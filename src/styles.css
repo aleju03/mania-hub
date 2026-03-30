@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@font-face { font-family: "Torus"; font-weight: 100; src: url("/fonts/Torus-Thin.otf") format("opentype"); }
+@font-face { font-family: "Torus"; font-weight: 300; src: url("/fonts/Torus-Light.otf") format("opentype"); }
+@font-face { font-family: "Torus"; font-weight: 400; src: url("/fonts/Torus-Regular.otf") format("opentype"); }
+@font-face { font-family: "Torus"; font-weight: 600; src: url("/fonts/Torus-SemiBold.otf") format("opentype"); }
+@font-face { font-family: "Torus"; font-weight: 700; src: url("/fonts/Torus-SemiBold.otf") format("opentype"); }
+@font-face { font-family: "Torus"; font-weight: 800; src: url("/fonts/Torus-Bold.otf") format("opentype"); }
+@font-face { font-family: "Torus"; font-weight: 900; src: url("/fonts/Torus-Heavy.otf") format("opentype"); }
+@font-face { font-family: "Venera"; font-weight: 500; src: url("/fonts/Venera-500.otf") format("opentype"); }
+@font-face {
+  font-family: "osu-extra";
+  src: url("/fonts/extra.woff2") format("woff2"), url("/fonts/extra.woff") format("woff"), url("/fonts/extra.ttf") format("truetype");
+}
+.mode-icon { font-family: "osu-extra"; -webkit-font-smoothing: antialiased; }
+
+@theme inline {
+  --font-sans: "Torus", "Inter", "Helvetica Neue", Tahoma, Arial, sans-serif;
+  --color-osu-b6: hsl(333, 10%, 10%); --color-osu-b5: hsl(333, 10%, 15%);
+  --color-osu-b4: hsl(333, 10%, 20%); --color-osu-b3: hsl(333, 10%, 25%);
+  --color-osu-b2: hsl(333, 10%, 30%); --color-osu-b1: hsl(333, 10%, 40%);
+  --color-osu-d6: hsl(333, 20%, 10%); --color-osu-d5: hsl(333, 20%, 15%); --color-osu-d4: hsl(333, 20%, 20%);
+  --color-osu-c1: hsl(333, 40%, 100%); --color-osu-c2: hsl(333, 40%, 90%);
+  --color-osu-l1: hsl(333, 40%, 80%); --color-osu-l2: hsl(333, 40%, 75%);
+  --color-osu-f1: hsl(333, 10%, 60%);
+  --color-osu-h1: hsl(333, 100%, 70%); --color-osu-h2: hsl(333, 50%, 45%);
+  --color-osu-pink: #ff66aa; --color-osu-pink-light: #ff99cc; --color-osu-pink-dark: #cc5288;
+  --color-osu-yellow: #ffcc22; --color-osu-yellow-light: #ffdd55;
+  --color-osu-blue: #66ccff; --color-osu-blue-dark: #44aadd; --color-osu-blue-darker: #2299bb;
+  --color-osu-green: #88b300; --color-osu-green-light: #b3d944;
+  --color-osu-red: #ed1221; --color-osu-red-light: #ed7887;
+  --color-osu-purple: #8866ee; --color-osu-purple-light: #aa88ff;
+  --color-osu-orange: #ff8e5d;
+}
+body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family: var(--font-sans); }
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--color-osu-b6); }
+::-webkit-scrollbar-thumb { background: var(--color-osu-b2); border-radius: 4px; }
+
+@keyframes mania-fall {
+  0% { transform: translateX(-50%) translateY(-100px); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateX(-50%) translateY(calc(100vh + 100px)); opacity: 0; }
+}
