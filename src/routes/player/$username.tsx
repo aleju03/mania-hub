@@ -141,8 +141,8 @@ function PlayerPage() {
                   {user.country?.name || user.country_code}
                 </span>
                 {user.is_supporter && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-osu-pink/20 text-osu-pink-light font-semibold">
-                    Supporter
+                  <span className="inline-flex items-center justify-center h-5 px-1.5 rounded-full bg-osu-pink" title="osu! Supporter">
+                    <img src="/images/icons/supporter.svg" alt="Supporter" className="w-3 h-3 brightness-0 invert" />
                   </span>
                 )}
                 {user.is_online && (
