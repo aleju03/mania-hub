@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { osuFetch, osuFetchBinary, fetchBeatmapFile, getCached, setCache } from "./api";
+import { calculateApproxPpGainMap } from "./score";
 import type {
   OsuUser,
   OsuScore,
@@ -7,6 +8,54 @@ import type {
   BeatmapsetSearchResponse,
   UserSearchResponse,
 } from "./types";
+
+const RANK_HISTORY_CONCURRENCY = 20;
+const rankHistoryPromiseCache = new Map<number, Promise<number[] | null>>();
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+      while (true) {
+        const currentIndex = nextIndex++;
+        if (currentIndex >= items.length) return;
+        results[currentIndex] = await mapper(items[currentIndex], currentIndex);
+      }
+    }),
+  );
+
+  return results;
+}
+
+async function getUserRankHistory(userId: number): Promise<number[] | null> {
+  const cacheKey = `rank-history:user:${userId}`;
+  const cached = getCached<number[]>(cacheKey);
+  if (cached) return cached;
+
+  const pending = rankHistoryPromiseCache.get(userId);
+  if (pending) return pending;
+
+  const request = osuFetch<OsuUser>(`/users/${userId}/mania`)
+    .then((user) => {
+      const history = user.rank_history?.data ?? null;
+      if (history) {
+        setCache(cacheKey, history);
+      }
+      return history;
+    })
+    .finally(() => {
+      rankHistoryPromiseCache.delete(userId);
+    });
+
+  rankHistoryPromiseCache.set(userId, request);
+  return request;
+}
 
 // ── User ────────────────────────────────────────────────────────────────────
 
@@ -36,6 +85,31 @@ export const getUserScoresRecent = createServerFn({ method: "GET" })
     });
   });
 
+export const getUserApproxPpGains = createServerFn({ method: "GET" })
+  .inputValidator((data: { userId: number }) => data)
+  .handler(async ({ data }: { data: { userId: number } }) => {
+    const cacheKey = `pp-gains:${data.userId}`;
+    const cached = getCached<Record<number, number>>(cacheKey);
+    if (cached) return cached;
+
+    const [firstPage, secondPage] = await Promise.all([
+      osuFetch<OsuScore[]>(`/users/${data.userId}/scores/best`, {
+        mode: "mania",
+        limit: 100,
+        offset: 0,
+      }),
+      osuFetch<OsuScore[]>(`/users/${data.userId}/scores/best`, {
+        mode: "mania",
+        limit: 100,
+        offset: 100,
+      }),
+    ]);
+
+    const gains = calculateApproxPpGainMap([...firstPage, ...secondPage]);
+    setCache(cacheKey, gains);
+    return gains;
+  });
+
 // ── Rankings ────────────────────────────────────────────────────────────────
 
 export const getRankings = createServerFn({ method: "GET" })
@@ -58,24 +132,29 @@ export const getRankings = createServerFn({ method: "GET" })
 export const getUsersRankHistory = createServerFn({ method: "GET" })
   .inputValidator((data: { userIds: number[] }) => data)
   .handler(async ({ data }: { data: { userIds: number[] } }) => {
-    const cacheKey = `rank-history:${data.userIds.join(",")}`;
-    const cached = getCached<Record<number, number[]>>(cacheKey);
-    if (cached) return cached;
+    const uniqueUserIds = [...new Set(data.userIds)];
 
-    const results = await Promise.allSettled(
-      data.userIds.map((uid) =>
-        osuFetch<OsuUser>(`/users/${uid}/mania`)
-      )
+    const results = await mapWithConcurrency(
+      uniqueUserIds,
+      RANK_HISTORY_CONCURRENCY,
+      async (userId) => {
+        try {
+          const history = await getUserRankHistory(userId);
+          return { userId, history };
+        } catch {
+          return { userId, history: null };
+        }
+      },
     );
 
     const out: Record<number, number[]> = {};
-    results.forEach((r, i) => {
-      if (r.status === "fulfilled" && r.value.rank_history?.data) {
-        out[data.userIds[i]] = r.value.rank_history.data;
+
+    results.forEach(({ userId, history }) => {
+      if (history?.length) {
+        out[userId] = history;
       }
     });
 
-    setCache(cacheKey, out);
     return out;
   });
 

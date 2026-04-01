@@ -1,29 +1,145 @@
 import { create } from "zustand";
-import type { OsuScore } from "./lib/types";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { getScoreTimeMs } from "./lib/score";
+import type { OsuScore, RankingsResponse } from "./lib/types";
+
+export interface CachedPlayer {
+  id: number;
+  username: string;
+  avatar_url: string;
+}
+
+export interface CachedHomePopoff {
+  user: { username: string; avatar_url: string };
+  score: OsuScore;
+}
+
+export interface CachedPopoff {
+  user: CachedPlayer;
+  score: OsuScore;
+  pp: number;
+  weightedPP: number;
+  time: string;
+}
 
 interface AppState {
+  crRankings: RankingsResponse | null;
+  crRankingsFetchedAt: number | null;
+  rankHistories: Record<number, number[]>;
+  rankHistoriesFetchedAt: number | null;
+  homeRecentScores: OsuScore[];
+  homeRecentScoresFetchedAt: number | null;
+  homePopoffs: CachedHomePopoff[];
+  homePopoffsFetchedAt: number | null;
+  popoffs: CachedPopoff[];
+  popoffsFetchedAt: number | null;
   // Score feed
   feedScores: OsuScore[];
+  feedScoresFetchedAt: number | null;
   trackedUserIds: number[];
+  trackedUserIdsFetchedAt: number | null;
   pollIndex: number;
+  setCrRankings: (rankings: RankingsResponse) => void;
+  setRankHistories: (histories: Record<number, number[]>) => void;
+  setHomeRecentScores: (scores: OsuScore[]) => void;
+  setHomePopoffs: (popoffs: CachedHomePopoff[]) => void;
+  setPopoffs: (popoffs: CachedPopoff[]) => void;
   addFeedScores: (scores: OsuScore[]) => void;
+  markFeedScoresFetched: () => void;
   setTrackedUserIds: (ids: number[]) => void;
   nextPollIndex: () => void;
 }
 
-export const useAppStore = create<AppState>((set) => ({
-  feedScores: [],
-  trackedUserIds: [],
-  pollIndex: 0,
-  addFeedScores: (scores) =>
-    set((s) => {
-      const existing = new Set(s.feedScores.map((sc) => sc.id));
-      const newScores = scores.filter((sc) => !existing.has(sc.id));
-      const merged = [...newScores, ...s.feedScores]
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-        .slice(0, 100);
-      return { feedScores: merged };
+const storage = typeof window !== "undefined"
+  ? createJSONStorage(() => localStorage)
+  : undefined;
+
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
+      crRankings: null,
+      crRankingsFetchedAt: null,
+      rankHistories: {},
+      rankHistoriesFetchedAt: null,
+      homeRecentScores: [],
+      homeRecentScoresFetchedAt: null,
+      homePopoffs: [],
+      homePopoffsFetchedAt: null,
+      popoffs: [],
+      popoffsFetchedAt: null,
+      feedScores: [],
+      feedScoresFetchedAt: null,
+      trackedUserIds: [],
+      trackedUserIdsFetchedAt: null,
+      pollIndex: 0,
+      setCrRankings: (rankings) =>
+        set({
+          crRankings: rankings,
+          crRankingsFetchedAt: Date.now(),
+        }),
+      setRankHistories: (histories) =>
+        set((state) => ({
+          rankHistories: { ...state.rankHistories, ...histories },
+          rankHistoriesFetchedAt: Date.now(),
+        })),
+      setHomeRecentScores: (scores) =>
+        set({
+          homeRecentScores: scores,
+          homeRecentScoresFetchedAt: Date.now(),
+        }),
+      setHomePopoffs: (popoffs) =>
+        set({
+          homePopoffs: popoffs,
+          homePopoffsFetchedAt: Date.now(),
+        }),
+      setPopoffs: (popoffs) =>
+        set({
+          popoffs,
+          popoffsFetchedAt: Date.now(),
+        }),
+      addFeedScores: (scores) =>
+        set((state) => {
+          const existing = new Set(state.feedScores.map((score) => score.id));
+          const newScores = scores.filter((score) => !existing.has(score.id));
+          const merged = [...newScores, ...state.feedScores]
+            .sort((a, b) => getScoreTimeMs(b) - getScoreTimeMs(a))
+            .slice(0, 100);
+
+          return {
+            feedScores: merged,
+            feedScoresFetchedAt: Date.now(),
+          };
+        }),
+      markFeedScoresFetched: () =>
+        set({
+          feedScoresFetchedAt: Date.now(),
+        }),
+      setTrackedUserIds: (ids) =>
+        set({
+          trackedUserIds: ids,
+          trackedUserIdsFetchedAt: Date.now(),
+        }),
+      nextPollIndex: () => set((state) => ({ pollIndex: state.pollIndex + 1 })),
     }),
-  setTrackedUserIds: (ids) => set({ trackedUserIds: ids }),
-  nextPollIndex: () => set((s) => ({ pollIndex: s.pollIndex + 1 })),
-}));
+    {
+      name: "mania-hub-cache-v1",
+      storage,
+      partialize: (state) => ({
+        crRankings: state.crRankings,
+        crRankingsFetchedAt: state.crRankingsFetchedAt,
+        rankHistories: state.rankHistories,
+        rankHistoriesFetchedAt: state.rankHistoriesFetchedAt,
+        homeRecentScores: state.homeRecentScores,
+        homeRecentScoresFetchedAt: state.homeRecentScoresFetchedAt,
+        homePopoffs: state.homePopoffs,
+        homePopoffsFetchedAt: state.homePopoffsFetchedAt,
+        popoffs: state.popoffs,
+        popoffsFetchedAt: state.popoffsFetchedAt,
+        feedScores: state.feedScores,
+        feedScoresFetchedAt: state.feedScoresFetchedAt,
+        trackedUserIds: state.trackedUserIds,
+        trackedUserIdsFetchedAt: state.trackedUserIdsFetchedAt,
+      }),
+    },
+  ),
+);

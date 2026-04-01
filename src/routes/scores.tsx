@@ -1,8 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getRankings, getCountryRecentScores } from "../lib/osu";
+import { getRankings, getCountryRecentScores, getUserApproxPpGains } from "../lib/osu";
+import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { formatAccuracy, formatTimeAgo, formatPP, formatNumber } from "../lib/format";
+import { getDisplayedTotalScore, getScoreTimestamp, scoreHasReplay } from "../lib/score";
+import { PageHeader } from "../components/layout/PageHeader";
+import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
@@ -14,11 +18,8 @@ export const Route = createFileRoute("/scores")({
   component: ScoresPage,
 });
 
-type ScoreFilter = "all" | "ranked" | "passed" | "failed" | "quit";
+type ScoreFilter = "all" | "ranked" | "passed" | "failed";
 
-function isQuit(s: OsuScore) {
-  return !s.passed && s.rank !== "F";
-}
 function isPassed(s: OsuScore) {
   return s.passed && s.rank !== "D";
 }
@@ -27,29 +28,62 @@ function isFailed(s: OsuScore) {
 }
 
 function ScoresPage() {
-  const { feedScores, addFeedScores, setTrackedUserIds, pollIndex, nextPollIndex } = useAppStore();
-  const [userIds, setUserIds] = useState<number[]>([]);
-  const [loadingPlayers, setLoadingPlayers] = useState(true);
+  const {
+    crRankings,
+    crRankingsFetchedAt,
+    feedScores,
+    feedScoresFetchedAt,
+    trackedUserIds,
+    addFeedScores,
+    markFeedScoresFetched,
+    setCrRankings,
+    setTrackedUserIds,
+    pollIndex,
+    nextPollIndex,
+  } = useAppStore();
+  const [userIds, setUserIds] = useState<number[]>(trackedUserIds);
+  const [loadingPlayers, setLoadingPlayers] = useState(trackedUserIds.length === 0 && !crRankings);
   const [playersError, setPlayersError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(true);
   const [filter, setFilter] = useState<ScoreFilter>("passed");
-  const [initialLoaded, setInitialLoaded] = useState(false);
+  const [initialLoaded, setInitialLoaded] = useState(feedScores.length > 0 || !!feedScoresFetchedAt);
+  const [initialRefreshDone, setInitialRefreshDone] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [ppGainByScoreId, setPpGainByScoreId] = useState<Record<number, number>>({});
+  const [ppGainFetchedByUserId, setPpGainFetchedByUserId] = useState<Record<number, true>>({});
 
   useEffect(() => {
     let cancelled = false;
+    const cachedIds = crRankings?.ranking.map((entry: { user: { id: number } }) => entry.user.id) ?? trackedUserIds;
+
+    if (cachedIds.length > 0) {
+      setUserIds(cachedIds);
+      setLoadingPlayers(false);
+      setPlayersError(null);
+    }
+
+    const shouldRefresh = !crRankings || isCacheStale(crRankingsFetchedAt, CLIENT_CACHE_TTL.rankings);
+
+    if (!shouldRefresh) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setLoadingPlayers(cachedIds.length === 0);
 
     getRankings({ data: { type: "performance", page: 1, country: "CR" } })
       .then((rankings) => {
         if (cancelled) return;
 
         const ids = rankings.ranking.map((entry: { user: { id: number } }) => entry.user.id);
+        setCrRankings(rankings);
         setUserIds(ids);
         setTrackedUserIds(ids);
         setPlayersError(null);
       })
       .catch(() => {
-        if (cancelled) return;
+        if (cancelled || cachedIds.length > 0) return;
         setPlayersError("Couldn't load the tracked player pool.");
       })
       .finally(() => {
@@ -60,15 +94,40 @@ function ScoresPage() {
     return () => {
       cancelled = true;
     };
-  }, [setTrackedUserIds]);
+  }, [crRankings, crRankingsFetchedAt, setCrRankings, setTrackedUserIds, trackedUserIds]);
 
   useEffect(() => {
-    if (!initialLoaded && userIds.length > 0) {
-      getCountryRecentScores({ data: { userIds, batchSize: 15, batchIndex: 0 } })
-        .then((scores) => { if (scores.length > 0) addFeedScores(scores); })
-        .finally(() => setInitialLoaded(true));
+    if (initialLoaded || feedScores.length > 0) {
+      setInitialLoaded(true);
     }
-  }, [userIds, initialLoaded, addFeedScores]);
+  }, [feedScores.length, initialLoaded]);
+
+  useEffect(() => {
+    if (userIds.length === 0 || initialRefreshDone) return;
+
+    const shouldRefresh =
+      feedScores.length === 0 || isCacheStale(feedScoresFetchedAt, CLIENT_CACHE_TTL.scoresFeed);
+
+    if (!shouldRefresh) {
+      setInitialLoaded(true);
+      setInitialRefreshDone(true);
+      return;
+    }
+
+    if (feedScores.length > 0) {
+      setInitialLoaded(true);
+    }
+
+    getCountryRecentScores({ data: { userIds, batchSize: 15, batchIndex: 0 } })
+      .then((scores) => {
+        if (scores.length > 0) addFeedScores(scores);
+      })
+      .finally(() => {
+        markFeedScoresFetched();
+        setInitialLoaded(true);
+        setInitialRefreshDone(true);
+      });
+  }, [userIds, initialRefreshDone, feedScores.length, feedScoresFetchedAt, addFeedScores, markFeedScoresFetched]);
 
   const poll = useCallback(async () => {
     if (!isPolling || userIds.length === 0) return;
@@ -77,41 +136,86 @@ function ScoresPage() {
         data: { userIds, batchSize: 5, batchIndex: pollIndex },
       });
       if (scores.length > 0) addFeedScores(scores);
+      else markFeedScoresFetched();
       nextPollIndex();
     } catch { /* silently continue */ }
-  }, [isPolling, userIds, pollIndex, addFeedScores, nextPollIndex]);
+  }, [isPolling, userIds, pollIndex, addFeedScores, markFeedScoresFetched, nextPollIndex]);
 
   useEffect(() => {
     const id = setInterval(poll, 30_000);
     return () => clearInterval(id);
   }, [poll]);
 
-  const filtered = feedScores.filter((s: OsuScore) => {
-    switch (filter) {
-      case "ranked": return s.pp != null && s.pp > 0;
-      case "passed": return isPassed(s);
-      case "failed": return isFailed(s);
-      case "quit": return isQuit(s);
-      default: return true;
-    }
-  });
+  useEffect(() => {
+    setExpandedId(null);
+  }, [filter]);
+
+  const filtered = useMemo(() => {
+    return feedScores.filter((score: OsuScore) => {
+      switch (filter) {
+        case "ranked":
+          return score.pp != null && score.pp > 0;
+        case "passed":
+          return isPassed(score);
+        case "failed":
+          return isFailed(score);
+        default:
+          return true;
+      }
+    });
+  }, [feedScores, filter]);
+
+  useEffect(() => {
+    const rankedUsersToFetch = [...new Set(
+      feedScores
+        .filter((score) => score.pp != null && score.pp > 0 && !ppGainFetchedByUserId[score.user_id])
+        .map((score) => score.user_id),
+    )];
+
+    if (rankedUsersToFetch.length === 0) return;
+
+    let cancelled = false;
+
+    Promise.allSettled(
+      rankedUsersToFetch.map(async (userId) => ({
+        userId,
+        gains: await getUserApproxPpGains({ data: { userId } }),
+      })),
+    ).then((results) => {
+      if (cancelled) return;
+
+      const nextGains: Record<number, number> = {};
+      const fetchedUsers: Record<number, true> = {};
+
+      results.forEach((result) => {
+        if (result.status !== "fulfilled") return;
+        fetchedUsers[result.value.userId] = true;
+        Object.assign(nextGains, result.value.gains);
+      });
+
+      setPpGainByScoreId((prev) => ({ ...prev, ...nextGains }));
+      setPpGainFetchedByUserId((prev) => ({ ...prev, ...fetchedUsers }));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [feedScores, ppGainFetchedByUserId]);
 
   const filters: { id: ScoreFilter; label: string }[] = [
     { id: "all", label: "All" },
     { id: "ranked", label: "Ranked (PP)" },
     { id: "passed", label: "Passed" },
     { id: "failed", label: "Failed" },
-    { id: "quit", label: "Quit" },
   ];
 
   return (
     <div className="flex-1">
-      <div className="bg-osu-d5 border-b border-osu-b3/40">
-        <div className="max-w-[1200px] mx-auto px-5 py-3 flex items-center gap-3">
-          <img src="/images/icons/news.svg" alt="" width={28} height={28} className="opacity-60" />
-          <h2 className="text-[15px] font-medium text-osu-c2">CR mania tracker</h2>
-          <span className="mode-icon text-osu-pink ml-1">{"\ue802"}</span>
-          <div className="ml-auto flex items-center gap-2">
+      <PageHeader
+        iconSrc="/images/icons/news.svg"
+        title="CR mania tracker"
+        right={
+          <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${isPolling ? "bg-osu-green animate-pulse" : "bg-osu-f1"}`} />
             <span className="text-[10px] text-osu-f1">
               {loadingPlayers
@@ -126,27 +230,10 @@ function ScoresPage() {
               {isPolling ? "Pause" : "Resume"}
             </button>
           </div>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Filters */}
-      <div className="bg-osu-d5 border-b border-osu-b3/30">
-        <div className="max-w-[1200px] mx-auto px-5 flex">
-          {filters.map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setFilter(f.id)}
-              className={`px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] border-b-2 ${
-                filter === f.id
-                  ? "text-osu-c1 border-osu-h1"
-                  : "text-osu-f1 border-transparent hover:text-osu-l2"
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <PageTabs items={filters} value={filter} onChange={setFilter} />
 
       <div className="bg-osu-b5">
         <div className="max-w-[1200px] mx-auto px-5 py-5">
@@ -162,12 +249,13 @@ function ScoresPage() {
             </div>
           ) : (
             <>
-              <div className="space-y-2">
-                <AnimatePresence initial={false}>
+              <div key={filter} className="space-y-2">
+                <AnimatePresence initial={false} mode="popLayout">
                   {filtered.map((score: OsuScore) => (
                     <ScoreFeedItem
                       key={score.id}
                       score={score}
+                      approxPpGain={ppGainByScoreId[score.id] ?? null}
                       expanded={expandedId === score.id}
                       onToggle={() => setExpandedId(expandedId === score.id ? null : score.id)}
                     />
@@ -189,9 +277,26 @@ function ScoresPage() {
   );
 }
 
-function ScoreFeedItem({ score, expanded, onToggle }: { score: OsuScore; expanded: boolean; onToggle: () => void }) {
+function ScoreFeedItem({
+  score,
+  approxPpGain,
+  expanded,
+  onToggle,
+}: {
+  score: OsuScore;
+  approxPpGain: number | null;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
   const keys = score.beatmap?.cs;
   const stats = score.statistics;
+  const totalScore = getDisplayedTotalScore(score);
+  const countMax = stats?.count_geki ?? stats?.perfect ?? 0;
+  const count300 = stats?.count_300 ?? stats?.great ?? 0;
+  const count200 = stats?.count_katu ?? stats?.good ?? 0;
+  const count100 = stats?.count_100 ?? stats?.ok ?? 0;
+  const count50 = stats?.count_50 ?? stats?.meh ?? 0;
+  const countMiss = stats?.count_miss ?? stats?.miss ?? 0;
 
   return (
     <motion.div
@@ -229,8 +334,18 @@ function ScoreFeedItem({ score, expanded, onToggle }: { score: OsuScore; expande
             ))}
           </div>
           <span className="text-xs text-osu-l2">{formatAccuracy(score.accuracy)}</span>
-          <span className="text-sm font-bold">{formatPP(score.pp)}</span>
-          {score.replay && (
+          <span className="text-sm font-bold">
+            {formatPP(score.pp)}
+            {approxPpGain != null && (
+              <span
+                className="ml-1 text-[11px] font-semibold text-osu-green"
+                title="Approximate pp gain from removing this play from the current best-score stack"
+              >
+                (+{formatNumber(Math.round(approxPpGain))})
+              </span>
+            )}
+          </span>
+          {scoreHasReplay(score) && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -243,7 +358,7 @@ function ScoreFeedItem({ score, expanded, onToggle }: { score: OsuScore; expande
             </button>
           )}
           <span className="text-[10px] text-osu-f1 w-12 text-right">
-            {formatTimeAgo(score.ended_at || score.created_at)}
+            {formatTimeAgo(getScoreTimestamp(score))}
           </span>
         </div>
       </div>
@@ -260,14 +375,14 @@ function ScoreFeedItem({ score, expanded, onToggle }: { score: OsuScore; expande
           >
             <div className="px-4 pb-3 pt-1 border-t border-osu-b3/20">
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
-                <StatCell label="Score" value={formatNumber(score.score)} />
+                <StatCell label="Score" value={totalScore != null ? formatNumber(totalScore) : "-"} />
                 <StatCell label="Combo" value={`${formatNumber(score.max_combo)}x`} />
-                <StatCell label="MAX" value={formatNumber(stats?.perfect ?? 0)} color="text-osu-blue" />
-                <StatCell label="300" value={formatNumber(stats?.great ?? 0)} color="text-osu-yellow" />
-                <StatCell label="200" value={formatNumber(stats?.good ?? 0)} color="text-osu-green" />
-                <StatCell label="100" value={formatNumber(stats?.ok ?? 0)} color="text-osu-purple" />
-                <StatCell label="50" value={formatNumber(stats?.meh ?? 0)} color="text-osu-orange" />
-                <StatCell label="Miss" value={formatNumber(stats?.miss ?? 0)} color="text-osu-red" />
+                <StatCell label="MAX" value={formatNumber(countMax)} color="text-osu-blue" />
+                <StatCell label="300" value={formatNumber(count300)} color="text-osu-yellow" />
+                <StatCell label="200" value={formatNumber(count200)} color="text-osu-green" />
+                <StatCell label="100" value={formatNumber(count100)} color="text-osu-purple" />
+                <StatCell label="50" value={formatNumber(count50)} color="text-osu-orange" />
+                <StatCell label="Miss" value={formatNumber(countMiss)} color="text-osu-red" />
                 {score.pp != null && score.pp > 0 && (
                   <StatCell label="PP" value={`${Math.round(score.pp)}pp`} color="text-osu-pink" />
                 )}

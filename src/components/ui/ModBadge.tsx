@@ -15,10 +15,16 @@ const typeColor: Record<string, string> = {
   CO: "#ffcc22", AT: "#66ccff",
 };
 
+const iconInset: Record<string, number> = {
+  DT: 2,
+  NC: 2,
+};
+
 export function ModBadge({ mod }: { mod: string }) {
   if (!mod) return null;
   const file = fileMap[mod] || mod.toLowerCase();
   const bg = typeColor[mod] || "#ff6666";
+  const inset = iconInset[mod] ?? 1;
   const mask = (url: string) => ({
     backgroundColor: bg,
     maskImage: `url(${url})`, WebkitMaskImage: `url(${url})`,
@@ -27,9 +33,16 @@ export function ModBadge({ mod }: { mod: string }) {
     maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
   });
   return (
-    <div className="relative flex-shrink-0" style={{ width: 44, height: 30 }} title={mod}>
+    <div className="relative flex-shrink-0" style={{ width: 36, height: 24 }} title={mod}>
       <div className="absolute inset-0" style={mask("/images/badges/mods/mod-icon.svg")} />
-      <div className="absolute inset-0" style={{ ...mask(`/images/badges/mods/mod-${file}.svg`), backgroundColor: `color-mix(in srgb-linear, black, ${bg} 10%)` }} />
+      <div
+        className="absolute"
+        style={{
+          inset,
+          ...mask(`/images/badges/mods/mod-${file}.svg`),
+          backgroundColor: `color-mix(in srgb-linear, black, ${bg} 10%)`,
+        }}
+      />
     </div>
   );
 }

@@ -3,6 +3,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, searchUsers } from "../lib/osu";
 import { parseManiaBeatmap } from "../lib/beatmap-parser";
+import { scoreHasReplay } from "../lib/score";
+import { PageHeader } from "../components/layout/PageHeader";
 import { ManiaReplayRenderer } from "../components/replay/ReplayCanvas";
 import { SearchInput } from "../components/ui/SearchInput";
 import { GradeImg } from "../components/ui/GradeImg";
@@ -98,20 +100,14 @@ function ReplayPage() {
     setLoadingScores(true);
     try {
       const scores = await getUserScoresBest({ data: { userId: user.id, limit: 20 } });
-      setPlayerScores(scores.filter((s: OsuScore) => s.replay));
+      setPlayerScores(scores.filter((s: OsuScore) => scoreHasReplay(s)));
     } catch { setPlayerScores([]); }
     finally { setLoadingScores(false); }
   };
 
   return (
     <div className="flex-1">
-      <div className="bg-osu-d5 border-b border-osu-b3/40">
-        <div className="max-w-[1200px] mx-auto px-5 py-3 flex items-center gap-3">
-          <img src="/images/icons/home.svg" alt="" width={28} height={28} className="opacity-60" />
-          <h2 className="text-[15px] font-medium text-osu-c2">mania replay viewer</h2>
-          <span className="mode-icon text-osu-pink ml-1">{"\ue802"}</span>
-        </div>
-      </div>
+      <PageHeader iconSrc="/images/icons/home.svg" title="mania replay viewer" />
 
       <div className="bg-osu-b5 min-h-[80vh]">
         <div className="max-w-[1200px] mx-auto px-5 py-6">

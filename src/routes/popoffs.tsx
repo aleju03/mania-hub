@@ -1,13 +1,18 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getRankings, getUserScoresBest } from "../lib/osu";
+import { getRankings, getUserApproxPpGains, getUserScoresBest } from "../lib/osu";
+import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { formatNumber, formatAccuracy, formatTimeAgo } from "../lib/format";
+import { getScoreTimeMs, getScoreTimestamp, scoreHasReplay } from "../lib/score";
+import { PageHeader } from "../components/layout/PageHeader";
+import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import type { OsuScore, RankingsResponse } from "../lib/types";
+import { useAppStore } from "../store";
 
 interface PopOff {
   user: { id: number; username: string; avatar_url: string };
@@ -33,33 +38,50 @@ export const Route = createFileRoute("/popoffs")({
 
 function PopOffsPage() {
   const navigate = useNavigate();
-  const [players, setPlayers] = useState<PopOff["user"][]>([]);
+  const rankings = useAppStore((state) => state.crRankings);
+  const rankingsFetchedAt = useAppStore((state) => state.crRankingsFetchedAt);
+  const popoffs = useAppStore((state) => state.popoffs);
+  const popoffsFetchedAt = useAppStore((state) => state.popoffsFetchedAt);
+  const setCrRankings = useAppStore((state) => state.setCrRankings);
+  const setCachedPopoffs = useAppStore((state) => state.setPopoffs);
   const [playersError, setPlayersError] = useState<string | null>(null);
-  const [loadingPlayers, setLoadingPlayers] = useState(true);
-  const [popoffs, setPopoffs] = useState<PopOff[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingPlayers, setLoadingPlayers] = useState(!rankings);
+  const [loading, setLoading] = useState(popoffs.length === 0);
+  const [progressivePopoffs, setProgressivePopoffs] = useState<PopOff[]>([]);
   const [loadedCount, setLoadedCount] = useState(0);
   const [range, setRange] = useState<TimeRange>("7d");
   const [page, setPage] = useState(0);
+  const [ppGainByScoreId, setPpGainByScoreId] = useState<Record<number, number>>({});
+  const [ppGainFetchedByUserId, setPpGainFetchedByUserId] = useState<Record<number, true>>({});
+
+  const players = rankings?.ranking.slice(0, 30).map((entry: RankingsResponse["ranking"][number]) => ({
+    id: entry.user.id,
+    username: entry.user.username,
+    avatar_url: entry.user.avatar_url,
+  })) ?? [];
 
   useEffect(() => {
     let cancelled = false;
+    const shouldRefresh = !rankings || isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings);
+
+    if (!shouldRefresh) {
+      setLoadingPlayers(false);
+      setPlayersError(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setLoadingPlayers(!rankings);
 
     getRankings({ data: { type: "performance", page: 1, country: "CR" } })
       .then((rankings) => {
         if (cancelled) return;
-
-        setPlayers(
-          rankings.ranking.slice(0, 30).map((entry: RankingsResponse["ranking"][number]) => ({
-            id: entry.user.id,
-            username: entry.user.username,
-            avatar_url: entry.user.avatar_url,
-          })),
-        );
+        setCrRankings(rankings);
         setPlayersError(null);
       })
       .catch(() => {
-        if (cancelled) return;
+        if (cancelled || rankings) return;
         setPlayersError("Couldn't load the player list for pop-offs.");
       })
       .finally(() => {
@@ -70,7 +92,7 @@ function PopOffsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [rankings, rankingsFetchedAt, setCrRankings]);
 
   // Progressively fetch scores for each player
   const fetchAll = useCallback(async () => {
@@ -79,8 +101,16 @@ function PopOffsPage() {
       return;
     }
 
-    setLoading(true);
-    setPopoffs([]);
+    const hasCachedPopoffs = popoffs.length > 0;
+    const shouldRefresh = !hasCachedPopoffs || isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.popoffs);
+
+    if (!shouldRefresh) {
+      setLoadedCount(players.length);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(!hasCachedPopoffs);
     setLoadedCount(0);
     setPage(0);
 
@@ -93,7 +123,7 @@ function PopOffsPage() {
           const scores = await getUserScoresBest({ data: { userId: player.id, limit: 15 } });
           return scores
             .filter((s: OsuScore) => {
-              const age = Date.now() - new Date(s.created_at).getTime();
+              const age = Date.now() - getScoreTimeMs(s);
               return age < RANGE_MS["30d"] && s.pp && s.pp > 0;
             })
             .map((s: OsuScore) => ({
@@ -101,7 +131,7 @@ function PopOffsPage() {
               score: s,
               pp: s.pp ?? 0,
               weightedPP: s.weight?.pp ?? 0,
-              time: s.created_at,
+              time: getScoreTimestamp(s),
             }));
         })
       );
@@ -112,12 +142,18 @@ function PopOffsPage() {
 
       // Sort and update progressively
       all.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-      setPopoffs([...all]);
+      if (!hasCachedPopoffs) {
+        setProgressivePopoffs([...all]);
+      }
       setLoadedCount(Math.min(i + 5, players.length));
     }
 
+    if (!hasCachedPopoffs) {
+      setProgressivePopoffs([]);
+    }
+    setCachedPopoffs([...all]);
     setLoading(false);
-  }, [players]);
+  }, [players, popoffs.length, popoffsFetchedAt, setCachedPopoffs]);
 
   useEffect(() => {
     if (loadingPlayers || playersError) return;
@@ -125,10 +161,48 @@ function PopOffsPage() {
   }, [fetchAll, loadingPlayers, playersError]);
 
   // Filter by time range
-  const filtered = popoffs.filter((p) => {
+  const visiblePopoffs = popoffs.length > 0 ? popoffs : progressivePopoffs;
+  const filtered = visiblePopoffs.filter((p) => {
     const age = Date.now() - new Date(p.time).getTime();
     return age < RANGE_MS[range];
   });
+
+  useEffect(() => {
+    const usersToFetch = [...new Set(
+      visiblePopoffs
+        .filter((entry) => !ppGainFetchedByUserId[entry.user.id])
+        .map((entry) => entry.user.id),
+    )];
+
+    if (usersToFetch.length === 0) return;
+
+    let cancelled = false;
+
+    Promise.allSettled(
+      usersToFetch.map(async (userId) => ({
+        userId,
+        gains: await getUserApproxPpGains({ data: { userId } }),
+      })),
+    ).then((results) => {
+      if (cancelled) return;
+
+      const nextGains: Record<number, number> = {};
+      const fetchedUsers: Record<number, true> = {};
+
+      results.forEach((result) => {
+        if (result.status !== "fulfilled") return;
+        fetchedUsers[result.value.userId] = true;
+        Object.assign(nextGains, result.value.gains);
+      });
+
+      setPpGainByScoreId((prev) => ({ ...prev, ...nextGains }));
+      setPpGainFetchedByUserId((prev) => ({ ...prev, ...fetchedUsers }));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visiblePopoffs, ppGainFetchedByUserId]);
 
   // Paginate
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
@@ -143,13 +217,11 @@ function PopOffsPage() {
 
   return (
     <div className="flex-1">
-      {/* Header */}
-      <div className="bg-osu-d5 border-b border-osu-b3/40">
-        <div className="max-w-[1200px] mx-auto px-5 py-3 flex items-center gap-3">
-          <img src="/images/icons/rankings.svg" alt="" width={28} height={28} className="opacity-60" />
-          <h2 className="text-[15px] font-medium text-osu-c2">CR mania pop-offs</h2>
-          <span className="mode-icon text-osu-pink ml-1">{"\ue802"}</span>
-          <div className="ml-auto flex items-center gap-2">
+      <PageHeader
+        iconSrc="/images/icons/rankings.svg"
+        title="CR mania pop-offs"
+        right={
+          <div className="flex items-center gap-2">
             {(loadingPlayers || loading) && !playersError && (
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
@@ -166,27 +238,17 @@ function PopOffsPage() {
               </span>
             )}
           </div>
-        </div>
-      </div>
+        }
+      />
 
-      {/* Time range filter */}
-      <div className="bg-osu-d5 border-b border-osu-b3/30">
-        <div className="max-w-[1200px] mx-auto px-5 flex">
-          {ranges.map((r) => (
-            <button
-              key={r.id}
-              onClick={() => { setRange(r.id); setPage(0); }}
-              className={`px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] border-b-2 ${
-                range === r.id
-                  ? "text-osu-c1 border-osu-h1"
-                  : "text-osu-f1 border-transparent hover:text-osu-l2"
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <PageTabs
+        items={ranges}
+        value={range}
+        onChange={(nextRange) => {
+          setRange(nextRange);
+          setPage(0);
+        }}
+      />
 
       <div className="bg-osu-b5">
         <div className="max-w-[1200px] mx-auto px-5 py-6">
@@ -197,7 +259,7 @@ function PopOffsPage() {
           )}
 
           {/* Loading skeletons on initial load */}
-          {!playersError && (loadingPlayers || (loading && popoffs.length === 0)) && (
+          {!playersError && (loadingPlayers || (loading && visiblePopoffs.length === 0)) && (
             <div className="space-y-2">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 py-3 px-4 rounded-xl bg-osu-b4 border border-osu-b3/20">
@@ -237,6 +299,14 @@ function PopOffsPage() {
                         {Math.round(p.pp)}
                       </div>
                       <div className="text-[8px] uppercase tracking-wider text-osu-f1 font-semibold">pp</div>
+                      {ppGainByScoreId[p.score.id] != null && (
+                        <div
+                          className="text-[10px] font-semibold text-osu-green"
+                          title="Approximate pp gain from removing this play from the current best-score stack"
+                        >
+                          +{formatNumber(Math.round(ppGainByScoreId[p.score.id]))}
+                        </div>
+                      )}
                     </div>
 
                     <GradeImg grade={p.score.rank} size={30} />
@@ -278,7 +348,7 @@ function PopOffsPage() {
                       <span className="text-xs text-osu-f1">
                         {formatNumber(p.score.max_combo)}x
                       </span>
-                      {p.score.replay && (
+                      {scoreHasReplay(p.score) && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();

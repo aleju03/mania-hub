@@ -9,7 +9,16 @@ export const Route = createRootRoute({
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "osu!mania hub" },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "stylesheet", href: appCss },
+      {
+        rel: "preload",
+        href: "/fonts/Torus-Heavy.otf",
+        as: "font",
+        type: "font/otf",
+        crossOrigin: "anonymous",
+      },
+    ],
   }),
   shellComponent: RootDocument,
 });

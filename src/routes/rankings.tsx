@@ -2,10 +2,14 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { getRankings, getUsersRankHistory } from "../lib/osu";
+import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { formatNumber, formatAccuracy } from "../lib/format";
+import { getCrRankChanges, getGlobalRankChange } from "../lib/rankings";
 import { Avatar } from "../components/ui/Avatar";
+import { PageHeader } from "../components/layout/PageHeader";
 import { RankingRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import type { RankingsResponse } from "../lib/types";
+import { useAppStore } from "../store";
 
 type SortField = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "ss" | "s" | "a";
 
@@ -15,74 +19,79 @@ export const Route = createFileRoute("/rankings")({
 
 function RankingsPage() {
   const navigate = useNavigate();
-  const [data, setData] = useState<Awaited<ReturnType<typeof getRankings>> | null>(null);
+  const data = useAppStore((state) => state.crRankings);
+  const rankingsFetchedAt = useAppStore((state) => state.crRankingsFetchedAt);
+  const rankHistories = useAppStore((state) => state.rankHistories);
+  const rankHistoriesFetchedAt = useAppStore((state) => state.rankHistoriesFetchedAt);
+  const setCrRankings = useAppStore((state) => state.setCrRankings);
+  const setRankHistories = useAppStore((state) => state.setRankHistories);
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortField>("rank");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [rankHistories, setRankHistories] = useState<Record<number, number[]>>({});
+  const [rankingsLoading, setRankingsLoading] = useState(!data);
+  const [rankHistoriesLoading, setRankHistoriesLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    const shouldRefresh = !data || isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings);
+
+    if (!shouldRefresh) {
+      setRankingsLoading(false);
+      setError(null);
+      return () => { cancelled = true; };
+    }
+
+    setRankingsLoading(!data);
+
     getRankings({ data: { type: "performance", page: 1, country: "CR" } })
       .then((result) => {
         if (cancelled) return;
-        setData(result);
+        setCrRankings(result);
         setError(null);
       })
       .catch(() => {
-        if (cancelled) return;
+        if (cancelled || data) return;
         setError("Couldn't load the Costa Rica rankings right now.");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setRankingsLoading(false);
       });
+
     return () => { cancelled = true; };
-  }, []);
+  }, [data, rankingsFetchedAt, setCrRankings]);
 
   useEffect(() => {
     if (!data) return;
     let cancelled = false;
     const userIds = data.ranking.slice(0, 50).map((e) => e.user.id);
-    const batchSize = 10;
+    const hasAllHistories = userIds.every((userId) => rankHistories[userId]);
+    const shouldRefresh = !hasAllHistories || isCacheStale(rankHistoriesFetchedAt, CLIENT_CACHE_TTL.rankHistories);
 
-    (async () => {
-      for (let i = 0; i < userIds.length; i += batchSize) {
+    if (!shouldRefresh) {
+      setRankHistoriesLoading(false);
+      return () => { cancelled = true; };
+    }
+
+    setRankHistoriesLoading(!hasAllHistories);
+
+    getUsersRankHistory({ data: { userIds } })
+      .then((histories) => {
         if (cancelled) return;
-        const batch = userIds.slice(i, i + batchSize);
-        try {
-          const histories = await getUsersRankHistory({ data: { userIds: batch } });
-          if (cancelled) return;
-          setRankHistories((prev) => ({ ...prev, ...histories }));
-        } catch {
-          // Silently skip failed batches
-        }
-      }
-    })();
+        setRankHistories(histories);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setRankHistoriesLoading(false);
+      });
 
     return () => { cancelled = true; };
-  }, [data]);
+  }, [data, rankHistories, rankHistoriesFetchedAt, setRankHistories]);
 
   // Compute CR rank changes: compare current CR positions vs 7 days ago
   const crRankChanges = useMemo(() => {
     if (!data || Object.keys(rankHistories).length === 0) return {};
-    const entries = data.ranking.slice(0, 50);
-
-    // Current CR rank is just their index + 1
-    // To get CR rank 7 days ago, sort by global rank 7 days ago
-    const withOldRank = entries.map((e, i) => {
-      const history = rankHistories[e.user.id];
-      const oldGlobal = history && history.length >= 8 ? history[history.length - 8] : null;
-      return { userId: e.user.id, currentCR: i + 1, oldGlobal };
-    }).filter((e) => e.oldGlobal !== null && e.oldGlobal !== 0);
-
-    if (withOldRank.length === 0) return {};
-
-    // Sort by old global rank to reconstruct old CR ranking
-    const oldOrder = [...withOldRank].sort((a, b) => a.oldGlobal! - b.oldGlobal!);
-    const changes: Record<number, number> = {};
-    oldOrder.forEach((e, i) => {
-      const oldCR = i + 1;
-      // Positive = gained CR ranks (moved up)
-      changes[e.userId] = oldCR - e.currentCR;
-    });
-    return changes;
+    return getCrRankChanges(data.ranking, rankHistories);
   }, [data, rankHistories]);
 
   const sortedRankings = useMemo(() => {
@@ -153,16 +162,16 @@ function RankingsPage() {
 
   return (
     <div className="flex-1">
-      <div className="bg-osu-d5 border-b border-osu-b3/40">
-        <div className="max-w-[1200px] mx-auto px-5 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src="/images/icons/rankings.svg" alt="" width={28} height={28} className="opacity-60" />
-            <h2 className="text-[15px] font-medium text-osu-c2">Costa Rica mania top 50</h2>
-            <span className="mode-icon text-osu-pink ml-1">{"\ue802"}</span>
-          </div>
-          {!data && !error && <span className="text-[10px] text-osu-f1">Loading rankings...</span>}
-        </div>
-      </div>
+      <PageHeader
+        iconSrc="/images/icons/rankings.svg"
+        title="Costa Rica mania top 50"
+        right={
+          <>
+            {!data && rankingsLoading && !error && <span className="text-[10px] text-osu-f1">Loading rankings...</span>}
+            {data && rankHistoriesLoading && <span className="text-[10px] text-osu-f1">Loading 7d changes...</span>}
+          </>
+        }
+      />
 
       <div className="bg-osu-b5">
         <div className="max-w-[1200px] mx-auto px-5 py-5">
@@ -267,14 +276,6 @@ function RankingsPage() {
       </div>
     </div>
   );
-}
-
-function getGlobalRankChange(history: number[] | undefined): number | null {
-  if (!history || history.length < 8) return null;
-  const current = history[history.length - 1];
-  const weekAgo = history[history.length - 8];
-  if (!current || !weekAgo || current === 0 || weekAgo === 0) return null;
-  return weekAgo - current;
 }
 
 function MiniSparkline({ data }: { data: number[] }) {

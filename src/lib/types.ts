@@ -99,6 +99,7 @@ export interface OsuBeatmap {
   count_circles: number;
   count_sliders: number; // hold notes in mania
   count_spinners: number;
+  max_combo?: number;
   version: string; // difficulty name
   url: string;
 }
@@ -122,6 +123,12 @@ export interface OsuBeatmapset {
 }
 
 export interface OsuScoreStatistics {
+  count_geki?: number;
+  count_300?: number;
+  count_katu?: number;
+  count_100?: number;
+  count_50?: number;
+  count_miss?: number;
   perfect?: number;
   great?: number;
   good?: number;
@@ -139,10 +146,16 @@ export interface OsuScore {
   id: number;
   user_id: number;
   accuracy: number;
+  beatmap_id?: number;
+  build_id?: number | null;
   mods: OsuMod[];
   score: number;
+  total_score?: number;
+  classic_total_score?: number;
+  legacy_total_score?: number;
   max_combo: number;
   passed: boolean;
+  ranked?: boolean;
   rank: string;
   statistics: OsuScoreStatistics;
   pp: number | null;
@@ -154,9 +167,15 @@ export interface OsuScore {
     avatar_url: string;
     country_code: string;
   };
-  created_at: string;
-  ended_at: string;
-  replay: boolean;
+  created_at?: string;
+  started_at?: string | null;
+  ended_at?: string;
+  replay?: boolean;
+  has_replay?: boolean;
+  is_perfect_combo?: boolean;
+  legacy_perfect?: boolean;
+  processed?: boolean;
+  type?: string;
   weight?: { percentage: number; pp: number };
 }
 
