@@ -49,7 +49,7 @@ export function Nav() {
             whileHover={{ scale: 1.11 }}
             transition={{ duration: 0.1 }}
           >
-            <Link to="/" className="flex items-center gap-2">
+            <Link to="/" preload="intent" className="flex items-center gap-2">
               <div className="relative w-10 h-10">
                 <div
                   className="absolute inset-0"
@@ -87,6 +87,7 @@ export function Nav() {
             <Link
               key={l.id}
               to={l.to}
+              preload="intent"
               className={`relative px-2.5 py-[19px] text-[12px] font-semibold capitalize transition-colors duration-[120ms] ${
                 current?.id === l.id
                   ? "text-white"
