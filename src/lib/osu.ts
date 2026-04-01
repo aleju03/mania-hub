@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { osuFetch, osuFetchBinary, fetchBeatmapFile, getCached, setCache } from "./api";
+import { osuFetch, osuFetchBinary, fetchBeatmapFile, getPersistentCached, setPersistentCache } from "./api";
 import { calculateApproxPpGainMap } from "./score";
 import type {
   OsuUser,
@@ -9,7 +9,11 @@ import type {
   UserSearchResponse,
 } from "./types";
 
+const RANKINGS_CACHE_TTL = 5 * 60 * 1000;
+const RANK_HISTORY_CACHE_TTL = 24 * 60 * 60 * 1000;
+const APPROX_PP_GAINS_CACHE_TTL = 10 * 60 * 1000;
 const RANK_HISTORY_CONCURRENCY = 20;
+const APPROX_PP_GAINS_CONCURRENCY = 8;
 const rankHistoryPromiseCache = new Map<number, Promise<number[] | null>>();
 
 async function mapWithConcurrency<T, R>(
@@ -35,7 +39,7 @@ async function mapWithConcurrency<T, R>(
 
 async function getUserRankHistory(userId: number): Promise<number[] | null> {
   const cacheKey = `rank-history:user:${userId}`;
-  const cached = getCached<number[]>(cacheKey);
+  const cached = await getPersistentCached<number[]>(cacheKey);
   if (cached) return cached;
 
   const pending = rankHistoryPromiseCache.get(userId);
@@ -45,7 +49,7 @@ async function getUserRankHistory(userId: number): Promise<number[] | null> {
     .then((user) => {
       const history = user.rank_history?.data ?? null;
       if (history) {
-        setCache(cacheKey, history);
+        void setPersistentCache(cacheKey, history, RANK_HISTORY_CACHE_TTL);
       }
       return history;
     })
@@ -88,26 +92,56 @@ export const getUserScoresRecent = createServerFn({ method: "GET" })
 export const getUserApproxPpGains = createServerFn({ method: "GET" })
   .inputValidator((data: { userId: number }) => data)
   .handler(async ({ data }: { data: { userId: number } }) => {
-    const cacheKey = `pp-gains:${data.userId}`;
-    const cached = getCached<Record<number, number>>(cacheKey);
-    if (cached) return cached;
+    return getApproxPpGainsForUser(data.userId);
+  });
 
-    const [firstPage, secondPage] = await Promise.all([
-      osuFetch<OsuScore[]>(`/users/${data.userId}/scores/best`, {
-        mode: "mania",
-        limit: 100,
-        offset: 0,
-      }),
-      osuFetch<OsuScore[]>(`/users/${data.userId}/scores/best`, {
-        mode: "mania",
-        limit: 100,
-        offset: 100,
-      }),
-    ]);
+async function getApproxPpGainsForUser(userId: number): Promise<Record<number, number>> {
+  const cacheKey = `pp-gains:${userId}`;
+  const cached = await getPersistentCached<Record<number, number>>(cacheKey);
+  if (cached) return cached;
 
-    const gains = calculateApproxPpGainMap([...firstPage, ...secondPage]);
-    setCache(cacheKey, gains);
-    return gains;
+  const [firstPage, secondPage] = await Promise.all([
+    osuFetch<OsuScore[]>(`/users/${userId}/scores/best`, {
+      mode: "mania",
+      limit: 100,
+      offset: 0,
+    }),
+    osuFetch<OsuScore[]>(`/users/${userId}/scores/best`, {
+      mode: "mania",
+      limit: 100,
+      offset: 100,
+    }),
+  ]);
+
+  const gains = calculateApproxPpGainMap([...firstPage, ...secondPage]);
+  await setPersistentCache(cacheKey, gains, APPROX_PP_GAINS_CACHE_TTL);
+  return gains;
+}
+
+export const getUsersApproxPpGains = createServerFn({ method: "GET" })
+  .inputValidator((data: { userIds: number[] }) => data)
+  .handler(async ({ data }: { data: { userIds: number[] } }) => {
+    const uniqueUserIds = [...new Set(data.userIds)];
+
+    const results = await mapWithConcurrency(
+      uniqueUserIds,
+      APPROX_PP_GAINS_CONCURRENCY,
+      async (userId) => {
+        try {
+          const gains = await getApproxPpGainsForUser(userId);
+          return { userId, gains };
+        } catch {
+          return { userId, gains: {} as Record<number, number> };
+        }
+      },
+    );
+
+    const merged: Record<number, number> = {};
+    results.forEach(({ gains }) => {
+      Object.assign(merged, gains);
+    });
+
+    return merged;
   });
 
 // ── Rankings ────────────────────────────────────────────────────────────────
@@ -117,13 +151,13 @@ export const getRankings = createServerFn({ method: "GET" })
   .handler(async ({ data }: { data: { type?: string; page?: number; country?: string } }) => {
     const type = data.type ?? "performance";
     const cacheKey = `rankings:${type}:${data.page ?? 1}:${data.country ?? ""}`;
-    const cached = getCached<RankingsResponse>(cacheKey);
+    const cached = await getPersistentCached<RankingsResponse>(cacheKey);
     if (cached) return cached;
     const result = await osuFetch<RankingsResponse>(`/rankings/mania/${type}`, {
       "cursor[page]": data.page ?? 1,
       country: data.country,
     });
-    setCache(cacheKey, result);
+    await setPersistentCache(cacheKey, result, RANKINGS_CACHE_TTL);
     return result;
   });
 

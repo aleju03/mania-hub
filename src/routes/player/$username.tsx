@@ -15,11 +15,42 @@ import { Avatar } from "../../components/ui/Avatar";
 import { GradeImg } from "../../components/ui/GradeImg";
 import { ModBadge } from "../../components/ui/ModBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
+import { UsernameText } from "../../components/ui/UsernameText";
 import type { OsuScore, OsuUser } from "../../lib/types";
+
+const userRequestCache = new Map<string, Promise<OsuUser>>();
+const userScoresRequestCache = new Map<number, Promise<[OsuScore[], OsuScore[]]>>();
 
 export const Route = createFileRoute("/player/$username")({
   component: PlayerPage,
 });
+
+function loadUserCached(username: string): Promise<OsuUser> {
+  const cached = userRequestCache.get(username);
+  if (cached) return cached;
+
+  const request = getUser({ data: { key: username } }).finally(() => {
+    userRequestCache.delete(username);
+  });
+
+  userRequestCache.set(username, request);
+  return request;
+}
+
+function loadUserScoresCached(userId: number): Promise<[OsuScore[], OsuScore[]]> {
+  const cached = userScoresRequestCache.get(userId);
+  if (cached) return cached;
+
+  const request = Promise.all([
+    getUserScoresBest({ data: { userId, limit: 30 } }),
+    getUserScoresRecent({ data: { userId, limit: 15, include_fails: true } }),
+  ]).finally(() => {
+    userScoresRequestCache.delete(userId);
+  });
+
+  userScoresRequestCache.set(userId, request);
+  return request;
+}
 
 function PlayerPage() {
   const { username } = Route.useParams();
@@ -44,7 +75,7 @@ function PlayerPage() {
     setLoadingUser(true);
     setLoadingScores(true);
 
-    getUser({ data: { key: username } })
+    loadUserCached(username)
       .then((result) => {
         if (cancelled) return;
         setUser(result);
@@ -70,10 +101,7 @@ function PlayerPage() {
     let cancelled = false;
     setLoadingScores(true);
 
-    Promise.all([
-      getUserScoresBest({ data: { userId: user.id, limit: 30 } }),
-      getUserScoresRecent({ data: { userId: user.id, limit: 15, include_fails: true } }),
-    ])
+    loadUserScoresCached(user.id)
       .then(([bestScores, recentScores]) => {
         if (cancelled) return;
         setBest(bestScores);
@@ -128,11 +156,8 @@ function PlayerPage() {
               <Avatar url={user.avatar_url} size={110} />
             </div>
             <div className="pb-1 flex-1 min-w-0">
-              <h1
-                className="text-3xl font-bold text-white truncate"
-                style={{ textShadow: "0 2px 6px rgba(0,0,0,0.75)" }}
-              >
-                {user.username}
+              <h1 className="text-3xl font-bold text-white truncate">
+                <UsernameText username={user.username} avatarUrl={user.avatar_url} className="text-[34px] font-black text-white" />
               </h1>
               <div className="flex items-center gap-3 mt-1">
                 <span
@@ -336,7 +361,7 @@ function RankChart({ data }: { data: number[] }) {
   const points = valid
     .map((v, i) => {
       const x = (i / (valid.length - 1)) * w;
-      const y = h - ((v - min) / range) * (h - 4) - 2;
+      const y = ((v - min) / range) * (h - 4) + 2;
       return `${x},${y}`;
     })
     .join(" ");
@@ -414,7 +439,7 @@ function ScoreRow({ score, index }: { score: OsuScore; index: number }) {
         </span>
       </div>
       <div className="flex items-center gap-3 flex-shrink-0">
-        <div className="flex gap-0.5">
+        <div className="flex gap-0.5 justify-end w-24">
           {(score.mods ?? [])
             .filter((m) => m?.acronym && m.acronym !== "CL")
             .map((m) => (

@@ -1,4 +1,5 @@
 // Server-only: OAuth token management + fetch wrapper for osu! API v2
+import { db, ensureCacheSchema, hasDb } from "./db";
 
 let tokenCache: { access_token: string; expires_at: number } | null = null;
 const OSU_FETCH_RETRIES = 2;
@@ -17,6 +18,60 @@ export function getCached<T>(key: string): T | null {
 
 export function setCache(key: string, data: unknown): void {
   responseCache.set(key, { data, expires: Date.now() + CACHE_TTL });
+}
+
+export async function getPersistentCached<T>(key: string): Promise<T | null> {
+  const memoryCached = getCached<T>(key);
+  if (memoryCached !== null) return memoryCached;
+  if (!hasDb() || !db) return null;
+
+  await ensureCacheSchema();
+
+  const result = await db.execute({
+    sql: `
+      SELECT cache_value, expires_at
+      FROM cache_entries
+      WHERE cache_key = ?
+      LIMIT 1
+    `,
+    args: [key],
+  });
+
+  const row = result.rows[0];
+  if (!row) return null;
+
+  const expiresAt = Number(row.expires_at);
+  if (Date.now() >= expiresAt) {
+    await db.execute({
+      sql: `DELETE FROM cache_entries WHERE cache_key = ?`,
+      args: [key],
+    });
+    return null;
+  }
+
+  const parsed = JSON.parse(String(row.cache_value)) as T;
+  responseCache.set(key, { data: parsed, expires: expiresAt });
+  return parsed;
+}
+
+export async function setPersistentCache(key: string, data: unknown, ttlMs = CACHE_TTL): Promise<void> {
+  const expiresAt = Date.now() + ttlMs;
+  responseCache.set(key, { data, expires: expiresAt });
+  if (!hasDb() || !db) return;
+
+  await ensureCacheSchema();
+
+  await db.execute({
+    sql: `
+      INSERT INTO cache_entries (cache_key, cache_value, expires_at, updated_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(cache_key) DO UPDATE SET
+        cache_value = excluded.cache_value,
+        expires_at = excluded.expires_at,
+        updated_at = excluded.updated_at
+    `,
+    args: [key, JSON.stringify(data), expiresAt, Date.now()],
+  });
 }
 
 function sleep(ms: number): Promise<void> {

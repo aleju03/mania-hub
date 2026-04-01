@@ -16,8 +16,8 @@ const typeColor: Record<string, string> = {
 };
 
 const iconInset: Record<string, number> = {
-  DT: 2,
-  NC: 2,
+  DT: 1,
+  NC: 1,
 };
 
 export function ModBadge({ mod }: { mod: string }) {

@@ -1,16 +1,17 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getRankings, getCountryRecentScores, getUserApproxPpGains } from "../lib/osu";
+import { getRankings, getCountryRecentScores, getUsersApproxPpGains } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { formatAccuracy, formatTimeAgo, formatPP, formatNumber } from "../lib/format";
-import { getDisplayedTotalScore, getScoreTimestamp, scoreHasReplay } from "../lib/score";
+import { getBeatmapUrl, getDisplayedTotalScore, getScoreTimestamp, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
 import { ScoreRowSkeleton } from "../components/ui/LoadingSkeleton";
+import { UsernameText } from "../components/ui/UsernameText";
 import { useAppStore } from "../store";
 import type { OsuScore } from "../lib/types";
 
@@ -176,24 +177,10 @@ function ScoresPage() {
 
     let cancelled = false;
 
-    Promise.allSettled(
-      rankedUsersToFetch.map(async (userId) => ({
-        userId,
-        gains: await getUserApproxPpGains({ data: { userId } }),
-      })),
-    ).then((results) => {
+    getUsersApproxPpGains({ data: { userIds: rankedUsersToFetch } }).then((gains) => {
       if (cancelled) return;
-
-      const nextGains: Record<number, number> = {};
-      const fetchedUsers: Record<number, true> = {};
-
-      results.forEach((result) => {
-        if (result.status !== "fulfilled") return;
-        fetchedUsers[result.value.userId] = true;
-        Object.assign(nextGains, result.value.gains);
-      });
-
-      setPpGainByScoreId((prev) => ({ ...prev, ...nextGains }));
+      const fetchedUsers = Object.fromEntries(rankedUsersToFetch.map((userId) => [userId, true])) as Record<number, true>;
+      setPpGainByScoreId((prev) => ({ ...prev, ...gains }));
       setPpGainFetchedByUserId((prev) => ({ ...prev, ...fetchedUsers }));
     });
 
@@ -291,6 +278,7 @@ function ScoreFeedItem({
   const keys = score.beatmap?.cs;
   const stats = score.statistics;
   const totalScore = getDisplayedTotalScore(score);
+  const beatmapUrl = getBeatmapUrl(score);
   const countMax = stats?.count_geki ?? stats?.perfect ?? 0;
   const count300 = stats?.count_300 ?? stats?.great ?? 0;
   const count200 = stats?.count_katu ?? stats?.good ?? 0;
@@ -312,13 +300,56 @@ function ScoreFeedItem({
         onClick={onToggle}
       >
         <GradeImg grade={score.rank} size={32} />
-        <Avatar url={score.user?.avatar_url} size={36} />
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!score.user?.username) return;
+            window.location.href = `/player/${encodeURIComponent(score.user.username)}`;
+          }}
+          className="cursor-pointer"
+          title={score.user?.username ? `Open ${score.user.username}'s profile` : undefined}
+        >
+          <Avatar url={score.user?.avatar_url} size={36} />
+        </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-osu-blue">{score.user?.username}</span>
+            {score.user?.username ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.location.href = `/player/${encodeURIComponent(score.user.username)}`;
+                }}
+                className="cursor-pointer"
+              >
+                <UsernameText
+                  username={score.user.username}
+                  avatarUrl={score.user?.avatar_url}
+                  className="text-sm font-semibold"
+                />
+              </button>
+            ) : (
+              <UsernameText
+                username="Unknown"
+                avatarUrl={score.user?.avatar_url}
+                className="text-sm font-semibold"
+              />
+            )}
           </div>
           <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-xs text-white truncate">{score.beatmapset?.title}</span>
+            {beatmapUrl ? (
+              <a
+                href={beatmapUrl}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-xs text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
+                title="Open beatmap on osu!"
+              >
+                {score.beatmapset?.title}
+              </a>
+            ) : (
+              <span className="text-xs text-white truncate">{score.beatmapset?.title}</span>
+            )}
             <span className="text-[10px] text-osu-f1 truncate">[{score.beatmap?.version}]</span>
             {keys && (
               <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">

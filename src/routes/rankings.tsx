@@ -8,6 +8,7 @@ import { getCrRankChanges, getGlobalRankChange } from "../lib/rankings";
 import { Avatar } from "../components/ui/Avatar";
 import { PageHeader } from "../components/layout/PageHeader";
 import { RankingRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
+import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse } from "../lib/types";
 import { useAppStore } from "../store";
 
@@ -223,7 +224,11 @@ function RankingsPage() {
                         <td className="py-2.5 px-3">
                           <div className="flex items-center gap-3">
                             <Avatar url={entry.user.avatar_url} size={30} />
-                            <span className="text-sm font-medium text-white">{entry.user.username}</span>
+                            <UsernameText
+                              username={entry.user.username}
+                              avatarUrl={entry.user.avatar_url}
+                              className="text-sm font-medium"
+                            />
                           </div>
                         </td>
                         <td className="py-2.5 px-3">
