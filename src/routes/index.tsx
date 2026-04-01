@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { getRankings, getCountryRecentScores, getUserScoresBest, searchUsers } from "../lib/osu";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
@@ -190,22 +190,125 @@ function HomePage() {
   );
 }
 
+const NOTE_IMAGES = [
+  "/images/notes/arrow-down-gray.png", "/images/notes/arrow-down-green.png",
+  "/images/notes/arrow-left-gray.png", "/images/notes/arrow-left-pink.png",
+  "/images/notes/arrow-right-gray.png", "/images/notes/arrow-right-green.png",
+  "/images/notes/arrow-up-gray.png", "/images/notes/arrow-up-pink.png",
+  "/images/notes/bar-blue.png", "/images/notes/bar-gray.png",
+  "/images/notes/bar-red.png", "/images/notes/bar-yellow.png",
+  "/images/notes/circle-blue.png", "/images/notes/circle-blue-light.png",
+  "/images/notes/circle-gray.png", "/images/notes/circle-green.png",
+  "/images/notes/circle-navy.png", "/images/notes/circle-pink.png",
+  "/images/notes/circle-pink-glow.png", "/images/notes/circle-purple.png",
+  "/images/notes/circle-violet.png", "/images/notes/circle-white.png",
+];
+
+interface FallingNote {
+  x: number;
+  y: number;
+  speed: number;
+  size: number;
+  opacity: number;
+  imgIndex: number;
+  rotation: number;
+  rotSpeed: number;
+}
+
+function createNote(canvasW: number, canvasH: number, startAbove: boolean): FallingNote {
+  return {
+    x: Math.random() * canvasW,
+    y: startAbove ? -(Math.random() * canvasH) : Math.random() * canvasH,
+    speed: 20 + Math.random() * 40,
+    size: 20 + Math.random() * 20,
+    opacity: 0.04 + Math.random() * 0.08,
+    imgIndex: Math.floor(Math.random() * NOTE_IMAGES.length),
+    rotation: Math.random() * Math.PI * 2,
+    rotSpeed: (Math.random() - 0.5) * 0.3,
+  };
+}
+
 function ManiaRain() {
-  const cols = 7;
-  const notes = Array.from({ length: 20 }, (_, i) => ({
-    col: i % cols, delay: Math.random() * 5, duration: 3 + Math.random() * 4,
-    opacity: 0.03 + Math.random() * 0.06, width: 28 + Math.random() * 12, height: 8 + Math.random() * 20,
-  }));
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const notesRef = useRef<FallingNote[]>([]);
+  const imagesRef = useRef<HTMLImageElement[]>([]);
+  const rafRef = useRef<number>(0);
+  const lastTimeRef = useRef<number>(0);
+
+  const init = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.parentElement!.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    notesRef.current = Array.from({ length: 30 }, () =>
+      createNote(canvas.width, canvas.height, false)
+    );
+  }, []);
+
+  useEffect(() => {
+    // Preload all note images
+    imagesRef.current = NOTE_IMAGES.map((src) => {
+      const img = new Image();
+      img.src = src;
+      return img;
+    });
+
+    init();
+
+    const onResize = () => init();
+    window.addEventListener("resize", onResize);
+
+    const animate = (time: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+
+      const dt = lastTimeRef.current ? (time - lastTimeRef.current) / 1000 : 0.016;
+      lastTimeRef.current = time;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      for (const note of notesRef.current) {
+        note.y += note.speed * dt;
+        note.rotation += note.rotSpeed * dt;
+
+        // Seamless wrap: once fully off the bottom, reappear above
+        if (note.y > canvas.height + note.size) {
+          note.y = -note.size;
+          note.x = Math.random() * canvas.width;
+          note.imgIndex = Math.floor(Math.random() * NOTE_IMAGES.length);
+        }
+
+        const img = imagesRef.current[note.imgIndex];
+        if (!img || !img.complete) continue;
+
+        ctx.save();
+        ctx.globalAlpha = note.opacity;
+        ctx.translate(note.x, note.y);
+        ctx.rotate(note.rotation);
+        ctx.drawImage(img, -note.size / 2, -note.size / 2, note.size, note.size);
+        ctx.restore();
+      }
+
+      rafRef.current = requestAnimationFrame(animate);
+    };
+
+    rafRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [init]);
+
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {notes.map((n, i) => (
-        <div key={i} className="absolute rounded-sm" style={{
-          left: `${((n.col + 0.5) / cols) * 100}%`, width: n.width, height: n.height,
-          background: `hsl(${[200, 50, 280, 333, 160, 40, 300][n.col]}, 60%, 60%)`,
-          opacity: n.opacity, animation: `mania-fall ${n.duration}s ${n.delay}s linear infinite`,
-          transform: "translateX(-50%)",
-        }} />
-      ))}
+    <div className="absolute inset-0 pointer-events-none" style={{ maskImage: "linear-gradient(to bottom, black 60%, transparent 100%)", WebkitMaskImage: "linear-gradient(to bottom, black 60%, transparent 100%)" }}>
+      <canvas
+        ref={canvasRef}
+        className="w-full h-full"
+      />
     </div>
   );
 }
