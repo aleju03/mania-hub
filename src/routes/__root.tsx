@@ -1,6 +1,5 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
 import { Nav } from "../components/layout/Nav";
-import { Footer } from "../components/layout/Footer";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
@@ -24,7 +23,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <body className="min-h-screen flex flex-col font-sans antialiased">
         <Nav />
         <main className="flex-1 pt-[60px]">{children}</main>
-        <Footer />
         <Scripts />
       </body>
     </html>

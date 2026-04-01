@@ -33,11 +33,11 @@ export function Nav() {
         <img
           src="/images/layout/nav2-background-hue0.png"
           alt=""
-          className="absolute inset-0 w-full h-full object-cover opacity-40"
-          style={{ filter: "hue-rotate(333deg) saturate(0.6)" }}
+          className="absolute inset-0 w-full h-full object-cover opacity-60"
+          style={{ filter: "hue-rotate(333deg) saturate(0.8)" }}
         />
       </div>
-      <div className="absolute inset-0 bg-[#111]/90" />
+      <div className="absolute inset-0 bg-[#111]/70" />
       <div
         className="absolute bottom-0 left-0 right-0 h-px"
         style={{ background: "hsl(333,100%,70%,0.2)" }}
@@ -50,20 +50,36 @@ export function Nav() {
             transition={{ duration: 0.1 }}
           >
             <Link to="/" className="flex items-center gap-2">
-              <div
-                className="w-10 h-10"
-                style={{
-                  background: "linear-gradient(180deg, #002b7f 20%, #fff 20%, #fff 35%, #ce1126 35%, #ce1126 65%, #fff 65%, #fff 80%, #002b7f 80%)",
-                  maskImage: "url(/images/layout/osu-logo-white.svg)",
-                  WebkitMaskImage: "url(/images/layout/osu-logo-white.svg)",
-                  maskSize: "contain",
-                  WebkitMaskSize: "contain",
-                  maskRepeat: "no-repeat",
-                  WebkitMaskRepeat: "no-repeat",
-                  maskPosition: "center",
-                  WebkitMaskPosition: "center",
-                }}
-              />
+              <div className="relative w-10 h-10">
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background: "linear-gradient(180deg, #002b7f 20%, #fff 20%, #fff 35%, #ce1126 35%, #ce1126 65%, #fff 65%, #fff 80%, #002b7f 80%)",
+                    maskImage: "url(/images/layout/osu-logo-circle.svg)",
+                    WebkitMaskImage: "url(/images/layout/osu-logo-circle.svg)",
+                    maskSize: "contain",
+                    WebkitMaskSize: "contain",
+                    maskRepeat: "no-repeat",
+                    WebkitMaskRepeat: "no-repeat",
+                    maskPosition: "center",
+                    WebkitMaskPosition: "center",
+                  }}
+                />
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background: "white",
+                    maskImage: "url(/images/layout/osu-logo-text.svg)",
+                    WebkitMaskImage: "url(/images/layout/osu-logo-text.svg)",
+                    maskSize: "contain",
+                    WebkitMaskSize: "contain",
+                    maskRepeat: "no-repeat",
+                    WebkitMaskRepeat: "no-repeat",
+                    maskPosition: "center",
+                    WebkitMaskPosition: "center",
+                  }}
+                />
+              </div>
               <span className="mode-icon text-osu-pink text-lg" title="mania">{"\ue802"}</span>
             </Link>
           </motion.div>

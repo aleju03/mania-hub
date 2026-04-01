@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { getUser, getUserScoresBest, getUserScoresRecent } from "../../lib/osu";
 import {
@@ -13,24 +13,102 @@ import {
 import { Avatar } from "../../components/ui/Avatar";
 import { GradeImg } from "../../components/ui/GradeImg";
 import { ModBadge } from "../../components/ui/ModBadge";
-import type { OsuScore } from "../../lib/types";
+import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
+import type { OsuScore, OsuUser } from "../../lib/types";
 
 export const Route = createFileRoute("/player/$username")({
   component: PlayerPage,
-  loader: async ({ params }) => {
-    const user = await getUser({ data: { key: params.username } });
-    const [best, recent] = await Promise.all([
-      getUserScoresBest({ data: { userId: user.id, limit: 30 } }),
-      getUserScoresRecent({ data: { userId: user.id, limit: 15, include_fails: true } }),
-    ]);
-    return { user, best, recent };
-  },
 });
 
 function PlayerPage() {
-  const { user, best, recent } = Route.useLoaderData();
+  const { username } = Route.useParams();
+  const [user, setUser] = useState<OsuUser | null>(null);
+  const [best, setBest] = useState<OsuScore[]>([]);
+  const [recent, setRecent] = useState<OsuScore[]>([]);
+  const [loadingUser, setLoadingUser] = useState(true);
+  const [loadingScores, setLoadingScores] = useState(true);
+  const [userError, setUserError] = useState<string | null>(null);
+  const [scoresError, setScoresError] = useState<string | null>(null);
   const [tab, setTab] = useState<"best" | "recent">("best");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setUser(null);
+    setBest([]);
+    setRecent([]);
+    setTab("best");
+    setUserError(null);
+    setScoresError(null);
+    setLoadingUser(true);
+    setLoadingScores(true);
+
+    getUser({ data: { key: username } })
+      .then((result) => {
+        if (cancelled) return;
+        setUser(result);
+        setUserError(null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setUserError("Couldn't load this player right now.");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingUser(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [username]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+    setLoadingScores(true);
+
+    Promise.all([
+      getUserScoresBest({ data: { userId: user.id, limit: 30 } }),
+      getUserScoresRecent({ data: { userId: user.id, limit: 15, include_fails: true } }),
+    ])
+      .then(([bestScores, recentScores]) => {
+        if (cancelled) return;
+        setBest(bestScores);
+        setRecent(recentScores);
+        setScoresError(null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setScoresError("Couldn't load this player's scores right now.");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingScores(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  if (loadingUser && !user) {
+    return <PlayerPageSkeleton />;
+  }
+
+  if (userError || !user) {
+    return (
+      <div className="flex-1 bg-osu-b5">
+        <div className="max-w-[1200px] mx-auto px-5 py-16 text-center text-sm text-osu-f1">
+          {userError ?? "Player not found."}
+        </div>
+      </div>
+    );
+  }
+
   const stats = user.statistics;
+  const visibleScores = tab === "best" ? best : recent;
 
   return (
     <div className="flex-1">
@@ -151,12 +229,72 @@ function PlayerPage() {
       {/* Scores list */}
       <div className="bg-osu-b5 border-t border-osu-b3/20">
         <div className="max-w-[1200px] mx-auto px-5 py-5 space-y-1.5">
-          {(tab === "best" ? best : recent).map((s: OsuScore, i: number) => (
-            <ScoreRow key={s.id} score={s} index={i} />
-          ))}
-          {(tab === "best" ? best : recent).length === 0 && (
+          {loadingScores ? (
+            Array.from({ length: 6 }).map((_, i) => (
+              <ScoreRowSkeleton key={i} />
+            ))
+          ) : scoresError ? (
+            <div className="text-center py-8 text-osu-f1 text-sm">{scoresError}</div>
+          ) : visibleScores.length > 0 ? (
+            visibleScores.map((s: OsuScore, i: number) => (
+              <ScoreRow key={s.id} score={s} index={i} />
+            ))
+          ) : (
             <div className="text-center py-8 text-osu-f1 text-sm">No scores found</div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlayerPageSkeleton() {
+  return (
+    <div className="flex-1 bg-osu-b5">
+      <div className="relative h-[280px] overflow-hidden bg-osu-b4">
+        <div className="absolute inset-0 bg-gradient-to-b from-osu-d5 to-osu-b5" />
+        <div className="absolute bottom-0 left-0 right-0">
+          <div className="max-w-[1200px] mx-auto px-5 pb-5 flex items-end gap-5">
+            <Skeleton className="w-[110px] h-[110px] rounded-2xl translate-y-4 flex-shrink-0" />
+            <div className="pb-1 flex-1 min-w-0 space-y-2">
+              <Skeleton className="h-8 w-48" />
+              <Skeleton className="h-4 w-28" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-[1200px] mx-auto px-5 pt-8 pb-5 space-y-5">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="bg-osu-b4 rounded-xl p-3 border border-osu-b3/20 space-y-2">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-6 w-24" />
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-osu-b4 rounded-xl p-3 border border-osu-b3/20 space-y-2">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-3 w-28" />
+            <Skeleton className="h-3 w-14" />
+          </div>
+          <Skeleton className="h-16 w-full" />
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-osu-b4 rounded-xl p-3 border border-osu-b3/20 space-y-2">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-5 w-20" />
+            </div>
+          ))}
+        </div>
+
+        <div className="space-y-1.5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <ScoreRowSkeleton key={i} />
+          ))}
         </div>
       </div>
     </div>

@@ -29,30 +29,56 @@ const PAGE_SIZE = 15;
 
 export const Route = createFileRoute("/popoffs")({
   component: PopOffsPage,
-  loader: async () => {
-    // Only fetch the rankings list (fast) - scores are fetched client-side progressively
-    const rankings = await getRankings({ data: { type: "performance", page: 1, country: "CR" } });
-    return {
-      players: rankings.ranking.slice(0, 30).map((e: RankingsResponse["ranking"][number]) => ({
-        id: e.user.id,
-        username: e.user.username,
-        avatar_url: e.user.avatar_url,
-      })),
-    };
-  },
 });
 
 function PopOffsPage() {
-  const { players } = Route.useLoaderData();
   const navigate = useNavigate();
+  const [players, setPlayers] = useState<PopOff["user"][]>([]);
+  const [playersError, setPlayersError] = useState<string | null>(null);
+  const [loadingPlayers, setLoadingPlayers] = useState(true);
   const [popoffs, setPopoffs] = useState<PopOff[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadedCount, setLoadedCount] = useState(0);
   const [range, setRange] = useState<TimeRange>("7d");
   const [page, setPage] = useState(0);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    getRankings({ data: { type: "performance", page: 1, country: "CR" } })
+      .then((rankings) => {
+        if (cancelled) return;
+
+        setPlayers(
+          rankings.ranking.slice(0, 30).map((entry: RankingsResponse["ranking"][number]) => ({
+            id: entry.user.id,
+            username: entry.user.username,
+            avatar_url: entry.user.avatar_url,
+          })),
+        );
+        setPlayersError(null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPlayersError("Couldn't load the player list for pop-offs.");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingPlayers(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Progressively fetch scores for each player
   const fetchAll = useCallback(async () => {
+    if (players.length === 0) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setPopoffs([]);
     setLoadedCount(0);
@@ -93,7 +119,10 @@ function PopOffsPage() {
     setLoading(false);
   }, [players]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    if (loadingPlayers || playersError) return;
+    fetchAll();
+  }, [fetchAll, loadingPlayers, playersError]);
 
   // Filter by time range
   const filtered = popoffs.filter((p) => {
@@ -121,15 +150,17 @@ function PopOffsPage() {
           <h2 className="text-[15px] font-medium text-osu-c2">CR mania pop-offs</h2>
           <span className="mode-icon text-osu-pink ml-1">{"\ue802"}</span>
           <div className="ml-auto flex items-center gap-2">
-            {loading && (
+            {(loadingPlayers || loading) && !playersError && (
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
                 <span className="text-[10px] text-osu-f1">
-                  Loading {loadedCount}/{players.length} players...
+                  {loadingPlayers
+                    ? "Loading player list..."
+                    : `Loading ${loadedCount}/${players.length} players...`}
                 </span>
               </div>
             )}
-            {!loading && (
+            {!loadingPlayers && !loading && !playersError && (
               <span className="text-[10px] text-osu-f1">
                 {filtered.length} pop-offs found
               </span>
@@ -159,8 +190,14 @@ function PopOffsPage() {
 
       <div className="bg-osu-b5">
         <div className="max-w-[1200px] mx-auto px-5 py-6">
+          {playersError && (
+            <div className="text-center py-16 text-osu-f1 text-sm">
+              {playersError}
+            </div>
+          )}
+
           {/* Loading skeletons on initial load */}
-          {loading && popoffs.length === 0 && (
+          {!playersError && (loadingPlayers || (loading && popoffs.length === 0)) && (
             <div className="space-y-2">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 py-3 px-4 rounded-xl bg-osu-b4 border border-osu-b3/20">
@@ -178,7 +215,7 @@ function PopOffsPage() {
           )}
 
           {/* Results */}
-          {paginated.length > 0 && (
+          {!playersError && paginated.length > 0 && (
             <div className="space-y-2">
               <AnimatePresence mode="popLayout">
                 {paginated.map((p: PopOff, i: number) => (
@@ -262,14 +299,14 @@ function PopOffsPage() {
             </div>
           )}
 
-          {!loading && filtered.length === 0 && (
+          {!playersError && !loadingPlayers && !loading && filtered.length === 0 && (
             <div className="text-center py-16 text-osu-f1 text-sm">
               No pop-offs in this time range
             </div>
           )}
 
           {/* Pagination */}
-          {totalPages > 1 && (
+          {!playersError && totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 mt-6">
               {page > 0 && (
                 <button
