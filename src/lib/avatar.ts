@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createServerFn } from "@tanstack/react-start";
 import { getPersistentCached, setPersistentCache } from "./api";
+import { getAvatarAccentCacheKey } from "./avatar-accent";
 
 interface RgbColor {
   r: number;
@@ -87,6 +88,10 @@ function getSaturation(color: RgbColor): number {
 
 function normalizeForText(color: RgbColor): string {
   const { h, s, l } = rgbToHsl(color);
+  if (s < 0.08) {
+    return toHex(hslToRgb(0, 0, clamp(Math.max(l, 0.62), 0.58, 0.74)));
+  }
+
   const normalized = hslToRgb(
     h,
     clamp(Math.max(s, 0.55), 0.55, 0.9),
@@ -197,7 +202,7 @@ async function extractAvatarAccent(url: string): Promise<string | null> {
 }
 
 async function getAvatarAccentCached(url: string): Promise<string | null> {
-  const cacheKey = `avatar-accent:${url}`;
+  const cacheKey = getAvatarAccentCacheKey(url);
   const cached = await getPersistentCached<string | null>(cacheKey);
   if (cached !== null) return cached;
 

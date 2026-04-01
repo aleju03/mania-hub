@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { getAvatarAccentStoreKey } from "../../lib/avatar-accent";
 import { getAvatarAccents } from "../../lib/avatar";
 import { useAppStore } from "../../store";
 
@@ -40,14 +41,15 @@ export function UsernameText({
   avatarUrl?: string;
   className?: string;
 }) {
-  const accent = useAppStore((state) => (avatarUrl ? state.avatarAccents[avatarUrl] : null));
+  const accentKey = avatarUrl ? getAvatarAccentStoreKey(avatarUrl) : null;
+  const accent = useAppStore((state) => (accentKey ? state.avatarAccents[accentKey] : null));
 
   useEffect(() => {
     if (!avatarUrl) {
       return;
     }
 
-    if (useAppStore.getState().avatarAccents[avatarUrl] !== undefined) {
+    if (useAppStore.getState().avatarAccents[getAvatarAccentStoreKey(avatarUrl)] !== undefined) {
       return;
     }
 

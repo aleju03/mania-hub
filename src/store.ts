@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { getAvatarAccentStoreKey } from "./lib/avatar-accent";
 import { getScoreTimeMs } from "./lib/score";
 import type { OsuScore, RankingsResponse } from "./lib/types";
 
@@ -77,7 +78,12 @@ export const useAppStore = create<AppState>()(
       pollIndex: 0,
       setAvatarAccents: (accents) =>
         set((state) => ({
-          avatarAccents: { ...state.avatarAccents, ...accents },
+          avatarAccents: {
+            ...state.avatarAccents,
+            ...Object.fromEntries(
+              Object.entries(accents).map(([url, accent]) => [getAvatarAccentStoreKey(url), accent]),
+            ),
+          },
         })),
       setCrRankings: (rankings) =>
         set({
