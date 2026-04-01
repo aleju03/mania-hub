@@ -233,7 +233,7 @@ function PopOffsPage() {
                   >
                     {/* PP badge */}
                     <div className="flex-shrink-0 w-16 text-center">
-                      <div className="text-lg font-bold text-osu-pink" style={{ fontFamily: "Venera" }}>
+                      <div className="text-lg font-bold text-osu-pink" style={{ fontFamily: "Torus" }}>
                         {Math.round(p.pp)}
                       </div>
                       <div className="text-[8px] uppercase tracking-wider text-osu-f1 font-semibold">pp</div>
