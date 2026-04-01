@@ -23,6 +23,7 @@ export interface CachedPopoff {
 }
 
 interface AppState {
+  avatarAccents: Record<string, string | null>;
   crRankings: RankingsResponse | null;
   crRankingsFetchedAt: number | null;
   rankHistories: Record<number, number[]>;
@@ -39,6 +40,7 @@ interface AppState {
   trackedUserIds: number[];
   trackedUserIdsFetchedAt: number | null;
   pollIndex: number;
+  setAvatarAccents: (accents: Record<string, string | null>) => void;
   setCrRankings: (rankings: RankingsResponse) => void;
   setRankHistories: (histories: Record<number, number[]>) => void;
   setHomeRecentScores: (scores: OsuScore[]) => void;
@@ -58,6 +60,7 @@ export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       crRankings: null,
+      avatarAccents: {},
       crRankingsFetchedAt: null,
       rankHistories: {},
       rankHistoriesFetchedAt: null,
@@ -72,6 +75,10 @@ export const useAppStore = create<AppState>()(
       trackedUserIds: [],
       trackedUserIdsFetchedAt: null,
       pollIndex: 0,
+      setAvatarAccents: (accents) =>
+        set((state) => ({
+          avatarAccents: { ...state.avatarAccents, ...accents },
+        })),
       setCrRankings: (rankings) =>
         set({
           crRankings: rankings,
@@ -125,6 +132,7 @@ export const useAppStore = create<AppState>()(
       name: "mania-hub-cache-v1",
       storage,
       partialize: (state) => ({
+        avatarAccents: state.avatarAccents,
         crRankings: state.crRankings,
         crRankingsFetchedAt: state.crRankingsFetchedAt,
         rankHistories: state.rankHistories,

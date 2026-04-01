@@ -9,6 +9,7 @@ import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { PlayerCardSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { ManiaRain } from "../components/home/ManiaRain";
+import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse, OsuScore } from "../lib/types";
 import { useAppStore } from "../store";
 
@@ -176,7 +177,11 @@ function HomePage() {
                   onClick={() => navigate({ to: "/player/$username", params: { username: entry.user.username } })}>
                   <span className="text-sm font-bold text-osu-f1 w-6 text-center">#{i + 1}</span>
                   <Avatar url={entry.user.avatar_url} size={30} />
-                  <span className="text-sm font-medium text-white flex-1 truncate">{entry.user.username}</span>
+                  <UsernameText
+                    username={entry.user.username}
+                    avatarUrl={entry.user.avatar_url}
+                    className="text-sm font-medium flex-1 truncate"
+                  />
                   <span className="text-xs font-bold text-right">{formatNumber(Math.round(entry.pp))}pp</span>
                 </motion.div>
               ))
@@ -217,7 +222,11 @@ function HomePage() {
                   <div className="flex items-center justify-center gap-2 mb-2">
                     <GradeImg grade={p.score.rank} size={18} />
                     <Avatar url={p.user.avatar_url} size={24} />
-                    <span className="text-xs font-medium text-white">{p.user.username}</span>
+                    <UsernameText
+                      username={p.user.username}
+                      avatarUrl={p.user.avatar_url}
+                      className="text-xs font-medium"
+                    />
                   </div>
                   <div className="text-[10px] text-osu-f1 truncate">{p.score.beatmapset?.title}</div>
                   <div className="text-[10px] text-osu-f1 truncate">[{p.score.beatmap?.version}]</div>
@@ -254,7 +263,14 @@ function HomePage() {
                   <GradeImg grade={s.rank} size={22} />
                   <Avatar url={s.user?.avatar_url} size={26} />
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs text-white truncate">{s.user?.username} <span className="text-osu-f1">on</span> {s.beatmapset?.title}</div>
+                    <div className="text-xs truncate">
+                      <UsernameText
+                        username={s.user?.username ?? "Unknown"}
+                        avatarUrl={s.user?.avatar_url}
+                        className="font-medium"
+                      />{" "}
+                      <span className="text-osu-f1">on</span> {s.beatmapset?.title}
+                    </div>
                     <div className="text-[10px] text-osu-f1">[{s.beatmap?.version}] {s.beatmap?.cs && `${s.beatmap.cs}K`}</div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">

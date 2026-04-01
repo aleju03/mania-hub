@@ -25,6 +25,14 @@ export function scoreHasReplay(score: OsuScore): boolean {
   return score.has_replay ?? score.replay ?? false;
 }
 
+export function getBeatmapUrl(score: OsuScore): string | null {
+  return score.beatmap?.url ?? (
+    score.beatmap?.id != null
+      ? `https://osu.ppy.sh/beatmaps/${score.beatmap.id}`
+      : null
+  );
+}
+
 export function calculateWeightedPpTotal(scores: Array<Pick<OsuScore, "pp">>): number {
   return scores.reduce((total, score, index) => {
     const pp = score.pp ?? 0;

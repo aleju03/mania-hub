@@ -1,16 +1,17 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getRankings, getUserApproxPpGains, getUserScoresBest } from "../lib/osu";
+import { getRankings, getUserScoresBest, getUsersApproxPpGains } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { formatNumber, formatAccuracy, formatTimeAgo } from "../lib/format";
-import { getScoreTimeMs, getScoreTimestamp, scoreHasReplay } from "../lib/score";
+import { getBeatmapUrl, getDisplayedTotalScore, getScoreTimeMs, getScoreTimestamp, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
+import { UsernameText } from "../components/ui/UsernameText";
 import type { OsuScore, RankingsResponse } from "../lib/types";
 import { useAppStore } from "../store";
 
@@ -23,6 +24,7 @@ interface PopOff {
 }
 
 type TimeRange = "24h" | "3d" | "7d" | "30d";
+type SortMode = "recent" | "pp";
 const RANGE_MS: Record<TimeRange, number> = {
   "24h": 24 * 60 * 60 * 1000,
   "3d": 3 * 24 * 60 * 60 * 1000,
@@ -50,7 +52,9 @@ function PopOffsPage() {
   const [progressivePopoffs, setProgressivePopoffs] = useState<PopOff[]>([]);
   const [loadedCount, setLoadedCount] = useState(0);
   const [range, setRange] = useState<TimeRange>("7d");
+  const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [page, setPage] = useState(0);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
   const [ppGainByScoreId, setPpGainByScoreId] = useState<Record<number, number>>({});
   const [ppGainFetchedByUserId, setPpGainFetchedByUserId] = useState<Record<number, true>>({});
 
@@ -162,10 +166,20 @@ function PopOffsPage() {
 
   // Filter by time range
   const visiblePopoffs = popoffs.length > 0 ? popoffs : progressivePopoffs;
-  const filtered = visiblePopoffs.filter((p) => {
-    const age = Date.now() - new Date(p.time).getTime();
-    return age < RANGE_MS[range];
-  });
+  const filtered = useMemo(() => {
+    const withinRange = visiblePopoffs.filter((popoff) => {
+      const age = Date.now() - new Date(popoff.time).getTime();
+      return age < RANGE_MS[range];
+    });
+
+    return [...withinRange].sort((a, b) => {
+      if (sortMode === "pp") {
+        if (b.pp !== a.pp) return b.pp - a.pp;
+      }
+
+      return new Date(b.time).getTime() - new Date(a.time).getTime();
+    });
+  }, [visiblePopoffs, range, sortMode]);
 
   useEffect(() => {
     const usersToFetch = [...new Set(
@@ -178,24 +192,10 @@ function PopOffsPage() {
 
     let cancelled = false;
 
-    Promise.allSettled(
-      usersToFetch.map(async (userId) => ({
-        userId,
-        gains: await getUserApproxPpGains({ data: { userId } }),
-      })),
-    ).then((results) => {
+    getUsersApproxPpGains({ data: { userIds: usersToFetch } }).then((gains) => {
       if (cancelled) return;
-
-      const nextGains: Record<number, number> = {};
-      const fetchedUsers: Record<number, true> = {};
-
-      results.forEach((result) => {
-        if (result.status !== "fulfilled") return;
-        fetchedUsers[result.value.userId] = true;
-        Object.assign(nextGains, result.value.gains);
-      });
-
-      setPpGainByScoreId((prev) => ({ ...prev, ...nextGains }));
+      const fetchedUsers = Object.fromEntries(usersToFetch.map((userId) => [userId, true])) as Record<number, true>;
+      setPpGainByScoreId((prev) => ({ ...prev, ...gains }));
       setPpGainFetchedByUserId((prev) => ({ ...prev, ...fetchedUsers }));
     });
 
@@ -250,6 +250,37 @@ function PopOffsPage() {
         }}
       />
 
+      <div className="bg-osu-d5 border-b border-osu-b3/20">
+        <div className="max-w-[1200px] mx-auto px-5 py-2 flex items-center justify-end gap-2">
+          <button
+            onClick={() => {
+              setSortMode("recent");
+              setPage(0);
+            }}
+            className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+              sortMode === "recent"
+                ? "bg-osu-pink/15 text-osu-pink-light"
+                : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3"
+            }`}
+          >
+            Most Recent
+          </button>
+          <button
+            onClick={() => {
+              setSortMode("pp");
+              setPage(0);
+            }}
+            className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+              sortMode === "pp"
+                ? "bg-osu-pink/15 text-osu-pink-light"
+                : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3"
+            }`}
+          >
+            Highest PP
+          </button>
+        </div>
+      </div>
+
       <div className="bg-osu-b5">
         <div className="max-w-[1200px] mx-auto px-5 py-6">
           {playersError && (
@@ -288,81 +319,143 @@ function PopOffsPage() {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.12, delay: i * 0.02 }}
-                    className="flex items-center gap-3 py-3 px-4 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors duration-[120ms] cursor-pointer border border-osu-b3/20"
-                    onClick={() =>
-                      navigate({ to: "/player/$username", params: { username: p.user.username } })
-                    }
+                    className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden"
                   >
-                    {/* PP badge */}
-                    <div className="flex-shrink-0 w-16 text-center">
-                      <div className="text-lg font-bold text-osu-pink" style={{ fontFamily: "Torus" }}>
-                        {Math.round(p.pp)}
-                      </div>
-                      <div className="text-[8px] uppercase tracking-wider text-osu-f1 font-semibold">pp</div>
-                      {ppGainByScoreId[p.score.id] != null && (
-                        <div
-                          className="text-[10px] font-semibold text-osu-green"
-                          title="Approximate pp gain from removing this play from the current best-score stack"
-                        >
-                          +{formatNumber(Math.round(ppGainByScoreId[p.score.id]))}
+                    <div
+                      className="flex items-center gap-3 py-3 px-4 hover:bg-osu-b3 transition-colors duration-[120ms] cursor-pointer"
+                      onClick={() => setExpandedId(expandedId === p.score.id ? null : p.score.id)}
+                    >
+                      <div className="flex-shrink-0 w-16 text-center">
+                        <div className="text-lg font-bold text-osu-pink" style={{ fontFamily: "Torus" }}>
+                          {Math.round(p.pp)}
                         </div>
-                      )}
-                    </div>
-
-                    <GradeImg grade={p.score.rank} size={30} />
-                    <Avatar url={p.user.avatar_url} size={36} />
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-white">{p.user.username}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-osu-pink/15 text-osu-pink-light font-semibold">
-                          New best
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs text-osu-l2 truncate">
-                          {p.score.beatmapset?.title}
-                        </span>
-                        <span className="text-[10px] text-osu-f1 truncate">
-                          [{p.score.beatmap?.version}]
-                        </span>
-                        {p.score.beatmap?.cs && (
-                          <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
-                            {p.score.beatmap.cs}K
-                          </span>
+                        <div className="text-[8px] uppercase tracking-wider text-osu-f1 font-semibold">pp</div>
+                        {ppGainByScoreId[p.score.id] != null && (
+                          <div
+                            className="text-[10px] font-semibold text-osu-green"
+                            title="Approximate pp gain from removing this play from the current best-score stack"
+                          >
+                            +{formatNumber(Math.round(ppGainByScoreId[p.score.id]))}
+                          </div>
                         )}
                       </div>
+
+                      <GradeImg grade={p.score.rank} size={30} />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate({ to: "/player/$username", params: { username: p.user.username } });
+                        }}
+                        className="cursor-pointer"
+                        title={`Open ${p.user.username}'s profile`}
+                      >
+                        <Avatar url={p.user.avatar_url} size={36} />
+                      </button>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate({ to: "/player/$username", params: { username: p.user.username } });
+                            }}
+                            className="cursor-pointer"
+                          >
+                            <UsernameText
+                              username={p.user.username}
+                              avatarUrl={p.user.avatar_url}
+                              className="text-sm font-semibold"
+                            />
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {getBeatmapUrl(p.score) ? (
+                            <a
+                              href={getBeatmapUrl(p.score)!}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-xs text-osu-l2 truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
+                              title="Open beatmap on osu!"
+                            >
+                              {p.score.beatmapset?.title}
+                            </a>
+                          ) : (
+                            <span className="text-xs text-osu-l2 truncate">
+                              {p.score.beatmapset?.title}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-osu-f1 truncate">
+                            [{p.score.beatmap?.version}]
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <div className="flex gap-0.5">
+                          {(p.score.mods ?? [])
+                            .filter((m) => m?.acronym && m.acronym !== "CL")
+                            .map((m) => (
+                              <ModBadge key={m.acronym} mod={m.acronym} />
+                            ))}
+                        </div>
+                        <span className="text-xs text-osu-l2">
+                          {formatAccuracy(p.score.accuracy)}
+                        </span>
+                        <span className="text-xs text-osu-f1">
+                          {formatNumber(p.score.max_combo)}x
+                        </span>
+                        {scoreHasReplay(p.score) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.location.href = `/replay?scoreId=${p.score.id}&mode=mania`;
+                            }}
+                            className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
+                          >
+                            ▶ Replay
+                          </button>
+                        )}
+                        <span className="text-[10px] text-osu-f1 w-14 text-right">
+                          {formatTimeAgo(p.time)}
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <div className="flex gap-0.5">
-                        {(p.score.mods ?? [])
-                          .filter((m) => m?.acronym && m.acronym !== "CL")
-                          .map((m) => (
-                            <ModBadge key={m.acronym} mod={m.acronym} />
-                          ))}
-                      </div>
-                      <span className="text-xs text-osu-l2">
-                        {formatAccuracy(p.score.accuracy)}
-                      </span>
-                      <span className="text-xs text-osu-f1">
-                        {formatNumber(p.score.max_combo)}x
-                      </span>
-                      {scoreHasReplay(p.score) && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            window.location.href = `/replay?scoreId=${p.score.id}&mode=mania`;
-                          }}
-                          className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors"
+                    <AnimatePresence>
+                      {expandedId === p.score.id && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.15 }}
+                          className="overflow-hidden"
                         >
-                          ▶ Replay
-                        </button>
+                          <div className="px-4 pb-3 pt-1 border-t border-osu-b3/20">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
+                              <StatCell label="Score" value={getDisplayedTotalScore(p.score) != null ? formatNumber(getDisplayedTotalScore(p.score)!) : "-"} />
+                              <StatCell label="Combo" value={`${formatNumber(p.score.max_combo)}x`} />
+                              <StatCell label="MAX" value={formatNumber(p.score.statistics.count_geki ?? p.score.statistics.perfect ?? 0)} color="text-osu-blue" />
+                              <StatCell label="300" value={formatNumber(p.score.statistics.count_300 ?? p.score.statistics.great ?? 0)} color="text-osu-yellow" />
+                              <StatCell label="200" value={formatNumber(p.score.statistics.count_katu ?? p.score.statistics.good ?? 0)} color="text-osu-green" />
+                              <StatCell label="100" value={formatNumber(p.score.statistics.count_100 ?? p.score.statistics.ok ?? 0)} color="text-osu-purple" />
+                              <StatCell label="50" value={formatNumber(p.score.statistics.count_50 ?? p.score.statistics.meh ?? 0)} color="text-osu-orange" />
+                              <StatCell label="Miss" value={formatNumber(p.score.statistics.count_miss ?? p.score.statistics.miss ?? 0)} color="text-osu-red" />
+                              <StatCell label="PP" value={`${Math.round(p.pp)}pp`} color="text-osu-pink" />
+                              {p.score.beatmap?.difficulty_rating != null && (
+                                <StatCell label="Stars" value={p.score.beatmap.difficulty_rating.toFixed(2)} />
+                              )}
+                              {p.score.beatmap?.bpm != null && (
+                                <StatCell label="BPM" value={String(Math.round(p.score.beatmap.bpm))} />
+                              )}
+                              {p.score.max_combo > 0 && p.score.beatmap?.max_combo && p.score.beatmap.max_combo > 0 && (
+                                <StatCell label="Combo %" value={`${Math.round((p.score.max_combo / p.score.beatmap.max_combo) * 100)}%`} />
+                              )}
+                            </div>
+                          </div>
+                        </motion.div>
                       )}
-                      <span className="text-[10px] text-osu-f1 w-14 text-right">
-                        {formatTimeAgo(p.time)}
-                      </span>
-                    </div>
+                    </AnimatePresence>
                   </motion.div>
                 ))}
               </AnimatePresence>
@@ -401,6 +494,15 @@ function PopOffsPage() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function StatCell({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div className="py-1.5">
+      <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
+      <div className={`text-sm font-bold ${color ?? "text-white"}`}>{value}</div>
     </div>
   );
 }

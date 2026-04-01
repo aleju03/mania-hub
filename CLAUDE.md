@@ -14,9 +14,12 @@ A Costa Rica-focused osu!mania web app. Not a clone of osu.ppy.sh - it's a custo
 ## App Structure
 Code lives in `mania-hub/`. Key paths:
 - `src/lib/api.ts` - OAuth token cache + osuFetch wrapper (server-only)
+- `src/lib/db.ts` - Turso/libSQL client + durable cache table setup
 - `src/lib/cache.ts` - Client cache TTLs and staleness helpers
+- `src/lib/avatar.ts` - Server-side avatar accent extraction + batched accent cache
 - `src/lib/osu.ts` - All createServerFn definitions
 - `src/lib/rankings.ts` - Ranking-specific calculations (7d global/CR deltas)
+- `src/lib/score.ts` - Score normalization helpers and pp stack math
 - `src/lib/types.ts` - TypeScript types for osu! API v2
 - `src/lib/replay-parser.ts` - Custom .osr parser (unused now, kept as reference)
 - `src/lib/beatmap-parser.ts` - Parses .osu files for mania note data
@@ -41,6 +44,13 @@ OAuth credentials in `.env` (gitignored). Client Credentials grant, server-side 
 - User rank histories are cached per-user server-side for 5 minutes
 - Replay download uses legacy endpoint: `GET /scores/mania/{id}/download`
 - Beatmap files fetched from CDN: `https://osu.ppy.sh/osu/{beatmap_id}`
+
+## Turso Cache
+- Turso is used as the durable cache layer when `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are present.
+- Table schema lives in `db/schema.sql`.
+- `npm run db:init` applies the durable cache schema.
+- Current durable cache usage: rankings, rank histories, approximate pp gains, avatar accent colors.
+- In-memory cache still exists for hot requests in the current process; Turso backs cold starts and restarts.
 
 ## Front-End Data Flow
 - Shared CR data should flow through `src/store.ts`, not route-local duplicated state.
