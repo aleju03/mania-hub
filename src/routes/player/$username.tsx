@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { getUser, getUserScoresBest, getUserScoresRecent } from "../../lib/osu";
 import {
   formatNumber,
@@ -62,6 +62,14 @@ function PlayerPage() {
   const [userError, setUserError] = useState<string | null>(null);
   const [scoresError, setScoresError] = useState<string | null>(null);
   const [tab, setTab] = useState<"best" | "recent">("best");
+  const [avatarOpen, setAvatarOpen] = useState(false);
+
+  useEffect(() => {
+    if (!avatarOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setAvatarOpen(false);
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [avatarOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -141,6 +149,49 @@ function PlayerPage() {
 
   return (
     <div className="flex-1">
+      {/* Avatar modal */}
+      <AnimatePresence>
+        {avatarOpen && (
+          <motion.div
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center backdrop-blur-sm bg-black/75 cursor-pointer"
+            onClick={() => setAvatarOpen(false)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <motion.img
+              src={user.avatar_url}
+              alt={`${user.username}'s avatar`}
+              className="w-[300px] h-[300px] rounded-2xl shadow-[0_12px_60px_rgba(0,0,0,0.7)] object-cover"
+              onClick={(e) => e.stopPropagation()}
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              transition={{ type: "spring", damping: 30, stiffness: 500 }}
+            />
+            <motion.div
+              className="mt-4 flex flex-col items-center gap-2"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.15, delay: 0.05 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span className="text-white font-bold text-lg">{user.username}</span>
+              <a
+                href={`https://osu.ppy.sh/users/${user.id}/mania`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-osu-f1 hover:text-osu-l2 transition-colors"
+              >
+                View osu! profile
+              </a>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Cover + Avatar */}
       <div className="relative h-[280px] overflow-hidden bg-osu-b4">
         <img
@@ -152,9 +203,13 @@ function PlayerPage() {
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-osu-b5" />
         <div className="absolute bottom-0 left-0 right-0">
           <div className="max-w-[1200px] mx-auto px-5 pb-5 flex items-end gap-5">
-            <div className="w-[110px] h-[110px] rounded-2xl overflow-hidden border-2 border-osu-b3/60 shadow-[0_4px_20px_rgba(0,0,0,0.5)] translate-y-4 flex-shrink-0">
-              <Avatar url={user.avatar_url} size={110} />
-            </div>
+            <button
+              type="button"
+              onClick={() => setAvatarOpen(true)}
+              className="w-[110px] h-[110px] rounded-2xl overflow-hidden border-2 border-osu-b3/60 shadow-[0_4px_20px_rgba(0,0,0,0.5)] translate-y-4 flex-shrink-0 cursor-pointer hover:border-osu-l2/60 transition-colors duration-150"
+            >
+              <Avatar url={user.avatar_url} size={110} shape="square" />
+            </button>
             <div className="pb-1 flex-1 min-w-0">
               <h1 className="text-3xl font-bold text-white truncate">
                 <UsernameText username={user.username} avatarUrl={user.avatar_url} className="text-[34px] font-black text-white" />

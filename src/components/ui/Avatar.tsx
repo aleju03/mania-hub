@@ -1,4 +1,16 @@
-export function Avatar({ url, seed, size = 40 }: { url?: string; seed?: number; size?: number }) {
+export function Avatar({
+  url,
+  seed,
+  size = 40,
+  shape = "circle",
+}: {
+  url?: string;
+  seed?: number;
+  size?: number;
+  shape?: "circle" | "square";
+}) {
+  const shapeClass = shape === "square" ? "rounded-none" : "rounded-full";
+
   if (url) {
     return (
       <img
@@ -6,7 +18,7 @@ export function Avatar({ url, seed, size = 40 }: { url?: string; seed?: number; 
         alt="avatar"
         width={size}
         height={size}
-        className="rounded-full flex-shrink-0 object-cover"
+        className={`${shapeClass} flex-shrink-0 object-cover`}
         style={{ width: size, height: size }}
         loading="lazy"
       />
@@ -15,7 +27,7 @@ export function Avatar({ url, seed, size = 40 }: { url?: string; seed?: number; 
   const h = ((seed ?? 0) * 137) % 360;
   return (
     <div
-      className="rounded-full flex-shrink-0"
+      className={`${shapeClass} flex-shrink-0`}
       style={{
         width: size,
         height: size,
