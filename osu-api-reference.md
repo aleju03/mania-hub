@@ -312,6 +312,12 @@ Get a user's scores.
 
 **Returns:** Array of Score objects with `beatmap`, `beatmapset`. `best` type also includes `weight`.
 
+**Important:** Score response shape depends on the `x-api-version` header.
+
+- With no version header or with older versions, score responses use the older format with fields like `score`, `created_at`, `replay`, and count-style hit statistics.
+- With `x-api-version: 20220705` or newer, score responses use the newer format with fields like `total_score`, `classic_total_score`, `started_at`, `ended_at`, `has_replay`, `processed`, `ranked`, and `type`.
+- For newer `solo_score` entries, the old `score` field may be `0` even when a real total score exists. Use `total_score` or `classic_total_score` from the newer format instead.
+
 ---
 
 ### `GET /users/{user}/beatmapsets/{type}`
@@ -916,29 +922,60 @@ Get all beatmapset IDs the authenticated user has favourited.
 
 ## 25. Key Data Models
 
-### Score Object
+### Score Object (Modern format, `x-api-version: 20220705+`)
 | Field | Description |
 |-------|-------------|
 | `id` | Score ID |
 | `user_id` | Player ID |
 | `beatmap_id` | Beatmap ID |
 | `ruleset_id` | 0=osu, 1=taiko, 2=catch, 3=mania |
-| `total_score` | Total score |
+| `type` | Score type, commonly `solo_score` |
+| `total_score` | Total score using lazer's standardised scoring |
+| `classic_total_score` | Total score using lazer's classic scoring. Only present for `solo_score` |
+| `legacy_total_score` | Total score using stable scoring. Usually `0` for lazer-set scores |
 | `accuracy` | 0.0 - 1.0 |
 | `max_combo` | Max combo achieved |
 | `passed` | Whether the score was a pass |
+| `ranked` | Whether the score is leaderboard-visible. Only for `solo_score` |
+| `processed` | Whether server-side post-processing is complete. Only for `solo_score` |
 | `rank` | SS, S, A, B, C, D, F |
 | `mods` | Array of mod objects (`{ acronym, settings }`) |
-| `statistics` | Hit counts: `great`, `ok`, `meh`, `miss`, etc. |
+| `statistics` | Hit counts as `count_geki`, `count_300`, `count_katu`, `count_100`, `count_50`, `count_miss` |
 | `pp` | Performance points (when available) |
-| `ended_at` | Timestamp |
-| `started_at` | Timestamp |
+| `started_at` | Timestamp when play began |
+| `ended_at` | Timestamp when play ended |
 | `has_replay` | Whether replay is available |
-| `best_id` | Best score ID |
-| `legacy_score_id` | Legacy score ID |
-| `legacy_total_score` | Legacy scoring total |
-| `classic_total_score` | Classic scoring total |
+| `is_perfect_combo` | Perfect combo using lazer logic |
+| `legacy_perfect` | Perfect combo using stable logic |
+| `best_id` | Best score ID. No longer used |
+| `legacy_score_id` | Legacy stable score ID |
+| `build_id` | Game build ID |
 | **Optional includes** | `beatmap`, `beatmapset`, `user`, `weight`, `rank_global`, `rank_country`, `position`, `scores_around` |
+
+### Score Object (Legacy/default format)
+| Field | Description |
+|-------|-------------|
+| `id` | Score ID |
+| `best_id` | Best score ID |
+| `user_id` | Player ID |
+| `accuracy` | 0.0 - 1.0 |
+| `mods` | Array of mod objects |
+| `score` | Legacy/default total score field. Can be `0` for newer `solo_score` entries |
+| `max_combo` | Max combo achieved |
+| `perfect` | Perfect combo flag |
+| `statistics.count_50` | 50 count |
+| `statistics.count_100` | 100 count |
+| `statistics.count_300` | 300 count |
+| `statistics.count_geki` | MAX count in mania |
+| `statistics.count_katu` | 200 count in mania |
+| `statistics.count_miss` | Miss count |
+| `passed` | Whether the score was a pass |
+| `pp` | Performance points (when available) |
+| `rank` | Letter rank |
+| `created_at` | Timestamp |
+| `mode` | Ruleset string |
+| `mode_int` | Ruleset ID |
+| `replay` | Whether replay is available |
 
 ### User Object (Compact)
 | Field | Description |

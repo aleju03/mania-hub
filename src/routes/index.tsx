@@ -1,12 +1,16 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { getRankings, getCountryRecentScores, getUserScoresBest } from "../lib/osu";
+import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
+import { getScoreTimeMs, getScoreTimestamp } from "../lib/score";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { PlayerCardSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
+import { ManiaRain } from "../components/home/ManiaRain";
 import type { RankingsResponse, OsuScore } from "../lib/types";
+import { useAppStore } from "../store";
 
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -14,99 +18,127 @@ export const Route = createFileRoute("/")({
 
 function HomePage() {
   const navigate = useNavigate();
-  const [rankings, setRankings] = useState<RankingsResponse | null>(null);
+  const rankings = useAppStore((state) => state.crRankings);
+  const rankingsFetchedAt = useAppStore((state) => state.crRankingsFetchedAt);
+  const recentScores = useAppStore((state) => state.homeRecentScores);
+  const recentScoresFetchedAt = useAppStore((state) => state.homeRecentScoresFetchedAt);
+  const popoffs = useAppStore((state) => state.homePopoffs);
+  const popoffsFetchedAt = useAppStore((state) => state.homePopoffsFetchedAt);
+  const setCrRankings = useAppStore((state) => state.setCrRankings);
+  const setHomeRecentScores = useAppStore((state) => state.setHomeRecentScores);
+  const setHomePopoffs = useAppStore((state) => state.setHomePopoffs);
   const [rankingsError, setRankingsError] = useState<string | null>(null);
-
-  // Client-side: fetch recent scores
-  const [recentScores, setRecentScores] = useState<OsuScore[]>([]);
-  const [loadingScores, setLoadingScores] = useState(true);
-
-  // Client-side: fetch popoffs (recent best scores from top 10)
-  const [popoffs, setPopoffs] = useState<{ user: { username: string; avatar_url: string }; score: OsuScore }[]>([]);
-  const [loadingPopoffs, setLoadingPopoffs] = useState(true);
+  const [loadingScores, setLoadingScores] = useState(recentScores.length === 0);
+  const [loadingPopoffs, setLoadingPopoffs] = useState(popoffs.length === 0);
 
   useEffect(() => {
     let cancelled = false;
+    const shouldRefresh = !rankings || isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings);
+
+    if (!shouldRefresh) {
+      setRankingsError(null);
+      return () => {
+        cancelled = true;
+      };
+    }
 
     getRankings({ data: { type: "performance", page: 1, country: "CR" } })
       .then((data) => {
         if (cancelled) return;
-        setRankings(data);
+        setCrRankings(data);
         setRankingsError(null);
       })
       .catch(() => {
-        if (cancelled) return;
+        if (cancelled || rankings) return;
         setRankingsError("Couldn't load the Costa Rica rankings right now.");
       });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [rankings, rankingsFetchedAt, setCrRankings]);
 
   useEffect(() => {
     if (!rankings) return;
 
     let cancelled = false;
     const userIds = rankings.ranking.map((entry: RankingsResponse["ranking"][number]) => entry.user.id);
+    const shouldRefreshScores =
+      recentScores.length === 0 || isCacheStale(recentScoresFetchedAt, CLIENT_CACHE_TTL.homeRecentScores);
 
-    setLoadingScores(true);
-    setRecentScores([]);
+    if (!shouldRefreshScores) {
+      setLoadingScores(false);
+    } else {
+      setLoadingScores(recentScores.length === 0);
 
-    getCountryRecentScores({ data: { userIds, batchSize: 10, batchIndex: 0 } })
-      .then((scores) => {
-        if (cancelled) return;
-        setRecentScores(scores.slice(0, 5));
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoadingScores(false);
-      });
-
-    setLoadingPopoffs(true);
-    setPopoffs([]);
+      getCountryRecentScores({ data: { userIds, batchSize: 10, batchIndex: 0 } })
+        .then((scores) => {
+          if (cancelled) return;
+          setHomeRecentScores(scores.slice(0, 5));
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setLoadingScores(false);
+        });
+    }
 
     const top10 = rankings.ranking.slice(0, 10);
-    Promise.allSettled(
-      top10.map(async (entry: RankingsResponse["ranking"][number]) => {
-        const scores = await getUserScoresBest({ data: { userId: entry.user.id, limit: 5 } });
-        return scores
-          .filter((s: OsuScore) => {
-            const age = Date.now() - new Date(s.created_at).getTime();
-            return age < 7 * 24 * 60 * 60 * 1000 && s.pp && s.pp > 0;
-          })
-          .map((s: OsuScore) => ({
-            user: { username: entry.user.username, avatar_url: entry.user.avatar_url },
-            score: s,
-          }));
-      }),
-    )
-      .then((results) => {
-        if (cancelled) return;
+    const shouldRefreshPopoffs =
+      popoffs.length === 0 || isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.homePopoffs);
 
-        const all = results
-          .filter((r): r is PromiseFulfilledResult<{ user: { username: string; avatar_url: string }; score: OsuScore }[]> => r.status === "fulfilled")
-          .flatMap((r) => r.value)
-          .sort((a, b) => new Date(b.score.created_at).getTime() - new Date(a.score.created_at).getTime())
-          .slice(0, 5);
+    if (!shouldRefreshPopoffs) {
+      setLoadingPopoffs(false);
+    } else {
+      setLoadingPopoffs(popoffs.length === 0);
 
-        setPopoffs(all);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoadingPopoffs(false);
-      });
+      Promise.allSettled(
+        top10.map(async (entry: RankingsResponse["ranking"][number]) => {
+          const scores = await getUserScoresBest({ data: { userId: entry.user.id, limit: 5 } });
+          return scores
+            .filter((s: OsuScore) => {
+              const age = Date.now() - getScoreTimeMs(s);
+              return age < 7 * 24 * 60 * 60 * 1000 && s.pp && s.pp > 0;
+            })
+            .map((s: OsuScore) => ({
+              user: { username: entry.user.username, avatar_url: entry.user.avatar_url },
+              score: s,
+            }));
+        }),
+      )
+        .then((results) => {
+          if (cancelled) return;
+
+          const all = results
+            .filter((r): r is PromiseFulfilledResult<{ user: { username: string; avatar_url: string }; score: OsuScore }[]> => r.status === "fulfilled")
+            .flatMap((r) => r.value)
+            .sort((a, b) => getScoreTimeMs(b.score) - getScoreTimeMs(a.score))
+            .slice(0, 5);
+
+          setHomePopoffs(all);
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setLoadingPopoffs(false);
+        });
+    }
 
     return () => {
       cancelled = true;
     };
-  }, [rankings]);
+  }, [
+    rankings,
+    popoffs.length,
+    popoffsFetchedAt,
+    recentScores.length,
+    recentScoresFetchedAt,
+    setHomePopoffs,
+    setHomeRecentScores,
+  ]);
 
   const topPlayers = rankings?.ranking.slice(0, 5) ?? [];
 
   return (
     <div className="flex-1 relative overflow-hidden min-h-[calc(100vh-60px)]">
-      {/* Full-page background */}
       <div className="absolute inset-0 pointer-events-none">
         <img
           src="/images/layout/nav2-background-hue0.png"
@@ -189,7 +221,7 @@ function HomePage() {
                   </div>
                   <div className="text-[10px] text-osu-f1 truncate">{p.score.beatmapset?.title}</div>
                   <div className="text-[10px] text-osu-f1 truncate">[{p.score.beatmap?.version}]</div>
-                  <div className="text-[9px] text-osu-f1/60 mt-1">{formatTimeAgo(p.score.created_at)}</div>
+                  <div className="text-[9px] text-osu-f1/60 mt-1">{formatTimeAgo(getScoreTimestamp(p.score))}</div>
                 </motion.div>
               ))}
             </div>
@@ -238,188 +270,5 @@ function HomePage() {
         </section>
       </div>
     </div>
-  );
-}
-
-const NOTE_IMAGES: { src: string; aspect: "square" | "bar" }[] = [
-  { src: "/images/notes/arrow-down-gray.png", aspect: "square" },
-  { src: "/images/notes/arrow-down-green.png", aspect: "square" },
-  { src: "/images/notes/arrow-left-gray.png", aspect: "square" },
-  { src: "/images/notes/arrow-left-pink.png", aspect: "square" },
-  { src: "/images/notes/arrow-right-gray.png", aspect: "square" },
-  { src: "/images/notes/arrow-right-green.png", aspect: "square" },
-  { src: "/images/notes/arrow-up-gray.png", aspect: "square" },
-  { src: "/images/notes/arrow-up-pink.png", aspect: "square" },
-  { src: "/images/notes/bar-blue.png", aspect: "bar" },
-  { src: "/images/notes/bar-gray.png", aspect: "bar" },
-  { src: "/images/notes/bar-red.png", aspect: "bar" },
-  { src: "/images/notes/bar-yellow.png", aspect: "bar" },
-  { src: "/images/notes/circle-blue.png", aspect: "square" },
-  { src: "/images/notes/circle-blue-light.png", aspect: "square" },
-  { src: "/images/notes/circle-gray.png", aspect: "square" },
-  { src: "/images/notes/circle-green.png", aspect: "square" },
-  { src: "/images/notes/circle-navy.png", aspect: "square" },
-  { src: "/images/notes/circle-pink.png", aspect: "square" },
-  { src: "/images/notes/circle-pink-glow.png", aspect: "square" },
-  { src: "/images/notes/circle-purple.png", aspect: "square" },
-  { src: "/images/notes/circle-violet.png", aspect: "square" },
-  { src: "/images/notes/circle-white.png", aspect: "square" },
-];
-
-interface FallingNote {
-  x: number;
-  y: number;
-  speed: number;
-  size: number;
-  opacity: number;
-  imgIndex: number;
-  rotation: number;
-  rotSpeed: number;
-  isLN: boolean;
-  lnHeight: number;
-}
-
-function createNote(canvasW: number, canvasH: number, startAbove: boolean): FallingNote {
-  const isLN = Math.random() < 0.05;
-  return {
-    x: Math.random() * canvasW,
-    y: startAbove ? -(Math.random() * canvasH) : Math.random() * canvasH,
-    speed: 15 + Math.random() * 35,
-    size: 18 + Math.random() * 22,
-    opacity: 0.03 + Math.random() * 0.07,
-    imgIndex: Math.floor(Math.random() * NOTE_IMAGES.length),
-    rotation: Math.random() * Math.PI * 2,
-    rotSpeed: (Math.random() - 0.5) * 0.3,
-    isLN,
-    lnHeight: isLN ? 30 + Math.random() * 200 : 0,
-  };
-}
-
-function ManiaRain() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const notesRef = useRef<FallingNote[]>([]);
-  const imagesRef = useRef<HTMLImageElement[]>([]);
-  const rafRef = useRef<number>(0);
-  const lastTimeRef = useRef<number>(0);
-
-  const init = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.parentElement!.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
-    // Grid-jitter distribution: divide canvas into cells, one note per cell
-    const count = 55;
-    const cols = Math.ceil(Math.sqrt(count * (canvas.width / canvas.height)));
-    const rows = Math.ceil(count / cols);
-    const cellW = canvas.width / cols;
-    const cellH = canvas.height / rows;
-    const notes: FallingNote[] = [];
-    for (let r = 0; r < rows && notes.length < count; r++) {
-      for (let c = 0; c < cols && notes.length < count; c++) {
-        const note = createNote(canvas.width, canvas.height, false);
-        note.x = (c + 0.15 + Math.random() * 0.7) * cellW;
-        note.y = (r + Math.random()) * cellH;
-        notes.push(note);
-      }
-    }
-    notesRef.current = notes;
-  }, []);
-
-  useEffect(() => {
-    // Preload all note images
-    imagesRef.current = NOTE_IMAGES.map((n) => {
-      const img = new Image();
-      img.src = n.src;
-      return img;
-    });
-
-    init();
-
-    const onResize = () => init();
-    window.addEventListener("resize", onResize);
-
-    const animate = (time: number) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-
-      const dt = lastTimeRef.current ? (time - lastTimeRef.current) / 1000 : 0.016;
-      lastTimeRef.current = time;
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      for (const note of notesRef.current) {
-        note.y += note.speed * dt;
-        if (!note.isLN) note.rotation += note.rotSpeed * dt;
-
-        // Seamless wrap: once fully off the bottom, reappear above
-        const totalH = note.isLN ? note.lnHeight + note.size : note.size;
-        if (note.y > canvas.height + totalH) {
-          note.y = -totalH;
-          note.x = Math.random() * canvas.width;
-          note.imgIndex = Math.floor(Math.random() * NOTE_IMAGES.length);
-          note.isLN = Math.random() < 0.05;
-          note.lnHeight = note.isLN ? 30 + Math.random() * 200 : 0;
-          if (note.isLN) note.rotation = 0;
-        }
-
-        const img = imagesRef.current[note.imgIndex];
-        if (!img || !img.complete) continue;
-
-        ctx.save();
-        ctx.globalAlpha = note.opacity;
-        ctx.translate(note.x, note.y);
-
-        // Compute draw dimensions based on note type
-        const isBar = NOTE_IMAGES[note.imgIndex].aspect === "bar";
-        const drawW = isBar ? note.size * 1.4 : note.size;
-        const drawH = isBar ? note.size * 0.3 : note.size;
-
-        if (note.isLN) {
-          // Draw LN body - always vertical, clipped so it doesn't overlap the head
-          const bodyW = note.size * 0.5;
-          const radius = bodyW / 2;
-          ctx.save();
-          // Clip: exclude a rect matching the note head area
-          ctx.beginPath();
-          ctx.rect(-canvas.width, -canvas.height, canvas.width * 2, canvas.height * 2);
-          ctx.rect(-drawW / 2, -drawH / 2, drawW, drawH);
-          ctx.clip("evenodd");
-          ctx.beginPath();
-          ctx.moveTo(-bodyW / 2, 0);
-          ctx.lineTo(-bodyW / 2, -note.lnHeight + radius);
-          ctx.arcTo(-bodyW / 2, -note.lnHeight, 0, -note.lnHeight, radius);
-          ctx.arcTo(bodyW / 2, -note.lnHeight, bodyW / 2, -note.lnHeight + radius, radius);
-          ctx.lineTo(bodyW / 2, 0);
-          ctx.closePath();
-          ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
-          ctx.fill();
-          ctx.restore();
-        }
-
-        // Draw head note (rotates independently)
-        ctx.rotate(note.rotation);
-        ctx.drawImage(img, -drawW / 2, -drawH / 2, drawW, drawH);
-        ctx.restore();
-      }
-
-      rafRef.current = requestAnimationFrame(animate);
-    };
-
-    rafRef.current = requestAnimationFrame(animate);
-
-    return () => {
-      cancelAnimationFrame(rafRef.current);
-      window.removeEventListener("resize", onResize);
-    };
-  }, [init]);
-
-  return (
-    <canvas
-      ref={canvasRef}
-      className="absolute inset-0 w-full h-full pointer-events-none"
-    />
   );
 }

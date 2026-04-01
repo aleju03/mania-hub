@@ -10,6 +10,7 @@ import {
   formatDate,
   formatPP,
 } from "../../lib/format";
+import { getScoreTimestamp } from "../../lib/score";
 import { Avatar } from "../../components/ui/Avatar";
 import { GradeImg } from "../../components/ui/GradeImg";
 import { ModBadge } from "../../components/ui/ModBadge";
@@ -409,7 +410,7 @@ function ScoreRow({ score, index }: { score: OsuScore; index: number }) {
           )}
         </div>
         <span className="text-[10px] text-osu-f1">
-          {score.beatmapset?.artist} &middot; {formatTimeAgo(score.ended_at || score.created_at)}
+          {score.beatmapset?.artist} &middot; {formatTimeAgo(getScoreTimestamp(score))}
         </span>
       </div>
       <div className="flex items-center gap-3 flex-shrink-0">

@@ -9,7 +9,7 @@ const gradeFile: Record<string, string> = {
   D: "GradeSmall-D",
   SS: "GradeSmall-SS",
   SSH: "GradeSmall-SS-Silver",
-  F: "GradeSmall-D",
+  F: "GradeSmall-F",
 };
 
 export function GradeImg({ grade, size = 32 }: { grade: string; size?: number }) {

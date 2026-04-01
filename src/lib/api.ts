@@ -1,6 +1,8 @@
 // Server-only: OAuth token management + fetch wrapper for osu! API v2
 
 let tokenCache: { access_token: string; expires_at: number } | null = null;
+const OSU_FETCH_RETRIES = 2;
+const OSU_API_VERSION = "20220705";
 
 // Simple response cache (5 min TTL)
 const responseCache = new Map<string, { data: unknown; expires: number }>();
@@ -15,6 +17,22 @@ export function getCached<T>(key: string): T | null {
 
 export function setCache(key: string, data: unknown): void {
   responseCache.set(key, { data, expires: Date.now() + CACHE_TTL });
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getRetryDelayMs(res: Response, attempt: number): number {
+  const retryAfter = res.headers.get("retry-after");
+  if (retryAfter) {
+    const seconds = Number(retryAfter);
+    if (Number.isFinite(seconds) && seconds > 0) {
+      return seconds * 1000;
+    }
+  }
+
+  return 500 * 2 ** attempt;
 }
 
 async function getToken(): Promise<string> {
@@ -59,31 +77,58 @@ export async function osuFetch<T = unknown>(
     }
   }
 
-  const res = await fetch(url.toString(), {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-  });
+  for (let attempt = 0; attempt <= OSU_FETCH_RETRIES; attempt++) {
+    const res = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+        "Content-Type": "application/json",
+        "x-api-version": OSU_API_VERSION,
+      },
+    });
 
-  if (!res.ok) {
+    if (res.ok) {
+      return res.json() as Promise<T>;
+    }
+
+    const shouldRetry = (res.status === 429 || res.status >= 500) && attempt < OSU_FETCH_RETRIES;
+    if (shouldRetry) {
+      await sleep(getRetryDelayMs(res, attempt));
+      continue;
+    }
+
     const text = await res.text();
     throw new Error(`osu! API error ${res.status} on ${path}: ${text}`);
   }
 
-  return res.json() as Promise<T>;
+  throw new Error(`osu! API error on ${path}: exhausted retries`);
 }
 
 export async function osuFetchBinary(path: string): Promise<ArrayBuffer> {
   const token = await getToken();
-  const res = await fetch(`https://osu.ppy.sh/api/v2${path}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
+
+  for (let attempt = 0; attempt <= OSU_FETCH_RETRIES; attempt++) {
+    const res = await fetch(`https://osu.ppy.sh/api/v2${path}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "x-api-version": OSU_API_VERSION,
+      },
+    });
+
+    if (res.ok) {
+      return res.arrayBuffer();
+    }
+
+    const shouldRetry = (res.status === 429 || res.status >= 500) && attempt < OSU_FETCH_RETRIES;
+    if (shouldRetry) {
+      await sleep(getRetryDelayMs(res, attempt));
+      continue;
+    }
+
     throw new Error(`osu! API binary error ${res.status} on ${path}`);
   }
-  return res.arrayBuffer();
+
+  throw new Error(`osu! API binary error on ${path}: exhausted retries`);
 }
 
 export async function fetchBeatmapFile(beatmapId: number): Promise<string> {
