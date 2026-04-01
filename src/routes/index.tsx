@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { getRankings, getCountryRecentScores, getUserScoresBest } from "../lib/osu";
+import { getRankings, getCountryRecentScores, getUserScoresBestWindow } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
 import { getScoreTimeMs, getScoreTimestamp } from "../lib/score";
@@ -94,7 +94,7 @@ function HomePage() {
 
       Promise.allSettled(
         top10.map(async (entry: RankingsResponse["ranking"][number]) => {
-          const scores = await getUserScoresBest({ data: { userId: entry.user.id, limit: 5 } });
+          const scores = await getUserScoresBestWindow({ data: { userId: entry.user.id, totalLimit: 50 } });
           return scores
             .filter((s: OsuScore) => {
               const age = Date.now() - getScoreTimeMs(s);

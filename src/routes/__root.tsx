@@ -11,6 +11,7 @@ export const Route = createRootRoute({
       { title: "osu!mania hub" },
     ],
     links: [
+      { rel: "icon", type: "image/webp", href: "/favicon.webp" },
       { rel: "stylesheet", href: appCss },
       {
         rel: "preload",

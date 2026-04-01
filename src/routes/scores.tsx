@@ -119,7 +119,7 @@ function ScoresPage() {
       setInitialLoaded(true);
     }
 
-    getCountryRecentScores({ data: { userIds, batchSize: 15, batchIndex: 0 } })
+    getCountryRecentScores({ data: { userIds, batchSize: userIds.length, batchIndex: 0, recentLimit: 20 } })
       .then((scores) => {
         if (scores.length > 0) addFeedScores(scores);
       })
@@ -134,7 +134,7 @@ function ScoresPage() {
     if (!isPolling || userIds.length === 0) return;
     try {
       const scores = await getCountryRecentScores({
-        data: { userIds, batchSize: 5, batchIndex: pollIndex },
+        data: { userIds, batchSize: 10, batchIndex: pollIndex, recentLimit: 20 },
       });
       if (scores.length > 0) addFeedScores(scores);
       else markFeedScoresFetched();

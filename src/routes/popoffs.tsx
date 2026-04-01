@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getRankings, getUserScoresBest, getUsersApproxPpGains } from "../lib/osu";
+import { getRankings, getUserScoresBestWindow, getUsersApproxPpGains } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { formatNumber, formatAccuracy, formatTimeAgo } from "../lib/format";
 import { getBeatmapUrl, getDisplayedTotalScore, getScoreTimeMs, getScoreTimestamp, scoreHasReplay } from "../lib/score";
@@ -124,7 +124,7 @@ function PopOffsPage() {
       const batch = players.slice(i, i + 5);
       const results = await Promise.allSettled(
         batch.map(async (player: { id: number; username: string; avatar_url: string }) => {
-          const scores = await getUserScoresBest({ data: { userId: player.id, limit: 15 } });
+          const scores = await getUserScoresBestWindow({ data: { userId: player.id, totalLimit: 200 } });
           return scores
             .filter((s: OsuScore) => {
               const age = Date.now() - getScoreTimeMs(s);

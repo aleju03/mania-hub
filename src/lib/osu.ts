@@ -14,6 +14,7 @@ const RANK_HISTORY_CACHE_TTL = 24 * 60 * 60 * 1000;
 const APPROX_PP_GAINS_CACHE_TTL = 10 * 60 * 1000;
 const RANK_HISTORY_CONCURRENCY = 20;
 const APPROX_PP_GAINS_CONCURRENCY = 8;
+const RECENT_SCORES_CONCURRENCY = 10;
 const rankHistoryPromiseCache = new Map<number, Promise<number[] | null>>();
 
 async function mapWithConcurrency<T, R>(
@@ -100,23 +101,36 @@ async function getApproxPpGainsForUser(userId: number): Promise<Record<number, n
   const cached = await getPersistentCached<Record<number, number>>(cacheKey);
   if (cached) return cached;
 
-  const [firstPage, secondPage] = await Promise.all([
-    osuFetch<OsuScore[]>(`/users/${userId}/scores/best`, {
-      mode: "mania",
-      limit: 100,
-      offset: 0,
-    }),
-    osuFetch<OsuScore[]>(`/users/${userId}/scores/best`, {
-      mode: "mania",
-      limit: 100,
-      offset: 100,
-    }),
-  ]);
-
-  const gains = calculateApproxPpGainMap([...firstPage, ...secondPage]);
+  const gains = calculateApproxPpGainMap(await fetchUserBestScoresWindow(userId, 200));
   await setPersistentCache(cacheKey, gains, APPROX_PP_GAINS_CACHE_TTL);
   return gains;
 }
+
+async function fetchUserBestScoresWindow(userId: number, totalLimit = 200): Promise<OsuScore[]> {
+  const firstPage = await osuFetch<OsuScore[]>(`/users/${userId}/scores/best`, {
+    mode: "mania",
+    limit: Math.min(totalLimit, 100),
+    offset: 0,
+  });
+
+  if (totalLimit <= 100 || firstPage.length < 100) {
+    return firstPage;
+  }
+
+  const secondPage = await osuFetch<OsuScore[]>(`/users/${userId}/scores/best`, {
+    mode: "mania",
+    limit: Math.min(totalLimit - 100, 100),
+    offset: 100,
+  });
+
+  return [...firstPage, ...secondPage];
+}
+
+export const getUserScoresBestWindow = createServerFn({ method: "GET" })
+  .inputValidator((data: { userId: number; totalLimit?: number }) => data)
+  .handler(async ({ data }: { data: { userId: number; totalLimit?: number } }) => {
+    return fetchUserBestScoresWindow(data.userId, data.totalLimit ?? 200);
+  });
 
 export const getUsersApproxPpGains = createServerFn({ method: "GET" })
   .inputValidator((data: { userIds: number[] }) => data)
@@ -220,25 +234,30 @@ export const searchUsers = createServerFn({ method: "GET" })
 // ── Score Feed (CR top players' recent scores) ─────────────────────────────
 
 export const getCountryRecentScores = createServerFn({ method: "GET" })
-  .inputValidator((data: { userIds: number[]; batchSize?: number; batchIndex?: number }) => data)
-  .handler(async ({ data }: { data: { userIds: number[]; batchSize?: number; batchIndex?: number } }) => {
+  .inputValidator((data: { userIds: number[]; batchSize?: number; batchIndex?: number; recentLimit?: number }) => data)
+  .handler(async ({ data }: { data: { userIds: number[]; batchSize?: number; batchIndex?: number; recentLimit?: number } }) => {
     const size = data.batchSize ?? 5;
     const start = ((data.batchIndex ?? 0) * size) % data.userIds.length;
     const batch = data.userIds.slice(start, start + size);
+    const recentLimit = data.recentLimit ?? 20;
 
-    const results = await Promise.allSettled(
-      batch.map((uid: number) =>
-        osuFetch<OsuScore[]>(`/users/${uid}/scores/recent`, {
-          mode: "mania",
-          limit: 5,
-          include_fails: 1,
-        })
-      )
+    const results = await mapWithConcurrency(
+      batch,
+      RECENT_SCORES_CONCURRENCY,
+      async (uid: number) => {
+        try {
+          return await osuFetch<OsuScore[]>(`/users/${uid}/scores/recent`, {
+            mode: "mania",
+            limit: recentLimit,
+            include_fails: 1,
+          });
+        } catch {
+          return [];
+        }
+      },
     );
 
-    return results
-      .filter((r): r is PromiseFulfilledResult<OsuScore[]> => r.status === "fulfilled")
-      .flatMap((r) => r.value);
+    return results.flatMap((scores) => scores);
   });
 
 // ── Replay (parsed server-side via osu-parsers) ────────────────────────────
