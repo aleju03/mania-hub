@@ -25,6 +25,8 @@ export const Route = createFileRoute("/player/$username")({
   component: PlayerPage,
 });
 
+type KeyFilter = "all" | "4k" | "7k";
+
 function loadUserCached(username: string): Promise<OsuUser> {
   const cached = userRequestCache.get(username);
   if (cached) return cached;
@@ -62,6 +64,7 @@ function PlayerPage() {
   const [userError, setUserError] = useState<string | null>(null);
   const [scoresError, setScoresError] = useState<string | null>(null);
   const [tab, setTab] = useState<"best" | "recent">("best");
+  const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
   const [avatarOpen, setAvatarOpen] = useState(false);
 
   useEffect(() => {
@@ -78,6 +81,7 @@ function PlayerPage() {
     setBest([]);
     setRecent([]);
     setTab("best");
+    setKeyFilter("all");
     setUserError(null);
     setScoresError(null);
     setLoadingUser(true);
@@ -145,7 +149,12 @@ function PlayerPage() {
   }
 
   const stats = user.statistics;
-  const visibleScores = tab === "best" ? best : recent;
+  const visibleScores = (tab === "best" ? best : recent).filter((score) => {
+    if (keyFilter === "all") return true;
+    if (keyFilter === "4k") return score.beatmap?.cs === 4;
+    if (keyFilter === "7k") return score.beatmap?.cs === 7;
+    return true;
+  });
 
   return (
     <div className="flex-1">
@@ -289,20 +298,41 @@ function PlayerPage() {
           </div>
 
           {/* Score tabs */}
-          <div className="mt-5 pt-1 border-t border-osu-b3/30 flex">
-            {(["best", "recent"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] capitalize ${
-                  tab === t
-                    ? "text-osu-c1 border-b-2 border-osu-h1"
-                    : "text-osu-f1 hover:text-osu-l2"
-                }`}
-              >
-                {t === "best" ? "Best Performance" : "Recent Plays"}
-              </button>
-            ))}
+          <div className="mt-5 pt-1 border-t border-osu-b3/30 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex">
+              {(["best", "recent"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTab(t)}
+                  className={`px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] capitalize ${
+                    tab === t
+                      ? "text-osu-c1 border-b-2 border-osu-h1"
+                      : "text-osu-f1 hover:text-osu-l2"
+                  }`}
+                >
+                  {t === "best" ? "Best Performance" : "Recent Plays"}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1 rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-1">
+              {([
+                ["all", "All"],
+                ["4k", "4K"],
+                ["7k", "7K"],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  onClick={() => setKeyFilter(value)}
+                  className={`px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                    keyFilter === value
+                      ? "bg-osu-pink/15 text-osu-pink-light"
+                      : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

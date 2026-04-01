@@ -17,6 +17,10 @@ export const Route = createFileRoute("/")({
   component: HomePage,
 });
 
+function isPassedScore(score: OsuScore) {
+  return score.passed && score.rank !== "D";
+}
+
 function HomePage() {
   const navigate = useNavigate();
   const rankings = useAppStore((state) => state.crRankings);
@@ -75,7 +79,18 @@ function HomePage() {
       getCountryRecentScores({ data: { userIds, batchSize: 10, batchIndex: 0 } })
         .then((scores) => {
           if (cancelled) return;
-          setHomeRecentScores(scores.slice(0, 5));
+          const seenUsers = new Set<number>();
+          const previewScores = scores
+            .filter(isPassedScore)
+            .sort((a, b) => getScoreTimeMs(b) - getScoreTimeMs(a))
+            .filter((score) => {
+              if (seenUsers.has(score.user_id)) return false;
+              seenUsers.add(score.user_id);
+              return true;
+            })
+            .slice(0, 5);
+
+          setHomeRecentScores(previewScores);
         })
         .finally(() => {
           if (cancelled) return;
@@ -83,7 +98,7 @@ function HomePage() {
         });
     }
 
-    const top10 = rankings.ranking.slice(0, 10);
+    const topPlayersForPopoffs = rankings.ranking.slice(0, 30);
     const shouldRefreshPopoffs =
       popoffs.length === 0 || isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.homePopoffs);
 
@@ -93,8 +108,8 @@ function HomePage() {
       setLoadingPopoffs(popoffs.length === 0);
 
       Promise.allSettled(
-        top10.map(async (entry: RankingsResponse["ranking"][number]) => {
-          const scores = await getUserScoresBestWindow({ data: { userId: entry.user.id, totalLimit: 50 } });
+        topPlayersForPopoffs.map(async (entry: RankingsResponse["ranking"][number]) => {
+          const scores = await getUserScoresBestWindow({ data: { userId: entry.user.id, totalLimit: 100 } });
           return scores
             .filter((s: OsuScore) => {
               const age = Date.now() - getScoreTimeMs(s);
@@ -112,7 +127,11 @@ function HomePage() {
           const all = results
             .filter((r): r is PromiseFulfilledResult<{ user: { username: string; avatar_url: string }; score: OsuScore }[]> => r.status === "fulfilled")
             .flatMap((r) => r.value)
-            .sort((a, b) => getScoreTimeMs(b.score) - getScoreTimeMs(a.score))
+            .sort((a, b) => {
+              const ppDiff = (b.score.pp ?? 0) - (a.score.pp ?? 0);
+              if (ppDiff !== 0) return ppDiff;
+              return getScoreTimeMs(b.score) - getScoreTimeMs(a.score);
+            })
             .slice(0, 5);
 
           setHomePopoffs(all);
@@ -136,7 +155,8 @@ function HomePage() {
     setHomeRecentScores,
   ]);
 
-  const topPlayers = rankings?.ranking.slice(0, 5) ?? [];
+  const topPlayersMobile = rankings?.ranking.slice(0, 5) ?? [];
+  const topPlayersDesktop = rankings?.ranking.slice(0, 9) ?? [];
 
   return (
     <div className="flex-1 relative overflow-hidden min-h-[calc(100vh-60px)]">
@@ -164,27 +184,47 @@ function HomePage() {
         {/* CR Top 5 */}
         <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden lg:row-span-2">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">CR Top 50</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Rankings</h2>
             <Link to="/rankings" className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
           </div>
           <div className="divide-y divide-osu-b3/15">
             {rankingsError ? (
               <div className="px-4 py-6 text-center text-xs text-osu-f1">{rankingsError}</div>
-            ) : topPlayers.length > 0 ? (
-              topPlayers.map((entry: RankingsResponse["ranking"][number], i: number) => (
-                <motion.div key={entry.user.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
-                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3/50 transition-colors cursor-pointer"
-                  onClick={() => navigate({ to: "/player/$username", params: { username: entry.user.username } })}>
-                  <span className="text-sm font-bold text-osu-f1 w-6 text-center">#{i + 1}</span>
-                  <Avatar url={entry.user.avatar_url} size={30} />
-                  <UsernameText
-                    username={entry.user.username}
-                    avatarUrl={entry.user.avatar_url}
-                    className="text-sm font-medium flex-1 truncate"
-                  />
-                  <span className="text-xs font-bold text-right">{formatNumber(Math.round(entry.pp))}pp</span>
-                </motion.div>
-              ))
+            ) : topPlayersMobile.length > 0 ? (
+              <>
+                <div className="lg:hidden">
+                  {topPlayersMobile.map((entry: RankingsResponse["ranking"][number], i: number) => (
+                    <motion.div key={entry.user.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
+                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3/50 transition-colors cursor-pointer"
+                      onClick={() => navigate({ to: "/player/$username", params: { username: entry.user.username } })}>
+                      <span className="text-sm font-bold text-osu-f1 w-6 text-center">#{i + 1}</span>
+                      <Avatar url={entry.user.avatar_url} size={30} />
+                      <UsernameText
+                        username={entry.user.username}
+                        avatarUrl={entry.user.avatar_url}
+                        className="text-sm font-medium flex-1 truncate"
+                      />
+                      <span className="text-xs font-bold text-right">{formatNumber(Math.round(entry.pp))}pp</span>
+                    </motion.div>
+                  ))}
+                </div>
+                <div className="hidden lg:block">
+                  {topPlayersDesktop.map((entry: RankingsResponse["ranking"][number], i: number) => (
+                    <motion.div key={entry.user.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.035 }}
+                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3/50 transition-colors cursor-pointer"
+                      onClick={() => navigate({ to: "/player/$username", params: { username: entry.user.username } })}>
+                      <span className="text-sm font-bold text-osu-f1 w-6 text-center">#{i + 1}</span>
+                      <Avatar url={entry.user.avatar_url} size={30} />
+                      <UsernameText
+                        username={entry.user.username}
+                        avatarUrl={entry.user.avatar_url}
+                        className="text-sm font-medium flex-1 truncate"
+                      />
+                      <span className="text-xs font-bold text-right">{formatNumber(Math.round(entry.pp))}pp</span>
+                    </motion.div>
+                  ))}
+                </div>
+              </>
             ) : (
               Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="px-3 py-1">
@@ -271,7 +311,9 @@ function HomePage() {
                       />{" "}
                       <span className="text-osu-f1">on</span> {s.beatmapset?.title}
                     </div>
-                    <div className="text-[10px] text-osu-f1">[{s.beatmap?.version}] {s.beatmap?.cs && `${s.beatmap.cs}K`}</div>
+                    <div className="text-[10px] text-osu-f1">
+                      [{s.beatmap?.version}] {s.beatmap?.cs && `${s.beatmap.cs}K`} &middot; {formatTimeAgo(getScoreTimestamp(s))}
+                    </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="text-xs text-osu-l2">{formatAccuracy(s.accuracy)}</span>
