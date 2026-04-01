@@ -6,36 +6,59 @@ import { formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
+import { ScoreRowSkeleton } from "../components/ui/LoadingSkeleton";
 import { useAppStore } from "../store";
 import type { OsuScore } from "../lib/types";
 
 export const Route = createFileRoute("/scores")({
   component: ScoresPage,
-  loader: async () => {
-    const rankings = await getRankings({ data: { type: "performance", page: 1, country: "CR" } });
-    const userIds = rankings.ranking.map((r: { user: { id: number } }) => r.user.id);
-    return { userIds };
-  },
 });
 
 type ScoreFilter = "all" | "ranked" | "passed" | "failed";
 
 function ScoresPage() {
-  const { userIds } = Route.useLoaderData();
   const { feedScores, addFeedScores, setTrackedUserIds, pollIndex, nextPollIndex } = useAppStore();
+  const [userIds, setUserIds] = useState<number[]>([]);
+  const [loadingPlayers, setLoadingPlayers] = useState(true);
+  const [playersError, setPlayersError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(true);
   const [filter, setFilter] = useState<ScoreFilter>("all");
   const [initialLoaded, setInitialLoaded] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    getRankings({ data: { type: "performance", page: 1, country: "CR" } })
+      .then((rankings) => {
+        if (cancelled) return;
+
+        const ids = rankings.ranking.map((entry: { user: { id: number } }) => entry.user.id);
+        setUserIds(ids);
+        setTrackedUserIds(ids);
+        setPlayersError(null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPlayersError("Couldn't load the tracked player pool.");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingPlayers(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [setTrackedUserIds]);
+
   // Initial fetch client-side (non-blocking)
   useEffect(() => {
-    setTrackedUserIds(userIds);
     if (!initialLoaded && userIds.length > 0) {
       getCountryRecentScores({ data: { userIds, batchSize: 15, batchIndex: 0 } })
         .then((scores) => { if (scores.length > 0) addFeedScores(scores); })
         .finally(() => setInitialLoaded(true));
     }
-  }, [userIds, initialLoaded, setTrackedUserIds, addFeedScores]);
+  }, [userIds, initialLoaded, addFeedScores]);
 
   const poll = useCallback(async () => {
     if (!isPolling || userIds.length === 0) return;
@@ -79,11 +102,14 @@ function ScoresPage() {
           <div className="ml-auto flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${isPolling ? "bg-osu-green animate-pulse" : "bg-osu-f1"}`} />
             <span className="text-[10px] text-osu-f1">
-              {isPolling ? "Live" : "Paused"} &middot; {feedScores.length} scores
+              {loadingPlayers
+                ? "Loading tracked players..."
+                : `${isPolling ? "Live" : "Paused"} \u00b7 ${feedScores.length} scores`}
             </span>
             <button
               onClick={() => setIsPolling(!isPolling)}
               className="px-2.5 py-1 rounded-lg bg-osu-b4 text-[10px] text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/30"
+              disabled={loadingPlayers || !!playersError}
             >
               {isPolling ? "Pause" : "Resume"}
             </button>
@@ -112,17 +138,31 @@ function ScoresPage() {
 
       <div className="bg-osu-b5">
         <div className="max-w-[1200px] mx-auto px-5 py-5">
-          <AnimatePresence mode="popLayout">
-            {filtered.map((score: OsuScore) => (
-              <ScoreFeedItem key={score.id} score={score} />
-            ))}
-          </AnimatePresence>
-          {filtered.length === 0 && (
+          {playersError ? (
             <div className="text-center py-16 text-osu-f1 text-sm">
-              {feedScores.length === 0
-                ? "Loading recent scores from CR mania players..."
-                : "No scores match this filter"}
+              {playersError}
             </div>
+          ) : loadingPlayers || (!initialLoaded && feedScores.length === 0) ? (
+            <div className="space-y-2">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <ScoreRowSkeleton key={i} />
+              ))}
+            </div>
+          ) : (
+            <>
+              <AnimatePresence mode="popLayout">
+                {filtered.map((score: OsuScore) => (
+                  <ScoreFeedItem key={score.id} score={score} />
+                ))}
+              </AnimatePresence>
+              {filtered.length === 0 && (
+                <div className="text-center py-16 text-osu-f1 text-sm">
+                  {feedScores.length === 0
+                    ? "No recent scores yet."
+                    : "No scores match this filter"}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
