@@ -37,9 +37,3 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 ::-webkit-scrollbar-track { background: var(--color-osu-b6); }
 ::-webkit-scrollbar-thumb { background: var(--color-osu-b2); border-radius: 4px; }
 
-@keyframes mania-fall {
-  0% { transform: translateX(-50%) translateY(-100px); opacity: 0; }
-  10% { opacity: 1; }
-  90% { opacity: 1; }
-  100% { transform: translateX(-50%) translateY(calc(100vh + 100px)); opacity: 0; }
-}
