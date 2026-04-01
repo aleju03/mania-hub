@@ -6,7 +6,7 @@ import { searchUsers } from "../../lib/osu";
 const links = [
   { id: "home", to: "/", label: "home" },
   { id: "rankings", to: "/rankings", label: "CR top 50" },
-  { id: "scores", to: "/scores", label: "scores" },
+  { id: "scores", to: "/scores", label: "tracker" },
   { id: "popoffs", to: "/popoffs", label: "pop-offs" },
   { id: "replay", to: "/replay", label: "replay" },
 ] as const;
