@@ -20,6 +20,7 @@ export const Route = createFileRoute("/scores")({
 });
 
 type ScoreFilter = "all" | "ranked" | "passed" | "failed";
+const PP_GAIN_BATCH_SIZE = 4;
 
 function isPassed(s: OsuScore) {
   return s.passed && s.rank !== "D";
@@ -168,26 +169,31 @@ function ScoresPage() {
 
   useEffect(() => {
     const rankedUsersToFetch = [...new Set(
-      feedScores
+      filtered
         .filter((score) => score.pp != null && score.pp > 0 && !ppGainFetchedByUserId[score.user_id])
         .map((score) => score.user_id),
-    )];
+    )].slice(0, 12);
 
     if (rankedUsersToFetch.length === 0) return;
 
     let cancelled = false;
+    const run = async () => {
+      for (let i = 0; i < rankedUsersToFetch.length; i += PP_GAIN_BATCH_SIZE) {
+        const batch = rankedUsersToFetch.slice(i, i + PP_GAIN_BATCH_SIZE);
+        const gains = await getUsersApproxPpGains({ data: { userIds: batch } });
+        if (cancelled) return;
+        const fetchedUsers = Object.fromEntries(batch.map((userId) => [userId, true])) as Record<number, true>;
+        setPpGainByScoreId((prev) => ({ ...prev, ...gains }));
+        setPpGainFetchedByUserId((prev) => ({ ...prev, ...fetchedUsers }));
+      }
+    };
 
-    getUsersApproxPpGains({ data: { userIds: rankedUsersToFetch } }).then((gains) => {
-      if (cancelled) return;
-      const fetchedUsers = Object.fromEntries(rankedUsersToFetch.map((userId) => [userId, true])) as Record<number, true>;
-      setPpGainByScoreId((prev) => ({ ...prev, ...gains }));
-      setPpGainFetchedByUserId((prev) => ({ ...prev, ...fetchedUsers }));
-    });
+    void run();
 
     return () => {
       cancelled = true;
     };
-  }, [feedScores, ppGainFetchedByUserId]);
+  }, [filtered, ppGainFetchedByUserId]);
 
   const filters: { id: ScoreFilter; label: string }[] = [
     { id: "all", label: "All" },

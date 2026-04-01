@@ -25,6 +25,7 @@ interface PopOff {
 
 type TimeRange = "24h" | "3d" | "7d" | "30d";
 type SortMode = "recent" | "pp";
+const PP_GAIN_BATCH_SIZE = 4;
 const RANGE_MS: Record<TimeRange, number> = {
   "24h": 24 * 60 * 60 * 1000,
   "3d": 3 * 24 * 60 * 60 * 1000,
@@ -181,9 +182,13 @@ function PopOffsPage() {
     });
   }, [visiblePopoffs, range, sortMode]);
 
+  // Paginate
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
   useEffect(() => {
     const usersToFetch = [...new Set(
-      visiblePopoffs
+      paginated
         .filter((entry) => !ppGainFetchedByUserId[entry.user.id])
         .map((entry) => entry.user.id),
     )];
@@ -191,22 +196,23 @@ function PopOffsPage() {
     if (usersToFetch.length === 0) return;
 
     let cancelled = false;
+    const run = async () => {
+      for (let i = 0; i < usersToFetch.length; i += PP_GAIN_BATCH_SIZE) {
+        const batch = usersToFetch.slice(i, i + PP_GAIN_BATCH_SIZE);
+        const gains = await getUsersApproxPpGains({ data: { userIds: batch } });
+        if (cancelled) return;
+        const fetchedUsers = Object.fromEntries(batch.map((userId) => [userId, true])) as Record<number, true>;
+        setPpGainByScoreId((prev) => ({ ...prev, ...gains }));
+        setPpGainFetchedByUserId((prev) => ({ ...prev, ...fetchedUsers }));
+      }
+    };
 
-    getUsersApproxPpGains({ data: { userIds: usersToFetch } }).then((gains) => {
-      if (cancelled) return;
-      const fetchedUsers = Object.fromEntries(usersToFetch.map((userId) => [userId, true])) as Record<number, true>;
-      setPpGainByScoreId((prev) => ({ ...prev, ...gains }));
-      setPpGainFetchedByUserId((prev) => ({ ...prev, ...fetchedUsers }));
-    });
+    void run();
 
     return () => {
       cancelled = true;
     };
-  }, [visiblePopoffs, ppGainFetchedByUserId]);
-
-  // Paginate
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  }, [paginated, ppGainFetchedByUserId]);
 
   const ranges: { id: TimeRange; label: string }[] = [
     { id: "24h", label: "24 hours" },

@@ -15,26 +15,34 @@ import { useAppStore } from "../store";
 type SortField = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "ss" | "s" | "a";
 
 export const Route = createFileRoute("/rankings")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    page: search.page === 2 || search.page === "2" ? 2 : 1,
+  }),
   component: RankingsPage,
 });
 
 function RankingsPage() {
+  const { page } = Route.useSearch();
   const navigate = useNavigate();
-  const data = useAppStore((state) => state.crRankings);
+  const cachedPageOneData = useAppStore((state) => state.crRankings);
   const rankingsFetchedAt = useAppStore((state) => state.crRankingsFetchedAt);
   const rankHistories = useAppStore((state) => state.rankHistories);
   const rankHistoriesFetchedAt = useAppStore((state) => state.rankHistoriesFetchedAt);
   const setCrRankings = useAppStore((state) => state.setCrRankings);
   const setRankHistories = useAppStore((state) => state.setRankHistories);
+  const [pageTwoData, setPageTwoData] = useState<RankingsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortField>("rank");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const [rankingsLoading, setRankingsLoading] = useState(!data);
+  const pageData = page === 1 ? cachedPageOneData : pageTwoData;
+  const [rankingsLoading, setRankingsLoading] = useState(!(page === 1 ? cachedPageOneData : pageTwoData));
   const [rankHistoriesLoading, setRankHistoriesLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    const shouldRefresh = !data || isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings);
+    const cachedData = page === 1 ? cachedPageOneData : pageTwoData;
+    const shouldRefresh =
+      !cachedData || (page === 1 && isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings));
 
     if (!shouldRefresh) {
       setRankingsLoading(false);
@@ -42,16 +50,17 @@ function RankingsPage() {
       return () => { cancelled = true; };
     }
 
-    setRankingsLoading(!data);
+    setRankingsLoading(!pageData);
 
-    getRankings({ data: { type: "performance", page: 1, country: "CR" } })
+    getRankings({ data: { type: "performance", page, country: "CR" } })
       .then((result) => {
         if (cancelled) return;
-        setCrRankings(result);
+        if (page === 1) setCrRankings(result);
+        else setPageTwoData(result);
         setError(null);
       })
       .catch(() => {
-        if (cancelled || data) return;
+        if (cancelled || pageData) return;
         setError("Couldn't load the Costa Rica rankings right now.");
       })
       .finally(() => {
@@ -60,12 +69,12 @@ function RankingsPage() {
       });
 
     return () => { cancelled = true; };
-  }, [data, rankingsFetchedAt, setCrRankings]);
+  }, [cachedPageOneData, page, pageData, pageTwoData, rankingsFetchedAt, setCrRankings]);
 
   useEffect(() => {
-    if (!data) return;
+    if (!pageData) return;
     let cancelled = false;
-    const userIds = data.ranking.slice(0, 50).map((e) => e.user.id);
+    const userIds = pageData.ranking.slice(0, 50).map((e) => e.user.id);
     const hasAllHistories = userIds.every((userId) => rankHistories[userId]);
     const shouldRefresh = !hasAllHistories || isCacheStale(rankHistoriesFetchedAt, CLIENT_CACHE_TTL.rankHistories);
 
@@ -87,17 +96,18 @@ function RankingsPage() {
       });
 
     return () => { cancelled = true; };
-  }, [data, rankHistories, rankHistoriesFetchedAt, setRankHistories]);
+  }, [pageData, rankHistories, rankHistoriesFetchedAt, setRankHistories]);
 
   // Compute CR rank changes: compare current CR positions vs 7 days ago
   const crRankChanges = useMemo(() => {
-    if (!data || Object.keys(rankHistories).length === 0) return {};
-    return getCrRankChanges(data.ranking, rankHistories);
-  }, [data, rankHistories]);
+    if (!pageData || Object.keys(rankHistories).length === 0) return {};
+    return getCrRankChanges(pageData.ranking, rankHistories);
+  }, [pageData, rankHistories]);
 
   const sortedRankings = useMemo(() => {
-    if (!data) return [];
-    const entries = data.ranking.slice(0, 50).map((entry, i) => ({ entry, originalRank: i + 1 }));
+    if (!pageData) return [];
+    const startRank = (page - 1) * 50;
+    const entries = pageData.ranking.slice(0, 50).map((entry, i) => ({ entry, originalRank: startRank + i + 1 }));
     if (sortBy === "rank") return sortDir === "desc" ? entries : [...entries].reverse();
 
     return [...entries].sort((a, b) => {
@@ -149,7 +159,7 @@ function RankingsPage() {
       }
       return sortDir === "desc" ? (bVal as number) - (aVal as number) : (aVal as number) - (bVal as number);
     });
-  }, [data, sortBy, sortDir, rankHistories, crRankChanges]);
+  }, [pageData, page, sortBy, sortDir, rankHistories, crRankChanges]);
 
   const handleSort = (field: SortField) => {
     if (sortBy === field) {
@@ -165,11 +175,11 @@ function RankingsPage() {
     <div className="flex-1">
       <PageHeader
         iconSrc="/images/icons/rankings.svg"
-        title="Costa Rica mania top 50"
+        title="Costa Rica mania rankings"
         right={
           <>
-            {!data && rankingsLoading && !error && <span className="text-[10px] text-osu-f1">Loading rankings...</span>}
-            {data && rankHistoriesLoading && <span className="text-[10px] text-osu-f1">Loading 7d changes...</span>}
+            {!pageData && rankingsLoading && !error && <span className="text-[10px] text-osu-f1">Loading rankings...</span>}
+            {pageData && rankHistoriesLoading && <span className="text-[10px] text-osu-f1">Loading 7d changes...</span>}
           </>
         }
       />
@@ -202,7 +212,7 @@ function RankingsPage() {
                       {error}
                     </td>
                   </tr>
-                ) : data ? (
+                ) : pageData ? (
                   sortedRankings.map(({ entry, originalRank }, i: number) => {
                     const history = rankHistories[entry.user.id];
                     const globalChange = getGlobalRankChange(history);
@@ -276,6 +286,22 @@ function RankingsPage() {
                 )}
               </tbody>
             </table>
+          </div>
+          <div className="flex items-center justify-center gap-3 pt-4">
+            <button
+              onClick={() => navigate({ to: "/rankings", search: { page: 1 } })}
+              disabled={page === 1}
+              className="px-4 py-2 rounded-lg bg-osu-b4 text-xs font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              Page 1
+            </button>
+            <button
+              onClick={() => navigate({ to: "/rankings", search: { page: 2 } })}
+              disabled={page === 2}
+              className="px-4 py-2 rounded-lg bg-osu-b4 text-xs font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              Next Page
+            </button>
           </div>
         </div>
       </div>
