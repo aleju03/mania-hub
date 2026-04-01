@@ -53,6 +53,32 @@ export const getRankings = createServerFn({ method: "GET" })
     return result;
   });
 
+// ── Batch user rank history ────────────────────────────────────────────────
+
+export const getUsersRankHistory = createServerFn({ method: "GET" })
+  .inputValidator((data: { userIds: number[] }) => data)
+  .handler(async ({ data }: { data: { userIds: number[] } }) => {
+    const cacheKey = `rank-history:${data.userIds.join(",")}`;
+    const cached = getCached<Record<number, number[]>>(cacheKey);
+    if (cached) return cached;
+
+    const results = await Promise.allSettled(
+      data.userIds.map((uid) =>
+        osuFetch<OsuUser>(`/users/${uid}/mania`)
+      )
+    );
+
+    const out: Record<number, number[]> = {};
+    results.forEach((r, i) => {
+      if (r.status === "fulfilled" && r.value.rank_history?.data) {
+        out[data.userIds[i]] = r.value.rank_history.data;
+      }
+    });
+
+    setCache(cacheKey, out);
+    return out;
+  });
+
 // ── Beatmaps ────────────────────────────────────────────────────────────────
 
 export const searchBeatmaps = createServerFn({ method: "GET" })

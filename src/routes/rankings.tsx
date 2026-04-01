@@ -1,11 +1,13 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
-import { getRankings } from "../lib/osu";
+import { getRankings, getUsersRankHistory } from "../lib/osu";
 import { formatNumber, formatAccuracy } from "../lib/format";
 import { Avatar } from "../components/ui/Avatar";
 import { RankingRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import type { RankingsResponse } from "../lib/types";
+
+type SortField = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "ss" | "s" | "a";
 
 export const Route = createFileRoute("/rankings")({
   component: RankingsPage,
@@ -15,10 +17,12 @@ function RankingsPage() {
   const navigate = useNavigate();
   const [data, setData] = useState<Awaited<ReturnType<typeof getRankings>> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<SortField>("rank");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [rankHistories, setRankHistories] = useState<Record<number, number[]>>({});
 
   useEffect(() => {
     let cancelled = false;
-
     getRankings({ data: { type: "performance", page: 1, country: "CR" } })
       .then((result) => {
         if (cancelled) return;
@@ -29,11 +33,123 @@ function RankingsPage() {
         if (cancelled) return;
         setError("Couldn't load the Costa Rica rankings right now.");
       });
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (!data) return;
+    let cancelled = false;
+    const userIds = data.ranking.slice(0, 50).map((e) => e.user.id);
+    const batchSize = 10;
+
+    (async () => {
+      for (let i = 0; i < userIds.length; i += batchSize) {
+        if (cancelled) return;
+        const batch = userIds.slice(i, i + batchSize);
+        try {
+          const histories = await getUsersRankHistory({ data: { userIds: batch } });
+          if (cancelled) return;
+          setRankHistories((prev) => ({ ...prev, ...histories }));
+        } catch {
+          // Silently skip failed batches
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [data]);
+
+  // Compute CR rank changes: compare current CR positions vs 7 days ago
+  const crRankChanges = useMemo(() => {
+    if (!data || Object.keys(rankHistories).length === 0) return {};
+    const entries = data.ranking.slice(0, 50);
+
+    // Current CR rank is just their index + 1
+    // To get CR rank 7 days ago, sort by global rank 7 days ago
+    const withOldRank = entries.map((e, i) => {
+      const history = rankHistories[e.user.id];
+      const oldGlobal = history && history.length >= 8 ? history[history.length - 8] : null;
+      return { userId: e.user.id, currentCR: i + 1, oldGlobal };
+    }).filter((e) => e.oldGlobal !== null && e.oldGlobal !== 0);
+
+    if (withOldRank.length === 0) return {};
+
+    // Sort by old global rank to reconstruct old CR ranking
+    const oldOrder = [...withOldRank].sort((a, b) => a.oldGlobal! - b.oldGlobal!);
+    const changes: Record<number, number> = {};
+    oldOrder.forEach((e, i) => {
+      const oldCR = i + 1;
+      // Positive = gained CR ranks (moved up)
+      changes[e.userId] = oldCR - e.currentCR;
+    });
+    return changes;
+  }, [data, rankHistories]);
+
+  const sortedRankings = useMemo(() => {
+    if (!data) return [];
+    const entries = data.ranking.slice(0, 50).map((entry, i) => ({ entry, originalRank: i + 1 }));
+    if (sortBy === "rank") return sortDir === "desc" ? entries : [...entries].reverse();
+
+    return [...entries].sort((a, b) => {
+      let aVal: number | string = 0;
+      let bVal: number | string = 0;
+
+      switch (sortBy) {
+        case "player":
+          aVal = a.entry.user.username.toLowerCase();
+          bVal = b.entry.user.username.toLowerCase();
+          return sortDir === "asc"
+            ? (aVal as string).localeCompare(bVal as string)
+            : (bVal as string).localeCompare(aVal as string);
+        case "7d": {
+          const aH = rankHistories[a.entry.user.id];
+          const bH = rankHistories[b.entry.user.id];
+          aVal = getGlobalRankChange(aH) ?? -99999;
+          bVal = getGlobalRankChange(bH) ?? -99999;
+          break;
+        }
+        case "cr7d":
+          aVal = crRankChanges[a.entry.user.id] ?? -99999;
+          bVal = crRankChanges[b.entry.user.id] ?? -99999;
+          break;
+        case "accuracy":
+          aVal = a.entry.hit_accuracy;
+          bVal = b.entry.hit_accuracy;
+          break;
+        case "playcount":
+          aVal = a.entry.play_count;
+          bVal = b.entry.play_count;
+          break;
+        case "pp":
+          aVal = a.entry.pp;
+          bVal = b.entry.pp;
+          break;
+        case "ss":
+          aVal = a.entry.grade_counts.ss + a.entry.grade_counts.ssh;
+          bVal = b.entry.grade_counts.ss + b.entry.grade_counts.ssh;
+          break;
+        case "s":
+          aVal = a.entry.grade_counts.s + a.entry.grade_counts.sh;
+          bVal = b.entry.grade_counts.s + b.entry.grade_counts.sh;
+          break;
+        case "a":
+          aVal = a.entry.grade_counts.a;
+          bVal = b.entry.grade_counts.a;
+          break;
+      }
+      return sortDir === "desc" ? (bVal as number) - (aVal as number) : (aVal as number) - (bVal as number);
+    });
+  }, [data, sortBy, sortDir, rankHistories, crRankChanges]);
+
+  const handleSort = (field: SortField) => {
+    if (sortBy === field) {
+      if (sortDir === "desc") setSortDir("asc");
+      else { setSortBy("rank"); setSortDir("desc"); }
+    } else {
+      setSortBy(field);
+      setSortDir("desc");
+    }
+  };
 
   return (
     <div className="flex-1">
@@ -44,9 +160,7 @@ function RankingsPage() {
             <h2 className="text-[15px] font-medium text-osu-c2">Costa Rica mania top 50</h2>
             <span className="mode-icon text-osu-pink ml-1">{"\ue802"}</span>
           </div>
-          <span className="text-[10px] text-osu-f1">
-            {data ? `${formatNumber(data.total)} ranked players` : "Loading rankings..."}
-          </span>
+          {!data && !error && <span className="text-[10px] text-osu-f1">Loading rankings...</span>}
         </div>
       </div>
 
@@ -57,60 +171,77 @@ function RankingsPage() {
               <thead>
                 <tr className="bg-osu-b4 text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">
                   <th className="py-2.5 px-3 text-left w-12">#</th>
-                  <th className="py-2.5 px-3 text-left">Player</th>
-                  <th className="py-2.5 px-3 text-right">Accuracy</th>
-                  <th className="py-2.5 px-3 text-right">Play Count</th>
-                  <th className="py-2.5 px-3 text-right">PP</th>
-                  <th className="py-2.5 px-3 text-center w-12">
-                    <img src="/images/badges/score-ranks-v2019/GradeSmall-SS.svg" alt="SS" width={22} height={22} className="inline" />
-                  </th>
-                  <th className="py-2.5 px-3 text-center w-12">
-                    <img src="/images/badges/score-ranks-v2019/GradeSmall-S.svg" alt="S" width={22} height={22} className="inline" />
-                  </th>
-                  <th className="py-2.5 px-3 text-center w-12">
-                    <img src="/images/badges/score-ranks-v2019/GradeSmall-A.svg" alt="A" width={22} height={22} className="inline" />
-                  </th>
+                  <SortableHeader field="player" label="Player" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="left" />
+                  <SortableHeader field="7d" label="7d Global" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-32" />
+                  <SortableHeader field="cr7d" label="7d CR" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-16" />
+                  <SortableHeader field="accuracy" label="Accuracy" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
+                  <SortableHeader field="playcount" label="Play Count" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
+                  <SortableHeader field="pp" label="PP" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
+                  <SortableGradeHeader field="ss" activeSort={sortBy} sortDir={sortDir} onSort={handleSort}
+                    img="/images/badges/score-ranks-v2019/GradeSmall-SS.svg" alt="SS" />
+                  <SortableGradeHeader field="s" activeSort={sortBy} sortDir={sortDir} onSort={handleSort}
+                    img="/images/badges/score-ranks-v2019/GradeSmall-S.svg" alt="S" />
+                  <SortableGradeHeader field="a" activeSort={sortBy} sortDir={sortDir} onSort={handleSort}
+                    img="/images/badges/score-ranks-v2019/GradeSmall-A.svg" alt="A" />
                 </tr>
               </thead>
               <tbody>
                 {error ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-sm text-osu-f1">
+                    <td colSpan={10} className="px-4 py-8 text-center text-sm text-osu-f1">
                       {error}
                     </td>
                   </tr>
                 ) : data ? (
-                  data.ranking.slice(0, 50).map((entry: RankingsResponse["ranking"][number], i: number) => (
-                    <motion.tr
-                      key={entry.user.id}
-                      initial={{ opacity: 0, x: -6 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.12, delay: i * 0.015 }}
-                      className="border-t border-osu-b3/20 hover:bg-osu-b4/80 transition-colors duration-[120ms] cursor-pointer"
-                      style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}
-                      onClick={() =>
-                        navigate({ to: "/player/$username", params: { username: entry.user.username } })
-                      }
-                    >
-                      <td className="py-2.5 px-3 text-sm font-bold text-osu-f1">#{i + 1}</td>
-                      <td className="py-2.5 px-3">
-                        <div className="flex items-center gap-3">
-                          <Avatar url={entry.user.avatar_url} size={30} />
-                          <span className="text-sm font-medium text-white">{entry.user.username}</span>
-                        </div>
-                      </td>
-                      <td className="py-2.5 px-3 text-sm text-osu-l2 text-right">{formatAccuracy(entry.hit_accuracy / 100)}</td>
-                      <td className="py-2.5 px-3 text-sm text-osu-f1 text-right">{formatNumber(entry.play_count)}</td>
-                      <td className="py-2.5 px-3 text-sm font-bold text-right">{formatNumber(Math.round(entry.pp))}</td>
-                      <td className="py-2.5 px-3 text-xs text-osu-f1 text-center">{entry.grade_counts.ss + entry.grade_counts.ssh}</td>
-                      <td className="py-2.5 px-3 text-xs text-osu-f1 text-center">{entry.grade_counts.s + entry.grade_counts.sh}</td>
-                      <td className="py-2.5 px-3 text-xs text-osu-f1 text-center">{entry.grade_counts.a}</td>
-                    </motion.tr>
-                  ))
+                  sortedRankings.map(({ entry, originalRank }, i: number) => {
+                    const history = rankHistories[entry.user.id];
+                    const globalChange = getGlobalRankChange(history);
+                    const crChange = crRankChanges[entry.user.id] ?? null;
+
+                    return (
+                      <motion.tr
+                        key={entry.user.id}
+                        initial={{ opacity: 0, x: -6 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.12, delay: i * 0.015 }}
+                        className="border-t border-osu-b3/20 hover:bg-osu-b4/80 transition-colors duration-[120ms] cursor-pointer"
+                        style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}
+                        onClick={() =>
+                          navigate({ to: "/player/$username", params: { username: entry.user.username } })
+                        }
+                      >
+                        <td className="py-2.5 px-3 text-sm font-bold text-osu-f1">#{originalRank}</td>
+                        <td className="py-2.5 px-3">
+                          <div className="flex items-center gap-3">
+                            <Avatar url={entry.user.avatar_url} size={30} />
+                            <span className="text-sm font-medium text-white">{entry.user.username}</span>
+                          </div>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <GlobalRankCell history={history} rankChange={globalChange} />
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <CRRankCell change={crChange} loaded={!!history} />
+                        </td>
+                        <td className="py-2.5 px-3 text-sm text-osu-l2 text-right">{formatAccuracy(entry.hit_accuracy / 100)}</td>
+                        <td className="py-2.5 px-3 text-sm text-osu-f1 text-right">{formatNumber(entry.play_count)}</td>
+                        <td className="py-2.5 px-3 text-sm font-bold text-right">{formatNumber(Math.round(entry.pp))}</td>
+                        <td className={`py-2.5 px-3 text-xs text-center ${sortBy === "ss" ? "text-white font-semibold" : "text-osu-f1"}`}>
+                          {entry.grade_counts.ss + entry.grade_counts.ssh}
+                        </td>
+                        <td className={`py-2.5 px-3 text-xs text-center ${sortBy === "s" ? "text-white font-semibold" : "text-osu-f1"}`}>
+                          {entry.grade_counts.s + entry.grade_counts.sh}
+                        </td>
+                        <td className={`py-2.5 px-3 text-xs text-center ${sortBy === "a" ? "text-white font-semibold" : "text-osu-f1"}`}>
+                          {entry.grade_counts.a}
+                        </td>
+                      </motion.tr>
+                    );
+                  })
                 ) : (
                   Array.from({ length: 10 }).map((_, i) => (
                     <tr key={i} className="border-t border-osu-b3/20">
-                      <td colSpan={8} className="px-3 py-1.5">
+                      <td colSpan={10} className="px-3 py-1.5">
                         <div className="hidden sm:block">
                           <RankingRowSkeleton />
                         </div>
@@ -135,5 +266,116 @@ function RankingsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function getGlobalRankChange(history: number[] | undefined): number | null {
+  if (!history || history.length < 8) return null;
+  const current = history[history.length - 1];
+  const weekAgo = history[history.length - 8];
+  if (!current || !weekAgo || current === 0 || weekAgo === 0) return null;
+  return weekAgo - current;
+}
+
+function MiniSparkline({ data }: { data: number[] }) {
+  const slice = data.slice(-7);
+  if (slice.length < 2) return null;
+
+  const min = Math.min(...slice);
+  const max = Math.max(...slice);
+  const range = max - min || 1;
+  const w = 44;
+  const h = 16;
+  const pad = 1;
+
+  const points = slice.map((v, i) => {
+    const x = pad + (i / (slice.length - 1)) * (w - pad * 2);
+    const y = pad + ((v - min) / range) * (h - pad * 2);
+    return `${x},${y}`;
+  }).join(" ");
+
+  const improved = slice[slice.length - 1] < slice[0];
+  const same = slice[slice.length - 1] === slice[0];
+  const color = same ? "hsl(333,10%,50%)" : improved ? "hsl(100,60%,50%)" : "hsl(0,70%,55%)";
+
+  return (
+    <svg width={w} height={h} className="inline-block align-middle flex-shrink-0">
+      <polyline points={points} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function GlobalRankCell({ history, rankChange }: { history: number[] | undefined; rankChange: number | null }) {
+  if (!history) {
+    return <div className="flex items-center justify-center"><Skeleton className="w-20 h-4" /></div>;
+  }
+  return (
+    <div className="flex items-center justify-center gap-2">
+      <MiniSparkline data={history} />
+      {rankChange !== null && rankChange !== 0 ? (
+        <span className={`text-[11px] font-semibold ${rankChange > 0 ? "text-osu-green" : "text-osu-red"}`}>
+          {rankChange > 0 ? `+${formatNumber(rankChange)}` : formatNumber(rankChange)}
+        </span>
+      ) : (
+        <span className="text-[11px] text-osu-f1">-</span>
+      )}
+    </div>
+  );
+}
+
+function CRRankCell({ change, loaded }: { change: number | null; loaded: boolean }) {
+  if (!loaded) {
+    return <div className="flex items-center justify-center"><Skeleton className="w-8 h-4" /></div>;
+  }
+  if (change === null || change === 0) {
+    return <div className="text-center text-[11px] text-osu-f1">-</div>;
+  }
+  return (
+    <div className={`text-center text-[11px] font-semibold ${change > 0 ? "text-osu-green" : "text-osu-red"}`}>
+      {change > 0 ? `+${change}` : change}
+    </div>
+  );
+}
+
+function SortableHeader({ field, label, activeSort, sortDir, onSort, align, className }: {
+  field: SortField;
+  label: string;
+  activeSort: SortField;
+  sortDir: "asc" | "desc";
+  onSort: (f: SortField) => void;
+  align: "left" | "center" | "right";
+  className?: string;
+}) {
+  const active = activeSort === field;
+  return (
+    <th
+      className={`py-2.5 px-3 text-${align} cursor-pointer select-none transition-colors ${active ? "bg-osu-pink/15 text-osu-pink-light" : "hover:bg-osu-b3/30"} ${className ?? ""}`}
+      onClick={() => onSort(field)}
+    >
+      {label}
+      {active && <span className="ml-1 text-osu-pink text-[8px]">{sortDir === "desc" ? "\u25BC" : "\u25B2"}</span>}
+    </th>
+  );
+}
+
+function SortableGradeHeader({ field, activeSort, sortDir, onSort, img, alt }: {
+  field: SortField;
+  activeSort: SortField;
+  sortDir: "asc" | "desc";
+  onSort: (f: SortField) => void;
+  img: string;
+  alt: string;
+}) {
+  const active = activeSort === field;
+  return (
+    <th
+      className={`py-2.5 px-3 text-center w-12 cursor-pointer select-none transition-colors ${active ? "bg-osu-pink/15" : "hover:bg-osu-b3/30"}`}
+      onClick={() => onSort(field)}
+    >
+      <div className="flex items-center justify-center gap-1">
+        <img src={img} alt={alt} width={22} height={22} className={`inline transition-opacity ${active ? "opacity-100" : "opacity-70"}`} />
+        {active && <span className="text-osu-pink text-[8px]">{sortDir === "desc" ? "\u25BC" : "\u25B2"}</span>}
+      </div>
+    </th>
   );
 }
