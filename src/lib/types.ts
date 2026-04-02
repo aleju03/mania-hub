@@ -144,6 +144,7 @@ export interface OsuMod {
 
 export interface OsuScore {
   id: number;
+  legacy_score_id?: number | null;
   user_id: number;
   accuracy: number;
   beatmap_id?: number;

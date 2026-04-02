@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getUser, getUserScoresBest, getUserScoresRecent } from "../../lib/osu";
 import {
@@ -10,7 +10,7 @@ import {
   formatDate,
   formatPP,
 } from "../../lib/format";
-import { getScoreTimestamp } from "../../lib/score";
+import { getScoreIdentity, getScoreTimestamp, getScoreUrl } from "../../lib/score";
 import { Avatar } from "../../components/ui/Avatar";
 import { GradeImg } from "../../components/ui/GradeImg";
 import { ModBadge } from "../../components/ui/ModBadge";
@@ -20,12 +20,23 @@ import type { OsuScore, OsuUser } from "../../lib/types";
 
 const userRequestCache = new Map<string, Promise<OsuUser>>();
 const userScoresRequestCache = new Map<number, Promise<[OsuScore[], OsuScore[]]>>();
+const INITIAL_SCORE_BATCH_SIZE = 5;
+const SHOW_MORE_BATCH_SIZE = 50;
+type ScoreTab = "best" | "recent";
 
 export const Route = createFileRoute("/player/$username")({
   component: PlayerPage,
 });
 
-type KeyFilter = "all" | "4k" | "7k";
+type KeyFilter = "all" | "4k" | "6k" | "7k";
+
+function matchesKeyFilter(score: OsuScore, keyFilter: KeyFilter): boolean {
+  if (keyFilter === "all") return true;
+  if (keyFilter === "4k") return score.beatmap?.cs === 4;
+  if (keyFilter === "6k") return score.beatmap?.cs === 6;
+  if (keyFilter === "7k") return score.beatmap?.cs === 7;
+  return true;
+}
 
 function loadUserCached(username: string): Promise<OsuUser> {
   const cached = userRequestCache.get(username);
@@ -44,8 +55,8 @@ function loadUserScoresCached(userId: number): Promise<[OsuScore[], OsuScore[]]>
   if (cached) return cached;
 
   const request = Promise.all([
-    getUserScoresBest({ data: { userId, limit: 30 } }),
-    getUserScoresRecent({ data: { userId, limit: 15, include_fails: true } }),
+    getUserScoresBest({ data: { userId, limit: INITIAL_SCORE_BATCH_SIZE, offset: 0 } }),
+    getUserScoresRecent({ data: { userId, limit: INITIAL_SCORE_BATCH_SIZE, offset: 0, include_fails: true } }),
   ]).finally(() => {
     userScoresRequestCache.delete(userId);
   });
@@ -63,9 +74,14 @@ function PlayerPage() {
   const [loadingScores, setLoadingScores] = useState(true);
   const [userError, setUserError] = useState<string | null>(null);
   const [scoresError, setScoresError] = useState<string | null>(null);
-  const [tab, setTab] = useState<"best" | "recent">("best");
+  const [tab, setTab] = useState<ScoreTab>("best");
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [bestHasMore, setBestHasMore] = useState(true);
+  const [recentHasMore, setRecentHasMore] = useState(true);
+  const [loadingMoreTab, setLoadingMoreTab] = useState<ScoreTab | null>(null);
+  const [bestVisibleCount, setBestVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
+  const [recentVisibleCount, setRecentVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
 
   useEffect(() => {
     if (!avatarOpen) return;
@@ -86,6 +102,11 @@ function PlayerPage() {
     setScoresError(null);
     setLoadingUser(true);
     setLoadingScores(true);
+    setBestHasMore(true);
+    setRecentHasMore(true);
+    setLoadingMoreTab(null);
+    setBestVisibleCount(INITIAL_SCORE_BATCH_SIZE);
+    setRecentVisibleCount(INITIAL_SCORE_BATCH_SIZE);
 
     loadUserCached(username)
       .then((result) => {
@@ -118,6 +139,8 @@ function PlayerPage() {
         if (cancelled) return;
         setBest(bestScores);
         setRecent(recentScores);
+        setBestHasMore(bestScores.length === INITIAL_SCORE_BATCH_SIZE);
+        setRecentHasMore(recentScores.length === INITIAL_SCORE_BATCH_SIZE);
         setScoresError(null);
       })
       .catch(() => {
@@ -134,6 +157,80 @@ function PlayerPage() {
     };
   }, [user]);
 
+  const fetchMoreScores = useCallback(async (targetTab: ScoreTab) => {
+    if (!user || loadingMoreTab) return;
+
+    const currentScores = targetTab === "best" ? best : recent;
+    setLoadingMoreTab(targetTab);
+
+    try {
+      const nextScores = targetTab === "best"
+        ? await getUserScoresBest({
+          data: { userId: user.id, limit: SHOW_MORE_BATCH_SIZE, offset: currentScores.length },
+        })
+        : await getUserScoresRecent({
+          data: {
+            userId: user.id,
+            limit: SHOW_MORE_BATCH_SIZE,
+            offset: currentScores.length,
+            include_fails: true,
+          },
+        });
+
+      if (targetTab === "best") {
+        setBest((prev) => [...prev, ...nextScores]);
+        setBestHasMore(nextScores.length === SHOW_MORE_BATCH_SIZE);
+      } else {
+        setRecent((prev) => [...prev, ...nextScores]);
+        setRecentHasMore(nextScores.length === SHOW_MORE_BATCH_SIZE);
+      }
+    } catch {
+      setScoresError("Couldn't load more scores right now.");
+    } finally {
+      setLoadingMoreTab(null);
+    }
+  }, [best, loadingMoreTab, recent, user]);
+
+  useEffect(() => {
+    setBestVisibleCount(INITIAL_SCORE_BATCH_SIZE);
+    setRecentVisibleCount(INITIAL_SCORE_BATCH_SIZE);
+  }, [keyFilter]);
+
+  const handleShowMore = useCallback(() => {
+    if (tab === "best") {
+      setBestVisibleCount((count) => count + SHOW_MORE_BATCH_SIZE);
+      return;
+    }
+
+    setRecentVisibleCount((count) => count + SHOW_MORE_BATCH_SIZE);
+  }, [tab]);
+
+  useEffect(() => {
+    const currentScores = tab === "best" ? best : recent;
+    const currentVisibleCount = tab === "best" ? bestVisibleCount : recentVisibleCount;
+    const filteredScores = currentScores.filter((score) => matchesKeyFilter(score, keyFilter));
+    const currentHasMore = tab === "best" ? bestHasMore : recentHasMore;
+
+    if (loadingScores || scoresError || loadingMoreTab) return;
+    if (filteredScores.length >= currentVisibleCount) return;
+    if (!currentHasMore) return;
+
+    void fetchMoreScores(tab);
+  }, [
+    best,
+    bestHasMore,
+    bestVisibleCount,
+    fetchMoreScores,
+    keyFilter,
+    loadingMoreTab,
+    loadingScores,
+    recent,
+    recentHasMore,
+    recentVisibleCount,
+    scoresError,
+    tab,
+  ]);
+
   if (loadingUser && !user) {
     return <PlayerPageSkeleton />;
   }
@@ -149,12 +246,27 @@ function PlayerPage() {
   }
 
   const stats = user.statistics;
-  const visibleScores = (tab === "best" ? best : recent).filter((score) => {
-    if (keyFilter === "all") return true;
-    if (keyFilter === "4k") return score.beatmap?.cs === 4;
-    if (keyFilter === "7k") return score.beatmap?.cs === 7;
-    return true;
-  });
+  const currentScores = tab === "best" ? best : recent;
+  const currentVisibleCount = tab === "best" ? bestVisibleCount : recentVisibleCount;
+  const filteredScores = currentScores.filter((score) => matchesKeyFilter(score, keyFilter));
+  const visibleScores = filteredScores.slice(0, currentVisibleCount);
+  const currentHasMore = tab === "best" ? bestHasMore : recentHasMore;
+  const isLoadingMoreCurrentTab = loadingMoreTab === tab;
+  const canShowMore = filteredScores.length > visibleScores.length || currentHasMore;
+  const isSettlingInitialFilteredView =
+    !loadingScores &&
+    currentVisibleCount === INITIAL_SCORE_BATCH_SIZE &&
+    filteredScores.length < INITIAL_SCORE_BATCH_SIZE &&
+    currentHasMore;
+  const scoreListState = loadingScores
+    ? "loading"
+    : isSettlingInitialFilteredView
+      ? "settling"
+      : scoresError
+        ? "error"
+        : visibleScores.length > 0
+          ? "loaded"
+          : "empty";
 
   return (
     <div className="flex-1">
@@ -318,6 +430,7 @@ function PlayerPage() {
               {([
                 ["all", "All"],
                 ["4k", "4K"],
+                ["6k", "6K"],
                 ["7k", "7K"],
               ] as const).map(([value, label]) => (
                 <button
@@ -340,18 +453,46 @@ function PlayerPage() {
       {/* Scores list */}
       <div className="bg-osu-b5 border-t border-osu-b3/20">
         <div className="max-w-[1200px] mx-auto px-5 py-5 space-y-1.5">
-          {loadingScores ? (
-            Array.from({ length: 6 }).map((_, i) => (
-              <ScoreRowSkeleton key={i} />
-            ))
-          ) : scoresError ? (
-            <div className="text-center py-8 text-osu-f1 text-sm">{scoresError}</div>
-          ) : visibleScores.length > 0 ? (
-            visibleScores.map((s: OsuScore, i: number) => (
-              <ScoreRow key={s.id} score={s} index={i} />
-            ))
-          ) : (
-            <div className="text-center py-8 text-osu-f1 text-sm">No scores found</div>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={scoreListState}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.14 }}
+              className="space-y-1.5"
+            >
+              {scoreListState === "loading" ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <ScoreRowSkeleton key={i} />
+                ))
+              ) : scoreListState === "settling" ? (
+                Array.from({ length: INITIAL_SCORE_BATCH_SIZE }).map((_, i) => (
+                  <PlayerScoreRowSkeleton key={`settling-${i}`} />
+                ))
+              ) : scoreListState === "error" ? (
+                <div className="text-center py-8 text-osu-f1 text-sm">{scoresError}</div>
+              ) : scoreListState === "loaded" ? (
+                visibleScores.map((s: OsuScore, i: number) => (
+                  <ScoreRow key={getScoreIdentity(s)} score={s} position={i + 1} />
+                ))
+              ) : (
+                <div className="text-center py-8 text-osu-f1 text-sm">No scores found</div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+
+          {!loadingScores && !scoresError && canShowMore && (
+            <div className="pt-3 flex justify-center">
+              <button
+                type="button"
+                onClick={handleShowMore}
+                disabled={isLoadingMoreCurrentTab}
+                className="px-4 py-2 rounded-lg bg-osu-b4 text-[12px] font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors cursor-pointer disabled:cursor-default disabled:opacity-60"
+              >
+                {isLoadingMoreCurrentTab ? "Loading..." : "Show more"}
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -484,57 +625,95 @@ function RankChart({ data }: { data: number[] }) {
   );
 }
 
-function ScoreRow({ score, index }: { score: OsuScore; index: number }) {
-  const keys = score.beatmap?.cs;
+function PlayerScoreRowSkeleton() {
   return (
-    <motion.a
-      href={`https://osu.ppy.sh/scores/${score.id}`}
-      target="_blank"
-      rel="noreferrer"
-      className="flex items-center gap-3 py-2.5 px-3 rounded-lg bg-osu-b4/50 hover:bg-osu-b4 transition-colors duration-[120ms] cursor-pointer"
-      initial={{ opacity: 0, x: -8 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.12, delay: index * 0.025 }}
-    >
-      <GradeImg grade={score.rank} size={28} />
-      {score.beatmapset?.covers?.list && (
-        <img
-          src={score.beatmapset.covers.list}
-          alt=""
-          className="w-12 h-8 rounded object-cover flex-shrink-0"
-          loading="lazy"
-        />
-      )}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-white truncate">
-            {score.beatmapset?.title || "Unknown"}
-          </span>
-          <span className="text-[10px] text-osu-f1 truncate">
-            [{score.beatmap?.version}]
-          </span>
-          {keys && (
-            <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
-              {keys}K
-            </span>
-          )}
+    <div className="flex items-center gap-3 py-2.5 px-3 rounded-lg bg-osu-b4/50 min-h-[63px]">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <Skeleton className="w-7 h-7 rounded-full flex-shrink-0" />
+        <Skeleton className="w-12 h-8 rounded flex-shrink-0" />
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-4 w-64 max-w-[55%]" />
+            <Skeleton className="h-3 w-28" />
+            <Skeleton className="h-4 w-5 rounded" />
+          </div>
+          <Skeleton className="h-3 w-40" />
         </div>
-        <span className="text-[10px] text-osu-f1">
-          {score.beatmapset?.artist} &middot; {formatTimeAgo(getScoreTimestamp(score))}
-        </span>
       </div>
       <div className="flex items-center gap-3 flex-shrink-0">
         <div className="flex gap-0.5 justify-end w-24">
-          {(score.mods ?? [])
-            .filter((m) => m?.acronym && m.acronym !== "CL")
-            .map((m) => (
-              <ModBadge key={m.acronym} mod={m.acronym} />
-            ))}
+          <Skeleton className="h-5 w-14 rounded" />
         </div>
-        <span className="text-xs text-osu-l2">{formatAccuracy(score.accuracy)}</span>
-        <span className="text-xs text-osu-f1">{formatNumber(score.max_combo)}x</span>
-        <span className="text-sm font-bold w-16 text-right">{formatPP(score.pp)}</span>
+        <Skeleton className="h-4 w-12" />
+        <Skeleton className="h-4 w-10" />
+        <Skeleton className="h-5 w-16" />
       </div>
-    </motion.a>
+    </div>
+  );
+}
+
+function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
+  const keys = score.beatmap?.cs;
+  const scoreUrl = getScoreUrl(score);
+
+  if (!scoreUrl) {
+    return null;
+  }
+
+  return (
+    <div className="relative group/score">
+      <div
+        className="pointer-events-none absolute -left-14 top-1/2 -translate-y-1/2 w-10 text-right text-white/90 opacity-0 translate-x-2 transition-all duration-150 ease-out group-hover/score:opacity-100 group-hover/score:translate-x-0"
+        style={{ fontFamily: "Venera" }}
+      >
+        <span className="block text-[24px] leading-none">{position}</span>
+      </div>
+      <a
+        href={scoreUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="flex items-center gap-3 py-2.5 px-3 rounded-lg bg-osu-b4/50 hover:bg-osu-b4 transition-colors duration-[120ms] cursor-pointer"
+      >
+        <GradeImg grade={score.rank} size={28} />
+        {score.beatmapset?.covers?.list && (
+          <img
+            src={score.beatmapset.covers.list}
+            alt=""
+            className="w-12 h-8 rounded object-cover flex-shrink-0"
+            loading="lazy"
+          />
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-white truncate">
+              {score.beatmapset?.title || "Unknown"}
+            </span>
+            <span className="text-[10px] text-osu-f1 truncate">
+              [{score.beatmap?.version}]
+            </span>
+            {keys && (
+              <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
+                {keys}K
+              </span>
+            )}
+          </div>
+          <span className="text-[10px] text-osu-f1">
+            {score.beatmapset?.artist} &middot; {formatTimeAgo(getScoreTimestamp(score))}
+          </span>
+        </div>
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <div className="flex gap-0.5 justify-end w-24">
+            {(score.mods ?? [])
+              .filter((m) => m?.acronym && m.acronym !== "CL")
+              .map((m) => (
+                <ModBadge key={m.acronym} mod={m.acronym} />
+              ))}
+          </div>
+          <span className="text-xs text-osu-l2">{formatAccuracy(score.accuracy)}</span>
+          <span className="text-xs text-osu-f1">{formatNumber(score.max_combo)}x</span>
+          <span className="text-sm font-bold w-16 text-right">{formatPP(score.pp)}</span>
+        </div>
+      </a>
+    </div>
   );
 }
