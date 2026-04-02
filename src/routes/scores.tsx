@@ -1,12 +1,12 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getRankings, getCountryRecentScores, getUsersApproxPpGains } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { formatAccuracy, formatTimeAgo, formatPP, formatNumber } from "../lib/format";
-import { getBeatmapUrl, getDisplayedTotalScore, getScoreTimestamp, scoreHasReplay } from "../lib/score";
+import { getBeatmapUrl, getDisplayedTotalScore, getScoreIdentity, getScoreTimestamp, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
-import { PageTabs } from "../components/layout/PageTabs";
+
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
@@ -19,14 +19,15 @@ export const Route = createFileRoute("/scores")({
   component: ScoresPage,
 });
 
-type ScoreFilter = "all" | "ranked" | "passed" | "failed";
+type ScoreFilter = "all" | "ranked" | "passed";
 const PP_GAIN_BATCH_SIZE = 4;
 
 function isPassed(s: OsuScore) {
   return s.passed && s.rank !== "D";
 }
-function isFailed(s: OsuScore) {
-  return !s.passed && s.rank === "F";
+
+function getDisplayRank(s: OsuScore): string {
+  return s.passed ? s.rank : "F";
 }
 
 function ScoresPage() {
@@ -47,10 +48,11 @@ function ScoresPage() {
   const [loadingPlayers, setLoadingPlayers] = useState(trackedUserIds.length === 0 && !crRankings);
   const [playersError, setPlayersError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(true);
-  const [filter, setFilter] = useState<ScoreFilter>("passed");
+  const [filter, setFilter] = useState<ScoreFilter>("all");
+  const [showFailed, setShowFailed] = useState(false);
   const [initialLoaded, setInitialLoaded] = useState(feedScores.length > 0 || !!feedScoresFetchedAt);
   const [initialRefreshDone, setInitialRefreshDone] = useState(false);
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [ppGainByScoreId, setPpGainByScoreId] = useState<Record<number, number>>({});
   const [ppGainFetchedByUserId, setPpGainFetchedByUserId] = useState<Record<number, true>>({});
 
@@ -149,23 +151,22 @@ function ScoresPage() {
   }, [poll]);
 
   useEffect(() => {
-    setExpandedId(null);
-  }, [filter]);
+    setExpandedKey(null);
+  }, [filter, showFailed]);
 
   const filtered = useMemo(() => {
     return feedScores.filter((score: OsuScore) => {
+      if (!showFailed && !score.passed) return false;
       switch (filter) {
         case "ranked":
           return score.pp != null && score.pp > 0;
         case "passed":
           return isPassed(score);
-        case "failed":
-          return isFailed(score);
         default:
           return true;
       }
     });
-  }, [feedScores, filter]);
+  }, [feedScores, filter, showFailed]);
 
   useEffect(() => {
     const rankedUsersToFetch = [...new Set(
@@ -199,8 +200,8 @@ function ScoresPage() {
     { id: "all", label: "All" },
     { id: "ranked", label: "Ranked (PP)" },
     { id: "passed", label: "Passed" },
-    { id: "failed", label: "Failed" },
   ];
+  const listKey = `${filter}:${showFailed ? "with-failed" : "passed-only"}`;
 
   return (
     <div className="flex-1">
@@ -226,7 +227,34 @@ function ScoresPage() {
         }
       />
 
-      <PageTabs items={filters} value={filter} onChange={setFilter} />
+      <div className="bg-osu-d5 border-b border-osu-b3/30">
+        <div className="max-w-[1200px] mx-auto px-5 flex items-center justify-between">
+          <div className="flex">
+            {filters.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setFilter(item.id)}
+                className={`px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] border-b-2 ${
+                  filter === item.id
+                    ? "text-osu-c1 border-osu-h1"
+                    : "text-osu-f1 border-transparent hover:text-osu-l2"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showFailed}
+              onChange={(e) => setShowFailed(e.target.checked)}
+              className="accent-osu-pink w-3 h-3 cursor-pointer"
+            />
+            <span className="text-[11px] text-osu-f1">Show failed</span>
+          </label>
+        </div>
+      </div>
 
       <div className="bg-osu-b5">
         <div className="max-w-[1200px] mx-auto px-5 py-5">
@@ -242,17 +270,21 @@ function ScoresPage() {
             </div>
           ) : (
             <>
-              <div key={filter} className="space-y-2">
-                <AnimatePresence initial={false} mode="popLayout">
-                  {filtered.map((score: OsuScore) => (
-                    <ScoreFeedItem
-                      key={score.id}
-                      score={score}
-                      approxPpGain={ppGainByScoreId[score.id] ?? null}
-                      expanded={expandedId === score.id}
-                      onToggle={() => setExpandedId(expandedId === score.id ? null : score.id)}
-                    />
-                  ))}
+              <div key={listKey} className="space-y-2">
+                <AnimatePresence initial={false}>
+                  {filtered.map((score: OsuScore) => {
+                    const scoreKey = getScoreIdentity(score);
+
+                    return (
+                      <ScoreFeedItem
+                        key={scoreKey}
+                        score={score}
+                        approxPpGain={ppGainByScoreId[score.id] ?? null}
+                        expanded={expandedKey === scoreKey}
+                        onToggle={() => setExpandedKey((current) => (current === scoreKey ? null : scoreKey))}
+                      />
+                    );
+                  })}
                 </AnimatePresence>
               </div>
               {filtered.length === 0 && (
@@ -305,7 +337,7 @@ function ScoreFeedItem({
         className="flex items-center gap-3 py-3 px-4 hover:bg-osu-b3/50 transition-colors duration-[120ms] cursor-pointer"
         onClick={onToggle}
       >
-        <GradeImg grade={score.rank} size={32} />
+        <GradeImg grade={getDisplayRank(score)} size={32} />
         <button
           onClick={(e) => {
             e.stopPropagation();

@@ -11,6 +11,32 @@ export function getScoreTimeMs(score: OsuScore): number {
   return timestamp ? new Date(timestamp).getTime() : 0;
 }
 
+export function getScoreIdentity(score: OsuScore): string {
+  if (score.id > 0) {
+    return `id:${score.id}`;
+  }
+
+  const beatmapId = score.beatmap_id ?? score.beatmap?.id ?? "unknown";
+  const timestamp = getScoreTimestamp(score) || score.started_at || "unknown";
+  const mods = (score.mods ?? [])
+    .map((mod) => mod?.acronym)
+    .filter(Boolean)
+    .join(",");
+
+  return [
+    "fallback",
+    score.user_id,
+    beatmapId,
+    timestamp,
+    score.passed ? "passed" : "failed",
+    score.rank,
+    score.max_combo,
+    Math.round(score.accuracy * 10000),
+    getDisplayedTotalScore(score) ?? 0,
+    mods,
+  ].join(":");
+}
+
 export function getDisplayedTotalScore(score: OsuScore): number | null {
   const value =
     score.classic_total_score ??

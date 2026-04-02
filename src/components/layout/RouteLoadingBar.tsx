@@ -2,8 +2,8 @@ import { useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 
 export function RouteLoadingBar() {
-  const isPending = useRouterState({
-    select: (state) => state.status === "pending",
+  const isLoading = useRouterState({
+    select: (state) => state.isLoading,
   });
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -28,7 +28,7 @@ export function RouteLoadingBar() {
     if (finishTimeoutRef.current) clearTimeout(finishTimeoutRef.current);
     if (intervalRef.current) clearInterval(intervalRef.current);
 
-    if (isPending) {
+    if (isLoading) {
       delayTimeoutRef.current = setTimeout(() => {
         setVisible(true);
         setProgress(14);
@@ -55,7 +55,7 @@ export function RouteLoadingBar() {
       setVisible(false);
       setProgress(0);
     }, 220);
-  }, [isPending, mounted, visible]);
+  }, [isLoading, mounted, visible]);
 
   if (!mounted) return null;
 

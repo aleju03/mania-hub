@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { SearchInput } from "../ui/SearchInput";
 import { searchUsers } from "../../lib/osu";
+import { useAppStore } from "../../store";
 
 const links = [
   { id: "home", to: "/", label: "home" },
@@ -105,12 +106,26 @@ export function Nav() {
             </Link>
           ))}
         </div>
-        <SearchInput
-          className="w-52"
-          placeholder="find player..."
-          onSearch={handleSearch}
-          onSelect={(u) => navigate({ to: "/player/$username", params: { username: u.username } })}
-        />
+        <div className="flex items-center gap-2">
+          {import.meta.env.VITE_DEV_MODE === "1" && (
+            <button
+              onClick={() => {
+                useAppStore.persist.clearStorage();
+                window.location.reload();
+              }}
+              className="px-2 py-1 rounded-lg bg-osu-red/20 text-[10px] text-osu-red font-semibold hover:bg-osu-red/30 transition-colors cursor-pointer border border-osu-red/30"
+              title="Clear all cached data and reload"
+            >
+              Clear cache
+            </button>
+          )}
+          <SearchInput
+            className="w-52"
+            placeholder="find player..."
+            onSearch={handleSearch}
+            onSelect={(u) => navigate({ to: "/player/$username", params: { username: u.username } })}
+          />
+        </div>
       </nav>
     </header>
   );
