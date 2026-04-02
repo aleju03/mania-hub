@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getUser, getUserScoresBest, getUserScoresRecent } from "../../lib/osu";
@@ -10,7 +10,7 @@ import {
   formatDate,
   formatPP,
 } from "../../lib/format";
-import { getScoreIdentity, getScoreTimestamp, getScoreUrl } from "../../lib/score";
+import { getScoreIdentity, getScoreTimestamp, getScoreUrl, scoreHasReplay } from "../../lib/score";
 import { Avatar } from "../../components/ui/Avatar";
 import { GradeImg } from "../../components/ui/GradeImg";
 import { ModBadge } from "../../components/ui/ModBadge";
@@ -655,13 +655,14 @@ function PlayerScoreRowSkeleton() {
 function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
   const keys = score.beatmap?.cs;
   const scoreUrl = getScoreUrl(score);
+  const canReplay = scoreHasReplay(score);
 
   if (!scoreUrl) {
     return null;
   }
 
   return (
-    <div className="relative group/score">
+    <div className="relative group/score flex items-center gap-3 py-2.5 px-3 rounded-lg bg-osu-b4/50 hover:bg-osu-b4 transition-colors duration-[120ms]">
       <div
         className="pointer-events-none absolute -left-14 top-1/2 -translate-y-1/2 w-10 text-right text-white/90 opacity-0 translate-x-2 transition-all duration-150 ease-out group-hover/score:opacity-100 group-hover/score:translate-x-0"
         style={{ fontFamily: "Venera" }}
@@ -672,7 +673,7 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
         href={scoreUrl}
         target="_blank"
         rel="noreferrer"
-        className="flex items-center gap-3 py-2.5 px-3 rounded-lg bg-osu-b4/50 hover:bg-osu-b4 transition-colors duration-[120ms] cursor-pointer"
+        className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
       >
         <GradeImg grade={score.rank} size={28} />
         {score.beatmapset?.covers?.list && (
@@ -714,6 +715,15 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
           <span className="text-sm font-bold w-16 text-right">{formatPP(score.pp)}</span>
         </div>
       </a>
+      {canReplay && (
+        <Link
+          to="/replay"
+          search={{ scoreId: score.id, mode: "mania" }}
+          className="px-2.5 py-1.5 rounded-md bg-osu-pink/15 text-[10px] font-semibold text-osu-pink-light border border-osu-pink/20 hover:bg-osu-pink/25 transition-colors flex-shrink-0"
+        >
+          Replay
+        </Link>
+      )}
     </div>
   );
 }
