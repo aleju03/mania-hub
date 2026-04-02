@@ -81,11 +81,12 @@ export const getUserScoresBest = createServerFn({ method: "GET" })
   });
 
 export const getUserScoresRecent = createServerFn({ method: "GET" })
-  .inputValidator((data: { userId: number; limit?: number; include_fails?: boolean }) => data)
-  .handler(async ({ data }: { data: { userId: number; limit?: number; include_fails?: boolean } }) => {
+  .inputValidator((data: { userId: number; limit?: number; offset?: number; include_fails?: boolean }) => data)
+  .handler(async ({ data }: { data: { userId: number; limit?: number; offset?: number; include_fails?: boolean } }) => {
     return osuFetch<OsuScore[]>(`/users/${data.userId}/scores/recent`, {
       mode: "mania",
       limit: data.limit ?? 10,
+      offset: data.offset ?? 0,
       include_fails: data.include_fails ? 1 : 0,
     });
   });

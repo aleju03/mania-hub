@@ -59,6 +59,12 @@ export function getBeatmapUrl(score: OsuScore): string | null {
   );
 }
 
+export function getScoreUrl(score: OsuScore): string | null {
+  const scoreId = score.legacy_score_id ?? score.id;
+  if (!scoreId) return null;
+  return `https://osu.ppy.sh/scores/${scoreId}`;
+}
+
 export function calculateWeightedPpTotal(scores: Array<Pick<OsuScore, "pp">>): number {
   return scores.reduce((total, score, index) => {
     const pp = score.pp ?? 0;
