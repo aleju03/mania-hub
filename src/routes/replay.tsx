@@ -188,19 +188,22 @@ function ReplayPage() {
   );
 }
 
-function ReplayInfo({ replay, score: _score, beatmap, onClear }: {
+function ReplayInfo({ replay, score, beatmap, onClear }: {
   replay: ServerReplay; score: OsuScore | null; beatmap: ManiaBeatmap | null; onClear: () => void;
 }) {
   const h = replay.header;
   const totalHits = h.countGeki + h.count300 + h.countKatu + h.count100 + h.count50;
   const accuracy = totalHits + h.countMiss > 0
     ? ((h.countGeki * 6 + h.count300 * 6 + h.countKatu * 4 + h.count100 * 2 + h.count50) / ((totalHits + h.countMiss) * 6) * 100) : 0;
+  const beatmapsetId = score?.beatmapset?.id;
+  const beatmapId = score?.beatmap?.id;
+  const mapUrl = beatmapsetId ? `https://osu.ppy.sh/beatmapsets/${beatmapsetId}${beatmapId ? `#mania/${beatmapId}` : ""}` : null;
 
   return (
     <div className="bg-osu-b4 rounded-xl p-4 mb-4 border border-osu-b3/20">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
         <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Player</div><div className="text-sm font-bold text-white">{h.playerName}</div></div>
-        {beatmap && <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Map</div><div className="text-sm font-medium text-osu-l2">{beatmap.title} [{beatmap.version}]</div></div>}
+        {beatmap && <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Map</div>{mapUrl ? <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-osu-l2 hover:text-osu-pink-light transition-colors">{beatmap.title} [{beatmap.version}]</a> : <div className="text-sm font-medium text-osu-l2">{beatmap.title} [{beatmap.version}]</div>}</div>}
         <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Keys</div><div className="text-sm font-bold text-osu-yellow">{replay.keyCount}K</div></div>
         <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Accuracy</div><div className="text-sm font-bold text-white">{accuracy.toFixed(2)}%</div></div>
         <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Score</div><div className="text-sm font-bold text-white">{h.totalScore.toLocaleString()}</div></div>
@@ -473,43 +476,72 @@ function ReplayViewer({
       )}
 
       {/* Controls */}
-      <div className="bg-osu-b4 rounded-xl p-4 border border-osu-b3/20 space-y-3">
+      <div className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
         {audioError && (
-          <div className="text-[11px] text-osu-yellow bg-osu-yellow/10 border border-osu-yellow/20 rounded-lg px-3 py-2">
+          <div className="text-[11px] text-osu-yellow bg-osu-yellow/10 border-b border-osu-yellow/20 px-4 py-2">
             {audioError}
           </div>
         )}
+
         {/* Progress bar */}
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] text-osu-f1 w-10">{formatTime(progress)}</span>
+        <div className="flex items-center gap-3 px-4 pt-3 pb-1">
+          <span className="text-[10px] text-osu-f1 tabular-nums w-10">{formatTime(progress)}</span>
           <input type="range" min={0} max={1} step={0.001} value={progress}
             onChange={(e) => { const v = Number(e.target.value); setProgress(v); const t = v * (rendererRef.current?.duration ?? 0); rendererRef.current?.seek(t); syncAudioTime(t); }}
             className={`flex-1 h-1.5 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink`} />
-          <span className="text-[10px] text-osu-f1 w-10 text-right">{formatTime(1)}</span>
+          <span className="text-[10px] text-osu-f1 tabular-nums w-10 text-right">{formatTime(1)}</span>
         </div>
 
         {/* Controls row */}
-        <div className="flex items-center gap-4 flex-wrap">
+        <div className="flex items-center gap-3 px-4 py-3 flex-wrap">
           {/* Play/Pause */}
-          <button onClick={togglePlay} className="w-10 h-10 rounded-full bg-osu-pink hover:bg-osu-pink-light transition-colors flex items-center justify-center cursor-pointer">
-            <span className="text-white text-sm font-bold">{isPlaying ? "||" : ">"}</span>
+          <button onClick={togglePlay} className="w-9 h-9 rounded-full bg-osu-pink hover:bg-osu-pink-light transition-colors flex items-center justify-center cursor-pointer shrink-0">
+            {isPlaying ? (
+              <svg viewBox="0 0 24 24" fill="white" className="w-4 h-4">
+                <rect x="6" y="4" width="4" height="16" rx="1" />
+                <rect x="14" y="4" width="4" height="16" rx="1" />
+              </svg>
+            ) : (
+              <svg viewBox="0 0 24 24" fill="white" className="w-4 h-4 ml-0.5">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            )}
           </button>
 
           {/* Speed */}
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] text-osu-f1 mr-1">Speed:</span>
+          <div className="flex items-center gap-0.5">
             {[0.25, 0.5, 1, 1.5, 2].map((s) => (
               <button key={s} onClick={() => { setSpeed(s); rendererRef.current?.setSpeed(s); if (audioRef.current) audioRef.current.playbackRate = s; }}
-                className={`px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${speed === s ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white"}`}>{s}x</button>
+                className={`px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${speed === s ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"}`}>{s}x</button>
             ))}
           </div>
 
+          {/* Divider */}
+          <div className="w-px h-5 bg-osu-b3/40" />
+
           {/* Volume */}
           {audioUrl && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <button onClick={toggleAudio}
-                className={`px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${audioEnabled ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white"}`}>
-                {audioEnabled ? "Vol" : "Muted"}
+                className="w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors hover:bg-osu-b3/50">
+                {!audioEnabled || volume === 0 ? (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-osu-f1">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
+                    <line x1="23" y1="9" x2="17" y2="15" />
+                    <line x1="17" y1="9" x2="23" y2="15" />
+                  </svg>
+                ) : volume < 0.5 ? (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-white">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-white">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                  </svg>
+                )}
               </button>
               <input type="range" min={0} max={1} step={0.05} value={audioEnabled ? volume : 0}
                 onChange={(e) => { const v = Number(e.target.value); setVolume(v); if (!audioEnabled && v > 0) setAudioEnabled(true); if (audioRef.current) audioRef.current.volume = v; }}
@@ -517,32 +549,36 @@ function ReplayViewer({
             </div>
           )}
 
+          {/* Divider */}
+          <div className="w-px h-5 bg-osu-b3/40" />
+
+          {/* Input overlay toggle */}
           <button
             onClick={() => setShowInputOverlay((value) => !value)}
-            className={`px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
-              showInputOverlay ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white"
+            className={`px-2.5 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
+              showInputOverlay ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
             }`}
           >
             Input
           </button>
 
           {/* Scroll Speed */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-osu-f1">Scroll:</span>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] text-osu-f1 mr-0.5">Scroll</span>
             <button onClick={() => { const v = Math.max(1, scrollSpeed - 1); setScrollSpeed(v); rendererRef.current?.setScrollSpeed(v); }}
-              className="w-5 h-5 rounded bg-osu-b3/50 text-[10px] text-osu-f1 hover:text-white hover:bg-osu-b2 transition-colors cursor-pointer flex items-center justify-center">-</button>
-            <span className="text-xs text-white font-bold w-5 text-center">{scrollSpeed}</span>
+              className="w-5 h-5 rounded bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3 transition-colors cursor-pointer flex items-center justify-center text-xs leading-none">-</button>
+            <span className="text-xs text-white font-bold w-5 text-center tabular-nums">{scrollSpeed}</span>
             <button onClick={() => { const v = Math.min(40, scrollSpeed + 1); setScrollSpeed(v); rendererRef.current?.setScrollSpeed(v); }}
-              className="w-5 h-5 rounded bg-osu-b3/50 text-[10px] text-osu-f1 hover:text-white hover:bg-osu-b2 transition-colors cursor-pointer flex items-center justify-center">+</button>
+              className="w-5 h-5 rounded bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3 transition-colors cursor-pointer flex items-center justify-center text-xs leading-none">+</button>
           </div>
 
-          {/* BG Dim */}
+          {/* BG Dim — pushed right */}
           <div className="flex items-center gap-2 ml-auto">
-            <span className="text-[10px] text-osu-f1">BG Dim:</span>
+            <span className="text-[10px] text-osu-f1">BG Dim</span>
             <input type="range" min={0} max={100} step={5} value={bgDim}
               onChange={(e) => { const v = Number(e.target.value); setBgDim(v); rendererRef.current?.setBackgroundDim(v); }}
               className={`w-20 ${sliderClass}`} />
-            <span className="text-[10px] text-osu-f1 w-7">{bgDim}%</span>
+            <span className="text-[10px] text-osu-f1 tabular-nums w-7">{bgDim}%</span>
           </div>
         </div>
       </div>
