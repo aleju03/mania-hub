@@ -308,6 +308,14 @@ function ReplayViewer({
         backgroundDim: bgDim,
         od: beatmap?.od,
         showInputOverlay,
+        realJudgments: {
+          countGeki: replay.header.countGeki,
+          count300: replay.header.count300,
+          countKatu: replay.header.countKatu,
+          count100: replay.header.count100,
+          count50: replay.header.count50,
+          countMiss: replay.header.countMiss,
+        },
       },
     );
     rendererRef.current = renderer;

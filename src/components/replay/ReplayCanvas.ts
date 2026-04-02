@@ -49,11 +49,21 @@ const JUDGMENT_WEIGHTS: Record<number, number> = {
 };
 const HOLD_VISUAL_GRACE_MS = 60;
 
+interface RealJudgments {
+  countGeki: number;  // MAX
+  count300: number;
+  countKatu: number;  // 200
+  count100: number;
+  count50: number;
+  countMiss: number;
+}
+
 interface RendererOptions {
   backgroundImage?: HTMLImageElement;
   backgroundDim?: number;
   od?: number;
   showInputOverlay?: boolean;
+  realJudgments?: RealJudgments;
 }
 
 interface Layout {
@@ -99,6 +109,8 @@ export class ManiaReplayRenderer {
   private backgroundDim = 80;
   private od = 8;
   private showInputOverlay = true;
+  private realJudgments: RealJudgments | null = null;
+  private realTotal = 0;
 
   // Receptor flash state
   private receptorFlashTimestamps: number[];
@@ -137,6 +149,11 @@ export class ManiaReplayRenderer {
     this.backgroundDim = options?.backgroundDim ?? 80;
     this.od = options?.od ?? 8;
     this.showInputOverlay = options?.showInputOverlay ?? true;
+    this.realJudgments = options?.realJudgments ?? null;
+    if (this.realJudgments) {
+      const rj = this.realJudgments;
+      this.realTotal = rj.countGeki + rj.count300 + rj.countKatu + rj.count100 + rj.count50 + rj.countMiss;
+    }
     this.receptorFlashTimestamps = new Array(keyCount).fill(0);
 
     const frameDuration = frames.length > 0 ? frames[frames.length - 1].time : 0;
@@ -311,13 +328,30 @@ export class ManiaReplayRenderer {
   }
 
   private getAccuracy(): number {
+    const counts = this.getDisplayCounts();
     let totalWeight = 0;
     let totalNotes = 0;
     for (let j = 1; j <= 6; j++) {
-      totalWeight += this.judgmentCounts[j] * JUDGMENT_WEIGHTS[j];
-      totalNotes += this.judgmentCounts[j];
+      totalWeight += counts[j] * JUDGMENT_WEIGHTS[j];
+      totalNotes += counts[j];
     }
     return totalNotes > 0 ? (totalWeight / (totalNotes * 6)) * 100 : 100;
+  }
+
+  // Returns judgment counts for display: uses live hit detection during
+  // playback, but snaps to real header data once all notes are judged.
+  private getDisplayCounts(): number[] {
+    if (!this.realJudgments || this.realTotal === 0) return this.judgmentCounts;
+
+    let judgedSoFar = 0;
+    for (let j = 1; j <= 6; j++) judgedSoFar += this.judgmentCounts[j];
+
+    if (judgedSoFar >= this.realTotal) {
+      const rj = this.realJudgments;
+      return [0, rj.countGeki, rj.count300, rj.countKatu, rj.count100, rj.count50, rj.countMiss];
+    }
+
+    return this.judgmentCounts;
   }
 
   private getHandForColumn(column: number): Hand {
@@ -696,16 +730,16 @@ export class ManiaReplayRenderer {
           const barH = Math.max(pieceBottom - pieceTop, 2);
           if (barH <= 0) return;
 
-          ctx.fillStyle = color;
-          ctx.globalAlpha = hasNotes ? 0.08 : 0.7;
+          ctx.fillStyle = hasNotes ? "#a855f7" : color;
+          ctx.globalAlpha = hasNotes ? 0.18 : 0.7;
           ctx.beginPath();
           ctx.roundRect(x, pieceTop, barWidth, barH, 3);
           ctx.fill();
 
           if (pieceTop < judgmentY && pieceBottom > judgmentY - 20) {
-            ctx.globalAlpha = 0.04;
+            ctx.globalAlpha = 0.08;
             ctx.save();
-            ctx.shadowColor = color;
+            ctx.shadowColor = "#a855f7";
             ctx.shadowBlur = 12;
             ctx.fillRect(x, pieceTop, barWidth, barH);
             ctx.restore();
@@ -899,13 +933,14 @@ export class ManiaReplayRenderer {
     // --- Right-side live judgment counter ---
     const judgmentCounterX = playfieldX + playfieldWidth + 16;
     const judgmentCounterY = 52;
+    const displayCounts = this.getDisplayCounts();
     const judgmentItems = [
-      { label: "MAX", value: this.judgmentCounts[1], color: JUDGMENT_COLORS[1] },
-      { label: "300", value: this.judgmentCounts[2], color: JUDGMENT_COLORS[2] },
-      { label: "200", value: this.judgmentCounts[3], color: JUDGMENT_COLORS[3] },
-      { label: "100", value: this.judgmentCounts[4], color: JUDGMENT_COLORS[4] },
-      { label: "50", value: this.judgmentCounts[5], color: JUDGMENT_COLORS[5] },
-      { label: "MISS", value: this.judgmentCounts[6], color: JUDGMENT_COLORS[6] },
+      { label: "MAX", value: displayCounts[1], color: JUDGMENT_COLORS[1] },
+      { label: "300", value: displayCounts[2], color: JUDGMENT_COLORS[2] },
+      { label: "200", value: displayCounts[3], color: JUDGMENT_COLORS[3] },
+      { label: "100", value: displayCounts[4], color: JUDGMENT_COLORS[4] },
+      { label: "50", value: displayCounts[5], color: JUDGMENT_COLORS[5] },
+      { label: "MISS", value: displayCounts[6], color: JUDGMENT_COLORS[6] },
     ];
 
     judgmentItems.forEach((item, index) => {
