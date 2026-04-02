@@ -822,11 +822,11 @@ export class ManiaReplayRenderer {
 
     // --- Left-side key overlay + hand misses ---
     const currentState = this.getCurrentKeyState();
-    const keyBoxSize = 24;
+    const keyBoxSize = 32;
     const keyGap = 6;
     const keyRowWidth = this.keyCount * keyBoxSize + Math.max(0, this.keyCount - 1) * keyGap;
     const keyRowX = Math.max(12, playfieldX - keyRowWidth - 18);
-    const keyRowY = judgmentY - 28;
+    const keyRowY = judgmentY - 36;
 
     for (let col = 0; col < this.keyCount; col++) {
       const x = keyRowX + col * (keyBoxSize + keyGap);
@@ -849,7 +849,7 @@ export class ManiaReplayRenderer {
       }
 
       ctx.globalAlpha = 1;
-      ctx.font = "bold 11px Torus, sans-serif";
+      ctx.font = "bold 14px Torus, sans-serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillStyle = pressed ? "rgba(10,10,18,0.9)" : "rgba(255,255,255,0.75)";
@@ -861,21 +861,21 @@ export class ManiaReplayRenderer {
       { label: "R MISS", value: String(this.rightHandMisses), color: "#de31ae" },
     ];
     missStats.forEach((item, index) => {
-      const x = keyRowX + index * 58;
+      const x = keyRowX + index * 68;
       const y = keyRowY + keyBoxSize + 10;
       ctx.fillStyle = "rgba(10, 10, 18, 0.78)";
-      ctx.fillRect(x, y, 52, 28);
+      ctx.fillRect(x, y, 60, 36);
       ctx.fillStyle = item.color;
-      ctx.fillRect(x, y, 3, 28);
-      ctx.font = "bold 8px Torus, sans-serif";
+      ctx.fillRect(x, y, 3, 36);
+      ctx.font = "bold 9px Torus, sans-serif";
       ctx.textAlign = "left";
       ctx.textBaseline = "top";
       ctx.fillStyle = "rgba(255,255,255,0.58)";
-      ctx.fillText(item.label, x + 8, y + 5);
-      ctx.font = "bold 14px Torus, sans-serif";
+      ctx.fillText(item.label, x + 9, y + 5);
+      ctx.font = "bold 16px Torus, sans-serif";
       ctx.textBaseline = "bottom";
       ctx.fillStyle = "rgba(255,255,255,0.95)";
-      ctx.fillText(item.value, x + 8, y + 24);
+      ctx.fillText(item.value, x + 9, y + 32);
     });
 
     // --- Right-side live judgment counter ---
