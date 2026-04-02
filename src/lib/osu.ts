@@ -283,9 +283,11 @@ export const getReplayParsed = createServerFn({ method: "GET" })
     const { ScoreDecoder } = await import("osu-parsers");
     let buffer: ArrayBuffer;
     try {
-      buffer = await osuFetchBinary(`/scores/${data.scoreId}/download`);
-    } catch {
+      // Try legacy (mode-prefixed) endpoint first — the scoreId from player pages
+      // is a legacy ID, and the modern endpoint may resolve to a different score.
       buffer = await osuFetchBinary(`/scores/${data.mode}/${data.scoreId}/download`);
+    } catch {
+      buffer = await osuFetchBinary(`/scores/${data.scoreId}/download`);
     }
     const decoder = new ScoreDecoder();
     const score = await decoder.decodeFromBuffer(Buffer.from(buffer));
