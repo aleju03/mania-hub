@@ -60,9 +60,16 @@ export function getBeatmapUrl(score: OsuScore): string | null {
 }
 
 export function getScoreUrl(score: OsuScore): string | null {
-  const scoreId = score.legacy_score_id ?? score.id;
-  if (!scoreId) return null;
-  return `https://osu.ppy.sh/scores/${scoreId}`;
+  if (score.id > 0) {
+    return `https://osu.ppy.sh/scores/${score.id}`;
+  }
+
+  if (score.legacy_score_id && score.legacy_score_id > 0) {
+    const ruleset = score.beatmap?.mode ?? "mania";
+    return `https://osu.ppy.sh/scores/${ruleset}/${score.legacy_score_id}`;
+  }
+
+  return null;
 }
 
 export function calculateWeightedPpTotal(scores: Array<Pick<OsuScore, "pp">>): number {
