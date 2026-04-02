@@ -232,6 +232,24 @@ export class ManiaReplayRenderer {
           else if (delta <= hw.meh) judgment = 5;
           else continue;
 
+          // For hold notes, degrade judgment based on tail release timing.
+          // Early release before the hold body ends by more than the miss
+          // window counts as a miss. Otherwise tail windows are 1.75x head.
+          if (note.isHold && note.endTime > note.time) {
+            const earlyRelease = note.endTime - seg.end;
+            if (earlyRelease > (hw.ok + hw.miss) / 2) {
+              judgment = 6; // released way too early → miss
+            } else {
+              const tailDelta = Math.abs(seg.end - note.endTime);
+              const ts = 1.75;
+              let tailJudgment: Judgment;
+              if (tailDelta <= hw.perfect * ts) tailJudgment = 1;
+              else if (tailDelta <= hw.great * ts) tailJudgment = 2;
+              else tailJudgment = 3; // caps at 200
+              if (tailJudgment > judgment) judgment = tailJudgment;
+            }
+          }
+
           results[noteIdx] = {
             judgment,
             hitTime: seg.start,
