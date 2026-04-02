@@ -18,14 +18,16 @@ const COLUMN_COLORS: Record<number, string[]> = {
 };
 
 // osu!mania hit window formulas: base - 3 * OD (except MAX which is fixed at 16ms)
-function getHitWindows(od: number) {
+// speedRate (DT=1.5, HT=0.75) shrinks/expands windows like the real game.
+function getHitWindows(od: number, speedRate = 1) {
+  const s = 1 / speedRate;
   return {
-    perfect: 16,
-    great: 64 - 3 * od,
-    good: 97 - 3 * od,
-    ok: 127 - 3 * od,
-    meh: 151 - 3 * od,
-    miss: 188 - 3 * od,
+    perfect: 16 * s,
+    great: (64 - 3 * od) * s,
+    good: (97 - 3 * od) * s,
+    ok: (127 - 3 * od) * s,
+    meh: (151 - 3 * od) * s,
+    miss: (188 - 3 * od) * s,
   };
 }
 
@@ -223,7 +225,7 @@ export class ManiaReplayRenderer {
 
     if (this.frames.length === 0 || this.notes.length === 0) return results;
 
-    const hw = getHitWindows(this.od);
+    const hw = getHitWindows(this.od, this.modRate);
 
     // Group note indices by column
     const notesByCol: number[][] = Array.from({ length: this.keyCount }, () => []);
@@ -358,7 +360,7 @@ export class ManiaReplayRenderer {
     let judgedSoFar = 0;
     for (let j = 1; j <= 6; j++) judgedSoFar += this.judgmentCounts[j];
 
-    if (judgedSoFar >= this.realTotal) {
+    if (judgedSoFar >= this.notes.length) {
       const rj = this.realJudgments;
       return [0, rj.countGeki, rj.count300, rj.countKatu, rj.count100, rj.count50, rj.countMiss];
     }
@@ -405,7 +407,17 @@ export class ManiaReplayRenderer {
     }
 
     const playfieldX = (w - playfieldWidth) / 2;
-    const judgmentY = h * 0.88;
+    // osu! stable HitPosition: higher value = closer to bottom.
+    // Formula from lazer: bottomPadding = (480 - clamp(hitPos, 240, 480)) * 1.6
+    // Then judgmentY = h - (bottomPadding / 480) * h (scale to canvas height)
+    let judgmentY: number;
+    if (this.skin) {
+      const clamped = Math.max(240, Math.min(480, this.skin.config.hitPosition));
+      const bottomPadding = (480 - clamped) * 1.6;
+      judgmentY = h - (bottomPadding / (480 * 1.6)) * h;
+    } else {
+      judgmentY = h * 0.88;
+    }
     const noteHeight = Math.max(10, h * 0.02);
     const receptorHeight = Math.max(6, h * 0.012);
     const pixelsPerMs = this.scrollSpeed;
@@ -668,9 +680,8 @@ export class ManiaReplayRenderer {
 
         ctx.globalAlpha = releasedEarly ? 0.45 : 1;
 
-        // Hold body
+        // Hold body — stretch to fill the full hold duration
         if (bodyImg) {
-          // Tile or stretch the body image vertically
           ctx.drawImage(bodyImg, colX, top, colWidth, bottom - top);
         } else {
           ctx.fillStyle = color;
@@ -683,11 +694,11 @@ export class ManiaReplayRenderer {
           ctx.stroke();
         }
 
-        // Hold head
+        // Hold head — draw at bottom of hold body, same height as regular notes
         ctx.globalAlpha = releasedEarly ? 0.65 : 1;
         if (bottom > top + noteHeight) {
           if (headImg) {
-            const imgH = Math.max(noteHeight, colWidth * (headImg.height / headImg.width));
+            const imgH = this.getSkinNoteHeight(headImg, colWidth, noteHeight);
             ctx.drawImage(headImg, colX, bottom - imgH, colWidth, imgH);
           } else {
             ctx.fillStyle = color;
@@ -697,11 +708,11 @@ export class ManiaReplayRenderer {
           }
         }
 
-        // Hold tail
-        if (tailImg) {
-          const imgH = Math.max(noteHeight / 2, colWidth * (tailImg.height / tailImg.width));
+        // Hold tail — draw at top of hold body (skip if image is trivially small like 1x1 transparent pixel)
+        if (tailImg && tailImg.width > 2 && tailImg.height > 2) {
+          const imgH = this.getSkinNoteHeight(tailImg, colWidth, noteHeight * 0.6);
           ctx.drawImage(tailImg, colX, top, colWidth, imgH);
-        } else {
+        } else if (!tailImg) {
           ctx.beginPath();
           ctx.fillStyle = color;
           ctx.roundRect(x, top, barWidth, noteHeight / 2, 2);
@@ -717,7 +728,7 @@ export class ManiaReplayRenderer {
         const noteImg = this.skin ? getNoteImage(this.skin, col) : null;
 
         if (noteImg) {
-          const imgH = Math.max(noteHeight, colWidth * (noteImg.height / noteImg.width));
+          const imgH = this.getSkinNoteHeight(noteImg, colWidth, noteHeight);
           ctx.drawImage(noteImg, colX, noteY - imgH, colWidth, imgH);
         } else {
           // Default canvas rendering
@@ -858,7 +869,8 @@ export class ManiaReplayRenderer {
 
     if (this.skin?.images.stageHint) {
       const img = this.skin.images.stageHint;
-      const hintHeight = Math.max(4, playfieldWidth * (img.height / img.width) * 0.5);
+      // Stage hint is a thin bar at the judgment line — cap height to stay subtle
+      const hintHeight = Math.min(Math.max(4, layout.h * 0.015), 12);
       ctx.drawImage(img, playfieldX, judgmentY - hintHeight / 2, playfieldWidth, hintHeight);
     } else {
       ctx.save();
@@ -894,8 +906,8 @@ export class ManiaReplayRenderer {
       const keyImg = this.skin ? getKeyImage(this.skin, col, pressed) : null;
 
       if (keyImg) {
-        // Draw skin key image at judgment line
-        const imgH = Math.max(receptorHeight + 6, colWidth * (keyImg.height / keyImg.width));
+        // Draw skin key image at judgment line, same sizing logic as notes
+        const imgH = this.getSkinNoteHeight(keyImg, colWidth, receptorHeight + 6);
         ctx.globalAlpha = pressed ? 1 : 0.8;
         ctx.drawImage(keyImg, x, judgmentY + 2, colWidth, imgH);
         ctx.globalAlpha = 1;
@@ -1151,6 +1163,19 @@ export class ManiaReplayRenderer {
       else hi = mid;
     }
     return lo;
+  }
+
+  // Calculate note height for skin images. Skin note images are drawn at column width;
+  // height preserves aspect ratio but is capped to avoid oversized rendering.
+  // @2x images have double pixel density, so their logical size is halved.
+  private getSkinNoteHeight(img: HTMLImageElement, colWidth: number, minHeight: number): number {
+    // Detect @2x: if the image is significantly larger than expected column width
+    const is2x = img.width > colWidth * 1.5;
+    const logicalW = is2x ? img.width / 2 : img.width;
+    const logicalH = is2x ? img.height / 2 : img.height;
+    const aspectH = colWidth * (logicalH / logicalW);
+    // Cap height: notes should not be taller than the column width (for circles/squares)
+    return Math.max(minHeight, Math.min(aspectH, colWidth));
   }
 
   private colorWithAlpha(hexColor: string, alpha: number): string {
