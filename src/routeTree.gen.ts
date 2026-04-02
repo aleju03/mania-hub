@@ -15,6 +15,7 @@ import { Route as RankingsRouteImport } from './routes/rankings'
 import { Route as PopoffsRouteImport } from './routes/popoffs'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
+import { Route as ApiAudioRouteImport } from './routes/api/audio'
 
 const ScoresRoute = ScoresRouteImport.update({
   id: '/scores',
@@ -46,6 +47,11 @@ const PlayerUsernameRoute = PlayerUsernameRouteImport.update({
   path: '/player/$username',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAudioRoute = ApiAudioRouteImport.update({
+  id: '/api/audio',
+  path: '/api/audio',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -53,6 +59,7 @@ export interface FileRoutesByFullPath {
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
   '/scores': typeof ScoresRoute
+  '/api/audio': typeof ApiAudioRoute
   '/player/$username': typeof PlayerUsernameRoute
 }
 export interface FileRoutesByTo {
@@ -61,6 +68,7 @@ export interface FileRoutesByTo {
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
   '/scores': typeof ScoresRoute
+  '/api/audio': typeof ApiAudioRoute
   '/player/$username': typeof PlayerUsernameRoute
 }
 export interface FileRoutesById {
@@ -70,6 +78,7 @@ export interface FileRoutesById {
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
   '/scores': typeof ScoresRoute
+  '/api/audio': typeof ApiAudioRoute
   '/player/$username': typeof PlayerUsernameRoute
 }
 export interface FileRouteTypes {
@@ -80,6 +89,7 @@ export interface FileRouteTypes {
     | '/rankings'
     | '/replay'
     | '/scores'
+    | '/api/audio'
     | '/player/$username'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -88,6 +98,7 @@ export interface FileRouteTypes {
     | '/rankings'
     | '/replay'
     | '/scores'
+    | '/api/audio'
     | '/player/$username'
   id:
     | '__root__'
@@ -96,6 +107,7 @@ export interface FileRouteTypes {
     | '/rankings'
     | '/replay'
     | '/scores'
+    | '/api/audio'
     | '/player/$username'
   fileRoutesById: FileRoutesById
 }
@@ -105,6 +117,7 @@ export interface RootRouteChildren {
   RankingsRoute: typeof RankingsRoute
   ReplayRoute: typeof ReplayRoute
   ScoresRoute: typeof ScoresRoute
+  ApiAudioRoute: typeof ApiAudioRoute
   PlayerUsernameRoute: typeof PlayerUsernameRoute
 }
 
@@ -152,6 +165,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlayerUsernameRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/audio': {
+      id: '/api/audio'
+      path: '/api/audio'
+      fullPath: '/api/audio'
+      preLoaderRoute: typeof ApiAudioRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -161,6 +181,7 @@ const rootRouteChildren: RootRouteChildren = {
   RankingsRoute: RankingsRoute,
   ReplayRoute: ReplayRoute,
   ScoresRoute: ScoresRoute,
+  ApiAudioRoute: ApiAudioRoute,
   PlayerUsernameRoute: PlayerUsernameRoute,
 }
 export const routeTree = rootRouteImport

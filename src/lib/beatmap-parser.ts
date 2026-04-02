@@ -13,9 +13,13 @@ export interface ManiaBeatmap {
   version: string;
   creator: string;
   keyCount: number;
+  od: number;
   bpm: number;
   notes: ManiaNote[];
   totalLength: number;
+  audioFilename: string;
+  previewTime: number;
+  backgroundFilename: string;
 }
 
 export function parseManiaBeatmap(content: string): ManiaBeatmap {
@@ -26,6 +30,10 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
   let version = "";
   let creator = "";
   let circleSize = 4; // CS = key count in mania
+  let overallDifficulty = 8;
+  let audioFilename = "";
+  let previewTime = 0;
+  let backgroundFilename = "";
   let section = "";
   const notes: ManiaNote[] = [];
   const timingPoints: { time: number; beatLength: number }[] = [];
@@ -36,6 +44,11 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
       continue;
     }
 
+    if (section === "General") {
+      if (line.startsWith("AudioFilename:")) audioFilename = line.slice(14).trim();
+      if (line.startsWith("PreviewTime:")) previewTime = parseInt(line.split(":")[1].trim(), 10) || 0;
+    }
+
     if (section === "Metadata") {
       if (line.startsWith("Title:")) title = line.slice(6).trim();
       if (line.startsWith("Artist:")) artist = line.slice(7).trim();
@@ -43,8 +56,14 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
       if (line.startsWith("Creator:")) creator = line.slice(8).trim();
     }
 
+    if (section === "Events" && !backgroundFilename) {
+      const match = line.match(/^0,0,"([^"]+)"/);
+      if (match) backgroundFilename = match[1];
+    }
+
     if (section === "Difficulty") {
       if (line.startsWith("CircleSize:")) circleSize = parseFloat(line.split(":")[1].trim());
+      if (line.startsWith("OverallDifficulty:")) overallDifficulty = parseFloat(line.split(":")[1].trim());
     }
 
     if (section === "TimingPoints" && line.includes(",")) {
@@ -97,8 +116,12 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
     version,
     creator,
     keyCount: Math.round(circleSize),
+    od: overallDifficulty,
     bpm,
     notes: notes.sort((a, b) => a.time - b.time),
     totalLength,
+    audioFilename,
+    previewTime,
+    backgroundFilename,
   };
 }
