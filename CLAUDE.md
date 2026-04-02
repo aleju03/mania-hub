@@ -1,80 +1,63 @@
-# osu!cr - osu!mania Hub
+# CLAUDE.md
 
-## Project
-A Costa Rica-focused osu!mania web app. Not a clone of osu.ppy.sh - it's a custom dashboard for tracking CR mania players, scores, pop-offs, and viewing replays in the browser.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Tech Stack
-- TanStack Start (React 19, Vite 7, file-based routing)
-- Tailwind CSS 4 with custom osu! theme (Torus/Venera fonts, HSL color system)
-- Framer Motion for animations
-- Zustand for client state and persisted client cache
-- osu! API v2 via server functions (Client Credentials OAuth)
-- osu-parsers for server-side .osr replay parsing
+## What This Is
 
-## App Structure
-Code lives in `mania-hub/`. Key paths:
-- `src/lib/api.ts` - OAuth token cache + osuFetch wrapper (server-only)
-- `src/lib/db.ts` - Turso/libSQL client + durable cache table setup
-- `src/lib/cache.ts` - Client cache TTLs and staleness helpers
-- `src/lib/avatar.ts` - Server-side avatar accent extraction + batched accent cache
-- `src/lib/osu.ts` - All createServerFn definitions
-- `src/lib/rankings.ts` - Ranking-specific calculations (7d global/CR deltas)
-- `src/lib/score.ts` - Score normalization helpers and pp stack math
-- `src/lib/types.ts` - TypeScript types for osu! API v2
-- `src/lib/replay-parser.ts` - Custom .osr parser (unused now, kept as reference)
-- `src/lib/beatmap-parser.ts` - Parses .osu files for mania note data
-- `src/store.ts` - Shared persisted client cache + live feed state
-- `src/components/layout/PageHeader.tsx` - Reusable route header chrome
-- `src/components/layout/PageTabs.tsx` - Reusable route tab/filter bar
-- `src/components/home/ManiaRain.tsx` - Home page background canvas effect
-- `src/components/replay/ReplayCanvas.ts` - Canvas renderer for mania replays
-- `src/routes/` - All pages
+osu!mania hub — a web app for Costa Rican osu!mania players. Shows country rankings, live score feeds, player profiles, "popoff" highlights, and a replay viewer. Built with TanStack Start (SSR React framework) on Vite.
 
-## Routes
-- `/` - Dashboard with previews of CR Top 50, Recent Scores, Pop-offs
-- `/rankings` - CR mania top 50 (hardcoded country=CR, no pagination)
-- `/scores` - Live score feed polling CR players, filters: All/Ranked/Passed/Failed
-- `/popoffs` - Recent PP plays from top 30 CR players, time range filters, pagination
-- `/player/$username` - Player profile with stats, rank chart, best/recent scores
-- `/replay` - Search player -> browse replays -> watch in-browser with notes + key presses
+## Commands
 
-## API Auth
-OAuth credentials in `.env` (gitignored). Client Credentials grant, server-side only.
-- Rankings responses are cached server-side for 5 minutes
-- User rank histories are cached per-user server-side for 5 minutes
-- Replay download uses legacy endpoint: `GET /scores/mania/{id}/download`
-- Beatmap files fetched from CDN: `https://osu.ppy.sh/osu/{beatmap_id}`
+- `npm run dev` — dev server on port 3000
+- `npm run build` — production build
+- `npm run test` — run tests (vitest)
+- `npm run db:init` — initialize Turso database from `db/schema.sql`
+- `npm run db:inspect` — open interactive Turso shell
 
-## Turso Cache
-- Turso is used as the durable cache layer when `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are present.
-- Table schema lives in `db/schema.sql`.
-- `npm run db:init` applies the durable cache schema.
-- Current durable cache usage: rankings, rank histories, approximate pp gains, avatar accent colors.
-- In-memory cache still exists for hot requests in the current process; Turso backs cold starts and restarts.
+## Environment Variables
 
-## Front-End Data Flow
-- Shared CR data should flow through `src/store.ts`, not route-local duplicated state.
-- `crRankings` is the canonical client-side source for CR player lists used by `/`, `/rankings`, `/scores`, and `/popoffs`.
-- Route components should prefer "show cached data immediately, refresh in background" over clearing UI back to skeletons.
-- TTL decisions live in `src/lib/cache.ts` so freshness policy stays centralized.
-- Ranking math helpers belong in `src/lib/rankings.ts`, not inline in route files.
-- Reusable page chrome belongs in `src/components/layout/` so routes mostly describe behavior, not shell markup.
+Required in `.env`:
+- `OSU_CLIENT_ID` / `OSU_CLIENT_SECRET` — osu! API v2 OAuth credentials (client_credentials flow)
+- `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` — Turso (libSQL) database for persistent server-side caching
+- `VITE_DEV_MODE` — enables dev-only features when set
 
-## Style Rules
-- Mania-only app. All API calls use mode=mania. No mode selector anywhere.
-- No em dashes. Use hyphens (-) instead.
-- No emojis in UI. Use osu! icon SVGs from `/images/icons/`.
-- osu! logo in nav has Costa Rica flag colors (CSS masked into logo shape).
-- Heavy data fetching should happen client-side (not in route loaders) to avoid blocking navigation. Loaders should be fast (cached rankings call at most).
+## Architecture
 
-## Maintenance Notes
-- Prefer extracting helpers/components once a route starts mixing page shell, data loading, and several local subcomponents.
-- Avoid duplicating `getRankings({ country: "CR" })` fetch logic in new places. Reuse the shared cache/store pattern.
-- If a new feature needs cache persistence across navigations, add it to `src/store.ts` with a matching TTL entry in `src/lib/cache.ts`.
+### Server/Client Boundary
 
-## Running
-```
-cd mania-hub
-npm run dev
-```
-Runs on http://localhost:3000. Requires `.env` with `OSU_CLIENT_ID` and `OSU_CLIENT_SECRET`.
+All osu! API calls go through **server functions** (`createServerFn` from TanStack Start) defined in `src/lib/osu.ts`. These run server-side only — they hold the OAuth token and make authenticated requests to `osu.ppy.sh/api/v2`. The client never talks to osu! directly.
+
+`src/lib/api.ts` is the server-only layer: OAuth token management, `osuFetch`/`osuFetchBinary` wrappers with retry logic (429/5xx), and a two-tier cache (in-memory Map + Turso persistent cache with TTL).
+
+### State & Caching
+
+Client state uses **Zustand** (`src/store.ts`) with `persist` middleware (localStorage). The store caches rankings, scores, rank histories, avatar accents, and popoffs with `fetchedAt` timestamps. Staleness is checked via `isCacheStale()` from `src/lib/cache.ts` using TTLs defined there.
+
+Server-side caching uses `getPersistentCached`/`setPersistentCache` in `api.ts` — checks in-memory first, then falls back to the `cache_entries` table in Turso. The DB is optional; the app degrades gracefully without it.
+
+### Routing
+
+File-based routing via TanStack Router. Routes in `src/routes/`:
+- `index.tsx` — home: top players, recent scores, popoffs
+- `rankings.tsx` — CR country rankings (2 pages, sortable, 7-day rank changes)
+- `scores.tsx` — live score feed polling across tracked CR players
+- `popoffs.tsx` — top PP plays
+- `player/$username.tsx` — individual player profile with best/recent scores
+- `replay.tsx` — replay viewer (parses `.osr` via `osu-parsers` server-side, renders on canvas)
+
+### Key Modules
+
+- `src/lib/osu.ts` — all server functions (data fetching endpoints). Batched operations use `mapWithConcurrency` for controlled parallelism.
+- `src/lib/score.ts` — score utilities: identity dedup, pp gain calculation, display helpers
+- `src/lib/pp.ts` — approximate osu!mania PP calculator (strain + accuracy model)
+- `src/lib/rankings.ts` — rank change computation from history arrays
+- `src/lib/format.ts` — number/time/accuracy formatting
+- `src/lib/avatar-accent.ts` / `avatar.ts` — avatar color extraction and URL normalization
+
+### Path Aliases
+
+`#/*` and `@/*` both resolve to `./src/*` (configured in tsconfig and package.json imports).
+
+### Styling
+
+Tailwind CSS v4 via `@tailwindcss/vite` plugin. Styles in `src/styles.css`. Animations use `framer-motion`.

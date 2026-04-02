@@ -3,7 +3,7 @@ import { db, ensureCacheSchema, hasDb } from "./db";
 
 let tokenCache: { access_token: string; expires_at: number } | null = null;
 const OSU_FETCH_RETRIES = 2;
-const OSU_API_VERSION = "20220705";
+
 
 // Simple response cache (5 min TTL)
 const responseCache = new Map<string, { data: unknown; expires: number }>();
@@ -138,7 +138,6 @@ export async function osuFetch<T = unknown>(
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
         "Content-Type": "application/json",
-        "x-api-version": OSU_API_VERSION,
       },
     });
 
@@ -166,7 +165,6 @@ export async function osuFetchBinary(path: string): Promise<ArrayBuffer> {
     const res = await fetch(`https://osu.ppy.sh/api/v2${path}`, {
       headers: {
         Authorization: `Bearer ${token}`,
-        "x-api-version": OSU_API_VERSION,
       },
     });
 

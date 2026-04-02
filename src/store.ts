@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { getAvatarAccentStoreKey } from "./lib/avatar-accent";
-import { getScoreTimeMs } from "./lib/score";
+import { getScoreIdentity, getScoreTimeMs } from "./lib/score";
 import type { OsuScore, RankingsResponse } from "./lib/types";
 
 export interface CachedPlayer {
@@ -112,10 +112,15 @@ export const useAppStore = create<AppState>()(
         }),
       addFeedScores: (scores) =>
         set((state) => {
-          const existing = new Set(state.feedScores.map((score) => score.id));
-          const newScores = scores.filter((score) => !existing.has(score.id));
-          const merged = [...newScores, ...state.feedScores]
+          const seen = new Set<string>();
+          const merged = [...scores, ...state.feedScores]
             .sort((a, b) => getScoreTimeMs(b) - getScoreTimeMs(a))
+            .filter((score) => {
+              const key = getScoreIdentity(score);
+              if (seen.has(key)) return false;
+              seen.add(key);
+              return true;
+            })
             .slice(0, 100);
 
           return {
