@@ -92,6 +92,7 @@ export class ManiaReplayRenderer {
   private colors: string[];
   private totalDuration: number;
   private segments: { start: number; end: number }[][];
+  private maxHoldDuration: number;
 
   // Background
   private backgroundImage: HTMLImageElement | null = null;
@@ -141,6 +142,14 @@ export class ManiaReplayRenderer {
     const frameDuration = frames.length > 0 ? frames[frames.length - 1].time : 0;
     const noteDuration = notes.length > 0 ? Math.max(...notes.map((n) => n.endTime)) : 0;
     this.totalDuration = Math.max(frameDuration, noteDuration);
+
+    this.maxHoldDuration = 0;
+    for (const n of notes) {
+      if (n.isHold) {
+        const dur = n.endTime - n.time;
+        if (dur > this.maxHoldDuration) this.maxHoldDuration = dur;
+      }
+    }
 
     this.segments = this.computeSegments();
     this.hitResults = this.computeHitResults();
@@ -482,7 +491,9 @@ export class ManiaReplayRenderer {
     const visibleMinTime = this.currentTime - timeWindow * 0.15;
     const visibleMaxTime = this.currentTime + timeWindow * 1.1;
 
-    let startIdx = this.binarySearchNoteIndex(visibleMinTime);
+    // Search back by maxHoldDuration so hold notes that started earlier
+    // but are still active (endTime in visible range) are not skipped.
+    let startIdx = this.binarySearchNoteIndex(visibleMinTime - this.maxHoldDuration);
 
     for (let i = startIdx; i < this.notes.length; i++) {
       const note = this.notes[i];
@@ -512,7 +523,12 @@ export class ManiaReplayRenderer {
         const tailY = judgmentY - (note.endTime - this.currentTime) * pixelsPerMs;
         const awaitingJudgment = hr.hitTime > this.currentTime;
         const shouldLetPassLine = awaitingJudgment && note.time < this.currentTime - 10;
-        const stillPhysicallyHeld = this.isColumnEffectivelyHeldAtTime(col, this.currentTime);
+        // Use the matched segment's release time to determine hold state.
+        // During the matched segment (hitTime..releaseTime) the note is always solid.
+        // After the matched segment ends but before note.endTime, fall back to
+        // column-wide check so a quick re-press still looks correct.
+        const withinMatchedSegment = this.currentTime < hr.releaseTime;
+        const stillPhysicallyHeld = withinMatchedSegment || this.isColumnEffectivelyHeldAtTime(col, this.currentTime);
         const releasedEarly =
           hr.judgment >= 1 &&
           hr.judgment <= 5 &&
@@ -609,7 +625,7 @@ export class ManiaReplayRenderer {
     );
 
     if (hasNotes) {
-      const startIdx = this.binarySearchNoteIndex(visibleMinTime);
+      const startIdx = this.binarySearchNoteIndex(visibleMinTime - this.maxHoldDuration);
 
       for (let i = startIdx; i < this.notes.length; i++) {
         const note = this.notes[i];
@@ -956,8 +972,7 @@ export class ManiaReplayRenderer {
     let lo = 0, hi = this.notes.length - 1;
     while (lo < hi) {
       const mid = (lo + hi) >> 1;
-      const noteEnd = this.notes[mid].isHold ? this.notes[mid].endTime : this.notes[mid].time;
-      if (noteEnd < targetTime) lo = mid + 1;
+      if (this.notes[mid].time < targetTime) lo = mid + 1;
       else hi = mid;
     }
     return lo;
