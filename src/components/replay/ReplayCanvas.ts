@@ -6,14 +6,76 @@ const COLUMN_COLORS: Record<number, string[]> = {
   1: ["#fff"],
   2: ["#5a8fff", "#5a8fff"],
   3: ["#5a8fff", "#fff", "#5a8fff"],
-  4: ["#5a8fff", "#de31ae", "#de31ae", "#5a8fff"],
+  4: ["#fff", "#5a8fff", "#5a8fff", "#fff"],
   5: ["#5a8fff", "#de31ae", "#fff", "#de31ae", "#5a8fff"],
   6: ["#5a8fff", "#de31ae", "#fff", "#fff", "#de31ae", "#5a8fff"],
-  7: ["#5a8fff", "#de31ae", "#fff", "#ffcc22", "#fff", "#de31ae", "#5a8fff"],
+  7: ["#fff", "#5a8fff", "#fff", "#ffcc22", "#fff", "#5a8fff", "#fff"],
   8: ["#5a8fff", "#de31ae", "#fff", "#ffcc22", "#ffcc22", "#fff", "#de31ae", "#5a8fff"],
   9: ["#5a8fff", "#de31ae", "#fff", "#ffcc22", "#88da20", "#ffcc22", "#fff", "#de31ae", "#5a8fff"],
   10: ["#5a8fff", "#de31ae", "#fff", "#ffcc22", "#88da20", "#88da20", "#ffcc22", "#fff", "#de31ae", "#5a8fff"],
 };
+
+// osu!mania hit window formulas: base - 3 * OD (except MAX which is fixed at 16ms)
+function getHitWindows(od: number) {
+  return {
+    perfect: 16,
+    great: 64 - 3 * od,
+    good: 97 - 3 * od,
+    ok: 127 - 3 * od,
+    meh: 151 - 3 * od,
+    miss: 188 - 3 * od,
+  };
+}
+
+// Judgment type: 0=pending, 1=MAX, 2=300, 3=200, 4=100, 5=50, 6=miss
+type Judgment = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+const JUDGMENT_COLORS: Record<number, string> = {
+  1: "#b3f5ff",  // MAX - rainbow/cyan
+  2: "#ffcc22",  // 300 - yellow
+  3: "#88da20",  // 200 - green
+  4: "#5a8fff",  // 100 - blue
+  5: "#cc8800",  // 50 - orange
+  6: "#ff4444",  // miss - red
+};
+
+const JUDGMENT_LABELS: Record<number, string> = {
+  1: "MAX", 2: "300", 3: "200", 4: "100", 5: "50", 6: "MISS",
+};
+
+// Scoring weights for accuracy (osu!mania)
+const JUDGMENT_WEIGHTS: Record<number, number> = {
+  1: 6, 2: 6, 3: 4, 4: 2, 5: 1, 6: 0,
+};
+const HOLD_VISUAL_GRACE_MS = 60;
+
+interface RendererOptions {
+  backgroundImage?: HTMLImageElement;
+  backgroundDim?: number;
+  od?: number;
+  showInputOverlay?: boolean;
+}
+
+interface Layout {
+  w: number;
+  h: number;
+  playfieldWidth: number;
+  playfieldX: number;
+  laneWidth: number;
+  judgmentY: number;
+  noteHeight: number;
+  receptorHeight: number;
+  pixelsPerMs: number;
+}
+
+interface NoteHitResult {
+  judgment: Judgment;     // 0=pending
+  hitTime: number;        // when the note was judged
+  releaseTime: number;    // matched segment end for hold visibility
+  offsetMs: number;       // signed hit offset for UR/judgment visuals
+}
+
+type Hand = "left" | "right" | "center";
 
 export class ManiaReplayRenderer {
   private canvas: HTMLCanvasElement;
@@ -24,18 +86,44 @@ export class ManiaReplayRenderer {
   private currentTime = 0;
   private playbackSpeed = 1;
   private _isPlaying = false;
-  private scrollSpeed = 0.4;
+  private scrollSpeed = 0.74; // default = speed 32: 0.1 + (32/40) * 0.8
   private animFrameId = 0;
   private lastRenderTime = 0;
   private colors: string[];
   private totalDuration: number;
   private segments: { start: number; end: number }[][];
 
+  // Background
+  private backgroundImage: HTMLImageElement | null = null;
+  private backgroundDim = 80;
+  private od = 8;
+  private showInputOverlay = true;
+
+  // Receptor flash state
+  private receptorFlashTimestamps: number[];
+
+  // Hit detection results (pre-computed)
+  private hitResults: NoteHitResult[];
+
+  // Live stats (computed incrementally during playback)
+  private combo = 0;
+  private maxComboSoFar = 0;
+  private statsScanIndex = 0;
+  private judgmentCounts: number[] = [0, 0, 0, 0, 0, 0, 0]; // indexed by Judgment
+  private leftHandMisses = 0;
+  private rightHandMisses = 0;
+  private recentHitOffsets: number[] = [];
+
+  // Last judgment display
+  private lastJudgment: Judgment = 0;
+  private lastJudgmentTime = 0;
+
   constructor(
     canvas: HTMLCanvasElement,
     frames: ReplayFrame[],
     keyCount: number,
     notes: ManiaNote[] = [],
+    options?: RendererOptions,
   ) {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d")!;
@@ -44,11 +132,18 @@ export class ManiaReplayRenderer {
     this.keyCount = keyCount;
     this.colors = COLUMN_COLORS[keyCount] || this.generateColors(keyCount);
 
+    this.backgroundImage = options?.backgroundImage ?? null;
+    this.backgroundDim = options?.backgroundDim ?? 80;
+    this.od = options?.od ?? 8;
+    this.showInputOverlay = options?.showInputOverlay ?? true;
+    this.receptorFlashTimestamps = new Array(keyCount).fill(0);
+
     const frameDuration = frames.length > 0 ? frames[frames.length - 1].time : 0;
     const noteDuration = notes.length > 0 ? Math.max(...notes.map((n) => n.endTime)) : 0;
     this.totalDuration = Math.max(frameDuration, noteDuration);
 
     this.segments = this.computeSegments();
+    this.hitResults = this.computeHitResults();
     this.resize();
     this.render();
   }
@@ -75,8 +170,164 @@ export class ManiaReplayRenderer {
     for (let col = 0; col < this.keyCount; col++) {
       if (active[col] !== null) segs[col].push({ start: active[col]!, end: this.totalDuration });
     }
+
     return segs;
   }
+
+  // Pre-compute hit results for every note by matching to replay key presses.
+  // Each key press (segment) can only be consumed by one note per column.
+  // Notes are processed per-column in time order for correct matching.
+  private computeHitResults(): NoteHitResult[] {
+    const results: NoteHitResult[] = new Array(this.notes.length);
+    for (let i = 0; i < this.notes.length; i++) {
+      results[i] = { judgment: 0, hitTime: 0, releaseTime: 0, offsetMs: 0 };
+    }
+
+    if (this.frames.length === 0 || this.notes.length === 0) return results;
+
+    const hw = getHitWindows(this.od);
+
+    // Group note indices by column
+    const notesByCol: number[][] = Array.from({ length: this.keyCount }, () => []);
+    for (let i = 0; i < this.notes.length; i++) {
+      const col = this.notes[i].column;
+      if (col < this.keyCount) notesByCol[col].push(i);
+    }
+
+    // Process each column independently
+    for (let col = 0; col < this.keyCount; col++) {
+      const colNotes = notesByCol[col];
+      const colSegs = this.segments[col];
+      let segStart = 0; // next unconsumed segment
+
+      for (const noteIdx of colNotes) {
+        const note = this.notes[noteIdx];
+
+        // Advance past consumed/expired segments
+        while (segStart < colSegs.length && colSegs[segStart].start < note.time - hw.miss) {
+          segStart++;
+        }
+
+        // Find the first unconsumed segment whose start is within the hit window
+        let matched = false;
+        for (let s = segStart; s < colSegs.length; s++) {
+          const seg = colSegs[s];
+          if (seg.start > note.time + hw.miss) break;
+
+          const delta = Math.abs(seg.start - note.time);
+          let judgment: Judgment;
+          if (delta <= hw.perfect) judgment = 1;
+          else if (delta <= hw.great) judgment = 2;
+          else if (delta <= hw.good) judgment = 3;
+          else if (delta <= hw.ok) judgment = 4;
+          else if (delta <= hw.meh) judgment = 5;
+          else continue;
+
+          results[noteIdx] = {
+            judgment,
+            hitTime: seg.start,
+            releaseTime: seg.end,
+            offsetMs: seg.start - note.time,
+          };
+          segStart = s + 1;
+          matched = true;
+          break;
+        }
+
+        if (!matched) {
+          results[noteIdx] = { judgment: 6, hitTime: note.time + hw.miss, releaseTime: 0, offsetMs: 0 };
+        }
+      }
+    }
+
+    return results;
+  }
+
+  // Recompute live stats (combo, accuracy) up to currentTime
+  private recomputeStatsUpTo(time: number) {
+    this.statsScanIndex = 0;
+    this.combo = 0;
+    this.maxComboSoFar = 0;
+    this.judgmentCounts = [0, 0, 0, 0, 0, 0, 0];
+    this.leftHandMisses = 0;
+    this.rightHandMisses = 0;
+    this.recentHitOffsets = [];
+    this.advanceStats(time);
+  }
+
+  private advanceStats(upToTime?: number) {
+    const time = upToTime ?? this.currentTime;
+    while (this.statsScanIndex < this.notes.length) {
+      const hr = this.hitResults[this.statsScanIndex];
+      if (hr.judgment === 0) break; // pending (shouldn't happen with pre-computed)
+      if (hr.hitTime > time) break;
+
+      this.judgmentCounts[hr.judgment]++;
+      if (hr.judgment <= 5) {
+        // Hit (MAX through 50)
+        this.combo++;
+        if (this.combo > this.maxComboSoFar) this.maxComboSoFar = this.combo;
+        this.recentHitOffsets.push(hr.offsetMs);
+        if (this.recentHitOffsets.length > 40) this.recentHitOffsets.shift();
+      } else {
+        // Miss
+        this.combo = 0;
+        const hand = this.getHandForColumn(this.notes[this.statsScanIndex]?.column ?? -1);
+        if (hand === "left") this.leftHandMisses++;
+        if (hand === "right") this.rightHandMisses++;
+      }
+
+      this.lastJudgment = hr.judgment;
+      this.lastJudgmentTime = hr.hitTime;
+      this.statsScanIndex++;
+    }
+  }
+
+  private getAccuracy(): number {
+    let totalWeight = 0;
+    let totalNotes = 0;
+    for (let j = 1; j <= 6; j++) {
+      totalWeight += this.judgmentCounts[j] * JUDGMENT_WEIGHTS[j];
+      totalNotes += this.judgmentCounts[j];
+    }
+    return totalNotes > 0 ? (totalWeight / (totalNotes * 6)) * 100 : 100;
+  }
+
+  private getHandForColumn(column: number): Hand {
+    if (column < 0 || column >= this.keyCount) return "center";
+    const leftCount = Math.floor(this.keyCount / 2);
+    const rightStart = this.keyCount - leftCount;
+    if (column < leftCount) return "left";
+    if (column >= rightStart) return "right";
+    return "center";
+  }
+
+  private getUr(): number {
+    if (this.recentHitOffsets.length < 2) return 0;
+    const mean = this.recentHitOffsets.reduce((sum, value) => sum + value, 0) / this.recentHitOffsets.length;
+    const variance = this.recentHitOffsets.reduce((sum, value) => sum + (value - mean) ** 2, 0) / this.recentHitOffsets.length;
+    return Math.sqrt(variance) * 10;
+  }
+
+  // --- Layout ---
+
+  private getLayout(): Layout {
+    const w = this.canvas.getBoundingClientRect().width;
+    const h = this.canvas.getBoundingClientRect().height;
+
+    const baseRatio = 0.25 + this.keyCount * 0.025;
+    const playfieldWidth = Math.min(w * Math.min(baseRatio, 0.6), 50 * this.keyCount);
+    const playfieldX = (w - playfieldWidth) / 2;
+    const laneWidth = playfieldWidth / this.keyCount;
+    const judgmentY = h * 0.88;
+    const noteHeight = Math.max(10, h * 0.02);
+    const receptorHeight = Math.max(6, h * 0.012);
+    const pixelsPerMs = this.scrollSpeed;
+
+    return { w, h, playfieldWidth, playfieldX, laneWidth, judgmentY, noteHeight, receptorHeight, pixelsPerMs };
+  }
+
+  // --- Public API ---
 
   resize() {
     const rect = this.canvas.getBoundingClientRect();
@@ -102,18 +353,37 @@ export class ManiaReplayRenderer {
 
   seek(timeMs: number) {
     this.currentTime = Math.max(0, Math.min(timeMs, this.totalDuration));
+    this.recomputeStatsUpTo(this.currentTime);
     if (!this._isPlaying) this.render();
   }
 
   setSpeed(speed: number) { this.playbackSpeed = speed; }
 
-  setZoom(zoom: number) {
-    this.scrollSpeed = 0.2 + zoom * 0.4;
+  setScrollSpeed(speed: number) {
+    // osu!mania scroll speed 1-40 → pixels per ms
+    this.scrollSpeed = 0.1 + (speed / 40) * 0.8;
+    if (!this._isPlaying) this.render();
+  }
+
+  setBackgroundDim(dim: number) {
+    this.backgroundDim = dim;
+    if (!this._isPlaying) this.render();
+  }
+
+  setBackgroundImage(img: HTMLImageElement) {
+    this.backgroundImage = img;
+    if (!this._isPlaying) this.render();
+  }
+
+  setShowInputOverlay(show: boolean) {
+    this.showInputOverlay = show;
     if (!this._isPlaying) this.render();
   }
 
   get time() { return this.currentTime; }
   get duration() { return this.totalDuration; }
+
+  // --- Tick loop ---
 
   private tick() {
     if (!this._isPlaying) return;
@@ -122,162 +392,592 @@ export class ManiaReplayRenderer {
     this.lastRenderTime = now;
     this.currentTime += dt;
     if (this.currentTime >= this.totalDuration) { this.currentTime = this.totalDuration; this._isPlaying = false; }
+    this.advanceStats();
     this.render();
     if (this._isPlaying) this.animFrameId = requestAnimationFrame(() => this.tick());
   }
 
+  // --- Rendering ---
+
   private render() {
-    const w = this.canvas.getBoundingClientRect().width;
-    const h = this.canvas.getBoundingClientRect().height;
+    const layout = this.getLayout();
     const ctx = this.ctx;
+    ctx.clearRect(0, 0, layout.w, layout.h);
 
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = "#1a1016";
-    ctx.fillRect(0, 0, w, h);
+    this.renderBackground(ctx, layout);
+    this.renderPlayfield(ctx, layout);
+    this.renderSegmentOverlays(ctx, layout);
+    this.renderNotes(ctx, layout);
+    this.renderJudgmentLine(ctx, layout);
+    this.renderReceptors(ctx, layout);
+    this.renderHUD(ctx, layout);
+  }
 
-    const colWidth = w / this.keyCount;
-    const judgmentY = h * 0.88;
-    const noteH = 12;
+  private renderBackground(ctx: CanvasRenderingContext2D, layout: Layout) {
+    const { w, h } = layout;
 
-    // Column backgrounds
+    if (this.backgroundImage) {
+      const imgAspect = this.backgroundImage.width / this.backgroundImage.height;
+      const canvasAspect = w / h;
+      let dw: number, dh: number, dx: number, dy: number;
+
+      if (imgAspect > canvasAspect) {
+        dh = h; dw = h * imgAspect;
+        dx = (w - dw) / 2; dy = 0;
+      } else {
+        dw = w; dh = w / imgAspect;
+        dx = 0; dy = (h - dh) / 2;
+      }
+
+      ctx.drawImage(this.backgroundImage, dx, dy, dw, dh);
+      ctx.fillStyle = `rgba(0, 0, 0, ${this.backgroundDim / 100})`;
+      ctx.fillRect(0, 0, w, h);
+    } else {
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, "#0a0a18");
+      grad.addColorStop(0.5, "#1a1016");
+      grad.addColorStop(1, "#0c0c14");
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+    }
+  }
+
+  private renderPlayfield(ctx: CanvasRenderingContext2D, layout: Layout) {
+    const { w, h, playfieldX, playfieldWidth, laneWidth } = layout;
+
+    // Darken areas outside the playfield
+    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+    ctx.fillRect(0, 0, playfieldX, h);
+    ctx.fillRect(playfieldX + playfieldWidth, 0, w - playfieldX - playfieldWidth, h);
+
+    // Lane backgrounds
     for (let col = 0; col < this.keyCount; col++) {
-      const x = col * colWidth;
+      const x = playfieldX + col * laneWidth;
       ctx.fillStyle = col % 2 === 0 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)";
-      ctx.fillRect(x, 0, colWidth, h);
-      ctx.strokeStyle = "rgba(255,255,255,0.06)";
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+      ctx.fillRect(x, 0, laneWidth, h);
     }
 
-    // Judgment line
-    ctx.strokeStyle = "rgba(255,255,255,0.4)";
+    // Lane dividers
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= this.keyCount; i++) {
+      ctx.beginPath();
+      ctx.moveTo(playfieldX + i * laneWidth, 0);
+      ctx.lineTo(playfieldX + i * laneWidth, h);
+      ctx.stroke();
+    }
+
+    // Playfield border
+    ctx.strokeStyle = "rgba(255,255,255,0.15)";
     ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(0, judgmentY); ctx.lineTo(w, judgmentY); ctx.stroke();
+    ctx.strokeRect(playfieldX, 0, playfieldWidth, h);
+  }
 
-    // Draw beatmap notes (scrolling down towards judgment line)
-    if (this.notes.length > 0) {
-      for (const note of this.notes) {
-        const col = note.column;
-        if (col >= this.keyCount) continue;
+  private renderNotes(ctx: CanvasRenderingContext2D, layout: Layout) {
+    const { playfieldX, laneWidth, judgmentY, noteHeight, pixelsPerMs, h } = layout;
 
-        const x = col * colWidth + 3;
-        const barWidth = colWidth - 6;
-        const color = this.colors[col];
+    if (this.notes.length === 0) return;
 
-        // Note Y: notes at current time appear at judgmentY, future notes scroll down from top
-        const noteY = judgmentY - (note.time - this.currentTime) * this.scrollSpeed;
+    const timeWindow = judgmentY / pixelsPerMs;
+    const visibleMinTime = this.currentTime - timeWindow * 0.15;
+    const visibleMaxTime = this.currentTime + timeWindow * 1.1;
 
-        if (note.isHold) {
-          const endY = judgmentY - (note.endTime - this.currentTime) * this.scrollSpeed;
-          const top = Math.min(noteY, endY);
-          const bottom = Math.max(noteY, endY);
-          if (top > h + 20 || bottom < -20) continue;
+    let startIdx = this.binarySearchNoteIndex(visibleMinTime);
 
-          // Hold body
-          ctx.fillStyle = color;
-          ctx.globalAlpha = 0.35;
-          ctx.beginPath();
-          ctx.roundRect(x + 2, top, barWidth - 4, bottom - top, 2);
-          ctx.fill();
+    for (let i = startIdx; i < this.notes.length; i++) {
+      const note = this.notes[i];
+      if (note.time > visibleMaxTime) break;
 
-          // Hold head & tail
-          ctx.globalAlpha = 0.9;
-          ctx.beginPath(); ctx.roundRect(x, bottom - noteH, barWidth, noteH, 4); ctx.fill();
-          ctx.beginPath(); ctx.roundRect(x, top, barWidth, noteH / 2, 2); ctx.fill();
-          ctx.globalAlpha = 1;
+      const col = note.column;
+      if (col >= this.keyCount) continue;
+
+      // Check if this note has been judged — hide it after hit
+      const hr = this.hitResults[i];
+      if (hr.judgment !== 0 && hr.hitTime <= this.currentTime) {
+        // Note has been judged — don't render it
+        // For hold notes, keep showing until endTime if it was hit (not missed)
+        if (note.isHold && hr.judgment <= 5 && note.endTime > this.currentTime) {
+          // Still holding — render the remaining portion
         } else {
-          if (noteY > h + 20 || noteY < -20) continue;
-
-          // Regular note
-          ctx.fillStyle = color;
-          ctx.globalAlpha = 0.9;
-          ctx.beginPath();
-          ctx.roundRect(x, noteY - noteH, barWidth, noteH, 4);
-          ctx.fill();
-
-          // Note highlight
-          ctx.globalAlpha = 0.4;
-          ctx.fillStyle = "#fff";
-          ctx.beginPath();
-          ctx.roundRect(x + 2, noteY - noteH + 1, barWidth - 4, noteH / 3, 2);
-          ctx.fill();
-          ctx.globalAlpha = 1;
+          continue;
         }
       }
+
+      const x = playfieldX + col * laneWidth + 3;
+      const barWidth = laneWidth - 6;
+      const color = this.colors[col];
+
+      if (note.isHold) {
+        let headY = judgmentY - (note.time - this.currentTime) * pixelsPerMs;
+        const tailY = judgmentY - (note.endTime - this.currentTime) * pixelsPerMs;
+        const awaitingJudgment = hr.hitTime > this.currentTime;
+        const shouldLetPassLine = awaitingJudgment && note.time < this.currentTime - 10;
+        const stillPhysicallyHeld = this.isColumnEffectivelyHeldAtTime(col, this.currentTime);
+        const releasedEarly =
+          hr.judgment >= 1 &&
+          hr.judgment <= 5 &&
+          this.currentTime < note.endTime &&
+          !stillPhysicallyHeld;
+
+        if (!shouldLetPassLine) {
+          // Hold note heads should never render below the judgment line once the hit/miss is resolved.
+          headY = Math.min(headY, judgmentY);
+        }
+        const top = Math.min(headY, tailY);
+        let bottom = Math.max(headY, tailY);
+
+        if (!shouldLetPassLine) {
+          // Hold notes should stay clamped once they are actively held or fully judged.
+          bottom = Math.min(bottom, judgmentY);
+        }
+
+        if (top > h + 20 || bottom < -20) continue;
+
+        // Hold body
+        ctx.fillStyle = color;
+        ctx.globalAlpha = releasedEarly ? 0.45 : 1;
+        ctx.beginPath();
+        ctx.roundRect(x, top, barWidth, bottom - top, 2);
+        ctx.fill();
+
+        // Hold body border
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = releasedEarly ? 0.55 : 1;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Hold head
+        if (bottom > top + noteHeight) {
+          ctx.globalAlpha = releasedEarly ? 0.65 : 1;
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.roundRect(x, bottom - noteHeight, barWidth, noteHeight, 4);
+          ctx.fill();
+        }
+
+        // Hold tail
+        ctx.globalAlpha = releasedEarly ? 0.65 : 1;
+        ctx.beginPath();
+        ctx.roundRect(x, top, barWidth, noteHeight / 2, 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      } else {
+        // Notes that have passed the line but have not been judged yet
+        // (including precomputed future misses) should no longer render.
+        if (note.time < this.currentTime - 10 && hr.hitTime > this.currentTime) continue;
+
+        const noteY = judgmentY - (note.time - this.currentTime) * pixelsPerMs;
+        if (noteY > h + 20 || noteY < -20) continue;
+
+        // Main note body
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.roundRect(x, noteY - noteHeight, barWidth, noteHeight, 4);
+        ctx.fill();
+
+        // Note glow
+        ctx.save();
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 5;
+        ctx.fill();
+        ctx.restore();
+
+        // White highlight strip (top third)
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.roundRect(x + 2, noteY - noteHeight + 1, barWidth - 4, noteHeight / 3, 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  private renderSegmentOverlays(ctx: CanvasRenderingContext2D, layout: Layout) {
+    const { playfieldX, laneWidth, judgmentY, pixelsPerMs, h } = layout;
+
+    if (this.frames.length === 0 || !this.showInputOverlay) return;
+
+    const timeWindow = judgmentY / pixelsPerMs;
+    const visibleMinTime = this.currentTime - timeWindow * 0.15;
+    const visibleMaxTime = this.currentTime + timeWindow * 1.1;
+    const hasNotes = this.notes.length > 0;
+    const holdOcclusionRanges: Array<Array<{ top: number; bottom: number }>> = Array.from(
+      { length: this.keyCount },
+      () => [],
+    );
+
+    if (hasNotes) {
+      const startIdx = this.binarySearchNoteIndex(visibleMinTime);
+
+      for (let i = startIdx; i < this.notes.length; i++) {
+        const note = this.notes[i];
+        if (note.time > visibleMaxTime) break;
+        if (!note.isHold || note.column >= this.keyCount) continue;
+
+        const hr = this.hitResults[i];
+        if (hr.judgment !== 0 && hr.hitTime <= this.currentTime) {
+          if (!(hr.judgment <= 5 && note.endTime > this.currentTime)) {
+            continue;
+          }
+        }
+
+        let headY = judgmentY - (note.time - this.currentTime) * pixelsPerMs;
+        const tailY = judgmentY - (note.endTime - this.currentTime) * pixelsPerMs;
+        headY = Math.min(headY, judgmentY);
+
+        const top = Math.min(headY, tailY);
+        const bottom = Math.min(Math.max(headY, tailY), judgmentY);
+        if (top > h + 20 || bottom < -20 || bottom - top <= 0) continue;
+
+        holdOcclusionRanges[note.column].push({ top, bottom });
+      }
+
+      holdOcclusionRanges.forEach((ranges) => {
+        ranges.sort((a, b) => a.top - b.top);
+      });
     }
 
-    // Draw key press segments (from replay data) as overlay
-    if (this.frames.length > 0) {
-      for (let col = 0; col < this.keyCount; col++) {
-        const x = col * colWidth + 2;
-        const barWidth = colWidth - 4;
-        const color = this.colors[col];
+    for (let col = 0; col < this.keyCount; col++) {
+      const x = playfieldX + col * laneWidth + 2;
+      const barWidth = laneWidth - 4;
+      const color = this.colors[col];
+      const occlusions = holdOcclusionRanges[col];
 
-        for (const seg of this.segments[col]) {
-          const startY = judgmentY - (seg.start - this.currentTime) * this.scrollSpeed;
-          const endY = judgmentY - (seg.end - this.currentTime) * this.scrollSpeed;
-          if (startY < -20 && endY < -20) continue;
-          if (startY > h + 20 && endY > h + 20) continue;
+      for (const seg of this.segments[col]) {
+        if (seg.end < this.currentTime - timeWindow * 0.15) continue;
+        if (seg.start > this.currentTime + timeWindow * 1.1) break;
 
-          const top = Math.min(startY, endY);
-          const bottom = Math.max(startY, endY);
-          const barH = Math.max(bottom - top, 2);
+        const startY = judgmentY - (seg.start - this.currentTime) * pixelsPerMs;
+        const endY = judgmentY - (seg.end - this.currentTime) * pixelsPerMs;
+        if (startY < -20 && endY < -20) continue;
+        if (startY > h + 20 && endY > h + 20) continue;
 
-          // Translucent overlay showing actual key presses
+        const top = Math.min(startY, endY);
+        const bottom = Math.min(Math.max(startY, endY), judgmentY);
+        let cursor = top;
+
+        const drawOverlayPiece = (pieceTop: number, pieceBottom: number) => {
+          const barH = Math.max(pieceBottom - pieceTop, 2);
+          if (barH <= 0) return;
+
           ctx.fillStyle = color;
-          ctx.globalAlpha = this.notes.length > 0 ? 0.25 : 0.8;
+          ctx.globalAlpha = hasNotes ? 0.08 : 0.7;
           ctx.beginPath();
-          ctx.roundRect(x, top, barWidth, barH, 3);
+          ctx.roundRect(x, pieceTop, barWidth, barH, 3);
           ctx.fill();
 
-          if (top < judgmentY && bottom > judgmentY - 20) {
-            ctx.globalAlpha = 0.15;
+          if (pieceTop < judgmentY && pieceBottom > judgmentY - 20) {
+            ctx.globalAlpha = 0.04;
+            ctx.save();
             ctx.shadowColor = color;
             ctx.shadowBlur = 12;
-            ctx.fillRect(x, top, barWidth, barH);
-            ctx.shadowBlur = 0;
+            ctx.fillRect(x, pieceTop, barWidth, barH);
+            ctx.restore();
           }
           ctx.globalAlpha = 1;
+        };
+
+        if (!occlusions.length) {
+          drawOverlayPiece(top, bottom);
+          continue;
+        }
+
+        for (const range of occlusions) {
+          if (range.bottom <= cursor) continue;
+          if (range.top >= bottom) break;
+
+          if (range.top > cursor) {
+            drawOverlayPiece(cursor, Math.min(range.top, bottom));
+          }
+          cursor = Math.max(cursor, range.bottom);
+          if (cursor >= bottom) break;
+        }
+
+        if (cursor < bottom) {
+          drawOverlayPiece(cursor, bottom);
         }
       }
     }
+  }
 
-    // Key press indicators at bottom
-    const indicatorH = h * 0.07;
+  private renderJudgmentLine(ctx: CanvasRenderingContext2D, layout: Layout) {
+    const { playfieldX, playfieldWidth, judgmentY } = layout;
+
+    ctx.save();
+    ctx.shadowColor = "#ffffff";
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(playfieldX, judgmentY);
+    ctx.lineTo(playfieldX + playfieldWidth, judgmentY);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private renderReceptors(ctx: CanvasRenderingContext2D, layout: Layout) {
+    const { playfieldX, laneWidth, judgmentY, receptorHeight } = layout;
     const currentState = this.getCurrentKeyState();
 
     for (let col = 0; col < this.keyCount; col++) {
-      const x = col * colWidth;
+      const x = playfieldX + col * laneWidth;
       const pressed = (currentState & (1 << col)) !== 0;
-
-      ctx.fillStyle = pressed ? this.colors[col] : "rgba(255,255,255,0.05)";
-      ctx.globalAlpha = pressed ? 0.9 : 0.5;
-      ctx.beginPath();
-      ctx.roundRect(x + 2, judgmentY, colWidth - 4, indicatorH, 3);
-      ctx.fill();
+      const color = this.colors[col];
 
       if (pressed) {
-        ctx.shadowColor = this.colors[col];
-        ctx.shadowBlur = 20;
-        ctx.fillRect(x + 2, judgmentY, colWidth - 4, indicatorH);
-        ctx.shadowBlur = 0;
+        this.receptorFlashTimestamps[col] = this.currentTime;
       }
-      ctx.globalAlpha = 1;
+
+      const timeSinceFlash = this.currentTime - (this.receptorFlashTimestamps[col] || 0);
+      const flashIntensity = pressed ? 1.0 : Math.max(0, 1.0 - timeSinceFlash / 120);
+
+      if (flashIntensity > 0) {
+        const grad = ctx.createLinearGradient(x, judgmentY - 80, x, judgmentY + 15);
+        grad.addColorStop(0, "transparent");
+        grad.addColorStop(0.6, this.colorWithAlpha(color, 0.2 * flashIntensity));
+        grad.addColorStop(1, this.colorWithAlpha(color, 0.7 * flashIntensity));
+        ctx.fillStyle = grad;
+        ctx.fillRect(x, judgmentY - 80, laneWidth, 95);
+
+        ctx.fillStyle = color;
+        ctx.globalAlpha = flashIntensity;
+        ctx.beginPath();
+        ctx.roundRect(x + 3, judgmentY + 2, laneWidth - 6, receptorHeight, 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.fillStyle = "rgba(255,255,255,0.12)";
+        ctx.beginPath();
+        ctx.roundRect(x + 3, judgmentY + 2, laneWidth - 6, receptorHeight, 2);
+        ctx.fill();
+      }
+    }
+  }
+
+  private renderHUD(ctx: CanvasRenderingContext2D, layout: Layout) {
+    const { w, h, playfieldX, playfieldWidth, judgmentY } = layout;
+    const playfieldCenterX = playfieldX + playfieldWidth / 2;
+    const playfieldMiddleY = judgmentY * 0.5; // vertical center of the play area
+
+    // --- Judgment text (centered in playfield, fades out) ---
+    if (this.lastJudgment > 0) {
+      const timeSince = this.currentTime - this.lastJudgmentTime;
+      if (timeSince < 400) {
+        const alpha = Math.max(0, 1.0 - timeSince / 400);
+        const jColor = JUDGMENT_COLORS[this.lastJudgment];
+        const label = JUDGMENT_LABELS[this.lastJudgment];
+        const offsetY = -timeSince * 0.03;
+
+        ctx.save();
+        ctx.font = `bold ${Math.max(16, h * 0.035)}px Torus, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = jColor;
+        ctx.globalAlpha = alpha;
+        ctx.fillText(label, playfieldCenterX, playfieldMiddleY + offsetY);
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
     }
 
-    // Time & speed
+    // --- Combo (centered in playfield, above judgment) ---
+    if (this.combo > 0) {
+      ctx.save();
+      const fontSize = Math.max(22, h * 0.05);
+      ctx.font = `bold ${fontSize}px Torus, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.fillText(`${this.combo}x`, playfieldCenterX, playfieldMiddleY - h * 0.06);
+      ctx.restore();
+    }
+
+    // --- Live accuracy (top-right outside the playfield) ---
+    const acc = this.getAccuracy();
+    ctx.save();
+    ctx.font = `bold ${Math.max(16, h * 0.032)}px Torus, sans-serif`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+    ctx.fillText(`${acc.toFixed(2)}%`, playfieldX + playfieldWidth + 16, 16);
+    ctx.restore();
+
+    // --- Left-side key overlay + hand misses ---
+    const currentState = this.getCurrentKeyState();
+    const keyBoxSize = 24;
+    const keyGap = 6;
+    const keyRowWidth = this.keyCount * keyBoxSize + Math.max(0, this.keyCount - 1) * keyGap;
+    const keyRowX = Math.max(12, playfieldX - keyRowWidth - 18);
+    const keyRowY = judgmentY - 28;
+
+    for (let col = 0; col < this.keyCount; col++) {
+      const x = keyRowX + col * (keyBoxSize + keyGap);
+      const pressed = (currentState & (1 << col)) !== 0;
+      const color = this.colors[col];
+
+      ctx.fillStyle = "rgba(10, 10, 18, 0.82)";
+      ctx.fillRect(x, keyRowY, keyBoxSize, keyBoxSize);
+      ctx.strokeStyle = "rgba(255,255,255,0.12)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x, keyRowY, keyBoxSize, keyBoxSize);
+
+      if (pressed) {
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.95;
+        ctx.fillRect(x + 1, keyRowY + 1, keyBoxSize - 2, keyBoxSize - 2);
+      } else {
+        ctx.fillStyle = this.colorWithAlpha(color, 0.18);
+        ctx.fillRect(x + 1, keyRowY + 1, keyBoxSize - 2, keyBoxSize - 2);
+      }
+
+      ctx.globalAlpha = 1;
+      ctx.font = "bold 11px Torus, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = pressed ? "rgba(10,10,18,0.9)" : "rgba(255,255,255,0.75)";
+      ctx.fillText(String(col + 1), x + keyBoxSize / 2, keyRowY + keyBoxSize / 2 + 0.5);
+    }
+
+    const missStats = [
+      { label: "L MISS", value: String(this.leftHandMisses), color: "#5a8fff" },
+      { label: "R MISS", value: String(this.rightHandMisses), color: "#de31ae" },
+    ];
+    missStats.forEach((item, index) => {
+      const x = keyRowX + index * 58;
+      const y = keyRowY + keyBoxSize + 10;
+      ctx.fillStyle = "rgba(10, 10, 18, 0.78)";
+      ctx.fillRect(x, y, 52, 28);
+      ctx.fillStyle = item.color;
+      ctx.fillRect(x, y, 3, 28);
+      ctx.font = "bold 8px Torus, sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillStyle = "rgba(255,255,255,0.58)";
+      ctx.fillText(item.label, x + 8, y + 5);
+      ctx.font = "bold 14px Torus, sans-serif";
+      ctx.textBaseline = "bottom";
+      ctx.fillStyle = "rgba(255,255,255,0.95)";
+      ctx.fillText(item.value, x + 8, y + 24);
+    });
+
+    // --- Right-side live judgment counter ---
+    const judgmentCounterX = playfieldX + playfieldWidth + 16;
+    const judgmentCounterY = 52;
+    const judgmentItems = [
+      { label: "MAX", value: this.judgmentCounts[1], color: JUDGMENT_COLORS[1] },
+      { label: "300", value: this.judgmentCounts[2], color: JUDGMENT_COLORS[2] },
+      { label: "200", value: this.judgmentCounts[3], color: JUDGMENT_COLORS[3] },
+      { label: "100", value: this.judgmentCounts[4], color: JUDGMENT_COLORS[4] },
+      { label: "50", value: this.judgmentCounts[5], color: JUDGMENT_COLORS[5] },
+      { label: "MISS", value: this.judgmentCounts[6], color: JUDGMENT_COLORS[6] },
+    ];
+
+    judgmentItems.forEach((item, index) => {
+      const y = judgmentCounterY + index * 18;
+      ctx.font = "bold 10px Torus, sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+      ctx.fillStyle = item.color;
+      ctx.fillText(item.label, judgmentCounterX, y);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "rgba(255,255,255,0.88)";
+      ctx.fillText(String(item.value), judgmentCounterX + 52, y);
+    });
+
+    // --- Bottom-center UR bar ---
+    const urBarWidth = Math.min(playfieldWidth * 0.68, 180);
+    const urBarX = playfieldCenterX - urBarWidth / 2;
+    const urBarY = h - 26;
+    const urRange = getHitWindows(this.od).meh;
+
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fillRect(urBarX, urBarY, urBarWidth, 3);
+    ctx.fillStyle = "rgba(255,255,255,0.25)";
+    ctx.fillRect(playfieldCenterX - 1, urBarY - 4, 2, 11);
+
+    this.recentHitOffsets.forEach((offset, index) => {
+      const normalized = Math.max(-1, Math.min(1, offset / urRange));
+      const x = playfieldCenterX + normalized * (urBarWidth / 2);
+      const alpha = 0.2 + ((index + 1) / this.recentHitOffsets.length) * 0.8;
+      ctx.fillStyle = this.colorWithAlpha("#b3f5ff", alpha);
+      ctx.fillRect(x - 1.5, urBarY - 3, 3, 9);
+    });
+
+    ctx.font = "bold 10px Torus, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillStyle = "rgba(255,255,255,0.72)";
+    ctx.fillText(`UR ${this.getUr().toFixed(0)}`, playfieldCenterX, urBarY - 6);
+
+    // --- Time display (bottom-left) ---
     ctx.fillStyle = "rgba(255,255,255,0.4)";
     ctx.font = "11px Torus, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText(`${Math.floor(this.currentTime / 60000)}:${String(Math.floor((this.currentTime % 60000) / 1000)).padStart(2, "0")}`, 8, h - 8);
+    const mins = Math.floor(this.currentTime / 60000);
+    const secs = String(Math.floor((this.currentTime % 60000) / 1000)).padStart(2, "0");
+    ctx.fillText(`${mins}:${secs}`, 8, h - 8);
+
+    // Speed display (bottom-right)
     ctx.textAlign = "right";
     ctx.fillText(`${this.playbackSpeed}x`, w - 8, h - 8);
   }
+
+  // --- Utilities ---
 
   private getCurrentKeyState(): number {
     let lo = 0, hi = this.frames.length - 1;
     while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (this.frames[mid].time <= this.currentTime) lo = mid; else hi = mid - 1; }
     return this.frames[lo]?.keyState ?? 0;
+  }
+
+  private isColumnPressedAtTime(column: number, time: number): boolean {
+    if (column < 0 || column >= this.keyCount) return false;
+    const segments = this.segments[column];
+    for (const seg of segments) {
+      if (seg.start > time) break;
+      if (seg.start <= time && seg.end > time) return true;
+    }
+    return false;
+  }
+
+  private isColumnEffectivelyHeldAtTime(column: number, time: number, graceMs = HOLD_VISUAL_GRACE_MS): boolean {
+    if (column < 0 || column >= this.keyCount) return false;
+    const segments = this.segments[column];
+    for (const seg of segments) {
+      if (seg.start > time + graceMs) break;
+      if (seg.start - graceMs <= time && seg.end + graceMs > time) return true;
+    }
+    return false;
+  }
+
+  private binarySearchNoteIndex(targetTime: number): number {
+    let lo = 0, hi = this.notes.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      const noteEnd = this.notes[mid].isHold ? this.notes[mid].endTime : this.notes[mid].time;
+      if (noteEnd < targetTime) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+
+  private colorWithAlpha(hexColor: string, alpha: number): string {
+    let r = 0, g = 0, b = 0;
+    if (hexColor.startsWith("#")) {
+      const hex = hexColor.slice(1);
+      if (hex.length === 3) {
+        r = parseInt(hex[0] + hex[0], 16);
+        g = parseInt(hex[1] + hex[1], 16);
+        b = parseInt(hex[2] + hex[2], 16);
+      } else if (hex.length === 6) {
+        r = parseInt(hex.slice(0, 2), 16);
+        g = parseInt(hex.slice(2, 4), 16);
+        b = parseInt(hex.slice(4, 6), 16);
+      }
+    }
+    return `rgba(${r},${g},${b},${alpha})`;
   }
 
   destroy() { this.pause(); }

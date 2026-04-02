@@ -12,9 +12,13 @@ import { formatAccuracy, formatPP } from "../lib/format";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import type { OsuScore, ReplayFrame } from "../lib/types";
 
+const REPLAY_VOLUME_STORAGE_KEY = "mania-hub-replay-volume";
+const REPLAY_INPUT_OVERLAY_STORAGE_KEY = "mania-hub-replay-input-overlay";
+
 interface ReplaySearch {
   scoreId?: number;
   mode?: string;
+  beatmapsetId?: number;
 }
 
 interface ServerReplay {
@@ -40,11 +44,12 @@ export const Route = createFileRoute("/replay")({
   validateSearch: (s: Record<string, unknown>): ReplaySearch => ({
     scoreId: Number(s.scoreId) || undefined,
     mode: (s.mode as string) || "mania",
+    beatmapsetId: Number(s.beatmapsetId) || undefined,
   }),
 });
 
 function ReplayPage() {
-  const { scoreId, mode } = Route.useSearch();
+  const { scoreId, mode, beatmapsetId } = Route.useSearch();
   const navigate = useNavigate();
   const [replay, setReplay] = useState<ServerReplay | null>(null);
   const [beatmap, setBeatmap] = useState<ManiaBeatmap | null>(null);
@@ -61,22 +66,22 @@ function ReplayPage() {
     setBeatmap(null);
 
     try {
-      // Fetch parsed replay + score info in parallel (parsing happens server-side)
-      const [parsed, score] = await Promise.all([
-        getReplayParsed({ data: { scoreId: sid, mode: m } }),
-        getScore({ data: { scoreId: sid } }).catch(() => null),
+      // Fetch score first to get key count (beatmap.cs) for correct replay parsing
+      const score = await getScore({ data: { scoreId: sid, mode: m } }).catch(() => null);
+      if (score) setScoreInfo(score);
+
+      // Fetch replay with key count from score API, and beatmap file in parallel
+      const keyCount = score?.beatmap?.cs ? Math.round(score.beatmap.cs) : undefined;
+      const [parsed, bmResult] = await Promise.all([
+        getReplayParsed({ data: { scoreId: sid, mode: m, keyCount } }),
+        score?.beatmap?.id
+          ? getBeatmapFile({ data: { beatmapId: score.beatmap.id } }).catch(() => null)
+          : Promise.resolve(null),
       ]);
 
       setReplay(parsed);
-      if (score) setScoreInfo(score);
-
-      // Fetch beatmap .osu file if we have the beatmap ID
-      const beatmapId = score?.beatmap?.id;
-      if (beatmapId) {
-        try {
-          const bmFile = await getBeatmapFile({ data: { beatmapId } });
-          setBeatmap(parseManiaBeatmap(bmFile.content));
-        } catch { /* continue without notes */ }
+      if (bmResult) {
+        setBeatmap(parseManiaBeatmap(bmResult.content));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load replay");
@@ -123,7 +128,7 @@ function ReplayPage() {
                   setReplay(null); setBeatmap(null); setScoreInfo(null);
                   navigate({ to: "/replay", search: {} });
                 }} />
-                <ReplayViewer replay={replay} beatmap={beatmap} />
+                <ReplayViewer replay={replay} beatmap={beatmap} scoreInfo={scoreInfo} fallbackBeatmapsetId={beatmapsetId} />
               </motion.div>
             ) : (
               <motion.div key="browse" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -152,7 +157,7 @@ function ReplayPage() {
                     {playerScores.map((s: OsuScore, i: number) => (
                       <motion.div key={s.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.02 }}
                         className="flex items-center gap-3 py-2.5 px-4 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20"
-                        onClick={() => navigate({ to: "/replay", search: { scoreId: s.id, mode: "mania" } })}>
+                        onClick={() => navigate({ to: "/replay", search: { scoreId: s.id, mode: "mania", beatmapsetId: s.beatmapset?.id } })}>
                         <GradeImg grade={s.rank} size={26} />
                         {s.beatmapset?.covers?.list && (
                           <img src={s.beatmapset.covers.list} alt="" className="w-12 h-8 rounded object-cover flex-shrink-0" loading="lazy" />
@@ -189,7 +194,7 @@ function ReplayInfo({ replay, score: _score, beatmap, onClear }: {
   const h = replay.header;
   const totalHits = h.countGeki + h.count300 + h.countKatu + h.count100 + h.count50;
   const accuracy = totalHits + h.countMiss > 0
-    ? ((h.countGeki * 320 + h.count300 * 300 + h.countKatu * 200 + h.count100 * 100 + h.count50 * 50) / ((totalHits + h.countMiss) * 320) * 100) : 0;
+    ? ((h.countGeki * 6 + h.count300 * 6 + h.countKatu * 4 + h.count100 * 2 + h.count50) / ((totalHits + h.countMiss) * 6) * 100) : 0;
 
   return (
     <div className="bg-osu-b4 rounded-xl p-4 mb-4 border border-osu-b3/20">
@@ -213,40 +218,229 @@ function ReplayInfo({ replay, score: _score, beatmap, onClear }: {
   );
 }
 
-function ReplayViewer({ replay, beatmap }: { replay: ServerReplay; beatmap: ManiaBeatmap | null }) {
+function ReplayViewer({
+  replay,
+  beatmap,
+  scoreInfo,
+  fallbackBeatmapsetId,
+}: {
+  replay: ServerReplay;
+  beatmap: ManiaBeatmap | null;
+  scoreInfo: OsuScore | null;
+  fallbackBeatmapsetId?: number;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<ManiaReplayRenderer | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [progress, setProgress] = useState(0);
-  const [zoom, setZoom] = useState(0.5);
+  const [scrollSpeed, setScrollSpeed] = useState(32);
+  const [bgDim, setBgDim] = useState(80);
+  const [audioEnabled, setAudioEnabled] = useState(true);
+  const [volume, setVolume] = useState(() => {
+    if (typeof window === "undefined") return 0.5;
+    const stored = Number(window.localStorage.getItem(REPLAY_VOLUME_STORAGE_KEY));
+    return Number.isFinite(stored) ? Math.min(1, Math.max(0, stored)) : 0.5;
+  });
+  const [showInputOverlay, setShowInputOverlay] = useState(() => {
+    if (typeof window === "undefined") return true;
+    const stored = window.localStorage.getItem(REPLAY_INPUT_OVERLAY_STORAGE_KEY);
+    return stored == null ? true : stored === "true";
+  });
+  const [audioError, setAudioError] = useState<string | null>(null);
+  const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   const progressInterval = useRef<ReturnType<typeof setInterval>>(undefined);
+  const shouldResumeAudioRef = useRef(false);
+
+  // Build full audio URL from Sayobot CDN using beatmapset ID + audio filename from .osu
+  const effectiveBeatmapsetId = scoreInfo?.beatmapset?.id ?? fallbackBeatmapsetId;
+  const audioUrl = effectiveBeatmapsetId && beatmap?.audioFilename
+    ? `/api/audio?beatmapsetId=${encodeURIComponent(String(effectiveBeatmapsetId))}&filename=${encodeURIComponent(beatmap.audioFilename)}`
+    : null;
+
+  // Load background image from beatmapset cover
+  useEffect(() => {
+    const coverUrl = scoreInfo?.beatmapset?.covers?.["cover@2x"] || scoreInfo?.beatmapset?.covers?.cover;
+    if (!coverUrl) return;
+    const img = new Image();
+    img.onload = () => setBgImage(img);
+    img.src = coverUrl;
+  }, [scoreInfo]);
+
+  // Pass background image to renderer when it loads
+  useEffect(() => {
+    if (bgImage && rendererRef.current) {
+      rendererRef.current.setBackgroundImage(bgImage);
+    }
+  }, [bgImage]);
 
   useEffect(() => {
+    setAudioError(null);
+    shouldResumeAudioRef.current = false;
+  }, [audioUrl]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio || !audioUrl) return;
+    audio.load();
+  }, [audioUrl]);
+
+  useEffect(() => {
+    if (rendererRef.current) {
+      rendererRef.current.setShowInputOverlay(showInputOverlay);
+    }
+  }, [showInputOverlay]);
+
+  // Create renderer
+  useEffect(() => {
     if (!canvasRef.current || replay.frames.length === 0) return;
-    const renderer = new ManiaReplayRenderer(canvasRef.current, replay.frames, replay.keyCount, beatmap?.notes ?? []);
+    const renderer = new ManiaReplayRenderer(
+      canvasRef.current,
+      replay.frames,
+      replay.keyCount,
+      beatmap?.notes ?? [],
+      {
+        backgroundImage: bgImage ?? undefined,
+        backgroundDim: bgDim,
+        od: beatmap?.od,
+        showInputOverlay,
+      },
+    );
     rendererRef.current = renderer;
     const handleResize = () => renderer.resize();
     window.addEventListener("resize", handleResize);
     return () => { renderer.destroy(); window.removeEventListener("resize", handleResize); };
   }, [replay, beatmap]);
 
+  // Progress polling + audio drift correction
   useEffect(() => {
     if (progressInterval.current) clearInterval(progressInterval.current);
     if (isPlaying) {
+      let syncCounter = 0;
       progressInterval.current = setInterval(() => {
         const r = rendererRef.current;
-        if (r) { setProgress(r.time / r.duration); if (!r.isPlaying) setIsPlaying(false); }
+        if (!r) return;
+        setProgress(r.time / r.duration);
+        if (!r.isPlaying) setIsPlaying(false);
+
+        // Re-sync audio every ~2s if drifted more than 200ms
+        syncCounter++;
+        if (syncCounter >= 40 && audioRef.current && audioEnabled && !audioRef.current.paused) {
+          syncCounter = 0;
+          const drift = Math.abs(audioRef.current.currentTime - r.time / 1000);
+          if (drift > 0.2) {
+            audioRef.current.currentTime = r.time / 1000;
+          }
+        }
       }, 50);
     }
     return () => { if (progressInterval.current) clearInterval(progressInterval.current); };
-  }, [isPlaying]);
+  }, [isPlaying, audioEnabled]);
+
+  // Sync audio with replay play/pause/seek
+  useEffect(() => {
+    if (!audioRef.current || !audioEnabled) return;
+    audioRef.current.volume = volume;
+    if (isPlaying) {
+      audioRef.current.playbackRate = speed;
+      if (audioRef.current.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+        audioRef.current.play().catch(() => {});
+      } else {
+        shouldResumeAudioRef.current = true;
+      }
+    } else {
+      shouldResumeAudioRef.current = false;
+      audioRef.current.pause();
+    }
+  }, [isPlaying, audioEnabled, speed, volume]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(REPLAY_VOLUME_STORAGE_KEY, String(volume));
+  }, [volume]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(REPLAY_INPUT_OVERLAY_STORAGE_KEY, String(showInputOverlay));
+  }, [showInputOverlay]);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const resumeAudioIfNeeded = () => {
+      if (!audioEnabled || !isPlaying || !shouldResumeAudioRef.current) return;
+      if (audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
+      shouldResumeAudioRef.current = false;
+      audio.playbackRate = speed;
+      audio.volume = volume;
+      audio.play().catch(() => {
+        shouldResumeAudioRef.current = true;
+      });
+    };
+
+    const handleCanPlay = () => resumeAudioIfNeeded();
+    const handleSeeked = () => resumeAudioIfNeeded();
+    const handleLoadedData = () => resumeAudioIfNeeded();
+
+    audio.addEventListener("canplay", handleCanPlay);
+    audio.addEventListener("seeked", handleSeeked);
+    audio.addEventListener("loadeddata", handleLoadedData);
+
+    return () => {
+      audio.removeEventListener("canplay", handleCanPlay);
+      audio.removeEventListener("seeked", handleSeeked);
+      audio.removeEventListener("loadeddata", handleLoadedData);
+    };
+  }, [audioEnabled, isPlaying, speed, volume, audioUrl]);
+
+  // Sync audio time on seek — pause first to force re-buffer, then resume
+  const syncAudioTime = (timeMs: number) => {
+    if (!audioRef.current || !audioEnabled) return;
+    const wasPlaying = !audioRef.current.paused;
+    shouldResumeAudioRef.current = wasPlaying || isPlaying;
+    audioRef.current.pause();
+    audioRef.current.currentTime = timeMs / 1000;
+    if ((wasPlaying || isPlaying) && audioRef.current.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+      shouldResumeAudioRef.current = false;
+      audioRef.current.play().catch(() => {});
+    }
+  };
 
   const togglePlay = () => {
     const r = rendererRef.current;
     if (!r) return;
     if (isPlaying) { r.pause(); setIsPlaying(false); }
-    else { if (r.time >= r.duration) r.seek(0); r.play(); setIsPlaying(true); }
+    else {
+      if (r.time >= r.duration) r.seek(0);
+      r.play();
+      setIsPlaying(true);
+      // Sync audio to current replay time on play
+      if (audioRef.current && audioEnabled) {
+        audioRef.current.currentTime = r.time / 1000;
+        shouldResumeAudioRef.current = true;
+      }
+    }
+  };
+
+  const toggleAudio = () => {
+    if (!audioRef.current) return;
+    if (audioEnabled) {
+      audioRef.current.pause();
+      setAudioEnabled(false);
+    } else {
+      // Sync audio to current replay time
+      const r = rendererRef.current;
+      if (r) audioRef.current.currentTime = r.time / 1000;
+      audioRef.current.playbackRate = speed;
+      shouldResumeAudioRef.current = isPlaying;
+      if (isPlaying && audioRef.current.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+        shouldResumeAudioRef.current = false;
+        audioRef.current.play().catch(() => {});
+      }
+      setAudioEnabled(true);
+    }
   };
 
   const formatTime = (ratio: number) => {
@@ -254,35 +448,101 @@ function ReplayViewer({ replay, beatmap }: { replay: ServerReplay; beatmap: Mani
     return `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, "0")}`;
   };
 
+  const sliderClass = "h-1 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink";
+
+  const handleAudioError = () => {
+    setAudioError("Couldn't load the song audio for this replay.");
+    shouldResumeAudioRef.current = false;
+  };
+
   return (
     <div className="space-y-3">
-      <div className="rounded-xl overflow-hidden border border-osu-b3/20 bg-[#1a1016]">
-        <canvas ref={canvasRef} className="w-full" style={{ height: 500 }} />
+      {/* Canvas */}
+      <div className="rounded-xl overflow-hidden border border-osu-b3/20 bg-[#0a0a18]">
+        <canvas ref={canvasRef} className="w-full" style={{ height: "min(70vh, 600px)" }} />
       </div>
+
+      {/* Audio element (hidden) — full song from Sayobot CDN */}
+      {audioUrl && (
+        <audio
+          ref={audioRef}
+          src={audioUrl}
+          preload="auto"
+          onError={handleAudioError}
+        />
+      )}
+
+      {/* Controls */}
       <div className="bg-osu-b4 rounded-xl p-4 border border-osu-b3/20 space-y-3">
+        {audioError && (
+          <div className="text-[11px] text-osu-yellow bg-osu-yellow/10 border border-osu-yellow/20 rounded-lg px-3 py-2">
+            {audioError}
+          </div>
+        )}
+        {/* Progress bar */}
         <div className="flex items-center gap-3">
           <span className="text-[10px] text-osu-f1 w-10">{formatTime(progress)}</span>
           <input type="range" min={0} max={1} step={0.001} value={progress}
-            onChange={(e) => { const v = Number(e.target.value); setProgress(v); rendererRef.current?.seek(v * (rendererRef.current?.duration ?? 0)); }}
-            className="flex-1 h-1.5 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink" />
+            onChange={(e) => { const v = Number(e.target.value); setProgress(v); const t = v * (rendererRef.current?.duration ?? 0); rendererRef.current?.seek(t); syncAudioTime(t); }}
+            className={`flex-1 h-1.5 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink`} />
           <span className="text-[10px] text-osu-f1 w-10 text-right">{formatTime(1)}</span>
         </div>
-        <div className="flex items-center gap-4">
+
+        {/* Controls row */}
+        <div className="flex items-center gap-4 flex-wrap">
+          {/* Play/Pause */}
           <button onClick={togglePlay} className="w-10 h-10 rounded-full bg-osu-pink hover:bg-osu-pink-light transition-colors flex items-center justify-center cursor-pointer">
             <span className="text-white text-sm font-bold">{isPlaying ? "||" : ">"}</span>
           </button>
+
+          {/* Speed */}
           <div className="flex items-center gap-1">
             <span className="text-[10px] text-osu-f1 mr-1">Speed:</span>
             {[0.25, 0.5, 1, 1.5, 2].map((s) => (
-              <button key={s} onClick={() => { setSpeed(s); rendererRef.current?.setSpeed(s); }}
+              <button key={s} onClick={() => { setSpeed(s); rendererRef.current?.setSpeed(s); if (audioRef.current) audioRef.current.playbackRate = s; }}
                 className={`px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${speed === s ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white"}`}>{s}x</button>
             ))}
           </div>
+
+          {/* Volume */}
+          {audioUrl && (
+            <div className="flex items-center gap-2">
+              <button onClick={toggleAudio}
+                className={`px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${audioEnabled ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white"}`}>
+                {audioEnabled ? "Vol" : "Muted"}
+              </button>
+              <input type="range" min={0} max={1} step={0.05} value={audioEnabled ? volume : 0}
+                onChange={(e) => { const v = Number(e.target.value); setVolume(v); if (!audioEnabled && v > 0) setAudioEnabled(true); if (audioRef.current) audioRef.current.volume = v; }}
+                className={`w-16 ${sliderClass}`} />
+            </div>
+          )}
+
+          <button
+            onClick={() => setShowInputOverlay((value) => !value)}
+            className={`px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
+              showInputOverlay ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white"
+            }`}
+          >
+            Input
+          </button>
+
+          {/* Scroll Speed */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-osu-f1">Scroll:</span>
+            <button onClick={() => { const v = Math.max(1, scrollSpeed - 1); setScrollSpeed(v); rendererRef.current?.setScrollSpeed(v); }}
+              className="w-5 h-5 rounded bg-osu-b3/50 text-[10px] text-osu-f1 hover:text-white hover:bg-osu-b2 transition-colors cursor-pointer flex items-center justify-center">-</button>
+            <span className="text-xs text-white font-bold w-5 text-center">{scrollSpeed}</span>
+            <button onClick={() => { const v = Math.min(40, scrollSpeed + 1); setScrollSpeed(v); rendererRef.current?.setScrollSpeed(v); }}
+              className="w-5 h-5 rounded bg-osu-b3/50 text-[10px] text-osu-f1 hover:text-white hover:bg-osu-b2 transition-colors cursor-pointer flex items-center justify-center">+</button>
+          </div>
+
+          {/* BG Dim */}
           <div className="flex items-center gap-2 ml-auto">
-            <span className="text-[10px] text-osu-f1">Zoom:</span>
-            <input type="range" min={0.1} max={1.5} step={0.05} value={zoom}
-              onChange={(e) => { const v = Number(e.target.value); setZoom(v); rendererRef.current?.setZoom(v); }}
-              className="w-24 h-1 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink" />
+            <span className="text-[10px] text-osu-f1">BG Dim:</span>
+            <input type="range" min={0} max={100} step={5} value={bgDim}
+              onChange={(e) => { const v = Number(e.target.value); setBgDim(v); rendererRef.current?.setBackgroundDim(v); }}
+              className={`w-20 ${sliderClass}`} />
+            <span className="text-[10px] text-osu-f1 w-7">{bgDim}%</span>
           </div>
         </div>
       </div>

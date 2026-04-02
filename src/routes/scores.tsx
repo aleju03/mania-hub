@@ -4,7 +4,16 @@ import { motion, AnimatePresence } from "framer-motion";
 import { getRankings, getCountryRecentScores, getUsersApproxPpGains } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { formatAccuracy, formatTimeAgo, formatPP, formatNumber } from "../lib/format";
-import { getBeatmapUrl, getDisplayedTotalScore, getScoreIdentity, getScoreTimestamp, scoreHasReplay } from "../lib/score";
+import {
+  getBeatmapUrl,
+  getDisplayedAccuracy,
+  getDisplayedRank,
+  getDisplayedTotalScore,
+  getScoreIdentity,
+  getScoreTimestamp,
+  isDisplayedPassed,
+  scoreHasReplay,
+} from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
 
 import { Avatar } from "../components/ui/Avatar";
@@ -21,14 +30,6 @@ export const Route = createFileRoute("/scores")({
 
 type ScoreFilter = "all" | "ranked" | "passed";
 const PP_GAIN_BATCH_SIZE = 4;
-
-function isPassed(s: OsuScore) {
-  return s.passed && s.rank !== "D";
-}
-
-function getDisplayRank(s: OsuScore): string {
-  return s.passed ? s.rank : "F";
-}
 
 function ScoresPage() {
   const {
@@ -156,12 +157,12 @@ function ScoresPage() {
 
   const filtered = useMemo(() => {
     return feedScores.filter((score: OsuScore) => {
-      if (!showFailed && !score.passed) return false;
+      if (!showFailed && !isDisplayedPassed(score)) return false;
       switch (filter) {
         case "ranked":
           return score.pp != null && score.pp > 0;
         case "passed":
-          return isPassed(score);
+          return isDisplayedPassed(score);
         default:
           return true;
       }
@@ -337,7 +338,7 @@ function ScoreFeedItem({
         className="flex items-center gap-3 py-3 px-4 hover:bg-osu-b3/50 transition-colors duration-[120ms] cursor-pointer"
         onClick={onToggle}
       >
-        <GradeImg grade={getDisplayRank(score)} size={32} />
+        <GradeImg grade={getDisplayedRank(score)} size={32} />
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -402,7 +403,7 @@ function ScoreFeedItem({
               <ModBadge key={m.acronym} mod={m.acronym} />
             ))}
           </div>
-          <span className="text-xs text-osu-l2">{formatAccuracy(score.accuracy)}</span>
+          <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>
           <span className="text-sm font-bold">
             {formatPP(score.pp)}
             {approxPpGain != null && (
@@ -418,7 +419,7 @@ function ScoreFeedItem({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                window.location.href = `/replay?scoreId=${score.id}&mode=mania`;
+                window.location.href = `/replay?scoreId=${score.id}&mode=mania&beatmapsetId=${score.beatmapset?.id}`;
               }}
               className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
               title="Watch replay"

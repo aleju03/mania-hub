@@ -10,7 +10,14 @@ import {
   formatDate,
   formatPP,
 } from "../../lib/format";
-import { getScoreIdentity, getScoreTimestamp, getScoreUrl, scoreHasReplay } from "../../lib/score";
+import {
+  getDisplayedAccuracy,
+  getDisplayedRank,
+  getScoreIdentity,
+  getScoreTimestamp,
+  getScoreUrl,
+  scoreHasReplay,
+} from "../../lib/score";
 import { Avatar } from "../../components/ui/Avatar";
 import { GradeImg } from "../../components/ui/GradeImg";
 import { ModBadge } from "../../components/ui/ModBadge";
@@ -675,7 +682,7 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
         rel="noreferrer"
         className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
       >
-        <GradeImg grade={score.rank} size={28} />
+        <GradeImg grade={getDisplayedRank(score)} size={28} />
         {score.beatmapset?.covers?.list && (
           <img
             src={score.beatmapset.covers.list}
@@ -710,7 +717,7 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
                 <ModBadge key={m.acronym} mod={m.acronym} />
               ))}
           </div>
-          <span className="text-xs text-osu-l2">{formatAccuracy(score.accuracy)}</span>
+          <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>
           <span className="text-xs text-osu-f1">{formatNumber(score.max_combo)}x</span>
           <span className="text-sm font-bold w-16 text-right">{formatPP(score.pp)}</span>
         </div>
@@ -718,7 +725,7 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
       {canReplay && (
         <Link
           to="/replay"
-          search={{ scoreId: score.id, mode: "mania" }}
+          search={{ scoreId: score.id, mode: "mania", beatmapsetId: score.beatmapset?.id }}
           className="px-2.5 py-1.5 rounded-md bg-osu-pink/15 text-[10px] font-semibold text-osu-pink-light border border-osu-pink/20 hover:bg-osu-pink/25 transition-colors flex-shrink-0"
         >
           Replay

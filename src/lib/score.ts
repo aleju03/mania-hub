@@ -2,6 +2,62 @@ import type { OsuScore } from "./types";
 
 const PP_WEIGHT_DECAY = 0.95;
 
+function getCount(score: OsuScore, key: "perfect" | "great" | "good" | "ok" | "meh" | "miss"): number {
+  const stats = score.statistics;
+  switch (key) {
+    case "perfect":
+      return stats?.count_geki ?? stats?.perfect ?? 0;
+    case "great":
+      return stats?.count_300 ?? stats?.great ?? 0;
+    case "good":
+      return stats?.count_katu ?? stats?.good ?? 0;
+    case "ok":
+      return stats?.count_100 ?? stats?.ok ?? 0;
+    case "meh":
+      return stats?.count_50 ?? stats?.meh ?? 0;
+    case "miss":
+      return stats?.count_miss ?? stats?.miss ?? 0;
+  }
+}
+
+function getTotalHits(score: OsuScore): number {
+  return (
+    getCount(score, "perfect") +
+    getCount(score, "great") +
+    getCount(score, "good") +
+    getCount(score, "ok") +
+    getCount(score, "meh") +
+    getCount(score, "miss")
+  );
+}
+
+function shouldRepairClassicDisplay(score: OsuScore): boolean {
+  return score.type === "solo_score" && score.accuracy === 0 && getTotalHits(score) > 0;
+}
+
+function calculateManiaClassicAccuracy(score: OsuScore): number {
+  const totalHits = getTotalHits(score);
+  if (totalHits === 0) return 0;
+
+  const weightedTotal =
+    getCount(score, "perfect") * 6 +
+    getCount(score, "great") * 6 +
+    getCount(score, "good") * 4 +
+    getCount(score, "ok") * 2 +
+    getCount(score, "meh");
+
+  return weightedTotal / (totalHits * 6);
+}
+
+function getClassicRankFromAccuracy(accuracy: number): string {
+  if (accuracy >= 1) return "SS";
+  if (accuracy >= 0.95) return "S";
+  if (accuracy >= 0.9) return "A";
+  if (accuracy >= 0.8) return "B";
+  if (accuracy >= 0.7) return "C";
+  return "D";
+}
+
 export function getScoreTimestamp(score: OsuScore): string {
   return score.ended_at ?? score.created_at ?? "";
 }
@@ -47,6 +103,22 @@ export function getDisplayedTotalScore(score: OsuScore): number | null {
   return value && value > 0 ? value : null;
 }
 
+export function getDisplayedAccuracy(score: OsuScore): number {
+  return shouldRepairClassicDisplay(score) ? calculateManiaClassicAccuracy(score) : score.accuracy;
+}
+
+export function getDisplayedRank(score: OsuScore): string {
+  if (!score.passed) return "F";
+  if (shouldRepairClassicDisplay(score)) {
+    return getClassicRankFromAccuracy(getDisplayedAccuracy(score));
+  }
+  return score.rank;
+}
+
+export function isDisplayedPassed(score: OsuScore): boolean {
+  return score.passed && getDisplayedRank(score) !== "D";
+}
+
 export function scoreHasReplay(score: OsuScore): boolean {
   return score.has_replay ?? score.replay ?? false;
 }
@@ -60,13 +132,18 @@ export function getBeatmapUrl(score: OsuScore): string | null {
 }
 
 export function getScoreUrl(score: OsuScore): string | null {
-  if (score.id > 0) {
-    return `https://osu.ppy.sh/scores/${score.id}`;
-  }
+  if (score.legacy_score_id !== undefined) {
+    if (score.id > 0) {
+      return `https://osu.ppy.sh/scores/${score.id}`;
+    }
 
-  if (score.legacy_score_id && score.legacy_score_id > 0) {
+    if (score.legacy_score_id && score.legacy_score_id > 0) {
+      const ruleset = score.beatmap?.mode ?? "mania";
+      return `https://osu.ppy.sh/scores/${ruleset}/${score.legacy_score_id}`;
+    }
+  } else if (score.id > 0) {
     const ruleset = score.beatmap?.mode ?? "mania";
-    return `https://osu.ppy.sh/scores/${ruleset}/${score.legacy_score_id}`;
+    return `https://osu.ppy.sh/scores/${ruleset}/${score.id}`;
   }
 
   return null;

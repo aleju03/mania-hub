@@ -16,6 +16,20 @@ const RANK_HISTORY_CONCURRENCY = 20;
 const APPROX_PP_GAINS_CONCURRENCY = 8;
 const RECENT_SCORES_CONCURRENCY = 10;
 const rankHistoryPromiseCache = new Map<number, Promise<number[] | null>>();
+const MIXED_SCORE_USER_IDS = new Set<number>([
+  23341349, // happy amke sure
+  25914429, // jaimito
+]);
+
+function getScoreRequestParams(
+  userId: number,
+  params: Record<string, string | number | undefined>,
+): Record<string, string | number | undefined> {
+  return {
+    ...params,
+    legacy_only: MIXED_SCORE_USER_IDS.has(userId) ? undefined : 1,
+  };
+}
 
 async function mapWithConcurrency<T, R>(
   items: T[],
@@ -73,22 +87,22 @@ export const getUser = createServerFn({ method: "GET" })
 export const getUserScoresBest = createServerFn({ method: "GET" })
   .inputValidator((data: { userId: number; limit?: number; offset?: number }) => data)
   .handler(async ({ data }: { data: { userId: number; limit?: number; offset?: number } }) => {
-    return osuFetch<OsuScore[]>(`/users/${data.userId}/scores/best`, {
+    return osuFetch<OsuScore[]>(`/users/${data.userId}/scores/best`, getScoreRequestParams(data.userId, {
       mode: "mania",
       limit: data.limit ?? 20,
       offset: data.offset ?? 0,
-    });
+    }));
   });
 
 export const getUserScoresRecent = createServerFn({ method: "GET" })
   .inputValidator((data: { userId: number; limit?: number; offset?: number; include_fails?: boolean }) => data)
   .handler(async ({ data }: { data: { userId: number; limit?: number; offset?: number; include_fails?: boolean } }) => {
-    return osuFetch<OsuScore[]>(`/users/${data.userId}/scores/recent`, {
+    return osuFetch<OsuScore[]>(`/users/${data.userId}/scores/recent`, getScoreRequestParams(data.userId, {
       mode: "mania",
       limit: data.limit ?? 10,
       offset: data.offset ?? 0,
       include_fails: data.include_fails ? 1 : 0,
-    });
+    }));
   });
 
 export const getUserApproxPpGains = createServerFn({ method: "GET" })
@@ -108,21 +122,21 @@ async function getApproxPpGainsForUser(userId: number): Promise<Record<number, n
 }
 
 async function fetchUserBestScoresWindow(userId: number, totalLimit = 200): Promise<OsuScore[]> {
-  const firstPage = await osuFetch<OsuScore[]>(`/users/${userId}/scores/best`, {
+  const firstPage = await osuFetch<OsuScore[]>(`/users/${userId}/scores/best`, getScoreRequestParams(userId, {
     mode: "mania",
     limit: Math.min(totalLimit, 100),
     offset: 0,
-  });
+  }));
 
   if (totalLimit <= 100 || firstPage.length < 100) {
     return firstPage;
   }
 
-  const secondPage = await osuFetch<OsuScore[]>(`/users/${userId}/scores/best`, {
+  const secondPage = await osuFetch<OsuScore[]>(`/users/${userId}/scores/best`, getScoreRequestParams(userId, {
     mode: "mania",
     limit: Math.min(totalLimit - 100, 100),
     offset: 100,
-  });
+  }));
 
   return [...firstPage, ...secondPage];
 }
@@ -247,11 +261,11 @@ export const getCountryRecentScores = createServerFn({ method: "GET" })
       RECENT_SCORES_CONCURRENCY,
       async (uid: number) => {
         try {
-          return await osuFetch<OsuScore[]>(`/users/${uid}/scores/recent`, {
+          return await osuFetch<OsuScore[]>(`/users/${uid}/scores/recent`, getScoreRequestParams(uid, {
             mode: "mania",
             limit: recentLimit,
             include_fails: 1,
-          });
+          }));
         } catch {
           return [];
         }
@@ -264,26 +278,34 @@ export const getCountryRecentScores = createServerFn({ method: "GET" })
 // ── Replay (parsed server-side via osu-parsers) ────────────────────────────
 
 export const getReplayParsed = createServerFn({ method: "GET" })
-  .inputValidator((data: { scoreId: number; mode: string }) => data)
-  .handler(async ({ data }: { data: { scoreId: number; mode: string } }) => {
+  .inputValidator((data: { scoreId: number; mode: string; keyCount?: number }) => data)
+  .handler(async ({ data }: { data: { scoreId: number; mode: string; keyCount?: number } }) => {
     const { ScoreDecoder } = await import("osu-parsers");
-    const buffer = await osuFetchBinary(`/scores/${data.mode}/${data.scoreId}/download`);
+    let buffer: ArrayBuffer;
+    try {
+      buffer = await osuFetchBinary(`/scores/${data.scoreId}/download`);
+    } catch {
+      buffer = await osuFetchBinary(`/scores/${data.mode}/${data.scoreId}/download`);
+    }
     const decoder = new ScoreDecoder();
     const score = await decoder.decodeFromBuffer(Buffer.from(buffer));
 
     const info = score.info;
+    // For mania, column bitmask is in mouseX (position.x), NOT buttonState
     const frames = (score.replay?.frames ?? []).map((f: any) => ({
       time: f.startTime,
-      keyState: f.buttonState,
+      keyState: Math.round(f.mouseX ?? f.position?.x ?? f.buttonState ?? 0),
     }));
 
-    // Detect key count from max bit used
-    let maxBit = 0;
-    for (const f of frames) {
-      let s = f.keyState;
-      let bit = 0;
-      while (s > 0) { bit++; s >>= 1; }
-      if (bit > maxBit) maxBit = bit;
+    // Detect key count: prefer beatmap CS from score API, fall back to OR of all frames
+    let keyCount = data.keyCount ?? 0;
+    if (!keyCount) {
+      let allBits = 0;
+      for (const f of frames) allBits |= f.keyState;
+      let maxBit = 0;
+      let tmp = allBits;
+      while (tmp > 0) { maxBit++; tmp >>= 1; }
+      keyCount = Math.max(maxBit, 4);
     }
 
     return {
@@ -301,7 +323,7 @@ export const getReplayParsed = createServerFn({ method: "GET" })
         isPerfect: info?.perfect ?? false,
       },
       frames,
-      keyCount: Math.max(maxBit, 4),
+      keyCount,
     };
   });
 
@@ -313,7 +335,19 @@ export const getBeatmapFile = createServerFn({ method: "GET" })
   });
 
 export const getScore = createServerFn({ method: "GET" })
-  .inputValidator((data: { scoreId: number }) => data)
-  .handler(async ({ data }: { data: { scoreId: number } }) => {
+  .inputValidator((data: { scoreId: number; mode?: string }) => data)
+  .handler(async ({ data }: { data: { scoreId: number; mode?: string } }) => {
+    const mode = data.mode ?? "mania";
+
+    try {
+      const legacyScore = await osuFetch<OsuScore>(`/scores/${mode}/${data.scoreId}`);
+      const resolvedMode = legacyScore.beatmap?.mode ?? legacyScore.user?.playmode ?? mode;
+      if (resolvedMode === mode) {
+        return legacyScore;
+      }
+    } catch {
+      // Fall back to modern score lookup below.
+    }
+
     return osuFetch<OsuScore>(`/scores/${data.scoreId}`);
   });

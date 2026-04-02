@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { getRankings, getCountryRecentScores, getUserScoresBestWindow } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
-import { getScoreTimeMs, getScoreTimestamp } from "../lib/score";
+import { getDisplayedAccuracy, getDisplayedRank, getScoreTimeMs, getScoreTimestamp, isDisplayedPassed } from "../lib/score";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { PlayerCardSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
@@ -18,7 +18,7 @@ export const Route = createFileRoute("/")({
 });
 
 function isPassedScore(score: OsuScore) {
-  return score.passed && score.rank !== "D";
+  return isDisplayedPassed(score);
 }
 
 function HomePage() {
@@ -260,7 +260,7 @@ function HomePage() {
                   onClick={() => navigate({ to: "/player/$username", params: { username: p.user.username } })}>
                   <div className="text-2xl font-bold text-osu-pink mb-1" style={{ fontFamily: "Torus" }}>{Math.round(p.score.pp ?? 0)}pp</div>
                   <div className="flex items-center justify-center gap-2 mb-2">
-                    <GradeImg grade={p.score.rank} size={18} />
+                    <GradeImg grade={getDisplayedRank(p.score)} size={18} />
                     <Avatar url={p.user.avatar_url} size={24} />
                     <UsernameText
                       username={p.user.username}
@@ -300,7 +300,7 @@ function HomePage() {
                 <motion.div key={s.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
                   className="flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3/50 transition-colors cursor-pointer"
                   onClick={() => navigate({ to: "/player/$username", params: { username: s.user?.username } })}>
-                  <GradeImg grade={s.rank} size={22} />
+                    <GradeImg grade={getDisplayedRank(s)} size={22} />
                   <Avatar url={s.user?.avatar_url} size={26} />
                   <div className="flex-1 min-w-0">
                     <div className="text-xs truncate">
@@ -316,7 +316,7 @@ function HomePage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-xs text-osu-l2">{formatAccuracy(s.accuracy)}</span>
+                    <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(s))}</span>
                     <span className="text-xs font-bold">{formatPP(s.pp)}</span>
                   </div>
                 </motion.div>
