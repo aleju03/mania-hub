@@ -1,16 +1,17 @@
 @import "tailwindcss";
 
-@font-face { font-family: "Torus"; font-weight: 100; src: url("/fonts/Torus-Thin.otf") format("opentype"); }
-@font-face { font-family: "Torus"; font-weight: 300; src: url("/fonts/Torus-Light.otf") format("opentype"); }
-@font-face { font-family: "Torus"; font-weight: 400; src: url("/fonts/Torus-Regular.otf") format("opentype"); }
-@font-face { font-family: "Torus"; font-weight: 600; src: url("/fonts/Torus-SemiBold.otf") format("opentype"); }
-@font-face { font-family: "Torus"; font-weight: 700; src: url("/fonts/Torus-SemiBold.otf") format("opentype"); }
-@font-face { font-family: "Torus"; font-weight: 800; src: url("/fonts/Torus-Bold.otf") format("opentype"); }
-@font-face { font-family: "Torus"; font-weight: 900; src: url("/fonts/Torus-Heavy.otf") format("opentype"); }
-@font-face { font-family: "Venera"; font-weight: 500; src: url("/fonts/Venera-500.otf") format("opentype"); }
+@font-face { font-family: "Torus"; font-weight: 100; src: url("/fonts/Torus-Thin.otf") format("opentype"); font-display: swap; }
+@font-face { font-family: "Torus"; font-weight: 300; src: url("/fonts/Torus-Light.otf") format("opentype"); font-display: swap; }
+@font-face { font-family: "Torus"; font-weight: 400; src: url("/fonts/Torus-Regular.otf") format("opentype"); font-display: swap; }
+@font-face { font-family: "Torus"; font-weight: 600; src: url("/fonts/Torus-SemiBold.otf") format("opentype"); font-display: swap; }
+@font-face { font-family: "Torus"; font-weight: 700; src: url("/fonts/Torus-SemiBold.otf") format("opentype"); font-display: swap; }
+@font-face { font-family: "Torus"; font-weight: 800; src: url("/fonts/Torus-Bold.otf") format("opentype"); font-display: swap; }
+@font-face { font-family: "Torus"; font-weight: 900; src: url("/fonts/Torus-Heavy.otf") format("opentype"); font-display: swap; }
+@font-face { font-family: "Venera"; font-weight: 500; src: url("/fonts/Venera-500.otf") format("opentype"); font-display: swap; }
 @font-face {
   font-family: "osu-extra";
   src: url("/fonts/extra.woff2") format("woff2"), url("/fonts/extra.woff") format("woff"), url("/fonts/extra.ttf") format("truetype");
+  font-display: swap;
 }
 .mode-icon { font-family: "osu-extra"; -webkit-font-smoothing: antialiased; }
 
