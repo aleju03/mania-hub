@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { getRankings, getUserScoresBestWindow } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { formatNumber, formatAccuracy, formatTimeAgo } from "../lib/format";
-import { calculateApproxPpGainMap, getBeatmapUrl, getDisplayedTotalScore, getModAcronyms, getScoreTimeMs, getScoreTimestamp, scoreHasReplay } from "../lib/score";
+import { calculateApproxPpGainMap, getBeatmapUrl, getDisplayedTotalScore, getModAcronyms, getScoreTimeMs, getScoreTimestamp, getScoreUrl, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
@@ -486,6 +486,18 @@ function PopOffsPage() {
                                 <StatCell label="Combo %" value={`${Math.round((p.score.max_combo / p.score.beatmap.max_combo) * 100)}%`} />
                               )}
                             </div>
+                            {getScoreUrl(p.score) && (
+                              <div className="mt-2 text-right">
+                                <a
+                                  href={getScoreUrl(p.score)!}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-[10px] text-osu-f1 hover:text-osu-pink-light underline-offset-2 hover:underline transition-colors"
+                                >
+                                  View on osu! →
+                                </a>
+                              </div>
+                            )}
                           </div>
                         </motion.div>
                       )}

@@ -29,6 +29,10 @@ import type { OsuScore, OsuUser } from "../../lib/types";
 
 const userRequestCache = new Map<string, Promise<OsuUser>>();
 const userScoresRequestCache = new Map<number, Promise<[OsuScore[], OsuScore[]]>>();
+const userDataCache = new Map<string, { data: OsuUser; expiresAt: number }>();
+const userScoresDataCache = new Map<number, { data: [OsuScore[], OsuScore[]]; expiresAt: number }>();
+const USER_CLIENT_CACHE_TTL = 2 * 60 * 1000;
+const USER_SCORES_CLIENT_CACHE_TTL = 60 * 1000;
 const INITIAL_SCORE_BATCH_SIZE = 5;
 const SHOW_MORE_BATCH_SIZE = 50;
 type ScoreTab = "best" | "recent";
@@ -48,27 +52,61 @@ function matchesKeyFilter(score: OsuScore, keyFilter: KeyFilter): boolean {
 }
 
 function loadUserCached(username: string): Promise<OsuUser> {
+  const now = Date.now();
+  const cachedData = userDataCache.get(username);
+  if (cachedData && cachedData.expiresAt > now) {
+    return Promise.resolve(cachedData.data);
+  }
+  if (cachedData) {
+    userDataCache.delete(username);
+  }
+
   const cached = userRequestCache.get(username);
   if (cached) return cached;
 
-  const request = getUser({ data: { key: username } }).finally(() => {
-    userRequestCache.delete(username);
-  });
+  const request = getUser({ data: { key: username } })
+    .then((user) => {
+      userDataCache.set(username, {
+        data: user,
+        expiresAt: Date.now() + USER_CLIENT_CACHE_TTL,
+      });
+      return user;
+    })
+    .finally(() => {
+      userRequestCache.delete(username);
+    });
 
   userRequestCache.set(username, request);
   return request;
 }
 
 function loadUserScoresCached(userId: number): Promise<[OsuScore[], OsuScore[]]> {
+  const now = Date.now();
+  const cachedData = userScoresDataCache.get(userId);
+  if (cachedData && cachedData.expiresAt > now) {
+    return Promise.resolve(cachedData.data);
+  }
+  if (cachedData) {
+    userScoresDataCache.delete(userId);
+  }
+
   const cached = userScoresRequestCache.get(userId);
   if (cached) return cached;
 
   const request = Promise.all([
     getUserScoresBest({ data: { userId, limit: INITIAL_SCORE_BATCH_SIZE, offset: 0 } }),
     getUserScoresRecent({ data: { userId, limit: INITIAL_SCORE_BATCH_SIZE, offset: 0, include_fails: true } }),
-  ]).finally(() => {
-    userScoresRequestCache.delete(userId);
-  });
+  ])
+    .then((scores) => {
+      userScoresDataCache.set(userId, {
+        data: scores,
+        expiresAt: Date.now() + USER_SCORES_CLIENT_CACHE_TTL,
+      });
+      return scores;
+    })
+    .finally(() => {
+      userScoresRequestCache.delete(userId);
+    });
 
   userScoresRequestCache.set(userId, request);
   return request;
@@ -351,6 +389,15 @@ function PlayerPage() {
                 >
                   {user.country?.name || user.country_code}
                 </span>
+                <a
+                  href={`https://osu.ppy.sh/users/${user.id}/mania`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-2 py-0.5 rounded-full bg-osu-pink/20 text-[11px] font-semibold text-osu-pink-light hover:bg-osu-pink/35 transition-colors duration-150"
+                >
+                  osu! profile
+                  <svg className="inline w-2.5 h-2.5 ml-0.5 -mt-px" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 1.5h7v7" /><path d="M10.5 1.5 1.5 10.5" /></svg>
+                </a>
                 {user.is_supporter && (
                   <span className="inline-flex items-center justify-center h-5 px-1.5 rounded-full bg-osu-pink" title="osu! Supporter">
                     <img src="/images/icons/supporter.svg" alt="Supporter" className="w-3 h-3 brightness-0 invert" />

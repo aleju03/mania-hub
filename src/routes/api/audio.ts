@@ -1,7 +1,35 @@
 import JSZip from "jszip";
 import { createFileRoute } from "@tanstack/react-router";
 
-const audioCache = new Map<string, Promise<{ buffer: Buffer; mimeType: string }>>();
+const AUDIO_CACHE_TTL = 15 * 60 * 1000;
+const AUDIO_CACHE_MAX_ENTRIES = 12;
+
+type AudioCacheValue = { buffer: Buffer; mimeType: string };
+type AudioCacheEntry = {
+  expiresAt: number;
+  lastAccessedAt: number;
+  promise: Promise<AudioCacheValue>;
+};
+
+const audioCache = new Map<string, AudioCacheEntry>();
+
+function pruneAudioCache(now = Date.now()): void {
+  for (const [key, entry] of audioCache.entries()) {
+    if (entry.expiresAt <= now) {
+      audioCache.delete(key);
+    }
+  }
+
+  if (audioCache.size <= AUDIO_CACHE_MAX_ENTRIES) return;
+
+  const entriesToRemove = [...audioCache.entries()]
+    .sort(([, a], [, b]) => a.lastAccessedAt - b.lastAccessedAt)
+    .slice(0, audioCache.size - AUDIO_CACHE_MAX_ENTRIES);
+
+  entriesToRemove.forEach(([key]) => {
+    audioCache.delete(key);
+  });
+}
 
 function getMimeType(filename: string): string {
   const lower = filename.toLowerCase();
@@ -35,10 +63,17 @@ function parseRangeHeader(rangeHeader: string | null, size: number): { start: nu
   return { start, end: Math.min(end, size - 1) };
 }
 
-async function extractAudioFromArchive(beatmapsetId: string, filename: string): Promise<{ buffer: Buffer; mimeType: string }> {
+async function extractAudioFromArchive(beatmapsetId: string, filename: string): Promise<AudioCacheValue> {
   const cacheKey = `${beatmapsetId}:${filename}`;
+  const now = Date.now();
   const cached = audioCache.get(cacheKey);
-  if (cached) return cached;
+  if (cached && cached.expiresAt > now) {
+    cached.lastAccessedAt = now;
+    return cached.promise;
+  }
+  if (cached) {
+    audioCache.delete(cacheKey);
+  }
 
   const request = (async () => {
     const archiveUrl = `https://catboy.best/d/${encodeURIComponent(beatmapsetId)}`;
@@ -58,7 +93,12 @@ async function extractAudioFromArchive(beatmapsetId: string, filename: string): 
     return { buffer: extracted, mimeType: getMimeType(filename) };
   })();
 
-  audioCache.set(cacheKey, request);
+  audioCache.set(cacheKey, {
+    expiresAt: now + AUDIO_CACHE_TTL,
+    lastAccessedAt: now,
+    promise: request,
+  });
+  pruneAudioCache(now);
   request.catch(() => {
     audioCache.delete(cacheKey);
   });

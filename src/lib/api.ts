@@ -4,74 +4,134 @@ import { db, ensureCacheSchema, hasDb } from "./db";
 let tokenCache: { access_token: string; expires_at: number } | null = null;
 const OSU_FETCH_RETRIES = 2;
 
-
 // Simple response cache (5 min TTL)
-const responseCache = new Map<string, { data: unknown; expires: number }>();
+const responseCache = new Map<string, { value: unknown; expires: number }>();
 const CACHE_TTL = 5 * 60 * 1000;
+const CACHE_ENVELOPE_MARKER = "__mania_hub_cache_v1";
+const warnedCacheIssues = new Set<string>();
 
-export function getCached<T>(key: string): T | null {
-  const entry = responseCache.get(key);
-  if (entry && Date.now() < entry.expires) return entry.data as T;
-  if (entry) responseCache.delete(key);
-  return null;
+export type CacheLookup<T> =
+  | { hit: true; value: T }
+  | { hit: false };
+
+function warnCacheIssue(action: string, key: string, error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  const warningKey = `${action}:${key}:${message}`;
+  if (warnedCacheIssues.has(warningKey)) return;
+  warnedCacheIssues.add(warningKey);
+  console.warn(`[cache] ${action} failed for "${key}": ${message}`);
 }
 
-export function setCache(key: string, data: unknown): void {
-  responseCache.set(key, { data, expires: Date.now() + CACHE_TTL });
+function encodeCacheValue(data: unknown): string {
+  return JSON.stringify({
+    [CACHE_ENVELOPE_MARKER]: true,
+    value: data,
+  });
+}
+
+function decodeCacheValue(raw: string): unknown {
+  const parsed = JSON.parse(raw) as unknown;
+  if (
+    parsed &&
+    typeof parsed === "object" &&
+    !Array.isArray(parsed) &&
+    CACHE_ENVELOPE_MARKER in parsed &&
+    "value" in parsed
+  ) {
+    return (parsed as { value: unknown }).value;
+  }
+
+  return parsed;
+}
+
+export function getCachedEntry<T>(key: string): CacheLookup<T> {
+  const entry = responseCache.get(key);
+  if (entry && Date.now() < entry.expires) {
+    return { hit: true, value: entry.value as T };
+  }
+  if (entry) responseCache.delete(key);
+  return { hit: false };
+}
+
+export function getCached<T>(key: string): T | null {
+  const entry = getCachedEntry<T>(key);
+  return entry.hit ? entry.value : null;
+}
+
+export function setCache(key: string, data: unknown, ttlMs = CACHE_TTL): void {
+  responseCache.set(key, { value: data, expires: Date.now() + ttlMs });
+}
+
+export async function getPersistentCacheEntry<T>(key: string): Promise<CacheLookup<T>> {
+  const memoryCached = getCachedEntry<T>(key);
+  if (memoryCached.hit) return memoryCached;
+  if (!hasDb() || !db) return { hit: false };
+
+  try {
+    await ensureCacheSchema();
+
+    const result = await db.execute({
+      sql: `
+        SELECT cache_value, expires_at
+        FROM cache_entries
+        WHERE cache_key = ?
+        LIMIT 1
+      `,
+      args: [key],
+    });
+
+    const row = result.rows[0];
+    if (!row) return { hit: false };
+
+    const expiresAt = Number(row.expires_at);
+    if (Date.now() >= expiresAt) {
+      try {
+        await db.execute({
+          sql: `DELETE FROM cache_entries WHERE cache_key = ?`,
+          args: [key],
+        });
+      } catch (error) {
+        warnCacheIssue("delete expired entry", key, error);
+      }
+      return { hit: false };
+    }
+
+    const parsed = decodeCacheValue(String(row.cache_value)) as T;
+    responseCache.set(key, { value: parsed, expires: expiresAt });
+    return { hit: true, value: parsed };
+  } catch (error) {
+    warnCacheIssue("persistent read", key, error);
+    return { hit: false };
+  }
 }
 
 export async function getPersistentCached<T>(key: string): Promise<T | null> {
-  const memoryCached = getCached<T>(key);
-  if (memoryCached !== null) return memoryCached;
-  if (!hasDb() || !db) return null;
-
-  await ensureCacheSchema();
-
-  const result = await db.execute({
-    sql: `
-      SELECT cache_value, expires_at
-      FROM cache_entries
-      WHERE cache_key = ?
-      LIMIT 1
-    `,
-    args: [key],
-  });
-
-  const row = result.rows[0];
-  if (!row) return null;
-
-  const expiresAt = Number(row.expires_at);
-  if (Date.now() >= expiresAt) {
-    await db.execute({
-      sql: `DELETE FROM cache_entries WHERE cache_key = ?`,
-      args: [key],
-    });
-    return null;
-  }
-
-  const parsed = JSON.parse(String(row.cache_value)) as T;
-  responseCache.set(key, { data: parsed, expires: expiresAt });
-  return parsed;
+  const cached = await getPersistentCacheEntry<T>(key);
+  return cached.hit ? cached.value : null;
 }
 
 export async function setPersistentCache(key: string, data: unknown, ttlMs = CACHE_TTL): Promise<void> {
   const expiresAt = Date.now() + ttlMs;
-  responseCache.set(key, { data, expires: expiresAt });
+  responseCache.set(key, { value: data, expires: expiresAt });
   if (!hasDb() || !db) return;
 
-  await ensureCacheSchema();
+  try {
+    await ensureCacheSchema();
 
-  await db.execute({
-    sql: `
-      INSERT INTO cache_entries (cache_key, cache_value, expires_at, updated_at)
-      VALUES (?, ?, ?, ?)
-      ON CONFLICT(cache_key) DO UPDATE SET
-        cache_value = excluded.cache_value,
-        expires_at = excluded.expires_at,
-        updated_at = excluded.updated_at
-    `,
-    args: [key, JSON.stringify(data), expiresAt, Date.now()],
-  });
+    await db.execute({
+      sql: `
+        INSERT INTO cache_entries (cache_key, cache_value, expires_at, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(cache_key) DO UPDATE SET
+          cache_value = excluded.cache_value,
+          expires_at = excluded.expires_at,
+          updated_at = excluded.updated_at
+      `,
+      args: [key, encodeCacheValue(data), expiresAt, Date.now()],
+    });
+  } catch (error) {
+    warnCacheIssue("persistent write", key, error);
+  }
 }
 
 function sleep(ms: number): Promise<void> {
@@ -138,6 +198,7 @@ export async function osuFetch<T = unknown>(
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
         "Content-Type": "application/json",
+        "x-api-version": "20220705",
       },
     });
 

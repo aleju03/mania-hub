@@ -108,7 +108,7 @@ export class ManiaReplayRenderer {
   private backgroundImage: HTMLImageElement | null = null;
   private backgroundDim = 80;
   private od = 8;
-  private showInputOverlay = true;
+  private showInputOverlay = false;
   private skin: ManiaSkin | null = null;
 
   // Receptor flash state
@@ -154,7 +154,7 @@ export class ManiaReplayRenderer {
     this.backgroundImage = options?.backgroundImage ?? null;
     this.backgroundDim = options?.backgroundDim ?? 80;
     this.od = options?.od ?? 8;
-    this.showInputOverlay = options?.showInputOverlay ?? true;
+    this.showInputOverlay = options?.showInputOverlay ?? false;
     this.receptorFlashTimestamps = new Array(keyCount).fill(0);
 
     const frameDuration = frames.length > 0 ? frames[frames.length - 1].time : 0;
