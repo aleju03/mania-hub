@@ -235,11 +235,11 @@ function HomePage() {
           </div>
         </section>
 
-        {/* Recent Pop-offs - featured */}
+        {/* Recent Top Plays - featured */}
         <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden lg:col-span-2">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Recent Pop-offs</h2>
-            <Link to="/popoffs" className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Recent Top Plays</h2>
+            <Link to="/top-plays" className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
           </div>
           {loadingPopoffs ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-osu-b3/15">
@@ -275,7 +275,7 @@ function HomePage() {
               ))}
             </div>
           ) : (
-            <div className="px-4 py-6 text-center text-xs text-osu-f1">No recent pop-offs</div>
+            <div className="px-4 py-6 text-center text-xs text-osu-f1">No recent top plays</div>
           )}
         </section>
 
@@ -283,7 +283,7 @@ function HomePage() {
         <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden lg:col-span-2">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Recent Scores</h2>
-            <Link to="/scores" className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
+            <Link to="/tracker" className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
           </div>
           <div className="divide-y divide-osu-b3/15">
             {loadingScores ? (

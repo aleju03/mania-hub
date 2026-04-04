@@ -95,9 +95,9 @@ export function getScoreIdentity(score: OsuScore): string {
 
 export function getDisplayedTotalScore(score: OsuScore): number | null {
   const value =
-    score.classic_total_score ??
-    score.total_score ??
-    score.legacy_total_score ??
+    score.classic_total_score ||
+    score.total_score ||
+    score.legacy_total_score ||
     score.score;
 
   return value && value > 0 ? value : null;

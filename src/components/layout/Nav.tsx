@@ -7,9 +7,10 @@ import { useAppStore } from "../../store";
 const links = [
   { id: "home", to: "/", label: "home" },
   { id: "rankings", to: "/rankings", label: "rankings" },
-  { id: "scores", to: "/scores", label: "tracker" },
-  { id: "popoffs", to: "/popoffs", label: "pop-offs" },
+  { id: "tracker", to: "/tracker", label: "tracker" },
+  { id: "top-plays", to: "/top-plays", label: "top plays" },
   { id: "replay", to: "/replay", label: "replay" },
+  { id: "snipes", to: "/snipes", label: "snipes" },
 ] as const;
 
 export function Nav() {
@@ -96,6 +97,7 @@ export function Nav() {
               }`}
             >
               {l.label}
+              {l.id === "snipes" && <img src="/images/icons/sniper.webp" alt="" className="inline w-4 h-4 ml-1 -mt-0.5" />}
               {current?.id === l.id && (
                 <motion.div
                   layoutId="nav-bar"

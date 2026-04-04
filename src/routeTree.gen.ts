@@ -9,17 +9,28 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as ScoresRouteImport } from './routes/scores'
+import { Route as TrackerRouteImport } from './routes/tracker'
+import { Route as TopPlaysRouteImport } from './routes/top-plays'
+import { Route as SnipesRouteImport } from './routes/snipes'
 import { Route as ReplayRouteImport } from './routes/replay'
 import { Route as RankingsRouteImport } from './routes/rankings'
-import { Route as PopoffsRouteImport } from './routes/popoffs'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
 import { Route as ApiAudioRouteImport } from './routes/api/audio'
 
-const ScoresRoute = ScoresRouteImport.update({
-  id: '/scores',
-  path: '/scores',
+const TrackerRoute = TrackerRouteImport.update({
+  id: '/tracker',
+  path: '/tracker',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TopPlaysRoute = TopPlaysRouteImport.update({
+  id: '/top-plays',
+  path: '/top-plays',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SnipesRoute = SnipesRouteImport.update({
+  id: '/snipes',
+  path: '/snipes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReplayRoute = ReplayRouteImport.update({
@@ -30,11 +41,6 @@ const ReplayRoute = ReplayRouteImport.update({
 const RankingsRoute = RankingsRouteImport.update({
   id: '/rankings',
   path: '/rankings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PopoffsRoute = PopoffsRouteImport.update({
-  id: '/popoffs',
-  path: '/popoffs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -55,29 +61,32 @@ const ApiAudioRoute = ApiAudioRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/popoffs': typeof PopoffsRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
-  '/scores': typeof ScoresRoute
+  '/snipes': typeof SnipesRoute
+  '/top-plays': typeof TopPlaysRoute
+  '/tracker': typeof TrackerRoute
   '/api/audio': typeof ApiAudioRoute
   '/player/$username': typeof PlayerUsernameRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/popoffs': typeof PopoffsRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
-  '/scores': typeof ScoresRoute
+  '/snipes': typeof SnipesRoute
+  '/top-plays': typeof TopPlaysRoute
+  '/tracker': typeof TrackerRoute
   '/api/audio': typeof ApiAudioRoute
   '/player/$username': typeof PlayerUsernameRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/popoffs': typeof PopoffsRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
-  '/scores': typeof ScoresRoute
+  '/snipes': typeof SnipesRoute
+  '/top-plays': typeof TopPlaysRoute
+  '/tracker': typeof TrackerRoute
   '/api/audio': typeof ApiAudioRoute
   '/player/$username': typeof PlayerUsernameRoute
 }
@@ -85,49 +94,67 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/popoffs'
     | '/rankings'
     | '/replay'
-    | '/scores'
+    | '/snipes'
+    | '/top-plays'
+    | '/tracker'
     | '/api/audio'
     | '/player/$username'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/popoffs'
     | '/rankings'
     | '/replay'
-    | '/scores'
+    | '/snipes'
+    | '/top-plays'
+    | '/tracker'
     | '/api/audio'
     | '/player/$username'
   id:
     | '__root__'
     | '/'
-    | '/popoffs'
     | '/rankings'
     | '/replay'
-    | '/scores'
+    | '/snipes'
+    | '/top-plays'
+    | '/tracker'
     | '/api/audio'
     | '/player/$username'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  PopoffsRoute: typeof PopoffsRoute
   RankingsRoute: typeof RankingsRoute
   ReplayRoute: typeof ReplayRoute
-  ScoresRoute: typeof ScoresRoute
+  SnipesRoute: typeof SnipesRoute
+  TopPlaysRoute: typeof TopPlaysRoute
+  TrackerRoute: typeof TrackerRoute
   ApiAudioRoute: typeof ApiAudioRoute
   PlayerUsernameRoute: typeof PlayerUsernameRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/scores': {
-      id: '/scores'
-      path: '/scores'
-      fullPath: '/scores'
-      preLoaderRoute: typeof ScoresRouteImport
+    '/tracker': {
+      id: '/tracker'
+      path: '/tracker'
+      fullPath: '/tracker'
+      preLoaderRoute: typeof TrackerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/top-plays': {
+      id: '/top-plays'
+      path: '/top-plays'
+      fullPath: '/top-plays'
+      preLoaderRoute: typeof TopPlaysRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/snipes': {
+      id: '/snipes'
+      path: '/snipes'
+      fullPath: '/snipes'
+      preLoaderRoute: typeof SnipesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/replay': {
@@ -142,13 +169,6 @@ declare module '@tanstack/react-router' {
       path: '/rankings'
       fullPath: '/rankings'
       preLoaderRoute: typeof RankingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/popoffs': {
-      id: '/popoffs'
-      path: '/popoffs'
-      fullPath: '/popoffs'
-      preLoaderRoute: typeof PopoffsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -177,10 +197,11 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  PopoffsRoute: PopoffsRoute,
   RankingsRoute: RankingsRoute,
   ReplayRoute: ReplayRoute,
-  ScoresRoute: ScoresRoute,
+  SnipesRoute: SnipesRoute,
+  TopPlaysRoute: TopPlaysRoute,
+  TrackerRoute: TrackerRoute,
   ApiAudioRoute: ApiAudioRoute,
   PlayerUsernameRoute: PlayerUsernameRoute,
 }
