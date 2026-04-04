@@ -1,8 +1,4 @@
-import { randomUUID } from "node:crypto";
-import { unlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { spawn } from "node:child_process";
+import JSZip from "jszip";
 import { createFileRoute } from "@tanstack/react-router";
 
 const audioCache = new Map<string, Promise<{ buffer: Buffer; mimeType: string }>>();
@@ -51,43 +47,15 @@ async function extractAudioFromArchive(beatmapsetId: string, filename: string): 
       throw new Error(`Archive fetch failed (${archiveResponse.status})`);
     }
 
-    const archiveBuffer = Buffer.from(await archiveResponse.arrayBuffer());
-    const archivePath = join(tmpdir(), `mania-hub-audio-${randomUUID()}.osz`);
-
-    await writeFile(archivePath, archiveBuffer);
-
-    try {
-      const extracted = await new Promise<Buffer>((resolve, reject) => {
-        const unzip = spawn("unzip", ["-p", archivePath, filename]);
-        const chunks: Buffer[] = [];
-        let stderr = "";
-
-        unzip.stdout.on("data", (chunk: Buffer) => {
-          chunks.push(chunk);
-        });
-
-        unzip.stderr.on("data", (chunk: Buffer) => {
-          stderr += chunk.toString();
-        });
-
-        unzip.on("error", reject);
-        unzip.on("close", (code) => {
-          if (code === 0 && chunks.length > 0) {
-            resolve(Buffer.concat(chunks));
-            return;
-          }
-
-          reject(new Error(stderr || `unzip exited with code ${code}`));
-        });
-      });
-
-      return {
-        buffer: extracted,
-        mimeType: getMimeType(filename),
-      };
-    } finally {
-      await unlink(archivePath).catch(() => undefined);
+    const archiveBuffer = await archiveResponse.arrayBuffer();
+    const zip = await JSZip.loadAsync(archiveBuffer);
+    const file = zip.file(filename);
+    if (!file) {
+      throw new Error(`Audio file "${filename}" not found in archive`);
     }
+
+    const extracted = Buffer.from(await file.async("arraybuffer"));
+    return { buffer: extracted, mimeType: getMimeType(filename) };
   })();
 
   audioCache.set(cacheKey, request);
