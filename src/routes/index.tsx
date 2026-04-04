@@ -171,16 +171,16 @@ function HomePage() {
       </div>
 
       {/* Hero */}
-      <section className="relative py-14 px-5">
+      <section className="relative py-8 sm:py-14 px-4 sm:px-5">
         <div className="max-w-[1200px] mx-auto text-center">
           <div className="flex items-center justify-center gap-3">
-            <span className="mode-icon text-osu-pink text-5xl">{"\ue802"}</span>
-            <h1 className="text-5xl font-black text-white tracking-tight" style={{ fontFamily: "Torus" }}>mania <span className="text-osu-pink">CR</span></h1>
+            <span className="mode-icon text-osu-pink text-3xl sm:text-5xl">{"\ue802"}</span>
+            <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight" style={{ fontFamily: "Torus" }}>mania <span className="text-osu-pink">CR</span></h1>
           </div>
         </div>
       </section>
 
-      <div className="relative max-w-[1200px] mx-auto px-5 pb-8 grid grid-cols-1 lg:grid-cols-[1fr_1fr_1fr] gap-4">
+      <div className="relative max-w-[1200px] mx-auto px-4 sm:px-5 pb-8 grid grid-cols-1 lg:grid-cols-[1fr_1fr_1fr] gap-4">
         {/* CR Top 5 */}
         <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden lg:row-span-2">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">

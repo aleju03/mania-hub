@@ -194,8 +194,72 @@ function RankingsPage() {
       />
 
       <div className="bg-osu-b5">
-        <div className="max-w-[1200px] mx-auto px-5 py-5">
-          <div className="rounded-xl overflow-hidden border border-osu-b3/30">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5">
+          {/* Mobile card layout */}
+          <div className="sm:hidden space-y-2">
+            {error ? (
+              <div className="px-4 py-8 text-center text-sm text-osu-f1">{error}</div>
+            ) : pageData ? (
+              sortedRankings.map(({ entry, originalRank }, i: number) => {
+                const history = rankHistories[entry.user.id];
+                const globalChange = getGlobalRankChange(history);
+
+                return (
+                  <motion.div
+                    key={entry.user.id}
+                    initial={{ opacity: 0, x: -6 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.12, delay: i * 0.015 }}
+                    className="rounded-lg bg-osu-b4/50 p-3 cursor-pointer hover:bg-osu-b4 transition-colors"
+                    onClick={() => navigate({ to: "/player/$username", params: { username: entry.user.username } })}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-bold text-osu-f1 w-8">#{originalRank}</span>
+                      <Avatar url={entry.user.avatar_url} size={36} />
+                      <div className="flex-1 min-w-0">
+                        <UsernameText
+                          username={entry.user.username}
+                          avatarUrl={entry.user.avatar_url}
+                          className="text-sm font-semibold"
+                        />
+                        <div className="flex items-center gap-3 mt-0.5 text-[11px] text-osu-f1">
+                          <span>{formatAccuracy(entry.hit_accuracy / 100)}</span>
+                          {history && (
+                            <div className="flex items-center gap-1">
+                              <MiniSparkline data={history} />
+                              {globalChange !== null && globalChange !== 0 && (
+                                <span className={`font-semibold ${globalChange > 0 ? "text-osu-green" : "text-osu-red"}`}>
+                                  {globalChange > 0 ? `+${formatNumber(globalChange)}` : formatNumber(globalChange)}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-sm font-bold text-right flex-shrink-0">{formatNumber(Math.round(entry.pp))}pp</span>
+                    </div>
+                  </motion.div>
+                );
+              })
+            ) : (
+              Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="space-y-2 rounded-lg bg-osu-b4/50 p-3">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="w-8 h-4" />
+                    <Skeleton className="w-9 h-9 rounded-full" />
+                    <Skeleton className="h-4 flex-1" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Skeleton className="h-3 flex-1" />
+                    <Skeleton className="h-3 w-14" />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden sm:block rounded-xl overflow-hidden border border-osu-b3/30">
             <table className="w-full">
               <thead>
                 <tr className="bg-osu-b4 text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">

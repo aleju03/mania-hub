@@ -363,7 +363,7 @@ function PlayerPage() {
       </AnimatePresence>
 
       {/* Cover + Avatar */}
-      <div className="relative h-[280px] overflow-hidden bg-osu-b4">
+      <div className="relative h-[220px] sm:h-[280px] overflow-hidden bg-osu-b4">
         <img
           src={user.cover?.url || user.cover_url}
           alt=""
@@ -372,17 +372,17 @@ function PlayerPage() {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-osu-b5" />
         <div className="absolute bottom-0 left-0 right-0">
-          <div className="max-w-[1200px] mx-auto px-5 pb-5 flex items-end gap-5">
+          <div className="max-w-[1200px] mx-auto px-4 sm:px-5 pb-5 flex items-end gap-3 sm:gap-5">
             <button
               type="button"
               onClick={() => setAvatarOpen(true)}
-              className="w-[110px] h-[110px] rounded-2xl overflow-hidden border-2 border-osu-b3/60 shadow-[0_4px_20px_rgba(0,0,0,0.5)] translate-y-4 flex-shrink-0 cursor-pointer hover:border-osu-l2/60 transition-colors duration-150"
+              className="w-[80px] h-[80px] sm:w-[110px] sm:h-[110px] rounded-2xl overflow-hidden border-2 border-osu-b3/60 shadow-[0_4px_20px_rgba(0,0,0,0.5)] translate-y-4 flex-shrink-0 cursor-pointer hover:border-osu-l2/60 transition-colors duration-150"
             >
               <Avatar url={user.avatar_url} size={110} shape="square" />
             </button>
             <div className="pb-1 flex-1 min-w-0">
               <h1 className="text-3xl font-bold text-white truncate">
-                <UsernameText username={user.username} avatarUrl={user.avatar_url} className="text-[34px] font-black text-white" />
+                <UsernameText username={user.username} avatarUrl={user.avatar_url} className="text-2xl sm:text-[34px] font-black text-white" />
               </h1>
               <div className="flex items-center gap-3 mt-1">
                 <span
@@ -454,7 +454,7 @@ function PlayerPage() {
                 <span className="text-xs text-osu-f1 font-medium">{formatNumber(count)}</span>
               </div>
             ))}
-            <div className="ml-auto text-[11px] text-osu-f1 space-x-4">
+            <div className="w-full sm:w-auto sm:ml-auto text-[11px] text-osu-f1 space-x-4">
               <span>
                 Joined <strong className="text-osu-l2">{formatDate(user.join_date)}</strong>
               </span>
@@ -731,7 +731,7 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
           <span className="text-sm font-medium text-white truncate">
             {score.beatmapset?.title || "Unknown"}
           </span>
-          <span className="text-[10px] text-osu-f1 truncate">
+          <span className="text-[10px] text-osu-f1 truncate hidden sm:inline">
             [{score.beatmap?.version}]
           </span>
           {keys && (
@@ -743,8 +743,20 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
         <span className="text-[10px] text-osu-f1">
           {score.beatmapset?.artist} &middot; {formatTimeAgo(getScoreTimestamp(score))}
         </span>
+        {/* Mobile-only metadata row */}
+        <div className="flex items-center gap-2 mt-0.5 sm:hidden">
+          <div className="flex gap-0.5">
+            {getModAcronyms(score.mods).map((acronym) => (
+              <ModBadge key={acronym} mod={acronym} />
+            ))}
+          </div>
+          <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>
+          <span className="text-xs text-osu-f1">{formatNumber(score.max_combo)}x</span>
+          <span className="text-sm font-bold ml-auto">{formatPP(score.pp)}</span>
+        </div>
       </div>
-      <div className="flex items-center gap-3 flex-shrink-0">
+      {/* Desktop metadata */}
+      <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
         <div className="flex gap-0.5 justify-end w-24">
           {getModAcronyms(score.mods).map((acronym) => (
             <ModBadge key={acronym} mod={acronym} />
@@ -761,9 +773,12 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
   );
 
   return (
-    <div className="relative group/score flex items-center gap-3 py-2.5 px-3 rounded-lg bg-osu-b4/50 hover:bg-osu-b4 transition-colors duration-[120ms]">
+    <div className="relative group/score flex items-center gap-2 sm:gap-3 py-2.5 px-3 rounded-lg bg-osu-b4/50 hover:bg-osu-b4 transition-colors duration-[120ms]">
+      {/* Mobile inline position number */}
+      <span className="sm:hidden text-xs text-osu-f1 font-bold flex-shrink-0">{position}.</span>
+      {/* Desktop hover position number */}
       <div
-        className="pointer-events-none absolute -left-14 top-1/2 -translate-y-1/2 w-10 text-right text-white/90 opacity-0 translate-x-2 transition-all duration-150 ease-out group-hover/score:opacity-100 group-hover/score:translate-x-0"
+        className="pointer-events-none absolute -left-14 top-1/2 -translate-y-1/2 w-10 text-right text-white/90 opacity-0 translate-x-2 transition-all duration-150 ease-out group-hover/score:opacity-100 group-hover/score:translate-x-0 hidden sm:block"
         style={{ fontFamily: "Venera" }}
       >
         <span className="block text-[24px] leading-none">{position}</span>
@@ -773,12 +788,12 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
           href={linkUrl}
           target="_blank"
           rel="noreferrer"
-          className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
+          className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 cursor-pointer"
         >
           {content}
         </a>
       ) : (
-        <div className="flex items-center gap-3 flex-1 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
           {content}
         </div>
       )}
@@ -786,7 +801,7 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
         <Link
           to="/replay"
           search={{ scoreId: score.id, mode: "mania", beatmapsetId: score.beatmapset?.id }}
-          className="px-2.5 py-1.5 rounded-md bg-osu-pink/15 text-[10px] font-semibold text-osu-pink-light border border-osu-pink/20 hover:bg-osu-pink/25 transition-colors flex-shrink-0"
+          className="px-2.5 py-1.5 rounded-md bg-osu-pink/15 text-[10px] font-semibold text-osu-pink-light border border-osu-pink/20 hover:bg-osu-pink/25 transition-colors flex-shrink-0 hidden sm:block"
         >
           Replay
         </Link>
