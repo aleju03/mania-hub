@@ -21,6 +21,7 @@ interface ReplaySearch {
   scoreId?: number;
   mode?: string;
   beatmapsetId?: number;
+  t?: number; // timestamp in seconds to seek to on load
 }
 
 interface ServerReplay {
@@ -47,11 +48,12 @@ export const Route = createFileRoute("/replay")({
     scoreId: Number(s.scoreId) || undefined,
     mode: (s.mode as string) || "mania",
     beatmapsetId: Number(s.beatmapsetId) || undefined,
+    t: Number(s.t) || undefined,
   }),
 });
 
 function ReplayPage() {
-  const { scoreId, mode, beatmapsetId } = Route.useSearch();
+  const { scoreId, mode, beatmapsetId, t: initialTime } = Route.useSearch();
   const navigate = useNavigate();
   const [replay, setReplay] = useState<ServerReplay | null>(null);
   const [beatmap, setBeatmap] = useState<ManiaBeatmap | null>(null);
@@ -130,7 +132,7 @@ function ReplayPage() {
                   setReplay(null); setBeatmap(null); setScoreInfo(null);
                   navigate({ to: "/replay", search: {} });
                 }} />
-                <ReplayViewer replay={replay} beatmap={beatmap} scoreInfo={scoreInfo} fallbackBeatmapsetId={beatmapsetId} />
+                <ReplayViewer replay={replay} beatmap={beatmap} scoreInfo={scoreInfo} fallbackBeatmapsetId={beatmapsetId} initialTime={initialTime} />
               </motion.div>
             ) : (
               <motion.div key="browse" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
@@ -228,11 +230,13 @@ function ReplayViewer({
   beatmap,
   scoreInfo,
   fallbackBeatmapsetId,
+  initialTime,
 }: {
   replay: ServerReplay;
   beatmap: ManiaBeatmap | null;
   scoreInfo: OsuScore | null;
   fallbackBeatmapsetId?: number;
+  initialTime?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<ManiaReplayRenderer | null>(null);
@@ -260,6 +264,9 @@ function ReplayViewer({
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
   const [skin, setSkin] = useState<ManiaSkin | null>(null);
   const [skinLoading, setSkinLoading] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [sharePos, setSharePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [copied, setCopied] = useState(false);
   const skinFileRef = useRef<HTMLInputElement>(null);
   const progressInterval = useRef<ReturnType<typeof setInterval>>(undefined);
   const shouldResumeAudioRef = useRef(false);
@@ -317,20 +324,18 @@ function ReplayViewer({
         backgroundDim: bgDim,
         od: beatmap?.od,
         showInputOverlay,
-        realJudgments: {
-          countGeki: replay.header.countGeki,
-          count300: replay.header.count300,
-          countKatu: replay.header.countKatu,
-          count100: replay.header.count100,
-          count50: replay.header.count50,
-          countMiss: replay.header.countMiss,
-        },
         mods: modAcronyms,
       },
     );
     rendererRef.current = renderer;
     // Apply skin if already loaded
     if (skin) renderer.setSkin(skin);
+    // Seek to initial timestamp from URL (t param, in seconds)
+    if (initialTime != null && initialTime > 0) {
+      const gameTimeMs = initialTime * 1000 * modRate;
+      renderer.seek(gameTimeMs);
+      setProgress(gameTimeMs / renderer.duration);
+    }
     const handleResize = () => renderer.resize();
     window.addEventListener("resize", handleResize);
     return () => { renderer.destroy(); window.removeEventListener("resize", handleResize); };
@@ -511,7 +516,7 @@ function ReplayViewer({
   };
 
   const formatTime = (ratio: number) => {
-    const ms = ratio * (rendererRef.current?.duration ?? 0);
+    const ms = ratio * (rendererRef.current?.displayDuration ?? 0);
     return `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, "0")}`;
   };
 
@@ -548,12 +553,57 @@ function ReplayViewer({
         )}
 
         {/* Progress bar */}
-        <div className="flex items-center gap-3 px-4 pt-3 pb-1">
+        <div className="relative flex items-center gap-3 px-4 pt-3 pb-1"
+          onContextMenu={(e) => {
+            e.preventDefault();
+            const wallSeconds = progress * (rendererRef.current?.displayDuration ?? 0) / 1000;
+            const t = Math.round(wallSeconds * 10) / 10;
+            const url = new URL(window.location.href);
+            url.searchParams.set("t", String(t));
+            setShareUrl(url.toString());
+            setSharePos({ x: e.clientX, y: e.clientY });
+            setCopied(false);
+          }}
+        >
           <span className="text-[10px] text-osu-f1 tabular-nums w-10">{formatTime(progress)}</span>
           <input type="range" min={0} max={1} step={0.001} value={progress}
             onChange={(e) => { const v = Number(e.target.value); setProgress(v); const t = v * (rendererRef.current?.duration ?? 0); rendererRef.current?.seek(t); syncAudioTime(t); }}
             className={`flex-1 h-1.5 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink`} />
           <span className="text-[10px] text-osu-f1 tabular-nums w-10 text-right">{formatTime(1)}</span>
+
+          {/* Share timestamp tooltip */}
+          <AnimatePresence>
+            {shareUrl && (
+              <>
+                <div className="fixed inset-0 z-[99]" onClick={() => setShareUrl(null)} />
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 4 }}
+                  transition={{ duration: 0.1 }}
+                  style={{ left: Math.min(sharePos.x, window.innerWidth - 340), top: sharePos.y - 8 }}
+                  className="fixed -translate-y-full z-[100] bg-osu-b3 border border-osu-b2 rounded-lg shadow-2xl p-2.5 w-80"
+                >
+                  <div className="text-[11px] text-osu-f1 mb-1.5">Copy URL at {formatTime(progress)}</div>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      readOnly
+                      value={shareUrl}
+                      className="flex-1 min-w-0 bg-osu-b4 text-[10px] text-osu-f0 rounded px-2 py-1 border border-osu-b2 outline-none select-all"
+                      onFocus={(e) => e.target.select()}
+                    />
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(shareUrl); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+                      className="px-2.5 py-1 rounded bg-osu-pink hover:bg-osu-pink-light text-white text-[11px] font-medium transition-colors cursor-pointer shrink-0"
+                    >
+                      {copied ? "Copied!" : "Copy"}
+                    </button>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Controls row */}
