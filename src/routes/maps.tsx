@@ -301,14 +301,14 @@ function MapsPage() {
 
       {/* ── Filter bar ───────────────────────────────────────────────── */}
       <div className="bg-osu-d5 border-b border-osu-b3/20">
-        <div className="max-w-[1200px] mx-auto px-5 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
           {/* Search */}
           <input
             type="text"
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(0); }}
             placeholder="Search title or artist..."
-            className="bg-osu-b4 border border-osu-b3/30 rounded-lg px-3 py-1.5 text-[11px] text-osu-l2 placeholder:text-osu-f1 w-48 focus:outline-none focus:border-osu-pink/40 transition-colors"
+            className="bg-osu-b4 border border-osu-b3/30 rounded-lg px-3 py-1.5 text-[11px] text-osu-l2 placeholder:text-osu-f1 w-full sm:w-48 focus:outline-none focus:border-osu-pink/40 transition-colors"
           />
 
           {tab === "farmed" && (
