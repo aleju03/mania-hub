@@ -17,17 +17,21 @@ const COLUMN_COLORS: Record<number, string[]> = {
   10: ["#5a8fff", "#de31ae", "#fff", "#ffcc22", "#88da20", "#88da20", "#ffcc22", "#fff", "#de31ae", "#5a8fff"],
 };
 
-// osu!mania hit window formulas: base - 3 * OD (except MAX which is fixed at 16ms)
-// speedRate (DT=1.5, HT=0.75) shrinks/expands windows like the real game.
+// osu!mania stable hit window formulas (classic path from ManiaHitWindows.cs).
+// MAX is fixed at 16ms. Other windows use: base + 3*(10-od) = (base+30) - 3*od.
+// speedRate multiplies game-time windows so wall-clock timing stays constant:
+//   DT (1.5x) → wider game-time windows, HT (0.75x) → narrower game-time windows.
+// floor+0.5 matches lazer's rounding (inclusive boundary).
 function getHitWindows(od: number, speedRate = 1) {
-  const s = 1 / speedRate;
+  const m = speedRate;
+  const inv = Math.max(0, Math.min(10, 10 - od)); // invertedOd, clamped 0-10
   return {
-    perfect: 16 * s,
-    great: (64 - 3 * od) * s,
-    good: (97 - 3 * od) * s,
-    ok: (127 - 3 * od) * s,
-    meh: (151 - 3 * od) * s,
-    miss: (188 - 3 * od) * s,
+    perfect: Math.floor(16 * m) + 0.5,
+    great:   Math.floor((34 + 3 * inv) * m) + 0.5,
+    good:    Math.floor((67 + 3 * inv) * m) + 0.5,
+    ok:      Math.floor((97 + 3 * inv) * m) + 0.5,
+    meh:     Math.floor((121 + 3 * inv) * m) + 0.5,
+    miss:    Math.floor((158 + 3 * inv) * m) + 0.5,
   };
 }
 
@@ -53,21 +57,11 @@ const JUDGMENT_WEIGHTS: Record<number, number> = {
 };
 const HOLD_VISUAL_GRACE_MS = 60;
 
-interface RealJudgments {
-  countGeki: number;  // MAX
-  count300: number;
-  countKatu: number;  // 200
-  count100: number;
-  count50: number;
-  countMiss: number;
-}
-
 interface RendererOptions {
   backgroundImage?: HTMLImageElement;
   backgroundDim?: number;
   od?: number;
   showInputOverlay?: boolean;
-  realJudgments?: RealJudgments;
   mods?: string[]; // mod acronyms, e.g. ["DT", "MR"]
 }
 
@@ -116,8 +110,6 @@ export class ManiaReplayRenderer {
   private od = 8;
   private showInputOverlay = true;
   private skin: ManiaSkin | null = null;
-  private realJudgments: RealJudgments | null = null;
-  private realTotal = 0;
 
   // Receptor flash state
   private receptorFlashTimestamps: number[];
@@ -163,11 +155,6 @@ export class ManiaReplayRenderer {
     this.backgroundDim = options?.backgroundDim ?? 80;
     this.od = options?.od ?? 8;
     this.showInputOverlay = options?.showInputOverlay ?? true;
-    this.realJudgments = options?.realJudgments ?? null;
-    if (this.realJudgments) {
-      const rj = this.realJudgments;
-      this.realTotal = rj.countGeki + rj.count300 + rj.countKatu + rj.count100 + rj.count50 + rj.countMiss;
-    }
     this.receptorFlashTimestamps = new Array(keyCount).fill(0);
 
     const frameDuration = frames.length > 0 ? frames[frames.length - 1].time : 0;
@@ -263,22 +250,19 @@ export class ManiaReplayRenderer {
           else if (delta <= hw.meh) judgment = 5;
           else continue;
 
-          // For hold notes, degrade judgment based on tail release timing.
-          // Early release before the hold body ends by more than the miss
-          // window counts as a miss. Otherwise tail windows are 1.75x head.
+          // Stable hold notes: single combined judgment = worse of (head, tail).
+          // Tail uses 1.5x window lenience. Released way too early = miss.
           if (note.isHold && note.endTime > note.time) {
-            const earlyRelease = note.endTime - seg.end;
-            if (earlyRelease > (hw.ok + hw.miss) / 2) {
-              judgment = 6; // released way too early → miss
-            } else {
-              const tailDelta = Math.abs(seg.end - note.endTime);
-              const ts = 1.75;
-              let tailJudgment: Judgment;
-              if (tailDelta <= hw.perfect * ts) tailJudgment = 1;
-              else if (tailDelta <= hw.great * ts) tailJudgment = 2;
-              else tailJudgment = 3; // caps at 200
-              if (tailJudgment > judgment) judgment = tailJudgment;
-            }
+            const tailDelta = Math.abs(seg.end - note.endTime) / 1.5; // RELEASE_WINDOW_LENIENCE
+            let tailJudgment: Judgment;
+            if (tailDelta <= hw.perfect) tailJudgment = 1;
+            else if (tailDelta <= hw.great) tailJudgment = 2;
+            else if (tailDelta <= hw.good) tailJudgment = 3;
+            else if (tailDelta <= hw.ok) tailJudgment = 4;
+            else if (tailDelta <= hw.meh) tailJudgment = 5;
+            else tailJudgment = 6;
+            // Final = worse of head and tail
+            if (tailJudgment > judgment) judgment = tailJudgment;
           }
 
           results[noteIdx] = {
@@ -317,18 +301,16 @@ export class ManiaReplayRenderer {
     const time = upToTime ?? this.currentTime;
     while (this.statsScanIndex < this.notes.length) {
       const hr = this.hitResults[this.statsScanIndex];
-      if (hr.judgment === 0) break; // pending (shouldn't happen with pre-computed)
+      if (hr.judgment === 0) break;
       if (hr.hitTime > time) break;
 
       this.judgmentCounts[hr.judgment]++;
       if (hr.judgment <= 5) {
-        // Hit (MAX through 50)
         this.combo++;
         if (this.combo > this.maxComboSoFar) this.maxComboSoFar = this.combo;
         this.recentHitOffsets.push(hr.offsetMs);
         if (this.recentHitOffsets.length > 40) this.recentHitOffsets.shift();
       } else {
-        // Miss
         this.combo = 0;
         const hand = this.getHandForColumn(this.notes[this.statsScanIndex]?.column ?? -1);
         if (hand === "left") this.leftHandMisses++;
@@ -352,19 +334,7 @@ export class ManiaReplayRenderer {
     return totalNotes > 0 ? (totalWeight / (totalNotes * 6)) * 100 : 100;
   }
 
-  // Returns judgment counts for display: uses live hit detection during
-  // playback, but snaps to real header data once all notes are judged.
   private getDisplayCounts(): number[] {
-    if (!this.realJudgments || this.realTotal === 0) return this.judgmentCounts;
-
-    let judgedSoFar = 0;
-    for (let j = 1; j <= 6; j++) judgedSoFar += this.judgmentCounts[j];
-
-    if (judgedSoFar >= this.notes.length) {
-      const rj = this.realJudgments;
-      return [0, rj.countGeki, rj.count300, rj.countKatu, rj.count100, rj.count50, rj.countMiss];
-    }
-
     return this.judgmentCounts;
   }
 
@@ -500,6 +470,8 @@ export class ManiaReplayRenderer {
 
   get time() { return this.currentTime; }
   get duration() { return this.totalDuration; }
+  // Wall-clock adjusted duration for display (HT makes it longer, DT shorter)
+  get displayDuration() { return this.totalDuration / this.modRate; }
 
   // --- Tick loop ---
 
@@ -1093,7 +1065,7 @@ export class ManiaReplayRenderer {
     const urBarWidth = Math.min(playfieldWidth * 0.68, 180);
     const urBarX = playfieldCenterX - urBarWidth / 2;
     const urBarY = h - 26;
-    const urRange = getHitWindows(this.od).meh;
+    const urRange = getHitWindows(this.od, this.modRate).meh;
 
     ctx.fillStyle = "rgba(255,255,255,0.08)";
     ctx.fillRect(urBarX, urBarY, urBarWidth, 3);
@@ -1114,12 +1086,13 @@ export class ManiaReplayRenderer {
     ctx.fillStyle = "rgba(255,255,255,0.72)";
     ctx.fillText(`UR ${this.getUr().toFixed(0)}`, playfieldCenterX, urBarY - 6);
 
-    // --- Time display (bottom-left) ---
+    // --- Time display (bottom-left, wall-clock adjusted) ---
     ctx.fillStyle = "rgba(255,255,255,0.4)";
     ctx.font = "11px Torus, sans-serif";
     ctx.textAlign = "left";
-    const mins = Math.floor(this.currentTime / 60000);
-    const secs = String(Math.floor((this.currentTime % 60000) / 1000)).padStart(2, "0");
+    const wallTime = this.currentTime / this.modRate;
+    const mins = Math.floor(wallTime / 60000);
+    const secs = String(Math.floor((wallTime % 60000) / 1000)).padStart(2, "0");
     ctx.fillText(`${mins}:${secs}`, 8, h - 8);
 
     // Speed display (bottom-right)
