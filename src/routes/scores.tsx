@@ -10,6 +10,7 @@ import {
   getDisplayedRank,
   getDisplayedTotalScore,
   getScoreIdentity,
+  getScoreTimeMs,
   getScoreTimestamp,
   isDisplayedPassed,
   scoreHasReplay,
@@ -29,6 +30,8 @@ export const Route = createFileRoute("/scores")({
 });
 
 type ScoreFilter = "all" | "ranked" | "passed";
+type GradeFilter = "all" | "SS" | "S" | "A" | "B";
+type FailedFilter = "hide" | "show" | "only";
 const PP_GAIN_BATCH_SIZE = 4;
 
 function ScoresPage() {
@@ -50,7 +53,8 @@ function ScoresPage() {
   const [playersError, setPlayersError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(true);
   const [filter, setFilter] = useState<ScoreFilter>("all");
-  const [showFailed, setShowFailed] = useState(false);
+  const [gradeFilter, setGradeFilter] = useState<GradeFilter>("all");
+  const [failedFilter, setFailedFilter] = useState<FailedFilter>("hide");
   const [initialLoaded, setInitialLoaded] = useState(feedScores.length > 0 || !!feedScoresFetchedAt);
   const [initialRefreshDone, setInitialRefreshDone] = useState(false);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -153,21 +157,51 @@ function ScoresPage() {
 
   useEffect(() => {
     setExpandedKey(null);
-  }, [filter, showFailed]);
+  }, [filter, gradeFilter, failedFilter]);
 
   const filtered = useMemo(() => {
     return feedScores.filter((score: OsuScore) => {
-      if (!showFailed && !isDisplayedPassed(score)) return false;
+      const passed = isDisplayedPassed(score);
+      if (failedFilter === "hide" && !passed) return false;
+      if (failedFilter === "only" && passed) return false;
       switch (filter) {
         case "ranked":
           return score.pp != null && score.pp > 0;
         case "passed":
-          return isDisplayedPassed(score);
+          return passed;
         default:
-          return true;
+          break;
       }
+      if (gradeFilter !== "all") {
+        const rank = getDisplayedRank(score);
+        // SS includes XH/X/SS/SSH, S includes SH/S
+        if (gradeFilter === "SS") return ["SS", "SSH", "X", "XH"].includes(rank);
+        if (gradeFilter === "S") return ["S", "SH"].includes(rank);
+        return rank === gradeFilter;
+      }
+      return true;
     });
-  }, [feedScores, filter, showFailed]);
+  }, [feedScores, filter, gradeFilter, failedFilter]);
+
+  const activePlayers = useMemo(() => {
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    const seen = new Map<number, { username: string; avatar_url: string; latestTime: number }>();
+    for (const score of feedScores) {
+      const timeMs = getScoreTimeMs(score);
+      if (timeMs < oneHourAgo || !score.user) continue;
+      const existing = seen.get(score.user_id);
+      if (!existing || timeMs > existing.latestTime) {
+        seen.set(score.user_id, {
+          username: score.user.username,
+          avatar_url: score.user.avatar_url,
+          latestTime: timeMs,
+        });
+      }
+    }
+    return [...seen.entries()]
+      .sort((a, b) => b[1].latestTime - a[1].latestTime)
+      .map(([id, info]) => ({ id, ...info }));
+  }, [feedScores]);
 
   useEffect(() => {
     const rankedUsersToFetch = [...new Set(
@@ -202,7 +236,19 @@ function ScoresPage() {
     { id: "ranked", label: "Ranked (PP)" },
     { id: "passed", label: "Passed" },
   ];
-  const listKey = `${filter}:${showFailed ? "with-failed" : "passed-only"}`;
+  const grades: { id: GradeFilter; label: string }[] = [
+    { id: "all", label: "Any" },
+    { id: "SS", label: "SS" },
+    { id: "S", label: "S" },
+    { id: "A", label: "A" },
+    { id: "B", label: "B" },
+  ];
+  const failedOptions: { id: FailedFilter; label: string }[] = [
+    { id: "hide", label: "Hide failed" },
+    { id: "show", label: "Show failed" },
+    { id: "only", label: "Only failed" },
+  ];
+  const listKey = `${filter}:${gradeFilter}:${failedFilter}`;
 
   return (
     <div className="flex-1">
@@ -230,11 +276,11 @@ function ScoresPage() {
 
       <div className="bg-osu-d5 border-b border-osu-b3/30">
         <div className="max-w-[1200px] mx-auto px-5 flex items-center justify-between">
-          <div className="flex">
+          <div className="flex items-center gap-0">
             {filters.map((item) => (
               <button
                 key={item.id}
-                onClick={() => setFilter(item.id)}
+                onClick={() => { setFilter(item.id); if (item.id !== "all") setGradeFilter("all"); }}
                 className={`px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] border-b-2 ${
                   filter === item.id
                     ? "text-osu-c1 border-osu-h1"
@@ -244,59 +290,100 @@ function ScoresPage() {
                 {item.label}
               </button>
             ))}
+            <div className="w-px h-5 bg-osu-b3/40 mx-2" />
+            {grades.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => { setGradeFilter(item.id); if (item.id !== "all") setFilter("all"); }}
+                className={`px-2.5 py-2.5 text-[11px] font-semibold cursor-pointer transition-colors duration-[120ms] border-b-2 ${
+                  gradeFilter === item.id
+                    ? "text-osu-c1 border-osu-h1"
+                    : "text-osu-f1 border-transparent hover:text-osu-l2"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
-          <label className="flex items-center gap-1.5 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={showFailed}
-              onChange={(e) => setShowFailed(e.target.checked)}
-              className="accent-osu-pink w-3 h-3 cursor-pointer"
-            />
-            <span className="text-[11px] text-osu-f1">Show failed</span>
-          </label>
+          <div className="flex rounded-lg overflow-hidden border border-osu-b3/30">
+            {failedOptions.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setFailedFilter(item.id)}
+                className={`px-2.5 py-1.5 text-[10px] font-medium cursor-pointer transition-colors duration-[120ms] ${
+                  failedFilter === item.id
+                    ? "bg-osu-b3 text-osu-l2"
+                    : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       <div className="bg-osu-b5">
-        <div className="max-w-[1200px] mx-auto px-5 py-5">
-          {playersError ? (
-            <div className="text-center py-16 text-osu-f1 text-sm">
-              {playersError}
-            </div>
-          ) : loadingPlayers || (!initialLoaded && feedScores.length === 0) ? (
-            <div className="space-y-2">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <ScoreRowSkeleton key={i} />
+        <div className="max-w-[1200px] mx-auto px-5 py-5 flex gap-5">
+          {activePlayers.length > 0 && (
+            <div className="hidden lg:flex flex-col items-center gap-2 flex-shrink-0 pt-1">
+              <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-1">Playing</span>
+              {activePlayers.map((player) => (
+                <button
+                  key={player.id}
+                  onClick={() => {
+                    window.location.href = `/player/${encodeURIComponent(player.username)}`;
+                  }}
+                  className="cursor-pointer group relative"
+                  title={player.username}
+                >
+                  <div className="ring-2 ring-osu-green/50 rounded-full group-hover:ring-osu-green transition-all">
+                    <Avatar url={player.avatar_url} size={32} />
+                  </div>
+                </button>
               ))}
             </div>
-          ) : (
-            <>
-              <div key={listKey} className="space-y-2">
-                <AnimatePresence initial={false}>
-                  {filtered.map((score: OsuScore) => {
-                    const scoreKey = getScoreIdentity(score);
-
-                    return (
-                      <ScoreFeedItem
-                        key={scoreKey}
-                        score={score}
-                        approxPpGain={ppGainByScoreId[score.id] ?? null}
-                        expanded={expandedKey === scoreKey}
-                        onToggle={() => setExpandedKey((current) => (current === scoreKey ? null : scoreKey))}
-                      />
-                    );
-                  })}
-                </AnimatePresence>
-              </div>
-              {filtered.length === 0 && (
-                <div className="text-center py-16 text-osu-f1 text-sm">
-                  {feedScores.length === 0
-                    ? "No recent scores yet."
-                    : "No scores match this filter"}
-                </div>
-              )}
-            </>
           )}
+          <div className="flex-1 min-w-0">
+            {playersError ? (
+              <div className="text-center py-16 text-osu-f1 text-sm">
+                {playersError}
+              </div>
+            ) : loadingPlayers || (!initialLoaded && feedScores.length === 0) ? (
+              <div className="space-y-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <ScoreRowSkeleton key={i} />
+                ))}
+              </div>
+            ) : (
+              <>
+                <div key={listKey} className="space-y-2">
+                  <AnimatePresence initial={false}>
+                    {filtered.map((score: OsuScore) => {
+                      const scoreKey = getScoreIdentity(score);
+
+                      return (
+                        <ScoreFeedItem
+                          key={scoreKey}
+                          score={score}
+                          approxPpGain={ppGainByScoreId[score.id] ?? null}
+                          expanded={expandedKey === scoreKey}
+                          onToggle={() => setExpandedKey((current) => (current === scoreKey ? null : scoreKey))}
+                        />
+                      );
+                    })}
+                  </AnimatePresence>
+                </div>
+                {filtered.length === 0 && (
+                  <div className="text-center py-16 text-osu-f1 text-sm">
+                    {feedScores.length === 0
+                      ? "No recent scores yet."
+                      : "No scores match this filter"}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
