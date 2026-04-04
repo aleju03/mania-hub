@@ -1,4 +1,4 @@
-import type { OsuScore } from "./types";
+import type { OsuMod, OsuScore } from "./types";
 
 const PP_WEIGHT_DECAY = 0.95;
 
@@ -67,6 +67,13 @@ export function getScoreTimeMs(score: OsuScore): number {
   return timestamp ? new Date(timestamp).getTime() : 0;
 }
 
+/** Extract acronym strings from mods array (handles both object and plain-string formats) */
+export function getModAcronyms(mods: OsuMod[] | undefined, excludeCl = true): string[] {
+  return (mods ?? [])
+    .map((m: any) => (typeof m === "string" ? m : m?.acronym ?? ""))
+    .filter((a: string) => a && (!excludeCl || a !== "CL"));
+}
+
 export function getScoreIdentity(score: OsuScore): string {
   if (score.id > 0) {
     return `id:${score.id}`;
@@ -74,10 +81,7 @@ export function getScoreIdentity(score: OsuScore): string {
 
   const beatmapId = score.beatmap_id ?? score.beatmap?.id ?? "unknown";
   const timestamp = getScoreTimestamp(score) || score.started_at || "unknown";
-  const mods = (score.mods ?? [])
-    .map((mod) => mod?.acronym)
-    .filter(Boolean)
-    .join(",");
+  const mods = getModAcronyms(score.mods, false).join(",");
 
   return [
     "fallback",
@@ -132,21 +136,16 @@ export function getBeatmapUrl(score: OsuScore): string | null {
 }
 
 export function getScoreUrl(score: OsuScore): string | null {
-  if (score.legacy_score_id !== undefined) {
-    if (score.id > 0) {
-      return `https://osu.ppy.sh/scores/${score.id}`;
-    }
+  if (score.id <= 0) return null;
 
-    if (score.legacy_score_id && score.legacy_score_id > 0) {
-      const ruleset = score.beatmap?.mode ?? "mania";
-      return `https://osu.ppy.sh/scores/${ruleset}/${score.legacy_score_id}`;
-    }
-  } else if (score.id > 0) {
-    const ruleset = score.beatmap?.mode ?? "mania";
-    return `https://osu.ppy.sh/scores/${ruleset}/${score.id}`;
+  // Lazer score — universal URL without ruleset prefix
+  if (score.type === "solo_score") {
+    return `https://osu.ppy.sh/scores/${score.id}`;
   }
 
-  return null;
+  // Legacy/stable score — needs ruleset prefix
+  const ruleset = score.beatmap?.mode ?? "mania";
+  return `https://osu.ppy.sh/scores/${ruleset}/${score.id}`;
 }
 
 export function calculateWeightedPpTotal(scores: Array<Pick<OsuScore, "pp">>): number {

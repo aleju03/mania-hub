@@ -9,6 +9,7 @@ import {
   getDisplayedAccuracy,
   getDisplayedRank,
   getDisplayedTotalScore,
+  getModAcronyms,
   getScoreIdentity,
   getScoreTimeMs,
   getScoreTimestamp,
@@ -490,8 +491,8 @@ function ScoreFeedItem({
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
           <div className="flex gap-0.5">
-            {(score.mods ?? []).filter((m) => m?.acronym && m.acronym !== "CL").map((m) => (
-              <ModBadge key={m.acronym} mod={m.acronym} />
+            {getModAcronyms(score.mods).map((acronym) => (
+              <ModBadge key={acronym} mod={acronym} />
             ))}
           </div>
           <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>

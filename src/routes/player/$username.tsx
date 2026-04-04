@@ -14,6 +14,7 @@ import {
   getBeatmapUrl,
   getDisplayedAccuracy,
   getDisplayedRank,
+  getModAcronyms,
   getScoreIdentity,
   getScoreTimestamp,
   getScoreUrl,
@@ -696,11 +697,9 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
       </div>
       <div className="flex items-center gap-3 flex-shrink-0">
         <div className="flex gap-0.5 justify-end w-24">
-          {(score.mods ?? [])
-            .filter((m) => m?.acronym && m.acronym !== "CL")
-            .map((m) => (
-              <ModBadge key={m.acronym} mod={m.acronym} />
-            ))}
+          {getModAcronyms(score.mods).map((acronym) => (
+            <ModBadge key={acronym} mod={acronym} />
+          ))}
         </div>
         <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>
         <span className="text-xs text-osu-f1">{formatNumber(score.max_combo)}x</span>

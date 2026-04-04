@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { getRankings, getUserScoresBestWindow } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { formatNumber, formatAccuracy, formatTimeAgo } from "../lib/format";
-import { calculateApproxPpGainMap, getBeatmapUrl, getDisplayedTotalScore, getScoreTimeMs, getScoreTimestamp, scoreHasReplay } from "../lib/score";
+import { calculateApproxPpGainMap, getBeatmapUrl, getDisplayedTotalScore, getModAcronyms, getScoreTimeMs, getScoreTimestamp, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
@@ -429,11 +429,9 @@ function PopOffsPage() {
 
                       <div className="flex items-center gap-3 flex-shrink-0">
                         <div className="flex gap-0.5">
-                          {(p.score.mods ?? [])
-                            .filter((m) => m?.acronym && m.acronym !== "CL")
-                            .map((m) => (
-                              <ModBadge key={m.acronym} mod={m.acronym} />
-                            ))}
+                          {getModAcronyms(p.score.mods).map((acronym) => (
+                            <ModBadge key={acronym} mod={acronym} />
+                          ))}
                         </div>
                         <span className="text-xs text-osu-l2">
                           {formatAccuracy(p.score.accuracy)}
