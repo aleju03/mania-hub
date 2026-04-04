@@ -359,11 +359,11 @@ function PopOffsPage() {
                     className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden"
                   >
                     <div
-                      className="flex items-center gap-3 py-3 px-4 hover:bg-osu-b3 transition-colors duration-[120ms] cursor-pointer"
+                      className="flex items-center gap-2 sm:gap-3 py-3 px-3 sm:px-4 hover:bg-osu-b3 transition-colors duration-[120ms] cursor-pointer"
                       onClick={() => setExpandedId(expandedId === p.score.id ? null : p.score.id)}
                     >
-                      <div className="flex-shrink-0 w-16 text-center">
-                        <div className="text-lg font-bold text-osu-pink" style={{ fontFamily: "Torus" }}>
+                      <div className="flex-shrink-0 w-12 sm:w-16 text-center">
+                        <div className="text-base sm:text-lg font-bold text-osu-pink" style={{ fontFamily: "Torus" }}>
                           {Math.round(p.pp)}
                         </div>
                         <div className="text-[8px] uppercase tracking-wider text-osu-f1 font-semibold">pp</div>
@@ -426,9 +426,21 @@ function PopOffsPage() {
                             [{p.score.beatmap?.version}]
                           </span>
                         </div>
+                        {/* Mobile-only metadata row */}
+                        <div className="flex items-center gap-2 mt-1 sm:hidden">
+                          <div className="flex gap-0.5">
+                            {getModAcronyms(p.score.mods).map((acronym) => (
+                              <ModBadge key={acronym} mod={acronym} />
+                            ))}
+                          </div>
+                          {isLazerScore(p.score) && <LazerBadge />}
+                          <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(p.score))}</span>
+                          <span className="text-[10px] text-osu-f1 ml-auto">{formatTimeAgo(p.time)}</span>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-3 flex-shrink-0">
+                      {/* Desktop metadata */}
+                      <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
                         <div className="flex gap-0.5">
                           {getModAcronyms(p.score.mods).map((acronym) => (
                             <ModBadge key={acronym} mod={acronym} />

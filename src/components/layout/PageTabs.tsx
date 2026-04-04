@@ -12,7 +12,7 @@ interface PageTabsProps<T extends string> {
 export function PageTabs<T extends string>({ items, value, onChange }: PageTabsProps<T>) {
   return (
     <div className="bg-osu-d5 border-b border-osu-b3/30">
-      <div className="max-w-[1200px] mx-auto px-5 flex">
+      <div className="max-w-[1200px] mx-auto px-4 sm:px-5 flex overflow-x-auto scrollbar-hide">
         {items.map((item) => (
           <button
             key={item.id}
