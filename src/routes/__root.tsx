@@ -12,7 +12,15 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: "icon", type: "image/webp", href: "/favicon.webp" },
+      { rel: "manifest", href: "/manifest.json" },
       { rel: "stylesheet", href: appCss },
+      {
+        rel: "preload",
+        href: "/fonts/Torus-Regular.otf",
+        as: "font",
+        type: "font/otf",
+        crossOrigin: "anonymous",
+      },
       {
         rel: "preload",
         href: "/fonts/Torus-Heavy.otf",
@@ -36,6 +44,11 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <RouteLoadingBar />
         <main className="flex-1 pt-[60px]">{children}</main>
         <Scripts />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'))}`,
+          }}
+        />
       </body>
     </html>
   );
