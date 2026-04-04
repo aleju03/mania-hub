@@ -11,11 +11,22 @@ import { calculateApproxPpGainMap } from "./score";
 import type {
   OsuUser,
   OsuScore,
+  OsuBeatmapset,
   RankingsResponse,
   BeatmapsetSearchResponse,
   UserSearchResponse,
+  BeatmapPlaycount,
+  CountryMapsData,
+  MapsAggregatedBeatmap,
+  MapsAggregatedFavourite,
+  MapsFarmedEntry,
 } from "./types";
 
+const MAPS_DATA_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const MAPS_DATA_CACHE_VERSION = 2;
+const USER_MOST_PLAYED_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
+const USER_FAVOURITES_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
+const MAPS_FETCH_CONCURRENCY = 6;
 const RANKINGS_CACHE_TTL = 5 * 60 * 1000;
 const RANK_HISTORY_CACHE_TTL = 24 * 60 * 60 * 1000;
 const APPROX_PP_GAINS_CACHE_TTL = 10 * 60 * 1000;
@@ -376,6 +387,236 @@ export const getCountryRecentScores = createServerFn({ method: "GET" })
 
     return results.flatMap((scores) => scores);
   });
+
+// ── Maps (aggregated most-played + favourites across CR players) ───────────
+
+async function fetchUserMostPlayed(userId: number): Promise<BeatmapPlaycount[]> {
+  const cacheKey = `user-most-played:${userId}`;
+  const cached = await getPersistentCached<BeatmapPlaycount[]>(cacheKey);
+  if (cached) return cached;
+
+  const result = await osuFetch<BeatmapPlaycount[]>(
+    `/users/${userId}/beatmapsets/most_played`,
+    { limit: 100, offset: 0 },
+  );
+  await setPersistentCache(cacheKey, result, USER_MOST_PLAYED_CACHE_TTL);
+  return result;
+}
+
+async function fetchUserFavourites(userId: number): Promise<OsuBeatmapset[]> {
+  const cacheKey = `user-favourites:${userId}`;
+  const cached = await getPersistentCached<OsuBeatmapset[]>(cacheKey);
+  if (cached) return cached;
+
+  const result = await osuFetch<OsuBeatmapset[]>(
+    `/users/${userId}/beatmapsets/favourite`,
+    { limit: 100, offset: 0 },
+  );
+  await setPersistentCache(cacheKey, result, USER_FAVOURITES_CACHE_TTL);
+  return result;
+}
+
+export const getCountryMapsData = createServerFn({ method: "GET" })
+  .inputValidator(
+    (data: { users: Array<{ id: number; username: string; avatar_url: string }> }) => data,
+  )
+  .handler(
+    async ({
+      data,
+    }: {
+      data: { users: Array<{ id: number; username: string; avatar_url: string }> };
+    }) => {
+      const userKey = data.users
+        .map((user) => user.id)
+        .sort((a, b) => a - b)
+        .join(",");
+      const cacheKey = `country-maps-data:v${MAPS_DATA_CACHE_VERSION}:${userKey}`;
+      const cached = await getPersistentCached<CountryMapsData>(cacheKey);
+      if (cached) return cached;
+
+      const users = data.users;
+
+      // Fetch best scores + most_played + favourites for all users
+      const userResults = await mapWithConcurrency(
+        users,
+        MAPS_FETCH_CONCURRENCY,
+        async (user) => {
+          const [bestScores, mostPlayed, favourites] = await Promise.all([
+            fetchUserBestScoresWindow(user.id, 200).catch(() => [] as OsuScore[]),
+            fetchUserMostPlayed(user.id).catch(() => [] as BeatmapPlaycount[]),
+            fetchUserFavourites(user.id).catch(() => [] as OsuBeatmapset[]),
+          ]);
+          return { user, bestScores, mostPlayed, favourites };
+        },
+      );
+
+      // ── Farmed: maps in 2+ players' top 200 best scores ──────────
+      const farmedMap = new Map<number, MapsFarmedEntry>();
+      for (const { user, bestScores } of userResults) {
+        for (const score of bestScores) {
+          if (!score.beatmap || score.beatmap.mode !== "mania") continue;
+          if (!score.pp || score.pp <= 0) continue;
+          if (score.beatmapset?.status !== "ranked") continue;
+
+          const bid = score.beatmap.id;
+          const existing = farmedMap.get(bid);
+          if (existing) {
+            if (!existing.players.some((p) => p.id === user.id)) {
+              existing.playerCount++;
+              existing.players.push({
+                id: user.id,
+                username: user.username,
+                avatarUrl: user.avatar_url,
+                pp: score.pp,
+              });
+              existing.maxPp = Math.max(existing.maxPp, score.pp);
+            }
+          } else {
+            farmedMap.set(bid, {
+              beatmapId: bid,
+              version: score.beatmap.version,
+              difficultyRating: score.beatmap.difficulty_rating,
+              totalLength: score.beatmap.total_length,
+              cs: score.beatmap.cs,
+              bpm: score.beatmap.bpm,
+              beatmapsetId: score.beatmapset.id,
+              title: score.beatmapset.title,
+              artist: score.beatmapset.artist,
+              creator: score.beatmapset.creator,
+              covers: score.beatmapset.covers,
+              status: score.beatmapset.status,
+              playerCount: 1,
+              players: [
+                {
+                  id: user.id,
+                  username: user.username,
+                  avatarUrl: user.avatar_url,
+                  pp: score.pp,
+                },
+              ],
+              avgPp: 0,
+              maxPp: score.pp,
+            });
+          }
+        }
+      }
+
+      const farmed: MapsFarmedEntry[] = [];
+      for (const entry of farmedMap.values()) {
+        if (entry.playerCount < 2) continue;
+        entry.players.sort((a, b) => b.pp - a.pp);
+        entry.avgPp =
+          entry.players.reduce((sum, p) => sum + p.pp, 0) / entry.players.length;
+        farmed.push(entry);
+      }
+      farmed.sort((a, b) => b.playerCount - a.playerCount || b.avgPp - a.avgPp);
+
+      // ── Most played: from most_played endpoint (mania only) ──────
+      const mpMap = new Map<number, MapsAggregatedBeatmap>();
+      for (const { user, mostPlayed } of userResults) {
+        for (const mp of mostPlayed) {
+          if (mp.beatmap.mode !== "mania") continue;
+          const existing = mpMap.get(mp.beatmap_id);
+          if (existing) {
+            existing.totalPlays += mp.count;
+            existing.playerCount++;
+            existing.players.push({
+              id: user.id,
+              username: user.username,
+              avatarUrl: user.avatar_url,
+              count: mp.count,
+            });
+          } else {
+            mpMap.set(mp.beatmap_id, {
+              beatmapId: mp.beatmap_id,
+              version: mp.beatmap.version,
+              difficultyRating: mp.beatmap.difficulty_rating,
+              totalLength: mp.beatmap.total_length,
+              beatmapsetId: mp.beatmapset.id,
+              title: mp.beatmapset.title,
+              artist: mp.beatmapset.artist,
+              creator: mp.beatmapset.creator,
+              covers: mp.beatmapset.covers,
+              status: mp.beatmapset.status,
+              globalPlayCount: mp.beatmapset.play_count,
+              totalPlays: mp.count,
+              playerCount: 1,
+              players: [
+                {
+                  id: user.id,
+                  username: user.username,
+                  avatarUrl: user.avatar_url,
+                  count: mp.count,
+                },
+              ],
+            });
+          }
+        }
+      }
+
+      for (const entry of mpMap.values()) {
+        entry.players.sort((a, b) => b.count - a.count);
+      }
+
+      const mostPlayed = [...mpMap.values()]
+        .filter((m) => m.playerCount >= 2)
+        .sort((a, b) => b.playerCount - a.playerCount || b.totalPlays - a.totalPlays)
+        .slice(0, 200);
+
+      // ── Favourites ───────────────────────────────────────────────
+      const favMap = new Map<number, MapsAggregatedFavourite>();
+      for (const { user, favourites } of userResults) {
+        for (const fav of favourites) {
+          const existing = favMap.get(fav.id);
+          if (existing) {
+            existing.playerCount++;
+            existing.players.push({
+              id: user.id,
+              username: user.username,
+              avatarUrl: user.avatar_url,
+            });
+          } else {
+            favMap.set(fav.id, {
+              beatmapsetId: fav.id,
+              title: fav.title,
+              artist: fav.artist,
+              creator: fav.creator,
+              covers: fav.covers,
+              status: fav.status,
+              globalPlayCount: fav.play_count,
+              globalFavouriteCount: fav.favourite_count,
+              playerCount: 1,
+              players: [
+                {
+                  id: user.id,
+                  username: user.username,
+                  avatarUrl: user.avatar_url,
+                },
+              ],
+            });
+          }
+        }
+      }
+
+      const favourites = [...favMap.values()]
+        .filter((f) => f.playerCount >= 2)
+        .sort(
+          (a, b) =>
+            b.playerCount - a.playerCount ||
+            b.globalFavouriteCount - a.globalFavouriteCount,
+        )
+        .slice(0, 100);
+
+      const result: CountryMapsData = {
+        farmed,
+        mostPlayed,
+        favourites,
+        generatedAt: new Date().toISOString(),
+      };
+      await setPersistentCache(cacheKey, result, MAPS_DATA_CACHE_TTL);
+      return result;
+    },
+  );
 
 // ── Replay (parsed server-side via osu-parsers) ────────────────────────────
 

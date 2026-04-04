@@ -14,6 +14,7 @@ import { Route as TopPlaysRouteImport } from './routes/top-plays'
 import { Route as SnipesRouteImport } from './routes/snipes'
 import { Route as ReplayRouteImport } from './routes/replay'
 import { Route as RankingsRouteImport } from './routes/rankings'
+import { Route as MapsRouteImport } from './routes/maps'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
 import { Route as ApiAudioRouteImport } from './routes/api/audio'
@@ -43,6 +44,11 @@ const RankingsRoute = RankingsRouteImport.update({
   path: '/rankings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MapsRoute = MapsRouteImport.update({
+  id: '/maps',
+  path: '/maps',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -61,6 +67,7 @@ const ApiAudioRoute = ApiAudioRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/maps': typeof MapsRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
   '/snipes': typeof SnipesRoute
@@ -71,6 +78,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/maps': typeof MapsRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
   '/snipes': typeof SnipesRoute
@@ -82,6 +90,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/maps': typeof MapsRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
   '/snipes': typeof SnipesRoute
@@ -94,6 +103,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/maps'
     | '/rankings'
     | '/replay'
     | '/snipes'
@@ -104,6 +114,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/maps'
     | '/rankings'
     | '/replay'
     | '/snipes'
@@ -114,6 +125,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/maps'
     | '/rankings'
     | '/replay'
     | '/snipes'
@@ -125,6 +137,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  MapsRoute: typeof MapsRoute
   RankingsRoute: typeof RankingsRoute
   ReplayRoute: typeof ReplayRoute
   SnipesRoute: typeof SnipesRoute
@@ -171,6 +184,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RankingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/maps': {
+      id: '/maps'
+      path: '/maps'
+      fullPath: '/maps'
+      preLoaderRoute: typeof MapsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -197,6 +217,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  MapsRoute: MapsRoute,
   RankingsRoute: RankingsRoute,
   ReplayRoute: ReplayRoute,
   SnipesRoute: SnipesRoute,

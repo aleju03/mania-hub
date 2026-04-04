@@ -5,11 +5,9 @@ import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, searchUse
 import { parseManiaBeatmap } from "../lib/beatmap-parser";
 import { scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
-import { ManiaReplayRenderer } from "../components/replay/ReplayCanvas";
 import { SearchInput } from "../components/ui/SearchInput";
 import { GradeImg } from "../components/ui/GradeImg";
 import { formatAccuracy, formatPP } from "../lib/format";
-import { parseSkinFile, saveSkinToIDB, loadSkinFromIDB, removeSkinFromIDB } from "../lib/skin-parser";
 import type { ManiaSkin } from "../lib/skin-parser";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import type { OsuScore, ReplayFrame } from "../lib/types";
@@ -40,6 +38,24 @@ interface ServerReplay {
   };
   frames: ReplayFrame[];
   keyCount: number;
+}
+
+interface ReplayRendererLike {
+  readonly duration: number;
+  readonly displayDuration: number;
+  readonly time: number;
+  readonly isPlaying: boolean;
+  destroy: () => void;
+  pause: () => void;
+  play: () => void;
+  resize: () => void;
+  seek: (timeMs: number) => void;
+  setBackgroundDim: (value: number) => void;
+  setBackgroundImage: (image: HTMLImageElement | null) => void;
+  setScrollSpeed: (value: number) => void;
+  setShowInputOverlay: (value: boolean) => void;
+  setSkin: (skin: ManiaSkin | null) => void;
+  setSpeed: (value: number) => void;
 }
 
 export const Route = createFileRoute("/replay")({
@@ -239,7 +255,7 @@ function ReplayViewer({
   initialTime?: number;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rendererRef = useRef<ManiaReplayRenderer | null>(null);
+  const rendererRef = useRef<ReplayRendererLike | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -316,32 +332,49 @@ function ReplayViewer({
   useEffect(() => {
     if (!canvasRef.current || replay.frames.length === 0) return;
 
-    const renderer = new ManiaReplayRenderer(
-      canvasRef.current,
-      replay.frames,
-      replay.keyCount,
-      beatmap?.notes ?? [],
-      {
-        backgroundImage: bgImage ?? undefined,
-        backgroundDim: bgDim,
-        od: beatmap?.od,
-        showInputOverlay,
-        mods: modAcronyms,
-      },
-    );
-    rendererRef.current = renderer;
-    // Apply skin if already loaded
-    if (skin) renderer.setSkin(skin);
-    // Seek to initial timestamp from URL (t param, in seconds)
-    if (initialTime != null && initialTime > 0) {
-      const gameTimeMs = initialTime * 1000 * modRate;
-      renderer.seek(gameTimeMs);
-      setProgress(gameTimeMs / renderer.duration);
-    }
-    const handleResize = () => renderer.resize();
-    window.addEventListener("resize", handleResize);
-    return () => { renderer.destroy(); window.removeEventListener("resize", handleResize); };
-  }, [replay, beatmap, scoreInfo]);
+    let cancelled = false;
+    let renderer: ReplayRendererLike | null = null;
+    let handleResize: (() => void) | null = null;
+
+    void import("../components/replay/ReplayCanvas").then(({ ManiaReplayRenderer }) => {
+      if (cancelled || !canvasRef.current) return;
+
+      renderer = new ManiaReplayRenderer(
+        canvasRef.current,
+        replay.frames,
+        replay.keyCount,
+        beatmap?.notes ?? [],
+        {
+          backgroundImage: bgImage ?? undefined,
+          backgroundDim: bgDim,
+          od: beatmap?.od,
+          showInputOverlay,
+          mods: modAcronyms,
+        },
+      ) as ReplayRendererLike;
+
+      rendererRef.current = renderer;
+
+      if (skin) renderer.setSkin(skin);
+      if (initialTime != null && initialTime > 0) {
+        const gameTimeMs = initialTime * 1000 * modRate;
+        renderer.seek(gameTimeMs);
+        setProgress(gameTimeMs / renderer.duration);
+      }
+
+      handleResize = () => renderer?.resize();
+      window.addEventListener("resize", handleResize);
+    });
+
+    return () => {
+      cancelled = true;
+      if (handleResize) window.removeEventListener("resize", handleResize);
+      if (rendererRef.current) {
+        rendererRef.current.destroy();
+        rendererRef.current = null;
+      }
+    };
+  }, [replay, beatmap, bgImage, bgDim, showInputOverlay, skin, initialTime, modRate, modAcronyms]);
 
   // Pass skin to renderer when it changes
   useEffect(() => {
@@ -352,16 +385,23 @@ function ReplayViewer({
 
   // Load persisted skin from IndexedDB on mount
   useEffect(() => {
-    loadSkinFromIDB().then(async (stored) => {
-      if (!stored) return;
+    let cancelled = false;
+
+    void import("../lib/skin-parser").then(async ({ loadSkinFromIDB, parseSkinFile, removeSkinFromIDB }) => {
+      const stored = await loadSkinFromIDB();
+      if (!stored || cancelled) return;
+
       try {
         const parsed = await parseSkinFile(stored.data, replay.keyCount);
-        setSkin(parsed);
+        if (!cancelled) setSkin(parsed);
       } catch {
-        // Stored skin may be corrupt or incompatible
         await removeSkinFromIDB();
       }
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, [replay.keyCount]);
 
   const handleSkinUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -369,6 +409,7 @@ function ReplayViewer({
     if (!file) return;
     setSkinLoading(true);
     try {
+      const { parseSkinFile, saveSkinToIDB } = await import("../lib/skin-parser");
       const buffer = await file.arrayBuffer();
       const parsed = await parseSkinFile(buffer, replay.keyCount);
       setSkin(parsed);
@@ -384,6 +425,7 @@ function ReplayViewer({
 
   const handleRemoveSkin = async () => {
     setSkin(null);
+    const { removeSkinFromIDB } = await import("../lib/skin-parser");
     await removeSkinFromIDB();
   };
 

@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { SearchInput } from "../ui/SearchInput";
+import { clearDevServerCaches } from "../../lib/api";
 import { searchUsers } from "../../lib/osu";
 import { useAppStore } from "../../store";
 
@@ -9,9 +10,57 @@ const links = [
   { id: "rankings", to: "/rankings", label: "rankings" },
   { id: "tracker", to: "/tracker", label: "tracker" },
   { id: "top-plays", to: "/top-plays", label: "top plays" },
+  { id: "maps", to: "/maps", label: "maps" },
   { id: "replay", to: "/replay", label: "replay" },
   { id: "snipes", to: "/snipes", label: "snipes" },
 ] as const;
+
+const CLIENT_CACHE_KEYS = ["mania-hub-cache-v1", "mania-hub-cache-v2", "mania-hub-cache-v3"];
+const SKIN_DB_NAME = "mania-hub-skins";
+
+function deleteIndexedDb(name: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof indexedDB === "undefined") {
+      resolve();
+      return;
+    }
+
+    const request = indexedDB.deleteDatabase(name);
+    request.onsuccess = () => resolve();
+    request.onerror = () => resolve();
+    request.onblocked = () => resolve();
+  });
+}
+
+async function clearClientCaches(): Promise<void> {
+  useAppStore.persist.clearStorage();
+
+  if (typeof window !== "undefined") {
+    CLIENT_CACHE_KEYS.forEach((key) => {
+      window.localStorage.removeItem(key);
+    });
+    window.sessionStorage.clear();
+  }
+
+  if (typeof caches !== "undefined") {
+    const cacheNames = await caches.keys();
+    await Promise.allSettled(cacheNames.map((name) => caches.delete(name)));
+  }
+
+  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.allSettled(registrations.map((registration) => registration.unregister()));
+  }
+
+  await deleteIndexedDb(SKIN_DB_NAME);
+}
+
+async function clearAllDevCaches(): Promise<void> {
+  await Promise.allSettled([
+    clearClientCaches(),
+    clearDevServerCaches(),
+  ]);
+}
 
 export function Nav() {
   const location = useLocation();
@@ -111,12 +160,12 @@ export function Nav() {
         <div className="flex items-center gap-2">
           {import.meta.env.VITE_DEV_MODE === "1" && (
             <button
-              onClick={() => {
-                useAppStore.persist.clearStorage();
+              onClick={async () => {
+                await clearAllDevCaches();
                 window.location.reload();
               }}
               className="px-2 py-1 rounded-lg bg-osu-red/20 text-[10px] text-osu-red font-semibold hover:bg-osu-red/30 transition-colors cursor-pointer border border-osu-red/30"
-              title="Clear all cached data and reload"
+              title="Clear dev caches, including Turso cache entries, and reload"
             >
               Clear cache
             </button>

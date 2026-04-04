@@ -1,4 +1,5 @@
 // Server-only: OAuth token management + fetch wrapper for osu! API v2
+import { createServerFn } from "@tanstack/react-start";
 import { db, ensureCacheSchema, hasDb } from "./db";
 
 let tokenCache: { access_token: string; expires_at: number } | null = null;
@@ -133,6 +134,33 @@ export async function setPersistentCache(key: string, data: unknown, ttlMs = CAC
     warnCacheIssue("persistent write", key, error);
   }
 }
+
+async function clearServerCachesInternal(): Promise<void> {
+  responseCache.clear();
+  warnedCacheIssues.clear();
+
+  if (!hasDb() || !db) return;
+
+  try {
+    await ensureCacheSchema();
+    await db.execute("DELETE FROM cache_entries");
+  } catch (error) {
+    warnCacheIssue("clear persistent cache", "cache_entries", error);
+    throw error;
+  }
+}
+
+export const clearDevServerCaches = createServerFn({ method: "POST" })
+  .handler(async () => {
+    const isDevMode = process.env.VITE_DEV_MODE === "1" || process.env.NODE_ENV !== "production";
+
+    if (!isDevMode) {
+      throw new Error("Server cache clearing is only enabled in dev mode.");
+    }
+
+    await clearServerCachesInternal();
+    return { ok: true };
+  });
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

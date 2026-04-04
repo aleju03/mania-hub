@@ -44,11 +44,13 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <RouteLoadingBar />
         <main className="flex-1 pt-[60px]">{children}</main>
         <Scripts />
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'))}`,
-          }}
-        />
+        {import.meta.env.PROD ? (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'))}`,
+            }}
+          />
+        ) : null}
       </body>
     </html>
   );

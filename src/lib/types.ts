@@ -215,6 +215,104 @@ export interface UserSearchResponse {
   };
 }
 
+// Maps aggregation types
+
+export interface BeatmapPlaycount {
+  beatmap_id: number;
+  count: number;
+  beatmap: {
+    beatmapset_id: number;
+    difficulty_rating: number;
+    id: number;
+    mode: string;
+    status: string;
+    total_length: number;
+    user_id: number;
+    version: string;
+  };
+  beatmapset: {
+    id: number;
+    title: string;
+    artist: string;
+    creator: string;
+    covers: OsuCovers;
+    status: string;
+    play_count: number;
+    favourite_count: number;
+    preview_url: string;
+  };
+}
+
+export interface MapsPlayerEntry {
+  id: number;
+  username: string;
+  avatarUrl: string;
+  count: number;
+}
+
+export interface MapsAggregatedBeatmap {
+  beatmapId: number;
+  version: string;
+  difficultyRating: number;
+  totalLength: number;
+  beatmapsetId: number;
+  title: string;
+  artist: string;
+  creator: string;
+  covers: OsuCovers;
+  status: string;
+  globalPlayCount: number;
+  totalPlays: number;
+  playerCount: number;
+  players: MapsPlayerEntry[];
+}
+
+export interface MapsAggregatedFavourite {
+  beatmapsetId: number;
+  title: string;
+  artist: string;
+  creator: string;
+  covers: OsuCovers;
+  status: string;
+  globalPlayCount: number;
+  globalFavouriteCount: number;
+  playerCount: number;
+  players: Array<{ id: number; username: string; avatarUrl: string }>;
+}
+
+export interface MapsFarmedPlayer {
+  id: number;
+  username: string;
+  avatarUrl: string;
+  pp: number;
+}
+
+export interface MapsFarmedEntry {
+  beatmapId: number;
+  version: string;
+  difficultyRating: number;
+  totalLength: number;
+  cs: number;
+  bpm: number;
+  beatmapsetId: number;
+  title: string;
+  artist: string;
+  creator: string;
+  covers: OsuCovers;
+  status: string;
+  playerCount: number;
+  players: MapsFarmedPlayer[];
+  avgPp: number;
+  maxPp: number;
+}
+
+export interface CountryMapsData {
+  farmed: MapsFarmedEntry[];
+  mostPlayed: MapsAggregatedBeatmap[];
+  favourites: MapsAggregatedFavourite[];
+  generatedAt: string;
+}
+
 // Replay types
 export interface ReplayHeader {
   gameMode: number;

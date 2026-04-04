@@ -15,6 +15,7 @@ import {
   getScoreTimestamp,
   getScoreUrl,
   isDisplayedPassed,
+  isLazerScore,
   scoreHasReplay,
 } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -22,6 +23,7 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
+import { LazerBadge } from "../components/ui/LazerBadge";
 import { ScoreRowSkeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import { useAppStore } from "../store";
@@ -497,6 +499,9 @@ function ScoreFeedItem({
               <ModBadge key={acronym} mod={acronym} />
             ))}
           </div>
+          {isLazerScore(score) && (
+            <LazerBadge />
+          )}
           <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>
           <span className="text-sm font-bold">
             {formatPP(score.pp)}
