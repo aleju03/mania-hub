@@ -221,7 +221,7 @@ function ReplayInfo({ replay, score, beatmap, onClear }: {
 
   return (
     <div className="bg-osu-b4 rounded-xl p-4 mb-4 border border-osu-b3/20">
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+      <div className="flex flex-wrap items-center gap-x-4 sm:gap-x-6 gap-y-2">
         <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Player</div><div className="text-sm font-bold text-white">{h.playerName}</div></div>
         {beatmap && <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Map</div>{mapUrl ? <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-osu-l2 hover:text-osu-pink-light transition-colors">{beatmap.title} [{beatmap.version}]</a> : <div className="text-sm font-medium text-osu-l2">{beatmap.title} [{beatmap.version}]</div>}</div>}
         <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Keys</div><div className="text-sm font-bold text-osu-yellow">{replay.keyCount}K</div></div>
@@ -655,7 +655,7 @@ function ReplayViewer({
         </div>
 
         {/* Controls row */}
-        <div className="flex items-center gap-3 px-4 py-3 flex-wrap">
+        <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 flex-wrap">
           {/* Play/Pause */}
           <button onClick={togglePlay} className="w-9 h-9 rounded-full bg-osu-pink hover:bg-osu-pink-light transition-colors flex items-center justify-center cursor-pointer shrink-0">
             {isPlaying ? (
@@ -674,12 +674,12 @@ function ReplayViewer({
           <div className="flex items-center gap-0.5">
             {[0.25, 0.5, 1, 1.5, 2].map((s) => (
               <button key={s} onClick={() => { setSpeed(s); rendererRef.current?.setSpeed(s); if (audioRef.current) audioRef.current.playbackRate = s * modRate; }}
-                className={`px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${speed === s ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"}`}>{s}x</button>
+                className={`px-1.5 sm:px-2 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${speed === s ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"}`}>{s}x</button>
             ))}
           </div>
 
           {/* Divider */}
-          <div className="w-px h-5 bg-osu-b3/40" />
+          <div className="w-px h-5 bg-osu-b3/40 hidden sm:block" />
 
           {/* Volume */}
           {audioUrl && (
@@ -707,12 +707,12 @@ function ReplayViewer({
               </button>
               <input type="range" min={0} max={1} step={0.05} value={audioEnabled ? volume : 0}
                 onChange={(e) => { const v = Number(e.target.value); setVolume(v); if (!audioEnabled && v > 0) setAudioEnabled(true); if (audioRef.current) audioRef.current.volume = v; }}
-                className={`w-16 ${sliderClass}`} />
+                className={`w-12 sm:w-16 ${sliderClass}`} />
             </div>
           )}
 
           {/* Divider */}
-          <div className="w-px h-5 bg-osu-b3/40" />
+          <div className="w-px h-5 bg-osu-b3/40 hidden sm:block" />
 
           {/* Input overlay toggle */}
           <button
@@ -735,7 +735,7 @@ function ReplayViewer({
           </div>
 
           {/* Divider */}
-          <div className="w-px h-5 bg-osu-b3/40" />
+          <div className="w-px h-5 bg-osu-b3/40 hidden sm:block" />
 
           {/* Skin upload */}
           <div className="flex items-center gap-1.5">
@@ -757,11 +757,11 @@ function ReplayViewer({
           </div>
 
           {/* BG Dim — pushed right */}
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-2 ml-0 sm:ml-auto w-full sm:w-auto">
             <span className="text-[10px] text-osu-f1">BG Dim</span>
             <input type="range" min={0} max={100} step={5} value={bgDim}
               onChange={(e) => { const v = Number(e.target.value); setBgDim(v); rendererRef.current?.setBackgroundDim(v); }}
-              className={`w-20 ${sliderClass}`} />
+              className={`w-16 sm:w-20 ${sliderClass}`} />
             <span className="text-[10px] text-osu-f1 tabular-nums w-7">{bgDim}%</span>
           </div>
         </div>

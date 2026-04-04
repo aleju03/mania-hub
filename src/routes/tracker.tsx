@@ -279,8 +279,8 @@ function ScoresPage() {
       />
 
       <div className="bg-osu-d5 border-b border-osu-b3/30">
-        <div className="max-w-[1200px] mx-auto px-5 flex items-center justify-between">
-          <div className="flex items-center gap-0">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
+          <div className="flex items-center gap-0 overflow-x-auto scrollbar-hide w-full sm:w-auto">
             {filters.map((item) => (
               <button
                 key={item.id}
@@ -313,7 +313,7 @@ function ScoresPage() {
               </button>
             ))}
           </div>
-          <div className="flex rounded-lg overflow-hidden border border-osu-b3/30">
+          <div className="flex rounded-lg overflow-hidden border border-osu-b3/30 self-end sm:self-auto">
             {failedOptions.map((item) => (
               <button
                 key={item.id}
@@ -431,7 +431,7 @@ function ScoreFeedItem({
       className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden"
     >
       <div
-        className="flex items-center gap-3 py-3 px-4 hover:bg-osu-b3/50 transition-colors duration-[120ms] cursor-pointer"
+        className="flex items-center gap-2 sm:gap-3 py-3 px-3 sm:px-4 hover:bg-osu-b3/50 transition-colors duration-[120ms] cursor-pointer"
         onClick={onToggle}
       >
         <GradeImg grade={getDisplayedRank(score)} size={32} />
@@ -492,8 +492,21 @@ function ScoreFeedItem({
               </span>
             )}
           </div>
+          {/* Mobile-only metadata row */}
+          <div className="flex items-center gap-2 mt-1 sm:hidden">
+            <div className="flex gap-0.5">
+              {getModAcronyms(score.mods).map((acronym) => (
+                <ModBadge key={acronym} mod={acronym} />
+              ))}
+            </div>
+            {isLazerScore(score) && <LazerBadge />}
+            <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>
+            <span className="text-sm font-bold">{formatPP(score.pp)}</span>
+            <span className="text-[10px] text-osu-f1 ml-auto">{formatTimeAgo(getScoreTimestamp(score))}</span>
+          </div>
         </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
+        {/* Desktop metadata */}
+        <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
           <div className="flex gap-0.5">
             {getModAcronyms(score.mods).map((acronym) => (
               <ModBadge key={acronym} mod={acronym} />

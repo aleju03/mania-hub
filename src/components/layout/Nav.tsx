@@ -1,4 +1,5 @@
-import { motion } from "framer-motion";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { SearchInput } from "../ui/SearchInput";
 import { clearDevServerCaches } from "../../lib/api";
@@ -65,8 +66,26 @@ async function clearAllDevCaches(): Promise<void> {
 export function Nav() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [menuOpen, setMenuOpen] = useState(false);
   const current = links.find((l) => location.pathname.startsWith(l.to === "/" ? "/__home" : l.to)) ||
     (location.pathname === "/" ? links[0] : location.pathname.startsWith("/player") ? null : links[0]);
+
+  // Close drawer on route change
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+
+  // Prevent body scroll when drawer is open
+  useEffect(() => {
+    if (menuOpen) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [menuOpen]);
 
   const handleSearch = async (q: string) => {
     const res = await searchUsers({ data: { query: q } });
@@ -93,7 +112,7 @@ export function Nav() {
         className="absolute bottom-0 left-0 right-0 h-px"
         style={{ background: "hsl(333,100%,70%,0.2)" }}
       />
-      <nav className="relative flex items-center justify-between h-[60px] px-5 max-w-[1200px] mx-auto">
+      <nav className="relative flex items-center justify-between h-[60px] px-4 sm:px-5 max-w-[1200px] mx-auto">
         <div className="flex items-center gap-1">
           <motion.div
             className="cursor-pointer mr-2"
@@ -134,30 +153,36 @@ export function Nav() {
               <span className="mode-icon text-osu-pink text-lg" title="mania">{"\ue802"}</span>
             </Link>
           </motion.div>
-          {links.map((l) => (
-            <Link
-              key={l.id}
-              to={l.to}
-              preload="intent"
-              className={`relative px-2.5 py-[19px] text-[12px] font-semibold capitalize transition-colors duration-[120ms] ${
-                current?.id === l.id
-                  ? "text-white"
-                  : "text-osu-pink-light hover:text-white"
-              }`}
-            >
-              {l.label}
-              {l.id === "snipes" && <img src="/images/icons/sniper.webp" alt="" className="inline w-4 h-4 ml-1 -mt-0.5" />}
-              {current?.id === l.id && (
-                <motion.div
-                  layoutId="nav-bar"
-                  className="absolute bottom-0 left-2 right-2 h-[3px] rounded-full bg-osu-yellow"
-                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                />
-              )}
-            </Link>
-          ))}
+
+          {/* Desktop nav links */}
+          <div className="hidden md:flex items-center gap-1">
+            {links.map((l) => (
+              <Link
+                key={l.id}
+                to={l.to}
+                preload="intent"
+                className={`relative px-2.5 py-[19px] text-[12px] font-semibold capitalize transition-colors duration-[120ms] ${
+                  current?.id === l.id
+                    ? "text-white"
+                    : "text-osu-pink-light hover:text-white"
+                }`}
+              >
+                {l.label}
+                {l.id === "snipes" && <img src="/images/icons/sniper.webp" alt="" className="inline w-4 h-4 ml-1 -mt-0.5" />}
+                {current?.id === l.id && (
+                  <motion.div
+                    layoutId="nav-bar"
+                    className="absolute bottom-0 left-2 right-2 h-[3px] rounded-full bg-osu-yellow"
+                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                  />
+                )}
+              </Link>
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+
+        {/* Desktop search + dev tools */}
+        <div className="hidden md:flex items-center gap-2">
           {import.meta.env.VITE_DEV_MODE === "1" && (
             <button
               onClick={async () => {
@@ -177,7 +202,101 @@ export function Nav() {
             onSelect={(u) => navigate({ to: "/player/$username", params: { username: u.username } })}
           />
         </div>
+
+        {/* Mobile hamburger button */}
+        <button
+          className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg hover:bg-osu-b3/50 transition-colors cursor-pointer"
+          onClick={() => setMenuOpen(!menuOpen)}
+          aria-label="Toggle menu"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-5 h-5 text-osu-pink-light">
+            {menuOpen ? (
+              <>
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </>
+            ) : (
+              <>
+                <line x1="4" y1="7" x2="20" y2="7" />
+                <line x1="4" y1="12" x2="20" y2="12" />
+                <line x1="4" y1="17" x2="20" y2="17" />
+              </>
+            )}
+          </svg>
+        </button>
       </nav>
+
+      {/* Mobile drawer */}
+      <AnimatePresence>
+        {menuOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              className="fixed inset-0 z-[55] bg-black/60 md:hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setMenuOpen(false)}
+              style={{ top: 60 }}
+            />
+            {/* Drawer panel */}
+            <motion.div
+              className="fixed top-[60px] right-0 w-64 bottom-0 bg-osu-b5 z-[60] md:hidden border-l border-osu-b3/30 overflow-y-auto"
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 400 }}
+            >
+              <div className="py-2">
+                {links.map((l) => (
+                  <Link
+                    key={l.id}
+                    to={l.to}
+                    preload="intent"
+                    onClick={() => setMenuOpen(false)}
+                    className={`flex items-center gap-3 px-5 py-3 text-sm font-medium capitalize transition-colors duration-[120ms] ${
+                      current?.id === l.id
+                        ? "text-white bg-osu-pink/10 border-l-3 border-osu-yellow"
+                        : "text-osu-pink-light hover:text-white hover:bg-osu-b4/50 border-l-3 border-transparent"
+                    }`}
+                  >
+                    {l.label}
+                    {l.id === "snipes" && <img src="/images/icons/sniper.webp" alt="" className="inline w-4 h-4" />}
+                  </Link>
+                ))}
+              </div>
+
+              <div className="border-t border-osu-b3/30 px-4 py-4">
+                <SearchInput
+                  className="w-full"
+                  placeholder="find player..."
+                  onSearch={handleSearch}
+                  onSelect={(u) => {
+                    setMenuOpen(false);
+                    navigate({ to: "/player/$username", params: { username: u.username } });
+                  }}
+                />
+              </div>
+
+              {import.meta.env.VITE_DEV_MODE === "1" && (
+                <div className="border-t border-osu-b3/30 px-4 py-3">
+                  <button
+                    onClick={async () => {
+                      await clearAllDevCaches();
+                      window.location.reload();
+                    }}
+                    className="w-full px-3 py-2 rounded-lg bg-osu-red/20 text-[10px] text-osu-red font-semibold hover:bg-osu-red/30 transition-colors cursor-pointer border border-osu-red/30"
+                    title="Clear dev caches"
+                  >
+                    Clear cache
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </header>
   );
 }
