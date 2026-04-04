@@ -4,12 +4,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import { getRankings, getUserScoresBestWindow } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { formatNumber, formatAccuracy, formatTimeAgo } from "../lib/format";
-import { calculateApproxPpGainMap, getBeatmapUrl, getDisplayedTotalScore, getModAcronyms, getScoreTimeMs, getScoreTimestamp, getScoreUrl, scoreHasReplay } from "../lib/score";
+import { calculateApproxPpGainMap, getBeatmapUrl, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, getScoreTimeMs, getScoreTimestamp, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
+import { LazerBadge } from "../components/ui/LazerBadge";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { OsuScore, RankingsResponse } from "../lib/types";
@@ -433,8 +434,11 @@ function PopOffsPage() {
                             <ModBadge key={acronym} mod={acronym} />
                           ))}
                         </div>
+                        {isLazerScore(p.score) && (
+                          <LazerBadge />
+                        )}
                         <span className="text-xs text-osu-l2">
-                          {formatAccuracy(p.score.accuracy)}
+                          {formatAccuracy(getDisplayedAccuracy(p.score))}
                         </span>
                         <span className="text-xs text-osu-f1">
                           {formatNumber(p.score.max_combo)}x

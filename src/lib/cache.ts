@@ -5,6 +5,7 @@ export const CLIENT_CACHE_TTL = {
   homePopoffs: 2 * 60 * 1000,
   popoffs: 2 * 60 * 1000,
   scoresFeed: 60 * 1000,
+  mapsData: 60 * 60 * 1000,
 } as const;
 
 export function isCacheStale(fetchedAt: number | null | undefined, ttl: number): boolean {

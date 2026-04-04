@@ -1,4 +1,4 @@
-import type { OsuMod, OsuScore } from "./types";
+import type { OsuMod, OsuScore, OsuScoreStatistics } from "./types";
 
 const PP_WEIGHT_DECAY = 0.95;
 
@@ -51,8 +51,45 @@ export function getDisplayedTotalScore(score: OsuScore): number | null {
   return value && value > 0 ? value : null;
 }
 
+function isLegacySubmittedScore(score: OsuScore): boolean {
+  return score.legacy_score_id != null || !!(score.legacy_total_score && score.legacy_total_score > 0);
+}
+
+export function isLazerScore(score: OsuScore): boolean {
+  return !isLegacySubmittedScore(score);
+}
+
+/** Lazer (v2) mania accuracy: MAX=320, 300=300, 200=200, 100=100, 50=50, max=320 */
+function calculateLazerAccuracy(stats: OsuScoreStatistics): number {
+  const countMax = stats.count_geki ?? stats.perfect ?? 0;
+  const count300 = stats.count_300 ?? stats.great ?? 0;
+  const count200 = stats.count_katu ?? stats.good ?? 0;
+  const count100 = stats.count_100 ?? stats.ok ?? 0;
+  const count50 = stats.count_50 ?? stats.meh ?? 0;
+  const countMiss = stats.count_miss ?? stats.miss ?? 0;
+  const total = countMax + count300 + count200 + count100 + count50 + countMiss;
+  if (total === 0) return 0;
+  return (countMax * 320 + count300 * 300 + count200 * 200 + count100 * 100 + count50 * 50) / (total * 320);
+}
+
+/** Stable mania accuracy: MAX=300=300, 200=200, 100=100, 50=50, miss=0 */
+function calculateStableAccuracy(stats: OsuScoreStatistics): number {
+  const countMax = stats.count_geki ?? stats.perfect ?? 0;
+  const count300 = stats.count_300 ?? stats.great ?? 0;
+  const count200 = stats.count_katu ?? stats.good ?? 0;
+  const count100 = stats.count_100 ?? stats.ok ?? 0;
+  const count50 = stats.count_50 ?? stats.meh ?? 0;
+  const countMiss = stats.count_miss ?? stats.miss ?? 0;
+  const total = countMax + count300 + count200 + count100 + count50 + countMiss;
+  if (total === 0) return 0;
+  return (countMax * 300 + count300 * 300 + count200 * 200 + count100 * 100 + count50 * 50) / (total * 300);
+}
+
 export function getDisplayedAccuracy(score: OsuScore): number {
-  return score.accuracy;
+  if (isLazerScore(score)) {
+    return calculateLazerAccuracy(score.statistics);
+  }
+  return calculateStableAccuracy(score.statistics);
 }
 
 export function getDisplayedRank(score: OsuScore): string {

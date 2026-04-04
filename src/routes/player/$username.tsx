@@ -18,11 +18,13 @@ import {
   getScoreIdentity,
   getScoreTimestamp,
   getScoreUrl,
+  isLazerScore,
   scoreHasReplay,
 } from "../../lib/score";
 import { Avatar } from "../../components/ui/Avatar";
 import { GradeImg } from "../../components/ui/GradeImg";
 import { ModBadge } from "../../components/ui/ModBadge";
+import { LazerBadge } from "../../components/ui/LazerBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
 import { UsernameText } from "../../components/ui/UsernameText";
 import type { OsuScore, OsuUser } from "../../lib/types";
@@ -748,6 +750,9 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
             <ModBadge key={acronym} mod={acronym} />
           ))}
         </div>
+        {isLazerScore(score) && (
+          <LazerBadge />
+        )}
         <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>
         <span className="text-xs text-osu-f1">{formatNumber(score.max_combo)}x</span>
         <span className="text-sm font-bold w-16 text-right">{formatPP(score.pp)}</span>

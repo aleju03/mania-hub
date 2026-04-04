@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { getAvatarAccentStoreKey } from "./lib/avatar-accent";
 import { getScoreIdentity, getScoreTimeMs } from "./lib/score";
-import type { OsuScore, RankingsResponse } from "./lib/types";
+import type { OsuScore, RankingsResponse, CountryMapsData } from "./lib/types";
 
 export interface CachedPlayer {
   id: number;
@@ -36,6 +36,10 @@ interface AppState {
   homePopoffsFetchedAt: number | null;
   popoffs: CachedPopoff[];
   popoffsFetchedAt: number | null;
+  // Maps
+  mapsData: CountryMapsData | null;
+  mapsDataFetchedAt: number | null;
+  setMapsData: (data: CountryMapsData) => void;
   // Score feed
   feedScores: OsuScore[];
   feedScoresFetchedAt: number | null;
@@ -72,6 +76,13 @@ export const useAppStore = create<AppState>()(
       homePopoffsFetchedAt: null,
       popoffs: [],
       popoffsFetchedAt: null,
+      mapsData: null,
+      mapsDataFetchedAt: null,
+      setMapsData: (data) =>
+        set({
+          mapsData: data,
+          mapsDataFetchedAt: Date.now(),
+        }),
       feedScores: [],
       feedScoresFetchedAt: null,
       trackedUserIds: [],
@@ -149,7 +160,7 @@ export const useAppStore = create<AppState>()(
       nextPollIndex: () => set((state) => ({ pollIndex: state.pollIndex + 1 })),
     }),
     {
-      name: "mania-hub-cache-v2",
+      name: "mania-hub-cache-v3",
       storage,
       partialize: (state) => ({
         avatarAccents: state.avatarAccents,
@@ -163,6 +174,8 @@ export const useAppStore = create<AppState>()(
         homePopoffsFetchedAt: state.homePopoffsFetchedAt,
         popoffs: state.popoffs,
         popoffsFetchedAt: state.popoffsFetchedAt,
+        mapsData: state.mapsData,
+        mapsDataFetchedAt: state.mapsDataFetchedAt,
         feedScores: state.feedScores,
         feedScoresFetchedAt: state.feedScoresFetchedAt,
         trackedUserIds: state.trackedUserIds,
