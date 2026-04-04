@@ -25,7 +25,7 @@ import { UsernameText } from "../components/ui/UsernameText";
 import { useAppStore } from "../store";
 import type { OsuScore } from "../lib/types";
 
-export const Route = createFileRoute("/scores")({
+export const Route = createFileRoute("/tracker")({
   component: ScoresPage,
 });
 
@@ -295,13 +295,17 @@ function ScoresPage() {
               <button
                 key={item.id}
                 onClick={() => { setGradeFilter(item.id); if (item.id !== "all") setFilter("all"); }}
-                className={`px-2.5 py-2.5 text-[11px] font-semibold cursor-pointer transition-colors duration-[120ms] border-b-2 ${
+                className={`px-2.5 py-2 cursor-pointer transition-all duration-[120ms] border-b-2 flex items-center ${
                   gradeFilter === item.id
-                    ? "text-osu-c1 border-osu-h1"
-                    : "text-osu-f1 border-transparent hover:text-osu-l2"
+                    ? "border-osu-h1 opacity-100"
+                    : "border-transparent opacity-50 hover:opacity-80"
                 }`}
               >
-                {item.label}
+                {item.id === "all" ? (
+                  <span className="text-[11px] font-semibold text-osu-f1">Any</span>
+                ) : (
+                  <GradeImg grade={item.id} size={20} />
+                )}
               </button>
             ))}
           </div>

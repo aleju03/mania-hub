@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getRankings, getUserScoresBestWindow, getUsersApproxPpGains } from "../lib/osu";
+import { getRankings, getUserScoresBestWindow } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { formatNumber, formatAccuracy, formatTimeAgo } from "../lib/format";
-import { getBeatmapUrl, getDisplayedTotalScore, getScoreTimeMs, getScoreTimestamp, scoreHasReplay } from "../lib/score";
+import { calculateApproxPpGainMap, getBeatmapUrl, getDisplayedTotalScore, getScoreTimeMs, getScoreTimestamp, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
@@ -20,12 +20,12 @@ interface PopOff {
   score: OsuScore;
   pp: number;
   weightedPP: number;
+  ppGain: number;
   time: string;
 }
 
 type TimeRange = "24h" | "3d" | "7d" | "30d";
 type SortMode = "recent" | "pp";
-const PP_GAIN_BATCH_SIZE = 4;
 const RANGE_MS: Record<TimeRange, number> = {
   "24h": 24 * 60 * 60 * 1000,
   "3d": 3 * 24 * 60 * 60 * 1000,
@@ -35,7 +35,7 @@ const RANGE_MS: Record<TimeRange, number> = {
 
 const PAGE_SIZE = 15;
 
-export const Route = createFileRoute("/popoffs")({
+export const Route = createFileRoute("/top-plays")({
   component: PopOffsPage,
 });
 
@@ -56,8 +56,6 @@ function PopOffsPage() {
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [page, setPage] = useState(0);
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [ppGainByScoreId, setPpGainByScoreId] = useState<Record<number, number>>({});
-  const [ppGainFetchedByUserId, setPpGainFetchedByUserId] = useState<Record<number, true>>({});
 
   const players = rankings?.ranking.slice(0, 30).map((entry: RankingsResponse["ranking"][number]) => ({
     id: entry.user.id,
@@ -87,7 +85,7 @@ function PopOffsPage() {
       })
       .catch(() => {
         if (cancelled || rankings) return;
-        setPlayersError("Couldn't load the player list for pop-offs.");
+        setPlayersError("Couldn't load the player list for top plays.");
       })
       .finally(() => {
         if (cancelled) return;
@@ -126,6 +124,7 @@ function PopOffsPage() {
       const results = await Promise.allSettled(
         batch.map(async (player: { id: number; username: string; avatar_url: string }) => {
           const scores = await getUserScoresBestWindow({ data: { userId: player.id, totalLimit: 200 } });
+          const gainMap = calculateApproxPpGainMap(scores);
           return scores
             .filter((s: OsuScore) => {
               const age = Date.now() - getScoreTimeMs(s);
@@ -136,6 +135,7 @@ function PopOffsPage() {
               score: s,
               pp: s.pp ?? 0,
               weightedPP: s.weight?.pp ?? 0,
+              ppGain: gainMap[s.id] ?? 0,
               time: getScoreTimestamp(s),
             }));
         })
@@ -182,37 +182,30 @@ function PopOffsPage() {
     });
   }, [visiblePopoffs, range, sortMode]);
 
+  const playerPpGains = useMemo(() => {
+    const byUser = new Map<number, { username: string; avatar_url: string; totalGain: number }>();
+    for (const p of filtered) {
+      if (!p.ppGain) continue;
+      const existing = byUser.get(p.user.id);
+      if (existing) {
+        existing.totalGain += p.ppGain;
+      } else {
+        byUser.set(p.user.id, {
+          username: p.user.username,
+          avatar_url: p.user.avatar_url,
+          totalGain: p.ppGain,
+        });
+      }
+    }
+    return [...byUser.entries()]
+      .filter(([, info]) => Math.round(info.totalGain) > 0)
+      .sort((a, b) => b[1].totalGain - a[1].totalGain)
+      .map(([id, info]) => ({ id, ...info }));
+  }, [filtered]);
+
   // Paginate
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-
-  useEffect(() => {
-    const usersToFetch = [...new Set(
-      paginated
-        .filter((entry) => !ppGainFetchedByUserId[entry.user.id])
-        .map((entry) => entry.user.id),
-    )];
-
-    if (usersToFetch.length === 0) return;
-
-    let cancelled = false;
-    const run = async () => {
-      for (let i = 0; i < usersToFetch.length; i += PP_GAIN_BATCH_SIZE) {
-        const batch = usersToFetch.slice(i, i + PP_GAIN_BATCH_SIZE);
-        const gains = await getUsersApproxPpGains({ data: { userIds: batch } });
-        if (cancelled) return;
-        const fetchedUsers = Object.fromEntries(batch.map((userId) => [userId, true])) as Record<number, true>;
-        setPpGainByScoreId((prev) => ({ ...prev, ...gains }));
-        setPpGainFetchedByUserId((prev) => ({ ...prev, ...fetchedUsers }));
-      }
-    };
-
-    void run();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [paginated, ppGainFetchedByUserId]);
 
   const ranges: { id: TimeRange; label: string }[] = [
     { id: "24h", label: "24 hours" },
@@ -225,7 +218,7 @@ function PopOffsPage() {
     <div className="flex-1">
       <PageHeader
         iconSrc="/images/icons/rankings.svg"
-        title="CR mania pop-offs"
+        title="CR mania top plays"
         right={
           <div className="flex items-center gap-2">
             {(loadingPlayers || loading) && !playersError && (
@@ -240,7 +233,7 @@ function PopOffsPage() {
             )}
             {!loadingPlayers && !loading && !playersError && (
               <span className="text-[10px] text-osu-f1">
-                {filtered.length} pop-offs found
+                {filtered.length} top plays found
               </span>
             )}
           </div>
@@ -288,7 +281,44 @@ function PopOffsPage() {
       </div>
 
       <div className="bg-osu-b5">
-        <div className="max-w-[1200px] mx-auto px-5 py-6">
+        <div className="max-w-[1200px] mx-auto px-5 py-6 flex gap-5">
+          {playerPpGains.length > 0 && (
+            <div className="hidden lg:flex flex-shrink-0 pt-1 gap-3">
+              {(() => {
+                const maxPerCol = 8;
+                const numCols = Math.ceil(playerPpGains.length / maxPerCol);
+                const perCol = Math.ceil(playerPpGains.length / numCols);
+                const cols: typeof playerPpGains[] = [];
+                for (let i = 0; i < playerPpGains.length; i += perCol) {
+                  cols.push(playerPpGains.slice(i, i + perCol));
+                }
+                return cols.map((col, ci) => (
+                  <div key={ci} className="flex flex-col items-center gap-2">
+                    {ci === 0 && (
+                      <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-1">PP Gained</span>
+                    )}
+                    {ci > 0 && <div className="mb-1 h-[14px]" />}
+                    {col.map((player) => (
+                      <button
+                        key={player.id}
+                        onClick={() => navigate({ to: "/player/$username", params: { username: player.username } })}
+                        className="cursor-pointer group relative flex flex-col items-center gap-0.5"
+                        title={`${player.username}: +${formatNumber(Math.round(player.totalGain))}pp`}
+                      >
+                        <div className="ring-2 ring-osu-pink/40 rounded-full group-hover:ring-osu-pink transition-all">
+                          <Avatar url={player.avatar_url} size={32} />
+                        </div>
+                        <span className="text-[9px] font-semibold text-osu-green">
+                          +{formatNumber(Math.round(player.totalGain))}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ));
+              })()}
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
           {playersError && (
             <div className="text-center py-16 text-osu-f1 text-sm">
               {playersError}
@@ -316,15 +346,15 @@ function PopOffsPage() {
           {/* Results */}
           {!playersError && paginated.length > 0 && (
             <div className="space-y-2">
-              <AnimatePresence mode="popLayout">
-                {paginated.map((p: PopOff, i: number) => (
+              <AnimatePresence initial={false}>
+                {paginated.map((p: PopOff) => (
                   <motion.div
                     key={`${p.user.id}-${p.score.id}`}
                     layout
-                    initial={{ opacity: 0, x: -8 }}
-                    animate={{ opacity: 1, x: 0 }}
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
-                    transition={{ duration: 0.12, delay: i * 0.02 }}
+                    transition={{ duration: 0.15 }}
                     className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden"
                   >
                     <div
@@ -336,12 +366,12 @@ function PopOffsPage() {
                           {Math.round(p.pp)}
                         </div>
                         <div className="text-[8px] uppercase tracking-wider text-osu-f1 font-semibold">pp</div>
-                        {ppGainByScoreId[p.score.id] != null && (
+                        {p.ppGain > 0 && (
                           <div
                             className="text-[10px] font-semibold text-osu-green"
-                            title="Approximate pp gain from removing this play from the current best-score stack"
+                            title="Approximate pp gain from this play"
                           >
-                            +{formatNumber(Math.round(ppGainByScoreId[p.score.id]))}
+                            +{formatNumber(Math.round(p.ppGain))}
                           </div>
                         )}
                       </div>
@@ -470,7 +500,7 @@ function PopOffsPage() {
 
           {!playersError && !loadingPlayers && !loading && filtered.length === 0 && (
             <div className="text-center py-16 text-osu-f1 text-sm">
-              No pop-offs in this time range
+              No top plays in this time range
             </div>
           )}
 
@@ -498,6 +528,7 @@ function PopOffsPage() {
               )}
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

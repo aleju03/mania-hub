@@ -20,6 +20,7 @@ export interface CachedPopoff {
   score: OsuScore;
   pp: number;
   weightedPP: number;
+  ppGain: number;
   time: string;
 }
 
