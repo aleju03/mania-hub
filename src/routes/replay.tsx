@@ -488,10 +488,14 @@ function ReplayViewer({
       if (r.time >= r.duration) r.seek(0);
       r.play();
       setIsPlaying(true);
-      // Sync audio to current replay time on play
+      // Play audio directly from user gesture so browsers don't block it
       if (audioRef.current && audioEnabled) {
         audioRef.current.currentTime = r.time / 1000;
-        shouldResumeAudioRef.current = true;
+        audioRef.current.playbackRate = effectiveRate;
+        audioRef.current.volume = volume;
+        audioRef.current.play().catch(() => {
+          shouldResumeAudioRef.current = true;
+        });
       }
     }
   };
