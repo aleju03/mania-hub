@@ -252,13 +252,15 @@ function ReplayViewer({
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [volume, setVolume] = useState(() => {
     if (typeof window === "undefined") return 0.5;
-    const stored = Number(window.localStorage.getItem(REPLAY_VOLUME_STORAGE_KEY));
+    const raw = window.localStorage.getItem(REPLAY_VOLUME_STORAGE_KEY);
+    if (raw == null) return 0.5;
+    const stored = Number(raw);
     return Number.isFinite(stored) ? Math.min(1, Math.max(0, stored)) : 0.5;
   });
   const [showInputOverlay, setShowInputOverlay] = useState(() => {
-    if (typeof window === "undefined") return true;
+    if (typeof window === "undefined") return false;
     const stored = window.localStorage.getItem(REPLAY_INPUT_OVERLAY_STORAGE_KEY);
-    return stored == null ? true : stored === "true";
+    return stored == null ? false : stored === "true";
   });
   const [audioError, setAudioError] = useState<string | null>(null);
   const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);

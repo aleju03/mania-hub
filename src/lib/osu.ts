@@ -1,5 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
-import { osuFetch, osuFetchBinary, fetchBeatmapFile, getPersistentCached, setPersistentCache } from "./api";
+import {
+  osuFetch,
+  osuFetchBinary,
+  fetchBeatmapFile,
+  getPersistentCacheEntry,
+  getPersistentCached,
+  setPersistentCache,
+} from "./api";
 import { calculateApproxPpGainMap } from "./score";
 import type {
   OsuUser,
@@ -12,10 +19,16 @@ import type {
 const RANKINGS_CACHE_TTL = 5 * 60 * 1000;
 const RANK_HISTORY_CACHE_TTL = 24 * 60 * 60 * 1000;
 const APPROX_PP_GAINS_CACHE_TTL = 10 * 60 * 1000;
+const BEST_SCORES_WINDOW_CACHE_TTL = 2 * 60 * 1000;
+const USER_CACHE_TTL = 2 * 60 * 1000;
+const USER_SCORE_LIST_CACHE_TTL = 60 * 1000;
 const RANK_HISTORY_CONCURRENCY = 20;
 const APPROX_PP_GAINS_CONCURRENCY = 8;
 const RECENT_SCORES_CONCURRENCY = 10;
+const userPromiseCache = new Map<string, Promise<OsuUser>>();
+const userScoresListPromiseCache = new Map<string, Promise<OsuScore[]>>();
 const rankHistoryPromiseCache = new Map<number, Promise<number[] | null>>();
+const bestScoresWindowPromiseCache = new Map<string, Promise<OsuScore[]>>();
 const MIXED_SCORE_USER_IDS = new Set<number>([
   23341349, // happy amke sure
   25914429, // jaimito
@@ -29,6 +42,83 @@ function getScoreRequestParams(
     ...params,
     legacy_only: MIXED_SCORE_USER_IDS.has(userId) ? undefined : 1,
   };
+}
+
+function getUserCacheKey(key: string): string {
+  return `user:${key.trim().toLowerCase()}`;
+}
+
+function getUserScoreListCacheKey(
+  type: "best" | "recent",
+  userId: number,
+  params: { limit: number; offset: number; includeFails?: boolean },
+): string {
+  return [
+    "user-score-list",
+    type,
+    userId,
+    params.limit,
+    params.offset,
+    params.includeFails ? 1 : 0,
+  ].join(":");
+}
+
+async function getCachedUser(key: string): Promise<OsuUser> {
+  const cacheKey = getUserCacheKey(key);
+  const cached = await getPersistentCached<OsuUser>(cacheKey);
+  if (cached) return cached;
+
+  const pending = userPromiseCache.get(cacheKey);
+  if (pending) return pending;
+
+  const request = osuFetch<OsuUser>(`/users/${encodeURIComponent(key)}/mania`)
+    .then((user) => {
+      void Promise.allSettled([
+        setPersistentCache(cacheKey, user, USER_CACHE_TTL),
+        setPersistentCache(getUserCacheKey(user.username), user, USER_CACHE_TTL),
+        setPersistentCache(`user-id:${user.id}`, user, USER_CACHE_TTL),
+      ]);
+      return user;
+    })
+    .finally(() => {
+      userPromiseCache.delete(cacheKey);
+    });
+
+  userPromiseCache.set(cacheKey, request);
+  return request;
+}
+
+async function getCachedUserScores(
+  type: "best" | "recent",
+  userId: number,
+  options: { limit: number; offset: number; includeFails?: boolean },
+): Promise<OsuScore[]> {
+  const cacheKey = getUserScoreListCacheKey(type, userId, options);
+  const cached = await getPersistentCached<OsuScore[]>(cacheKey);
+  if (cached) return cached;
+
+  const pending = userScoresListPromiseCache.get(cacheKey);
+  if (pending) return pending;
+
+  const request = osuFetch<OsuScore[]>(
+    `/users/${userId}/scores/${type}`,
+    getScoreRequestParams(userId, {
+      mode: "mania",
+      limit: options.limit,
+      offset: options.offset,
+      include_fails: type === "recent" && options.includeFails ? 1 : 0,
+    }),
+  )
+    .then((scores) => {
+      void setPersistentCache(cacheKey, scores, USER_SCORE_LIST_CACHE_TTL);
+      return scores;
+    })
+    .finally(() => {
+      userScoresListPromiseCache.delete(cacheKey);
+    });
+
+  userScoresListPromiseCache.set(cacheKey, request);
+  return request;
 }
 
 async function mapWithConcurrency<T, R>(
@@ -54,8 +144,8 @@ async function mapWithConcurrency<T, R>(
 
 async function getUserRankHistory(userId: number): Promise<number[] | null> {
   const cacheKey = `rank-history:user:${userId}`;
-  const cached = await getPersistentCached<number[]>(cacheKey);
-  if (cached) return cached;
+  const cached = await getPersistentCacheEntry<number[] | null>(cacheKey);
+  if (cached.hit) return cached.value;
 
   const pending = rankHistoryPromiseCache.get(userId);
   if (pending) return pending;
@@ -63,9 +153,7 @@ async function getUserRankHistory(userId: number): Promise<number[] | null> {
   const request = osuFetch<OsuUser>(`/users/${userId}/mania`)
     .then((user) => {
       const history = user.rank_history?.data ?? null;
-      if (history) {
-        void setPersistentCache(cacheKey, history, RANK_HISTORY_CACHE_TTL);
-      }
+      void setPersistentCache(cacheKey, history, RANK_HISTORY_CACHE_TTL);
       return history;
     })
     .finally(() => {
@@ -81,28 +169,26 @@ async function getUserRankHistory(userId: number): Promise<number[] | null> {
 export const getUser = createServerFn({ method: "GET" })
   .inputValidator((data: { key: string }) => data)
   .handler(async ({ data }: { data: { key: string } }) => {
-    return osuFetch<OsuUser>(`/users/${encodeURIComponent(data.key)}/mania`);
+    return getCachedUser(data.key);
   });
 
 export const getUserScoresBest = createServerFn({ method: "GET" })
   .inputValidator((data: { userId: number; limit?: number; offset?: number }) => data)
   .handler(async ({ data }: { data: { userId: number; limit?: number; offset?: number } }) => {
-    return osuFetch<OsuScore[]>(`/users/${data.userId}/scores/best`, getScoreRequestParams(data.userId, {
-      mode: "mania",
+    return getCachedUserScores("best", data.userId, {
       limit: data.limit ?? 20,
       offset: data.offset ?? 0,
-    }));
+    });
   });
 
 export const getUserScoresRecent = createServerFn({ method: "GET" })
   .inputValidator((data: { userId: number; limit?: number; offset?: number; include_fails?: boolean }) => data)
   .handler(async ({ data }: { data: { userId: number; limit?: number; offset?: number; include_fails?: boolean } }) => {
-    return osuFetch<OsuScore[]>(`/users/${data.userId}/scores/recent`, getScoreRequestParams(data.userId, {
-      mode: "mania",
+    return getCachedUserScores("recent", data.userId, {
       limit: data.limit ?? 10,
       offset: data.offset ?? 0,
-      include_fails: data.include_fails ? 1 : 0,
-    }));
+      includeFails: data.include_fails,
+    });
   });
 
 export const getUserApproxPpGains = createServerFn({ method: "GET" })
@@ -122,23 +208,39 @@ async function getApproxPpGainsForUser(userId: number): Promise<Record<number, n
 }
 
 async function fetchUserBestScoresWindow(userId: number, totalLimit = 200): Promise<OsuScore[]> {
-  const firstPage = await osuFetch<OsuScore[]>(`/users/${userId}/scores/best`, getScoreRequestParams(userId, {
-    mode: "mania",
-    limit: Math.min(totalLimit, 100),
-    offset: 0,
-  }));
+  const cacheKey = `user-best-scores-window:${userId}:${totalLimit}`;
+  const cached = await getPersistentCacheEntry<OsuScore[]>(cacheKey);
+  if (cached.hit) return cached.value;
 
-  if (totalLimit <= 100 || firstPage.length < 100) {
-    return firstPage;
-  }
+  const pending = bestScoresWindowPromiseCache.get(cacheKey);
+  if (pending) return pending;
 
-  const secondPage = await osuFetch<OsuScore[]>(`/users/${userId}/scores/best`, getScoreRequestParams(userId, {
-    mode: "mania",
-    limit: Math.min(totalLimit - 100, 100),
-    offset: 100,
-  }));
+  const request = (async () => {
+    const firstPage = await osuFetch<OsuScore[]>(`/users/${userId}/scores/best`, getScoreRequestParams(userId, {
+      mode: "mania",
+      limit: Math.min(totalLimit, 100),
+      offset: 0,
+    }));
 
-  return [...firstPage, ...secondPage];
+    let scores = firstPage;
+
+    if (totalLimit > 100 && firstPage.length >= 100) {
+      const secondPage = await osuFetch<OsuScore[]>(`/users/${userId}/scores/best`, getScoreRequestParams(userId, {
+        mode: "mania",
+        limit: Math.min(totalLimit - 100, 100),
+        offset: 100,
+      }));
+      scores = [...firstPage, ...secondPage];
+    }
+
+    await setPersistentCache(cacheKey, scores, BEST_SCORES_WINDOW_CACHE_TTL);
+    return scores;
+  })().finally(() => {
+    bestScoresWindowPromiseCache.delete(cacheKey);
+  });
+
+  bestScoresWindowPromiseCache.set(cacheKey, request);
+  return request;
 }
 
 export const getUserScoresBestWindow = createServerFn({ method: "GET" })

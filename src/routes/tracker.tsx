@@ -13,6 +13,7 @@ import {
   getScoreIdentity,
   getScoreTimeMs,
   getScoreTimestamp,
+  getScoreUrl,
   isDisplayedPassed,
   scoreHasReplay,
 } from "../lib/score";
@@ -410,6 +411,7 @@ function ScoreFeedItem({
   const stats = score.statistics;
   const totalScore = getDisplayedTotalScore(score);
   const beatmapUrl = getBeatmapUrl(score);
+  const scoreUrl = getScoreUrl(score);
   const countMax = stats?.count_geki ?? stats?.perfect ?? 0;
   const count300 = stats?.count_300 ?? stats?.great ?? 0;
   const count200 = stats?.count_katu ?? stats?.good ?? 0;
@@ -558,6 +560,18 @@ function ScoreFeedItem({
                   <StatCell label="Combo %" value={`${Math.round((score.max_combo / score.beatmap.max_combo) * 100)}%`} />
                 )}
               </div>
+              {scoreUrl && (
+                <div className="mt-2 text-right">
+                  <a
+                    href={scoreUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] text-osu-f1 hover:text-osu-pink-light underline-offset-2 hover:underline transition-colors"
+                  >
+                    View on osu! →
+                  </a>
+                </div>
+              )}
             </div>
           </motion.div>
         )}

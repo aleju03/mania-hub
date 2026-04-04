@@ -29,7 +29,7 @@ interface AppState {
   crRankings: RankingsResponse | null;
   crRankingsFetchedAt: number | null;
   rankHistories: Record<number, number[]>;
-  rankHistoriesFetchedAt: number | null;
+  rankHistoriesFetchedAt: Record<number, number>;
   homeRecentScores: OsuScore[];
   homeRecentScoresFetchedAt: number | null;
   homePopoffs: CachedHomePopoff[];
@@ -65,7 +65,7 @@ export const useAppStore = create<AppState>()(
       avatarAccents: {},
       crRankingsFetchedAt: null,
       rankHistories: {},
-      rankHistoriesFetchedAt: null,
+      rankHistoriesFetchedAt: {},
       homeRecentScores: [],
       homeRecentScoresFetchedAt: null,
       homePopoffs: [],
@@ -92,10 +92,18 @@ export const useAppStore = create<AppState>()(
           crRankingsFetchedAt: Date.now(),
         }),
       setRankHistories: (histories) =>
-        set((state) => ({
-          rankHistories: { ...state.rankHistories, ...histories },
-          rankHistoriesFetchedAt: Date.now(),
-        })),
+        set((state) => {
+          const fetchedAt = Date.now();
+          return {
+            rankHistories: { ...state.rankHistories, ...histories },
+            rankHistoriesFetchedAt: {
+              ...state.rankHistoriesFetchedAt,
+              ...Object.fromEntries(
+                Object.keys(histories).map((userId) => [Number(userId), fetchedAt]),
+              ),
+            },
+          };
+        }),
       setHomeRecentScores: (scores) =>
         set({
           homeRecentScores: scores,
@@ -141,7 +149,7 @@ export const useAppStore = create<AppState>()(
       nextPollIndex: () => set((state) => ({ pollIndex: state.pollIndex + 1 })),
     }),
     {
-      name: "mania-hub-cache-v1",
+      name: "mania-hub-cache-v2",
       storage,
       partialize: (state) => ({
         avatarAccents: state.avatarAccents,

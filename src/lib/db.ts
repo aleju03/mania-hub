@@ -34,7 +34,10 @@ export async function ensureCacheSchema(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_cache_entries_expires_at
       ON cache_entries (expires_at)
     `);
-  })();
+  })().catch((error) => {
+    cacheSchemaReady = null;
+    throw error;
+  });
 
   return cacheSchemaReady;
 }

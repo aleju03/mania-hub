@@ -31,6 +31,7 @@ function RankingsPage() {
   const setCrRankings = useAppStore((state) => state.setCrRankings);
   const setRankHistories = useAppStore((state) => state.setRankHistories);
   const [pageTwoData, setPageTwoData] = useState<RankingsResponse | null>(null);
+  const [pageTwoFetchedAt, setPageTwoFetchedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortField>("rank");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -41,8 +42,8 @@ function RankingsPage() {
   useEffect(() => {
     let cancelled = false;
     const cachedData = page === 1 ? cachedPageOneData : pageTwoData;
-    const shouldRefresh =
-      !cachedData || (page === 1 && isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings));
+    const fetchedAt = page === 1 ? rankingsFetchedAt : pageTwoFetchedAt;
+    const shouldRefresh = !cachedData || isCacheStale(fetchedAt, CLIENT_CACHE_TTL.rankings);
 
     if (!shouldRefresh) {
       setRankingsLoading(false);
@@ -56,7 +57,10 @@ function RankingsPage() {
       .then((result) => {
         if (cancelled) return;
         if (page === 1) setCrRankings(result);
-        else setPageTwoData(result);
+        else {
+          setPageTwoData(result);
+          setPageTwoFetchedAt(Date.now());
+        }
         setError(null);
       })
       .catch(() => {
@@ -69,14 +73,19 @@ function RankingsPage() {
       });
 
     return () => { cancelled = true; };
-  }, [cachedPageOneData, page, pageData, pageTwoData, rankingsFetchedAt, setCrRankings]);
+  }, [cachedPageOneData, page, pageData, pageTwoData, pageTwoFetchedAt, rankingsFetchedAt, setCrRankings]);
 
   useEffect(() => {
     if (!pageData) return;
     let cancelled = false;
     const userIds = pageData.ranking.slice(0, 50).map((e) => e.user.id);
-    const hasAllHistories = userIds.every((userId) => rankHistories[userId]);
-    const shouldRefresh = !hasAllHistories || isCacheStale(rankHistoriesFetchedAt, CLIENT_CACHE_TTL.rankHistories);
+    const userIdsToFetch = userIds.filter(
+      (userId) =>
+        !rankHistories[userId] ||
+        isCacheStale(rankHistoriesFetchedAt[userId], CLIENT_CACHE_TTL.rankHistories),
+    );
+    const hasAllHistories = userIdsToFetch.length === 0;
+    const shouldRefresh = userIdsToFetch.length > 0;
 
     if (!shouldRefresh) {
       setRankHistoriesLoading(false);
@@ -85,7 +94,7 @@ function RankingsPage() {
 
     setRankHistoriesLoading(!hasAllHistories);
 
-    getUsersRankHistory({ data: { userIds } })
+    getUsersRankHistory({ data: { userIds: userIdsToFetch } })
       .then((histories) => {
         if (cancelled) return;
         setRankHistories(histories);
