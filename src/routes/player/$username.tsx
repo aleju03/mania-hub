@@ -11,6 +11,7 @@ import {
   formatPP,
 } from "../../lib/format";
 import {
+  getBeatmapUrl,
   getDisplayedAccuracy,
   getDisplayedRank,
   getScoreIdentity,
@@ -661,12 +662,52 @@ function PlayerScoreRowSkeleton() {
 
 function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
   const keys = score.beatmap?.cs;
-  const scoreUrl = getScoreUrl(score);
+  const linkUrl = getScoreUrl(score) ?? getBeatmapUrl(score);
   const canReplay = scoreHasReplay(score);
 
-  if (!scoreUrl) {
-    return null;
-  }
+  const content = (
+    <>
+      <GradeImg grade={getDisplayedRank(score)} size={28} />
+      {score.beatmapset?.covers?.list && (
+        <img
+          src={score.beatmapset.covers.list}
+          alt=""
+          className="w-12 h-8 rounded object-cover flex-shrink-0"
+          loading="lazy"
+        />
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium text-white truncate">
+            {score.beatmapset?.title || "Unknown"}
+          </span>
+          <span className="text-[10px] text-osu-f1 truncate">
+            [{score.beatmap?.version}]
+          </span>
+          {keys && (
+            <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
+              {keys}K
+            </span>
+          )}
+        </div>
+        <span className="text-[10px] text-osu-f1">
+          {score.beatmapset?.artist} &middot; {formatTimeAgo(getScoreTimestamp(score))}
+        </span>
+      </div>
+      <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="flex gap-0.5 justify-end w-24">
+          {(score.mods ?? [])
+            .filter((m) => m?.acronym && m.acronym !== "CL")
+            .map((m) => (
+              <ModBadge key={m.acronym} mod={m.acronym} />
+            ))}
+        </div>
+        <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>
+        <span className="text-xs text-osu-f1">{formatNumber(score.max_combo)}x</span>
+        <span className="text-sm font-bold w-16 text-right">{formatPP(score.pp)}</span>
+      </div>
+    </>
+  );
 
   return (
     <div className="relative group/score flex items-center gap-3 py-2.5 px-3 rounded-lg bg-osu-b4/50 hover:bg-osu-b4 transition-colors duration-[120ms]">
@@ -676,52 +717,20 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
       >
         <span className="block text-[24px] leading-none">{position}</span>
       </div>
-      <a
-        href={scoreUrl}
-        target="_blank"
-        rel="noreferrer"
-        className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
-      >
-        <GradeImg grade={getDisplayedRank(score)} size={28} />
-        {score.beatmapset?.covers?.list && (
-          <img
-            src={score.beatmapset.covers.list}
-            alt=""
-            className="w-12 h-8 rounded object-cover flex-shrink-0"
-            loading="lazy"
-          />
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-white truncate">
-              {score.beatmapset?.title || "Unknown"}
-            </span>
-            <span className="text-[10px] text-osu-f1 truncate">
-              [{score.beatmap?.version}]
-            </span>
-            {keys && (
-              <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
-                {keys}K
-              </span>
-            )}
-          </div>
-          <span className="text-[10px] text-osu-f1">
-            {score.beatmapset?.artist} &middot; {formatTimeAgo(getScoreTimestamp(score))}
-          </span>
+      {linkUrl ? (
+        <a
+          href={linkUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
+        >
+          {content}
+        </a>
+      ) : (
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          {content}
         </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
-          <div className="flex gap-0.5 justify-end w-24">
-            {(score.mods ?? [])
-              .filter((m) => m?.acronym && m.acronym !== "CL")
-              .map((m) => (
-                <ModBadge key={m.acronym} mod={m.acronym} />
-              ))}
-          </div>
-          <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>
-          <span className="text-xs text-osu-f1">{formatNumber(score.max_combo)}x</span>
-          <span className="text-sm font-bold w-16 text-right">{formatPP(score.pp)}</span>
-        </div>
-      </a>
+      )}
       {canReplay && (
         <Link
           to="/replay"
