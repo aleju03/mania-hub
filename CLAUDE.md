@@ -21,6 +21,10 @@ Required in `.env`:
 - `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` — Turso (libSQL) database for persistent server-side caching
 - `VITE_DEV_MODE` — enables dev-only features when set
 
+## Debugging
+
+You can make live calls to the osu! API v2 directly using the credentials in `.env`. Use this proactively when debugging data-related issues — don't guess at API response shapes, just call the endpoint and check. Token flow: `POST https://osu.ppy.sh/oauth/token` with `client_id`, `client_secret`, `grant_type=client_credentials`, `scope=public`, then use the bearer token on `https://osu.ppy.sh/api/v2/...`. See `osu-api-reference.md` for endpoints.
+
 ## Architecture
 
 ### Server/Client Boundary

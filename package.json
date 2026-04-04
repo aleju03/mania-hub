@@ -26,6 +26,7 @@
     "jszip": "^3.10.1",
     "lucide-react": "^0.545.0",
     "lzma-purejs": "^0.9.3",
+    "nitro": "^3.0.260311-beta",
     "osu-parsers": "^4.1.7",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
