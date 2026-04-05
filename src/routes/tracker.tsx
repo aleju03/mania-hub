@@ -279,8 +279,9 @@ function ScoresPage() {
       />
 
       <div className="bg-osu-d5 border-b border-osu-b3/30">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
-          <div className="flex items-center gap-0 overflow-x-auto scrollbar-hide w-full sm:w-auto">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-0">
+          {/* Desktop: single row with all filters */}
+          <div className="hidden sm:flex items-center gap-0 w-auto">
             {filters.map((item) => (
               <button
                 key={item.id}
@@ -313,6 +314,46 @@ function ScoresPage() {
               </button>
             ))}
           </div>
+          {/* Mobile: compact single row */}
+          <div className="sm:hidden w-full py-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex rounded-lg overflow-hidden border border-osu-b3/30 flex-shrink-0">
+                {filters.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => { setFilter(item.id); if (item.id !== "all") setGradeFilter("all"); }}
+                    className={`px-2.5 py-1.5 text-[11px] font-medium cursor-pointer transition-colors duration-[120ms] ${
+                      filter === item.id && gradeFilter === "all"
+                        ? "bg-osu-b3 text-osu-l2"
+                        : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
+                    }`}
+                  >
+                    {item.id === "all" ? "All" : item.id === "ranked" ? "PP" : "Pass"}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                {grades.filter((g) => g.id !== "all").map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      if (gradeFilter === item.id) { setGradeFilter("all"); }
+                      else { setGradeFilter(item.id); setFilter("all"); }
+                    }}
+                    className={`cursor-pointer transition-all duration-[120ms] ${
+                      gradeFilter === item.id
+                        ? "opacity-100 scale-110"
+                        : gradeFilter === "all"
+                          ? "opacity-60"
+                          : "opacity-30"
+                    }`}
+                  >
+                    <GradeImg grade={item.id} size={32} />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
           <div className="flex rounded-lg overflow-hidden border border-osu-b3/30 self-end sm:self-auto">
             {failedOptions.map((item) => (
               <button
@@ -332,25 +373,46 @@ function ScoresPage() {
       </div>
 
       <div className="bg-osu-b5">
-        <div className="max-w-[1200px] mx-auto px-5 py-5 flex gap-5">
+        <div className="max-w-[1200px] mx-auto px-5 py-5 flex flex-col lg:flex-row gap-4 lg:gap-5">
           {activePlayers.length > 0 && (
-            <div className="hidden lg:flex flex-col items-center gap-2 flex-shrink-0 pt-1">
-              <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-1">Playing</span>
-              {activePlayers.map((player) => (
-                <button
-                  key={player.id}
-                  onClick={() => {
-                    window.location.href = `/player/${encodeURIComponent(player.username)}`;
-                  }}
-                  className="cursor-pointer group relative"
-                  title={player.username}
-                >
-                  <div className="ring-2 ring-osu-green/50 rounded-full group-hover:ring-osu-green transition-all">
-                    <Avatar url={player.avatar_url} size={32} />
-                  </div>
-                </button>
-              ))}
-            </div>
+            <>
+              {/* Mobile: horizontal row */}
+              <div className="lg:hidden flex items-center gap-3 overflow-x-auto scrollbar-hide py-1">
+                <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold flex-shrink-0">Playing</span>
+                {activePlayers.map((player) => (
+                  <button
+                    key={player.id}
+                    onClick={() => {
+                      window.location.href = `/player/${encodeURIComponent(player.username)}`;
+                    }}
+                    className="cursor-pointer group relative flex-shrink-0"
+                    title={player.username}
+                  >
+                    <div className="ring-2 ring-inset ring-osu-green/50 rounded-full group-hover:ring-osu-green transition-all">
+                      <Avatar url={player.avatar_url} size={32} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {/* Desktop: vertical sidebar */}
+              <div className="hidden lg:flex flex-col items-center gap-2 flex-shrink-0 pt-1">
+                <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-1">Playing</span>
+                {activePlayers.map((player) => (
+                  <button
+                    key={player.id}
+                    onClick={() => {
+                      window.location.href = `/player/${encodeURIComponent(player.username)}`;
+                    }}
+                    className="cursor-pointer group relative"
+                    title={player.username}
+                  >
+                    <div className="ring-2 ring-osu-green/50 rounded-full group-hover:ring-osu-green transition-all">
+                      <Avatar url={player.avatar_url} size={32} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
           )}
           <div className="flex-1 min-w-0">
             {playersError ? (
@@ -447,62 +509,73 @@ function ScoreFeedItem({
           <Avatar url={score.user?.avatar_url} size={36} />
         </button>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            {score.user?.username ? (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  window.location.href = `/player/${encodeURIComponent(score.user.username)}`;
-                }}
-                className="cursor-pointer"
-              >
+          {/* Row 1: Username + time (mobile) */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              {score.user?.username ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.location.href = `/player/${encodeURIComponent(score.user.username)}`;
+                  }}
+                  className="cursor-pointer"
+                >
+                  <UsernameText
+                    username={score.user.username}
+                    avatarUrl={score.user?.avatar_url}
+                    className="text-sm font-semibold"
+                  />
+                </button>
+              ) : (
                 <UsernameText
-                  username={score.user.username}
+                  username="Unknown"
                   avatarUrl={score.user?.avatar_url}
                   className="text-sm font-semibold"
                 />
-              </button>
-            ) : (
-              <UsernameText
-                username="Unknown"
-                avatarUrl={score.user?.avatar_url}
-                className="text-sm font-semibold"
-              />
-            )}
+              )}
+            </div>
+            <span className="text-[10px] text-osu-f1 flex-shrink-0 sm:hidden">{formatTimeAgo(getScoreTimestamp(score))}</span>
           </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            {beatmapUrl ? (
-              <a
-                href={beatmapUrl}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="text-xs text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
-                title="Open beatmap on osu!"
-              >
-                {score.beatmapset?.title}
-              </a>
-            ) : (
-              <span className="text-xs text-white truncate">{score.beatmapset?.title}</span>
-            )}
-            <span className="text-[10px] text-osu-f1 truncate">[{score.beatmap?.version}]</span>
+          {/* Row 2: Beatmap title + keys */}
+          <div className="flex items-center justify-between sm:justify-start gap-2 mt-0.5">
+            <div className="flex items-center gap-2 min-w-0">
+              {beatmapUrl ? (
+                <a
+                  href={beatmapUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-xs text-white truncate hover:text-osu-pink-light underline-offset-2 hover:underline"
+                  title="Open beatmap on osu!"
+                >
+                  {score.beatmapset?.title}
+                </a>
+              ) : (
+                <span className="text-xs text-white truncate">{score.beatmapset?.title}</span>
+              )}
+              <span className="text-[10px] text-osu-f1 truncate">[{score.beatmap?.version}]</span>
+            </div>
             {keys && (
               <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
                 {keys}K
               </span>
             )}
           </div>
-          {/* Mobile-only metadata row */}
-          <div className="flex items-center gap-2 mt-1 sm:hidden">
-            <div className="flex gap-0.5">
+          {/* Row 3 (mobile): Mods left, stats right */}
+          <div className="flex items-center justify-between gap-2 mt-1 sm:hidden">
+            <div className="flex items-center gap-1">
               {getModAcronyms(score.mods).map((acronym) => (
                 <ModBadge key={acronym} mod={acronym} />
               ))}
+              {isLazerScore(score) && <LazerBadge />}
             </div>
-            {isLazerScore(score) && <LazerBadge />}
-            <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>
-            <span className="text-sm font-bold">{formatPP(score.pp)}</span>
-            <span className="text-[10px] text-osu-f1 ml-auto">{formatTimeAgo(getScoreTimestamp(score))}</span>
+            <div className="flex items-baseline gap-2 flex-shrink-0">
+              <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>
+              <span className="text-sm font-bold">{formatPP(score.pp)}</span>
+              {approxPpGain != null && (
+                <span className="text-[10px] font-semibold text-osu-green">+{formatNumber(Math.round(approxPpGain))}</span>
+              )}
+            </div>
           </div>
         </div>
         {/* Desktop metadata */}

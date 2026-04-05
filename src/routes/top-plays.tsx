@@ -282,42 +282,64 @@ function PopOffsPage() {
       </div>
 
       <div className="bg-osu-b5">
-        <div className="max-w-[1200px] mx-auto px-5 py-6 flex gap-5">
+        <div className="max-w-[1200px] mx-auto px-5 py-6 flex flex-col lg:flex-row gap-4 lg:gap-5">
           {playerPpGains.length > 0 && (
-            <div className="hidden lg:flex flex-shrink-0 pt-1 gap-3">
-              {(() => {
-                const maxPerCol = 8;
-                const numCols = Math.ceil(playerPpGains.length / maxPerCol);
-                const perCol = Math.ceil(playerPpGains.length / numCols);
-                const cols: typeof playerPpGains[] = [];
-                for (let i = 0; i < playerPpGains.length; i += perCol) {
-                  cols.push(playerPpGains.slice(i, i + perCol));
-                }
-                return cols.map((col, ci) => (
-                  <div key={ci} className="flex flex-col items-center gap-2">
-                    {ci === 0 && (
-                      <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-1">PP Gained</span>
-                    )}
-                    {ci > 0 && <div className="mb-1 h-[14px]" />}
-                    {col.map((player) => (
-                      <button
-                        key={player.id}
-                        onClick={() => navigate({ to: "/player/$username", params: { username: player.username } })}
-                        className="cursor-pointer group relative flex flex-col items-center gap-0.5"
-                        title={`${player.username}: +${formatNumber(Math.round(player.totalGain))}pp`}
-                      >
-                        <div className="ring-2 ring-osu-pink/40 rounded-full group-hover:ring-osu-pink transition-all">
-                          <Avatar url={player.avatar_url} size={32} />
-                        </div>
-                        <span className="text-[9px] font-semibold text-osu-green">
-                          +{formatNumber(Math.round(player.totalGain))}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ));
-              })()}
-            </div>
+            <>
+              {/* Mobile: horizontal row */}
+              <div className="lg:hidden flex items-start gap-3 overflow-x-auto scrollbar-hide py-1">
+                <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold flex-shrink-0 pt-2">PP Gained</span>
+                {playerPpGains.map((player) => (
+                  <button
+                    key={player.id}
+                    onClick={() => navigate({ to: "/player/$username", params: { username: player.username } })}
+                    className="cursor-pointer group relative flex-shrink-0 flex flex-col items-center gap-0.5"
+                    title={`${player.username}: +${formatNumber(Math.round(player.totalGain))}pp`}
+                  >
+                    <div className="ring-2 ring-inset ring-osu-pink/40 rounded-full group-hover:ring-osu-pink transition-all">
+                      <Avatar url={player.avatar_url} size={32} />
+                    </div>
+                    <span className="text-[9px] font-semibold text-osu-green">
+                      +{formatNumber(Math.round(player.totalGain))}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {/* Desktop: vertical sidebar */}
+              <div className="hidden lg:flex flex-shrink-0 pt-1 gap-3">
+                {(() => {
+                  const maxPerCol = 8;
+                  const numCols = Math.ceil(playerPpGains.length / maxPerCol);
+                  const perCol = Math.ceil(playerPpGains.length / numCols);
+                  const cols: typeof playerPpGains[] = [];
+                  for (let i = 0; i < playerPpGains.length; i += perCol) {
+                    cols.push(playerPpGains.slice(i, i + perCol));
+                  }
+                  return cols.map((col, ci) => (
+                    <div key={ci} className="flex flex-col items-center gap-2">
+                      {ci === 0 && (
+                        <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-1">PP Gained</span>
+                      )}
+                      {ci > 0 && <div className="mb-1 h-[14px]" />}
+                      {col.map((player) => (
+                        <button
+                          key={player.id}
+                          onClick={() => navigate({ to: "/player/$username", params: { username: player.username } })}
+                          className="cursor-pointer group relative flex flex-col items-center gap-0.5"
+                          title={`${player.username}: +${formatNumber(Math.round(player.totalGain))}pp`}
+                        >
+                          <div className="ring-2 ring-osu-pink/40 rounded-full group-hover:ring-osu-pink transition-all">
+                            <Avatar url={player.avatar_url} size={32} />
+                          </div>
+                          <span className="text-[9px] font-semibold text-osu-green">
+                            +{formatNumber(Math.round(player.totalGain))}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ));
+                })()}
+              </div>
+            </>
           )}
           <div className="flex-1 min-w-0">
           {playersError && (
@@ -390,21 +412,26 @@ function PopOffsPage() {
                       </button>
 
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate({ to: "/player/$username", params: { username: p.user.username } });
-                            }}
-                            className="cursor-pointer"
-                          >
-                            <UsernameText
-                              username={p.user.username}
-                              avatarUrl={p.user.avatar_url}
-                              className="text-sm font-semibold"
-                            />
-                          </button>
+                        {/* Row 1: Username + time (mobile) */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate({ to: "/player/$username", params: { username: p.user.username } });
+                              }}
+                              className="cursor-pointer"
+                            >
+                              <UsernameText
+                                username={p.user.username}
+                                avatarUrl={p.user.avatar_url}
+                                className="text-sm font-semibold"
+                              />
+                            </button>
+                          </div>
+                          <span className="text-[10px] text-osu-f1 flex-shrink-0 sm:hidden">{formatTimeAgo(p.time)}</span>
                         </div>
+                        {/* Row 2: Beatmap title */}
                         <div className="flex items-center gap-2 mt-0.5">
                           {getBeatmapUrl(p.score) ? (
                             <a
@@ -426,16 +453,15 @@ function PopOffsPage() {
                             [{p.score.beatmap?.version}]
                           </span>
                         </div>
-                        {/* Mobile-only metadata row */}
-                        <div className="flex items-center gap-2 mt-1 sm:hidden">
-                          <div className="flex gap-0.5">
+                        {/* Row 3 (mobile): Mods left, accuracy right */}
+                        <div className="flex items-center justify-between gap-2 mt-1 sm:hidden">
+                          <div className="flex items-center gap-1">
                             {getModAcronyms(p.score.mods).map((acronym) => (
                               <ModBadge key={acronym} mod={acronym} />
                             ))}
+                            {isLazerScore(p.score) && <LazerBadge />}
                           </div>
-                          {isLazerScore(p.score) && <LazerBadge />}
-                          <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(p.score))}</span>
-                          <span className="text-[10px] text-osu-f1 ml-auto">{formatTimeAgo(p.time)}</span>
+                          <span className="text-xs text-osu-l2 flex-shrink-0">{formatAccuracy(getDisplayedAccuracy(p.score))}</span>
                         </div>
                       </div>
 
