@@ -195,6 +195,58 @@ function RankingsPage() {
 
       <div className="bg-osu-b5">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5">
+          {/* Mobile sort bar */}
+          <div className="sm:hidden flex items-center gap-1.5 pb-3 overflow-x-auto scrollbar-hide">
+            {([
+              { field: "rank" as SortField, label: "#" },
+              { field: "player" as SortField, label: "Player" },
+              { field: "pp" as SortField, label: "PP" },
+              { field: "accuracy" as SortField, label: "Acc" },
+              { field: "7d" as SortField, label: "7d" },
+              { field: "cr7d" as SortField, label: "CR" },
+              { field: "playcount" as SortField, label: "Plays" },
+            ]).map(({ field, label }) => {
+              const active = sortBy === field;
+              return (
+                <button
+                  key={field}
+                  onClick={() => handleSort(field)}
+                  className={`flex-shrink-0 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                    active
+                      ? "bg-osu-pink/20 text-osu-pink-light"
+                      : "bg-osu-b4/60 text-osu-f1 hover:bg-osu-b4"
+                  }`}
+                >
+                  {label}
+                  {active && <span className="ml-0.5 text-[8px]">{sortDir === "desc" ? "▼" : "▲"}</span>}
+                </button>
+              );
+            })}
+            {([
+              { field: "ss" as SortField, img: "/images/badges/score-ranks-v2019/GradeSmall-SS.svg", alt: "SS" },
+              { field: "s" as SortField, img: "/images/badges/score-ranks-v2019/GradeSmall-S.svg", alt: "S" },
+              { field: "a" as SortField, img: "/images/badges/score-ranks-v2019/GradeSmall-A.svg", alt: "A" },
+            ]).map(({ field, img, alt }) => {
+              const active = sortBy === field;
+              return (
+                <button
+                  key={field}
+                  onClick={() => handleSort(field)}
+                  className={`flex-shrink-0 px-2 py-1 rounded-md transition-colors cursor-pointer ${
+                    active
+                      ? "bg-osu-pink/20"
+                      : "bg-osu-b4/60 hover:bg-osu-b4"
+                  }`}
+                >
+                  <div className="flex items-center gap-0.5">
+                    <img src={img} alt={alt} width={18} height={18} className={`transition-opacity ${active ? "opacity-100" : "opacity-60"}`} />
+                    {active && <span className="text-osu-pink text-[8px]">{sortDir === "desc" ? "▼" : "▲"}</span>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
           {/* Mobile card layout */}
           <div className="sm:hidden space-y-2">
             {error ? (
@@ -203,6 +255,79 @@ function RankingsPage() {
               sortedRankings.map(({ entry, originalRank }, i: number) => {
                 const history = rankHistories[entry.user.id];
                 const globalChange = getGlobalRankChange(history);
+                const crChange = crRankChanges[entry.user.id] ?? null;
+
+                // Show the value for the active sort field on the right side
+                const sortedValue = (() => {
+                  switch (sortBy) {
+                    case "playcount":
+                      return <>{formatNumber(entry.play_count)} plays</>;
+                    case "accuracy":
+                      return <>{formatAccuracy(entry.hit_accuracy / 100)}</>;
+                    case "ss":
+                      return <div className="flex items-center gap-1">
+                        <img src="/images/badges/score-ranks-v2019/GradeSmall-SS.svg" alt="SS" width={16} height={16} />
+                        <span>{entry.grade_counts.ss + entry.grade_counts.ssh}</span>
+                      </div>;
+                    case "s":
+                      return <div className="flex items-center gap-1">
+                        <img src="/images/badges/score-ranks-v2019/GradeSmall-S.svg" alt="S" width={16} height={16} />
+                        <span>{entry.grade_counts.s + entry.grade_counts.sh}</span>
+                      </div>;
+                    case "a":
+                      return <div className="flex items-center gap-1">
+                        <img src="/images/badges/score-ranks-v2019/GradeSmall-A.svg" alt="A" width={16} height={16} />
+                        <span>{entry.grade_counts.a}</span>
+                      </div>;
+                    default:
+                      return <>{formatNumber(Math.round(entry.pp))}pp</>;
+                  }
+                })();
+
+                // Show contextual subtitle based on sort
+                const subtitle = (() => {
+                  if (sortBy === "7d" || sortBy === "cr7d") {
+                    return (
+                      <div className="flex items-center gap-2">
+                        {sortBy === "7d" && history && (
+                          <>
+                            <MiniSparkline data={history} />
+                            {globalChange !== null && globalChange !== 0 && (
+                              <span className={`font-semibold ${globalChange > 0 ? "text-osu-green" : "text-osu-red"}`}>
+                                {globalChange > 0 ? `+${formatNumber(globalChange)}` : formatNumber(globalChange)}
+                              </span>
+                            )}
+                          </>
+                        )}
+                        {sortBy === "cr7d" && (
+                          crChange !== null && crChange !== 0 ? (
+                            <span className={`font-semibold ${crChange > 0 ? "text-osu-green" : "text-osu-red"}`}>
+                              CR {crChange > 0 ? `+${crChange}` : crChange}
+                            </span>
+                          ) : (
+                            <span>CR -</span>
+                          )
+                        )}
+                      </div>
+                    );
+                  }
+                  // Default: accuracy + sparkline
+                  return (
+                    <>
+                      <span>{formatAccuracy(entry.hit_accuracy / 100)}</span>
+                      {history && (
+                        <div className="flex items-center gap-1">
+                          <MiniSparkline data={history} />
+                          {globalChange !== null && globalChange !== 0 && (
+                            <span className={`font-semibold ${globalChange > 0 ? "text-osu-green" : "text-osu-red"}`}>
+                              {globalChange > 0 ? `+${formatNumber(globalChange)}` : formatNumber(globalChange)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  );
+                })();
 
                 return (
                   <motion.div
@@ -223,20 +348,10 @@ function RankingsPage() {
                           className="text-sm font-semibold"
                         />
                         <div className="flex items-center gap-3 mt-0.5 text-[11px] text-osu-f1">
-                          <span>{formatAccuracy(entry.hit_accuracy / 100)}</span>
-                          {history && (
-                            <div className="flex items-center gap-1">
-                              <MiniSparkline data={history} />
-                              {globalChange !== null && globalChange !== 0 && (
-                                <span className={`font-semibold ${globalChange > 0 ? "text-osu-green" : "text-osu-red"}`}>
-                                  {globalChange > 0 ? `+${formatNumber(globalChange)}` : formatNumber(globalChange)}
-                                </span>
-                              )}
-                            </div>
-                          )}
+                          {subtitle}
                         </div>
                       </div>
-                      <span className="text-sm font-bold text-right flex-shrink-0">{formatNumber(Math.round(entry.pp))}pp</span>
+                      <span className="text-sm font-bold text-right flex-shrink-0">{sortedValue}</span>
                     </div>
                   </motion.div>
                 );
