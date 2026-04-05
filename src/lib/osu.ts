@@ -22,7 +22,7 @@ import type {
   MapsFarmedEntry,
 } from "./types";
 
-const MAPS_DATA_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const MAPS_DATA_CACHE_TTL = 24 * 60 * 60 * 1000; // 1 day
 const MAPS_DATA_CACHE_VERSION = 3;
 const USER_MOST_PLAYED_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 const USER_FAVOURITES_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours

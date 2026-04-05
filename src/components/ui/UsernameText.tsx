@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { getAvatarAccentStoreKey } from "../../lib/avatar-accent";
 import { getAvatarAccents } from "../../lib/avatar";
-import { useAppStore } from "../../store";
+import { AVATAR_ACCENT_CLIENT_TTL, useAppStore } from "../../store";
 
 const pendingUrls = new Set<string>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -42,14 +42,16 @@ export function UsernameText({
   className?: string;
 }) {
   const accentKey = avatarUrl ? getAvatarAccentStoreKey(avatarUrl) : null;
-  const accent = useAppStore((state) => (accentKey ? state.avatarAccents[accentKey] : null));
+  const accentEntry = useAppStore((state) => (accentKey ? state.avatarAccents[accentKey] : undefined));
+  const accent = accentEntry?.value ?? null;
 
   useEffect(() => {
     if (!avatarUrl) {
       return;
     }
 
-    if (useAppStore.getState().avatarAccents[getAvatarAccentStoreKey(avatarUrl)] !== undefined) {
+    const existing = useAppStore.getState().avatarAccents[getAvatarAccentStoreKey(avatarUrl)];
+    if (existing && Date.now() - existing.fetchedAt < AVATAR_ACCENT_CLIENT_TTL) {
       return;
     }
 

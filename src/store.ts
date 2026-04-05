@@ -4,6 +4,13 @@ import { getAvatarAccentStoreKey } from "./lib/avatar-accent";
 import { getScoreIdentity, getScoreTimeMs } from "./lib/score";
 import type { OsuScore, RankingsResponse, CountryMapsData } from "./lib/types";
 
+export interface CachedAvatarAccent {
+  fetchedAt: number;
+  value: string | null;
+}
+
+export const AVATAR_ACCENT_CLIENT_TTL = 24 * 60 * 60 * 1000;
+
 export interface CachedPlayer {
   id: number;
   username: string;
@@ -25,7 +32,7 @@ export interface CachedPopoff {
 }
 
 interface AppState {
-  avatarAccents: Record<string, string | null>;
+  avatarAccents: Record<string, CachedAvatarAccent>;
   crRankings: RankingsResponse | null;
   crRankingsFetchedAt: number | null;
   rankHistories: Record<number, number[]>;
@@ -46,7 +53,7 @@ interface AppState {
   trackedUserIds: number[];
   trackedUserIdsFetchedAt: number | null;
   pollIndex: number;
-  setAvatarAccents: (accents: Record<string, string | null>) => void;
+  setAvatarAccents: (accents: Record<string, string | null>, fetchedAt?: number) => void;
   setCrRankings: (rankings: RankingsResponse) => void;
   setRankHistories: (histories: Record<number, number[]>) => void;
   setHomeRecentScores: (scores: OsuScore[]) => void;
@@ -88,12 +95,15 @@ export const useAppStore = create<AppState>()(
       trackedUserIds: [],
       trackedUserIdsFetchedAt: null,
       pollIndex: 0,
-      setAvatarAccents: (accents) =>
+      setAvatarAccents: (accents, fetchedAt = Date.now()) =>
         set((state) => ({
           avatarAccents: {
             ...state.avatarAccents,
             ...Object.fromEntries(
-              Object.entries(accents).map(([url, accent]) => [getAvatarAccentStoreKey(url), accent]),
+              Object.entries(accents).map(([url, accent]) => [
+                getAvatarAccentStoreKey(url),
+                { value: accent, fetchedAt },
+              ]),
             ),
           },
         })),
@@ -170,12 +180,21 @@ export const useAppStore = create<AppState>()(
         return {
           ...currentState,
           ...nextState,
-          // Avatar accents are derived from shared server cache and should not
-          // stick to one device forever via localStorage rehydration.
-          avatarAccents: currentState.avatarAccents,
+          avatarAccents: Object.fromEntries(
+            Object.entries(
+              nextState.avatarAccents && typeof nextState.avatarAccents === "object"
+                ? nextState.avatarAccents
+                : {},
+            ).filter(([, entry]) => {
+              if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
+              const fetchedAt = (entry as CachedAvatarAccent).fetchedAt;
+              return Number.isFinite(fetchedAt) && Date.now() - fetchedAt < AVATAR_ACCENT_CLIENT_TTL;
+            }),
+          ) as Record<string, CachedAvatarAccent>,
         };
       },
       partialize: (state) => ({
+        avatarAccents: state.avatarAccents,
         crRankings: state.crRankings,
         crRankingsFetchedAt: state.crRankingsFetchedAt,
         rankHistories: state.rankHistories,

@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getRankings, getCountryMapsData } from "../lib/osu";
@@ -41,6 +41,16 @@ type MapsSearch = {
 
 const PAGE_SIZE = 24;
 const VISIBLE_AVATARS = 4;
+const DEFAULT_MAPS_SEARCH: Required<MapsSearch> = {
+  tab: "farmed",
+  page: 0,
+  key: "all",
+  beatmapSort: "players",
+  farmedSort: "players",
+  status: "all",
+  pp: 0,
+  q: "",
+};
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -87,7 +97,13 @@ function hasValidMapsDataShape(data: CountryMapsData | null): data is CountryMap
     }
 
     const samplePlayer = sampleFarmed.players[0];
-    if (samplePlayer && typeof samplePlayer.pp !== "number") {
+    if (
+      samplePlayer && (
+        typeof samplePlayer.pp !== "number" ||
+        !Array.isArray(samplePlayer.mods) ||
+        (samplePlayer.scoreUrl !== null && typeof samplePlayer.scoreUrl !== "string")
+      )
+    ) {
       return false;
     }
   }
@@ -98,15 +114,18 @@ function hasValidMapsDataShape(data: CountryMapsData | null): data is CountryMap
 // ── Route ──────────────────────────────────────────────────────────────────
 
 export const Route = createFileRoute("/maps")({
+  search: {
+    middlewares: [stripSearchParams(DEFAULT_MAPS_SEARCH)],
+  },
   validateSearch: (search: Record<string, unknown>): Required<MapsSearch> => ({
-    tab: search.tab === "popular" || search.tab === "favourites" ? search.tab : "farmed",
-    page: Math.max(0, Number(search.page) || 0),
-    key: search.key === "4k" || search.key === "7k" || search.key === "other" ? search.key : "all",
-    beatmapSort: search.beatmapSort === "plays" || search.beatmapSort === "stars" || search.beatmapSort === "length" ? search.beatmapSort : "players",
-    farmedSort: search.farmedSort === "avg-pp" || search.farmedSort === "max-pp" || search.farmedSort === "stars" ? search.farmedSort : "players",
-    status: search.status === "ranked" || search.status === "loved" || search.status === "other" ? search.status : "all",
-    pp: search.pp === 500 || search.pp === 700 ? search.pp : 0,
-    q: typeof search.q === "string" ? search.q : "",
+    tab: search.tab === "popular" || search.tab === "favourites" ? search.tab : DEFAULT_MAPS_SEARCH.tab,
+    page: Math.max(0, Number(search.page) || DEFAULT_MAPS_SEARCH.page),
+    key: search.key === "4k" || search.key === "7k" || search.key === "other" ? search.key : DEFAULT_MAPS_SEARCH.key,
+    beatmapSort: search.beatmapSort === "plays" || search.beatmapSort === "stars" || search.beatmapSort === "length" ? search.beatmapSort : DEFAULT_MAPS_SEARCH.beatmapSort,
+    farmedSort: search.farmedSort === "avg-pp" || search.farmedSort === "max-pp" || search.farmedSort === "stars" ? search.farmedSort : DEFAULT_MAPS_SEARCH.farmedSort,
+    status: search.status === "ranked" || search.status === "loved" || search.status === "other" ? search.status : DEFAULT_MAPS_SEARCH.status,
+    pp: search.pp === 500 || search.pp === 700 ? search.pp : DEFAULT_MAPS_SEARCH.pp,
+    q: typeof search.q === "string" ? search.q : DEFAULT_MAPS_SEARCH.q,
   }),
   component: MapsPage,
 });
@@ -555,13 +574,11 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
 function PlayerAvatars({
   players,
   onPlayerClick,
-  renderLabel,
-  renderDetails,
+  renderMeta,
 }: {
   players: Array<{ id: number; username: string; avatarUrl: string; pp?: number; count?: number; mods?: string[]; scoreUrl?: string | null }>;
   onPlayerClick: (player: { id: number; username: string; avatarUrl: string; pp?: number; count?: number; mods?: string[]; scoreUrl?: string | null }) => void;
-  renderLabel?: (p: { pp?: number; count?: number }) => string | null;
-  renderDetails?: (p: { mods?: string[] }) => React.ReactNode;
+  renderMeta?: (p: { pp?: number; count?: number; mods?: string[] }) => React.ReactNode;
 }) {
   const [showPopover, setShowPopover] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -597,7 +614,7 @@ function PlayerAvatars({
           key={p.id}
           onClick={() => onPlayerClick(p)}
           className="cursor-pointer"
-          title={`${p.username}${renderLabel?.(p) ? ` (${renderLabel(p)})` : ""}`}
+          title={p.username}
         >
           <Avatar url={p.avatarUrl} size={18} />
         </button>
@@ -624,15 +641,8 @@ function PlayerAvatars({
                   className="flex items-center gap-2 w-full py-1 px-1.5 rounded hover:bg-osu-b4 cursor-pointer transition-colors text-left"
                 >
                   <Avatar url={p.avatarUrl} size={16} />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[10px] text-osu-l2 truncate">{p.username}</div>
-                    {renderDetails?.(p)}
-                  </div>
-                  {renderLabel?.(p) && (
-                    <span className="text-[9px] text-osu-pink ml-auto flex-shrink-0">
-                      {renderLabel(p)}
-                    </span>
-                  )}
+                  <div className="min-w-0 flex-1 text-[10px] text-osu-l2 truncate">{p.username}</div>
+                  {renderMeta?.(p)}
                 </button>
               ))}
             </div>
@@ -698,14 +708,20 @@ function FarmedCard({ map, onPlayerClick }: { map: MapsFarmedEntry; onPlayerClic
             }
             onPlayerClick(player.username);
           }}
-          renderLabel={(p) => (p as MapsFarmedPlayer).pp ? `${Math.round((p as MapsFarmedPlayer).pp)}pp` : null}
-          renderDetails={(p) => p.mods?.length ? (
-            <div className="flex items-center gap-0.5 mt-0.5">
-              {p.mods.map((mod) => (
-                <ModBadge key={mod} mod={mod} />
+          renderMeta={(p) => (
+            <div className="ml-auto flex items-center gap-1 flex-shrink-0">
+              {p.mods?.map((mod) => (
+                <span key={mod} className="inline-flex origin-center scale-[0.34] -mx-2">
+                  <ModBadge mod={mod} />
+                </span>
               ))}
+              {(p as MapsFarmedPlayer).pp ? (
+                <span className="text-[9px] text-osu-pink whitespace-nowrap">
+                  {Math.round((p as MapsFarmedPlayer).pp)}pp
+                </span>
+              ) : null}
             </div>
-          ) : null}
+          )}
         />
       </div>
     </motion.div>
@@ -762,7 +778,11 @@ function MostPlayedCard({ map, onPlayerClick }: { map: MapsAggregatedBeatmap; on
         <PlayerAvatars
           players={map.players}
           onPlayerClick={(player) => onPlayerClick(player.username)}
-          renderLabel={(p) => (p as MapsPlayerEntry).count ? `${formatNumber((p as MapsPlayerEntry).count)}x` : null}
+          renderMeta={(p) => (p as MapsPlayerEntry).count ? (
+            <span className="text-[9px] text-osu-pink whitespace-nowrap">
+              {formatNumber((p as MapsPlayerEntry).count)}x
+            </span>
+          ) : null}
         />
       </div>
     </motion.div>
