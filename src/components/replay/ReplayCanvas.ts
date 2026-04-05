@@ -110,6 +110,8 @@ export class ManiaReplayRenderer {
   private od = 8;
   private showInputOverlay = false;
   private skin: ManiaSkin | null = null;
+  private cssWidth = 0;
+  private cssHeight = 0;
 
   // Receptor flash state
   private receptorFlashTimestamps: number[];
@@ -357,8 +359,8 @@ export class ManiaReplayRenderer {
   // --- Layout ---
 
   private getLayout(): Layout {
-    const w = this.canvas.getBoundingClientRect().width;
-    const h = this.canvas.getBoundingClientRect().height;
+    const w = this.cssWidth;
+    const h = this.cssHeight;
 
     let playfieldWidth: number;
     let laneWidth: number;
@@ -414,10 +416,15 @@ export class ManiaReplayRenderer {
 
   resize() {
     const rect = this.canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
+    const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+    const dprCap = coarsePointer ? 1.5 : 2;
+    const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
+    this.cssWidth = rect.width;
+    this.cssHeight = rect.height;
     this.canvas.width = rect.width * dpr;
     this.canvas.height = rect.height * dpr;
-    this.ctx.scale(dpr, dpr);
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.render();
   }
 
   play() {
