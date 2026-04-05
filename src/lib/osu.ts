@@ -7,7 +7,7 @@ import {
   getPersistentCached,
   setPersistentCache,
 } from "./api";
-import { calculateApproxPpGainMap, getModAcronyms, getScoreUrl } from "./score";
+import { calculateApproxPpGainMap, getModAcronyms, getScoreTimestamp, getScoreUrl } from "./score";
 import type {
   OsuUser,
   OsuScore,
@@ -20,6 +20,7 @@ import type {
   MapsAggregatedBeatmap,
   MapsAggregatedFavourite,
   MapsFarmedEntry,
+  UserProfileInsights,
 } from "./types";
 
 const MAPS_DATA_CACHE_TTL = 24 * 60 * 60 * 1000; // 1 day
@@ -32,6 +33,7 @@ const RANKINGS_CACHE_TTL = 5 * 60 * 1000;
 const RANK_HISTORY_CACHE_TTL = 24 * 60 * 60 * 1000;
 const APPROX_PP_GAINS_CACHE_TTL = 10 * 60 * 1000;
 const BEST_SCORES_WINDOW_CACHE_TTL = 2 * 60 * 1000;
+const USER_PROFILE_INSIGHTS_CACHE_TTL = 6 * 60 * 60 * 1000;
 const USER_CACHE_TTL = 2 * 60 * 1000;
 const USER_SCORE_LIST_CACHE_TTL = 60 * 1000;
 const RANK_HISTORY_CONCURRENCY = 20;
@@ -219,6 +221,93 @@ async function getApproxPpGainsForUser(userId: number): Promise<Record<number, n
   return gains;
 }
 
+function getTopCountEntry(counts: Map<string, number>): { label: string; count: number } | null {
+  const entries = [...counts.entries()];
+  if (!entries.length) return null;
+
+  entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const [label, count] = entries[0];
+  return { label, count };
+}
+
+function getMedian(values: number[]): number | null {
+  if (!values.length) return null;
+
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+
+  if (sorted.length % 2 === 1) {
+    return sorted[mid];
+  }
+
+  return (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+function getTimestampMs(score: OsuScore): number {
+  const timestamp = getScoreTimestamp(score);
+  return timestamp ? new Date(timestamp).getTime() : 0;
+}
+
+function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfileInsights {
+  const scores = bestScores.filter((score) => score.beatmap?.mode === "mania");
+  const keyCounts = new Map<number, number>();
+  const modCounts = new Map<string, number>();
+  const bpms: number[] = [];
+  const ppValues: number[] = [];
+  const timestamps: Array<{ value: string; ms: number }> = [];
+
+  for (const score of scores) {
+    const keyCount = Number(score.beatmap?.cs);
+    if (Number.isFinite(keyCount) && keyCount > 0) {
+      const normalizedKeyCount = Math.round(keyCount);
+      keyCounts.set(normalizedKeyCount, (keyCounts.get(normalizedKeyCount) ?? 0) + 1);
+    }
+
+    const mods = getModAcronyms(score.mods);
+    if (mods.length > 0) {
+      for (const mod of mods) {
+        modCounts.set(mod, (modCounts.get(mod) ?? 0) + 1);
+      }
+    }
+
+    const bpm = Number(score.beatmap?.bpm);
+    if (Number.isFinite(bpm) && bpm > 0) {
+      bpms.push(bpm);
+    }
+
+    if (score.pp != null && score.pp > 0) {
+      ppValues.push(score.pp);
+    }
+
+    const timestamp = getScoreTimestamp(score);
+    const timestampMs = getTimestampMs(score);
+    if (timestamp && Number.isFinite(timestampMs) && timestampMs > 0) {
+      timestamps.push({ value: timestamp, ms: timestampMs });
+    }
+  }
+
+  const sortedKeySplit = [...keyCounts.entries()]
+    .map(([keyCount, count]) => ({ keyCount, count }))
+    .sort((a, b) => b.count - a.count || a.keyCount - b.keyCount);
+  const sortedTimestamps = timestamps.sort((a, b) => a.ms - b.ms);
+  const sortedPpValues = ppValues.sort((a, b) => b - a);
+
+  return {
+    sampleSize: scores.length,
+    keySplit: sortedKeySplit,
+    mostUsedMod: getTopCountEntry(modCounts),
+    medianBpm: getMedian(bpms),
+    newestTopPlayAt: sortedTimestamps.length ? sortedTimestamps[sortedTimestamps.length - 1].value : null,
+    oldestTopPlayAt: sortedTimestamps.length ? sortedTimestamps[0].value : null,
+    ppRange: sortedPpValues.length
+      ? {
+          top: sortedPpValues[0],
+          bottom: sortedPpValues[sortedPpValues.length - 1],
+        }
+      : null,
+  };
+}
+
 async function fetchUserBestScoresWindow(userId: number, totalLimit = 200): Promise<OsuScore[]> {
   const cacheKey = `user-best-scores-window:${userId}:${totalLimit}`;
   const cached = await getPersistentCacheEntry<OsuScore[]>(cacheKey);
@@ -259,6 +348,18 @@ export const getUserScoresBestWindow = createServerFn({ method: "GET" })
   .inputValidator((data: { userId: number; totalLimit?: number }) => data)
   .handler(async ({ data }: { data: { userId: number; totalLimit?: number } }) => {
     return fetchUserBestScoresWindow(data.userId, data.totalLimit ?? 200);
+  });
+
+export const getUserProfileInsights = createServerFn({ method: "GET" })
+  .inputValidator((data: { userId: number }) => data)
+  .handler(async ({ data }: { data: { userId: number } }) => {
+    const cacheKey = `user-profile-insights:${data.userId}`;
+    const cached = await getPersistentCached<UserProfileInsights>(cacheKey);
+    if (cached) return cached;
+
+    const insights = calculateUserProfileInsights(await fetchUserBestScoresWindow(data.userId, 200));
+    await setPersistentCache(cacheKey, insights, USER_PROFILE_INSIGHTS_CACHE_TTL);
+    return insights;
   });
 
 export const getUsersApproxPpGains = createServerFn({ method: "GET" })

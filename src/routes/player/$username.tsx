@@ -1,7 +1,7 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getUser, getUserScoresBest, getUserScoresRecent } from "../../lib/osu";
+import { getUser, getUserProfileInsights, getUserScoresBest, getUserScoresRecent } from "../../lib/osu";
 import {
   formatNumber,
   formatAccuracy,
@@ -25,14 +25,17 @@ import { ModBadge } from "../../components/ui/ModBadge";
 import { LazerBadge } from "../../components/ui/LazerBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
 import { UsernameText } from "../../components/ui/UsernameText";
-import type { OsuScore, OsuUser } from "../../lib/types";
+import type { OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 
 const userRequestCache = new Map<string, Promise<OsuUser>>();
 const userScoresRequestCache = new Map<number, Promise<[OsuScore[], OsuScore[]]>>();
+const userProfileInsightsRequestCache = new Map<number, Promise<UserProfileInsights>>();
 const userDataCache = new Map<string, { data: OsuUser; expiresAt: number }>();
 const userScoresDataCache = new Map<number, { data: [OsuScore[], OsuScore[]]; expiresAt: number }>();
+const userProfileInsightsDataCache = new Map<number, { data: UserProfileInsights; expiresAt: number }>();
 const USER_CLIENT_CACHE_TTL = 2 * 60 * 1000;
 const USER_SCORES_CLIENT_CACHE_TTL = 60 * 1000;
+const USER_PROFILE_INSIGHTS_CLIENT_CACHE_TTL = 10 * 60 * 1000;
 const INITIAL_SCORE_BATCH_SIZE = 5;
 const SHOW_MORE_BATCH_SIZE = 50;
 type ScoreTab = "best" | "recent";
@@ -112,15 +115,81 @@ function loadUserScoresCached(userId: number): Promise<[OsuScore[], OsuScore[]]>
   return request;
 }
 
+function loadUserProfileInsightsCached(userId: number): Promise<UserProfileInsights> {
+  const now = Date.now();
+  const cachedData = userProfileInsightsDataCache.get(userId);
+  if (cachedData && cachedData.expiresAt > now) {
+    return Promise.resolve(cachedData.data);
+  }
+  if (cachedData) {
+    userProfileInsightsDataCache.delete(userId);
+  }
+
+  const cached = userProfileInsightsRequestCache.get(userId);
+  if (cached) return cached;
+
+  const request = getUserProfileInsights({ data: { userId } })
+    .then((insights) => {
+      userProfileInsightsDataCache.set(userId, {
+        data: insights,
+        expiresAt: Date.now() + USER_PROFILE_INSIGHTS_CLIENT_CACHE_TTL,
+      });
+      return insights;
+    })
+    .finally(() => {
+      userProfileInsightsRequestCache.delete(userId);
+    });
+
+  userProfileInsightsRequestCache.set(userId, request);
+  return request;
+}
+
+function formatKeySplitSummary(insights: UserProfileInsights | null): string {
+  if (!insights?.sampleSize || insights.keySplit.length === 0) return "-";
+
+  return insights.keySplit
+    .slice(0, 3)
+    .map((bucket) => `${bucket.keyCount}K ${Math.round((bucket.count / insights.sampleSize) * 100)}%`)
+    .join(" · ");
+}
+
+function formatInsightCount(count: number, total: number): string {
+  if (!total) return formatNumber(count);
+  return `${formatNumber(count)} of ${formatNumber(total)}`;
+}
+
+function formatInsightDateValue(dateStr: string | null): string {
+  return dateStr ? formatTimeAgo(dateStr) : "-";
+}
+
+function formatInsightDateDetail(dateStr: string | null): string {
+  return dateStr ? formatDate(dateStr) : "No dated top plays";
+}
+
+function formatMedianBpm(medianBpm: number | null): string {
+  if (medianBpm == null) return "-";
+  return `${Math.round(medianBpm)} BPM`;
+}
+
+function formatPpRange(
+  ppRange: UserProfileInsights["ppRange"],
+): string {
+  if (!ppRange) return "-";
+  return `${Math.round(ppRange.top)}pp -> ${Math.round(ppRange.bottom)}pp`;
+}
+
 function PlayerPage() {
   const { username } = Route.useParams();
   const [user, setUser] = useState<OsuUser | null>(null);
   const [best, setBest] = useState<OsuScore[]>([]);
   const [recent, setRecent] = useState<OsuScore[]>([]);
+  const [profileInsights, setProfileInsights] = useState<UserProfileInsights | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [loadingScores, setLoadingScores] = useState(true);
+  const [loadingInsights, setLoadingInsights] = useState(true);
   const [userError, setUserError] = useState<string | null>(null);
   const [scoresError, setScoresError] = useState<string | null>(null);
+  const [insightsError, setInsightsError] = useState<string | null>(null);
   const [tab, setTab] = useState<ScoreTab>("best");
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
   const [avatarOpen, setAvatarOpen] = useState(false);
@@ -143,12 +212,15 @@ function PlayerPage() {
     setUser(null);
     setBest([]);
     setRecent([]);
+    setProfileInsights(null);
     setTab("best");
     setKeyFilter("all");
     setUserError(null);
     setScoresError(null);
+    setInsightsError(null);
     setLoadingUser(true);
     setLoadingScores(true);
+    setLoadingInsights(true);
     setBestHasMore(true);
     setRecentHasMore(true);
     setLoadingMoreTab(null);
@@ -197,6 +269,32 @@ function PlayerPage() {
       .finally(() => {
         if (cancelled) return;
         setLoadingScores(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
+    setLoadingInsights(true);
+
+    loadUserProfileInsightsCached(user.id)
+      .then((insights) => {
+        if (cancelled) return;
+        setProfileInsights(insights);
+        setInsightsError(null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setInsightsError("Couldn't load profile insights right now.");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingInsights(false);
       });
 
     return () => {
@@ -430,12 +528,56 @@ function PlayerPage() {
             <RankChart data={user.rank_history.data} />
           )}
 
-          {/* Secondary stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
-            <StatBox label="Ranked Score" value={formatNumber(stats.ranked_score)} small />
-            <StatBox label="Total Score" value={formatNumber(stats.total_score)} small />
-            <StatBox label="Total Hits" value={formatNumber(stats.total_hits)} small />
-            <StatBox label="Max Combo" value={formatNumber(stats.maximum_combo)} small />
+          {/* Profile insights */}
+          <div className="mt-4">
+            {loadingInsights ? (
+              <InsightsSkeleton />
+            ) : insightsError ? (
+              <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 px-4 py-3 text-sm text-osu-f1">
+                {insightsError}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                <InsightBox
+                  label="Key Split"
+                  value={formatKeySplitSummary(profileInsights)}
+                  detail={
+                    profileInsights?.sampleSize
+                      ? `${formatNumber(profileInsights.sampleSize)} top plays sampled`
+                      : "No top-play key data"
+                  }
+                />
+                <InsightBox
+                  label="Most Used Mod"
+                  value={profileInsights?.mostUsedMod?.label ?? "-"}
+                  detail={
+                    profileInsights?.mostUsedMod && profileInsights.sampleSize
+                      ? `${formatInsightCount(profileInsights.mostUsedMod.count, profileInsights.sampleSize)} plays`
+                      : "No repeated mod preference"
+                  }
+                />
+                <InsightBox
+                  label="Median BPM"
+                  value={formatMedianBpm(profileInsights?.medianBpm ?? null)}
+                  detail="Middle tempo across top plays"
+                />
+                <InsightBox
+                  label="Newest Top Play"
+                  value={formatInsightDateValue(profileInsights?.newestTopPlayAt ?? null)}
+                  detail={formatInsightDateDetail(profileInsights?.newestTopPlayAt ?? null)}
+                />
+                <InsightBox
+                  label="Oldest Top Play"
+                  value={formatInsightDateValue(profileInsights?.oldestTopPlayAt ?? null)}
+                  detail={formatInsightDateDetail(profileInsights?.oldestTopPlayAt ?? null)}
+                />
+                <InsightBox
+                  label="PP Range"
+                  value={formatPpRange(profileInsights?.ppRange ?? null)}
+                  detail="Highest top play to lowest one in the sample"
+                />
+              </div>
+            )}
           </div>
 
           {/* Grades */}
@@ -590,11 +732,12 @@ function PlayerPageSkeleton() {
           <Skeleton className="h-16 w-full" />
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="bg-osu-b4 rounded-xl p-3 border border-osu-b3/20 space-y-2">
               <Skeleton className="h-3 w-16" />
-              <Skeleton className="h-5 w-20" />
+              <Skeleton className="h-5 w-28" />
+              <Skeleton className="h-3 w-24" />
             </div>
           ))}
         </div>
@@ -628,6 +771,38 @@ function StatBox({
       >
         {value}
       </div>
+    </div>
+  );
+}
+
+function InsightBox({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="bg-osu-b4 rounded-xl p-3 border border-osu-b3/20">
+      <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
+      <div className="mt-1 text-base sm:text-lg font-bold text-white break-words">{value}</div>
+      <div className="mt-1 text-[11px] text-osu-f1">{detail}</div>
+    </div>
+  );
+}
+
+function InsightsSkeleton() {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <div key={i} className="bg-osu-b4 rounded-xl p-3 border border-osu-b3/20 space-y-2">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="h-5 w-24" />
+          <Skeleton className="h-3 w-28" />
+        </div>
+      ))}
     </div>
   );
 }
