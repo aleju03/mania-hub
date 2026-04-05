@@ -14,7 +14,7 @@ const gradeFile: Record<string, string> = {
 
 const preloadedGrades = new Set<string>();
 
-export function GradeImg({ grade, size = 32 }: { grade: string; size?: number }) {
+export function GradeImg({ grade, size = 32, className }: { grade: string; size?: number; className?: string }) {
   const file = gradeFile[grade] ?? `GradeSmall-${grade}`;
   const src = `/images/badges/score-ranks-v2019/${file}.svg`;
 
@@ -31,6 +31,7 @@ export function GradeImg({ grade, size = 32 }: { grade: string; size?: number })
       alt={grade}
       width={size}
       height={size}
+      className={className}
       loading="eager"
       decoding="async"
       fetchPriority="high"
