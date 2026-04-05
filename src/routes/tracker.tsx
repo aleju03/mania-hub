@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getRankings, getCountryRecentScores, getUsersApproxPpGains } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
@@ -62,6 +62,9 @@ function ScoresPage() {
   const [initialLoaded, setInitialLoaded] = useState(feedScores.length > 0 || !!feedScoresFetchedAt);
   const [initialRefreshDone, setInitialRefreshDone] = useState(false);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const handleToggleExpand = useCallback((key: string) => {
+    setExpandedKey((prev) => (prev === key ? null : key));
+  }, []);
   const [ppGainByScoreId, setPpGainByScoreId] = useState<Record<number, number>>({});
   const [ppGainFetchedByUserId, setPpGainFetchedByUserId] = useState<Record<number, true>>({});
 
@@ -436,9 +439,10 @@ function ScoresPage() {
                         <ScoreFeedItem
                           key={scoreKey}
                           score={score}
+                          scoreKey={scoreKey}
                           approxPpGain={ppGainByScoreId[score.id] ?? null}
                           expanded={expandedKey === scoreKey}
-                          onToggle={() => setExpandedKey((current) => (current === scoreKey ? null : scoreKey))}
+                          onToggle={handleToggleExpand}
                         />
                       );
                     })}
@@ -460,17 +464,22 @@ function ScoresPage() {
   );
 }
 
-function ScoreFeedItem({
+const ScoreFeedItem = memo(function ScoreFeedItem({
   score,
+  scoreKey,
   approxPpGain,
   expanded,
   onToggle,
 }: {
   score: OsuScore;
+  scoreKey: string;
   approxPpGain: number | null;
   expanded: boolean;
-  onToggle: () => void;
+  onToggle: (key: string) => void;
 }) {
+  const [rendered, setRendered] = useState(expanded);
+  useEffect(() => { if (expanded) setRendered(true); }, [expanded]);
+
   const keys = score.beatmap?.cs;
   const stats = score.statistics;
   const totalScore = getDisplayedTotalScore(score);
@@ -493,7 +502,7 @@ function ScoreFeedItem({
     >
       <div
         className="flex items-center gap-2 sm:gap-3 py-3 px-3 sm:px-4 hover:bg-osu-b3/50 transition-colors duration-[120ms] cursor-pointer"
-        onClick={onToggle}
+        onClick={() => onToggle(scoreKey)}
       >
         <GradeImg grade={getDisplayedRank(score)} size={32} />
         <button
@@ -618,16 +627,11 @@ function ScoreFeedItem({
       </div>
 
       {/* Expanded score details */}
-      <AnimatePresence>
-        {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.15 }}
-            className="overflow-hidden"
-          >
-            <div className="px-4 pb-3 pt-1 border-t border-osu-b3/20">
+      {rendered && (
+        <div
+          className={`px-4 pb-3 pt-1 border-t border-osu-b3/20 ${expanded ? "detail-enter" : "detail-exit"}`}
+          onAnimationEnd={() => { if (!expanded) setRendered(false); }}
+        >
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
                 <StatCell label="Score" value={totalScore != null ? formatNumber(totalScore) : "-"} />
                 <StatCell label="Combo" value={`${formatNumber(score.max_combo)}x`} />
@@ -662,13 +666,11 @@ function ScoreFeedItem({
                   </a>
                 </div>
               )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
     </motion.div>
   );
-}
+});
 
 function StatCell({ label, value, color }: { label: string; value: string; color?: string }) {
   return (

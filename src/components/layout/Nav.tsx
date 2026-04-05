@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { SearchInput } from "../ui/SearchInput";
 import { clearDevServerCaches } from "../../lib/api";
@@ -226,28 +226,23 @@ export function Nav() {
         </button>
       </nav>
 
-      {/* Mobile drawer */}
-      <AnimatePresence>
-        {menuOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              className="fixed inset-0 z-[55] bg-black/60 md:hidden"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              onClick={() => setMenuOpen(false)}
-              style={{ top: 60 }}
-            />
-            {/* Drawer panel */}
-            <motion.div
-              className="fixed top-[60px] right-0 w-64 bottom-0 bg-osu-b5 z-[60] md:hidden border-l border-osu-b3/30 overflow-y-auto transform-gpu will-change-transform"
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ duration: 0.18, ease: "easeOut" }}
-            >
+      {/* Mobile drawer — pure CSS transitions for compositor-thread animation */}
+      {/* Backdrop */}
+      <div
+        className={`fixed inset-0 z-[55] bg-black/60 md:hidden transition-opacity duration-200 ease-out ${
+          menuOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}
+        onClick={() => setMenuOpen(false)}
+        style={{ top: 60 }}
+        aria-hidden={!menuOpen}
+      />
+      {/* Drawer panel */}
+      <div
+        className={`fixed top-[60px] right-0 w-64 bottom-0 bg-osu-b5 z-[60] md:hidden border-l border-osu-b3/30 overflow-y-auto transform-gpu will-change-transform transition-transform duration-250 ease-out ${
+          menuOpen ? "translate-x-0" : "translate-x-full pointer-events-none"
+        }`}
+        aria-hidden={!menuOpen}
+      >
               <div className="py-2">
                 {links.map((l) => (
                   <Link
@@ -293,10 +288,7 @@ export function Nav() {
                   </button>
                 </div>
               )}
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      </div>
     </header>
   );
 }
