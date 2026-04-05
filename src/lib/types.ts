@@ -325,13 +325,25 @@ export interface UserProfileCountStat {
   count: number;
 }
 
+export interface InsightScoreSnapshot {
+  title: string;
+  artist: string;
+  version: string;
+  pp: number | null;
+  rank: string;
+  coverUrl: string;
+  beatmapUrl: string;
+  date: string;
+  mods: string[];
+}
+
 export interface UserProfileInsights {
   sampleSize: number;
   keySplit: UserProfileKeyBucket[];
   mostUsedMod: UserProfileCountStat | null;
   medianBpm: number | null;
-  newestTopPlayAt: string | null;
-  oldestTopPlayAt: string | null;
+  newestTopPlay: InsightScoreSnapshot | null;
+  oldestTopPlay: InsightScoreSnapshot | null;
   ppRange: {
     top: number;
     bottom: number;

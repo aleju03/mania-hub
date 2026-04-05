@@ -21,6 +21,7 @@ import type {
   MapsAggregatedFavourite,
   MapsFarmedEntry,
   UserProfileInsights,
+  InsightScoreSnapshot,
 } from "./types";
 
 const MAPS_DATA_CACHE_TTL = 24 * 60 * 60 * 1000; // 1 day
@@ -248,13 +249,27 @@ function getTimestampMs(score: OsuScore): number {
   return timestamp ? new Date(timestamp).getTime() : 0;
 }
 
+function scoreToSnapshot(score: OsuScore): InsightScoreSnapshot {
+  return {
+    title: score.beatmapset?.title ?? "Unknown",
+    artist: score.beatmapset?.artist ?? "",
+    version: score.beatmap?.version ?? "",
+    pp: score.pp,
+    rank: score.rank,
+    coverUrl: score.beatmapset?.covers?.card ?? "",
+    beatmapUrl: score.beatmap?.url ?? `https://osu.ppy.sh/b/${score.beatmap?.id ?? 0}`,
+    date: getScoreTimestamp(score) ?? "",
+    mods: getModAcronyms(score.mods),
+  };
+}
+
 function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfileInsights {
   const scores = bestScores.filter((score) => score.beatmap?.mode === "mania");
   const keyCounts = new Map<number, number>();
   const modCounts = new Map<string, number>();
   const bpms: number[] = [];
   const ppValues: number[] = [];
-  const timestamps: Array<{ value: string; ms: number }> = [];
+  const datedScores: Array<{ score: OsuScore; ms: number }> = [];
 
   for (const score of scores) {
     const keyCount = Number(score.beatmap?.cs);
@@ -279,17 +294,16 @@ function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfileInsigh
       ppValues.push(score.pp);
     }
 
-    const timestamp = getScoreTimestamp(score);
     const timestampMs = getTimestampMs(score);
-    if (timestamp && Number.isFinite(timestampMs) && timestampMs > 0) {
-      timestamps.push({ value: timestamp, ms: timestampMs });
+    if (Number.isFinite(timestampMs) && timestampMs > 0) {
+      datedScores.push({ score, ms: timestampMs });
     }
   }
 
   const sortedKeySplit = [...keyCounts.entries()]
     .map(([keyCount, count]) => ({ keyCount, count }))
     .sort((a, b) => b.count - a.count || a.keyCount - b.keyCount);
-  const sortedTimestamps = timestamps.sort((a, b) => a.ms - b.ms);
+  datedScores.sort((a, b) => a.ms - b.ms);
   const sortedPpValues = ppValues.sort((a, b) => b - a);
 
   return {
@@ -297,8 +311,8 @@ function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfileInsigh
     keySplit: sortedKeySplit,
     mostUsedMod: getTopCountEntry(modCounts),
     medianBpm: getMedian(bpms),
-    newestTopPlayAt: sortedTimestamps.length ? sortedTimestamps[sortedTimestamps.length - 1].value : null,
-    oldestTopPlayAt: sortedTimestamps.length ? sortedTimestamps[0].value : null,
+    newestTopPlay: datedScores.length ? scoreToSnapshot(datedScores[datedScores.length - 1].score) : null,
+    oldestTopPlay: datedScores.length ? scoreToSnapshot(datedScores[0].score) : null,
     ppRange: sortedPpValues.length
       ? {
           top: sortedPpValues[0],

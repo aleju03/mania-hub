@@ -49,3 +49,8 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 .detail-enter { animation: detail-in 200ms ease-out; }
 .detail-exit { animation: detail-out 120ms ease-in forwards; }
 
+@keyframes cards-in {
+  from { opacity: 0; }
+}
+.cards-enter { animation: cards-in 200ms ease-out; }
+

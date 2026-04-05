@@ -25,7 +25,7 @@ import { ModBadge } from "../../components/ui/ModBadge";
 import { LazerBadge } from "../../components/ui/LazerBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
 import { UsernameText } from "../../components/ui/UsernameText";
-import type { OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
+import type { OsuScore, OsuUser, UserProfileInsights, InsightScoreSnapshot } from "../../lib/types";
 
 const userRequestCache = new Map<string, Promise<OsuUser>>();
 const userScoresRequestCache = new Map<number, Promise<[OsuScore[], OsuScore[]]>>();
@@ -144,38 +144,13 @@ function loadUserProfileInsightsCached(userId: number): Promise<UserProfileInsig
   return request;
 }
 
-function formatKeySplitSummary(insights: UserProfileInsights | null): string {
-  if (!insights?.sampleSize || insights.keySplit.length === 0) return "-";
-
-  return insights.keySplit
-    .slice(0, 3)
-    .map((bucket) => `${bucket.keyCount}K ${Math.round((bucket.count / insights.sampleSize) * 100)}%`)
-    .join(" · ");
-}
-
-function formatInsightCount(count: number, total: number): string {
-  if (!total) return formatNumber(count);
-  return `${formatNumber(count)} of ${formatNumber(total)}`;
-}
-
-function formatInsightDateValue(dateStr: string | null): string {
-  return dateStr ? formatTimeAgo(dateStr) : "-";
-}
-
-function formatInsightDateDetail(dateStr: string | null): string {
-  return dateStr ? formatDate(dateStr) : "No dated top plays";
-}
-
-function formatMedianBpm(medianBpm: number | null): string {
-  if (medianBpm == null) return "-";
-  return `${Math.round(medianBpm)} BPM`;
-}
-
-function formatPpRange(
-  ppRange: UserProfileInsights["ppRange"],
-): string {
-  if (!ppRange) return "-";
-  return `${Math.round(ppRange.top)}pp -> ${Math.round(ppRange.bottom)}pp`;
+function getBpmLabel(bpm: number | null): string {
+  if (bpm == null) return "";
+  const v = Math.round(bpm);
+  if (v < 140) return "Chill";
+  if (v < 180) return "Mid";
+  if (v < 220) return "Fast";
+  return "Speed demon";
 }
 
 function PlayerPage() {
@@ -536,48 +511,76 @@ function PlayerPage() {
               <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 px-4 py-3 text-sm text-osu-f1">
                 {insightsError}
               </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                <InsightBox
-                  label="Key Split"
-                  value={formatKeySplitSummary(profileInsights)}
-                  detail={
-                    profileInsights?.sampleSize
-                      ? `${formatNumber(profileInsights.sampleSize)} top plays sampled`
-                      : "No top-play key data"
-                  }
-                />
-                <InsightBox
-                  label="Most Used Mod"
-                  value={profileInsights?.mostUsedMod?.label ?? "-"}
-                  detail={
-                    profileInsights?.mostUsedMod && profileInsights.sampleSize
-                      ? `${formatInsightCount(profileInsights.mostUsedMod.count, profileInsights.sampleSize)} plays`
-                      : "No repeated mod preference"
-                  }
-                />
-                <InsightBox
-                  label="Median BPM"
-                  value={formatMedianBpm(profileInsights?.medianBpm ?? null)}
-                  detail="Middle tempo across top plays"
-                />
-                <InsightBox
-                  label="Newest Top Play"
-                  value={formatInsightDateValue(profileInsights?.newestTopPlayAt ?? null)}
-                  detail={formatInsightDateDetail(profileInsights?.newestTopPlayAt ?? null)}
-                />
-                <InsightBox
-                  label="Oldest Top Play"
-                  value={formatInsightDateValue(profileInsights?.oldestTopPlayAt ?? null)}
-                  detail={formatInsightDateDetail(profileInsights?.oldestTopPlayAt ?? null)}
-                />
-                <InsightBox
-                  label="PP Range"
-                  value={formatPpRange(profileInsights?.ppRange ?? null)}
-                  detail="Highest top play to lowest one in the sample"
-                />
+            ) : profileInsights && profileInsights.sampleSize > 0 ? (
+              <div className="space-y-3">
+                {/* Row 1: Key Split + Most Used Mod + BPM + PP Range */}
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <KeySplitCard keySplit={profileInsights.keySplit} sampleSize={profileInsights.sampleSize} />
+                  <div className="bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20">
+                    <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Most Used Mod</div>
+                    {profileInsights.mostUsedMod ? (
+                      <>
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <ModBadge mod={profileInsights.mostUsedMod.label} />
+                          <span className="text-lg font-bold text-white">{profileInsights.mostUsedMod.label}</span>
+                        </div>
+                        <div className="mt-1.5">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1 rounded-full bg-osu-b3/40 overflow-hidden">
+                              <div
+                                className="h-full rounded-full bg-osu-yellow"
+                                style={{ width: `${Math.round((profileInsights.mostUsedMod.count / profileInsights.sampleSize) * 100)}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-osu-f1 tabular-nums">
+                              {Math.round((profileInsights.mostUsedMod.count / profileInsights.sampleSize) * 100)}%
+                            </span>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="mt-1.5 text-sm text-osu-f1">No mod preference</div>
+                    )}
+                  </div>
+                  <div className="bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20">
+                    <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Median BPM</div>
+                    {profileInsights.medianBpm != null ? (
+                      <>
+                        <div className="mt-1 flex items-baseline gap-2">
+                          <span className="text-xl font-bold text-white">{Math.round(profileInsights.medianBpm)}</span>
+                          <span className="text-xs text-osu-f1">BPM</span>
+                        </div>
+                        <div className="mt-1 text-[11px] text-osu-f1">{getBpmLabel(profileInsights.medianBpm)}</div>
+                      </>
+                    ) : (
+                      <div className="mt-1.5 text-sm text-osu-f1">-</div>
+                    )}
+                  </div>
+                  <div className="bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20">
+                    <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">PP Range</div>
+                    {profileInsights.ppRange ? (
+                      <>
+                        <div className="mt-1 flex items-baseline gap-1.5">
+                          <span className="text-xl font-bold text-osu-pink-light">{Math.round(profileInsights.ppRange.top)}</span>
+                          <span className="text-xs text-osu-f1">to</span>
+                          <span className="text-xl font-bold text-white">{Math.round(profileInsights.ppRange.bottom)}</span>
+                          <span className="text-xs text-osu-f1">pp</span>
+                        </div>
+                        <div className="mt-1 text-[11px] text-osu-f1">{Math.round(profileInsights.ppRange.top - profileInsights.ppRange.bottom)}pp spread</div>
+                      </>
+                    ) : (
+                      <div className="mt-1.5 text-sm text-osu-f1">-</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Row 2: Newest + Oldest top play with map backgrounds */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <TopPlayCard label="Newest Top Play" snapshot={profileInsights.newestTopPlay} />
+                  <TopPlayCard label="Oldest Top Play" snapshot={profileInsights.oldestTopPlay} />
+                </div>
               </div>
-            )}
+            ) : null}
           </div>
 
           {/* Grades */}
@@ -732,14 +735,25 @@ function PlayerPageSkeleton() {
           <Skeleton className="h-16 w-full" />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="bg-osu-b4 rounded-xl p-3 border border-osu-b3/20 space-y-2">
-              <Skeleton className="h-3 w-16" />
-              <Skeleton className="h-5 w-28" />
-              <Skeleton className="h-3 w-24" />
-            </div>
-          ))}
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 space-y-2">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="h-5 w-28" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 h-[90px]">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-4 w-40 mt-2" />
+                <Skeleton className="h-3 w-32 mt-1" />
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="space-y-1.5">
@@ -775,34 +789,114 @@ function StatBox({
   );
 }
 
-function InsightBox({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-}) {
+function KeySplitCard({ keySplit, sampleSize }: { keySplit: UserProfileInsights["keySplit"]; sampleSize: number }) {
+  const colors: Record<number, string> = { 4: "bg-osu-blue", 7: "bg-osu-pink", 6: "bg-osu-purple", 9: "bg-osu-orange" };
+  const textColors: Record<number, string> = { 4: "text-osu-blue", 7: "text-osu-pink-light", 6: "text-osu-purple-light", 9: "text-osu-orange" };
+
   return (
-    <div className="bg-osu-b4 rounded-xl p-3 border border-osu-b3/20">
-      <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
-      <div className="mt-1 text-base sm:text-lg font-bold text-white break-words">{value}</div>
-      <div className="mt-1 text-[11px] text-osu-f1">{detail}</div>
+    <div className="bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20">
+      <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Key Split</div>
+      {keySplit.length > 0 ? (
+        <>
+          <div className="mt-2 flex rounded-full h-2.5 overflow-hidden bg-osu-b3/40">
+            {keySplit.map((b) => (
+              <div
+                key={b.keyCount}
+                className={`${colors[b.keyCount] ?? "bg-osu-b1"} transition-all duration-300`}
+                style={{ width: `${(b.count / sampleSize) * 100}%` }}
+              />
+            ))}
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5">
+            {keySplit.map((b) => (
+              <div key={b.keyCount} className="flex items-center gap-1.5">
+                <div className={`w-2 h-2 rounded-full ${colors[b.keyCount] ?? "bg-osu-b1"}`} />
+                <span className={`text-xs font-bold ${textColors[b.keyCount] ?? "text-osu-f1"}`}>{b.keyCount}K</span>
+                <span className="text-[10px] text-osu-f1 tabular-nums">{Math.round((b.count / sampleSize) * 100)}%</span>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <div className="mt-1.5 text-sm text-osu-f1">No key data</div>
+      )}
     </div>
+  );
+}
+
+function TopPlayCard({ label, snapshot }: { label: string; snapshot: InsightScoreSnapshot | null }) {
+  if (!snapshot) {
+    return (
+      <div className="bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20">
+        <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
+        <div className="mt-1.5 text-sm text-osu-f1">No data</div>
+      </div>
+    );
+  }
+
+  return (
+    <a
+      href={snapshot.beatmapUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="block relative rounded-xl overflow-hidden border border-osu-b3/20 hover:border-osu-pink/30 transition-colors group/topplay"
+    >
+      {snapshot.coverUrl && (
+        <img
+          src={snapshot.coverUrl}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover/topplay:scale-105"
+        />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/60 to-black/40" />
+      <div className="relative p-3.5 flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
+          <div className="mt-1 text-sm font-bold text-white truncate">{snapshot.title}</div>
+          <div className="text-[10px] text-osu-l2 truncate">{snapshot.artist} [{snapshot.version}]</div>
+          <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+            <GradeImg grade={snapshot.rank} size={18} />
+            {snapshot.mods.map((mod) => (
+              <ModBadge key={mod} mod={mod} />
+            ))}
+            <span className="text-[10px] text-osu-f1">{formatTimeAgo(snapshot.date)}</span>
+            {snapshot.date && (
+              <span className="text-[10px] text-osu-f1 hidden sm:inline">{formatDate(snapshot.date)}</span>
+            )}
+          </div>
+        </div>
+        {snapshot.pp != null && (
+          <div className="flex-shrink-0 text-right">
+            <div className="text-xl font-bold text-osu-pink-light leading-none">{Math.round(snapshot.pp)}</div>
+            <div className="text-[10px] text-osu-f1 mt-0.5">pp</div>
+          </div>
+        )}
+      </div>
+    </a>
   );
 }
 
 function InsightsSkeleton() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-      {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="bg-osu-b4 rounded-xl p-3 border border-osu-b3/20 space-y-2">
-          <Skeleton className="h-3 w-20" />
-          <Skeleton className="h-5 w-24" />
-          <Skeleton className="h-3 w-28" />
-        </div>
-      ))}
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 space-y-2">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-5 w-28" />
+            <Skeleton className="h-3 w-20" />
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div key={i} className="bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 h-[90px]">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-4 w-40 mt-2" />
+            <Skeleton className="h-3 w-32 mt-1" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

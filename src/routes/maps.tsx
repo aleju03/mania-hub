@@ -1,6 +1,5 @@
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useMemo, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { getRankings, getCountryMapsData } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { formatNumber, formatDuration, formatTimeAgo } from "../lib/format";
@@ -503,8 +502,7 @@ function MapsPage() {
 
           {/* Card grid */}
           {!error && paginated.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              <AnimatePresence initial={false} mode="popLayout">
+            <div key={`${tab}-${page}`} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 cards-enter">
                 {tab === "farmed"
                   ? (paginated as MapsFarmedEntry[]).map((map) => (
                       <FarmedCard
@@ -528,7 +526,6 @@ function MapsPage() {
                           onPlayerClick={(u) => navigate({ to: "/player/$username", params: { username: u } })}
                         />
                       ))}
-              </AnimatePresence>
             </div>
           )}
 
@@ -744,14 +741,7 @@ function FarmedCard({ map, onPlayerClick }: { map: MapsFarmedEntry; onPlayerClic
   const dominantModColor = dominantMod === "DT" ? "#ff6666" : "#b3d944";
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, scale: 0.96 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.96 }}
-      transition={{ duration: 0.12 }}
-      className="rounded-xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/30 transition-colors"
-    >
+    <div className="rounded-xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/30 transition-colors">
       <a href={url} target="_blank" rel="noreferrer" className="block relative rounded-t-xl overflow-hidden">
         <img src={map.covers.card} alt="" className="w-full h-[90px] object-cover" loading="lazy" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
@@ -800,7 +790,7 @@ function FarmedCard({ map, onPlayerClick }: { map: MapsFarmedEntry; onPlayerClic
       <div className="px-2.5 py-2">
         <div className="flex items-center gap-1.5">
           <span className="text-[10px] text-osu-l2 truncate flex-1">[{map.version}]</span>
-          <span className="text-[9px] text-osu-f1 flex-shrink-0">{formatDuration(map.totalLength)}</span>
+          <span className="text-[9px] text-osu-f1 flex-shrink-0">{formatDuration(Math.round(dominantMod === "DT" ? map.totalLength / 1.5 : dominantMod === "HT" ? map.totalLength / 0.75 : map.totalLength))}</span>
         </div>
 
         <div className="flex items-center gap-3 mt-1.5">
@@ -839,7 +829,7 @@ function FarmedCard({ map, onPlayerClick }: { map: MapsFarmedEntry; onPlayerClic
           )}
         />
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -850,14 +840,7 @@ function MostPlayedCard({ map, onPlayerClick }: { map: MapsAggregatedBeatmap; on
   const url = `https://osu.ppy.sh/beatmapsets/${map.beatmapsetId}#mania/${map.beatmapId}`;
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, scale: 0.96 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.96 }}
-      transition={{ duration: 0.12 }}
-      className="rounded-xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/30 transition-colors"
-    >
+    <div className="rounded-xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/30 transition-colors">
       <a href={url} target="_blank" rel="noreferrer" className="block relative rounded-t-xl overflow-hidden">
         <img src={map.covers.card} alt="" className="w-full h-[90px] object-cover" loading="lazy" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
@@ -900,7 +883,7 @@ function MostPlayedCard({ map, onPlayerClick }: { map: MapsAggregatedBeatmap; on
           ) : null}
         />
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -910,14 +893,7 @@ function FavouriteCard({ fav, onPlayerClick }: { fav: MapsAggregatedFavourite; o
   const url = `https://osu.ppy.sh/beatmapsets/${fav.beatmapsetId}`;
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, scale: 0.96 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.96 }}
-      transition={{ duration: 0.12 }}
-      className="rounded-xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/30 transition-colors"
-    >
+    <div className="rounded-xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/30 transition-colors">
       <a href={url} target="_blank" rel="noreferrer" className="block relative rounded-t-xl overflow-hidden">
         <img src={fav.covers.card} alt="" className="w-full h-[90px] object-cover" loading="lazy" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
@@ -954,6 +930,6 @@ function FavouriteCard({ fav, onPlayerClick }: { fav: MapsAggregatedFavourite; o
 
         <PlayerAvatars players={fav.players} onPlayerClick={onPlayerClick} />
       </div>
-    </motion.div>
+    </div>
   );
 }
