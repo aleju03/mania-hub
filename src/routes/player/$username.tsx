@@ -461,12 +461,6 @@ function PlayerPage() {
                 <UsernameText username={user.username} avatarUrl={user.avatar_url} className="text-2xl sm:text-[34px] font-black text-white" />
               </h1>
               <div className="flex items-center gap-3 mt-1">
-                <span
-                  className="text-xs text-osu-l2"
-                  style={{ textShadow: "0 1px 3px rgba(0,0,0,0.75)" }}
-                >
-                  {user.country?.name || user.country_code}
-                </span>
                 <a
                   href={`https://osu.ppy.sh/users/${user.id}/mania`}
                   target="_blank"
