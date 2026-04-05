@@ -29,6 +29,7 @@ type BeatmapSort = "plays" | "players" | "stars" | "length";
 type FarmedSort = "players" | "avg-pp" | "max-pp" | "stars";
 type StatusFilter = "all" | "ranked" | "loved" | "other";
 type PpFilter = 0 | 500 | 700;
+type ModFilter = "all" | "dt" | "ht" | "nm";
 type MapsSearch = {
   tab?: Tab;
   page?: number;
@@ -37,6 +38,7 @@ type MapsSearch = {
   farmedSort?: FarmedSort;
   status?: StatusFilter;
   pp?: PpFilter;
+  mod?: ModFilter;
   q?: string;
 };
 
@@ -51,6 +53,7 @@ const DEFAULT_MAPS_SEARCH: Required<MapsSearch> = {
   farmedSort: "players",
   status: "all",
   pp: 0,
+  mod: "all",
   q: "",
 };
 
@@ -127,6 +130,7 @@ export const Route = createFileRoute("/maps")({
     farmedSort: search.farmedSort === "avg-pp" || search.farmedSort === "max-pp" || search.farmedSort === "stars" ? search.farmedSort : DEFAULT_MAPS_SEARCH.farmedSort,
     status: search.status === "ranked" || search.status === "loved" || search.status === "other" ? search.status : DEFAULT_MAPS_SEARCH.status,
     pp: search.pp === 500 || search.pp === 700 ? search.pp : DEFAULT_MAPS_SEARCH.pp,
+    mod: search.mod === "dt" || search.mod === "ht" || search.mod === "nm" ? search.mod : DEFAULT_MAPS_SEARCH.mod,
     q: typeof search.q === "string" ? search.q : DEFAULT_MAPS_SEARCH.q,
   }),
   component: MapsPage,
@@ -141,6 +145,7 @@ function buildMapsSearch(search: Required<MapsSearch>): MapsSearch {
     ...(search.farmedSort !== "players" ? { farmedSort: search.farmedSort } : {}),
     ...(search.status !== "all" ? { status: search.status } : {}),
     ...(search.pp > 0 ? { pp: search.pp } : {}),
+    ...(search.mod !== "all" ? { mod: search.mod } : {}),
     ...(search.q ? { q: search.q } : {}),
   };
 }
@@ -165,6 +170,7 @@ function MapsPage() {
   const farmedSort = mapsSearch.farmedSort;
   const statusFilter = mapsSearch.status;
   const ppFilter = mapsSearch.pp;
+  const modFilter = mapsSearch.mod;
   const searchQuery = mapsSearch.q;
 
   const updateMapsSearch = (patch: Partial<Required<MapsSearch>>) => {
@@ -266,7 +272,12 @@ function MapsPage() {
         (m): m is MapsFarmedEntry =>
           m !== null &&
           matchesKeyFilter(m.cs, keyFilter) &&
-          matchesSearch(m.title, m.artist, searchQuery),
+          matchesSearch(m.title, m.artist, searchQuery) &&
+          (modFilter === "all" || (
+            modFilter === "dt" ? getDominantSpeedMod(m.players) === "DT" :
+            modFilter === "ht" ? getDominantSpeedMod(m.players) === "HT" :
+            getDominantSpeedMod(m.players) === null
+          )),
       )
       .sort((a, b) => {
         if (farmedSort === "players") return b.playerCount - a.playerCount || b.avgPp - a.avgPp;
@@ -274,7 +285,7 @@ function MapsPage() {
         if (farmedSort === "max-pp") return b.maxPp - a.maxPp;
         return b.difficultyRating - a.difficultyRating;
       });
-  }, [mapsData, keyFilter, searchQuery, farmedSort, ppFilter]);
+  }, [mapsData, keyFilter, searchQuery, farmedSort, ppFilter, modFilter]);
 
   // ── Filtered + sorted: most played (from most_played endpoint) ──────────
   const filteredMostPlayed = useMemo(() => {
@@ -322,7 +333,7 @@ function MapsPage() {
   const isLoading = loadingPlayers || loadingMaps;
 
   const hasActiveFilters =
-    searchQuery || keyFilter !== "all" || statusFilter !== "all" || ppFilter > 0 || beatmapSort !== "players" || farmedSort !== "players" || tab !== "farmed";
+    searchQuery || keyFilter !== "all" || statusFilter !== "all" || ppFilter > 0 || modFilter !== "all" || beatmapSort !== "players" || farmedSort !== "players" || tab !== "farmed";
 
   const resetFilters = () => {
     navigate({
@@ -383,6 +394,15 @@ function MapsPage() {
                 {(["all", "4k", "7k", "other"] as KeyFilter[]).map((k) => (
                   <FilterPill key={k} active={keyFilter === k} onClick={() => updateMapsSearch({ key: k, page: 0 })}>
                     {k === "all" ? "All" : k.toUpperCase()}
+                  </FilterPill>
+                ))}
+              </FilterGroup>
+
+              {/* Mod type */}
+              <FilterGroup label="Mods">
+                {(["all", "dt", "ht", "nm"] as ModFilter[]).map((m) => (
+                  <FilterPill key={m} active={modFilter === m} onClick={() => updateMapsSearch({ mod: m, page: 0 })}>
+                    {m === "all" ? "All" : m === "nm" ? "NM" : m.toUpperCase()}
                   </FilterPill>
                 ))}
               </FilterGroup>
@@ -550,6 +570,38 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
   );
 }
 
+// ── Dominant speed mod for farmed cards ───────────────────────────────────
+
+/**
+ * Determines the dominant speed mod (DT or HT) for a farmed map.
+ * - DT and NC are treated as the same (returns "DT").
+ * - HT is only returned if the highest PP play also has HT.
+ * - Only DT/NC/HT are considered, no other mods.
+ */
+function getDominantSpeedMod(players: MapsFarmedPlayer[]): "DT" | "HT" | null {
+  let dtCount = 0;
+  let htCount = 0;
+  for (const p of players) {
+    if (p.mods.includes("DT") || p.mods.includes("NC")) dtCount++;
+    else if (p.mods.includes("HT")) htCount++;
+  }
+
+  if (dtCount === 0 && htCount === 0) return null;
+
+  if (dtCount >= htCount) {
+    // Majority is DT/NC — need at least half the players
+    if (dtCount > players.length / 2) return "DT";
+    return null;
+  }
+
+  // Majority is HT — check that the top PP play is also HT
+  if (htCount > players.length / 2) {
+    const topPlayer = players.reduce((best, p) => (p.pp > best.pp ? p : best), players[0]);
+    if (topPlayer.mods.includes("HT")) return "HT";
+  }
+  return null;
+}
+
 // ── Mod helpers ───────────────────────────────────────────────────────────
 
 const MAIN_MODS = new Set(["DT", "NC", "HR", "HT", "DC", "EZ", "FL", "HD", "FI"]);
@@ -687,6 +739,9 @@ function PlayerAvatars({
 
 function FarmedCard({ map, onPlayerClick }: { map: MapsFarmedEntry; onPlayerClick: (u: string) => void }) {
   const url = `https://osu.ppy.sh/beatmapsets/${map.beatmapsetId}#mania/${map.beatmapId}`;
+  const dominantMod = getDominantSpeedMod(map.players);
+  const dominantModFile = dominantMod === "DT" ? "double-time" : dominantMod === "HT" ? "half-time" : null;
+  const dominantModColor = dominantMod === "DT" ? "#ff6666" : "#b3d944";
 
   return (
     <motion.div
@@ -700,6 +755,36 @@ function FarmedCard({ map, onPlayerClick }: { map: MapsFarmedEntry; onPlayerClic
       <a href={url} target="_blank" rel="noreferrer" className="block relative rounded-t-xl overflow-hidden">
         <img src={map.covers.card} alt="" className="w-full h-[90px] object-cover" loading="lazy" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+        {dominantModFile && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none -translate-y-2.5">
+            <div className="relative w-[56px] h-[38px] opacity-70">
+              {/* Base badge shape */}
+              <img src="/images/badges/mods/mod-icon.svg" alt="" className="absolute inset-0 w-full h-full" style={{ filter: `brightness(0) saturate(100%)` }} />
+              <div
+                className="absolute inset-0"
+                style={{
+                  backgroundColor: dominantModColor,
+                  maskImage: "url(/images/badges/mods/mod-icon.svg)",
+                  WebkitMaskImage: "url(/images/badges/mods/mod-icon.svg)",
+                  maskSize: "100%", WebkitMaskSize: "100%",
+                  maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
+                }}
+              />
+              {/* Mod icon overlay */}
+              <div
+                className="absolute inset-0"
+                style={{
+                  backgroundColor: `color-mix(in srgb-linear, black, ${dominantModColor} 10%)`,
+                  maskImage: `url(/images/badges/mods/mod-${dominantModFile}.svg)`,
+                  WebkitMaskImage: `url(/images/badges/mods/mod-${dominantModFile}.svg)`,
+                  maskSize: "110%", WebkitMaskSize: "110%",
+                  maskPosition: "center", WebkitMaskPosition: "center",
+                  maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
+                }}
+              />
+            </div>
+          </div>
+        )}
         <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/60 text-[9px] font-bold text-white">
           {map.cs}K
         </span>

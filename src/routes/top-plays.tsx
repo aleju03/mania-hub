@@ -498,16 +498,8 @@ function PopOffsPage() {
                       </div>
                     </div>
 
-                    <AnimatePresence>
-                      {expandedId === p.score.id && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.15 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="px-4 pb-3 pt-1 border-t border-osu-b3/20">
+                    <ExpandableDetail expanded={expandedId === p.score.id}>
+                      <div className="px-4 pb-3 pt-1 border-t border-osu-b3/20">
                             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
                               <StatCell label="Score" value={getDisplayedTotalScore(p.score) != null ? formatNumber(getDisplayedTotalScore(p.score)!) : "-"} />
                               <StatCell label="Combo" value={`${formatNumber(p.score.max_combo)}x`} />
@@ -540,10 +532,8 @@ function PopOffsPage() {
                                 </a>
                               </div>
                             )}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
+                      </div>
+                    </ExpandableDetail>
                   </motion.div>
                 ))}
               </AnimatePresence>
@@ -563,6 +553,20 @@ function PopOffsPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ExpandableDetail({ expanded, children }: { expanded: boolean; children: React.ReactNode }) {
+  const [rendered, setRendered] = useState(expanded);
+  useEffect(() => { if (expanded) setRendered(true); }, [expanded]);
+  if (!rendered) return null;
+  return (
+    <div
+      className={expanded ? "detail-enter" : "detail-exit"}
+      onAnimationEnd={() => { if (!expanded) setRendered(false); }}
+    >
+      {children}
     </div>
   );
 }

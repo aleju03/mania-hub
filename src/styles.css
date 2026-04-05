@@ -40,3 +40,12 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
+@keyframes detail-in {
+  from { opacity: 0; transform: translateY(-6px); }
+}
+@keyframes detail-out {
+  to { opacity: 0; transform: translateY(-6px); }
+}
+.detail-enter { animation: detail-in 200ms ease-out; }
+.detail-exit { animation: detail-out 120ms ease-in forwards; }
+
