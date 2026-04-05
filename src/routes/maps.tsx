@@ -486,17 +486,20 @@ function MapsPage() {
 
           {/* Loading skeleton grid */}
           {!error && isLoading && !mapsData && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <div key={i} className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
-                  <Skeleton className="w-full h-[90px] rounded-none" />
-                  <div className="p-3 space-y-2">
-                    <Skeleton className="h-3.5 w-3/4" />
-                    <Skeleton className="h-3 w-1/2" />
-                    <Skeleton className="h-3 w-2/3" />
+            <div className="space-y-3">
+              <MapsLoadingIndicator loadingPlayers={loadingPlayers} />
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {Array.from({ length: 12 }).map((_, i) => (
+                  <div key={i} className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
+                    <Skeleton className="w-full h-[90px] rounded-none" />
+                    <div className="p-3 space-y-2">
+                      <Skeleton className="h-3.5 w-3/4" />
+                      <Skeleton className="h-3 w-1/2" />
+                      <Skeleton className="h-3 w-2/3" />
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           )}
 
@@ -539,6 +542,39 @@ function MapsPage() {
           <Pagination page={page} totalPages={totalPages} onPageChange={(p) => updateMapsSearch({ page: p })} />
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Loading indicator ─────────────────────────────────────────────────────
+
+const LOADING_STEPS = [
+  "Fetching player scores...",
+  "Analyzing top plays...",
+  "Finding popular maps...",
+  "Collecting favourites...",
+  "Crunching the data...",
+];
+
+function MapsLoadingIndicator({ loadingPlayers }: { loadingPlayers: boolean }) {
+  const [stepIndex, setStepIndex] = useState(0);
+
+  useEffect(() => {
+    if (loadingPlayers) return;
+    const id = setInterval(() => {
+      setStepIndex((i) => (i + 1) % LOADING_STEPS.length);
+    }, 3000);
+    return () => clearInterval(id);
+  }, [loadingPlayers]);
+
+  const label = loadingPlayers ? "Loading players..." : LOADING_STEPS[stepIndex];
+
+  return (
+    <div className="flex items-center gap-3">
+      <div className="flex-1 h-1 rounded-full bg-osu-b3/40 overflow-hidden">
+        <div className="h-full w-1/3 rounded-full bg-osu-pink animate-[indeterminate_1.5s_ease-in-out_infinite]" />
+      </div>
+      <span className="text-[11px] text-osu-f1 flex-shrink-0">{label}</span>
     </div>
   );
 }

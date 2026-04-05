@@ -323,6 +323,7 @@ export interface UserProfileKeyBucket {
 export interface UserProfileCountStat {
   label: string;
   count: number;
+  total: number;
 }
 
 export interface InsightScoreSnapshot {
@@ -348,6 +349,20 @@ export interface UserProfileInsights {
     top: number;
     bottom: number;
   } | null;
+}
+
+export interface HomePagePopoff {
+  user: {
+    username: string;
+    avatar_url: string;
+  };
+  score: OsuScore;
+}
+
+export interface HomePageData {
+  rankings: RankingsResponse;
+  recentScores: OsuScore[];
+  popoffs: HomePagePopoff[];
 }
 
 // Replay types

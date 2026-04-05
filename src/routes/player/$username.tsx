@@ -534,11 +534,11 @@ function PlayerPage() {
                             <div className="flex-1 h-1 rounded-full bg-osu-b3/40 overflow-hidden">
                               <div
                                 className="h-full rounded-full bg-osu-yellow"
-                                style={{ width: `${Math.round((profileInsights.mostUsedMod.count / profileInsights.sampleSize) * 100)}%` }}
+                                style={{ width: `${Math.round((profileInsights.mostUsedMod.count / profileInsights.mostUsedMod.total) * 100)}%` }}
                               />
                             </div>
                             <span className="text-[10px] text-osu-f1 tabular-nums">
-                              {Math.round((profileInsights.mostUsedMod.count / profileInsights.sampleSize) * 100)}%
+                              {Math.round((profileInsights.mostUsedMod.count / profileInsights.mostUsedMod.total) * 100)}%
                             </span>
                           </div>
                         </div>

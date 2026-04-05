@@ -54,3 +54,8 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 }
 .cards-enter { animation: cards-in 200ms ease-out; }
 
+@keyframes indeterminate {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
+
