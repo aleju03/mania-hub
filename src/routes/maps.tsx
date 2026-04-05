@@ -80,7 +80,7 @@ function matchesStatusFilter(status: string, filter: StatusFilter): boolean {
 function matchesSearch(title: string, artist: string, query: string): boolean {
   if (!query) return true;
   const q = query.toLowerCase();
-  return title.toLowerCase().includes(q) || artist.toLowerCase().includes(q);
+  return (title ?? "").toLowerCase().includes(q) || (artist ?? "").toLowerCase().includes(q);
 }
 
 function hasValidMapsDataShape(data: CountryMapsData | null): data is CountryMapsData {
@@ -615,8 +615,9 @@ function getDominantSpeedMod(players: MapsFarmedPlayer[]): "DT" | "HT" | null {
   let dtCount = 0;
   let htCount = 0;
   for (const p of players) {
-    if (p.mods.includes("DT") || p.mods.includes("NC")) dtCount++;
-    else if (p.mods.includes("HT")) htCount++;
+    const mods = p.mods ?? [];
+    if (mods.includes("DT") || mods.includes("NC")) dtCount++;
+    else if (mods.includes("HT")) htCount++;
   }
 
   if (dtCount === 0 && htCount === 0) return null;
@@ -630,7 +631,7 @@ function getDominantSpeedMod(players: MapsFarmedPlayer[]): "DT" | "HT" | null {
   // Majority is HT — check that the top PP play is also HT
   if (htCount > players.length / 2) {
     const topPlayer = players.reduce((best, p) => (p.pp > best.pp ? p : best), players[0]);
-    if (topPlayer.mods.includes("HT")) return "HT";
+    if ((topPlayer.mods ?? []).includes("HT")) return "HT";
   }
   return null;
 }
