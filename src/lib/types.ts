@@ -315,6 +315,29 @@ export interface CountryMapsData {
   generatedAt: string;
 }
 
+export interface UserProfileKeyBucket {
+  keyCount: number;
+  count: number;
+}
+
+export interface UserProfileCountStat {
+  label: string;
+  count: number;
+}
+
+export interface UserProfileInsights {
+  sampleSize: number;
+  keySplit: UserProfileKeyBucket[];
+  mostUsedMod: UserProfileCountStat | null;
+  medianBpm: number | null;
+  newestTopPlayAt: string | null;
+  oldestTopPlayAt: string | null;
+  ppRange: {
+    top: number;
+    bottom: number;
+  } | null;
+}
+
 // Replay types
 export interface ReplayHeader {
   gameMode: number;
