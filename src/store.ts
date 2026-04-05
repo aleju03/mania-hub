@@ -162,8 +162,20 @@ export const useAppStore = create<AppState>()(
     {
       name: "mania-hub-cache-v3",
       storage,
+      merge: (persistedState, currentState) => {
+        const nextState = persistedState && typeof persistedState === "object"
+          ? persistedState as Partial<AppState>
+          : {};
+
+        return {
+          ...currentState,
+          ...nextState,
+          // Avatar accents are derived from shared server cache and should not
+          // stick to one device forever via localStorage rehydration.
+          avatarAccents: currentState.avatarAccents,
+        };
+      },
       partialize: (state) => ({
-        avatarAccents: state.avatarAccents,
         crRankings: state.crRankings,
         crRankingsFetchedAt: state.crRankingsFetchedAt,
         rankHistories: state.rankHistories,
