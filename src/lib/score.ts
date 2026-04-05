@@ -2,6 +2,14 @@ import type { OsuMod, OsuScore, OsuScoreStatistics } from "./types";
 
 const PP_WEIGHT_DECAY = 0.95;
 
+export interface ScoreDisplayValues {
+  accuracy: number;
+  isLazer: boolean;
+  passed: boolean;
+  rank: string;
+  totalScore: number | null;
+}
+
 export function getScoreTimestamp(score: OsuScore): string {
   return score.ended_at ?? score.created_at ?? "";
 }
@@ -42,13 +50,7 @@ export function getScoreIdentity(score: OsuScore): string {
 }
 
 export function getDisplayedTotalScore(score: OsuScore): number | null {
-  const value =
-    score.classic_total_score ||
-    score.total_score ||
-    score.legacy_total_score ||
-    score.score;
-
-  return value && value > 0 ? value : null;
+  return getScoreDisplayValues(score).totalScore;
 }
 
 function isLegacySubmittedScore(score: OsuScore): boolean {
@@ -85,20 +87,60 @@ function calculateStableAccuracy(stats: OsuScoreStatistics): number {
   return (countMax * 300 + count300 * 300 + count200 * 200 + count100 * 100 + count50 * 50) / (total * 300);
 }
 
-export function getDisplayedAccuracy(score: OsuScore): number {
-  if (isLazerScore(score)) {
+function getPreferredTotalScore(score: OsuScore, isLazer: boolean): number | null {
+  const candidates = isLazer
+    ? [score.classic_total_score, score.total_score, score.legacy_total_score, score.score]
+    : [score.legacy_total_score, score.classic_total_score, score.total_score, score.score];
+
+  for (const value of candidates) {
+    if (value != null && value > 0) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function getPreferredAccuracy(score: OsuScore, isLazer: boolean): number {
+  if (isLazer) {
+    if (Number.isFinite(score.accuracy) && score.accuracy > 0) {
+      return score.accuracy;
+    }
+
     return calculateLazerAccuracy(score.statistics);
   }
-  return calculateStableAccuracy(score.statistics);
+
+  const stableAccuracy = calculateStableAccuracy(score.statistics);
+  if (stableAccuracy > 0) {
+    return stableAccuracy;
+  }
+
+  return score.accuracy;
+}
+
+export function getScoreDisplayValues(score: OsuScore): ScoreDisplayValues {
+  const lazer = isLazerScore(score);
+  const rank = score.passed ? score.rank : "F";
+
+  return {
+    accuracy: getPreferredAccuracy(score, lazer),
+    isLazer: lazer,
+    passed: score.passed && rank !== "D",
+    rank,
+    totalScore: getPreferredTotalScore(score, lazer),
+  };
+}
+
+export function getDisplayedAccuracy(score: OsuScore): number {
+  return getScoreDisplayValues(score).accuracy;
 }
 
 export function getDisplayedRank(score: OsuScore): string {
-  if (!score.passed) return "F";
-  return score.rank;
+  return getScoreDisplayValues(score).rank;
 }
 
 export function isDisplayedPassed(score: OsuScore): boolean {
-  return score.passed && getDisplayedRank(score) !== "D";
+  return getScoreDisplayValues(score).passed;
 }
 
 export function scoreHasReplay(score: OsuScore): boolean {

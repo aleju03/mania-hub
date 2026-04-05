@@ -21,6 +21,14 @@ function isPassedScore(score: OsuScore) {
   return isDisplayedPassed(score);
 }
 
+function getFeaturedPopoffSpanClass(index: number, total: number): string {
+  if (total === 3 && index === 2) {
+    return "md:col-span-2 xl:col-span-1";
+  }
+
+  return "";
+}
+
 function HomePage() {
   const navigate = useNavigate();
   const rankings = useAppStore((state) => state.crRankings);
@@ -157,6 +165,7 @@ function HomePage() {
 
   const topPlayersMobile = rankings?.ranking.slice(0, 5) ?? [];
   const topPlayersDesktop = rankings?.ranking.slice(0, 9) ?? [];
+  const featuredPopoffs = popoffs.slice(0, 3);
 
   return (
     <div className="flex-1 relative overflow-hidden min-h-[calc(100vh-60px)]">
@@ -242,35 +251,50 @@ function HomePage() {
             <Link to="/top-plays" className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
           </div>
           {loadingPopoffs ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-osu-b3/15">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-px bg-osu-b3/15">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="bg-osu-b4 p-4 space-y-3">
-                  <Skeleton className="h-8 w-16 mx-auto" />
-                  <Skeleton className="h-8 w-8 rounded-full mx-auto" />
-                  <Skeleton className="h-3 w-24 mx-auto" />
-                  <Skeleton className="h-2.5 w-32 mx-auto" />
+                <div
+                  key={i}
+                  className={`bg-osu-b4 min-h-[180px] p-5 flex flex-col items-center justify-center space-y-3 ${getFeaturedPopoffSpanClass(i, 3)}`}
+                >
+                  <Skeleton className="h-8 w-20 mx-auto" />
+                  <Skeleton className="h-8 w-24 mx-auto" />
+                  <Skeleton className="h-3 w-32 mx-auto" />
+                  <Skeleton className="h-2.5 w-40 mx-auto" />
                 </div>
               ))}
             </div>
-          ) : popoffs.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-osu-b3/15">
-              {popoffs.slice(0, 3).map((p, i) => (
-                <motion.div key={p.score.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
-                  className="bg-osu-b4 p-4 hover:bg-osu-b3/50 transition-colors cursor-pointer text-center"
+          ) : featuredPopoffs.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-px bg-osu-b3/15">
+              {featuredPopoffs.map((p, i) => (
+                <motion.div
+                  key={p.score.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.06 }}
+                  className={`bg-osu-b4 min-h-[180px] p-5 hover:bg-osu-b3/50 transition-colors cursor-pointer text-center flex flex-col items-center justify-center ${getFeaturedPopoffSpanClass(i, featuredPopoffs.length)}`}
                   onClick={() => navigate({ to: "/player/$username", params: { username: p.user.username } })}>
-                  <div className="text-2xl font-bold text-osu-pink mb-1" style={{ fontFamily: "Torus" }}>{Math.round(p.score.pp ?? 0)}pp</div>
-                  <div className="flex items-center justify-center gap-2 mb-2">
+                  <div className="text-3xl font-bold text-osu-pink leading-none" style={{ fontFamily: "Torus" }}>
+                    {Math.round(p.score.pp ?? 0)}pp
+                  </div>
+                  <div className="mt-3 flex items-center justify-center gap-2 max-w-full">
                     <GradeImg grade={getDisplayedRank(p.score)} size={18} />
                     <Avatar url={p.user.avatar_url} size={24} />
                     <UsernameText
                       username={p.user.username}
                       avatarUrl={p.user.avatar_url}
-                      className="text-xs font-medium"
+                      className="text-xs font-medium max-w-[14ch] truncate"
                     />
                   </div>
-                  <div className="text-[10px] text-osu-f1 truncate">{p.score.beatmapset?.title}</div>
-                  <div className="text-[10px] text-osu-f1 truncate">[{p.score.beatmap?.version}]</div>
-                  <div className="text-[9px] text-osu-f1/60 mt-1">{formatTimeAgo(getScoreTimestamp(p.score))}</div>
+                  <div className="mt-3 w-full max-w-[26ch] space-y-1">
+                    <div className="text-[11px] text-osu-f1 leading-relaxed line-clamp-2">
+                      {p.score.beatmapset?.title}
+                    </div>
+                    <div className="text-[10px] text-osu-f1/80 leading-relaxed line-clamp-2">
+                      [{p.score.beatmap?.version}]
+                    </div>
+                  </div>
+                  <div className="mt-3 text-[10px] text-osu-f1/60">{formatTimeAgo(getScoreTimestamp(p.score))}</div>
                 </motion.div>
               ))}
             </div>
