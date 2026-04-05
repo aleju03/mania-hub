@@ -373,7 +373,6 @@ function PopOffsPage() {
                 {paginated.map((p: PopOff) => (
                   <motion.div
                     key={`${p.user.id}-${p.score.id}`}
-                    layout
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}

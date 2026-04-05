@@ -242,11 +242,11 @@ export function Nav() {
             />
             {/* Drawer panel */}
             <motion.div
-              className="fixed top-[60px] right-0 w-64 bottom-0 bg-osu-b5 z-[60] md:hidden border-l border-osu-b3/30 overflow-y-auto"
+              className="fixed top-[60px] right-0 w-64 bottom-0 bg-osu-b5 z-[60] md:hidden border-l border-osu-b3/30 overflow-y-auto transform-gpu will-change-transform"
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 400 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
             >
               <div className="py-2">
                 {links.map((l) => (
