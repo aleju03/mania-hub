@@ -92,7 +92,11 @@ export function SearchInput({
                   loading="lazy"
                 />
                 <span className="text-sm font-medium text-white">{u.username}</span>
-                <span className="text-[10px] text-osu-f1 ml-auto">{u.country_code}</span>
+                <img
+                  src={`https://osu.ppy.sh/images/flags/${u.country_code}.png`}
+                  alt={u.country_code}
+                  className="w-[20px] h-[14px] object-cover rounded-[2px] ml-auto"
+                />
               </button>
             ))}
           </motion.div>

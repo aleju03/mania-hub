@@ -7,7 +7,7 @@ import {
   getPersistentCached,
   setPersistentCache,
 } from "./api";
-import { calculateApproxPpGainMap } from "./score";
+import { calculateApproxPpGainMap, getModAcronyms, getScoreUrl } from "./score";
 import type {
   OsuUser,
   OsuScore,
@@ -23,7 +23,7 @@ import type {
 } from "./types";
 
 const MAPS_DATA_CACHE_TTL = 60 * 60 * 1000; // 1 hour
-const MAPS_DATA_CACHE_VERSION = 2;
+const MAPS_DATA_CACHE_VERSION = 3;
 const USER_MOST_PLAYED_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 const USER_FAVOURITES_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 const MAPS_FETCH_CONCURRENCY = 6;
@@ -467,7 +467,9 @@ export const getCountryMapsData = createServerFn({ method: "GET" })
                 id: user.id,
                 username: user.username,
                 avatarUrl: user.avatar_url,
+                mods: getModAcronyms(score.mods),
                 pp: score.pp,
+                scoreUrl: getScoreUrl(score),
               });
               existing.maxPp = Math.max(existing.maxPp, score.pp);
             }
@@ -491,7 +493,9 @@ export const getCountryMapsData = createServerFn({ method: "GET" })
                   id: user.id,
                   username: user.username,
                   avatarUrl: user.avatar_url,
+                  mods: getModAcronyms(score.mods),
                   pp: score.pp,
+                  scoreUrl: getScoreUrl(score),
                 },
               ],
               avgPp: 0,

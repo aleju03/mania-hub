@@ -8,6 +8,7 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
+import { ModBadge } from "../components/ui/ModBadge";
 import type {
   CountryMapsData,
   RankingsResponse,
@@ -27,6 +28,16 @@ type BeatmapSort = "plays" | "players" | "stars" | "length";
 type FarmedSort = "players" | "avg-pp" | "max-pp" | "stars";
 type StatusFilter = "all" | "ranked" | "loved" | "other";
 type PpFilter = 0 | 500 | 700;
+type MapsSearch = {
+  tab?: Tab;
+  page?: number;
+  key?: KeyFilter;
+  beatmapSort?: BeatmapSort;
+  farmedSort?: FarmedSort;
+  status?: StatusFilter;
+  pp?: PpFilter;
+  q?: string;
+};
 
 const PAGE_SIZE = 24;
 const VISIBLE_AVATARS = 4;
@@ -87,11 +98,35 @@ function hasValidMapsDataShape(data: CountryMapsData | null): data is CountryMap
 // ── Route ──────────────────────────────────────────────────────────────────
 
 export const Route = createFileRoute("/maps")({
+  validateSearch: (search: Record<string, unknown>): Required<MapsSearch> => ({
+    tab: search.tab === "popular" || search.tab === "favourites" ? search.tab : "farmed",
+    page: Math.max(0, Number(search.page) || 0),
+    key: search.key === "4k" || search.key === "7k" || search.key === "other" ? search.key : "all",
+    beatmapSort: search.beatmapSort === "plays" || search.beatmapSort === "stars" || search.beatmapSort === "length" ? search.beatmapSort : "players",
+    farmedSort: search.farmedSort === "avg-pp" || search.farmedSort === "max-pp" || search.farmedSort === "stars" ? search.farmedSort : "players",
+    status: search.status === "ranked" || search.status === "loved" || search.status === "other" ? search.status : "all",
+    pp: search.pp === 500 || search.pp === 700 ? search.pp : 0,
+    q: typeof search.q === "string" ? search.q : "",
+  }),
   component: MapsPage,
 });
 
+function buildMapsSearch(search: Required<MapsSearch>): MapsSearch {
+  return {
+    ...(search.tab !== "farmed" ? { tab: search.tab } : {}),
+    ...(search.page > 0 ? { page: search.page } : {}),
+    ...(search.key !== "all" ? { key: search.key } : {}),
+    ...(search.beatmapSort !== "players" ? { beatmapSort: search.beatmapSort } : {}),
+    ...(search.farmedSort !== "players" ? { farmedSort: search.farmedSort } : {}),
+    ...(search.status !== "all" ? { status: search.status } : {}),
+    ...(search.pp > 0 ? { pp: search.pp } : {}),
+    ...(search.q ? { q: search.q } : {}),
+  };
+}
+
 function MapsPage() {
   const navigate = useNavigate();
+  const mapsSearch = Route.useSearch();
   const rankings = useAppStore((s) => s.crRankings);
   const rankingsFetchedAt = useAppStore((s) => s.crRankingsFetchedAt);
   const mapsData = useAppStore((s) => s.mapsData);
@@ -102,16 +137,25 @@ function MapsPage() {
   const [loadingPlayers, setLoadingPlayers] = useState(!rankings);
   const [loadingMaps, setLoadingMaps] = useState(!mapsData);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("farmed");
-  const [page, setPage] = useState(0);
+  const tab = mapsSearch.tab;
+  const page = mapsSearch.page;
+  const keyFilter = mapsSearch.key;
+  const beatmapSort = mapsSearch.beatmapSort;
+  const farmedSort = mapsSearch.farmedSort;
+  const statusFilter = mapsSearch.status;
+  const ppFilter = mapsSearch.pp;
+  const searchQuery = mapsSearch.q;
 
-  // Filters
-  const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
-  const [beatmapSort, setBeatmapSort] = useState<BeatmapSort>("players");
-  const [farmedSort, setFarmedSort] = useState<FarmedSort>("players");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [ppFilter, setPpFilter] = useState<PpFilter>(0);
-  const [search, setSearch] = useState("");
+  const updateMapsSearch = (patch: Partial<Required<MapsSearch>>) => {
+    navigate({
+      to: "/maps",
+      search: buildMapsSearch({
+        ...mapsSearch,
+        ...patch,
+      }),
+      replace: true,
+    });
+  };
 
   const players =
     rankings?.ranking.slice(0, 30).map((e: RankingsResponse["ranking"][number]) => ({
@@ -200,7 +244,7 @@ function MapsPage() {
         (m): m is MapsFarmedEntry =>
           m !== null &&
           matchesKeyFilter(m.cs, keyFilter) &&
-          matchesSearch(m.title, m.artist, search),
+          matchesSearch(m.title, m.artist, searchQuery),
       )
       .sort((a, b) => {
         if (farmedSort === "players") return b.playerCount - a.playerCount || b.avgPp - a.avgPp;
@@ -208,7 +252,7 @@ function MapsPage() {
         if (farmedSort === "max-pp") return b.maxPp - a.maxPp;
         return b.difficultyRating - a.difficultyRating;
       });
-  }, [mapsData, keyFilter, search, farmedSort, ppFilter]);
+  }, [mapsData, keyFilter, searchQuery, farmedSort, ppFilter]);
 
   // ── Filtered + sorted: most played (from most_played endpoint) ──────────
   const filteredMostPlayed = useMemo(() => {
@@ -217,7 +261,7 @@ function MapsPage() {
       .filter(
         (m) =>
           matchesKeyFilter(parseKeyCount(m.version), keyFilter) &&
-          matchesSearch(m.title, m.artist, search),
+          matchesSearch(m.title, m.artist, searchQuery),
       )
       .sort((a, b) => {
         if (beatmapSort === "plays") return b.totalPlays - a.totalPlays;
@@ -225,7 +269,7 @@ function MapsPage() {
         if (beatmapSort === "stars") return b.difficultyRating - a.difficultyRating;
         return b.totalLength - a.totalLength;
       });
-  }, [mapsData, keyFilter, search, beatmapSort]);
+  }, [mapsData, keyFilter, searchQuery, beatmapSort]);
 
   // ── Filtered + sorted: favourites ───────────────────────────────────────
   const filteredFavourites = useMemo(() => {
@@ -234,13 +278,13 @@ function MapsPage() {
       .filter(
         (f) =>
           matchesStatusFilter(f.status, statusFilter) &&
-          matchesSearch(f.title, f.artist, search),
+          matchesSearch(f.title, f.artist, searchQuery),
       )
       .sort(
         (a, b) =>
           b.playerCount - a.playerCount || b.globalFavouriteCount - a.globalFavouriteCount,
       );
-  }, [mapsData, statusFilter, search]);
+  }, [mapsData, statusFilter, searchQuery]);
 
   const currentList =
     tab === "farmed" ? filteredFarmed : tab === "popular" ? filteredMostPlayed : filteredFavourites;
@@ -256,14 +300,14 @@ function MapsPage() {
   const isLoading = loadingPlayers || loadingMaps;
 
   const hasActiveFilters =
-    search || keyFilter !== "all" || statusFilter !== "all" || ppFilter > 0;
+    searchQuery || keyFilter !== "all" || statusFilter !== "all" || ppFilter > 0 || beatmapSort !== "players" || farmedSort !== "players" || tab !== "farmed";
 
   const resetFilters = () => {
-    setPage(0);
-    setSearch("");
-    setKeyFilter("all");
-    setStatusFilter("all");
-    setPpFilter(0);
+    navigate({
+      to: "/maps",
+      search: {},
+      replace: true,
+    });
   };
 
   return (
@@ -294,8 +338,7 @@ function MapsPage() {
         items={tabs}
         value={tab}
         onChange={(t) => {
-          setTab(t);
-          setPage(0);
+          updateMapsSearch({ tab: t, page: 0 });
         }}
       />
 
@@ -305,8 +348,8 @@ function MapsPage() {
           {/* Search */}
           <input
             type="text"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            value={searchQuery}
+            onChange={(e) => updateMapsSearch({ q: e.target.value, page: 0 })}
             placeholder="Search title or artist..."
             className="bg-osu-b4 border border-osu-b3/30 rounded-lg px-3 py-1.5 text-[11px] text-osu-l2 placeholder:text-osu-f1 w-full sm:w-48 focus:outline-none focus:border-osu-pink/40 transition-colors"
           />
@@ -316,7 +359,7 @@ function MapsPage() {
               {/* Key count */}
               <FilterGroup label="Keys">
                 {(["all", "4k", "7k", "other"] as KeyFilter[]).map((k) => (
-                  <FilterPill key={k} active={keyFilter === k} onClick={() => { setKeyFilter(k); setPage(0); }}>
+                  <FilterPill key={k} active={keyFilter === k} onClick={() => updateMapsSearch({ key: k, page: 0 })}>
                     {k === "all" ? "All" : k.toUpperCase()}
                   </FilterPill>
                 ))}
@@ -325,7 +368,7 @@ function MapsPage() {
               {/* Min PP */}
               <FilterGroup label="Min PP">
                 {([0, 500, 700] as PpFilter[]).map((pp) => (
-                  <FilterPill key={pp} active={ppFilter === pp} onClick={() => { setPpFilter(pp); setPage(0); }}>
+                  <FilterPill key={pp} active={ppFilter === pp} onClick={() => updateMapsSearch({ pp, page: 0 })}>
                     {pp === 0 ? "All" : `${pp}+`}
                   </FilterPill>
                 ))}
@@ -339,7 +382,7 @@ function MapsPage() {
                   ["max-pp", "Max PP"],
                   ["stars", "Stars"],
                 ] as [FarmedSort, string][]).map(([id, label]) => (
-                  <FilterPill key={id} active={farmedSort === id} onClick={() => { setFarmedSort(id); setPage(0); }}>
+                  <FilterPill key={id} active={farmedSort === id} onClick={() => updateMapsSearch({ farmedSort: id, page: 0 })}>
                     {label}
                   </FilterPill>
                 ))}
@@ -351,7 +394,7 @@ function MapsPage() {
             <>
               <FilterGroup label="Keys">
                 {(["all", "4k", "7k", "other"] as KeyFilter[]).map((k) => (
-                  <FilterPill key={k} active={keyFilter === k} onClick={() => { setKeyFilter(k); setPage(0); }}>
+                  <FilterPill key={k} active={keyFilter === k} onClick={() => updateMapsSearch({ key: k, page: 0 })}>
                     {k === "all" ? "All" : k.toUpperCase()}
                   </FilterPill>
                 ))}
@@ -364,7 +407,7 @@ function MapsPage() {
                   ["stars", "Stars"],
                   ["length", "Length"],
                 ] as [BeatmapSort, string][]).map(([id, label]) => (
-                  <FilterPill key={id} active={beatmapSort === id} onClick={() => { setBeatmapSort(id); setPage(0); }}>
+                  <FilterPill key={id} active={beatmapSort === id} onClick={() => updateMapsSearch({ beatmapSort: id, page: 0 })}>
                     {label}
                   </FilterPill>
                 ))}
@@ -375,7 +418,7 @@ function MapsPage() {
           {tab === "favourites" && (
             <FilterGroup label="Status">
               {(["all", "ranked", "loved", "other"] as StatusFilter[]).map((s) => (
-                <FilterPill key={s} active={statusFilter === s} onClick={() => { setStatusFilter(s); setPage(0); }}>
+                <FilterPill key={s} active={statusFilter === s} onClick={() => updateMapsSearch({ status: s, page: 0 })}>
                   {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
                 </FilterPill>
               ))}
@@ -458,7 +501,7 @@ function MapsPage() {
             <div className="flex items-center justify-center gap-2 mt-6">
               {page > 0 && (
                 <button
-                  onClick={() => setPage(page - 1)}
+                  onClick={() => updateMapsSearch({ page: page - 1 })}
                   className="px-4 py-2 rounded-lg bg-osu-b4 text-xs text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer"
                 >
                   &larr; Prev
@@ -469,7 +512,7 @@ function MapsPage() {
               </span>
               {page < totalPages - 1 && (
                 <button
-                  onClick={() => setPage(page + 1)}
+                  onClick={() => updateMapsSearch({ page: page + 1 })}
                   className="px-4 py-2 rounded-lg bg-osu-b4 text-xs text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer"
                 >
                   Next &rarr;
@@ -513,10 +556,12 @@ function PlayerAvatars({
   players,
   onPlayerClick,
   renderLabel,
+  renderDetails,
 }: {
-  players: Array<{ id: number; username: string; avatarUrl: string; pp?: number; count?: number }>;
-  onPlayerClick: (username: string) => void;
+  players: Array<{ id: number; username: string; avatarUrl: string; pp?: number; count?: number; mods?: string[]; scoreUrl?: string | null }>;
+  onPlayerClick: (player: { id: number; username: string; avatarUrl: string; pp?: number; count?: number; mods?: string[]; scoreUrl?: string | null }) => void;
   renderLabel?: (p: { pp?: number; count?: number }) => string | null;
+  renderDetails?: (p: { mods?: string[] }) => React.ReactNode;
 }) {
   const [showPopover, setShowPopover] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -550,7 +595,7 @@ function PlayerAvatars({
       {visible.map((p) => (
         <button
           key={p.id}
-          onClick={() => onPlayerClick(p.username)}
+          onClick={() => onPlayerClick(p)}
           className="cursor-pointer"
           title={`${p.username}${renderLabel?.(p) ? ` (${renderLabel(p)})` : ""}`}
         >
@@ -575,11 +620,14 @@ function PlayerAvatars({
               {players.slice(VISIBLE_AVATARS).map((p) => (
                 <button
                   key={p.id}
-                  onClick={() => onPlayerClick(p.username)}
-                  className="flex items-center gap-2 w-full py-1 px-1.5 rounded hover:bg-osu-b4 cursor-pointer transition-colors"
+                  onClick={() => onPlayerClick(p)}
+                  className="flex items-center gap-2 w-full py-1 px-1.5 rounded hover:bg-osu-b4 cursor-pointer transition-colors text-left"
                 >
                   <Avatar url={p.avatarUrl} size={16} />
-                  <span className="text-[10px] text-osu-l2 truncate">{p.username}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[10px] text-osu-l2 truncate">{p.username}</div>
+                    {renderDetails?.(p)}
+                  </div>
                   {renderLabel?.(p) && (
                     <span className="text-[9px] text-osu-pink ml-auto flex-shrink-0">
                       {renderLabel(p)}
@@ -643,8 +691,21 @@ function FarmedCard({ map, onPlayerClick }: { map: MapsFarmedEntry; onPlayerClic
 
         <PlayerAvatars
           players={map.players}
-          onPlayerClick={onPlayerClick}
+          onPlayerClick={(player) => {
+            if (player.scoreUrl) {
+              window.open(player.scoreUrl, "_blank", "noopener,noreferrer");
+              return;
+            }
+            onPlayerClick(player.username);
+          }}
           renderLabel={(p) => (p as MapsFarmedPlayer).pp ? `${Math.round((p as MapsFarmedPlayer).pp)}pp` : null}
+          renderDetails={(p) => p.mods?.length ? (
+            <div className="flex items-center gap-0.5 mt-0.5">
+              {p.mods.map((mod) => (
+                <ModBadge key={mod} mod={mod} />
+              ))}
+            </div>
+          ) : null}
         />
       </div>
     </motion.div>
@@ -700,7 +761,7 @@ function MostPlayedCard({ map, onPlayerClick }: { map: MapsAggregatedBeatmap; on
 
         <PlayerAvatars
           players={map.players}
-          onPlayerClick={onPlayerClick}
+          onPlayerClick={(player) => onPlayerClick(player.username)}
           renderLabel={(p) => (p as MapsPlayerEntry).count ? `${formatNumber((p as MapsPlayerEntry).count)}x` : null}
         />
       </div>

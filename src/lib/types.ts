@@ -284,7 +284,9 @@ export interface MapsFarmedPlayer {
   id: number;
   username: string;
   avatarUrl: string;
+  mods: string[];
   pp: number;
+  scoreUrl: string | null;
 }
 
 export interface MapsFarmedEntry {
