@@ -449,7 +449,12 @@ function PlayerPage() {
               onClick={() => setAvatarOpen(true)}
               className="w-[80px] h-[80px] sm:w-[110px] sm:h-[110px] rounded-2xl overflow-hidden border-2 border-osu-b3/60 shadow-[0_4px_20px_rgba(0,0,0,0.5)] translate-y-4 flex-shrink-0 cursor-pointer hover:border-osu-l2/60 transition-colors duration-150"
             >
-              <Avatar url={user.avatar_url} size={110} shape="square" />
+              <img
+                src={user.avatar_url}
+                alt={`${user.username}'s avatar`}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
             </button>
             <div className="pb-1 flex-1 min-w-0">
               <h1 className="text-3xl font-bold text-white truncate">
@@ -845,10 +850,10 @@ function TopPlayCard({ label, snapshot }: { label: string; snapshot: InsightScor
         <img
           src={snapshot.coverUrl}
           alt=""
-          className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover/topplay:scale-105"
+          className="absolute inset-0 w-full h-full object-cover"
         />
       )}
-      <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/60 to-black/40" />
+      <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/50 to-black/75" />
       <div className="relative p-3.5 flex items-center gap-3">
         <div className="flex-1 min-w-0">
           <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
