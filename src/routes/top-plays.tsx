@@ -13,6 +13,7 @@ import { ModBadge } from "../components/ui/ModBadge";
 import { LazerBadge } from "../components/ui/LazerBadge";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
+import { Pagination } from "../components/ui/Pagination";
 import type { OsuScore, RankingsResponse } from "../lib/types";
 import { useAppStore } from "../store";
 
@@ -556,28 +557,8 @@ function PopOffsPage() {
           )}
 
           {/* Pagination */}
-          {!playersError && totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 mt-6">
-              {page > 0 && (
-                <button
-                  onClick={() => setPage(page - 1)}
-                  className="px-4 py-2 rounded-lg bg-osu-b4 text-xs text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer"
-                >
-                  &larr; Prev
-                </button>
-              )}
-              <span className="text-xs text-osu-f1 px-3">
-                Page {page + 1} of {totalPages}
-              </span>
-              {page < totalPages - 1 && (
-                <button
-                  onClick={() => setPage(page + 1)}
-                  className="px-4 py-2 rounded-lg bg-osu-b4 text-xs text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer"
-                >
-                  Next &rarr;
-                </button>
-              )}
-            </div>
+          {!playersError && (
+            <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
           )}
           </div>
         </div>

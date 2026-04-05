@@ -23,7 +23,8 @@ import type {
 } from "./types";
 
 const MAPS_DATA_CACHE_TTL = 24 * 60 * 60 * 1000; // 1 day
-const MAPS_DATA_CACHE_VERSION = 3;
+const MAPS_DATA_CACHE_VERSION = 4;
+const FARMED_SINGLE_PLAYER_PP_MIN = 500;
 const USER_MOST_PLAYED_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 const USER_FAVOURITES_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 const MAPS_FETCH_CONCURRENCY = 6;
@@ -507,7 +508,7 @@ export const getCountryMapsData = createServerFn({ method: "GET" })
 
       const farmed: MapsFarmedEntry[] = [];
       for (const entry of farmedMap.values()) {
-        if (entry.playerCount < 2) continue;
+        if (entry.playerCount < 2 && entry.maxPp < FARMED_SINGLE_PLAYER_PP_MIN) continue;
         entry.players.sort((a, b) => b.pp - a.pp);
         entry.avgPp =
           entry.players.reduce((sum, p) => sum + p.pp, 0) / entry.players.length;
