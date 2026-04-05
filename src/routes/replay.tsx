@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, searchUsers } from "../lib/osu";
 import { parseManiaBeatmap } from "../lib/beatmap-parser";
@@ -259,7 +259,10 @@ function ReplayViewer({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
-  const modAcronyms = (scoreInfo?.mods ?? []).map((m: any) => (typeof m === "string" ? m : m.acronym ?? "").toUpperCase());
+  const modAcronyms = useMemo(
+    () => (scoreInfo?.mods ?? []).map((m: any) => (typeof m === "string" ? m : m.acronym ?? "").toUpperCase()),
+    [scoreInfo?.mods],
+  );
   const modRate = modAcronyms.includes("DT") || modAcronyms.includes("NC") ? 1.5 : modAcronyms.includes("HT") ? 0.75 : 1;
   const effectiveRate = speed * modRate;
   const [progress, setProgress] = useState(0);
