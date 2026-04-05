@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getDisplayedAccuracy, isLazerScore } from "./score";
+import { getDisplayedAccuracy, getDisplayedTotalScore, getScoreDisplayValues, isLazerScore } from "./score";
 import type { OsuScore } from "./types";
 
 function createScore(overrides: Partial<OsuScore>): OsuScore {
@@ -82,6 +82,113 @@ describe("getDisplayedAccuracy", () => {
       type: "solo_score",
     }));
 
-    expect(accuracy).toBeCloseTo(620 / 640);
+    expect(accuracy).toBe(0.987);
+  });
+});
+
+describe("getScoreDisplayValues", () => {
+  const referenceScores: Array<{
+    expectedAccuracy: number;
+    expectedIsLazer: boolean;
+    expectedTotalScore: number;
+    score: OsuScore;
+  }> = [
+    {
+      expectedAccuracy: 1,
+      expectedIsLazer: false,
+      expectedTotalScore: 996631,
+      score: createScore({
+        id: 2180669956,
+        accuracy: 0.998233,
+        classic_total_score: 956237,
+        total_score: 956237,
+        legacy_score_id: 450232351,
+        legacy_total_score: 996631,
+        rank: "X",
+        statistics: {
+          great: 29,
+          perfect: 240,
+        },
+        type: "solo_score",
+      }),
+    },
+    {
+      expectedAccuracy: 0.982222,
+      expectedIsLazer: true,
+      expectedTotalScore: 929938,
+      score: createScore({
+        id: 5451648091,
+        accuracy: 0.982222,
+        classic_total_score: 929938,
+        total_score: 929938,
+        legacy_score_id: null,
+        legacy_total_score: 0,
+        rank: "S",
+        statistics: {
+          ok: 14,
+          meh: 4,
+          good: 215,
+          miss: 10,
+          great: 2484,
+          perfect: 5007,
+        },
+        type: "solo_score",
+      }),
+    },
+    {
+      expectedAccuracy: 1,
+      expectedIsLazer: false,
+      expectedTotalScore: 996683,
+      score: createScore({
+        id: 6199744810,
+        accuracy: 0,
+        classic_total_score: 0,
+        total_score: 0,
+        legacy_score_id: 0,
+        legacy_total_score: 996683,
+        rank: "D",
+        statistics: {
+          great: 276,
+          perfect: 2324,
+        },
+        type: "solo_score",
+      }),
+    },
+    {
+      expectedAccuracy: 0.963096,
+      expectedIsLazer: true,
+      expectedTotalScore: 855507,
+      score: createScore({
+        id: 6458299766,
+        accuracy: 0.963096,
+        classic_total_score: 855507,
+        total_score: 855507,
+        legacy_score_id: null,
+        legacy_total_score: 0,
+        rank: "S",
+        statistics: {
+          ok: 58,
+          meh: 20,
+          good: 395,
+          miss: 55,
+          great: 2511,
+          perfect: 4761,
+        },
+        type: "solo_score",
+      }),
+    },
+  ];
+
+  it("normalizes the reference stable and lazer scores consistently", () => {
+    referenceScores.forEach(({ expectedAccuracy, expectedIsLazer, expectedTotalScore, score }) => {
+      const display = getScoreDisplayValues(score);
+
+      expect(display.isLazer).toBe(expectedIsLazer);
+      expect(display.accuracy).toBeCloseTo(expectedAccuracy, 6);
+      expect(display.totalScore).toBe(expectedTotalScore);
+      expect(getDisplayedAccuracy(score)).toBeCloseTo(expectedAccuracy, 6);
+      expect(getDisplayedTotalScore(score)).toBe(expectedTotalScore);
+      expect(isLazerScore(score)).toBe(expectedIsLazer);
+    });
   });
 });

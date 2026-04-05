@@ -12,13 +12,11 @@ import {
 } from "../../lib/format";
 import {
   getBeatmapUrl,
-  getDisplayedAccuracy,
-  getDisplayedRank,
   getModAcronyms,
+  getScoreDisplayValues,
   getScoreIdentity,
   getScoreTimestamp,
   getScoreUrl,
-  isLazerScore,
   scoreHasReplay,
 } from "../../lib/score";
 import { Avatar } from "../../components/ui/Avatar";
@@ -714,10 +712,11 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
   const keys = score.beatmap?.cs;
   const linkUrl = getScoreUrl(score) ?? getBeatmapUrl(score);
   const canReplay = scoreHasReplay(score);
+  const display = getScoreDisplayValues(score);
 
   const content = (
     <>
-      <GradeImg grade={getDisplayedRank(score)} size={28} />
+      <GradeImg grade={display.rank} size={28} />
       {score.beatmapset?.covers?.list && (
         <img
           src={score.beatmapset.covers.list}
@@ -750,7 +749,7 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
               <ModBadge key={acronym} mod={acronym} />
             ))}
           </div>
-          <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>
+          <span className="text-xs text-osu-l2">{formatAccuracy(display.accuracy)}</span>
           <span className="text-xs text-osu-f1">{formatNumber(score.max_combo)}x</span>
           <span className="text-sm font-bold ml-auto">{formatPP(score.pp)}</span>
         </div>
@@ -762,10 +761,10 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
             <ModBadge key={acronym} mod={acronym} />
           ))}
         </div>
-        {isLazerScore(score) && (
+        {display.isLazer && (
           <LazerBadge />
         )}
-        <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>
+        <span className="text-xs text-osu-l2">{formatAccuracy(display.accuracy)}</span>
         <span className="text-xs text-osu-f1">{formatNumber(score.max_combo)}x</span>
         <span className="text-sm font-bold w-16 text-right">{formatPP(score.pp)}</span>
       </div>
