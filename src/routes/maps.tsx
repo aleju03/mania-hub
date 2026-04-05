@@ -9,6 +9,7 @@ import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { ModBadge } from "../components/ui/ModBadge";
+import { Pagination } from "../components/ui/Pagination";
 import type {
   CountryMapsData,
   RankingsResponse,
@@ -41,6 +42,7 @@ type MapsSearch = {
 
 const PAGE_SIZE = 24;
 const VISIBLE_AVATARS = 4;
+const FARMED_SINGLE_PLAYER_PP_MIN = 500;
 const DEFAULT_MAPS_SEARCH: Required<MapsSearch> = {
   tab: "farmed",
   page: 0,
@@ -248,13 +250,14 @@ function MapsPage() {
         // When pp filter is active, only keep players meeting the threshold
         if (ppFilter > 0) {
           const filtered = entry.players.filter((p) => p.pp >= ppFilter);
-          if (filtered.length < 2) return null;
+          const filteredMaxPp = Math.max(...filtered.map((p) => p.pp), 0);
+          if (filtered.length < 2 && filteredMaxPp < FARMED_SINGLE_PLAYER_PP_MIN) return null;
           return {
             ...entry,
             players: filtered,
             playerCount: filtered.length,
             avgPp: filtered.reduce((s, p) => s + p.pp, 0) / filtered.length,
-            maxPp: Math.max(...filtered.map((p) => p.pp)),
+            maxPp: filteredMaxPp,
           };
         }
         return entry;
@@ -516,29 +519,7 @@ function MapsPage() {
           )}
 
           {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 mt-6">
-              {page > 0 && (
-                <button
-                  onClick={() => updateMapsSearch({ page: page - 1 })}
-                  className="px-4 py-2 rounded-lg bg-osu-b4 text-xs text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer"
-                >
-                  &larr; Prev
-                </button>
-              )}
-              <span className="text-xs text-osu-f1 px-3">
-                Page {page + 1} of {totalPages}
-              </span>
-              {page < totalPages - 1 && (
-                <button
-                  onClick={() => updateMapsSearch({ page: page + 1 })}
-                  className="px-4 py-2 rounded-lg bg-osu-b4 text-xs text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer"
-                >
-                  Next &rarr;
-                </button>
-              )}
-            </div>
-          )}
+          <Pagination page={page} totalPages={totalPages} onPageChange={(p) => updateMapsSearch({ page: p })} />
         </div>
       </div>
     </div>
@@ -566,6 +547,51 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
     >
       {children}
     </button>
+  );
+}
+
+// ── Mod helpers ───────────────────────────────────────────────────────────
+
+const MAIN_MODS = new Set(["DT", "NC", "HR", "HT", "DC", "EZ", "FL", "HD", "FI"]);
+
+function getMainMod(mods?: string[]): string | null {
+  if (!mods) return null;
+  return mods.find((m) => MAIN_MODS.has(m)) ?? null;
+}
+
+const miniModColors: Record<string, string> = {
+  DT: "#ff6666", NC: "#ff6666", HR: "#ff6666", FL: "#ff6666", HD: "#ff6666", FI: "#ff6666",
+  HT: "#b3d944", DC: "#b3d944", EZ: "#b3d944",
+};
+
+const miniModFileMap: Record<string, string> = {
+  DT: "double-time", NC: "nightcore", HR: "hard-rock", HT: "half-time",
+  DC: "daycore", EZ: "easy", FL: "flashlight", HD: "hidden", FI: "fade-in",
+};
+
+function MiniModIcon({ mod, size = 10 }: { mod: string; size?: number }) {
+  const bg = miniModColors[mod] || "#ff6666";
+  const file = miniModFileMap[mod];
+  if (!file) return null;
+  const offset = Math.round(size * -0.3);
+  return (
+    <span
+      className="absolute rounded-full border border-osu-b5 z-10 overflow-hidden"
+      style={{ width: size, height: size, top: offset, right: offset, backgroundColor: bg }}
+      title={mod}
+    >
+      <span
+        className="absolute inset-0"
+        style={{
+          backgroundColor: `color-mix(in srgb-linear, black, ${bg} 10%)`,
+          maskImage: `url(/images/badges/mods/mod-${file}.svg)`,
+          WebkitMaskImage: `url(/images/badges/mods/mod-${file}.svg)`,
+          maskSize: "110%", WebkitMaskSize: "110%",
+          maskPosition: "center", WebkitMaskPosition: "center",
+          maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
+        }}
+      />
+    </span>
   );
 }
 
@@ -609,16 +635,20 @@ function PlayerAvatars({
 
   return (
     <div className="flex items-center gap-0.5 mt-1.5">
-      {visible.map((p) => (
-        <button
-          key={p.id}
-          onClick={() => onPlayerClick(p)}
-          className="cursor-pointer"
-          title={p.username}
-        >
-          <Avatar url={p.avatarUrl} size={18} />
-        </button>
-      ))}
+      {visible.map((p) => {
+        const mainMod = getMainMod(p.mods);
+        return (
+          <button
+            key={p.id}
+            onClick={() => onPlayerClick(p)}
+            className="cursor-pointer relative"
+            title={p.pp ? `${Math.round(p.pp)}pp` : p.username}
+          >
+            <Avatar url={p.avatarUrl} size={18} />
+            {mainMod && <MiniModIcon mod={mainMod} />}
+          </button>
+        );
+      })}
       {overflow > 0 && (
         <div
           className="relative"
