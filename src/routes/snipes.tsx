@@ -14,7 +14,7 @@ function SnipesPage() {
       />
       <div className="bg-osu-b5 flex-1">
         <div className="max-w-[1200px] mx-auto px-5 py-40 text-center">
-          <span className="text-2xl font-bold text-osu-f1">no.</span>
+          <span className="text-2xl">🥷</span>
         </div>
       </div>
     </div>
