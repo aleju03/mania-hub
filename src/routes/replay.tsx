@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, searchUsers } from "../lib/osu";
 import { parseManiaBeatmap } from "../lib/beatmap-parser";
-import { scoreHasReplay } from "../lib/score";
+import { getDisplayedAccuracy, getDisplayedRank, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SearchInput } from "../components/ui/SearchInput";
 import { GradeImg } from "../components/ui/GradeImg";
@@ -178,7 +178,7 @@ function ReplayPage() {
                       <motion.div key={s.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.02 }}
                         className="flex items-center gap-3 py-2.5 px-4 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20"
                         onClick={() => navigate({ to: "/replay", search: { scoreId: s.id, mode: "mania", beatmapsetId: s.beatmapset?.id } })}>
-                        <GradeImg grade={s.rank} size={26} />
+                        <GradeImg grade={getDisplayedRank(s)} size={26} />
                         {s.beatmapset?.covers?.list && (
                           <img src={s.beatmapset.covers.list} alt="" className="w-12 h-8 rounded object-cover flex-shrink-0" loading="lazy" />
                         )}
@@ -186,7 +186,7 @@ function ReplayPage() {
                           <div className="text-sm text-white truncate">{s.beatmapset?.title}</div>
                           <div className="text-[10px] text-osu-f1">[{s.beatmap?.version}] {s.beatmap?.cs && `${s.beatmap.cs}K`}</div>
                         </div>
-                        <span className="text-xs text-osu-l2">{formatAccuracy(s.accuracy)}</span>
+                        <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(s))}</span>
                         <span className="text-sm font-bold">{formatPP(s.pp)}</span>
                         <span className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold">Watch</span>
                       </motion.div>

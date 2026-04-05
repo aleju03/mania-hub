@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getRankings, getUserScoresBestWindow } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { formatNumber, formatAccuracy, formatTimeAgo } from "../lib/format";
-import { calculateApproxPpGainMap, getBeatmapUrl, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, getScoreTimeMs, getScoreTimestamp, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
+import { calculateApproxPpGainMap, getBeatmapUrl, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModAcronyms, getScoreTimeMs, getScoreTimestamp, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
@@ -52,18 +52,19 @@ function PopOffsPage() {
   const [playersError, setPlayersError] = useState<string | null>(null);
   const [loadingPlayers, setLoadingPlayers] = useState(!rankings);
   const [loading, setLoading] = useState(popoffs.length === 0);
-  const [progressivePopoffs, setProgressivePopoffs] = useState<PopOff[]>([]);
   const [loadedCount, setLoadedCount] = useState(0);
   const [range, setRange] = useState<TimeRange>("7d");
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [page, setPage] = useState(0);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
-  const players = rankings?.ranking.slice(0, 30).map((entry: RankingsResponse["ranking"][number]) => ({
-    id: entry.user.id,
-    username: entry.user.username,
-    avatar_url: entry.user.avatar_url,
-  })) ?? [];
+  const players = useMemo(() =>
+    rankings?.ranking.slice(0, 30).map((entry: RankingsResponse["ranking"][number]) => ({
+      id: entry.user.id,
+      username: entry.user.username,
+      avatar_url: entry.user.avatar_url,
+    })) ?? []
+  , [rankings]);
 
   useEffect(() => {
     let cancelled = false;
@@ -99,10 +100,11 @@ function PopOffsPage() {
     };
   }, [rankings, rankingsFetchedAt, setCrRankings]);
 
-  // Progressively fetch scores for each player
+  // Fetch scores for all players, show results once complete
+  const fetchingRef = useRef(false);
   const fetchAll = useCallback(async () => {
-    if (players.length === 0) {
-      setLoading(false);
+    if (players.length === 0 || fetchingRef.current) {
+      if (players.length === 0) setLoading(false);
       return;
     }
 
@@ -115,6 +117,7 @@ function PopOffsPage() {
       return;
     }
 
+    fetchingRef.current = true;
     setLoading(!hasCachedPopoffs);
     setLoadedCount(0);
     setPage(0);
@@ -147,19 +150,12 @@ function PopOffsPage() {
         if (r.status === "fulfilled") all.push(...r.value);
       }
 
-      // Sort and update progressively
-      all.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
-      if (!hasCachedPopoffs) {
-        setProgressivePopoffs([...all]);
-      }
       setLoadedCount(Math.min(i + 5, players.length));
     }
 
-    if (!hasCachedPopoffs) {
-      setProgressivePopoffs([]);
-    }
     setCachedPopoffs([...all]);
     setLoading(false);
+    fetchingRef.current = false;
   }, [players, popoffs.length, popoffsFetchedAt, setCachedPopoffs]);
 
   useEffect(() => {
@@ -168,9 +164,8 @@ function PopOffsPage() {
   }, [fetchAll, loadingPlayers, playersError]);
 
   // Filter by time range
-  const visiblePopoffs = popoffs.length > 0 ? popoffs : progressivePopoffs;
   const filtered = useMemo(() => {
-    const withinRange = visiblePopoffs.filter((popoff) => {
+    const withinRange = popoffs.filter((popoff) => {
       const age = Date.now() - new Date(popoff.time).getTime();
       return age < RANGE_MS[range];
     });
@@ -182,7 +177,7 @@ function PopOffsPage() {
 
       return new Date(b.time).getTime() - new Date(a.time).getTime();
     });
-  }, [visiblePopoffs, range, sortMode]);
+  }, [popoffs, range, sortMode]);
 
   const playerPpGains = useMemo(() => {
     const byUser = new Map<number, { username: string; avatar_url: string; totalGain: number }>();
@@ -350,8 +345,21 @@ function PopOffsPage() {
           )}
 
           {/* Loading skeletons on initial load */}
-          {!playersError && (loadingPlayers || (loading && visiblePopoffs.length === 0)) && (
+          {!playersError && (loadingPlayers || loading) && (
             <div className="space-y-2">
+              {!loadingPlayers && players.length > 0 && (
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="flex-1 h-1 rounded-full bg-osu-b3/40 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-osu-pink transition-all duration-500 ease-out"
+                      style={{ width: `${Math.round((loadedCount / players.length) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-[11px] text-osu-f1 tabular-nums flex-shrink-0">
+                    {loadedCount}/{players.length} players
+                  </span>
+                </div>
+              )}
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 py-3 px-4 rounded-xl bg-osu-b4 border border-osu-b3/20">
                   <Skeleton className="w-16 h-10" />
@@ -399,7 +407,7 @@ function PopOffsPage() {
                         )}
                       </div>
 
-                      <GradeImg grade={p.score.rank} size={30} />
+                      <GradeImg grade={getDisplayedRank(p.score)} size={30} />
                       <button
                         onClick={(e) => {
                           e.stopPropagation();

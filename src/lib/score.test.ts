@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getDisplayedAccuracy, getDisplayedTotalScore, getScoreDisplayValues, isLazerScore } from "./score";
+import { getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getScoreDisplayValues, isLazerScore } from "./score";
 import type { OsuScore } from "./types";
 
 function createScore(overrides: Partial<OsuScore>): OsuScore {
@@ -83,6 +83,28 @@ describe("getDisplayedAccuracy", () => {
     }));
 
     expect(accuracy).toBe(0.987);
+  });
+});
+
+describe("getDisplayedRank", () => {
+  it("derives the stable mania grade for legacy-submitted scores", () => {
+    const rank = getDisplayedRank(createScore({
+      accuracy: 0.945677,
+      legacy_score_id: 654180694,
+      legacy_total_score: 785567,
+      rank: "A",
+      statistics: {
+        ok: 55,
+        meh: 33,
+        good: 341,
+        miss: 138,
+        great: 2572,
+        perfect: 3527,
+      },
+      type: "solo_score",
+    }));
+
+    expect(rank).toBe("S");
   });
 });
 

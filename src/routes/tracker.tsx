@@ -134,15 +134,29 @@ function ScoresPage() {
       setInitialLoaded(true);
     }
 
-    getCountryRecentScores({ data: { userIds, batchSize: userIds.length, batchIndex: 0, recentLimit: 20 } })
-      .then((scores) => {
-        if (scores.length > 0) addFeedScores(scores);
-      })
-      .finally(() => {
+    let cancelled = false;
+    const BATCH = 10;
+
+    (async () => {
+      const totalBatches = Math.ceil(userIds.length / BATCH);
+      for (let b = 0; b < totalBatches; b++) {
+        if (cancelled) return;
+        try {
+          const scores = await getCountryRecentScores({
+            data: { userIds, batchSize: BATCH, batchIndex: b, recentLimit: 20 },
+          });
+          if (cancelled) return;
+          if (scores.length > 0) addFeedScores(scores);
+          setInitialLoaded(true);
+        } catch { /* continue */ }
+      }
+      if (!cancelled) {
         markFeedScoresFetched();
-        setInitialLoaded(true);
         setInitialRefreshDone(true);
-      });
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, [userIds, initialRefreshDone, feedScores.length, feedScoresFetchedAt, addFeedScores, markFeedScoresFetched]);
 
   const poll = useCallback(async () => {

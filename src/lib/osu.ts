@@ -7,7 +7,7 @@ import {
   getPersistentCached,
   setPersistentCache,
 } from "./api";
-import { calculateApproxPpGainMap, getModAcronyms, getScoreTimestamp, getScoreUrl } from "./score";
+import { calculateApproxPpGainMap, getModAcronyms, getScoreDisplayValues, getScoreTimestamp, getScoreUrl } from "./score";
 import type {
   OsuUser,
   OsuScore,
@@ -20,6 +20,8 @@ import type {
   MapsAggregatedBeatmap,
   MapsAggregatedFavourite,
   MapsFarmedEntry,
+  HomePageData,
+  HomePagePopoff,
   UserProfileInsights,
   InsightScoreSnapshot,
 } from "./types";
@@ -35,6 +37,8 @@ const RANK_HISTORY_CACHE_TTL = 24 * 60 * 60 * 1000;
 const APPROX_PP_GAINS_CACHE_TTL = 10 * 60 * 1000;
 const BEST_SCORES_WINDOW_CACHE_TTL = 2 * 60 * 1000;
 const USER_PROFILE_INSIGHTS_CACHE_TTL = 6 * 60 * 60 * 1000;
+const USER_PROFILE_INSIGHTS_CACHE_VERSION = 2;
+const HOME_PAGE_CACHE_TTL = 60 * 1000;
 const USER_CACHE_TTL = 2 * 60 * 1000;
 const USER_SCORE_LIST_CACHE_TTL = 60 * 1000;
 const RANK_HISTORY_CONCURRENCY = 20;
@@ -222,13 +226,13 @@ async function getApproxPpGainsForUser(userId: number): Promise<Record<number, n
   return gains;
 }
 
-function getTopCountEntry(counts: Map<string, number>): { label: string; count: number } | null {
+function getTopCountEntry(counts: Map<string, number>, total: number): { label: string; count: number; total: number } | null {
   const entries = [...counts.entries()];
   if (!entries.length) return null;
 
   entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   const [label, count] = entries[0];
-  return { label, count };
+  return { label, count, total };
 }
 
 function getMedian(values: number[]): number | null {
@@ -250,13 +254,15 @@ function getTimestampMs(score: OsuScore): number {
 }
 
 function scoreToSnapshot(score: OsuScore): InsightScoreSnapshot {
+  const display = getScoreDisplayValues(score);
+
   return {
     title: score.beatmapset?.title ?? "Unknown",
     artist: score.beatmapset?.artist ?? "",
     version: score.beatmap?.version ?? "",
     pp: score.pp,
-    rank: score.rank,
-    coverUrl: score.beatmapset?.covers?.card ?? "",
+    rank: display.rank,
+    coverUrl: score.beatmapset?.covers?.cover ?? "",
     beatmapUrl: score.beatmap?.url ?? `https://osu.ppy.sh/b/${score.beatmap?.id ?? 0}`,
     date: getScoreTimestamp(score) ?? "",
     mods: getModAcronyms(score.mods),
@@ -267,6 +273,7 @@ function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfileInsigh
   const scores = bestScores.filter((score) => score.beatmap?.mode === "mania");
   const keyCounts = new Map<number, number>();
   const modCounts = new Map<string, number>();
+  let moddedPlayCount = 0;
   const bpms: number[] = [];
   const ppValues: number[] = [];
   const datedScores: Array<{ score: OsuScore; ms: number }> = [];
@@ -280,6 +287,7 @@ function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfileInsigh
 
     const mods = getModAcronyms(score.mods);
     if (mods.length > 0) {
+      moddedPlayCount++;
       for (const mod of mods) {
         modCounts.set(mod, (modCounts.get(mod) ?? 0) + 1);
       }
@@ -309,7 +317,7 @@ function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfileInsigh
   return {
     sampleSize: scores.length,
     keySplit: sortedKeySplit,
-    mostUsedMod: getTopCountEntry(modCounts),
+    mostUsedMod: getTopCountEntry(modCounts, moddedPlayCount),
     medianBpm: getMedian(bpms),
     newestTopPlay: datedScores.length ? scoreToSnapshot(datedScores[datedScores.length - 1].score) : null,
     oldestTopPlay: datedScores.length ? scoreToSnapshot(datedScores[0].score) : null,
@@ -367,7 +375,7 @@ export const getUserScoresBestWindow = createServerFn({ method: "GET" })
 export const getUserProfileInsights = createServerFn({ method: "GET" })
   .inputValidator((data: { userId: number }) => data)
   .handler(async ({ data }: { data: { userId: number } }) => {
-    const cacheKey = `user-profile-insights:${data.userId}`;
+    const cacheKey = `user-profile-insights:v${USER_PROFILE_INSIGHTS_CACHE_VERSION}:${data.userId}`;
     const cached = await getPersistentCached<UserProfileInsights>(cacheKey);
     if (cached) return cached;
 
@@ -417,6 +425,109 @@ export const getRankings = createServerFn({ method: "GET" })
     });
     await setPersistentCache(cacheKey, result, RANKINGS_CACHE_TTL);
     return result;
+  });
+
+async function fetchCountryRecentScores(
+  userIds: number[],
+  options?: { batchSize?: number; batchIndex?: number; recentLimit?: number },
+): Promise<OsuScore[]> {
+  const size = options?.batchSize ?? 5;
+  const start = ((options?.batchIndex ?? 0) * size) % userIds.length;
+  const batch = userIds.slice(start, start + size);
+  const recentLimit = options?.recentLimit ?? 20;
+
+  const results = await mapWithConcurrency(
+    batch,
+    RECENT_SCORES_CONCURRENCY,
+    async (uid: number) => {
+      try {
+        return await getCachedUserScores("recent", uid, {
+          limit: recentLimit,
+          offset: 0,
+          includeFails: true,
+        });
+      } catch {
+        return [];
+      }
+    },
+  );
+
+  return results.flatMap((scores) => scores);
+}
+
+function buildRecentScoresPreview(scores: OsuScore[], limit = 5): OsuScore[] {
+  const seenUsers = new Set<number>();
+
+  return scores
+    .filter((score) => score.passed)
+    .sort((a, b) => getTimestampMs(b) - getTimestampMs(a))
+    .filter((score) => {
+      if (seenUsers.has(score.user_id)) return false;
+      seenUsers.add(score.user_id);
+      return true;
+    })
+    .slice(0, limit);
+}
+
+async function buildHomePopoffs(rankings: RankingsResponse): Promise<HomePagePopoff[]> {
+  const topPlayersForPopoffs = rankings.ranking.slice(0, 30);
+
+  const results = await mapWithConcurrency(
+    topPlayersForPopoffs,
+    APPROX_PP_GAINS_CONCURRENCY,
+    async (entry) => {
+      try {
+        const scores = await fetchUserBestScoresWindow(entry.user.id, 100);
+        return scores
+          .filter((score) => {
+            const age = Date.now() - getTimestampMs(score);
+            return age < 7 * 24 * 60 * 60 * 1000 && score.pp != null && score.pp > 0;
+          })
+          .map((score) => ({
+            user: {
+              username: entry.user.username,
+              avatar_url: entry.user.avatar_url,
+            },
+            score,
+          }));
+      } catch {
+        return [] as HomePagePopoff[];
+      }
+    },
+  );
+
+  return results
+    .flatMap((scores) => scores)
+    .sort((a, b) => {
+      const ppDiff = (b.score.pp ?? 0) - (a.score.pp ?? 0);
+      if (ppDiff !== 0) return ppDiff;
+      return getTimestampMs(b.score) - getTimestampMs(a.score);
+    })
+    .slice(0, 5);
+}
+
+export const getHomePageData = createServerFn({ method: "GET" })
+  .handler(async (): Promise<HomePageData> => {
+    const cacheKey = "home-page-data:v1";
+    const cached = await getPersistentCached<HomePageData>(cacheKey);
+    if (cached) return cached;
+
+    const rankings = await getRankings({ data: { type: "performance", page: 1, country: "CR" } });
+    const userIds = rankings.ranking.map((entry) => entry.user.id);
+
+    const [recentScores, popoffs] = await Promise.all([
+      fetchCountryRecentScores(userIds, { batchSize: 10, batchIndex: 0, recentLimit: 20 })
+        .then((scores) => buildRecentScoresPreview(scores, 5)),
+      buildHomePopoffs(rankings),
+    ]);
+
+    const data: HomePageData = {
+      rankings,
+      recentScores,
+      popoffs,
+    };
+    await setPersistentCache(cacheKey, data, HOME_PAGE_CACHE_TTL);
+    return data;
   });
 
 // ── Batch user rank history ────────────────────────────────────────────────
@@ -480,28 +591,7 @@ export const searchUsers = createServerFn({ method: "GET" })
 export const getCountryRecentScores = createServerFn({ method: "GET" })
   .inputValidator((data: { userIds: number[]; batchSize?: number; batchIndex?: number; recentLimit?: number }) => data)
   .handler(async ({ data }: { data: { userIds: number[]; batchSize?: number; batchIndex?: number; recentLimit?: number } }) => {
-    const size = data.batchSize ?? 5;
-    const start = ((data.batchIndex ?? 0) * size) % data.userIds.length;
-    const batch = data.userIds.slice(start, start + size);
-    const recentLimit = data.recentLimit ?? 20;
-
-    const results = await mapWithConcurrency(
-      batch,
-      RECENT_SCORES_CONCURRENCY,
-      async (uid: number) => {
-        try {
-          return await osuFetch<OsuScore[]>(`/users/${uid}/scores/recent`, getScoreRequestParams(uid, {
-            mode: "mania",
-            limit: recentLimit,
-            include_fails: 1,
-          }));
-        } catch {
-          return [];
-        }
-      },
-    );
-
-    return results.flatMap((scores) => scores);
+    return fetchCountryRecentScores(data.userIds, data);
   });
 
 // ── Maps (aggregated most-played + favourites across CR players) ───────────

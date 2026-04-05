@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { getRankings, getCountryRecentScores, getUserScoresBestWindow } from "../lib/osu";
+import { getHomePageData } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
 import { getDisplayedAccuracy, getDisplayedRank, getScoreTimeMs, getScoreTimestamp, isDisplayedPassed } from "../lib/score";
@@ -46,119 +46,54 @@ function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
-    const shouldRefresh = !rankings || isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings);
+    const shouldRefreshRankings = !rankings || isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings);
+    const shouldRefreshScores =
+      recentScores.length === 0 || isCacheStale(recentScoresFetchedAt, CLIENT_CACHE_TTL.homeRecentScores);
+    const shouldRefreshPopoffs =
+      popoffs.length === 0 || isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.homePopoffs);
 
-    if (!shouldRefresh) {
+    if (!shouldRefreshRankings && !shouldRefreshScores && !shouldRefreshPopoffs) {
       setRankingsError(null);
+      setLoadingScores(false);
+      setLoadingPopoffs(false);
       return () => {
         cancelled = true;
       };
     }
 
-    getRankings({ data: { type: "performance", page: 1, country: "CR" } })
+    setLoadingScores(shouldRefreshScores && recentScores.length === 0);
+    setLoadingPopoffs(shouldRefreshPopoffs && popoffs.length === 0);
+
+    getHomePageData()
       .then((data) => {
         if (cancelled) return;
-        setCrRankings(data);
+        setCrRankings(data.rankings);
+        setHomeRecentScores(data.recentScores);
+        setHomePopoffs(data.popoffs);
         setRankingsError(null);
       })
       .catch(() => {
         if (cancelled || rankings) return;
         setRankingsError("Couldn't load the Costa Rica rankings right now.");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingScores(false);
+        setLoadingPopoffs(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [rankings, rankingsFetchedAt, setCrRankings]);
-
-  useEffect(() => {
-    if (!rankings) return;
-
-    let cancelled = false;
-    const userIds = rankings.ranking.map((entry: RankingsResponse["ranking"][number]) => entry.user.id);
-    const shouldRefreshScores =
-      recentScores.length === 0 || isCacheStale(recentScoresFetchedAt, CLIENT_CACHE_TTL.homeRecentScores);
-
-    if (!shouldRefreshScores) {
-      setLoadingScores(false);
-    } else {
-      setLoadingScores(recentScores.length === 0);
-
-      getCountryRecentScores({ data: { userIds, batchSize: 10, batchIndex: 0 } })
-        .then((scores) => {
-          if (cancelled) return;
-          const seenUsers = new Set<number>();
-          const previewScores = scores
-            .filter(isPassedScore)
-            .sort((a, b) => getScoreTimeMs(b) - getScoreTimeMs(a))
-            .filter((score) => {
-              if (seenUsers.has(score.user_id)) return false;
-              seenUsers.add(score.user_id);
-              return true;
-            })
-            .slice(0, 5);
-
-          setHomeRecentScores(previewScores);
-        })
-        .finally(() => {
-          if (cancelled) return;
-          setLoadingScores(false);
-        });
-    }
-
-    const topPlayersForPopoffs = rankings.ranking.slice(0, 30);
-    const shouldRefreshPopoffs =
-      popoffs.length === 0 || isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.homePopoffs);
-
-    if (!shouldRefreshPopoffs) {
-      setLoadingPopoffs(false);
-    } else {
-      setLoadingPopoffs(popoffs.length === 0);
-
-      Promise.allSettled(
-        topPlayersForPopoffs.map(async (entry: RankingsResponse["ranking"][number]) => {
-          const scores = await getUserScoresBestWindow({ data: { userId: entry.user.id, totalLimit: 100 } });
-          return scores
-            .filter((s: OsuScore) => {
-              const age = Date.now() - getScoreTimeMs(s);
-              return age < 7 * 24 * 60 * 60 * 1000 && s.pp && s.pp > 0;
-            })
-            .map((s: OsuScore) => ({
-              user: { username: entry.user.username, avatar_url: entry.user.avatar_url },
-              score: s,
-            }));
-        }),
-      )
-        .then((results) => {
-          if (cancelled) return;
-
-          const all = results
-            .filter((r): r is PromiseFulfilledResult<{ user: { username: string; avatar_url: string }; score: OsuScore }[]> => r.status === "fulfilled")
-            .flatMap((r) => r.value)
-            .sort((a, b) => {
-              const ppDiff = (b.score.pp ?? 0) - (a.score.pp ?? 0);
-              if (ppDiff !== 0) return ppDiff;
-              return getScoreTimeMs(b.score) - getScoreTimeMs(a.score);
-            })
-            .slice(0, 5);
-
-          setHomePopoffs(all);
-        })
-        .finally(() => {
-          if (cancelled) return;
-          setLoadingPopoffs(false);
-        });
-    }
-
-    return () => {
-      cancelled = true;
-    };
   }, [
-    rankings,
+    popoffs,
     popoffs.length,
     popoffsFetchedAt,
+    rankings,
+    rankingsFetchedAt,
     recentScores.length,
     recentScoresFetchedAt,
+    setCrRankings,
     setHomePopoffs,
     setHomeRecentScores,
   ]);

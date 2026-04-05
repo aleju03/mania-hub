@@ -5,6 +5,7 @@ import { AVATAR_ACCENT_CLIENT_TTL, useAppStore } from "../../store";
 
 const pendingUrls = new Set<string>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
+const AVATAR_ACCENT_FAILURE_RETRY_TTL = 5 * 60 * 1000;
 
 function flushAvatarAccentQueue() {
   if (pendingUrls.size === 0) return;
@@ -51,7 +52,19 @@ export function UsernameText({
     }
 
     const existing = useAppStore.getState().avatarAccents[getAvatarAccentStoreKey(avatarUrl)];
-    if (existing && Date.now() - existing.fetchedAt < AVATAR_ACCENT_CLIENT_TTL) {
+    if (
+      existing &&
+      existing.value !== null &&
+      Date.now() - existing.fetchedAt < AVATAR_ACCENT_CLIENT_TTL
+    ) {
+      return;
+    }
+
+    if (
+      existing &&
+      existing.value === null &&
+      Date.now() - existing.fetchedAt < AVATAR_ACCENT_FAILURE_RETRY_TTL
+    ) {
       return;
     }
 

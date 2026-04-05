@@ -10,6 +10,7 @@ export interface CachedAvatarAccent {
 }
 
 export const AVATAR_ACCENT_CLIENT_TTL = 24 * 60 * 60 * 1000;
+export const AVATAR_ACCENT_FAILURE_TTL = 5 * 60 * 1000;
 
 export interface CachedPlayer {
   id: number;
@@ -188,7 +189,9 @@ export const useAppStore = create<AppState>()(
             ).filter(([, entry]) => {
               if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
               const fetchedAt = (entry as CachedAvatarAccent).fetchedAt;
-              return Number.isFinite(fetchedAt) && Date.now() - fetchedAt < AVATAR_ACCENT_CLIENT_TTL;
+              const value = (entry as CachedAvatarAccent).value;
+              const ttl = value === null ? AVATAR_ACCENT_FAILURE_TTL : AVATAR_ACCENT_CLIENT_TTL;
+              return Number.isFinite(fetchedAt) && Date.now() - fetchedAt < ttl;
             }),
           ) as Record<string, CachedAvatarAccent>,
         };
