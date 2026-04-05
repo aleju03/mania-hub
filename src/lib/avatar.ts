@@ -1,5 +1,5 @@
-import { spawn } from "node:child_process";
 import { createServerFn } from "@tanstack/react-start";
+import sharp from "sharp";
 import { getPersistentCacheEntry, setPersistentCache } from "./api";
 import { getAvatarAccentCacheKey } from "./avatar-accent";
 
@@ -101,32 +101,6 @@ function normalizeForText(color: RgbColor): string {
   return toHex(normalized);
 }
 
-function parseHistogram(output: string): RgbColor[] {
-  return output
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .flatMap((line) => {
-      const match = line.match(/^(\d+):\s+\(([\d.]+),([\d.]+),([\d.]+)/);
-      if (!match) return [];
-
-      return [{
-        count: Number(match[1]),
-        color: {
-          r: Number(match[2]),
-          g: Number(match[3]),
-          b: Number(match[4]),
-        },
-      }];
-    })
-    .sort((a, b) => {
-      const saturationDelta = getSaturation(b.color) - getSaturation(a.color);
-      if (Math.abs(saturationDelta) > 0.08) return saturationDelta;
-      return b.count - a.count;
-    })
-    .map((entry) => entry.color);
-}
-
 function pickAccentColor(colors: RgbColor[]): string | null {
   const preferred = colors.find((color) => {
     const luminance = getLuminance(color);
@@ -143,45 +117,39 @@ function pickAccentColor(colors: RgbColor[]): string | null {
   return chosen ? normalizeForText(chosen) : null;
 }
 
-async function getHistogram(buffer: Buffer): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const process = spawn("convert", [
-      "-",
-      "-alpha",
-      "off",
-      "-resize",
-      "24x24!",
-      "+dither",
-      "-colors",
-      "6",
-      "-format",
-      "%c",
-      "histogram:info:-",
-    ]);
+function extractDominantColors(pixelData: Uint8Array | Buffer, channels: number): RgbColor[] {
+  const buckets = new Map<string, { count: number; color: RgbColor }>();
 
-    let stdout = "";
-    let stderr = "";
+  for (let i = 0; i < pixelData.length; i += channels) {
+    const r = pixelData[i] ?? 0;
+    const g = pixelData[i + 1] ?? 0;
+    const b = pixelData[i + 2] ?? 0;
+    const quantized: RgbColor = {
+      r: Math.round(r / 16) * 16,
+      g: Math.round(g / 16) * 16,
+      b: Math.round(b / 16) * 16,
+    };
+    const key = `${quantized.r},${quantized.g},${quantized.b}`;
+    const existing = buckets.get(key);
 
-    process.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
-    });
+    if (existing) {
+      existing.count += 1;
+    } else {
+      buckets.set(key, {
+        count: 1,
+        color: quantized,
+      });
+    }
+  }
 
-    process.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-
-    process.on("error", reject);
-    process.on("close", (code) => {
-      if (code === 0) {
-        resolve(stdout);
-        return;
-      }
-
-      reject(new Error(`convert exited with code ${code}: ${stderr}`));
-    });
-
-    process.stdin.end(buffer);
-  });
+  return [...buckets.values()]
+    .sort((a, b) => {
+      const saturationDelta = getSaturation(b.color) - getSaturation(a.color);
+      if (Math.abs(saturationDelta) > 0.08) return saturationDelta;
+      return b.count - a.count;
+    })
+    .slice(0, 6)
+    .map((entry) => entry.color);
 }
 
 async function extractAvatarAccent(url: string): Promise<string | null> {
@@ -196,8 +164,12 @@ async function extractAvatarAccent(url: string): Promise<string | null> {
   }
 
   const buffer = Buffer.from(await response.arrayBuffer());
-  const histogram = await getHistogram(buffer);
-  const colors = parseHistogram(histogram);
+  const { data, info } = await sharp(buffer, { animated: false })
+    .resize(24, 24, { fit: "fill" })
+    .removeAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const colors = extractDominantColors(data, info.channels);
   return pickAccentColor(colors);
 }
 
