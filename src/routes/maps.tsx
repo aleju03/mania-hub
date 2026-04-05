@@ -965,7 +965,7 @@ function FavouriteCard({ fav, onPlayerClick }: { fav: MapsAggregatedFavourite; o
           </div>
         </div>
 
-        <PlayerAvatars players={fav.players} onPlayerClick={onPlayerClick} />
+        <PlayerAvatars players={fav.players} onPlayerClick={(player) => onPlayerClick(player.username)} />
       </div>
     </div>
   );
