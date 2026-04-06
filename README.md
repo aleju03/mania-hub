@@ -31,93 +31,116 @@ Create a `.env` file with:
 
 ## Roadmap
 
-> Brainstormed ideas and planned work, not in strict priority order.
-
-### Bug Fixes
-
-| Issue | Status |
-|---|:---:|
-| Some plays missing the **+n PP** display on score cards | `todo` |
-| Name color calculation wrong (Randy = blue, BabyIan = pink) | `todo` |
-| Replay: accuracy not accurate at end of play | `todo` |
-| Replay: changing BG dim resets the play | `todo` |
+> Ordered by recommended priority. Fix what's broken, lay the foundation, then build new things.
 
 ---
 
-### Replay Viewer: Major Overhaul
+### Phase 1: Bug Fixes
 
-The replay viewer is getting a big upgrade across UX, mobile, and customization.
+*Fix what's broken before building new. Quick wins that improve the current experience.*
 
-| Feature | Status |
-|---|:---:|
-| UI/UX overhaul for the replay page | `planned` |
-| Full responsive mobile support for watching replays | `planned` |
-| Customizable overlay positions | `planned` |
-| Persist BG dim preference locally (per play) | `planned` |
-| Finish custom skin support | `planned` |
-| Rename "Replay" button to "Watch" + show on mobile | `planned` |
-
-**Post-overhaul stretch goal:**
-
-| Feature | Status |
-|---|:---:|
-| Shareable replay videos - generate a URL that embeds as a playable video in Discord and other platforms | `idea` |
+| # | Issue | Status |
+|:---:|---|:---:|
+| 1 | Some plays missing the **+n PP** display on score cards | `todo` |
+| 2 | Name color calculation wrong (Randy = blue, BabyIan = pink) | `todo` |
+| 3 | Replay: accuracy not accurate at end of play | `todo` |
+| 4 | Replay: changing BG dim resets the play | `todo` |
+| 5 | Fix LN position on falling notes in home page background | `todo` |
 
 ---
 
-### Performance: Server-Driven Data
+### Phase 2: Server-Driven Data
 
-**Goal:** Read most/all data from the DB instead of hitting the osu! API on every request. The server keeps itself up to date in the background, so every user (even on first cold boot) gets fast load times.
+*Foundational. Every feature built after this benefits from fast loads, even on cold boots. Do it early so new pages don't need to be rewritten later.*
 
-| Step | Status |
-|---|:---:|
-| Design background sync strategy (server polls API, writes to Turso) | `planned` |
-| Migrate endpoints to read from DB first | `planned` |
-| Keep live-update loop so data stays fresh for everyone | `planned` |
-
----
-
-### Player Profiles (`/player/`)
-
-| Feature | Status |
-|---|:---:|
-| Show **best peak rank** instead of current global rank | `planned` |
-| Rethink display of existing osu! stats (country rank, PP, accuracy, play count, play time, 90-day rank history) so the page feels unique vs. the official profile | `planned` |
+| # | Step | Status |
+|:---:|---|:---:|
+| 5 | Design background sync strategy (server polls API, writes to Turso) | `planned` |
+| 6 | Migrate endpoints to read from DB first | `planned` |
+| 7 | Keep live-update loop so data stays fresh for everyone | `planned` |
 
 ---
 
-### Home Page & Score Cards
+### Phase 3: Quick UI Wins
 
-| Feature | Status |
-|---|:---:|
-| Show **mod badges** on recent top plays | `planned` |
+*Small improvements to ship between bigger efforts.*
 
----
-
-### New Pages
-
-| Page | Description | Status |
-|---|---|:---:|
-| **Snipes** | Plan out and implement the snipes tracking page | `planned` |
-| **Fun Facts** | New page with community stats and fun facts | `idea` |
+| # | Feature | Status |
+|:---:|---|:---:|
+| 8 | Show **mod badges** on recent top plays (home page) | `planned` |
+| 9 | Rename "Replay" button to "Watch" + show on mobile | `planned` |
 
 ---
 
-### Dan Estimation on Tracker
+### Phase 4: Replay Viewer Overhaul
 
-Show estimated Dan level (e.g. Gamma mid, Delta low, Alpha high) per player on the `/tracker` page, with Dan logo assets for each tier.
+*Big chunk of work, but self-contained. Replay bugs are already fixed in Phase 1, so this is a clean rewrite. Mobile support is high value since a lot of osu! browsing happens on phones and Discord.*
 
-- Requires fetching and analyzing the actual beatmap files to estimate Dan difficulty
-- Display Dan badge/logo next to player scores or as a dedicated column
-- Needs research into how to reliably classify Dan tiers from beatmap data
-
-Status: `idea`, needs research
+| # | Feature | Status |
+|:---:|---|:---:|
+| 10 | UI/UX overhaul for the replay page | `planned` |
+| 11 | Full responsive mobile support for watching replays | `planned` |
+| 12 | Customizable overlay positions | `planned` |
+| 13 | Persist BG dim preference locally (per play) | `planned` |
+| 14 | Finish custom skin support | `planned` |
 
 ---
 
-### Go Global: Multi-Country Support
+### Phase 5: Player Profiles
 
-Open the app up so it works for **any country**, not just Costa Rica.
+*Moderate effort, high visibility. Make profiles feel like a destination, not just an osu! mirror.*
+
+| # | Feature | Status |
+|:---:|---|:---:|
+| 15 | Show **best peak rank** instead of current global rank | `planned` |
+| 16 | Rethink display of existing osu! stats (country rank, PP, accuracy, play count, play time, 90-day rank history) so the page feels unique | `planned` |
+
+---
+
+### Phase 6: Snipes Page
+
+*New feature that builds on the DB infrastructure from Phase 2. Fast from day one.*
+
+| # | Feature | Status |
+|:---:|---|:---:|
+| 17 | Plan out and implement the snipes tracking page | `planned` |
+
+---
+
+### Phase 7: Dan Estimation on Tracker
+
+*Needs the most research. By this point the tracker page is mature and there's experience with beatmap file handling from the replay work.*
+
+| # | Feature | Status |
+|:---:|---|:---:|
+| 18 | Fetch and analyze beatmap files to estimate Dan difficulty | `idea` |
+| 19 | Display estimated Dan level (Gamma mid, Delta low, Alpha high) with logo assets | `idea` |
+
+---
+
+### Phase 8: Fun Facts Page
+
+*Better with more data flowing through the DB to pull interesting stats from.*
+
+| # | Feature | Status |
+|:---:|---|:---:|
+| 20 | New page with community stats and fun facts | `idea` |
+
+---
+
+### Phase 9: Shareable Replay Videos
+
+*Depends on the replay overhaul being polished. Technically the hardest item (server-side rendering or canvas recording + hosting). Generate a URL that embeds as a playable video in Discord.*
+
+| # | Feature | Status |
+|:---:|---|:---:|
+| 21 | Shareable replay video links with Discord embed support | `idea` |
+
+---
+
+### Phase 10: Go Global (Multi-Country Support)
+
+*Last because it touches everything. All features should be working and stable for Costa Rica first, then generalize. Doing it earlier would slow down every other feature.*
 
 - Country switcher in the UI (needs UX design)
 - Navbar osu! logo SVG colors dynamically match the selected country's flag
@@ -127,8 +150,8 @@ Status: `idea`, needs planning
 
 ---
 
-### Infrastructure
+### Anytime: Infrastructure
 
 | Item | Status |
 |---|:---:|
-| Buy **osumtracker.gg** domain | `todo` |
+| Buy **osumtracker.gg** domain (doesn't block anything, but nice to have before sharing widely) | `todo` |
