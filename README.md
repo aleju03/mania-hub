@@ -1,4 +1,4 @@
-# osu!mania Hub
+# osu!mania tracker
 
 A web app for Costa Rican osu!mania players. Shows country rankings, live score feeds, player profiles, top play highlights, and a replay viewer.
 
