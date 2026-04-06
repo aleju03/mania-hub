@@ -1,193 +1,134 @@
-Welcome to your new TanStack Start app! 
+# osu!mania Hub
 
-# Getting Started
+A web app for Costa Rican osu!mania players. Shows country rankings, live score feeds, player profiles, top play highlights, and a replay viewer.
 
-To run this application:
+Built with [TanStack Start](https://tanstack.com/start) (SSR React) on Vite.
+
+## Getting Started
 
 ```bash
 npm install
 npm run dev
 ```
 
-# Building For Production
+### Environment Variables
 
-To build this application for production:
+Create a `.env` file with:
 
-```bash
-npm run build
-```
+- `OSU_CLIENT_ID` / `OSU_CLIENT_SECRET` - osu! API v2 OAuth credentials
+- `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` - Turso (libSQL) database
+- `VITE_DEV_MODE` - enables dev-only features when set
 
-## Testing
+### Commands
 
-This project uses [Vitest](https://vitest.dev/) for testing. You can run the tests with:
+| Command | Description |
+|---|---|
+| `npm run dev` | Dev server on port 3000 |
+| `npm run build` | Production build |
+| `npm run test` | Run tests (Vitest) |
+| `npm run db:init` | Initialize Turso DB from schema |
+| `npm run db:inspect` | Open interactive Turso shell |
 
-```bash
-npm run test
-```
+## Roadmap
 
-## Styling
+> Brainstormed ideas and planned work, not in strict priority order.
 
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
+### Bug Fixes
 
-### Removing Tailwind CSS
+| Issue | Status |
+|---|:---:|
+| Some plays missing the **+n PP** display on score cards | `todo` |
+| Name color calculation wrong (Randy = blue, BabyIan = pink) | `todo` |
+| Replay: accuracy not accurate at end of play | `todo` |
+| Replay: changing BG dim resets the play | `todo` |
 
-If you prefer not to use Tailwind CSS:
+---
 
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Uninstall the packages: `npm install @tailwindcss/vite tailwindcss -D`
+### Replay Viewer: Major Overhaul
 
+The replay viewer is getting a big upgrade across UX, mobile, and customization.
 
+| Feature | Status |
+|---|:---:|
+| UI/UX overhaul for the replay page | `planned` |
+| Full responsive mobile support for watching replays | `planned` |
+| Customizable overlay positions | `planned` |
+| Persist BG dim preference locally (per play) | `planned` |
+| Finish custom skin support | `planned` |
+| Rename "Replay" button to "Watch" + show on mobile | `planned` |
 
-## Routing
+**Post-overhaul stretch goal:**
 
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `src/routes`.
+| Feature | Status |
+|---|:---:|
+| Shareable replay videos - generate a URL that embeds as a playable video in Discord and other platforms | `idea` |
 
-### Adding A Route
+---
 
-To add a new route to your application just add a new file in the `./src/routes` directory.
+### Performance: Server-Driven Data
 
-TanStack will automatically generate the content of the route file for you.
+**Goal:** Read most/all data from the DB instead of hitting the osu! API on every request. The server keeps itself up to date in the background, so every user (even on first cold boot) gets fast load times.
 
-Now that you have two routes you can use a `Link` component to navigate between them.
+| Step | Status |
+|---|:---:|
+| Design background sync strategy (server polls API, writes to Turso) | `planned` |
+| Migrate endpoints to read from DB first | `planned` |
+| Keep live-update loop so data stays fresh for everyone | `planned` |
 
-### Adding Links
+---
 
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
+### Player Profiles (`/player/`)
 
-```tsx
-import { Link } from "@tanstack/react-router";
-```
+| Feature | Status |
+|---|:---:|
+| Show **best peak rank** instead of current global rank | `planned` |
+| Rethink display of existing osu! stats (country rank, PP, accuracy, play count, play time, 90-day rank history) so the page feels unique vs. the official profile | `planned` |
 
-Then anywhere in your JSX you can use it like so:
+---
 
-```tsx
-<Link to="/about">About</Link>
-```
+### Home Page & Score Cards
 
-This will create a link that will navigate to the `/about` route.
+| Feature | Status |
+|---|:---:|
+| Show **mod badges** on recent top plays | `planned` |
 
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
+---
 
-### Using A Layout
+### New Pages
 
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you render `{children}` in the `shellComponent`.
+| Page | Description | Status |
+|---|---|:---:|
+| **Snipes** | Plan out and implement the snipes tracking page | `planned` |
+| **Fun Facts** | New page with community stats and fun facts | `idea` |
 
-Here is an example layout that includes a header:
+---
 
-```tsx
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
+### Dan Estimation on Tracker
 
-export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'My App' },
-    ],
-  }),
-  shellComponent: ({ children }) => (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <header>
-          <nav>
-            <Link to="/">Home</Link>
-            <Link to="/about">About</Link>
-          </nav>
-        </header>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  ),
-})
-```
+Show estimated Dan level (e.g. Gamma mid, Delta low, Alpha high) per player on the `/tracker` page, with Dan logo assets for each tier.
 
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
+- Requires fetching and analyzing the actual beatmap files to estimate Dan difficulty
+- Display Dan badge/logo next to player scores or as a dedicated column
+- Needs research into how to reliably classify Dan tiers from beatmap data
 
-## Server Functions
+Status: `idea`, needs research
 
-TanStack Start provides server functions that allow you to write server-side code that seamlessly integrates with your client components.
+---
 
-```tsx
-import { createServerFn } from '@tanstack/react-start'
+### Go Global: Multi-Country Support
 
-const getServerTime = createServerFn({
-  method: 'GET',
-}).handler(async () => {
-  return new Date().toISOString()
-})
+Open the app up so it works for **any country**, not just Costa Rica.
 
-// Use in a component
-function MyComponent() {
-  const [time, setTime] = useState('')
-  
-  useEffect(() => {
-    getServerTime().then(setTime)
-  }, [])
-  
-  return <div>Server time: {time}</div>
-}
-```
+- Country switcher in the UI (needs UX design)
+- Navbar osu! logo SVG colors dynamically match the selected country's flag
+- All data endpoints scoped to the chosen country
 
-## API Routes
+Status: `idea`, needs planning
 
-You can create API routes by using the `server` property in your route definitions:
+---
 
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-import { json } from '@tanstack/react-start'
+### Infrastructure
 
-export const Route = createFileRoute('/api/hello')({
-  server: {
-    handlers: {
-      GET: () => json({ message: 'Hello, World!' }),
-    },
-  },
-})
-```
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-
-export const Route = createFileRoute('/people')({
-  loader: async () => {
-    const response = await fetch('https://swapi.dev/api/people')
-    return response.json()
-  },
-  component: PeopleComponent,
-})
-
-function PeopleComponent() {
-  const data = Route.useLoaderData()
-  return (
-    <ul>
-      {data.results.map((person) => (
-        <li key={person.name}>{person.name}</li>
-      ))}
-    </ul>
-  )
-}
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-# Demo files
-
-Files prefixed with `demo` can be safely deleted. They are there to provide a starting point for you to play around with the features you've installed.
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
-
-For TanStack Start specific documentation, visit [TanStack Start](https://tanstack.com/start).
+| Item | Status |
+|---|:---:|
+| Buy **osumtracker.gg** domain | `todo` |
