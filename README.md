@@ -46,7 +46,7 @@ Create a `.env` file with:
 | 3 | Replay: accuracy not accurate at end of play | `todo` |
 | 4 | Replay: changing BG dim resets the play | `todo` |
 | 5 | Fix LN position on falling notes in home page background | `todo` |
-| 6 | Rankings page: name colors stay white until full page reload (don't load on client-side navigation) | `todo` |
+| 6 | Rankings page: name colors stay white on client-side navigation unless already cached; only load after full page reload | `todo` |
 
 ---
 
