@@ -2,6 +2,7 @@ import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react
 import { useState, useEffect, useMemo, useRef } from "react";
 import { getRankings, getCountryMapsData } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
+import { getCountryName } from "../lib/country";
 import { formatNumber, formatDuration, formatTimeAgo } from "../lib/format";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
@@ -152,11 +153,12 @@ function buildMapsSearch(search: Required<MapsSearch>): MapsSearch {
 function MapsPage() {
   const navigate = useNavigate();
   const mapsSearch = Route.useSearch();
-  const rankings = useAppStore((s) => s.crRankings);
-  const rankingsFetchedAt = useAppStore((s) => s.crRankingsFetchedAt);
-  const mapsData = useAppStore((s) => s.mapsData);
-  const mapsDataFetchedAt = useAppStore((s) => s.mapsDataFetchedAt);
-  const setCrRankings = useAppStore((s) => s.setCrRankings);
+  const selectedCountry = useAppStore((s) => s.selectedCountry);
+  const rankings = useAppStore((s) => s.rankingsByCountry[selectedCountry] ?? null);
+  const rankingsFetchedAt = useAppStore((s) => s.rankingsFetchedAtByCountry[selectedCountry] ?? null);
+  const mapsData = useAppStore((s) => s.mapsDataByCountry[selectedCountry] ?? null);
+  const mapsDataFetchedAt = useAppStore((s) => s.mapsDataFetchedAtByCountry[selectedCountry] ?? null);
+  const setRankings = useAppStore((s) => s.setRankings);
   const setMapsData = useAppStore((s) => s.setMapsData);
 
   const [loadingPlayers, setLoadingPlayers] = useState(!rankings);
@@ -171,6 +173,13 @@ function MapsPage() {
   const ppFilter = mapsSearch.pp;
   const modFilter = mapsSearch.mod;
   const searchQuery = mapsSearch.q;
+  const countryName = getCountryName(selectedCountry);
+
+  useEffect(() => {
+    setLoadingPlayers(!rankings);
+    setLoadingMaps(!mapsData);
+    setError(null);
+  }, [selectedCountry]);
 
   const updateMapsSearch = (patch: Partial<Required<MapsSearch>>) => {
     navigate({
@@ -203,10 +212,10 @@ function MapsPage() {
     }
 
     setLoadingPlayers(!rankings);
-    getRankings({ data: { type: "performance", page: 1, country: "CR" } })
+    getRankings({ data: { type: "performance", page: 1, country: selectedCountry } })
       .then((r) => {
         if (cancelled) return;
-        setCrRankings(r);
+        setRankings(selectedCountry, r);
       })
       .catch(() => {
         if (cancelled || rankings) return;
@@ -217,7 +226,7 @@ function MapsPage() {
       });
 
     return () => { cancelled = true; };
-  }, [rankings, rankingsFetchedAt, setCrRankings]);
+  }, [rankings, rankingsFetchedAt, selectedCountry, setRankings]);
 
   // Fetch maps data
   useEffect(() => {
@@ -234,7 +243,7 @@ function MapsPage() {
     getCountryMapsData({ data: { users: players } })
       .then((data) => {
         if (cancelled) return;
-        setMapsData(data);
+        setMapsData(selectedCountry, data);
       })
       .catch(() => {
         if (cancelled) return;
@@ -245,7 +254,7 @@ function MapsPage() {
       });
 
     return () => { cancelled = true; };
-  }, [loadingPlayers, error, mapsData, mapsDataFetchedAt, playerIdsKey, players, setMapsData]);
+  }, [loadingPlayers, error, mapsData, mapsDataFetchedAt, playerIdsKey, players, setMapsData, selectedCountry]);
 
   // ── Filtered + sorted: farmed (from best scores) ────────────────────────
   const filteredFarmed = useMemo(() => {
@@ -346,7 +355,7 @@ function MapsPage() {
     <div className="flex-1">
       <PageHeader
         iconSrc="/images/icons/rankings.svg"
-        title="CR mania maps"
+        title={`${countryName} mania maps`}
         right={
           <div className="flex items-center gap-2">
             {isLoading && !error && (
@@ -927,6 +936,7 @@ function MostPlayedCard({ map, onPlayerClick }: { map: MapsAggregatedBeatmap; on
 // ── Favourite card ─────────────────────────────────────────────────────────
 
 function FavouriteCard({ fav, onPlayerClick }: { fav: MapsAggregatedFavourite; onPlayerClick: (u: string) => void }) {
+  const selectedCountry = useAppStore((state) => state.selectedCountry);
   const url = `https://osu.ppy.sh/beatmapsets/${fav.beatmapsetId}`;
 
   return (
@@ -957,7 +967,7 @@ function FavouriteCard({ fav, onPlayerClick }: { fav: MapsAggregatedFavourite; o
         <div className="flex items-center gap-3 mt-1.5">
           <div className="flex items-center gap-1">
             <span className="text-[11px] font-bold text-osu-pink" style={{ fontFamily: "Torus" }}>{fav.playerCount}</span>
-            <span className="text-[8px] text-osu-f1 uppercase">CR favs</span>
+            <span className="text-[8px] text-osu-f1 uppercase">{selectedCountry} favs</span>
           </div>
           <div className="flex items-center gap-1">
             <span className="text-[11px] font-bold text-osu-l2" style={{ fontFamily: "Torus" }}>{formatNumber(fav.globalFavouriteCount)}</span>

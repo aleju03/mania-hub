@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { getHomePageData } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
+import { getCountryName } from "../lib/country";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
 import { getDisplayedAccuracy, getDisplayedRank, getScoreTimeMs, getScoreTimestamp, isDisplayedPassed } from "../lib/score";
 import { Avatar } from "../components/ui/Avatar";
@@ -11,7 +12,7 @@ import { PlayerCardSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse, OsuScore } from "../lib/types";
-import { useAppStore } from "../store";
+import { useAppStore, type CachedHomePopoff } from "../store";
 
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -29,20 +30,25 @@ function getFeaturedPopoffSpanClass(index: number, total: number): string {
   return "";
 }
 
+const EMPTY_SCORES: OsuScore[] = [];
+const EMPTY_POPOFFS: CachedHomePopoff[] = [];
+
 function HomePage() {
   const navigate = useNavigate();
-  const rankings = useAppStore((state) => state.crRankings);
-  const rankingsFetchedAt = useAppStore((state) => state.crRankingsFetchedAt);
-  const recentScores = useAppStore((state) => state.homeRecentScores);
-  const recentScoresFetchedAt = useAppStore((state) => state.homeRecentScoresFetchedAt);
-  const popoffs = useAppStore((state) => state.homePopoffs);
-  const popoffsFetchedAt = useAppStore((state) => state.homePopoffsFetchedAt);
-  const setCrRankings = useAppStore((state) => state.setCrRankings);
+  const selectedCountry = useAppStore((state) => state.selectedCountry);
+  const rankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
+  const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
+  const recentScores = useAppStore((state) => state.homeRecentScoresByCountry[selectedCountry]) ?? EMPTY_SCORES;
+  const recentScoresFetchedAt = useAppStore((state) => state.homeRecentScoresFetchedAtByCountry[selectedCountry]) ?? null;
+  const popoffs = useAppStore((state) => state.homePopoffsByCountry[selectedCountry]) ?? EMPTY_POPOFFS;
+  const popoffsFetchedAt = useAppStore((state) => state.homePopoffsFetchedAtByCountry[selectedCountry]) ?? null;
+  const setRankings = useAppStore((state) => state.setRankings);
   const setHomeRecentScores = useAppStore((state) => state.setHomeRecentScores);
   const setHomePopoffs = useAppStore((state) => state.setHomePopoffs);
   const [rankingsError, setRankingsError] = useState<string | null>(null);
   const [loadingScores, setLoadingScores] = useState(recentScores.length === 0);
   const [loadingPopoffs, setLoadingPopoffs] = useState(popoffs.length === 0);
+  const countryName = getCountryName(selectedCountry);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,17 +70,17 @@ function HomePage() {
     setLoadingScores(shouldRefreshScores && recentScores.length === 0);
     setLoadingPopoffs(shouldRefreshPopoffs && popoffs.length === 0);
 
-    getHomePageData()
+    getHomePageData({ data: { country: selectedCountry } })
       .then((data) => {
         if (cancelled) return;
-        setCrRankings(data.rankings);
-        setHomeRecentScores(data.recentScores);
-        setHomePopoffs(data.popoffs);
+        setRankings(selectedCountry, data.rankings);
+        setHomeRecentScores(selectedCountry, data.recentScores);
+        setHomePopoffs(selectedCountry, data.popoffs);
         setRankingsError(null);
       })
       .catch(() => {
         if (cancelled || rankings) return;
-        setRankingsError("Couldn't load the Costa Rica rankings right now.");
+        setRankingsError(`Couldn't load the ${countryName} rankings right now.`);
       })
       .finally(() => {
         if (cancelled) return;
@@ -93,9 +99,11 @@ function HomePage() {
     rankingsFetchedAt,
     recentScores.length,
     recentScoresFetchedAt,
-    setCrRankings,
+    selectedCountry,
+    setRankings,
     setHomePopoffs,
     setHomeRecentScores,
+    countryName,
   ]);
 
   const topPlayersMobile = rankings?.ranking.slice(0, 5) ?? [];
@@ -119,7 +127,7 @@ function HomePage() {
         <div className="max-w-[1200px] mx-auto text-center">
           <div className="flex items-center justify-center gap-3">
             <span className="mode-icon text-osu-pink text-3xl sm:text-5xl">{"\ue802"}</span>
-            <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight" style={{ fontFamily: "Torus" }}>mania <span className="text-osu-pink">CR</span></h1>
+            <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight" style={{ fontFamily: "Torus" }}>mania <span className="text-osu-pink">{selectedCountry}</span></h1>
           </div>
         </div>
       </section>

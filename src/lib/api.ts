@@ -135,6 +135,81 @@ export async function setPersistentCache(key: string, data: unknown, ttlMs = CAC
   }
 }
 
+// ── Distributed cache lock (prevents thundering herd across serverless instances) ──
+
+const LOCK_WAIT_MS = 300;
+const LOCK_WAIT_RETRIES = 5;
+const DEFAULT_LOCK_TTL = 15_000;
+
+async function acquireCacheLock(key: string, lockTtlMs: number): Promise<boolean> {
+  if (!hasDb() || !db) return true;
+  try {
+    await ensureCacheSchema();
+    const now = Date.now();
+    const results = await db.batch([
+      {
+        sql: "DELETE FROM cache_locks WHERE lock_key = ? AND expires_at <= ?",
+        args: [key, now],
+      },
+      {
+        sql: "INSERT INTO cache_locks (lock_key, expires_at) VALUES (?, ?) ON CONFLICT(lock_key) DO NOTHING",
+        args: [key, now + lockTtlMs],
+      },
+    ]);
+    return (results[1].rowsAffected ?? 0) > 0;
+  } catch (error) {
+    warnCacheIssue("acquire lock", key, error);
+    return true;
+  }
+}
+
+async function releaseCacheLock(key: string): Promise<void> {
+  if (!hasDb() || !db) return;
+  try {
+    await db.execute({
+      sql: "DELETE FROM cache_locks WHERE lock_key = ?",
+      args: [key],
+    });
+  } catch (error) {
+    warnCacheIssue("release lock", key, error);
+  }
+}
+
+export async function fetchWithCacheLock<T>(
+  cacheKey: string,
+  cacheTtlMs: number,
+  fetchFn: () => Promise<T>,
+  lockTtlMs: number = DEFAULT_LOCK_TTL,
+): Promise<T> {
+  const cached = await getPersistentCached<T>(cacheKey);
+  if (cached) return cached;
+
+  const acquired = await acquireCacheLock(cacheKey, lockTtlMs);
+
+  if (acquired) {
+    try {
+      const rechecked = await getPersistentCached<T>(cacheKey);
+      if (rechecked) return rechecked;
+
+      const result = await fetchFn();
+      await setPersistentCache(cacheKey, result, cacheTtlMs);
+      return result;
+    } finally {
+      await releaseCacheLock(cacheKey);
+    }
+  }
+
+  for (let i = 0; i < LOCK_WAIT_RETRIES; i++) {
+    await sleep(LOCK_WAIT_MS);
+    const cached = await getPersistentCached<T>(cacheKey);
+    if (cached) return cached;
+  }
+
+  const result = await fetchFn();
+  await setPersistentCache(cacheKey, result, cacheTtlMs);
+  return result;
+}
+
 async function clearServerCachesInternal(): Promise<void> {
   responseCache.clear();
   warnedCacheIssues.clear();

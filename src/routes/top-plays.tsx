@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getRankings, getUserScoresBestWindow } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
+import { getCountryName } from "../lib/country";
 import { formatNumber, formatAccuracy, formatTimeAgo } from "../lib/format";
 import { calculateApproxPpGainMap, getBeatmapUrl, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModAcronyms, getScoreTimeMs, getScoreTimestamp, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -15,7 +16,7 @@ import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import { Pagination } from "../components/ui/Pagination";
 import type { OsuScore, RankingsResponse } from "../lib/types";
-import { useAppStore } from "../store";
+import { useAppStore, type CachedPopoff } from "../store";
 
 interface PopOff {
   user: { id: number; username: string; avatar_url: string };
@@ -41,13 +42,16 @@ export const Route = createFileRoute("/top-plays")({
   component: PopOffsPage,
 });
 
+const EMPTY_POPOFFS: CachedPopoff[] = [];
+
 function PopOffsPage() {
   const navigate = useNavigate();
-  const rankings = useAppStore((state) => state.crRankings);
-  const rankingsFetchedAt = useAppStore((state) => state.crRankingsFetchedAt);
-  const popoffs = useAppStore((state) => state.popoffs);
-  const popoffsFetchedAt = useAppStore((state) => state.popoffsFetchedAt);
-  const setCrRankings = useAppStore((state) => state.setCrRankings);
+  const selectedCountry = useAppStore((state) => state.selectedCountry);
+  const rankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
+  const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
+  const popoffs = useAppStore((state) => state.popoffsByCountry[selectedCountry]) ?? EMPTY_POPOFFS;
+  const popoffsFetchedAt = useAppStore((state) => state.popoffsFetchedAtByCountry[selectedCountry]) ?? null;
+  const setRankings = useAppStore((state) => state.setRankings);
   const setCachedPopoffs = useAppStore((state) => state.setPopoffs);
   const [playersError, setPlayersError] = useState<string | null>(null);
   const [loadingPlayers, setLoadingPlayers] = useState(!rankings);
@@ -57,6 +61,17 @@ function PopOffsPage() {
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [page, setPage] = useState(0);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const countryName = getCountryName(selectedCountry);
+
+  useEffect(() => {
+    setPlayersError(null);
+    setLoadingPlayers(!rankings);
+    setLoading(popoffs.length === 0);
+    setLoadedCount(0);
+    setPage(0);
+    setExpandedId(null);
+    fetchingRef.current = false;
+  }, [selectedCountry]);
 
   const players = useMemo(() =>
     rankings?.ranking.slice(0, 30).map((entry: RankingsResponse["ranking"][number]) => ({
@@ -80,10 +95,10 @@ function PopOffsPage() {
 
     setLoadingPlayers(!rankings);
 
-    getRankings({ data: { type: "performance", page: 1, country: "CR" } })
+    getRankings({ data: { type: "performance", page: 1, country: selectedCountry } })
       .then((rankings) => {
         if (cancelled) return;
-        setCrRankings(rankings);
+        setRankings(selectedCountry, rankings);
         setPlayersError(null);
       })
       .catch(() => {
@@ -98,7 +113,7 @@ function PopOffsPage() {
     return () => {
       cancelled = true;
     };
-  }, [rankings, rankingsFetchedAt, setCrRankings]);
+  }, [rankings, rankingsFetchedAt, selectedCountry, setRankings]);
 
   // Fetch scores for all players, show results once complete
   const fetchingRef = useRef(false);
@@ -153,10 +168,10 @@ function PopOffsPage() {
       setLoadedCount(Math.min(i + 5, players.length));
     }
 
-    setCachedPopoffs([...all]);
+    setCachedPopoffs(selectedCountry, [...all]);
     setLoading(false);
     fetchingRef.current = false;
-  }, [players, popoffs.length, popoffsFetchedAt, setCachedPopoffs]);
+  }, [players, popoffs.length, popoffsFetchedAt, setCachedPopoffs, selectedCountry]);
 
   useEffect(() => {
     if (loadingPlayers || playersError) return;
@@ -215,7 +230,7 @@ function PopOffsPage() {
     <div className="flex-1">
       <PageHeader
         iconSrc="/images/icons/rankings.svg"
-        title="CR mania top plays"
+        title={`${countryName} mania top plays`}
         right={
           <div className="flex items-center gap-2">
             {(loadingPlayers || loading) && !playersError && (

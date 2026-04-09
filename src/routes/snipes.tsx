@@ -1,16 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "../components/layout/PageHeader";
+import { getCountryName } from "../lib/country";
+import { useAppStore } from "../store";
 
 export const Route = createFileRoute("/snipes")({
   component: SnipesPage,
 });
 
 function SnipesPage() {
+  const selectedCountry = useAppStore((state) => state.selectedCountry);
+  const countryName = getCountryName(selectedCountry);
+
   return (
     <div className="flex-1">
       <PageHeader
         iconSrc="/images/icons/sniper.webp"
-        title="CR mania snipes"
+        title={`${countryName} mania snipes`}
       />
       <div className="bg-osu-b5 flex-1">
         <div className="max-w-[1200px] mx-auto px-5 py-40 text-center">

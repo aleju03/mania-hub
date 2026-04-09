@@ -7,3 +7,8 @@ CREATE TABLE IF NOT EXISTS cache_entries (
 
 CREATE INDEX IF NOT EXISTS idx_cache_entries_expires_at
 ON cache_entries (expires_at);
+
+CREATE TABLE IF NOT EXISTS cache_locks (
+  lock_key TEXT PRIMARY KEY,
+  expires_at INTEGER NOT NULL
+);
