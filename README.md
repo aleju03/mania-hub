@@ -70,8 +70,8 @@ Create a `.env` file with:
 
 | # | Feature | Status |
 |:---:|---|:---:|
-| 8 | Show **mod badges** on recent top plays (home page) | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
-| 9 | Rename "Replay" button to "Watch" + show on mobile | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
+| 8 | Show **mod badges** on recent top plays (home page) | ![done](https://img.shields.io/badge/done-brightgreen?style=flat-square) |
+| 9 | Rename "Replay" button to "Watch" + show on mobile | ![done](https://img.shields.io/badge/done-brightgreen?style=flat-square) |
 
 ---
 
