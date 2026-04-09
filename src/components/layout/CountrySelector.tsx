@@ -50,9 +50,9 @@ export function CountrySelector({ className = "" }: CountrySelectorProps) {
     return () => document.removeEventListener("keydown", handler);
   }, [open]);
 
-  // Focus search when opening
+  // Focus search when opening (skip on touch devices to avoid popping up the keyboard)
   useEffect(() => {
-    if (open) {
+    if (open && !window.matchMedia("(pointer: coarse)").matches) {
       requestAnimationFrame(() => searchRef.current?.focus());
     }
   }, [open]);

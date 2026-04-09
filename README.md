@@ -41,14 +41,14 @@ Create a `.env` file with:
 
 | # | Issue | Status |
 |:---:|---|:---:|
-| 1 | Some plays missing the **+n PP** display on score cards | `done` |
-| 2 | Name color calculation wrong (Randy = blue, BabyIan = pink) | `done` |
-| 3 | Replay: accuracy not accurate at end of play | `todo` |
-| 4 | Replay: changing BG dim resets the play | `done` |
-| 5 | Fix LN position on falling notes in home page background | `todo` |
-| 6 | Rankings page: name colors stay white on client-side navigation unless already cached; only load after full page reload | `done` |
-| 7 | Replay: background disappears and becomes blurred after reloading replay | `todo` |
-| 8 | Replay: fix scroll speed to be accurate | `todo` |
+| 1 | Some plays missing the **+n PP** display on score cards | ![done](https://img.shields.io/badge/done-brightgreen?style=flat-square) |
+| 2 | Name color calculation wrong (Randy = blue, BabyIan = pink) | ![done](https://img.shields.io/badge/done-brightgreen?style=flat-square) |
+| 3 | Replay: accuracy not accurate at end of play | ![todo](https://img.shields.io/badge/todo-red?style=flat-square) |
+| 4 | Replay: changing BG dim resets the play | ![done](https://img.shields.io/badge/done-brightgreen?style=flat-square) |
+| 5 | Fix LN position on falling notes in home page background | ![todo](https://img.shields.io/badge/todo-red?style=flat-square) |
+| 6 | Rankings page: name colors stay white on client-side navigation unless already cached; only load after full page reload | ![done](https://img.shields.io/badge/done-brightgreen?style=flat-square) |
+| 7 | Replay: background disappears and becomes blurred after reloading replay | ![todo](https://img.shields.io/badge/todo-red?style=flat-square) |
+| 8 | Replay: fix scroll speed to be accurate | ![todo](https://img.shields.io/badge/todo-red?style=flat-square) |
 
 ---
 
@@ -58,9 +58,9 @@ Create a `.env` file with:
 
 | # | Step | Status |
 |:---:|---|:---:|
-| 5 | ~~Design background sync strategy~~ Implemented as lazy sync with distributed cache lock (only one serverless instance fetches per cache key, others wait and read cached result) | `done` |
-| 6 | Migrate endpoints to read from DB first | `done` |
-| 7 | Keep live-update loop so data stays fresh for everyone | `done` |
+| 5 | ~~Design background sync strategy~~ Implemented as lazy sync with distributed cache lock (only one serverless instance fetches per cache key, others wait and read cached result) | ![done](https://img.shields.io/badge/done-brightgreen?style=flat-square) |
+| 6 | Migrate endpoints to read from DB first | ![done](https://img.shields.io/badge/done-brightgreen?style=flat-square) |
+| 7 | Keep live-update loop so data stays fresh for everyone | ![done](https://img.shields.io/badge/done-brightgreen?style=flat-square) |
 
 ---
 
@@ -70,8 +70,8 @@ Create a `.env` file with:
 
 | # | Feature | Status |
 |:---:|---|:---:|
-| 8 | Show **mod badges** on recent top plays (home page) | `planned` |
-| 9 | Rename "Replay" button to "Watch" + show on mobile | `planned` |
+| 8 | Show **mod badges** on recent top plays (home page) | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
+| 9 | Rename "Replay" button to "Watch" + show on mobile | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
 
 ---
 
@@ -81,11 +81,11 @@ Create a `.env` file with:
 
 | # | Feature | Status |
 |:---:|---|:---:|
-| 10 | UI/UX overhaul for the replay page | `planned` |
-| 11 | Full responsive mobile support for watching replays | `planned` |
-| 12 | Customizable overlay positions | `planned` |
-| 13 | Persist BG dim preference locally (per play) | `planned` |
-| 14 | Finish custom skin support | `planned` |
+| 10 | UI/UX overhaul for the replay page | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
+| 11 | Full responsive mobile support for watching replays | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
+| 12 | Customizable overlay positions | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
+| 13 | Persist BG dim preference locally (per play) | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
+| 14 | Finish custom skin support | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
 
 ---
 
@@ -95,8 +95,8 @@ Create a `.env` file with:
 
 | # | Feature | Status |
 |:---:|---|:---:|
-| 15 | Show **best peak rank** instead of current global rank | `planned` |
-| 16 | Rethink display of existing osu! stats (country rank, PP, accuracy, play count, play time, 90-day rank history) so the page feels unique | `planned` |
+| 15 | Show **best peak rank** instead of current global rank | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
+| 16 | Rethink display of existing osu! stats (country rank, PP, accuracy, play count, play time, 90-day rank history) so the page feels unique | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
 
 ---
 
@@ -106,7 +106,7 @@ Create a `.env` file with:
 
 | # | Feature | Status |
 |:---:|---|:---:|
-| 17 | Plan out and implement the snipes tracking page | `planned` |
+| 17 | Plan out and implement the snipes tracking page | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
 
 ---
 
@@ -116,8 +116,8 @@ Create a `.env` file with:
 
 | # | Feature | Status |
 |:---:|---|:---:|
-| 18 | Fetch and analyze beatmap files to estimate Dan difficulty | `idea` |
-| 19 | Display estimated Dan level (Gamma mid, Delta low, Alpha high) with logo assets | `idea` |
+| 18 | Fetch and analyze beatmap files to estimate Dan difficulty | ![idea](https://img.shields.io/badge/idea-lightgrey?style=flat-square) |
+| 19 | Display estimated Dan level (Gamma mid, Delta low, Alpha high) with logo assets | ![idea](https://img.shields.io/badge/idea-lightgrey?style=flat-square) |
 
 ---
 
@@ -127,7 +127,7 @@ Create a `.env` file with:
 
 | # | Feature | Status |
 |:---:|---|:---:|
-| 20 | New page with community stats and fun facts | `idea` |
+| 20 | New page with community stats and fun facts | ![idea](https://img.shields.io/badge/idea-lightgrey?style=flat-square) |
 
 ---
 
@@ -137,7 +137,7 @@ Create a `.env` file with:
 
 | # | Feature | Status |
 |:---:|---|:---:|
-| 21 | Shareable replay video links with Discord embed support | `idea` |
+| 21 | Shareable replay video links with Discord embed support | ![idea](https://img.shields.io/badge/idea-lightgrey?style=flat-square) |
 
 ---
 
@@ -147,9 +147,9 @@ Create a `.env` file with:
 
 | # | Feature | Status |
 |:---:|---|:---:|
-| 22 | Country selector in the nav with per-country data caching | `done` |
-| 23 | All data endpoints and pages scoped to chosen country | `done` |
-| 24 | Navbar osu! logo SVG colors dynamically match the selected country's flag | `done` |
+| 22 | Country selector in the nav with per-country data caching | ![done](https://img.shields.io/badge/done-brightgreen?style=flat-square) |
+| 23 | All data endpoints and pages scoped to chosen country | ![done](https://img.shields.io/badge/done-brightgreen?style=flat-square) |
+| 24 | Navbar osu! logo SVG colors dynamically match the selected country's flag | ![done](https://img.shields.io/badge/done-brightgreen?style=flat-square) |
 
 ---
 
@@ -157,4 +157,4 @@ Create a `.env` file with:
 
 | Item | Status |
 |---|:---:|
-| Buy **osumtracker.gg** domain (doesn't block anything, but nice to have before sharing widely) | `todo` |
+| Buy **osumtracker.gg** domain (doesn't block anything, but nice to have before sharing widely) | ![todo](https://img.shields.io/badge/todo-red?style=flat-square) |
