@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { getHomePageData } from "../lib/osu";
+import { getHomePopoffs, getHomeRecentScores, getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
@@ -49,41 +49,37 @@ function HomePage() {
   const [loadingScores, setLoadingScores] = useState(recentScores.length === 0);
   const [loadingPopoffs, setLoadingPopoffs] = useState(popoffs.length === 0);
   const countryName = getCountryName(selectedCountry);
+  const homePreviewPlayers = rankings?.ranking.slice(0, 10).map((entry) => ({
+    id: entry.user.id,
+    username: entry.user.username,
+    avatar_url: entry.user.avatar_url,
+  })) ?? [];
+  const homePreviewUserIds = homePreviewPlayers.map((player) => player.id);
+  const homePreviewPlayerIdsKey = homePreviewUserIds.join(",");
+  const homePreviewPlayersKey = homePreviewPlayers
+    .map((player) => `${player.id}:${player.username}:${player.avatar_url}`)
+    .join("|");
 
   useEffect(() => {
     let cancelled = false;
     const shouldRefreshRankings = !rankings || isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings);
-    const shouldRefreshScores =
-      !recentScoresFetchedAt || isCacheStale(recentScoresFetchedAt, CLIENT_CACHE_TTL.homeRecentScores);
-    const shouldRefreshPopoffs =
-      !popoffsFetchedAt || isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.homePopoffs);
 
-    if (!shouldRefreshRankings && !shouldRefreshScores && !shouldRefreshPopoffs) {
+    if (!shouldRefreshRankings) {
       setRankingsError(null);
-      setLoadingScores(false);
-      setLoadingPopoffs(false);
       return () => {
         cancelled = true;
       };
     }
 
-    setLoadingScores(shouldRefreshScores && recentScores.length === 0);
-    setLoadingPopoffs(shouldRefreshPopoffs && popoffs.length === 0);
-
-    getHomePageData({ data: { country: selectedCountry } })
+    getRankings({ data: { type: "performance", page: 1, country: selectedCountry } })
       .then((data) => {
         if (cancelled) return;
-        setRankings(selectedCountry, data.rankings);
-        setHomeRecentScores(selectedCountry, data.recentScores);
-        setHomePopoffs(selectedCountry, data.popoffs);
+        setRankings(selectedCountry, data);
         setRankingsError(null);
       })
       .catch(() => {
         if (cancelled || rankings) return;
         setRankingsError(`Couldn't load the ${countryName} rankings right now.`);
-      })
-      .finally(() => {
-        if (cancelled) return;
         setLoadingScores(false);
         setLoadingPopoffs(false);
       });
@@ -95,18 +91,111 @@ function HomePage() {
   // The effect only needs to know *whether* data exists and *how stale* it is.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    popoffs.length,
-    popoffsFetchedAt,
     rankings,
     rankingsFetchedAt,
-    recentScores.length,
-    recentScoresFetchedAt,
     selectedCountry,
     countryName,
+    setRankings,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const shouldRefreshScores =
+      !recentScoresFetchedAt || isCacheStale(recentScoresFetchedAt, CLIENT_CACHE_TTL.homeRecentScores);
+
+    if (!shouldRefreshScores) {
+      setLoadingScores(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (homePreviewUserIds.length === 0) {
+      setLoadingScores(recentScores.length === 0 && !rankingsError);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setLoadingScores(recentScores.length === 0);
+
+    getHomeRecentScores({ data: { userIds: homePreviewUserIds } })
+      .then((data) => {
+        if (cancelled) return;
+        setHomeRecentScores(selectedCountry, data);
+      })
+      .catch(() => {
+        if (cancelled) return;
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingScores(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  // Only depend on lengths and timestamps, never on array/object references.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    recentScores.length,
+    recentScoresFetchedAt,
+    homePreviewPlayerIdsKey,
+    rankingsError,
+    selectedCountry,
+    setHomeRecentScores,
+  ]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const shouldRefreshPopoffs =
+      !popoffsFetchedAt || isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.homePopoffs);
+
+    if (!shouldRefreshPopoffs) {
+      setLoadingPopoffs(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (homePreviewPlayers.length === 0) {
+      setLoadingPopoffs(popoffs.length === 0 && !rankingsError);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setLoadingPopoffs(popoffs.length === 0);
+
+    getHomePopoffs({ data: { players: homePreviewPlayers } })
+      .then((data) => {
+        if (cancelled) return;
+        setHomePopoffs(selectedCountry, data);
+      })
+      .catch(() => {
+        if (cancelled) return;
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingPopoffs(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  // Only depend on lengths and timestamps, never on array/object references.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    popoffs.length,
+    popoffsFetchedAt,
+    homePreviewPlayersKey,
+    rankingsError,
+    selectedCountry,
+    setHomePopoffs,
   ]);
 
   const topPlayersMobile = rankings?.ranking.slice(0, 5) ?? [];
-  const topPlayersDesktop = rankings?.ranking.slice(0, 9) ?? [];
+  const topPlayersDesktop = rankings?.ranking.slice(0, 10) ?? [];
   const featuredPopoffs = popoffs.slice(0, 3);
 
   return (

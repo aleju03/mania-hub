@@ -40,6 +40,10 @@ const BEST_SCORES_WINDOW_CACHE_TTL = 2 * 60 * 1000;
 const USER_PROFILE_INSIGHTS_CACHE_TTL = 6 * 60 * 60 * 1000;
 const USER_PROFILE_INSIGHTS_CACHE_VERSION = 2;
 const HOME_PAGE_CACHE_TTL = 60 * 1000;
+const HOME_RECENT_SCORES_CACHE_TTL = 60 * 1000;
+const HOME_POPOFFS_CACHE_TTL = 2 * 60 * 1000;
+const HOME_RECENT_SCORES_PLAYER_COUNT = 10;
+const HOME_POPOFFS_PLAYER_COUNT = 10;
 const USER_CACHE_TTL = 2 * 60 * 1000;
 const USER_SCORE_LIST_CACHE_TTL = 60 * 1000;
 const RANK_HISTORY_CONCURRENCY = 20;
@@ -456,41 +460,65 @@ function buildRecentScoresPreview(scores: OsuScore[], limit = 5): OsuScore[] {
     .slice(0, limit);
 }
 
-async function buildHomePopoffs(rankings: RankingsResponse): Promise<HomePagePopoff[]> {
-  const topPlayersForPopoffs = rankings.ranking.slice(0, 30);
+async function buildHomeRecentScoresPreview(userIds: number[]): Promise<OsuScore[]> {
+  const previewUserIds = userIds.slice(0, HOME_RECENT_SCORES_PLAYER_COUNT);
+  if (previewUserIds.length === 0) return [];
+  const cacheKey = `home-recent-scores:v1:${previewUserIds.join(",")}`;
 
-  const results = await mapWithConcurrency(
-    topPlayersForPopoffs,
-    APPROX_PP_GAINS_CONCURRENCY,
-    async (entry) => {
-      try {
-        const scores = await fetchUserBestScoresWindow(entry.user.id, 100);
-        return scores
-          .filter((score) => {
-            const age = Date.now() - getTimestampMs(score);
-            return age < 7 * 24 * 60 * 60 * 1000 && score.pp != null && score.pp > 0;
-          })
-          .map((score) => ({
-            user: {
-              username: entry.user.username,
-              avatar_url: entry.user.avatar_url,
-            },
-            score,
-          }));
-      } catch {
-        return [] as HomePagePopoff[];
-      }
-    },
+  return fetchWithCacheLock(cacheKey, HOME_RECENT_SCORES_CACHE_TTL, async () =>
+    fetchCountryRecentScores(previewUserIds, {
+      batchSize: previewUserIds.length,
+      batchIndex: 0,
+      recentLimit: 20,
+    }).then((scores) => buildRecentScoresPreview(scores, 5)),
   );
+}
 
-  return results
-    .flatMap((scores) => scores)
-    .sort((a, b) => {
-      const ppDiff = (b.score.pp ?? 0) - (a.score.pp ?? 0);
-      if (ppDiff !== 0) return ppDiff;
-      return getTimestampMs(b.score) - getTimestampMs(a.score);
-    })
-    .slice(0, 5);
+type HomePreviewPlayer = {
+  id: number;
+  username: string;
+  avatar_url: string;
+};
+
+async function buildHomePopoffs(players: HomePreviewPlayer[]): Promise<HomePagePopoff[]> {
+  const topPlayersForPopoffs = players.slice(0, HOME_POPOFFS_PLAYER_COUNT);
+  if (topPlayersForPopoffs.length === 0) return [];
+  const cacheKey = `home-popoffs:v1:${topPlayersForPopoffs.map((player) => player.id).join(",")}`;
+
+  return fetchWithCacheLock(cacheKey, HOME_POPOFFS_CACHE_TTL, async () => {
+    const results = await mapWithConcurrency(
+      topPlayersForPopoffs,
+      APPROX_PP_GAINS_CONCURRENCY,
+      async (player) => {
+        try {
+          const scores = await fetchUserBestScoresWindow(player.id, 100);
+          return scores
+            .filter((score) => {
+              const age = Date.now() - getTimestampMs(score);
+              return age < 7 * 24 * 60 * 60 * 1000 && score.pp != null && score.pp > 0;
+            })
+            .map((score) => ({
+              user: {
+                username: player.username,
+                avatar_url: player.avatar_url,
+              },
+              score,
+            }));
+        } catch {
+          return [] as HomePagePopoff[];
+        }
+      },
+    );
+
+    return results
+      .flatMap((scores) => scores)
+      .sort((a, b) => {
+        const ppDiff = (b.score.pp ?? 0) - (a.score.pp ?? 0);
+        if (ppDiff !== 0) return ppDiff;
+        return getTimestampMs(b.score) - getTimestampMs(a.score);
+      })
+      .slice(0, 5);
+  });
 }
 
 export const getHomePageData = createServerFn({ method: "GET" })
@@ -501,15 +529,31 @@ export const getHomePageData = createServerFn({ method: "GET" })
     return fetchWithCacheLock(cacheKey, HOME_PAGE_CACHE_TTL, async () => {
       const rankings = await getRankings({ data: { type: "performance", page: 1, country } });
       const userIds = rankings.ranking.map((entry) => entry.user.id);
+      const players = rankings.ranking.map((entry) => ({
+        id: entry.user.id,
+        username: entry.user.username,
+        avatar_url: entry.user.avatar_url,
+      }));
 
       const [recentScores, popoffs] = await Promise.all([
-        fetchCountryRecentScores(userIds, { batchSize: 10, batchIndex: 0, recentLimit: 20 })
-          .then((scores) => buildRecentScoresPreview(scores, 5)),
-        buildHomePopoffs(rankings),
+        buildHomeRecentScoresPreview(userIds),
+        buildHomePopoffs(players),
       ]);
 
       return { rankings, recentScores, popoffs } satisfies HomePageData;
     }, 30_000);
+  });
+
+export const getHomeRecentScores = createServerFn({ method: "GET" })
+  .inputValidator((data: { userIds: number[] }) => data)
+  .handler(async ({ data }: { data: { userIds: number[] } }) => {
+    return buildHomeRecentScoresPreview(data.userIds);
+  });
+
+export const getHomePopoffs = createServerFn({ method: "GET" })
+  .inputValidator((data: { players: HomePreviewPlayer[] }) => data)
+  .handler(async ({ data }: { data: { players: HomePreviewPlayer[] } }) => {
+    return buildHomePopoffs(data.players);
   });
 
 // ── Batch user rank history ────────────────────────────────────────────────

@@ -137,40 +137,45 @@ function PopOffsPage() {
     setLoadedCount(0);
     setPage(0);
 
-    const all: PopOff[] = [];
+    try {
+      const all: PopOff[] = [];
 
-    for (let i = 0; i < players.length; i += 5) {
-      const batch = players.slice(i, i + 5);
-      const results = await Promise.allSettled(
-        batch.map(async (player: { id: number; username: string; avatar_url: string }) => {
-          const scores = await getUserScoresBestWindow({ data: { userId: player.id, totalLimit: 200 } });
-          const gainMap = calculateApproxPpGainMap(scores);
-          return scores
-            .filter((s: OsuScore) => {
-              const age = Date.now() - getScoreTimeMs(s);
-              return age < RANGE_MS["30d"] && s.pp && s.pp > 0;
-            })
-            .map((s: OsuScore) => ({
-              user: player,
-              score: s,
-              pp: s.pp ?? 0,
-              weightedPP: s.weight?.pp ?? 0,
-              ppGain: gainMap[s.id] ?? 0,
-              time: getScoreTimestamp(s),
-            }));
-        })
-      );
+      for (let i = 0; i < players.length; i += 5) {
+        const batch = players.slice(i, i + 5);
+        const results = await Promise.allSettled(
+          batch.map(async (player: { id: number; username: string; avatar_url: string }) => {
+            const scores = await getUserScoresBestWindow({ data: { userId: player.id, totalLimit: 200 } });
+            const gainMap = calculateApproxPpGainMap(scores);
+            return scores
+              .filter((s: OsuScore) => {
+                const age = Date.now() - getScoreTimeMs(s);
+                return age < RANGE_MS["30d"] && s.pp && s.pp > 0;
+              })
+              .map((s: OsuScore) => ({
+                user: player,
+                score: s,
+                pp: s.pp ?? 0,
+                weightedPP: s.weight?.pp ?? 0,
+                ppGain: gainMap[s.id] ?? 0,
+                time: getScoreTimestamp(s),
+              }));
+          })
+        );
 
-      for (const r of results) {
-        if (r.status === "fulfilled") all.push(...r.value);
+        for (const r of results) {
+          if (r.status === "fulfilled") all.push(...r.value);
+        }
+
+        setLoadedCount(Math.min(i + 5, players.length));
       }
 
-      setLoadedCount(Math.min(i + 5, players.length));
+      setCachedPopoffs(selectedCountry, [...all]);
+    } catch (error) {
+      console.warn("Failed to cache top plays:", error);
+    } finally {
+      setLoading(false);
+      fetchingRef.current = false;
     }
-
-    setCachedPopoffs(selectedCountry, [...all]);
-    setLoading(false);
-    fetchingRef.current = false;
   }, [players, popoffs.length, popoffsFetchedAt, setCachedPopoffs, selectedCountry]);
 
   useEffect(() => {
