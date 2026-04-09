@@ -8,7 +8,7 @@ import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/fo
 import { getDisplayedAccuracy, getDisplayedRank, getScoreTimeMs, getScoreTimestamp, isDisplayedPassed } from "../lib/score";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
-import { PlayerCardSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
+import { RankingRowSkeleton, ScoreRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse, OsuScore } from "../lib/types";
@@ -23,6 +23,10 @@ function isPassedScore(score: OsuScore) {
 }
 
 function getFeaturedPopoffSpanClass(index: number, total: number): string {
+  if (total === 1) {
+    return "md:col-span-2 xl:col-span-3";
+  }
+
   if (total === 3 && index === 2) {
     return "md:col-span-2 xl:col-span-1";
   }
@@ -30,8 +34,23 @@ function getFeaturedPopoffSpanClass(index: number, total: number): string {
   return "";
 }
 
+function getFeaturedPopoffGridClass(total: number): string {
+  if (total === 1) {
+    return "grid grid-cols-1 gap-px bg-osu-b3/15";
+  }
+
+  if (total === 2) {
+    return "grid grid-cols-1 md:grid-cols-2 gap-px bg-osu-b3/15";
+  }
+
+  return "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-px bg-osu-b3/15";
+}
+
 const EMPTY_SCORES: OsuScore[] = [];
 const EMPTY_POPOFFS: CachedHomePopoff[] = [];
+const HOME_RANKING_SKELETON_MOBILE_COUNT = 5;
+const HOME_RANKING_SKELETON_DESKTOP_COUNT = 10;
+const HOME_RECENT_SCORES_SKELETON_COUNT = 2;
 
 function HomePage() {
   const navigate = useNavigate();
@@ -266,11 +285,18 @@ function HomePage() {
                 </div>
               </>
             ) : (
-              Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="px-3 py-1">
-                  <PlayerCardSkeleton />
+              <>
+                <div className="lg:hidden">
+                  {Array.from({ length: HOME_RANKING_SKELETON_MOBILE_COUNT }).map((_, i) => (
+                    <RankingRowSkeleton key={i} />
+                  ))}
                 </div>
-              ))
+                <div className="hidden lg:block">
+                  {Array.from({ length: HOME_RANKING_SKELETON_DESKTOP_COUNT }).map((_, i) => (
+                    <RankingRowSkeleton key={i} />
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </section>
@@ -296,7 +322,7 @@ function HomePage() {
               ))}
             </div>
           ) : featuredPopoffs.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-px bg-osu-b3/15">
+            <div className={getFeaturedPopoffGridClass(featuredPopoffs.length)}>
               {featuredPopoffs.map((p, i) => (
                 <motion.div
                   key={p.score.id}
@@ -342,12 +368,9 @@ function HomePage() {
           </div>
           <div className="divide-y divide-osu-b3/15">
             {loadingScores ? (
-              Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3 px-4 py-2.5">
-                  <Skeleton className="w-6 h-6 rounded" />
-                  <Skeleton className="w-7 h-7 rounded-full" />
-                  <div className="flex-1 space-y-1"><Skeleton className="h-3.5 w-32" /><Skeleton className="h-2.5 w-48" /></div>
-                  <Skeleton className="h-3.5 w-12" />
+              Array.from({ length: HOME_RECENT_SCORES_SKELETON_COUNT }).map((_, i) => (
+                <div key={i} className="px-4 py-2">
+                  <ScoreRowSkeleton />
                 </div>
               ))
             ) : recentScores.length > 0 ? (
