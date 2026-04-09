@@ -56,6 +56,7 @@ const JUDGMENT_WEIGHTS: Record<number, number> = {
   1: 6, 2: 6, 3: 4, 4: 2, 5: 1, 6: 0,
 };
 const HOLD_VISUAL_GRACE_MS = 60;
+const BACKGROUND_FADE_DURATION_MS = 180;
 
 interface RendererOptions {
   backgroundImage?: HTMLImageElement;
@@ -63,6 +64,7 @@ interface RendererOptions {
   od?: number;
   showInputOverlay?: boolean;
   mods?: string[]; // mod acronyms, e.g. ["DT", "MR"]
+  transparentBackground?: boolean;
 }
 
 interface Layout {
@@ -106,9 +108,12 @@ export class ManiaReplayRenderer {
 
   // Background
   private backgroundImage: HTMLImageElement | null = null;
+  private previousBackgroundImage: HTMLImageElement | null = null;
   private backgroundDim = 80;
+  private backgroundTransitionStartedAt = 0;
   private od = 8;
   private showInputOverlay = false;
+  private transparentBackground = false;
   private skin: ManiaSkin | null = null;
   private cssWidth = 0;
   private cssHeight = 0;
@@ -157,6 +162,7 @@ export class ManiaReplayRenderer {
     this.backgroundDim = options?.backgroundDim ?? 80;
     this.od = options?.od ?? 8;
     this.showInputOverlay = options?.showInputOverlay ?? false;
+    this.transparentBackground = options?.transparentBackground ?? false;
     this.receptorFlashTimestamps = new Array(keyCount).fill(0);
 
     const frameDuration = frames.length > 0 ? frames[frames.length - 1].time : 0;
@@ -460,8 +466,12 @@ export class ManiaReplayRenderer {
     if (!this._isPlaying) this.render();
   }
 
-  setBackgroundImage(img: HTMLImageElement) {
+  setBackgroundImage(img: HTMLImageElement | null) {
+    if (img === this.backgroundImage) return;
+    const shouldFade = this.backgroundImage && img;
+    this.previousBackgroundImage = shouldFade ? this.backgroundImage : null;
     this.backgroundImage = img;
+    this.backgroundTransitionStartedAt = shouldFade ? performance.now() : 0;
     if (!this._isPlaying) this.render();
   }
 
@@ -519,10 +529,16 @@ export class ManiaReplayRenderer {
   }
 
   private renderBackground(ctx: CanvasRenderingContext2D, layout: Layout) {
-    const { w, h } = layout;
+    if (this.transparentBackground) return;
 
-    if (this.backgroundImage) {
-      const imgAspect = this.backgroundImage.width / this.backgroundImage.height;
+    const { w, h } = layout;
+    const transitionProgress = this.backgroundTransitionStartedAt > 0
+      ? Math.min(1, (performance.now() - this.backgroundTransitionStartedAt) / BACKGROUND_FADE_DURATION_MS)
+      : 1;
+
+    const drawBackgroundImage = (image: HTMLImageElement, alpha = 1) => {
+      if (image.width <= 0 || image.height <= 0) return;
+      const imgAspect = image.width / image.height;
       const canvasAspect = w / h;
       let dw: number, dh: number, dx: number, dy: number;
 
@@ -534,16 +550,47 @@ export class ManiaReplayRenderer {
         dx = 0; dy = (h - dh) / 2;
       }
 
-      ctx.drawImage(this.backgroundImage, dx, dy, dw, dh);
-      ctx.fillStyle = `rgba(0, 0, 0, ${this.backgroundDim / 100})`;
-      ctx.fillRect(0, 0, w, h);
-    } else {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.drawImage(image, dx, dy, dw, dh);
+      ctx.restore();
+    };
+
+    const drawFallback = () => {
       const grad = ctx.createLinearGradient(0, 0, 0, h);
       grad.addColorStop(0, "#0a0a18");
       grad.addColorStop(0.5, "#1a1016");
       grad.addColorStop(1, "#0c0c14");
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
+    };
+
+    if (this.previousBackgroundImage && transitionProgress < 1) {
+      drawBackgroundImage(this.previousBackgroundImage, 1);
+      if (this.backgroundImage) {
+        drawBackgroundImage(this.backgroundImage, transitionProgress);
+      }
+    } else if (this.backgroundImage) {
+      if (transitionProgress < 1) {
+        drawFallback();
+        drawBackgroundImage(this.backgroundImage, transitionProgress);
+      } else {
+        drawBackgroundImage(this.backgroundImage, 1);
+      }
+    } else {
+      drawFallback();
+    }
+
+    ctx.fillStyle = `rgba(0, 0, 0, ${this.backgroundDim / 100})`;
+    ctx.fillRect(0, 0, w, h);
+
+    if (transitionProgress >= 1) {
+      this.previousBackgroundImage = null;
+      this.backgroundTransitionStartedAt = 0;
+    } else if (!this._isPlaying) {
+      requestAnimationFrame(() => {
+        if (!this._isPlaying) this.render();
+      });
     }
   }
 
@@ -1175,5 +1222,9 @@ export class ManiaReplayRenderer {
     return `rgba(${r},${g},${b},${alpha})`;
   }
 
-  destroy() { this.pause(); }
+  destroy() {
+    this.pause();
+    this.previousBackgroundImage = null;
+    this.backgroundTransitionStartedAt = 0;
+  }
 }

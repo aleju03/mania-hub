@@ -234,11 +234,11 @@ function ReplayPage() {
         getUserScoresPinned({ data: { userId, limit: 50 } }).catch(() => [] as OsuScore[]),
       ]);
       const filterReplayable = (scores: OsuScore[]) => scores.filter((s) => scoreHasReplay(s));
-      const bestFiltered = filterReplayable(best);
+      const pinnedFiltered = filterReplayable(pinned);
+      const pinnedIds = new Set(pinnedFiltered.map((s) => s.id));
+      const bestFiltered = filterReplayable(best).filter((s) => !pinnedIds.has(s.id));
       const bestIds = new Set(bestFiltered.map((s) => s.id));
-      const firstsFiltered = filterReplayable(firsts).filter((s) => !bestIds.has(s.id));
-      const firstsIds = new Set([...bestIds, ...firstsFiltered.map((s) => s.id)]);
-      const pinnedFiltered = filterReplayable(pinned).filter((s) => !firstsIds.has(s.id));
+      const firstsFiltered = filterReplayable(firsts).filter((s) => !pinnedIds.has(s.id) && !bestIds.has(s.id));
       setPlayerScoreGroups({ best: bestFiltered, firsts: firstsFiltered, pinned: pinnedFiltered });
     } catch { setPlayerScoreGroups({ best: [], firsts: [], pinned: [] }); }
     finally { setLoadingScores(false); }
@@ -683,7 +683,7 @@ function ReplayViewer({
     return stored == null ? false : stored === "true";
   });
   const [audioError, setAudioError] = useState<string | null>(null);
-  const [bgImage, setBgImage] = useState<HTMLImageElement | null>(null);
+  const [bgSrc, setBgSrc] = useState<string | null>(null);
   const [skin, setSkin] = useState<ManiaSkin | null>(null);
   const [skinLoading, setSkinLoading] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -713,47 +713,36 @@ function ReplayViewer({
   // Prefer the map's real background from the beatmap archive, then fall back to the set cover.
   useEffect(() => {
     let cancelled = false;
-    const candidates = [beatmapBackgroundUrl, coverUrl].filter(Boolean) as string[];
 
-    setBgImage(null);
+    if (!beatmapBackgroundUrl && !coverUrl) {
+      setBgSrc(null);
+      return () => {
+        cancelled = true;
+      };
+    }
 
-    if (candidates.length === 0) return () => {
-      cancelled = true;
-    };
-
-    const tryLoad = (index: number) => {
-      if (cancelled || index >= candidates.length) return;
-
+    if (coverUrl) {
       const img = new Image();
       img.decoding = "async";
       img.onload = () => {
-        if (!cancelled) setBgImage(img);
+        if (!cancelled) setBgSrc((current) => current ?? coverUrl);
       };
-      img.onerror = () => {
-        tryLoad(index + 1);
-      };
-      img.src = candidates[index];
-    };
+      img.src = coverUrl;
+    }
 
-    tryLoad(0);
+    if (beatmapBackgroundUrl) {
+      const img = new Image();
+      img.decoding = "async";
+      img.onload = () => {
+        if (!cancelled) setBgSrc(beatmapBackgroundUrl);
+      };
+      img.src = beatmapBackgroundUrl;
+    }
 
     return () => {
       cancelled = true;
     };
   }, [beatmapBackgroundUrl, coverUrl]);
-
-  // Pass background image to renderer when it loads
-  useEffect(() => {
-    if (rendererRef.current) {
-      rendererRef.current.setBackgroundImage(bgImage);
-    }
-  }, [bgImage]);
-
-  useEffect(() => {
-    if (rendererRef.current) {
-      rendererRef.current.setBackgroundDim(bgDim);
-    }
-  }, [bgDim]);
 
   useEffect(() => {
     setAudioError(null);
@@ -808,11 +797,10 @@ function ReplayViewer({
         replay.keyCount,
         beatmap?.notes ?? [],
         {
-          backgroundImage: bgImage ?? undefined,
-          backgroundDim: bgDim,
           od: beatmap?.od,
           showInputOverlay,
           mods: modAcronyms,
+          transparentBackground: true,
         },
       ) as ReplayRendererLike;
 
@@ -1046,8 +1034,24 @@ function ReplayViewer({
   return (
     <div className="space-y-3">
       {/* Canvas */}
-      <div className="rounded-xl overflow-hidden border border-osu-b3/20 bg-[#0a0a18]">
-        <canvas ref={canvasRef} className="w-full" style={{ height: "min(70vh, 600px)" }} />
+      <div className="relative rounded-xl overflow-hidden border border-osu-b3/20 bg-[#0a0a18]">
+        {bgSrc ? (
+          <img
+            src={bgSrc}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover pointer-events-none select-none"
+          />
+        ) : (
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: "linear-gradient(180deg, #0a0a18 0%, #1a1016 50%, #0c0c14 100%)" }}
+          />
+        )}
+        <div
+          className="absolute inset-0 pointer-events-none bg-black transition-opacity"
+          style={{ opacity: bgDim / 100 }}
+        />
+        <canvas ref={canvasRef} className="relative z-10 w-full" style={{ height: "min(70vh, 600px)" }} />
       </div>
 
       {/* Audio element (hidden) — full song from Sayobot CDN */}

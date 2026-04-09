@@ -1,5 +1,5 @@
-import JSZip from "jszip";
 import { createFileRoute } from "@tanstack/react-router";
+import { extractBeatmapArchiveFile } from "#/lib/beatmap-archive";
 
 const AUDIO_CACHE_TTL = 15 * 60 * 1000;
 const AUDIO_CACHE_MAX_ENTRIES = 12;
@@ -76,20 +76,7 @@ async function extractAudioFromArchive(beatmapsetId: string, filename: string): 
   }
 
   const request = (async () => {
-    const archiveUrl = `https://catboy.best/d/${encodeURIComponent(beatmapsetId)}`;
-    const archiveResponse = await fetch(archiveUrl);
-    if (!archiveResponse.ok) {
-      throw new Error(`Archive fetch failed (${archiveResponse.status})`);
-    }
-
-    const archiveBuffer = await archiveResponse.arrayBuffer();
-    const zip = await JSZip.loadAsync(archiveBuffer);
-    const file = zip.file(filename);
-    if (!file) {
-      throw new Error(`Audio file "${filename}" not found in archive`);
-    }
-
-    const extracted = Buffer.from(await file.async("arraybuffer"));
+    const extracted = await extractBeatmapArchiveFile(beatmapsetId, filename);
     return { buffer: extracted, mimeType: getMimeType(filename) };
   })();
 
