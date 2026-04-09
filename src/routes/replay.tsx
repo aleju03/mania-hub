@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, searchUsers, searchBeatmaps, getBeatmapScores } from "../lib/osu";
+import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, searchUsers, searchBeatmaps, getBeatmapScores, getRankings } from "../lib/osu";
 import { parseManiaBeatmap } from "../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
 import { getDisplayedAccuracy, getDisplayedRank, scoreHasReplay } from "../lib/score";
@@ -10,6 +10,8 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { SearchInput } from "../components/ui/SearchInput";
 import { GradeImg } from "../components/ui/GradeImg";
 import { formatAccuracy, formatPP } from "../lib/format";
+import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
+import { getCountryName } from "../lib/country";
 import type { ManiaSkin } from "../lib/skin-parser";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import type { OsuScore, OsuBeatmapset, OsuBeatmap, ReplayFrame } from "../lib/types";
@@ -126,6 +128,9 @@ function ReplayPage() {
   const { scoreId, beatmapsetId, t: initialTime, tab, player: playerParam } = Route.useSearch();
   const navigate = useNavigate();
   const selectedCountry = useAppStore((s) => s.selectedCountry);
+  const cachedRankings = useAppStore((s) => s.rankingsByCountry[selectedCountry] ?? null);
+  const rankingsFetchedAt = useAppStore((s) => s.rankingsFetchedAtByCountry[selectedCountry] ?? null);
+  const setRankings = useAppStore((s) => s.setRankings);
   const [replay, setReplay] = useState<ServerReplay | null>(null);
   const [beatmap, setBeatmap] = useState<ManiaBeatmap | null>(null);
   const [scoreInfo, setScoreInfo] = useState<OsuScore | null>(null);
@@ -243,6 +248,34 @@ function ReplayPage() {
     navigate({ to: "/replay", search: { player: user.username }, replace: true });
     loadPlayerScores(user.id);
   };
+
+  // Fetch country rankings to power the player suggestions grid (cached in store).
+  useEffect(() => {
+    if (browseMode !== "player") return;
+    const stale = !cachedRankings || isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings);
+    if (!stale) return;
+    let cancelled = false;
+    getRankings({ data: { type: "performance", page: 1, country: selectedCountry } })
+      .then((data) => {
+        if (cancelled) return;
+        setRankings(selectedCountry, data);
+      })
+      .catch(() => { /* suggestions are non-critical */ });
+    return () => { cancelled = true; };
+  }, [browseMode, cachedRankings, rankingsFetchedAt, selectedCountry, setRankings]);
+
+  const suggestionPlayers = useMemo(
+    () => (cachedRankings?.ranking ?? [])
+      .filter((entry) => entry.user.is_active !== false)
+      .slice(0, 12)
+      .map((entry) => ({
+        id: entry.user.id,
+        username: entry.user.username,
+        avatar_url: entry.user.avatar_url,
+        global_rank: entry.global_rank,
+      })),
+    [cachedRankings],
+  );
 
   // Auto-load player scores when arriving via URL with ?player=
   useEffect(() => {
@@ -398,9 +431,35 @@ function ReplayPage() {
                     )}
 
                     {!loadingScores && !playerScoreGroups && !error && (
-                      <div className="text-center py-12 text-osu-f1 text-sm">
-                        Search for a player above to browse their available replays
-                      </div>
+                      suggestionPlayers.length > 0 ? (
+                        <div>
+                          <h4 className="text-xs font-semibold text-osu-f1 uppercase tracking-wider mb-3 text-center">
+                            Top {getCountryName(selectedCountry)} Players
+                          </h4>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                            {suggestionPlayers.map((p, i) => (
+                              <motion.button
+                                key={p.id}
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: i * 0.02 }}
+                                onClick={() => handleSelectPlayer(p)}
+                                className="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20 text-left"
+                              >
+                                <img src={p.avatar_url} alt="" className="w-9 h-9 rounded-full flex-shrink-0 object-cover" loading="lazy" />
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm text-white truncate">{p.username}</div>
+                                  <div className="text-[10px] text-osu-f1">#{p.global_rank.toLocaleString()}</div>
+                                </div>
+                              </motion.button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-center py-12 text-osu-f1 text-sm">
+                          Search for a player above to browse their available replays
+                        </div>
+                      )
                     )}
                   </>
                 )}
@@ -646,19 +705,46 @@ function ReplayViewer({
   const audioUrl = effectiveBeatmapsetId && beatmap?.audioFilename
     ? `/api/audio?beatmapsetId=${encodeURIComponent(String(effectiveBeatmapsetId))}&filename=${encodeURIComponent(beatmap.audioFilename)}`
     : null;
+  const coverUrl = scoreInfo?.beatmapset?.covers?.["cover@2x"] || scoreInfo?.beatmapset?.covers?.cover || null;
+  const beatmapBackgroundUrl = effectiveBeatmapsetId && beatmap?.backgroundFilename
+    ? `/api/background?beatmapsetId=${encodeURIComponent(String(effectiveBeatmapsetId))}&filename=${encodeURIComponent(beatmap.backgroundFilename)}`
+    : null;
 
-  // Load background image from beatmapset cover
+  // Prefer the map's real background from the beatmap archive, then fall back to the set cover.
   useEffect(() => {
-    const coverUrl = scoreInfo?.beatmapset?.covers?.["cover@2x"] || scoreInfo?.beatmapset?.covers?.cover;
-    if (!coverUrl) return;
-    const img = new Image();
-    img.onload = () => setBgImage(img);
-    img.src = coverUrl;
-  }, [scoreInfo]);
+    let cancelled = false;
+    const candidates = [beatmapBackgroundUrl, coverUrl].filter(Boolean) as string[];
+
+    setBgImage(null);
+
+    if (candidates.length === 0) return () => {
+      cancelled = true;
+    };
+
+    const tryLoad = (index: number) => {
+      if (cancelled || index >= candidates.length) return;
+
+      const img = new Image();
+      img.decoding = "async";
+      img.onload = () => {
+        if (!cancelled) setBgImage(img);
+      };
+      img.onerror = () => {
+        tryLoad(index + 1);
+      };
+      img.src = candidates[index];
+    };
+
+    tryLoad(0);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [beatmapBackgroundUrl, coverUrl]);
 
   // Pass background image to renderer when it loads
   useEffect(() => {
-    if (bgImage && rendererRef.current) {
+    if (rendererRef.current) {
       rendererRef.current.setBackgroundImage(bgImage);
     }
   }, [bgImage]);
