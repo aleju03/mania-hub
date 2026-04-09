@@ -17,6 +17,7 @@ import { Route as RankingsRouteImport } from './routes/rankings'
 import { Route as MapsRouteImport } from './routes/maps'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
+import { Route as ApiBackgroundRouteImport } from './routes/api/background'
 import { Route as ApiAudioRouteImport } from './routes/api/audio'
 
 const TrackerRoute = TrackerRouteImport.update({
@@ -59,6 +60,11 @@ const PlayerUsernameRoute = PlayerUsernameRouteImport.update({
   path: '/player/$username',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiBackgroundRoute = ApiBackgroundRouteImport.update({
+  id: '/api/background',
+  path: '/api/background',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAudioRoute = ApiAudioRouteImport.update({
   id: '/api/audio',
   path: '/api/audio',
@@ -74,6 +80,7 @@ export interface FileRoutesByFullPath {
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/api/audio': typeof ApiAudioRoute
+  '/api/background': typeof ApiBackgroundRoute
   '/player/$username': typeof PlayerUsernameRoute
 }
 export interface FileRoutesByTo {
@@ -85,6 +92,7 @@ export interface FileRoutesByTo {
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/api/audio': typeof ApiAudioRoute
+  '/api/background': typeof ApiBackgroundRoute
   '/player/$username': typeof PlayerUsernameRoute
 }
 export interface FileRoutesById {
@@ -97,6 +105,7 @@ export interface FileRoutesById {
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/api/audio': typeof ApiAudioRoute
+  '/api/background': typeof ApiBackgroundRoute
   '/player/$username': typeof PlayerUsernameRoute
 }
 export interface FileRouteTypes {
@@ -110,6 +119,7 @@ export interface FileRouteTypes {
     | '/top-plays'
     | '/tracker'
     | '/api/audio'
+    | '/api/background'
     | '/player/$username'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -121,6 +131,7 @@ export interface FileRouteTypes {
     | '/top-plays'
     | '/tracker'
     | '/api/audio'
+    | '/api/background'
     | '/player/$username'
   id:
     | '__root__'
@@ -132,6 +143,7 @@ export interface FileRouteTypes {
     | '/top-plays'
     | '/tracker'
     | '/api/audio'
+    | '/api/background'
     | '/player/$username'
   fileRoutesById: FileRoutesById
 }
@@ -144,6 +156,7 @@ export interface RootRouteChildren {
   TopPlaysRoute: typeof TopPlaysRoute
   TrackerRoute: typeof TrackerRoute
   ApiAudioRoute: typeof ApiAudioRoute
+  ApiBackgroundRoute: typeof ApiBackgroundRoute
   PlayerUsernameRoute: typeof PlayerUsernameRoute
 }
 
@@ -205,6 +218,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlayerUsernameRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/background': {
+      id: '/api/background'
+      path: '/api/background'
+      fullPath: '/api/background'
+      preLoaderRoute: typeof ApiBackgroundRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/audio': {
       id: '/api/audio'
       path: '/api/audio'
@@ -224,6 +244,7 @@ const rootRouteChildren: RootRouteChildren = {
   TopPlaysRoute: TopPlaysRoute,
   TrackerRoute: TrackerRoute,
   ApiAudioRoute: ApiAudioRoute,
+  ApiBackgroundRoute: ApiBackgroundRoute,
   PlayerUsernameRoute: PlayerUsernameRoute,
 }
 export const routeTree = rootRouteImport
