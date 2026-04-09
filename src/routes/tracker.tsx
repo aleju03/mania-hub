@@ -86,7 +86,9 @@ function ScoresPage() {
 
   useEffect(() => {
     let cancelled = false;
-    const cachedIds = rankings?.ranking.map((entry: { user: { id: number } }) => entry.user.id) ?? trackedUserIds;
+    const cachedIds = rankings?.ranking
+      .filter((entry: { user: { is_active?: boolean } }) => entry.user.is_active !== false)
+      .map((entry: { user: { id: number } }) => entry.user.id) ?? trackedUserIds;
 
     if (cachedIds.length > 0) {
       setUserIds(cachedIds);
@@ -108,7 +110,9 @@ function ScoresPage() {
       .then((rankings) => {
         if (cancelled) return;
 
-        const ids = rankings.ranking.map((entry: { user: { id: number } }) => entry.user.id);
+        const ids = rankings.ranking
+          .filter((entry: { user: { is_active?: boolean } }) => entry.user.is_active !== false)
+          .map((entry: { user: { id: number } }) => entry.user.id);
         setRankings(selectedCountry, rankings);
         setUserIds(ids);
         setTrackedUserIds(selectedCountry, ids);
