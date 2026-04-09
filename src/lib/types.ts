@@ -57,6 +57,7 @@ export interface OsuUser {
   country: OsuCountry;
   join_date: string;
   last_visit: string | null;
+  is_active?: boolean;
   is_online: boolean;
   is_supporter: boolean;
   statistics: OsuUserStatistics;
