@@ -56,9 +56,9 @@ Create a `.env` file with:
 
 | # | Step | Status |
 |:---:|---|:---:|
-| 5 | Design background sync strategy (server polls API, writes to Turso) | `planned` |
-| 6 | Migrate endpoints to read from DB first | `planned` |
-| 7 | Keep live-update loop so data stays fresh for everyone | `planned` |
+| 5 | ~~Design background sync strategy~~ Implemented as lazy sync with distributed cache lock (only one serverless instance fetches per cache key, others wait and read cached result) | `done` |
+| 6 | Migrate endpoints to read from DB first | `done` |
+| 7 | Keep live-update loop so data stays fresh for everyone | `done` |
 
 ---
 
@@ -143,11 +143,11 @@ Create a `.env` file with:
 
 *Last because it touches everything. All features should be working and stable for Costa Rica first, then generalize. Doing it earlier would slow down every other feature.*
 
-- Country switcher in the UI (needs UX design)
-- Navbar osu! logo SVG colors dynamically match the selected country's flag
-- All data endpoints scoped to the chosen country
-
-Status: `idea`, needs planning
+| # | Feature | Status |
+|:---:|---|:---:|
+| 22 | Country selector in the nav with per-country data caching | `done` |
+| 23 | All data endpoints and pages scoped to chosen country | `done` |
+| 24 | Navbar osu! logo SVG colors dynamically match the selected country's flag | `idea` |
 
 ---
 
