@@ -42,11 +42,13 @@ const iconInset: Record<string, number> = {
   NC: 1,
 };
 
-export function ModBadge({ mod }: { mod: string }) {
+export function ModBadge({ mod, size = 1 }: { mod: string; size?: number }) {
   if (!mod) return null;
   const file = fileMap[mod];
   const bg = typeColor[mod] || "#ff6666";
-  const inset = iconInset[mod] ?? 1;
+  const inset = (iconInset[mod] ?? 1) * size;
+  const width = 36 * size;
+  const height = 24 * size;
   const mask = (url: string) => ({
     backgroundColor: bg,
     maskImage: `url(${url})`, WebkitMaskImage: `url(${url})`,
@@ -59,7 +61,7 @@ export function ModBadge({ mod }: { mod: string }) {
     return (
       <div
         className="relative flex-shrink-0 flex items-center justify-center"
-        style={{ width: 36, height: 24 }}
+        style={{ width, height }}
         title={mod}
       >
         <div className="absolute inset-0" style={mask("/images/badges/mods/mod-icon.svg")} />
@@ -74,7 +76,7 @@ export function ModBadge({ mod }: { mod: string }) {
   }
 
   return (
-    <div className="relative flex-shrink-0" style={{ width: 36, height: 24 }} title={mod}>
+    <div className="relative flex-shrink-0" style={{ width, height }} title={mod}>
       <div className="absolute inset-0" style={mask("/images/badges/mods/mod-icon.svg")} />
       <div
         className="absolute"

@@ -5,9 +5,10 @@ import { getHomePopoffs, getHomeRecentScores, getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
-import { getDisplayedAccuracy, getDisplayedRank, getScoreTimeMs, getScoreTimestamp, isDisplayedPassed } from "../lib/score";
+import { getDisplayedAccuracy, getDisplayedRank, getModAcronyms, getScoreTimeMs, getScoreTimestamp, isDisplayedPassed } from "../lib/score";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
+import { ModBadge } from "../components/ui/ModBadge";
 import { RankingRowSkeleton, ScoreRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { UsernameText } from "../components/ui/UsernameText";
@@ -354,6 +355,13 @@ function HomePage() {
                       [{p.score.beatmap?.version}]
                     </div>
                   </div>
+                  {getModAcronyms(p.score.mods).length > 0 && (
+                    <div className="mt-3 flex items-center justify-center gap-1 flex-wrap max-w-[26ch]">
+                      {getModAcronyms(p.score.mods).map((acronym) => (
+                        <ModBadge key={acronym} mod={acronym} size={0.8} />
+                      ))}
+                    </div>
+                  )}
                   <div className="mt-3 text-[10px] text-osu-f1/60">{formatTimeAgo(getScoreTimestamp(p.score))}</div>
                 </motion.div>
               ))}
