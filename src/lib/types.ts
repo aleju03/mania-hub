@@ -202,6 +202,10 @@ export interface BeatmapsetSearchResponse {
   recommended_difficulty: number | null;
 }
 
+export interface BeatmapScoresResponse {
+  scores: OsuScore[];
+}
+
 export interface UserSearchResponse {
   user: {
     data: Array<{

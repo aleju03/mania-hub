@@ -1,16 +1,18 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, searchUsers } from "../lib/osu";
+import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, searchUsers, searchBeatmaps, getBeatmapScores } from "../lib/osu";
 import { parseManiaBeatmap } from "../lib/beatmap-parser";
+import { filterBeatmapSearchResults } from "../lib/beatmap-search";
 import { getDisplayedAccuracy, getDisplayedRank, scoreHasReplay } from "../lib/score";
+import { useAppStore } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SearchInput } from "../components/ui/SearchInput";
 import { GradeImg } from "../components/ui/GradeImg";
 import { formatAccuracy, formatPP } from "../lib/format";
 import type { ManiaSkin } from "../lib/skin-parser";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
-import type { OsuScore, ReplayFrame } from "../lib/types";
+import type { OsuScore, OsuBeatmapset, OsuBeatmap, ReplayFrame } from "../lib/types";
 
 const REPLAY_VOLUME_STORAGE_KEY = "mania-hub-replay-volume";
 const REPLAY_INPUT_OVERLAY_STORAGE_KEY = "mania-hub-replay-input-overlay";
@@ -19,9 +21,10 @@ const REPLAY_PLAYER_SCROLL_STORAGE_KEY = "mania-hub-replay-player-scroll";
 
 interface ReplaySearch {
   scoreId?: number;
-  mode?: string;
   beatmapsetId?: number;
   t?: number; // timestamp in seconds to seek to on load
+  tab?: "player" | "beatmap";
+  player?: string; // selected player username (for URL state)
 }
 
 interface ServerReplay {
@@ -110,24 +113,49 @@ export const Route = createFileRoute("/replay")({
   component: ReplayPage,
   validateSearch: (s: Record<string, unknown>): ReplaySearch => ({
     scoreId: Number(s.scoreId) || undefined,
-    mode: (s.mode as string) || "mania",
     beatmapsetId: Number(s.beatmapsetId) || undefined,
     t: Number(s.t) || undefined,
+    tab: s.tab === "beatmap" ? "beatmap" : undefined,
+    player: (s.player as string) || undefined,
   }),
 });
 
+type BrowseMode = "player" | "beatmap";
+
 function ReplayPage() {
-  const { scoreId, mode, beatmapsetId, t: initialTime } = Route.useSearch();
+  const { scoreId, beatmapsetId, t: initialTime, tab, player: playerParam } = Route.useSearch();
   const navigate = useNavigate();
+  const selectedCountry = useAppStore((s) => s.selectedCountry);
   const [replay, setReplay] = useState<ServerReplay | null>(null);
   const [beatmap, setBeatmap] = useState<ManiaBeatmap | null>(null);
   const [scoreInfo, setScoreInfo] = useState<OsuScore | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [playerScores, setPlayerScores] = useState<OsuScore[]>([]);
-  const [loadingScores, setLoadingScores] = useState(false);
 
-  const loadReplay = useCallback(async (sid: number, m: string) => {
+  // Player browse state
+  const [playerScoreGroups, setPlayerScoreGroups] = useState<{ best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScore[] } | null>(null);
+  const [loadingScores, setLoadingScores] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+
+  // Browse mode
+  const [browseMode, setBrowseMode] = useState<BrowseMode>(tab === "beatmap" ? "beatmap" : "player");
+
+  // Beatmap browse state
+  const [beatmapQuery, setBeatmapQuery] = useState("");
+  const [beatmapResults, setBeatmapResults] = useState<OsuBeatmapset[]>([]);
+  const [beatmapSearchLoading, setBeatmapSearchLoading] = useState(false);
+  const [selectedBeatmapset, setSelectedBeatmapset] = useState<OsuBeatmapset | null>(null);
+  const [selectedDiffId, setSelectedDiffId] = useState<number | null>(null);
+  const [rawBeatmapScores, setRawBeatmapScores] = useState<OsuScore[]>([]);
+  const [loadingBeatmapScores, setLoadingBeatmapScores] = useState(false);
+  const beatmapTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const beatmapScores = useMemo(
+    () => rawBeatmapScores.filter((s) => scoreHasReplay(s)),
+    [rawBeatmapScores],
+  );
+
+  const loadReplay = useCallback(async (sid: number) => {
     setError(null);
     setLoading(true);
     setReplay(null);
@@ -135,13 +163,13 @@ function ReplayPage() {
 
     try {
       // Fetch score first to get key count (beatmap.cs) for correct replay parsing
-      const score = await getScore({ data: { scoreId: sid, mode: m } }).catch(() => null);
+      const score = await getScore({ data: { scoreId: sid, mode: "mania" } }).catch(() => null);
       if (score) setScoreInfo(score);
 
       // Fetch replay with key count from score API, and beatmap file in parallel
       const keyCount = score?.beatmap?.cs ? Math.round(score.beatmap.cs) : undefined;
       const [parsed, bmResult] = await Promise.all([
-        getReplayParsed({ data: { scoreId: sid, mode: m, keyCount } }),
+        getReplayParsed({ data: { scoreId: sid, mode: "mania", keyCount } }),
         score?.beatmap?.id
           ? getBeatmapFile({ data: { beatmapId: score.beatmap.id } }).catch(() => null)
           : Promise.resolve(null),
@@ -159,8 +187,30 @@ function ReplayPage() {
   }, []);
 
   useEffect(() => {
-    if (scoreId) loadReplay(scoreId, mode ?? "mania");
-  }, [scoreId, mode, loadReplay]);
+    if (scoreId) loadReplay(scoreId);
+  }, [scoreId, loadReplay]);
+
+  // Debounced beatmap search
+  useEffect(() => {
+    if (browseMode !== "beatmap") return;
+    if (beatmapQuery.length < 2) {
+      setBeatmapResults([]);
+      return;
+    }
+    setBeatmapSearchLoading(true);
+    clearTimeout(beatmapTimerRef.current);
+    beatmapTimerRef.current = setTimeout(async () => {
+      try {
+        const res = await searchBeatmaps({ data: { query: beatmapQuery } });
+        setBeatmapResults(filterBeatmapSearchResults(res.beatmapsets, beatmapQuery).slice(0, 12));
+      } catch {
+        setBeatmapResults([]);
+      } finally {
+        setBeatmapSearchLoading(false);
+      }
+    }, 350);
+    return () => clearTimeout(beatmapTimerRef.current);
+  }, [beatmapQuery, browseMode]);
 
   const handlePlayerSearch = async (q: string) => {
     const res = await searchUsers({ data: { query: q } });
@@ -169,13 +219,59 @@ function ReplayPage() {
     }));
   };
 
-  const handleSelectPlayer = async (user: { id: number }) => {
+  const loadPlayerScores = useCallback(async (userId: number) => {
     setLoadingScores(true);
+    setExpandedSections({});
     try {
-      const scores = await getUserScoresBest({ data: { userId: user.id, limit: 20 } });
-      setPlayerScores(scores.filter((s: OsuScore) => scoreHasReplay(s)));
-    } catch { setPlayerScores([]); }
+      const [best, firsts, pinned] = await Promise.all([
+        getUserScoresBest({ data: { userId, limit: 100 } }).catch(() => [] as OsuScore[]),
+        getUserScoresFirsts({ data: { userId, limit: 100 } }).catch(() => [] as OsuScore[]),
+        getUserScoresPinned({ data: { userId, limit: 50 } }).catch(() => [] as OsuScore[]),
+      ]);
+      const filterReplayable = (scores: OsuScore[]) => scores.filter((s) => scoreHasReplay(s));
+      const bestFiltered = filterReplayable(best);
+      const bestIds = new Set(bestFiltered.map((s) => s.id));
+      const firstsFiltered = filterReplayable(firsts).filter((s) => !bestIds.has(s.id));
+      const firstsIds = new Set([...bestIds, ...firstsFiltered.map((s) => s.id)]);
+      const pinnedFiltered = filterReplayable(pinned).filter((s) => !firstsIds.has(s.id));
+      setPlayerScoreGroups({ best: bestFiltered, firsts: firstsFiltered, pinned: pinnedFiltered });
+    } catch { setPlayerScoreGroups({ best: [], firsts: [], pinned: [] }); }
     finally { setLoadingScores(false); }
+  }, []);
+
+  const handleSelectPlayer = async (user: { id: number; username: string }) => {
+    navigate({ to: "/replay", search: { player: user.username }, replace: true });
+    loadPlayerScores(user.id);
+  };
+
+  // Auto-load player scores when arriving via URL with ?player=
+  useEffect(() => {
+    if (scoreId || !playerParam || playerScoreGroups || loadingScores) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await searchUsers({ data: { query: playerParam } });
+        const match = (res.user?.data ?? []).find(
+          (u: { username: string }) => u.username.toLowerCase() === playerParam.toLowerCase(),
+        );
+        if (match && !cancelled) loadPlayerScores(match.id);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [playerParam, scoreId, playerScoreGroups, loadingScores, loadPlayerScores]);
+
+  const handleSelectDifficulty = async (bm: OsuBeatmap) => {
+    setSelectedDiffId(bm.id);
+    setLoadingBeatmapScores(true);
+    setRawBeatmapScores([]);
+    try {
+      const res = await getBeatmapScores({ data: { beatmapId: bm.id, country: selectedCountry } });
+      setRawBeatmapScores(res.scores);
+    } catch {
+      setRawBeatmapScores([]);
+    } finally {
+      setLoadingBeatmapScores(false);
+    }
   };
 
   return (
@@ -200,52 +296,244 @@ function ReplayPage() {
               </motion.div>
             ) : (
               <motion.div key="browse" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-                <div className="max-w-lg mx-auto mb-8">
-                  <h3 className="text-sm font-semibold text-osu-f1 uppercase tracking-wider mb-3 text-center">
-                    Search a player to view their replays
-                  </h3>
-                  <SearchInput placeholder="Search player..." onSearch={handlePlayerSearch} onSelect={handleSelectPlayer} />
+                {/* Tab toggle */}
+                <div className="flex justify-center mb-6">
+                  <div className="flex bg-osu-b4 rounded-lg border border-osu-b3/50 overflow-hidden">
+                    {(["player", "beatmap"] as const).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => {
+                          setBrowseMode(m);
+                          setPlayerScoreGroups(null);
+                          setBeatmapResults([]);
+                          setRawBeatmapScores([]);
+                          setSelectedBeatmapset(null);
+                          setSelectedDiffId(null);
+                          setBeatmapQuery("");
+                          setError(null);
+                          navigate({ to: "/replay", search: m === "beatmap" ? { tab: "beatmap" } : {}, replace: true });
+                        }}
+                        className={`px-5 py-2 text-xs font-semibold uppercase tracking-wider cursor-pointer transition-colors ${
+                          browseMode === m
+                            ? "bg-osu-pink/20 text-osu-pink-light"
+                            : "text-osu-f1 hover:text-white"
+                        }`}
+                      >
+                        {m === "player" ? "By Player" : "By Beatmap"}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 {error && (
                   <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-xs text-osu-red-light bg-osu-red/10 px-4 py-2 rounded-lg text-center max-w-lg mx-auto mb-6">{error}</motion.p>
                 )}
 
-                {loadingScores && (
-                  <div className="flex justify-center py-8">
-                    <div className="w-6 h-6 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
-                  </div>
+                {browseMode === "player" && (
+                  <>
+                    <div className="max-w-lg mx-auto mb-8">
+                      <h3 className="text-sm font-semibold text-osu-f1 uppercase tracking-wider mb-3 text-center">
+                        Search a player to view their replays
+                      </h3>
+                      <SearchInput placeholder="Search player..." onSearch={handlePlayerSearch} onSelect={handleSelectPlayer} />
+                    </div>
+
+                    {loadingScores && (
+                      <div className="flex justify-center py-8">
+                        <div className="w-6 h-6 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
+                      </div>
+                    )}
+
+                    {playerScoreGroups && (playerScoreGroups.best.length > 0 || playerScoreGroups.firsts.length > 0 || playerScoreGroups.pinned.length > 0) && (
+                      <div className="space-y-5">
+                        {([
+                          { key: "pinned", label: "Pinned", scores: playerScoreGroups.pinned },
+                          { key: "best", label: "Best Scores", scores: playerScoreGroups.best },
+                          { key: "firsts", label: "First Places", scores: playerScoreGroups.firsts },
+                        ] as const).map(({ key, label, scores }) => {
+                          if (scores.length === 0) return null;
+                          const isExpanded = expandedSections[key];
+                          const visible = isExpanded ? scores : scores.slice(0, 5);
+                          const hasMore = scores.length > 5;
+                          return (
+                            <div key={key} className="space-y-1.5">
+                              <h4 className="text-xs font-semibold text-osu-f1 uppercase tracking-wider mb-2">
+                                {label} ({scores.length})
+                              </h4>
+                              {visible.map((s: OsuScore, i: number) => (
+                                <motion.div key={s.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.02 }}
+                                  className="flex items-center gap-3 py-2.5 px-4 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20"
+                                  onClick={() => navigate({ to: "/replay", search: { scoreId: s.id, beatmapsetId: s.beatmapset?.id } })}>
+                                  <GradeImg grade={getDisplayedRank(s)} size={26} />
+                                  {s.beatmapset?.covers?.list && (
+                                    <img src={s.beatmapset.covers.list} alt="" className="w-12 h-8 rounded object-cover flex-shrink-0" loading="lazy" />
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-sm text-white truncate">{s.beatmapset?.title}</div>
+                                    <div className="text-[10px] text-osu-f1">[{s.beatmap?.version}] {s.beatmap?.cs && `${s.beatmap.cs}K`}</div>
+                                  </div>
+                                  <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(s))}</span>
+                                  <span className="text-sm font-bold">{formatPP(s.pp)}</span>
+                                  <span className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold">Watch</span>
+                                </motion.div>
+                              ))}
+                              {hasMore && (
+                                <button
+                                  onClick={() => setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }))}
+                                  className="w-full py-2 text-xs font-semibold text-osu-f1 hover:text-white transition-colors cursor-pointer"
+                                >
+                                  {isExpanded ? "Show Less" : `Show ${scores.length - 5} More`}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {!loadingScores && playerScoreGroups && playerScoreGroups.best.length === 0 && playerScoreGroups.firsts.length === 0 && playerScoreGroups.pinned.length === 0 && (
+                      <div className="text-center py-8 text-osu-f1 text-sm">
+                        No replays available for this player
+                      </div>
+                    )}
+
+                    {!loadingScores && !playerScoreGroups && !error && (
+                      <div className="text-center py-12 text-osu-f1 text-sm">
+                        Search for a player above to browse their available replays
+                      </div>
+                    )}
+                  </>
                 )}
 
-                {playerScores.length > 0 && (
-                  <div className="space-y-1.5">
-                    <h4 className="text-xs font-semibold text-osu-f1 uppercase tracking-wider mb-2">
-                      Scores with replays available ({playerScores.length})
-                    </h4>
-                    {playerScores.map((s: OsuScore, i: number) => (
-                      <motion.div key={s.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.02 }}
-                        className="flex items-center gap-3 py-2.5 px-4 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20"
-                        onClick={() => navigate({ to: "/replay", search: { scoreId: s.id, mode: "mania", beatmapsetId: s.beatmapset?.id } })}>
-                        <GradeImg grade={getDisplayedRank(s)} size={26} />
-                        {s.beatmapset?.covers?.list && (
-                          <img src={s.beatmapset.covers.list} alt="" className="w-12 h-8 rounded object-cover flex-shrink-0" loading="lazy" />
+                {browseMode === "beatmap" && (
+                  <>
+                    <div className="max-w-lg mx-auto mb-8">
+                      <h3 className="text-sm font-semibold text-osu-f1 uppercase tracking-wider mb-3 text-center">
+                        Search a beatmap, then pick a difficulty
+                      </h3>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={beatmapQuery}
+                          onChange={(e) => {
+                            setBeatmapQuery(e.target.value);
+                            setSelectedDiffId(null);
+                            setRawBeatmapScores([]);
+                          }}
+                          placeholder="Search beatmap..."
+                          className="w-full px-4 py-2.5 rounded-lg bg-osu-b4 text-osu-c1 text-sm placeholder:text-osu-f1 border border-osu-b3/50 focus:border-osu-h1/40 focus:outline-none transition-colors duration-[120ms] shadow-[inset_0_1px_3px_rgba(0,0,0,0.3)]"
+                        />
+                        {beatmapSearchLoading && (
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                            <div className="w-4 h-4 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
+                          </div>
                         )}
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm text-white truncate">{s.beatmapset?.title}</div>
-                          <div className="text-[10px] text-osu-f1">[{s.beatmap?.version}] {s.beatmap?.cs && `${s.beatmap.cs}K`}</div>
-                        </div>
-                        <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(s))}</span>
-                        <span className="text-sm font-bold">{formatPP(s.pp)}</span>
-                        <span className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold">Watch</span>
-                      </motion.div>
-                    ))}
-                  </div>
-                )}
+                      </div>
+                    </div>
 
-                {!loadingScores && playerScores.length === 0 && !error && (
-                  <div className="text-center py-12 text-osu-f1 text-sm">
-                    Search for a player above to browse their available replays
-                  </div>
+                    {/* Beatmapset results */}
+                    {beatmapResults.length > 0 && (
+                      <div className="space-y-3 mb-4">
+                        <h4 className="text-xs font-semibold text-osu-f1 uppercase tracking-wider mb-2">
+                          Beatmaps ({beatmapResults.length})
+                        </h4>
+                        {beatmapResults.map((bs, i) => {
+                          const maniaDiffs = (bs.beatmaps ?? [])
+                            .filter((b) => b.mode === "mania")
+                            .sort((a, b) => a.cs - b.cs || a.difficulty_rating - b.difficulty_rating);
+                          const coverUrl = bs.covers?.["cover@2x"] || bs.covers?.cover;
+                          return (
+                            <motion.div key={bs.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
+                              className="relative rounded-xl overflow-hidden border border-osu-b3/20">
+                              {/* Background cover image */}
+                              {coverUrl && (
+                                <img src={coverUrl} alt="" className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+                              )}
+                              <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/75 to-black/50" />
+                              <div className="relative z-10 px-4 py-3">
+                                <div className="mb-2">
+                                  <div className="text-sm font-semibold text-white truncate drop-shadow-sm">{bs.title}</div>
+                                  <div className="text-[10px] text-white/60 truncate">{bs.artist} // {bs.creator}</div>
+                                </div>
+                                {maniaDiffs.length > 0 ? (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {maniaDiffs.map((b) => (
+                                      <button
+                                        key={b.id}
+                                        onClick={() => {
+                                          setSelectedBeatmapset(bs);
+                                          handleSelectDifficulty(b);
+                                        }}
+                                        className={`px-2.5 py-1 rounded-md text-[11px] cursor-pointer transition-colors border backdrop-blur-sm ${
+                                          selectedDiffId === b.id
+                                            ? "bg-osu-pink/30 border-osu-pink/60 text-white"
+                                            : "bg-black/40 hover:bg-black/60 border-white/10 text-white/90"
+                                        }`}
+                                      >
+                                        <span className="text-osu-yellow font-semibold">{b.cs}K</span>{" "}
+                                        <span className="opacity-70">{b.version.replace(/\s*\[\d+[Kk]\]\s*/g, " ").trim()}</span>{" "}
+                                        <span className="text-osu-l2">&#9733;{b.difficulty_rating.toFixed(2)}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-xs text-white/40">No mania difficulties</div>
+                                )}
+                              </div>
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Loading beatmap scores */}
+                    {loadingBeatmapScores && (
+                      <div className="flex justify-center py-8">
+                        <div className="w-6 h-6 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
+                      </div>
+                    )}
+
+                    {/* Beatmap score results */}
+                    {!loadingBeatmapScores && selectedDiffId && beatmapScores.length > 0 && (
+                      <div className="space-y-1.5">
+                        <h4 className="text-xs font-semibold text-osu-f1 uppercase tracking-wider mb-2">
+                          Replays available ({beatmapScores.length})
+                        </h4>
+                        {beatmapScores.map((s: OsuScore, i: number) => (
+                          <motion.div key={s.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.02 }}
+                            className="flex items-center gap-3 py-2.5 px-4 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20"
+                            onClick={() => navigate({ to: "/replay", search: { scoreId: s.id, beatmapsetId: selectedBeatmapset?.id } })}>
+                            <GradeImg grade={getDisplayedRank(s)} size={26} />
+                            <img src={s.user?.avatar_url} alt="" className="w-7 h-7 rounded-full flex-shrink-0" loading="lazy" />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm text-white truncate">{s.user?.username}</div>
+                            </div>
+                            <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(s))}</span>
+                            <span className="text-sm font-bold">{formatPP(s.pp)}</span>
+                            <span className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold">Watch</span>
+                          </motion.div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Empty states */}
+                    {!loadingBeatmapScores && selectedDiffId && beatmapScores.length === 0 && rawBeatmapScores.length > 0 && (
+                      <div className="text-center py-6 text-osu-f1 text-sm">
+                        No replays available from {selectedCountry.toUpperCase()} players on this difficulty
+                      </div>
+                    )}
+                    {!loadingBeatmapScores && selectedDiffId && rawBeatmapScores.length === 0 && (
+                      <div className="text-center py-6 text-osu-f1 text-sm">
+                        No scores found from {selectedCountry.toUpperCase()} players on this difficulty
+                      </div>
+                    )}
+
+                    {!beatmapSearchLoading && beatmapResults.length === 0 && beatmapQuery.length < 2 && !selectedDiffId && (
+                      <div className="text-center py-12 text-osu-f1 text-sm">
+                        Search for a beatmap above to find replays
+                      </div>
+                    )}
+                  </>
                 )}
               </motion.div>
             )}

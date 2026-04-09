@@ -643,7 +643,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                window.location.href = `/replay?scoreId=${score.id}&mode=mania&beatmapsetId=${score.beatmapset?.id}`;
+                window.location.href = `/replay?scoreId=${score.id}&beatmapsetId=${score.beatmapset?.id}`;
               }}
               className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
               title="Watch replay"

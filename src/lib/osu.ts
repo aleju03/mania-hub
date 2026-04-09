@@ -15,6 +15,7 @@ import type {
   OsuBeatmapset,
   RankingsResponse,
   BeatmapsetSearchResponse,
+  BeatmapScoresResponse,
   UserSearchResponse,
   BeatmapPlaycount,
   CountryMapsData,
@@ -37,6 +38,10 @@ const RANKINGS_CACHE_TTL = 5 * 60 * 1000;
 const RANK_HISTORY_CACHE_TTL = 24 * 60 * 60 * 1000;
 const APPROX_PP_GAINS_CACHE_TTL = 10 * 60 * 1000;
 const BEST_SCORES_WINDOW_CACHE_TTL = 2 * 60 * 1000;
+const COUNTRY_BEATMAP_SCORES_CACHE_TTL = 2 * 60 * 1000;
+const COUNTRY_BEATMAP_USER_SCORE_CACHE_TTL = 10 * 60 * 1000;
+const COUNTRY_BEATMAP_LOOKUP_CONCURRENCY = 10;
+const COUNTRY_BEATMAP_PLAYER_PAGE_LIMIT = 2; // Match the rest of the app's top-100 country player scope.
 const USER_PROFILE_INSIGHTS_CACHE_TTL = 6 * 60 * 60 * 1000;
 const USER_PROFILE_INSIGHTS_CACHE_VERSION = 2;
 const HOME_PAGE_CACHE_TTL = 60 * 1000;
@@ -60,6 +65,12 @@ const MIXED_SCORE_USER_IDS = new Set<number>([
   25914429, // jaimito
 ]);
 
+interface BeatmapUserScoreResponse {
+  error?: string | null;
+  position?: number | null;
+  score?: OsuScore | null;
+}
+
 function getScoreRequestParams(
   userId: number,
   params: Record<string, string | number | undefined>,
@@ -75,7 +86,7 @@ function getUserCacheKey(key: string): string {
 }
 
 function getUserScoreListCacheKey(
-  type: "best" | "recent",
+  type: "best" | "recent" | "firsts" | "pinned",
   userId: number,
   params: { limit: number; offset: number; includeFails?: boolean },
 ): string {
@@ -113,7 +124,7 @@ async function getCachedUser(key: string): Promise<OsuUser> {
 }
 
 async function getCachedUserScores(
-  type: "best" | "recent",
+  type: "best" | "recent" | "firsts" | "pinned",
   userId: number,
   options: { limit: number; offset: number; includeFails?: boolean },
 ): Promise<OsuScore[]> {
@@ -209,6 +220,24 @@ export const getUserScoresRecent = createServerFn({ method: "GET" })
       limit: data.limit ?? 10,
       offset: data.offset ?? 0,
       includeFails: data.include_fails,
+    });
+  });
+
+export const getUserScoresFirsts = createServerFn({ method: "GET" })
+  .inputValidator((data: { userId: number; limit?: number; offset?: number }) => data)
+  .handler(async ({ data }: { data: { userId: number; limit?: number; offset?: number } }) => {
+    return getCachedUserScores("firsts", data.userId, {
+      limit: data.limit ?? 100,
+      offset: data.offset ?? 0,
+    });
+  });
+
+export const getUserScoresPinned = createServerFn({ method: "GET" })
+  .inputValidator((data: { userId: number; limit?: number; offset?: number }) => data)
+  .handler(async ({ data }: { data: { userId: number; limit?: number; offset?: number } }) => {
+    return getCachedUserScores("pinned", data.userId, {
+      limit: data.limit ?? 50,
+      offset: data.offset ?? 0,
     });
   });
 
@@ -659,6 +688,64 @@ export const searchBeatmaps = createServerFn({ method: "GET" })
       sort: data.sort ?? "ranked_desc",
       cursor_string: data.cursor_string,
       s: data.status,
+    });
+  });
+
+async function getBeatmapUserScore(beatmapId: number, userId: number): Promise<OsuScore | null> {
+  const cacheKey = `beatmap-user-score:${beatmapId}:${userId}`;
+  return fetchWithCacheLock(cacheKey, COUNTRY_BEATMAP_USER_SCORE_CACHE_TTL, async () => {
+    const response = await osuFetch<BeatmapUserScoreResponse>(`/beatmaps/${beatmapId}/scores/users/${userId}`, {
+      mode: "mania",
+    });
+    return response.score ?? null;
+  });
+}
+
+async function getCountryBeatmapScores(beatmapId: number, country: string): Promise<OsuScore[]> {
+  const normalizedCountry = country.trim().toUpperCase();
+  const cacheKey = `country-beatmap-scores:${beatmapId}:${normalizedCountry}`;
+
+  return fetchWithCacheLock(cacheKey, COUNTRY_BEATMAP_SCORES_CACHE_TTL, async () => {
+    const firstPage = await getRankings({ data: { type: "performance", page: 1, country: normalizedCountry } });
+    const totalPages = Math.max(1, Math.min(Math.ceil(firstPage.total / 50), COUNTRY_BEATMAP_PLAYER_PAGE_LIMIT));
+    const remainingPages = await Promise.all(
+      Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) =>
+        getRankings({ data: { type: "performance", page: index + 2, country: normalizedCountry } })),
+    );
+
+    const rankedUsers = [firstPage, ...remainingPages].flatMap((page) => page.ranking);
+    const userIds = Array.from(new Set(rankedUsers.map((entry) => entry.user.id)));
+    const scores = await mapWithConcurrency(
+      userIds,
+      COUNTRY_BEATMAP_LOOKUP_CONCURRENCY,
+      async (userId) => getBeatmapUserScore(beatmapId, userId).catch(() => null),
+    );
+
+    return scores
+      .filter((score): score is OsuScore => score !== null)
+      .filter((score) => score.user?.country_code === normalizedCountry)
+      .sort((left, right) => {
+        const scoreDelta = getScoreDisplayValues(right).totalScore - getScoreDisplayValues(left).totalScore;
+        if (scoreDelta !== 0) return scoreDelta;
+
+        const ppDelta = (right.pp ?? 0) - (left.pp ?? 0);
+        if (ppDelta !== 0) return ppDelta;
+
+        return right.accuracy - left.accuracy;
+      });
+  });
+}
+
+export const getBeatmapScores = createServerFn({ method: "GET" })
+  .inputValidator((data: { beatmapId: number; country?: string }) => data)
+  .handler(async ({ data }: { data: { beatmapId: number; country?: string } }) => {
+    if (data.country?.trim()) {
+      return { scores: await getCountryBeatmapScores(data.beatmapId, data.country) };
+    }
+
+    return osuFetch<BeatmapScoresResponse>(`/beatmaps/${data.beatmapId}/scores`, {
+      mode: "mania",
+      type: "global",
     });
   });
 
