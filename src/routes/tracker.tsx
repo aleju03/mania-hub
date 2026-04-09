@@ -608,11 +608,24 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               ))}
               {isLazerScore(score) && <LazerBadge />}
             </div>
-            <div className="flex items-baseline gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>
               <span className="text-sm font-bold">{formatPP(score.pp)}</span>
               {approxPpGain != null && (
                 <span className="text-[10px] font-semibold text-osu-green">+{formatNumber(Math.round(approxPpGain))}</span>
+              )}
+              {scoreHasReplay(score) && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.location.href = `/replay?scoreId=${score.id}&beatmapsetId=${score.beatmapset?.id}`;
+                  }}
+                  className="px-1.5 py-0.5 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
+                  title="Watch replay"
+                  aria-label="Watch replay"
+                >
+                  &#9654;
+                </button>
               )}
             </div>
           </div>
@@ -648,7 +661,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
               title="Watch replay"
             >
-              &#9654; Replay
+              &#9654; Watch
             </button>
           )}
           <span className="text-[10px] text-osu-f1 w-12 text-right">
