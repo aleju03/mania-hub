@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getRankings, getCountryRecentScores, getUsersApproxPpGains } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
+import { getCountryName } from "../lib/country";
 import { formatAccuracy, formatTimeAgo, formatPP, formatNumber } from "../lib/format";
 import {
   getBeatmapUrl,
@@ -37,23 +38,25 @@ type ScoreFilter = "all" | "ranked" | "passed";
 type GradeFilter = "all" | "SS" | "S" | "A" | "B";
 type FailedFilter = "hide" | "show" | "only";
 const PP_GAIN_BATCH_SIZE = 4;
+const EMPTY_IDS: number[] = [];
+const EMPTY_SCORES: OsuScore[] = [];
 
 function ScoresPage() {
-  const {
-    crRankings,
-    crRankingsFetchedAt,
-    feedScores,
-    feedScoresFetchedAt,
-    trackedUserIds,
-    addFeedScores,
-    markFeedScoresFetched,
-    setCrRankings,
-    setTrackedUserIds,
-    pollIndex,
-    nextPollIndex,
-  } = useAppStore();
+  const selectedCountry = useAppStore((state) => state.selectedCountry);
+  const rankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
+  const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
+  const feedScores = useAppStore((state) => state.feedScoresByCountry[selectedCountry]) ?? EMPTY_SCORES;
+  const feedScoresFetchedAt = useAppStore((state) => state.feedScoresFetchedAtByCountry[selectedCountry]) ?? null;
+  const trackedUserIds = useAppStore((state) => state.trackedUserIdsByCountry[selectedCountry]) ?? EMPTY_IDS;
+  const addFeedScores = useAppStore((state) => state.addFeedScores);
+  const markFeedScoresFetched = useAppStore((state) => state.markFeedScoresFetched);
+  const setRankings = useAppStore((state) => state.setRankings);
+  const setTrackedUserIds = useAppStore((state) => state.setTrackedUserIds);
+  const pollIndex = useAppStore((state) => state.pollIndexByCountry[selectedCountry] ?? 0);
+  const nextPollIndex = useAppStore((state) => state.nextPollIndex);
+  const resetPollIndex = useAppStore((state) => state.resetPollIndex);
   const [userIds, setUserIds] = useState<number[]>(trackedUserIds);
-  const [loadingPlayers, setLoadingPlayers] = useState(trackedUserIds.length === 0 && !crRankings);
+  const [loadingPlayers, setLoadingPlayers] = useState<boolean>(trackedUserIds.length === 0 && !rankings);
   const [playersError, setPlayersError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(true);
   const [filter, setFilter] = useState<ScoreFilter>("all");
@@ -67,10 +70,23 @@ function ScoresPage() {
   }, []);
   const [ppGainByScoreId, setPpGainByScoreId] = useState<Record<number, number>>({});
   const [ppGainFetchedByUserId, setPpGainFetchedByUserId] = useState<Record<number, true>>({});
+  const countryName = getCountryName(selectedCountry);
+
+  useEffect(() => {
+    setUserIds(trackedUserIds);
+    setLoadingPlayers(trackedUserIds.length === 0 && !rankings);
+    setPlayersError(null);
+    setInitialLoaded(feedScores.length > 0 || !!feedScoresFetchedAt);
+    setInitialRefreshDone(false);
+    setExpandedKey(null);
+    setPpGainByScoreId({});
+    setPpGainFetchedByUserId({});
+    resetPollIndex(selectedCountry);
+  }, [selectedCountry]);
 
   useEffect(() => {
     let cancelled = false;
-    const cachedIds = crRankings?.ranking.map((entry: { user: { id: number } }) => entry.user.id) ?? trackedUserIds;
+    const cachedIds = rankings?.ranking.map((entry: { user: { id: number } }) => entry.user.id) ?? trackedUserIds;
 
     if (cachedIds.length > 0) {
       setUserIds(cachedIds);
@@ -78,7 +94,7 @@ function ScoresPage() {
       setPlayersError(null);
     }
 
-    const shouldRefresh = !crRankings || isCacheStale(crRankingsFetchedAt, CLIENT_CACHE_TTL.rankings);
+    const shouldRefresh = !rankings || isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings);
 
     if (!shouldRefresh) {
       return () => {
@@ -88,14 +104,14 @@ function ScoresPage() {
 
     setLoadingPlayers(cachedIds.length === 0);
 
-    getRankings({ data: { type: "performance", page: 1, country: "CR" } })
+    getRankings({ data: { type: "performance", page: 1, country: selectedCountry } })
       .then((rankings) => {
         if (cancelled) return;
 
         const ids = rankings.ranking.map((entry: { user: { id: number } }) => entry.user.id);
-        setCrRankings(rankings);
+        setRankings(selectedCountry, rankings);
         setUserIds(ids);
-        setTrackedUserIds(ids);
+        setTrackedUserIds(selectedCountry, ids);
         setPlayersError(null);
       })
       .catch(() => {
@@ -110,7 +126,7 @@ function ScoresPage() {
     return () => {
       cancelled = true;
     };
-  }, [crRankings, crRankingsFetchedAt, setCrRankings, setTrackedUserIds, trackedUserIds]);
+  }, [rankings, rankingsFetchedAt, selectedCountry, setRankings, setTrackedUserIds, trackedUserIds]);
 
   useEffect(() => {
     if (initialLoaded || feedScores.length > 0) {
@@ -146,18 +162,18 @@ function ScoresPage() {
             data: { userIds, batchSize: BATCH, batchIndex: b, recentLimit: 20 },
           });
           if (cancelled) return;
-          if (scores.length > 0) addFeedScores(scores);
+          if (scores.length > 0) addFeedScores(selectedCountry, scores);
           setInitialLoaded(true);
         } catch { /* continue */ }
       }
       if (!cancelled) {
-        markFeedScoresFetched();
+        markFeedScoresFetched(selectedCountry);
         setInitialRefreshDone(true);
       }
     })();
 
     return () => { cancelled = true; };
-  }, [userIds, initialRefreshDone, feedScores.length, feedScoresFetchedAt, addFeedScores, markFeedScoresFetched]);
+  }, [userIds, initialRefreshDone, feedScores.length, feedScoresFetchedAt, addFeedScores, markFeedScoresFetched, selectedCountry]);
 
   const poll = useCallback(async () => {
     if (!isPolling || userIds.length === 0) return;
@@ -165,11 +181,11 @@ function ScoresPage() {
       const scores = await getCountryRecentScores({
         data: { userIds, batchSize: 10, batchIndex: pollIndex, recentLimit: 20 },
       });
-      if (scores.length > 0) addFeedScores(scores);
-      else markFeedScoresFetched();
-      nextPollIndex();
+      if (scores.length > 0) addFeedScores(selectedCountry, scores);
+      else markFeedScoresFetched(selectedCountry);
+      nextPollIndex(selectedCountry);
     } catch { /* silently continue */ }
-  }, [isPolling, userIds, pollIndex, addFeedScores, markFeedScoresFetched, nextPollIndex]);
+  }, [isPolling, userIds, pollIndex, addFeedScores, markFeedScoresFetched, nextPollIndex, selectedCountry]);
 
   useEffect(() => {
     const id = setInterval(poll, 30_000);
@@ -275,7 +291,7 @@ function ScoresPage() {
     <div className="flex-1">
       <PageHeader
         iconSrc="/images/icons/news.svg"
-        title="CR mania tracker"
+        title={`${countryName} mania tracker`}
         right={
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${isPolling ? "bg-osu-green animate-pulse" : "bg-osu-f1"}`} />

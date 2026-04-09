@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { SearchInput } from "../ui/SearchInput";
+import { CountrySelector } from "./CountrySelector";
 import { clearDevServerCaches } from "../../lib/api";
 import { searchUsers } from "../../lib/osu";
 import { useAppStore } from "../../store";
@@ -16,7 +17,7 @@ const links = [
   { id: "snipes", to: "/snipes", label: "snipes" },
 ] as const;
 
-const CLIENT_CACHE_KEYS = ["mania-hub-cache-v1", "mania-hub-cache-v2", "mania-hub-cache-v3"];
+const CLIENT_CACHE_KEYS = ["mania-hub-cache-v1", "mania-hub-cache-v2", "mania-hub-cache-v3", "mania-hub-cache-v4"];
 const SKIN_DB_NAME = "mania-hub-skins";
 
 function deleteIndexedDb(name: string): Promise<void> {
@@ -195,6 +196,7 @@ export function Nav() {
               Clear cache
             </button>
           )}
+          <CountrySelector className="w-52" />
           <SearchInput
             className="w-52"
             placeholder="find player..."
@@ -244,6 +246,9 @@ export function Nav() {
         aria-hidden={!menuOpen}
       >
               <div className="py-2">
+                <div className="px-4 pb-3">
+                  <CountrySelector className="w-full" />
+                </div>
                 {links.map((l) => (
                   <Link
                     key={l.id}

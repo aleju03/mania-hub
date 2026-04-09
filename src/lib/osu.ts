@@ -3,6 +3,7 @@ import {
   osuFetch,
   osuFetchBinary,
   fetchBeatmapFile,
+  fetchWithCacheLock,
   getPersistentCacheEntry,
   getPersistentCached,
   setPersistentCache,
@@ -90,18 +91,16 @@ async function getCachedUser(key: string): Promise<OsuUser> {
   const pending = userPromiseCache.get(cacheKey);
   if (pending) return pending;
 
-  const request = osuFetch<OsuUser>(`/users/${encodeURIComponent(key)}/mania`)
-    .then((user) => {
-      void Promise.allSettled([
-        setPersistentCache(cacheKey, user, USER_CACHE_TTL),
-        setPersistentCache(getUserCacheKey(user.username), user, USER_CACHE_TTL),
-        setPersistentCache(`user-id:${user.id}`, user, USER_CACHE_TTL),
-      ]);
-      return user;
-    })
-    .finally(() => {
-      userPromiseCache.delete(cacheKey);
-    });
+  const request = fetchWithCacheLock(cacheKey, USER_CACHE_TTL, async () => {
+    const user = await osuFetch<OsuUser>(`/users/${encodeURIComponent(key)}/mania`);
+    void Promise.allSettled([
+      setPersistentCache(getUserCacheKey(user.username), user, USER_CACHE_TTL),
+      setPersistentCache(`user-id:${user.id}`, user, USER_CACHE_TTL),
+    ]);
+    return user;
+  }).finally(() => {
+    userPromiseCache.delete(cacheKey);
+  });
 
   userPromiseCache.set(cacheKey, request);
   return request;
@@ -119,22 +118,19 @@ async function getCachedUserScores(
   const pending = userScoresListPromiseCache.get(cacheKey);
   if (pending) return pending;
 
-  const request = osuFetch<OsuScore[]>(
-    `/users/${userId}/scores/${type}`,
-    getScoreRequestParams(userId, {
-      mode: "mania",
-      limit: options.limit,
-      offset: options.offset,
-      include_fails: type === "recent" && options.includeFails ? 1 : 0,
-    }),
-  )
-    .then((scores) => {
-      void setPersistentCache(cacheKey, scores, USER_SCORE_LIST_CACHE_TTL);
-      return scores;
-    })
-    .finally(() => {
-      userScoresListPromiseCache.delete(cacheKey);
-    });
+  const request = fetchWithCacheLock(cacheKey, USER_SCORE_LIST_CACHE_TTL, () =>
+    osuFetch<OsuScore[]>(
+      `/users/${userId}/scores/${type}`,
+      getScoreRequestParams(userId, {
+        mode: "mania",
+        limit: options.limit,
+        offset: options.offset,
+        include_fails: type === "recent" && options.includeFails ? 1 : 0,
+      }),
+    ),
+  ).finally(() => {
+    userScoresListPromiseCache.delete(cacheKey);
+  });
 
   userScoresListPromiseCache.set(cacheKey, request);
   return request;
@@ -218,12 +214,9 @@ export const getUserApproxPpGains = createServerFn({ method: "GET" })
 
 async function getApproxPpGainsForUser(userId: number): Promise<Record<number, number>> {
   const cacheKey = `pp-gains:${userId}`;
-  const cached = await getPersistentCached<Record<number, number>>(cacheKey);
-  if (cached) return cached;
-
-  const gains = calculateApproxPpGainMap(await fetchUserBestScoresWindow(userId, 200));
-  await setPersistentCache(cacheKey, gains, APPROX_PP_GAINS_CACHE_TTL);
-  return gains;
+  return fetchWithCacheLock(cacheKey, APPROX_PP_GAINS_CACHE_TTL, async () =>
+    calculateApproxPpGainMap(await fetchUserBestScoresWindow(userId, 200)),
+  );
 }
 
 function getTopCountEntry(counts: Map<string, number>, total: number): { label: string; count: number; total: number } | null {
@@ -332,13 +325,13 @@ function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfileInsigh
 
 async function fetchUserBestScoresWindow(userId: number, totalLimit = 200): Promise<OsuScore[]> {
   const cacheKey = `user-best-scores-window:${userId}:${totalLimit}`;
-  const cached = await getPersistentCacheEntry<OsuScore[]>(cacheKey);
-  if (cached.hit) return cached.value;
+  const cached = await getPersistentCached<OsuScore[]>(cacheKey);
+  if (cached) return cached;
 
   const pending = bestScoresWindowPromiseCache.get(cacheKey);
   if (pending) return pending;
 
-  const request = (async () => {
+  const request = fetchWithCacheLock(cacheKey, BEST_SCORES_WINDOW_CACHE_TTL, async () => {
     const firstPage = await osuFetch<OsuScore[]>(`/users/${userId}/scores/best`, getScoreRequestParams(userId, {
       mode: "mania",
       limit: Math.min(totalLimit, 100),
@@ -356,9 +349,8 @@ async function fetchUserBestScoresWindow(userId: number, totalLimit = 200): Prom
       scores = [...firstPage, ...secondPage];
     }
 
-    await setPersistentCache(cacheKey, scores, BEST_SCORES_WINDOW_CACHE_TTL);
     return scores;
-  })().finally(() => {
+  }).finally(() => {
     bestScoresWindowPromiseCache.delete(cacheKey);
   });
 
@@ -376,12 +368,9 @@ export const getUserProfileInsights = createServerFn({ method: "GET" })
   .inputValidator((data: { userId: number }) => data)
   .handler(async ({ data }: { data: { userId: number } }) => {
     const cacheKey = `user-profile-insights:v${USER_PROFILE_INSIGHTS_CACHE_VERSION}:${data.userId}`;
-    const cached = await getPersistentCached<UserProfileInsights>(cacheKey);
-    if (cached) return cached;
-
-    const insights = calculateUserProfileInsights(await fetchUserBestScoresWindow(data.userId, 200));
-    await setPersistentCache(cacheKey, insights, USER_PROFILE_INSIGHTS_CACHE_TTL);
-    return insights;
+    return fetchWithCacheLock(cacheKey, USER_PROFILE_INSIGHTS_CACHE_TTL, async () =>
+      calculateUserProfileInsights(await fetchUserBestScoresWindow(data.userId, 200)),
+    );
   });
 
 export const getUsersApproxPpGains = createServerFn({ method: "GET" })
@@ -417,14 +406,12 @@ export const getRankings = createServerFn({ method: "GET" })
   .handler(async ({ data }: { data: { type?: string; page?: number; country?: string } }) => {
     const type = data.type ?? "performance";
     const cacheKey = `rankings:${type}:${data.page ?? 1}:${data.country ?? ""}`;
-    const cached = await getPersistentCached<RankingsResponse>(cacheKey);
-    if (cached) return cached;
-    const result = await osuFetch<RankingsResponse>(`/rankings/mania/${type}`, {
-      "cursor[page]": data.page ?? 1,
-      country: data.country,
-    });
-    await setPersistentCache(cacheKey, result, RANKINGS_CACHE_TTL);
-    return result;
+    return fetchWithCacheLock(cacheKey, RANKINGS_CACHE_TTL, () =>
+      osuFetch<RankingsResponse>(`/rankings/mania/${type}`, {
+        "cursor[page]": data.page ?? 1,
+        country: data.country,
+      }),
+    );
   });
 
 async function fetchCountryRecentScores(
@@ -507,27 +494,22 @@ async function buildHomePopoffs(rankings: RankingsResponse): Promise<HomePagePop
 }
 
 export const getHomePageData = createServerFn({ method: "GET" })
-  .handler(async (): Promise<HomePageData> => {
-    const cacheKey = "home-page-data:v1";
-    const cached = await getPersistentCached<HomePageData>(cacheKey);
-    if (cached) return cached;
+  .inputValidator((data?: { country?: string }) => data)
+  .handler(async ({ data }: { data?: { country?: string } }): Promise<HomePageData> => {
+    const country = data?.country ?? "CR";
+    const cacheKey = `home-page-data:v1:${country}`;
+    return fetchWithCacheLock(cacheKey, HOME_PAGE_CACHE_TTL, async () => {
+      const rankings = await getRankings({ data: { type: "performance", page: 1, country } });
+      const userIds = rankings.ranking.map((entry) => entry.user.id);
 
-    const rankings = await getRankings({ data: { type: "performance", page: 1, country: "CR" } });
-    const userIds = rankings.ranking.map((entry) => entry.user.id);
+      const [recentScores, popoffs] = await Promise.all([
+        fetchCountryRecentScores(userIds, { batchSize: 10, batchIndex: 0, recentLimit: 20 })
+          .then((scores) => buildRecentScoresPreview(scores, 5)),
+        buildHomePopoffs(rankings),
+      ]);
 
-    const [recentScores, popoffs] = await Promise.all([
-      fetchCountryRecentScores(userIds, { batchSize: 10, batchIndex: 0, recentLimit: 20 })
-        .then((scores) => buildRecentScoresPreview(scores, 5)),
-      buildHomePopoffs(rankings),
-    ]);
-
-    const data: HomePageData = {
-      rankings,
-      recentScores,
-      popoffs,
-    };
-    await setPersistentCache(cacheKey, data, HOME_PAGE_CACHE_TTL);
-    return data;
+      return { rankings, recentScores, popoffs } satisfies HomePageData;
+    }, 30_000);
   });
 
 // ── Batch user rank history ────────────────────────────────────────────────
@@ -598,28 +580,16 @@ export const getCountryRecentScores = createServerFn({ method: "GET" })
 
 async function fetchUserMostPlayed(userId: number): Promise<BeatmapPlaycount[]> {
   const cacheKey = `user-most-played:${userId}`;
-  const cached = await getPersistentCached<BeatmapPlaycount[]>(cacheKey);
-  if (cached) return cached;
-
-  const result = await osuFetch<BeatmapPlaycount[]>(
-    `/users/${userId}/beatmapsets/most_played`,
-    { limit: 100, offset: 0 },
+  return fetchWithCacheLock(cacheKey, USER_MOST_PLAYED_CACHE_TTL, () =>
+    osuFetch<BeatmapPlaycount[]>(`/users/${userId}/beatmapsets/most_played`, { limit: 100, offset: 0 }),
   );
-  await setPersistentCache(cacheKey, result, USER_MOST_PLAYED_CACHE_TTL);
-  return result;
 }
 
 async function fetchUserFavourites(userId: number): Promise<OsuBeatmapset[]> {
   const cacheKey = `user-favourites:${userId}`;
-  const cached = await getPersistentCached<OsuBeatmapset[]>(cacheKey);
-  if (cached) return cached;
-
-  const result = await osuFetch<OsuBeatmapset[]>(
-    `/users/${userId}/beatmapsets/favourite`,
-    { limit: 100, offset: 0 },
+  return fetchWithCacheLock(cacheKey, USER_FAVOURITES_CACHE_TTL, () =>
+    osuFetch<OsuBeatmapset[]>(`/users/${userId}/beatmapsets/favourite`, { limit: 100, offset: 0 }),
   );
-  await setPersistentCache(cacheKey, result, USER_FAVOURITES_CACHE_TTL);
-  return result;
 }
 
 export const getCountryMapsData = createServerFn({ method: "GET" })
@@ -637,11 +607,9 @@ export const getCountryMapsData = createServerFn({ method: "GET" })
         .sort((a, b) => a - b)
         .join(",");
       const cacheKey = `country-maps-data:v${MAPS_DATA_CACHE_VERSION}:${userKey}`;
-      const cached = await getPersistentCached<CountryMapsData>(cacheKey);
-      if (cached) return cached;
-
       const users = data.users;
 
+      return fetchWithCacheLock(cacheKey, MAPS_DATA_CACHE_TTL, async () => {
       // Fetch best scores + most_played + favourites for all users
       const userResults = await mapWithConcurrency(
         users,
@@ -817,14 +785,13 @@ export const getCountryMapsData = createServerFn({ method: "GET" })
         )
         .slice(0, 100);
 
-      const result: CountryMapsData = {
+      return {
         farmed,
         mostPlayed,
         favourites,
         generatedAt: new Date().toISOString(),
-      };
-      await setPersistentCache(cacheKey, result, MAPS_DATA_CACHE_TTL);
-      return result;
+      } satisfies CountryMapsData;
+      }, 60_000);
     },
   );
 

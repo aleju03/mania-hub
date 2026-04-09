@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { getRankings, getUsersRankHistory } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
+import { getCountryName } from "../lib/country";
 import { formatNumber, formatAccuracy } from "../lib/format";
 import { getCrRankChanges, getGlobalRankChange } from "../lib/rankings";
 import { Avatar } from "../components/ui/Avatar";
@@ -24,11 +25,12 @@ export const Route = createFileRoute("/rankings")({
 function RankingsPage() {
   const { page } = Route.useSearch();
   const navigate = useNavigate();
-  const cachedPageOneData = useAppStore((state) => state.crRankings);
-  const rankingsFetchedAt = useAppStore((state) => state.crRankingsFetchedAt);
+  const selectedCountry = useAppStore((state) => state.selectedCountry);
+  const cachedPageOneData = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
+  const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const rankHistories = useAppStore((state) => state.rankHistories);
   const rankHistoriesFetchedAt = useAppStore((state) => state.rankHistoriesFetchedAt);
-  const setCrRankings = useAppStore((state) => state.setCrRankings);
+  const setRankings = useAppStore((state) => state.setRankings);
   const setRankHistories = useAppStore((state) => state.setRankHistories);
   const [pageTwoData, setPageTwoData] = useState<RankingsResponse | null>(null);
   const [pageTwoFetchedAt, setPageTwoFetchedAt] = useState<number | null>(null);
@@ -38,6 +40,13 @@ function RankingsPage() {
   const pageData = page === 1 ? cachedPageOneData : pageTwoData;
   const [rankingsLoading, setRankingsLoading] = useState(!(page === 1 ? cachedPageOneData : pageTwoData));
   const [rankHistoriesLoading, setRankHistoriesLoading] = useState(false);
+  const countryName = getCountryName(selectedCountry);
+
+  useEffect(() => {
+    setPageTwoData(null);
+    setPageTwoFetchedAt(null);
+    setError(null);
+  }, [selectedCountry]);
 
   useEffect(() => {
     let cancelled = false;
@@ -53,10 +62,10 @@ function RankingsPage() {
 
     setRankingsLoading(!pageData);
 
-    getRankings({ data: { type: "performance", page, country: "CR" } })
+    getRankings({ data: { type: "performance", page, country: selectedCountry } })
       .then((result) => {
         if (cancelled) return;
-        if (page === 1) setCrRankings(result);
+        if (page === 1) setRankings(selectedCountry, result);
         else {
           setPageTwoData(result);
           setPageTwoFetchedAt(Date.now());
@@ -65,7 +74,7 @@ function RankingsPage() {
       })
       .catch(() => {
         if (cancelled || pageData) return;
-        setError("Couldn't load the Costa Rica rankings right now.");
+        setError(`Couldn't load the ${countryName} rankings right now.`);
       })
       .finally(() => {
         if (cancelled) return;
@@ -73,7 +82,7 @@ function RankingsPage() {
       });
 
     return () => { cancelled = true; };
-  }, [cachedPageOneData, page, pageData, pageTwoData, pageTwoFetchedAt, rankingsFetchedAt, setCrRankings]);
+  }, [cachedPageOneData, page, pageData, pageTwoData, pageTwoFetchedAt, rankingsFetchedAt, selectedCountry, setRankings, countryName]);
 
   useEffect(() => {
     if (!pageData) return;
@@ -107,8 +116,8 @@ function RankingsPage() {
     return () => { cancelled = true; };
   }, [pageData, rankHistories, rankHistoriesFetchedAt, setRankHistories]);
 
-  // Compute CR rank changes: compare current CR positions vs 7 days ago
-  const crRankChanges = useMemo(() => {
+  // Compare current country positions vs 7 days ago.
+  const countryRankChanges = useMemo(() => {
     if (!pageData || Object.keys(rankHistories).length === 0) return {};
     return getCrRankChanges(pageData.ranking, rankHistories);
   }, [pageData, rankHistories]);
@@ -138,8 +147,8 @@ function RankingsPage() {
           break;
         }
         case "cr7d":
-          aVal = crRankChanges[a.entry.user.id] ?? -99999;
-          bVal = crRankChanges[b.entry.user.id] ?? -99999;
+          aVal = countryRankChanges[a.entry.user.id] ?? -99999;
+          bVal = countryRankChanges[b.entry.user.id] ?? -99999;
           break;
         case "accuracy":
           aVal = a.entry.hit_accuracy;
@@ -168,7 +177,7 @@ function RankingsPage() {
       }
       return sortDir === "desc" ? (bVal as number) - (aVal as number) : (aVal as number) - (bVal as number);
     });
-  }, [pageData, page, sortBy, sortDir, rankHistories, crRankChanges]);
+  }, [pageData, page, sortBy, sortDir, rankHistories, countryRankChanges]);
 
   const handleSort = (field: SortField) => {
     if (sortBy === field) {
@@ -184,7 +193,7 @@ function RankingsPage() {
     <div className="flex-1">
       <PageHeader
         iconSrc="/images/icons/rankings.svg"
-        title="Costa Rica mania rankings"
+        title={`${countryName} mania rankings`}
         right={
           <>
             {!pageData && rankingsLoading && !error && <span className="text-[10px] text-osu-f1">Loading rankings...</span>}
@@ -203,7 +212,7 @@ function RankingsPage() {
               { field: "pp" as SortField, label: "PP" },
               { field: "accuracy" as SortField, label: "Acc" },
               { field: "7d" as SortField, label: "7d" },
-              { field: "cr7d" as SortField, label: "CR" },
+              { field: "cr7d" as SortField, label: selectedCountry },
               { field: "playcount" as SortField, label: "Plays" },
             ]).map(({ field, label }) => {
               const active = sortBy === field;
@@ -255,7 +264,7 @@ function RankingsPage() {
               sortedRankings.map(({ entry, originalRank }, i: number) => {
                 const history = rankHistories[entry.user.id];
                 const globalChange = getGlobalRankChange(history);
-                const crChange = crRankChanges[entry.user.id] ?? null;
+                const crChange = countryRankChanges[entry.user.id] ?? null;
 
                 // Show the value for the active sort field on the right side
                 const sortedValue = (() => {
@@ -302,10 +311,10 @@ function RankingsPage() {
                         {sortBy === "cr7d" && (
                           crChange !== null && crChange !== 0 ? (
                             <span className={`font-semibold ${crChange > 0 ? "text-osu-green" : "text-osu-red"}`}>
-                              CR {crChange > 0 ? `+${crChange}` : crChange}
+                              {selectedCountry} {crChange > 0 ? `+${crChange}` : crChange}
                             </span>
                           ) : (
-                            <span>CR -</span>
+                            <span>{selectedCountry} -</span>
                           )
                         )}
                       </div>
@@ -381,7 +390,7 @@ function RankingsPage() {
                   <th className="py-2.5 px-3 text-left w-12">#</th>
                   <SortableHeader field="player" label="Player" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="left" />
                   <SortableHeader field="7d" label="7d Global" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-32" />
-                  <SortableHeader field="cr7d" label="7d CR" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-16" />
+                  <SortableHeader field="cr7d" label={`7d ${selectedCountry}`} activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-16" />
                   <SortableHeader field="accuracy" label="Accuracy" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
                   <SortableHeader field="playcount" label="Play Count" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
                   <SortableHeader field="pp" label="PP" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
@@ -404,7 +413,7 @@ function RankingsPage() {
                   sortedRankings.map(({ entry, originalRank }, i: number) => {
                     const history = rankHistories[entry.user.id];
                     const globalChange = getGlobalRankChange(history);
-                    const crChange = crRankChanges[entry.user.id] ?? null;
+                    const crChange = countryRankChanges[entry.user.id] ?? null;
 
                     return (
                       <motion.tr
