@@ -534,7 +534,22 @@ function PopOffsPage() {
                             ))}
                             {isLazerScore(p.score) && <LazerBadge />}
                           </div>
-                          <span className="text-xs text-osu-l2 flex-shrink-0">{formatAccuracy(getDisplayedAccuracy(p.score))}</span>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(p.score))}</span>
+                            {scoreHasReplay(p.score) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.location.href = `/replay?scoreId=${p.score.id}&beatmapsetId=${p.score.beatmapset?.id}`;
+                                }}
+                                className="px-1.5 py-0.5 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
+                                title="Watch replay"
+                                aria-label="Watch replay"
+                              >
+                                &#9654;
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -562,7 +577,7 @@ function PopOffsPage() {
                             }}
                             className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
                           >
-                            ▶ Replay
+                            ▶ Watch
                           </button>
                         )}
                         <span className="text-[10px] text-osu-f1 w-14 text-right">
