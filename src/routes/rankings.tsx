@@ -41,6 +41,8 @@ function RankingsPage() {
   const [rankingsLoading, setRankingsLoading] = useState(!(page === 1 ? cachedPageOneData : pageTwoData));
   const [rankHistoriesLoading, setRankHistoriesLoading] = useState(false);
   const countryName = getCountryName(selectedCountry);
+  const totalPlayers = cachedPageOneData?.total ?? pageData?.total ?? 0;
+  const hasNextPage = totalPlayers > 50;
 
   useEffect(() => {
     setPageTwoData(null);
@@ -49,7 +51,20 @@ function RankingsPage() {
   }, [selectedCountry]);
 
   useEffect(() => {
+    if (page === 2 && totalPlayers > 0 && !hasNextPage) {
+      navigate({ to: "/rankings", search: { page: 1 }, replace: true });
+    }
+  }, [hasNextPage, navigate, page, totalPlayers]);
+
+  useEffect(() => {
     let cancelled = false;
+    const knownTotal = cachedPageOneData?.total ?? null;
+
+    if (page === 2 && knownTotal !== null && knownTotal <= 50) {
+      setRankingsLoading(false);
+      return () => { cancelled = true; };
+    }
+
     const cachedData = page === 1 ? cachedPageOneData : pageTwoData;
     const fetchedAt = page === 1 ? rankingsFetchedAt : pageTwoFetchedAt;
     const shouldRefresh = !cachedData || isCacheStale(fetchedAt, CLIENT_CACHE_TTL.rankings);
@@ -484,22 +499,24 @@ function RankingsPage() {
               </tbody>
             </table>
           </div>
-          <div className="flex items-center justify-center gap-3 pt-4">
-            <button
-              onClick={() => navigate({ to: "/rankings", search: { page: 1 } })}
-              disabled={page === 1}
-              className="px-4 py-2 rounded-lg bg-osu-b4 text-xs font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              Page 1
-            </button>
-            <button
-              onClick={() => navigate({ to: "/rankings", search: { page: 2 } })}
-              disabled={page === 2}
-              className="px-4 py-2 rounded-lg bg-osu-b4 text-xs font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              Next Page
-            </button>
-          </div>
+          {hasNextPage && (
+            <div className="flex items-center justify-center gap-3 pt-4">
+              <button
+                onClick={() => navigate({ to: "/rankings", search: { page: 1 } })}
+                disabled={page === 1}
+                className="px-4 py-2 rounded-lg bg-osu-b4 text-xs font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                Page 1
+              </button>
+              <button
+                onClick={() => navigate({ to: "/rankings", search: { page: 2 } })}
+                disabled={page === 2}
+                className="px-4 py-2 rounded-lg bg-osu-b4 text-xs font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                Next Page
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
