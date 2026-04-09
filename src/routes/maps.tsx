@@ -254,7 +254,8 @@ function MapsPage() {
       });
 
     return () => { cancelled = true; };
-  }, [loadingPlayers, error, mapsData, mapsDataFetchedAt, playerIdsKey, players, setMapsData, selectedCountry]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingPlayers, error, mapsData, mapsDataFetchedAt, playerIdsKey, selectedCountry]);
 
   // ── Filtered + sorted: farmed (from best scores) ────────────────────────
   const filteredFarmed = useMemo(() => {

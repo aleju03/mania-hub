@@ -124,7 +124,7 @@ function PopOffsPage() {
     }
 
     const hasCachedPopoffs = popoffs.length > 0;
-    const shouldRefresh = !hasCachedPopoffs || isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.popoffs);
+    const shouldRefresh = !popoffsFetchedAt || isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.popoffs);
 
     if (!shouldRefresh) {
       setLoadedCount(players.length);

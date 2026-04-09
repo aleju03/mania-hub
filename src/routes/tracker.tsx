@@ -126,7 +126,8 @@ function ScoresPage() {
     return () => {
       cancelled = true;
     };
-  }, [rankings, rankingsFetchedAt, selectedCountry, setRankings, setTrackedUserIds, trackedUserIds]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rankings, rankingsFetchedAt, selectedCountry]);
 
   useEffect(() => {
     if (initialLoaded || feedScores.length > 0) {
@@ -138,7 +139,7 @@ function ScoresPage() {
     if (userIds.length === 0 || initialRefreshDone) return;
 
     const shouldRefresh =
-      feedScores.length === 0 || isCacheStale(feedScoresFetchedAt, CLIENT_CACHE_TTL.scoresFeed);
+      !feedScoresFetchedAt || isCacheStale(feedScoresFetchedAt, CLIENT_CACHE_TTL.scoresFeed);
 
     if (!shouldRefresh) {
       setInitialLoaded(true);
