@@ -323,10 +323,9 @@ export const useAppStore = create<AppState>()(
           nextState.popoffsFetchedAtByCountry && typeof nextState.popoffsFetchedAtByCountry === "object"
             ? nextState.popoffsFetchedAtByCountry
             : {};
-        const freshPopoffsEntries = Object.entries(persistedPopoffsByCountry).filter(([country]) => {
-          const fetchedAt = Number(persistedPopoffsFetchedAtByCountry[country]);
-          return Number.isFinite(fetchedAt) && Date.now() - fetchedAt < CLIENT_CACHE_TTL.popoffs;
-        });
+        const persistedPopoffsFetchedAtEntries = Object.entries(
+          persistedPopoffsFetchedAtByCountry,
+        ).filter(([, fetchedAt]) => Number.isFinite(Number(fetchedAt)));
 
         return {
           ...currentState,
@@ -347,9 +346,11 @@ export const useAppStore = create<AppState>()(
               return Number.isFinite(fetchedAt) && Date.now() - fetchedAt < ttl;
             }),
           ) as Record<string, CachedAvatarAccent>,
-          popoffsByCountry: Object.fromEntries(freshPopoffsEntries) as CountryRecord<CachedPopoff[]>,
+          // Keep persisted top-plays data even when stale so the route can render it
+          // immediately after a reload and revalidate in the background.
+          popoffsByCountry: persistedPopoffsByCountry as CountryRecord<CachedPopoff[]>,
           popoffsFetchedAtByCountry: Object.fromEntries(
-            freshPopoffsEntries.map(([country]) => [country, Number(persistedPopoffsFetchedAtByCountry[country])]),
+            persistedPopoffsFetchedAtEntries.map(([country, fetchedAt]) => [country, Number(fetchedAt)]),
           ) as CountryRecord<number>,
         };
       },

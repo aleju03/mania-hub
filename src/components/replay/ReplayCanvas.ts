@@ -598,9 +598,14 @@ export class ManiaReplayRenderer {
     const { w, h, playfieldX, playfieldWidth } = layout;
 
     // Darken areas outside the playfield
-    ctx.fillStyle = "rgba(0, 0, 0, 0.3)";
+    ctx.fillStyle = "rgba(0, 0, 0, 0.24)";
     ctx.fillRect(0, 0, playfieldX, h);
     ctx.fillRect(playfieldX + playfieldWidth, 0, w - playfieldX - playfieldWidth, h);
+
+    // Apply a subtle base shade across the playfield so the center doesn't read
+    // much brighter than the side gutters once the lane overlays are added.
+    ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
+    ctx.fillRect(playfieldX, 0, playfieldWidth, h);
 
     // Lane backgrounds
     for (let col = 0; col < this.keyCount; col++) {

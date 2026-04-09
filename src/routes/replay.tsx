@@ -141,6 +141,7 @@ function ReplayPage() {
   const [playerScoreGroups, setPlayerScoreGroups] = useState<{ best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScore[] } | null>(null);
   const [loadingScores, setLoadingScores] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [loadedPlayerParam, setLoadedPlayerParam] = useState<string | null>(null);
 
   // Browse mode
   const [browseMode, setBrowseMode] = useState<BrowseMode>(tab === "beatmap" ? "beatmap" : "player");
@@ -159,6 +160,7 @@ function ReplayPage() {
     () => rawBeatmapScores.filter((s) => scoreHasReplay(s)),
     [rawBeatmapScores],
   );
+  const normalizedPlayerParam = playerParam?.trim().toLowerCase() ?? null;
 
   const loadReplay = useCallback(async (sid: number) => {
     setError(null);
@@ -192,8 +194,22 @@ function ReplayPage() {
   }, []);
 
   useEffect(() => {
-    if (scoreId) loadReplay(scoreId);
+    if (scoreId) {
+      loadReplay(scoreId);
+      return;
+    }
+
+    setLoading(false);
+    setReplay(null);
+    setBeatmap(null);
+    setScoreInfo(null);
+    setError(null);
   }, [scoreId, loadReplay]);
+
+  useEffect(() => {
+    if (scoreId) return;
+    setBrowseMode(tab === "beatmap" ? "beatmap" : "player");
+  }, [scoreId, tab]);
 
   // Debounced beatmap search
   useEffect(() => {
@@ -245,8 +261,11 @@ function ReplayPage() {
   }, []);
 
   const handleSelectPlayer = async (user: { id: number; username: string }) => {
-    navigate({ to: "/replay", search: { player: user.username }, replace: true });
-    loadPlayerScores(user.id);
+    navigate({ to: "/replay", search: { player: user.username } });
+    setPlayerScoreGroups(null);
+    setLoadedPlayerParam(null);
+    await loadPlayerScores(user.id);
+    setLoadedPlayerParam(user.username.trim().toLowerCase());
   };
 
   // Fetch country rankings to power the player suggestions grid (cached in store).
@@ -279,19 +298,37 @@ function ReplayPage() {
 
   // Auto-load player scores when arriving via URL with ?player=
   useEffect(() => {
-    if (scoreId || !playerParam || playerScoreGroups || loadingScores) return;
+    if (scoreId) return;
+    if (!normalizedPlayerParam) {
+      setPlayerScoreGroups(null);
+      setLoadedPlayerParam(null);
+      setExpandedSections({});
+      return;
+    }
+    if (loadingScores || loadedPlayerParam === normalizedPlayerParam) return;
+
+    setPlayerScoreGroups(null);
     let cancelled = false;
     (async () => {
       try {
-        const res = await searchUsers({ data: { query: playerParam } });
+        const res = await searchUsers({ data: { query: playerParam! } });
         const match = (res.user?.data ?? []).find(
-          (u: { username: string }) => u.username.toLowerCase() === playerParam.toLowerCase(),
+          (u: { username: string }) => u.username.toLowerCase() === normalizedPlayerParam,
         );
-        if (match && !cancelled) loadPlayerScores(match.id);
+        if (cancelled) return;
+
+        if (match) {
+          await loadPlayerScores(match.id);
+          if (!cancelled) setLoadedPlayerParam(normalizedPlayerParam);
+          return;
+        }
+
+        setPlayerScoreGroups({ best: [], firsts: [], pinned: [] });
+        setLoadedPlayerParam(normalizedPlayerParam);
       } catch { /* ignore */ }
     })();
     return () => { cancelled = true; };
-  }, [playerParam, scoreId, playerScoreGroups, loadingScores, loadPlayerScores]);
+  }, [normalizedPlayerParam, playerParam, scoreId, loadingScores, loadedPlayerParam, loadPlayerScores]);
 
   const handleSelectDifficulty = async (bm: OsuBeatmap) => {
     setSelectedDiffId(bm.id);
@@ -323,7 +360,7 @@ function ReplayPage() {
               <motion.div key="viewer" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                 <ReplayInfo replay={replay} score={scoreInfo} beatmap={beatmap} onClear={() => {
                   setReplay(null); setBeatmap(null); setScoreInfo(null);
-                  navigate({ to: "/replay", search: {} });
+                  navigate({ to: "/replay", search: playerParam ? { player: playerParam } : tab === "beatmap" ? { tab: "beatmap" } : {} });
                 }} />
                 <ReplayViewer replay={replay} beatmap={beatmap} scoreInfo={scoreInfo} fallbackBeatmapsetId={beatmapsetId} initialTime={initialTime} />
               </motion.div>
@@ -396,7 +433,7 @@ function ReplayPage() {
                               {visible.map((s: OsuScore, i: number) => (
                                 <motion.div key={s.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.02 }}
                                   className="flex items-center gap-3 py-2.5 px-4 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20"
-                                  onClick={() => navigate({ to: "/replay", search: { scoreId: s.id, beatmapsetId: s.beatmapset?.id } })}>
+                                  onClick={() => navigate({ to: "/replay", search: { scoreId: s.id, beatmapsetId: s.beatmapset?.id, player: playerParam } })}>
                                   <GradeImg grade={getDisplayedRank(s)} size={26} />
                                   {s.beatmapset?.covers?.list && (
                                     <img src={s.beatmapset.covers.list} alt="" className="w-12 h-8 rounded object-cover flex-shrink-0" loading="lazy" />
@@ -561,7 +598,7 @@ function ReplayPage() {
                         {beatmapScores.map((s: OsuScore, i: number) => (
                           <motion.div key={s.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.02 }}
                             className="flex items-center gap-3 py-2.5 px-4 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20"
-                            onClick={() => navigate({ to: "/replay", search: { scoreId: s.id, beatmapsetId: selectedBeatmapset?.id } })}>
+                            onClick={() => navigate({ to: "/replay", search: { scoreId: s.id, beatmapsetId: selectedBeatmapset?.id, tab: "beatmap" } })}>
                             <GradeImg grade={getDisplayedRank(s)} size={26} />
                             <img src={s.user?.avatar_url} alt="" className="w-7 h-7 rounded-full flex-shrink-0" loading="lazy" />
                             <div className="flex-1 min-w-0">
