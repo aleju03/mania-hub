@@ -70,8 +70,41 @@ interface AppState {
   resetPollIndex: (country: string) => void;
 }
 
+const warnedStorageIssues = new Set<string>();
+
+function warnStorageIssue(action: string, error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  const warningKey = `${action}:${message}`;
+  if (warnedStorageIssues.has(warningKey)) return;
+  warnedStorageIssues.add(warningKey);
+  console.warn(`[store] ${action} failed: ${message}`);
+}
+
 const storage = typeof window !== "undefined"
-  ? createJSONStorage(() => localStorage)
+  ? createJSONStorage(() => ({
+      getItem: (name) => {
+        try {
+          return localStorage.getItem(name);
+        } catch (error) {
+          warnStorageIssue(`read "${name}"`, error);
+          return null;
+        }
+      },
+      setItem: (name, value) => {
+        try {
+          localStorage.setItem(name, value);
+        } catch (error) {
+          warnStorageIssue(`write "${name}"`, error);
+        }
+      },
+      removeItem: (name) => {
+        try {
+          localStorage.removeItem(name);
+        } catch (error) {
+          warnStorageIssue(`remove "${name}"`, error);
+        }
+      },
+    }))
   : undefined;
 
 export const useAppStore = create<AppState>()(
@@ -277,11 +310,17 @@ export const useAppStore = create<AppState>()(
         const nextState = persistedState && typeof persistedState === "object"
           ? persistedState as Partial<AppState>
           : {};
+        const persistedSelectedCountry = normalizeCountryCode(nextState.selectedCountry);
+        const selectedCountry = currentState.selectedCountry !== DEFAULT_COUNTRY_CODE
+          ? currentState.selectedCountry
+          : persistedSelectedCountry;
 
         return {
           ...currentState,
           ...nextState,
-          selectedCountry: normalizeCountryCode(nextState.selectedCountry),
+          // If the user changed country before persist hydration finished, do not clobber
+          // that live selection with the older value from storage.
+          selectedCountry,
           avatarAccents: Object.fromEntries(
             Object.entries(
               nextState.avatarAccents && typeof nextState.avatarAccents === "object"
@@ -295,6 +334,8 @@ export const useAppStore = create<AppState>()(
               return Number.isFinite(fetchedAt) && Date.now() - fetchedAt < ttl;
             }),
           ) as Record<string, CachedAvatarAccent>,
+          popoffsByCountry: currentState.popoffsByCountry,
+          popoffsFetchedAtByCountry: currentState.popoffsFetchedAtByCountry,
         };
       },
       partialize: (state) => ({
@@ -308,8 +349,6 @@ export const useAppStore = create<AppState>()(
         homeRecentScoresFetchedAtByCountry: state.homeRecentScoresFetchedAtByCountry,
         homePopoffsByCountry: state.homePopoffsByCountry,
         homePopoffsFetchedAtByCountry: state.homePopoffsFetchedAtByCountry,
-        popoffsByCountry: state.popoffsByCountry,
-        popoffsFetchedAtByCountry: state.popoffsFetchedAtByCountry,
         mapsDataByCountry: state.mapsDataByCountry,
         mapsDataFetchedAtByCountry: state.mapsDataFetchedAtByCountry,
         feedScoresByCountry: state.feedScoresByCountry,

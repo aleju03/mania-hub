@@ -147,7 +147,7 @@ Create a `.env` file with:
 |:---:|---|:---:|
 | 22 | Country selector in the nav with per-country data caching | `done` |
 | 23 | All data endpoints and pages scoped to chosen country | `done` |
-| 24 | Navbar osu! logo SVG colors dynamically match the selected country's flag | `idea` |
+| 24 | Navbar osu! logo SVG colors dynamically match the selected country's flag | `done` |
 
 ---
 
