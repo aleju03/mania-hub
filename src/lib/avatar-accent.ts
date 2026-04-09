@@ -1,4 +1,4 @@
-export const AVATAR_ACCENT_VERSION = 2;
+export const AVATAR_ACCENT_VERSION = 3;
 
 export function getAvatarAccentCacheKey(url: string): string {
   return `avatar-accent:v${AVATAR_ACCENT_VERSION}:${url}`;

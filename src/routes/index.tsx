@@ -68,11 +68,14 @@ function HomePage() {
   const [loadingScores, setLoadingScores] = useState(recentScores.length === 0);
   const [loadingPopoffs, setLoadingPopoffs] = useState(popoffs.length === 0);
   const countryName = getCountryName(selectedCountry);
-  const homePreviewPlayers = rankings?.ranking.slice(0, 10).map((entry) => ({
-    id: entry.user.id,
-    username: entry.user.username,
-    avatar_url: entry.user.avatar_url,
-  })) ?? [];
+  const homePreviewPlayers = rankings?.ranking
+    .filter((entry) => entry.user.is_active !== false)
+    .slice(0, 10)
+    .map((entry) => ({
+      id: entry.user.id,
+      username: entry.user.username,
+      avatar_url: entry.user.avatar_url,
+    })) ?? [];
   const homePreviewUserIds = homePreviewPlayers.map((player) => player.id);
   const homePreviewPlayerIdsKey = homePreviewUserIds.join(",");
   const homePreviewPlayersKey = homePreviewPlayers

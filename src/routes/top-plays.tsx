@@ -1,11 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getRankings, getUserScoresBestWindow } from "../lib/osu";
+import { getCountryPopoffs, getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { formatNumber, formatAccuracy, formatTimeAgo } from "../lib/format";
-import { calculateApproxPpGainMap, getBeatmapUrl, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModAcronyms, getScoreTimeMs, getScoreTimestamp, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
+import { getBeatmapUrl, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModAcronyms, getScoreTimestamp, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
@@ -37,6 +37,8 @@ const RANGE_MS: Record<TimeRange, number> = {
 };
 
 const PAGE_SIZE = 15;
+const FETCH_BATCH_SIZE = 5;
+const PP_GAIN_SKELETON_COUNT = 6;
 
 export const Route = createFileRoute("/top-plays")({
   component: PopOffsPage,
@@ -56,17 +58,20 @@ function PopOffsPage() {
   const [playersError, setPlayersError] = useState<string | null>(null);
   const [loadingPlayers, setLoadingPlayers] = useState(!rankings);
   const [loading, setLoading] = useState(popoffs.length === 0);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadedCount, setLoadedCount] = useState(0);
   const [range, setRange] = useState<TimeRange>("7d");
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [page, setPage] = useState(0);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const countryName = getCountryName(selectedCountry);
+  const hasCachedPopoffs = popoffs.length > 0;
 
   useEffect(() => {
     setPlayersError(null);
     setLoadingPlayers(!rankings);
     setLoading(popoffs.length === 0);
+    setRefreshing(false);
     setLoadedCount(0);
     setPage(0);
     setExpandedId(null);
@@ -74,11 +79,14 @@ function PopOffsPage() {
   }, [selectedCountry]);
 
   const players = useMemo(() =>
-    rankings?.ranking.slice(0, 30).map((entry: RankingsResponse["ranking"][number]) => ({
-      id: entry.user.id,
-      username: entry.user.username,
-      avatar_url: entry.user.avatar_url,
-    })) ?? []
+    rankings?.ranking
+      .filter((entry: RankingsResponse["ranking"][number]) => entry.user.is_active !== false)
+      .slice(0, 30)
+      .map((entry: RankingsResponse["ranking"][number]) => ({
+        id: entry.user.id,
+        username: entry.user.username,
+        avatar_url: entry.user.avatar_url,
+      })) ?? []
   , [rankings]);
 
   useEffect(() => {
@@ -117,66 +125,74 @@ function PopOffsPage() {
 
   // Fetch scores for all players, show results once complete
   const fetchingRef = useRef(false);
+  const mergePopoffs = useCallback((entries: PopOff[]): PopOff[] => {
+    const byKey = new Map<string, PopOff>();
+
+    entries.forEach((entry) => {
+      byKey.set(`${entry.user.id}-${entry.score.id}`, entry);
+    });
+
+    return [...byKey.values()].sort((a, b) => {
+      if (b.pp !== a.pp) return b.pp - a.pp;
+      return new Date(b.time).getTime() - new Date(a.time).getTime();
+    });
+  }, []);
+
   const fetchAll = useCallback(async () => {
     if (players.length === 0 || fetchingRef.current) {
-      if (players.length === 0) setLoading(false);
+      if (players.length === 0) {
+        setLoading(false);
+        setRefreshing(false);
+        setLoadedCount(0);
+      }
       return;
     }
 
-    const hasCachedPopoffs = popoffs.length > 0;
-    const shouldRefresh = !popoffsFetchedAt || isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.popoffs);
+    const shouldRefresh =
+      !hasCachedPopoffs ||
+      !popoffsFetchedAt ||
+      isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.popoffs);
 
     if (!shouldRefresh) {
-      setLoadedCount(players.length);
       setLoading(false);
+      setRefreshing(false);
+      setLoadedCount(players.length);
       return;
     }
 
     fetchingRef.current = true;
     setLoading(!hasCachedPopoffs);
+    setRefreshing(true);
     setLoadedCount(0);
     setPage(0);
 
     try {
-      const all: PopOff[] = [];
+      let merged = hasCachedPopoffs ? [] as PopOff[] : [];
 
-      for (let i = 0; i < players.length; i += 5) {
-        const batch = players.slice(i, i + 5);
-        const results = await Promise.allSettled(
-          batch.map(async (player: { id: number; username: string; avatar_url: string }) => {
-            const scores = await getUserScoresBestWindow({ data: { userId: player.id, totalLimit: 200 } });
-            const gainMap = calculateApproxPpGainMap(scores);
-            return scores
-              .filter((s: OsuScore) => {
-                const age = Date.now() - getScoreTimeMs(s);
-                return age < RANGE_MS["30d"] && s.pp && s.pp > 0;
-              })
-              .map((s: OsuScore) => ({
-                user: player,
-                score: s,
-                pp: s.pp ?? 0,
-                weightedPP: s.weight?.pp ?? 0,
-                ppGain: gainMap[s.id] ?? 0,
-                time: getScoreTimestamp(s),
-              }));
-          })
-        );
+      for (let i = 0; i < players.length; i += FETCH_BATCH_SIZE) {
+        const batch = players.slice(i, i + FETCH_BATCH_SIZE);
+        const batchResults = await getCountryPopoffs({ data: { players: batch } });
+        merged = mergePopoffs([...merged, ...batchResults]);
 
-        for (const r of results) {
-          if (r.status === "fulfilled") all.push(...r.value);
+        if (!hasCachedPopoffs) {
+          if (merged.length > 0) {
+            setCachedPopoffs(selectedCountry, merged);
+            setLoading(false);
+          }
         }
 
-        setLoadedCount(Math.min(i + 5, players.length));
+        setLoadedCount(Math.min(i + FETCH_BATCH_SIZE, players.length));
       }
 
-      setCachedPopoffs(selectedCountry, [...all]);
+      setCachedPopoffs(selectedCountry, merged);
     } catch (error) {
       console.warn("Failed to cache top plays:", error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
       fetchingRef.current = false;
     }
-  }, [players, popoffs.length, popoffsFetchedAt, setCachedPopoffs, selectedCountry]);
+  }, [mergePopoffs, players, popoffs.length, popoffsFetchedAt, setCachedPopoffs, selectedCountry]);
 
   useEffect(() => {
     if (loadingPlayers || playersError) return;
@@ -220,6 +236,8 @@ function PopOffsPage() {
       .map(([id, info]) => ({ id, ...info }));
   }, [filtered]);
 
+  const showPpGainsRail = playerPpGains.length > 0 || loadingPlayers || loading;
+
   // Paginate
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -238,7 +256,7 @@ function PopOffsPage() {
         title={`${countryName} mania top plays`}
         right={
           <div className="flex items-center gap-2">
-            {(loadingPlayers || loading) && !playersError && (
+            {(loadingPlayers || (refreshing && !hasCachedPopoffs)) && !playersError && (
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
                 <span className="text-[10px] text-osu-f1">
@@ -248,7 +266,7 @@ function PopOffsPage() {
                 </span>
               </div>
             )}
-            {!loadingPlayers && !loading && !playersError && (
+            {!loadingPlayers && !refreshing && !loading && !playersError && (
               <span className="text-[10px] text-osu-f1">
                 {filtered.length} top plays found
               </span>
@@ -299,61 +317,87 @@ function PopOffsPage() {
 
       <div className="bg-osu-b5">
         <div className="max-w-[1200px] mx-auto px-5 py-6 flex flex-col lg:flex-row gap-4 lg:gap-5">
-          {playerPpGains.length > 0 && (
+          {showPpGainsRail && (
             <>
               {/* Mobile: horizontal row */}
-              <div className="lg:hidden flex items-start gap-3 overflow-x-auto scrollbar-hide py-1">
+              <div className="lg:hidden flex items-start gap-3 overflow-x-auto scrollbar-hide py-1 min-h-[54px]">
                 <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold flex-shrink-0 pt-2">PP Gained</span>
-                {playerPpGains.map((player) => (
-                  <button
-                    key={player.id}
-                    onClick={() => navigate({ to: "/player/$username", params: { username: player.username } })}
-                    className="cursor-pointer group relative flex-shrink-0 flex flex-col items-center gap-0.5"
-                    title={`${player.username}: +${formatNumber(Math.round(player.totalGain))}pp`}
-                  >
-                    <div className="ring-2 ring-inset ring-osu-pink/40 rounded-full group-hover:ring-osu-pink transition-all">
-                      <Avatar url={player.avatar_url} size={32} />
+                {playerPpGains.length > 0 ? (
+                  playerPpGains.map((player) => (
+                    <button
+                      key={player.id}
+                      onClick={() => navigate({ to: "/player/$username", params: { username: player.username } })}
+                      className="cursor-pointer group relative flex-shrink-0 flex flex-col items-center gap-0.5"
+                      title={`${player.username}: +${formatNumber(Math.round(player.totalGain))}pp`}
+                    >
+                      <div className="ring-2 ring-inset ring-osu-pink/40 rounded-full group-hover:ring-osu-pink transition-all">
+                        <Avatar url={player.avatar_url} size={32} />
+                      </div>
+                      <span className="text-[9px] font-semibold text-osu-green">
+                        +{formatNumber(Math.round(player.totalGain))}
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex-shrink-0 flex flex-col items-center gap-1">
+                      <Skeleton className="w-8 h-8 rounded-full" />
+                      <Skeleton className="h-2.5 w-8" />
                     </div>
-                    <span className="text-[9px] font-semibold text-osu-green">
-                      +{formatNumber(Math.round(player.totalGain))}
-                    </span>
-                  </button>
-                ))}
+                  ))
+                )}
               </div>
               {/* Desktop: vertical sidebar */}
-              <div className="hidden lg:flex flex-shrink-0 pt-1 gap-3">
-                {(() => {
-                  const maxPerCol = 8;
-                  const numCols = Math.ceil(playerPpGains.length / maxPerCol);
-                  const perCol = Math.ceil(playerPpGains.length / numCols);
-                  const cols: typeof playerPpGains[] = [];
-                  for (let i = 0; i < playerPpGains.length; i += perCol) {
-                    cols.push(playerPpGains.slice(i, i + perCol));
-                  }
-                  return cols.map((col, ci) => (
+              <div className="hidden lg:flex flex-shrink-0 pt-1 gap-3 min-w-[86px]">
+                {playerPpGains.length > 0 ? (
+                  (() => {
+                    const maxPerCol = 8;
+                    const numCols = Math.ceil(playerPpGains.length / maxPerCol);
+                    const perCol = Math.ceil(playerPpGains.length / numCols);
+                    const cols: typeof playerPpGains[] = [];
+                    for (let i = 0; i < playerPpGains.length; i += perCol) {
+                      cols.push(playerPpGains.slice(i, i + perCol));
+                    }
+                    return cols.map((col, ci) => (
+                      <div key={ci} className="flex flex-col items-center gap-2">
+                        {ci === 0 && (
+                          <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-1">PP Gained</span>
+                        )}
+                        {ci > 0 && <div className="mb-1 h-[14px]" />}
+                        {col.map((player) => (
+                          <button
+                            key={player.id}
+                            onClick={() => navigate({ to: "/player/$username", params: { username: player.username } })}
+                            className="cursor-pointer group relative flex flex-col items-center gap-0.5"
+                            title={`${player.username}: +${formatNumber(Math.round(player.totalGain))}pp`}
+                          >
+                            <div className="ring-2 ring-osu-pink/40 rounded-full group-hover:ring-osu-pink transition-all">
+                              <Avatar url={player.avatar_url} size={32} />
+                            </div>
+                            <span className="text-[9px] font-semibold text-osu-green">
+                              +{formatNumber(Math.round(player.totalGain))}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ));
+                  })()
+                ) : (
+                  Array.from({ length: 2 }).map((_, ci) => (
                     <div key={ci} className="flex flex-col items-center gap-2">
                       {ci === 0 && (
                         <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-1">PP Gained</span>
                       )}
                       {ci > 0 && <div className="mb-1 h-[14px]" />}
-                      {col.map((player) => (
-                        <button
-                          key={player.id}
-                          onClick={() => navigate({ to: "/player/$username", params: { username: player.username } })}
-                          className="cursor-pointer group relative flex flex-col items-center gap-0.5"
-                          title={`${player.username}: +${formatNumber(Math.round(player.totalGain))}pp`}
-                        >
-                          <div className="ring-2 ring-osu-pink/40 rounded-full group-hover:ring-osu-pink transition-all">
-                            <Avatar url={player.avatar_url} size={32} />
-                          </div>
-                          <span className="text-[9px] font-semibold text-osu-green">
-                            +{formatNumber(Math.round(player.totalGain))}
-                          </span>
-                        </button>
+                      {Array.from({ length: PP_GAIN_SKELETON_COUNT / 2 }).map((__, i) => (
+                        <div key={i} className="flex flex-col items-center gap-1">
+                          <Skeleton className="w-8 h-8 rounded-full" />
+                          <Skeleton className="h-2.5 w-8" />
+                        </div>
                       ))}
                     </div>
-                  ));
-                })()}
+                  ))
+                )}
               </div>
             </>
           )}
@@ -367,19 +411,6 @@ function PopOffsPage() {
           {/* Loading skeletons on initial load */}
           {!playersError && (loadingPlayers || loading) && (
             <div className="space-y-2">
-              {!loadingPlayers && players.length > 0 && (
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="flex-1 h-1 rounded-full bg-osu-b3/40 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-osu-pink transition-all duration-500 ease-out"
-                      style={{ width: `${Math.round((loadedCount / players.length) * 100)}%` }}
-                    />
-                  </div>
-                  <span className="text-[11px] text-osu-f1 tabular-nums flex-shrink-0">
-                    {loadedCount}/{players.length} players
-                  </span>
-                </div>
-              )}
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 py-3 px-4 rounded-xl bg-osu-b4 border border-osu-b3/20">
                   <Skeleton className="w-16 h-10" />
@@ -392,6 +423,20 @@ function PopOffsPage() {
                   <Skeleton className="h-4 w-16" />
                 </div>
               ))}
+            </div>
+          )}
+
+          {!playersError && !loading && refreshing && !hasCachedPopoffs && players.length > 0 && (
+            <div className="mb-3 flex items-center gap-3">
+              <div className="flex-1 h-1 rounded-full bg-osu-b3/40 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-osu-pink transition-all duration-500 ease-out"
+                  style={{ width: `${Math.round((loadedCount / players.length) * 100)}%` }}
+                />
+              </div>
+              <span className="text-[11px] text-osu-f1 tabular-nums flex-shrink-0">
+                {loadedCount}/{players.length} players
+              </span>
             </div>
           )}
 

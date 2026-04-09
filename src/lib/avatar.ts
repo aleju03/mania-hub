@@ -9,6 +9,11 @@ interface RgbColor {
   b: number;
 }
 
+interface ColorBucket {
+  count: number;
+  color: RgbColor;
+}
+
 const AVATAR_COLOR_CONCURRENCY = 8;
 const AVATAR_ACCENT_CACHE_TTL = 3 * 24 * 60 * 60 * 1000;
 
@@ -86,6 +91,11 @@ function getSaturation(color: RgbColor): number {
   return s;
 }
 
+function getLightness(color: RgbColor): number {
+  const { l } = rgbToHsl(color);
+  return l;
+}
+
 function normalizeForText(color: RgbColor): string {
   const { h, s, l } = rgbToHsl(color);
   if (s < 0.08) {
@@ -101,33 +111,105 @@ function normalizeForText(color: RgbColor): string {
   return toHex(normalized);
 }
 
-function pickAccentColor(colors: RgbColor[]): string | null {
-  const preferred = colors.find((color) => {
+function averageColors(entries: Array<{ color: RgbColor; weight: number }>): RgbColor | null {
+  const totalWeight = entries.reduce((sum, entry) => sum + entry.weight, 0);
+  if (totalWeight <= 0) return null;
+
+  const weighted = entries.reduce(
+    (sum, entry) => ({
+      r: sum.r + entry.color.r * entry.weight,
+      g: sum.g + entry.color.g * entry.weight,
+      b: sum.b + entry.color.b * entry.weight,
+    }),
+    { r: 0, g: 0, b: 0 },
+  );
+
+  return {
+    r: Math.round(weighted.r / totalWeight),
+    g: Math.round(weighted.g / totalWeight),
+    b: Math.round(weighted.b / totalWeight),
+  };
+}
+
+function pickNeutralAccentColor(buckets: ColorBucket[]): string | null {
+  const neutralCandidates = buckets
+    .filter(({ color }) => {
+      const luminance = getLuminance(color);
+      return getSaturation(color) < 0.18 && luminance > 24 && luminance < 235;
+    })
+    .map((bucket) => {
+      const lightness = getLightness(bucket.color);
+      const midtoneWeight = 1 - Math.min(Math.abs(lightness - 0.5) / 0.5, 1);
+      return {
+        color: bucket.color,
+        weight: bucket.count * (0.35 + midtoneWeight),
+      };
+    });
+
+  const averaged = averageColors(neutralCandidates)
+    ?? averageColors(buckets.map((bucket) => ({ color: bucket.color, weight: bucket.count })));
+
+  return averaged ? normalizeForText(averaged) : null;
+}
+
+function pickAccentColor(buckets: ColorBucket[]): string | null {
+  if (buckets.length === 0) return null;
+
+  const totalPixels = buckets.reduce((sum, bucket) => sum + bucket.count, 0);
+  const chromaticBuckets = buckets.filter(({ color }) => {
     const luminance = getLuminance(color);
     const saturation = getSaturation(color);
-    return luminance > 45 && luminance < 220 && saturation > 0.18;
+    return luminance > 55 && luminance < 248 && saturation >= 0.2;
+  });
+  const chromaticPixels = chromaticBuckets.reduce((sum, bucket) => sum + bucket.count, 0);
+
+  // Avatars that are almost entirely grayscale should stay neutral instead of
+  // latching onto a tiny colored patch.
+  if (chromaticPixels / Math.max(totalPixels, 1) < 0.12) {
+    return pickNeutralAccentColor(buckets);
+  }
+
+  const hueGroups = new Map<number, Array<{ color: RgbColor; weight: number }>>();
+
+  chromaticBuckets.forEach((bucket) => {
+    const { h, s, l } = rgbToHsl(bucket.color);
+    const hueBin = Math.floor(h * 12) % 12;
+    const lightnessWeight = 1 - Math.min(Math.abs(l - 0.58) / 0.58, 1);
+    const weight = bucket.count * (0.4 + s) * (0.35 + lightnessWeight);
+    const existing = hueGroups.get(hueBin);
+
+    if (existing) {
+      existing.push({ color: bucket.color, weight });
+    } else {
+      hueGroups.set(hueBin, [{ color: bucket.color, weight }]);
+    }
   });
 
-  const fallback = colors.find((color) => {
-    const luminance = getLuminance(color);
-    return luminance > 30 && luminance < 235;
-  });
+  const bestGroup = [...hueGroups.values()]
+    .sort((a, b) => {
+      const aWeight = a.reduce((sum, entry) => sum + entry.weight, 0);
+      const bWeight = b.reduce((sum, entry) => sum + entry.weight, 0);
+      return bWeight - aWeight;
+    })[0];
 
-  const chosen = preferred ?? fallback ?? colors[0];
+  const chosen = bestGroup
+    ? averageColors(bestGroup)
+    : averageColors(buckets.map((bucket) => ({ color: bucket.color, weight: bucket.count })));
+
   return chosen ? normalizeForText(chosen) : null;
 }
 
-function extractDominantColors(pixelData: Uint8Array | Buffer, channels: number): RgbColor[] {
-  const buckets = new Map<string, { count: number; color: RgbColor }>();
+function extractDominantColors(pixelData: Uint8Array | Buffer, channels: number): ColorBucket[] {
+  const buckets = new Map<string, ColorBucket>();
 
   for (let i = 0; i < pixelData.length; i += channels) {
     const r = pixelData[i] ?? 0;
     const g = pixelData[i + 1] ?? 0;
     const b = pixelData[i + 2] ?? 0;
     const quantized: RgbColor = {
-      r: Math.round(r / 16) * 16,
-      g: Math.round(g / 16) * 16,
-      b: Math.round(b / 16) * 16,
+      r: clamp(Math.round(r / 16) * 16, 0, 255),
+      g: clamp(Math.round(g / 16) * 16, 0, 255),
+      b: clamp(Math.round(b / 16) * 16, 0, 255),
     };
     const key = `${quantized.r},${quantized.g},${quantized.b}`;
     const existing = buckets.get(key);
@@ -143,13 +225,7 @@ function extractDominantColors(pixelData: Uint8Array | Buffer, channels: number)
   }
 
   return [...buckets.values()]
-    .sort((a, b) => {
-      const saturationDelta = getSaturation(b.color) - getSaturation(a.color);
-      if (Math.abs(saturationDelta) > 0.08) return saturationDelta;
-      return b.count - a.count;
-    })
-    .slice(0, 6)
-    .map((entry) => entry.color);
+    .sort((a, b) => b.count - a.count);
 }
 
 async function extractAvatarAccent(url: string): Promise<string | null> {
@@ -169,8 +245,8 @@ async function extractAvatarAccent(url: string): Promise<string | null> {
     .removeAlpha()
     .raw()
     .toBuffer({ resolveWithObject: true });
-  const colors = extractDominantColors(data, info.channels);
-  return pickAccentColor(colors);
+  const buckets = extractDominantColors(data, info.channels);
+  return pickAccentColor(buckets);
 }
 
 async function getAvatarAccentCached(url: string): Promise<string | null> {

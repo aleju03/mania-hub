@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { getAvatarAccentStoreKey } from "./lib/avatar-accent";
+import { CLIENT_CACHE_TTL } from "./lib/cache";
 import { DEFAULT_COUNTRY_CODE, normalizeCountryCode } from "./lib/country";
 import { getScoreIdentity, getScoreTimeMs } from "./lib/score";
 import type { OsuScore, RankingsResponse, CountryMapsData } from "./lib/types";
@@ -314,6 +315,18 @@ export const useAppStore = create<AppState>()(
         const selectedCountry = currentState.selectedCountry !== DEFAULT_COUNTRY_CODE
           ? currentState.selectedCountry
           : persistedSelectedCountry;
+        const persistedPopoffsByCountry =
+          nextState.popoffsByCountry && typeof nextState.popoffsByCountry === "object"
+            ? nextState.popoffsByCountry
+            : {};
+        const persistedPopoffsFetchedAtByCountry =
+          nextState.popoffsFetchedAtByCountry && typeof nextState.popoffsFetchedAtByCountry === "object"
+            ? nextState.popoffsFetchedAtByCountry
+            : {};
+        const freshPopoffsEntries = Object.entries(persistedPopoffsByCountry).filter(([country]) => {
+          const fetchedAt = Number(persistedPopoffsFetchedAtByCountry[country]);
+          return Number.isFinite(fetchedAt) && Date.now() - fetchedAt < CLIENT_CACHE_TTL.popoffs;
+        });
 
         return {
           ...currentState,
@@ -330,12 +343,14 @@ export const useAppStore = create<AppState>()(
               if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
               const fetchedAt = (entry as CachedAvatarAccent).fetchedAt;
               const value = (entry as CachedAvatarAccent).value;
-              const ttl = value === null ? AVATAR_ACCENT_FAILURE_TTL : AVATAR_ACCENT_CLIENT_TTL;
+                const ttl = value === null ? AVATAR_ACCENT_FAILURE_TTL : AVATAR_ACCENT_CLIENT_TTL;
               return Number.isFinite(fetchedAt) && Date.now() - fetchedAt < ttl;
             }),
           ) as Record<string, CachedAvatarAccent>,
-          popoffsByCountry: currentState.popoffsByCountry,
-          popoffsFetchedAtByCountry: currentState.popoffsFetchedAtByCountry,
+          popoffsByCountry: Object.fromEntries(freshPopoffsEntries) as CountryRecord<CachedPopoff[]>,
+          popoffsFetchedAtByCountry: Object.fromEntries(
+            freshPopoffsEntries.map(([country]) => [country, Number(persistedPopoffsFetchedAtByCountry[country])]),
+          ) as CountryRecord<number>,
         };
       },
       partialize: (state) => ({
@@ -349,6 +364,8 @@ export const useAppStore = create<AppState>()(
         homeRecentScoresFetchedAtByCountry: state.homeRecentScoresFetchedAtByCountry,
         homePopoffsByCountry: state.homePopoffsByCountry,
         homePopoffsFetchedAtByCountry: state.homePopoffsFetchedAtByCountry,
+        popoffsByCountry: state.popoffsByCountry,
+        popoffsFetchedAtByCountry: state.popoffsFetchedAtByCountry,
         mapsDataByCountry: state.mapsDataByCountry,
         mapsDataFetchedAtByCountry: state.mapsDataFetchedAtByCountry,
         feedScoresByCountry: state.feedScoresByCountry,

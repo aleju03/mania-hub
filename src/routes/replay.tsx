@@ -14,6 +14,8 @@ import type { OsuScore, ReplayFrame } from "../lib/types";
 
 const REPLAY_VOLUME_STORAGE_KEY = "mania-hub-replay-volume";
 const REPLAY_INPUT_OVERLAY_STORAGE_KEY = "mania-hub-replay-input-overlay";
+const REPLAY_BG_DIM_STORAGE_KEY = "mania-hub-replay-bg-dim";
+const REPLAY_PLAYER_SCROLL_STORAGE_KEY = "mania-hub-replay-player-scroll";
 
 interface ReplaySearch {
   scoreId?: number;
@@ -38,6 +40,52 @@ interface ServerReplay {
   };
   frames: ReplayFrame[];
   keyCount: number;
+  replayScrollY?: number;
+}
+
+const REPLAY_SCROLL_CALIBRATION_SLOPE = 2.3819505316513596;
+const REPLAY_SCROLL_CALIBRATION_INTERCEPT = -6.496179351347244;
+
+function getReplayScrollSpeed(replay: ServerReplay): number | null {
+  if (!Number.isFinite(replay.replayScrollY) || (replay.replayScrollY ?? 0) <= 0) return null;
+
+  // Heuristic calibration from verified replay samples:
+  // Aleju replay y=16.16162 -> 32 scroll
+  // Anthony replay y=14.0625 -> 27 scroll
+  const derived = Math.round(REPLAY_SCROLL_CALIBRATION_SLOPE * replay.replayScrollY! + REPLAY_SCROLL_CALIBRATION_INTERCEPT);
+  return Math.max(1, Math.min(40, derived));
+}
+
+function readPlayerScrollOverrides(): Record<string, number> {
+  if (typeof window === "undefined") return {};
+
+  const raw = window.localStorage.getItem(REPLAY_PLAYER_SCROLL_STORAGE_KEY);
+  if (!raw) return {};
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+    return Object.fromEntries(
+      Object.entries(parsed).filter(([, value]) => Number.isFinite(value)).map(([key, value]) => [
+        key,
+        Math.max(1, Math.min(40, Math.round(Number(value)))),
+      ]),
+    );
+  } catch {
+    return {};
+  }
+}
+
+function writePlayerScrollOverride(userId: number, scrollSpeed: number) {
+  if (typeof window === "undefined") return;
+
+  const next = {
+    ...readPlayerScrollOverrides(),
+    [String(userId)]: Math.max(1, Math.min(40, Math.round(scrollSpeed))),
+  };
+
+  window.localStorage.setItem(REPLAY_PLAYER_SCROLL_STORAGE_KEY, JSON.stringify(next));
 }
 
 interface ReplayRendererLike {
@@ -267,7 +315,13 @@ function ReplayViewer({
   const effectiveRate = speed * modRate;
   const [progress, setProgress] = useState(0);
   const [scrollSpeed, setScrollSpeed] = useState(32);
-  const [bgDim, setBgDim] = useState(80);
+  const [bgDim, setBgDim] = useState(() => {
+    if (typeof window === "undefined") return 80;
+    const raw = window.localStorage.getItem(REPLAY_BG_DIM_STORAGE_KEY);
+    if (raw == null) return 80;
+    const stored = Number(raw);
+    return Number.isFinite(stored) ? Math.min(100, Math.max(0, stored)) : 80;
+  });
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [volume, setVolume] = useState(() => {
     if (typeof window === "undefined") return 0.5;
@@ -291,6 +345,13 @@ function ReplayViewer({
   const skinFileRef = useRef<HTMLInputElement>(null);
   const progressInterval = useRef<ReturnType<typeof setInterval>>(undefined);
   const shouldResumeAudioRef = useRef(false);
+  const applyScrollSpeed = useCallback((next: number, persistForPlayer = false) => {
+    const normalized = Math.max(1, Math.min(40, Math.round(next)));
+    setScrollSpeed(normalized);
+    if (persistForPlayer && scoreInfo?.user_id) {
+      writePlayerScrollOverride(scoreInfo.user_id, normalized);
+    }
+  }, [scoreInfo?.user_id]);
 
   // Build full audio URL from Sayobot CDN using beatmapset ID + audio filename from .osu
   const effectiveBeatmapsetId = scoreInfo?.beatmapset?.id ?? fallbackBeatmapsetId;
@@ -315,6 +376,12 @@ function ReplayViewer({
   }, [bgImage]);
 
   useEffect(() => {
+    if (rendererRef.current) {
+      rendererRef.current.setBackgroundDim(bgDim);
+    }
+  }, [bgDim]);
+
+  useEffect(() => {
     setAudioError(null);
     shouldResumeAudioRef.current = false;
   }, [audioUrl]);
@@ -330,6 +397,25 @@ function ReplayViewer({
       rendererRef.current.setShowInputOverlay(showInputOverlay);
     }
   }, [showInputOverlay]);
+
+  useEffect(() => {
+    if (rendererRef.current) {
+      rendererRef.current.setScrollSpeed(scrollSpeed);
+    }
+  }, [scrollSpeed]);
+
+  useEffect(() => {
+    const userId = scoreInfo?.user_id;
+    const storedOverrides = readPlayerScrollOverrides();
+
+    if (userId && Number.isFinite(storedOverrides[String(userId)])) {
+      applyScrollSpeed(storedOverrides[String(userId)]);
+      return;
+    }
+
+    const replayScrollSpeed = getReplayScrollSpeed(replay);
+    applyScrollSpeed(replayScrollSpeed ?? 32);
+  }, [applyScrollSpeed, replay, scoreInfo?.user_id]);
 
   // Create renderer
   useEffect(() => {
@@ -377,7 +463,7 @@ function ReplayViewer({
         rendererRef.current = null;
       }
     };
-  }, [replay, beatmap, bgImage, bgDim, showInputOverlay, skin, initialTime, modRate, modAcronyms]);
+  }, [replay, beatmap, initialTime, modRate, modAcronyms]);
 
   // Pass skin to renderer when it changes
   useEffect(() => {
@@ -483,6 +569,11 @@ function ReplayViewer({
     if (typeof window === "undefined") return;
     window.localStorage.setItem(REPLAY_INPUT_OVERLAY_STORAGE_KEY, String(showInputOverlay));
   }, [showInputOverlay]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(REPLAY_BG_DIM_STORAGE_KEY, String(bgDim));
+  }, [bgDim]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -730,10 +821,10 @@ function ReplayViewer({
           {/* Scroll Speed */}
           <div className="flex items-center gap-1">
             <span className="text-[10px] text-osu-f1 mr-0.5">Scroll</span>
-            <button onClick={() => { const v = Math.max(1, scrollSpeed - 1); setScrollSpeed(v); rendererRef.current?.setScrollSpeed(v); }}
+            <button onClick={() => { const v = Math.max(1, scrollSpeed - 1); applyScrollSpeed(v, true); rendererRef.current?.setScrollSpeed(v); }}
               className="w-5 h-5 rounded bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3 transition-colors cursor-pointer flex items-center justify-center text-xs leading-none">-</button>
             <span className="text-xs text-white font-bold w-5 text-center tabular-nums">{scrollSpeed}</span>
-            <button onClick={() => { const v = Math.min(40, scrollSpeed + 1); setScrollSpeed(v); rendererRef.current?.setScrollSpeed(v); }}
+            <button onClick={() => { const v = Math.min(40, scrollSpeed + 1); applyScrollSpeed(v, true); rendererRef.current?.setScrollSpeed(v); }}
               className="w-5 h-5 rounded bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3 transition-colors cursor-pointer flex items-center justify-center text-xs leading-none">+</button>
           </div>
 

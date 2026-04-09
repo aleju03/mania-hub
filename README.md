@@ -41,12 +41,14 @@ Create a `.env` file with:
 
 | # | Issue | Status |
 |:---:|---|:---:|
-| 1 | Some plays missing the **+n PP** display on score cards | `todo` |
-| 2 | Name color calculation wrong (Randy = blue, BabyIan = pink) | `todo` |
+| 1 | Some plays missing the **+n PP** display on score cards | `done` |
+| 2 | Name color calculation wrong (Randy = blue, BabyIan = pink) | `done` |
 | 3 | Replay: accuracy not accurate at end of play | `todo` |
-| 4 | Replay: changing BG dim resets the play | `todo` |
+| 4 | Replay: changing BG dim resets the play | `done` |
 | 5 | Fix LN position on falling notes in home page background | `todo` |
-| 6 | Rankings page: name colors stay white on client-side navigation unless already cached; only load after full page reload | `todo` |
+| 6 | Rankings page: name colors stay white on client-side navigation unless already cached; only load after full page reload | `done` |
+| 7 | Replay: background disappears and becomes blurred after reloading replay | `todo` |
+| 8 | Replay: fix scroll speed to be accurate | `todo` |
 
 ---
 

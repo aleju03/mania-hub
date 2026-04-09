@@ -42,6 +42,8 @@ const USER_PROFILE_INSIGHTS_CACHE_VERSION = 2;
 const HOME_PAGE_CACHE_TTL = 60 * 1000;
 const HOME_RECENT_SCORES_CACHE_TTL = 60 * 1000;
 const HOME_POPOFFS_CACHE_TTL = 2 * 60 * 1000;
+const COUNTRY_POPOFFS_CACHE_TTL = 2 * 60 * 1000;
+const COUNTRY_POPOFFS_CACHE_VERSION = 3;
 const HOME_RECENT_SCORES_PLAYER_COUNT = 10;
 const HOME_POPOFFS_PLAYER_COUNT = 10;
 const USER_CACHE_TTL = 2 * 60 * 1000;
@@ -521,6 +523,58 @@ async function buildHomePopoffs(players: HomePreviewPlayer[]): Promise<HomePageP
   });
 }
 
+async function buildCountryPopoffs(players: HomePreviewPlayer[]): Promise<Array<{
+  user: { id: number; username: string; avatar_url: string };
+  score: OsuScore;
+  pp: number;
+  weightedPP: number;
+  ppGain: number;
+  time: string;
+}>> {
+  const topPlayers = players.slice(0, 30);
+  if (topPlayers.length === 0) return [];
+
+  const cacheKey = `country-popoffs:v${COUNTRY_POPOFFS_CACHE_VERSION}:${topPlayers.map((player) => player.id).join(",")}`;
+
+  return fetchWithCacheLock(cacheKey, COUNTRY_POPOFFS_CACHE_TTL, async () => {
+    const results = await mapWithConcurrency(
+      topPlayers,
+      APPROX_PP_GAINS_CONCURRENCY,
+      async (player) => {
+        try {
+          const scores = await fetchUserBestScoresWindow(player.id, 100);
+          const gainMap = calculateApproxPpGainMap(scores);
+
+          return scores
+            .filter((score) => {
+              const age = Date.now() - getTimestampMs(score);
+              return age < 30 * 24 * 60 * 60 * 1000 && score.pp != null && score.pp > 0;
+            })
+            .map((score) => ({
+              user: player,
+              score,
+              pp: score.pp ?? 0,
+              weightedPP: score.weight?.pp ?? 0,
+              ppGain: gainMap[score.id] ?? 0,
+              time: getScoreTimestamp(score),
+            }));
+        } catch {
+          return [] as Array<{
+            user: { id: number; username: string; avatar_url: string };
+            score: OsuScore;
+            pp: number;
+            weightedPP: number;
+            ppGain: number;
+            time: string;
+          }>;
+        }
+      },
+    );
+
+    return results.flatMap((scores) => scores);
+  });
+}
+
 export const getHomePageData = createServerFn({ method: "GET" })
   .inputValidator((data?: { country?: string }) => data)
   .handler(async ({ data }: { data?: { country?: string } }): Promise<HomePageData> => {
@@ -528,8 +582,9 @@ export const getHomePageData = createServerFn({ method: "GET" })
     const cacheKey = `home-page-data:v1:${country}`;
     return fetchWithCacheLock(cacheKey, HOME_PAGE_CACHE_TTL, async () => {
       const rankings = await getRankings({ data: { type: "performance", page: 1, country } });
-      const userIds = rankings.ranking.map((entry) => entry.user.id);
-      const players = rankings.ranking.map((entry) => ({
+      const activeRankings = rankings.ranking.filter((entry) => entry.user.is_active !== false);
+      const userIds = activeRankings.map((entry) => entry.user.id);
+      const players = activeRankings.map((entry) => ({
         id: entry.user.id,
         username: entry.user.username,
         avatar_url: entry.user.avatar_url,
@@ -554,6 +609,12 @@ export const getHomePopoffs = createServerFn({ method: "GET" })
   .inputValidator((data: { players: HomePreviewPlayer[] }) => data)
   .handler(async ({ data }: { data: { players: HomePreviewPlayer[] } }) => {
     return buildHomePopoffs(data.players);
+  });
+
+export const getCountryPopoffs = createServerFn({ method: "GET" })
+  .inputValidator((data: { players: HomePreviewPlayer[] }) => data)
+  .handler(async ({ data }: { data: { players: HomePreviewPlayer[] } }) => {
+    return buildCountryPopoffs(data.players);
   });
 
 // ── Batch user rank history ────────────────────────────────────────────────
@@ -857,6 +918,10 @@ export const getReplayParsed = createServerFn({ method: "GET" })
     const score = await decoder.decodeFromBuffer(Buffer.from(buffer));
 
     const info = score.info;
+    const replayScrollY = (score.replay?.frames ?? [])
+      .map((f: any) => Number(f.mouseY ?? f.position?.y))
+      .find((value: number) => Number.isFinite(value) && value > 0);
+
     // For mania, column bitmask is in mouseX (position.x), NOT buttonState
     const frames = (score.replay?.frames ?? []).map((f: any) => ({
       time: f.startTime,
@@ -890,6 +955,7 @@ export const getReplayParsed = createServerFn({ method: "GET" })
       },
       frames,
       keyCount,
+      replayScrollY,
     };
   });
 
