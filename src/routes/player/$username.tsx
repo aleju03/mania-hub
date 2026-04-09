@@ -5,7 +5,6 @@ import { getUser, getUserProfileInsights, getUserScoresBest, getUserScoresRecent
 import {
   formatNumber,
   formatAccuracy,
-  formatPlayTime,
   formatTimeAgo,
   formatDate,
   formatPP,
@@ -142,15 +141,6 @@ function loadUserProfileInsightsCached(userId: number): Promise<UserProfileInsig
 
   userProfileInsightsRequestCache.set(userId, request);
   return request;
-}
-
-function getBpmLabel(bpm: number | null): string {
-  if (bpm == null) return "";
-  const v = Math.round(bpm);
-  if (v < 140) return "Chill";
-  if (v < 180) return "Mid";
-  if (v < 220) return "Fast";
-  return "Speed demon";
 }
 
 function PlayerPage() {
@@ -487,20 +477,23 @@ function PlayerPage() {
       {/* Stats */}
       <div className="bg-osu-b5">
         <div className="max-w-[1200px] mx-auto px-5 pt-8 pb-4">
-          {/* Main stats grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
-            <StatBox label="Global Rank" value={stats.global_rank ? `#${formatNumber(stats.global_rank)}` : "-"} accent />
-            <StatBox label="Country Rank" value={stats.country_rank ? `#${formatNumber(stats.country_rank)}` : "-"} accent />
-            <StatBox label="PP" value={formatNumber(Math.round(stats.pp))} />
-            <StatBox label="Accuracy" value={formatAccuracy(stats.hit_accuracy / 100)} />
-            <StatBox label="Play Count" value={formatNumber(stats.play_count)} />
-            <StatBox label="Play Time" value={formatPlayTime(stats.play_time)} />
-          </div>
+          {/* Rank hero card: peak rank headliner with current + country + 90d sparkline baked in */}
+          <RankHeroCard
+            peakRank={user.rank_highest?.rank ?? null}
+            peakRankDate={user.rank_highest?.updated_at ?? null}
+            currentRank={stats.global_rank}
+            countryRank={stats.country_rank}
+            countryCode={user.country_code}
+            rankHistory={user.rank_history?.data ?? null}
+          />
 
-          {/* Rank history chart */}
-          {user.rank_history?.data && user.rank_history.data.length > 0 && (
-            <RankChart data={user.rank_history.data} />
-          )}
+          {/* Secondary stats strip: compact inline row for the remaining mirror stats */}
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <CompactStat label="PP" value={formatNumber(Math.round(stats.pp))} accent />
+            <CompactStat label="Accuracy" value={formatAccuracy(stats.hit_accuracy / 100)} />
+            <CompactStat label="Play Count" value={formatNumber(stats.play_count)} />
+            <CompactStat label="Play Time" value={`${formatNumber(Math.floor((stats.play_time ?? 0) / 3600))}h`} />
+          </div>
 
           {/* Profile insights */}
           <div className="mt-4">
@@ -549,7 +542,11 @@ function PlayerPage() {
                           <span className="text-xl font-bold text-white">{Math.round(profileInsights.medianBpm)}</span>
                           <span className="text-xs text-osu-f1">BPM</span>
                         </div>
-                        <div className="mt-1 text-[11px] text-osu-f1">{getBpmLabel(profileInsights.medianBpm)}</div>
+                        {profileInsights.bpmRange && (
+                          <div className="mt-1 text-[11px] text-osu-f1 tabular-nums">
+                            {Math.round(profileInsights.bpmRange.min)} - {Math.round(profileInsights.bpmRange.max)} range
+                          </div>
+                        )}
                       </>
                     ) : (
                       <div className="mt-1.5 text-sm text-osu-f1">-</div>
@@ -716,22 +713,36 @@ function PlayerPageSkeleton() {
         </div>
       </div>
 
-      <div className="max-w-[1200px] mx-auto px-5 pt-8 pb-5 space-y-5">
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="bg-osu-b4 rounded-xl p-3 border border-osu-b3/20 space-y-2">
+      <div className="max-w-[1200px] mx-auto px-5 pt-8 pb-5 space-y-3">
+        {/* Rank hero skeleton */}
+        <div className="bg-osu-b4 rounded-xl p-5 border border-osu-b3/20">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5">
+            <div className="space-y-2">
               <Skeleton className="h-3 w-20" />
-              <Skeleton className="h-6 w-24" />
+              <Skeleton className="h-10 w-32" />
+              <Skeleton className="h-3 w-40" />
             </div>
-          ))}
+            <div className="flex items-start gap-8">
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-14" />
+                <Skeleton className="h-6 w-20" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-3 w-14" />
+                <Skeleton className="h-6 w-12" />
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="bg-osu-b4 rounded-xl p-3 border border-osu-b3/20 space-y-2">
-          <div className="flex items-center justify-between">
-            <Skeleton className="h-3 w-28" />
-            <Skeleton className="h-3 w-14" />
-          </div>
-          <Skeleton className="h-16 w-full" />
+        {/* Compact stats strip skeleton */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="bg-osu-b4 rounded-xl px-4 py-2.5 border border-osu-b3/20 flex items-center justify-between gap-3">
+              <Skeleton className="h-3 w-14" />
+              <Skeleton className="h-4 w-16" />
+            </div>
+          ))}
         </div>
 
         <div className="space-y-3">
@@ -765,24 +776,129 @@ function PlayerPageSkeleton() {
   );
 }
 
-function StatBox({
-  label,
-  value,
-  accent,
-  small,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-  small?: boolean;
-}) {
+function CompactStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="bg-osu-b4 rounded-xl p-3 border border-osu-b3/20">
-      <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
-      <div
-        className={`font-bold mt-0.5 ${small ? "text-sm" : "text-xl"} ${accent ? "text-osu-yellow" : "text-white"}`}
-      >
-        {value}
+    <div className="bg-osu-b4 rounded-xl px-4 py-2.5 border border-osu-b3/20 flex items-baseline justify-between gap-3">
+      <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</span>
+      <span className={`text-base font-bold tabular-nums ${accent ? "text-osu-yellow" : "text-white"}`}>{value}</span>
+    </div>
+  );
+}
+
+function RankHeroCard({
+  peakRank,
+  peakRankDate,
+  currentRank,
+  countryRank,
+  countryCode,
+  rankHistory,
+}: {
+  peakRank: number | null;
+  peakRankDate: string | null;
+  currentRank: number | null;
+  countryRank: number | null;
+  countryCode: string;
+  rankHistory: number[] | null;
+}) {
+  const valid = (rankHistory ?? []).filter((d) => d > 0);
+  const has90d = valid.length >= 2;
+  const w = 800;
+  const h = 60;
+  let points = "";
+  if (has90d) {
+    const max = Math.max(...valid);
+    const min = Math.min(...valid);
+    const range = max - min || 1;
+    points = valid
+      .map((v, i) => {
+        const x = (i / (valid.length - 1)) * w;
+        const y = ((v - min) / range) * (h - 4) + 2;
+        return `${x},${y}`;
+      })
+      .join(" ");
+  }
+
+  // Positive delta = rank improved (number went down)
+  const delta90d = has90d ? valid[0] - valid[valid.length - 1] : null;
+  const heroRank = peakRank ?? currentRank;
+
+  return (
+    <div className="relative bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
+      {/* 90-day sparkline as background texture */}
+      {has90d && (
+        <svg
+          viewBox={`0 0 ${w} ${h}`}
+          preserveAspectRatio="none"
+          className="absolute inset-x-0 bottom-0 w-full h-[70%] pointer-events-none"
+          aria-hidden
+        >
+          <defs>
+            <linearGradient id="rankHeroGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="hsl(333,100%,70%)" stopOpacity="0.28" />
+              <stop offset="100%" stopColor="hsl(333,100%,70%)" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <polygon points={`0,${h} ${points} ${w},${h}`} fill="url(#rankHeroGrad)" />
+          <polyline
+            points={points}
+            fill="none"
+            stroke="hsl(333,100%,70%)"
+            strokeWidth="2"
+            strokeOpacity="0.85"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+      )}
+
+      {/* Foreground content */}
+      <div className="relative px-5 py-5 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5">
+        {/* Peak rank - hero */}
+        <div className="min-w-0">
+          <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">
+            {peakRank ? "Peak Rank" : "Global Rank"}
+          </div>
+          <div className="mt-0.5 text-4xl sm:text-5xl font-extrabold text-osu-yellow leading-none tabular-nums">
+            {heroRank ? `#${formatNumber(heroRank)}` : "-"}
+          </div>
+          {peakRank && peakRankDate && (
+            <div className="mt-2 text-[10px] text-osu-f1">
+              achieved <span className="text-osu-l2">{formatDate(peakRankDate)}</span> · {formatTimeAgo(peakRankDate)}
+            </div>
+          )}
+        </div>
+
+        {/* Secondary: current global + country + 90d delta */}
+        <div className="flex items-start gap-6 sm:gap-8">
+          {peakRank && (
+            <div className="min-w-0">
+              <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Current</div>
+              <div className="mt-0.5 text-xl font-bold text-white tabular-nums">
+                {currentRank ? `#${formatNumber(currentRank)}` : "-"}
+              </div>
+              {delta90d != null && delta90d !== 0 && (
+                <div className={`mt-1 text-[10px] inline-flex items-center gap-1 ${delta90d > 0 ? "text-osu-green-light" : "text-osu-red-light"}`}>
+                  <svg width="7" height="6" viewBox="0 0 7 6" className="flex-shrink-0" aria-hidden>
+                    <path
+                      d={delta90d > 0 ? "M3.5 0 L7 6 L0 6 Z" : "M3.5 6 L0 0 L7 0 Z"}
+                      fill="currentColor"
+                    />
+                  </svg>
+                  <span className="tabular-nums">{formatNumber(Math.abs(delta90d))}</span>
+                  <span className="text-osu-f1">90d</span>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="min-w-0">
+            <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Country</div>
+            <div className="mt-0.5 text-xl font-bold text-osu-pink-light tabular-nums">
+              {countryRank ? `#${formatNumber(countryRank)}` : "-"}
+            </div>
+            {countryCode && (
+              <div className="mt-1 text-[10px] text-osu-f1 uppercase tracking-wider">{countryCode}</div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -896,55 +1012,6 @@ function InsightsSkeleton() {
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-function RankChart({ data }: { data: number[] }) {
-  const valid = data.filter((d) => d > 0);
-  if (valid.length < 2) return null;
-  const max = Math.max(...valid);
-  const min = Math.min(...valid);
-  const range = max - min || 1;
-  const w = 800;
-  const h = 60;
-  const points = valid
-    .map((v, i) => {
-      const x = (i / (valid.length - 1)) * w;
-      const y = ((v - min) / range) * (h - 4) + 2;
-      return `${x},${y}`;
-    })
-    .join(" ");
-
-  return (
-    <div className="bg-osu-b4 rounded-xl p-3 border border-osu-b3/20 overflow-hidden">
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">
-          Rank History (90 days)
-        </span>
-        <span className="text-[10px] text-osu-f1">
-          #{formatNumber(valid[valid.length - 1])}
-        </span>
-      </div>
-      <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-16">
-        <defs>
-          <linearGradient id="rankGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="hsl(333,100%,70%)" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="hsl(333,100%,70%)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <polygon
-          points={`0,${h} ${points} ${w},${h}`}
-          fill="url(#rankGrad)"
-        />
-        <polyline
-          points={points}
-          fill="none"
-          stroke="hsl(333,100%,70%)"
-          strokeWidth="2"
-          vectorEffect="non-scaling-stroke"
-        />
-      </svg>
     </div>
   );
 }

@@ -39,6 +39,11 @@ export interface OsuRankHistory {
   data: number[];
 }
 
+export interface OsuRankHighest {
+  rank: number;
+  updated_at: string;
+}
+
 export interface OsuBadge {
   awarded_at: string;
   description: string;
@@ -62,6 +67,7 @@ export interface OsuUser {
   is_supporter: boolean;
   statistics: OsuUserStatistics;
   rank_history: OsuRankHistory | null;
+  rank_highest: OsuRankHighest | null;
   badges: OsuBadge[];
   user_achievements: Array<{ achieved_at: string; achievement_id: number }>;
   follower_count: number;
@@ -348,6 +354,10 @@ export interface UserProfileInsights {
   keySplit: UserProfileKeyBucket[];
   mostUsedMod: UserProfileCountStat | null;
   medianBpm: number | null;
+  bpmRange: {
+    min: number;
+    max: number;
+  } | null;
   newestTopPlay: InsightScoreSnapshot | null;
   oldestTopPlay: InsightScoreSnapshot | null;
   ppRange: {

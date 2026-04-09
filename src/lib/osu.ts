@@ -43,7 +43,7 @@ const COUNTRY_BEATMAP_USER_SCORE_CACHE_TTL = 10 * 60 * 1000;
 const COUNTRY_BEATMAP_LOOKUP_CONCURRENCY = 10;
 const COUNTRY_BEATMAP_PLAYER_PAGE_LIMIT = 2; // Match the rest of the app's top-100 country player scope.
 const USER_PROFILE_INSIGHTS_CACHE_TTL = 6 * 60 * 60 * 1000;
-const USER_PROFILE_INSIGHTS_CACHE_VERSION = 2;
+const USER_PROFILE_INSIGHTS_CACHE_VERSION = 3;
 const HOME_PAGE_CACHE_TTL = 60 * 1000;
 const HOME_RECENT_SCORES_CACHE_TTL = 60 * 1000;
 const HOME_POPOFFS_CACHE_TTL = 2 * 60 * 1000;
@@ -347,6 +347,12 @@ function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfileInsigh
     keySplit: sortedKeySplit,
     mostUsedMod: getTopCountEntry(modCounts, moddedPlayCount),
     medianBpm: getMedian(bpms),
+    bpmRange: bpms.length
+      ? {
+          min: Math.min(...bpms),
+          max: Math.max(...bpms),
+        }
+      : null,
     newestTopPlay: datedScores.length ? scoreToSnapshot(datedScores[datedScores.length - 1].score) : null,
     oldestTopPlay: datedScores.length ? scoreToSnapshot(datedScores[0].score) : null,
     ppRange: sortedPpValues.length

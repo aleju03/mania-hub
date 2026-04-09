@@ -84,7 +84,7 @@ Create a `.env` file with:
 | 10 | UI/UX overhaul for the replay page | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
 | 11 | Full responsive mobile support for watching replays | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
 | 12 | Customizable overlay positions | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
-| 13 | Persist BG dim preference locally (per play) | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
+| 13 | Persist BG dim preference locally (per play) | ![done](https://img.shields.io/badge/done-brightgreen?style=flat-square) |
 | 14 | Finish custom skin support | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
 
 ---
@@ -95,8 +95,8 @@ Create a `.env` file with:
 
 | # | Feature | Status |
 |:---:|---|:---:|
-| 15 | Show **best peak rank** instead of current global rank | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
-| 16 | Rethink display of existing osu! stats (country rank, PP, accuracy, play count, play time, 90-day rank history) so the page feels unique | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
+| 15 | Show **best peak rank** instead of current global rank | ![done](https://img.shields.io/badge/done-brightgreen?style=flat-square) |
+| 16 | Rethink display of existing osu! stats (country rank, PP, accuracy, play count, play time, 90-day rank history) so the page feels unique | ![done](https://img.shields.io/badge/done-brightgreen?style=flat-square) |
 
 ---
 
