@@ -47,7 +47,7 @@ Create a `.env` file with:
 | 4 | Replay: changing BG dim resets the play | ![done](https://img.shields.io/badge/done-brightgreen?style=flat-square) |
 | 5 | Fix LN position on falling notes in home page background | ![todo](https://img.shields.io/badge/todo-red?style=flat-square) |
 | 6 | Rankings page: name colors stay white on client-side navigation unless already cached; only load after full page reload | ![done](https://img.shields.io/badge/done-brightgreen?style=flat-square) |
-| 7 | Replay: background disappears and becomes blurred after reloading replay | ![todo](https://img.shields.io/badge/todo-red?style=flat-square) |
+| 7 | Replay: background disappears and becomes blurred after reloading replay | ![done](https://img.shields.io/badge/done-brightgreen?style=flat-square) |
 | 8 | Replay: fix scroll speed to be accurate | ![todo](https://img.shields.io/badge/todo-red?style=flat-square) |
 
 ---
