@@ -59,3 +59,13 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
   100% { transform: translateX(300%); }
 }
 
+@keyframes skeleton-pulse {
+  0%, 100% { background-color: rgba(255, 255, 255, 0.045); }
+  50% { background-color: rgba(255, 255, 255, 0.065); }
+}
+.skeleton-pulse {
+  background-color: rgba(255, 255, 255, 0.045);
+  animation: skeleton-pulse 1.8s ease-in-out infinite;
+  will-change: background-color;
+}
+
