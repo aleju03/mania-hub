@@ -54,9 +54,9 @@ function HomePage() {
     let cancelled = false;
     const shouldRefreshRankings = !rankings || isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings);
     const shouldRefreshScores =
-      recentScores.length === 0 || isCacheStale(recentScoresFetchedAt, CLIENT_CACHE_TTL.homeRecentScores);
+      !recentScoresFetchedAt || isCacheStale(recentScoresFetchedAt, CLIENT_CACHE_TTL.homeRecentScores);
     const shouldRefreshPopoffs =
-      popoffs.length === 0 || isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.homePopoffs);
+      !popoffsFetchedAt || isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.homePopoffs);
 
     if (!shouldRefreshRankings && !shouldRefreshScores && !shouldRefreshPopoffs) {
       setRankingsError(null);
@@ -91,8 +91,10 @@ function HomePage() {
     return () => {
       cancelled = true;
     };
+  // Only depend on lengths and timestamps, never on array/object references.
+  // The effect only needs to know *whether* data exists and *how stale* it is.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    popoffs,
     popoffs.length,
     popoffsFetchedAt,
     rankings,
@@ -100,9 +102,6 @@ function HomePage() {
     recentScores.length,
     recentScoresFetchedAt,
     selectedCountry,
-    setRankings,
-    setHomePopoffs,
-    setHomeRecentScores,
     countryName,
   ]);
 

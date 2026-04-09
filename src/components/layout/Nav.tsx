@@ -6,6 +6,7 @@ import { CountrySelector } from "./CountrySelector";
 import { clearDevServerCaches } from "../../lib/api";
 import { searchUsers } from "../../lib/osu";
 import { useAppStore } from "../../store";
+import { getCountryFlagGradient, getCountryFlagUrl } from "../../lib/country";
 
 const links = [
   { id: "home", to: "/", label: "home" },
@@ -68,8 +69,12 @@ export function Nav() {
   const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const selectedCountry = useAppStore((state) => state.selectedCountry);
   const current = links.find((l) => location.pathname.startsWith(l.to === "/" ? "/__home" : l.to)) ||
     (location.pathname === "/" ? links[0] : location.pathname.startsWith("/player") ? null : links[0]);
+
+  const flagGradient = getCountryFlagGradient(selectedCountry);
+  const flagImageUrl = getCountryFlagUrl(selectedCountry);
 
   // Close drawer on route change
   useEffect(() => {
@@ -123,9 +128,9 @@ export function Nav() {
             <Link to="/" preload="intent" className="flex items-center gap-2">
               <div className="relative w-10 h-10">
                 <div
-                  className="absolute inset-0"
+                  className="absolute inset-0 transition-all duration-300"
                   style={{
-                    background: "linear-gradient(180deg, #002b7f 20%, #fff 20%, #fff 35%, #ce1126 35%, #ce1126 65%, #fff 65%, #fff 80%, #002b7f 80%)",
+                    background: flagGradient ?? `url(${flagImageUrl}) center/cover no-repeat`,
                     maskImage: "url(/images/layout/osu-logo-circle.svg)",
                     WebkitMaskImage: "url(/images/layout/osu-logo-circle.svg)",
                     maskSize: "contain",
@@ -134,6 +139,22 @@ export function Nav() {
                     WebkitMaskRepeat: "no-repeat",
                     maskPosition: "center",
                     WebkitMaskPosition: "center",
+                  }}
+                />
+                {/* Dark halo behind text for readability on light/busy flags */}
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    background: "rgba(0,0,0,0.35)",
+                    maskImage: "url(/images/layout/osu-logo-text.svg)",
+                    WebkitMaskImage: "url(/images/layout/osu-logo-text.svg)",
+                    maskSize: "115%",
+                    WebkitMaskSize: "115%",
+                    maskRepeat: "no-repeat",
+                    WebkitMaskRepeat: "no-repeat",
+                    maskPosition: "center",
+                    WebkitMaskPosition: "center",
+                    filter: "blur(2px)",
                   }}
                 />
                 <div
