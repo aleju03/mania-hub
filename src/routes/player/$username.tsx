@@ -1067,7 +1067,7 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
       {canReplay && (
         <Link
           to="/replay"
-          search={{ scoreId: score.id, mode: "mania", beatmapsetId: score.beatmapset?.id }}
+          search={{ scoreId: score.id, beatmapsetId: score.beatmapset?.id }}
           className="px-2.5 py-1.5 rounded-md bg-osu-pink/15 text-[10px] font-semibold text-osu-pink-light border border-osu-pink/20 hover:bg-osu-pink/25 transition-colors flex-shrink-0 hidden sm:block"
         >
           Replay

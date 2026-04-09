@@ -558,7 +558,7 @@ function PopOffsPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              window.location.href = `/replay?scoreId=${p.score.id}&mode=mania&beatmapsetId=${p.score.beatmapset?.id}`;
+                              window.location.href = `/replay?scoreId=${p.score.id}&beatmapsetId=${p.score.beatmapset?.id}`;
                             }}
                             className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
                           >
