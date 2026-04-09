@@ -72,7 +72,10 @@ export function UsernameText({
   }, [avatarUrl]);
 
   return (
-    <span className={className} style={accent ? { color: accent } : undefined}>
+    <span
+      className={className}
+      style={{ transition: "color 220ms ease-out", ...(accent ? { color: accent } : null) }}
+    >
       {username}
     </span>
   );
