@@ -34,6 +34,8 @@ export interface CachedPopoff {
   time: string;
 }
 
+export type TopPlaysRange = "24h" | "3d" | "7d" | "30d";
+
 type CountryRecord<T> = Record<string, T>;
 
 interface AppState {
@@ -47,6 +49,7 @@ interface AppState {
   homeRecentScoresFetchedAtByCountry: CountryRecord<number>;
   homePopoffsByCountry: CountryRecord<CachedHomePopoff[]>;
   homePopoffsFetchedAtByCountry: CountryRecord<number>;
+  topPlaysRangeByCountry: CountryRecord<TopPlaysRange>;
   popoffsByCountry: CountryRecord<CachedPopoff[]>;
   popoffsFetchedAtByCountry: CountryRecord<number>;
   mapsDataByCountry: CountryRecord<CountryMapsData>;
@@ -62,6 +65,7 @@ interface AppState {
   setRankHistories: (histories: Record<number, number[]>) => void;
   setHomeRecentScores: (country: string, scores: OsuScore[]) => void;
   setHomePopoffs: (country: string, popoffs: CachedHomePopoff[]) => void;
+  setTopPlaysRange: (country: string, range: TopPlaysRange) => void;
   setPopoffs: (country: string, popoffs: CachedPopoff[]) => void;
   setMapsData: (country: string, data: CountryMapsData) => void;
   addFeedScores: (country: string, scores: OsuScore[]) => void;
@@ -121,6 +125,7 @@ export const useAppStore = create<AppState>()(
       homeRecentScoresFetchedAtByCountry: {},
       homePopoffsByCountry: {},
       homePopoffsFetchedAtByCountry: {},
+      topPlaysRangeByCountry: {},
       popoffsByCountry: {},
       popoffsFetchedAtByCountry: {},
       mapsDataByCountry: {},
@@ -198,6 +203,16 @@ export const useAppStore = create<AppState>()(
             homePopoffsFetchedAtByCountry: {
               ...state.homePopoffsFetchedAtByCountry,
               [normalizedCountry]: Date.now(),
+            },
+          };
+        }),
+      setTopPlaysRange: (country, range) =>
+        set((state) => {
+          const normalizedCountry = normalizeCountryCode(country);
+          return {
+            topPlaysRangeByCountry: {
+              ...state.topPlaysRangeByCountry,
+              [normalizedCountry]: range,
             },
           };
         }),
@@ -346,6 +361,10 @@ export const useAppStore = create<AppState>()(
               return Number.isFinite(fetchedAt) && Date.now() - fetchedAt < ttl;
             }),
           ) as Record<string, CachedAvatarAccent>,
+          topPlaysRangeByCountry:
+            nextState.topPlaysRangeByCountry && typeof nextState.topPlaysRangeByCountry === "object"
+              ? nextState.topPlaysRangeByCountry as CountryRecord<TopPlaysRange>
+              : {},
           // Keep persisted top-plays data even when stale so the route can render it
           // immediately after a reload and revalidate in the background.
           popoffsByCountry: persistedPopoffsByCountry as CountryRecord<CachedPopoff[]>,
@@ -365,6 +384,7 @@ export const useAppStore = create<AppState>()(
         homeRecentScoresFetchedAtByCountry: state.homeRecentScoresFetchedAtByCountry,
         homePopoffsByCountry: state.homePopoffsByCountry,
         homePopoffsFetchedAtByCountry: state.homePopoffsFetchedAtByCountry,
+        topPlaysRangeByCountry: state.topPlaysRangeByCountry,
         popoffsByCountry: state.popoffsByCountry,
         popoffsFetchedAtByCountry: state.popoffsFetchedAtByCountry,
         mapsDataByCountry: state.mapsDataByCountry,

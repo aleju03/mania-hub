@@ -62,6 +62,7 @@ function HomePage() {
   const recentScoresFetchedAt = useAppStore((state) => state.homeRecentScoresFetchedAtByCountry[selectedCountry]) ?? null;
   const popoffs = useAppStore((state) => state.homePopoffsByCountry[selectedCountry]) ?? EMPTY_POPOFFS;
   const popoffsFetchedAt = useAppStore((state) => state.homePopoffsFetchedAtByCountry[selectedCountry]) ?? null;
+  const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
   const setRankings = useAppStore((state) => state.setRankings);
   const setHomeRecentScores = useAppStore((state) => state.setHomeRecentScores);
   const setHomePopoffs = useAppStore((state) => state.setHomePopoffs);
@@ -309,7 +310,13 @@ function HomePage() {
         <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden lg:col-span-2">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Recent Top Plays</h2>
-            <Link to="/top-plays" className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
+            <Link
+              to="/top-plays"
+              search={topPlaysRange !== "7d" ? { range: topPlaysRange } : undefined}
+              className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors"
+            >
+              view all
+            </Link>
           </div>
           {loadingPopoffs ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-px bg-osu-b3/15">

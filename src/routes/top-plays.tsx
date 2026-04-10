@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getCountryPopoffs, getRankings } from "../lib/osu";
@@ -16,7 +16,7 @@ import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import { Pagination } from "../components/ui/Pagination";
 import type { OsuScore, RankingsResponse } from "../lib/types";
-import { useAppStore, type CachedPopoff } from "../store";
+import { useAppStore, type CachedPopoff, type TopPlaysRange } from "../store";
 
 interface PopOff {
   user: { id: number; username: string; avatar_url: string };
@@ -27,8 +27,12 @@ interface PopOff {
   time: string;
 }
 
-type TimeRange = "24h" | "3d" | "7d" | "30d";
+type TimeRange = TopPlaysRange;
 type SortMode = "recent" | "pp";
+type TopPlaysSearch = {
+  range?: TimeRange;
+};
+
 const RANGE_MS: Record<TimeRange, number> = {
   "24h": 24 * 60 * 60 * 1000,
   "3d": 3 * 24 * 60 * 60 * 1000,
@@ -39,28 +43,51 @@ const RANGE_MS: Record<TimeRange, number> = {
 const PAGE_SIZE = 15;
 const FETCH_BATCH_SIZE = 5;
 const PP_GAIN_SKELETON_COUNT = 6;
+const DEFAULT_TOP_PLAYS_SEARCH: Required<TopPlaysSearch> = {
+  range: "7d",
+};
 
 export const Route = createFileRoute("/top-plays")({
+  search: {
+    middlewares: [stripSearchParams(DEFAULT_TOP_PLAYS_SEARCH)],
+  },
+  validateSearch: (search: Record<string, unknown>): Required<TopPlaysSearch> => ({
+    range:
+      search.range === "24h" ||
+      search.range === "3d" ||
+      search.range === "30d"
+        ? search.range
+        : DEFAULT_TOP_PLAYS_SEARCH.range,
+  }),
   component: PopOffsPage,
 });
 
 const EMPTY_POPOFFS: CachedPopoff[] = [];
 
+function buildTopPlaysSearch(search: Required<TopPlaysSearch>): TopPlaysSearch {
+  return {
+    ...(search.range !== DEFAULT_TOP_PLAYS_SEARCH.range ? { range: search.range } : {}),
+  };
+}
+
 function PopOffsPage() {
+  const { range } = Route.useSearch();
+  const location = useLocation();
   const navigate = useNavigate();
   const selectedCountry = useAppStore((state) => state.selectedCountry);
   const rankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const popoffs = useAppStore((state) => state.popoffsByCountry[selectedCountry]) ?? EMPTY_POPOFFS;
   const popoffsFetchedAt = useAppStore((state) => state.popoffsFetchedAtByCountry[selectedCountry]) ?? null;
+  const rememberedRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? DEFAULT_TOP_PLAYS_SEARCH.range);
   const setRankings = useAppStore((state) => state.setRankings);
   const setCachedPopoffs = useAppStore((state) => state.setPopoffs);
+  const setTopPlaysRange = useAppStore((state) => state.setTopPlaysRange);
   const [playersError, setPlayersError] = useState<string | null>(null);
   const [loadingPlayers, setLoadingPlayers] = useState(!rankings);
   const [loading, setLoading] = useState(popoffs.length === 0);
   const [refreshing, setRefreshing] = useState(false);
   const [loadedCount, setLoadedCount] = useState(0);
-  const [range, setRange] = useState<TimeRange>("7d");
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [page, setPage] = useState(0);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -77,6 +104,22 @@ function PopOffsPage() {
     setExpandedId(null);
     fetchingRef.current = false;
   }, [selectedCountry]);
+
+  useEffect(() => {
+    const hasExplicitRange = new URLSearchParams(location.searchStr).has("range");
+    if (hasExplicitRange || rememberedRange === range) return;
+
+    navigate({
+      to: "/top-plays",
+      search: buildTopPlaysSearch({ range: rememberedRange }),
+      replace: true,
+    });
+  }, [location.searchStr, navigate, range, rememberedRange]);
+
+  useEffect(() => {
+    if (rememberedRange === range) return;
+    setTopPlaysRange(selectedCountry, range);
+  }, [range, rememberedRange, selectedCountry, setTopPlaysRange]);
 
   const players = useMemo(() =>
     rankings?.ranking
@@ -279,7 +322,12 @@ function PopOffsPage() {
         items={ranges}
         value={range}
         onChange={(nextRange) => {
-          setRange(nextRange);
+          setTopPlaysRange(selectedCountry, nextRange);
+          navigate({
+            to: "/top-plays",
+            search: buildTopPlaysSearch({ range: nextRange }),
+            replace: true,
+          });
           setPage(0);
         }}
       />
