@@ -321,7 +321,7 @@ const FLAG_GRADIENTS: Record<string, string> = {
   ID: "linear-gradient(180deg, #ce1126 50%, #fff 50%)",
   PH: "linear-gradient(180deg, #0038a8 50%, #ce1126 50%)",
   MY: "linear-gradient(180deg, #cc0001 7%, #fff 7%, #fff 14%, #cc0001 14%, #cc0001 21%, #fff 21%, #fff 29%, #cc0001 29%, #cc0001 36%, #fff 36%, #fff 43%, #cc0001 43%, #cc0001 50%, #fff 50%, #fff 57%, #cc0001 57%, #cc0001 64%, #fff 64%, #fff 71%, #cc0001 71%, #cc0001 79%, #fff 79%, #fff 86%, #cc0001 86%, #cc0001 93%, #fff 93%)",
-  US: "linear-gradient(180deg, #b22234 8%, #fff 8%, #fff 15%, #b22234 15%, #b22234 23%, #fff 23%, #fff 31%, #b22234 31%, #b22234 38%, #fff 38%, #fff 46%, #b22234 46%, #b22234 54%, #fff 54%, #fff 62%, #b22234 62%, #b22234 69%, #fff 69%, #fff 77%, #b22234 77%, #b22234 85%, #fff 85%, #fff 92%, #b22234 92%)",
+  US: "linear-gradient(#3c3b6e, #3c3b6e) top left / 40% 54% no-repeat, linear-gradient(180deg, #b22234 8%, #fff 8%, #fff 15%, #b22234 15%, #b22234 23%, #fff 23%, #fff 31%, #b22234 31%, #b22234 38%, #fff 38%, #fff 46%, #b22234 46%, #b22234 54%, #fff 54%, #fff 62%, #b22234 62%, #b22234 69%, #fff 69%, #fff 77%, #b22234 77%, #b22234 85%, #fff 85%, #fff 92%, #b22234 92%)",
   CA: "linear-gradient(90deg, #ff0000 25%, #fff 25%, #fff 75%, #ff0000 75%)",
   MX: "linear-gradient(90deg, #006847 33%, #fff 33%, #fff 67%, #ce1126 67%)",
   SE: "linear-gradient(180deg, #005293 40%, #fecc02 40%, #fecc02 60%, #005293 60%)",
