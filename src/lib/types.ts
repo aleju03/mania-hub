@@ -68,6 +68,7 @@ export interface OsuUser {
   statistics: OsuUserStatistics;
   rank_history: OsuRankHistory | null;
   rank_highest: OsuRankHighest | null;
+  page: { html: string | null; raw: string | null } | null;
   badges: OsuBadge[];
   user_achievements: Array<{ achieved_at: string; achievement_id: number }>;
   follower_count: number;

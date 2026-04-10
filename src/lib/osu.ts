@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import sanitizeHtml from "sanitize-html";
 import {
   osuFetch,
   osuFetchBinary,
@@ -81,8 +82,67 @@ function getScoreRequestParams(
   };
 }
 
+const USER_CACHE_VERSION = 4;
+
 function getUserCacheKey(key: string): string {
-  return `user:${key.trim().toLowerCase()}`;
+  return `user:v${USER_CACHE_VERSION}:${key.trim().toLowerCase()}`;
+}
+
+const PROFILE_PAGE_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
+  allowedTags: [
+    "a", "b", "br", "blockquote", "center", "code", "del", "div", "em", "h1",
+    "h2", "h3", "h4", "h5", "h6", "hr", "i", "img", "li", "ol", "p", "pre",
+    "s", "span", "strike", "strong", "u", "ul",
+  ],
+  allowedAttributes: {
+    a: ["href", "title", "rel", "target", "class"],
+    img: ["src", "alt", "title", "width", "height", "class", "loading", "style"],
+    span: ["class", "style"],
+    div: ["class", "style"],
+    "*": ["class"],
+  },
+  allowedStyles: {
+    "*": {
+      color: [/^#(0x)?[0-9a-f]+$/i, /^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/],
+      "text-align": [/^left$/, /^right$/, /^center$/, /^justify$/],
+      "font-size": [/^\d+(\.\d+)?(%|px|em|rem|pt)$/],
+      width: [/^\d+(\.\d+)?(px|%|em|rem)$/],
+      "max-width": [/^\d+(\.\d+)?(px|%|em|rem)$/],
+      "aspect-ratio": [/^[\d.\s/]+$/],
+    },
+  },
+  allowedSchemes: ["http", "https", "mailto"],
+  transformTags: {
+    a: (tagName, attribs) => {
+      // Spoilerbox toggle links: strip href/target entirely. Without href, the
+      // browser cannot navigate, even if our React click handler hasn't mounted
+      // yet. Our JS handles the toggle via the preserved classes.
+      const cls = typeof attribs.class === "string" ? attribs.class : "";
+      if (cls.includes("js-spoilerbox__link")) {
+        const { href: _href, target: _target, ...rest } = attribs;
+        void _href; void _target;
+        return { tagName, attribs: rest };
+      }
+      // Raw "#" links (rare, not spoilerbox): leave as-is so they don't open
+      // "#" in a new tab.
+      if (attribs.href === "#") return { tagName, attribs };
+      // External links: open in new tab.
+      return {
+        tagName,
+        attribs: {
+          ...attribs,
+          target: "_blank",
+          rel: "noopener noreferrer nofollow",
+        },
+      };
+    },
+  },
+};
+
+function sanitizeProfilePageHtml(html: string | null | undefined): string | null {
+  if (!html) return null;
+  const cleaned = sanitizeHtml(html, PROFILE_PAGE_SANITIZE_OPTIONS);
+  return cleaned.trim() || null;
 }
 
 function getUserScoreListCacheKey(
@@ -110,9 +170,12 @@ async function getCachedUser(key: string): Promise<OsuUser> {
 
   const request = fetchWithCacheLock(cacheKey, USER_CACHE_TTL, async () => {
     const user = await osuFetch<OsuUser>(`/users/${encodeURIComponent(key)}/mania`);
+    if (user.page) {
+      user.page.html = sanitizeProfilePageHtml(user.page.html);
+    }
     void Promise.allSettled([
       setPersistentCache(getUserCacheKey(user.username), user, USER_CACHE_TTL),
-      setPersistentCache(`user-id:${user.id}`, user, USER_CACHE_TTL),
+      setPersistentCache(`user-id:v${USER_CACHE_VERSION}:${user.id}`, user, USER_CACHE_TTL),
     ]);
     return user;
   }).finally(() => {

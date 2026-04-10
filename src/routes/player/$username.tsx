@@ -1,5 +1,5 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getUser, getUserProfileInsights, getUserScoresBest, getUserScoresRecent } from "../../lib/osu";
 import {
@@ -37,7 +37,7 @@ const USER_SCORES_CLIENT_CACHE_TTL = 60 * 1000;
 const USER_PROFILE_INSIGHTS_CLIENT_CACHE_TTL = 10 * 60 * 1000;
 const INITIAL_SCORE_BATCH_SIZE = 5;
 const SHOW_MORE_BATCH_SIZE = 50;
-type ScoreTab = "best" | "recent";
+type PlayerTab = "best" | "recent" | "about";
 
 export const Route = createFileRoute("/player/$username")({
   component: PlayerPage,
@@ -155,12 +155,12 @@ function PlayerPage() {
   const [userError, setUserError] = useState<string | null>(null);
   const [scoresError, setScoresError] = useState<string | null>(null);
   const [insightsError, setInsightsError] = useState<string | null>(null);
-  const [tab, setTab] = useState<ScoreTab>("best");
+  const [tab, setTab] = useState<PlayerTab>("best");
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [bestHasMore, setBestHasMore] = useState(true);
   const [recentHasMore, setRecentHasMore] = useState(true);
-  const [loadingMoreTab, setLoadingMoreTab] = useState<ScoreTab | null>(null);
+  const [loadingMoreTab, setLoadingMoreTab] = useState<"best" | "recent" | null>(null);
   const [bestVisibleCount, setBestVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const [recentVisibleCount, setRecentVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
 
@@ -267,7 +267,12 @@ function PlayerPage() {
     };
   }, [user]);
 
-  const fetchMoreScores = useCallback(async (targetTab: ScoreTab) => {
+  // Safety: if we're on the About tab but the user has no page content, fall back to Best
+  useEffect(() => {
+    if (tab === "about" && !user?.page?.html) setTab("best");
+  }, [tab, user]);
+
+  const fetchMoreScores = useCallback(async (targetTab: "best" | "recent") => {
     if (!user || loadingMoreTab) return;
 
     const currentScores = targetTab === "best" ? best : recent;
@@ -316,6 +321,7 @@ function PlayerPage() {
   }, [tab]);
 
   useEffect(() => {
+    if (tab === "about") return;
     const currentScores = tab === "best" ? best : recent;
     const currentVisibleCount = tab === "best" ? bestVisibleCount : recentVisibleCount;
     const filteredScores = currentScores.filter((score) => matchesKeyFilter(score, keyFilter));
@@ -606,10 +612,10 @@ function PlayerPage() {
             </div>
           </div>
 
-          {/* Score tabs */}
+          {/* Player tabs */}
           <div className="mt-5 pt-1 border-t border-osu-b3/30 flex flex-wrap items-center justify-between gap-3">
             <div className="flex">
-              {(["best", "recent"] as const).map((t) => (
+              {((["best", "recent", ...(user.page?.html ? ["about"] : [])]) as PlayerTab[]).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -619,67 +625,81 @@ function PlayerPage() {
                       : "text-osu-f1 hover:text-osu-l2"
                   }`}
                 >
-                  {t === "best" ? "Best Performance" : "Recent Plays"}
+                  {t === "best" ? "Best Performance" : t === "recent" ? "Recent Plays" : "About"}
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-1 rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-1">
-              {([
-                ["all", "All"],
-                ["4k", "4K"],
-                ["6k", "6K"],
-                ["7k", "7K"],
-              ] as const).map(([value, label]) => (
-                <button
-                  key={value}
-                  onClick={() => setKeyFilter(value)}
-                  className={`px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
-                    keyFilter === value
-                      ? "bg-osu-pink/15 text-osu-pink-light"
-                      : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            {tab !== "about" && (
+              <div className="flex items-center gap-1 rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-1">
+                {([
+                  ["all", "All"],
+                  ["4k", "4K"],
+                  ["6k", "6K"],
+                  ["7k", "7K"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => setKeyFilter(value)}
+                    className={`px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                      keyFilter === value
+                        ? "bg-osu-pink/15 text-osu-pink-light"
+                        : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Scores list */}
+      {/* Tab body: About card or scores list */}
       <div className="bg-osu-b5 border-t border-osu-b3/20">
         <div className="max-w-[1200px] mx-auto px-5 py-5 space-y-1.5">
           <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={scoreListState}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.14 }}
-              className="space-y-1.5"
-            >
-              {scoreListState === "loading" ? (
-                Array.from({ length: 6 }).map((_, i) => (
-                  <ScoreRowSkeleton key={i} />
-                ))
-              ) : scoreListState === "settling" ? (
-                Array.from({ length: INITIAL_SCORE_BATCH_SIZE }).map((_, i) => (
-                  <PlayerScoreRowSkeleton key={`settling-${i}`} />
-                ))
-              ) : scoreListState === "error" ? (
-                <div className="text-center py-8 text-osu-f1 text-sm">{scoresError}</div>
-              ) : scoreListState === "loaded" ? (
-                visibleScores.map((s: OsuScore, i: number) => (
-                  <ScoreRow key={getScoreIdentity(s)} score={s} position={i + 1} />
-                ))
-              ) : (
-                <div className="text-center py-8 text-osu-f1 text-sm">No scores found</div>
-              )}
-            </motion.div>
+            {tab === "about" && user.page?.html ? (
+              <motion.div
+                key="about"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.14 }}
+              >
+                <PlayerAboutCard html={user.page.html} />
+              </motion.div>
+            ) : (
+              <motion.div
+                key={scoreListState}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.14 }}
+                className="space-y-1.5"
+              >
+                {scoreListState === "loading" ? (
+                  Array.from({ length: 6 }).map((_, i) => (
+                    <ScoreRowSkeleton key={i} />
+                  ))
+                ) : scoreListState === "settling" ? (
+                  Array.from({ length: INITIAL_SCORE_BATCH_SIZE }).map((_, i) => (
+                    <PlayerScoreRowSkeleton key={`settling-${i}`} />
+                  ))
+                ) : scoreListState === "error" ? (
+                  <div className="text-center py-8 text-osu-f1 text-sm">{scoresError}</div>
+                ) : scoreListState === "loaded" ? (
+                  visibleScores.map((s: OsuScore, i: number) => (
+                    <ScoreRow key={getScoreIdentity(s)} score={s} position={i + 1} />
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-osu-f1 text-sm">No scores found</div>
+                )}
+              </motion.div>
+            )}
           </AnimatePresence>
 
-          {!loadingScores && !scoresError && canShowMore && (
+          {tab !== "about" && !loadingScores && !scoresError && canShowMore && (
             <div className="pt-3 flex justify-center">
               <button
                 type="button"
@@ -772,6 +792,82 @@ function PlayerPageSkeleton() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function PlayerAboutCard({ html }: { html: string }) {
+  const contentRef = useRef<HTMLDivElement | null>(null);
+
+  // Wire up osu's spoilerbox toggles + shorten raw URL link text. osu's own
+  // JS isn't here, so we do the toggle behavior ourselves via event delegation
+  // on the container (more robust than per-element handlers).
+  useEffect(() => {
+    const root = contentRef.current;
+    if (!root) return;
+
+    // 1. Shorten raw-URL link text where the visible text equals the href
+    root.querySelectorAll<HTMLAnchorElement>("a[href]").forEach((link) => {
+      const href = link.getAttribute("href") ?? "";
+      const text = (link.textContent ?? "").trim();
+      if (!text || text !== href || !/^https?:\/\//i.test(href)) return;
+      try {
+        const url = new URL(href);
+        const host = url.hostname.replace(/^www\./, "");
+        const path = url.pathname === "/" ? "" : url.pathname;
+        const truncatedPath = path.length > 24 ? path.slice(0, 24) + "..." : path;
+        link.textContent = host + truncatedPath;
+        if (!link.getAttribute("title")) link.setAttribute("title", href);
+      } catch {
+        // Leave the link as-is if URL parsing fails
+      }
+    });
+
+    // 2. Mark spoilerbox toggles as keyboard-accessible buttons
+    root.querySelectorAll<HTMLElement>(".js-spoilerbox__link").forEach((el) => {
+      el.setAttribute("role", "button");
+      el.setAttribute("tabindex", "0");
+    });
+
+    // 3. Delegated click/keyboard handler for spoilerbox toggles
+    const toggleBox = (target: EventTarget | null) => {
+      if (!(target instanceof Element)) return false;
+      const toggle = target.closest(".js-spoilerbox__link");
+      if (!toggle) return false;
+      const box = toggle.closest(".js-spoilerbox");
+      if (box) box.classList.toggle("is-open");
+      return true;
+    };
+
+    const onClick = (e: MouseEvent) => {
+      if (toggleBox(e.target)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      if (toggleBox(e.target)) {
+        e.preventDefault();
+      }
+    };
+
+    root.addEventListener("click", onClick);
+    root.addEventListener("keydown", onKeyDown);
+    return () => {
+      root.removeEventListener("click", onClick);
+      root.removeEventListener("keydown", onKeyDown);
+    };
+  }, [html]);
+
+  return (
+    <div className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
+      <div
+        ref={contentRef}
+        className="bbcode-content px-4 py-3 text-sm text-osu-l2 max-h-[520px] overflow-y-auto"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
     </div>
   );
 }
