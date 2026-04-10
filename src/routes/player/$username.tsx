@@ -1,7 +1,12 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getUser, getUserProfileInsights, getUserScoresBest, getUserScoresRecent } from "../../lib/osu";
+import {
+  getUser,
+  getUserProfileInsights,
+  getUserScoresBestWindow,
+  getUserScoresRecent,
+} from "../../lib/osu";
 import {
   formatNumber,
   formatAccuracy,
@@ -14,6 +19,7 @@ import {
   getModAcronyms,
   getScoreDisplayValues,
   getScoreIdentity,
+  getScoreTimeMs,
   getScoreTimestamp,
   getScoreUrl,
   scoreHasReplay,
@@ -37,6 +43,7 @@ const USER_SCORES_CLIENT_CACHE_TTL = 60 * 1000;
 const USER_PROFILE_INSIGHTS_CLIENT_CACHE_TTL = 10 * 60 * 1000;
 const INITIAL_SCORE_BATCH_SIZE = 5;
 const SHOW_MORE_BATCH_SIZE = 50;
+const BEST_SCORES_WINDOW_SIZE = 200;
 type PlayerTab = "best" | "recent" | "about";
 
 export const Route = createFileRoute("/player/$username")({
@@ -44,6 +51,12 @@ export const Route = createFileRoute("/player/$username")({
 });
 
 type KeyFilter = "all" | "4k" | "6k" | "7k";
+type ModFilterMode = "include" | "exclude";
+type ModFilterState = Record<string, ModFilterMode>;
+type BestSort = "pp" | "newest" | "oldest";
+
+// Synthetic chip used to filter for scores submitted without any mods.
+const NO_MOD_KEY = "NM";
 
 function matchesKeyFilter(score: OsuScore, keyFilter: KeyFilter): boolean {
   if (keyFilter === "all") return true;
@@ -51,6 +64,59 @@ function matchesKeyFilter(score: OsuScore, keyFilter: KeyFilter): boolean {
   if (keyFilter === "6k") return score.beatmap?.cs === 6;
   if (keyFilter === "7k") return score.beatmap?.cs === 7;
   return true;
+}
+
+function matchesModFilter(score: OsuScore, modFilter: ModFilterState): boolean {
+  const entries = Object.entries(modFilter);
+  if (entries.length === 0) return true;
+
+  const scoreMods = new Set(getModAcronyms(score.mods));
+  const hasNoMods = scoreMods.size === 0;
+
+  for (const [mod, mode] of entries) {
+    const present = mod === NO_MOD_KEY ? hasNoMods : scoreMods.has(mod);
+    if (mode === "include" && !present) return false;
+    if (mode === "exclude" && present) return false;
+  }
+  return true;
+}
+
+function sortBestScores(scores: OsuScore[], sort: BestSort): OsuScore[] {
+  if (sort === "pp") return scores;
+  const copy = [...scores];
+  copy.sort((a, b) => {
+    const diff = getScoreTimeMs(b) - getScoreTimeMs(a);
+    return sort === "newest" ? diff : -diff;
+  });
+  return copy;
+}
+
+function cycleModFilterMode(current: ModFilterMode | undefined): ModFilterMode | undefined {
+  if (current === undefined) return "include";
+  if (current === "include") return "exclude";
+  return undefined;
+}
+
+function getRelevantMods(scores: OsuScore[]): string[] {
+  const counts = new Map<string, number>();
+  let noModCount = 0;
+  for (const score of scores) {
+    const mods = getModAcronyms(score.mods);
+    if (mods.length === 0) {
+      noModCount += 1;
+      continue;
+    }
+    for (const mod of mods) {
+      counts.set(mod, (counts.get(mod) ?? 0) + 1);
+    }
+  }
+
+  const sorted = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([mod]) => mod);
+
+  if (noModCount > 0) sorted.unshift(NO_MOD_KEY);
+  return sorted;
 }
 
 function loadUserCached(username: string): Promise<OsuUser> {
@@ -96,7 +162,7 @@ function loadUserScoresCached(userId: number): Promise<[OsuScore[], OsuScore[]]>
   if (cached) return cached;
 
   const request = Promise.all([
-    getUserScoresBest({ data: { userId, limit: INITIAL_SCORE_BATCH_SIZE, offset: 0 } }),
+    getUserScoresBestWindow({ data: { userId, totalLimit: BEST_SCORES_WINDOW_SIZE } }),
     getUserScoresRecent({ data: { userId, limit: INITIAL_SCORE_BATCH_SIZE, offset: 0, include_fails: true } }),
   ])
     .then((scores) => {
@@ -157,10 +223,11 @@ function PlayerPage() {
   const [insightsError, setInsightsError] = useState<string | null>(null);
   const [tab, setTab] = useState<PlayerTab>("best");
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
+  const [bestModFilter, setBestModFilter] = useState<ModFilterState>({});
+  const [bestSort, setBestSort] = useState<BestSort>("pp");
   const [avatarOpen, setAvatarOpen] = useState(false);
-  const [bestHasMore, setBestHasMore] = useState(true);
   const [recentHasMore, setRecentHasMore] = useState(true);
-  const [loadingMoreTab, setLoadingMoreTab] = useState<"best" | "recent" | null>(null);
+  const [loadingMoreRecent, setLoadingMoreRecent] = useState(false);
   const [bestVisibleCount, setBestVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const [recentVisibleCount, setRecentVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
 
@@ -180,15 +247,16 @@ function PlayerPage() {
     setProfileInsights(null);
     setTab("best");
     setKeyFilter("all");
+    setBestModFilter({});
+    setBestSort("pp");
     setUserError(null);
     setScoresError(null);
     setInsightsError(null);
     setLoadingUser(true);
     setLoadingScores(true);
     setLoadingInsights(true);
-    setBestHasMore(true);
     setRecentHasMore(true);
-    setLoadingMoreTab(null);
+    setLoadingMoreRecent(false);
     setBestVisibleCount(INITIAL_SCORE_BATCH_SIZE);
     setRecentVisibleCount(INITIAL_SCORE_BATCH_SIZE);
 
@@ -223,7 +291,6 @@ function PlayerPage() {
         if (cancelled) return;
         setBest(bestScores);
         setRecent(recentScores);
-        setBestHasMore(bestScores.length === INITIAL_SCORE_BATCH_SIZE);
         setRecentHasMore(recentScores.length === INITIAL_SCORE_BATCH_SIZE);
         setScoresError(null);
       })
@@ -272,44 +339,38 @@ function PlayerPage() {
     if (tab === "about" && !user?.page?.html) setTab("best");
   }, [tab, user]);
 
-  const fetchMoreScores = useCallback(async (targetTab: "best" | "recent") => {
-    if (!user || loadingMoreTab) return;
+  const fetchMoreRecent = useCallback(async () => {
+    if (!user || loadingMoreRecent) return;
 
-    const currentScores = targetTab === "best" ? best : recent;
-    setLoadingMoreTab(targetTab);
+    setLoadingMoreRecent(true);
 
     try {
-      const nextScores = targetTab === "best"
-        ? await getUserScoresBest({
-          data: { userId: user.id, limit: SHOW_MORE_BATCH_SIZE, offset: currentScores.length },
-        })
-        : await getUserScoresRecent({
-          data: {
-            userId: user.id,
-            limit: SHOW_MORE_BATCH_SIZE,
-            offset: currentScores.length,
-            include_fails: true,
-          },
-        });
+      const nextScores = await getUserScoresRecent({
+        data: {
+          userId: user.id,
+          limit: SHOW_MORE_BATCH_SIZE,
+          offset: recent.length,
+          include_fails: true,
+        },
+      });
 
-      if (targetTab === "best") {
-        setBest((prev) => [...prev, ...nextScores]);
-        setBestHasMore(nextScores.length === SHOW_MORE_BATCH_SIZE);
-      } else {
-        setRecent((prev) => [...prev, ...nextScores]);
-        setRecentHasMore(nextScores.length === SHOW_MORE_BATCH_SIZE);
-      }
+      setRecent((prev) => [...prev, ...nextScores]);
+      setRecentHasMore(nextScores.length === SHOW_MORE_BATCH_SIZE);
     } catch {
       setScoresError("Couldn't load more scores right now.");
     } finally {
-      setLoadingMoreTab(null);
+      setLoadingMoreRecent(false);
     }
-  }, [best, loadingMoreTab, recent, user]);
+  }, [loadingMoreRecent, recent, user]);
 
   useEffect(() => {
     setBestVisibleCount(INITIAL_SCORE_BATCH_SIZE);
     setRecentVisibleCount(INITIAL_SCORE_BATCH_SIZE);
   }, [keyFilter]);
+
+  useEffect(() => {
+    setBestVisibleCount(INITIAL_SCORE_BATCH_SIZE);
+  }, [bestModFilter, bestSort]);
 
   const handleShowMore = useCallback(() => {
     if (tab === "best") {
@@ -321,24 +382,18 @@ function PlayerPage() {
   }, [tab]);
 
   useEffect(() => {
-    if (tab === "about") return;
-    const currentScores = tab === "best" ? best : recent;
-    const currentVisibleCount = tab === "best" ? bestVisibleCount : recentVisibleCount;
-    const filteredScores = currentScores.filter((score) => matchesKeyFilter(score, keyFilter));
-    const currentHasMore = tab === "best" ? bestHasMore : recentHasMore;
+    if (tab !== "recent") return;
+    const filteredScores = recent.filter((score) => matchesKeyFilter(score, keyFilter));
 
-    if (loadingScores || scoresError || loadingMoreTab) return;
-    if (filteredScores.length >= currentVisibleCount) return;
-    if (!currentHasMore) return;
+    if (loadingScores || scoresError || loadingMoreRecent) return;
+    if (filteredScores.length >= recentVisibleCount) return;
+    if (!recentHasMore) return;
 
-    void fetchMoreScores(tab);
+    void fetchMoreRecent();
   }, [
-    best,
-    bestHasMore,
-    bestVisibleCount,
-    fetchMoreScores,
+    fetchMoreRecent,
     keyFilter,
-    loadingMoreTab,
+    loadingMoreRecent,
     loadingScores,
     recent,
     recentHasMore,
@@ -346,6 +401,21 @@ function PlayerPage() {
     scoresError,
     tab,
   ]);
+
+  const relevantBestMods = useMemo(() => getRelevantMods(best), [best]);
+
+  const cycleBestMod = useCallback((mod: string) => {
+    setBestModFilter((prev) => {
+      const next = { ...prev };
+      const cycled = cycleModFilterMode(prev[mod]);
+      if (cycled === undefined) {
+        delete next[mod];
+      } else {
+        next[mod] = cycled;
+      }
+      return next;
+    });
+  }, []);
 
   if (loadingUser && !user) {
     return <PlayerPageSkeleton />;
@@ -364,10 +434,16 @@ function PlayerPage() {
   const stats = user.statistics;
   const currentScores = tab === "best" ? best : recent;
   const currentVisibleCount = tab === "best" ? bestVisibleCount : recentVisibleCount;
-  const filteredScores = currentScores.filter((score) => matchesKeyFilter(score, keyFilter));
+  const keyFilteredScores = currentScores.filter((score) => matchesKeyFilter(score, keyFilter));
+  const filteredScores = tab === "best"
+    ? sortBestScores(
+      keyFilteredScores.filter((score) => matchesModFilter(score, bestModFilter)),
+      bestSort,
+    )
+    : keyFilteredScores;
   const visibleScores = filteredScores.slice(0, currentVisibleCount);
-  const currentHasMore = tab === "best" ? bestHasMore : recentHasMore;
-  const isLoadingMoreCurrentTab = loadingMoreTab === tab;
+  const currentHasMore = tab === "best" ? false : recentHasMore;
+  const isLoadingMoreCurrentTab = tab === "recent" && loadingMoreRecent;
   const canShowMore = filteredScores.length > visibleScores.length || currentHasMore;
   const isSettlingInitialFilteredView =
     !loadingScores &&
@@ -652,6 +728,17 @@ function PlayerPage() {
               </div>
             )}
           </div>
+
+          {tab === "best" && !loadingScores && best.length > 0 && (
+            <BestScoresControlBar
+              mods={relevantBestMods}
+              modFilter={bestModFilter}
+              onCycleMod={cycleBestMod}
+              onClearMods={() => setBestModFilter({})}
+              sort={bestSort}
+              onChangeSort={setBestSort}
+            />
+          )}
         </div>
       </div>
 
@@ -869,6 +956,128 @@ function PlayerAboutCard({ html }: { html: string }) {
         dangerouslySetInnerHTML={{ __html: html }}
       />
     </div>
+  );
+}
+
+function BestScoresControlBar({
+  mods,
+  modFilter,
+  onCycleMod,
+  onClearMods,
+  sort,
+  onChangeSort,
+}: {
+  mods: string[];
+  modFilter: ModFilterState;
+  onCycleMod: (mod: string) => void;
+  onClearMods: () => void;
+  sort: BestSort;
+  onChangeSort: (sort: BestSort) => void;
+}) {
+  const hasActiveFilter = Object.keys(modFilter).length > 0;
+
+  return (
+    <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex items-center gap-2 flex-wrap min-w-0">
+        <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold shrink-0">Mods</span>
+        {mods.length === 0 ? (
+          <span className="text-[11px] text-osu-f1">No mods in top plays</span>
+        ) : (
+          <>
+            <div className="flex items-center gap-1 flex-wrap">
+              {mods.map((mod) => (
+                <ModFilterChip
+                  key={mod}
+                  mod={mod}
+                  mode={modFilter[mod]}
+                  onClick={() => onCycleMod(mod)}
+                />
+              ))}
+            </div>
+            {hasActiveFilter && (
+              <button
+                type="button"
+                onClick={onClearMods}
+                className="text-[10px] font-semibold text-osu-f1 hover:text-osu-l2 underline underline-offset-2 cursor-pointer"
+              >
+                Clear
+              </button>
+            )}
+          </>
+        )}
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Sort</span>
+        <div className="flex items-center gap-1 rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-1">
+          {([
+            ["pp", "Top PP"],
+            ["newest", "Newest"],
+            ["oldest", "Oldest"],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => onChangeSort(value)}
+              className={`px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                sort === value
+                  ? "bg-osu-pink/15 text-osu-pink-light"
+                  : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModFilterChip({
+  mod,
+  mode,
+  onClick,
+}: {
+  mod: string;
+  mode: ModFilterMode | undefined;
+  onClick: () => void;
+}) {
+  const label = mod === NO_MOD_KEY ? "NoMod" : mod;
+  const title = mode === "include"
+    ? `Showing only ${label}`
+    : mode === "exclude"
+      ? `Hiding ${label}`
+      : `Click to require ${label}`;
+
+  const ringClass = mode === "include"
+    ? "border-osu-green-light bg-osu-green/15"
+    : mode === "exclude"
+      ? "border-osu-red-light bg-osu-red/15"
+      : "border-osu-b3/30 bg-osu-b4/50 hover:bg-osu-b3/40";
+
+  const contentDimClass = mode === "exclude" ? "opacity-40 saturate-50" : "";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className={`relative flex items-center gap-1 rounded-md border px-1.5 py-1 transition-colors cursor-pointer ${ringClass}`}
+    >
+      <div className={`flex items-center transition-opacity ${contentDimClass}`}>
+        {mod === NO_MOD_KEY ? (
+          <span className="text-[10px] font-bold text-osu-l2 px-1">NoMod</span>
+        ) : (
+          <ModBadge mod={mod} size={0.8} />
+        )}
+      </div>
+      {mode === "exclude" && (
+        <span
+          className="pointer-events-none absolute left-1 right-1 top-1/2 h-[2px] -translate-y-1/2 rotate-[-10deg] rounded-full bg-osu-red-light shadow-[0_0_0_1px_rgba(0,0,0,0.5)]"
+          aria-hidden="true"
+        />
+      )}
+    </button>
   );
 }
 
