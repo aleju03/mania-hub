@@ -58,6 +58,26 @@ type BestSort = "pp" | "newest" | "oldest";
 // Synthetic chip used to filter for scores submitted without any mods.
 const NO_MOD_KEY = "NM";
 
+// DT and NC apply the same 1.5x rate (NC is DT with an audio swap); HT and DC
+// are the same 0.75x rate. Scores carry one or the other, so collapse them into
+// a single filter chip that matches either mod in the group.
+const MOD_ALIAS_GROUPS: readonly { readonly key: string; readonly mods: readonly string[] }[] = [
+  { key: "DT|NC", mods: ["DT", "NC"] },
+  { key: "HT|DC", mods: ["HT", "DC"] },
+];
+
+function getModFilterKey(mod: string): string {
+  for (const group of MOD_ALIAS_GROUPS) {
+    if (group.mods.includes(mod)) return group.key;
+  }
+  return mod;
+}
+
+function getModFilterGroup(key: string): readonly string[] | null {
+  const group = MOD_ALIAS_GROUPS.find((g) => g.key === key);
+  return group?.mods ?? null;
+}
+
 function matchesKeyFilter(score: OsuScore, keyFilter: KeyFilter): boolean {
   if (keyFilter === "all") return true;
   if (keyFilter === "4k") return score.beatmap?.cs === 4;
@@ -73,8 +93,14 @@ function matchesModFilter(score: OsuScore, modFilter: ModFilterState): boolean {
   const scoreMods = new Set(getModAcronyms(score.mods));
   const hasNoMods = scoreMods.size === 0;
 
-  for (const [mod, mode] of entries) {
-    const present = mod === NO_MOD_KEY ? hasNoMods : scoreMods.has(mod);
+  for (const [key, mode] of entries) {
+    let present: boolean;
+    if (key === NO_MOD_KEY) {
+      present = hasNoMods;
+    } else {
+      const group = getModFilterGroup(key);
+      present = group ? group.some((m) => scoreMods.has(m)) : scoreMods.has(key);
+    }
     if (mode === "include" && !present) return false;
     if (mode === "exclude" && present) return false;
   }
@@ -106,14 +132,20 @@ function getRelevantMods(scores: OsuScore[]): string[] {
       noModCount += 1;
       continue;
     }
+    // Collapse DT/NC and HT/DC into a single key per score so the count reflects
+    // the number of scores matched by the chip, not double-counted aliases.
+    const seenKeys = new Set<string>();
     for (const mod of mods) {
-      counts.set(mod, (counts.get(mod) ?? 0) + 1);
+      const key = getModFilterKey(mod);
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      counts.set(key, (counts.get(key) ?? 0) + 1);
     }
   }
 
   const sorted = [...counts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .map(([mod]) => mod);
+    .map(([key]) => key);
 
   if (noModCount > 0) sorted.unshift(NO_MOD_KEY);
   return sorted;
@@ -1041,7 +1073,12 @@ function ModFilterChip({
   mode: ModFilterMode | undefined;
   onClick: () => void;
 }) {
-  const label = mod === NO_MOD_KEY ? "NoMod" : mod;
+  const groupMods = getModFilterGroup(mod);
+  const label = mod === NO_MOD_KEY
+    ? "NoMod"
+    : groupMods
+      ? groupMods.join(" or ")
+      : mod;
   const title = mode === "include"
     ? `Showing only ${label}`
     : mode === "exclude"
@@ -1067,6 +1104,12 @@ function ModFilterChip({
       <div className={`flex items-center transition-opacity ${contentDimClass}`}>
         {mod === NO_MOD_KEY ? (
           <span className="text-[10px] font-bold text-osu-l2 px-1">NoMod</span>
+        ) : groupMods ? (
+          <div className="flex items-center gap-0.5">
+            {groupMods.map((m) => (
+              <ModBadge key={m} mod={m} size={0.7} />
+            ))}
+          </div>
         ) : (
           <ModBadge mod={mod} size={0.8} />
         )}
