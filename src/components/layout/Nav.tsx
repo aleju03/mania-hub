@@ -70,6 +70,7 @@ export function Nav() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const selectedCountry = useAppStore((state) => state.selectedCountry);
+  const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
   const current = links.find((l) => location.pathname.startsWith(l.to === "/" ? "/__home" : l.to)) ||
     (location.pathname === "/" ? links[0] : location.pathname.startsWith("/player") ? null : links[0]);
 
@@ -182,6 +183,7 @@ export function Nav() {
               <Link
                 key={l.id}
                 to={l.to}
+                search={l.id === "top-plays" && topPlaysRange !== "7d" ? { range: topPlaysRange } : undefined}
                 preload="intent"
                 className={`relative px-2.5 py-[19px] text-[12px] font-semibold capitalize transition-colors duration-[120ms] ${
                   current?.id === l.id
@@ -274,6 +276,7 @@ export function Nav() {
                   <Link
                     key={l.id}
                     to={l.to}
+                    search={l.id === "top-plays" && topPlaysRange !== "7d" ? { range: topPlaysRange } : undefined}
                     preload="intent"
                     onClick={() => setMenuOpen(false)}
                     className={`flex items-center gap-3 px-5 py-3 text-sm font-medium capitalize transition-colors duration-[120ms] ${
