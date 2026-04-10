@@ -3,13 +3,18 @@ export function Avatar({
   seed,
   size = 40,
   shape = "circle",
+  online = false,
 }: {
   url?: string;
   seed?: number;
   size?: number;
   shape?: "circle" | "square";
+  online?: boolean;
 }) {
   const shapeClass = shape === "square" ? "rounded-none" : "rounded-full";
+  const onlineClass = online
+    ? "ring-2 ring-osu-green-light shadow-[0_0_8px_rgba(179,217,68,0.45)]"
+    : "";
 
   if (url) {
     return (
@@ -18,7 +23,7 @@ export function Avatar({
         alt="avatar"
         width={size}
         height={size}
-        className={`${shapeClass} flex-shrink-0 object-cover`}
+        className={`${shapeClass} ${onlineClass} flex-shrink-0 object-cover`}
         style={{ width: size, height: size }}
         loading="lazy"
       />
@@ -27,7 +32,7 @@ export function Avatar({
   const h = ((seed ?? 0) * 137) % 360;
   return (
     <div
-      className={`${shapeClass} flex-shrink-0`}
+      className={`${shapeClass} ${onlineClass} flex-shrink-0`}
       style={{
         width: size,
         height: size,
