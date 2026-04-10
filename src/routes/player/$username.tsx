@@ -25,7 +25,6 @@ import {
   getScoreUrl,
   scoreHasReplay,
 } from "../../lib/score";
-import { Avatar } from "../../components/ui/Avatar";
 import { GradeImg } from "../../components/ui/GradeImg";
 import { ModBadge } from "../../components/ui/ModBadge";
 import { LazerBadge } from "../../components/ui/LazerBadge";
