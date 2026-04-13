@@ -952,9 +952,20 @@ function ReplayViewer({
         setProgress(r.time / r.duration);
         if (!r.isPlaying) setIsPlaying(false);
 
-        // Re-sync audio every ~2s if drifted more than 200ms
+        // Re-sync audio every ~2s if drifted more than 200ms.
+        // Skip while the tab is hidden: rAF is paused so renderer.time is frozen,
+        // but audio keeps playing normally — correcting here would yank audio
+        // back to the frozen renderer time. When the tab returns, the next rAF
+        // tick advances renderer.time by the elapsed wall clock, which matches
+        // where the audio has played to, so both stay in sync automatically.
         syncCounter++;
-        if (syncCounter >= 40 && audioRef.current && audioEnabled && !audioRef.current.paused) {
+        if (
+          syncCounter >= 40 &&
+          audioRef.current &&
+          audioEnabled &&
+          !audioRef.current.paused &&
+          (typeof document === "undefined" || document.visibilityState === "visible")
+        ) {
           syncCounter = 0;
           const drift = Math.abs(audioRef.current.currentTime - r.time / 1000);
           if (drift > 0.2) {
