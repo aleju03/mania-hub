@@ -15,6 +15,10 @@ export type CacheLookup<T> =
   | { hit: true; value: T }
   | { hit: false };
 
+export type StaleCacheLookup<T> =
+  | { hit: true; value: T; isStale: boolean }
+  | { hit: false };
+
 function warnCacheIssue(action: string, key: string, error: unknown): void {
   const message = error instanceof Error ? error.message : String(error);
   const warningKey = `${action}:${key}:${message}`;
@@ -109,6 +113,44 @@ export async function getPersistentCacheEntry<T>(key: string): Promise<CacheLook
 export async function getPersistentCached<T>(key: string): Promise<T | null> {
   const cached = await getPersistentCacheEntry<T>(key);
   return cached.hit ? cached.value : null;
+}
+
+export async function getPersistentCacheEntryAllowStale<T>(
+  key: string,
+): Promise<StaleCacheLookup<T>> {
+  const memoryCached = getCachedEntry<T>(key);
+  if (memoryCached.hit) return { hit: true, value: memoryCached.value, isStale: false };
+  if (!hasDb() || !db) return { hit: false };
+
+  try {
+    await ensureCacheSchema();
+
+    const result = await db.execute({
+      sql: `
+        SELECT cache_value, expires_at
+        FROM cache_entries
+        WHERE cache_key = ?
+        LIMIT 1
+      `,
+      args: [key],
+    });
+
+    const row = result.rows[0];
+    if (!row) return { hit: false };
+
+    const expiresAt = Number(row.expires_at);
+    const parsed = decodeCacheValue(String(row.cache_value)) as T;
+    const isStale = Date.now() >= expiresAt;
+
+    if (!isStale) {
+      responseCache.set(key, { value: parsed, expires: expiresAt });
+    }
+
+    return { hit: true, value: parsed, isStale };
+  } catch (error) {
+    warnCacheIssue("persistent read (stale allowed)", key, error);
+    return { hit: false };
+  }
 }
 
 export async function setPersistentCache(key: string, data: unknown, ttlMs = CACHE_TTL): Promise<void> {
@@ -208,6 +250,92 @@ export async function fetchWithCacheLock<T>(
   const result = await fetchFn();
   await setPersistentCache(cacheKey, result, cacheTtlMs);
   return result;
+}
+
+export async function fetchWithStaleAllowed<T>(
+  cacheKey: string,
+  cacheTtlMs: number,
+  fetchFn: () => Promise<T>,
+  lockTtlMs: number = DEFAULT_LOCK_TTL,
+): Promise<{ value: T; isStale: boolean }> {
+  const cached = await getPersistentCacheEntryAllowStale<T>(cacheKey);
+  if (cached.hit) return { value: cached.value, isStale: cached.isStale };
+
+  const acquired = await acquireCacheLock(cacheKey, lockTtlMs);
+
+  if (acquired) {
+    try {
+      const rechecked = await getPersistentCacheEntryAllowStale<T>(cacheKey);
+      if (rechecked.hit) return { value: rechecked.value, isStale: rechecked.isStale };
+
+      const result = await fetchFn();
+      await setPersistentCache(cacheKey, result, cacheTtlMs);
+      return { value: result, isStale: false };
+    } finally {
+      await releaseCacheLock(cacheKey);
+    }
+  }
+
+  for (let i = 0; i < LOCK_WAIT_RETRIES; i++) {
+    await sleep(LOCK_WAIT_MS);
+    const polled = await getPersistentCacheEntryAllowStale<T>(cacheKey);
+    if (polled.hit) return { value: polled.value, isStale: polled.isStale };
+  }
+
+  const result = await fetchFn();
+  await setPersistentCache(cacheKey, result, cacheTtlMs);
+  return { value: result, isStale: false };
+}
+
+const REBUILD_POLL_MS = 2000;
+const REBUILD_POLL_RETRIES = 20;
+
+export async function runCacheRebuild<T>(
+  cacheKey: string,
+  cacheTtlMs: number,
+  fetchFn: () => Promise<T>,
+  lockTtlMs: number = DEFAULT_LOCK_TTL,
+): Promise<{ rebuilt: boolean; value: T | null }> {
+  const acquired = await acquireCacheLock(cacheKey, lockTtlMs);
+
+  if (acquired) {
+    try {
+      const result = await fetchFn();
+      await setPersistentCache(cacheKey, result, cacheTtlMs);
+      return { rebuilt: true, value: result };
+    } finally {
+      await releaseCacheLock(cacheKey);
+    }
+  }
+
+  // Another instance is already rebuilding. Wait for it to publish fresh data to Turso,
+  // then return that so this caller still gets an up-to-date value.
+  for (let i = 0; i < REBUILD_POLL_RETRIES; i++) {
+    await sleep(REBUILD_POLL_MS);
+    const polled = await getPersistentCacheEntryAllowStale<T>(cacheKey);
+    if (polled.hit && !polled.isStale) {
+      return { rebuilt: false, value: polled.value };
+    }
+  }
+
+  return { rebuilt: false, value: null };
+}
+
+export async function deleteExpiredCacheEntriesByPrefix(
+  prefix: string,
+  olderThanMs: number,
+): Promise<void> {
+  if (!hasDb() || !db) return;
+  try {
+    await ensureCacheSchema();
+    const threshold = Date.now() - olderThanMs;
+    await db.execute({
+      sql: "DELETE FROM cache_entries WHERE cache_key LIKE ? AND expires_at < ?",
+      args: [`${prefix}%`, threshold],
+    });
+  } catch (error) {
+    warnCacheIssue("cleanup expired entries", prefix, error);
+  }
 }
 
 async function clearServerCachesInternal(): Promise<void> {

@@ -5,6 +5,9 @@ import {
   osuFetchBinary,
   fetchBeatmapFile,
   fetchWithCacheLock,
+  fetchWithStaleAllowed,
+  runCacheRebuild,
+  deleteExpiredCacheEntriesByPrefix,
   getPersistentCacheEntry,
   getPersistentCached,
   setPersistentCache,
@@ -46,8 +49,8 @@ const COUNTRY_BEATMAP_PLAYER_PAGE_LIMIT = 2; // Match the rest of the app's top-
 const USER_PROFILE_INSIGHTS_CACHE_TTL = 6 * 60 * 60 * 1000;
 const USER_PROFILE_INSIGHTS_CACHE_VERSION = 3;
 const HOME_PAGE_CACHE_TTL = 60 * 1000;
-const HOME_RECENT_SCORES_CACHE_TTL = 60 * 1000;
-const HOME_POPOFFS_CACHE_TTL = 2 * 60 * 1000;
+const HOME_RECENT_SCORES_CACHE_TTL = 5 * 60 * 1000;
+const HOME_POPOFFS_CACHE_TTL = 10 * 60 * 1000;
 const COUNTRY_POPOFFS_CACHE_TTL = 2 * 60 * 1000;
 const COUNTRY_POPOFFS_CACHE_VERSION = 3;
 const HOME_RECENT_SCORES_PLAYER_COUNT = 10;
@@ -794,7 +797,7 @@ async function getCountryBeatmapScores(beatmapId: number, country: string): Prom
       .filter((score): score is OsuScore => score !== null)
       .filter((score) => score.user?.country_code === normalizedCountry)
       .sort((left, right) => {
-        const scoreDelta = getScoreDisplayValues(right).totalScore - getScoreDisplayValues(left).totalScore;
+        const scoreDelta = (getScoreDisplayValues(right).totalScore ?? 0) - (getScoreDisplayValues(left).totalScore ?? 0);
         if (scoreDelta !== 0) return scoreDelta;
 
         const ppDelta = (right.pp ?? 0) - (left.pp ?? 0);
@@ -853,24 +856,20 @@ async function fetchUserFavourites(userId: number): Promise<OsuBeatmapset[]> {
   );
 }
 
-export const getCountryMapsData = createServerFn({ method: "GET" })
-  .inputValidator(
-    (data: { users: Array<{ id: number; username: string; avatar_url: string }> }) => data,
-  )
-  .handler(
-    async ({
-      data,
-    }: {
-      data: { users: Array<{ id: number; username: string; avatar_url: string }> };
-    }) => {
-      const userKey = data.users
-        .map((user) => user.id)
-        .sort((a, b) => a - b)
-        .join(",");
-      const cacheKey = `country-maps-data:v${MAPS_DATA_CACHE_VERSION}:${userKey}`;
-      const users = data.users;
+type MapsUser = { id: number; username: string; avatar_url: string };
 
-      return fetchWithCacheLock(cacheKey, MAPS_DATA_CACHE_TTL, async () => {
+const MAPS_REBUILD_LOCK_TTL_MS = 60_000;
+const MAPS_ORPHAN_CLEANUP_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function computeMapsCacheKey(users: MapsUser[]): string {
+  const userKey = users
+    .map((user) => user.id)
+    .sort((a, b) => a - b)
+    .join(",");
+  return `country-maps-data:v${MAPS_DATA_CACHE_VERSION}:${userKey}`;
+}
+
+async function buildCountryMapsData(users: MapsUser[]): Promise<CountryMapsData> {
       // Fetch best scores + most_played + favourites for all users
       const userResults = await mapWithConcurrency(
         users,
@@ -1052,9 +1051,40 @@ export const getCountryMapsData = createServerFn({ method: "GET" })
         favourites,
         generatedAt: new Date().toISOString(),
       } satisfies CountryMapsData;
-      }, 60_000);
-    },
-  );
+}
+
+export const getCountryMapsData = createServerFn({ method: "GET" })
+  .inputValidator((data: { users: MapsUser[] }) => data)
+  .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
+    const cacheKey = computeMapsCacheKey(data.users);
+    const { value, isStale } = await fetchWithStaleAllowed<CountryMapsData>(
+      cacheKey,
+      MAPS_DATA_CACHE_TTL,
+      () => buildCountryMapsData(data.users),
+      MAPS_REBUILD_LOCK_TTL_MS,
+    );
+    return { value, isStale };
+  });
+
+export const rebuildCountryMapsData = createServerFn({ method: "POST" })
+  .inputValidator((data: { users: MapsUser[] }) => data)
+  .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
+    const cacheKey = computeMapsCacheKey(data.users);
+    const { rebuilt, value } = await runCacheRebuild<CountryMapsData>(
+      cacheKey,
+      MAPS_DATA_CACHE_TTL,
+      async () => {
+        const result = await buildCountryMapsData(data.users);
+        await deleteExpiredCacheEntriesByPrefix(
+          "country-maps-data:",
+          MAPS_ORPHAN_CLEANUP_AGE_MS,
+        );
+        return result;
+      },
+      MAPS_REBUILD_LOCK_TTL_MS,
+    );
+    return { rebuilt, value };
+  });
 
 // ── Replay (parsed server-side via osu-parsers) ────────────────────────────
 
@@ -1129,7 +1159,7 @@ export const getScore = createServerFn({ method: "GET" })
 
     try {
       const legacyScore = await osuFetch<OsuScore>(`/scores/${mode}/${data.scoreId}`);
-      const resolvedMode = legacyScore.beatmap?.mode ?? legacyScore.user?.playmode ?? mode;
+      const resolvedMode = legacyScore.beatmap?.mode ?? mode;
       if (resolvedMode === mode) {
         return legacyScore;
       }
