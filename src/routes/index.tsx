@@ -5,7 +5,7 @@ import { getHomePopoffs, getHomeRecentScores, getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
-import { getDisplayedAccuracy, getDisplayedRank, getModAcronyms, getScoreTimeMs, getScoreTimestamp, isDisplayedPassed } from "../lib/score";
+import { getDisplayedAccuracy, getDisplayedRank, getModAcronyms, getScoreTimestamp } from "../lib/score";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
@@ -18,10 +18,6 @@ import { useAppStore, type CachedHomePopoff } from "../store";
 export const Route = createFileRoute("/")({
   component: HomePage,
 });
-
-function isPassedScore(score: OsuScore) {
-  return isDisplayedPassed(score);
-}
 
 function getFeaturedPopoffSpanClass(index: number, total: number): string {
   if (total === 1) {
@@ -249,7 +245,7 @@ function HomePage() {
         <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden lg:row-span-2">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Rankings</h2>
-            <Link to="/rankings" className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
+            <Link to="/rankings" search={{ page: 1 }} className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
           </div>
           <div className="divide-y divide-osu-b3/15">
             {rankingsError ? (
@@ -312,7 +308,7 @@ function HomePage() {
             <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Recent Top Plays</h2>
             <Link
               to="/top-plays"
-              search={topPlaysRange !== "7d" ? { range: topPlaysRange } : undefined}
+              search={{ range: topPlaysRange }}
               className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors"
             >
               view all

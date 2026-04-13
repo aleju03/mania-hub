@@ -119,13 +119,13 @@ export const Route = createFileRoute("/api/audio")({
 
           if (!range) {
             headers.set("Content-Length", String(buffer.length));
-            return new Response(buffer, { status: 200, headers });
+            return new Response(buffer as unknown as BodyInit, { status: 200, headers });
           }
 
           const chunk = buffer.subarray(range.start, range.end + 1);
           headers.set("Content-Length", String(chunk.length));
           headers.set("Content-Range", `bytes ${range.start}-${range.end}/${buffer.length}`);
-          return new Response(chunk, { status: 206, headers });
+          return new Response(chunk as unknown as BodyInit, { status: 206, headers });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unknown audio extraction error";
           return new Response(message, { status: 404 });

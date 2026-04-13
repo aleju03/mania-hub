@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { getAvatarAccentStoreKey } from "./lib/avatar-accent";
-import { CLIENT_CACHE_TTL } from "./lib/cache";
 import { DEFAULT_COUNTRY_CODE, normalizeCountryCode } from "./lib/country";
 import { getScoreIdentity, getScoreTimeMs } from "./lib/score";
 import type { OsuScore, RankingsResponse, CountryMapsData } from "./lib/types";

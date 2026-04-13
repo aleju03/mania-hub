@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from 'vite'
 import { devtools } from '@tanstack/devtools-vite'
 import tsconfigPaths from 'vite-tsconfig-paths'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 
@@ -9,7 +10,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { nitro } from 'nitro/vite'
 
 function staticCacheHeaders(): Plugin {
-  const middleware: import('connect').NextHandleFunction = (req, res, next) => {
+  const middleware = (req: IncomingMessage, res: ServerResponse, next: () => void) => {
     const url = req.url ?? ''
     if (url.startsWith('/assets/')) {
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable')

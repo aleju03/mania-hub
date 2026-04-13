@@ -5,7 +5,7 @@ import { getCountryPopoffs, getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { formatNumber, formatAccuracy, formatTimeAgo } from "../lib/format";
-import { getBeatmapUrl, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModAcronyms, getScoreTimestamp, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
+import { getBeatmapUrl, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModAcronyms, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
@@ -30,7 +30,7 @@ interface PopOff {
 type TimeRange = TopPlaysRange;
 type SortMode = "recent" | "pp";
 type TopPlaysSearch = {
-  range?: TimeRange;
+  range: TimeRange;
 };
 
 const RANGE_MS: Record<TimeRange, number> = {
@@ -43,7 +43,7 @@ const RANGE_MS: Record<TimeRange, number> = {
 const PAGE_SIZE = 15;
 const FETCH_BATCH_SIZE = 5;
 const PP_GAIN_SKELETON_COUNT = 6;
-const DEFAULT_TOP_PLAYS_SEARCH: Required<TopPlaysSearch> = {
+const DEFAULT_TOP_PLAYS_SEARCH: TopPlaysSearch = {
   range: "7d",
 };
 
@@ -51,7 +51,7 @@ export const Route = createFileRoute("/top-plays")({
   search: {
     middlewares: [stripSearchParams(DEFAULT_TOP_PLAYS_SEARCH)],
   },
-  validateSearch: (search: Record<string, unknown>): Required<TopPlaysSearch> => ({
+  validateSearch: (search: Record<string, unknown>): TopPlaysSearch => ({
     range:
       search.range === "24h" ||
       search.range === "3d" ||
@@ -63,12 +63,6 @@ export const Route = createFileRoute("/top-plays")({
 });
 
 const EMPTY_POPOFFS: CachedPopoff[] = [];
-
-function buildTopPlaysSearch(search: Required<TopPlaysSearch>): TopPlaysSearch {
-  return {
-    ...(search.range !== DEFAULT_TOP_PLAYS_SEARCH.range ? { range: search.range } : {}),
-  };
-}
 
 function PopOffsPage() {
   const { range } = Route.useSearch();
@@ -111,7 +105,7 @@ function PopOffsPage() {
 
     navigate({
       to: "/top-plays",
-      search: buildTopPlaysSearch({ range: rememberedRange }),
+      search: { range: rememberedRange },
       replace: true,
     });
   }, [location.searchStr, navigate, range, rememberedRange]);
@@ -325,7 +319,7 @@ function PopOffsPage() {
           setTopPlaysRange(selectedCountry, nextRange);
           navigate({
             to: "/top-plays",
-            search: buildTopPlaysSearch({ range: nextRange }),
+            search: { range: nextRange },
             replace: true,
           });
           setPage(0);
