@@ -17,13 +17,19 @@ export function PageTabs<T extends string>({ items, value, onChange }: PageTabsP
           <button
             key={item.id}
             onClick={() => onChange(item.id)}
-            className={`px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] border-b-2 ${
+            className={`relative px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] ${
               value === item.id
-                ? "text-osu-c1 border-osu-h1"
-                : "text-osu-f1 border-transparent hover:text-osu-l2"
+                ? "text-osu-c1"
+                : "text-osu-f1 hover:text-osu-l2"
             }`}
           >
             {item.label}
+            {value === item.id && (
+              <span
+                aria-hidden="true"
+                className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-osu-h1"
+              />
+            )}
           </button>
         ))}
       </div>

@@ -12,6 +12,7 @@ export interface CachedAvatarAccent {
 
 export const AVATAR_ACCENT_CLIENT_TTL = 24 * 60 * 60 * 1000;
 export const AVATAR_ACCENT_FAILURE_TTL = 5 * 60 * 1000;
+export const TOP_PLAYS_RANGE_STORAGE_KEY = "mania-hub-top-plays-range-v1";
 
 export interface CachedPlayer {
   id: number;
@@ -84,6 +85,37 @@ function warnStorageIssue(action: string, error: unknown): void {
   console.warn(`[store] ${action} failed: ${message}`);
 }
 
+function readTopPlaysRangeByCountry(): CountryRecord<TopPlaysRange> {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = localStorage.getItem(TOP_PLAYS_RANGE_STORAGE_KEY);
+    if (!raw) return {};
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+    return Object.fromEntries(
+      Object.entries(parsed).filter(([, range]) =>
+        range === "24h" || range === "3d" || range === "7d" || range === "30d",
+      ),
+    ) as CountryRecord<TopPlaysRange>;
+  } catch (error) {
+    warnStorageIssue(`read "${TOP_PLAYS_RANGE_STORAGE_KEY}"`, error);
+    return {};
+  }
+}
+
+function writeTopPlaysRangeByCountry(ranges: CountryRecord<TopPlaysRange>): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    localStorage.setItem(TOP_PLAYS_RANGE_STORAGE_KEY, JSON.stringify(ranges));
+  } catch (error) {
+    warnStorageIssue(`write "${TOP_PLAYS_RANGE_STORAGE_KEY}"`, error);
+  }
+}
+
 const storage = typeof window !== "undefined"
   ? createJSONStorage(() => ({
       getItem: (name) => {
@@ -124,7 +156,7 @@ export const useAppStore = create<AppState>()(
       homeRecentScoresFetchedAtByCountry: {},
       homePopoffsByCountry: {},
       homePopoffsFetchedAtByCountry: {},
-      topPlaysRangeByCountry: {},
+      topPlaysRangeByCountry: readTopPlaysRangeByCountry(),
       popoffsByCountry: {},
       popoffsFetchedAtByCountry: {},
       mapsDataByCountry: {},
@@ -208,11 +240,15 @@ export const useAppStore = create<AppState>()(
       setTopPlaysRange: (country, range) =>
         set((state) => {
           const normalizedCountry = normalizeCountryCode(country);
+          const nextTopPlaysRangeByCountry = {
+            ...state.topPlaysRangeByCountry,
+            [normalizedCountry]: range,
+          };
+
+          writeTopPlaysRangeByCountry(nextTopPlaysRangeByCountry);
+
           return {
-            topPlaysRangeByCountry: {
-              ...state.topPlaysRangeByCountry,
-              [normalizedCountry]: range,
-            },
+            topPlaysRangeByCountry: nextTopPlaysRangeByCountry,
           };
         }),
       setPopoffs: (country, popoffs) =>
@@ -360,10 +396,7 @@ export const useAppStore = create<AppState>()(
               return Number.isFinite(fetchedAt) && Date.now() - fetchedAt < ttl;
             }),
           ) as Record<string, CachedAvatarAccent>,
-          topPlaysRangeByCountry:
-            nextState.topPlaysRangeByCountry && typeof nextState.topPlaysRangeByCountry === "object"
-              ? nextState.topPlaysRangeByCountry as CountryRecord<TopPlaysRange>
-              : {},
+          topPlaysRangeByCountry: currentState.topPlaysRangeByCountry,
           // Keep persisted top-plays data even when stale so the route can render it
           // immediately after a reload and revalidate in the background.
           popoffsByCountry: persistedPopoffsByCountry as CountryRecord<CachedPopoff[]>,
@@ -383,7 +416,6 @@ export const useAppStore = create<AppState>()(
         homeRecentScoresFetchedAtByCountry: state.homeRecentScoresFetchedAtByCountry,
         homePopoffsByCountry: state.homePopoffsByCountry,
         homePopoffsFetchedAtByCountry: state.homePopoffsFetchedAtByCountry,
-        topPlaysRangeByCountry: state.topPlaysRangeByCountry,
         popoffsByCountry: state.popoffsByCountry,
         popoffsFetchedAtByCountry: state.popoffsFetchedAtByCountry,
         mapsDataByCountry: state.mapsDataByCountry,

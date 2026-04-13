@@ -55,6 +55,7 @@ export const Route = createFileRoute("/top-plays")({
     range:
       search.range === "24h" ||
       search.range === "3d" ||
+      search.range === "7d" ||
       search.range === "30d"
         ? search.range
         : DEFAULT_TOP_PLAYS_SEARCH.range,
@@ -85,6 +86,7 @@ function PopOffsPage() {
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [page, setPage] = useState(0);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const hasRestoredRememberedRangeRef = useRef(false);
   const countryName = getCountryName(selectedCountry);
   const hasCachedPopoffs = popoffs.length > 0;
 
@@ -97,9 +99,13 @@ function PopOffsPage() {
     setPage(0);
     setExpandedId(null);
     fetchingRef.current = false;
+    hasRestoredRememberedRangeRef.current = false;
   }, [selectedCountry]);
 
   useEffect(() => {
+    if (hasRestoredRememberedRangeRef.current) return;
+
+    hasRestoredRememberedRangeRef.current = true;
     const hasExplicitRange = new URLSearchParams(location.searchStr).has("range");
     if (hasExplicitRange || rememberedRange === range) return;
 
