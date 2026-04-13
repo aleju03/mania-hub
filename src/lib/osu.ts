@@ -1,5 +1,14 @@
 import { createServerFn } from "@tanstack/react-start";
+import { setResponseHeader } from "@tanstack/react-start/server";
 import sanitizeHtml from "sanitize-html";
+
+function edgeCache(sMaxage: number, swr?: number): void {
+  const effectiveSwr = swr ?? sMaxage * 4;
+  setResponseHeader(
+    "Cache-Control",
+    `public, s-maxage=${sMaxage}, stale-while-revalidate=${effectiveSwr}`,
+  );
+}
 import {
   osuFetch,
   osuFetchBinary,
@@ -267,12 +276,14 @@ async function getUserRankHistory(userId: number): Promise<number[] | null> {
 export const getUser = createServerFn({ method: "GET" })
   .inputValidator((data: { key: string }) => data)
   .handler(async ({ data }: { data: { key: string } }) => {
+    edgeCache(60, 300);
     return getCachedUser(data.key);
   });
 
 export const getUserScoresBest = createServerFn({ method: "GET" })
   .inputValidator((data: { userId: number; limit?: number; offset?: number }) => data)
   .handler(async ({ data }: { data: { userId: number; limit?: number; offset?: number } }) => {
+    edgeCache(120, 600);
     return getCachedUserScores("best", data.userId, {
       limit: data.limit ?? 20,
       offset: data.offset ?? 0,
@@ -282,6 +293,7 @@ export const getUserScoresBest = createServerFn({ method: "GET" })
 export const getUserScoresRecent = createServerFn({ method: "GET" })
   .inputValidator((data: { userId: number; limit?: number; offset?: number; include_fails?: boolean }) => data)
   .handler(async ({ data }: { data: { userId: number; limit?: number; offset?: number; include_fails?: boolean } }) => {
+    edgeCache(30, 120);
     return getCachedUserScores("recent", data.userId, {
       limit: data.limit ?? 10,
       offset: data.offset ?? 0,
@@ -292,6 +304,7 @@ export const getUserScoresRecent = createServerFn({ method: "GET" })
 export const getUserScoresFirsts = createServerFn({ method: "GET" })
   .inputValidator((data: { userId: number; limit?: number; offset?: number }) => data)
   .handler(async ({ data }: { data: { userId: number; limit?: number; offset?: number } }) => {
+    edgeCache(300, 1800);
     return getCachedUserScores("firsts", data.userId, {
       limit: data.limit ?? 100,
       offset: data.offset ?? 0,
@@ -301,6 +314,7 @@ export const getUserScoresFirsts = createServerFn({ method: "GET" })
 export const getUserScoresPinned = createServerFn({ method: "GET" })
   .inputValidator((data: { userId: number; limit?: number; offset?: number }) => data)
   .handler(async ({ data }: { data: { userId: number; limit?: number; offset?: number } }) => {
+    edgeCache(600, 3600);
     return getCachedUserScores("pinned", data.userId, {
       limit: data.limit ?? 50,
       offset: data.offset ?? 0,
@@ -310,6 +324,7 @@ export const getUserScoresPinned = createServerFn({ method: "GET" })
 export const getUserApproxPpGains = createServerFn({ method: "GET" })
   .inputValidator((data: { userId: number }) => data)
   .handler(async ({ data }: { data: { userId: number } }) => {
+    edgeCache(300, 1800);
     return getApproxPpGainsForUser(data.userId);
   });
 
@@ -468,12 +483,14 @@ async function fetchUserBestScoresWindow(userId: number, totalLimit = 200): Prom
 export const getUserScoresBestWindow = createServerFn({ method: "GET" })
   .inputValidator((data: { userId: number; totalLimit?: number }) => data)
   .handler(async ({ data }: { data: { userId: number; totalLimit?: number } }) => {
+    edgeCache(120, 600);
     return fetchUserBestScoresWindow(data.userId, data.totalLimit ?? 200);
   });
 
 export const getUserProfileInsights = createServerFn({ method: "GET" })
   .inputValidator((data: { userId: number }) => data)
   .handler(async ({ data }: { data: { userId: number } }) => {
+    edgeCache(1800, 21600);
     const cacheKey = `user-profile-insights:v${USER_PROFILE_INSIGHTS_CACHE_VERSION}:${data.userId}`;
     return fetchWithCacheLock(cacheKey, USER_PROFILE_INSIGHTS_CACHE_TTL, async () =>
       calculateUserProfileInsights(await fetchUserBestScoresWindow(data.userId, 200)),
@@ -483,6 +500,7 @@ export const getUserProfileInsights = createServerFn({ method: "GET" })
 export const getUsersApproxPpGains = createServerFn({ method: "GET" })
   .inputValidator((data: { userIds: number[] }) => data)
   .handler(async ({ data }: { data: { userIds: number[] } }) => {
+    edgeCache(300, 1800);
     const uniqueUserIds = [...new Set(data.userIds)];
 
     const results = await mapWithConcurrency(
@@ -511,6 +529,7 @@ export const getUsersApproxPpGains = createServerFn({ method: "GET" })
 export const getRankings = createServerFn({ method: "GET" })
   .inputValidator((data: { type?: string; page?: number; country?: string }) => data)
   .handler(async ({ data }: { data: { type?: string; page?: number; country?: string } }) => {
+    edgeCache(60, 300);
     const type = data.type ?? "performance";
     const cacheKey = `rankings:${type}:${data.page ?? 1}:${data.country ?? ""}`;
     return fetchWithCacheLock(cacheKey, RANKINGS_CACHE_TTL, () =>
@@ -679,6 +698,7 @@ async function buildCountryPopoffs(players: HomePreviewPlayer[]): Promise<Array<
 export const getHomePageData = createServerFn({ method: "GET" })
   .inputValidator((data?: { country?: string }) => data)
   .handler(async ({ data }: { data?: { country?: string } }): Promise<HomePageData> => {
+    edgeCache(30, 300);
     const country = data?.country ?? "CR";
     const cacheKey = `home-page-data:v1:${country}`;
     return fetchWithCacheLock(cacheKey, HOME_PAGE_CACHE_TTL, async () => {
@@ -703,18 +723,21 @@ export const getHomePageData = createServerFn({ method: "GET" })
 export const getHomeRecentScores = createServerFn({ method: "GET" })
   .inputValidator((data: { userIds: number[] }) => data)
   .handler(async ({ data }: { data: { userIds: number[] } }) => {
+    edgeCache(60, 300);
     return buildHomeRecentScoresPreview(data.userIds);
   });
 
 export const getHomePopoffs = createServerFn({ method: "GET" })
   .inputValidator((data: { players: HomePreviewPlayer[] }) => data)
   .handler(async ({ data }: { data: { players: HomePreviewPlayer[] } }) => {
+    edgeCache(300, 1800);
     return buildHomePopoffs(data.players);
   });
 
 export const getCountryPopoffs = createServerFn({ method: "GET" })
   .inputValidator((data: { players: HomePreviewPlayer[] }) => data)
   .handler(async ({ data }: { data: { players: HomePreviewPlayer[] } }) => {
+    edgeCache(60, 600);
     return buildCountryPopoffs(data.players);
   });
 
@@ -723,6 +746,7 @@ export const getCountryPopoffs = createServerFn({ method: "GET" })
 export const getUsersRankHistory = createServerFn({ method: "GET" })
   .inputValidator((data: { userIds: number[] }) => data)
   .handler(async ({ data }: { data: { userIds: number[] } }) => {
+    edgeCache(3600, 86400);
     const uniqueUserIds = [...new Set(data.userIds)];
 
     const results = await mapWithConcurrency(
@@ -754,6 +778,7 @@ export const getUsersRankHistory = createServerFn({ method: "GET" })
 export const searchBeatmaps = createServerFn({ method: "GET" })
   .inputValidator((data: { query?: string; sort?: string; cursor_string?: string; status?: string }) => data)
   .handler(async ({ data }: { data: { query?: string; sort?: string; cursor_string?: string; status?: string } }) => {
+    edgeCache(300, 3600);
     return osuFetch<BeatmapsetSearchResponse>("/beatmapsets/search", {
       m: 3, // mania
       q: data.query,
@@ -811,6 +836,7 @@ async function getCountryBeatmapScores(beatmapId: number, country: string): Prom
 export const getBeatmapScores = createServerFn({ method: "GET" })
   .inputValidator((data: { beatmapId: number; country?: string }) => data)
   .handler(async ({ data }: { data: { beatmapId: number; country?: string } }) => {
+    edgeCache(120, 600);
     if (data.country?.trim()) {
       return { scores: await getCountryBeatmapScores(data.beatmapId, data.country) };
     }
@@ -826,6 +852,7 @@ export const getBeatmapScores = createServerFn({ method: "GET" })
 export const searchUsers = createServerFn({ method: "GET" })
   .inputValidator((data: { query: string }) => data)
   .handler(async ({ data }: { data: { query: string } }) => {
+    edgeCache(60, 600);
     return osuFetch<UserSearchResponse>("/search", {
       mode: "user",
       query: data.query,
@@ -837,6 +864,7 @@ export const searchUsers = createServerFn({ method: "GET" })
 export const getCountryRecentScores = createServerFn({ method: "GET" })
   .inputValidator((data: { userIds: number[]; batchSize?: number; batchIndex?: number; recentLimit?: number }) => data)
   .handler(async ({ data }: { data: { userIds: number[]; batchSize?: number; batchIndex?: number; recentLimit?: number } }) => {
+    edgeCache(30, 120);
     return fetchCountryRecentScores(data.userIds, data);
   });
 
@@ -1056,6 +1084,7 @@ async function buildCountryMapsData(users: MapsUser[]): Promise<CountryMapsData>
 export const getCountryMapsData = createServerFn({ method: "GET" })
   .inputValidator((data: { users: MapsUser[] }) => data)
   .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
+    edgeCache(3600, 86400);
     const cacheKey = computeMapsCacheKey(data.users);
     const { value, isStale } = await fetchWithStaleAllowed<CountryMapsData>(
       cacheKey,
@@ -1091,6 +1120,7 @@ export const rebuildCountryMapsData = createServerFn({ method: "POST" })
 export const getReplayParsed = createServerFn({ method: "GET" })
   .inputValidator((data: { scoreId: number; mode: string; keyCount?: number }) => data)
   .handler(async ({ data }: { data: { scoreId: number; mode: string; keyCount?: number } }) => {
+    edgeCache(86400, 604800);
     const { ScoreDecoder } = await import("osu-parsers");
     let buffer: ArrayBuffer;
     try {
@@ -1148,6 +1178,7 @@ export const getReplayParsed = createServerFn({ method: "GET" })
 export const getBeatmapFile = createServerFn({ method: "GET" })
   .inputValidator((data: { beatmapId: number }) => data)
   .handler(async ({ data }: { data: { beatmapId: number } }) => {
+    edgeCache(86400, 604800);
     const osuFile = await fetchBeatmapFile(data.beatmapId);
     return { content: osuFile };
   });
@@ -1155,6 +1186,7 @@ export const getBeatmapFile = createServerFn({ method: "GET" })
 export const getScore = createServerFn({ method: "GET" })
   .inputValidator((data: { scoreId: number; mode?: string }) => data)
   .handler(async ({ data }: { data: { scoreId: number; mode?: string } }) => {
+    edgeCache(300, 1800);
     const mode = data.mode ?? "mania";
 
     try {

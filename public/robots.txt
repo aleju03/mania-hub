@@ -1,3 +1,9 @@
 # https://www.robotstxt.org/robotstxt.html
 User-agent: *
-Disallow:
+Disallow: /api/
+Disallow: /tracker
+Disallow: /replay
+Disallow: /player/
+Disallow: /snipes
+Allow: /
+Crawl-delay: 10

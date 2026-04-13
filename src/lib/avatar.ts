@@ -1,7 +1,16 @@
 import { createServerFn } from "@tanstack/react-start";
+import { setResponseHeader } from "@tanstack/react-start/server";
 import sharp from "sharp";
 import { getPersistentCacheEntry, setPersistentCache } from "./api";
 import { getAvatarAccentCacheKey } from "./avatar-accent";
+
+function edgeCache(sMaxage: number, swr?: number): void {
+  const effectiveSwr = swr ?? sMaxage * 4;
+  setResponseHeader(
+    "Cache-Control",
+    `public, s-maxage=${sMaxage}, stale-while-revalidate=${effectiveSwr}`,
+  );
+}
 
 interface RgbColor {
   r: number;
@@ -262,12 +271,14 @@ async function getAvatarAccentCached(url: string): Promise<string | null> {
 export const getAvatarAccent = createServerFn({ method: "GET" })
   .inputValidator((data: { url: string }) => data)
   .handler(async ({ data }: { data: { url: string } }) => {
+    edgeCache(86400, 604800);
     return getAvatarAccentCached(data.url);
   });
 
 export const getAvatarAccents = createServerFn({ method: "GET" })
   .inputValidator((data: { urls: string[] }) => data)
   .handler(async ({ data }: { data: { urls: string[] } }) => {
+    edgeCache(86400, 604800);
     const urls = [...new Set(data.urls)];
     const output: Record<string, string | null> = {};
     let nextIndex = 0;

@@ -182,6 +182,7 @@ function ScoresPage() {
 
   const poll = useCallback(async () => {
     if (!isPolling || userIds.length === 0) return;
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
     try {
       const scores = await getCountryRecentScores({
         data: { userIds, batchSize: 10, batchIndex: pollIndex, recentLimit: 20 },
@@ -193,9 +194,17 @@ function ScoresPage() {
   }, [isPolling, userIds, pollIndex, addFeedScores, markFeedScoresFetched, nextPollIndex, selectedCountry]);
 
   useEffect(() => {
-    const id = setInterval(poll, 30_000);
-    return () => clearInterval(id);
-  }, [poll]);
+    if (!isPolling) return;
+    const id = setInterval(poll, 60_000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void poll();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [poll, isPolling]);
 
   useEffect(() => {
     setExpandedKey(null);
