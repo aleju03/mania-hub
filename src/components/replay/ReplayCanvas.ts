@@ -1167,16 +1167,6 @@ export class ManiaReplayRenderer {
     return this.frames[lo]?.keyState ?? 0;
   }
 
-  private isColumnPressedAtTime(column: number, time: number): boolean {
-    if (column < 0 || column >= this.keyCount) return false;
-    const segments = this.segments[column];
-    for (const seg of segments) {
-      if (seg.start > time) break;
-      if (seg.start <= time && seg.end > time) return true;
-    }
-    return false;
-  }
-
   private isColumnEffectivelyHeldAtTime(column: number, time: number, graceMs = HOLD_VISUAL_GRACE_MS): boolean {
     if (column < 0 || column >= this.keyCount) return false;
     const segments = this.segments[column];
