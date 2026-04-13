@@ -720,6 +720,7 @@ function ReplayViewer({
     return stored == null ? false : stored === "true";
   });
   const [audioError, setAudioError] = useState<string | null>(null);
+  const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
   const [bgSrc, setBgSrc] = useState<string | null>(null);
   const [skin, setSkin] = useState<ManiaSkin | null>(null);
   const [skinLoading, setSkinLoading] = useState(false);
@@ -784,12 +785,35 @@ function ReplayViewer({
   useEffect(() => {
     setAudioError(null);
     shouldResumeAudioRef.current = false;
-  }, [audioUrl]);
+    setAudioBlobUrl(null);
 
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio || !audioUrl) return;
-    audio.load();
+    if (!audioUrl) return;
+
+    let cancelled = false;
+    let createdBlobUrl: string | null = null;
+
+    (async () => {
+      try {
+        const response = await fetch(audioUrl);
+        if (!response.ok) {
+          throw new Error(`Audio fetch failed (${response.status})`);
+        }
+        const blob = await response.blob();
+        if (cancelled) return;
+        createdBlobUrl = URL.createObjectURL(blob);
+        setAudioBlobUrl(createdBlobUrl);
+      } catch (err) {
+        if (cancelled) return;
+        setAudioError(err instanceof Error ? err.message : "Failed to load audio");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (createdBlobUrl) {
+        URL.revokeObjectURL(createdBlobUrl);
+      }
+    };
   }, [audioUrl]);
 
   useEffect(() => {
@@ -1091,11 +1115,11 @@ function ReplayViewer({
         <canvas ref={canvasRef} className="relative z-10 w-full" style={{ height: "min(70vh, 600px)" }} />
       </div>
 
-      {/* Audio element (hidden) — full song from Sayobot CDN */}
-      {audioUrl && (
+      {/* Audio element (hidden) — full song fetched as a Blob for instant seek without Range requests */}
+      {audioBlobUrl && (
         <audio
           ref={audioRef}
-          src={audioUrl}
+          src={audioBlobUrl}
           preload="auto"
           onError={handleAudioError}
         />

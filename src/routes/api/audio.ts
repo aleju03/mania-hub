@@ -13,6 +13,13 @@ type AudioCacheEntry = {
 
 const audioCache = new Map<string, AudioCacheEntry>();
 
+const ALLOWED_AUDIO_EXTENSIONS = [".mp3", ".ogg", ".wav", ".flac"] as const;
+
+function isAllowedAudioFilename(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  return ALLOWED_AUDIO_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
 function pruneAudioCache(now = Date.now()): void {
   for (const [key, entry] of audioCache.entries()) {
     if (entry.expiresAt <= now) {
@@ -38,29 +45,6 @@ function getMimeType(filename: string): string {
   if (lower.endsWith(".wav")) return "audio/wav";
   if (lower.endsWith(".flac")) return "audio/flac";
   return "application/octet-stream";
-}
-
-function parseRangeHeader(rangeHeader: string | null, size: number): { start: number; end: number } | null {
-  if (!rangeHeader) return null;
-  const match = rangeHeader.match(/^bytes=(\d*)-(\d*)$/);
-  if (!match) return null;
-
-  const [, startRaw, endRaw] = match;
-  if (startRaw === "" && endRaw === "") return null;
-
-  if (startRaw === "") {
-    const suffixLength = Number(endRaw);
-    if (!Number.isFinite(suffixLength) || suffixLength <= 0) return null;
-    return { start: Math.max(0, size - suffixLength), end: size - 1 };
-  }
-
-  const start = Number(startRaw);
-  const end = endRaw === "" ? size - 1 : Number(endRaw);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start || start >= size) {
-    return null;
-  }
-
-  return { start, end: Math.min(end, size - 1) };
 }
 
 async function extractAudioFromArchive(beatmapsetId: string, filename: string): Promise<AudioCacheValue> {
@@ -100,32 +84,24 @@ export const Route = createFileRoute("/api/audio")({
         const beatmapsetId = url.searchParams.get("beatmapsetId");
         const filename = url.searchParams.get("filename");
 
-        if (!beatmapsetId) {
-          return new Response("Missing beatmapsetId", { status: 400 });
+        if (!beatmapsetId || !/^\d+$/.test(beatmapsetId)) {
+          return new Response("Invalid beatmapsetId", { status: 400 });
         }
 
-        if (!filename) {
-          return new Response("Missing filename", { status: 400 });
+        if (!filename || !isAllowedAudioFilename(filename)) {
+          return new Response("Invalid filename", { status: 400 });
         }
 
         try {
           const { buffer, mimeType } = await extractAudioFromArchive(beatmapsetId, filename);
-          const range = parseRangeHeader(request.headers.get("range"), buffer.length);
-          const headers = new Headers({
-            "Content-Type": mimeType,
-            "Accept-Ranges": "bytes",
-            "Cache-Control": "public, max-age=3600",
+          return new Response(buffer as unknown as BodyInit, {
+            status: 200,
+            headers: {
+              "Content-Type": mimeType,
+              "Content-Length": String(buffer.length),
+              "Cache-Control": "public, max-age=86400, s-maxage=31536000, stale-while-revalidate=604800, immutable",
+            },
           });
-
-          if (!range) {
-            headers.set("Content-Length", String(buffer.length));
-            return new Response(buffer as unknown as BodyInit, { status: 200, headers });
-          }
-
-          const chunk = buffer.subarray(range.start, range.end + 1);
-          headers.set("Content-Length", String(chunk.length));
-          headers.set("Content-Range", `bytes ${range.start}-${range.end}/${buffer.length}`);
-          return new Response(chunk as unknown as BodyInit, { status: 206, headers });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unknown audio extraction error";
           return new Response(message, { status: 404 });

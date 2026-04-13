@@ -1,6 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { extractBeatmapArchiveFile } from "#/lib/beatmap-archive";
 
+const ALLOWED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp"] as const;
+
+function isAllowedImageFilename(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  return ALLOWED_IMAGE_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
 function getMimeType(filename: string): string {
   const lower = filename.toLowerCase();
   if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
@@ -19,12 +26,12 @@ export const Route = createFileRoute("/api/background")({
         const beatmapsetId = url.searchParams.get("beatmapsetId");
         const filename = url.searchParams.get("filename");
 
-        if (!beatmapsetId) {
-          return new Response("Missing beatmapsetId", { status: 400 });
+        if (!beatmapsetId || !/^\d+$/.test(beatmapsetId)) {
+          return new Response("Invalid beatmapsetId", { status: 400 });
         }
 
-        if (!filename) {
-          return new Response("Missing filename", { status: 400 });
+        if (!filename || !isAllowedImageFilename(filename)) {
+          return new Response("Invalid filename", { status: 400 });
         }
 
         try {
@@ -34,7 +41,7 @@ export const Route = createFileRoute("/api/background")({
             headers: {
               "Content-Type": getMimeType(filename),
               "Content-Length": String(buffer.length),
-              "Cache-Control": "public, max-age=3600",
+              "Cache-Control": "public, max-age=86400, s-maxage=31536000, stale-while-revalidate=604800, immutable",
             },
           });
         } catch (error) {
