@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, searchUsers, searchBeatmaps, getBeatmapScores, getRankings } from "../lib/osu";
+import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings } from "../lib/osu";
 import { parseManiaBeatmap } from "../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
 import { getDisplayedAccuracy, getDisplayedRank, scoreHasReplay } from "../lib/score";
@@ -138,7 +138,7 @@ function ReplayPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Player browse state
-  const [playerScoreGroups, setPlayerScoreGroups] = useState<{ best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScore[] } | null>(null);
+  const [playerScoreGroups, setPlayerScoreGroups] = useState<{ best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScore[]; recent: OsuScore[] } | null>(null);
   const [loadingScores, setLoadingScores] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [loadedPlayerParam, setLoadedPlayerParam] = useState<string | null>(null);
@@ -244,10 +244,11 @@ function ReplayPage() {
     setLoadingScores(true);
     setExpandedSections({});
     try {
-      const [best, firsts, pinned] = await Promise.all([
+      const [best, firsts, pinned, recent] = await Promise.all([
         getUserScoresBest({ data: { userId, limit: 100 } }).catch(() => [] as OsuScore[]),
         getUserScoresFirsts({ data: { userId, limit: 100 } }).catch(() => [] as OsuScore[]),
         getUserScoresPinned({ data: { userId, limit: 50 } }).catch(() => [] as OsuScore[]),
+        getUserScoresRecent({ data: { userId, limit: 50, include_fails: true } }).catch(() => [] as OsuScore[]),
       ]);
       const filterReplayable = (scores: OsuScore[]) => scores.filter((s) => scoreHasReplay(s));
       const pinnedFiltered = filterReplayable(pinned);
@@ -255,8 +256,11 @@ function ReplayPage() {
       const bestFiltered = filterReplayable(best).filter((s) => !pinnedIds.has(s.id));
       const bestIds = new Set(bestFiltered.map((s) => s.id));
       const firstsFiltered = filterReplayable(firsts).filter((s) => !pinnedIds.has(s.id) && !bestIds.has(s.id));
-      setPlayerScoreGroups({ best: bestFiltered, firsts: firstsFiltered, pinned: pinnedFiltered });
-    } catch { setPlayerScoreGroups({ best: [], firsts: [], pinned: [] }); }
+      // Recent is intentionally NOT deduped against the others — a recent play
+      // that is also a best score is exactly what you want to see as "new".
+      const recentFiltered = filterReplayable(recent);
+      setPlayerScoreGroups({ best: bestFiltered, firsts: firstsFiltered, pinned: pinnedFiltered, recent: recentFiltered });
+    } catch { setPlayerScoreGroups({ best: [], firsts: [], pinned: [], recent: [] }); }
     finally { setLoadingScores(false); }
   }, []);
 
@@ -323,7 +327,7 @@ function ReplayPage() {
           return;
         }
 
-        setPlayerScoreGroups({ best: [], firsts: [], pinned: [] });
+        setPlayerScoreGroups({ best: [], firsts: [], pinned: [], recent: [] });
         setLoadedPlayerParam(normalizedPlayerParam);
       } catch { /* ignore */ }
     })();
@@ -414,10 +418,11 @@ function ReplayPage() {
                       </div>
                     )}
 
-                    {playerScoreGroups && (playerScoreGroups.best.length > 0 || playerScoreGroups.firsts.length > 0 || playerScoreGroups.pinned.length > 0) && (
+                    {playerScoreGroups && (playerScoreGroups.best.length > 0 || playerScoreGroups.firsts.length > 0 || playerScoreGroups.pinned.length > 0 || playerScoreGroups.recent.length > 0) && (
                       <div className="space-y-5">
                         {([
                           { key: "pinned", label: "Pinned", scores: playerScoreGroups.pinned },
+                          { key: "recent", label: "Recent Plays", scores: playerScoreGroups.recent },
                           { key: "best", label: "Best Scores", scores: playerScoreGroups.best },
                           { key: "firsts", label: "First Places", scores: playerScoreGroups.firsts },
                         ] as const).map(({ key, label, scores }) => {
@@ -461,7 +466,7 @@ function ReplayPage() {
                       </div>
                     )}
 
-                    {!loadingScores && playerScoreGroups && playerScoreGroups.best.length === 0 && playerScoreGroups.firsts.length === 0 && playerScoreGroups.pinned.length === 0 && (
+                    {!loadingScores && playerScoreGroups && playerScoreGroups.best.length === 0 && playerScoreGroups.firsts.length === 0 && playerScoreGroups.pinned.length === 0 && playerScoreGroups.recent.length === 0 && (
                       <div className="text-center py-8 text-osu-f1 text-sm">
                         No replays available for this player
                       </div>
@@ -721,6 +726,7 @@ function ReplayViewer({
   });
   const [audioError, setAudioError] = useState<string | null>(null);
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
+  const [pendingPlay, setPendingPlay] = useState(false);
   const [bgSrc, setBgSrc] = useState<string | null>(null);
   const [skin, setSkin] = useState<ManiaSkin | null>(null);
   const [skinLoading, setSkinLoading] = useState(false);
@@ -1052,25 +1058,53 @@ function ReplayViewer({
     }
   };
 
+  const startPlayback = useCallback(() => {
+    const r = rendererRef.current;
+    if (!r) return;
+    if (r.time >= r.duration) r.seek(0);
+    r.play();
+    setIsPlaying(true);
+    // Play audio directly from user gesture so browsers don't block it
+    if (audioRef.current && audioEnabled) {
+      audioRef.current.currentTime = r.time / 1000;
+      audioRef.current.playbackRate = effectiveRate;
+      audioRef.current.volume = volume;
+      audioRef.current.play().catch(() => {
+        shouldResumeAudioRef.current = true;
+      });
+    }
+  }, [audioEnabled, effectiveRate, volume]);
+
   const togglePlay = () => {
     const r = rendererRef.current;
     if (!r) return;
-    if (isPlaying) { r.pause(); setIsPlaying(false); }
-    else {
-      if (r.time >= r.duration) r.seek(0);
-      r.play();
-      setIsPlaying(true);
-      // Play audio directly from user gesture so browsers don't block it
-      if (audioRef.current && audioEnabled) {
-        audioRef.current.currentTime = r.time / 1000;
-        audioRef.current.playbackRate = effectiveRate;
-        audioRef.current.volume = volume;
-        audioRef.current.play().catch(() => {
-          shouldResumeAudioRef.current = true;
-        });
-      }
+    if (isPlaying) {
+      r.pause();
+      setIsPlaying(false);
+      setPendingPlay(false);
+      return;
     }
+    // Second click while already queued cancels the pending start
+    if (pendingPlay) {
+      setPendingPlay(false);
+      return;
+    }
+    // Audio is expected but not ready yet — queue the play until the blob lands
+    if (audioEnabled && audioUrl && !audioBlobUrl && !audioError) {
+      setPendingPlay(true);
+      return;
+    }
+    startPlayback();
   };
+
+  // Auto-start playback once the audio blob finishes loading (or fails, or the
+  // user disables audio) after the user already clicked play.
+  useEffect(() => {
+    if (!pendingPlay || isPlaying) return;
+    if (audioEnabled && audioUrl && !audioBlobUrl && !audioError) return;
+    setPendingPlay(false);
+    startPlayback();
+  }, [pendingPlay, isPlaying, audioEnabled, audioUrl, audioBlobUrl, audioError, startPlayback]);
 
   const toggleAudio = () => {
     if (!audioRef.current) return;
@@ -1107,18 +1141,24 @@ function ReplayViewer({
     <div className="space-y-3">
       {/* Canvas */}
       <div className="relative rounded-xl overflow-hidden border border-osu-b3/20 bg-[#0a0a18]">
-        {bgSrc ? (
-          <img
-            src={bgSrc}
-            alt=""
-            className="absolute inset-0 h-full w-full object-cover pointer-events-none select-none"
-          />
-        ) : (
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{ background: "linear-gradient(180deg, #0a0a18 0%, #1a1016 50%, #0c0c14 100%)" }}
-          />
-        )}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: "linear-gradient(180deg, #0a0a18 0%, #1a1016 50%, #0c0c14 100%)" }}
+        />
+        <AnimatePresence>
+          {bgSrc && (
+            <motion.img
+              key={bgSrc}
+              src={bgSrc}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover pointer-events-none select-none"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.6, ease: "easeInOut" }}
+            />
+          )}
+        </AnimatePresence>
         <div
           className="absolute inset-0 pointer-events-none bg-black transition-opacity"
           style={{ opacity: bgDim / 100 }}
@@ -1201,8 +1241,16 @@ function ReplayViewer({
         {/* Controls row */}
         <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 flex-wrap">
           {/* Play/Pause */}
-          <button onClick={togglePlay} className="w-9 h-9 rounded-full bg-osu-pink hover:bg-osu-pink-light transition-colors flex items-center justify-center cursor-pointer shrink-0">
-            {isPlaying ? (
+          <button
+            onClick={togglePlay}
+            title={pendingPlay ? "Waiting for audio to load..." : undefined}
+            className="w-9 h-9 rounded-full bg-osu-pink hover:bg-osu-pink-light transition-colors flex items-center justify-center cursor-pointer shrink-0"
+          >
+            {pendingPlay ? (
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" className="w-4 h-4 animate-spin">
+                <path d="M12 2a10 10 0 0 1 10 10" />
+              </svg>
+            ) : isPlaying ? (
               <svg viewBox="0 0 24 24" fill="white" className="w-4 h-4">
                 <rect x="6" y="4" width="4" height="16" rx="1" />
                 <rect x="14" y="4" width="4" height="16" rx="1" />
