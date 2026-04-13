@@ -5,7 +5,7 @@ import { SearchInput } from "../ui/SearchInput";
 import { CountrySelector } from "./CountrySelector";
 import { clearDevServerCaches } from "../../lib/api";
 import { searchUsers } from "../../lib/osu";
-import { useAppStore } from "../../store";
+import { TOP_PLAYS_RANGE_STORAGE_KEY, useAppStore } from "../../store";
 import { getCountryFlagGradient, getCountryFlagUrl } from "../../lib/country";
 
 const links = [
@@ -42,6 +42,7 @@ async function clearClientCaches(): Promise<void> {
     CLIENT_CACHE_KEYS.forEach((key) => {
       window.localStorage.removeItem(key);
     });
+    window.localStorage.removeItem(TOP_PLAYS_RANGE_STORAGE_KEY);
     window.sessionStorage.clear();
   }
 
