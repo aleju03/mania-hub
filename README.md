@@ -107,6 +107,7 @@ Create a `.env` file with:
 | # | Feature | Status |
 |:---:|---|:---:|
 | 17 | Plan out and implement the snipes tracking page | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
+| 17a | Set up external cron (e.g. cron-job.org) to periodically snapshot country leaderboards for tracked maps and diff against the last Turso snapshot to detect snipes. Lazy on-visit collection won't work: snipes need a continuous time series regardless of whether anyone is viewing the page. | ![planned](https://img.shields.io/badge/planned-blue?style=flat-square) |
 
 ---
 
