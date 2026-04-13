@@ -1,6 +1,6 @@
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useMemo, useRef } from "react";
-import { getRankings, getCountryMapsData } from "../lib/osu";
+import { getRankings, getCountryMapsData, rebuildCountryMapsData } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { formatNumber, formatDuration, formatTimeAgo } from "../lib/format";
@@ -31,21 +31,21 @@ type StatusFilter = "all" | "ranked" | "loved" | "other";
 type PpFilter = 0 | 500 | 700;
 type ModFilter = "all" | "dt" | "ht" | "nm";
 type MapsSearch = {
-  tab?: Tab;
-  page?: number;
-  key?: KeyFilter;
-  beatmapSort?: BeatmapSort;
-  farmedSort?: FarmedSort;
-  status?: StatusFilter;
-  pp?: PpFilter;
-  mod?: ModFilter;
-  q?: string;
+  tab: Tab;
+  page: number;
+  key: KeyFilter;
+  beatmapSort: BeatmapSort;
+  farmedSort: FarmedSort;
+  status: StatusFilter;
+  pp: PpFilter;
+  mod: ModFilter;
+  q: string;
 };
 
 const PAGE_SIZE = 24;
 const VISIBLE_AVATARS = 4;
 const FARMED_SINGLE_PLAYER_PP_MIN = 500;
-const DEFAULT_MAPS_SEARCH: Required<MapsSearch> = {
+const DEFAULT_MAPS_SEARCH: MapsSearch = {
   tab: "farmed",
   page: 0,
   key: "all",
@@ -122,7 +122,7 @@ export const Route = createFileRoute("/maps")({
   search: {
     middlewares: [stripSearchParams(DEFAULT_MAPS_SEARCH)],
   },
-  validateSearch: (search: Record<string, unknown>): Required<MapsSearch> => ({
+  validateSearch: (search: Record<string, unknown>): MapsSearch => ({
     tab: search.tab === "popular" || search.tab === "favourites" ? search.tab : DEFAULT_MAPS_SEARCH.tab,
     page: Math.max(0, Number(search.page) || DEFAULT_MAPS_SEARCH.page),
     key: search.key === "4k" || search.key === "7k" || search.key === "other" ? search.key : DEFAULT_MAPS_SEARCH.key,
@@ -135,20 +135,6 @@ export const Route = createFileRoute("/maps")({
   }),
   component: MapsPage,
 });
-
-function buildMapsSearch(search: Required<MapsSearch>): MapsSearch {
-  return {
-    ...(search.tab !== "farmed" ? { tab: search.tab } : {}),
-    ...(search.page > 0 ? { page: search.page } : {}),
-    ...(search.key !== "all" ? { key: search.key } : {}),
-    ...(search.beatmapSort !== "players" ? { beatmapSort: search.beatmapSort } : {}),
-    ...(search.farmedSort !== "players" ? { farmedSort: search.farmedSort } : {}),
-    ...(search.status !== "all" ? { status: search.status } : {}),
-    ...(search.pp > 0 ? { pp: search.pp } : {}),
-    ...(search.mod !== "all" ? { mod: search.mod } : {}),
-    ...(search.q ? { q: search.q } : {}),
-  };
-}
 
 function MapsPage() {
   const navigate = useNavigate();
@@ -181,13 +167,10 @@ function MapsPage() {
     setError(null);
   }, [selectedCountry]);
 
-  const updateMapsSearch = (patch: Partial<Required<MapsSearch>>) => {
+  const updateMapsSearch = (patch: Partial<MapsSearch>) => {
     navigate({
       to: "/maps",
-      search: buildMapsSearch({
-        ...mapsSearch,
-        ...patch,
-      }),
+      search: { ...mapsSearch, ...patch },
       replace: true,
     });
   };
@@ -241,9 +224,19 @@ function MapsPage() {
 
     setLoadingMaps(!mapsData);
     getCountryMapsData({ data: { users: players } })
-      .then((data) => {
+      .then(({ value, isStale }) => {
         if (cancelled) return;
-        setMapsData(selectedCountry, data);
+        setMapsData(selectedCountry, value);
+        if (isStale) {
+          rebuildCountryMapsData({ data: { users: players } })
+            .then((result) => {
+              if (cancelled) return;
+              if (result.value) {
+                setMapsData(selectedCountry, result.value);
+              }
+            })
+            .catch(() => {});
+        }
       })
       .catch(() => {
         if (cancelled) return;
@@ -347,7 +340,7 @@ function MapsPage() {
   const resetFilters = () => {
     navigate({
       to: "/maps",
-      search: {},
+      search: DEFAULT_MAPS_SEARCH,
       replace: true,
     });
   };
