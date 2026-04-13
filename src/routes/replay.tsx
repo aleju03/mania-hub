@@ -728,6 +728,8 @@ function ReplayViewer({
   const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
   const [pendingPlay, setPendingPlay] = useState(false);
   const [bgSrc, setBgSrc] = useState<string | null>(null);
+  const scrubbingRef = useRef(false);
+  const scrubResumeOnReleaseRef = useRef(false);
   const [skin, setSkin] = useState<ManiaSkin | null>(null);
   const [skinLoading, setSkinLoading] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -1199,7 +1201,60 @@ function ReplayViewer({
         >
           <span className="text-[10px] text-osu-f1 tabular-nums w-10">{formatTime(progress)}</span>
           <input type="range" min={0} max={1} step={0.001} value={progress}
-            onChange={(e) => { const v = Number(e.target.value); setProgress(v); const t = v * (rendererRef.current?.duration ?? 0); rendererRef.current?.seek(t); syncAudioTime(t); }}
+            onPointerDown={() => {
+              const r = rendererRef.current;
+              if (!r) return;
+              scrubbingRef.current = true;
+              scrubResumeOnReleaseRef.current = r.isPlaying;
+              if (r.isPlaying) {
+                r.pause();
+                setIsPlaying(false);
+              }
+              if (audioRef.current && !audioRef.current.paused) {
+                audioRef.current.pause();
+              }
+            }}
+            onPointerUp={() => {
+              const r = rendererRef.current;
+              if (!r) {
+                scrubbingRef.current = false;
+                scrubResumeOnReleaseRef.current = false;
+                return;
+              }
+              scrubbingRef.current = false;
+              // Sync audio to the renderer's final position once, on release
+              if (audioRef.current && audioEnabled) {
+                audioRef.current.currentTime = r.time / 1000;
+                audioRef.current.playbackRate = effectiveRate;
+                audioRef.current.volume = volume;
+              }
+              if (scrubResumeOnReleaseRef.current) {
+                scrubResumeOnReleaseRef.current = false;
+                r.play();
+                setIsPlaying(true);
+                if (audioRef.current && audioEnabled) {
+                  if (audioRef.current.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+                    audioRef.current.play().catch(() => {
+                      shouldResumeAudioRef.current = true;
+                    });
+                  } else {
+                    shouldResumeAudioRef.current = true;
+                  }
+                }
+              }
+            }}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setProgress(v);
+              const t = v * (rendererRef.current?.duration ?? 0);
+              rendererRef.current?.seek(t);
+              // During an active pointer scrub, don't touch audio — we sync
+              // it once on release. Keyboard/accessibility scrubs still go
+              // through the normal audio sync path.
+              if (!scrubbingRef.current) {
+                syncAudioTime(t);
+              }
+            }}
             className={`flex-1 h-1.5 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink`} />
           <span className="text-[10px] text-osu-f1 tabular-nums w-10 text-right">{formatTime(1)}</span>
 

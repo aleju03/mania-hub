@@ -450,7 +450,12 @@ export class ManiaReplayRenderer {
   seek(timeMs: number) {
     this.currentTime = Math.max(0, Math.min(timeMs, this.totalDuration));
     this.recomputeStatsUpTo(this.currentTime);
-    if (!this._isPlaying) this.render();
+    // Baseline the next tick's dt from right after the seek so the next rAF
+    // doesn't push currentTime forward by the (possibly large) gap between the
+    // previous tick and this seek — that gap is what caused the post-scrub
+    // note teleport/jiggle.
+    this.lastRenderTime = performance.now();
+    this.render();
   }
 
   setSpeed(speed: number) { this.playbackSpeed = speed; }
