@@ -17,6 +17,7 @@ import { Route as RankingsRouteImport } from './routes/rankings'
 import { Route as MapsRouteImport } from './routes/maps'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
+import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as ApiBackgroundRouteImport } from './routes/api/background'
 import { Route as ApiAudioRouteImport } from './routes/api/audio'
 
@@ -60,6 +61,11 @@ const PlayerUsernameRoute = PlayerUsernameRouteImport.update({
   path: '/player/$username',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSyncRoute = ApiSyncRouteImport.update({
+  id: '/api/sync',
+  path: '/api/sync',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiBackgroundRoute = ApiBackgroundRouteImport.update({
   id: '/api/background',
   path: '/api/background',
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/tracker': typeof TrackerRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/background': typeof ApiBackgroundRoute
+  '/api/sync': typeof ApiSyncRoute
   '/player/$username': typeof PlayerUsernameRoute
 }
 export interface FileRoutesByTo {
@@ -93,6 +100,7 @@ export interface FileRoutesByTo {
   '/tracker': typeof TrackerRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/background': typeof ApiBackgroundRoute
+  '/api/sync': typeof ApiSyncRoute
   '/player/$username': typeof PlayerUsernameRoute
 }
 export interface FileRoutesById {
@@ -106,6 +114,7 @@ export interface FileRoutesById {
   '/tracker': typeof TrackerRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/background': typeof ApiBackgroundRoute
+  '/api/sync': typeof ApiSyncRoute
   '/player/$username': typeof PlayerUsernameRoute
 }
 export interface FileRouteTypes {
@@ -120,6 +129,7 @@ export interface FileRouteTypes {
     | '/tracker'
     | '/api/audio'
     | '/api/background'
+    | '/api/sync'
     | '/player/$username'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -132,6 +142,7 @@ export interface FileRouteTypes {
     | '/tracker'
     | '/api/audio'
     | '/api/background'
+    | '/api/sync'
     | '/player/$username'
   id:
     | '__root__'
@@ -144,6 +155,7 @@ export interface FileRouteTypes {
     | '/tracker'
     | '/api/audio'
     | '/api/background'
+    | '/api/sync'
     | '/player/$username'
   fileRoutesById: FileRoutesById
 }
@@ -157,6 +169,7 @@ export interface RootRouteChildren {
   TrackerRoute: typeof TrackerRoute
   ApiAudioRoute: typeof ApiAudioRoute
   ApiBackgroundRoute: typeof ApiBackgroundRoute
+  ApiSyncRoute: typeof ApiSyncRoute
   PlayerUsernameRoute: typeof PlayerUsernameRoute
 }
 
@@ -218,6 +231,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlayerUsernameRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/sync': {
+      id: '/api/sync'
+      path: '/api/sync'
+      fullPath: '/api/sync'
+      preLoaderRoute: typeof ApiSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/background': {
       id: '/api/background'
       path: '/api/background'
@@ -245,6 +265,7 @@ const rootRouteChildren: RootRouteChildren = {
   TrackerRoute: TrackerRoute,
   ApiAudioRoute: ApiAudioRoute,
   ApiBackgroundRoute: ApiBackgroundRoute,
+  ApiSyncRoute: ApiSyncRoute,
   PlayerUsernameRoute: PlayerUsernameRoute,
 }
 export const routeTree = rootRouteImport
