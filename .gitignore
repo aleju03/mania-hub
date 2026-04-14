@@ -14,3 +14,6 @@ __unconfig*
 todos.json
 inspirations
 .vercel
+tmp-*.mjs
+tmp-*.js
+tmp-*.ts

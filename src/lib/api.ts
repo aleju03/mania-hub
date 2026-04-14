@@ -2,6 +2,34 @@
 import { createServerFn } from "@tanstack/react-start";
 import { db, ensureCacheSchema, hasDb } from "./db";
 
+// Lazy zlib loader. Using a dynamic import keeps `node:zlib` out of the client
+// module graph, because this file is transitively imported client-side via
+// `clearDevServerCaches` in Nav.tsx. A top-level `import "node:zlib"` would
+// otherwise be externalized by Vite and crash the browser at runtime.
+type ZlibAsync = {
+  gzipAsync: (buf: Buffer) => Promise<Buffer>;
+  gunzipAsync: (buf: Buffer) => Promise<Buffer>;
+};
+let zlibPromise: Promise<ZlibAsync> | null = null;
+function getZlib(): Promise<ZlibAsync> {
+  if (!zlibPromise) {
+    zlibPromise = (async () => {
+      const [zlib, util] = await Promise.all([
+        import("node:zlib"),
+        import("node:util"),
+      ]);
+      return {
+        gzipAsync: util.promisify(zlib.gzip) as (buf: Buffer) => Promise<Buffer>,
+        gunzipAsync: util.promisify(zlib.gunzip) as (buf: Buffer) => Promise<Buffer>,
+      };
+    })().catch((error) => {
+      zlibPromise = null;
+      throw error;
+    });
+  }
+  return zlibPromise;
+}
+
 let tokenCache: { access_token: string; expires_at: number } | null = null;
 const OSU_FETCH_RETRIES = 2;
 
@@ -9,7 +37,17 @@ const OSU_FETCH_RETRIES = 2;
 const responseCache = new Map<string, { value: unknown; expires: number }>();
 const CACHE_TTL = 5 * 60 * 1000;
 const CACHE_ENVELOPE_MARKER = "__mania_hub_cache_v1";
+// Anything above this gets gzipped before storage. Below it, gzip header
+// overhead dominates and compression would hurt more than help.
+const CACHE_COMPRESS_THRESHOLD_BYTES = 4096;
 const warnedCacheIssues = new Set<string>();
+
+// Opportunistic auto-purge of expired rows. Every Nth successful write fires
+// a background DELETE of up to M expired rows. Keeps the table bounded without
+// scheduled jobs or new infrastructure.
+const CACHE_PURGE_EVERY_N_WRITES = 20;
+const CACHE_PURGE_BATCH_SIZE = 50;
+let writesSinceLastPurge = 0;
 
 export type CacheLookup<T> =
   | { hit: true; value: T }
@@ -27,15 +65,47 @@ function warnCacheIssue(action: string, key: string, error: unknown): void {
   console.warn(`[cache] ${action} failed for "${key}": ${message}`);
 }
 
-function encodeCacheValue(data: unknown): string {
-  return JSON.stringify({
+async function encodeCacheValue(data: unknown): Promise<string> {
+  const json = JSON.stringify({
     [CACHE_ENVELOPE_MARKER]: true,
     value: data,
   });
+  if (json.length < CACHE_COMPRESS_THRESHOLD_BYTES) {
+    return `P:${json}`;
+  }
+  // Defensive: encode/decode should only run server-side. If a client build
+  // somehow calls this, Buffer + dynamic node: imports would throw, so we
+  // bail to plain encoding.
+  if (typeof window !== "undefined") {
+    return `P:${json}`;
+  }
+  try {
+    const { gzipAsync } = await getZlib();
+    const compressed = await gzipAsync(Buffer.from(json, "utf8"));
+    return `Z:${compressed.toString("base64")}`;
+  } catch {
+    return `P:${json}`;
+  }
 }
 
-function decodeCacheValue(raw: string): unknown {
-  const parsed = JSON.parse(raw) as unknown;
+async function decodeCacheValue(raw: string): Promise<unknown> {
+  let json: string;
+  if (raw.startsWith("Z:")) {
+    if (typeof window !== "undefined") {
+      throw new Error("cannot decode compressed cache value in client context");
+    }
+    const { gunzipAsync } = await getZlib();
+    const compressed = Buffer.from(raw.slice(2), "base64");
+    const decompressed = await gunzipAsync(compressed);
+    json = decompressed.toString("utf8");
+  } else if (raw.startsWith("P:")) {
+    json = raw.slice(2);
+  } else {
+    // Legacy entries written before the P:/Z: prefix format existed.
+    json = raw;
+  }
+
+  const parsed = JSON.parse(json) as unknown;
   if (
     parsed &&
     typeof parsed === "object" &&
@@ -47,6 +117,32 @@ function decodeCacheValue(raw: string): unknown {
   }
 
   return parsed;
+}
+
+async function purgeExpiredCacheEntries(): Promise<void> {
+  if (!hasDb() || !db) return;
+  try {
+    await db.execute({
+      sql: `
+        DELETE FROM cache_entries
+        WHERE cache_key IN (
+          SELECT cache_key FROM cache_entries
+          WHERE expires_at < ?
+          LIMIT ?
+        )
+      `,
+      args: [Date.now(), CACHE_PURGE_BATCH_SIZE],
+    });
+  } catch (error) {
+    warnCacheIssue("auto-purge expired", "cache_entries", error);
+  }
+}
+
+function scheduleOpportunisticPurge(): void {
+  writesSinceLastPurge += 1;
+  if (writesSinceLastPurge < CACHE_PURGE_EVERY_N_WRITES) return;
+  writesSinceLastPurge = 0;
+  purgeExpiredCacheEntries().catch(() => {});
 }
 
 export function getCachedEntry<T>(key: string): CacheLookup<T> {
@@ -101,7 +197,7 @@ export async function getPersistentCacheEntry<T>(key: string): Promise<CacheLook
       return { hit: false };
     }
 
-    const parsed = decodeCacheValue(String(row.cache_value)) as T;
+    const parsed = (await decodeCacheValue(String(row.cache_value))) as T;
     responseCache.set(key, { value: parsed, expires: expiresAt });
     return { hit: true, value: parsed };
   } catch (error) {
@@ -139,7 +235,7 @@ export async function getPersistentCacheEntryAllowStale<T>(
     if (!row) return { hit: false };
 
     const expiresAt = Number(row.expires_at);
-    const parsed = decodeCacheValue(String(row.cache_value)) as T;
+    const parsed = (await decodeCacheValue(String(row.cache_value))) as T;
     const isStale = Date.now() >= expiresAt;
 
     if (!isStale) {
@@ -161,6 +257,7 @@ export async function setPersistentCache(key: string, data: unknown, ttlMs = CAC
   try {
     await ensureCacheSchema();
 
+    const encoded = await encodeCacheValue(data);
     await db.execute({
       sql: `
         INSERT INTO cache_entries (cache_key, cache_value, expires_at, updated_at)
@@ -170,8 +267,9 @@ export async function setPersistentCache(key: string, data: unknown, ttlMs = CAC
           expires_at = excluded.expires_at,
           updated_at = excluded.updated_at
       `,
-      args: [key, encodeCacheValue(data), expiresAt, Date.now()],
+      args: [key, encoded, expiresAt, Date.now()],
     });
+    scheduleOpportunisticPurge();
   } catch (error) {
     warnCacheIssue("persistent write", key, error);
   }
