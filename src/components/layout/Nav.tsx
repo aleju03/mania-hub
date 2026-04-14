@@ -71,6 +71,7 @@ export function Nav() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const selectedCountry = useSelectedCountry();
+  const devMode = import.meta.env.VITE_DEV_MODE === "1";
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
   const current = links.find((l) => location.pathname.startsWith(l.to === "/" ? "/__home" : l.to)) ||
     (location.pathname === "/" ? links[0] : location.pathname.startsWith("/player") ? null : links[0]);
@@ -204,17 +205,26 @@ export function Nav() {
 
         {/* Desktop search + dev tools */}
         <div className="hidden md:flex items-center gap-2">
-          {import.meta.env.VITE_DEV_MODE === "1" && (
-            <button
-              onClick={async () => {
-                await clearAllDevCaches();
-                window.location.reload();
-              }}
-              className="px-2 py-1 rounded-lg bg-osu-red/20 text-[10px] text-osu-red font-semibold hover:bg-osu-red/30 transition-colors cursor-pointer border border-osu-red/30"
-              title="Clear dev caches, including Turso cache entries, and reload"
-            >
-              Clear cache
-            </button>
+          {devMode && (
+            <>
+              <Link
+                to="/admin/monitor"
+                className="px-2 py-1 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
+                title="Situation monitor (dev only)"
+              >
+                Monitor
+              </Link>
+              <button
+                onClick={async () => {
+                  await clearAllDevCaches();
+                  window.location.reload();
+                }}
+                className="px-2 py-1 rounded-lg bg-osu-red/20 text-[10px] text-osu-red font-semibold hover:bg-osu-red/30 transition-colors cursor-pointer border border-osu-red/30"
+                title="Clear dev caches, including Turso cache entries, and reload"
+              >
+                Clear cache
+              </button>
+            </>
           )}
           <CountrySelector className="w-52" />
           <SearchInput
@@ -300,8 +310,15 @@ export function Nav() {
                 />
               </div>
 
-              {import.meta.env.VITE_DEV_MODE === "1" && (
-                <div className="border-t border-osu-b3/30 px-4 py-3">
+              {devMode && (
+                <div className="border-t border-osu-b3/30 px-4 py-3 space-y-2">
+                  <Link
+                    to="/admin/monitor"
+                    onClick={() => setMenuOpen(false)}
+                    className="block w-full text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
+                  >
+                    Monitor
+                  </Link>
                   <button
                     onClick={async () => {
                       await clearAllDevCaches();
