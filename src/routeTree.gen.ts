@@ -20,6 +20,7 @@ import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as ApiBackgroundRouteImport } from './routes/api/background'
 import { Route as ApiAudioRouteImport } from './routes/api/audio'
+import { Route as AdminMonitorRouteImport } from './routes/admin/monitor'
 
 const TrackerRoute = TrackerRouteImport.update({
   id: '/tracker',
@@ -76,6 +77,11 @@ const ApiAudioRoute = ApiAudioRouteImport.update({
   path: '/api/audio',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminMonitorRoute = AdminMonitorRouteImport.update({
+  id: '/admin/monitor',
+  path: '/admin/monitor',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -85,6 +91,7 @@ export interface FileRoutesByFullPath {
   '/snipes': typeof SnipesRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
+  '/admin/monitor': typeof AdminMonitorRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/background': typeof ApiBackgroundRoute
   '/api/sync': typeof ApiSyncRoute
@@ -98,6 +105,7 @@ export interface FileRoutesByTo {
   '/snipes': typeof SnipesRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
+  '/admin/monitor': typeof AdminMonitorRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/background': typeof ApiBackgroundRoute
   '/api/sync': typeof ApiSyncRoute
@@ -112,6 +120,7 @@ export interface FileRoutesById {
   '/snipes': typeof SnipesRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
+  '/admin/monitor': typeof AdminMonitorRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/background': typeof ApiBackgroundRoute
   '/api/sync': typeof ApiSyncRoute
@@ -127,6 +136,7 @@ export interface FileRouteTypes {
     | '/snipes'
     | '/top-plays'
     | '/tracker'
+    | '/admin/monitor'
     | '/api/audio'
     | '/api/background'
     | '/api/sync'
@@ -140,6 +150,7 @@ export interface FileRouteTypes {
     | '/snipes'
     | '/top-plays'
     | '/tracker'
+    | '/admin/monitor'
     | '/api/audio'
     | '/api/background'
     | '/api/sync'
@@ -153,6 +164,7 @@ export interface FileRouteTypes {
     | '/snipes'
     | '/top-plays'
     | '/tracker'
+    | '/admin/monitor'
     | '/api/audio'
     | '/api/background'
     | '/api/sync'
@@ -167,6 +179,7 @@ export interface RootRouteChildren {
   SnipesRoute: typeof SnipesRoute
   TopPlaysRoute: typeof TopPlaysRoute
   TrackerRoute: typeof TrackerRoute
+  AdminMonitorRoute: typeof AdminMonitorRoute
   ApiAudioRoute: typeof ApiAudioRoute
   ApiBackgroundRoute: typeof ApiBackgroundRoute
   ApiSyncRoute: typeof ApiSyncRoute
@@ -252,6 +265,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAudioRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/monitor': {
+      id: '/admin/monitor'
+      path: '/admin/monitor'
+      fullPath: '/admin/monitor'
+      preLoaderRoute: typeof AdminMonitorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -263,6 +283,7 @@ const rootRouteChildren: RootRouteChildren = {
   SnipesRoute: SnipesRoute,
   TopPlaysRoute: TopPlaysRoute,
   TrackerRoute: TrackerRoute,
+  AdminMonitorRoute: AdminMonitorRoute,
   ApiAudioRoute: ApiAudioRoute,
   ApiBackgroundRoute: ApiBackgroundRoute,
   ApiSyncRoute: ApiSyncRoute,

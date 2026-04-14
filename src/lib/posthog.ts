@@ -1,7 +1,3 @@
-import { useEffect } from "react";
-import { useRouterState } from "@tanstack/react-router";
-import { useSelectedCountry } from "../store";
-
 const API_KEY = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
 const ENDPOINT = "/api/sync";
 const VISITOR_ID_KEY = "mh_vid";
@@ -85,7 +81,7 @@ export function track(event: string, properties?: Record<string, unknown>) {
   }
 }
 
-function registerSuperProperties(props: Record<string, unknown>) {
+export function registerSuperProperties(props: Record<string, unknown>) {
   superProperties = { ...superProperties, ...props };
 }
 
@@ -115,24 +111,7 @@ function getPageviewProperties(pathname: string): Record<string, unknown> {
   return props;
 }
 
-function capturePageview(pathname: string) {
+export function capturePageview(pathname: string) {
+  if (pathname.startsWith("/admin/")) return;
   track("$pageview", getPageviewProperties(pathname));
-}
-
-export function PostHogProvider({ children }: { children: React.ReactNode }) {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const searchKey = useRouterState({
-    select: (s) => JSON.stringify(s.location.search ?? {}),
-  });
-  const selectedCountry = useSelectedCountry();
-
-  useEffect(() => {
-    registerSuperProperties({ selected_country: selectedCountry });
-  }, [selectedCountry]);
-
-  useEffect(() => {
-    capturePageview(pathname);
-  }, [pathname, searchKey]);
-
-  return <>{children}</>;
 }

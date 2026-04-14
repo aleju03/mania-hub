@@ -12,6 +12,7 @@ import { GradeImg } from "../components/ui/GradeImg";
 import { formatAccuracy, formatPP } from "../lib/format";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
+import { track } from "../lib/posthog";
 import type { ManiaSkin } from "../lib/skin-parser";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import type { OsuScore, OsuBeatmapset, OsuBeatmap, ReplayFrame } from "../lib/types";
@@ -171,7 +172,20 @@ function ReplayPage() {
     try {
       // Fetch score first to get key count (beatmap.cs) for correct replay parsing
       const score = await getScore({ data: { scoreId: sid, mode: "mania" } }).catch(() => null);
-      if (score) setScoreInfo(score);
+      if (score) {
+        setScoreInfo(score);
+        track("replay_view", {
+          replay_score_id: String(sid),
+          replay_beatmapset_id: score.beatmapset?.id,
+          replay_beatmap_id: score.beatmap?.id,
+          replay_title: score.beatmapset?.title,
+          replay_artist: score.beatmapset?.artist,
+          replay_difficulty: score.beatmap?.version,
+          replay_creator: score.beatmapset?.creator,
+          replay_player: score.user?.username,
+          replay_cover_url: score.beatmapset?.covers?.list,
+        });
+      }
 
       // Fetch replay with key count from score API, and beatmap file in parallel
       const keyCount = score?.beatmap?.cs ? Math.round(score.beatmap.cs) : undefined;

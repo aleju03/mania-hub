@@ -17,7 +17,8 @@ Create a `.env` file with:
 
 - `OSU_CLIENT_ID` / `OSU_CLIENT_SECRET` - osu! API v2 OAuth credentials
 - `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN` - Turso (libSQL) database
-- `VITE_POSTHOG_KEY` - PostHog project API key
+- `VITE_POSTHOG_KEY` - PostHog project API key (client-side capture)
+- `POSTHOG_PERSONAL_API_KEY` / `POSTHOG_PROJECT_ID` - required for the dev-only `/admin/monitor` dashboard
 - `VITE_DEV_MODE` - enables dev-only features when set
 
 ### Commands
