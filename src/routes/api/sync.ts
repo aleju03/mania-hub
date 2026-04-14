@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { waitUntil } from "@vercel/functions";
 
 const POSTHOG_CAPTURE_URL = "https://us.i.posthog.com/capture/";
 
@@ -21,11 +22,16 @@ async function forwardCapture(request: Request): Promise<Response> {
   // The client (browser sendBeacon) doesn't need the upstream body and
   // holding the connection open starves the browser's per-origin
   // concurrent connection budget, queueing other server function calls.
-  fetch(POSTHOG_CAPTURE_URL, {
-    method: "POST",
-    headers,
-    body,
-  }).catch(() => {});
+  // waitUntil keeps the Vercel function alive until the upstream fetch
+  // resolves so events aren't dropped when the runtime recycles the
+  // instance; it's a no-op outside Vercel.
+  waitUntil(
+    fetch(POSTHOG_CAPTURE_URL, {
+      method: "POST",
+      headers,
+      body,
+    }).catch(() => {}),
+  );
 
   return new Response(null, { status: 202 });
 }
