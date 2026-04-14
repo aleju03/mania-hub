@@ -320,10 +320,30 @@ export interface MapsFarmedEntry {
   maxPp: number;
 }
 
+export interface MapsFavouriteBeatmapset {
+  id: number;
+  title: string;
+  artist: string;
+  creator: string;
+  covers: OsuCovers;
+  status: string;
+  globalPlayCount: number;
+  globalFavouriteCount: number;
+}
+
+export interface MapsPlayerFavourites {
+  id: number;
+  username: string;
+  avatarUrl: string;
+  beatmapsetIds: number[];
+}
+
 export interface CountryMapsData {
   farmed: MapsFarmedEntry[];
   mostPlayed: MapsAggregatedBeatmap[];
   favourites: MapsAggregatedFavourite[];
+  favouritesByPlayer: MapsPlayerFavourites[];
+  beatmapsetsPool: Record<number, MapsFavouriteBeatmapset>;
   generatedAt: string;
 }
 
