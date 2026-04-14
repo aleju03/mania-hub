@@ -76,6 +76,30 @@ async function extractAudioFromArchive(beatmapsetId: string, filename: string): 
   return request;
 }
 
+// Accepts: bytes=start-end | bytes=start- | bytes=-suffix
+function parseRangeHeader(header: string, size: number): { start: number; end: number } | null {
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match) return null;
+  const [, startStr, endStr] = match;
+  if (startStr === "" && endStr === "") return null;
+
+  let start: number;
+  let end: number;
+  if (startStr === "") {
+    const suffix = Number(endStr);
+    if (!Number.isFinite(suffix) || suffix <= 0) return null;
+    start = Math.max(0, size - suffix);
+    end = size - 1;
+  } else {
+    start = Number(startStr);
+    end = endStr === "" ? size - 1 : Number(endStr);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start > end) return null;
+    end = Math.min(end, size - 1);
+  }
+  if (start < 0 || start >= size) return null;
+  return { start, end };
+}
+
 export const Route = createFileRoute("/api/audio")({
   server: {
     handlers: {
@@ -92,20 +116,50 @@ export const Route = createFileRoute("/api/audio")({
           return new Response("Invalid filename", { status: 400 });
         }
 
+        let buffer: Buffer;
+        let mimeType: string;
         try {
-          const { buffer, mimeType } = await extractAudioFromArchive(beatmapsetId, filename);
-          return new Response(buffer as unknown as BodyInit, {
-            status: 200,
-            headers: {
-              "Content-Type": mimeType,
-              "Content-Length": String(buffer.length),
-              "Cache-Control": "public, max-age=86400, s-maxage=31536000, stale-while-revalidate=604800, immutable",
-            },
-          });
+          const extracted = await extractAudioFromArchive(beatmapsetId, filename);
+          buffer = extracted.buffer;
+          mimeType = extracted.mimeType;
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unknown audio extraction error";
           return new Response(message, { status: 404 });
         }
+
+        const size = buffer.length;
+        const baseHeaders: Record<string, string> = {
+          "Content-Type": mimeType,
+          "Accept-Ranges": "bytes",
+          "Cache-Control":
+            "public, max-age=86400, s-maxage=31536000, stale-while-revalidate=604800, immutable",
+        };
+
+        const rangeHeader = request.headers.get("range");
+        if (rangeHeader) {
+          const parsed = parseRangeHeader(rangeHeader, size);
+          if (!parsed) {
+            return new Response("Invalid Range", {
+              status: 416,
+              headers: { ...baseHeaders, "Content-Range": `bytes */${size}` },
+            });
+          }
+          const { start, end } = parsed;
+          const slice = buffer.subarray(start, end + 1);
+          return new Response(slice as unknown as BodyInit, {
+            status: 206,
+            headers: {
+              ...baseHeaders,
+              "Content-Length": String(slice.length),
+              "Content-Range": `bytes ${start}-${end}/${size}`,
+            },
+          });
+        }
+
+        return new Response(buffer as unknown as BodyInit, {
+          status: 200,
+          headers: { ...baseHeaders, "Content-Length": String(size) },
+        });
       },
     },
   },
