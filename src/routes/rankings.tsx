@@ -1,6 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, useMemo } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useState, useMemo, useSyncExternalStore } from "react";
 import { getRankings, getUsersRankHistory } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
@@ -15,6 +14,25 @@ import { useAppStore, useSelectedCountry } from "../store";
 
 type SortField = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "ss" | "s" | "a";
 
+// Track the sm breakpoint with useSyncExternalStore so the initial render
+// reads the real viewport width synchronously (no second-render flicker) and
+// server rendering falls back to the desktop variant.
+const DESKTOP_MQ = "(min-width: 640px)";
+function subscribeDesktop(cb: () => void): () => void {
+  const mq = window.matchMedia(DESKTOP_MQ);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+}
+function getDesktopSnapshot(): boolean {
+  return window.matchMedia(DESKTOP_MQ).matches;
+}
+function getDesktopServerSnapshot(): boolean {
+  return true;
+}
+function useIsDesktop(): boolean {
+  return useSyncExternalStore(subscribeDesktop, getDesktopSnapshot, getDesktopServerSnapshot);
+}
+
 export const Route = createFileRoute("/rankings")({
   validateSearch: (search: Record<string, unknown>) => ({
     page: search.page === 2 || search.page === "2" ? 2 : 1,
@@ -26,6 +44,7 @@ function RankingsPage() {
   const { page } = Route.useSearch();
   const navigate = useNavigate();
   const selectedCountry = useSelectedCountry();
+  const isDesktop = useIsDesktop();
   const cachedPageOneData = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const rankHistories = useAppStore((state) => state.rankHistories);
@@ -219,8 +238,10 @@ function RankingsPage() {
 
       <div className="bg-osu-b5">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5">
+          {!isDesktop && (
+          <>
           {/* Mobile sort bar */}
-          <div className="sm:hidden flex items-center gap-1.5 pb-3 overflow-x-auto scrollbar-hide">
+          <div className="flex items-center gap-1.5 pb-3 overflow-x-auto scrollbar-hide">
             {([
               { field: "rank" as SortField, label: "#" },
               { field: "player" as SortField, label: "Player" },
@@ -272,11 +293,11 @@ function RankingsPage() {
           </div>
 
           {/* Mobile card layout */}
-          <div className="sm:hidden space-y-2">
+          <div className="space-y-2">
             {error ? (
               <div className="px-4 py-8 text-center text-sm text-osu-f1">{error}</div>
             ) : pageData ? (
-              sortedRankings.map(({ entry, originalRank }, i: number) => {
+              sortedRankings.map(({ entry, originalRank }) => {
                 const history = rankHistories[entry.user.id];
                 const globalChange = getGlobalRankChange(history);
                 const crChange = countryRankChanges[entry.user.id] ?? null;
@@ -354,11 +375,8 @@ function RankingsPage() {
                 })();
 
                 return (
-                  <motion.div
+                  <div
                     key={entry.user.id}
-                    initial={{ opacity: 0, x: -6 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.12, delay: i * 0.015 }}
                     className="rounded-lg bg-osu-b4/50 p-3 cursor-pointer hover:bg-osu-b4 transition-colors"
                     onClick={() => navigate({ to: "/player/$username", params: { username: entry.user.username } })}
                   >
@@ -377,7 +395,7 @@ function RankingsPage() {
                       </div>
                       <span className="text-sm font-bold text-right flex-shrink-0">{sortedValue}</span>
                     </div>
-                  </motion.div>
+                  </div>
                 );
               })
             ) : (
@@ -396,9 +414,11 @@ function RankingsPage() {
               ))
             )}
           </div>
+          </>
+          )}
 
-          {/* Desktop table */}
-          <div className="hidden sm:block rounded-xl overflow-hidden border border-osu-b3/30">
+          {isDesktop && (
+          <div className="rounded-xl overflow-hidden border border-osu-b3/30">
             <table className="w-full">
               <thead>
                 <tr className="bg-osu-b4 text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">
@@ -431,11 +451,8 @@ function RankingsPage() {
                     const crChange = countryRankChanges[entry.user.id] ?? null;
 
                     return (
-                      <motion.tr
+                      <tr
                         key={entry.user.id}
-                        initial={{ opacity: 0, x: -6 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.12, delay: i * 0.015 }}
                         className="border-t border-osu-b3/20 hover:bg-osu-b4/80 transition-colors duration-[120ms] cursor-pointer"
                         style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}
                         onClick={() =>
@@ -471,7 +488,7 @@ function RankingsPage() {
                         <td className={`py-2.5 px-3 text-xs text-center ${sortBy === "a" ? "text-white font-semibold" : "text-osu-f1"}`}>
                           {entry.grade_counts.a}
                         </td>
-                      </motion.tr>
+                      </tr>
                     );
                   })
                 ) : (
@@ -499,6 +516,7 @@ function RankingsPage() {
               </tbody>
             </table>
           </div>
+          )}
           {hasNextPage && (
             <div className="flex items-center justify-center gap-3 pt-4">
               <button

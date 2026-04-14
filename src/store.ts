@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { getAvatarAccentStoreKey } from "./lib/avatar-accent";
@@ -119,31 +119,76 @@ function writeTopPlaysRangeByCountry(ranges: CountryRecord<TopPlaysRange>): void
   }
 }
 
+// Zustand's persist middleware calls storage.setItem on every state change,
+// and each call synchronously writes the full partialized blob via
+// localStorage.setItem — ~20-50ms for our ~100KB payload. A single navigation
+// triggers several state updates in rapid succession (router match, mount
+// effects, fetch .then callbacks, polling intervals), which stacked up to
+// ~200ms of main-thread blocking during the click -> paint window.
+//
+// This wrapper coalesces setItem calls within a short window into one write
+// and dispatches them via setTimeout(0) so the actual localStorage.setItem
+// runs on a later task, after the current render has painted. If the tab is
+// closing we flush synchronously via pagehide so nothing is lost.
+const PERSIST_DEBOUNCE_MS = 250;
 const storage = typeof window !== "undefined"
-  ? createJSONStorage(() => ({
-      getItem: (name) => {
-        try {
-          return localStorage.getItem(name);
-        } catch (error) {
-          warnStorageIssue(`read "${name}"`, error);
-          return null;
+  ? createJSONStorage(() => {
+      const pending = new Map<string, string | null>();
+      let timer: ReturnType<typeof setTimeout> | null = null;
+
+      const flush = () => {
+        timer = null;
+        if (pending.size === 0) return;
+        const batch = Array.from(pending.entries());
+        pending.clear();
+        for (const [name, value] of batch) {
+          try {
+            if (value === null) {
+              localStorage.removeItem(name);
+            } else {
+              localStorage.setItem(name, value);
+            }
+          } catch (error) {
+            warnStorageIssue(`write "${name}"`, error);
+          }
         }
-      },
-      setItem: (name, value) => {
-        try {
-          localStorage.setItem(name, value);
-        } catch (error) {
-          warnStorageIssue(`write "${name}"`, error);
-        }
-      },
-      removeItem: (name) => {
-        try {
-          localStorage.removeItem(name);
-        } catch (error) {
-          warnStorageIssue(`remove "${name}"`, error);
-        }
-      },
-    }))
+      };
+
+      const schedule = () => {
+        if (timer != null) return;
+        timer = setTimeout(flush, PERSIST_DEBOUNCE_MS);
+      };
+
+      // Best-effort sync flush on tab hide/unload so we don't lose the last
+      // batch if the user closes the page within the debounce window.
+      window.addEventListener("pagehide", flush);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") flush();
+      });
+
+      return {
+        getItem: (name) => {
+          // Honor pending writes so consecutive read-after-write stays coherent.
+          if (pending.has(name)) {
+            return pending.get(name) ?? null;
+          }
+          try {
+            return localStorage.getItem(name);
+          } catch (error) {
+            warnStorageIssue(`read "${name}"`, error);
+            return null;
+          }
+        },
+        setItem: (name, value) => {
+          pending.set(name, value);
+          schedule();
+        },
+        removeItem: (name) => {
+          pending.set(name, null);
+          schedule();
+        },
+      };
+    })
   : undefined;
 
 // On the client, prefer the cookie value as the initial selectedCountry so
@@ -436,8 +481,9 @@ export const useAppStore = create<AppState>()(
         popoffsFetchedAtByCountry: state.popoffsFetchedAtByCountry,
         mapsDataByCountry: state.mapsDataByCountry,
         mapsDataFetchedAtByCountry: state.mapsDataFetchedAtByCountry,
-        feedScoresByCountry: state.feedScoresByCountry,
-        feedScoresFetchedAtByCountry: state.feedScoresFetchedAtByCountry,
+        // feedScoresByCountry is intentionally NOT persisted: it's live tracker
+        // data (up to 100 full OsuScore objects per country) that gets refetched
+        // on mount and was singlehandedly blowing the localStorage quota.
         trackedUserIdsByCountry: state.trackedUserIdsByCountry,
         trackedUserIdsFetchedAtByCountry: state.trackedUserIdsFetchedAtByCountry,
         pollIndexByCountry: state.pollIndexByCountry,
@@ -468,14 +514,22 @@ if (typeof window !== "undefined") {
 // Zustand persist has synced from localStorage. Mostly used internally by
 // useSelectedCountry to know when to switch from the SSR-provided context
 // value to the live store value.
+//
+// Implemented via useSyncExternalStore so the initial client render after a
+// nav reads the real hydration state synchronously — a plain useState+effect
+// version flips the value inside an effect, forcing every page that uses
+// useSelectedCountry to re-render a second time on mount.
+function subscribeHydration(cb: () => void): () => void {
+  return useAppStore.persist.onFinishHydration(cb);
+}
+function getHydrationSnapshot(): boolean {
+  return useAppStore.persist.hasHydrated();
+}
+function getHydrationServerSnapshot(): boolean {
+  return false;
+}
 export function useHasHydrated(): boolean {
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => {
-    const unsub = useAppStore.persist.onFinishHydration(() => setHydrated(true));
-    if (useAppStore.persist.hasHydrated()) setHydrated(true);
-    return unsub;
-  }, []);
-  return hydrated;
+  return useSyncExternalStore(subscribeHydration, getHydrationSnapshot, getHydrationServerSnapshot);
 }
 
 // Read the currently-selected country with no SSR/hydration flash.
