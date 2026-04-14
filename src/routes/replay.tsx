@@ -49,6 +49,32 @@ interface ServerReplay {
   replayScrollY?: number;
 }
 
+// Server returns frames as two base64-packed typed arrays (Int32 times, Uint16 keys).
+// Unpack into the ReplayFrame[] shape every consumer already expects.
+function unpackReplayFrames(packed: { count: number; times: string; keys: string }): ReplayFrame[] {
+  const timesBytes = base64ToBytes(packed.times);
+  const keysBytes = base64ToBytes(packed.keys);
+  const timesBuf = new ArrayBuffer(timesBytes.byteLength);
+  new Uint8Array(timesBuf).set(timesBytes);
+  const keysBuf = new ArrayBuffer(keysBytes.byteLength);
+  new Uint8Array(keysBuf).set(keysBytes);
+  const times = new Int32Array(timesBuf, 0, packed.count);
+  const keys = new Uint16Array(keysBuf, 0, packed.count);
+  const out = new Array<ReplayFrame>(packed.count);
+  for (let i = 0; i < packed.count; i++) {
+    out[i] = { time: times[i], keyState: keys[i] };
+  }
+  return out;
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const binary = atob(b64);
+  const len = binary.length;
+  const out = new Uint8Array(len);
+  for (let i = 0; i < len; i++) out[i] = binary.charCodeAt(i);
+  return out;
+}
+
 const REPLAY_SCROLL_CALIBRATION_SLOPE = 2.3819505316513596;
 const REPLAY_SCROLL_CALIBRATION_INTERCEPT = -6.496179351347244;
 
@@ -196,7 +222,12 @@ function ReplayPage() {
           : Promise.resolve(null),
       ]);
 
-      setReplay(parsed);
+      setReplay({
+        header: parsed.header,
+        frames: unpackReplayFrames(parsed.framesPacked),
+        keyCount: parsed.keyCount,
+        replayScrollY: parsed.replayScrollY,
+      });
       if (bmResult) {
         setBeatmap(parseManiaBeatmap(bmResult.content));
       }
@@ -739,7 +770,7 @@ function ReplayViewer({
     return stored == null ? false : stored === "true";
   });
   const [audioError, setAudioError] = useState<string | null>(null);
-  const [audioBlobUrl, setAudioBlobUrl] = useState<string | null>(null);
+  const [audioReady, setAudioReady] = useState(false);
   const [pendingPlay, setPendingPlay] = useState(false);
   const [bgSrc, setBgSrc] = useState<string | null>(null);
   const scrubbingRef = useRef(false);
@@ -806,36 +837,8 @@ function ReplayViewer({
 
   useEffect(() => {
     setAudioError(null);
+    setAudioReady(false);
     shouldResumeAudioRef.current = false;
-    setAudioBlobUrl(null);
-
-    if (!audioUrl) return;
-
-    let cancelled = false;
-    let createdBlobUrl: string | null = null;
-
-    (async () => {
-      try {
-        const response = await fetch(audioUrl);
-        if (!response.ok) {
-          throw new Error(`Audio fetch failed (${response.status})`);
-        }
-        const blob = await response.blob();
-        if (cancelled) return;
-        createdBlobUrl = URL.createObjectURL(blob);
-        setAudioBlobUrl(createdBlobUrl);
-      } catch (err) {
-        if (cancelled) return;
-        setAudioError(err instanceof Error ? err.message : "Failed to load audio");
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      if (createdBlobUrl) {
-        URL.revokeObjectURL(createdBlobUrl);
-      }
-    };
   }, [audioUrl]);
 
   useEffect(() => {
@@ -1049,15 +1052,20 @@ function ReplayViewer({
     const handleCanPlay = () => resumeAudioIfNeeded();
     const handleSeeked = () => resumeAudioIfNeeded();
     const handleLoadedData = () => resumeAudioIfNeeded();
+    const handleLoadedMetadata = () => setAudioReady(true);
 
     audio.addEventListener("canplay", handleCanPlay);
     audio.addEventListener("seeked", handleSeeked);
     audio.addEventListener("loadeddata", handleLoadedData);
+    audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+
+    if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) setAudioReady(true);
 
     return () => {
       audio.removeEventListener("canplay", handleCanPlay);
       audio.removeEventListener("seeked", handleSeeked);
       audio.removeEventListener("loadeddata", handleLoadedData);
+      audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
     };
   }, [audioEnabled, isPlaying, speed, volume, audioUrl]);
 
@@ -1105,22 +1113,22 @@ function ReplayViewer({
       setPendingPlay(false);
       return;
     }
-    // Audio is expected but not ready yet — queue the play until the blob lands
-    if (audioEnabled && audioUrl && !audioBlobUrl && !audioError) {
+    // Audio is expected but hasn't loaded metadata yet — queue the play.
+    if (audioEnabled && audioUrl && !audioReady && !audioError) {
       setPendingPlay(true);
       return;
     }
     startPlayback();
   };
 
-  // Auto-start playback once the audio blob finishes loading (or fails, or the
-  // user disables audio) after the user already clicked play.
+  // Auto-start playback once the audio has metadata (or failed, or audio was
+  // disabled) after the user already clicked play.
   useEffect(() => {
     if (!pendingPlay || isPlaying) return;
-    if (audioEnabled && audioUrl && !audioBlobUrl && !audioError) return;
+    if (audioEnabled && audioUrl && !audioReady && !audioError) return;
     setPendingPlay(false);
     startPlayback();
-  }, [pendingPlay, isPlaying, audioEnabled, audioUrl, audioBlobUrl, audioError, startPlayback]);
+  }, [pendingPlay, isPlaying, audioEnabled, audioUrl, audioReady, audioError, startPlayback]);
 
   const toggleAudio = () => {
     if (!audioRef.current) return;
@@ -1182,12 +1190,12 @@ function ReplayViewer({
         <canvas ref={canvasRef} className="relative z-10 w-full" style={{ height: "min(70vh, 600px)" }} />
       </div>
 
-      {/* Audio element (hidden) — full song fetched as a Blob for instant seek without Range requests */}
-      {audioBlobUrl && (
+      {/* Audio element (hidden) — streamed from /api/audio with Range requests so the browser only pulls what it plays */}
+      {audioUrl && (
         <audio
           ref={audioRef}
-          src={audioBlobUrl}
-          preload="auto"
+          src={audioUrl}
+          preload="metadata"
           onError={handleAudioError}
         />
       )}
