@@ -16,7 +16,7 @@ import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import { Pagination } from "../components/ui/Pagination";
 import type { OsuScore, RankingsResponse } from "../lib/types";
-import { useAppStore, type CachedPopoff, type TopPlaysRange } from "../store";
+import { useAppStore, useSelectedCountry, type CachedPopoff, type TopPlaysRange } from "../store";
 
 interface PopOff {
   user: { id: number; username: string; avatar_url: string };
@@ -69,7 +69,7 @@ function PopOffsPage() {
   const { range } = Route.useSearch();
   const location = useLocation();
   const navigate = useNavigate();
-  const selectedCountry = useAppStore((state) => state.selectedCountry);
+  const selectedCountry = useSelectedCountry();
   const rankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const popoffs = useAppStore((state) => state.popoffsByCountry[selectedCountry]) ?? EMPTY_POPOFFS;

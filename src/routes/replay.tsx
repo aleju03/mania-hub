@@ -5,7 +5,7 @@ import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserSc
 import { parseManiaBeatmap } from "../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
 import { getDisplayedAccuracy, getDisplayedRank, scoreHasReplay } from "../lib/score";
-import { useAppStore } from "../store";
+import { useAppStore, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SearchInput } from "../components/ui/SearchInput";
 import { GradeImg } from "../components/ui/GradeImg";
@@ -127,7 +127,7 @@ type BrowseMode = "player" | "beatmap";
 function ReplayPage() {
   const { scoreId, beatmapsetId, t: initialTime, tab, player: playerParam } = Route.useSearch();
   const navigate = useNavigate();
-  const selectedCountry = useAppStore((s) => s.selectedCountry);
+  const selectedCountry = useSelectedCountry();
   const cachedRankings = useAppStore((s) => s.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((s) => s.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const setRankings = useAppStore((s) => s.setRankings);

@@ -27,7 +27,7 @@ import { ModBadge } from "../components/ui/ModBadge";
 import { LazerBadge } from "../components/ui/LazerBadge";
 import { ScoreRowSkeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
-import { useAppStore } from "../store";
+import { useAppStore, useSelectedCountry } from "../store";
 import type { OsuScore } from "../lib/types";
 
 export const Route = createFileRoute("/tracker")({
@@ -42,7 +42,7 @@ const EMPTY_IDS: number[] = [];
 const EMPTY_SCORES: OsuScore[] = [];
 
 function ScoresPage() {
-  const selectedCountry = useAppStore((state) => state.selectedCountry);
+  const selectedCountry = useSelectedCountry();
   const rankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const feedScores = useAppStore((state) => state.feedScoresByCountry[selectedCountry]) ?? EMPTY_SCORES;

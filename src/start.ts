@@ -1,4 +1,5 @@
 import { createStart, createMiddleware } from "@tanstack/react-start";
+import { COUNTRY_COOKIE_NAME } from "./lib/country-cookie";
 
 const CACHEABLE_DOCUMENT_PATHS = new Set<string>([
   "/",
@@ -24,6 +25,16 @@ const documentCacheMiddleware = createMiddleware().server(
 
     const contentType = response.headers.get("content-type") ?? "";
     if (!contentType.toLowerCase().includes("text/html")) return result;
+
+    // The HTML body now embeds the country resolved from the request's
+    // `mania-hub-country` cookie. If that cookie is present, the response
+    // is per-user and must NOT enter the shared CDN cache. New visitors
+    // (no cookie) still get the cached default-country HTML.
+    const cookieHeader = request.headers.get("cookie") ?? "";
+    const escaped = COUNTRY_COOKIE_NAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (new RegExp(`(?:^|;\\s*)${escaped}=`).test(cookieHeader)) {
+      return result;
+    }
 
     const existing = response.headers.get("cache-control") ?? "";
     if (existing && !/max-age=0|no-store|no-cache/i.test(existing)) {

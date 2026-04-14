@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { COUNTRY_OPTIONS, getCountryName, getCountryFlagUrl } from "../../lib/country";
-import { useAppStore } from "../../store";
+import { useAppStore, useSelectedCountry } from "../../store";
 
 interface CountrySelectorProps {
   className?: string;
 }
 
 export function CountrySelector({ className = "" }: CountrySelectorProps) {
-  const selectedCountry = useAppStore((state) => state.selectedCountry);
+  const selectedCountry = useSelectedCountry();
   const setSelectedCountry = useAppStore((state) => state.setSelectedCountry);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
