@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useEffect, useCallback, useMemo, memo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
+import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { getRankings, getCountryRecentScores, getUsersApproxPpGains } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
@@ -474,24 +474,13 @@ function ScoresPage() {
               </div>
             ) : (
               <>
-                <div key={listKey} className="space-y-2">
-                  <AnimatePresence initial={false}>
-                    {filtered.map((score: OsuScore) => {
-                      const scoreKey = getScoreIdentity(score);
-
-                      return (
-                        <ScoreFeedItem
-                          key={scoreKey}
-                          score={score}
-                          scoreKey={scoreKey}
-                          approxPpGain={ppGainByScoreId[score.id] ?? null}
-                          expanded={expandedKey === scoreKey}
-                          onToggle={handleToggleExpand}
-                        />
-                      );
-                    })}
-                  </AnimatePresence>
-                </div>
+                <VirtualScoreList
+                  listKey={listKey}
+                  scores={filtered}
+                  expandedKey={expandedKey}
+                  onToggle={handleToggleExpand}
+                  ppGainByScoreId={ppGainByScoreId}
+                />
                 {filtered.length === 0 && (
                   <div className="text-center py-16 text-osu-f1 text-sm">
                     {feedScores.length === 0
@@ -504,6 +493,86 @@ function ScoresPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Window-virtualized score list. Only mounts the items currently in the
+// viewport (plus a small overscan), so mount cost stays roughly constant
+// regardless of how many scores are in the feed.
+//
+// scrollMargin is set to the list container's offsetTop so the virtualizer
+// knows where the list starts relative to the window scroll. measureElement
+// handles variable item heights (collapsed vs expanded). The outer div gets
+// position: relative and a fixed total height so the page scrollbar reflects
+// the full list even though only a few items are rendered.
+const ESTIMATED_ROW_HEIGHT = 80;
+
+function VirtualScoreList({
+  listKey,
+  scores,
+  expandedKey,
+  onToggle,
+  ppGainByScoreId,
+}: {
+  listKey: string;
+  scores: OsuScore[];
+  expandedKey: string | null;
+  onToggle: (key: string) => void;
+  ppGainByScoreId: Record<number, number>;
+}) {
+  const parentRef = useRef<HTMLDivElement>(null);
+  const scrollMargin = parentRef.current?.offsetTop ?? 0;
+
+  const virtualizer = useWindowVirtualizer({
+    count: scores.length,
+    estimateSize: () => ESTIMATED_ROW_HEIGHT,
+    overscan: 4,
+    scrollMargin,
+    // Include the 8px gap (space-y-2) in the item's measured size via a
+    // wrapper padding, so the virtualizer's offsets stay correct.
+    getItemKey: (index) => getScoreIdentity(scores[index]),
+  });
+
+  const items = virtualizer.getVirtualItems();
+
+  return (
+    <div
+      key={listKey}
+      ref={parentRef}
+      style={{
+        height: `${virtualizer.getTotalSize()}px`,
+        position: "relative",
+        width: "100%",
+      }}
+    >
+      {items.map((vi) => {
+        const score = scores[vi.index];
+        const scoreKey = getScoreIdentity(score);
+        return (
+          <div
+            key={scoreKey}
+            data-index={vi.index}
+            ref={virtualizer.measureElement}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "100%",
+              transform: `translateY(${vi.start - virtualizer.options.scrollMargin}px)`,
+              paddingBottom: 8,
+            }}
+          >
+            <ScoreFeedItem
+              score={score}
+              scoreKey={scoreKey}
+              approxPpGain={ppGainByScoreId[score.id] ?? null}
+              expanded={expandedKey === scoreKey}
+              onToggle={onToggle}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -537,13 +606,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   const countMiss = stats?.count_miss ?? stats?.miss ?? 0;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.15 }}
-      className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden"
-    >
+    <div className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
       <div
         className="flex items-center gap-2 sm:gap-3 py-3 px-3 sm:px-4 hover:bg-osu-b3/50 transition-colors duration-[120ms] cursor-pointer"
         onClick={() => onToggle(scoreKey)}
@@ -725,7 +788,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               )}
         </div>
       )}
-    </motion.div>
+    </div>
   );
 });
 
