@@ -479,11 +479,11 @@ export const useAppStore = create<AppState>()(
         homePopoffsFetchedAtByCountry: state.homePopoffsFetchedAtByCountry,
         popoffsByCountry: state.popoffsByCountry,
         popoffsFetchedAtByCountry: state.popoffsFetchedAtByCountry,
-        mapsDataByCountry: state.mapsDataByCountry,
-        mapsDataFetchedAtByCountry: state.mapsDataFetchedAtByCountry,
-        // feedScoresByCountry is intentionally NOT persisted: it's live tracker
-        // data (up to 100 full OsuScore objects per country) that gets refetched
-        // on mount and was singlehandedly blowing the localStorage quota.
+        // mapsDataByCountry and feedScoresByCountry are intentionally NOT
+        // persisted. Both can balloon past the ~5MB localStorage quota once
+        // more than a country or two accumulates (the maps beatmapset pool
+        // alone is ~1-2MB per country). The server cache serves them in
+        // <100ms on hydration so the round-trip is cheap.
         trackedUserIdsByCountry: state.trackedUserIdsByCountry,
         trackedUserIdsFetchedAtByCountry: state.trackedUserIdsFetchedAtByCountry,
         pollIndexByCountry: state.pollIndexByCountry,
