@@ -1,5 +1,5 @@
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { getRankings, getCountryMapsData, rebuildCountryMapsData } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
@@ -17,13 +17,15 @@ import type {
   MapsAggregatedFavourite,
   MapsFarmedEntry,
   MapsFarmedPlayer,
+  MapsFavouriteBeatmapset,
   MapsPlayerEntry,
+  MapsPlayerFavourites,
 } from "../lib/types";
 import { useAppStore, useSelectedCountry } from "../store";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type Tab = "farmed" | "popular" | "favourites";
+type Tab = "farmed" | "popular" | "favourites" | "random";
 type KeyFilter = "all" | "4k" | "7k" | "other";
 type BeatmapSort = "plays" | "players" | "stars" | "length";
 type FarmedSort = "players" | "avg-pp" | "max-pp" | "stars";
@@ -89,6 +91,9 @@ function hasValidMapsDataShape(data: CountryMapsData | null): data is CountryMap
   if (!Array.isArray(data.farmed) || !Array.isArray(data.mostPlayed) || !Array.isArray(data.favourites)) {
     return false;
   }
+  if (!Array.isArray(data.favouritesByPlayer) || !data.beatmapsetsPool || typeof data.beatmapsetsPool !== "object") {
+    return false;
+  }
 
   const sampleFarmed = data.farmed[0];
   if (sampleFarmed) {
@@ -123,7 +128,7 @@ export const Route = createFileRoute("/maps")({
     middlewares: [stripSearchParams(DEFAULT_MAPS_SEARCH)],
   },
   validateSearch: (search: Record<string, unknown>): MapsSearch => ({
-    tab: search.tab === "popular" || search.tab === "favourites" ? search.tab : DEFAULT_MAPS_SEARCH.tab,
+    tab: search.tab === "popular" || search.tab === "favourites" || search.tab === "random" ? search.tab : DEFAULT_MAPS_SEARCH.tab,
     page: Math.max(0, Number(search.page) || DEFAULT_MAPS_SEARCH.page),
     key: search.key === "4k" || search.key === "7k" || search.key === "other" ? search.key : DEFAULT_MAPS_SEARCH.key,
     beatmapSort: search.beatmapSort === "plays" || search.beatmapSort === "stars" || search.beatmapSort === "length" ? search.beatmapSort : DEFAULT_MAPS_SEARCH.beatmapSort,
@@ -149,6 +154,7 @@ function MapsPage() {
 
   const [loadingPlayers, setLoadingPlayers] = useState(!rankings);
   const [loadingMaps, setLoadingMaps] = useState(!mapsData);
+  const [rebuilding, setRebuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const tab = mapsSearch.tab;
   const page = mapsSearch.page;
@@ -322,20 +328,57 @@ function MapsPage() {
   }, [mapsData, statusFilter, searchQuery]);
 
   const currentList =
-    tab === "farmed" ? filteredFarmed : tab === "popular" ? filteredMostPlayed : filteredFavourites;
-  const totalPages = Math.ceil(currentList.length / PAGE_SIZE);
-  const paginated = currentList.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+    tab === "farmed"
+      ? filteredFarmed
+      : tab === "popular"
+        ? filteredMostPlayed
+        : tab === "favourites"
+          ? filteredFavourites
+          : [];
+  const totalPages = tab === "random" ? 0 : Math.ceil(currentList.length / PAGE_SIZE);
+  const paginated = tab === "random" ? [] : currentList.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "farmed", label: "most farmed" },
     { id: "popular", label: "widely played" },
     { id: "favourites", label: "community favorites" },
+    { id: "random", label: "random picks" },
   ];
 
   const isLoading = loadingPlayers || loadingMaps;
 
+  // ── Random tab: pick a random top-30 player and a single random favourite ──
+  const [randomPlayer, setRandomPlayer] = useState<MapsPlayerFavourites | null>(null);
+  const [randomBeatmapset, setRandomBeatmapset] = useState<MapsFavouriteBeatmapset | null>(null);
+  const lastRandomKeyRef = useRef<string | null>(null);
+
+  const reshuffleRandom = useCallback(() => {
+    const pool = mapsData?.favouritesByPlayer?.filter((p) => p.beatmapsetIds.length > 0) ?? [];
+    if (pool.length === 0 || !mapsData?.beatmapsetsPool) {
+      setRandomPlayer(null);
+      setRandomBeatmapset(null);
+      return;
+    }
+    const player = pool[Math.floor(Math.random() * pool.length)];
+    const ids = player.beatmapsetIds;
+    const pickedId = ids[Math.floor(Math.random() * ids.length)];
+    const beatmapset = mapsData.beatmapsetsPool[pickedId] ?? null;
+    setRandomPlayer(player);
+    setRandomBeatmapset(beatmapset);
+  }, [mapsData]);
+
+  useEffect(() => {
+    if (tab !== "random" || !mapsData) return;
+    const key = `${selectedCountry}:${mapsData.generatedAt}`;
+    if (lastRandomKeyRef.current === key && randomPlayer) return;
+    lastRandomKeyRef.current = key;
+    reshuffleRandom();
+  }, [tab, selectedCountry, mapsData, reshuffleRandom, randomPlayer]);
+
   const hasActiveFilters =
-    searchQuery || keyFilter !== "all" || statusFilter !== "all" || ppFilter > 0 || modFilter !== "all" || beatmapSort !== "players" || farmedSort !== "players" || tab !== "farmed";
+    tab !== "random" && (
+      searchQuery || keyFilter !== "all" || statusFilter !== "all" || ppFilter > 0 || modFilter !== "all" || beatmapSort !== "players" || farmedSort !== "players" || tab !== "farmed"
+    );
 
   const resetFilters = () => {
     navigate({
@@ -344,6 +387,21 @@ function MapsPage() {
       replace: true,
     });
   };
+
+  const handleDevRebuild = async () => {
+    if (rebuilding || players.length === 0) return;
+    setRebuilding(true);
+    try {
+      const result = await rebuildCountryMapsData({ data: { users: players } });
+      if (result.value) setMapsData(selectedCountry, result.value);
+    } catch {
+      setError("Rebuild failed.");
+    } finally {
+      setRebuilding(false);
+    }
+  };
+
+  const isDevMode = import.meta.env.VITE_DEV_MODE === "1";
 
   return (
     <div className="flex-1">
@@ -365,6 +423,16 @@ function MapsPage() {
                 {currentList.length} maps &middot; updated {formatTimeAgo(mapsData.generatedAt)}
               </span>
             )}
+            {isDevMode && !isLoading && !error && mapsData && (
+              <button
+                onClick={handleDevRebuild}
+                disabled={rebuilding}
+                className="px-2 py-1 rounded-lg bg-osu-red/20 text-[10px] text-osu-red font-semibold hover:bg-osu-red/30 transition-colors cursor-pointer border border-osu-red/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Force rebuild maps data (dev only)"
+              >
+                {rebuilding ? "Rebuilding..." : "Rebuild"}
+              </button>
+            )}
           </div>
         }
       />
@@ -378,6 +446,7 @@ function MapsPage() {
       />
 
       {/* ── Filter bar ───────────────────────────────────────────────── */}
+      {tab !== "random" && (
       <div className="bg-osu-d5 border-b border-osu-b3/20">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
           {/* Search */}
@@ -479,6 +548,7 @@ function MapsPage() {
           )}
         </div>
       </div>
+      )}
 
       {/* ── Content ──────────────────────────────────────────────────── */}
       <div className="bg-osu-b5">
@@ -507,7 +577,7 @@ function MapsPage() {
           )}
 
           {/* Card grid */}
-          {!error && paginated.length > 0 && (
+          {tab !== "random" && !error && paginated.length > 0 && (
             <div key={`${tab}-${page}`} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 cards-enter">
                 {tab === "farmed"
                   ? (paginated as MapsFarmedEntry[]).map((map) => (
@@ -535,14 +605,58 @@ function MapsPage() {
             </div>
           )}
 
-          {!error && !isLoading && currentList.length === 0 && (
+          {tab !== "random" && !error && !isLoading && currentList.length === 0 && (
             <div className="text-center py-16 text-osu-f1 text-sm">
               No maps match your filters
             </div>
           )}
 
+          {/* Random tab */}
+          {tab === "random" && !error && !isLoading && mapsData && (
+            <div className="max-w-[640px] mx-auto space-y-5">
+              {randomPlayer && randomBeatmapset ? (
+                <>
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <button
+                      onClick={() => navigate({ to: "/player/$username", params: { username: randomPlayer.username } })}
+                      className="flex items-center gap-3 group cursor-pointer"
+                    >
+                      <Avatar url={randomPlayer.avatarUrl} size={44} />
+                      <div className="text-left">
+                        <div className="text-[10px] uppercase tracking-wider text-osu-f1">
+                          random pick from
+                        </div>
+                        <div className="text-[15px] font-semibold text-osu-l2 group-hover:text-white transition-colors">
+                          {randomPlayer.username}
+                        </div>
+                        <div className="text-[10px] text-osu-f1">
+                          {randomPlayer.beatmapsetIds.length} favourites
+                        </div>
+                      </div>
+                    </button>
+                    <button
+                      onClick={reshuffleRandom}
+                      className="px-3 py-1.5 rounded-lg bg-osu-pink/20 text-[11px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer border border-osu-pink/30"
+                    >
+                      Reroll
+                    </button>
+                  </div>
+                  <div key={`random-${randomPlayer.id}-${randomBeatmapset.id}`} className="cards-enter">
+                    <RandomCard bm={randomBeatmapset} />
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-16 text-osu-f1 text-sm">
+                  No favourites found for any player in the top 30.
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Pagination */}
-          <Pagination page={page} totalPages={totalPages} onPageChange={(p) => updateMapsSearch({ page: p })} />
+          {tab !== "random" && (
+            <Pagination page={page} totalPages={totalPages} onPageChange={(p) => updateMapsSearch({ page: p })} />
+          )}
         </div>
       </div>
     </div>
@@ -970,6 +1084,50 @@ function FavouriteCard({ fav, onPlayerClick }: { fav: MapsAggregatedFavourite; o
         </div>
 
         <PlayerAvatars players={fav.players} onPlayerClick={(player) => onPlayerClick(player.username)} />
+      </div>
+    </div>
+  );
+}
+
+// ── Random card (hero-sized favourite card for the Random tab) ────────────
+
+function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
+  const url = `https://osu.ppy.sh/beatmapsets/${bm.id}`;
+
+  return (
+    <div className="rounded-2xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/40 transition-colors overflow-hidden">
+      <a href={url} target="_blank" rel="noreferrer" className="block relative">
+        <img src={bm.covers.cover} alt="" className="w-full h-[220px] object-cover" loading="lazy" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
+        <span
+          className={`absolute top-3 left-3 px-2 py-1 rounded text-[10px] font-bold uppercase ${
+            bm.status === "ranked"
+              ? "bg-osu-green/80 text-white"
+              : bm.status === "loved"
+                ? "bg-osu-pink/80 text-white"
+                : "bg-black/60 text-white/80"
+          }`}
+        >
+          {bm.status}
+        </span>
+        <div className="absolute bottom-0 left-0 right-0 px-4 pb-3">
+          <div className="text-[18px] font-semibold text-white truncate leading-tight drop-shadow-lg">{bm.title}</div>
+          <div className="text-[13px] text-white/75 truncate leading-tight drop-shadow-lg">{bm.artist}</div>
+        </div>
+      </a>
+
+      <div className="px-4 py-3 flex items-center justify-between gap-3">
+        <div className="text-[11px] text-osu-f1 truncate">mapped by {bm.creator}</div>
+        <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="flex items-center gap-1">
+            <span className="text-[13px] font-bold text-osu-l2" style={{ fontFamily: "Torus" }}>{formatNumber(bm.globalFavouriteCount)}</span>
+            <span className="text-[9px] text-osu-f1 uppercase">favs</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[13px] font-bold text-osu-l2" style={{ fontFamily: "Torus" }}>{formatNumber(bm.globalPlayCount)}</span>
+            <span className="text-[9px] text-osu-f1 uppercase">plays</span>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -35,14 +35,18 @@ import type {
   MapsAggregatedBeatmap,
   MapsAggregatedFavourite,
   MapsFarmedEntry,
+  MapsFavouriteBeatmapset,
+  MapsPlayerFavourites,
   HomePageData,
   HomePagePopoff,
   UserProfileInsights,
   InsightScoreSnapshot,
 } from "./types";
 
-const MAPS_DATA_CACHE_TTL = 24 * 60 * 60 * 1000; // 1 day
-const MAPS_DATA_CACHE_VERSION = 4;
+const MAPS_DATA_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 1 week
+const MAPS_DATA_CACHE_VERSION = 5;
+const USER_FAVOURITES_PAGE_SIZE = 100;
+const USER_FAVOURITES_MAX_PAGES = 10;
 const FARMED_SINGLE_PLAYER_PP_MIN = 500;
 const USER_MOST_PLAYED_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 const USER_FAVOURITES_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
@@ -878,10 +882,19 @@ async function fetchUserMostPlayed(userId: number): Promise<BeatmapPlaycount[]> 
 }
 
 async function fetchUserFavourites(userId: number): Promise<OsuBeatmapset[]> {
-  const cacheKey = `user-favourites:${userId}`;
-  return fetchWithCacheLock(cacheKey, USER_FAVOURITES_CACHE_TTL, () =>
-    osuFetch<OsuBeatmapset[]>(`/users/${userId}/beatmapsets/favourite`, { limit: 100, offset: 0 }),
-  );
+  const cacheKey = `user-favourites-all:${userId}`;
+  return fetchWithCacheLock(cacheKey, USER_FAVOURITES_CACHE_TTL, async () => {
+    const all: OsuBeatmapset[] = [];
+    for (let page = 0; page < USER_FAVOURITES_MAX_PAGES; page++) {
+      const batch = await osuFetch<OsuBeatmapset[]>(
+        `/users/${userId}/beatmapsets/favourite`,
+        { limit: USER_FAVOURITES_PAGE_SIZE, offset: page * USER_FAVOURITES_PAGE_SIZE },
+      );
+      all.push(...batch);
+      if (batch.length < USER_FAVOURITES_PAGE_SIZE) break;
+    }
+    return all;
+  });
 }
 
 type MapsUser = { id: number; username: string; avatar_url: string };
@@ -1031,8 +1044,26 @@ async function buildCountryMapsData(users: MapsUser[]): Promise<CountryMapsData>
 
       // ── Favourites ───────────────────────────────────────────────
       const favMap = new Map<number, MapsAggregatedFavourite>();
+      const beatmapsetsPool: Record<number, MapsFavouriteBeatmapset> = {};
+      const favouritesByPlayer: MapsPlayerFavourites[] = [];
       for (const { user, favourites } of userResults) {
+        const playerIds: number[] = [];
         for (const fav of favourites) {
+          playerIds.push(fav.id);
+
+          if (!beatmapsetsPool[fav.id]) {
+            beatmapsetsPool[fav.id] = {
+              id: fav.id,
+              title: fav.title,
+              artist: fav.artist,
+              creator: fav.creator,
+              covers: fav.covers,
+              status: fav.status,
+              globalPlayCount: fav.play_count,
+              globalFavouriteCount: fav.favourite_count,
+            };
+          }
+
           const existing = favMap.get(fav.id);
           if (existing) {
             existing.playerCount++;
@@ -1062,6 +1093,15 @@ async function buildCountryMapsData(users: MapsUser[]): Promise<CountryMapsData>
             });
           }
         }
+
+        if (playerIds.length > 0) {
+          favouritesByPlayer.push({
+            id: user.id,
+            username: user.username,
+            avatarUrl: user.avatar_url,
+            beatmapsetIds: playerIds,
+          });
+        }
       }
 
       const favourites = [...favMap.values()]
@@ -1077,6 +1117,8 @@ async function buildCountryMapsData(users: MapsUser[]): Promise<CountryMapsData>
         farmed,
         mostPlayed,
         favourites,
+        favouritesByPlayer,
+        beatmapsetsPool,
         generatedAt: new Date().toISOString(),
       } satisfies CountryMapsData;
 }
