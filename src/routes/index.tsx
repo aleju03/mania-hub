@@ -13,7 +13,7 @@ import { RankingRowSkeleton, ScoreRowSkeleton, Skeleton } from "../components/ui
 import { ManiaRain } from "../components/home/ManiaRain";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse, OsuScore } from "../lib/types";
-import { useAppStore, type CachedHomePopoff } from "../store";
+import { useAppStore, useSelectedCountry, type CachedHomePopoff } from "../store";
 
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -51,7 +51,7 @@ const HOME_RECENT_SCORES_SKELETON_COUNT = 2;
 
 function HomePage() {
   const navigate = useNavigate();
-  const selectedCountry = useAppStore((state) => state.selectedCountry);
+  const selectedCountry = useSelectedCountry();
   const rankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const recentScores = useAppStore((state) => state.homeRecentScoresByCountry[selectedCountry]) ?? EMPTY_SCORES;

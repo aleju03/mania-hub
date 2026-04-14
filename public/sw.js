@@ -1,4 +1,4 @@
-const CACHE_NAME = "static-v1";
+const CACHE_NAME = "static-v2";
 
 const PRECACHE_URLS = [
   // Fonts
@@ -14,10 +14,6 @@ const PRECACHE_URLS = [
   "/fonts/extra.ttf",
   // Layout
   "/images/layout/nav2-background-hue0.png",
-  "/images/layout/osu-logo-circle.svg",
-  "/images/layout/osu-logo-text.svg",
-  "/images/layout/osu-logo-triangles.svg",
-  "/images/layout/osu-logo-white.svg",
   // Grade badges
   "/images/badges/score-ranks-v2019/GradeSmall-SS-Silver.svg",
   "/images/badges/score-ranks-v2019/GradeSmall-SS.svg",

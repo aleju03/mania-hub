@@ -5,7 +5,7 @@ import { SearchInput } from "../ui/SearchInput";
 import { CountrySelector } from "./CountrySelector";
 import { clearDevServerCaches } from "../../lib/api";
 import { searchUsers } from "../../lib/osu";
-import { TOP_PLAYS_RANGE_STORAGE_KEY, useAppStore } from "../../store";
+import { TOP_PLAYS_RANGE_STORAGE_KEY, useAppStore, useSelectedCountry } from "../../store";
 import { getCountryFlagGradient, getCountryFlagUrl } from "../../lib/country";
 
 const links = [
@@ -70,13 +70,13 @@ export function Nav() {
   const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
-  const selectedCountry = useAppStore((state) => state.selectedCountry);
+  const selectedCountry = useSelectedCountry();
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
   const current = links.find((l) => location.pathname.startsWith(l.to === "/" ? "/__home" : l.to)) ||
     (location.pathname === "/" ? links[0] : location.pathname.startsWith("/player") ? null : links[0]);
 
-  const flagGradient = getCountryFlagGradient(selectedCountry);
-  const flagImageUrl = getCountryFlagUrl(selectedCountry);
+  const flagBackground = getCountryFlagGradient(selectedCountry)
+    ?? `url(${getCountryFlagUrl(selectedCountry)}) center/cover no-repeat`;
 
   // Close drawer on route change
   useEffect(() => {
@@ -128,49 +128,45 @@ export function Nav() {
             transition={{ duration: 0.1 }}
           >
             <Link to="/" preload="intent" className="flex items-center gap-2">
-              <div className="relative w-10 h-10">
-                <div
-                  className="absolute inset-0 transition-all duration-300"
-                  style={{
-                    background: flagGradient ?? `url(${flagImageUrl}) center/cover no-repeat`,
-                    maskImage: "url(/images/layout/osu-logo-circle.svg)",
-                    WebkitMaskImage: "url(/images/layout/osu-logo-circle.svg)",
-                    maskSize: "contain",
-                    WebkitMaskSize: "contain",
-                    maskRepeat: "no-repeat",
-                    WebkitMaskRepeat: "no-repeat",
-                    maskPosition: "center",
-                    WebkitMaskPosition: "center",
-                  }}
-                />
-                {/* Dark halo behind text for readability on light/busy flags */}
+              <div className="relative w-9 h-9 rounded-full shadow-md ring-1 ring-white/15 overflow-hidden transition-all duration-300">
+                {/* Dimmed flag base */}
                 <div
                   className="absolute inset-0"
                   style={{
-                    background: "rgba(0,0,0,0.35)",
-                    maskImage: "url(/images/layout/osu-logo-text.svg)",
-                    WebkitMaskImage: "url(/images/layout/osu-logo-text.svg)",
-                    maskSize: "115%",
-                    WebkitMaskSize: "115%",
-                    maskRepeat: "no-repeat",
-                    WebkitMaskRepeat: "no-repeat",
-                    maskPosition: "center",
-                    WebkitMaskPosition: "center",
-                    filter: "blur(2px)",
+                    background: flagBackground,
+                    filter: "brightness(0.45) saturate(0.75)",
                   }}
                 />
+                {/* Bright flag clipped to arrow shape (clipping mask + outer glow) */}
                 <div
                   className="absolute inset-0"
                   style={{
-                    background: "white",
-                    maskImage: "url(/images/layout/osu-logo-text.svg)",
-                    WebkitMaskImage: "url(/images/layout/osu-logo-text.svg)",
-                    maskSize: "contain",
-                    WebkitMaskSize: "contain",
+                    background: flagBackground,
+                    maskImage: "url(/images/notes/arrow-left-pink.png)",
+                    WebkitMaskImage: "url(/images/notes/arrow-left-pink.png)",
+                    maskSize: "62%",
+                    WebkitMaskSize: "62%",
                     maskRepeat: "no-repeat",
                     WebkitMaskRepeat: "no-repeat",
                     maskPosition: "center",
                     WebkitMaskPosition: "center",
+                    transform: "scaleX(-1)",
+                    filter: [
+                      "brightness(1.4)",
+                      "saturate(1.45)",
+                      // Thicker ~2px black outline (8 stacked drop-shadows in a ring)
+                      "drop-shadow(2px 0 0 rgba(0,0,0,0.95))",
+                      "drop-shadow(-2px 0 0 rgba(0,0,0,0.95))",
+                      "drop-shadow(0 2px 0 rgba(0,0,0,0.95))",
+                      "drop-shadow(0 -2px 0 rgba(0,0,0,0.95))",
+                      "drop-shadow(1.5px 1.5px 0 rgba(0,0,0,0.95))",
+                      "drop-shadow(-1.5px 1.5px 0 rgba(0,0,0,0.95))",
+                      "drop-shadow(1.5px -1.5px 0 rgba(0,0,0,0.95))",
+                      "drop-shadow(-1.5px -1.5px 0 rgba(0,0,0,0.95))",
+                      // Soft white outer glow on top
+                      "drop-shadow(0 0 3px rgba(255,255,255,0.55))",
+                      "drop-shadow(0 0 5px rgba(255,255,255,0.3))",
+                    ].join(" "),
                   }}
                 />
               </div>

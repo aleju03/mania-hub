@@ -1,7 +1,10 @@
+import { useContext, useEffect, useState } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { getAvatarAccentStoreKey } from "./lib/avatar-accent";
 import { DEFAULT_COUNTRY_CODE, normalizeCountryCode } from "./lib/country";
+import { InitialCountryContext } from "./lib/country-context";
+import { readCountryCookieClient, writeCountryCookieClient } from "./lib/country-cookie";
 import { getScoreIdentity, getScoreTimeMs } from "./lib/score";
 import type { OsuScore, RankingsResponse, CountryMapsData } from "./lib/types";
 
@@ -143,10 +146,16 @@ const storage = typeof window !== "undefined"
     }))
   : undefined;
 
+// On the client, prefer the cookie value as the initial selectedCountry so
+// that the store agrees with what the server rendered. localStorage may be
+// stale (e.g. user cleared the cookie) — the cookie wins because it's what
+// drove the SSR HTML the user just saw.
+const initialClientCountry = readCountryCookieClient();
+
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
-      selectedCountry: DEFAULT_COUNTRY_CODE,
+      selectedCountry: initialClientCountry ?? DEFAULT_COUNTRY_CODE,
       avatarAccents: {},
       rankingsByCountry: {},
       rankingsFetchedAtByCountry: {},
@@ -166,10 +175,11 @@ export const useAppStore = create<AppState>()(
       trackedUserIdsByCountry: {},
       trackedUserIdsFetchedAtByCountry: {},
       pollIndexByCountry: {},
-      setSelectedCountry: (country) =>
-        set({
-          selectedCountry: normalizeCountryCode(country),
-        }),
+      setSelectedCountry: (country) => {
+        const normalized = normalizeCountryCode(country);
+        writeCountryCookieClient(normalized);
+        set({ selectedCountry: normalized });
+      },
       setAvatarAccents: (accents, fetchedAt = Date.now()) =>
         set((state) => ({
           avatarAccents: {
@@ -362,9 +372,15 @@ export const useAppStore = create<AppState>()(
           ? persistedState as Partial<AppState>
           : {};
         const persistedSelectedCountry = normalizeCountryCode(nextState.selectedCountry);
-        const selectedCountry = currentState.selectedCountry !== DEFAULT_COUNTRY_CODE
-          ? currentState.selectedCountry
-          : persistedSelectedCountry;
+        // The cookie is the source of truth on first load: it's what the
+        // server used to render the SSR HTML. If it disagrees with the
+        // localStorage value, the cookie wins. Falls back to the in-flight
+        // store value (user mid-session) and finally the persisted value.
+        const cookieCountry = readCountryCookieClient();
+        const selectedCountry = cookieCountry
+          ?? (currentState.selectedCountry !== DEFAULT_COUNTRY_CODE
+            ? currentState.selectedCountry
+            : persistedSelectedCountry);
         const persistedPopoffsByCountry =
           nextState.popoffsByCountry && typeof nextState.popoffsByCountry === "object"
             ? nextState.popoffsByCountry
@@ -429,3 +445,49 @@ export const useAppStore = create<AppState>()(
     },
   ),
 );
+
+// Migration sync: returning users may have a localStorage preference but no
+// cookie (because the cookie was added in this commit). After persist has
+// hydrated the store on the client, write the cookie to match the store so
+// the very next reload renders the right country server-side.
+if (typeof window !== "undefined") {
+  const syncCookieToStore = () => {
+    const current = useAppStore.getState().selectedCountry;
+    if (readCountryCookieClient() !== current) {
+      writeCountryCookieClient(current);
+    }
+  };
+  if (useAppStore.persist.hasHydrated()) {
+    syncCookieToStore();
+  } else {
+    useAppStore.persist.onFinishHydration(syncCookieToStore);
+  }
+}
+
+// Returns false during SSR and the very first client render, then true once
+// Zustand persist has synced from localStorage. Mostly used internally by
+// useSelectedCountry to know when to switch from the SSR-provided context
+// value to the live store value.
+export function useHasHydrated(): boolean {
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    const unsub = useAppStore.persist.onFinishHydration(() => setHydrated(true));
+    if (useAppStore.persist.hasHydrated()) setHydrated(true);
+    return unsub;
+  }, []);
+  return hydrated;
+}
+
+// Read the currently-selected country with no SSR/hydration flash.
+//
+// On the server (and during the very first client render that must match
+// the SSR HTML), this returns the value the server resolved from the request
+// cookie via InitialCountryContext. Once Zustand persist has finished syncing
+// from localStorage, it switches to reading the live store value so that
+// in-app country changes propagate normally.
+export function useSelectedCountry(): string {
+  const fromContext = useContext(InitialCountryContext);
+  const fromStore = useAppStore((state) => state.selectedCountry);
+  const hydrated = useHasHydrated();
+  return hydrated ? fromStore : fromContext;
+}

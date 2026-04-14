@@ -11,7 +11,7 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { RankingRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse } from "../lib/types";
-import { useAppStore } from "../store";
+import { useAppStore, useSelectedCountry } from "../store";
 
 type SortField = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "ss" | "s" | "a";
 
@@ -25,7 +25,7 @@ export const Route = createFileRoute("/rankings")({
 function RankingsPage() {
   const { page } = Route.useSearch();
   const navigate = useNavigate();
-  const selectedCountry = useAppStore((state) => state.selectedCountry);
+  const selectedCountry = useSelectedCountry();
   const cachedPageOneData = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const rankHistories = useAppStore((state) => state.rankHistories);

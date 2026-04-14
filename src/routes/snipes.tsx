@@ -1,14 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader } from "../components/layout/PageHeader";
 import { getCountryName } from "../lib/country";
-import { useAppStore } from "../store";
+import { useSelectedCountry } from "../store";
 
 export const Route = createFileRoute("/snipes")({
   component: SnipesPage,
 });
 
 function SnipesPage() {
-  const selectedCountry = useAppStore((state) => state.selectedCountry);
+  const selectedCountry = useSelectedCountry();
   const countryName = getCountryName(selectedCountry);
 
   return (

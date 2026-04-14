@@ -19,7 +19,7 @@ import type {
   MapsFarmedPlayer,
   MapsPlayerEntry,
 } from "../lib/types";
-import { useAppStore } from "../store";
+import { useAppStore, useSelectedCountry } from "../store";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -139,7 +139,7 @@ export const Route = createFileRoute("/maps")({
 function MapsPage() {
   const navigate = useNavigate();
   const mapsSearch = Route.useSearch();
-  const selectedCountry = useAppStore((s) => s.selectedCountry);
+  const selectedCountry = useSelectedCountry();
   const rankings = useAppStore((s) => s.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((s) => s.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const mapsData = useAppStore((s) => s.mapsDataByCountry[selectedCountry] ?? null);
@@ -930,7 +930,7 @@ function MostPlayedCard({ map, onPlayerClick }: { map: MapsAggregatedBeatmap; on
 // ── Favourite card ─────────────────────────────────────────────────────────
 
 function FavouriteCard({ fav, onPlayerClick }: { fav: MapsAggregatedFavourite; onPlayerClick: (u: string) => void }) {
-  const selectedCountry = useAppStore((state) => state.selectedCountry);
+  const selectedCountry = useSelectedCountry();
   const url = `https://osu.ppy.sh/beatmapsets/${fav.beatmapsetId}`;
 
   return (
