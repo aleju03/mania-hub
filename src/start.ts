@@ -13,7 +13,25 @@ const DOCUMENT_CACHE_CONTROL =
 
 const documentCacheMiddleware = createMiddleware().server(
   async ({ next, request }) => {
-    const result = await next();
+    let result;
+    try {
+      result = await next();
+    } catch (err) {
+      // @tanstack/start-server-core's handleServerAction reads
+      // `action.method` without guarding against an unknown server-fn id.
+      // Stale browser tabs from a previous dev build trigger this after
+      // HMR. Surface it as a 404 instead of a 500 TypeError.
+      if (
+        err instanceof TypeError &&
+        /reading 'method'/.test(err.message) &&
+        new URL(request.url).pathname.includes("/_serverFn/")
+      ) {
+        return {
+          response: new Response("Unknown server function", { status: 404 }),
+        };
+      }
+      throw err;
+    }
 
     const response = (result as { response?: Response } | undefined)?.response;
     if (!response || typeof response.headers?.set !== "function") {
