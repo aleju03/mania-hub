@@ -26,6 +26,9 @@ interface RecentEventRow {
   country: string | null;
   selectedCountry: string | null;
   distinctId: string;
+  mapsTab: string | null;
+  rankingsPage: string | null;
+  profileUsername: string | null;
 }
 
 interface CountryRow {
@@ -175,7 +178,7 @@ const getMonitorData = createServerFn({ method: "GET" })
         `SELECT properties.$pathname AS p, count() AS c FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$pathname IS NOT NULL AND properties.$pathname != '/' GROUP BY p ORDER BY c DESC LIMIT 10`,
       ),
       runQuery(
-        `SELECT toString(timestamp), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id FROM events ORDER BY timestamp DESC LIMIT 30`,
+        `SELECT toString(timestamp), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username FROM events WHERE distinct_id != 'server' ORDER BY timestamp DESC LIMIT 30`,
       ),
       runQuery(
         `SELECT properties.$geoip_country_code AS c, count(DISTINCT distinct_id) AS n FROM events WHERE timestamp > ${since} AND properties.$geoip_country_code IS NOT NULL GROUP BY c ORDER BY n DESC LIMIT 10`,
@@ -193,10 +196,10 @@ const getMonitorData = createServerFn({ method: "GET" })
         `SELECT properties.$referring_domain AS d, count(DISTINCT distinct_id) AS n FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$referring_domain IS NOT NULL AND properties.$referring_domain NOT IN ('localhost', '127.0.0.1', '::1') AND properties.$referring_domain NOT LIKE '%-aleju03s-projects.vercel.app' GROUP BY d ORDER BY n DESC LIMIT 10`,
       ),
       runQuery(
-        `SELECT properties.caller AS c, properties.path AS p, properties.status AS s, count() AS n FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} GROUP BY c, p, s ORDER BY n DESC LIMIT 10`,
+        `SELECT properties.caller AS c, properties.path AS p, properties.status AS s, count() AS n FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} AND properties.caller IS NOT NULL GROUP BY c, p, s ORDER BY n DESC LIMIT 10`,
       ),
       runQuery(
-        `SELECT toString(timestamp), properties.caller, properties.path, properties.status, properties.body_preview, properties.attempts, properties.kind FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} ORDER BY timestamp DESC LIMIT 15`,
+        `SELECT toString(timestamp), properties.caller, properties.path, properties.status, properties.body_preview, properties.attempts, properties.kind FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} AND properties.caller IS NOT NULL ORDER BY timestamp DESC LIMIT 15`,
       ),
       runQuery(
         `SELECT countIf(pv_count = 1) AS bounced, count() AS landers FROM (SELECT distinct_id, count() AS pv_count FROM events WHERE event = '$pageview' AND timestamp > ${since} GROUP BY distinct_id HAVING countIf(properties.$pathname = '/') > 0)`,
@@ -224,6 +227,9 @@ const getMonitorData = createServerFn({ method: "GET" })
         country: row[3] ? String(row[3]) : null,
         selectedCountry: row[4] ? String(row[4]) : null,
         distinctId: String(row[5] ?? ""),
+        mapsTab: row[6] ? String(row[6]) : null,
+        rankingsPage: row[7] ? String(row[7]) : null,
+        profileUsername: row[8] ? String(row[8]) : null,
       })),
       topPhysicalCountries: topPhysCountries.map((row) => ({
         country: String(row[0] ?? ""),
@@ -353,10 +359,10 @@ function MonitorPage() {
             <>
               <KpiRow data={data} range={range} />
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-                <div className="lg:col-span-3">
+                <div className="lg:col-span-3 flex">
                   <TopRoutesCard rows={data.topRoutes} range={range} />
                 </div>
-                <div className="lg:col-span-2">
+                <div className="lg:col-span-2 flex">
                   <RecentEventsCard rows={data.recentEvents} />
                 </div>
               </div>
@@ -552,12 +558,12 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/30 overflow-hidden">
+    <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/30 overflow-hidden flex flex-col w-full">
       <div className="px-4 pt-3 pb-2 border-b border-osu-b3/20">
         <div className="text-[11px] font-semibold text-osu-c2 uppercase tracking-wider">{title}</div>
         {subtitle ? <div className="text-[10px] text-osu-f1 mt-0.5">{subtitle}</div> : null}
       </div>
-      <div className="p-3">{children}</div>
+      <div className="p-3 flex-1 min-h-0">{children}</div>
     </div>
   );
 }
@@ -569,19 +575,19 @@ function TopRoutesCard({ rows, range }: { rows: TopRouteRow[]; range: Range }) {
       {rows.length === 0 ? (
         <EmptyMessage text="No pageviews today yet." />
       ) : (
-        <div className="space-y-1.5">
+        <div className="flex flex-col gap-1.5 h-full">
           {rows.map((row) => {
             const pct = Math.max(3, Math.round((row.count / max) * 100));
             return (
               <div
                 key={row.path}
-                className="relative rounded-md bg-osu-b5/60 border border-osu-b3/20 overflow-hidden"
+                className="relative rounded-md bg-osu-b5/60 border border-osu-b3/20 overflow-hidden flex-1 min-h-[32px]"
               >
                 <div
                   className="absolute inset-y-0 left-0 bg-gradient-to-r from-osu-pink/25 to-osu-pink/10"
                   style={{ width: `${pct}%` }}
                 />
-                <div className="relative px-3 py-2 flex items-center justify-between gap-3">
+                <div className="relative px-3 h-full flex items-center justify-between gap-3">
                   <span className="text-[11px] font-mono text-osu-c2 truncate">
                     {row.path || "(unknown)"}
                   </span>
@@ -598,21 +604,42 @@ function TopRoutesCard({ rows, range }: { rows: TopRouteRow[]; range: Range }) {
   );
 }
 
+function formatRecentEventLabel(row: RecentEventRow): string {
+  const path = row.path || "";
+  if (!path || path === "/") return "Home";
+  if (path === "/maps") {
+    return row.mapsTab ? `Maps · ${row.mapsTab}` : "Maps";
+  }
+  if (path === "/rankings") {
+    return row.rankingsPage ? `Rankings · p${row.rankingsPage}` : "Rankings";
+  }
+  if (path.startsWith("/player/")) {
+    return row.profileUsername ? `Player · ${row.profileUsername}` : "Player";
+  }
+  if (path === "/top-plays") return "Top plays";
+  if (path === "/tracker") return "Tracker";
+  if (path === "/replay") return "Replay";
+  if (path === "/snipes") return "Snipes";
+  return path;
+}
+
 function RecentEventsCard({ rows }: { rows: RecentEventRow[] }) {
   return (
     <SectionCard title="Recent events" subtitle="last 30 from the live stream">
       {rows.length === 0 ? (
         <EmptyMessage text="No events captured yet." />
       ) : (
-        <div className="space-y-1 max-h-[420px] overflow-y-auto pr-1">
+        <div className="space-y-1 h-full max-h-[420px] overflow-y-auto pr-1">
           {rows.map((row, i) => {
             const ts = row.timestamp ? Date.parse(row.timestamp) : NaN;
             const when = Number.isFinite(ts) ? formatAgeShort(Date.now() - ts) : "—";
             const shortId = row.distinctId ? row.distinctId.slice(-6) : "—";
+            const label = formatRecentEventLabel(row);
             return (
               <div
                 key={`${row.timestamp}-${i}`}
                 className="flex items-center gap-2 text-[10px] py-1.5 px-2 rounded-md hover:bg-osu-b3/30 transition-colors duration-[100ms]"
+                title={row.path || ""}
               >
                 <span className="text-osu-f1 font-mono w-10 flex-shrink-0">{when}</span>
                 {row.country ? (
@@ -625,7 +652,7 @@ function RecentEventsCard({ rows }: { rows: RecentEventRow[] }) {
                 ) : (
                   <span className="w-[14px] h-[10px] rounded-[1px] bg-osu-b3/40 flex-shrink-0" />
                 )}
-                <span className="font-mono text-osu-c2 truncate flex-1">{row.path || "—"}</span>
+                <span className="text-osu-c2 truncate flex-1">{label}</span>
                 <span className="text-osu-f1 font-mono flex-shrink-0">{shortId}</span>
               </div>
             );
