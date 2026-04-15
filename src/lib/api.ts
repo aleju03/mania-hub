@@ -1,6 +1,7 @@
 // Server-only: OAuth token management + fetch wrapper for osu! API v2
 import { createServerFn } from "@tanstack/react-start";
 import { db, ensureCacheSchema, hasDb } from "./db";
+import { trackServerEvent } from "./server-track";
 
 // Lazy zlib loader. Using a dynamic import keeps `node:zlib` out of the client
 // module graph, because this file is transitively imported client-side via
@@ -542,9 +543,22 @@ export async function osuFetch<T = unknown>(
     }
 
     const text = await res.text();
+    trackServerEvent("osu_api_error", {
+      path,
+      status: res.status,
+      attempts: attempt + 1,
+      kind: "json",
+    });
     throw new Error(`osu! API error ${res.status} on ${path}: ${text}`);
   }
 
+  trackServerEvent("osu_api_error", {
+    path,
+    status: null,
+    attempts: OSU_FETCH_RETRIES + 1,
+    kind: "json",
+    reason: "retries_exhausted",
+  });
   throw new Error(`osu! API error on ${path}: exhausted retries`);
 }
 
@@ -568,9 +582,22 @@ export async function osuFetchBinary(path: string): Promise<ArrayBuffer> {
       continue;
     }
 
+    trackServerEvent("osu_api_error", {
+      path,
+      status: res.status,
+      attempts: attempt + 1,
+      kind: "binary",
+    });
     throw new Error(`osu! API binary error ${res.status} on ${path}`);
   }
 
+  trackServerEvent("osu_api_error", {
+    path,
+    status: null,
+    attempts: OSU_FETCH_RETRIES + 1,
+    kind: "binary",
+    reason: "retries_exhausted",
+  });
   throw new Error(`osu! API binary error on ${path}: exhausted retries`);
 }
 

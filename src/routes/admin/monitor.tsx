@@ -48,6 +48,22 @@ interface TopReplayRow {
   views: number;
 }
 
+interface ReferrerRow {
+  domain: string;
+  count: number;
+}
+
+interface ServerErrorRow {
+  path: string;
+  status: number | null;
+  count: number;
+}
+
+interface BounceStats {
+  bounced: number;
+  landers: number;
+}
+
 const RANGES = ["1h", "24h", "7d", "30d"] as const;
 type Range = (typeof RANGES)[number];
 
@@ -75,12 +91,15 @@ interface MonitorData {
   pageviewsInRange: number;
   uniqueVisitorsInRange: number;
   eventsInRange: number;
+  bounce: BounceStats;
   topRoutes: TopRouteRow[];
   recentEvents: RecentEventRow[];
   topPhysicalCountries: CountryRow[];
   topSelectedCountries: CountryRow[];
   topProfiles: TopProfileRow[];
   topReplays: TopReplayRow[];
+  topReferrers: ReferrerRow[];
+  serverErrors: ServerErrorRow[];
   fetchedAt: number;
 }
 
@@ -131,13 +150,16 @@ const getMonitorData = createServerFn({ method: "GET" })
       topSelCountries,
       topProfiles,
       topReplays,
+      topReferrers,
+      serverErrors,
+      bounce,
     ] = await Promise.all([
       runQuery(`SELECT count(DISTINCT distinct_id) FROM events WHERE timestamp > now() - interval 5 minute`),
       runQuery(`SELECT count() FROM events WHERE event = '$pageview' AND timestamp > ${since}`),
       runQuery(`SELECT count(DISTINCT distinct_id) FROM events WHERE timestamp > ${since}`),
       runQuery(`SELECT count() FROM events WHERE timestamp > ${since}`),
       runQuery(
-        `SELECT properties.$pathname AS p, count() AS c FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$pathname IS NOT NULL GROUP BY p ORDER BY c DESC LIMIT 10`,
+        `SELECT properties.$pathname AS p, count() AS c FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$pathname IS NOT NULL AND properties.$pathname != '/' GROUP BY p ORDER BY c DESC LIMIT 10`,
       ),
       runQuery(
         `SELECT toString(timestamp), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id FROM events ORDER BY timestamp DESC LIMIT 30`,
@@ -154,6 +176,15 @@ const getMonitorData = createServerFn({ method: "GET" })
       runQuery(
         `SELECT properties.replay_score_id AS score_id, any(properties.replay_title) AS title, any(properties.replay_artist) AS artist, any(properties.replay_difficulty) AS difficulty, any(properties.replay_player) AS player, any(properties.replay_cover_url) AS cover_url, count() AS n FROM events WHERE event = 'replay_view' AND properties.replay_score_id IS NOT NULL AND timestamp > ${since} GROUP BY score_id ORDER BY n DESC LIMIT 10`,
       ),
+      runQuery(
+        `SELECT properties.$referring_domain AS d, count(DISTINCT distinct_id) AS n FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$referring_domain IS NOT NULL GROUP BY d ORDER BY n DESC LIMIT 10`,
+      ),
+      runQuery(
+        `SELECT properties.path AS p, properties.status AS s, count() AS n FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} GROUP BY p, s ORDER BY n DESC LIMIT 10`,
+      ),
+      runQuery(
+        `SELECT countIf(pv_count = 1) AS bounced, count() AS landers FROM (SELECT distinct_id, count() AS pv_count FROM events WHERE event = '$pageview' AND timestamp > ${since} GROUP BY distinct_id HAVING countIf(properties.$pathname = '/') > 0)`,
+      ),
     ]);
 
     return {
@@ -162,6 +193,10 @@ const getMonitorData = createServerFn({ method: "GET" })
       pageviewsInRange: Number(pvRange[0]?.[0] ?? 0),
       uniqueVisitorsInRange: Number(uvRange[0]?.[0] ?? 0),
       eventsInRange: Number(eventsRange[0]?.[0] ?? 0),
+      bounce: {
+        bounced: Number(bounce[0]?.[0] ?? 0),
+        landers: Number(bounce[0]?.[1] ?? 0),
+      },
       topRoutes: topRoutes.map((row) => ({
         path: String(row[0] ?? ""),
         count: Number(row[1] ?? 0),
@@ -195,6 +230,15 @@ const getMonitorData = createServerFn({ method: "GET" })
         coverUrl: row[5] ? String(row[5]) : null,
         views: Number(row[6] ?? 0),
       })),
+      topReferrers: topReferrers.map((row) => ({
+        domain: String(row[0] ?? ""),
+        count: Number(row[1] ?? 0),
+      })),
+      serverErrors: serverErrors.map((row) => ({
+        path: String(row[0] ?? ""),
+        status: row[1] == null ? null : Number(row[1]),
+        count: Number(row[2] ?? 0),
+      })),
       fetchedAt: Date.now(),
     };
   });
@@ -204,7 +248,8 @@ export const Route = createFileRoute("/admin/monitor")({
     if (typeof window !== "undefined") {
       const host = window.location.hostname;
       const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1";
-      if (!isLocal) throw notFound();
+      const isDevMode = import.meta.env.VITE_DEV_MODE === "1";
+      if (!isLocal && !isDevMode) throw notFound();
     } else if (process.env.VITE_DEV_MODE !== "1" && process.env.NODE_ENV === "production") {
       throw notFound();
     }
@@ -304,6 +349,10 @@ function MonitorPage() {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <TopProfilesCard rows={data.topProfiles} range={range} />
                 <TopReplaysCard rows={data.topReplays} range={range} />
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <ReferrersCard rows={data.topReferrers} range={range} />
+                <ServerErrorsCard rows={data.serverErrors} range={range} />
               </div>
             </>
           ) : null}
@@ -408,12 +457,22 @@ function MonitorHeader({
 
 function KpiRow({ data, range }: { data: MonitorData; range: Range }) {
   const hint = RANGE_LABEL[range].toLowerCase();
+  const bouncePct =
+    data.bounce.landers > 0
+      ? Math.round((data.bounce.bounced / data.bounce.landers) * 100)
+      : null;
+  const bounceLabel = bouncePct == null ? "—" : `${bouncePct}%`;
+  const bounceHint =
+    data.bounce.landers > 0
+      ? `${formatNumber(data.bounce.bounced)} / ${formatNumber(data.bounce.landers)} landers`
+      : `no / landers ${hint}`;
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
       <KpiCard label="Active now" hint="last 5 min" value={data.activeVisitors} accent="pink" />
       <KpiCard label="Pageviews" hint={hint} value={data.pageviewsInRange} />
       <KpiCard label="Visitors" hint={hint} value={data.uniqueVisitorsInRange} />
       <KpiCard label="Events" hint={hint} value={data.eventsInRange} />
+      <KpiCard label="Bounce /" hint={bounceHint} display={bounceLabel} />
     </div>
   );
 }
@@ -422,13 +481,16 @@ function KpiCard({
   label,
   hint,
   value,
+  display,
   accent,
 }: {
   label: string;
   hint: string;
-  value: number;
+  value?: number;
+  display?: string;
   accent?: "pink";
 }) {
+  const rendered = display ?? (value != null ? formatNumber(value) : "—");
   return (
     <div
       className={`rounded-lg border px-4 py-3 ${
@@ -443,7 +505,7 @@ function KpiCard({
           accent === "pink" ? "text-osu-pink-light" : "text-white"
         }`}
       >
-        {formatNumber(value)}
+        {rendered}
       </div>
       <div className="text-[10px] text-osu-f1 mt-1.5">{hint}</div>
     </div>
@@ -678,6 +740,95 @@ function TopReplaysCard({ rows, range }: { rows: TopReplayRow[]; range: Range })
                   </div>
                   <span className="text-[12px] font-bold text-white flex-shrink-0">
                     {formatNumber(row.views)}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function ReferrersCard({ rows, range }: { rows: ReferrerRow[]; range: Range }) {
+  const max = Math.max(1, ...rows.map((r) => r.count));
+  return (
+    <SectionCard
+      title="Top referrers"
+      subtitle={`unique visitors by referring domain, ${RANGE_LABEL[range].toLowerCase()}`}
+    >
+      {rows.length === 0 ? (
+        <EmptyMessage text="No referrers captured yet." />
+      ) : (
+        <div className="space-y-1.5">
+          {rows.map((row) => {
+            const pct = Math.max(3, Math.round((row.count / max) * 100));
+            const label = row.domain === "$direct" ? "Direct / none" : row.domain;
+            return (
+              <div
+                key={row.domain}
+                className="relative rounded-md bg-osu-b5/60 border border-osu-b3/20 overflow-hidden"
+              >
+                <div
+                  className="absolute inset-y-0 left-0 bg-gradient-to-r from-osu-green-light/20 to-osu-green-light/5"
+                  style={{ width: `${pct}%` }}
+                />
+                <div className="relative px-3 py-2 flex items-center justify-between gap-3">
+                  <span className="text-[11px] font-mono text-osu-c2 truncate">{label}</span>
+                  <span className="text-[11px] font-bold text-white flex-shrink-0">
+                    {formatNumber(row.count)}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function ServerErrorsCard({ rows, range }: { rows: ServerErrorRow[]; range: Range }) {
+  const total = rows.reduce((acc, row) => acc + row.count, 0);
+  return (
+    <SectionCard
+      title="Server errors"
+      subtitle={`osu! API failures by path + status, ${RANGE_LABEL[range].toLowerCase()}`}
+    >
+      {rows.length === 0 ? (
+        <EmptyMessage text="No server errors recorded. (good)" />
+      ) : (
+        <div className="space-y-1.5">
+          <div className="text-[10px] text-osu-f1 font-mono pb-1">
+            {formatNumber(total)} total errors
+          </div>
+          {rows.map((row, i) => {
+            const statusLabel =
+              row.status == null ? "retries_exhausted" : String(row.status);
+            const statusColor =
+              row.status == null || row.status >= 500
+                ? "text-osu-red-light"
+                : row.status === 429
+                  ? "text-osu-yellow"
+                  : "text-osu-c2";
+            return (
+              <div
+                key={`${row.path}-${row.status ?? "x"}-${i}`}
+                className="relative rounded-md bg-osu-b5/60 border border-osu-b3/20 overflow-hidden"
+              >
+                <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-osu-red/20 to-osu-red/5 w-full" />
+                <div className="relative px-3 py-2 flex items-center gap-2.5">
+                  <span
+                    className={`text-[10px] font-mono font-bold ${statusColor} w-14 flex-shrink-0`}
+                  >
+                    {statusLabel}
+                  </span>
+                  <span className="text-[11px] font-mono text-osu-c2 truncate flex-1">
+                    {row.path || "(unknown)"}
+                  </span>
+                  <span className="text-[11px] font-bold text-white flex-shrink-0">
+                    {formatNumber(row.count)}
                   </span>
                 </div>
               </div>

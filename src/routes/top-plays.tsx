@@ -229,7 +229,17 @@ function PopOffsPage() {
 
       setCachedPopoffs(selectedCountry, merged);
     } catch (error) {
-      console.warn("Failed to cache top plays:", error);
+      const message = error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : JSON.stringify(error);
+      console.warn("Failed to cache top plays:", {
+        country: selectedCountry,
+        hasCachedPopoffs,
+        playerCount: players.length,
+        reason: message,
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -513,7 +523,7 @@ function PopOffsPage() {
                         {p.ppGain > 0 && (
                           <div
                             className="text-[10px] font-semibold text-osu-green"
-                            title="Approximate pp gain from this play"
+                            title="Estimated pp gain from replacing your previous best score on this map"
                           >
                             +{formatNumber(Math.round(p.ppGain))}
                           </div>
