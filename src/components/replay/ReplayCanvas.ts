@@ -118,6 +118,12 @@ export class ManiaReplayRenderer {
   private cssWidth = 0;
   private cssHeight = 0;
 
+  // Optional external clock (e.g., audio element). When set, replaces the
+  // wall-clock dt in tick() with the external source. Returning `stalled: true`
+  // freezes currentTime (used while audio is buffering/seeking) so the replay
+  // never drifts ahead of the song.
+  private externalClock: (() => { time: number; stalled: boolean } | null) | null = null;
+
   // Receptor flash state
   private receptorFlashTimestamps: number[];
 
@@ -490,6 +496,13 @@ export class ManiaReplayRenderer {
     if (!this._isPlaying) this.render();
   }
 
+  setExternalClock(cb: (() => { time: number; stalled: boolean } | null) | null) {
+    this.externalClock = cb;
+    // Reset wall-clock baseline so a later fallback tick doesn't accumulate a
+    // stale dt from before the clock switch.
+    this.lastRenderTime = performance.now();
+  }
+
   get time() { return this.currentTime; }
   get duration() { return this.totalDuration; }
   // Wall-clock adjusted duration for display (HT makes it longer, DT shorter)
@@ -500,9 +513,31 @@ export class ManiaReplayRenderer {
   private tick() {
     if (!this._isPlaying) return;
     const now = performance.now();
-    const dt = (now - this.lastRenderTime) * this.playbackSpeed * this.modRate;
+    const external = this.externalClock?.() ?? null;
+
+    if (external) {
+      // Drive from an external clock (audio element). If stalled, freeze
+      // currentTime so we wait for the audio to catch up — this is what makes
+      // mid-replay seeks on bad internet stay in sync, and what keeps a
+      // backgrounded tab from drifting on return.
+      if (!external.stalled) {
+        const newTime = Math.max(0, Math.min(external.time, this.totalDuration));
+        if (newTime > this.currentTime) {
+          this.currentTime = newTime;
+        } else if (newTime < this.currentTime - 50) {
+          // Significant backward jump (e.g., user scrubbed backwards) —
+          // rescanning stats from the start is the only correct option.
+          this.currentTime = newTime;
+          this.recomputeStatsUpTo(this.currentTime);
+        }
+        // Sub-50ms backward jitter is ignored to keep combo/stats monotonic.
+      }
+    } else {
+      const dt = (now - this.lastRenderTime) * this.playbackSpeed * this.modRate;
+      this.currentTime += dt;
+    }
+
     this.lastRenderTime = now;
-    this.currentTime += dt;
     if (this.currentTime >= this.totalDuration) { this.currentTime = this.totalDuration; this._isPlaying = false; }
     this.advanceStats();
     this.render();
