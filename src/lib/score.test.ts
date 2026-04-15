@@ -52,6 +52,14 @@ describe("isLazerScore", () => {
       type: "solo_score",
     }))).toBe(true);
   });
+
+  it("treats non-solo score payloads as legacy even without legacy markers", () => {
+    expect(isLazerScore(createScore({
+      legacy_score_id: null,
+      legacy_total_score: 0,
+      type: "score_best_mania",
+    }))).toBe(false);
+  });
 });
 
 describe("getDisplayedAccuracy", () => {
@@ -72,7 +80,7 @@ describe("getDisplayedAccuracy", () => {
 
   it("uses lazer mania accuracy for lazer-only scores", () => {
     const accuracy = getDisplayedAccuracy(createScore({
-      accuracy: 0.987,
+      accuracy: 0,
       legacy_score_id: null,
       legacy_total_score: 0,
       statistics: {
@@ -82,7 +90,7 @@ describe("getDisplayedAccuracy", () => {
       type: "solo_score",
     }));
 
-    expect(accuracy).toBe(0.987);
+    expect(accuracy).toBeCloseTo((305 + 300) / (2 * 305), 6);
   });
 });
 
@@ -135,7 +143,7 @@ describe("getScoreDisplayValues", () => {
       }),
     },
     {
-      expectedAccuracy: 0.982222,
+      expectedAccuracy: 0.9822224200570612,
       expectedIsLazer: true,
       expectedTotalScore: 929938,
       score: createScore({
@@ -177,7 +185,7 @@ describe("getScoreDisplayValues", () => {
       }),
     },
     {
-      expectedAccuracy: 0.963096,
+      expectedAccuracy: 0.9630958385876419,
       expectedIsLazer: true,
       expectedTotalScore: 855507,
       score: createScore({

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings } from "../lib/osu";
 import { parseManiaBeatmap } from "../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
-import { getDisplayedAccuracy, getDisplayedRank, scoreHasReplay } from "../lib/score";
+import { getDisplayedAccuracy, getDisplayedRank, getScoreDisplayValues, scoreHasReplay } from "../lib/score";
 import { useAppStore, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SearchInput } from "../components/ui/SearchInput";
@@ -696,8 +696,11 @@ function ReplayInfo({ replay, score, beatmap, onClear }: {
 }) {
   const h = replay.header;
   const totalHits = h.countGeki + h.count300 + h.countKatu + h.count100 + h.count50;
-  const accuracy = totalHits + h.countMiss > 0
-    ? ((h.countGeki * 6 + h.count300 * 6 + h.countKatu * 4 + h.count100 * 2 + h.count50) / ((totalHits + h.countMiss) * 6) * 100) : 0;
+  const accuracy = score
+    ? getDisplayedAccuracy(score) * 100
+    : totalHits + h.countMiss > 0
+      ? ((h.countGeki * 6 + h.count300 * 6 + h.countKatu * 4 + h.count100 * 2 + h.count50) / ((totalHits + h.countMiss) * 6) * 100)
+      : 0;
   const beatmapsetId = score?.beatmapset?.id;
   const beatmapId = score?.beatmap?.id;
   const mapUrl = beatmapsetId ? `https://osu.ppy.sh/beatmapsets/${beatmapsetId}${beatmapId ? `#mania/${beatmapId}` : ""}` : null;
@@ -745,6 +748,10 @@ function ReplayViewer({
   const modAcronyms = useMemo(
     () => (scoreInfo?.mods ?? []).map((m: any) => (typeof m === "string" ? m : m.acronym ?? "").toUpperCase()),
     [scoreInfo?.mods],
+  );
+  const displayScoreValues = useMemo(
+    () => (scoreInfo ? getScoreDisplayValues(scoreInfo) : null),
+    [scoreInfo],
   );
   const modRate = modAcronyms.includes("DT") || modAcronyms.includes("NC") ? 1.5 : modAcronyms.includes("HT") ? 0.75 : 1;
   const effectiveRate = speed * modRate;
@@ -896,6 +903,17 @@ function ReplayViewer({
         replay.keyCount,
         beatmap?.notes ?? [],
         {
+          finalJudgmentCounts: [
+            0,
+            replay.header.countGeki,
+            replay.header.count300,
+            replay.header.countKatu,
+            replay.header.count100,
+            replay.header.count50,
+            replay.header.countMiss,
+          ],
+          isConvert: scoreInfo?.beatmap?.convert ?? false,
+          isLazer: displayScoreValues?.isLazer ?? false,
           od: beatmap?.od,
           showInputOverlay,
           mods: modAcronyms,
@@ -940,7 +958,7 @@ function ReplayViewer({
         rendererRef.current = null;
       }
     };
-  }, [replay, beatmap, initialTime, modRate, modAcronyms]);
+  }, [replay, beatmap, initialTime, modRate, modAcronyms, displayScoreValues, scoreInfo?.beatmap?.convert, showInputOverlay]);
 
   // Pass skin to renderer when it changes
   useEffect(() => {

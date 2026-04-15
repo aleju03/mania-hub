@@ -54,6 +54,10 @@ export function getDisplayedTotalScore(score: OsuScore): number | null {
 }
 
 function isLegacySubmittedScore(score: OsuScore): boolean {
+  if (score.type != null && score.type !== "solo_score") {
+    return true;
+  }
+
   return score.legacy_score_id != null || !!(score.legacy_total_score && score.legacy_total_score > 0);
 }
 
@@ -61,7 +65,7 @@ export function isLazerScore(score: OsuScore): boolean {
   return !isLegacySubmittedScore(score);
 }
 
-/** Lazer (v2) mania accuracy: MAX=320, 300=300, 200=200, 100=100, 50=50, max=320 */
+/** Lazer mania score accuracy follows the score processor base values: MAX=305, 300=300, 200=200, 100=100, 50=50. */
 function calculateLazerAccuracy(stats: OsuScoreStatistics): number {
   const countMax = stats.count_geki ?? stats.perfect ?? 0;
   const count300 = stats.count_300 ?? stats.great ?? 0;
@@ -71,7 +75,7 @@ function calculateLazerAccuracy(stats: OsuScoreStatistics): number {
   const countMiss = stats.count_miss ?? stats.miss ?? 0;
   const total = countMax + count300 + count200 + count100 + count50 + countMiss;
   if (total === 0) return 0;
-  return (countMax * 320 + count300 * 300 + count200 * 200 + count100 * 100 + count50 * 50) / (total * 320);
+  return (countMax * 305 + count300 * 300 + count200 * 200 + count100 * 100 + count50 * 50) / (total * 305);
 }
 
 /** Stable mania accuracy: MAX=300=300, 200=200, 100=100, 50=50, miss=0 */

@@ -135,7 +135,7 @@ function hasValidMapsDataShape(data: CountryMapsData | null): data is CountryMap
   }
 
   const sampleSet = Object.values(data.beatmapsetsPool)[0];
-  if (sampleSet && !Array.isArray(sampleSet.maniaKeys)) {
+  if (sampleSet && (!Array.isArray(sampleSet.maniaKeys) || typeof sampleSet.previewUrl !== "string")) {
     return false;
   }
 
@@ -197,6 +197,7 @@ function MapsPage() {
   const mapsDataFetchedAt = useAppStore((s) => s.mapsDataFetchedAtByCountry[selectedCountry] ?? null);
   const setRankings = useAppStore((s) => s.setRankings);
   const setMapsData = useAppStore((s) => s.setMapsData);
+  const hasValidMapsData = hasValidMapsDataShape(mapsData);
 
   const [loadingPlayers, setLoadingPlayers] = useState(!rankings);
   const [loadingMaps, setLoadingMaps] = useState(!mapsData);
@@ -219,7 +220,7 @@ function MapsPage() {
 
   useEffect(() => {
     setLoadingPlayers(!rankings);
-    setLoadingMaps(!mapsData);
+    setLoadingMaps(!mapsData || !hasValidMapsData);
     setError(null);
   }, [selectedCountry]);
 
@@ -272,13 +273,12 @@ function MapsPage() {
     if (loadingPlayers || error || players.length === 0) return;
 
     let cancelled = false;
-    const hasValidShape = hasValidMapsDataShape(mapsData);
-    if (!isCacheStale(mapsDataFetchedAt, CLIENT_CACHE_TTL.mapsData) && hasValidShape) {
+    if (!isCacheStale(mapsDataFetchedAt, CLIENT_CACHE_TTL.mapsData) && hasValidMapsData) {
       setLoadingMaps(false);
       return () => { cancelled = true; };
     }
 
-    setLoadingMaps(!mapsData);
+    setLoadingMaps(!mapsData || !hasValidMapsData);
     getCountryMapsData({ data: { users: players } })
       .then(({ value, isStale }) => {
         if (cancelled) return;
@@ -296,7 +296,7 @@ function MapsPage() {
       })
       .catch(() => {
         if (cancelled) return;
-        if (!mapsData) setError("Couldn't load maps data. Try again later.");
+        if (!mapsData || !hasValidMapsData) setError("Couldn't load maps data. Try again later.");
       })
       .finally(() => {
         if (!cancelled) setLoadingMaps(false);
@@ -304,7 +304,7 @@ function MapsPage() {
 
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadingPlayers, error, mapsData, mapsDataFetchedAt, playerIdsKey, selectedCountry]);
+  }, [loadingPlayers, error, hasValidMapsData, mapsData, mapsDataFetchedAt, playerIdsKey, selectedCountry]);
 
   // ── Filtered + sorted: farmed (from best scores) ────────────────────────
   const filteredFarmed = useMemo(() => {
@@ -667,7 +667,7 @@ function MapsPage() {
           )}
 
           {/* Loading skeleton grid */}
-          {!error && isLoading && !mapsData && (
+          {!error && isLoading && (!mapsData || !hasValidMapsData) && (
             <div className="space-y-3">
               <MapsLoadingIndicator loadingPlayers={loadingPlayers} />
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -1203,9 +1203,100 @@ function FavouriteCard({ fav, onPlayerClick }: { fav: MapsAggregatedFavourite; o
 
 // ── Random card (hero-sized favourite card for the Random tab) ────────────
 
+const PREVIEW_VOLUME_STORAGE_KEY = "mania-hub-preview-volume-v1";
+const DEFAULT_PREVIEW_VOLUME = 0.3;
+
+function readStoredPreviewVolume(): number {
+  if (typeof window === "undefined") return DEFAULT_PREVIEW_VOLUME;
+  try {
+    const raw = window.localStorage.getItem(PREVIEW_VOLUME_STORAGE_KEY);
+    if (raw == null) return DEFAULT_PREVIEW_VOLUME;
+    const parsed = Number.parseFloat(raw);
+    if (!Number.isFinite(parsed)) return DEFAULT_PREVIEW_VOLUME;
+    return Math.min(1, Math.max(0, parsed));
+  } catch {
+    return DEFAULT_PREVIEW_VOLUME;
+  }
+}
+
 function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const url = `https://osu.ppy.sh/beatmapsets/${bm.id}`;
   const keys = bm.maniaKeys ?? [];
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState<number>(readStoredPreviewVolume);
+  const lastNonZeroVolumeRef = useRef<number>(volume > 0 ? volume : DEFAULT_PREVIEW_VOLUME);
+  const rawPreviewUrl = typeof bm.previewUrl === "string" ? bm.previewUrl : "";
+  const previewUrl = rawPreviewUrl.startsWith("//") ? `https:${rawPreviewUrl}` : rawPreviewUrl;
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = volume;
+  }, [volume]);
+
+  useEffect(() => {
+    if (!isPreviewPlaying) return;
+    let rafId = 0;
+    const tick = () => {
+      const audio = audioRef.current;
+      if (audio) setCurrentTime(audio.currentTime);
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [isPreviewPlaying]);
+
+  const stopPreview = useCallback(() => {
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+    setIsPreviewPlaying(false);
+    setCurrentTime(0);
+  }, []);
+
+  const togglePreview = useCallback(async () => {
+    if (!previewUrl) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (isPreviewPlaying) {
+      audio.pause();
+      return;
+    }
+
+    setPreviewError(null);
+    try {
+      await audio.play();
+    } catch {
+      setPreviewError("Couldn't play preview");
+      setIsPreviewPlaying(false);
+    }
+  }, [isPreviewPlaying, previewUrl]);
+
+  const applyVolume = useCallback((v: number) => {
+    const clamped = Math.min(1, Math.max(0, v));
+    setVolume(clamped);
+    if (clamped > 0) lastNonZeroVolumeRef.current = clamped;
+    try {
+      window.localStorage.setItem(PREVIEW_VOLUME_STORAGE_KEY, String(clamped));
+    } catch {
+      /* ignore quota errors */
+    }
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    if (volume > 0) {
+      applyVolume(0);
+    } else {
+      applyVolume(lastNonZeroVolumeRef.current || DEFAULT_PREVIEW_VOLUME);
+    }
+  }, [applyVolume, volume]);
+
+  const progressRatio = duration > 0 ? Math.min(1, currentTime / duration) : 0;
 
   return (
     <div className="rounded-2xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/40 transition-colors overflow-hidden">
@@ -1238,18 +1329,117 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         </div>
       </a>
 
-      <div className="px-4 py-3 flex items-center justify-between gap-3">
-        <div className="text-[11px] text-osu-f1 truncate">mapped by {bm.creator}</div>
-        <div className="flex items-center gap-4 flex-shrink-0">
-          <div className="flex items-center gap-1">
-            <span className="text-[13px] font-bold text-osu-l2" style={{ fontFamily: "Torus" }}>{formatNumber(bm.globalFavouriteCount)}</span>
-            <span className="text-[9px] text-osu-f1 uppercase">favs</span>
+      <div className="px-4 py-3 space-y-3">
+        <div className="flex items-end justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[11px] text-osu-f1 truncate">mapped by {bm.creator}</div>
           </div>
-          <div className="flex items-center gap-1">
-            <span className="text-[13px] font-bold text-osu-l2" style={{ fontFamily: "Torus" }}>{formatNumber(bm.globalPlayCount)}</span>
-            <span className="text-[9px] text-osu-f1 uppercase">plays</span>
+          <div className="flex items-center gap-4 flex-shrink-0">
+            <div className="flex items-center gap-1">
+              <span className="text-[13px] font-bold text-osu-l2" style={{ fontFamily: "Torus" }}>{formatNumber(bm.globalFavouriteCount)}</span>
+              <span className="text-[9px] text-osu-f1 uppercase">favs</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-[13px] font-bold text-osu-l2" style={{ fontFamily: "Torus" }}>{formatNumber(bm.globalPlayCount)}</span>
+              <span className="text-[9px] text-osu-f1 uppercase">plays</span>
+            </div>
           </div>
         </div>
+
+        {previewUrl ? (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={togglePreview}
+              aria-label={isPreviewPlaying ? "Pause preview" : "Play preview"}
+              className="w-6 h-6 rounded-full bg-osu-pink/90 hover:bg-osu-pink transition-colors flex items-center justify-center cursor-pointer shrink-0"
+            >
+              {isPreviewPlaying ? (
+                <svg viewBox="0 0 24 24" fill="white" className="w-3 h-3">
+                  <rect x="6" y="4" width="4" height="16" rx="1" />
+                  <rect x="14" y="4" width="4" height="16" rx="1" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="white" className="w-3 h-3 ml-0.5">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              )}
+            </button>
+
+            <div
+              onClick={(e) => {
+                const audio = audioRef.current;
+                if (!audio || !duration) return;
+                const rect = e.currentTarget.getBoundingClientRect();
+                const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+                audio.currentTime = ratio * duration;
+                setCurrentTime(audio.currentTime);
+              }}
+              className="flex-1 h-1 bg-osu-b3/60 rounded-full cursor-pointer relative group"
+            >
+              <div
+                className="absolute inset-y-0 left-0 bg-osu-pink rounded-full"
+                style={{ width: `${progressRatio * 100}%` }}
+              />
+            </div>
+
+            <span className="text-[9px] text-osu-f1 tabular-nums shrink-0">
+              {formatDuration(Math.floor(currentTime))}/{duration > 0 ? formatDuration(Math.floor(duration)) : "--:--"}
+            </span>
+
+            <button
+              onClick={toggleMute}
+              aria-label={volume === 0 ? "Unmute preview" : "Mute preview"}
+              className="w-5 h-5 flex items-center justify-center cursor-pointer shrink-0 text-osu-f1 hover:text-white transition-colors"
+            >
+              {volume === 0 ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
+                  <line x1="23" y1="9" x2="17" y2="15" />
+                  <line x1="17" y1="9" x2="23" y2="15" />
+                </svg>
+              ) : volume < 0.5 ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
+                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                </svg>
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" />
+                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                </svg>
+              )}
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={volume}
+              onChange={(e) => applyVolume(Number(e.target.value))}
+              aria-label="Preview volume"
+              className="w-12 h-1 appearance-none bg-osu-b3 rounded-full cursor-pointer shrink-0 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink"
+            />
+
+            <audio
+              ref={audioRef}
+              src={previewUrl}
+              preload="metadata"
+              onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
+              onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+              onEnded={stopPreview}
+              onPause={() => setIsPreviewPlaying(false)}
+              onPlay={() => setIsPreviewPlaying(true)}
+              onError={() => {
+                setPreviewError("Couldn't load preview");
+                setIsPreviewPlaying(false);
+              }}
+            />
+          </div>
+        ) : null}
+        {previewError ? (
+          <div className="text-[10px] text-rose-300">{previewError}</div>
+        ) : null}
       </div>
     </div>
   );
