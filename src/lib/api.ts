@@ -509,10 +509,23 @@ async function getToken(): Promise<string> {
   return tokenCache.access_token;
 }
 
+export type OsuFetchOptions = { caller?: string };
+
+// Truncate API error response bodies before they hit logs / analytics. osu!
+// errors are usually compact JSON, but rate-limit HTML pages or stack traces
+// can be huge — cap them so the dashboard stays readable.
+function truncateErrorBody(text: string, max = 240): string {
+  const trimmed = text.replace(/\s+/g, " ").trim();
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, max)}…`;
+}
+
 export async function osuFetch<T = unknown>(
   path: string,
   params?: Record<string, string | number | undefined>,
+  options?: OsuFetchOptions,
 ): Promise<T> {
+  const caller = options?.caller ?? "unknown";
   const token = await getToken();
 
   const url = new URL(`https://osu.ppy.sh/api/v2${path}`);
@@ -542,27 +555,31 @@ export async function osuFetch<T = unknown>(
       continue;
     }
 
-    const text = await res.text();
+    const text = await res.text().catch(() => "");
+    const bodyPreview = truncateErrorBody(text);
     trackServerEvent("osu_api_error", {
+      caller,
       path,
       status: res.status,
       attempts: attempt + 1,
       kind: "json",
+      body_preview: bodyPreview,
     });
-    throw new Error(`osu! API error ${res.status} on ${path}: ${text}`);
+    throw new Error(
+      `[osuFetch:${caller}] ${res.status} ${path} — ${bodyPreview || "<empty body>"}`,
+    );
   }
 
-  trackServerEvent("osu_api_error", {
-    path,
-    status: null,
-    attempts: OSU_FETCH_RETRIES + 1,
-    kind: "json",
-    reason: "retries_exhausted",
-  });
-  throw new Error(`osu! API error on ${path}: exhausted retries`);
+  // Unreachable: the loop's final iteration always throws above. Keep as a
+  // typing safety net so TS knows osuFetch never returns undefined.
+  throw new Error(`[osuFetch:${caller}] retries exhausted on ${path}`);
 }
 
-export async function osuFetchBinary(path: string): Promise<ArrayBuffer> {
+export async function osuFetchBinary(
+  path: string,
+  options?: OsuFetchOptions,
+): Promise<ArrayBuffer> {
+  const caller = options?.caller ?? "unknown";
   const token = await getToken();
 
   for (let attempt = 0; attempt <= OSU_FETCH_RETRIES; attempt++) {
@@ -582,23 +599,25 @@ export async function osuFetchBinary(path: string): Promise<ArrayBuffer> {
       continue;
     }
 
+    // Binary endpoints sometimes return a small text/html or text/plain
+    // error page. Capture it for the dashboard so we can see *why* the
+    // download failed instead of just "binary error 404".
+    const text = await res.text().catch(() => "");
+    const bodyPreview = truncateErrorBody(text);
     trackServerEvent("osu_api_error", {
+      caller,
       path,
       status: res.status,
       attempts: attempt + 1,
       kind: "binary",
+      body_preview: bodyPreview,
     });
-    throw new Error(`osu! API binary error ${res.status} on ${path}`);
+    throw new Error(
+      `[osuFetchBinary:${caller}] ${res.status} ${path} — ${bodyPreview || "<empty body>"}`,
+    );
   }
 
-  trackServerEvent("osu_api_error", {
-    path,
-    status: null,
-    attempts: OSU_FETCH_RETRIES + 1,
-    kind: "binary",
-    reason: "retries_exhausted",
-  });
-  throw new Error(`osu! API binary error on ${path}: exhausted retries`);
+  throw new Error(`[osuFetchBinary:${caller}] retries exhausted on ${path}`);
 }
 
 export async function fetchBeatmapFile(beatmapId: number): Promise<string> {
