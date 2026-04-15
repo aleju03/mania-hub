@@ -4,6 +4,7 @@ import { getRankings, getCountryMapsData, rebuildCountryMapsData } from "../lib/
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { formatNumber, formatDuration, formatTimeAgo } from "../lib/format";
+import { MANIA_PATTERN_LABELS } from "../lib/mania-patterns";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
@@ -44,6 +45,7 @@ type MapsSearch = {
   q: string;
   rStatus: string;
   rKey: string;
+  rPattern: string;
 };
 
 const PAGE_SIZE = 24;
@@ -61,12 +63,48 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   q: "",
   rStatus: "",
   rKey: "",
+  rPattern: "",
 };
 
 const RANDOM_STATUS_OPTIONS = ["ranked", "loved", "graveyard", "other"] as const;
 const RANDOM_KEY_OPTIONS = ["4k", "7k", "other"] as const;
+const RANDOM_PATTERN_OPTIONS = [
+  "jack",
+  "chordjack",
+  "stream",
+  "jumpstream",
+  "stamina",
+  "tech",
+  "ln",
+  "sv",
+] as const;
 type RandomStatus = (typeof RANDOM_STATUS_OPTIONS)[number];
 type RandomKey = (typeof RANDOM_KEY_OPTIONS)[number];
+type RandomPattern = (typeof RANDOM_PATTERN_OPTIONS)[number];
+
+// Umbrella filters expand to their specific siblings so "Jack" also matches
+// chordjack/longjack/etc and "Stream" also matches jumpstream/handstream/etc.
+const RANDOM_PATTERN_MATCHES: Record<RandomPattern, string[]> = {
+  jack: ["jack", "chordjack", "longjack", "speedjack", "minijack"],
+  chordjack: ["chordjack"],
+  stream: ["stream", "jumpstream", "chordstream", "handstream", "dumpstream"],
+  jumpstream: ["jumpstream"],
+  stamina: ["stamina"],
+  tech: ["tech"],
+  ln: ["ln"],
+  sv: ["sv"],
+};
+
+const RANDOM_PATTERN_LABEL: Record<RandomPattern, string> = {
+  jack: "Jack",
+  chordjack: "Chordjack",
+  stream: "Stream",
+  jumpstream: "Jumpstream",
+  stamina: "Stamina",
+  tech: "Tech",
+  ln: "LN",
+  sv: "SV",
+};
 
 function parseCsvSet<T extends string>(raw: string, allowed: readonly T[]): Set<T> {
   if (!raw) return new Set();
@@ -135,7 +173,14 @@ function hasValidMapsDataShape(data: CountryMapsData | null): data is CountryMap
   }
 
   const sampleSet = Object.values(data.beatmapsetsPool)[0];
-  if (sampleSet && (!Array.isArray(sampleSet.maniaKeys) || typeof sampleSet.previewUrl !== "string")) {
+  if (
+    sampleSet && (
+      !Array.isArray(sampleSet.maniaKeys) ||
+      typeof sampleSet.previewUrl !== "string" ||
+      typeof sampleSet.starMax !== "number" ||
+      !Array.isArray(sampleSet.patterns)
+    )
+  ) {
     return false;
   }
 
@@ -183,6 +228,7 @@ export const Route = createFileRoute("/maps")({
     q: typeof search.q === "string" ? search.q : DEFAULT_MAPS_SEARCH.q,
     rStatus: typeof search.rStatus === "string" ? search.rStatus : DEFAULT_MAPS_SEARCH.rStatus,
     rKey: typeof search.rKey === "string" ? search.rKey : DEFAULT_MAPS_SEARCH.rKey,
+    rPattern: typeof search.rPattern === "string" ? search.rPattern : DEFAULT_MAPS_SEARCH.rPattern,
   }),
   component: MapsPage,
 });
@@ -214,8 +260,18 @@ function MapsPage() {
   const searchQuery = mapsSearch.q;
   const rStatusRaw = mapsSearch.rStatus;
   const rKeyRaw = mapsSearch.rKey;
+  const rPatternRaw = mapsSearch.rPattern;
   const randomStatusSet = useMemo(() => parseCsvSet(rStatusRaw, RANDOM_STATUS_OPTIONS), [rStatusRaw]);
   const randomKeySet = useMemo(() => parseCsvSet(rKeyRaw, RANDOM_KEY_OPTIONS), [rKeyRaw]);
+  const randomPatternSet = useMemo(() => parseCsvSet(rPatternRaw, RANDOM_PATTERN_OPTIONS), [rPatternRaw]);
+  const randomPatternCanonicalSet = useMemo(() => {
+    if (randomPatternSet.size === 0) return null;
+    const expanded = new Set<string>();
+    for (const p of randomPatternSet) {
+      for (const canonical of RANDOM_PATTERN_MATCHES[p]) expanded.add(canonical);
+    }
+    return expanded;
+  }, [randomPatternSet]);
   const countryName = getCountryName(selectedCountry);
 
   useEffect(() => {
@@ -414,11 +470,15 @@ function MapsPage() {
           const keys = beatmapset.maniaKeys ?? [];
           if (!keys.some((k) => randomKeySet.has(mapKeyBucket(k)))) continue;
         }
+        if (randomPatternCanonicalSet) {
+          const patterns = beatmapset.patterns ?? [];
+          if (!patterns.some((p) => randomPatternCanonicalSet.has(p))) continue;
+        }
         pairs.push({ player, beatmapset });
       }
     }
     return pairs;
-  }, [mapsData, randomStatusSet, randomKeySet]);
+  }, [mapsData, randomStatusSet, randomKeySet, randomPatternCanonicalSet]);
 
   const reshuffleRandom = useCallback(() => {
     if (randomPool.length === 0) {
@@ -446,12 +506,15 @@ function MapsPage() {
     const keyOk =
       randomKeySet.size === 0 ||
       (randomBeatmapset.maniaKeys ?? []).some((k) => randomKeySet.has(mapKeyBucket(k)));
-    if (!statusOk || !keyOk) reshuffleRandom();
-  }, [tab, selectedCountry, mapsData, reshuffleRandom, randomBeatmapset, randomStatusSet, randomKeySet]);
+    const patternOk =
+      !randomPatternCanonicalSet ||
+      (randomBeatmapset.patterns ?? []).some((p) => randomPatternCanonicalSet.has(p));
+    if (!statusOk || !keyOk || !patternOk) reshuffleRandom();
+  }, [tab, selectedCountry, mapsData, reshuffleRandom, randomBeatmapset, randomStatusSet, randomKeySet, randomPatternCanonicalSet]);
 
   const hasActiveFilters =
     tab === "random"
-      ? randomStatusSet.size > 0 || randomKeySet.size > 0
+      ? randomStatusSet.size > 0 || randomKeySet.size > 0 || randomPatternSet.size > 0
       : (
           searchQuery || keyFilter !== "all" || statusFilter !== "all" || ppFilter > 0 || modFilter !== "all" || beatmapSort !== "players" || farmedSort !== "players" || tab !== "farmed"
         );
@@ -558,6 +621,19 @@ function MapsPage() {
                     onClick={() => updateMapsSearch({ rKey: toggleCsv(rKeyRaw, k) })}
                   >
                     {k.toUpperCase()}
+                  </FilterPill>
+                ))}
+              </FilterGroup>
+
+              <FilterGroup label="Type">
+                {RANDOM_PATTERN_OPTIONS.map((p) => (
+                  <FilterPill
+                    key={p}
+                    active={randomPatternSet.has(p)}
+                    dimmed={randomPatternSet.size === 0}
+                    onClick={() => updateMapsSearch({ rPattern: toggleCsv(rPatternRaw, p) })}
+                  >
+                    {RANDOM_PATTERN_LABEL[p]}
                   </FilterPill>
                 ))}
               </FilterGroup>
@@ -1219,9 +1295,20 @@ function readStoredPreviewVolume(): number {
   }
 }
 
+function formatStars(bm: MapsFavouriteBeatmapset): string | null {
+  const min = typeof bm.starMin === "number" ? bm.starMin : 0;
+  const max = typeof bm.starMax === "number" ? bm.starMax : 0;
+  if (!max) return null;
+  const fmt = (v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2));
+  if (!min || Math.abs(max - min) < 0.05) return fmt(max);
+  return `${fmt(min)}–${fmt(max)}`;
+}
+
 function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const url = `https://osu.ppy.sh/beatmapsets/${bm.id}`;
   const keys = bm.maniaKeys ?? [];
+  const patterns = (bm.patterns ?? []).slice(0, 5);
+  const starLabel = formatStars(bm);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -1314,15 +1401,18 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         >
           {bm.status}
         </span>
-        {keys.length > 0 && (
-          <div className="absolute top-3 right-3 flex gap-1">
-            {keys.map((k) => (
-              <span key={k} className="px-1.5 py-0.5 rounded bg-black/60 text-[10px] font-bold text-white">
-                {k}K
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="absolute top-3 right-3 flex items-center gap-1">
+          {keys.map((k) => (
+            <span key={k} className="px-1.5 py-0.5 rounded bg-black/60 text-[10px] font-bold text-white">
+              {k}K
+            </span>
+          ))}
+          {starLabel && (
+            <span className="px-1.5 py-0.5 rounded bg-black/60 text-[10px] font-bold text-osu-yellow">
+              {"\u2605"}{starLabel}
+            </span>
+          )}
+        </div>
         <div className="absolute bottom-0 left-0 right-0 px-4 pb-3">
           <div className="text-[18px] font-semibold text-white truncate leading-tight drop-shadow-lg">{bm.title}</div>
           <div className="text-[13px] text-white/75 truncate leading-tight drop-shadow-lg">{bm.artist}</div>
@@ -1333,6 +1423,9 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         <div className="flex items-end justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[11px] text-osu-f1 truncate">mapped by {bm.creator}</div>
+            {bm.bpm > 0 && (
+              <div className="text-[10px] text-osu-f1/80 truncate">{Math.round(bm.bpm)} BPM</div>
+            )}
           </div>
           <div className="flex items-center gap-4 flex-shrink-0">
             <div className="flex items-center gap-1">
@@ -1346,21 +1439,42 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
           </div>
         </div>
 
+        {patterns.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {patterns.map((p) => (
+              <span
+                key={p}
+                className="px-2 py-0.5 rounded-full bg-osu-pink/15 border border-osu-pink/25 text-[10px] font-semibold text-osu-pink-light tracking-wide"
+              >
+                {MANIA_PATTERN_LABELS[p] ?? p}
+              </span>
+            ))}
+          </div>
+        )}
+
         {previewUrl ? (
           <div className="flex items-center gap-2">
             <button
               onClick={togglePreview}
               aria-label={isPreviewPlaying ? "Pause preview" : "Play preview"}
-              className="w-6 h-6 rounded-full bg-osu-pink/90 hover:bg-osu-pink transition-colors flex items-center justify-center cursor-pointer shrink-0"
+              className="w-8 h-8 rounded-full bg-osu-pink/90 hover:bg-osu-pink transition-colors flex items-center justify-center cursor-pointer shrink-0 shadow-sm shadow-osu-pink/30"
             >
               {isPreviewPlaying ? (
-                <svg viewBox="0 0 24 24" fill="white" className="w-3 h-3">
-                  <rect x="6" y="4" width="4" height="16" rx="1" />
-                  <rect x="14" y="4" width="4" height="16" rx="1" />
+                <svg viewBox="0 0 24 24" fill="white" className="w-[14px] h-[14px]">
+                  <rect x="6.5" y="5" width="4" height="14" rx="1.4" />
+                  <rect x="13.5" y="5" width="4" height="14" rx="1.4" />
                 </svg>
               ) : (
-                <svg viewBox="0 0 24 24" fill="white" className="w-3 h-3 ml-0.5">
-                  <path d="M8 5v14l11-7z" />
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="white"
+                  stroke="white"
+                  strokeWidth="2"
+                  strokeLinejoin="round"
+                  strokeLinecap="round"
+                  className="w-[14px] h-[14px]"
+                >
+                  <path d="M8 5L20 12L8 19Z" />
                 </svg>
               )}
             </button>

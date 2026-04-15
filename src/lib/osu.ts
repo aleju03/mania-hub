@@ -32,6 +32,7 @@ import {
   setPersistentCache,
 } from "./api";
 import { calculateApproxPpGainMap, calculateReplacementPpGain, getModAcronyms, getScoreDisplayValues, getScoreTimestamp, getScoreUrl } from "./score";
+import { detectManiaPatterns } from "./mania-patterns";
 import type {
   OsuUser,
   OsuScore,
@@ -54,7 +55,7 @@ import type {
 } from "./types";
 
 const MAPS_DATA_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 1 week
-const MAPS_DATA_CACHE_VERSION = 7;
+const MAPS_DATA_CACHE_VERSION = 8;
 const USER_FAVOURITES_PAGE_SIZE = 100;
 const USER_FAVOURITES_MAX_PAGES = 10;
 const FARMED_SINGLE_PLAYER_PP_MIN = 500;
@@ -1159,22 +1160,31 @@ async function buildCountryMapsData(users: MapsUser[]): Promise<CountryMapsData>
         .sort((a, b) => b.playerCount - a.playerCount || b.totalPlays - a.totalPlays)
         .slice(0, 200);
 
-      // ── Favourites ───────────────────────────────────────────────
+      // ── Favourites (mania-only) ──────────────────────────────────
       const favMap = new Map<number, MapsAggregatedFavourite>();
       const beatmapsetsPool: Record<number, MapsFavouriteBeatmapset> = {};
       const favouritesByPlayer: MapsPlayerFavourites[] = [];
       for (const { user, favourites } of userResults) {
         const playerIds: number[] = [];
         for (const fav of favourites) {
+          const maniaBeatmaps = (fav.beatmaps ?? []).filter((bm) => bm.mode === "mania");
+          if (maniaBeatmaps.length === 0) continue;
+
           playerIds.push(fav.id);
 
           if (!beatmapsetsPool[fav.id]) {
             const maniaKeysSet = new Set<number>();
-            for (const bm of fav.beatmaps ?? []) {
-              if (bm.mode === "mania" && typeof bm.cs === "number") {
-                maniaKeysSet.add(bm.cs);
-              }
+            for (const bm of maniaBeatmaps) {
+              if (typeof bm.cs === "number") maniaKeysSet.add(bm.cs);
             }
+            const stars = maniaBeatmaps
+              .map((bm) => bm.difficulty_rating)
+              .filter((s): s is number => typeof s === "number" && Number.isFinite(s));
+            const starMin = stars.length ? Math.min(...stars) : 0;
+            const starMax = stars.length ? Math.max(...stars) : 0;
+            const versionNames = maniaBeatmaps.map((bm) => bm.version ?? "");
+            const patterns = detectManiaPatterns(fav.tags ?? "", versionNames);
+
             beatmapsetsPool[fav.id] = {
               id: fav.id,
               title: fav.title,
@@ -1186,6 +1196,10 @@ async function buildCountryMapsData(users: MapsUser[]): Promise<CountryMapsData>
               globalFavouriteCount: fav.favourite_count,
               previewUrl: fav.preview_url,
               maniaKeys: [...maniaKeysSet].sort((a, b) => a - b),
+              starMin,
+              starMax,
+              bpm: typeof fav.bpm === "number" ? fav.bpm : 0,
+              patterns,
             };
           }
 
