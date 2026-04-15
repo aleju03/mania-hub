@@ -132,6 +132,7 @@ interface ReplayRendererLike {
   seek: (timeMs: number) => void;
   setBackgroundDim: (value: number) => void;
   setBackgroundImage: (image: HTMLImageElement | null) => void;
+  setExternalClock: (cb: (() => { time: number; stalled: boolean } | null) | null) => void;
   setScrollSpeed: (value: number) => void;
   setShowInputOverlay: (value: boolean) => void;
   setSkin: (skin: ManiaSkin | null) => void;
@@ -772,9 +773,15 @@ function ReplayViewer({
   const [audioError, setAudioError] = useState<string | null>(null);
   const [audioReady, setAudioReady] = useState(false);
   const [pendingPlay, setPendingPlay] = useState(false);
+  const [buffering, setBuffering] = useState(false);
   const [bgSrc, setBgSrc] = useState<string | null>(null);
   const scrubbingRef = useRef(false);
   const scrubResumeOnReleaseRef = useRef(false);
+  // Refs mirror state for the renderer's external clock callback so it always
+  // reads the latest values without needing to be re-registered on every
+  // React re-render.
+  const audioEnabledRef = useRef(true);
+  const audioUrlActiveRef = useRef(false);
   const [skin, setSkin] = useState<ManiaSkin | null>(null);
   const [skinLoading, setSkinLoading] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -838,8 +845,14 @@ function ReplayViewer({
   useEffect(() => {
     setAudioError(null);
     setAudioReady(false);
+    setBuffering(false);
     shouldResumeAudioRef.current = false;
+    audioUrlActiveRef.current = !!audioUrl;
   }, [audioUrl]);
+
+  useEffect(() => {
+    audioEnabledRef.current = audioEnabled;
+  }, [audioEnabled]);
 
   useEffect(() => {
     if (rendererRef.current) {
@@ -891,6 +904,22 @@ function ReplayViewer({
       ) as ReplayRendererLike;
 
       rendererRef.current = renderer;
+
+      // Install the audio-driven clock. When audio is enabled and actually
+      // making sound, the renderer derives currentTime from audio.currentTime
+      // (i.e. audio is the master). When audio is seeking/buffering we
+      // freeze the renderer so it can't drift ahead of the song. When audio
+      // is disabled we return null and the renderer falls back to wall clock.
+      renderer.setExternalClock(() => {
+        if (!audioEnabledRef.current || !audioUrlActiveRef.current) return null;
+        const audio = audioRef.current;
+        if (!audio) return null;
+        const stalled =
+          audio.paused ||
+          audio.seeking ||
+          audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA;
+        return { time: audio.currentTime * 1000, stalled };
+      });
 
       if (skin) renderer.setSkin(skin);
       if (initialTime != null && initialTime > 0) {
@@ -966,41 +995,21 @@ function ReplayViewer({
     await removeSkinFromIDB();
   };
 
-  // Progress polling + audio drift correction
+  // Progress polling. Audio is the master clock (see setExternalClock in the
+  // renderer creation effect), so no drift correction is needed here — we
+  // just read r.time to keep the slider up to date.
   useEffect(() => {
     if (progressInterval.current) clearInterval(progressInterval.current);
     if (isPlaying) {
-      let syncCounter = 0;
       progressInterval.current = setInterval(() => {
         const r = rendererRef.current;
         if (!r) return;
         setProgress(r.time / r.duration);
         if (!r.isPlaying) setIsPlaying(false);
-
-        // Re-sync audio every ~2s if drifted more than 200ms.
-        // Skip while the tab is hidden: rAF is paused so renderer.time is frozen,
-        // but audio keeps playing normally — correcting here would yank audio
-        // back to the frozen renderer time. When the tab returns, the next rAF
-        // tick advances renderer.time by the elapsed wall clock, which matches
-        // where the audio has played to, so both stay in sync automatically.
-        syncCounter++;
-        if (
-          syncCounter >= 40 &&
-          audioRef.current &&
-          audioEnabled &&
-          !audioRef.current.paused &&
-          (typeof document === "undefined" || document.visibilityState === "visible")
-        ) {
-          syncCounter = 0;
-          const drift = Math.abs(audioRef.current.currentTime - r.time / 1000);
-          if (drift > 0.2) {
-            audioRef.current.currentTime = r.time / 1000;
-          }
-        }
       }, 50);
     }
     return () => { if (progressInterval.current) clearInterval(progressInterval.current); };
-  }, [isPlaying, audioEnabled]);
+  }, [isPlaying]);
 
   // Sync audio with replay play/pause/seek
   useEffect(() => {
@@ -1039,7 +1048,8 @@ function ReplayViewer({
     if (!audio) return;
 
     const resumeAudioIfNeeded = () => {
-      if (!audioEnabled || !isPlaying || !shouldResumeAudioRef.current) return;
+      if (!audioEnabled || !isPlaying) return;
+      if (!audio.paused) return;
       if (audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
       shouldResumeAudioRef.current = false;
       audio.playbackRate = effectiveRate;
@@ -1049,25 +1059,76 @@ function ReplayViewer({
       });
     };
 
-    const handleCanPlay = () => resumeAudioIfNeeded();
-    const handleSeeked = () => resumeAudioIfNeeded();
-    const handleLoadedData = () => resumeAudioIfNeeded();
-    const handleLoadedMetadata = () => setAudioReady(true);
+    const updateBuffering = () => {
+      if (!isPlaying || !audioEnabled) {
+        setBuffering(false);
+        return;
+      }
+      setBuffering(
+        audio.paused ||
+          audio.seeking ||
+          audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA,
+      );
+    };
+
+    const handleCanPlay = () => { resumeAudioIfNeeded(); updateBuffering(); };
+    const handleCanPlayThrough = () => { resumeAudioIfNeeded(); updateBuffering(); };
+    const handleSeeked = () => { resumeAudioIfNeeded(); updateBuffering(); };
+    const handleLoadedData = () => { resumeAudioIfNeeded(); updateBuffering(); };
+    const handleLoadedMetadata = () => { setAudioReady(true); updateBuffering(); };
+    const handlePlaying = () => updateBuffering();
+    const handleWaiting = () => updateBuffering();
+    const handleStalled = () => updateBuffering();
+    const handleSeeking = () => updateBuffering();
+    // We deliberately don't try to auto-resume from the "pause" event — user
+    // pauses (togglePlay, scrub) fire this synchronously, and resuming here
+    // would immediately undo them. Browser-initiated background-tab pauses
+    // are picked up by the visibilitychange handler below instead.
+    const handlePause = () => updateBuffering();
 
     audio.addEventListener("canplay", handleCanPlay);
+    audio.addEventListener("canplaythrough", handleCanPlayThrough);
     audio.addEventListener("seeked", handleSeeked);
     audio.addEventListener("loadeddata", handleLoadedData);
     audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+    audio.addEventListener("playing", handlePlaying);
+    audio.addEventListener("waiting", handleWaiting);
+    audio.addEventListener("stalled", handleStalled);
+    audio.addEventListener("seeking", handleSeeking);
+    audio.addEventListener("pause", handlePause);
 
     if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) setAudioReady(true);
+    updateBuffering();
+
+    // When the tab becomes visible again, some browsers leave the audio
+    // paused. Resume it so the renderer (which waits on the audio clock)
+    // can start advancing again.
+    const handleVisibility = () => {
+      if (typeof document === "undefined") return;
+      if (document.visibilityState !== "visible") return;
+      resumeAudioIfNeeded();
+      updateBuffering();
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibility);
+    }
 
     return () => {
       audio.removeEventListener("canplay", handleCanPlay);
+      audio.removeEventListener("canplaythrough", handleCanPlayThrough);
       audio.removeEventListener("seeked", handleSeeked);
       audio.removeEventListener("loadeddata", handleLoadedData);
       audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+      audio.removeEventListener("playing", handlePlaying);
+      audio.removeEventListener("waiting", handleWaiting);
+      audio.removeEventListener("stalled", handleStalled);
+      audio.removeEventListener("seeking", handleSeeking);
+      audio.removeEventListener("pause", handlePause);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibility);
+      }
     };
-  }, [audioEnabled, isPlaying, speed, volume, audioUrl]);
+  }, [audioEnabled, isPlaying, effectiveRate, volume, audioUrl]);
 
   // Sync audio time on seek — pause first to force re-buffer, then resume
   const syncAudioTime = (timeMs: number) => {
@@ -1320,10 +1381,10 @@ function ReplayViewer({
           {/* Play/Pause */}
           <button
             onClick={togglePlay}
-            title={pendingPlay ? "Waiting for audio to load..." : undefined}
+            title={pendingPlay ? "Waiting for audio to load..." : isPlaying && buffering ? "Buffering..." : undefined}
             className="w-9 h-9 rounded-full bg-osu-pink hover:bg-osu-pink-light transition-colors flex items-center justify-center cursor-pointer shrink-0"
           >
-            {pendingPlay ? (
+            {pendingPlay || (isPlaying && buffering) ? (
               <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" className="w-4 h-4 animate-spin">
                 <path d="M12 2a10 10 0 0 1 10 10" />
               </svg>
