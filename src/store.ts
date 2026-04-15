@@ -22,6 +22,19 @@ export const AVATAR_ACCENT_CLIENT_TTL = 24 * 60 * 60 * 1000;
 export const AVATAR_ACCENT_FAILURE_TTL = 5 * 60 * 1000;
 export const TRACKER_PP_GAIN_CLIENT_TTL = 10 * 60 * 1000;
 export const TOP_PLAYS_RANGE_STORAGE_KEY = "mania-hub-top-plays-range-v1";
+export const DEFAULT_THEME_HUE = 333;
+
+function applyThemeHueToDom(hue: number): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.style.setProperty("--theme-hue", String(hue));
+}
+
+function clampThemeHue(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_THEME_HUE;
+  const rounded = Math.round(n);
+  return ((rounded % 360) + 360) % 360;
+}
 
 export interface CachedPlayer {
   id: number;
@@ -49,6 +62,7 @@ type CountryRecord<T> = Record<string, T>;
 
 interface AppState {
   selectedCountry: string;
+  themeHue: number;
   avatarAccents: Record<string, CachedAvatarAccent>;
   rankingsByCountry: CountryRecord<RankingsResponse>;
   rankingsFetchedAtByCountry: CountryRecord<number>;
@@ -70,6 +84,8 @@ interface AppState {
   trackedUserIdsFetchedAtByCountry: CountryRecord<number>;
   pollIndexByCountry: CountryRecord<number>;
   setSelectedCountry: (country: string) => void;
+  setThemeHue: (hue: number) => void;
+  resetThemeHue: () => void;
   setAvatarAccents: (accents: Record<string, string | null>, fetchedAt?: number) => void;
   setRankings: (country: string, rankings: RankingsResponse) => void;
   setRankHistories: (histories: Record<number, number[]>) => void;
@@ -209,6 +225,7 @@ export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       selectedCountry: initialClientCountry ?? DEFAULT_COUNTRY_CODE,
+      themeHue: DEFAULT_THEME_HUE,
       avatarAccents: {},
       rankingsByCountry: {},
       rankingsFetchedAtByCountry: {},
@@ -233,6 +250,15 @@ export const useAppStore = create<AppState>()(
         const normalized = normalizeCountryCode(country);
         writeCountryCookieClient(normalized);
         set({ selectedCountry: normalized });
+      },
+      setThemeHue: (hue) => {
+        const clamped = clampThemeHue(hue);
+        applyThemeHueToDom(clamped);
+        set({ themeHue: clamped });
+      },
+      resetThemeHue: () => {
+        applyThemeHueToDom(DEFAULT_THEME_HUE);
+        set({ themeHue: DEFAULT_THEME_HUE });
       },
       setAvatarAccents: (accents, fetchedAt = Date.now()) =>
         set((state) => ({
@@ -478,6 +504,7 @@ export const useAppStore = create<AppState>()(
           // If the user changed country before persist hydration finished, do not clobber
           // that live selection with the older value from storage.
           selectedCountry,
+          themeHue: clampThemeHue(nextState.themeHue ?? currentState.themeHue),
           avatarAccents: Object.fromEntries(
             Object.entries(
               nextState.avatarAccents && typeof nextState.avatarAccents === "object"
@@ -521,6 +548,7 @@ export const useAppStore = create<AppState>()(
       },
       partialize: (state) => ({
         selectedCountry: state.selectedCountry,
+        themeHue: state.themeHue,
         avatarAccents: state.avatarAccents,
         rankingsByCountry: state.rankingsByCountry,
         rankingsFetchedAtByCountry: state.rankingsFetchedAtByCountry,
@@ -557,10 +585,17 @@ if (typeof window !== "undefined") {
       writeCountryCookieClient(current);
     }
   };
+  const syncThemeHueToDom = () => {
+    applyThemeHueToDom(useAppStore.getState().themeHue);
+  };
   if (useAppStore.persist.hasHydrated()) {
     syncCookieToStore();
+    syncThemeHueToDom();
   } else {
-    useAppStore.persist.onFinishHydration(syncCookieToStore);
+    useAppStore.persist.onFinishHydration(() => {
+      syncCookieToStore();
+      syncThemeHueToDom();
+    });
   }
 }
 

@@ -1265,15 +1265,15 @@ function RankHeroCard({
         >
           <defs>
             <linearGradient id="rankHeroGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="hsl(333,100%,70%)" stopOpacity="0.28" />
-              <stop offset="100%" stopColor="hsl(333,100%,70%)" stopOpacity="0" />
+              <stop offset="0%" style={{ stopColor: "hsl(var(--theme-hue),100%,70%)", stopOpacity: 0.28 }} />
+              <stop offset="100%" style={{ stopColor: "hsl(var(--theme-hue),100%,70%)", stopOpacity: 0 }} />
             </linearGradient>
           </defs>
           <polygon points={`0,${h} ${points} ${w},${h}`} fill="url(#rankHeroGrad)" />
           <polyline
             points={points}
             fill="none"
-            stroke="hsl(333,100%,70%)"
+            style={{ stroke: "hsl(var(--theme-hue),100%,70%)" }}
             strokeWidth="2"
             strokeOpacity="0.85"
             vectorEffect="non-scaling-stroke"

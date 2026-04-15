@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { SearchInput } from "../ui/SearchInput";
 import { CountrySelector } from "./CountrySelector";
+import { ThemePicker } from "./ThemePicker";
 import { clearDevServerCaches } from "../../lib/api";
 import { searchUsers } from "../../lib/osu";
 import { TOP_PLAYS_RANGE_STORAGE_KEY, useAppStore, useSelectedCountry } from "../../store";
@@ -113,14 +114,11 @@ export function Nav() {
           src="/images/layout/nav2-background-hue0.png"
           alt=""
           className="absolute inset-0 w-full h-full object-cover opacity-60"
-          style={{ filter: "hue-rotate(333deg) saturate(0.8)" }}
+          style={{ filter: "hue-rotate(calc(var(--theme-hue) * 1deg)) saturate(0.8)" }}
         />
       </div>
       <div className="absolute inset-0 bg-[#111]/70" />
-      <div
-        className="absolute bottom-0 left-0 right-0 h-px"
-        style={{ background: "hsl(333,100%,70%,0.2)" }}
-      />
+      <div className="absolute bottom-0 left-0 right-0 h-px bg-osu-pink/20" />
       <nav className="relative flex items-center justify-between h-[60px] px-4 sm:px-5 max-w-[1200px] mx-auto">
         <div className="flex items-center gap-1">
           <motion.div
@@ -233,6 +231,7 @@ export function Nav() {
             onSearch={handleSearch}
             onSelect={(u) => navigate({ to: "/player/$username", params: { username: u.username } })}
           />
+          <ThemePicker />
         </div>
 
         {/* Mobile hamburger button */}
@@ -276,8 +275,9 @@ export function Nav() {
         aria-hidden={!menuOpen}
       >
               <div className="py-2">
-                <div className="px-4 pb-3">
+                <div className="px-4 pb-3 space-y-2">
                   <CountrySelector className="w-full" />
+                  <ThemePicker variant="mobile" />
                 </div>
                 {links.map((l) => (
                   <Link
