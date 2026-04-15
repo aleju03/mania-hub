@@ -13,8 +13,14 @@ export interface CachedAvatarAccent {
   value: string | null;
 }
 
+export interface CachedScoreGain {
+  fetchedAt: number;
+  value: number;
+}
+
 export const AVATAR_ACCENT_CLIENT_TTL = 24 * 60 * 60 * 1000;
 export const AVATAR_ACCENT_FAILURE_TTL = 5 * 60 * 1000;
+export const TRACKER_PP_GAIN_CLIENT_TTL = 10 * 60 * 1000;
 export const TOP_PLAYS_RANGE_STORAGE_KEY = "mania-hub-top-plays-range-v1";
 
 export interface CachedPlayer {
@@ -59,6 +65,7 @@ interface AppState {
   mapsDataFetchedAtByCountry: CountryRecord<number>;
   feedScoresByCountry: CountryRecord<OsuScore[]>;
   feedScoresFetchedAtByCountry: CountryRecord<number>;
+  trackerPpGainsByCountry: CountryRecord<Record<number, CachedScoreGain>>;
   trackedUserIdsByCountry: CountryRecord<number[]>;
   trackedUserIdsFetchedAtByCountry: CountryRecord<number>;
   pollIndexByCountry: CountryRecord<number>;
@@ -73,6 +80,7 @@ interface AppState {
   setMapsData: (country: string, data: CountryMapsData) => void;
   addFeedScores: (country: string, scores: OsuScore[]) => void;
   markFeedScoresFetched: (country: string) => void;
+  setTrackerPpGains: (country: string, gains: Record<number, number>, fetchedAt?: number) => void;
   setTrackedUserIds: (country: string, ids: number[]) => void;
   nextPollIndex: (country: string) => void;
   resetPollIndex: (country: string) => void;
@@ -217,6 +225,7 @@ export const useAppStore = create<AppState>()(
       mapsDataFetchedAtByCountry: {},
       feedScoresByCountry: {},
       feedScoresFetchedAtByCountry: {},
+      trackerPpGainsByCountry: {},
       trackedUserIdsByCountry: {},
       trackedUserIdsFetchedAtByCountry: {},
       pollIndexByCountry: {},
@@ -370,6 +379,31 @@ export const useAppStore = create<AppState>()(
             },
           };
         }),
+      setTrackerPpGains: (country, gains, fetchedAt = Date.now()) =>
+        set((state) => {
+          const normalizedCountry = normalizeCountryCode(country);
+          const currentEntries = state.trackerPpGainsByCountry[normalizedCountry] ?? {};
+          const mergedEntries = {
+            ...currentEntries,
+            ...Object.fromEntries(
+              Object.entries(gains)
+                .filter(([, value]) => Number.isFinite(value))
+                .map(([scoreId, value]) => [Number(scoreId), { value, fetchedAt }]),
+            ),
+          };
+          const trimmedEntries = Object.fromEntries(
+            Object.entries(mergedEntries)
+              .sort((a, b) => b[1].fetchedAt - a[1].fetchedAt)
+              .slice(0, 300),
+          ) as Record<number, CachedScoreGain>;
+
+          return {
+            trackerPpGainsByCountry: {
+              ...state.trackerPpGainsByCountry,
+              [normalizedCountry]: trimmedEntries,
+            },
+          };
+        }),
       setTrackedUserIds: (country, ids) =>
         set((state) => {
           const normalizedCountry = normalizeCountryCode(country);
@@ -464,6 +498,25 @@ export const useAppStore = create<AppState>()(
           popoffsFetchedAtByCountry: Object.fromEntries(
             persistedPopoffsFetchedAtEntries.map(([country, fetchedAt]) => [country, Number(fetchedAt)]),
           ) as CountryRecord<number>,
+          trackerPpGainsByCountry: Object.fromEntries(
+            Object.entries(
+              nextState.trackerPpGainsByCountry && typeof nextState.trackerPpGainsByCountry === "object"
+                ? nextState.trackerPpGainsByCountry
+                : {},
+            ).map(([country, entries]) => [
+              country,
+              Object.fromEntries(
+                Object.entries(entries && typeof entries === "object" ? entries : {}).filter(([, entry]) => {
+                  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
+                  const fetchedAt = (entry as CachedScoreGain).fetchedAt;
+                  const value = (entry as CachedScoreGain).value;
+                  return Number.isFinite(fetchedAt) &&
+                    Number.isFinite(value) &&
+                    Date.now() - fetchedAt < TRACKER_PP_GAIN_CLIENT_TTL;
+                }),
+              ),
+            ]),
+          ) as CountryRecord<Record<number, CachedScoreGain>>,
         };
       },
       partialize: (state) => ({
@@ -479,6 +532,7 @@ export const useAppStore = create<AppState>()(
         homePopoffsFetchedAtByCountry: state.homePopoffsFetchedAtByCountry,
         popoffsByCountry: state.popoffsByCountry,
         popoffsFetchedAtByCountry: state.popoffsFetchedAtByCountry,
+        trackerPpGainsByCountry: state.trackerPpGainsByCountry,
         // mapsDataByCountry and feedScoresByCountry are intentionally NOT
         // persisted. Both can balloon past the ~5MB localStorage quota once
         // more than a country or two accumulates (the maps beatmapset pool

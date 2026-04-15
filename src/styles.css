@@ -101,6 +101,23 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 .bbcode-content .bbcode--profile-page { padding: 0; }
 .bbcode-content .bbcode--profile-page:first-child > *:first-child { margin-top: 0; }
 .bbcode-content .bbcode--profile-page:last-child > *:last-child { margin-bottom: 0; }
+.bbcode-content .imagemap { position: relative; overflow: hidden; max-width: max-content; margin: 0.25em 0; }
+.bbcode-content .imagemap__image {
+  display: block;
+  width: auto !important;
+  height: auto;
+  max-width: 100%;
+  max-height: none;
+  border-radius: 0;
+  margin: 0;
+  object-fit: contain;
+}
+.bbcode-content .imagemap__link { display: block; position: absolute; }
+.bbcode-content a.imagemap__link { cursor: pointer; }
+.bbcode-content a.imagemap__link:focus-visible {
+  outline: 2px solid var(--color-osu-pink);
+  outline-offset: -2px;
+}
 
 /* Spoilerbox toggle (osu! BBCode [box]/[spoilerbox]) */
 .bbcode-content .js-spoilerbox { margin: 0.5em 0; }
@@ -126,4 +143,3 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 }
 .bbcode-content .js-spoilerbox__body { display: none; margin-top: 0.5rem; padding-left: 0.5rem; border-left: 2px solid var(--color-osu-b3); }
 .bbcode-content .js-spoilerbox.is-open > .js-spoilerbox__body { display: block; }
-

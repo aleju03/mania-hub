@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getScoreDisplayValues, isLazerScore } from "./score";
+import { calculateReplacementPpGain, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getScoreDisplayValues, isLazerScore } from "./score";
 import type { OsuScore } from "./types";
 
 function createScore(overrides: Partial<OsuScore>): OsuScore {
@@ -212,5 +212,31 @@ describe("getScoreDisplayValues", () => {
       expect(getDisplayedTotalScore(score)).toBe(expectedTotalScore);
       expect(isLazerScore(score)).toBe(expectedIsLazer);
     });
+  });
+});
+
+describe("calculateReplacementPpGain", () => {
+  it("measures the incremental gain from replacing a previous best on the same map", () => {
+    const bestScores = [
+      createScore({ id: 1, pp: 700 }),
+      createScore({ id: 2, pp: 650 }),
+      createScore({ id: 3, pp: 600 }),
+    ];
+
+    const gain = calculateReplacementPpGain(bestScores, 2, createScore({ id: 20, pp: 649 }));
+
+    expect(gain).toBeCloseTo(0.95, 6);
+  });
+
+  it("falls back to the score-removal delta when the play had no previous ranked score", () => {
+    const bestScores = [
+      createScore({ id: 1, pp: 700 }),
+      createScore({ id: 2, pp: 650 }),
+      createScore({ id: 3, pp: 600 }),
+    ];
+
+    const gain = calculateReplacementPpGain(bestScores, 2, null);
+
+    expect(gain).toBeCloseTo(589, 6);
   });
 });

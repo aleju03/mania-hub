@@ -213,15 +213,27 @@ export function getScoreUrl(score: OsuScore): string | null {
   return `https://osu.ppy.sh/scores/${ruleset}/${score.id}`;
 }
 
+type WeightedPpScore = Pick<OsuScore, "pp"> & Partial<Pick<OsuScore, "id">>;
+
+function sortWeightedPpScores(scores: WeightedPpScore[]): WeightedPpScore[] {
+  return [...scores]
+    .filter((score) => score.pp != null && score.pp > 0)
+    .sort((a, b) => {
+      const ppDiff = (b.pp ?? 0) - (a.pp ?? 0);
+      if (ppDiff !== 0) return ppDiff;
+      return (a.id ?? 0) - (b.id ?? 0);
+    });
+}
+
 export function calculateWeightedPpTotal(scores: Array<Pick<OsuScore, "pp">>): number {
-  return scores.reduce((total, score, index) => {
+  return sortWeightedPpScores(scores as WeightedPpScore[]).reduce((total, score, index) => {
     const pp = score.pp ?? 0;
     return total + pp * PP_WEIGHT_DECAY ** index;
   }, 0);
 }
 
 export function calculateApproxPpGainMap(bestScores: OsuScore[]): Record<number, number> {
-  const rankedBestScores = bestScores.filter((score) => score.pp != null && score.pp > 0);
+  const rankedBestScores = sortWeightedPpScores(bestScores);
   const weightedWithAll = calculateWeightedPpTotal(rankedBestScores);
   const gains: Record<number, number> = {};
 
@@ -236,4 +248,31 @@ export function calculateApproxPpGainMap(bestScores: OsuScore[]): Record<number,
   });
 
   return gains;
+}
+
+export function calculateReplacementPpGain(
+  bestScores: WeightedPpScore[],
+  currentScoreId: number,
+  previousScore: WeightedPpScore | null,
+): number {
+  const rankedBestScores = sortWeightedPpScores(bestScores);
+  if (!rankedBestScores.some((score) => score.id === currentScoreId)) {
+    return 0;
+  }
+
+  const weightedWithAll = calculateWeightedPpTotal(rankedBestScores);
+  const hypotheticalScores = rankedBestScores.filter((score) => score.id !== currentScoreId);
+
+  if (
+    previousScore &&
+    previousScore.id !== currentScoreId &&
+    previousScore.pp != null &&
+    previousScore.pp > 0
+  ) {
+    hypotheticalScores.push(previousScore);
+  }
+
+  const weightedWithPrevious = calculateWeightedPpTotal(hypotheticalScores);
+  const gain = weightedWithAll - weightedWithPrevious;
+  return gain > 0 ? gain : 0;
 }

@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
-import sanitizeHtml from "sanitize-html";
+import { sanitizeProfilePageHtml } from "./profile-page";
 
 function edgeCache(sMaxage: number, swr?: number): void {
   const effectiveSwr = swr ?? sMaxage * 4;
@@ -8,6 +8,16 @@ function edgeCache(sMaxage: number, swr?: number): void {
     "Cache-Control",
     `public, s-maxage=${sMaxage}, stale-while-revalidate=${effectiveSwr}`,
   );
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
 }
 import {
   osuFetch,
@@ -21,7 +31,7 @@ import {
   getPersistentCached,
   setPersistentCache,
 } from "./api";
-import { calculateApproxPpGainMap, getModAcronyms, getScoreDisplayValues, getScoreTimestamp, getScoreUrl } from "./score";
+import { calculateApproxPpGainMap, calculateReplacementPpGain, getModAcronyms, getScoreDisplayValues, getScoreTimestamp, getScoreUrl } from "./score";
 import type {
   OsuUser,
   OsuScore,
@@ -53,10 +63,10 @@ const USER_FAVOURITES_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
 const MAPS_FETCH_CONCURRENCY = 6;
 const RANKINGS_CACHE_TTL = 5 * 60 * 1000;
 const RANK_HISTORY_CACHE_TTL = 24 * 60 * 60 * 1000;
-const APPROX_PP_GAINS_CACHE_TTL = 10 * 60 * 1000;
 const BEST_SCORES_WINDOW_CACHE_TTL = 2 * 60 * 1000;
 const COUNTRY_BEATMAP_SCORES_CACHE_TTL = 2 * 60 * 1000;
 const COUNTRY_BEATMAP_USER_SCORE_CACHE_TTL = 10 * 60 * 1000;
+const BEATMAP_USER_SCORES_ALL_CACHE_TTL = 10 * 60 * 1000;
 const COUNTRY_BEATMAP_LOOKUP_CONCURRENCY = 10;
 const COUNTRY_BEATMAP_PLAYER_PAGE_LIMIT = 2; // Match the rest of the app's top-100 country player scope.
 const USER_PROFILE_INSIGHTS_CACHE_TTL = 6 * 60 * 60 * 1000;
@@ -88,6 +98,22 @@ interface BeatmapUserScoreResponse {
   score?: OsuScore | null;
 }
 
+interface BeatmapUserScoresResponse {
+  scores?: OsuScore[] | null;
+}
+
+interface ScorePpGainLookup {
+  beatmapId: number;
+  scoreId: number;
+  timestamp: string;
+  userId: number;
+}
+
+interface CountryRecentScoresResponse {
+  gains: Record<number, number>;
+  scores: OsuScore[];
+}
+
 function getScoreRequestParams(
   userId: number,
   params: Record<string, string | number | undefined>,
@@ -102,63 +128,6 @@ const USER_CACHE_VERSION = 4;
 
 function getUserCacheKey(key: string): string {
   return `user:v${USER_CACHE_VERSION}:${key.trim().toLowerCase()}`;
-}
-
-const PROFILE_PAGE_SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
-  allowedTags: [
-    "a", "b", "br", "blockquote", "center", "code", "del", "div", "em", "h1",
-    "h2", "h3", "h4", "h5", "h6", "hr", "i", "img", "li", "ol", "p", "pre",
-    "s", "span", "strike", "strong", "u", "ul",
-  ],
-  allowedAttributes: {
-    a: ["href", "title", "rel", "target", "class"],
-    img: ["src", "alt", "title", "width", "height", "class", "loading", "style"],
-    span: ["class", "style"],
-    div: ["class", "style"],
-    "*": ["class"],
-  },
-  allowedStyles: {
-    "*": {
-      color: [/^#(0x)?[0-9a-f]+$/i, /^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/],
-      "text-align": [/^left$/, /^right$/, /^center$/, /^justify$/],
-      "font-size": [/^\d+(\.\d+)?(%|px|em|rem|pt)$/],
-      width: [/^\d+(\.\d+)?(px|%|em|rem)$/],
-      "max-width": [/^\d+(\.\d+)?(px|%|em|rem)$/],
-      "aspect-ratio": [/^[\d.\s/]+$/],
-    },
-  },
-  allowedSchemes: ["http", "https", "mailto"],
-  transformTags: {
-    a: (tagName, attribs) => {
-      // Spoilerbox toggle links: strip href/target entirely. Without href, the
-      // browser cannot navigate, even if our React click handler hasn't mounted
-      // yet. Our JS handles the toggle via the preserved classes.
-      const cls = typeof attribs.class === "string" ? attribs.class : "";
-      if (cls.includes("js-spoilerbox__link")) {
-        const { href: _href, target: _target, ...rest } = attribs;
-        void _href; void _target;
-        return { tagName, attribs: rest };
-      }
-      // Raw "#" links (rare, not spoilerbox): leave as-is so they don't open
-      // "#" in a new tab.
-      if (attribs.href === "#") return { tagName, attribs };
-      // External links: open in new tab.
-      return {
-        tagName,
-        attribs: {
-          ...attribs,
-          target: "_blank",
-          rel: "noopener noreferrer nofollow",
-        },
-      };
-    },
-  },
-};
-
-function sanitizeProfilePageHtml(html: string | null | undefined): string | null {
-  if (!html) return null;
-  const cleaned = sanitizeHtml(html, PROFILE_PAGE_SANITIZE_OPTIONS);
-  return cleaned.trim() || null;
 }
 
 function getUserScoreListCacheKey(
@@ -325,20 +294,6 @@ export const getUserScoresPinned = createServerFn({ method: "GET" })
     });
   });
 
-export const getUserApproxPpGains = createServerFn({ method: "GET" })
-  .inputValidator((data: { userId: number }) => data)
-  .handler(async ({ data }: { data: { userId: number } }) => {
-    edgeCache(300, 1800);
-    return getApproxPpGainsForUser(data.userId);
-  });
-
-async function getApproxPpGainsForUser(userId: number): Promise<Record<number, number>> {
-  const cacheKey = `pp-gains:${userId}`;
-  return fetchWithCacheLock(cacheKey, APPROX_PP_GAINS_CACHE_TTL, async () =>
-    calculateApproxPpGainMap(await fetchUserBestScoresWindow(userId, 200)),
-  );
-}
-
 function getTopCountEntry(counts: Map<string, number>, total: number): { label: string; count: number; total: number } | null {
   const entries = [...counts.entries()];
   if (!entries.length) return null;
@@ -484,6 +439,94 @@ async function fetchUserBestScoresWindow(userId: number, totalLimit = 200): Prom
   return request;
 }
 
+async function getBeatmapUserScoresAll(beatmapId: number, userId: number): Promise<OsuScore[]> {
+  const cacheKey = `beatmap-user-scores-all:${beatmapId}:${userId}`;
+  return fetchWithCacheLock(cacheKey, BEATMAP_USER_SCORES_ALL_CACHE_TTL, async () => {
+    const response = await osuFetch<BeatmapUserScoresResponse>(
+      `/beatmaps/${beatmapId}/scores/users/${userId}/all`,
+      getScoreRequestParams(userId, {
+        ruleset: "mania",
+      }),
+    );
+    return response.scores ?? [];
+  });
+}
+
+function getPreviousBeatmapBestScore(scores: OsuScore[], target: ScorePpGainLookup): OsuScore | null {
+  const targetTimestampMs = new Date(target.timestamp).getTime();
+  if (!Number.isFinite(targetTimestampMs) || targetTimestampMs <= 0) return null;
+
+  const olderScores = scores
+    .filter((score) => score.id !== target.scoreId)
+    .filter((score) => {
+      const timestampMs = getTimestampMs(score);
+      return Number.isFinite(timestampMs) && timestampMs > 0 && timestampMs < targetTimestampMs;
+    })
+    .filter((score) => score.pp != null && score.pp > 0);
+
+  if (olderScores.length === 0) return null;
+
+  olderScores.sort((a, b) => {
+    const ppDiff = (b.pp ?? 0) - (a.pp ?? 0);
+    if (ppDiff !== 0) return ppDiff;
+    return getTimestampMs(b) - getTimestampMs(a);
+  });
+
+  return olderScores[0];
+}
+
+async function calculateReplacementPpGainMapForTargets(
+  bestScores: OsuScore[],
+  targets: ScorePpGainLookup[],
+): Promise<Record<number, number>> {
+  const bestScoreById = new Map(
+    bestScores
+      .filter((score) => score.id > 0 && score.pp != null && score.pp > 0)
+      .map((score) => [score.id, score]),
+  );
+  const fallbackGainMap = calculateApproxPpGainMap(bestScores);
+  const relevantTargets = targets.filter((target) => bestScoreById.has(target.scoreId));
+  if (relevantTargets.length === 0) return {};
+
+  const previousScores = await mapWithConcurrency(
+    relevantTargets,
+    APPROX_PP_GAINS_CONCURRENCY,
+    async (target) => {
+      try {
+        const history = await getBeatmapUserScoresAll(target.beatmapId, target.userId);
+        return getPreviousBeatmapBestScore(history, target);
+      } catch (error) {
+        console.warn("[osu] failed to fetch beatmap score history for pp gain fallback", {
+          beatmapId: target.beatmapId,
+          scoreId: target.scoreId,
+          timestamp: target.timestamp,
+          userId: target.userId,
+          error: getErrorMessage(error),
+        });
+        return undefined;
+      }
+    },
+  );
+
+  const gains: Record<number, number> = {};
+  relevantTargets.forEach((target, index) => {
+    const currentScore = bestScoreById.get(target.scoreId);
+    if (!currentScore) return;
+
+    const previousScore = previousScores[index];
+    if (previousScore === undefined) {
+      const fallbackGain = fallbackGainMap[target.scoreId];
+      if (fallbackGain > 0) gains[target.scoreId] = fallbackGain;
+      return;
+    }
+
+    const gain = calculateReplacementPpGain(bestScores, target.scoreId, previousScore ?? null);
+    if (gain > 0) gains[target.scoreId] = gain;
+  });
+
+  return gains;
+}
+
 export const getUserScoresBestWindow = createServerFn({ method: "GET" })
   .inputValidator((data: { userId: number; totalLimit?: number }) => data)
   .handler(async ({ data }: { data: { userId: number; totalLimit?: number } }) => {
@@ -499,33 +542,6 @@ export const getUserProfileInsights = createServerFn({ method: "GET" })
     return fetchWithCacheLock(cacheKey, USER_PROFILE_INSIGHTS_CACHE_TTL, async () =>
       calculateUserProfileInsights(await fetchUserBestScoresWindow(data.userId, 200)),
     );
-  });
-
-export const getUsersApproxPpGains = createServerFn({ method: "GET" })
-  .inputValidator((data: { userIds: number[] }) => data)
-  .handler(async ({ data }: { data: { userIds: number[] } }) => {
-    edgeCache(300, 1800);
-    const uniqueUserIds = [...new Set(data.userIds)];
-
-    const results = await mapWithConcurrency(
-      uniqueUserIds,
-      APPROX_PP_GAINS_CONCURRENCY,
-      async (userId) => {
-        try {
-          const gains = await getApproxPpGainsForUser(userId);
-          return { userId, gains };
-        } catch {
-          return { userId, gains: {} as Record<number, number> };
-        }
-      },
-    );
-
-    const merged: Record<number, number> = {};
-    results.forEach(({ gains }) => {
-      Object.assign(merged, gains);
-    });
-
-    return merged;
   });
 
 // ── Rankings ────────────────────────────────────────────────────────────────
@@ -570,6 +586,57 @@ async function fetchCountryRecentScores(
   );
 
   return results.flatMap((scores) => scores);
+}
+
+async function fetchCountryRecentScoresWithGains(
+  userIds: number[],
+  options?: { batchSize?: number; batchIndex?: number; recentLimit?: number },
+): Promise<CountryRecentScoresResponse> {
+  const scores = await fetchCountryRecentScores(userIds, options);
+  const rankedTargets = Array.from(
+    new Map(
+      scores
+        .filter((score) => score.id > 0 && score.pp != null && score.pp > 0)
+        .map((score) => [
+          score.id,
+          {
+            beatmapId: score.beatmap_id ?? score.beatmap?.id ?? 0,
+            scoreId: score.id,
+            timestamp: getScoreTimestamp(score),
+            userId: score.user_id,
+          } satisfies ScorePpGainLookup,
+        ]),
+    ).values(),
+  );
+
+  if (rankedTargets.length === 0) {
+    return { scores, gains: {} };
+  }
+
+  const targetsByUserId = new Map<number, ScorePpGainLookup[]>();
+  rankedTargets.forEach((target) => {
+    const list = targetsByUserId.get(target.userId);
+    if (list) list.push(target);
+    else targetsByUserId.set(target.userId, [target]);
+  });
+
+  const groupedTargets = [...targetsByUserId.entries()];
+  const groupedGains = await mapWithConcurrency(
+    groupedTargets,
+    APPROX_PP_GAINS_CONCURRENCY,
+    async ([userId, targets]) => {
+      try {
+        const bestScores = await fetchUserBestScoresWindow(userId, 200);
+        return await calculateReplacementPpGainMapForTargets(bestScores, targets);
+      } catch {
+        return {} as Record<number, number>;
+      }
+    },
+  );
+
+  const gains: Record<number, number> = {};
+  groupedGains.forEach((group) => Object.assign(gains, group));
+  return { scores, gains };
 }
 
 function buildRecentScoresPreview(scores: OsuScore[], limit = 5): OsuScore[] {
@@ -667,13 +734,21 @@ async function buildCountryPopoffs(players: HomePreviewPlayer[]): Promise<Array<
       async (player) => {
         try {
           const scores = await fetchUserBestScoresWindow(player.id, 100);
-          const gainMap = calculateApproxPpGainMap(scores);
+          const relevantScores = scores.filter((score) => {
+            const age = Date.now() - getTimestampMs(score);
+            return age < 30 * 24 * 60 * 60 * 1000 && score.pp != null && score.pp > 0;
+          });
+          const gainMap = await calculateReplacementPpGainMapForTargets(
+            scores,
+            relevantScores.map((score) => ({
+              beatmapId: score.beatmap_id ?? score.beatmap?.id ?? 0,
+              scoreId: score.id,
+              timestamp: getScoreTimestamp(score),
+              userId: player.id,
+            })),
+          );
 
-          return scores
-            .filter((score) => {
-              const age = Date.now() - getTimestampMs(score);
-              return age < 30 * 24 * 60 * 60 * 1000 && score.pp != null && score.pp > 0;
-            })
+          return relevantScores
             .map((score) => ({
               user: player,
               score,
@@ -682,7 +757,12 @@ async function buildCountryPopoffs(players: HomePreviewPlayer[]): Promise<Array<
               ppGain: gainMap[score.id] ?? 0,
               time: getScoreTimestamp(score),
             }));
-        } catch {
+        } catch (error) {
+          console.warn("[osu] failed to build country popoff scores for player", {
+            playerId: player.id,
+            username: player.username,
+            error: getErrorMessage(error),
+          });
           return [] as Array<{
             user: { id: number; username: string; avatar_url: string };
             score: OsuScore;
@@ -869,7 +949,7 @@ export const getCountryRecentScores = createServerFn({ method: "GET" })
   .inputValidator((data: { userIds: number[]; batchSize?: number; batchIndex?: number; recentLimit?: number }) => data)
   .handler(async ({ data }: { data: { userIds: number[]; batchSize?: number; batchIndex?: number; recentLimit?: number } }) => {
     edgeCache(30, 120);
-    return fetchCountryRecentScores(data.userIds, data);
+    return fetchCountryRecentScoresWithGains(data.userIds, data);
   });
 
 // ── Maps (aggregated most-played + favourites across CR players) ───────────

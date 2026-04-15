@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { getRankings, getCountryRecentScores, getUsersApproxPpGains } from "../lib/osu";
+import { getRankings, getCountryRecentScores } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { formatAccuracy, formatTimeAgo, formatPP, formatNumber } from "../lib/format";
@@ -27,7 +27,7 @@ import { ModBadge } from "../components/ui/ModBadge";
 import { LazerBadge } from "../components/ui/LazerBadge";
 import { ScoreRowSkeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
-import { useAppStore, useSelectedCountry } from "../store";
+import { TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useSelectedCountry } from "../store";
 import type { OsuScore } from "../lib/types";
 
 export const Route = createFileRoute("/tracker")({
@@ -37,9 +37,9 @@ export const Route = createFileRoute("/tracker")({
 type ScoreFilter = "all" | "ranked" | "passed";
 type GradeFilter = "all" | "SS" | "S" | "A" | "B";
 type FailedFilter = "hide" | "show" | "only";
-const PP_GAIN_BATCH_SIZE = 4;
 const EMPTY_IDS: number[] = [];
 const EMPTY_SCORES: OsuScore[] = [];
+const EMPTY_SCORE_GAINS: Record<number, { fetchedAt: number; value: number }> = {};
 
 function ScoresPage() {
   const selectedCountry = useSelectedCountry();
@@ -68,8 +68,8 @@ function ScoresPage() {
   const handleToggleExpand = useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key));
   }, []);
-  const [ppGainByScoreId, setPpGainByScoreId] = useState<Record<number, number>>({});
-  const [ppGainFetchedByUserId, setPpGainFetchedByUserId] = useState<Record<number, true>>({});
+  const trackerPpGainEntries = useAppStore((state) => state.trackerPpGainsByCountry[selectedCountry] ?? EMPTY_SCORE_GAINS);
+  const setTrackerPpGains = useAppStore((state) => state.setTrackerPpGains);
   const countryName = getCountryName(selectedCountry);
 
   useEffect(() => {
@@ -79,8 +79,6 @@ function ScoresPage() {
     setInitialLoaded(feedScores.length > 0 || !!feedScoresFetchedAt);
     setInitialRefreshDone(false);
     setExpandedKey(null);
-    setPpGainByScoreId({});
-    setPpGainFetchedByUserId({});
     resetPollIndex(selectedCountry);
   }, [selectedCountry]);
 
@@ -163,11 +161,12 @@ function ScoresPage() {
       for (let b = 0; b < totalBatches; b++) {
         if (cancelled) return;
         try {
-          const scores = await getCountryRecentScores({
+          const result = await getCountryRecentScores({
             data: { userIds, batchSize: BATCH, batchIndex: b, recentLimit: 20 },
           });
           if (cancelled) return;
-          if (scores.length > 0) addFeedScores(selectedCountry, scores);
+          if (result.scores.length > 0) addFeedScores(selectedCountry, result.scores);
+          if (Object.keys(result.gains).length > 0) setTrackerPpGains(selectedCountry, result.gains);
           setInitialLoaded(true);
         } catch { /* continue */ }
       }
@@ -184,14 +183,15 @@ function ScoresPage() {
     if (!isPolling || userIds.length === 0) return;
     if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
     try {
-      const scores = await getCountryRecentScores({
+      const result = await getCountryRecentScores({
         data: { userIds, batchSize: 10, batchIndex: pollIndex, recentLimit: 20 },
       });
-      if (scores.length > 0) addFeedScores(selectedCountry, scores);
+      if (result.scores.length > 0) addFeedScores(selectedCountry, result.scores);
+      if (Object.keys(result.gains).length > 0) setTrackerPpGains(selectedCountry, result.gains);
       else markFeedScoresFetched(selectedCountry);
       nextPollIndex(selectedCountry);
     } catch { /* silently continue */ }
-  }, [isPolling, userIds, pollIndex, addFeedScores, markFeedScoresFetched, nextPollIndex, selectedCountry]);
+  }, [isPolling, userIds, pollIndex, addFeedScores, markFeedScoresFetched, nextPollIndex, selectedCountry, setTrackerPpGains]);
 
   useEffect(() => {
     if (!isPolling) return;
@@ -209,6 +209,15 @@ function ScoresPage() {
   useEffect(() => {
     setExpandedKey(null);
   }, [filter, gradeFilter, failedFilter]);
+
+  const ppGainByScoreId = useMemo(
+    () => Object.fromEntries(
+      Object.entries(trackerPpGainEntries)
+        .filter(([, entry]) => Date.now() - entry.fetchedAt < TRACKER_PP_GAIN_CLIENT_TTL)
+        .map(([scoreId, entry]) => [Number(scoreId), entry.value]),
+    ) as Record<number, number>,
+    [trackerPpGainEntries],
+  );
 
   const filtered = useMemo(() => {
     return feedScores.filter((score: OsuScore) => {
@@ -253,34 +262,6 @@ function ScoresPage() {
       .sort((a, b) => b[1].latestTime - a[1].latestTime)
       .map(([id, info]) => ({ id, ...info }));
   }, [feedScores]);
-
-  useEffect(() => {
-    const rankedUsersToFetch = [...new Set(
-      filtered
-        .filter((score) => score.pp != null && score.pp > 0 && !ppGainFetchedByUserId[score.user_id])
-        .map((score) => score.user_id),
-    )].slice(0, 12);
-
-    if (rankedUsersToFetch.length === 0) return;
-
-    let cancelled = false;
-    const run = async () => {
-      for (let i = 0; i < rankedUsersToFetch.length; i += PP_GAIN_BATCH_SIZE) {
-        const batch = rankedUsersToFetch.slice(i, i + PP_GAIN_BATCH_SIZE);
-        const gains = await getUsersApproxPpGains({ data: { userIds: batch } });
-        if (cancelled) return;
-        const fetchedUsers = Object.fromEntries(batch.map((userId) => [userId, true])) as Record<number, true>;
-        setPpGainByScoreId((prev) => ({ ...prev, ...gains }));
-        setPpGainFetchedByUserId((prev) => ({ ...prev, ...fetchedUsers }));
-      }
-    };
-
-    void run();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [filtered, ppGainFetchedByUserId]);
 
   const filters: { id: ScoreFilter; label: string }[] = [
     { id: "all", label: "All" },
@@ -722,7 +703,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
             {approxPpGain != null && (
               <span
                 className="ml-1 text-[11px] font-semibold text-osu-green"
-                title="Approximate pp gain from removing this play from the current best-score stack"
+                title="Estimated pp gain from replacing your previous best score on this map"
               >
                 (+{formatNumber(Math.round(approxPpGain))})
               </span>
