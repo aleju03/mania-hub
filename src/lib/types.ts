@@ -128,6 +128,7 @@ export interface OsuBeatmapset {
   bpm: number;
   beatmaps?: OsuBeatmap[];
   preview_url: string;
+  tags?: string;
 }
 
 export interface OsuScoreStatistics {
@@ -331,6 +332,10 @@ export interface MapsFavouriteBeatmapset {
   globalFavouriteCount: number;
   previewUrl: string;
   maniaKeys: number[];
+  starMin: number;
+  starMax: number;
+  bpm: number;
+  patterns: string[];
 }
 
 export interface MapsPlayerFavourites {
