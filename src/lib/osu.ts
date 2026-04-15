@@ -154,7 +154,9 @@ async function getCachedUser(key: string): Promise<OsuUser> {
   if (pending) return pending;
 
   const request = fetchWithCacheLock(cacheKey, USER_CACHE_TTL, async () => {
-    const user = await osuFetch<OsuUser>(`/users/${encodeURIComponent(key)}/mania`);
+    const user = await osuFetch<OsuUser>(`/users/${encodeURIComponent(key)}/mania`, undefined, {
+      caller: "getUser",
+    });
     if (user.page) {
       user.page.html = sanitizeProfilePageHtml(user.page.html);
     }
@@ -192,6 +194,7 @@ async function getCachedUserScores(
         offset: options.offset,
         include_fails: type === "recent" && options.includeFails ? 1 : 0,
       }),
+      { caller: `getUserScores:${type}` },
     ),
   ).finally(() => {
     userScoresListPromiseCache.delete(cacheKey);
@@ -230,7 +233,9 @@ async function getUserRankHistory(userId: number): Promise<number[] | null> {
   const pending = rankHistoryPromiseCache.get(userId);
   if (pending) return pending;
 
-  const request = osuFetch<OsuUser>(`/users/${userId}/mania`)
+  const request = osuFetch<OsuUser>(`/users/${userId}/mania`, undefined, {
+    caller: "getUserRankHistory",
+  })
     .then((user) => {
       const history = user.rank_history?.data ?? null;
       void setPersistentCache(cacheKey, history, RANK_HISTORY_CACHE_TTL);
@@ -413,20 +418,28 @@ async function fetchUserBestScoresWindow(userId: number, totalLimit = 200): Prom
   if (pending) return pending;
 
   const request = fetchWithCacheLock(cacheKey, BEST_SCORES_WINDOW_CACHE_TTL, async () => {
-    const firstPage = await osuFetch<OsuScore[]>(`/users/${userId}/scores/best`, getScoreRequestParams(userId, {
-      mode: "mania",
-      limit: Math.min(totalLimit, 100),
-      offset: 0,
-    }));
+    const firstPage = await osuFetch<OsuScore[]>(
+      `/users/${userId}/scores/best`,
+      getScoreRequestParams(userId, {
+        mode: "mania",
+        limit: Math.min(totalLimit, 100),
+        offset: 0,
+      }),
+      { caller: "fetchUserBestScoresWindow:p1" },
+    );
 
     let scores = firstPage;
 
     if (totalLimit > 100 && firstPage.length >= 100) {
-      const secondPage = await osuFetch<OsuScore[]>(`/users/${userId}/scores/best`, getScoreRequestParams(userId, {
-        mode: "mania",
-        limit: Math.min(totalLimit - 100, 100),
-        offset: 100,
-      }));
+      const secondPage = await osuFetch<OsuScore[]>(
+        `/users/${userId}/scores/best`,
+        getScoreRequestParams(userId, {
+          mode: "mania",
+          limit: Math.min(totalLimit - 100, 100),
+          offset: 100,
+        }),
+        { caller: "fetchUserBestScoresWindow:p2" },
+      );
       scores = [...firstPage, ...secondPage];
     }
 
@@ -447,6 +460,7 @@ async function getBeatmapUserScoresAll(beatmapId: number, userId: number): Promi
       getScoreRequestParams(userId, {
         ruleset: "mania",
       }),
+      { caller: "getBeatmapUserScoresAll" },
     );
     return response.scores ?? [];
   });
@@ -553,10 +567,14 @@ export const getRankings = createServerFn({ method: "GET" })
     const type = data.type ?? "performance";
     const cacheKey = `rankings:${type}:${data.page ?? 1}:${data.country ?? ""}`;
     return fetchWithCacheLock(cacheKey, RANKINGS_CACHE_TTL, () =>
-      osuFetch<RankingsResponse>(`/rankings/mania/${type}`, {
-        "cursor[page]": data.page ?? 1,
-        country: data.country,
-      }),
+      osuFetch<RankingsResponse>(
+        `/rankings/mania/${type}`,
+        {
+          "cursor[page]": data.page ?? 1,
+          country: data.country,
+        },
+        { caller: "getRankings" },
+      ),
     );
   });
 
@@ -863,21 +881,27 @@ export const searchBeatmaps = createServerFn({ method: "GET" })
   .inputValidator((data: { query?: string; sort?: string; cursor_string?: string; status?: string }) => data)
   .handler(async ({ data }: { data: { query?: string; sort?: string; cursor_string?: string; status?: string } }) => {
     edgeCache(300, 3600);
-    return osuFetch<BeatmapsetSearchResponse>("/beatmapsets/search", {
-      m: 3, // mania
-      q: data.query,
-      sort: data.sort ?? "ranked_desc",
-      cursor_string: data.cursor_string,
-      s: data.status,
-    });
+    return osuFetch<BeatmapsetSearchResponse>(
+      "/beatmapsets/search",
+      {
+        m: 3, // mania
+        q: data.query,
+        sort: data.sort ?? "ranked_desc",
+        cursor_string: data.cursor_string,
+        s: data.status,
+      },
+      { caller: "searchBeatmaps" },
+    );
   });
 
 async function getBeatmapUserScore(beatmapId: number, userId: number): Promise<OsuScore | null> {
   const cacheKey = `beatmap-user-score:${beatmapId}:${userId}`;
   return fetchWithCacheLock(cacheKey, COUNTRY_BEATMAP_USER_SCORE_CACHE_TTL, async () => {
-    const response = await osuFetch<BeatmapUserScoreResponse>(`/beatmaps/${beatmapId}/scores/users/${userId}`, {
-      mode: "mania",
-    });
+    const response = await osuFetch<BeatmapUserScoreResponse>(
+      `/beatmaps/${beatmapId}/scores/users/${userId}`,
+      { mode: "mania" },
+      { caller: "getBeatmapUserScore" },
+    );
     return response.score ?? null;
   });
 }
@@ -925,10 +949,14 @@ export const getBeatmapScores = createServerFn({ method: "GET" })
       return { scores: await getCountryBeatmapScores(data.beatmapId, data.country) };
     }
 
-    return osuFetch<BeatmapScoresResponse>(`/beatmaps/${data.beatmapId}/scores`, {
-      mode: "mania",
-      type: "global",
-    });
+    return osuFetch<BeatmapScoresResponse>(
+      `/beatmaps/${data.beatmapId}/scores`,
+      {
+        mode: "mania",
+        type: "global",
+      },
+      { caller: "getBeatmapScores" },
+    );
   });
 
 // ── Search ──────────────────────────────────────────────────────────────────
@@ -937,10 +965,14 @@ export const searchUsers = createServerFn({ method: "GET" })
   .inputValidator((data: { query: string }) => data)
   .handler(async ({ data }: { data: { query: string } }) => {
     edgeCache(60, 600);
-    return osuFetch<UserSearchResponse>("/search", {
-      mode: "user",
-      query: data.query,
-    });
+    return osuFetch<UserSearchResponse>(
+      "/search",
+      {
+        mode: "user",
+        query: data.query,
+      },
+      { caller: "searchUsers" },
+    );
   });
 
 // ── Score Feed (CR top players' recent scores) ─────────────────────────────
@@ -957,7 +989,11 @@ export const getCountryRecentScores = createServerFn({ method: "GET" })
 async function fetchUserMostPlayed(userId: number): Promise<BeatmapPlaycount[]> {
   const cacheKey = `user-most-played:${userId}`;
   return fetchWithCacheLock(cacheKey, USER_MOST_PLAYED_CACHE_TTL, () =>
-    osuFetch<BeatmapPlaycount[]>(`/users/${userId}/beatmapsets/most_played`, { limit: 100, offset: 0 }),
+    osuFetch<BeatmapPlaycount[]>(
+      `/users/${userId}/beatmapsets/most_played`,
+      { limit: 100, offset: 0 },
+      { caller: "fetchUserMostPlayed" },
+    ),
   );
 }
 
@@ -969,6 +1005,7 @@ async function fetchUserFavourites(userId: number): Promise<OsuBeatmapset[]> {
       const batch = await osuFetch<OsuBeatmapset[]>(
         `/users/${userId}/beatmapsets/favourite`,
         { limit: USER_FAVOURITES_PAGE_SIZE, offset: page * USER_FAVOURITES_PAGE_SIZE },
+        { caller: "fetchUserFavourites" },
       );
       all.push(...batch);
       if (batch.length < USER_FAVOURITES_PAGE_SIZE) break;
@@ -1255,9 +1292,13 @@ export const getReplayParsed = createServerFn({ method: "GET" })
     try {
       // Try legacy (mode-prefixed) endpoint first — the scoreId from player pages
       // is a legacy ID, and the modern endpoint may resolve to a different score.
-      buffer = await osuFetchBinary(`/scores/${data.mode}/${data.scoreId}/download`);
+      buffer = await osuFetchBinary(`/scores/${data.mode}/${data.scoreId}/download`, {
+        caller: "getReplayParsed:legacy",
+      });
     } catch {
-      buffer = await osuFetchBinary(`/scores/${data.scoreId}/download`);
+      buffer = await osuFetchBinary(`/scores/${data.scoreId}/download`, {
+        caller: "getReplayParsed:modern",
+      });
     }
     const decoder = new ScoreDecoder();
     const score = await decoder.decodeFromBuffer(Buffer.from(buffer));
@@ -1329,7 +1370,11 @@ export const getScore = createServerFn({ method: "GET" })
     const mode = data.mode ?? "mania";
 
     try {
-      const legacyScore = await osuFetch<OsuScore>(`/scores/${mode}/${data.scoreId}`);
+      const legacyScore = await osuFetch<OsuScore>(
+        `/scores/${mode}/${data.scoreId}`,
+        undefined,
+        { caller: "getScore:legacy" },
+      );
       const resolvedMode = legacyScore.beatmap?.mode ?? mode;
       if (resolvedMode === mode) {
         return legacyScore;
@@ -1338,5 +1383,7 @@ export const getScore = createServerFn({ method: "GET" })
       // Fall back to modern score lookup below.
     }
 
-    return osuFetch<OsuScore>(`/scores/${data.scoreId}`);
+    return osuFetch<OsuScore>(`/scores/${data.scoreId}`, undefined, {
+      caller: "getScore:modern",
+    });
   });
