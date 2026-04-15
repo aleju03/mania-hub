@@ -44,7 +44,7 @@ import type {
 } from "./types";
 
 const MAPS_DATA_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 1 week
-const MAPS_DATA_CACHE_VERSION = 5;
+const MAPS_DATA_CACHE_VERSION = 6;
 const USER_FAVOURITES_PAGE_SIZE = 100;
 const USER_FAVOURITES_MAX_PAGES = 10;
 const FARMED_SINGLE_PLAYER_PP_MIN = 500;
@@ -1052,6 +1052,12 @@ async function buildCountryMapsData(users: MapsUser[]): Promise<CountryMapsData>
           playerIds.push(fav.id);
 
           if (!beatmapsetsPool[fav.id]) {
+            const maniaKeysSet = new Set<number>();
+            for (const bm of fav.beatmaps ?? []) {
+              if (bm.mode === "mania" && typeof bm.cs === "number") {
+                maniaKeysSet.add(bm.cs);
+              }
+            }
             beatmapsetsPool[fav.id] = {
               id: fav.id,
               title: fav.title,
@@ -1061,6 +1067,7 @@ async function buildCountryMapsData(users: MapsUser[]): Promise<CountryMapsData>
               status: fav.status,
               globalPlayCount: fav.play_count,
               globalFavouriteCount: fav.favourite_count,
+              maniaKeys: [...maniaKeysSet].sort((a, b) => a - b),
             };
           }
 

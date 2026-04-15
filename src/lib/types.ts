@@ -329,6 +329,7 @@ export interface MapsFavouriteBeatmapset {
   status: string;
   globalPlayCount: number;
   globalFavouriteCount: number;
+  maniaKeys: number[];
 }
 
 export interface MapsPlayerFavourites {
