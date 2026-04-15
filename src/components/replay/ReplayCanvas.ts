@@ -1,6 +1,8 @@
 import type { ReplayFrame } from "../../lib/types";
 import type { ManiaNote } from "../../lib/beatmap-parser";
 import type { ManiaSkin } from "../../lib/skin-parser";
+import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgementEvent, ReplayNoteState } from "../../lib/mania-replay-judgement";
+import { buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "../../lib/mania-replay-judgement";
 import { getNoteImage, getHoldHeadImage, getHoldBodyImage, getHoldTailImage, getKeyImage } from "../../lib/skin-parser";
 
 // Column colors for mania key modes (matching osu!mania circle skin)
@@ -17,27 +19,6 @@ const COLUMN_COLORS: Record<number, string[]> = {
   10: ["#5a8fff", "#de31ae", "#fff", "#ffcc22", "#88da20", "#88da20", "#ffcc22", "#fff", "#de31ae", "#5a8fff"],
 };
 
-// osu!mania stable hit window formulas (classic path from ManiaHitWindows.cs).
-// MAX is fixed at 16ms. Other windows use: base + 3*(10-od) = (base+30) - 3*od.
-// speedRate multiplies game-time windows so wall-clock timing stays constant:
-//   DT (1.5x) → wider game-time windows, HT (0.75x) → narrower game-time windows.
-// floor+0.5 matches lazer's rounding (inclusive boundary).
-function getHitWindows(od: number, speedRate = 1) {
-  const m = speedRate;
-  const inv = Math.max(0, Math.min(10, 10 - od)); // invertedOd, clamped 0-10
-  return {
-    perfect: Math.floor(16 * m) + 0.5,
-    great:   Math.floor((34 + 3 * inv) * m) + 0.5,
-    good:    Math.floor((67 + 3 * inv) * m) + 0.5,
-    ok:      Math.floor((97 + 3 * inv) * m) + 0.5,
-    meh:     Math.floor((121 + 3 * inv) * m) + 0.5,
-    miss:    Math.floor((158 + 3 * inv) * m) + 0.5,
-  };
-}
-
-// Judgment type: 0=pending, 1=MAX, 2=300, 3=200, 4=100, 5=50, 6=miss
-type Judgment = 0 | 1 | 2 | 3 | 4 | 5 | 6;
-
 const JUDGMENT_COLORS: Record<number, string> = {
   1: "#b3f5ff",  // MAX - rainbow/cyan
   2: "#ffcc22",  // 300 - yellow
@@ -51,16 +32,15 @@ const JUDGMENT_LABELS: Record<number, string> = {
   1: "MAX", 2: "300", 3: "200", 4: "100", 5: "50", 6: "MISS",
 };
 
-// Scoring weights for accuracy (osu!mania)
-const JUDGMENT_WEIGHTS: Record<number, number> = {
-  1: 6, 2: 6, 3: 4, 4: 2, 5: 1, 6: 0,
-};
 const HOLD_VISUAL_GRACE_MS = 60;
 const BACKGROUND_FADE_DURATION_MS = 180;
 
 interface RendererOptions {
   backgroundImage?: HTMLImageElement;
   backgroundDim?: number;
+  finalJudgmentCounts?: number[];
+  isConvert?: boolean;
+  isLazer?: boolean;
   od?: number;
   showInputOverlay?: boolean;
   mods?: string[]; // mod acronyms, e.g. ["DT", "MR"]
@@ -77,13 +57,6 @@ interface Layout {
   noteHeight: number;
   receptorHeight: number;
   pixelsPerMs: number;
-}
-
-interface NoteHitResult {
-  judgment: Judgment;     // 0=pending
-  hitTime: number;        // when the note was judged
-  releaseTime: number;    // matched segment end for hold visibility
-  offsetMs: number;       // signed hit offset for UR/judgment visuals
 }
 
 type Hand = "left" | "right" | "center";
@@ -103,8 +76,10 @@ export class ManiaReplayRenderer {
   private lastRenderTime = 0;
   private colors: string[];
   private totalDuration: number;
-  private segments: { start: number; end: number }[][];
+  private segments: ReturnType<typeof buildReplaySegments>;
   private maxHoldDuration: number;
+  private ruleset: ManiaReplayRuleset;
+  private hitWindows: ManiaReplayHitWindows;
 
   // Background
   private backgroundImage: HTMLImageElement | null = null;
@@ -117,6 +92,7 @@ export class ManiaReplayRenderer {
   private skin: ManiaSkin | null = null;
   private cssWidth = 0;
   private cssHeight = 0;
+  private finalJudgmentCounts: number[] | null = null;
 
   // Optional external clock (e.g., audio element). When set, replaces the
   // wall-clock dt in tick() with the external source. Returning `stalled: true`
@@ -127,8 +103,9 @@ export class ManiaReplayRenderer {
   // Receptor flash state
   private receptorFlashTimestamps: number[];
 
-  // Hit detection results (pre-computed)
-  private hitResults: NoteHitResult[];
+  // Replay judgement state (pre-computed)
+  private judgmentEvents: ReplayJudgementEvent[];
+  private noteStates: ReplayNoteState[];
 
   // Live stats (computed incrementally during playback)
   private combo = 0;
@@ -163,17 +140,21 @@ export class ManiaReplayRenderer {
     this.notes = mirror
       ? notes.map((n) => ({ ...n, column: keyCount - 1 - n.column }))
       : [...notes];
+    this.ruleset = getManiaReplayRuleset(options?.isLazer ?? false, [...mods], options?.isConvert ?? false);
 
     this.backgroundImage = options?.backgroundImage ?? null;
     this.backgroundDim = options?.backgroundDim ?? 80;
+    this.finalJudgmentCounts = options?.finalJudgmentCounts ?? null;
     this.od = options?.od ?? 8;
     this.showInputOverlay = options?.showInputOverlay ?? false;
     this.transparentBackground = options?.transparentBackground ?? false;
     this.receptorFlashTimestamps = new Array(keyCount).fill(0);
+    this.hitWindows = getManiaReplayHitWindows(this.od, this.ruleset);
 
     const frameDuration = frames.length > 0 ? frames[frames.length - 1].time : 0;
     const noteDuration = notes.length > 0 ? Math.max(...notes.map((n) => n.endTime)) : 0;
-    this.totalDuration = Math.max(frameDuration, noteDuration);
+    const replayTailGrace = this.hitWindows.miss * 1.5;
+    this.totalDuration = Math.max(frameDuration, noteDuration + replayTailGrace);
 
     this.maxHoldDuration = 0;
     for (const n of notes) {
@@ -183,120 +164,20 @@ export class ManiaReplayRenderer {
       }
     }
 
-    this.segments = this.computeSegments();
-    this.hitResults = this.computeHitResults();
+    this.segments = buildReplaySegments(this.frames, this.keyCount, this.totalDuration);
+    const simulated = simulateManiaReplayJudgements(this.notes, this.segments, this.keyCount, this.hitWindows);
+    this.judgmentEvents = simulated.events;
+    this.noteStates = simulated.noteStates;
+    const lastJudgementTime = this.judgmentEvents.length > 0
+      ? this.judgmentEvents[this.judgmentEvents.length - 1].time
+      : 0;
+    this.totalDuration = Math.max(this.totalDuration, lastJudgementTime);
     this.resize();
     this.render();
   }
 
   private generateColors(n: number): string[] {
     return Array.from({ length: n }, (_, i) => `hsl(${(i / n) * 360}, 70%, 60%)`);
-  }
-
-  private computeSegments(): { start: number; end: number }[][] {
-    const segs: { start: number; end: number }[][] = Array.from({ length: this.keyCount }, () => []);
-    const active: (number | null)[] = new Array(this.keyCount).fill(null);
-
-    for (const frame of this.frames) {
-      for (let col = 0; col < this.keyCount; col++) {
-        const pressed = (frame.keyState & (1 << col)) !== 0;
-        if (pressed && active[col] === null) {
-          active[col] = frame.time;
-        } else if (!pressed && active[col] !== null) {
-          segs[col].push({ start: active[col]!, end: frame.time });
-          active[col] = null;
-        }
-      }
-    }
-    for (let col = 0; col < this.keyCount; col++) {
-      if (active[col] !== null) segs[col].push({ start: active[col]!, end: this.totalDuration });
-    }
-
-    return segs;
-  }
-
-  // Pre-compute hit results for every note by matching to replay key presses.
-  // Each key press (segment) can only be consumed by one note per column.
-  // Notes are processed per-column in time order for correct matching.
-  private computeHitResults(): NoteHitResult[] {
-    const results: NoteHitResult[] = new Array(this.notes.length);
-    for (let i = 0; i < this.notes.length; i++) {
-      results[i] = { judgment: 0, hitTime: 0, releaseTime: 0, offsetMs: 0 };
-    }
-
-    if (this.frames.length === 0 || this.notes.length === 0) return results;
-
-    const hw = getHitWindows(this.od, this.modRate);
-
-    // Group note indices by column
-    const notesByCol: number[][] = Array.from({ length: this.keyCount }, () => []);
-    for (let i = 0; i < this.notes.length; i++) {
-      const col = this.notes[i].column;
-      if (col < this.keyCount) notesByCol[col].push(i);
-    }
-
-    // Process each column independently
-    for (let col = 0; col < this.keyCount; col++) {
-      const colNotes = notesByCol[col];
-      const colSegs = this.segments[col];
-      let segStart = 0; // next unconsumed segment
-
-      for (const noteIdx of colNotes) {
-        const note = this.notes[noteIdx];
-
-        // Advance past consumed/expired segments
-        while (segStart < colSegs.length && colSegs[segStart].start < note.time - hw.miss) {
-          segStart++;
-        }
-
-        // Find the first unconsumed segment whose start is within the hit window
-        let matched = false;
-        for (let s = segStart; s < colSegs.length; s++) {
-          const seg = colSegs[s];
-          if (seg.start > note.time + hw.miss) break;
-
-          const delta = Math.abs(seg.start - note.time);
-          let judgment: Judgment;
-          if (delta <= hw.perfect) judgment = 1;
-          else if (delta <= hw.great) judgment = 2;
-          else if (delta <= hw.good) judgment = 3;
-          else if (delta <= hw.ok) judgment = 4;
-          else if (delta <= hw.meh) judgment = 5;
-          else continue;
-
-          // Stable hold notes: single combined judgment = worse of (head, tail).
-          // Tail uses 1.5x window lenience. Released way too early = miss.
-          if (note.isHold && note.endTime > note.time) {
-            const tailDelta = Math.abs(seg.end - note.endTime) / 1.5; // RELEASE_WINDOW_LENIENCE
-            let tailJudgment: Judgment;
-            if (tailDelta <= hw.perfect) tailJudgment = 1;
-            else if (tailDelta <= hw.great) tailJudgment = 2;
-            else if (tailDelta <= hw.good) tailJudgment = 3;
-            else if (tailDelta <= hw.ok) tailJudgment = 4;
-            else if (tailDelta <= hw.meh) tailJudgment = 5;
-            else tailJudgment = 6;
-            // Final = worse of head and tail
-            if (tailJudgment > judgment) judgment = tailJudgment;
-          }
-
-          results[noteIdx] = {
-            judgment,
-            hitTime: seg.start,
-            releaseTime: seg.end,
-            offsetMs: seg.start - note.time,
-          };
-          segStart = s + 1;
-          matched = true;
-          break;
-        }
-
-        if (!matched) {
-          results[noteIdx] = { judgment: 6, hitTime: note.time + hw.miss, releaseTime: 0, offsetMs: 0 };
-        }
-      }
-    }
-
-    return results;
   }
 
   // Recompute live stats (combo, accuracy) up to currentTime
@@ -308,47 +189,56 @@ export class ManiaReplayRenderer {
     this.leftHandMisses = 0;
     this.rightHandMisses = 0;
     this.recentHitOffsets = [];
+    this.lastJudgment = 0;
+    this.lastJudgmentTime = 0;
     this.advanceStats(time);
   }
 
   private advanceStats(upToTime?: number) {
     const time = upToTime ?? this.currentTime;
-    while (this.statsScanIndex < this.notes.length) {
-      const hr = this.hitResults[this.statsScanIndex];
-      if (hr.judgment === 0) break;
-      if (hr.hitTime > time) break;
+    while (this.statsScanIndex < this.judgmentEvents.length) {
+      const event = this.judgmentEvents[this.statsScanIndex];
+      if (event.time > time) break;
 
-      this.judgmentCounts[hr.judgment]++;
-      if (hr.judgment <= 5) {
+      if (event.judgment == null) {
+        this.combo = 0;
+        this.statsScanIndex++;
+        continue;
+      }
+
+      if (event.part === "note" || event.part === "hold-head") {
+        const noteState = this.noteStates[event.noteIndex];
+        if (noteState && noteState.displayTime <= time && noteState.displayJudgment > 0) {
+          this.judgmentCounts[noteState.displayJudgment]++;
+        }
+      }
+
+      if (event.judgment <= 5) {
         this.combo++;
         if (this.combo > this.maxComboSoFar) this.maxComboSoFar = this.combo;
-        this.recentHitOffsets.push(hr.offsetMs);
+        this.recentHitOffsets.push(event.offsetMs);
         if (this.recentHitOffsets.length > 40) this.recentHitOffsets.shift();
       } else {
         this.combo = 0;
-        const hand = this.getHandForColumn(this.notes[this.statsScanIndex]?.column ?? -1);
+        const hand = this.getHandForColumn(event.column);
         if (hand === "left") this.leftHandMisses++;
         if (hand === "right") this.rightHandMisses++;
       }
 
-      this.lastJudgment = hr.judgment;
-      this.lastJudgmentTime = hr.hitTime;
+      this.lastJudgment = event.judgment;
+      this.lastJudgmentTime = event.time;
       this.statsScanIndex++;
     }
   }
 
   private getAccuracy(): number {
-    const counts = this.getDisplayCounts();
-    let totalWeight = 0;
-    let totalNotes = 0;
-    for (let j = 1; j <= 6; j++) {
-      totalWeight += counts[j] * JUDGMENT_WEIGHTS[j];
-      totalNotes += counts[j];
-    }
-    return totalNotes > 0 ? (totalWeight / (totalNotes * 6)) * 100 : 100;
+    return calculateReplayAccuracy(this.getDisplayCounts(), this.ruleset.accuracyMode);
   }
 
   private getDisplayCounts(): number[] {
+    if (this.finalJudgmentCounts && this.currentTime >= this.totalDuration - 1) {
+      return this.finalJudgmentCounts;
+    }
     return this.judgmentCounts;
   }
 
@@ -706,10 +596,13 @@ export class ManiaReplayRenderer {
       const col = note.column;
       if (col >= this.keyCount) continue;
 
-      const hr = this.hitResults[i];
-      if (hr.judgment !== 0 && hr.hitTime <= this.currentTime) {
-        if (note.isHold && hr.judgment <= 5 && note.endTime > this.currentTime) {
-          // Still holding — render the remaining portion
+      const noteState = this.noteStates[i];
+      const headResolved = noteState.headTime <= this.currentTime;
+      const tailResolved = noteState.tailTime != null && noteState.tailTime <= this.currentTime;
+
+      if (headResolved) {
+        if (note.isHold && !tailResolved) {
+          // Keep rendering the active LN until the tail resolves.
         } else {
           continue;
         }
@@ -723,14 +616,14 @@ export class ManiaReplayRenderer {
       if (note.isHold) {
         let headY = judgmentY - (note.time - this.currentTime) * pixelsPerMs;
         const tailY = judgmentY - (note.endTime - this.currentTime) * pixelsPerMs;
-        const awaitingJudgment = hr.hitTime > this.currentTime;
+        const awaitingJudgment = !headResolved;
         const shouldLetPassLine = awaitingJudgment && note.time < this.currentTime - 10;
-        const withinMatchedSegment = this.currentTime < hr.releaseTime;
+        const withinMatchedSegment = this.currentTime < noteState.releaseTime;
         const stillPhysicallyHeld = withinMatchedSegment || this.isColumnEffectivelyHeldAtTime(col, this.currentTime);
         const releasedEarly =
-          hr.judgment >= 1 &&
-          hr.judgment <= 5 &&
-          this.currentTime < note.endTime &&
+          noteState.bodyBreakTime != null &&
+          noteState.bodyBreakTime <= this.currentTime &&
+          this.currentTime < (noteState.tailTime ?? note.endTime) &&
           !stillPhysicallyHeld;
 
         if (!shouldLetPassLine) {
@@ -791,7 +684,7 @@ export class ManiaReplayRenderer {
         }
         ctx.globalAlpha = 1;
       } else {
-        if (note.time < this.currentTime - 10 && hr.hitTime > this.currentTime) continue;
+        if (note.time < this.currentTime - 10 && !headResolved) continue;
 
         const noteY = judgmentY - (note.time - this.currentTime) * pixelsPerMs;
         if (noteY > h + 20 || noteY < -20) continue;
@@ -848,16 +741,18 @@ export class ManiaReplayRenderer {
         if (note.time > visibleMaxTime) break;
         if (!note.isHold || note.column >= this.keyCount) continue;
 
-        const hr = this.hitResults[i];
-        if (hr.judgment !== 0 && hr.hitTime <= this.currentTime) {
-          if (!(hr.judgment <= 5 && note.endTime > this.currentTime)) {
-            continue;
-          }
+        const noteState = this.noteStates[i];
+        const headResolved = noteState.headTime <= this.currentTime;
+        const tailResolved = noteState.tailTime != null && noteState.tailTime <= this.currentTime;
+        if (headResolved && tailResolved) {
+          continue;
         }
 
         let headY = judgmentY - (note.time - this.currentTime) * pixelsPerMs;
         const tailY = judgmentY - (note.endTime - this.currentTime) * pixelsPerMs;
-        headY = Math.min(headY, judgmentY);
+        if (headResolved) {
+          headY = Math.min(headY, judgmentY);
+        }
 
         const top = Math.min(headY, tailY);
         const bottom = Math.min(Math.max(headY, tailY), judgmentY);
@@ -1164,7 +1059,7 @@ export class ManiaReplayRenderer {
     const urBarWidth = Math.min(playfieldWidth * 0.68, 180);
     const urBarX = playfieldCenterX - urBarWidth / 2;
     const urBarY = h - 26;
-    const urRange = getHitWindows(this.od, this.modRate).meh;
+    const urRange = this.hitWindows.meh;
 
     ctx.fillStyle = "rgba(255,255,255,0.08)";
     ctx.fillRect(urBarX, urBarY, urBarWidth, 3);

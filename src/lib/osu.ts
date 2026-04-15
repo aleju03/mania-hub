@@ -54,7 +54,7 @@ import type {
 } from "./types";
 
 const MAPS_DATA_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 1 week
-const MAPS_DATA_CACHE_VERSION = 6;
+const MAPS_DATA_CACHE_VERSION = 7;
 const USER_FAVOURITES_PAGE_SIZE = 100;
 const USER_FAVOURITES_MAX_PAGES = 10;
 const FARMED_SINGLE_PLAYER_PP_MIN = 500;
@@ -1184,6 +1184,7 @@ async function buildCountryMapsData(users: MapsUser[]): Promise<CountryMapsData>
               status: fav.status,
               globalPlayCount: fav.play_count,
               globalFavouriteCount: fav.favourite_count,
+              previewUrl: fav.preview_url,
               maniaKeys: [...maniaKeysSet].sort((a, b) => a - b),
             };
           }
