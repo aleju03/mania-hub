@@ -29,7 +29,7 @@ type Tab = "farmed" | "popular" | "favourites" | "random";
 type KeyFilter = "all" | "4k" | "7k" | "other";
 type BeatmapSort = "plays" | "players" | "stars" | "length";
 type FarmedSort = "players" | "avg-pp" | "max-pp" | "stars";
-type StatusFilter = "all" | "ranked" | "loved" | "other";
+type StatusFilter = "all" | "ranked" | "loved" | "graveyard" | "other";
 type PpFilter = 0 | 500 | 700;
 type ModFilter = "all" | "dt" | "ht" | "nm";
 type MapsSearch = {
@@ -42,6 +42,8 @@ type MapsSearch = {
   pp: PpFilter;
   mod: ModFilter;
   q: string;
+  rStatus: string;
+  rKey: string;
 };
 
 const PAGE_SIZE = 24;
@@ -57,7 +59,30 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   pp: 0,
   mod: "all",
   q: "",
+  rStatus: "",
+  rKey: "",
 };
+
+const RANDOM_STATUS_OPTIONS = ["ranked", "loved", "graveyard", "other"] as const;
+const RANDOM_KEY_OPTIONS = ["4k", "7k", "other"] as const;
+type RandomStatus = (typeof RANDOM_STATUS_OPTIONS)[number];
+type RandomKey = (typeof RANDOM_KEY_OPTIONS)[number];
+
+function parseCsvSet<T extends string>(raw: string, allowed: readonly T[]): Set<T> {
+  if (!raw) return new Set();
+  const allowedSet = new Set<string>(allowed);
+  return new Set(
+    raw.split(",").map((s) => s.trim()).filter((s): s is T => allowedSet.has(s)),
+  );
+}
+
+function toggleCsv(raw: string, value: string): string {
+  const parts = raw ? raw.split(",").filter(Boolean) : [];
+  const idx = parts.indexOf(value);
+  if (idx >= 0) parts.splice(idx, 1);
+  else parts.push(value);
+  return parts.join(",");
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -75,9 +100,23 @@ function matchesKeyFilter(kc: number | null, filter: KeyFilter): boolean {
 
 function matchesStatusFilter(status: string, filter: StatusFilter): boolean {
   if (filter === "all") return true;
-  if (filter === "ranked") return status === "ranked";
+  if (filter === "ranked") return status === "ranked" || status === "approved";
   if (filter === "loved") return status === "loved";
-  return status !== "ranked" && status !== "loved";
+  if (filter === "graveyard") return status === "graveyard";
+  return status !== "ranked" && status !== "approved" && status !== "loved" && status !== "graveyard";
+}
+
+function mapStatusBucket(status: string): RandomStatus {
+  if (status === "ranked" || status === "approved") return "ranked";
+  if (status === "loved") return "loved";
+  if (status === "graveyard") return "graveyard";
+  return "other";
+}
+
+function mapKeyBucket(keyCount: number): RandomKey {
+  if (keyCount === 4) return "4k";
+  if (keyCount === 7) return "7k";
+  return "other";
 }
 
 function matchesSearch(title: string, artist: string, query: string): boolean {
@@ -92,6 +131,11 @@ function hasValidMapsDataShape(data: CountryMapsData | null): data is CountryMap
     return false;
   }
   if (!Array.isArray(data.favouritesByPlayer) || !data.beatmapsetsPool || typeof data.beatmapsetsPool !== "object") {
+    return false;
+  }
+
+  const sampleSet = Object.values(data.beatmapsetsPool)[0];
+  if (sampleSet && !Array.isArray(sampleSet.maniaKeys)) {
     return false;
   }
 
@@ -133,10 +177,12 @@ export const Route = createFileRoute("/maps")({
     key: search.key === "4k" || search.key === "7k" || search.key === "other" ? search.key : DEFAULT_MAPS_SEARCH.key,
     beatmapSort: search.beatmapSort === "plays" || search.beatmapSort === "stars" || search.beatmapSort === "length" ? search.beatmapSort : DEFAULT_MAPS_SEARCH.beatmapSort,
     farmedSort: search.farmedSort === "avg-pp" || search.farmedSort === "max-pp" || search.farmedSort === "stars" ? search.farmedSort : DEFAULT_MAPS_SEARCH.farmedSort,
-    status: search.status === "ranked" || search.status === "loved" || search.status === "other" ? search.status : DEFAULT_MAPS_SEARCH.status,
+    status: search.status === "ranked" || search.status === "loved" || search.status === "graveyard" || search.status === "other" ? search.status : DEFAULT_MAPS_SEARCH.status,
     pp: search.pp === 500 || search.pp === 700 ? search.pp : DEFAULT_MAPS_SEARCH.pp,
     mod: search.mod === "dt" || search.mod === "ht" || search.mod === "nm" ? search.mod : DEFAULT_MAPS_SEARCH.mod,
     q: typeof search.q === "string" ? search.q : DEFAULT_MAPS_SEARCH.q,
+    rStatus: typeof search.rStatus === "string" ? search.rStatus : DEFAULT_MAPS_SEARCH.rStatus,
+    rKey: typeof search.rKey === "string" ? search.rKey : DEFAULT_MAPS_SEARCH.rKey,
   }),
   component: MapsPage,
 });
@@ -165,6 +211,10 @@ function MapsPage() {
   const ppFilter = mapsSearch.pp;
   const modFilter = mapsSearch.mod;
   const searchQuery = mapsSearch.q;
+  const rStatusRaw = mapsSearch.rStatus;
+  const rKeyRaw = mapsSearch.rKey;
+  const randomStatusSet = useMemo(() => parseCsvSet(rStatusRaw, RANDOM_STATUS_OPTIONS), [rStatusRaw]);
+  const randomKeySet = useMemo(() => parseCsvSet(rKeyRaw, RANDOM_KEY_OPTIONS), [rKeyRaw]);
   const countryName = getCountryName(selectedCountry);
 
   useEffect(() => {
@@ -352,38 +402,64 @@ function MapsPage() {
   const [randomBeatmapset, setRandomBeatmapset] = useState<MapsFavouriteBeatmapset | null>(null);
   const lastRandomKeyRef = useRef<string | null>(null);
 
+  const randomPool = useMemo(() => {
+    if (!mapsData?.favouritesByPlayer || !mapsData?.beatmapsetsPool) return [];
+    const pairs: Array<{ player: MapsPlayerFavourites; beatmapset: MapsFavouriteBeatmapset }> = [];
+    for (const player of mapsData.favouritesByPlayer) {
+      for (const bid of player.beatmapsetIds) {
+        const beatmapset = mapsData.beatmapsetsPool[bid];
+        if (!beatmapset) continue;
+        if (randomStatusSet.size > 0 && !randomStatusSet.has(mapStatusBucket(beatmapset.status))) continue;
+        if (randomKeySet.size > 0) {
+          const keys = beatmapset.maniaKeys ?? [];
+          if (!keys.some((k) => randomKeySet.has(mapKeyBucket(k)))) continue;
+        }
+        pairs.push({ player, beatmapset });
+      }
+    }
+    return pairs;
+  }, [mapsData, randomStatusSet, randomKeySet]);
+
   const reshuffleRandom = useCallback(() => {
-    const pool = mapsData?.favouritesByPlayer?.filter((p) => p.beatmapsetIds.length > 0) ?? [];
-    if (pool.length === 0 || !mapsData?.beatmapsetsPool) {
+    if (randomPool.length === 0) {
       setRandomPlayer(null);
       setRandomBeatmapset(null);
       return;
     }
-    const player = pool[Math.floor(Math.random() * pool.length)];
-    const ids = player.beatmapsetIds;
-    const pickedId = ids[Math.floor(Math.random() * ids.length)];
-    const beatmapset = mapsData.beatmapsetsPool[pickedId] ?? null;
-    setRandomPlayer(player);
-    setRandomBeatmapset(beatmapset);
-  }, [mapsData]);
+    const pick = randomPool[Math.floor(Math.random() * randomPool.length)];
+    setRandomPlayer(pick.player);
+    setRandomBeatmapset(pick.beatmapset);
+  }, [randomPool]);
 
   useEffect(() => {
     if (tab !== "random" || !mapsData) return;
-    const key = `${selectedCountry}:${mapsData.generatedAt}`;
-    if (lastRandomKeyRef.current === key && randomPlayer) return;
-    lastRandomKeyRef.current = key;
-    reshuffleRandom();
-  }, [tab, selectedCountry, mapsData, reshuffleRandom, randomPlayer]);
+    const dataKey = `${selectedCountry}:${mapsData.generatedAt}`;
+    const dataChanged = lastRandomKeyRef.current !== dataKey;
+    lastRandomKeyRef.current = dataKey;
+
+    if (dataChanged || !randomBeatmapset) {
+      reshuffleRandom();
+      return;
+    }
+    // Keep the current pick if it still matches the filters; otherwise reshuffle.
+    const statusOk = randomStatusSet.size === 0 || randomStatusSet.has(mapStatusBucket(randomBeatmapset.status));
+    const keyOk =
+      randomKeySet.size === 0 ||
+      (randomBeatmapset.maniaKeys ?? []).some((k) => randomKeySet.has(mapKeyBucket(k)));
+    if (!statusOk || !keyOk) reshuffleRandom();
+  }, [tab, selectedCountry, mapsData, reshuffleRandom, randomBeatmapset, randomStatusSet, randomKeySet]);
 
   const hasActiveFilters =
-    tab !== "random" && (
-      searchQuery || keyFilter !== "all" || statusFilter !== "all" || ppFilter > 0 || modFilter !== "all" || beatmapSort !== "players" || farmedSort !== "players" || tab !== "farmed"
-    );
+    tab === "random"
+      ? randomStatusSet.size > 0 || randomKeySet.size > 0
+      : (
+          searchQuery || keyFilter !== "all" || statusFilter !== "all" || ppFilter > 0 || modFilter !== "all" || beatmapSort !== "players" || farmedSort !== "players" || tab !== "farmed"
+        );
 
   const resetFilters = () => {
     navigate({
       to: "/maps",
-      search: DEFAULT_MAPS_SEARCH,
+      search: { ...DEFAULT_MAPS_SEARCH, tab },
       replace: true,
     });
   };
@@ -414,7 +490,7 @@ function MapsPage() {
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
                 <span className="text-[10px] text-osu-f1">
-                  {loadingPlayers ? "Loading players..." : "Aggregating maps data..."}
+                  {loadingPlayers ? "Loading players..." : "Loading maps..."}
                 </span>
               </div>
             )}
@@ -446,10 +522,9 @@ function MapsPage() {
       />
 
       {/* ── Filter bar ───────────────────────────────────────────────── */}
-      {tab !== "random" && (
       <div className="bg-osu-d5 border-b border-osu-b3/20">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
-          {/* Search */}
+          {tab !== "random" && (
           <input
             type="text"
             value={searchQuery}
@@ -457,6 +532,41 @@ function MapsPage() {
             placeholder="Search title or artist..."
             className="bg-osu-b4 border border-osu-b3/30 rounded-lg px-3 py-1.5 text-[11px] text-osu-l2 placeholder:text-osu-f1 w-full sm:w-48 focus:outline-none focus:border-osu-pink/40 transition-colors"
           />
+          )}
+
+          {tab === "random" && (
+            <>
+              <FilterGroup label="Status">
+                {RANDOM_STATUS_OPTIONS.map((s) => (
+                  <FilterPill
+                    key={s}
+                    active={randomStatusSet.has(s)}
+                    dimmed={randomStatusSet.size === 0}
+                    onClick={() => updateMapsSearch({ rStatus: toggleCsv(rStatusRaw, s) })}
+                  >
+                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                  </FilterPill>
+                ))}
+              </FilterGroup>
+
+              <FilterGroup label="Keys">
+                {RANDOM_KEY_OPTIONS.map((k) => (
+                  <FilterPill
+                    key={k}
+                    active={randomKeySet.has(k)}
+                    dimmed={randomKeySet.size === 0}
+                    onClick={() => updateMapsSearch({ rKey: toggleCsv(rKeyRaw, k) })}
+                  >
+                    {k.toUpperCase()}
+                  </FilterPill>
+                ))}
+              </FilterGroup>
+
+              <span className="text-[10px] text-osu-f1">
+                {randomPool.length} {randomPool.length === 1 ? "match" : "matches"}
+              </span>
+            </>
+          )}
 
           {tab === "farmed" && (
             <>
@@ -530,7 +640,7 @@ function MapsPage() {
 
           {tab === "favourites" && (
             <FilterGroup label="Status">
-              {(["all", "ranked", "loved", "other"] as StatusFilter[]).map((s) => (
+              {(["all", "ranked", "loved", "graveyard", "other"] as StatusFilter[]).map((s) => (
                 <FilterPill key={s} active={statusFilter === s} onClick={() => updateMapsSearch({ status: s, page: 0 })}>
                   {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
                 </FilterPill>
@@ -548,7 +658,6 @@ function MapsPage() {
           )}
         </div>
       </div>
-      )}
 
       {/* ── Content ──────────────────────────────────────────────────── */}
       <div className="bg-osu-b5">
@@ -647,7 +756,9 @@ function MapsPage() {
                 </>
               ) : (
                 <div className="text-center py-16 text-osu-f1 text-sm">
-                  No favourites found for any player in the top 30.
+                  {hasActiveFilters
+                    ? "No favourites match your filters. Try loosening them."
+                    : "No favourites found for any player in the top 30."}
                 </div>
               )}
             </div>
@@ -666,11 +777,8 @@ function MapsPage() {
 // ── Loading indicator ─────────────────────────────────────────────────────
 
 const LOADING_STEPS = [
-  "Fetching player scores...",
-  "Analyzing top plays...",
-  "Finding popular maps...",
-  "Collecting favourites...",
-  "Crunching the data...",
+  "Loading maps...",
+  "Almost there...",
 ];
 
 function MapsLoadingIndicator({ loadingPlayers }: { loadingPlayers: boolean }) {
@@ -707,12 +815,16 @@ function FilterGroup({ label, children }: { label: string; children: React.React
   );
 }
 
-function FilterPill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function FilterPill({ active, onClick, children, dimmed }: { active: boolean; onClick: () => void; children: React.ReactNode; dimmed?: boolean }) {
   return (
     <button
       onClick={onClick}
       className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${
-        active ? "bg-osu-pink/20 text-osu-pink-light" : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3"
+        active
+          ? "bg-osu-pink/20 text-osu-pink-light"
+          : dimmed
+            ? "bg-osu-b4/60 text-osu-f1/70 hover:text-osu-l2 hover:bg-osu-b3"
+            : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3"
       }`}
     >
       {children}
@@ -1093,6 +1205,7 @@ function FavouriteCard({ fav, onPlayerClick }: { fav: MapsAggregatedFavourite; o
 
 function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const url = `https://osu.ppy.sh/beatmapsets/${bm.id}`;
+  const keys = bm.maniaKeys ?? [];
 
   return (
     <div className="rounded-2xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/40 transition-colors overflow-hidden">
@@ -1101,7 +1214,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
         <span
           className={`absolute top-3 left-3 px-2 py-1 rounded text-[10px] font-bold uppercase ${
-            bm.status === "ranked"
+            bm.status === "ranked" || bm.status === "approved"
               ? "bg-osu-green/80 text-white"
               : bm.status === "loved"
                 ? "bg-osu-pink/80 text-white"
@@ -1110,6 +1223,15 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         >
           {bm.status}
         </span>
+        {keys.length > 0 && (
+          <div className="absolute top-3 right-3 flex gap-1">
+            {keys.map((k) => (
+              <span key={k} className="px-1.5 py-0.5 rounded bg-black/60 text-[10px] font-bold text-white">
+                {k}K
+              </span>
+            ))}
+          </div>
+        )}
         <div className="absolute bottom-0 left-0 right-0 px-4 pb-3">
           <div className="text-[18px] font-semibold text-white truncate leading-tight drop-shadow-lg">{bm.title}</div>
           <div className="text-[13px] text-white/75 truncate leading-tight drop-shadow-lg">{bm.artist}</div>
