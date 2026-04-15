@@ -54,9 +54,20 @@ interface ReferrerRow {
 }
 
 interface ServerErrorRow {
+  caller: string;
   path: string;
   status: number | null;
   count: number;
+}
+
+interface RecentServerErrorRow {
+  timestamp: string;
+  caller: string;
+  path: string;
+  status: number | null;
+  bodyPreview: string | null;
+  attempts: number | null;
+  kind: string | null;
 }
 
 interface BounceStats {
@@ -100,6 +111,7 @@ interface MonitorData {
   topReplays: TopReplayRow[];
   topReferrers: ReferrerRow[];
   serverErrors: ServerErrorRow[];
+  recentServerErrors: RecentServerErrorRow[];
   fetchedAt: number;
 }
 
@@ -152,6 +164,7 @@ const getMonitorData = createServerFn({ method: "GET" })
       topReplays,
       topReferrers,
       serverErrors,
+      recentServerErrors,
       bounce,
     ] = await Promise.all([
       runQuery(`SELECT count(DISTINCT distinct_id) FROM events WHERE timestamp > now() - interval 5 minute`),
@@ -177,10 +190,13 @@ const getMonitorData = createServerFn({ method: "GET" })
         `SELECT properties.replay_score_id AS score_id, any(properties.replay_title) AS title, any(properties.replay_artist) AS artist, any(properties.replay_difficulty) AS difficulty, any(properties.replay_player) AS player, any(properties.replay_cover_url) AS cover_url, count() AS n FROM events WHERE event = 'replay_view' AND properties.replay_score_id IS NOT NULL AND timestamp > ${since} GROUP BY score_id ORDER BY n DESC LIMIT 10`,
       ),
       runQuery(
-        `SELECT properties.$referring_domain AS d, count(DISTINCT distinct_id) AS n FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$referring_domain IS NOT NULL GROUP BY d ORDER BY n DESC LIMIT 10`,
+        `SELECT properties.$referring_domain AS d, count(DISTINCT distinct_id) AS n FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$referring_domain IS NOT NULL AND properties.$referring_domain NOT IN ('localhost', '127.0.0.1', '::1') AND properties.$referring_domain NOT LIKE '%-aleju03s-projects.vercel.app' GROUP BY d ORDER BY n DESC LIMIT 10`,
       ),
       runQuery(
-        `SELECT properties.path AS p, properties.status AS s, count() AS n FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} GROUP BY p, s ORDER BY n DESC LIMIT 10`,
+        `SELECT properties.caller AS c, properties.path AS p, properties.status AS s, count() AS n FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} GROUP BY c, p, s ORDER BY n DESC LIMIT 10`,
+      ),
+      runQuery(
+        `SELECT toString(timestamp), properties.caller, properties.path, properties.status, properties.body_preview, properties.attempts, properties.kind FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} ORDER BY timestamp DESC LIMIT 15`,
       ),
       runQuery(
         `SELECT countIf(pv_count = 1) AS bounced, count() AS landers FROM (SELECT distinct_id, count() AS pv_count FROM events WHERE event = '$pageview' AND timestamp > ${since} GROUP BY distinct_id HAVING countIf(properties.$pathname = '/') > 0)`,
@@ -235,9 +251,19 @@ const getMonitorData = createServerFn({ method: "GET" })
         count: Number(row[1] ?? 0),
       })),
       serverErrors: serverErrors.map((row) => ({
-        path: String(row[0] ?? ""),
-        status: row[1] == null ? null : Number(row[1]),
-        count: Number(row[2] ?? 0),
+        caller: row[0] ? String(row[0]) : "unknown",
+        path: String(row[1] ?? ""),
+        status: row[2] == null ? null : Number(row[2]),
+        count: Number(row[3] ?? 0),
+      })),
+      recentServerErrors: recentServerErrors.map((row) => ({
+        timestamp: String(row[0] ?? ""),
+        caller: row[1] ? String(row[1]) : "unknown",
+        path: String(row[2] ?? ""),
+        status: row[3] == null ? null : Number(row[3]),
+        bodyPreview: row[4] ? String(row[4]) : null,
+        attempts: row[5] == null ? null : Number(row[5]),
+        kind: row[6] ? String(row[6]) : null,
       })),
       fetchedAt: Date.now(),
     };
@@ -352,7 +378,11 @@ function MonitorPage() {
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <ReferrersCard rows={data.topReferrers} range={range} />
-                <ServerErrorsCard rows={data.serverErrors} range={range} />
+                <ServerErrorsCard
+                  rows={data.serverErrors}
+                  recent={data.recentServerErrors}
+                  range={range}
+                />
               </div>
             </>
           ) : null}
@@ -751,31 +781,73 @@ function TopReplaysCard({ rows, range }: { rows: TopReplayRow[]; range: Range })
   );
 }
 
+const FRIENDLY_REFERRER_LABELS: Record<string, string> = {
+  $direct: "Direct visit (typed URL, bookmark, app)",
+  "google.com": "Google Search",
+  "www.google.com": "Google Search",
+  "google.co.uk": "Google Search",
+  "google.com.br": "Google Search",
+  "duckduckgo.com": "DuckDuckGo",
+  "bing.com": "Bing",
+  "osu.ppy.sh": "osu! site",
+  "old.reddit.com": "Reddit",
+  "www.reddit.com": "Reddit",
+  "reddit.com": "Reddit",
+  "out.reddit.com": "Reddit (link out)",
+  "t.co": "Twitter / X",
+  "x.com": "Twitter / X",
+  "twitter.com": "Twitter / X",
+  "discord.com": "Discord",
+  "discordapp.com": "Discord",
+  "www.youtube.com": "YouTube",
+  "youtube.com": "YouTube",
+  "m.youtube.com": "YouTube (mobile)",
+  "github.com": "GitHub",
+};
+
+function formatReferrerLabel(domain: string): string {
+  const friendly = FRIENDLY_REFERRER_LABELS[domain];
+  if (friendly) return friendly;
+  if (/-aleju03s-projects\.vercel\.app$/.test(domain)) {
+    return `${domain.replace(/^maniacr-tracker-/, "")} (preview)`;
+  }
+  if (domain.endsWith(".vercel.app")) return `${domain} (vercel)`;
+  return domain.replace(/^www\./, "");
+}
+
 function ReferrersCard({ rows, range }: { rows: ReferrerRow[]; range: Range }) {
   const max = Math.max(1, ...rows.map((r) => r.count));
   return (
     <SectionCard
       title="Top referrers"
-      subtitle={`unique visitors by referring domain, ${RANGE_LABEL[range].toLowerCase()}`}
+      subtitle={`unique visitors by referring domain (excluding localhost), ${RANGE_LABEL[range].toLowerCase()}`}
     >
       {rows.length === 0 ? (
-        <EmptyMessage text="No referrers captured yet." />
+        <EmptyMessage text="No external referrers captured yet." />
       ) : (
         <div className="space-y-1.5">
           {rows.map((row) => {
             const pct = Math.max(3, Math.round((row.count / max) * 100));
-            const label = row.domain === "$direct" ? "Direct / none" : row.domain;
+            const label = formatReferrerLabel(row.domain);
+            const isDirect = row.domain === "$direct";
             return (
               <div
                 key={row.domain}
                 className="relative rounded-md bg-osu-b5/60 border border-osu-b3/20 overflow-hidden"
+                title={isDirect ? "" : row.domain}
               >
                 <div
                   className="absolute inset-y-0 left-0 bg-gradient-to-r from-osu-green-light/20 to-osu-green-light/5"
                   style={{ width: `${pct}%` }}
                 />
                 <div className="relative px-3 py-2 flex items-center justify-between gap-3">
-                  <span className="text-[11px] font-mono text-osu-c2 truncate">{label}</span>
+                  <span
+                    className={`text-[11px] truncate ${
+                      isDirect ? "italic text-osu-f1" : "text-osu-c2"
+                    }`}
+                  >
+                    {label}
+                  </span>
                   <span className="text-[11px] font-bold text-white flex-shrink-0">
                     {formatNumber(row.count)}
                   </span>
@@ -789,51 +861,138 @@ function ReferrersCard({ rows, range }: { rows: ReferrerRow[]; range: Range }) {
   );
 }
 
-function ServerErrorsCard({ rows, range }: { rows: ServerErrorRow[]; range: Range }) {
+function statusColorClass(status: number | null): string {
+  if (status == null || status >= 500) return "text-osu-red-light";
+  if (status === 429) return "text-osu-yellow";
+  if (status === 401 || status === 403) return "text-osu-pink-light";
+  if (status === 404) return "text-osu-l2";
+  return "text-osu-c2";
+}
+
+function ServerErrorsCard({
+  rows,
+  recent,
+  range,
+}: {
+  rows: ServerErrorRow[];
+  recent: RecentServerErrorRow[];
+  range: Range;
+}) {
   const total = rows.reduce((acc, row) => acc + row.count, 0);
+  const callerCounts = rows.reduce<Record<string, number>>((acc, row) => {
+    acc[row.caller] = (acc[row.caller] ?? 0) + row.count;
+    return acc;
+  }, {});
+  const callerSummary = Object.entries(callerCounts)
+    .sort(([, a], [, b]) => b - a)
+    .slice(0, 4)
+    .map(([caller, count]) => `${caller}×${count}`)
+    .join("  ");
+
   return (
     <SectionCard
       title="Server errors"
-      subtitle={`osu! API failures by path + status, ${RANGE_LABEL[range].toLowerCase()}`}
+      subtitle={`osu! API failures by caller + status, ${RANGE_LABEL[range].toLowerCase()}`}
     >
-      {rows.length === 0 ? (
+      {rows.length === 0 && recent.length === 0 ? (
         <EmptyMessage text="No server errors recorded. (good)" />
       ) : (
-        <div className="space-y-1.5">
-          <div className="text-[10px] text-osu-f1 font-mono pb-1">
-            {formatNumber(total)} total errors
+        <div className="space-y-3">
+          <div className="text-[10px] text-osu-f1 font-mono">
+            {formatNumber(total)} total
+            {callerSummary ? (
+              <span className="ml-2 text-osu-l2/70">· {callerSummary}</span>
+            ) : null}
           </div>
-          {rows.map((row, i) => {
-            const statusLabel =
-              row.status == null ? "retries_exhausted" : String(row.status);
-            const statusColor =
-              row.status == null || row.status >= 500
-                ? "text-osu-red-light"
-                : row.status === 429
-                  ? "text-osu-yellow"
-                  : "text-osu-c2";
-            return (
-              <div
-                key={`${row.path}-${row.status ?? "x"}-${i}`}
-                className="relative rounded-md bg-osu-b5/60 border border-osu-b3/20 overflow-hidden"
-              >
-                <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-osu-red/20 to-osu-red/5 w-full" />
-                <div className="relative px-3 py-2 flex items-center gap-2.5">
-                  <span
-                    className={`text-[10px] font-mono font-bold ${statusColor} w-14 flex-shrink-0`}
-                  >
-                    {statusLabel}
-                  </span>
-                  <span className="text-[11px] font-mono text-osu-c2 truncate flex-1">
-                    {row.path || "(unknown)"}
-                  </span>
-                  <span className="text-[11px] font-bold text-white flex-shrink-0">
-                    {formatNumber(row.count)}
-                  </span>
-                </div>
+
+          {rows.length > 0 ? (
+            <div>
+              <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-1.5">
+                Grouped
               </div>
-            );
-          })}
+              <div className="space-y-1.5">
+                {rows.map((row, i) => {
+                  const statusLabel =
+                    row.status == null ? "no-resp" : String(row.status);
+                  return (
+                    <div
+                      key={`${row.caller}-${row.path}-${row.status ?? "x"}-${i}`}
+                      className="relative rounded-md bg-osu-b5/60 border border-osu-b3/20 overflow-hidden"
+                    >
+                      <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-osu-red/20 to-osu-red/5 w-full" />
+                      <div className="relative px-2.5 py-1.5 flex items-center gap-2 min-w-0">
+                        <span
+                          className={`text-[10px] font-mono font-bold ${statusColorClass(row.status)} w-12 flex-shrink-0 text-right`}
+                        >
+                          {statusLabel}
+                        </span>
+                        <span className="text-[11px] text-white font-medium truncate flex-shrink-0 max-w-[40%]">
+                          {row.caller || "unknown"}
+                        </span>
+                        <span className="text-[10px] font-mono text-osu-f1 truncate flex-1 min-w-0">
+                          {row.path || "(unknown)"}
+                        </span>
+                        <span className="text-[11px] font-bold text-white flex-shrink-0">
+                          {formatNumber(row.count)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          {recent.length > 0 ? (
+            <div>
+              <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-1.5">
+                Recent (last {recent.length})
+              </div>
+              <div className="space-y-1.5 max-h-[420px] overflow-y-auto pr-1">
+                {recent.map((row, i) => {
+                  const ts = row.timestamp ? Date.parse(row.timestamp) : NaN;
+                  const when = Number.isFinite(ts)
+                    ? formatAgeShort(Date.now() - ts)
+                    : "—";
+                  const statusLabel =
+                    row.status == null ? "no-resp" : String(row.status);
+                  return (
+                    <div
+                      key={`${row.timestamp}-${i}`}
+                      className="rounded-md bg-osu-b5/60 border border-osu-b3/20 overflow-hidden"
+                    >
+                      <div className="px-2.5 py-1.5 flex items-center gap-2 min-w-0">
+                        <span className="text-[10px] font-mono text-osu-f1 w-8 flex-shrink-0">
+                          {when}
+                        </span>
+                        <span
+                          className={`text-[10px] font-mono font-bold ${statusColorClass(row.status)} w-10 flex-shrink-0 text-right`}
+                        >
+                          {statusLabel}
+                        </span>
+                        <span className="text-[11px] text-white font-medium truncate flex-shrink-0 max-w-[35%]">
+                          {row.caller || "unknown"}
+                        </span>
+                        <span className="text-[10px] font-mono text-osu-f1 truncate flex-1 min-w-0">
+                          {row.path || "(unknown)"}
+                        </span>
+                        {row.attempts != null && row.attempts > 1 ? (
+                          <span className="text-[9px] font-mono text-osu-yellow flex-shrink-0">
+                            ×{row.attempts}
+                          </span>
+                        ) : null}
+                      </div>
+                      {row.bodyPreview ? (
+                        <div className="px-2.5 pb-1.5 -mt-0.5 text-[10px] font-mono text-osu-l2/70 break-all">
+                          {row.bodyPreview}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
         </div>
       )}
     </SectionCard>
