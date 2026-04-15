@@ -72,11 +72,19 @@ function RootLayout() {
         <main className="flex-1 pt-[60px]">
           <Outlet />
         </main>
-        <footer
-          className="px-4 py-2 text-center text-[10px] text-osu-pink-light/30"
-          title="Unofficial fanmade website for the osu! community. Not affiliated with or endorsed by osu! or ppy Pty Ltd. All game data is fetched via the public osu! API."
-        >
-          fanmade · unofficial · not affiliated with ppy
+        <footer className="px-4 py-2 text-center text-[10px] text-osu-pink-light/30">
+          <span title="Unofficial fanmade website for the osu! community. Not affiliated with or endorsed by osu! or ppy Pty Ltd. All game data is fetched via the public osu! API.">
+            fanmade · unofficial · not affiliated with ppy
+          </span>
+          {" · made by "}
+          <a
+            href="https://osu.ppy.sh/users/7095193"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-osu-pink-light/60 transition-colors"
+          >
+            aleju03
+          </a>
         </footer>
       </PostHogProvider>
     </InitialCountryContext.Provider>
@@ -88,6 +96,11 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var s=localStorage.getItem("mania-hub-cache-v4");if(!s)return;var p=JSON.parse(s);var h=p&&p.state&&p.state.themeHue;if(typeof h==="number"&&isFinite(h))document.documentElement.style.setProperty("--theme-hue",String(((Math.round(h)%360)+360)%360));}catch(e){}})();`,
+          }}
+        />
       </head>
       <body className="min-h-screen flex flex-col font-sans antialiased">
         {children}
