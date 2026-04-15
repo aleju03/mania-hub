@@ -625,7 +625,7 @@ function MapsPage() {
                 ))}
               </FilterGroup>
 
-              <FilterGroup label="Type">
+              <FilterGroup label="Tags">
                 {RANDOM_PATTERN_OPTIONS.map((p) => (
                   <FilterPill
                     key={p}
