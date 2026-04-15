@@ -1,6 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCountryFlagUrl, getCountryName } from "../../lib/country";
 import { formatNumber } from "../../lib/format";
 
@@ -171,14 +171,14 @@ const getMonitorData = createServerFn({ method: "GET" })
       bounce,
     ] = await Promise.all([
       runQuery(`SELECT count(DISTINCT distinct_id) FROM events WHERE timestamp > now() - interval 5 minute`),
-      runQuery(`SELECT count() FROM events WHERE event = '$pageview' AND timestamp > ${since}`),
+      runQuery(`SELECT count() FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$pathname NOT LIKE '/admin/%'`),
       runQuery(`SELECT count(DISTINCT distinct_id) FROM events WHERE timestamp > ${since}`),
       runQuery(`SELECT count() FROM events WHERE timestamp > ${since}`),
       runQuery(
-        `SELECT properties.$pathname AS p, count() AS c FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$pathname IS NOT NULL AND properties.$pathname != '/' GROUP BY p ORDER BY c DESC LIMIT 10`,
+        `SELECT properties.$pathname AS p, count() AS c FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$pathname IS NOT NULL AND properties.$pathname != '/' AND properties.$pathname NOT LIKE '/admin/%' GROUP BY p ORDER BY c DESC LIMIT 10`,
       ),
       runQuery(
-        `SELECT toString(timestamp), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username FROM events WHERE distinct_id != 'server' ORDER BY timestamp DESC LIMIT 30`,
+        `SELECT toString(timestamp), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username FROM events WHERE distinct_id != 'server' AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') ORDER BY timestamp DESC LIMIT 30`,
       ),
       runQuery(
         `SELECT properties.$geoip_country_code AS c, count(DISTINCT distinct_id) AS n FROM events WHERE timestamp > ${since} AND properties.$geoip_country_code IS NOT NULL GROUP BY c ORDER BY n DESC LIMIT 10`,
@@ -290,31 +290,61 @@ export const Route = createFileRoute("/admin/monitor")({
 });
 
 const REFRESH_MS = 15_000;
+const RANGE_STORAGE_KEY = "mh_monitor_range";
 
 function MonitorPage() {
-  const [range, setRange] = useState<Range>("24h");
+  // Start at the SSR default so the server render and the client
+  // hydration agree; the stored preference is applied in an effect
+  // below. This avoids a hydration mismatch where the selector
+  // visually stays on "Last 24h" even though state is the stored value.
+  const [range, setRangeState] = useState<Range>("24h");
+  const [hydrated, setHydrated] = useState(false);
+  const setRange = useCallback((next: Range) => {
+    setRangeState(next);
+    try {
+      window.localStorage.setItem(RANGE_STORAGE_KEY, next);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(RANGE_STORAGE_KEY);
+      if (stored && (RANGES as readonly string[]).includes(stored)) {
+        setRangeState(stored as Range);
+      }
+    } catch {
+      // ignore
+    }
+    setHydrated(true);
+  }, []);
   const [data, setData] = useState<MonitorData | null>(null);
+  const [dataRange, setDataRange] = useState<Range | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const mountedRef = useRef(true);
+  const requestIdRef = useRef(0);
 
   const load = useCallback(
     async (targetRange: Range, isInitial: boolean) => {
-      if (isInitial) setLoading(true);
-      else setRefreshing(true);
+      const requestId = ++requestIdRef.current;
+      if (!isInitial) setRefreshing(true);
       try {
         const result = await getMonitorData({ data: { range: targetRange } });
         if (!mountedRef.current) return;
+        if (requestId !== requestIdRef.current) return;
         setData(result);
+        setDataRange(targetRange);
         setError(null);
       } catch (e) {
         if (!mountedRef.current) return;
+        if (requestId !== requestIdRef.current) return;
         setError(e instanceof Error ? e.message : "Unknown error");
       } finally {
         if (!mountedRef.current) return;
-        setLoading(false);
+        if (requestId !== requestIdRef.current) return;
         setRefreshing(false);
       }
     },
@@ -329,16 +359,18 @@ function MonitorPage() {
   }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     void load(range, true);
-  }, [range, load]);
+  }, [hydrated, range, load]);
 
   useEffect(() => {
+    if (!hydrated) return;
     if (!autoRefresh) return;
     const id = setInterval(() => {
       void load(range, false);
     }, REFRESH_MS);
     return () => clearInterval(id);
-  }, [autoRefresh, range, load]);
+  }, [hydrated, autoRefresh, range, load]);
 
   return (
     <div className="flex-1">
@@ -353,9 +385,7 @@ function MonitorPage() {
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5 space-y-5">
           <RangeSelector range={range} onChange={setRange} />
           {error ? <ErrorBanner message={error} /> : null}
-          {loading && !data ? (
-            <LoadingGrid />
-          ) : data ? (
+          {data && dataRange === range ? (
             <>
               <KpiRow data={data} range={range} />
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
@@ -391,7 +421,9 @@ function MonitorPage() {
                 />
               </div>
             </>
-          ) : null}
+          ) : (
+            <LoadingGrid />
+          )}
         </div>
       </div>
     </div>
@@ -623,9 +655,40 @@ function formatRecentEventLabel(row: RecentEventRow): string {
   return path;
 }
 
+// Distinct but readable accent colors for the visitor column. Each
+// unique distinct_id in the current batch gets assigned a slot in
+// first-seen order, wrapping around if there are more visitors than
+// colors. Same device always renders with the same color within one
+// render, so bursts from a single visitor are easy to spot.
+const VISITOR_COLORS = [
+  { bg: "bg-osu-pink/15", text: "text-osu-pink-light", dot: "bg-osu-pink" },
+  { bg: "bg-osu-blue/15", text: "text-osu-blue", dot: "bg-osu-blue" },
+  { bg: "bg-osu-green-light/15", text: "text-osu-green-light", dot: "bg-osu-green-light" },
+  { bg: "bg-osu-yellow/15", text: "text-osu-yellow", dot: "bg-osu-yellow" },
+  { bg: "bg-osu-c2/15", text: "text-osu-c2", dot: "bg-osu-c2" },
+  { bg: "bg-osu-red-light/15", text: "text-osu-red-light", dot: "bg-osu-red-light" },
+] as const;
+
+function buildVisitorPalette(rows: RecentEventRow[]): Map<string, { slot: number; label: string }> {
+  const palette = new Map<string, { slot: number; label: string }>();
+  let nextSlot = 0;
+  for (const row of rows) {
+    const id = row.distinctId;
+    if (!id || palette.has(id)) continue;
+    palette.set(id, { slot: nextSlot, label: `V${nextSlot + 1}` });
+    nextSlot += 1;
+  }
+  return palette;
+}
+
 function RecentEventsCard({ rows }: { rows: RecentEventRow[] }) {
+  const visitorPalette = useMemo(() => buildVisitorPalette(rows), [rows]);
+  const visitorCount = visitorPalette.size;
   return (
-    <SectionCard title="Recent events" subtitle="last 30 from the live stream">
+    <SectionCard
+      title="Recent events"
+      subtitle={`last 30 from ${visitorCount} visitor${visitorCount === 1 ? "" : "s"}`}
+    >
       {rows.length === 0 ? (
         <EmptyMessage text="No events captured yet." />
       ) : (
@@ -633,14 +696,21 @@ function RecentEventsCard({ rows }: { rows: RecentEventRow[] }) {
           {rows.map((row, i) => {
             const ts = row.timestamp ? Date.parse(row.timestamp) : NaN;
             const when = Number.isFinite(ts) ? formatAgeShort(Date.now() - ts) : "—";
-            const shortId = row.distinctId ? row.distinctId.slice(-6) : "—";
             const label = formatRecentEventLabel(row);
+            const entry = row.distinctId ? visitorPalette.get(row.distinctId) : undefined;
+            const color = entry ? VISITOR_COLORS[entry.slot % VISITOR_COLORS.length] : null;
+            const visitorLabel = entry?.label ?? "—";
             return (
               <div
                 key={`${row.timestamp}-${i}`}
                 className="flex items-center gap-2 text-[10px] py-1.5 px-2 rounded-md hover:bg-osu-b3/30 transition-colors duration-[100ms]"
-                title={row.path || ""}
+                title={
+                  row.distinctId
+                    ? `visitor id: ${row.distinctId}${row.path ? ` · ${row.path}` : ""}`
+                    : row.path || ""
+                }
               >
+                <span className={`w-1 self-stretch rounded-full flex-shrink-0 ${color?.dot ?? "bg-osu-b3/40"}`} />
                 <span className="text-osu-f1 font-mono w-10 flex-shrink-0">{when}</span>
                 {row.country ? (
                   <img
@@ -653,7 +723,13 @@ function RecentEventsCard({ rows }: { rows: RecentEventRow[] }) {
                   <span className="w-[14px] h-[10px] rounded-[1px] bg-osu-b3/40 flex-shrink-0" />
                 )}
                 <span className="text-osu-c2 truncate flex-1">{label}</span>
-                <span className="text-osu-f1 font-mono flex-shrink-0">{shortId}</span>
+                <span
+                  className={`font-mono font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${
+                    color ? `${color.bg} ${color.text}` : "text-osu-f1"
+                  }`}
+                >
+                  {visitorLabel}
+                </span>
               </div>
             );
           })}
