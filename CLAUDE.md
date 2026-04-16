@@ -42,7 +42,7 @@ All osu! API calls go through **server functions** (`createServerFn` from TanSta
 
 ### State & Caching
 
-Client state uses **Zustand** (`src/store.ts`) with `persist` middleware (localStorage key `"mania-hub-cache-v4"`). Most store slices are keyed by country code (e.g., `rankingsByCountry`, `feedScoresByCountry`). Staleness is checked via `isCacheStale()` from `src/lib/cache.ts` using TTLs defined there.
+Client state uses **Zustand** (`src/store.ts`) with `persist` middleware (localStorage key `"mania-hub-cache-v5"`). Most store slices are keyed by country code (e.g., `rankingsByCountry`, `feedScoresByCountry`). Staleness is checked via `isCacheStale()` from `src/lib/cache.ts` using TTLs defined there.
 
 Server-side caching uses `getPersistentCached`/`setPersistentCache` in `api.ts` - checks in-memory first, then falls back to the `cache_entries` table in Turso. Server functions in `osu.ts` define their own cache TTLs (rankings 5 min, rank history 24h, user 2 min, home page 60s, maps data 24h, insights 6h).
 

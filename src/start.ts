@@ -1,15 +1,39 @@
 import { createStart, createMiddleware } from "@tanstack/react-start";
-import { COUNTRY_COOKIE_NAME } from "./lib/country-cookie";
 
-const CACHEABLE_DOCUMENT_PATHS = new Set<string>([
-  "/",
-  "/rankings",
-  "/top-plays",
-  "/maps",
-]);
+interface DocumentCacheConfig {
+  sMaxage: number;
+  swr: number;
+}
 
-const DOCUMENT_CACHE_CONTROL =
-  "public, s-maxage=60, stale-while-revalidate=300";
+const DEFAULT_DOCUMENT_CACHE: DocumentCacheConfig = {
+  sMaxage: 60,
+  swr: 300,
+};
+
+// Per-path SSR HTML cache config. The CDN caches the rendered document so
+// repeat navigations don't re-invoke the function. Server-function RPC
+// responses inside each page have their own edgeCache() and are cached
+// independently, so these TTLs only affect the HTML shell.
+const DOCUMENT_CACHE_BY_PATH: Record<string, DocumentCacheConfig> = {
+  "/": DEFAULT_DOCUMENT_CACHE,
+  "/rankings": DEFAULT_DOCUMENT_CACHE,
+  "/top-plays": DEFAULT_DOCUMENT_CACHE,
+  "/maps": DEFAULT_DOCUMENT_CACHE,
+  // Replay pages are an app shell; the real replay/beatmap data is loaded
+  // via server functions. Long TTL since the shell rarely changes.
+  "/replay": { sMaxage: 300, swr: 1800 },
+};
+
+function getDocumentCacheForPathname(pathname: string): DocumentCacheConfig | null {
+  const exact = DOCUMENT_CACHE_BY_PATH[pathname];
+  if (exact) return exact;
+  if (pathname.startsWith("/player/")) return { sMaxage: 60, swr: 300 };
+  return null;
+}
+
+function formatCacheControl(cfg: DocumentCacheConfig): string {
+  return `public, s-maxage=${cfg.sMaxage}, stale-while-revalidate=${cfg.swr}`;
+}
 
 const documentCacheMiddleware = createMiddleware().server(
   async ({ next, request }) => {
@@ -39,20 +63,11 @@ const documentCacheMiddleware = createMiddleware().server(
     }
 
     const url = new URL(request.url);
-    if (!CACHEABLE_DOCUMENT_PATHS.has(url.pathname)) return result;
+    const cacheConfig = getDocumentCacheForPathname(url.pathname);
+    if (!cacheConfig) return result;
 
     const contentType = response.headers.get("content-type") ?? "";
     if (!contentType.toLowerCase().includes("text/html")) return result;
-
-    // The HTML body now embeds the country resolved from the request's
-    // `mania-hub-country` cookie. If that cookie is present, the response
-    // is per-user and must NOT enter the shared CDN cache. New visitors
-    // (no cookie) still get the cached default-country HTML.
-    const cookieHeader = request.headers.get("cookie") ?? "";
-    const escaped = COUNTRY_COOKIE_NAME.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    if (new RegExp(`(?:^|;\\s*)${escaped}=`).test(cookieHeader)) {
-      return result;
-    }
 
     const existing = response.headers.get("cache-control") ?? "";
     if (existing && !/max-age=0|no-store|no-cache/i.test(existing)) {
@@ -60,7 +75,18 @@ const documentCacheMiddleware = createMiddleware().server(
     }
 
     try {
-      response.headers.set("Cache-Control", DOCUMENT_CACHE_CONTROL);
+      response.headers.set("Cache-Control", formatCacheControl(cacheConfig));
+      // Key the CDN cache per country. The HTML embeds country-specific
+      // state (nav, initial context) resolved from the `mania-hub-country`
+      // cookie, so responses differ per country. `Vary: Cookie` makes the
+      // edge key by cookie value, producing one cached variant per country
+      // (plus an anonymous "no cookie" bucket). This only works because
+      // `mania-hub-country` is the ONLY first-party cookie this site
+      // writes — PostHog uses localStorage (see lib/posthog.ts) and
+      // nothing else sets cookies. If a session cookie or other per-user
+      // cookie is ever introduced, this must change: each user would
+      // become a unique cache bucket, defeating the cache.
+      response.headers.set("Vary", "Cookie");
     } catch {
       // Some response objects have immutable headers — silently skip.
     }

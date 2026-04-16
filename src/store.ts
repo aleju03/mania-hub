@@ -6,7 +6,13 @@ import { DEFAULT_COUNTRY_CODE, normalizeCountryCode } from "./lib/country";
 import { InitialCountryContext } from "./lib/country-context";
 import { readCountryCookieClient, writeCountryCookieClient } from "./lib/country-cookie";
 import { getScoreIdentity, getScoreTimeMs } from "./lib/score";
-import type { OsuScore, RankingsResponse, CountryMapsData } from "./lib/types";
+import type {
+  OsuScore,
+  RankingsResponse,
+  CountryMapsData,
+  LeanHomeScore,
+  LeanHomePopoff,
+} from "./lib/types";
 
 export interface CachedAvatarAccent {
   fetchedAt: number;
@@ -42,11 +48,6 @@ export interface CachedPlayer {
   avatar_url: string;
 }
 
-export interface CachedHomePopoff {
-  user: { username: string; avatar_url: string };
-  score: OsuScore;
-}
-
 export interface CachedPopoff {
   user: CachedPlayer;
   score: OsuScore;
@@ -68,9 +69,9 @@ interface AppState {
   rankingsFetchedAtByCountry: CountryRecord<number>;
   rankHistories: Record<number, number[]>;
   rankHistoriesFetchedAt: Record<number, number>;
-  homeRecentScoresByCountry: CountryRecord<OsuScore[]>;
+  homeRecentScoresByCountry: CountryRecord<LeanHomeScore[]>;
   homeRecentScoresFetchedAtByCountry: CountryRecord<number>;
-  homePopoffsByCountry: CountryRecord<CachedHomePopoff[]>;
+  homePopoffsByCountry: CountryRecord<LeanHomePopoff[]>;
   homePopoffsFetchedAtByCountry: CountryRecord<number>;
   topPlaysRangeByCountry: CountryRecord<TopPlaysRange>;
   popoffsByCountry: CountryRecord<CachedPopoff[]>;
@@ -89,8 +90,8 @@ interface AppState {
   setAvatarAccents: (accents: Record<string, string | null>, fetchedAt?: number) => void;
   setRankings: (country: string, rankings: RankingsResponse) => void;
   setRankHistories: (histories: Record<number, number[]>) => void;
-  setHomeRecentScores: (country: string, scores: OsuScore[]) => void;
-  setHomePopoffs: (country: string, popoffs: CachedHomePopoff[]) => void;
+  setHomeRecentScores: (country: string, scores: LeanHomeScore[]) => void;
+  setHomePopoffs: (country: string, popoffs: LeanHomePopoff[]) => void;
   setTopPlaysRange: (country: string, range: TopPlaysRange) => void;
   setPopoffs: (country: string, popoffs: CachedPopoff[]) => void;
   setMapsData: (country: string, data: CountryMapsData) => void;
@@ -470,7 +471,11 @@ export const useAppStore = create<AppState>()(
         }),
     }),
     {
-      name: "mania-hub-cache-v4",
+      // v5: home scores/popoffs and rankings persisted shapes changed to
+      // lean DTOs; the bump forces returning users to re-fetch instead of
+      // rehydrating v4 entries with fat shapes our consumers no longer
+      // know how to read.
+      name: "mania-hub-cache-v5",
       storage,
       merge: (persistedState, currentState) => {
         const nextState = persistedState && typeof persistedState === "object"
@@ -498,12 +503,102 @@ export const useAppStore = create<AppState>()(
           persistedPopoffsFetchedAtByCountry,
         ).filter(([, fetchedAt]) => Number.isFinite(Number(fetchedAt)));
 
+        // Shape guard: during development, HMR can re-key the persist store
+        // mid-session and write a stale in-memory shape under the new name
+        // (e.g. fat `OsuScore` where the new consumer expects `LeanHomeScore`).
+        // On rehydration, drop any country's entries that don't match the
+        // current lean shape so the consumer re-fetches instead of rendering
+        // objects where it expects strings.
+        const isLeanHomeScore = (value: unknown): value is LeanHomeScore => {
+          if (!value || typeof value !== "object") return false;
+          const score = value as Record<string, unknown>;
+          if (!Array.isArray(score.mods)) return false;
+          if (score.mods.length > 0 && typeof score.mods[0] !== "string") return false;
+          return typeof score.displayRank === "string" && typeof score.title === "string";
+        };
+        const sanitizeByCountry = <T>(
+          raw: unknown,
+          isValid: (value: unknown) => boolean,
+        ): CountryRecord<T[]> => {
+          if (!raw || typeof raw !== "object") return {};
+          const result: CountryRecord<T[]> = {};
+          for (const [country, entries] of Object.entries(raw)) {
+            if (!Array.isArray(entries) || entries.length === 0) continue;
+            if (!entries.every(isValid)) continue;
+            result[country] = entries as T[];
+          }
+          return result;
+        };
+        const sanitizedHomeRecentScoresByCountry = sanitizeByCountry<LeanHomeScore>(
+          nextState.homeRecentScoresByCountry,
+          isLeanHomeScore,
+        );
+        const sanitizedHomePopoffsByCountry = sanitizeByCountry<LeanHomePopoff>(
+          nextState.homePopoffsByCountry,
+          (entry) =>
+            !!entry &&
+            typeof entry === "object" &&
+            isLeanHomeScore((entry as { score?: unknown }).score),
+        );
+        const rankingsIsLean = (ranking: unknown): boolean => {
+          if (!Array.isArray(ranking)) return false;
+          if (ranking.length === 0) return true;
+          const first = ranking[0] as Record<string, unknown> | null;
+          const user = first?.user as Record<string, unknown> | undefined;
+          // Reject v4 full `OsuUser` shape (has `page`, `badges`, `statistics`).
+          return !!user && !("page" in user) && !("badges" in user) && !("statistics" in user);
+        };
+        const sanitizedRankingsByCountry: CountryRecord<RankingsResponse> = {};
+        if (nextState.rankingsByCountry && typeof nextState.rankingsByCountry === "object") {
+          for (const [country, value] of Object.entries(nextState.rankingsByCountry)) {
+            if (value && typeof value === "object" && rankingsIsLean((value as RankingsResponse).ranking)) {
+              sanitizedRankingsByCountry[country] = value as RankingsResponse;
+            }
+          }
+        }
+        // Drop fetchedAt timestamps for any country whose entries got
+        // sanitized out, otherwise the consumer's stale-check treats the
+        // dropped country as fresh and never refetches.
+        const filterFetchedAtByCountry = (
+          raw: unknown,
+          validCountries: CountryRecord<unknown>,
+        ): CountryRecord<number> => {
+          if (!raw || typeof raw !== "object") return {};
+          const result: CountryRecord<number> = {};
+          for (const [country, ts] of Object.entries(raw)) {
+            if (!(country in validCountries)) continue;
+            if (!Number.isFinite(Number(ts))) continue;
+            result[country] = Number(ts);
+          }
+          return result;
+        };
+        const sanitizedHomeRecentScoresFetchedAtByCountry = filterFetchedAtByCountry(
+          nextState.homeRecentScoresFetchedAtByCountry,
+          sanitizedHomeRecentScoresByCountry,
+        );
+        const sanitizedHomePopoffsFetchedAtByCountry = filterFetchedAtByCountry(
+          nextState.homePopoffsFetchedAtByCountry,
+          sanitizedHomePopoffsByCountry,
+        );
+        const sanitizedRankingsFetchedAtByCountry = filterFetchedAtByCountry(
+          nextState.rankingsFetchedAtByCountry,
+          sanitizedRankingsByCountry,
+        );
+
         return {
           ...currentState,
           ...nextState,
           // If the user changed country before persist hydration finished, do not clobber
           // that live selection with the older value from storage.
           selectedCountry,
+          // Override the spread above with the shape-validated versions so
+          // stale/mismatched persisted entries don't make it to consumers.
+          rankingsByCountry: sanitizedRankingsByCountry,
+          rankingsFetchedAtByCountry: sanitizedRankingsFetchedAtByCountry,
+          homeRecentScoresByCountry: sanitizedHomeRecentScoresByCountry,
+          homeRecentScoresFetchedAtByCountry: sanitizedHomeRecentScoresFetchedAtByCountry,
+          homePopoffsByCountry: sanitizedHomePopoffsByCountry,
+          homePopoffsFetchedAtByCountry: sanitizedHomePopoffsFetchedAtByCountry,
           themeHue: clampThemeHue(nextState.themeHue ?? currentState.themeHue),
           avatarAccents: Object.fromEntries(
             Object.entries(

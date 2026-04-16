@@ -51,7 +51,7 @@ Do not move osu! credentials or direct authenticated requests into client compon
 
 ### State and Caching
 
-- `src/store.ts` contains the Zustand store with `persist` middleware (localStorage key `"mania-hub-cache-v4"`). Most slices are keyed by country code (e.g., `rankingsByCountry`, `feedScoresByCountry`).
+- `src/store.ts` contains the Zustand store with `persist` middleware (localStorage key `"mania-hub-cache-v5"`). Most slices are keyed by country code (e.g., `rankingsByCountry`, `feedScoresByCountry`).
 - `src/lib/cache.ts` defines client-side TTL constants and `isCacheStale()` helper.
 - Server functions in `osu.ts` define their own cache TTLs (rankings 5 min, rank history 24h, user 2 min, home page 60s, maps data 24h, insights 6h).
 

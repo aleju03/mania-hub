@@ -5,15 +5,14 @@ import { getHomePopoffs, getHomeRecentScores, getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
-import { getDisplayedAccuracy, getDisplayedRank, getModAcronyms, getScoreTimestamp } from "../lib/score";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
 import { RankingRowSkeleton, ScoreRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { UsernameText } from "../components/ui/UsernameText";
-import type { RankingsResponse, OsuScore } from "../lib/types";
-import { useAppStore, useSelectedCountry, type CachedHomePopoff } from "../store";
+import type { RankingsResponse, LeanHomeScore, LeanHomePopoff } from "../lib/types";
+import { useAppStore, useSelectedCountry } from "../store";
 
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -43,8 +42,8 @@ function getFeaturedPopoffGridClass(total: number): string {
   return "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-px bg-osu-b3/15";
 }
 
-const EMPTY_SCORES: OsuScore[] = [];
-const EMPTY_POPOFFS: CachedHomePopoff[] = [];
+const EMPTY_SCORES: LeanHomeScore[] = [];
+const EMPTY_POPOFFS: LeanHomePopoff[] = [];
 const HOME_RANKING_SKELETON_MOBILE_COUNT = 5;
 const HOME_RANKING_SKELETON_DESKTOP_COUNT = 10;
 const HOME_RECENT_SCORES_SKELETON_COUNT = 2;
@@ -342,7 +341,7 @@ function HomePage() {
                     {Math.round(p.score.pp ?? 0)}pp
                   </div>
                   <div className="mt-3 flex items-center justify-center gap-2 max-w-full">
-                    <GradeImg grade={getDisplayedRank(p.score)} size={18} />
+                    <GradeImg grade={p.score.displayRank} size={18} />
                     <Avatar url={p.user.avatar_url} size={24} />
                     <UsernameText
                       username={p.user.username}
@@ -352,20 +351,20 @@ function HomePage() {
                   </div>
                   <div className="mt-3 w-full max-w-[26ch] space-y-1">
                     <div className="text-[11px] text-osu-f1 leading-relaxed line-clamp-2">
-                      {p.score.beatmapset?.title}
+                      {p.score.title}
                     </div>
                     <div className="text-[10px] text-osu-f1/80 leading-relaxed line-clamp-2">
-                      [{p.score.beatmap?.version}]
+                      [{p.score.version}]
                     </div>
                   </div>
-                  {getModAcronyms(p.score.mods).length > 0 && (
+                  {p.score.mods.length > 0 && (
                     <div className="mt-3 flex items-center justify-center gap-1 flex-wrap max-w-[26ch]">
-                      {getModAcronyms(p.score.mods).map((acronym) => (
+                      {p.score.mods.map((acronym) => (
                         <ModBadge key={acronym} mod={acronym} size={0.8} />
                       ))}
                     </div>
                   )}
-                  <div className="mt-3 text-[10px] text-osu-f1/60">{formatTimeAgo(getScoreTimestamp(p.score))}</div>
+                  <div className="mt-3 text-[10px] text-osu-f1/60">{formatTimeAgo(p.score.timestamp)}</div>
                 </motion.div>
               ))}
             </div>
@@ -388,42 +387,38 @@ function HomePage() {
                 </div>
               ))
             ) : recentScores.length > 0 ? (
-              recentScores.map((s: OsuScore, i: number) => {
-                const mods = getModAcronyms(s.mods);
-
-                return (
-                  <motion.div key={s.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
-                    className="flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3/50 transition-colors cursor-pointer"
-                    onClick={() => navigate({ to: "/player/$username", params: { username: s.user?.username } })}>
-                      <GradeImg grade={getDisplayedRank(s)} size={22} />
-                    <Avatar url={s.user?.avatar_url} size={26} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs truncate">
-                        <UsernameText
-                          username={s.user?.username ?? "Unknown"}
-                          avatarUrl={s.user?.avatar_url}
-                          className="font-medium"
-                        />{" "}
-                        <span className="text-osu-f1">on</span> {s.beatmapset?.title}
-                      </div>
-                      <div className="mt-0.5 text-[10px] text-osu-f1 min-w-0 truncate">
-                          [{s.beatmap?.version}] {s.beatmap?.cs && `${s.beatmap.cs}K`} &middot; {formatTimeAgo(getScoreTimestamp(s))}
-                      </div>
+              recentScores.map((s: LeanHomeScore, i: number) => (
+                <motion.div key={s.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
+                  className="flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3/50 transition-colors cursor-pointer"
+                  onClick={() => navigate({ to: "/player/$username", params: { username: s.user.username } })}>
+                    <GradeImg grade={s.displayRank} size={22} />
+                  <Avatar url={s.user.avatar_url} size={26} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs truncate">
+                      <UsernameText
+                        username={s.user.username}
+                        avatarUrl={s.user.avatar_url}
+                        className="font-medium"
+                      />{" "}
+                      <span className="text-osu-f1">on</span> {s.title}
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {mods.length > 0 && (
-                        <div className="flex items-center gap-0.5">
-                          {mods.map((acronym) => (
-                            <ModBadge key={acronym} mod={acronym} size={0.8} />
-                          ))}
-                        </div>
-                      )}
-                      <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(s))}</span>
-                      <span className="text-xs font-bold">{formatPP(s.pp)}</span>
+                    <div className="mt-0.5 text-[10px] text-osu-f1 min-w-0 truncate">
+                        [{s.version}] {s.keyCount > 0 && `${s.keyCount}K`} &middot; {formatTimeAgo(s.timestamp)}
                     </div>
-                  </motion.div>
-                );
-              })
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {s.mods.length > 0 && (
+                      <div className="flex items-center gap-0.5">
+                        {s.mods.map((acronym) => (
+                          <ModBadge key={acronym} mod={acronym} size={0.8} />
+                        ))}
+                      </div>
+                    )}
+                    <span className="text-xs text-osu-l2">{formatAccuracy(s.displayAcc)}</span>
+                    <span className="text-xs font-bold">{formatPP(s.pp)}</span>
+                  </div>
+                </motion.div>
+              ))
             ) : (
               <div className="px-4 py-6 text-center text-xs text-osu-f1">No recent scores</div>
             )}
