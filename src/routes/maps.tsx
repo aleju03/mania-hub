@@ -46,6 +46,7 @@ type MapsSearch = {
   rStatus: string;
   rKey: string;
   rPattern: string;
+  rStars: number;
 };
 
 const PAGE_SIZE = 24;
@@ -64,6 +65,7 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   rStatus: "",
   rKey: "",
   rPattern: "",
+  rStars: 0,
 };
 
 const RANDOM_STATUS_OPTIONS = ["ranked", "loved", "graveyard", "other"] as const;
@@ -95,6 +97,9 @@ const RANDOM_PATTERN_MATCHES: Record<RandomPattern, string[]> = {
   sv: ["sv"],
 };
 
+const RANDOM_STAR_OPTIONS = [4, 5, 6, 7, 8, 9] as const;
+type RandomStarThreshold = (typeof RANDOM_STAR_OPTIONS)[number] | 0;
+
 const RANDOM_PATTERN_LABEL: Record<RandomPattern, string> = {
   jack: "Jack",
   chordjack: "Chordjack",
@@ -106,20 +111,51 @@ const RANDOM_PATTERN_LABEL: Record<RandomPattern, string> = {
   sv: "SV",
 };
 
-function parseCsvSet<T extends string>(raw: string, allowed: readonly T[]): Set<T> {
-  if (!raw) return new Set();
+type TriStateMode = "include" | "exclude";
+type TriStateSelection<T extends string> = { includes: Set<T>; excludes: Set<T> };
+
+// URL encoding: `value` = include, `-value` = exclude. Backwards compatible
+// with the previous toggle scheme (no prefix == include).
+function parseTriStateCsv<T extends string>(raw: string, allowed: readonly T[]): TriStateSelection<T> {
+  const includes = new Set<T>();
+  const excludes = new Set<T>();
+  if (!raw) return { includes, excludes };
   const allowedSet = new Set<string>(allowed);
-  return new Set(
-    raw.split(",").map((s) => s.trim()).filter((s): s is T => allowedSet.has(s)),
-  );
+  for (const part of raw.split(",")) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const isExclude = trimmed.startsWith("-");
+    const value = isExclude ? trimmed.slice(1) : trimmed;
+    if (!allowedSet.has(value)) continue;
+    if (isExclude) excludes.add(value as T);
+    else includes.add(value as T);
+  }
+  return { includes, excludes };
 }
 
-function toggleCsv(raw: string, value: string): string {
+// Cycle: none → include → exclude → none
+function cycleTriStateCsv(raw: string, value: string): string {
   const parts = raw ? raw.split(",").filter(Boolean) : [];
-  const idx = parts.indexOf(value);
-  if (idx >= 0) parts.splice(idx, 1);
-  else parts.push(value);
+  const includeIdx = parts.indexOf(value);
+  const excludeIdx = parts.indexOf(`-${value}`);
+  if (includeIdx >= 0) {
+    parts[includeIdx] = `-${value}`;
+  } else if (excludeIdx >= 0) {
+    parts.splice(excludeIdx, 1);
+  } else {
+    parts.push(value);
+  }
   return parts.join(",");
+}
+
+function getTriStateMode<T extends string>(sel: TriStateSelection<T>, value: T): TriStateMode | undefined {
+  if (sel.includes.has(value)) return "include";
+  if (sel.excludes.has(value)) return "exclude";
+  return undefined;
+}
+
+function triStateActive<T extends string>(sel: TriStateSelection<T>): number {
+  return sel.includes.size + sel.excludes.size;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -229,6 +265,7 @@ export const Route = createFileRoute("/maps")({
     rStatus: typeof search.rStatus === "string" ? search.rStatus : DEFAULT_MAPS_SEARCH.rStatus,
     rKey: typeof search.rKey === "string" ? search.rKey : DEFAULT_MAPS_SEARCH.rKey,
     rPattern: typeof search.rPattern === "string" ? search.rPattern : DEFAULT_MAPS_SEARCH.rPattern,
+    rStars: (RANDOM_STAR_OPTIONS as readonly number[]).includes(Number(search.rStars)) ? Number(search.rStars) : DEFAULT_MAPS_SEARCH.rStars,
   }),
   component: MapsPage,
 });
@@ -261,17 +298,21 @@ function MapsPage() {
   const rStatusRaw = mapsSearch.rStatus;
   const rKeyRaw = mapsSearch.rKey;
   const rPatternRaw = mapsSearch.rPattern;
-  const randomStatusSet = useMemo(() => parseCsvSet(rStatusRaw, RANDOM_STATUS_OPTIONS), [rStatusRaw]);
-  const randomKeySet = useMemo(() => parseCsvSet(rKeyRaw, RANDOM_KEY_OPTIONS), [rKeyRaw]);
-  const randomPatternSet = useMemo(() => parseCsvSet(rPatternRaw, RANDOM_PATTERN_OPTIONS), [rPatternRaw]);
-  const randomPatternCanonicalSet = useMemo(() => {
-    if (randomPatternSet.size === 0) return null;
-    const expanded = new Set<string>();
-    for (const p of randomPatternSet) {
-      for (const canonical of RANDOM_PATTERN_MATCHES[p]) expanded.add(canonical);
-    }
-    return expanded;
-  }, [randomPatternSet]);
+  const rStars = mapsSearch.rStars as RandomStarThreshold;
+  const randomStatus = useMemo(() => parseTriStateCsv(rStatusRaw, RANDOM_STATUS_OPTIONS), [rStatusRaw]);
+  const randomKey = useMemo(() => parseTriStateCsv(rKeyRaw, RANDOM_KEY_OPTIONS), [rKeyRaw]);
+  const randomPattern = useMemo(() => parseTriStateCsv(rPatternRaw, RANDOM_PATTERN_OPTIONS), [rPatternRaw]);
+  // Expand umbrella tags ("Stream" → jumpstream/handstream/etc) on each side.
+  const randomPatternCanonical = useMemo(() => {
+    const expand = (set: Set<RandomPattern>): Set<string> | null => {
+      if (set.size === 0) return null;
+      const expanded = new Set<string>();
+      for (const p of set) for (const c of RANDOM_PATTERN_MATCHES[p]) expanded.add(c);
+      return expanded;
+    };
+    return { includes: expand(randomPattern.includes), excludes: expand(randomPattern.excludes) };
+  }, [randomPattern]);
+  const totalRandomActive = triStateActive(randomStatus) + triStateActive(randomKey) + triStateActive(randomPattern) + (rStars > 0 ? 1 : 0);
   const countryName = getCountryName(selectedCountry);
 
   useEffect(() => {
@@ -457,6 +498,62 @@ function MapsPage() {
   const [randomPlayer, setRandomPlayer] = useState<MapsPlayerFavourites | null>(null);
   const [randomBeatmapset, setRandomBeatmapset] = useState<MapsFavouriteBeatmapset | null>(null);
   const lastRandomKeyRef = useRef<string | null>(null);
+  // Sliding window of recent player IDs to avoid repeats. Length 2 means three
+  // rolls in a row are guaranteed to be three different people (when possible).
+  const recentRandomPlayerIdsRef = useRef<number[]>([]);
+  const RECENT_PLAYER_HISTORY = 2;
+
+  // ── Mobile collapsible filter panel (shared across tabs) ────────────────
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const activeFilterCount = useMemo(() => {
+    if (tab === "random") return totalRandomActive;
+    if (tab === "farmed") {
+      return (
+        (keyFilter !== "all" ? 1 : 0) +
+        (modFilter !== "all" ? 1 : 0) +
+        (ppFilter > 0 ? 1 : 0) +
+        (farmedSort !== "players" ? 1 : 0)
+      );
+    }
+    if (tab === "popular") {
+      return (keyFilter !== "all" ? 1 : 0) + (beatmapSort !== "players" ? 1 : 0);
+    }
+    if (tab === "favourites") return statusFilter !== "all" ? 1 : 0;
+    return 0;
+  }, [tab, totalRandomActive, keyFilter, modFilter, ppFilter, farmedSort, beatmapSort, statusFilter]);
+
+  // Reset the panel when switching tabs so the new tab doesn't open mid-overlay.
+  useEffect(() => { setFiltersOpen(false); }, [tab]);
+
+  // Esc closes the mobile filter sheet (backdrop handles tap-outside).
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFiltersOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [filtersOpen]);
+
+  // Swipe-down-to-dismiss on the sheet's drag handle.
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragOffset, setDragOffset] = useState(0);
+  const dragStartYRef = useRef(0);
+  const handleDragStart = (e: React.TouchEvent) => {
+    dragStartYRef.current = e.touches[0].clientY;
+    setIsDragging(true);
+    setDragOffset(0);
+  };
+  const handleDragMove = (e: React.TouchEvent) => {
+    const delta = e.touches[0].clientY - dragStartYRef.current;
+    setDragOffset(Math.max(0, delta));
+  };
+  const handleDragEnd = () => {
+    setIsDragging(false);
+    if (dragOffset > 80) setFiltersOpen(false);
+    setDragOffset(0);
+  };
+  useEffect(() => { if (filtersOpen) setDragOffset(0); }, [filtersOpen]);
 
   const randomPool = useMemo(() => {
     if (!mapsData?.favouritesByPlayer || !mapsData?.beatmapsetsPool) return [];
@@ -465,20 +562,21 @@ function MapsPage() {
       for (const bid of player.beatmapsetIds) {
         const beatmapset = mapsData.beatmapsetsPool[bid];
         if (!beatmapset) continue;
-        if (randomStatusSet.size > 0 && !randomStatusSet.has(mapStatusBucket(beatmapset.status))) continue;
-        if (randomKeySet.size > 0) {
-          const keys = beatmapset.maniaKeys ?? [];
-          if (!keys.some((k) => randomKeySet.has(mapKeyBucket(k)))) continue;
-        }
-        if (randomPatternCanonicalSet) {
-          const patterns = beatmapset.patterns ?? [];
-          if (!patterns.some((p) => randomPatternCanonicalSet.has(p))) continue;
-        }
+        const statusBucket = mapStatusBucket(beatmapset.status);
+        if (randomStatus.includes.size > 0 && !randomStatus.includes.has(statusBucket)) continue;
+        if (randomStatus.excludes.has(statusBucket)) continue;
+        const keys = beatmapset.maniaKeys ?? [];
+        if (randomKey.includes.size > 0 && !keys.some((k) => randomKey.includes.has(mapKeyBucket(k)))) continue;
+        if (randomKey.excludes.size > 0 && keys.some((k) => randomKey.excludes.has(mapKeyBucket(k)))) continue;
+        const patterns = beatmapset.patterns ?? [];
+        if (randomPatternCanonical.includes && !patterns.some((p) => randomPatternCanonical.includes!.has(p))) continue;
+        if (randomPatternCanonical.excludes && patterns.some((p) => randomPatternCanonical.excludes!.has(p))) continue;
+        if (rStars > 0 && (beatmapset.starMax ?? 0) < rStars) continue;
         pairs.push({ player, beatmapset });
       }
     }
     return pairs;
-  }, [mapsData, randomStatusSet, randomKeySet, randomPatternCanonicalSet]);
+  }, [mapsData, randomStatus, randomKey, randomPatternCanonical, rStars]);
 
   const reshuffleRandom = useCallback(() => {
     if (randomPool.length === 0) {
@@ -486,7 +584,13 @@ function MapsPage() {
       setRandomBeatmapset(null);
       return;
     }
-    const pick = randomPool[Math.floor(Math.random() * randomPool.length)];
+    const recent = new Set(recentRandomPlayerIdsRef.current);
+    const distinctPool = recent.size > 0 ? randomPool.filter((p) => !recent.has(p.player.id)) : randomPool;
+    const pool = distinctPool.length > 0 ? distinctPool : randomPool;
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    const nextHistory = [...recentRandomPlayerIdsRef.current, pick.player.id];
+    if (nextHistory.length > RECENT_PLAYER_HISTORY) nextHistory.shift();
+    recentRandomPlayerIdsRef.current = nextHistory;
     setRandomPlayer(pick.player);
     setRandomBeatmapset(pick.beatmapset);
   }, [randomPool]);
@@ -502,19 +606,25 @@ function MapsPage() {
       return;
     }
     // Keep the current pick if it still matches the filters; otherwise reshuffle.
-    const statusOk = randomStatusSet.size === 0 || randomStatusSet.has(mapStatusBucket(randomBeatmapset.status));
+    const sBucket = mapStatusBucket(randomBeatmapset.status);
+    const statusOk =
+      (randomStatus.includes.size === 0 || randomStatus.includes.has(sBucket)) &&
+      !randomStatus.excludes.has(sBucket);
+    const bmKeys = randomBeatmapset.maniaKeys ?? [];
     const keyOk =
-      randomKeySet.size === 0 ||
-      (randomBeatmapset.maniaKeys ?? []).some((k) => randomKeySet.has(mapKeyBucket(k)));
+      (randomKey.includes.size === 0 || bmKeys.some((k) => randomKey.includes.has(mapKeyBucket(k)))) &&
+      !bmKeys.some((k) => randomKey.excludes.has(mapKeyBucket(k)));
+    const bmPatterns = randomBeatmapset.patterns ?? [];
     const patternOk =
-      !randomPatternCanonicalSet ||
-      (randomBeatmapset.patterns ?? []).some((p) => randomPatternCanonicalSet.has(p));
-    if (!statusOk || !keyOk || !patternOk) reshuffleRandom();
-  }, [tab, selectedCountry, mapsData, reshuffleRandom, randomBeatmapset, randomStatusSet, randomKeySet, randomPatternCanonicalSet]);
+      (!randomPatternCanonical.includes || bmPatterns.some((p) => randomPatternCanonical.includes!.has(p))) &&
+      (!randomPatternCanonical.excludes || !bmPatterns.some((p) => randomPatternCanonical.excludes!.has(p)));
+    const starsOk = rStars === 0 || (randomBeatmapset.starMax ?? 0) >= rStars;
+    if (!statusOk || !keyOk || !patternOk || !starsOk) reshuffleRandom();
+  }, [tab, selectedCountry, mapsData, reshuffleRandom, randomBeatmapset, randomStatus, randomKey, randomPatternCanonical, rStars]);
 
   const hasActiveFilters =
     tab === "random"
-      ? randomStatusSet.size > 0 || randomKeySet.size > 0 || randomPatternSet.size > 0
+      ? totalRandomActive > 0
       : (
           searchQuery || keyFilter !== "all" || statusFilter !== "all" || ppFilter > 0 || modFilter !== "all" || beatmapSort !== "players" || farmedSort !== "players" || tab !== "farmed"
         );
@@ -559,7 +669,7 @@ function MapsPage() {
             )}
             {!isLoading && !error && mapsData && (
               <span className="text-[10px] text-osu-f1">
-                {currentList.length} maps &middot; updated {formatTimeAgo(mapsData.generatedAt)}
+                {tab === "random" ? randomPool.length : currentList.length} maps &middot; updated {formatTimeAgo(mapsData.generatedAt)}
               </span>
             )}
             {isDevMode && !isLoading && !error && mapsData && (
@@ -588,141 +698,238 @@ function MapsPage() {
       <div className="bg-osu-d5 border-b border-osu-b3/20">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-2.5 flex flex-wrap items-start sm:items-center gap-x-4 gap-y-2">
           {tab !== "random" && (
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => updateMapsSearch({ q: e.target.value, page: 0 })}
-            placeholder="Search title or artist..."
-            className="bg-osu-b4 border border-osu-b3/30 rounded-lg px-3 py-1.5 text-[11px] text-osu-l2 placeholder:text-osu-f1 w-full sm:w-48 focus:outline-none focus:border-osu-pink/40 transition-colors"
-          />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => updateMapsSearch({ q: e.target.value, page: 0 })}
+              placeholder="Search title or artist..."
+              className="bg-osu-b4 border border-osu-b3/30 rounded-lg px-3 py-1.5 text-[11px] text-osu-l2 placeholder:text-osu-f1 w-full sm:w-48 focus:outline-none focus:border-osu-pink/40 transition-colors"
+            />
           )}
 
-          {tab === "random" && (
-            <>
-              <FilterGroup label="Status">
-                {RANDOM_STATUS_OPTIONS.map((s) => (
-                  <FilterPill
-                    key={s}
-                    active={randomStatusSet.has(s)}
-                    dimmed={randomStatusSet.size === 0}
-                    onClick={() => updateMapsSearch({ rStatus: toggleCsv(rStatusRaw, s) })}
-                  >
-                    {s.charAt(0).toUpperCase() + s.slice(1)}
-                  </FilterPill>
-                ))}
-              </FilterGroup>
-
-              <FilterGroup label="Keys">
-                {RANDOM_KEY_OPTIONS.map((k) => (
-                  <FilterPill
-                    key={k}
-                    active={randomKeySet.has(k)}
-                    dimmed={randomKeySet.size === 0}
-                    onClick={() => updateMapsSearch({ rKey: toggleCsv(rKeyRaw, k) })}
-                  >
-                    {k.toUpperCase()}
-                  </FilterPill>
-                ))}
-              </FilterGroup>
-
-              <FilterGroup label="Tags">
-                {RANDOM_PATTERN_OPTIONS.map((p) => (
-                  <FilterPill
-                    key={p}
-                    active={randomPatternSet.has(p)}
-                    dimmed={randomPatternSet.size === 0}
-                    onClick={() => updateMapsSearch({ rPattern: toggleCsv(rPatternRaw, p) })}
-                  >
-                    {RANDOM_PATTERN_LABEL[p]}
-                  </FilterPill>
-                ))}
-              </FilterGroup>
-
-              <span className="w-full sm:w-auto text-[10px] text-osu-f1">
+          {/* Mobile-only summary row: filter toggle + (random) match count */}
+          <div className="flex w-full items-center justify-between gap-2 sm:hidden">
+            <button
+              onClick={() => setFiltersOpen((o) => !o)}
+              aria-expanded={filtersOpen}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-osu-b4 border border-osu-b3/30 text-[11px] text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+              </svg>
+              <span>Filters</span>
+              {activeFilterCount > 0 && (
+                <span className="inline-flex min-w-[18px] h-[18px] shrink-0 items-center justify-center self-center rounded-full bg-osu-pink/30 px-1 text-[10px] font-bold leading-none text-osu-pink-light tabular-nums">
+                  <span className="relative -top-px">{activeFilterCount}</span>
+                </span>
+              )}
+            </button>
+            {tab === "random" && (
+              <span className="text-[10px] text-osu-f1">
                 {randomPool.length} {randomPool.length === 1 ? "match" : "matches"}
               </span>
-            </>
-          )}
+            )}
+          </div>
 
-          {tab === "farmed" && (
-            <>
-              {/* Key count */}
-              <FilterGroup label="Keys">
-                {(["all", "4k", "7k", "other"] as KeyFilter[]).map((k) => (
-                  <FilterPill key={k} active={keyFilter === k} onClick={() => updateMapsSearch({ key: k, page: 0 })}>
-                    {k === "all" ? "All" : k.toUpperCase()}
-                  </FilterPill>
-                ))}
-              </FilterGroup>
+          {/* Mobile dimming backdrop (always mounted so opacity can fade). */}
+          <div
+            onClick={() => setFiltersOpen(false)}
+            aria-hidden="true"
+            className="fixed inset-0 z-40 bg-black/35 sm:hidden transition-opacity duration-300 ease-out"
+            style={{
+              opacity: filtersOpen ? Math.max(0, 1 - dragOffset / 250) : 0,
+              pointerEvents: filtersOpen ? "auto" : "none",
+            }}
+          />
 
-              {/* Mod type */}
-              <FilterGroup label="Mods">
-                {(["all", "dt", "ht", "nm"] as ModFilter[]).map((m) => (
-                  <FilterPill key={m} active={modFilter === m} onClick={() => updateMapsSearch({ mod: m, page: 0 })}>
-                    {m === "all" ? "All" : m === "nm" ? "NM" : m.toUpperCase()}
-                  </FilterPill>
-                ))}
-              </FilterGroup>
+          {/* Filter content: inline on desktop (display: contents), bottom
+              sheet on mobile so it doesn't cover the page content above.
+              Always mounted on mobile so transform transitions animate. */}
+          <div
+            className="sm:contents fixed bottom-0 left-0 right-0 z-50 max-h-[75vh] overflow-y-auto bg-osu-d5 border-t border-osu-b3/30 rounded-t-2xl shadow-2xl px-4 pt-2 pb-6 flex flex-col gap-3 will-change-transform"
+            style={{
+              transform: filtersOpen ? `translateY(${dragOffset}px)` : "translateY(105%)",
+              transition: isDragging ? "none" : "transform 280ms cubic-bezier(0.32, 0.72, 0, 1)",
+              pointerEvents: filtersOpen ? "auto" : "none",
+            }}
+            role={filtersOpen ? "dialog" : undefined}
+            aria-modal={filtersOpen ? true : undefined}
+          >
+            {/* Drag handle pill — also the swipe-to-dismiss touch zone */}
+            <div
+              onTouchStart={handleDragStart}
+              onTouchMove={handleDragMove}
+              onTouchEnd={handleDragEnd}
+              onTouchCancel={handleDragEnd}
+              className="sm:hidden flex justify-center pt-2 pb-3 -mx-4 cursor-grab touch-none"
+            >
+              <div className="h-1 w-10 rounded-full bg-osu-b3" />
+            </div>
 
-              {/* Min PP */}
-              <FilterGroup label="Min PP">
-                {([0, 500, 700] as PpFilter[]).map((pp) => (
-                  <FilterPill key={pp} active={ppFilter === pp} onClick={() => updateMapsSearch({ pp, page: 0 })}>
-                    {pp === 0 ? "All" : `${pp}+`}
-                  </FilterPill>
-                ))}
-              </FilterGroup>
+            {/* Sheet header: title + close button */}
+            <div className="sm:hidden flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <h3 className="text-[12px] font-bold text-osu-l2 uppercase tracking-wider">Filters</h3>
+                {activeFilterCount > 0 && (
+                  <span className="inline-flex min-w-[18px] h-[18px] shrink-0 items-center justify-center self-center rounded-full bg-osu-pink/30 px-1 text-[10px] font-bold leading-none text-osu-pink-light tabular-nums">
+                    <span className="relative -top-px">{activeFilterCount}</span>
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setFiltersOpen(false)}
+                aria-label="Close filters"
+                className="p-1 text-osu-f1 hover:text-white transition-colors cursor-pointer"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+              {tab === "random" && (
+                <>
+                  <FilterGroup label="Status">
+                    {RANDOM_STATUS_OPTIONS.map((s) => (
+                      <TriStatePill
+                        key={s}
+                        mode={getTriStateMode(randomStatus, s)}
+                        hasAnyActive={triStateActive(randomStatus) > 0}
+                        onClick={() => updateMapsSearch({ rStatus: cycleTriStateCsv(rStatusRaw, s) })}
+                      >
+                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                      </TriStatePill>
+                    ))}
+                  </FilterGroup>
 
-              {/* Sort */}
-              <FilterGroup label="Sort">
-                {([
-                  ["players", "Players"],
-                  ["avg-pp", "Avg PP"],
-                  ["max-pp", "Max PP"],
-                  ["stars", "Stars"],
-                ] as [FarmedSort, string][]).map(([id, label]) => (
-                  <FilterPill key={id} active={farmedSort === id} onClick={() => updateMapsSearch({ farmedSort: id, page: 0 })}>
-                    {label}
-                  </FilterPill>
-                ))}
-              </FilterGroup>
-            </>
-          )}
+                  <FilterGroup label="Keys">
+                    {RANDOM_KEY_OPTIONS.map((k) => (
+                      <TriStatePill
+                        key={k}
+                        mode={getTriStateMode(randomKey, k)}
+                        hasAnyActive={triStateActive(randomKey) > 0}
+                        onClick={() => updateMapsSearch({ rKey: cycleTriStateCsv(rKeyRaw, k) })}
+                      >
+                        {k.toUpperCase()}
+                      </TriStatePill>
+                    ))}
+                  </FilterGroup>
 
-          {tab === "popular" && (
-            <>
-              <FilterGroup label="Keys">
-                {(["all", "4k", "7k", "other"] as KeyFilter[]).map((k) => (
-                  <FilterPill key={k} active={keyFilter === k} onClick={() => updateMapsSearch({ key: k, page: 0 })}>
-                    {k === "all" ? "All" : k.toUpperCase()}
-                  </FilterPill>
-                ))}
-              </FilterGroup>
+                  <FilterGroup label="Tags">
+                    {RANDOM_PATTERN_OPTIONS.map((p) => (
+                      <TriStatePill
+                        key={p}
+                        mode={getTriStateMode(randomPattern, p)}
+                        hasAnyActive={triStateActive(randomPattern) > 0}
+                        onClick={() => updateMapsSearch({ rPattern: cycleTriStateCsv(rPatternRaw, p) })}
+                      >
+                        {RANDOM_PATTERN_LABEL[p]}
+                      </TriStatePill>
+                    ))}
+                  </FilterGroup>
 
-              <FilterGroup label="Sort">
-                {([
-                  ["players", "Players"],
-                  ["plays", "Plays"],
-                  ["stars", "Stars"],
-                  ["length", "Length"],
-                ] as [BeatmapSort, string][]).map(([id, label]) => (
-                  <FilterPill key={id} active={beatmapSort === id} onClick={() => updateMapsSearch({ beatmapSort: id, page: 0 })}>
-                    {label}
-                  </FilterPill>
-                ))}
-              </FilterGroup>
-            </>
-          )}
+                  <FilterGroup label="Min ★">
+                    <FilterPill
+                      active={rStars === 0}
+                      dimmed={rStars !== 0}
+                      onClick={() => updateMapsSearch({ rStars: 0 })}
+                    >
+                      All
+                    </FilterPill>
+                    {RANDOM_STAR_OPTIONS.map((s) => (
+                      <FilterPill
+                        key={s}
+                        active={rStars === s}
+                        dimmed={rStars !== 0 && rStars !== s}
+                        onClick={() => updateMapsSearch({ rStars: s })}
+                      >
+                        {s}+
+                      </FilterPill>
+                    ))}
+                  </FilterGroup>
 
-          {tab === "favourites" && (
-            <FilterGroup label="Status">
-              {(["all", "ranked", "loved", "graveyard", "other"] as StatusFilter[]).map((s) => (
-                <FilterPill key={s} active={statusFilter === s} onClick={() => updateMapsSearch({ status: s, page: 0 })}>
-                  {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
-                </FilterPill>
-              ))}
-            </FilterGroup>
-          )}
+                  <span className="hidden sm:inline text-[10px] text-osu-f1">
+                    {randomPool.length} {randomPool.length === 1 ? "match" : "matches"}
+                  </span>
+                </>
+              )}
+
+              {tab === "farmed" && (
+                <>
+                  <FilterGroup label="Keys">
+                    {(["all", "4k", "7k", "other"] as KeyFilter[]).map((k) => (
+                      <FilterPill key={k} active={keyFilter === k} onClick={() => updateMapsSearch({ key: k, page: 0 })}>
+                        {k === "all" ? "All" : k.toUpperCase()}
+                      </FilterPill>
+                    ))}
+                  </FilterGroup>
+
+                  <FilterGroup label="Mods">
+                    {(["all", "dt", "ht", "nm"] as ModFilter[]).map((m) => (
+                      <FilterPill key={m} active={modFilter === m} onClick={() => updateMapsSearch({ mod: m, page: 0 })}>
+                        {m === "all" ? "All" : m === "nm" ? "NM" : m.toUpperCase()}
+                      </FilterPill>
+                    ))}
+                  </FilterGroup>
+
+                  <FilterGroup label="Min PP">
+                    {([0, 500, 700] as PpFilter[]).map((pp) => (
+                      <FilterPill key={pp} active={ppFilter === pp} onClick={() => updateMapsSearch({ pp, page: 0 })}>
+                        {pp === 0 ? "All" : `${pp}+`}
+                      </FilterPill>
+                    ))}
+                  </FilterGroup>
+
+                  <FilterGroup label="Sort">
+                    {([
+                      ["players", "Players"],
+                      ["avg-pp", "Avg PP"],
+                      ["max-pp", "Max PP"],
+                      ["stars", "Stars"],
+                    ] as [FarmedSort, string][]).map(([id, label]) => (
+                      <FilterPill key={id} active={farmedSort === id} onClick={() => updateMapsSearch({ farmedSort: id, page: 0 })}>
+                        {label}
+                      </FilterPill>
+                    ))}
+                  </FilterGroup>
+                </>
+              )}
+
+              {tab === "popular" && (
+                <>
+                  <FilterGroup label="Keys">
+                    {(["all", "4k", "7k", "other"] as KeyFilter[]).map((k) => (
+                      <FilterPill key={k} active={keyFilter === k} onClick={() => updateMapsSearch({ key: k, page: 0 })}>
+                        {k === "all" ? "All" : k.toUpperCase()}
+                      </FilterPill>
+                    ))}
+                  </FilterGroup>
+
+                  <FilterGroup label="Sort">
+                    {([
+                      ["players", "Players"],
+                      ["plays", "Plays"],
+                      ["stars", "Stars"],
+                      ["length", "Length"],
+                    ] as [BeatmapSort, string][]).map(([id, label]) => (
+                      <FilterPill key={id} active={beatmapSort === id} onClick={() => updateMapsSearch({ beatmapSort: id, page: 0 })}>
+                        {label}
+                      </FilterPill>
+                    ))}
+                  </FilterGroup>
+                </>
+              )}
+
+              {tab === "favourites" && (
+                <FilterGroup label="Status">
+                  {(["all", "ranked", "loved", "graveyard", "other"] as StatusFilter[]).map((s) => (
+                    <FilterPill key={s} active={statusFilter === s} onClick={() => updateMapsSearch({ status: s, page: 0 })}>
+                      {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
+                    </FilterPill>
+                  ))}
+                </FilterGroup>
+              )}
+          </div>
 
           {hasActiveFilters && (
             <button
@@ -801,7 +1008,7 @@ function MapsPage() {
             <div className="max-w-[640px] mx-auto space-y-5">
               {randomPlayer && randomBeatmapset ? (
                 <>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-row items-center justify-between gap-3">
                     <button
                       onClick={() => navigate({ to: "/player/$username", params: { username: randomPlayer.username } })}
                       className="flex items-center gap-3 group cursor-pointer min-w-0 text-left"
@@ -821,7 +1028,7 @@ function MapsPage() {
                     </button>
                     <button
                       onClick={reshuffleRandom}
-                      className="self-start sm:self-auto px-3 py-1.5 rounded-lg bg-osu-pink/20 text-[11px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer border border-osu-pink/30"
+                      className="shrink-0 px-3 py-1.5 rounded-lg bg-osu-pink/20 text-[11px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer border border-osu-pink/30"
                     >
                       Reroll
                     </button>
@@ -904,6 +1111,50 @@ function FilterPill({ active, onClick, children, dimmed }: { active: boolean; on
       }`}
     >
       {children}
+    </button>
+  );
+}
+
+// Tri-state pill for random filters: click cycles none → include → exclude → none.
+// Include = pink fill, exclude = red fill with strikethrough overlay.
+function TriStatePill({
+  mode,
+  hasAnyActive,
+  onClick,
+  children,
+}: {
+  mode: TriStateMode | undefined;
+  hasAnyActive: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  const styleClass = mode === "include"
+    ? "bg-osu-pink/20 text-osu-pink-light"
+    : mode === "exclude"
+      ? "bg-osu-red/15 text-osu-red border border-osu-red/40"
+      : hasAnyActive
+        ? "bg-osu-b4/60 text-osu-f1/70 hover:text-osu-l2 hover:bg-osu-b3"
+        : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3";
+  const title = mode === "include"
+    ? "Including (click to exclude)"
+    : mode === "exclude"
+      ? "Excluding (click to clear)"
+      : "Click to include";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className={`relative px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${styleClass}`}
+    >
+      <span className={mode === "exclude" ? "opacity-60" : ""}>{children}</span>
+      {mode === "exclude" && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute left-1.5 right-1.5 top-1/2 h-[1.5px] -translate-y-1/2 rotate-[-8deg] rounded-full bg-osu-red/80"
+        />
+      )}
     </button>
   );
 }
