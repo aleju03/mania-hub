@@ -178,7 +178,7 @@ const getMonitorData = createServerFn({ method: "GET" })
         `SELECT properties.$pathname AS p, count() AS c FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$pathname IS NOT NULL AND properties.$pathname != '/' AND properties.$pathname NOT LIKE '/admin/%' GROUP BY p ORDER BY c DESC LIMIT 10`,
       ),
       runQuery(
-        `SELECT toString(timestamp), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username FROM events WHERE distinct_id != 'server' AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') ORDER BY timestamp DESC LIMIT 30`,
+        `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username FROM events WHERE distinct_id != 'server' AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') ORDER BY timestamp DESC LIMIT 30`,
       ),
       runQuery(
         `SELECT properties.$geoip_country_code AS c, count(DISTINCT distinct_id) AS n FROM events WHERE timestamp > ${since} AND properties.$geoip_country_code IS NOT NULL GROUP BY c ORDER BY n DESC LIMIT 10`,
@@ -694,8 +694,7 @@ function RecentEventsCard({ rows }: { rows: RecentEventRow[] }) {
       ) : (
         <div className="space-y-1 h-full max-h-[420px] overflow-y-auto pr-1">
           {rows.map((row, i) => {
-            const ts = row.timestamp ? Date.parse(row.timestamp) : NaN;
-            const when = Number.isFinite(ts) ? formatAgeShort(Date.now() - ts) : "—";
+            const when = row.timestamp || "—";
             const label = formatRecentEventLabel(row);
             const entry = row.distinctId ? visitorPalette.get(row.distinctId) : undefined;
             const color = entry ? VISITOR_COLORS[entry.slot % VISITOR_COLORS.length] : null;
@@ -711,7 +710,7 @@ function RecentEventsCard({ rows }: { rows: RecentEventRow[] }) {
                 }
               >
                 <span className={`w-1 self-stretch rounded-full flex-shrink-0 ${color?.dot ?? "bg-osu-b3/40"}`} />
-                <span className="text-osu-f1 font-mono w-10 flex-shrink-0">{when}</span>
+                <span className="text-osu-f1 font-mono w-20 flex-shrink-0">{when}</span>
                 {row.country ? (
                   <img
                     src={getCountryFlagUrl(row.country)}

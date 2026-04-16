@@ -18,6 +18,7 @@ import { Route as MapsRouteImport } from './routes/maps'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
+import { Route as ApiFaviconRouteImport } from './routes/api/favicon'
 import { Route as ApiBackgroundRouteImport } from './routes/api/background'
 import { Route as ApiAudioRouteImport } from './routes/api/audio'
 import { Route as AdminMonitorRouteImport } from './routes/admin/monitor'
@@ -67,6 +68,11 @@ const ApiSyncRoute = ApiSyncRouteImport.update({
   path: '/api/sync',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiFaviconRoute = ApiFaviconRouteImport.update({
+  id: '/api/favicon',
+  path: '/api/favicon',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiBackgroundRoute = ApiBackgroundRouteImport.update({
   id: '/api/background',
   path: '/api/background',
@@ -94,6 +100,7 @@ export interface FileRoutesByFullPath {
   '/admin/monitor': typeof AdminMonitorRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/background': typeof ApiBackgroundRoute
+  '/api/favicon': typeof ApiFaviconRoute
   '/api/sync': typeof ApiSyncRoute
   '/player/$username': typeof PlayerUsernameRoute
 }
@@ -108,6 +115,7 @@ export interface FileRoutesByTo {
   '/admin/monitor': typeof AdminMonitorRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/background': typeof ApiBackgroundRoute
+  '/api/favicon': typeof ApiFaviconRoute
   '/api/sync': typeof ApiSyncRoute
   '/player/$username': typeof PlayerUsernameRoute
 }
@@ -123,6 +131,7 @@ export interface FileRoutesById {
   '/admin/monitor': typeof AdminMonitorRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/background': typeof ApiBackgroundRoute
+  '/api/favicon': typeof ApiFaviconRoute
   '/api/sync': typeof ApiSyncRoute
   '/player/$username': typeof PlayerUsernameRoute
 }
@@ -139,6 +148,7 @@ export interface FileRouteTypes {
     | '/admin/monitor'
     | '/api/audio'
     | '/api/background'
+    | '/api/favicon'
     | '/api/sync'
     | '/player/$username'
   fileRoutesByTo: FileRoutesByTo
@@ -153,6 +163,7 @@ export interface FileRouteTypes {
     | '/admin/monitor'
     | '/api/audio'
     | '/api/background'
+    | '/api/favicon'
     | '/api/sync'
     | '/player/$username'
   id:
@@ -167,6 +178,7 @@ export interface FileRouteTypes {
     | '/admin/monitor'
     | '/api/audio'
     | '/api/background'
+    | '/api/favicon'
     | '/api/sync'
     | '/player/$username'
   fileRoutesById: FileRoutesById
@@ -182,6 +194,7 @@ export interface RootRouteChildren {
   AdminMonitorRoute: typeof AdminMonitorRoute
   ApiAudioRoute: typeof ApiAudioRoute
   ApiBackgroundRoute: typeof ApiBackgroundRoute
+  ApiFaviconRoute: typeof ApiFaviconRoute
   ApiSyncRoute: typeof ApiSyncRoute
   PlayerUsernameRoute: typeof PlayerUsernameRoute
 }
@@ -251,6 +264,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSyncRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/favicon': {
+      id: '/api/favicon'
+      path: '/api/favicon'
+      fullPath: '/api/favicon'
+      preLoaderRoute: typeof ApiFaviconRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/background': {
       id: '/api/background'
       path: '/api/background'
@@ -286,6 +306,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminMonitorRoute: AdminMonitorRoute,
   ApiAudioRoute: ApiAudioRoute,
   ApiBackgroundRoute: ApiBackgroundRoute,
+  ApiFaviconRoute: ApiFaviconRoute,
   ApiSyncRoute: ApiSyncRoute,
   PlayerUsernameRoute: PlayerUsernameRoute,
 }

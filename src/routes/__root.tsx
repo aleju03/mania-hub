@@ -16,14 +16,14 @@ export const Route = createRootRoute({
   beforeLoad: async () => ({
     initialCountry: await getInitialCountry(),
   }),
-  head: () => ({
+  head: ({ match }) => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "pepesniper" },
+      { title: "o!mania tracker" },
     ],
     links: [
-      { rel: "icon", type: "image/webp", href: "/favicon.webp" },
+      { rel: "icon", type: "image/png", href: `/api/favicon?code=${match.context.initialCountry}&v=2` },
       { rel: "manifest", href: "/manifest.json" },
       { rel: "stylesheet", href: appCss },
       {
@@ -98,7 +98,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=localStorage.getItem("mania-hub-cache-v5");if(!s)return;var p=JSON.parse(s);var h=p&&p.state&&p.state.themeHue;if(typeof h==="number"&&isFinite(h))document.documentElement.style.setProperty("--theme-hue",String(((Math.round(h)%360)+360)%360));}catch(e){}})();`,
+            __html: `(function(){try{var s=localStorage.getItem("mania-hub-cache-v5");if(!s)return;var p=JSON.parse(s);var h=p&&p.state&&p.state.themeHue;if(typeof h==="number"&&isFinite(h)){var n=((Math.round(h)%360)+360)%360;document.documentElement.style.setProperty("--theme-hue",String(n));if(n!==333)document.documentElement.style.setProperty("--theme-hue-mix","1");}}catch(e){}})();`,
           }}
         />
       </head>
