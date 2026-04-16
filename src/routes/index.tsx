@@ -414,7 +414,7 @@ function HomePage() {
                         ))}
                       </div>
                     )}
-                    <span className="text-xs text-osu-l2">{formatAccuracy(s.displayAcc)}</span>
+                    <span className={`text-xs ${s.isLazer ? "text-osu-pink-light" : "text-osu-l2"}`}>{formatAccuracy(s.displayAcc)}</span>
                     <span className="text-xs font-bold">{formatPP(s.pp)}</span>
                   </div>
                 </motion.div>
