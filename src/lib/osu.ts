@@ -108,6 +108,7 @@ function toLeanHomeScore(
     pp: score.pp,
     displayAcc: display.accuracy,
     displayRank: display.rank,
+    isLazer: display.isLazer,
     mods: getModAcronyms(score.mods),
     timestamp: getScoreTimestamp(score),
     title: score.beatmapset?.title ?? "",
