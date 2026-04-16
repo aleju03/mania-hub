@@ -55,7 +55,12 @@ import type {
   HomePageData,
   UserProfileInsights,
   InsightScoreSnapshot,
+  SnipeEvent,
+  CountryBoardSnapshot,
+  CountryBoardSnapshotEntry,
+  CountryBoardScore,
 } from "./types";
+import { normalizeCountryCode } from "./country";
 
 // Raw shape returned by the osu! API's /rankings endpoint. We never expose
 // this off of the server — `getRankings` trims each user down to
@@ -148,6 +153,20 @@ const USER_SCORE_LIST_CACHE_TTL = 60 * 1000;
 const RANK_HISTORY_CONCURRENCY = 20;
 const APPROX_PP_GAINS_CONCURRENCY = 8;
 const RECENT_SCORES_CONCURRENCY = 10;
+const SNIPES_CACHE_TTL = 6 * 60 * 60 * 1000;
+const SNIPES_LOCK_TTL = 60 * 1000;
+const SNIPES_PLAYER_LIMIT = 15;
+const SNIPES_RECENT_LIMIT = 100;
+const SNIPES_RECENT_PLAYS_CACHE_TTL = 10 * 60 * 1000;
+const SNIPES_SCAN_CONCURRENCY = 8;
+const SNIPES_PROBE_CONCURRENCY = 10;
+const SNIPES_LOG_CAP = 500;
+const SNIPES_LOG_TTL = 30 * 24 * 60 * 60 * 1000;
+const SNIPES_SNAPSHOT_TTL = 90 * 24 * 60 * 60 * 1000;
+const SNIPES_SEED_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const SNIPES_SEED_PROBE_BUDGET = 30;
+const SNIPES_RANKED_STATUSES = new Set(["ranked", "loved", "approved"]);
+const userRecentPlaysPromiseCache = new Map<number, Promise<OsuScore[]>>();
 const userPromiseCache = new Map<string, Promise<OsuUser>>();
 const userScoresListPromiseCache = new Map<string, Promise<OsuScore[]>>();
 const rankHistoryPromiseCache = new Map<number, Promise<number[] | null>>();
@@ -1476,4 +1495,403 @@ export const getScore = createServerFn({ method: "GET" })
     return osuFetch<OsuScore>(`/scores/${data.scoreId}`, undefined, {
       caller: "getScore:modern",
     });
+  });
+
+// ── Snipes (per-beatmap country leaderboard #1 changes) ─────────────────────
+
+async function fetchUserRecentPlays(userId: number): Promise<OsuScore[]> {
+  const cacheKey = `user-recent-plays:mania:${userId}`;
+  const cached = await getPersistentCached<OsuScore[]>(cacheKey);
+  if (cached) return cached;
+
+  const pending = userRecentPlaysPromiseCache.get(userId);
+  if (pending) return pending;
+
+  const request = fetchWithCacheLock(cacheKey, SNIPES_RECENT_PLAYS_CACHE_TTL, () =>
+    osuFetch<OsuScore[]>(
+      `/users/${userId}/scores/recent`,
+      getScoreRequestParams(userId, {
+        mode: "mania",
+        limit: SNIPES_RECENT_LIMIT,
+        offset: 0,
+        include_fails: 0,
+      }),
+      { caller: "fetchUserRecentPlays" },
+    ),
+  ).finally(() => {
+    userRecentPlaysPromiseCache.delete(userId);
+  });
+
+  userRecentPlaysPromiseCache.set(userId, request);
+  return request;
+}
+
+function boardScoreFromScore(score: OsuScore): CountryBoardScore | null {
+  if (!score.user) return null;
+  const display = getScoreDisplayValues(score);
+  const totalScore = display.totalScore ?? score.total_score ?? score.score ?? 0;
+  return {
+    userId: score.user.id,
+    username: score.user.username,
+    avatarUrl: score.user.avatar_url,
+    scoreId: score.id,
+    totalScore,
+    accuracy: display.accuracy,
+    mods: getModAcronyms(score.mods),
+    pp: score.pp,
+    rank: display.rank,
+    isLazer: display.isLazer,
+    hasReplay: score.has_replay ?? score.replay ?? false,
+    endedAt: getScoreTimestamp(score),
+  };
+}
+
+type BoardMeta = Pick<CountryBoardSnapshotEntry, "beatmap" | "beatmapset">;
+
+function boardMetadataFromScore(
+  score: OsuScore,
+  fallbackBeatmapset?: OsuScore["beatmapset"],
+): BoardMeta | null {
+  const beatmap = score.beatmap;
+  const beatmapset = score.beatmapset ?? fallbackBeatmapset;
+  if (!beatmap || !beatmapset) return null;
+  return {
+    beatmap: {
+      version: beatmap.version,
+      difficulty_rating: beatmap.difficulty_rating,
+      cs: beatmap.cs,
+      url: beatmap.url ?? `https://osu.ppy.sh/beatmaps/${beatmap.id}`,
+    },
+    beatmapset: {
+      id: beatmapset.id,
+      title: beatmapset.title,
+      artist: beatmapset.artist,
+      cover_url: beatmapset.covers?.["cover@2x"] ?? beatmapset.covers?.cover ?? "",
+    },
+  };
+}
+
+function buildSnipeEvent(
+  beatmapId: number,
+  meta: BoardMeta,
+  sniper: CountryBoardScore,
+  victim: CountryBoardScore,
+  isSeeded = false,
+): SnipeEvent {
+  return {
+    beatmap_id: beatmapId,
+    beatmapset_id: meta.beatmapset.id,
+    score_id: sniper.scoreId,
+    sniper: {
+      id: sniper.userId,
+      username: sniper.username,
+      avatar_url: sniper.avatarUrl,
+    },
+    victim: {
+      id: victim.userId,
+      username: victim.username,
+      avatar_url: victim.avatarUrl,
+    },
+    beatmap: meta.beatmap,
+    beatmapset: meta.beatmapset,
+    totalScore: sniper.totalScore,
+    accuracy: sniper.accuracy,
+    mods: sniper.mods,
+    pp: sniper.pp,
+    rank: sniper.rank,
+    isLazer: sniper.isLazer,
+    hasReplay: sniper.hasReplay,
+    timestamp: sniper.endedAt,
+    victimTimestamp: victim.endedAt,
+    detectedAt: Date.now(),
+    ...(isSeeded ? { isSeeded: true } : {}),
+  };
+}
+
+async function probeCountryBoard(
+  beatmapId: number,
+  country: string,
+  rosterPlayerIds: number[],
+  beatmapsetFallback?: OsuScore["beatmapset"],
+): Promise<CountryBoardSnapshotEntry | null> {
+  const scores = await mapWithConcurrency(
+    rosterPlayerIds,
+    SNIPES_PROBE_CONCURRENCY,
+    async (uid) => {
+      try {
+        return await getBeatmapUserScore(beatmapId, uid);
+      } catch {
+        return null;
+      }
+    },
+  );
+
+  const filtered = scores.filter(
+    (s): s is OsuScore => s !== null && s.user?.country_code === country,
+  );
+  if (filtered.length === 0) return null;
+
+  const meta = boardMetadataFromScore(filtered[0], beatmapsetFallback);
+  if (!meta) return null;
+
+  const boardScores = filtered
+    .map(boardScoreFromScore)
+    .filter((s): s is CountryBoardScore => s !== null)
+    .sort((a, b) => b.totalScore - a.totalScore);
+
+  return {
+    ...meta,
+    scores: boardScores,
+    lastTouchedAt: Date.now(),
+  };
+}
+
+export const getCountrySnipes = createServerFn({ method: "GET" })
+  .inputValidator((data: { country?: string }) => data)
+  .handler(async ({ data }: { data: { country?: string } }): Promise<SnipeEvent[]> => {
+    edgeCache(60, 600);
+    const country = normalizeCountryCode(data.country);
+    const cacheKey = `country-snipes-response:v2:${country}`;
+    const snapshotKey = `country-board-snapshot:v2:${country}`;
+    const logKey = `country-snipes-log:v1:${country}`;
+
+    return fetchWithCacheLock(cacheKey, SNIPES_CACHE_TTL, async () => {
+      const rankings = await getRankings({ data: { type: "performance", page: 1, country } });
+      const players = rankings.ranking
+        .filter((entry) => entry.user.is_active !== false)
+        .slice(0, SNIPES_PLAYER_LIMIT)
+        .map((entry) => ({
+          id: entry.user.id,
+          username: entry.user.username,
+          avatar_url: entry.user.avatar_url,
+        }));
+
+      if (players.length === 0) {
+        return [];
+      }
+
+      const playerIds = players.map((p) => p.id);
+
+      const recentByPlayer = await mapWithConcurrency(
+        players,
+        SNIPES_SCAN_CONCURRENCY,
+        async (player) => {
+          try {
+            const scores = await fetchUserRecentPlays(player.id);
+            return { player, scores };
+          } catch (error) {
+            console.warn("[osu] failed to fetch recent plays for snipes scan", {
+              playerId: player.id,
+              error: getErrorMessage(error),
+            });
+            return { player, scores: [] as OsuScore[] };
+          }
+        },
+      );
+
+      const candidates: OsuScore[] = [];
+      for (const { scores } of recentByPlayer) {
+        for (const score of scores) {
+          if (!score.passed) continue;
+          if (!score.beatmap || !score.beatmapset || !score.user) continue;
+          if (score.beatmap.mode !== "mania") continue;
+          if (!SNIPES_RANKED_STATUSES.has(score.beatmapset.status)) continue;
+          candidates.push(score);
+        }
+      }
+
+      const snapshot: CountryBoardSnapshot =
+        (await getPersistentCached<CountryBoardSnapshot>(snapshotKey)) ?? {};
+
+      const newEvents: SnipeEvent[] = [];
+      const seedQueue: { beatmapId: number; bestCandidate: OsuScore }[] = [];
+
+      // Group all candidates by beatmap. We process every candidate per map
+      // (not just the best) so chained snipes resolve in chrono order: e.g.
+      // Sarou snipes AZ at #3, then a few hours later snipes Aleju at #2 -
+      // we want both events.
+      const candidatesByBeatmap = new Map<number, OsuScore[]>();
+      for (const score of candidates) {
+        const bid = score.beatmap.id;
+        let bucket = candidatesByBeatmap.get(bid);
+        if (!bucket) {
+          bucket = [];
+          candidatesByBeatmap.set(bid, bucket);
+        }
+        bucket.push(score);
+      }
+
+      for (const [bid, scoresForMap] of candidatesByBeatmap.entries()) {
+        scoresForMap.sort((a, b) => {
+          const aMs = new Date(getScoreTimestamp(a)).getTime();
+          const bMs = new Date(getScoreTimestamp(b)).getTime();
+          return aMs - bMs;
+        });
+
+        let entry = snapshot[bid];
+        if (!entry) {
+          // No board yet - pick the single highest-scoring candidate to seed
+          // against (we still need to fan out via probeCountryBoard to know
+          // the full roster's ranking).
+          let bestCandidate = scoresForMap[0];
+          let bestTotal = boardScoreFromScore(bestCandidate)?.totalScore ?? 0;
+          for (const s of scoresForMap.slice(1)) {
+            const t = boardScoreFromScore(s)?.totalScore ?? 0;
+            if (t > bestTotal) {
+              bestCandidate = s;
+              bestTotal = t;
+            }
+          }
+          seedQueue.push({ beatmapId: bid, bestCandidate });
+          continue;
+        }
+
+        for (const score of scoresForMap) {
+          const newScore = boardScoreFromScore(score);
+          if (!newScore) continue;
+
+          const oldIdx = entry.scores.findIndex((s) => s.userId === newScore.userId);
+          if (oldIdx >= 0 && entry.scores[oldIdx].totalScore >= newScore.totalScore) {
+            // Not an improvement on the player's own best; ignore.
+            continue;
+          }
+
+          const withoutPlayer =
+            oldIdx >= 0 ? entry.scores.filter((_, i) => i !== oldIdx) : entry.scores;
+          const newSorted = [...withoutPlayer, newScore].sort(
+            (a, b) => b.totalScore - a.totalScore,
+          );
+          const newIdx = newSorted.findIndex((s) => s.userId === newScore.userId);
+
+          // Did the player jump above someone? newIdx is their new rank in
+          // the post-play board; entry.scores[newIdx] is whoever held that
+          // exact rank in the pre-play board. That holder is the only victim
+          // we report, even if the player leapfrogged multiple ranks - the
+          // user wants one snipe per play, naming the highest displaced
+          // player only.
+          const movedUp =
+            oldIdx < 0 ? newIdx < entry.scores.length : newIdx < oldIdx;
+          if (movedUp) {
+            const victim = entry.scores[newIdx];
+            if (victim && victim.userId !== newScore.userId) {
+              newEvents.push(
+                buildSnipeEvent(
+                  bid,
+                  { beatmap: entry.beatmap, beatmapset: entry.beatmapset },
+                  newScore,
+                  victim,
+                ),
+              );
+            }
+          }
+
+          entry = { ...entry, scores: newSorted, lastTouchedAt: Date.now() };
+        }
+
+        snapshot[bid] = entry;
+      }
+
+      if (seedQueue.length > 0) {
+        // Cap seed probes per scan: cold start can otherwise blow up to
+        // hundreds of probes (~15 calls each). Prioritize the most recently
+        // played candidates so the seed reflects active scene.
+        seedQueue.sort((a, b) => {
+          const aMs = new Date(getScoreTimestamp(a.bestCandidate)).getTime();
+          const bMs = new Date(getScoreTimestamp(b.bestCandidate)).getTime();
+          return bMs - aMs;
+        });
+        const probeBatch = seedQueue.slice(0, SNIPES_SEED_PROBE_BUDGET);
+        const skipped = seedQueue.slice(SNIPES_SEED_PROBE_BUDGET);
+
+        // Skipped maps get a single-entry baseline so future scans can still
+        // compare against something. False-positive risk: another roster
+        // player's first observed play on this map will look like a snipe
+        // even if they actually held #1 for years. Bounded to the cold-start
+        // overflow batch.
+        for (const { beatmapId, bestCandidate } of skipped) {
+          const score = boardScoreFromScore(bestCandidate);
+          const meta = boardMetadataFromScore(bestCandidate);
+          if (score && meta) {
+            snapshot[beatmapId] = {
+              ...meta,
+              scores: [score],
+              lastTouchedAt: Date.now(),
+            };
+          }
+        }
+
+        const seededResults = await mapWithConcurrency(
+          probeBatch,
+          SNIPES_SCAN_CONCURRENCY,
+          async ({ beatmapId, bestCandidate }) => {
+            try {
+              const board = await probeCountryBoard(
+                beatmapId,
+                country,
+                playerIds,
+                bestCandidate.beatmapset,
+              );
+              return { beatmapId, board };
+            } catch (error) {
+              console.warn("[osu] snipes seed probe failed", {
+                beatmapId,
+                country,
+                error: getErrorMessage(error),
+              });
+              return { beatmapId, board: null as CountryBoardSnapshotEntry | null };
+            }
+          },
+        );
+
+        const seedCutoff = Date.now() - SNIPES_SEED_MAX_AGE_MS;
+        for (const { beatmapId, board } of seededResults) {
+          if (!board || board.scores.length === 0) continue;
+          snapshot[beatmapId] = board;
+
+          // Heuristic seeded-snipe: for each adjacent pair (i, i+1) in the
+          // ranked board, if rank-i's holder is more recent than rank-(i+1)'s
+          // and within the last 7 days, treat it as a likely snipe. Same
+          // shape as the original top1/top2 heuristic, just extended to the
+          // whole board so non-#1 snipes show up on first observation too.
+          for (let i = 0; i < board.scores.length - 1; i++) {
+            const top = board.scores[i];
+            const next = board.scores[i + 1];
+            if (top.userId === next.userId) continue;
+            const topMs = new Date(top.endedAt).getTime();
+            const nextMs = new Date(next.endedAt).getTime();
+            if (!Number.isFinite(topMs) || !Number.isFinite(nextMs)) continue;
+            if (topMs <= nextMs) continue;
+            if (topMs < seedCutoff) continue;
+            newEvents.push(
+              buildSnipeEvent(
+                beatmapId,
+                { beatmap: board.beatmap, beatmapset: board.beatmapset },
+                top,
+                next,
+                true,
+              ),
+            );
+          }
+        }
+      }
+
+      const existingLog = (await getPersistentCached<SnipeEvent[]>(logKey)) ?? [];
+      const merged = new Map<string, SnipeEvent>();
+      for (const event of existingLog) {
+        merged.set(`${event.beatmap_id}:${event.score_id}`, event);
+      }
+      for (const event of newEvents) {
+        merged.set(`${event.beatmap_id}:${event.score_id}`, event);
+      }
+      const mergedLog = [...merged.values()]
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, SNIPES_LOG_CAP);
+
+      void Promise.allSettled([
+        setPersistentCache(logKey, mergedLog, SNIPES_LOG_TTL),
+        setPersistentCache(snapshotKey, snapshot, SNIPES_SNAPSHOT_TTL),
+      ]);
+
+      return mergedLog;
+    }, SNIPES_LOCK_TTL);
   });

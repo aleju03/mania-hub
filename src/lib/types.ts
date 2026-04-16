@@ -442,6 +442,78 @@ export interface HomePageData {
   popoffs: LeanHomePopoff[];
 }
 
+// Snipes types
+
+export interface SnipePlayer {
+  id: number;
+  username: string;
+  avatar_url: string;
+}
+
+export interface SnipeEvent {
+  beatmap_id: number;
+  beatmapset_id: number;
+  score_id: number;
+  sniper: SnipePlayer;
+  victim: SnipePlayer;
+  beatmap: {
+    version: string;
+    difficulty_rating: number;
+    cs: number;
+    url: string;
+  };
+  beatmapset: {
+    title: string;
+    artist: string;
+    cover_url: string;
+  };
+  totalScore: number;
+  accuracy: number;
+  mods: string[];
+  pp: number | null;
+  rank: string;
+  isLazer: boolean;
+  hasReplay: boolean;
+  timestamp: string;
+  victimTimestamp: string;
+  detectedAt: number;
+  isSeeded?: boolean;
+}
+
+export interface CountryBoardScore {
+  userId: number;
+  username: string;
+  avatarUrl: string;
+  scoreId: number;
+  totalScore: number;
+  accuracy: number;
+  mods: string[];
+  pp: number | null;
+  rank: string;
+  isLazer: boolean;
+  hasReplay: boolean;
+  endedAt: string;
+}
+
+export interface CountryBoardSnapshotEntry {
+  beatmap: {
+    version: string;
+    difficulty_rating: number;
+    cs: number;
+    url: string;
+  };
+  beatmapset: {
+    id: number;
+    title: string;
+    artist: string;
+    cover_url: string;
+  };
+  scores: CountryBoardScore[]; // sorted by totalScore desc
+  lastTouchedAt: number;
+}
+
+export type CountryBoardSnapshot = Record<number, CountryBoardSnapshotEntry>;
+
 // Replay types
 export interface ReplayHeader {
   gameMode: number;
