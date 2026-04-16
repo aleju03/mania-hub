@@ -105,7 +105,14 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 .bbcode-content .bbcode--profile-page { padding: 0; }
 .bbcode-content .bbcode--profile-page:first-child > *:first-child { margin-top: 0; }
 .bbcode-content .bbcode--profile-page:last-child > *:last-child { margin-bottom: 0; }
-.bbcode-content .imagemap { position: relative; overflow: hidden; max-width: max-content; margin: 0.25em 0; }
+.bbcode-content .imagemap {
+  display: inline-block;
+  position: relative;
+  overflow: hidden;
+  max-width: 100%;
+  margin: 0.25em 0;
+  vertical-align: middle;
+}
 .bbcode-content .imagemap__image {
   display: block;
   width: auto !important;
