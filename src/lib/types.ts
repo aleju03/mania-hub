@@ -478,6 +478,9 @@ export interface SnipeEvent {
   victimTimestamp: string;
   detectedAt: number;
   isSeeded?: boolean;
+  /** 1-indexed country leaderboard rank the snipe happened at. Optional for
+   *  backward compatibility with events emitted before this field existed. */
+  boardRank?: number;
 }
 
 export interface CountryBoardScore {
@@ -513,6 +516,14 @@ export interface CountryBoardSnapshotEntry {
 }
 
 export type CountryBoardSnapshot = Record<number, CountryBoardSnapshotEntry>;
+
+export interface SnipesScanStatus {
+  phase: "roster" | "recent" | "compare" | "seed" | "merge";
+  label: string;
+  current: number;
+  total: number;
+  updatedAt: number;
+}
 
 // Replay types
 export interface ReplayHeader {

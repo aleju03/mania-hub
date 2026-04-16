@@ -1,6 +1,6 @@
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getCountrySnipes } from "../lib/osu";
+import { getCountrySnipes, getSnipesScanStatus } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { formatAccuracy, formatNumber, formatPP, formatTimeAgo } from "../lib/format";
@@ -8,11 +8,10 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { LazerBadge } from "../components/ui/LazerBadge";
-import { SnipeRowSkeleton } from "../components/ui/LoadingSkeleton";
 import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
 import { UsernameText } from "../components/ui/UsernameText";
-import type { SnipeEvent } from "../lib/types";
+import type { SnipeEvent, SnipesScanStatus } from "../lib/types";
 import { useAppStore, useSelectedCountry } from "../store";
 
 type KeyFilter = "all" | "4k" | "7k";
@@ -72,7 +71,47 @@ function SnipesPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [scanStartedAt, setScanStartedAt] = useState<number | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const [scanStatus, setScanStatus] = useState<SnipesScanStatus | null>(null);
   const fetchingRef = useRef(false);
+
+  // Render-driving "elapsed" timer for the secondary header indicator.
+  useEffect(() => {
+    if (scanStartedAt == null) return;
+    const tick = () => setElapsed(Date.now() - scanStartedAt);
+    tick();
+    const id = window.setInterval(tick, 250);
+    return () => window.clearInterval(id);
+  }, [scanStartedAt]);
+
+  // Poll real scan progress while the request is in flight. The server writes
+  // status snapshots to Turso at each phase (and throughout the seed loop);
+  // we just read them back on a short interval.
+  useEffect(() => {
+    if (scanStartedAt == null) {
+      setScanStatus(null);
+      return;
+    }
+    let cancelled = false;
+    const requestedCountry = selectedCountry;
+    const poll = async () => {
+      try {
+        const status = await getSnipesScanStatus({ data: { country: requestedCountry } });
+        if (cancelled) return;
+        if (useAppStore.getState().selectedCountry !== requestedCountry) return;
+        setScanStatus(status);
+      } catch {
+        // Status is best-effort; ignore failures so the main fetch isn't disturbed.
+      }
+    };
+    poll();
+    const id = window.setInterval(poll, 750);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [scanStartedAt, selectedCountry]);
 
   const searchRef = useRef(search);
   searchRef.current = search;
@@ -93,6 +132,8 @@ function SnipesPage() {
     setLoading(snipes.length === 0);
     setRefreshing(false);
     setExpandedKey(null);
+    setScanStartedAt(null);
+    setElapsed(0);
     fetchingRef.current = false;
     if (search.page !== 0) updateSearch({ page: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -113,6 +154,8 @@ function SnipesPage() {
     fetchingRef.current = true;
     setLoading(snipes.length === 0);
     if (snipes.length > 0) setRefreshing(true);
+    setScanStartedAt(Date.now());
+    setElapsed(0);
     const requestedCountry = selectedCountry;
 
     getCountrySnipes({ data: { country: requestedCountry } })
@@ -132,6 +175,7 @@ function SnipesPage() {
         if (useAppStore.getState().selectedCountry === requestedCountry) {
           setLoading(false);
           setRefreshing(false);
+          setScanStartedAt(null);
         }
         fetchingRef.current = false;
       });
@@ -219,7 +263,9 @@ function SnipesPage() {
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
                 <span className="text-[10px] text-osu-f1">
-                  {loading ? "Scanning country leaderboards..." : "Refreshing..."}
+                  {loading
+                    ? `Scanning... ${formatElapsedSeconds(elapsed)}`
+                    : "Refreshing..."}
                 </span>
               </div>
             )}
@@ -350,11 +396,11 @@ function SnipesPage() {
           {!error && (
             <>
               {loading && snipes.length === 0 && (
-                <div className="space-y-2">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <SnipeRowSkeleton key={i} />
-                  ))}
-                </div>
+                <ScanProgress
+                  elapsed={elapsed}
+                  countryName={countryName}
+                  status={scanStatus}
+                />
               )}
 
               {!loading && sorted.length === 0 && snipes.length === 0 && (
@@ -629,7 +675,9 @@ function SnipeRow({
           </div>
           <div className="relative mt-2 flex items-center justify-between gap-2 text-[10px] text-osu-f1">
             <span>
-              {`${event.sniper.username} sniped #1 from ${event.victim.username}`}
+              {event.boardRank
+                ? `${event.sniper.username} sniped #${event.boardRank} from ${event.victim.username}`
+                : `${event.sniper.username} sniped ${event.victim.username}`}
             </span>
             <a
               href={beatmapHref}
@@ -678,5 +726,132 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
     >
       {children}
     </button>
+  );
+}
+
+function formatElapsedSeconds(ms: number): string {
+  return `${Math.floor(ms / 1000)}s`;
+}
+
+const PHASE_ORDER: SnipesScanStatus["phase"][] = [
+  "roster",
+  "recent",
+  "compare",
+  "seed",
+  "merge",
+];
+
+const PHASE_DESCRIPTIONS: Record<SnipesScanStatus["phase"], string> = {
+  roster: "Loading the country's top 15 mania players.",
+  recent: "Pulling each player's recent plays from the osu! API.",
+  compare: "Cross-checking those plays against the saved country leaderboards.",
+  seed: "Probing newly-encountered beatmaps - this is the slow part. 15 API calls per map.",
+  merge: "Saving new snipes to the rolling log.",
+};
+
+function ScanProgress({
+  elapsed,
+  countryName,
+  status,
+}: {
+  elapsed: number;
+  countryName: string;
+  status: SnipesScanStatus | null;
+}) {
+  const phaseIdx = status ? PHASE_ORDER.indexOf(status.phase) : -1;
+  // Per-phase pct based on real current/total; if we don't yet have a
+  // status (the very first poll hasn't returned), show an indeterminate
+  // shimmer instead of pretending we've made progress.
+  const phasePct =
+    status && status.total > 0
+      ? Math.min(100, Math.round((status.current / status.total) * 100))
+      : 0;
+  const description = status ? PHASE_DESCRIPTIONS[status.phase] : "Connecting to the scanner...";
+
+  return (
+    <div className="rounded-2xl bg-osu-b4 border border-osu-b3/30 px-5 py-6 sm:px-7 sm:py-8 max-w-2xl mx-auto">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <div className="w-3.5 h-3.5 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin flex-shrink-0" />
+            <h2 className="text-sm font-bold text-white">
+              Scanning {countryName}
+            </h2>
+          </div>
+          <p className="text-[11px] text-osu-f1 mt-1">
+            First scan for a country pulls a lot of data. Subsequent scans are near-instant.
+          </p>
+        </div>
+        <span className="text-[11px] text-osu-f1 tabular-nums flex-shrink-0">
+          {formatElapsedSeconds(elapsed)}
+        </span>
+      </div>
+
+      {/* Phase checklist */}
+      <ol className="mt-5 space-y-1.5">
+        {PHASE_ORDER.map((phase, idx) => {
+          const isCurrent = idx === phaseIdx;
+          const isDone = phaseIdx >= 0 && idx < phaseIdx;
+          const isPending = phaseIdx < 0 || idx > phaseIdx;
+          return (
+            <li
+              key={phase}
+              className={`flex items-center gap-2 text-[11px] ${
+                isCurrent
+                  ? "text-white"
+                  : isDone
+                    ? "text-osu-l2"
+                    : "text-osu-f1/60"
+              }`}
+            >
+              <span
+                className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold flex-shrink-0 ${
+                  isCurrent
+                    ? "bg-osu-pink text-white"
+                    : isDone
+                      ? "bg-osu-pink/30 text-osu-pink-light"
+                      : "bg-osu-b3/60 text-osu-f1"
+                }`}
+              >
+                {isDone ? "✓" : idx + 1}
+              </span>
+              <span className={isPending ? "" : "font-medium"}>
+                {phase === "roster" && "Country roster"}
+                {phase === "recent" && "Recent plays"}
+                {phase === "compare" && "Compare against snapshot"}
+                {phase === "seed" && "Seed new beatmaps"}
+                {phase === "merge" && "Merge snipe log"}
+              </span>
+              {isCurrent && status && status.total > 0 && (
+                <span className="ml-auto text-osu-f1 tabular-nums">
+                  {status.current}/{status.total}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+
+      {/* Active phase detail + progress bar */}
+      <div className="mt-5">
+        <div className="flex items-center justify-between text-[10px] text-osu-f1 mb-1.5">
+          <span className="truncate pr-2">{status?.label ?? "Waiting for first status update..."}</span>
+          {status && status.total > 0 && (
+            <span className="tabular-nums flex-shrink-0">{phasePct}%</span>
+          )}
+        </div>
+        <div className="h-2 rounded-full bg-osu-b3/60 overflow-hidden">
+          {status && status.total > 0 ? (
+            <div
+              className="h-full bg-osu-pink transition-[width] duration-[400ms] ease-out"
+              style={{ width: `${phasePct}%` }}
+            />
+          ) : (
+            <div className="h-full w-1/3 bg-osu-pink/60 animate-pulse rounded-full" />
+          )}
+        </div>
+        <p className="text-[10px] text-osu-f1 mt-2">{description}</p>
+      </div>
+    </div>
   );
 }
