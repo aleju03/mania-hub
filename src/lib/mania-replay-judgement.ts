@@ -3,6 +3,8 @@ import type { ReplayFrame } from "./types";
 
 export type Judgment = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
+export type ReplayAccuracyMode = "stable" | "lazer";
+
 export interface ReplaySegment {
   start: number;
   end: number;
@@ -18,7 +20,7 @@ export interface ManiaReplayHitWindows {
 }
 
 export interface ManiaReplayRuleset {
-  accuracyMode: "stable" | "lazer";
+  accuracyMode: ReplayAccuracyMode;
   difficultyMultiplier: number;
   isConvert: boolean;
   speedMultiplier: number;
@@ -30,7 +32,7 @@ export interface ReplayJudgementEvent {
   judgment: Judgment | null;
   noteIndex: number;
   offsetMs: number;
-  part: "note" | "hold-head" | "hold-tail" | "hold-break";
+  part: "note" | "hold-head" | "hold-tail" | "hold-combined" | "hold-break";
   time: number;
 }
 
@@ -168,60 +170,133 @@ function getJudgmentForOffset(
   return 0;
 }
 
+// Stable (ScoreV1) long-note combined judgement rule.
+// Wiki: https://osu.ppy.sh/wiki/en/Gameplay/Judgement/osu%21mania
+// The tail's judgement for an LN depends on head error AND the combined error
+// (|headErr| + |tailErr|). Each tier tightens both independently. Body breaks
+// cap the result to MEH. A miss only happens when the head press was a miss or
+// the key was never pressed inside the tail window.
+function judgeStableLongNoteCombined(
+  headOffsetMs: number,
+  tailOffsetMs: number,
+  hadBodyBreak: boolean,
+  windows: ManiaReplayHitWindows,
+): Judgment {
+  const headErr = Math.abs(headOffsetMs);
+  const tailErr = Math.abs(tailOffsetMs);
+  const combinedErr = headErr + tailErr;
+
+  let result: Judgment;
+  if (headErr <= windows.perfect * 1.2 && combinedErr <= windows.perfect * 2.4) {
+    result = 1;
+  } else if (headErr <= windows.great * 1.1 && combinedErr <= windows.great * 2.2) {
+    result = 2;
+  } else if (headErr <= windows.good && combinedErr <= windows.good * 2) {
+    result = 3;
+  } else if (headErr <= windows.ok && combinedErr <= windows.ok * 2) {
+    result = 4;
+  } else {
+    result = 5;
+  }
+
+  if (hadBodyBreak && result < 5) {
+    result = 5;
+  }
+
+  return result;
+}
+
 function createMissState(
   note: ManiaNote,
   noteIndex: number,
   windows: ManiaReplayHitWindows,
   column: number,
   events: ReplayJudgementEvent[],
+  accuracyMode: ReplayAccuracyMode,
+  actualHead?: { time: number; offsetMs: number; releaseTime: number },
 ): ReplayNoteState {
-  const headTime = note.time + windows.miss;
+  const headTime = actualHead?.time ?? note.time + windows.miss;
+  const headOffsetMs = actualHead?.offsetMs ?? windows.miss;
+  const releaseTime = actualHead?.releaseTime ?? 0;
+  const isLN = note.isHold && note.endTime > note.time;
 
-  events.push({
-    column,
-    judgment: 6,
-    noteIndex,
-    offsetMs: windows.miss,
-    part: note.isHold ? "hold-head" : "note",
-    time: headTime,
-  });
-
-  if (!note.isHold || note.endTime <= note.time) {
+  if (!isLN) {
+    events.push({
+      column,
+      judgment: 6,
+      noteIndex,
+      offsetMs: headOffsetMs,
+      part: "note",
+      time: headTime,
+    });
     return {
       bodyBreakTime: null,
       displayJudgment: 6,
       displayTime: headTime,
       headJudgment: 6,
-      headOffsetMs: windows.miss,
+      headOffsetMs,
       headTime,
-      releaseTime: 0,
+      releaseTime,
       tailJudgment: null,
       tailOffsetMs: 0,
       tailTime: null,
     };
   }
 
-  const tailTime = note.endTime + windows.miss * RELEASE_WINDOW_LENIENCE;
+  if (accuracyMode === "lazer") {
+    const tailTime = note.endTime + windows.miss * RELEASE_WINDOW_LENIENCE;
+    events.push({
+      column,
+      judgment: 6,
+      noteIndex,
+      offsetMs: headOffsetMs,
+      part: "hold-head",
+      time: headTime,
+    });
+    events.push({
+      column,
+      judgment: 6,
+      noteIndex,
+      offsetMs: windows.miss * RELEASE_WINDOW_LENIENCE,
+      part: "hold-tail",
+      time: tailTime,
+    });
+    return {
+      bodyBreakTime: null,
+      displayJudgment: 6,
+      displayTime: tailTime,
+      headJudgment: 6,
+      headOffsetMs,
+      headTime,
+      releaseTime,
+      tailJudgment: 6,
+      tailOffsetMs: windows.miss * RELEASE_WINDOW_LENIENCE,
+      tailTime,
+    };
+  }
+
+  // Stable: one combined event; fire at the latest of head-miss time and
+  // the end of the OK release window so the HUD popup lines up with the tail.
+  const combinedTime = Math.max(headTime, note.endTime + windows.ok);
   events.push({
     column,
     judgment: 6,
     noteIndex,
-    offsetMs: windows.miss * RELEASE_WINDOW_LENIENCE,
-    part: "hold-tail",
-    time: tailTime,
+    offsetMs: headOffsetMs,
+    part: "hold-combined",
+    time: combinedTime,
   });
-
   return {
     bodyBreakTime: null,
     displayJudgment: 6,
-    displayTime: headTime,
+    displayTime: combinedTime,
     headJudgment: 6,
-    headOffsetMs: windows.miss,
+    headOffsetMs,
     headTime,
-    releaseTime: 0,
+    releaseTime,
     tailJudgment: 6,
-    tailOffsetMs: windows.miss * RELEASE_WINDOW_LENIENCE,
-    tailTime,
+    tailOffsetMs: windows.miss,
+    tailTime: combinedTime,
   };
 }
 
@@ -230,10 +305,12 @@ export function simulateManiaReplayJudgements(
   segments: ReplaySegment[][],
   keyCount: number,
   windows: ManiaReplayHitWindows,
+  accuracyMode: ReplayAccuracyMode = "lazer",
 ): { events: ReplayJudgementEvent[]; noteStates: ReplayNoteState[] } {
   const noteStates: ReplayNoteState[] = new Array(notes.length);
   const events: ReplayJudgementEvent[] = [];
   const notesByColumn: number[][] = Array.from({ length: keyCount }, () => []);
+  const isLazer = accuracyMode === "lazer";
 
   for (let i = 0; i < notes.length; i++) {
     const column = notes[i].column;
@@ -273,23 +350,45 @@ export function simulateManiaReplayJudgements(
         }
       }
 
+      const isLN = note.isHold && note.endTime > note.time;
+
       if (matchedSegmentIndex === -1) {
-        noteStates[noteIndex] = createMissState(note, noteIndex, windows, column, events);
+        noteStates[noteIndex] = createMissState(note, noteIndex, windows, column, events, accuracyMode);
         continue;
       }
 
       const headSegment = columnSegments[matchedSegmentIndex];
       const headOffsetMs = headSegment.start - note.time;
-      events.push({
-        column,
-        judgment: headJudgment,
-        noteIndex,
-        offsetMs: headOffsetMs,
-        part: note.isHold ? "hold-head" : "note",
-        time: headSegment.start,
-      });
 
-      if (!note.isHold || note.endTime <= note.time) {
+      // A stable press that lands in the miss tier (|offset| in (meh, miss])
+      // registers the LN as a miss at the real press time. Lazer is different:
+      // the head is counted as a miss but the tail still gets its own judgement
+      // (capped to Meh by the head-miss combo-break rule), so we let lazer fall
+      // through to the regular flow.
+      if (headJudgment === 6 && !isLazer) {
+        noteStates[noteIndex] = createMissState(
+          note,
+          noteIndex,
+          windows,
+          column,
+          events,
+          accuracyMode,
+          { time: headSegment.start, offsetMs: headOffsetMs, releaseTime: headSegment.end },
+        );
+        segmentCursor = matchedSegmentIndex + 1;
+        continue;
+      }
+
+      // Regular note (or a "hold" whose endTime == time which we treat as a tap)
+      if (!isLN) {
+        events.push({
+          column,
+          judgment: headJudgment,
+          noteIndex,
+          offsetMs: headOffsetMs,
+          part: "note",
+          time: headSegment.start,
+        });
         noteStates[noteIndex] = {
           bodyBreakTime: null,
           displayJudgment: headJudgment,
@@ -306,76 +405,188 @@ export function simulateManiaReplayJudgements(
         continue;
       }
 
+      // --- Long note ---
+      if (isLazer) {
+        events.push({
+          column,
+          judgment: headJudgment,
+          noteIndex,
+          offsetMs: headOffsetMs,
+          part: "hold-head",
+          time: headSegment.start,
+        });
+
+        let bodyBreakTime: number | null = null;
+        let releaseTime = headSegment.end;
+        let scanIndex = matchedSegmentIndex;
+        const tailDeadline = note.endTime + windows.miss * RELEASE_WINDOW_LENIENCE;
+        let tailJudgment: Judgment = 6;
+        let tailOffsetMs = windows.miss * RELEASE_WINDOW_LENIENCE;
+        let tailTime = tailDeadline;
+
+        // Lazer's DrawableHoldNoteTail.GetCappedResult: the tail is capped to
+        // Meh if the head was missed OR the body had a hold break.
+        const headMissed = headJudgment === 6;
+
+        while (scanIndex < columnSegments.length) {
+          const segment = columnSegments[scanIndex];
+          releaseTime = Math.max(releaseTime, segment.end);
+
+          const releaseOffsetMs = (segment.end - note.endTime) / RELEASE_WINDOW_LENIENCE;
+          const rawTailJudgment = getJudgmentForOffset(releaseOffsetMs, windows);
+
+          if (rawTailJudgment !== 0) {
+            const hasComboBreak = bodyBreakTime != null || headMissed;
+            tailJudgment = hasComboBreak && rawTailJudgment < 5 ? 5 : rawTailJudgment;
+            tailOffsetMs = segment.end - note.endTime;
+            tailTime = segment.end;
+            break;
+          }
+
+          if (segment.end >= tailDeadline) {
+            tailJudgment = 6;
+            tailOffsetMs = tailDeadline - note.endTime;
+            tailTime = tailDeadline;
+            break;
+          }
+
+          if (bodyBreakTime == null) {
+            bodyBreakTime = segment.end;
+            events.push({
+              column,
+              judgment: null,
+              noteIndex,
+              offsetMs: segment.end - note.endTime,
+              part: "hold-break",
+              time: segment.end,
+            });
+          }
+
+          scanIndex++;
+          if (scanIndex >= columnSegments.length || columnSegments[scanIndex].start > tailDeadline) {
+            tailJudgment = 6;
+            tailOffsetMs = tailDeadline - note.endTime;
+            tailTime = tailDeadline;
+            break;
+          }
+        }
+
+        events.push({
+          column,
+          judgment: tailJudgment,
+          noteIndex,
+          offsetMs: tailOffsetMs,
+          part: "hold-tail",
+          time: tailTime,
+        });
+
+        noteStates[noteIndex] = {
+          bodyBreakTime,
+          displayJudgment: tailJudgment,
+          displayTime: tailTime,
+          headJudgment,
+          headOffsetMs,
+          headTime: headSegment.start,
+          releaseTime,
+          tailJudgment,
+          tailOffsetMs,
+          tailTime,
+        };
+
+        segmentCursor = matchedSegmentIndex + 1;
+        continue;
+      }
+
+      // --- Stable LN: one combined judgement event at tail release time ---
+      const tailEarlyBound = note.endTime - windows.meh;
+      const tailLateBound = note.endTime + windows.ok;
+
       let bodyBreakTime: number | null = null;
       let releaseTime = headSegment.end;
       let scanIndex = matchedSegmentIndex;
-      const tailDeadline = note.endTime + windows.miss * RELEASE_WINDOW_LENIENCE;
-      let tailJudgment: Judgment = 6;
-      let tailOffsetMs = windows.miss * RELEASE_WINDOW_LENIENCE;
-      let tailTime = tailDeadline;
+      let tailReleaseTime: number | null = null;
+      let tailOffsetMs = windows.miss;
 
       while (scanIndex < columnSegments.length) {
         const segment = columnSegments[scanIndex];
         releaseTime = Math.max(releaseTime, segment.end);
 
-        const releaseOffsetMs = (segment.end - note.endTime) / RELEASE_WINDOW_LENIENCE;
-        const rawTailJudgment = getJudgmentForOffset(releaseOffsetMs, windows);
+        // Case A: released before tail window. Body break, then look for a
+        // re-press that can still cover the tail window.
+        if (segment.end < tailEarlyBound) {
+          if (bodyBreakTime == null) {
+            bodyBreakTime = segment.end;
+            events.push({
+              column,
+              judgment: null,
+              noteIndex,
+              offsetMs: segment.end - note.endTime,
+              part: "hold-break",
+              time: segment.end,
+            });
+          }
+          scanIndex++;
+          continue;
+        }
 
-        if (rawTailJudgment !== 0) {
-          tailJudgment = bodyBreakTime != null && rawTailJudgment < 5 ? 5 : rawTailJudgment;
+        // Case B: segment starts after the late OK window, so the user never
+        // pressed during the tail window. No more chances.
+        if (segment.start > tailLateBound) {
+          break;
+        }
+
+        // Case C: segment ends inside the tail window. Normal release.
+        if (segment.end <= tailLateBound) {
+          tailReleaseTime = segment.end;
           tailOffsetMs = segment.end - note.endTime;
-          tailTime = segment.end;
           break;
         }
 
-        if (segment.end >= tailDeadline) {
-          tailJudgment = 6;
-          tailOffsetMs = tailDeadline - note.endTime;
-          tailTime = tailDeadline;
-          break;
-        }
+        // Case D: segment ends after the late OK window but the user was
+        // clearly pressing during the tail window. Treat as if they released
+        // at the note's end (offset 0) so holding too long does not penalise.
+        tailReleaseTime = note.endTime;
+        tailOffsetMs = 0;
+        break;
+      }
 
-        if (bodyBreakTime == null) {
-          bodyBreakTime = segment.end;
-          events.push({
-            column,
-            judgment: null,
-            noteIndex,
-            offsetMs: segment.end - note.endTime,
-            part: "hold-break",
-            time: segment.end,
-          });
-        }
+      let combinedJudgment: Judgment;
+      let combinedTime: number;
 
-        scanIndex++;
-        if (scanIndex >= columnSegments.length || columnSegments[scanIndex].start > tailDeadline) {
-          tailJudgment = 6;
-          tailOffsetMs = tailDeadline - note.endTime;
-          tailTime = tailDeadline;
-          break;
-        }
+      if (tailReleaseTime == null) {
+        combinedJudgment = 6;
+        combinedTime = Math.max(headSegment.start, note.endTime + windows.ok);
+        tailOffsetMs = windows.miss;
+      } else {
+        combinedJudgment = judgeStableLongNoteCombined(
+          headOffsetMs,
+          tailOffsetMs,
+          bodyBreakTime != null,
+          windows,
+        );
+        combinedTime = tailReleaseTime;
       }
 
       events.push({
         column,
-        judgment: tailJudgment,
+        judgment: combinedJudgment,
         noteIndex,
         offsetMs: tailOffsetMs,
-        part: "hold-tail",
-        time: tailTime,
+        part: "hold-combined",
+        time: combinedTime,
       });
 
       noteStates[noteIndex] = {
         bodyBreakTime,
-        displayJudgment: headJudgment,
-        displayTime: headSegment.start,
+        displayJudgment: combinedJudgment,
+        displayTime: combinedTime,
         headJudgment,
         headOffsetMs,
         headTime: headSegment.start,
         releaseTime,
-        tailJudgment,
+        tailJudgment: combinedJudgment,
         tailOffsetMs,
-        tailTime,
+        tailTime: combinedTime,
       };
 
       segmentCursor = matchedSegmentIndex + 1;
@@ -389,7 +600,7 @@ export function simulateManiaReplayJudgements(
 
 export function calculateReplayAccuracy(
   counts: number[],
-  accuracyMode: ManiaReplayRuleset["accuracyMode"],
+  accuracyMode: ReplayAccuracyMode,
 ): number {
   const totalNotes = counts[1] + counts[2] + counts[3] + counts[4] + counts[5] + counts[6];
   if (totalNotes <= 0) return 100;
