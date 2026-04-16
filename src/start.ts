@@ -50,9 +50,7 @@ const documentCacheMiddleware = createMiddleware().server(
         /reading 'method'/.test(err.message) &&
         new URL(request.url).pathname.includes("/_serverFn/")
       ) {
-        return {
-          response: new Response("Unknown server function", { status: 404 }),
-        };
+        return new Response("Unknown server function", { status: 404 });
       }
       throw err;
     }
