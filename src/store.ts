@@ -12,6 +12,7 @@ import type {
   CountryMapsData,
   LeanHomeScore,
   LeanHomePopoff,
+  SnipeEvent,
 } from "./lib/types";
 
 export interface CachedAvatarAccent {
@@ -86,6 +87,8 @@ interface AppState {
   feedScoresByCountry: CountryRecord<OsuScore[]>;
   feedScoresFetchedAtByCountry: CountryRecord<number>;
   trackerPpGainsByCountry: CountryRecord<Record<number, CachedScoreGain>>;
+  snipesByCountry: CountryRecord<SnipeEvent[]>;
+  snipesFetchedAtByCountry: CountryRecord<number>;
   trackedUserIdsByCountry: CountryRecord<number[]>;
   trackedUserIdsFetchedAtByCountry: CountryRecord<number>;
   pollIndexByCountry: CountryRecord<number>;
@@ -100,6 +103,7 @@ interface AppState {
   setTopPlaysRange: (country: string, range: TopPlaysRange) => void;
   setPopoffs: (country: string, popoffs: CachedPopoff[]) => void;
   setMapsData: (country: string, data: CountryMapsData) => void;
+  setSnipes: (country: string, events: SnipeEvent[]) => void;
   addFeedScores: (country: string, scores: OsuScore[]) => void;
   markFeedScoresFetched: (country: string) => void;
   setTrackerPpGains: (country: string, gains: Record<number, number>, fetchedAt?: number) => void;
@@ -161,13 +165,17 @@ function writeTopPlaysRangeByCountry(ranges: CountryRecord<TopPlaysRange>): void
 // runs on a later task, after the current render has painted. If the tab is
 // closing we flush synchronously via pagehide so nothing is lost.
 const PERSIST_DEBOUNCE_MS = 250;
+let flushPersistedWrites: (() => void) | null = null;
 const storage = typeof window !== "undefined"
   ? createJSONStorage(() => {
       const pending = new Map<string, string | null>();
       let timer: ReturnType<typeof setTimeout> | null = null;
 
       const flush = () => {
-        timer = null;
+        if (timer != null) {
+          clearTimeout(timer);
+          timer = null;
+        }
         if (pending.size === 0) return;
         const batch = Array.from(pending.entries());
         pending.clear();
@@ -183,6 +191,7 @@ const storage = typeof window !== "undefined"
           }
         }
       };
+      flushPersistedWrites = flush;
 
       const schedule = () => {
         if (timer != null) return;
@@ -249,6 +258,8 @@ export const useAppStore = create<AppState>()(
       feedScoresByCountry: {},
       feedScoresFetchedAtByCountry: {},
       trackerPpGainsByCountry: {},
+      snipesByCountry: {},
+      snipesFetchedAtByCountry: {},
       trackedUserIdsByCountry: {},
       trackedUserIdsFetchedAtByCountry: {},
       pollIndexByCountry: {},
@@ -261,10 +272,12 @@ export const useAppStore = create<AppState>()(
         const clamped = clampThemeHue(hue);
         applyThemeHueToDom(clamped);
         set({ themeHue: clamped });
+        flushPersistedWrites?.();
       },
       resetThemeHue: () => {
         applyThemeHueToDom(DEFAULT_THEME_HUE);
         set({ themeHue: DEFAULT_THEME_HUE });
+        flushPersistedWrites?.();
       },
       setAvatarAccents: (accents, fetchedAt = Date.now()) =>
         set((state) => ({
@@ -375,6 +388,20 @@ export const useAppStore = create<AppState>()(
             },
           };
         }),
+      setSnipes: (country, events) =>
+        set((state) => {
+          const normalizedCountry = normalizeCountryCode(country);
+          return {
+            snipesByCountry: {
+              ...state.snipesByCountry,
+              [normalizedCountry]: events,
+            },
+            snipesFetchedAtByCountry: {
+              ...state.snipesFetchedAtByCountry,
+              [normalizedCountry]: Date.now(),
+            },
+          };
+        }),
       addFeedScores: (country, scores) =>
         set((state) => {
           const normalizedCountry = normalizeCountryCode(country);
@@ -424,7 +451,7 @@ export const useAppStore = create<AppState>()(
             ),
           };
           const trimmedEntries = Object.fromEntries(
-            Object.entries(mergedEntries)
+            (Object.entries(mergedEntries) as [string, CachedScoreGain][])
               .sort((a, b) => b[1].fetchedAt - a[1].fetchedAt)
               .slice(0, 300),
           ) as Record<number, CachedScoreGain>;
@@ -661,11 +688,12 @@ export const useAppStore = create<AppState>()(
         popoffsByCountry: state.popoffsByCountry,
         popoffsFetchedAtByCountry: state.popoffsFetchedAtByCountry,
         trackerPpGainsByCountry: state.trackerPpGainsByCountry,
-        // mapsDataByCountry and feedScoresByCountry are intentionally NOT
-        // persisted. Both can balloon past the ~5MB localStorage quota once
-        // more than a country or two accumulates (the maps beatmapset pool
-        // alone is ~1-2MB per country). The server cache serves them in
-        // <100ms on hydration so the round-trip is cheap.
+        // mapsDataByCountry, feedScoresByCountry, and snipesByCountry are
+        // intentionally NOT persisted. They can balloon past the ~5MB
+        // localStorage quota once more than a country or two accumulates
+        // (the maps beatmapset pool alone is ~1-2MB per country; the snipes
+        // log is up to 500 entries × ~1KB per country). The server cache
+        // serves them in <100ms on hydration so the round-trip is cheap.
         trackedUserIdsByCountry: state.trackedUserIdsByCountry,
         trackedUserIdsFetchedAtByCountry: state.trackedUserIdsFetchedAtByCountry,
         pollIndexByCountry: state.pollIndexByCountry,

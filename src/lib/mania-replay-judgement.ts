@@ -138,18 +138,20 @@ export function buildReplaySegments(
   for (const frame of frames) {
     for (let column = 0; column < keyCount; column++) {
       const pressed = (frame.keyState & (1 << column)) !== 0;
-      if (pressed && active[column] === null) {
+      const start = active[column];
+      if (pressed && start === null) {
         active[column] = frame.time;
-      } else if (!pressed && active[column] !== null) {
-        segments[column].push({ start: active[column], end: frame.time });
+      } else if (!pressed && start !== null) {
+        segments[column].push({ start, end: frame.time });
         active[column] = null;
       }
     }
   }
 
   for (let column = 0; column < keyCount; column++) {
-    if (active[column] !== null) {
-      segments[column].push({ start: active[column], end: totalDuration });
+    const start = active[column];
+    if (start !== null) {
+      segments[column].push({ start, end: totalDuration });
     }
   }
 
