@@ -39,6 +39,14 @@ interface FallingNote {
 }
 
 let cachedNoteImages: HTMLImageElement[] | null = null;
+let lnScratchCanvas: HTMLCanvasElement | null = null;
+
+function getLnScratch(width: number, height: number): HTMLCanvasElement {
+  if (!lnScratchCanvas) lnScratchCanvas = document.createElement("canvas");
+  if (lnScratchCanvas.width < width) lnScratchCanvas.width = width;
+  if (lnScratchCanvas.height < height) lnScratchCanvas.height = height;
+  return lnScratchCanvas;
+}
 
 function getNoteImages(): HTMLImageElement[] {
   if (cachedNoteImages) return cachedNoteImages;
@@ -53,8 +61,17 @@ function getNoteImages(): HTMLImageElement[] {
   return cachedNoteImages;
 }
 
+const LN_ALLOWED_INDICES = NOTE_IMAGES.map((_, i) => i).filter(
+  (i) => !NOTE_IMAGES[i].src.includes("arrow-up") && !NOTE_IMAGES[i].src.includes("arrow-down"),
+);
+
 function createNote(canvasW: number, canvasH: number, startAbove: boolean): FallingNote {
   const isLN = Math.random() < 0.05;
+  const imgIndex = isLN
+    ? LN_ALLOWED_INDICES[Math.floor(Math.random() * LN_ALLOWED_INDICES.length)]
+    : Math.floor(Math.random() * NOTE_IMAGES.length);
+  const headFixedOrientation =
+    isLN && (NOTE_IMAGES[imgIndex].aspect === "bar" || NOTE_IMAGES[imgIndex].src.includes("arrow-"));
 
   return {
     x: Math.random() * canvasW,
@@ -62,8 +79,8 @@ function createNote(canvasW: number, canvasH: number, startAbove: boolean): Fall
     speed: 9 + Math.random() * 18,
     size: 18 + Math.random() * 22,
     opacity: 0.03 + Math.random() * 0.07,
-    imgIndex: Math.floor(Math.random() * NOTE_IMAGES.length),
-    rotation: Math.random() * Math.PI * 2,
+    imgIndex,
+    rotation: headFixedOrientation ? 0 : Math.random() * Math.PI * 2,
     rotSpeed: (Math.random() - 0.5) * 0.3,
     isLN,
     lnHeight: isLN ? 30 + Math.random() * 200 : 0,
@@ -224,42 +241,71 @@ export function ManiaRain() {
         }
 
         const image = imagesRef.current[note.imgIndex];
-
-        context.save();
-        context.globalAlpha = note.opacity;
-        context.translate(note.x, note.y);
-
         const isBar = NOTE_IMAGES[note.imgIndex].aspect === "bar";
         const drawWidth = isBar ? note.size * 1.4 : note.size;
         const drawHeight = isBar ? note.size * 0.3 : note.size;
+        const imageReady = image?.complete && image.naturalWidth > 0;
 
         if (note.isLN) {
           const bodyWidth = note.size * 0.5;
           const radius = bodyWidth / 2;
+          const padding = 2;
+          const headHalfDiag = Math.hypot(drawWidth, drawHeight) / 2;
+          const ow = Math.ceil(Math.max(bodyWidth, headHalfDiag * 2) + padding * 2);
+          const oh = Math.ceil(note.lnHeight + headHalfDiag * 2 + padding * 2);
+          const ox = ow / 2;
+          const oy = oh - headHalfDiag - padding;
+
+          const scratch = getLnScratch(ow, oh);
+          const sctx = scratch.getContext("2d");
+          if (sctx) {
+            sctx.save();
+            sctx.setTransform(1, 0, 0, 1, 0, 0);
+            sctx.clearRect(0, 0, ow, oh);
+            sctx.translate(ox, oy);
+
+            sctx.beginPath();
+            sctx.moveTo(-bodyWidth / 2, 0);
+            sctx.lineTo(-bodyWidth / 2, -note.lnHeight + radius);
+            sctx.arcTo(-bodyWidth / 2, -note.lnHeight, 0, -note.lnHeight, radius);
+            sctx.arcTo(bodyWidth / 2, -note.lnHeight, bodyWidth / 2, -note.lnHeight + radius, radius);
+            sctx.lineTo(bodyWidth / 2, 0);
+            sctx.closePath();
+            sctx.fillStyle = "rgba(255, 255, 255, 0.3)";
+            sctx.fill();
+
+            sctx.rotate(note.rotation);
+            sctx.globalCompositeOperation = "destination-out";
+            if (imageReady) {
+              sctx.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+            } else {
+              drawFallbackNote(sctx, note, drawWidth, drawHeight, "rgba(0,0,0,1)");
+            }
+            sctx.globalCompositeOperation = "source-over";
+            if (imageReady) {
+              sctx.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+            } else {
+              drawFallbackNote(sctx, note, drawWidth, drawHeight, NOTE_IMAGES[note.imgIndex].tint);
+            }
+            sctx.restore();
+
+            context.save();
+            context.globalAlpha = note.opacity;
+            context.drawImage(scratch, 0, 0, ow, oh, note.x - ox, note.y - oy, ow, oh);
+            context.restore();
+          }
+        } else {
           context.save();
-          context.beginPath();
-          context.rect(-canvas.width, -canvas.height, canvas.width * 2, canvas.height * 2);
-          context.rect(-drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
-          context.clip("evenodd");
-          context.beginPath();
-          context.moveTo(-bodyWidth / 2, 0);
-          context.lineTo(-bodyWidth / 2, -note.lnHeight + radius);
-          context.arcTo(-bodyWidth / 2, -note.lnHeight, 0, -note.lnHeight, radius);
-          context.arcTo(bodyWidth / 2, -note.lnHeight, bodyWidth / 2, -note.lnHeight + radius, radius);
-          context.lineTo(bodyWidth / 2, 0);
-          context.closePath();
-          context.fillStyle = "rgba(255, 255, 255, 0.3)";
-          context.fill();
+          context.globalAlpha = note.opacity;
+          context.translate(note.x, note.y);
+          context.rotate(note.rotation);
+          if (imageReady) {
+            context.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+          } else {
+            drawFallbackNote(context, note, drawWidth, drawHeight, NOTE_IMAGES[note.imgIndex].tint);
+          }
           context.restore();
         }
-
-        context.rotate(note.rotation);
-        if (image?.complete && image.naturalWidth > 0) {
-          context.drawImage(image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
-        } else {
-          drawFallbackNote(context, note, drawWidth, drawHeight, NOTE_IMAGES[note.imgIndex].tint);
-        }
-        context.restore();
       }
 
       rafRef.current = requestAnimationFrame(animateRef.current);

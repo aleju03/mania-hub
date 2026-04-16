@@ -335,7 +335,7 @@ function HomePage() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.06 }}
-                  className={`bg-osu-b4 min-h-[180px] p-5 hover:bg-osu-b3/50 transition-colors cursor-pointer text-center flex flex-col items-center justify-center ${getFeaturedPopoffSpanClass(i, featuredPopoffs.length)}`}
+                  className={`bg-osu-b4 min-h-[180px] p-5 cursor-pointer text-center flex flex-col items-center justify-center relative isolate before:content-[''] before:absolute before:inset-0 before:bg-osu-b3/50 before:opacity-0 hover:before:opacity-100 before:transition-opacity before:pointer-events-none before:-z-10 ${getFeaturedPopoffSpanClass(i, featuredPopoffs.length)}`}
                   onClick={() => navigate({ to: "/player/$username", params: { username: p.user.username } })}>
                   <div className="text-3xl font-bold text-osu-pink leading-none" style={{ fontFamily: "Torus" }}>
                     {Math.round(p.score.pp ?? 0)}pp
