@@ -59,6 +59,7 @@ import type {
   CountryBoardSnapshot,
   CountryBoardSnapshotEntry,
   CountryBoardScore,
+  SnipesScanStatus,
 } from "./types";
 import { normalizeCountryCode } from "./country";
 
@@ -166,6 +167,33 @@ const SNIPES_SNAPSHOT_TTL = 90 * 24 * 60 * 60 * 1000;
 const SNIPES_SEED_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const SNIPES_SEED_PROBE_BUDGET = 30;
 const SNIPES_RANKED_STATUSES = new Set(["ranked", "loved", "approved"]);
+const SNIPES_STATUS_TTL = 60 * 1000;
+const SNIPES_STATUS_THROTTLE_MS = 350;
+const snipesStatusLastWriteByCountry = new Map<string, number>();
+
+function snipesStatusKey(country: string): string {
+  return `snipes-scan-status:${country}`;
+}
+
+function writeSnipesScanStatus(
+  country: string,
+  status: Omit<SnipesScanStatus, "updatedAt">,
+  options: { force?: boolean } = {},
+): void {
+  const now = Date.now();
+  const last = snipesStatusLastWriteByCountry.get(country) ?? 0;
+  if (!options.force && now - last < SNIPES_STATUS_THROTTLE_MS) return;
+  snipesStatusLastWriteByCountry.set(country, now);
+  // Fire-and-forget: status updates must not block the scan, and a failed
+  // write just means the client briefly sees stale status.
+  void setPersistentCache(snipesStatusKey(country), { ...status, updatedAt: now }, SNIPES_STATUS_TTL);
+}
+
+function clearSnipesScanStatus(country: string): void {
+  snipesStatusLastWriteByCountry.delete(country);
+  // Overwrite with a 1s-TTL marker so the client's next poll sees it gone.
+  void setPersistentCache(snipesStatusKey(country), null, 1000);
+}
 const userRecentPlaysPromiseCache = new Map<number, Promise<OsuScore[]>>();
 const userPromiseCache = new Map<string, Promise<OsuUser>>();
 const userScoresListPromiseCache = new Map<string, Promise<OsuScore[]>>();
@@ -1576,6 +1604,7 @@ function buildSnipeEvent(
   meta: BoardMeta,
   sniper: CountryBoardScore,
   victim: CountryBoardScore,
+  boardRank: number,
   isSeeded = false,
 ): SnipeEvent {
   return {
@@ -1604,6 +1633,7 @@ function buildSnipeEvent(
     timestamp: sniper.endedAt,
     victimTimestamp: victim.endedAt,
     detectedAt: Date.now(),
+    boardRank,
     ...(isSeeded ? { isSeeded: true } : {}),
   };
 }
@@ -1656,6 +1686,12 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
     const logKey = `country-snipes-log:v1:${country}`;
 
     return fetchWithCacheLock(cacheKey, SNIPES_CACHE_TTL, async () => {
+      try {
+      writeSnipesScanStatus(
+        country,
+        { phase: "roster", label: "Fetching country roster", current: 0, total: 1 },
+        { force: true },
+      );
       const rankings = await getRankings({ data: { type: "performance", page: 1, country } });
       const players = rankings.ranking
         .filter((entry) => entry.user.is_active !== false)
@@ -1667,11 +1703,24 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
         }));
 
       if (players.length === 0) {
+        clearSnipesScanStatus(country);
         return [];
       }
 
       const playerIds = players.map((p) => p.id);
 
+      writeSnipesScanStatus(
+        country,
+        {
+          phase: "recent",
+          label: `Loading recent plays from top ${players.length} players`,
+          current: 0,
+          total: players.length,
+        },
+        { force: true },
+      );
+
+      let recentDone = 0;
       const recentByPlayer = await mapWithConcurrency(
         players,
         SNIPES_SCAN_CONCURRENCY,
@@ -1685,6 +1734,14 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
               error: getErrorMessage(error),
             });
             return { player, scores: [] as OsuScore[] };
+          } finally {
+            recentDone += 1;
+            writeSnipesScanStatus(country, {
+              phase: "recent",
+              label: `Loading recent plays from top ${players.length} players`,
+              current: recentDone,
+              total: players.length,
+            });
           }
         },
       );
@@ -1699,6 +1756,17 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
           candidates.push(score);
         }
       }
+
+      writeSnipesScanStatus(
+        country,
+        {
+          phase: "compare",
+          label: `Comparing ${candidates.length} recent plays against snapshot`,
+          current: 0,
+          total: candidates.length,
+        },
+        { force: true },
+      );
 
       const snapshot: CountryBoardSnapshot =
         (await getPersistentCached<CountryBoardSnapshot>(snapshotKey)) ?? {};
@@ -1780,6 +1848,7 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
                   { beatmap: entry.beatmap, beatmapset: entry.beatmapset },
                   newScore,
                   victim,
+                  newIdx + 1,
                 ),
               );
             }
@@ -1820,6 +1889,18 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
           }
         }
 
+        writeSnipesScanStatus(
+          country,
+          {
+            phase: "seed",
+            label: `Seeding new beatmaps (${probeBatch.length} to probe, 15 calls each)`,
+            current: 0,
+            total: probeBatch.length,
+          },
+          { force: true },
+        );
+
+        let seedDone = 0;
         const seededResults = await mapWithConcurrency(
           probeBatch,
           SNIPES_SCAN_CONCURRENCY,
@@ -1839,6 +1920,14 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
                 error: getErrorMessage(error),
               });
               return { beatmapId, board: null as CountryBoardSnapshotEntry | null };
+            } finally {
+              seedDone += 1;
+              writeSnipesScanStatus(country, {
+                phase: "seed",
+                label: `Seeding new beatmaps (${probeBatch.length} to probe, 15 calls each)`,
+                current: seedDone,
+                total: probeBatch.length,
+              });
             }
           },
         );
@@ -1868,12 +1957,24 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
                 { beatmap: board.beatmap, beatmapset: board.beatmapset },
                 top,
                 next,
+                i + 1,
                 true,
               ),
             );
           }
         }
       }
+
+      writeSnipesScanStatus(
+        country,
+        {
+          phase: "merge",
+          label: `Merging ${newEvents.length} new event(s) into log`,
+          current: 1,
+          total: 1,
+        },
+        { force: true },
+      );
 
       const existingLog = (await getPersistentCached<SnipeEvent[]>(logKey)) ?? [];
       const merged = new Map<string, SnipeEvent>();
@@ -1892,6 +1993,19 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
         setPersistentCache(snapshotKey, snapshot, SNIPES_SNAPSHOT_TTL),
       ]);
 
+      clearSnipesScanStatus(country);
       return mergedLog;
+      } catch (err) {
+        clearSnipesScanStatus(country);
+        throw err;
+      }
     }, SNIPES_LOCK_TTL);
+  });
+
+export const getSnipesScanStatus = createServerFn({ method: "GET" })
+  .inputValidator((data: { country?: string }) => data)
+  .handler(async ({ data }: { data: { country?: string } }): Promise<SnipesScanStatus | null> => {
+    edgeCache(0, 0);
+    const country = normalizeCountryCode(data.country);
+    return (await getPersistentCached<SnipesScanStatus>(snipesStatusKey(country))) ?? null;
   });
