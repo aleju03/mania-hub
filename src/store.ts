@@ -33,6 +33,11 @@ export const DEFAULT_THEME_HUE = 333;
 function applyThemeHueToDom(hue: number): void {
   if (typeof document === "undefined") return;
   document.documentElement.style.setProperty("--theme-hue", String(hue));
+  if (hue === DEFAULT_THEME_HUE) {
+    document.documentElement.style.removeProperty("--theme-hue-mix");
+  } else {
+    document.documentElement.style.setProperty("--theme-hue-mix", "1");
+  }
 }
 
 function clampThemeHue(value: unknown): number {
