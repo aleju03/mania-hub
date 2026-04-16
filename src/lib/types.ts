@@ -189,18 +189,59 @@ export interface OsuScore {
   weight?: { percentage: number; pp: number };
 }
 
+// Only the user fields the rankings and home pages actually read. The raw
+// osu! API response wraps each rank row in a full `OsuUser` (page HTML,
+// badges, achievements, cover URLs, rank history, full statistics, etc.),
+// which is ~20 KB per row and ~1 MB per page of 50. Trimming to this shape
+// server-side cuts the bulk of rankings Fast Origin Transfer.
+export interface LeanRankingUser {
+  id: number;
+  username: string;
+  avatar_url: string;
+  country_code: string;
+  is_online: boolean;
+  is_active?: boolean;
+}
+
+export interface LeanRankingEntry {
+  user: LeanRankingUser;
+  hit_accuracy: number;
+  play_count: number;
+  pp: number;
+  global_rank: number;
+  ranked_score: number;
+  grade_counts: OsuGradeCounts;
+}
+
 export interface RankingsResponse {
   cursor: { page: number } | null;
-  ranking: Array<{
-    user: OsuUser;
-    hit_accuracy: number;
-    play_count: number;
-    pp: number;
-    global_rank: number;
-    ranked_score: number;
-    grade_counts: OsuGradeCounts;
-  }>;
+  ranking: LeanRankingEntry[];
   total: number;
+}
+
+// Pre-digested score for the home page's recent-scores and popoff lists.
+// The home page only needs display values, not the full osu! score shape,
+// so we compute accuracy/rank/timestamps server-side and ship the minimum.
+export interface LeanHomeScore {
+  id: number;
+  pp: number | null;
+  displayAcc: number;
+  displayRank: string;
+  mods: string[];
+  timestamp: string;
+  title: string;
+  version: string;
+  keyCount: number;
+  user: {
+    id: number;
+    username: string;
+    avatar_url: string;
+  };
+}
+
+export interface LeanHomePopoff {
+  user: { username: string; avatar_url: string };
+  score: LeanHomeScore;
 }
 
 export interface BeatmapsetSearchResponse {
@@ -394,18 +435,10 @@ export interface UserProfileInsights {
   } | null;
 }
 
-export interface HomePagePopoff {
-  user: {
-    username: string;
-    avatar_url: string;
-  };
-  score: OsuScore;
-}
-
 export interface HomePageData {
   rankings: RankingsResponse;
-  recentScores: OsuScore[];
-  popoffs: HomePagePopoff[];
+  recentScores: LeanHomeScore[];
+  popoffs: LeanHomePopoff[];
 }
 
 // Replay types

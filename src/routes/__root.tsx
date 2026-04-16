@@ -98,7 +98,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <HeadContent />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var s=localStorage.getItem("mania-hub-cache-v4");if(!s)return;var p=JSON.parse(s);var h=p&&p.state&&p.state.themeHue;if(typeof h==="number"&&isFinite(h))document.documentElement.style.setProperty("--theme-hue",String(((Math.round(h)%360)+360)%360));}catch(e){}})();`,
+            __html: `(function(){try{var s=localStorage.getItem("mania-hub-cache-v5");if(!s)return;var p=JSON.parse(s);var h=p&&p.state&&p.state.themeHue;if(typeof h==="number"&&isFinite(h))document.documentElement.style.setProperty("--theme-hue",String(((Math.round(h)%360)+360)%360));}catch(e){}})();`,
           }}
         />
       </head>

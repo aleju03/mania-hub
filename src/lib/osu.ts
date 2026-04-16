@@ -37,7 +37,11 @@ import type {
   OsuUser,
   OsuScore,
   OsuBeatmapset,
+  OsuGradeCounts,
   RankingsResponse,
+  LeanRankingEntry,
+  LeanHomeScore,
+  LeanHomePopoff,
   BeatmapsetSearchResponse,
   BeatmapScoresResponse,
   UserSearchResponse,
@@ -49,10 +53,69 @@ import type {
   MapsFavouriteBeatmapset,
   MapsPlayerFavourites,
   HomePageData,
-  HomePagePopoff,
   UserProfileInsights,
   InsightScoreSnapshot,
 } from "./types";
+
+// Raw shape returned by the osu! API's /rankings endpoint. We never expose
+// this off of the server — `getRankings` trims each user down to
+// `LeanRankingEntry` before responding or caching.
+interface RawRankingsResponse {
+  cursor: { page: number } | null;
+  ranking: Array<{
+    user: OsuUser;
+    hit_accuracy: number;
+    play_count: number;
+    pp: number;
+    global_rank: number;
+    ranked_score: number;
+    grade_counts: OsuGradeCounts;
+  }>;
+  total: number;
+}
+
+function toLeanRankingEntry(raw: RawRankingsResponse["ranking"][number]): LeanRankingEntry {
+  return {
+    user: {
+      id: raw.user.id,
+      username: raw.user.username,
+      avatar_url: raw.user.avatar_url,
+      country_code: raw.user.country_code,
+      is_online: raw.user.is_online,
+      is_active: raw.user.is_active,
+    },
+    hit_accuracy: raw.hit_accuracy,
+    play_count: raw.play_count,
+    pp: raw.pp,
+    global_rank: raw.global_rank,
+    ranked_score: raw.ranked_score,
+    grade_counts: raw.grade_counts,
+  };
+}
+
+function toLeanHomeScore(
+  score: OsuScore,
+  fallbackUser?: { id?: number; username?: string; avatar_url?: string },
+): LeanHomeScore {
+  const display = getScoreDisplayValues(score);
+  const user = {
+    id: score.user?.id ?? fallbackUser?.id ?? score.user_id,
+    username: score.user?.username ?? fallbackUser?.username ?? "Unknown",
+    avatar_url: score.user?.avatar_url ?? fallbackUser?.avatar_url ?? "",
+  };
+  return {
+    id: score.id,
+    pp: score.pp,
+    displayAcc: display.accuracy,
+    displayRank: display.rank,
+    mods: getModAcronyms(score.mods),
+    timestamp: getScoreTimestamp(score),
+    title: score.beatmapset?.title ?? "",
+    version: score.beatmap?.version ?? "",
+    keyCount: Number(score.beatmap?.cs) || 0,
+    user,
+  };
+}
 
 const MAPS_DATA_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 1 week
 const MAPS_DATA_CACHE_VERSION = 8;
@@ -563,20 +626,27 @@ export const getUserProfileInsights = createServerFn({ method: "GET" })
 
 export const getRankings = createServerFn({ method: "GET" })
   .inputValidator((data: { type?: string; page?: number; country?: string }) => data)
-  .handler(async ({ data }: { data: { type?: string; page?: number; country?: string } }) => {
+  .handler(async ({ data }: { data: { type?: string; page?: number; country?: string } }): Promise<RankingsResponse> => {
     edgeCache(60, 300);
     const type = data.type ?? "performance";
-    const cacheKey = `rankings:${type}:${data.page ?? 1}:${data.country ?? ""}`;
-    return fetchWithCacheLock(cacheKey, RANKINGS_CACHE_TTL, () =>
-      osuFetch<RankingsResponse>(
+    // v2: payload trimmed to LeanRankingEntry. Bumped so old full-OsuUser
+    // blobs in Turso aren't returned with the new lean consumer types.
+    const cacheKey = `rankings:v2:${type}:${data.page ?? 1}:${data.country ?? ""}`;
+    return fetchWithCacheLock(cacheKey, RANKINGS_CACHE_TTL, async () => {
+      const raw = await osuFetch<RawRankingsResponse>(
         `/rankings/mania/${type}`,
         {
           "cursor[page]": data.page ?? 1,
           country: data.country,
         },
         { caller: "getRankings" },
-      ),
-    );
+      );
+      return {
+        cursor: raw.cursor,
+        ranking: raw.ranking.map(toLeanRankingEntry),
+        total: raw.total,
+      };
+    });
   });
 
 async function fetchCountryRecentScores(
@@ -672,18 +742,21 @@ function buildRecentScoresPreview(scores: OsuScore[], limit = 5): OsuScore[] {
     .slice(0, limit);
 }
 
-async function buildHomeRecentScoresPreview(userIds: number[]): Promise<OsuScore[]> {
+async function buildHomeRecentScoresPreview(userIds: number[]): Promise<LeanHomeScore[]> {
   const previewUserIds = userIds.slice(0, HOME_RECENT_SCORES_PLAYER_COUNT);
   if (previewUserIds.length === 0) return [];
-  const cacheKey = `home-recent-scores:v1:${previewUserIds.join(",")}`;
+  // v2: response is now LeanHomeScore[] (pre-digested display values, no
+  // fat beatmapset/beatmap fields).
+  const cacheKey = `home-recent-scores:v2:${previewUserIds.join(",")}`;
 
-  return fetchWithCacheLock(cacheKey, HOME_RECENT_SCORES_CACHE_TTL, async () =>
-    fetchCountryRecentScores(previewUserIds, {
+  return fetchWithCacheLock(cacheKey, HOME_RECENT_SCORES_CACHE_TTL, async () => {
+    const scores = await fetchCountryRecentScores(previewUserIds, {
       batchSize: previewUserIds.length,
       batchIndex: 0,
       recentLimit: 20,
-    }).then((scores) => buildRecentScoresPreview(scores, 5)),
-  );
+    });
+    return buildRecentScoresPreview(scores, 5).map((score) => toLeanHomeScore(score));
+  });
 }
 
 type HomePreviewPlayer = {
@@ -692,16 +765,18 @@ type HomePreviewPlayer = {
   avatar_url: string;
 };
 
-async function buildHomePopoffs(players: HomePreviewPlayer[]): Promise<HomePagePopoff[]> {
+async function buildHomePopoffs(players: HomePreviewPlayer[]): Promise<LeanHomePopoff[]> {
   const topPlayersForPopoffs = players.slice(0, HOME_POPOFFS_PLAYER_COUNT);
   if (topPlayersForPopoffs.length === 0) return [];
-  const cacheKey = `home-popoffs:v1:${topPlayersForPopoffs.map((player) => player.id).join(",")}`;
+  // v2: response is now LeanHomePopoff[] (pre-digested display values).
+  const cacheKey = `home-popoffs:v2:${topPlayersForPopoffs.map((player) => player.id).join(",")}`;
 
   return fetchWithCacheLock(cacheKey, HOME_POPOFFS_CACHE_TTL, async () => {
+    type FatPopoff = { user: HomePreviewPlayer; score: OsuScore };
     const results = await mapWithConcurrency(
       topPlayersForPopoffs,
       APPROX_PP_GAINS_CONCURRENCY,
-      async (player) => {
+      async (player): Promise<FatPopoff[]> => {
         try {
           const scores = await fetchUserBestScoresWindow(player.id, 100);
           return scores
@@ -709,27 +784,25 @@ async function buildHomePopoffs(players: HomePreviewPlayer[]): Promise<HomePageP
               const age = Date.now() - getTimestampMs(score);
               return age < 7 * 24 * 60 * 60 * 1000 && score.pp != null && score.pp > 0;
             })
-            .map((score) => ({
-              user: {
-                username: player.username,
-                avatar_url: player.avatar_url,
-              },
-              score,
-            }));
+            .map((score) => ({ user: player, score }));
         } catch {
-          return [] as HomePagePopoff[];
+          return [];
         }
       },
     );
 
     return results
-      .flatMap((scores) => scores)
+      .flatMap((entries) => entries)
       .sort((a, b) => {
         const ppDiff = (b.score.pp ?? 0) - (a.score.pp ?? 0);
         if (ppDiff !== 0) return ppDiff;
         return getTimestampMs(b.score) - getTimestampMs(a.score);
       })
-      .slice(0, 5);
+      .slice(0, 5)
+      .map(({ user, score }) => ({
+        user: { username: user.username, avatar_url: user.avatar_url },
+        score: toLeanHomeScore(score, user),
+      }));
   });
 }
 
@@ -803,7 +876,8 @@ export const getHomePageData = createServerFn({ method: "GET" })
   .handler(async ({ data }: { data?: { country?: string } }): Promise<HomePageData> => {
     edgeCache(30, 300);
     const country = data?.country ?? "CR";
-    const cacheKey = `home-page-data:v1:${country}`;
+    // v2: rankings and scores are now lean shapes.
+    const cacheKey = `home-page-data:v2:${country}`;
     return fetchWithCacheLock(cacheKey, HOME_PAGE_CACHE_TTL, async () => {
       const rankings = await getRankings({ data: { type: "performance", page: 1, country } });
       const activeRankings = rankings.ranking.filter((entry) => entry.user.is_active !== false);
