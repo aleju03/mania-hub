@@ -4,16 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCountryFlagUrl, getCountryName } from "../../lib/country";
 import { formatNumber } from "../../lib/format";
 
-function formatAgeShort(ms: number): string {
-  const secs = Math.max(0, Math.round(ms / 1000));
-  if (secs < 60) return `${secs}s`;
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
-}
-
 interface TopRouteRow {
   path: string;
   count: number;
@@ -199,7 +189,7 @@ const getMonitorData = createServerFn({ method: "GET" })
         `SELECT properties.caller AS c, properties.path AS p, properties.status AS s, count() AS n FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} AND properties.caller IS NOT NULL GROUP BY c, p, s ORDER BY n DESC LIMIT 10`,
       ),
       runQuery(
-        `SELECT toString(timestamp), properties.caller, properties.path, properties.status, properties.body_preview, properties.attempts, properties.kind FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} AND properties.caller IS NOT NULL ORDER BY timestamp DESC LIMIT 15`,
+        `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), properties.caller, properties.path, properties.status, properties.body_preview, properties.attempts, properties.kind FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} AND properties.caller IS NOT NULL ORDER BY timestamp DESC LIMIT 15`,
       ),
       runQuery(
         `SELECT countIf(pv_count = 1) AS bounced, count() AS landers FROM (SELECT distinct_id, count() AS pv_count FROM events WHERE event = '$pageview' AND timestamp > ${since} GROUP BY distinct_id HAVING countIf(properties.$pathname = '/') > 0)`,
@@ -1052,10 +1042,7 @@ function ServerErrorsCard({
               </div>
               <div className="space-y-1.5 max-h-[420px] overflow-y-auto pr-1">
                 {recent.map((row, i) => {
-                  const ts = row.timestamp ? Date.parse(row.timestamp) : NaN;
-                  const when = Number.isFinite(ts)
-                    ? formatAgeShort(Date.now() - ts)
-                    : "—";
+                  const when = row.timestamp || "—";
                   const statusLabel =
                     row.status == null ? "no-resp" : String(row.status);
                   return (
@@ -1064,7 +1051,7 @@ function ServerErrorsCard({
                       className="rounded-md bg-osu-b5/60 border border-osu-b3/20 overflow-hidden"
                     >
                       <div className="px-2.5 py-1.5 flex items-center gap-2 min-w-0">
-                        <span className="text-[10px] font-mono text-osu-f1 w-8 flex-shrink-0">
+                        <span className="text-[10px] font-mono text-osu-f1 w-20 flex-shrink-0">
                           {when}
                         </span>
                         <span
