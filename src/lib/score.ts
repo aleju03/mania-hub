@@ -246,7 +246,7 @@ export function calculateApproxPpGainMap(bestScores: OsuScore[]): Record<number,
     const weightedWithoutScore = calculateWeightedPpTotal(withoutScore);
     const gain = weightedWithAll - weightedWithoutScore;
 
-    if (gain > 0) {
+    if (gain > 0 && score.id != null) {
       gains[score.id] = gain;
     }
   });
