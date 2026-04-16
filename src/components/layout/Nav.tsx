@@ -6,7 +6,7 @@ import { CountrySelector } from "./CountrySelector";
 import { ThemePicker } from "./ThemePicker";
 import { clearDevServerCaches } from "../../lib/api";
 import { searchUsers } from "../../lib/osu";
-import { TOP_PLAYS_RANGE_STORAGE_KEY, useAppStore, useSelectedCountry } from "../../store";
+import { DEFAULT_THEME_HUE, TOP_PLAYS_RANGE_STORAGE_KEY, useAppStore, useSelectedCountry } from "../../store";
 import { getCountryFlagGradient, getCountryFlagUrl } from "../../lib/country";
 
 const links = [
@@ -72,6 +72,8 @@ export function Nav() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const selectedCountry = useSelectedCountry();
+  const themeHue = useAppStore((state) => state.themeHue);
+  const isDefaultHue = themeHue === DEFAULT_THEME_HUE;
   const devMode = import.meta.env.VITE_DEV_MODE === "1";
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
   const current = links.find((l) => location.pathname.startsWith(l.to === "/" ? "/__home" : l.to)) ||
@@ -176,6 +178,12 @@ export function Nav() {
         />
       </div>
       <div className="absolute inset-0 bg-[#111]/60" />
+      {!isDefaultHue && (
+        <div
+          className="absolute inset-0 pointer-events-none mix-blend-hue"
+          style={{ backgroundColor: "hsl(calc(var(--theme-hue) * 1deg) 100% 50%)" }}
+        />
+      )}
       <div className="absolute bottom-0 left-0 right-0 h-px bg-osu-pink/20" />
       <nav className="relative flex items-center justify-between h-[60px] px-4 sm:px-5 max-w-[1200px] mx-auto">
         <div className="flex items-center gap-1">
