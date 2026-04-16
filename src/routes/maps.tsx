@@ -548,7 +548,7 @@ function MapsPage() {
         iconSrc="/images/icons/rankings.svg"
         title={`${countryName} mania maps`}
         right={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {isLoading && !error && (
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
@@ -586,7 +586,7 @@ function MapsPage() {
 
       {/* ── Filter bar ───────────────────────────────────────────────── */}
       <div className="bg-osu-d5 border-b border-osu-b3/20">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-2.5 flex flex-wrap items-start sm:items-center gap-x-4 gap-y-2">
           {tab !== "random" && (
           <input
             type="text"
@@ -638,7 +638,7 @@ function MapsPage() {
                 ))}
               </FilterGroup>
 
-              <span className="text-[10px] text-osu-f1">
+              <span className="w-full sm:w-auto text-[10px] text-osu-f1">
                 {randomPool.length} {randomPool.length === 1 ? "match" : "matches"}
               </span>
             </>
@@ -737,7 +737,7 @@ function MapsPage() {
 
       {/* ── Content ──────────────────────────────────────────────────── */}
       <div className="bg-osu-b5">
-        <div className="max-w-[1200px] mx-auto px-5 py-6">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-6">
           {error && (
             <div className="text-center py-16 text-osu-f1 text-sm">{error}</div>
           )}
@@ -801,17 +801,17 @@ function MapsPage() {
             <div className="max-w-[640px] mx-auto space-y-5">
               {randomPlayer && randomBeatmapset ? (
                 <>
-                  <div className="flex items-center justify-between flex-wrap gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <button
                       onClick={() => navigate({ to: "/player/$username", params: { username: randomPlayer.username } })}
-                      className="flex items-center gap-3 group cursor-pointer"
+                      className="flex items-center gap-3 group cursor-pointer min-w-0 text-left"
                     >
                       <Avatar url={randomPlayer.avatarUrl} size={44} />
-                      <div className="text-left">
+                      <div className="min-w-0">
                         <div className="text-[10px] uppercase tracking-wider text-osu-f1">
                           random pick from
                         </div>
-                        <div className="text-[15px] font-semibold text-osu-l2 group-hover:text-white transition-colors">
+                        <div className="text-[15px] font-semibold text-osu-l2 group-hover:text-white transition-colors truncate">
                           {randomPlayer.username}
                         </div>
                         <div className="text-[10px] text-osu-f1">
@@ -821,7 +821,7 @@ function MapsPage() {
                     </button>
                     <button
                       onClick={reshuffleRandom}
-                      className="px-3 py-1.5 rounded-lg bg-osu-pink/20 text-[11px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer border border-osu-pink/30"
+                      className="self-start sm:self-auto px-3 py-1.5 rounded-lg bg-osu-pink/20 text-[11px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer border border-osu-pink/30"
                     >
                       Reroll
                     </button>
@@ -884,9 +884,9 @@ function MapsLoadingIndicator({ loadingPlayers }: { loadingPlayers: boolean }) {
 
 function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</span>
-      <div className="flex gap-0.5">{children}</div>
+    <div className="flex w-full min-w-0 flex-col gap-1 sm:w-auto sm:flex-row sm:items-center sm:gap-1.5">
+      <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold shrink-0">{label}</span>
+      <div className="flex min-w-0 flex-wrap gap-0.5">{children}</div>
     </div>
   );
 }
@@ -1401,7 +1401,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         >
           {bm.status}
         </span>
-        <div className="absolute top-3 right-3 flex items-center gap-1">
+        <div className="absolute top-3 right-3 flex max-w-[calc(100%-5.5rem)] flex-wrap items-center justify-end gap-1">
           {keys.map((k) => (
             <span key={k} className="px-1.5 py-0.5 rounded bg-black/60 text-[10px] font-bold text-white">
               {k}K
@@ -1420,14 +1420,14 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       </a>
 
       <div className="px-4 py-3 space-y-3">
-        <div className="flex items-end justify-between gap-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[11px] text-osu-f1 truncate">mapped by {bm.creator}</div>
             {bm.bpm > 0 && (
               <div className="text-[10px] text-osu-f1/80 truncate">{Math.round(bm.bpm)} BPM</div>
             )}
           </div>
-          <div className="flex items-center gap-4 flex-shrink-0">
+          <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-start flex-shrink-0">
             <div className="flex items-center gap-1">
               <span className="text-[13px] font-bold text-osu-l2" style={{ fontFamily: "Torus" }}>{formatNumber(bm.globalFavouriteCount)}</span>
               <span className="text-[9px] text-osu-f1 uppercase">favs</span>
@@ -1453,7 +1453,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         )}
 
         {previewUrl ? (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={togglePreview}
               aria-label={isPreviewPlaying ? "Pause preview" : "Play preview"}
@@ -1479,26 +1479,28 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
               )}
             </button>
 
-            <div
-              onClick={(e) => {
-                const audio = audioRef.current;
-                if (!audio || !duration) return;
-                const rect = e.currentTarget.getBoundingClientRect();
-                const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-                audio.currentTime = ratio * duration;
-                setCurrentTime(audio.currentTime);
-              }}
-              className="flex-1 h-1 bg-osu-b3/60 rounded-full cursor-pointer relative group"
-            >
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               <div
-                className="absolute inset-y-0 left-0 bg-osu-pink rounded-full"
-                style={{ width: `${progressRatio * 100}%` }}
-              />
-            </div>
+                onClick={(e) => {
+                  const audio = audioRef.current;
+                  if (!audio || !duration) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+                  audio.currentTime = ratio * duration;
+                  setCurrentTime(audio.currentTime);
+                }}
+                className="flex-1 h-1 bg-osu-b3/60 rounded-full cursor-pointer relative group"
+              >
+                <div
+                  className="absolute inset-y-0 left-0 bg-osu-pink rounded-full"
+                  style={{ width: `${progressRatio * 100}%` }}
+                />
+              </div>
 
-            <span className="text-[9px] text-osu-f1 tabular-nums shrink-0">
-              {formatDuration(Math.floor(currentTime))}/{duration > 0 ? formatDuration(Math.floor(duration)) : "--:--"}
-            </span>
+              <span className="text-[9px] text-osu-f1 tabular-nums shrink-0">
+                {formatDuration(Math.floor(currentTime))}/{duration > 0 ? formatDuration(Math.floor(duration)) : "--:--"}
+              </span>
+            </div>
 
             <button
               onClick={toggleMute}
