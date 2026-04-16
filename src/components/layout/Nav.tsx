@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { SearchInput } from "../ui/SearchInput";
@@ -77,6 +77,49 @@ export function Nav() {
   const current = links.find((l) => location.pathname.startsWith(l.to === "/" ? "/__home" : l.to)) ||
     (location.pathname === "/" ? links[0] : location.pathname.startsWith("/player") ? null : links[0]);
 
+  // Active-link indicator: single always-mounted bar, measured from the
+  // active link's rect. Replaces an earlier Framer Motion `layoutId` shared
+  // layout animation that crashed the React tree on rapid nav clicks when a
+  // remount happened mid-spring.
+  const linksContainerRef = useRef<HTMLDivElement>(null);
+  const linkRefs = useRef<Map<string, HTMLAnchorElement>>(new Map());
+  const [barRect, setBarRect] = useState<{ left: number; width: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const id = current?.id;
+      const container = linksContainerRef.current;
+      if (!id || !container) {
+        setBarRect(null);
+        return;
+      }
+      const link = linkRefs.current.get(id);
+      if (!link) {
+        setBarRect(null);
+        return;
+      }
+      const c = container.getBoundingClientRect();
+      const l = link.getBoundingClientRect();
+      setBarRect({ left: l.left - c.left + 8, width: Math.max(0, l.width - 16) });
+    };
+    measure();
+    const container = linksContainerRef.current;
+    if (!container) return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(container);
+    linkRefs.current.forEach((el) => ro.observe(el));
+    let cancelled = false;
+    if (typeof document !== "undefined" && document.fonts?.ready) {
+      document.fonts.ready.then(() => {
+        if (!cancelled) measure();
+      });
+    }
+    return () => {
+      cancelled = true;
+      ro.disconnect();
+    };
+  }, [current?.id]);
+
   const flagBackground = getCountryFlagGradient(selectedCountry)
     ?? `url(${getCountryFlagUrl(selectedCountry)}) center/cover no-repeat`;
 
@@ -85,13 +128,25 @@ export function Nav() {
     setMenuOpen(false);
   }, [location.pathname]);
 
-  // Prevent body scroll when drawer is open
+  // Prevent body scroll when drawer is open. Defer the layout-invalidating
+  // style write by two rAFs so the drawer's transform transition gets a clean
+  // first frame on the compositor before we trigger a full-document restyle
+  // (otherwise the first frame stutters on mid-tier Android browsers).
   useEffect(() => {
     if (menuOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
+      let raf2 = 0;
+      const raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => {
+          document.body.style.overflow = "hidden";
+        });
+      });
+      return () => {
+        cancelAnimationFrame(raf1);
+        if (raf2) cancelAnimationFrame(raf2);
+        document.body.style.overflow = "";
+      };
     }
+    document.body.style.overflow = "";
     return () => {
       document.body.style.overflow = "";
     };
@@ -113,11 +168,14 @@ export function Nav() {
         <img
           src="/images/layout/nav2-background-hue0.png"
           alt=""
-          className="absolute inset-0 w-full h-full object-cover opacity-60"
-          style={{ filter: "hue-rotate(calc(var(--theme-hue) * 1deg)) saturate(0.8)" }}
+          className="absolute inset-0 w-full h-full object-cover opacity-50"
+        />
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ backgroundColor: "hsl(calc(var(--theme-hue) * 1deg) 55% 22% / 0.35)" }}
         />
       </div>
-      <div className="absolute inset-0 bg-[#111]/70" />
+      <div className="absolute inset-0 bg-[#111]/60" />
       <div className="absolute bottom-0 left-0 right-0 h-px bg-osu-pink/20" />
       <nav className="relative flex items-center justify-between h-[60px] px-4 sm:px-5 max-w-[1200px] mx-auto">
         <div className="flex items-center gap-1">
@@ -153,18 +211,11 @@ export function Nav() {
                     filter: [
                       "brightness(1.4)",
                       "saturate(1.45)",
-                      // Thicker ~2px black outline (8 stacked drop-shadows in a ring)
-                      "drop-shadow(2px 0 0 rgba(0,0,0,0.95))",
-                      "drop-shadow(-2px 0 0 rgba(0,0,0,0.95))",
-                      "drop-shadow(0 2px 0 rgba(0,0,0,0.95))",
-                      "drop-shadow(0 -2px 0 rgba(0,0,0,0.95))",
-                      "drop-shadow(1.5px 1.5px 0 rgba(0,0,0,0.95))",
-                      "drop-shadow(-1.5px 1.5px 0 rgba(0,0,0,0.95))",
-                      "drop-shadow(1.5px -1.5px 0 rgba(0,0,0,0.95))",
-                      "drop-shadow(-1.5px -1.5px 0 rgba(0,0,0,0.95))",
-                      // Soft white outer glow on top
-                      "drop-shadow(0 0 3px rgba(255,255,255,0.55))",
-                      "drop-shadow(0 0 5px rgba(255,255,255,0.3))",
+                      "drop-shadow(1.5px 0 0 rgba(0,0,0,0.95))",
+                      "drop-shadow(-1.5px 0 0 rgba(0,0,0,0.95))",
+                      "drop-shadow(0 1.5px 0 rgba(0,0,0,0.95))",
+                      "drop-shadow(0 -1.5px 0 rgba(0,0,0,0.95))",
+                      "drop-shadow(0 0 4px rgba(255,255,255,0.45))",
                     ].join(" "),
                   }}
                 />
@@ -174,10 +225,14 @@ export function Nav() {
           </motion.div>
 
           {/* Desktop nav links */}
-          <div className="hidden md:flex items-center gap-1">
+          <div ref={linksContainerRef} className="relative hidden md:flex items-center gap-1">
             {links.map((l) => (
               <Link
                 key={l.id}
+                ref={(el: HTMLAnchorElement | null) => {
+                  if (el) linkRefs.current.set(l.id, el);
+                  else linkRefs.current.delete(l.id);
+                }}
                 to={l.to}
                 search={l.id === "top-plays" && topPlaysRange !== "7d" ? { range: topPlaysRange } : undefined}
                 preload="intent"
@@ -189,15 +244,16 @@ export function Nav() {
               >
                 {l.label}
                 {l.id === "snipes" && <img src="/images/icons/sniper.webp" alt="" className="inline w-4 h-4 ml-1 -mt-0.5" />}
-                {current?.id === l.id && (
-                  <motion.div
-                    layoutId="nav-bar"
-                    className="absolute bottom-0 left-2 right-2 h-[3px] rounded-full bg-osu-yellow"
-                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                  />
-                )}
               </Link>
             ))}
+            {barRect && (
+              <motion.div
+                className="absolute bottom-0 h-[3px] rounded-full bg-osu-yellow pointer-events-none"
+                initial={false}
+                animate={{ left: barRect.left, width: barRect.width }}
+                transition={{ type: "spring", stiffness: 500, damping: 35 }}
+              />
+            )}
           </div>
         </div>
 
