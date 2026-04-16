@@ -470,15 +470,46 @@ function PopOffsPage() {
           {!playersError && (loadingPlayers || loading) && (
             <div className="space-y-2">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3 py-3 px-4 rounded-xl bg-osu-b4 border border-osu-b3/20">
-                  <Skeleton className="w-16 h-10" />
-                  <Skeleton className="w-8 h-8 rounded-full" />
-                  <Skeleton className="w-9 h-9 rounded-full" />
-                  <div className="flex-1 space-y-1.5">
-                    <Skeleton className="h-4 w-40" />
-                    <Skeleton className="h-3 w-56" />
+                <div key={i} className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
+                  <div className="flex items-center gap-2 sm:gap-3 py-3 px-3 sm:px-4">
+                    <div className="flex-shrink-0 w-12 sm:w-16 flex flex-col items-center gap-1">
+                      <Skeleton className="h-5 w-9" />
+                      <Skeleton className="h-2 w-5" />
+                      <Skeleton className="h-2.5 w-7" />
+                    </div>
+                    <Skeleton className="w-[30px] h-[30px] rounded" />
+                    <Skeleton className="w-9 h-9 rounded-full" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-3 w-10 sm:hidden" />
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Skeleton className="h-3 w-36 sm:w-56 max-w-full" />
+                        <Skeleton className="h-3 w-12 hidden sm:block" />
+                      </div>
+                      <div className="flex items-center justify-between gap-2 mt-1.5 sm:hidden">
+                        <div className="flex items-center gap-1">
+                          <Skeleton className="h-4 w-6 rounded" />
+                          <Skeleton className="h-4 w-6 rounded" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-3 w-12" />
+                          <Skeleton className="h-5 w-6 rounded" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
+                      <div className="flex gap-0.5">
+                        <Skeleton className="h-4 w-6 rounded" />
+                        <Skeleton className="h-4 w-6 rounded" />
+                      </div>
+                      <Skeleton className="h-3 w-12" />
+                      <Skeleton className="h-3 w-10" />
+                      <Skeleton className="h-5 w-16 rounded" />
+                      <Skeleton className="h-3 w-10" />
+                    </div>
                   </div>
-                  <Skeleton className="h-4 w-16" />
                 </div>
               ))}
             </div>

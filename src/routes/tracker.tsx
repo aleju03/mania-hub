@@ -25,7 +25,7 @@ import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
 import { LazerBadge } from "../components/ui/LazerBadge";
-import { ScoreRowSkeleton } from "../components/ui/LoadingSkeleton";
+import { TrackerRowSkeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import { TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useSelectedCountry } from "../store";
 import type { OsuScore } from "../lib/types";
@@ -450,7 +450,7 @@ function ScoresPage() {
             ) : loadingPlayers || (!initialLoaded && feedScores.length === 0) ? (
               <div className="space-y-2">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <ScoreRowSkeleton key={i} />
+                  <TrackerRowSkeleton key={i} />
                 ))}
               </div>
             ) : (
