@@ -35,10 +35,33 @@ const JUDGMENT_LABELS: Record<number, string> = {
 const HOLD_VISUAL_GRACE_MS = 60;
 const BACKGROUND_FADE_DURATION_MS = 180;
 
+// Memoized hex → rgb parse. Call sites pass a tiny set of static hex strings
+// (column colors, judgment colors, UR bar cyan), so the cache stays bounded.
+const HEX_RGB_CACHE = new Map<string, { r: number; g: number; b: number }>();
+function parseHexColor(hex: string): { r: number; g: number; b: number } {
+  const cached = HEX_RGB_CACHE.get(hex);
+  if (cached) return cached;
+  let r = 0, g = 0, b = 0;
+  if (hex.startsWith("#")) {
+    const raw = hex.slice(1);
+    if (raw.length === 3) {
+      r = parseInt(raw[0] + raw[0], 16);
+      g = parseInt(raw[1] + raw[1], 16);
+      b = parseInt(raw[2] + raw[2], 16);
+    } else if (raw.length === 6) {
+      r = parseInt(raw.slice(0, 2), 16);
+      g = parseInt(raw.slice(2, 4), 16);
+      b = parseInt(raw.slice(4, 6), 16);
+    }
+  }
+  const out = { r, g, b };
+  HEX_RGB_CACHE.set(hex, out);
+  return out;
+}
+
 interface RendererOptions {
   backgroundImage?: HTMLImageElement;
   backgroundDim?: number;
-  finalJudgmentCounts?: number[];
   isConvert?: boolean;
   isLazer?: boolean;
   od?: number;
@@ -92,7 +115,6 @@ export class ManiaReplayRenderer {
   private skin: ManiaSkin | null = null;
   private cssWidth = 0;
   private cssHeight = 0;
-  private finalJudgmentCounts: number[] | null = null;
 
   // Optional external clock (e.g., audio element). When set, replaces the
   // wall-clock dt in tick() with the external source. Returning `stalled: true`
@@ -120,6 +142,25 @@ export class ManiaReplayRenderer {
   private lastJudgment: Judgment = 0;
   private lastJudgmentTime = 0;
 
+  // --- Caches rebuilt on resize() / setSkin() / setScrollSpeed() ---
+  // Layout + per-column x/width avoid a reduce() loop per call (was called
+  // ~115x per frame on 7K charts).
+  private cachedLayout: Layout | null = null;
+  private cachedColumns: { x: number; width: number }[] = [];
+  // Receptor beam gradients, cached at flashIntensity=1; live intensity is
+  // applied via ctx.globalAlpha in renderReceptors.
+  private cachedReceptorGradients: (CanvasGradient | null)[] = [];
+
+  // Forward cursor into frames for getCurrentKeyState() — avoids a binary
+  // search per call. Reset on backward seek in seek()/recomputeStatsUpTo().
+  private keyStateCursor = 0;
+  // Cached once per render() so receptor + HUD share the same read.
+  private currentKeyState = 0;
+
+  // Running UR stats maintained incrementally in advanceStats().
+  private urSum = 0;
+  private urSumSq = 0;
+
   constructor(
     canvas: HTMLCanvasElement,
     frames: ReplayFrame[],
@@ -132,6 +173,9 @@ export class ManiaReplayRenderer {
     this.frames = frames;
     this.keyCount = keyCount;
     this.colors = COLUMN_COLORS[keyCount] || this.generateColors(keyCount);
+    // Warm the module-level hex-parse cache so the first render() call has
+    // all column colors memoized.
+    for (const c of this.colors) parseHexColor(c);
 
     // Apply mod transformations to notes
     const mods = new Set((options?.mods ?? []).filter(Boolean).map((m) => m.toUpperCase()));
@@ -144,7 +188,6 @@ export class ManiaReplayRenderer {
 
     this.backgroundImage = options?.backgroundImage ?? null;
     this.backgroundDim = options?.backgroundDim ?? 80;
-    this.finalJudgmentCounts = options?.finalJudgmentCounts ?? null;
     this.od = options?.od ?? 8;
     this.showInputOverlay = options?.showInputOverlay ?? false;
     this.transparentBackground = options?.transparentBackground ?? false;
@@ -165,7 +208,13 @@ export class ManiaReplayRenderer {
     }
 
     this.segments = buildReplaySegments(this.frames, this.keyCount, this.totalDuration);
-    const simulated = simulateManiaReplayJudgements(this.notes, this.segments, this.keyCount, this.hitWindows);
+    const simulated = simulateManiaReplayJudgements(
+      this.notes,
+      this.segments,
+      this.keyCount,
+      this.hitWindows,
+      this.ruleset.accuracyMode,
+    );
     this.judgmentEvents = simulated.events;
     this.noteStates = simulated.noteStates;
     const lastJudgementTime = this.judgmentEvents.length > 0
@@ -189,8 +238,12 @@ export class ManiaReplayRenderer {
     this.leftHandMisses = 0;
     this.rightHandMisses = 0;
     this.recentHitOffsets = [];
+    this.urSum = 0;
+    this.urSumSq = 0;
     this.lastJudgment = 0;
     this.lastJudgmentTime = 0;
+    // Backward seek past the cursor — rescan frame cursor from 0.
+    this.keyStateCursor = 0;
     this.advanceStats(time);
   }
 
@@ -201,23 +254,28 @@ export class ManiaReplayRenderer {
       if (event.time > time) break;
 
       if (event.judgment == null) {
+        // hold-break: combo reset only
         this.combo = 0;
         this.statsScanIndex++;
         continue;
       }
 
-      if (event.part === "note" || event.part === "hold-head") {
-        const noteState = this.noteStates[event.noteIndex];
-        if (noteState && noteState.displayTime <= time && noteState.displayJudgment > 0) {
-          this.judgmentCounts[noteState.displayJudgment]++;
-        }
+      if (event.judgment > 0) {
+        this.judgmentCounts[event.judgment]++;
       }
 
       if (event.judgment <= 5) {
         this.combo++;
         if (this.combo > this.maxComboSoFar) this.maxComboSoFar = this.combo;
-        this.recentHitOffsets.push(event.offsetMs);
-        if (this.recentHitOffsets.length > 40) this.recentHitOffsets.shift();
+        const offset = event.offsetMs;
+        this.recentHitOffsets.push(offset);
+        this.urSum += offset;
+        this.urSumSq += offset * offset;
+        if (this.recentHitOffsets.length > 40) {
+          const removed = this.recentHitOffsets.shift()!;
+          this.urSum -= removed;
+          this.urSumSq -= removed * removed;
+        }
       } else {
         this.combo = 0;
         const hand = this.getHandForColumn(event.column);
@@ -232,14 +290,7 @@ export class ManiaReplayRenderer {
   }
 
   private getAccuracy(): number {
-    return calculateReplayAccuracy(this.getDisplayCounts(), this.ruleset.accuracyMode);
-  }
-
-  private getDisplayCounts(): number[] {
-    if (this.finalJudgmentCounts && this.currentTime >= this.totalDuration - 1) {
-      return this.finalJudgmentCounts;
-    }
-    return this.judgmentCounts;
+    return calculateReplayAccuracy(this.judgmentCounts, this.ruleset.accuracyMode);
   }
 
   private getHandForColumn(column: number): Hand {
@@ -252,15 +303,29 @@ export class ManiaReplayRenderer {
   }
 
   private getUr(): number {
-    if (this.recentHitOffsets.length < 2) return 0;
-    const mean = this.recentHitOffsets.reduce((sum, value) => sum + value, 0) / this.recentHitOffsets.length;
-    const variance = this.recentHitOffsets.reduce((sum, value) => sum + (value - mean) ** 2, 0) / this.recentHitOffsets.length;
+    const n = this.recentHitOffsets.length;
+    if (n < 2) return 0;
+    const mean = this.urSum / n;
+    // sumSq/n - mean^2 can drift slightly negative on a 40-element rolling
+    // window; clamp before sqrt.
+    const variance = Math.max(0, this.urSumSq / n - mean * mean);
     return Math.sqrt(variance) * 10;
   }
 
   // --- Layout ---
 
+  // Invalidate cached layout/column/gradient data. Called on resize, skin
+  // change, and scroll-speed change — any time `getLayout()` would return a
+  // different value. Cheap; the caches are rebuilt lazily on next render().
+  private invalidateLayoutCache() {
+    this.cachedLayout = null;
+    this.cachedColumns = [];
+    this.cachedReceptorGradients = [];
+  }
+
   private getLayout(): Layout {
+    if (this.cachedLayout) return this.cachedLayout;
+
     const w = this.cssWidth;
     const h = this.cssHeight;
 
@@ -296,22 +361,43 @@ export class ManiaReplayRenderer {
     const receptorHeight = Math.max(6, h * 0.012);
     const pixelsPerMs = this.scrollSpeed;
 
-    return { w, h, playfieldWidth, playfieldX, laneWidth, judgmentY, noteHeight, receptorHeight, pixelsPerMs };
+    const layout: Layout = { w, h, playfieldWidth, playfieldX, laneWidth, judgmentY, noteHeight, receptorHeight, pixelsPerMs };
+    this.cachedLayout = layout;
+
+    // Build per-column (x, width) table in the same pass so every hot-path
+    // caller can just index into cachedColumns[col] instead of re-running the
+    // skin-width reduce loop.
+    const cols: { x: number; width: number }[] = new Array(this.keyCount);
+    if (this.skin) {
+      const skinWidths = this.skin.config.columnWidth;
+      const skinTotalWidth = skinWidths.reduce((a, b) => a + b, 0);
+      const scale = playfieldWidth / skinTotalWidth;
+      let x = playfieldX;
+      for (let i = 0; i < this.keyCount; i++) {
+        const width = skinWidths[i] * scale;
+        cols[i] = { x, width };
+        x += width;
+      }
+    } else {
+      for (let i = 0; i < this.keyCount; i++) {
+        cols[i] = { x: playfieldX + i * laneWidth, width: laneWidth };
+      }
+    }
+    this.cachedColumns = cols;
+    this.cachedReceptorGradients = new Array(this.keyCount).fill(null);
+
+    return layout;
   }
 
-  // Get the X position and width of a specific column, accounting for skin column widths
+  // Get the X position and width of a specific column. Reads from the
+  // layout cache built in getLayout(); caller must have called getLayout()
+  // first (all render() entry points do).
   private getColumnLayout(col: number, layout: Layout): { x: number; width: number } {
-    if (!this.skin) {
-      return { x: layout.playfieldX + col * layout.laneWidth, width: layout.laneWidth };
-    }
-    const skinWidths = this.skin.config.columnWidth;
-    const skinTotalWidth = skinWidths.reduce((a, b) => a + b, 0);
-    const scale = layout.playfieldWidth / skinTotalWidth;
-    let x = layout.playfieldX;
-    for (let i = 0; i < col; i++) {
-      x += skinWidths[i] * scale;
-    }
-    return { x, width: skinWidths[col] * scale };
+    const cached = this.cachedColumns[col];
+    if (cached) return cached;
+    // Fallback if the cache wasn't built yet (shouldn't happen on the render
+    // path, but be defensive).
+    return { x: layout.playfieldX + col * layout.laneWidth, width: layout.laneWidth };
   }
 
   // --- Public API ---
@@ -326,6 +412,7 @@ export class ManiaReplayRenderer {
     this.canvas.width = rect.width * dpr;
     this.canvas.height = rect.height * dpr;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.invalidateLayoutCache();
     this.render();
   }
 
@@ -359,6 +446,7 @@ export class ManiaReplayRenderer {
   setScrollSpeed(speed: number) {
     // osu!mania scroll speed 1-40 → pixels per ms
     this.scrollSpeed = 0.1 + (speed / 40) * 0.8;
+    this.invalidateLayoutCache();
     if (!this._isPlaying) this.render();
   }
 
@@ -383,6 +471,7 @@ export class ManiaReplayRenderer {
 
   setSkin(skin: ManiaSkin | null) {
     this.skin = skin;
+    this.invalidateLayoutCache();
     if (!this._isPlaying) this.render();
   }
 
@@ -438,6 +527,8 @@ export class ManiaReplayRenderer {
 
   private render() {
     const layout = this.getLayout();
+    // Cache once per frame; receptor + HUD both read it.
+    this.currentKeyState = this.getCurrentKeyState();
     const ctx = this.ctx;
     ctx.clearRect(0, 0, layout.w, layout.h);
 
@@ -854,7 +945,7 @@ export class ManiaReplayRenderer {
 
   private renderReceptors(ctx: CanvasRenderingContext2D, layout: Layout) {
     const { judgmentY, receptorHeight } = layout;
-    const currentState = this.getCurrentKeyState();
+    const currentState = this.currentKeyState;
 
     for (let col = 0; col < this.keyCount; col++) {
       const { x, width: colWidth } = this.getColumnLayout(col, layout);
@@ -893,24 +984,19 @@ export class ManiaReplayRenderer {
             ctx.globalAlpha = 1;
           }
         } else if (flashIntensity > 0) {
-          // Default beam glow even with skin keys
-          const grad = ctx.createLinearGradient(x, judgmentY - 80, x, judgmentY + 15);
-          grad.addColorStop(0, "transparent");
-          grad.addColorStop(0.6, this.colorWithAlpha(color, 0.2 * flashIntensity));
-          grad.addColorStop(1, this.colorWithAlpha(color, 0.7 * flashIntensity));
-          ctx.fillStyle = grad;
+          // Default beam glow even with skin keys — cached gradient at full
+          // intensity, globalAlpha modulates the live intensity.
+          ctx.fillStyle = this.getReceptorGradient(ctx, col, x, judgmentY, color);
+          ctx.globalAlpha = flashIntensity;
           ctx.fillRect(x, judgmentY - 80, colWidth, 95);
+          ctx.globalAlpha = 1;
         }
       } else if (flashIntensity > 0) {
-        const grad = ctx.createLinearGradient(x, judgmentY - 80, x, judgmentY + 15);
-        grad.addColorStop(0, "transparent");
-        grad.addColorStop(0.6, this.colorWithAlpha(color, 0.2 * flashIntensity));
-        grad.addColorStop(1, this.colorWithAlpha(color, 0.7 * flashIntensity));
-        ctx.fillStyle = grad;
+        ctx.globalAlpha = flashIntensity;
+        ctx.fillStyle = this.getReceptorGradient(ctx, col, x, judgmentY, color);
         ctx.fillRect(x, judgmentY - 80, colWidth, 95);
 
         ctx.fillStyle = color;
-        ctx.globalAlpha = flashIntensity;
         ctx.beginPath();
         ctx.roundRect(x + 3, judgmentY + 2, colWidth - 6, receptorHeight, 2);
         ctx.fill();
@@ -973,7 +1059,7 @@ export class ManiaReplayRenderer {
     ctx.restore();
 
     // --- Left-side key overlay + hand misses ---
-    const currentState = this.getCurrentKeyState();
+    const currentState = this.currentKeyState;
     const keyBoxSize = 32;
     const keyGap = 6;
     const keyRowWidth = this.keyCount * keyBoxSize + Math.max(0, this.keyCount - 1) * keyGap;
@@ -1033,7 +1119,7 @@ export class ManiaReplayRenderer {
     // --- Right-side live judgment counter ---
     const judgmentCounterX = playfieldX + playfieldWidth + 16;
     const judgmentCounterY = 52;
-    const displayCounts = this.getDisplayCounts();
+    const displayCounts = this.judgmentCounts;
     const judgmentItems = [
       { label: "MAX", value: displayCounts[1], color: JUDGMENT_COLORS[1] },
       { label: "300", value: displayCounts[2], color: JUDGMENT_COLORS[2] },
@@ -1097,9 +1183,19 @@ export class ManiaReplayRenderer {
   // --- Utilities ---
 
   private getCurrentKeyState(): number {
-    let lo = 0, hi = this.frames.length - 1;
-    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (this.frames[mid].time <= this.currentTime) lo = mid; else hi = mid - 1; }
-    return this.frames[lo]?.keyState ?? 0;
+    const t = this.currentTime;
+    const f = this.frames;
+    if (f.length === 0) return 0;
+    let cursor = this.keyStateCursor;
+    if (cursor >= f.length) cursor = f.length - 1;
+    // Advance forward while the next frame is still behind currentTime.
+    while (cursor + 1 < f.length && f[cursor + 1].time <= t) cursor++;
+    // Rewind if we somehow ended up past currentTime (small backward jitter
+    // from external-clock corrections that aren't large enough to trip the
+    // >50ms recomputeStatsUpTo path).
+    while (cursor > 0 && f[cursor].time > t) cursor--;
+    this.keyStateCursor = cursor;
+    return f[cursor].keyState;
   }
 
   private isColumnEffectivelyHeldAtTime(column: number, time: number, graceMs = HOLD_VISUAL_GRACE_MS): boolean {
@@ -1136,20 +1232,28 @@ export class ManiaReplayRenderer {
   }
 
   private colorWithAlpha(hexColor: string, alpha: number): string {
-    let r = 0, g = 0, b = 0;
-    if (hexColor.startsWith("#")) {
-      const hex = hexColor.slice(1);
-      if (hex.length === 3) {
-        r = parseInt(hex[0] + hex[0], 16);
-        g = parseInt(hex[1] + hex[1], 16);
-        b = parseInt(hex[2] + hex[2], 16);
-      } else if (hex.length === 6) {
-        r = parseInt(hex.slice(0, 2), 16);
-        g = parseInt(hex.slice(2, 4), 16);
-        b = parseInt(hex.slice(4, 6), 16);
-      }
-    }
+    const { r, g, b } = parseHexColor(hexColor);
     return `rgba(${r},${g},${b},${alpha})`;
+  }
+
+  // Receptor beam gradient. Cached per column at flashIntensity=1; live
+  // intensity is applied via ctx.globalAlpha in the caller. Invalidated on
+  // layout change (resize/setSkin/setScrollSpeed) via invalidateLayoutCache().
+  private getReceptorGradient(
+    ctx: CanvasRenderingContext2D,
+    col: number,
+    x: number,
+    judgmentY: number,
+    color: string,
+  ): CanvasGradient {
+    const cached = this.cachedReceptorGradients[col];
+    if (cached) return cached;
+    const grad = ctx.createLinearGradient(x, judgmentY - 80, x, judgmentY + 15);
+    grad.addColorStop(0, "transparent");
+    grad.addColorStop(0.6, this.colorWithAlpha(color, 0.2));
+    grad.addColorStop(1, this.colorWithAlpha(color, 0.7));
+    this.cachedReceptorGradients[col] = grad;
+    return grad;
   }
 
   destroy() {

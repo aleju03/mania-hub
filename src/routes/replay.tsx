@@ -727,6 +727,89 @@ function ReplayInfo({ replay, score, beatmap, onClear }: {
   );
 }
 
+// Formats a positive millisecond count as m:ss. Shared between the progress
+// bar and the share tooltip so both agree on the display.
+function formatReplayMs(ms: number): string {
+  const safe = Math.max(0, ms);
+  const mins = Math.floor(safe / 60000);
+  const secs = String(Math.floor((safe % 60000) / 1000)).padStart(2, "0");
+  return `${mins}:${secs}`;
+}
+
+// Isolated progress bar. Owns its own `progress` state and polls the renderer
+// on an interval — extracted so that the 10–20Hz slider update doesn't
+// re-render the whole ReplayViewer (which has ~25 useState slots) every tick.
+// Parent passes callbacks for seek/scrub/share so nothing leaks back up.
+interface ReplayProgressBarProps {
+  rendererRef: React.MutableRefObject<ReplayRendererLike | null>;
+  sliderClass: string;
+  onPointerDown: () => void;
+  onPointerUp: () => void;
+  onSeek: (timeMs: number) => void;
+  onContextMenu: (timeMsGame: number, clientX: number, clientY: number) => void;
+  children?: React.ReactNode;
+}
+
+function ReplayProgressBar({
+  rendererRef,
+  sliderClass,
+  onPointerDown,
+  onPointerUp,
+  onSeek,
+  onContextMenu,
+  children,
+}: ReplayProgressBarProps) {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    const pollOnce = () => {
+      const r = rendererRef.current;
+      if (!r || r.duration <= 0) return;
+      // setProgress with same value is a React bail-out; no re-render while paused.
+      setProgress(r.time / r.duration);
+    };
+    pollOnce();
+    const id = setInterval(pollOnce, 100);
+    return () => clearInterval(id);
+  }, [rendererRef]);
+
+  const displayDuration = rendererRef.current?.displayDuration ?? 0;
+  const leftLabel = formatReplayMs(progress * displayDuration);
+  const rightLabel = formatReplayMs(displayDuration);
+
+  return (
+    <div
+      className="relative flex items-center gap-3 px-4 pt-3 pb-1"
+      onContextMenu={(e) => {
+        e.preventDefault();
+        const r = rendererRef.current;
+        if (!r) return;
+        onContextMenu(r.time, e.clientX, e.clientY);
+      }}
+    >
+      <span className="text-[10px] text-osu-f1 tabular-nums w-10">{leftLabel}</span>
+      <input
+        type="range"
+        min={0}
+        max={1}
+        step={0.001}
+        value={progress}
+        onPointerDown={onPointerDown}
+        onPointerUp={onPointerUp}
+        onChange={(e) => {
+          const v = Number(e.target.value);
+          setProgress(v);
+          const r = rendererRef.current;
+          if (r) onSeek(v * r.duration);
+        }}
+        className={`flex-1 h-1.5 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink ${sliderClass}`}
+      />
+      <span className="text-[10px] text-osu-f1 tabular-nums w-10 text-right">{rightLabel}</span>
+      {children}
+    </div>
+  );
+}
+
 function ReplayViewer({
   replay,
   beatmap,
@@ -755,7 +838,6 @@ function ReplayViewer({
   );
   const modRate = modAcronyms.includes("DT") || modAcronyms.includes("NC") ? 1.5 : modAcronyms.includes("HT") ? 0.75 : 1;
   const effectiveRate = speed * modRate;
-  const [progress, setProgress] = useState(0);
   const [scrollSpeed, setScrollSpeed] = useState(32);
   const [bgDim, setBgDim] = useState(() => {
     if (typeof window === "undefined") return 80;
@@ -789,13 +871,14 @@ function ReplayViewer({
   // React re-render.
   const audioEnabledRef = useRef(true);
   const audioUrlActiveRef = useRef(false);
+  const showInputOverlayRef = useRef(false);
   const [skin, setSkin] = useState<ManiaSkin | null>(null);
   const [skinLoading, setSkinLoading] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [sharePos, setSharePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [shareLabel, setShareLabel] = useState("");
   const [copied, setCopied] = useState(false);
   const skinFileRef = useRef<HTMLInputElement>(null);
-  const progressInterval = useRef<ReturnType<typeof setInterval>>(undefined);
   const shouldResumeAudioRef = useRef(false);
   const applyScrollSpeed = useCallback((next: number, persistForPlayer = false) => {
     const normalized = Math.max(1, Math.min(40, Math.round(next)));
@@ -862,6 +945,7 @@ function ReplayViewer({
   }, [audioEnabled]);
 
   useEffect(() => {
+    showInputOverlayRef.current = showInputOverlay;
     if (rendererRef.current) {
       rendererRef.current.setShowInputOverlay(showInputOverlay);
     }
@@ -903,19 +987,10 @@ function ReplayViewer({
         replay.keyCount,
         beatmap?.notes ?? [],
         {
-          finalJudgmentCounts: [
-            0,
-            replay.header.countGeki,
-            replay.header.count300,
-            replay.header.countKatu,
-            replay.header.count100,
-            replay.header.count50,
-            replay.header.countMiss,
-          ],
           isConvert: scoreInfo?.beatmap?.convert ?? false,
           isLazer: displayScoreValues?.isLazer ?? false,
           od: beatmap?.od,
-          showInputOverlay,
+          showInputOverlay: showInputOverlayRef.current,
           mods: modAcronyms,
           transparentBackground: true,
         },
@@ -943,7 +1018,8 @@ function ReplayViewer({
       if (initialTime != null && initialTime > 0) {
         const gameTimeMs = initialTime * 1000 * modRate;
         renderer.seek(gameTimeMs);
-        setProgress(gameTimeMs / renderer.duration);
+        // ReplayProgressBar polls the renderer on an interval, so it will pick
+        // up the seeked position on its next tick.
       }
 
       handleResize = () => renderer?.resize();
@@ -958,7 +1034,7 @@ function ReplayViewer({
         rendererRef.current = null;
       }
     };
-  }, [replay, beatmap, initialTime, modRate, modAcronyms, displayScoreValues, scoreInfo?.beatmap?.convert, showInputOverlay]);
+  }, [replay, beatmap, initialTime, modRate, modAcronyms, displayScoreValues, scoreInfo?.beatmap?.convert]);
 
   // Pass skin to renderer when it changes
   useEffect(() => {
@@ -1013,20 +1089,17 @@ function ReplayViewer({
     await removeSkinFromIDB();
   };
 
-  // Progress polling. Audio is the master clock (see setExternalClock in the
-  // renderer creation effect), so no drift correction is needed here — we
-  // just read r.time to keep the slider up to date.
+  // Detect when the renderer reaches the end on its own (no more frames) and
+  // flip isPlaying back. ReplayProgressBar polls the renderer independently
+  // for its slider; this effect just handles the "playback ended" transition.
   useEffect(() => {
-    if (progressInterval.current) clearInterval(progressInterval.current);
-    if (isPlaying) {
-      progressInterval.current = setInterval(() => {
-        const r = rendererRef.current;
-        if (!r) return;
-        setProgress(r.time / r.duration);
-        if (!r.isPlaying) setIsPlaying(false);
-      }, 50);
-    }
-    return () => { if (progressInterval.current) clearInterval(progressInterval.current); };
+    if (!isPlaying) return;
+    const id = setInterval(() => {
+      const r = rendererRef.current;
+      if (!r) return;
+      if (!r.isPlaying) setIsPlaying(false);
+    }, 250);
+    return () => clearInterval(id);
   }, [isPlaying]);
 
   // Sync audio with replay play/pause/seek
@@ -1228,16 +1301,74 @@ function ReplayViewer({
     }
   };
 
-  const formatTime = (ratio: number) => {
-    const ms = ratio * (rendererRef.current?.displayDuration ?? 0);
-    return `${Math.floor(ms / 60000)}:${String(Math.floor((ms % 60000) / 1000)).padStart(2, "0")}`;
-  };
-
   const sliderClass = "h-1 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink";
 
   const handleAudioError = () => {
     setAudioError("Couldn't load the song audio for this replay.");
     shouldResumeAudioRef.current = false;
+  };
+
+  const handleProgressPointerDown = () => {
+    const r = rendererRef.current;
+    if (!r) return;
+    scrubbingRef.current = true;
+    scrubResumeOnReleaseRef.current = r.isPlaying;
+    if (r.isPlaying) {
+      r.pause();
+      setIsPlaying(false);
+    }
+    if (audioRef.current && !audioRef.current.paused) {
+      audioRef.current.pause();
+    }
+  };
+
+  const handleProgressPointerUp = () => {
+    const r = rendererRef.current;
+    if (!r) {
+      scrubbingRef.current = false;
+      scrubResumeOnReleaseRef.current = false;
+      return;
+    }
+    scrubbingRef.current = false;
+    if (audioRef.current && audioEnabled) {
+      audioRef.current.currentTime = r.time / 1000;
+      audioRef.current.playbackRate = effectiveRate;
+      audioRef.current.volume = volume;
+    }
+    if (scrubResumeOnReleaseRef.current) {
+      scrubResumeOnReleaseRef.current = false;
+      r.play();
+      setIsPlaying(true);
+      if (audioRef.current && audioEnabled) {
+        if (audioRef.current.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+          audioRef.current.play().catch(() => {
+            shouldResumeAudioRef.current = true;
+          });
+        } else {
+          shouldResumeAudioRef.current = true;
+        }
+      }
+    }
+  };
+
+  const handleProgressSeek = (timeMs: number) => {
+    rendererRef.current?.seek(timeMs);
+    // During an active pointer scrub, don't touch audio — it's synced once on
+    // release. Keyboard/accessibility scrubs still go through the audio sync.
+    if (!scrubbingRef.current) {
+      syncAudioTime(timeMs);
+    }
+  };
+
+  const handleProgressContextMenu = (timeMsGame: number, clientX: number, clientY: number) => {
+    const wallMs = timeMsGame / modRate;
+    const t = Math.round((wallMs / 1000) * 10) / 10;
+    const url = new URL(window.location.href);
+    url.searchParams.set("t", String(t));
+    setShareUrl(url.toString());
+    setSharePos({ x: clientX, y: clientY });
+    setShareLabel(formatReplayMs(wallMs));
+    setCopied(false);
   };
 
   return (
@@ -1287,78 +1418,15 @@ function ReplayViewer({
           </div>
         )}
 
-        {/* Progress bar */}
-        <div className="relative flex items-center gap-3 px-4 pt-3 pb-1"
-          onContextMenu={(e) => {
-            e.preventDefault();
-            const wallSeconds = progress * (rendererRef.current?.displayDuration ?? 0) / 1000;
-            const t = Math.round(wallSeconds * 10) / 10;
-            const url = new URL(window.location.href);
-            url.searchParams.set("t", String(t));
-            setShareUrl(url.toString());
-            setSharePos({ x: e.clientX, y: e.clientY });
-            setCopied(false);
-          }}
+        {/* Progress bar (isolated so slider updates don't re-render the rest) */}
+        <ReplayProgressBar
+          rendererRef={rendererRef}
+          sliderClass=""
+          onPointerDown={handleProgressPointerDown}
+          onPointerUp={handleProgressPointerUp}
+          onSeek={handleProgressSeek}
+          onContextMenu={handleProgressContextMenu}
         >
-          <span className="text-[10px] text-osu-f1 tabular-nums w-10">{formatTime(progress)}</span>
-          <input type="range" min={0} max={1} step={0.001} value={progress}
-            onPointerDown={() => {
-              const r = rendererRef.current;
-              if (!r) return;
-              scrubbingRef.current = true;
-              scrubResumeOnReleaseRef.current = r.isPlaying;
-              if (r.isPlaying) {
-                r.pause();
-                setIsPlaying(false);
-              }
-              if (audioRef.current && !audioRef.current.paused) {
-                audioRef.current.pause();
-              }
-            }}
-            onPointerUp={() => {
-              const r = rendererRef.current;
-              if (!r) {
-                scrubbingRef.current = false;
-                scrubResumeOnReleaseRef.current = false;
-                return;
-              }
-              scrubbingRef.current = false;
-              // Sync audio to the renderer's final position once, on release
-              if (audioRef.current && audioEnabled) {
-                audioRef.current.currentTime = r.time / 1000;
-                audioRef.current.playbackRate = effectiveRate;
-                audioRef.current.volume = volume;
-              }
-              if (scrubResumeOnReleaseRef.current) {
-                scrubResumeOnReleaseRef.current = false;
-                r.play();
-                setIsPlaying(true);
-                if (audioRef.current && audioEnabled) {
-                  if (audioRef.current.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
-                    audioRef.current.play().catch(() => {
-                      shouldResumeAudioRef.current = true;
-                    });
-                  } else {
-                    shouldResumeAudioRef.current = true;
-                  }
-                }
-              }
-            }}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              setProgress(v);
-              const t = v * (rendererRef.current?.duration ?? 0);
-              rendererRef.current?.seek(t);
-              // During an active pointer scrub, don't touch audio — we sync
-              // it once on release. Keyboard/accessibility scrubs still go
-              // through the normal audio sync path.
-              if (!scrubbingRef.current) {
-                syncAudioTime(t);
-              }
-            }}
-            className={`flex-1 h-1.5 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink`} />
-          <span className="text-[10px] text-osu-f1 tabular-nums w-10 text-right">{formatTime(1)}</span>
-
           {/* Share timestamp tooltip */}
           <AnimatePresence>
             {shareUrl && (
@@ -1372,7 +1440,7 @@ function ReplayViewer({
                   style={{ left: Math.min(sharePos.x, window.innerWidth - 340), top: sharePos.y - 8 }}
                   className="fixed -translate-y-full z-[100] bg-osu-b3 border border-osu-b2 rounded-lg shadow-2xl p-2.5 w-80"
                 >
-                  <div className="text-[11px] text-osu-f1 mb-1.5">Copy URL at {formatTime(progress)}</div>
+                  <div className="text-[11px] text-osu-f1 mb-1.5">Copy URL at {shareLabel}</div>
                   <div className="flex gap-1.5">
                     <input
                       type="text"
@@ -1392,7 +1460,7 @@ function ReplayViewer({
               </>
             )}
           </AnimatePresence>
-        </div>
+        </ReplayProgressBar>
 
         {/* Controls row */}
         <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 flex-wrap">
