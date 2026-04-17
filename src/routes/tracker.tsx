@@ -10,7 +10,7 @@ import {
   getDisplayedAccuracy,
   getDisplayedRank,
   getDisplayedTotalScore,
-  getModAcronyms,
+  getModDisplayList,
   getScoreIdentity,
   getScoreTimeMs,
   getScoreTimestamp,
@@ -24,7 +24,6 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
-import { LazerBadge } from "../components/ui/LazerBadge";
 import { TrackerRowSkeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import { TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useSelectedCountry } from "../store";
@@ -585,6 +584,8 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   const count100 = stats?.count_100 ?? stats?.ok ?? 0;
   const count50 = stats?.count_50 ?? stats?.meh ?? 0;
   const countMiss = stats?.count_miss ?? stats?.miss ?? 0;
+  const lazer = isLazerScore(score);
+  const accColorClass = lazer ? "text-osu-pink-light" : "text-osu-l2";
 
   return (
     <div className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
@@ -660,13 +661,12 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
           {/* Row 3 (mobile): Mods left, stats right */}
           <div className="flex items-center justify-between gap-2 mt-1 sm:hidden">
             <div className="flex items-center gap-1">
-              {getModAcronyms(score.mods).map((acronym) => (
-                <ModBadge key={acronym} mod={acronym} />
+              {getModDisplayList(score.mods).map((m) => (
+                <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
               ))}
-              {isLazerScore(score) && <LazerBadge />}
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>
+              <span className={`text-xs ${accColorClass}`}>{formatAccuracy(getDisplayedAccuracy(score))}</span>
               <span className="text-sm font-bold">{formatPP(score.pp)}</span>
               {approxPpGain != null && (
                 <span className="text-[10px] font-semibold text-osu-green">+{formatNumber(Math.round(approxPpGain))}</span>
@@ -690,14 +690,11 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
         {/* Desktop metadata */}
         <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
           <div className="flex gap-0.5">
-            {getModAcronyms(score.mods).map((acronym) => (
-              <ModBadge key={acronym} mod={acronym} />
+            {getModDisplayList(score.mods).map((m) => (
+              <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
             ))}
           </div>
-          {isLazerScore(score) && (
-            <LazerBadge />
-          )}
-          <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</span>
+          <span className={`text-xs ${accColorClass}`}>{formatAccuracy(getDisplayedAccuracy(score))}</span>
           <span className="text-sm font-bold">
             {formatPP(score.pp)}
             {approxPpGain != null && (
@@ -755,8 +752,11 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                   <StatCell label="Combo %" value={`${Math.round((score.max_combo / score.beatmap.max_combo) * 100)}%`} />
                 )}
               </div>
-              {scoreUrl && (
-                <div className="mt-2 text-right">
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span className="text-[10px] text-osu-f1">
+                  Played on: <span className={lazer ? "text-osu-pink-light" : "text-osu-l2"}>{lazer ? "Lazer" : "Stable"}</span>
+                </span>
+                {scoreUrl ? (
                   <a
                     href={scoreUrl}
                     target="_blank"
@@ -765,8 +765,8 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                   >
                     View on osu! →
                   </a>
-                </div>
-              )}
+                ) : <span />}
+              </div>
         </div>
       )}
     </div>

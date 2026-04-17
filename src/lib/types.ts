@@ -481,6 +481,14 @@ export interface SnipeEvent {
   /** 1-indexed country leaderboard rank the snipe happened at. Optional for
    *  backward compatibility with events emitted before this field existed. */
   boardRank?: number;
+  /** Victim's totalScore at the moment they were displaced. Optional for
+   *  backward compatibility with events emitted before this field existed. */
+  victimTotalScore?: number;
+  /** Victim's PP at the moment they were displaced. Helps surface the "sniper
+   *  won on totalScore but the play itself is worse" case common in mania
+   *  where totalScore (affected by combo) and PP can diverge. Optional for
+   *  backward compatibility with events emitted before this field existed. */
+  victimPp?: number | null;
 }
 
 export interface CountryBoardScore {
@@ -496,6 +504,12 @@ export interface CountryBoardScore {
   isLazer: boolean;
   hasReplay: boolean;
   endedAt: string;
+  /** Max totalScore this user had in this lane on this map with endedAt
+   *  strictly before the current best's endedAt. Used in the seed path to
+   *  kill self-improvement false positives: if priorBestTotalScore is above
+   *  the adjacent victim's current best, the "sniper" already held a rank
+   *  above them before the current play — not a snipe. */
+  priorBestTotalScore?: number;
 }
 
 export interface CountryBoardSnapshotEntry {
@@ -515,7 +529,10 @@ export interface CountryBoardSnapshotEntry {
   lastTouchedAt: number;
 }
 
-export type CountryBoardSnapshot = Record<number, CountryBoardSnapshotEntry>;
+/** v3: per-beatmap snapshot is further segmented by lane key
+ *  (`${speedBucket}:${client}`, e.g. "normal:lazer", "dt:stable"). Each lane
+ *  is treated as an independent leaderboard for snipe-detection purposes. */
+export type CountryBoardSnapshot = Record<number, Record<string, CountryBoardSnapshotEntry>>;
 
 export interface SnipesScanStatus {
   phase: "roster" | "recent" | "compare" | "seed" | "merge";
