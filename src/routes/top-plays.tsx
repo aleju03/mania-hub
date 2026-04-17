@@ -5,13 +5,12 @@ import { getCountryPopoffs, getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { formatNumber, formatAccuracy, formatTimeAgo } from "../lib/format";
-import { getBeatmapUrl, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModAcronyms, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
+import { getBeatmapUrl, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModDisplayList, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
-import { LazerBadge } from "../components/ui/LazerBadge";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import { Pagination } from "../components/ui/Pagination";
@@ -533,7 +532,10 @@ function PopOffsPage() {
           {!playersError && paginated.length > 0 && (
             <div className="space-y-2">
               <AnimatePresence initial={false}>
-                {paginated.map((p: PopOff) => (
+                {paginated.map((p: PopOff) => {
+                  const lazer = isLazerScore(p.score);
+                  const accColorClass = lazer ? "text-osu-pink-light" : "text-osu-l2";
+                  return (
                   <motion.div
                     key={`${p.user.id}-${p.score.id}`}
                     initial={{ opacity: 0, y: -10 }}
@@ -618,13 +620,12 @@ function PopOffsPage() {
                         {/* Row 3 (mobile): Mods left, accuracy right */}
                         <div className="flex items-center justify-between gap-2 mt-1 sm:hidden">
                           <div className="flex items-center gap-1">
-                            {getModAcronyms(p.score.mods).map((acronym) => (
-                              <ModBadge key={acronym} mod={acronym} />
+                            {getModDisplayList(p.score.mods).map((m) => (
+                              <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
                             ))}
-                            {isLazerScore(p.score) && <LazerBadge />}
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
-                            <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(p.score))}</span>
+                            <span className={`text-xs ${accColorClass}`}>{formatAccuracy(getDisplayedAccuracy(p.score))}</span>
                             {scoreHasReplay(p.score) && (
                               <button
                                 onClick={(e) => {
@@ -645,14 +646,11 @@ function PopOffsPage() {
                       {/* Desktop metadata */}
                       <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
                         <div className="flex gap-0.5">
-                          {getModAcronyms(p.score.mods).map((acronym) => (
-                            <ModBadge key={acronym} mod={acronym} />
+                          {getModDisplayList(p.score.mods).map((m) => (
+                            <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
                           ))}
                         </div>
-                        {isLazerScore(p.score) && (
-                          <LazerBadge />
-                        )}
-                        <span className="text-xs text-osu-l2">
+                        <span className={`text-xs ${accColorClass}`}>
                           {formatAccuracy(getDisplayedAccuracy(p.score))}
                         </span>
                         <span className="text-xs text-osu-f1">
@@ -697,8 +695,11 @@ function PopOffsPage() {
                                 <StatCell label="Combo %" value={`${Math.round((p.score.max_combo / p.score.beatmap.max_combo) * 100)}%`} />
                               )}
                             </div>
-                            {getScoreUrl(p.score) && (
-                              <div className="mt-2 text-right">
+                            <div className="mt-2 flex items-center justify-between gap-2">
+                              <span className="text-[10px] text-osu-f1">
+                                Played on: <span className={lazer ? "text-osu-pink-light" : "text-osu-l2"}>{lazer ? "Lazer" : "Stable"}</span>
+                              </span>
+                              {getScoreUrl(p.score) ? (
                                 <a
                                   href={getScoreUrl(p.score)!}
                                   target="_blank"
@@ -707,12 +708,13 @@ function PopOffsPage() {
                                 >
                                   View on osu! →
                                 </a>
-                              </div>
-                            )}
+                              ) : <span />}
+                            </div>
                       </div>
                     </ExpandableDetail>
                   </motion.div>
-                ))}
+                  );
+                })}
               </AnimatePresence>
             </div>
           )}
