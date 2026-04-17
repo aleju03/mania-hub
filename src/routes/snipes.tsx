@@ -702,11 +702,15 @@ function SnipeRow({
               style={{ backgroundImage: `url(${event.beatmapset.cover_url})` }}
             />
           )}
-          <div className="relative grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3 text-center">
+          {/* flex-wrap + justify-center so an orphan last row (e.g. 5 stats in
+              a 2/4/5-col layout) centers itself instead of hugging the left
+              edge. Each cell's basis matches the old grid's column width minus
+              its share of the gap. */}
+          <div className="relative flex flex-wrap justify-center gap-3 text-center">
             <StatCell label="Score" value={formatNumber(event.totalScore)} />
             <StatCell label="Accuracy" value={formatAccuracy(event.accuracy)} color="text-osu-l2" />
             {event.pp != null && event.pp > 0 && (
-              <div className="py-1.5">
+              <div className="basis-[calc(50%-6px)] sm:basis-[calc(25%-9px)] lg:basis-[calc(20%-9.6px)] py-1.5">
                 <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">PP</div>
                 <div className="text-sm font-bold">
                   <span
@@ -740,8 +744,8 @@ function SnipeRow({
           </div>
           <div className="relative mt-2 flex items-center justify-between gap-2 text-[10px] text-osu-f1">
             <span>
-              {event.boardRank
-                ? `${event.sniper.username} sniped #${event.boardRank} from ${event.victim.username}`
+              {event.boardRank === 1
+                ? `${event.sniper.username} sniped #1 from ${event.victim.username}`
                 : `${event.sniper.username} sniped ${event.victim.username}`}
             </span>
             <a
@@ -761,7 +765,7 @@ function SnipeRow({
 
 function StatCell({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div className="py-1.5">
+    <div className="basis-[calc(50%-6px)] sm:basis-[calc(25%-9px)] lg:basis-[calc(20%-9.6px)] py-1.5">
       <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
       <div className={`text-sm font-bold ${color ?? "text-white"}`}>{value}</div>
     </div>
