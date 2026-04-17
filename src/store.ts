@@ -30,6 +30,13 @@ export const AVATAR_ACCENT_FAILURE_TTL = 5 * 60 * 1000;
 export const TRACKER_PP_GAIN_CLIENT_TTL = 10 * 60 * 1000;
 export const TOP_PLAYS_RANGE_STORAGE_KEY = "mania-hub-top-plays-range-v1";
 export const DEFAULT_THEME_HUE = 333;
+// Persisted separately from the main `mania-hub-cache-v5` blob. Mobile Safari's
+// localStorage quota is tight (~5MB) and our cache payload can approach it; a
+// QuotaExceededError on the big blob would silently drop the theme change, so
+// the theme lives in its own tiny key that survives even when the main blob
+// write fails. Keep this key in sync with the inline bootstrap script in
+// `src/routes/__root.tsx` that applies the hue before React hydrates.
+export const THEME_HUE_STORAGE_KEY = "mania-hub-theme-v1";
 
 function applyThemeHueToDom(hue: number): void {
   if (typeof document === "undefined") return;
@@ -46,6 +53,38 @@ function clampThemeHue(value: unknown): number {
   if (!Number.isFinite(n)) return DEFAULT_THEME_HUE;
   const rounded = Math.round(n);
   return ((rounded % 360) + 360) % 360;
+}
+
+function readThemeHueFromStorage(): number | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(THEME_HUE_STORAGE_KEY);
+    if (raw == null) return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return null;
+    return clampThemeHue(n);
+  } catch (error) {
+    warnStorageIssue(`read "${THEME_HUE_STORAGE_KEY}"`, error);
+    return null;
+  }
+}
+
+function writeThemeHueToStorage(hue: number): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(THEME_HUE_STORAGE_KEY, String(hue));
+  } catch (error) {
+    warnStorageIssue(`write "${THEME_HUE_STORAGE_KEY}"`, error);
+  }
+}
+
+function removeThemeHueFromStorage(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(THEME_HUE_STORAGE_KEY);
+  } catch (error) {
+    warnStorageIssue(`remove "${THEME_HUE_STORAGE_KEY}"`, error);
+  }
 }
 
 export interface CachedPlayer {
@@ -235,12 +274,16 @@ const storage = typeof window !== "undefined"
 // stale (e.g. user cleared the cookie) — the cookie wins because it's what
 // drove the SSR HTML the user just saw.
 const initialClientCountry = readCountryCookieClient();
+// Pulled from the dedicated key so the store starts with the right hue even
+// before persist hydration runs its async merge. Mirrors the inline bootstrap
+// script so client rendering stays consistent from the first paint.
+const initialClientThemeHue = readThemeHueFromStorage();
 
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       selectedCountry: initialClientCountry ?? DEFAULT_COUNTRY_CODE,
-      themeHue: DEFAULT_THEME_HUE,
+      themeHue: initialClientThemeHue ?? DEFAULT_THEME_HUE,
       avatarAccents: {},
       rankingsByCountry: {},
       rankingsFetchedAtByCountry: {},
@@ -271,13 +314,13 @@ export const useAppStore = create<AppState>()(
       setThemeHue: (hue) => {
         const clamped = clampThemeHue(hue);
         applyThemeHueToDom(clamped);
+        writeThemeHueToStorage(clamped);
         set({ themeHue: clamped });
-        flushPersistedWrites?.();
       },
       resetThemeHue: () => {
         applyThemeHueToDom(DEFAULT_THEME_HUE);
+        removeThemeHueFromStorage();
         set({ themeHue: DEFAULT_THEME_HUE });
-        flushPersistedWrites?.();
       },
       setAvatarAccents: (accents, fetchedAt = Date.now()) =>
         set((state) => ({
@@ -631,7 +674,11 @@ export const useAppStore = create<AppState>()(
           homeRecentScoresFetchedAtByCountry: sanitizedHomeRecentScoresFetchedAtByCountry,
           homePopoffsByCountry: sanitizedHomePopoffsByCountry,
           homePopoffsFetchedAtByCountry: sanitizedHomePopoffsFetchedAtByCountry,
-          themeHue: clampThemeHue(nextState.themeHue ?? currentState.themeHue),
+          // Dedicated key wins; the `nextState.themeHue` fallback only matters
+          // for returning users whose theme still lives in the legacy blob and
+          // haven't picked a color since this migration landed.
+          themeHue: readThemeHueFromStorage()
+            ?? clampThemeHue(nextState.themeHue ?? currentState.themeHue),
           avatarAccents: Object.fromEntries(
             Object.entries(
               nextState.avatarAccents && typeof nextState.avatarAccents === "object"
@@ -675,7 +722,9 @@ export const useAppStore = create<AppState>()(
       },
       partialize: (state) => ({
         selectedCountry: state.selectedCountry,
-        themeHue: state.themeHue,
+        // themeHue is persisted separately via THEME_HUE_STORAGE_KEY so a
+        // QuotaExceededError on this big blob (common on mobile Safari) can't
+        // drop a theme change on the floor.
         avatarAccents: state.avatarAccents,
         rankingsByCountry: state.rankingsByCountry,
         rankingsFetchedAtByCountry: state.rankingsFetchedAtByCountry,
