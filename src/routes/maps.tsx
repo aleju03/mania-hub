@@ -746,7 +746,7 @@ function MapsPage() {
               sheet on mobile so it doesn't cover the page content above.
               Always mounted on mobile so transform transitions animate. */}
           <div
-            className="sm:contents fixed bottom-0 left-0 right-0 z-50 max-h-[75vh] overflow-y-auto bg-osu-d5 border-t border-osu-b3/30 rounded-t-2xl shadow-2xl px-4 pt-2 pb-6 flex flex-col gap-3 will-change-transform"
+            className="sm:contents sm:!pointer-events-auto fixed bottom-0 left-0 right-0 z-50 max-h-[75vh] overflow-y-auto bg-osu-d5 border-t border-osu-b3/30 rounded-t-2xl shadow-2xl px-4 pt-2 pb-6 flex flex-col gap-3 will-change-transform"
             style={{
               transform: filtersOpen ? `translateY(${dragOffset}px)` : "translateY(105%)",
               transition: isDragging ? "none" : "transform 280ms cubic-bezier(0.32, 0.72, 0, 1)",
