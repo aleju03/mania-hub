@@ -18,6 +18,7 @@ import {
 import {
   getBeatmapUrl,
   getModAcronyms,
+  getModDisplayList,
   getScoreDisplayValues,
   getScoreIdentity,
   getScoreTimeMs,
@@ -1511,8 +1512,8 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
         {/* Mobile-only metadata row */}
         <div className="flex items-center gap-2 mt-0.5 sm:hidden">
           <div className="flex gap-0.5">
-            {getModAcronyms(score.mods).map((acronym) => (
-              <ModBadge key={acronym} mod={acronym} />
+            {getModDisplayList(score.mods).map((m) => (
+              <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
             ))}
           </div>
           <span className="text-xs text-osu-l2">{formatAccuracy(display.accuracy)}</span>
@@ -1523,8 +1524,8 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
       {/* Desktop metadata */}
       <div className="hidden sm:flex items-center gap-3 flex-shrink-0">
         <div className="flex gap-0.5 justify-end w-24">
-          {getModAcronyms(score.mods).map((acronym) => (
-            <ModBadge key={acronym} mod={acronym} />
+          {getModDisplayList(score.mods).map((m) => (
+            <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
           ))}
         </div>
         {display.isLazer && (

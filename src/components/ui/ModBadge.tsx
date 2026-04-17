@@ -42,7 +42,7 @@ const iconInset: Record<string, number> = {
   NC: 1,
 };
 
-export function ModBadge({ mod, size = 1 }: { mod: string; size?: number }) {
+export function ModBadge({ mod, size = 1, rate }: { mod: string; size?: number; rate?: number }) {
   if (!mod) return null;
   const file = fileMap[mod];
   const bg = typeColor[mod] || "#ff6666";
@@ -57,26 +57,11 @@ export function ModBadge({ mod, size = 1 }: { mod: string; size?: number }) {
     maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
   });
 
-  if (!file) {
-    return (
-      <div
-        className="relative flex-shrink-0 flex items-center justify-center"
-        style={{ width, height }}
-        title={mod}
-      >
-        <div className="absolute inset-0" style={mask("/images/badges/mods/mod-icon.svg")} />
-        <span
-          className="relative text-[8px] font-bold leading-none"
-          style={{ color: `color-mix(in srgb-linear, black, ${bg} 10%)` }}
-        >
-          {mod}
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative flex-shrink-0" style={{ width, height }} title={mod}>
+  // Format matches osu-web: 2 decimals + "×" (U+00D7). E.g. 0.9 → "0.90×".
+  const rateText = rate != null ? `${rate.toFixed(2)}×` : null;
+  const title = rateText != null ? `${mod} ${rateText}` : mod;
+  const iconPill = file ? (
+    <div className="relative flex-shrink-0" style={{ width, height }} title={title}>
       <div className="absolute inset-0" style={mask("/images/badges/mods/mod-icon.svg")} />
       <div
         className="absolute"
@@ -87,5 +72,61 @@ export function ModBadge({ mod, size = 1 }: { mod: string; size?: number }) {
         }}
       />
     </div>
+  ) : (
+    <div
+      className="relative flex-shrink-0 flex items-center justify-center"
+      style={{ width, height }}
+      title={title}
+    >
+      <div className="absolute inset-0" style={mask("/images/badges/mods/mod-icon.svg")} />
+      <span
+        className="relative text-[8px] font-bold leading-none"
+        style={{ color: `color-mix(in srgb-linear, black, ${bg} 10%)` }}
+      >
+        {mod}
+      </span>
+    </div>
   );
+
+  if (rateText != null) {
+    // Dimensions cross-reference osu-web's .mod__extender (resources/css/bem/mod.less):
+    // extender width = 2.2em, margin-left = -0.5em, padding-left = 0.5em, font-size = 0.5em
+    // where 1em = height. Darker tail color = color-mix(in srgb, black, bg 26.3%)
+    // which matches osu-framework's .Darken(2.8f).
+    const extenderWidth = Math.round(height * 2.2);
+    const overlap = Math.round(height * 0.5);
+    const fontSize = Math.round(height * 0.5);
+    const darkerBg = `color-mix(in srgb, black, ${bg} 26.3%)`;
+    return (
+      <div className="flex items-center flex-shrink-0" title={title}>
+        {iconPill}
+        <div
+          className="flex items-center justify-center"
+          style={{
+            width: extenderWidth,
+            height,
+            marginLeft: -overlap,
+            paddingLeft: overlap,
+            paddingRight: 3 * size,
+            paddingBottom: 1 * size,
+            backgroundColor: darkerBg,
+            maskImage: "url(/images/badges/mods/mod-icon-extender.svg)",
+            WebkitMaskImage: "url(/images/badges/mods/mod-icon-extender.svg)",
+            maskSize: "contain",
+            WebkitMaskSize: "contain",
+            maskPosition: "center",
+            WebkitMaskPosition: "center",
+            maskRepeat: "no-repeat",
+            WebkitMaskRepeat: "no-repeat",
+          }}
+        >
+          <span className="font-bold leading-none" style={{ fontSize, color: bg }}>
+            {rateText}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  return iconPill;
 }

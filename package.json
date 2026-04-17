@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "db:init": "turso db shell mania-hub < db/schema.sql",
-    "db:inspect": "turso db shell mania-hub"
+    "db:inspect": "turso db shell mania-hub",
+    "snipes:reset": "node --env-file=.env scripts/reset-snipes.mjs"
   },
   "dependencies": {
     "@libsql/client": "^0.17.2",

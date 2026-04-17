@@ -37,6 +37,17 @@ const RANGE_MS: Record<Exclude<RangeFilter, "all">, number> = {
 
 const PAGE_SIZE = 25;
 const EMPTY_SNIPES: SnipeEvent[] = [];
+// Kept in sync with SNIPES_PLAYER_LIMIT in src/lib/osu.ts (15). UI-only copy,
+// not a functional dep, so not worth threading through a shared export.
+const SNIPES_PLAYER_LIMIT_LABEL = 15;
+
+const INLINE_PHASE_LABEL: Record<SnipesScanStatus["phase"], string> = {
+  roster: "Loading country roster…",
+  recent: "Loading players' recent plays…",
+  compare: "Comparing plays against snapshot…",
+  seed: "Seeding new beatmaps…",
+  merge: "Merging snipe log…",
+};
 
 function readKeys(value: unknown): KeyFilter {
   return value === "4k" || value === "7k" ? value : "all";
@@ -396,17 +407,42 @@ function SnipesPage() {
           {!error && (
             <>
               {loading && snipes.length === 0 && (
-                <ScanProgress
-                  elapsed={elapsed}
-                  countryName={countryName}
-                  status={scanStatus}
-                />
+                scanStatus?.phase === "seed" ? (
+                  <ScanProgress
+                    elapsed={elapsed}
+                    countryName={countryName}
+                    status={scanStatus}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center gap-1.5 py-20 text-osu-f1 text-xs">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
+                      <span>
+                        {scanStatus
+                          ? INLINE_PHASE_LABEL[scanStatus.phase]
+                          : `Loading ${countryName} snipes…`}
+                      </span>
+                    </div>
+                    {scanStatus && scanStatus.total > 0 && (
+                      <span className="text-[10px] tabular-nums text-osu-f1/70">
+                        {scanStatus.current}/{scanStatus.total}
+                      </span>
+                    )}
+                  </div>
+                )
               )}
 
               {!loading && sorted.length === 0 && snipes.length === 0 && (
                 <div className="text-center py-16 text-osu-f1 text-sm">
                   <p>No snipes tracked yet for {countryName}.</p>
-                  <p className="mt-1 text-[11px]">Snipes appear as country players reclaim #1s on country leaderboards.</p>
+                  <p className="mt-1 text-[11px]">
+                    Snipes appear as top-{SNIPES_PLAYER_LIMIT_LABEL} country players push each other down the per-map country leaderboard.
+                  </p>
+                  {snipesFetchedAt && (
+                    <p className="mt-2 text-[10px] text-osu-f1/60">
+                      Last scanned {formatTimeAgo(new Date(snipesFetchedAt).toISOString())}.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -541,9 +577,13 @@ function SnipeRow({
               <span className="text-[9px] text-osu-f1 uppercase tracking-wider hidden sm:inline">
                 {relationLabel}
               </span>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 text-osu-f1 flex-shrink-0">
-                <line x1="5" y1="12" x2="19" y2="12" />
-                <polyline points="12 5 19 12 12 19" />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 text-osu-pink-light flex-shrink-0" aria-label="sniped">
+                <circle cx="12" cy="12" r="9" />
+                <line x1="12" y1="2" x2="12" y2="6" />
+                <line x1="12" y1="18" x2="12" y2="22" />
+                <line x1="2" y1="12" x2="6" y2="12" />
+                <line x1="18" y1="12" x2="22" y2="12" />
+                <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
               </svg>
               <button
                 onClick={(e) => {
@@ -666,11 +706,36 @@ function SnipeRow({
             <StatCell label="Score" value={formatNumber(event.totalScore)} />
             <StatCell label="Accuracy" value={formatAccuracy(event.accuracy)} color="text-osu-l2" />
             {event.pp != null && event.pp > 0 && (
-              <StatCell label="PP" value={`${Math.round(event.pp)}pp`} color="text-osu-pink" />
+              <div className="py-1.5">
+                <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">PP</div>
+                <div className="text-sm font-bold">
+                  <span
+                    className={
+                      event.victimPp != null && event.victimPp > event.pp
+                        ? "text-osu-yellow"
+                        : "text-osu-pink"
+                    }
+                  >
+                    {Math.round(event.pp)}pp
+                  </span>
+                  {event.victimPp != null && event.victimPp > 0 && (
+                    <span className="ml-1 text-[11px] font-normal text-osu-f1">
+                      vs {Math.round(event.victimPp)}pp
+                    </span>
+                  )}
+                </div>
+              </div>
             )}
             <StatCell label="Stars" value={event.beatmap.difficulty_rating.toFixed(2)} />
-            {heldFor && (
-              <StatCell label="Held for" value={heldFor} color="text-osu-yellow" />
+            {event.victimTotalScore != null && event.victimTotalScore > 0 && (
+              <StatCell
+                label="Margin"
+                value={`+${formatNumber(Math.max(0, event.totalScore - event.victimTotalScore))}`}
+                color="text-osu-pink-light"
+              />
+            )}
+            {heldFor && event.boardRank === 1 && (
+              <StatCell label="Held #1 for" value={heldFor} color="text-osu-yellow" />
             )}
           </div>
           <div className="relative mt-2 flex items-center justify-between gap-2 text-[10px] text-osu-f1">
@@ -745,7 +810,7 @@ const PHASE_DESCRIPTIONS: Record<SnipesScanStatus["phase"], string> = {
   roster: "Loading the country's top 15 mania players.",
   recent: "Pulling each player's recent plays from the osu! API.",
   compare: "Cross-checking those plays against the saved country leaderboards.",
-  seed: "Probing newly-encountered beatmaps - this is the slow part. 15 API calls per map.",
+  seed: "Probing newly-encountered beatmaps.",
   merge: "Saving new snipes to the rolling log.",
 };
 
@@ -769,7 +834,7 @@ function ScanProgress({
   const description = status ? PHASE_DESCRIPTIONS[status.phase] : "Connecting to the scanner...";
 
   return (
-    <div className="rounded-2xl bg-osu-b4 border border-osu-b3/30 px-5 py-6 sm:px-7 sm:py-8 max-w-2xl mx-auto">
+    <div className="max-w-xl mx-auto py-8 px-1">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
