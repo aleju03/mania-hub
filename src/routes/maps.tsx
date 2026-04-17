@@ -97,8 +97,8 @@ const RANDOM_PATTERN_MATCHES: Record<RandomPattern, string[]> = {
   sv: ["sv"],
 };
 
-const RANDOM_STAR_OPTIONS = [4, 5, 6, 7, 8, 9] as const;
-type RandomStarThreshold = (typeof RANDOM_STAR_OPTIONS)[number] | 0;
+const RANDOM_STAR_MIN = 4;
+const RANDOM_STAR_MAX = 9;
 
 const RANDOM_PATTERN_LABEL: Record<RandomPattern, string> = {
   jack: "Jack",
@@ -265,7 +265,12 @@ export const Route = createFileRoute("/maps")({
     rStatus: typeof search.rStatus === "string" ? search.rStatus : DEFAULT_MAPS_SEARCH.rStatus,
     rKey: typeof search.rKey === "string" ? search.rKey : DEFAULT_MAPS_SEARCH.rKey,
     rPattern: typeof search.rPattern === "string" ? search.rPattern : DEFAULT_MAPS_SEARCH.rPattern,
-    rStars: (RANDOM_STAR_OPTIONS as readonly number[]).includes(Number(search.rStars)) ? Number(search.rStars) : DEFAULT_MAPS_SEARCH.rStars,
+    rStars: (() => {
+      const n = Number(search.rStars);
+      if (!Number.isFinite(n) || n <= 0) return DEFAULT_MAPS_SEARCH.rStars;
+      const clamped = Math.min(Math.max(n, RANDOM_STAR_MIN), RANDOM_STAR_MAX);
+      return Math.round(clamped * 10) / 10;
+    })(),
   }),
   component: MapsPage,
 });
@@ -298,7 +303,7 @@ function MapsPage() {
   const rStatusRaw = mapsSearch.rStatus;
   const rKeyRaw = mapsSearch.rKey;
   const rPatternRaw = mapsSearch.rPattern;
-  const rStars = mapsSearch.rStars as RandomStarThreshold;
+  const rStars = mapsSearch.rStars;
   const randomStatus = useMemo(() => parseTriStateCsv(rStatusRaw, RANDOM_STATUS_OPTIONS), [rStatusRaw]);
   const randomKey = useMemo(() => parseTriStateCsv(rKeyRaw, RANDOM_KEY_OPTIONS), [rKeyRaw]);
   const randomPattern = useMemo(() => parseTriStateCsv(rPatternRaw, RANDOM_PATTERN_OPTIONS), [rPatternRaw]);
@@ -595,32 +600,16 @@ function MapsPage() {
     setRandomBeatmapset(pick.beatmapset);
   }, [randomPool]);
 
+  // Only reshuffle on first entry to the tab or when the underlying data
+  // changes (country switch / rebuild). Filter changes never auto-reroll —
+  // the user must click Reroll explicitly.
   useEffect(() => {
     if (tab !== "random" || !mapsData) return;
     const dataKey = `${selectedCountry}:${mapsData.generatedAt}`;
     const dataChanged = lastRandomKeyRef.current !== dataKey;
     lastRandomKeyRef.current = dataKey;
-
-    if (dataChanged || !randomBeatmapset) {
-      reshuffleRandom();
-      return;
-    }
-    // Keep the current pick if it still matches the filters; otherwise reshuffle.
-    const sBucket = mapStatusBucket(randomBeatmapset.status);
-    const statusOk =
-      (randomStatus.includes.size === 0 || randomStatus.includes.has(sBucket)) &&
-      !randomStatus.excludes.has(sBucket);
-    const bmKeys = randomBeatmapset.maniaKeys ?? [];
-    const keyOk =
-      (randomKey.includes.size === 0 || bmKeys.some((k) => randomKey.includes.has(mapKeyBucket(k)))) &&
-      !bmKeys.some((k) => randomKey.excludes.has(mapKeyBucket(k)));
-    const bmPatterns = randomBeatmapset.patterns ?? [];
-    const patternOk =
-      (!randomPatternCanonical.includes || bmPatterns.some((p) => randomPatternCanonical.includes!.has(p))) &&
-      (!randomPatternCanonical.excludes || !bmPatterns.some((p) => randomPatternCanonical.excludes!.has(p)));
-    const starsOk = rStars === 0 || (randomBeatmapset.starMax ?? 0) >= rStars;
-    if (!statusOk || !keyOk || !patternOk || !starsOk) reshuffleRandom();
-  }, [tab, selectedCountry, mapsData, reshuffleRandom, randomBeatmapset, randomStatus, randomKey, randomPatternCanonical, rStars]);
+    if (dataChanged || !randomBeatmapset) reshuffleRandom();
+  }, [tab, selectedCountry, mapsData, reshuffleRandom, randomBeatmapset]);
 
   const hasActiveFilters =
     tab === "random"
@@ -746,7 +735,7 @@ function MapsPage() {
               sheet on mobile so it doesn't cover the page content above.
               Always mounted on mobile so transform transitions animate. */}
           <div
-            className="sm:contents fixed bottom-0 left-0 right-0 z-50 max-h-[75vh] overflow-y-auto bg-osu-d5 border-t border-osu-b3/30 rounded-t-2xl shadow-2xl px-4 pt-2 pb-6 flex flex-col gap-3 will-change-transform"
+            className="sm:contents sm:!pointer-events-auto fixed bottom-0 left-0 right-0 z-50 max-h-[75vh] overflow-y-auto bg-osu-d5 border-t border-osu-b3/30 rounded-t-2xl shadow-2xl px-4 pt-2 pb-6 flex flex-col gap-3 will-change-transform"
             style={{
               transform: filtersOpen ? `translateY(${dragOffset}px)` : "translateY(105%)",
               transition: isDragging ? "none" : "transform 280ms cubic-bezier(0.32, 0.72, 0, 1)",
@@ -829,23 +818,10 @@ function MapsPage() {
                   </FilterGroup>
 
                   <FilterGroup label="Min ★">
-                    <FilterPill
-                      active={rStars === 0}
-                      dimmed={rStars !== 0}
-                      onClick={() => updateMapsSearch({ rStars: 0 })}
-                    >
-                      All
-                    </FilterPill>
-                    {RANDOM_STAR_OPTIONS.map((s) => (
-                      <FilterPill
-                        key={s}
-                        active={rStars === s}
-                        dimmed={rStars !== 0 && rStars !== s}
-                        onClick={() => updateMapsSearch({ rStars: s })}
-                      >
-                        {s}+
-                      </FilterPill>
-                    ))}
+                    <StarMinSlider
+                      value={rStars}
+                      onChange={(v) => updateMapsSearch({ rStars: v })}
+                    />
                   </FilterGroup>
 
                   <span className="hidden sm:inline text-[10px] text-osu-f1">
@@ -1156,6 +1132,72 @@ function TriStatePill({
         />
       )}
     </button>
+  );
+}
+
+// Range slider for "Min ★" — smooth drag, commits to URL only on release
+// (rounded to 0.1). Left-side "Any" toggle maps to rStars=0 (disabled).
+function StarMinSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const active = value > 0;
+  const [localValue, setLocalValue] = useState<number>(active ? value : RANDOM_STAR_MIN);
+  const draggingRef = useRef(false);
+
+  // Keep local in sync with the committed prop when the user isn't dragging
+  // (e.g. when URL changes externally, or after commit).
+  useEffect(() => {
+    if (!draggingRef.current) setLocalValue(active ? value : RANDOM_STAR_MIN);
+  }, [value, active]);
+
+  const commit = () => {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    onChange(Math.round(localValue * 10) / 10);
+  };
+
+  const pct = ((localValue - RANDOM_STAR_MIN) / (RANDOM_STAR_MAX - RANDOM_STAR_MIN)) * 100;
+  const trackColor = "var(--color-osu-b3)";
+  const fillColor = "var(--color-osu-pink)";
+  const background = active
+    ? `linear-gradient(to right, ${fillColor} 0%, ${fillColor} ${pct}%, ${trackColor} ${pct}%, ${trackColor} 100%)`
+    : trackColor;
+
+  return (
+    <div className="flex items-center gap-2 w-full sm:w-auto">
+      <button
+        type="button"
+        onClick={() => onChange(0)}
+        className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer shrink-0 ${
+          !active
+            ? "bg-osu-pink/20 text-osu-pink-light"
+            : "bg-osu-b4/60 text-osu-f1/70 hover:text-osu-l2 hover:bg-osu-b3"
+        }`}
+      >
+        Any
+      </button>
+      <input
+        type="range"
+        min={RANDOM_STAR_MIN}
+        max={RANDOM_STAR_MAX}
+        step="any"
+        value={localValue}
+        onChange={(e) => {
+          draggingRef.current = true;
+          setLocalValue(Number(e.target.value));
+        }}
+        onMouseUp={commit}
+        onTouchEnd={commit}
+        onKeyUp={commit}
+        aria-label="Minimum star rating"
+        style={{ background }}
+        className={`flex-1 sm:w-28 h-1 appearance-none rounded-full cursor-pointer
+          [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink-light [&::-webkit-slider-thumb]:shadow-[0_0_0_2px_rgba(0,0,0,0.35)] [&::-webkit-slider-thumb]:cursor-grab
+          [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-osu-pink-light [&::-moz-range-thumb]:shadow-[0_0_0_2px_rgba(0,0,0,0.35)] [&::-moz-range-thumb]:cursor-grab
+          transition-opacity ${active ? "" : "opacity-60"}`}
+      />
+      <span className="text-[10px] font-semibold tabular-nums w-10 text-right text-osu-pink-light shrink-0">
+        {active ? `${localValue.toFixed(1)}★+` : "—"}
+      </span>
+    </div>
   );
 }
 

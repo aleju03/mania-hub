@@ -26,6 +26,61 @@ export function getModAcronyms(mods: OsuMod[] | undefined, excludeCl = true): st
     .filter((a: string) => a && (!excludeCl || a !== "CL"));
 }
 
+// Lazer rate-changing mods. A score with one of these at its default speed
+// has no `settings.speed_change` in the API response; a custom rate does.
+const MOD_RATE_DEFAULTS: Record<string, number> = {
+  DT: 1.5,
+  NC: 1.5,
+  HT: 0.75,
+  DC: 0.75,
+};
+
+export interface ModDisplay {
+  acronym: string;
+  /** Custom speed_change when the player picked a non-default rate (lazer only). */
+  rate?: number;
+}
+
+/** Like `getModAcronyms`, but preserves lazer custom rate settings so the UI
+ *  can render e.g. "0.9x" instead of the plain DC icon. */
+export function getModDisplayList(mods: OsuMod[] | undefined, excludeCl = true): ModDisplay[] {
+  const out: ModDisplay[] = [];
+  for (const m of mods ?? []) {
+    const acronym = typeof m === "string" ? m : (m as any)?.acronym ?? "";
+    if (!acronym) continue;
+    if (excludeCl && acronym === "CL") continue;
+    const rateSetting = typeof m === "object" ? Number((m as any)?.settings?.speed_change) : NaN;
+    const defaultRate = MOD_RATE_DEFAULTS[acronym];
+    if (Number.isFinite(rateSetting) && defaultRate !== undefined && rateSetting !== defaultRate) {
+      out.push({ acronym, rate: rateSetting });
+    } else {
+      out.push({ acronym });
+    }
+  }
+  return out;
+}
+
+export type ScoreSpeedBucket = "ht" | "normal" | "dt";
+
+/** Bucket a mania score by its effective speed mod. In osu!, HT/DC, NM, and
+ *  DT/NC score pools are effectively distinct leaderboards — scores from one
+ *  bucket shouldn't "snipe" another because totalScore across rate-mods isn't
+ *  directly comparable. */
+export function getScoreSpeedBucket(mods: string[]): ScoreSpeedBucket {
+  for (const m of mods) {
+    if (m === "DT" || m === "NC") return "dt";
+    if (m === "HT" || m === "DC") return "ht";
+  }
+  return "normal";
+}
+
+/** Lane key for snipe-detection snapshots: combines speed bucket and client
+ *  (lazer vs stable). Lazer and stable score differently enough that a
+ *  cross-client "snipe" isn't meaningful; same reasoning applies to rate mods. */
+export function getBoardLaneKey(mods: string[], isLazer: boolean): string {
+  return `${getScoreSpeedBucket(mods)}:${isLazer ? "lazer" : "stable"}`;
+}
+
 export function getScoreIdentity(score: OsuScore): string {
   if (score.id > 0) {
     return `id:${score.id}`;

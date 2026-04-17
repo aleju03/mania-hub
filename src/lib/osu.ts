@@ -31,7 +31,7 @@ import {
   getPersistentCached,
   setPersistentCache,
 } from "./api";
-import { calculateApproxPpGainMap, calculateReplacementPpGain, getModAcronyms, getScoreDisplayValues, getScoreTimestamp, getScoreUrl } from "./score";
+import { calculateApproxPpGainMap, calculateReplacementPpGain, getBoardLaneKey, getModAcronyms, getScoreDisplayValues, getScoreTimestamp, getScoreUrl } from "./score";
 import { detectManiaPatterns } from "./mania-patterns";
 import type {
   OsuUser,
@@ -1632,48 +1632,123 @@ function buildSnipeEvent(
     hasReplay: sniper.hasReplay,
     timestamp: sniper.endedAt,
     victimTimestamp: victim.endedAt,
+    victimTotalScore: victim.totalScore,
+    victimPp: victim.pp,
     detectedAt: Date.now(),
     boardRank,
     ...(isSeeded ? { isSeeded: true } : {}),
   };
 }
 
-async function probeCountryBoard(
+interface SnipesRosterPlayer {
+  id: number;
+  username: string;
+  avatar_url: string;
+}
+
+async function probeCountryBoardLanes(
   beatmapId: number,
-  country: string,
-  rosterPlayerIds: number[],
-  beatmapsetFallback?: OsuScore["beatmapset"],
-): Promise<CountryBoardSnapshotEntry | null> {
-  const scores = await mapWithConcurrency(
-    rosterPlayerIds,
+  roster: SnipesRosterPlayer[],
+  meta: BoardMeta,
+): Promise<Record<string, CountryBoardSnapshotEntry> | null> {
+  // getBeatmapUserScoresAll returns every score the user has on the map
+  // (different mod sets, lazer/stable splits, etc). We need all of them so
+  // we can segment by lane — getBeatmapUserScore only returns the user's
+  // single "best" score and would collapse lanes.
+  //
+  // Note: this endpoint does NOT embed `user` on each returned score
+  // (only `user_id`), nor does it include beatmap/beatmapset. That's why
+  // we receive roster players and beatmap meta from the caller instead of
+  // deriving them from the response.
+  const perUserResults = await mapWithConcurrency(
+    roster,
     SNIPES_PROBE_CONCURRENCY,
-    async (uid) => {
+    async (player) => {
       try {
-        return await getBeatmapUserScore(beatmapId, uid);
+        const scores = await getBeatmapUserScoresAll(beatmapId, player.id);
+        return { player, scores };
       } catch {
-        return null;
+        return { player, scores: [] as OsuScore[] };
       }
     },
   );
 
-  const filtered = scores.filter(
-    (s): s is OsuScore => s !== null && s.user?.country_code === country,
-  );
-  if (filtered.length === 0) return null;
+  // For each (user, lane), compute the best play AND the best prior play
+  // (highest totalScore with endedAt strictly before the best's endedAt). The
+  // prior-best lets the seed heuristic detect self-improvement false positives
+  // without needing cross-scan history.
+  const perLane = new Map<string, Map<number, CountryBoardScore>>();
+  for (const { player, scores } of perUserResults) {
+    // Group this user's scores by lane first so prior-best stays lane-scoped.
+    const byLane = new Map<string, { score: OsuScore; totalScore: number; endedAtMs: number }[]>();
+    for (const score of scores) {
+      if (!score) continue;
+      const display = getScoreDisplayValues(score);
+      const totalScore = display.totalScore ?? score.total_score ?? score.score ?? 0;
+      if (totalScore <= 0) continue;
+      const mods = getModAcronyms(score.mods);
+      const lane = getBoardLaneKey(mods, display.isLazer);
+      const endedAtMs = new Date(getScoreTimestamp(score)).getTime();
+      if (!byLane.has(lane)) byLane.set(lane, []);
+      byLane.get(lane)!.push({ score, totalScore, endedAtMs });
+    }
 
-  const meta = boardMetadataFromScore(filtered[0], beatmapsetFallback);
-  if (!meta) return null;
+    for (const [lane, entries] of byLane) {
+      if (entries.length === 0) continue;
+      entries.sort((a, b) => b.totalScore - a.totalScore);
+      const best = entries[0];
+      const display = getScoreDisplayValues(best.score);
 
-  const boardScores = filtered
-    .map(boardScoreFromScore)
-    .filter((s): s is CountryBoardScore => s !== null)
-    .sort((a, b) => b.totalScore - a.totalScore);
+      let priorBestTotalScore: number | undefined;
+      if (Number.isFinite(best.endedAtMs)) {
+        for (let i = 1; i < entries.length; i++) {
+          const e = entries[i];
+          if (!Number.isFinite(e.endedAtMs) || e.endedAtMs >= best.endedAtMs) continue;
+          if (priorBestTotalScore == null || e.totalScore > priorBestTotalScore) {
+            priorBestTotalScore = e.totalScore;
+          }
+        }
+      }
 
-  return {
-    ...meta,
-    scores: boardScores,
-    lastTouchedAt: Date.now(),
-  };
+      const board: CountryBoardScore = {
+        userId: player.id,
+        username: player.username,
+        avatarUrl: player.avatar_url,
+        scoreId: best.score.id,
+        totalScore: best.totalScore,
+        accuracy: display.accuracy,
+        mods: getModAcronyms(best.score.mods),
+        pp: best.score.pp,
+        rank: display.rank,
+        isLazer: display.isLazer,
+        hasReplay: best.score.has_replay ?? best.score.replay ?? false,
+        endedAt: getScoreTimestamp(best.score),
+        ...(priorBestTotalScore != null ? { priorBestTotalScore } : {}),
+      };
+
+      let users = perLane.get(lane);
+      if (!users) {
+        users = new Map();
+        perLane.set(lane, users);
+      }
+      users.set(board.userId, board);
+    }
+  }
+
+  if (perLane.size === 0) return null;
+
+  const entries: Record<string, CountryBoardSnapshotEntry> = {};
+  const now = Date.now();
+  for (const [lane, users] of perLane) {
+    const scores = [...users.values()].sort((a, b) => b.totalScore - a.totalScore);
+    entries[lane] = {
+      ...meta,
+      scores,
+      lastTouchedAt: now,
+    };
+  }
+
+  return entries;
 }
 
 export const getCountrySnipes = createServerFn({ method: "GET" })
@@ -1682,7 +1757,10 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
     edgeCache(60, 600);
     const country = normalizeCountryCode(data.country);
     const cacheKey = `country-snipes-response:v2:${country}`;
-    const snapshotKey = `country-board-snapshot:v2:${country}`;
+    // v3: snapshot is now keyed by (beatmap, lane) where lane = speedBucket:client.
+    // Cross-lane snipes aren't meaningful (HT/normal/DT scoring differs; lazer
+    // vs stable use different scoring systems).
+    const snapshotKey = `country-board-snapshot:v3:${country}`;
     const logKey = `country-snipes-log:v1:${country}`;
 
     return fetchWithCacheLock(cacheKey, SNIPES_CACHE_TTL, async () => {
@@ -1706,8 +1784,6 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
         clearSnipesScanStatus(country);
         return [];
       }
-
-      const playerIds = players.map((p) => p.id);
 
       writeSnipesScanStatus(
         country,
@@ -1796,11 +1872,10 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
           return aMs - bMs;
         });
 
-        let entry = snapshot[bid];
-        if (!entry) {
+        const existingLanes = snapshot[bid];
+        if (!existingLanes || Object.keys(existingLanes).length === 0) {
           // No board yet - pick the single highest-scoring candidate to seed
-          // against (we still need to fan out via probeCountryBoard to know
-          // the full roster's ranking).
+          // against (the seed probe fans out across all lanes regardless).
           let bestCandidate = scoresForMap[0];
           let bestTotal = boardScoreFromScore(bestCandidate)?.totalScore ?? 0;
           for (const s of scoresForMap.slice(1)) {
@@ -1814,13 +1889,37 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
           continue;
         }
 
+        // Reuse existing beatmap/beatmapset metadata from any lane for newly
+        // observed lanes that don't have their own entry yet.
+        let lanesForBid: Record<string, CountryBoardSnapshotEntry> = { ...existingLanes };
+        const anyLaneMeta: BoardMeta | null = (() => {
+          const first = Object.values(existingLanes)[0];
+          return first ? { beatmap: first.beatmap, beatmapset: first.beatmapset } : null;
+        })();
+
         for (const score of scoresForMap) {
           const newScore = boardScoreFromScore(score);
           if (!newScore) continue;
+          const lane = getBoardLaneKey(newScore.mods, newScore.isLazer);
+          const entry = lanesForBid[lane];
+
+          if (!entry) {
+            // Beatmap has some lanes but not this one. Add a silent
+            // single-entry baseline (no emit) so subsequent scans have
+            // something to compare against, matching the overflow-skipped
+            // baseline behavior.
+            const meta = boardMetadataFromScore(score) ?? anyLaneMeta;
+            if (!meta) continue;
+            lanesForBid = {
+              ...lanesForBid,
+              [lane]: { ...meta, scores: [newScore], lastTouchedAt: Date.now() },
+            };
+            continue;
+          }
 
           const oldIdx = entry.scores.findIndex((s) => s.userId === newScore.userId);
           if (oldIdx >= 0 && entry.scores[oldIdx].totalScore >= newScore.totalScore) {
-            // Not an improvement on the player's own best; ignore.
+            // Not an improvement on the player's own best in this lane; ignore.
             continue;
           }
 
@@ -1831,11 +1930,11 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
           );
           const newIdx = newSorted.findIndex((s) => s.userId === newScore.userId);
 
-          // Did the player jump above someone? newIdx is their new rank in
-          // the post-play board; entry.scores[newIdx] is whoever held that
-          // exact rank in the pre-play board. That holder is the only victim
-          // we report, even if the player leapfrogged multiple ranks - the
-          // user wants one snipe per play, naming the highest displaced
+          // Did the player jump above someone in this lane? newIdx is their
+          // new rank in the post-play board; entry.scores[newIdx] is whoever
+          // held that exact rank in the pre-play board. That holder is the
+          // only victim we report, even if the player leapfrogged multiple
+          // ranks - we want one snipe per play, naming the highest displaced
           // player only.
           const movedUp =
             oldIdx < 0 ? newIdx < entry.scores.length : newIdx < oldIdx;
@@ -1854,10 +1953,13 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
             }
           }
 
-          entry = { ...entry, scores: newSorted, lastTouchedAt: Date.now() };
+          lanesForBid = {
+            ...lanesForBid,
+            [lane]: { ...entry, scores: newSorted, lastTouchedAt: Date.now() },
+          };
         }
 
-        snapshot[bid] = entry;
+        snapshot[bid] = lanesForBid;
       }
 
       if (seedQueue.length > 0) {
@@ -1881,10 +1983,13 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
           const score = boardScoreFromScore(bestCandidate);
           const meta = boardMetadataFromScore(bestCandidate);
           if (score && meta) {
+            const lane = getBoardLaneKey(score.mods, score.isLazer);
             snapshot[beatmapId] = {
-              ...meta,
-              scores: [score],
-              lastTouchedAt: Date.now(),
+              [lane]: {
+                ...meta,
+                scores: [score],
+                lastTouchedAt: Date.now(),
+              },
             };
           }
         }
@@ -1906,20 +2011,25 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
           SNIPES_SCAN_CONCURRENCY,
           async ({ beatmapId, bestCandidate }) => {
             try {
-              const board = await probeCountryBoard(
-                beatmapId,
-                country,
-                playerIds,
-                bestCandidate.beatmapset,
-              );
-              return { beatmapId, board };
+              const meta = boardMetadataFromScore(bestCandidate);
+              if (!meta) {
+                return {
+                  beatmapId,
+                  lanes: null as Record<string, CountryBoardSnapshotEntry> | null,
+                };
+              }
+              const lanes = await probeCountryBoardLanes(beatmapId, players, meta);
+              return { beatmapId, lanes };
             } catch (error) {
               console.warn("[osu] snipes seed probe failed", {
                 beatmapId,
                 country,
                 error: getErrorMessage(error),
               });
-              return { beatmapId, board: null as CountryBoardSnapshotEntry | null };
+              return {
+                beatmapId,
+                lanes: null as Record<string, CountryBoardSnapshotEntry> | null,
+              };
             } finally {
               seedDone += 1;
               writeSnipesScanStatus(country, {
@@ -1933,34 +2043,47 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
         );
 
         const seedCutoff = Date.now() - SNIPES_SEED_MAX_AGE_MS;
-        for (const { beatmapId, board } of seededResults) {
-          if (!board || board.scores.length === 0) continue;
-          snapshot[beatmapId] = board;
+        for (const { beatmapId, lanes } of seededResults) {
+          if (!lanes || Object.keys(lanes).length === 0) continue;
+          snapshot[beatmapId] = lanes;
 
-          // Heuristic seeded-snipe: for each adjacent pair (i, i+1) in the
-          // ranked board, if rank-i's holder is more recent than rank-(i+1)'s
-          // and within the last 7 days, treat it as a likely snipe. Same
-          // shape as the original top1/top2 heuristic, just extended to the
-          // whole board so non-#1 snipes show up on first observation too.
-          for (let i = 0; i < board.scores.length - 1; i++) {
-            const top = board.scores[i];
-            const next = board.scores[i + 1];
-            if (top.userId === next.userId) continue;
-            const topMs = new Date(top.endedAt).getTime();
-            const nextMs = new Date(next.endedAt).getTime();
-            if (!Number.isFinite(topMs) || !Number.isFinite(nextMs)) continue;
-            if (topMs <= nextMs) continue;
-            if (topMs < seedCutoff) continue;
-            newEvents.push(
-              buildSnipeEvent(
-                beatmapId,
-                { beatmap: board.beatmap, beatmapset: board.beatmapset },
-                top,
-                next,
-                i + 1,
-                true,
-              ),
-            );
+          // Heuristic seeded-snipe, applied per lane: within each lane's
+          // ranked board, for each adjacent pair (i, i+1), if rank-i's holder
+          // is more recent than rank-(i+1)'s and within the last 7 days (and
+          // the gap between the two plays is small), treat it as a likely
+          // snipe. Per-lane so cross-bucket / cross-client comparisons never
+          // emit spurious events.
+          for (const entry of Object.values(lanes)) {
+            for (let i = 0; i < entry.scores.length - 1; i++) {
+              const top = entry.scores[i];
+              const next = entry.scores[i + 1];
+              if (top.userId === next.userId) continue;
+              const topMs = new Date(top.endedAt).getTime();
+              const nextMs = new Date(next.endedAt).getTime();
+              if (!Number.isFinite(topMs) || !Number.isFinite(nextMs)) continue;
+              if (topMs <= nextMs) continue;
+              if (topMs < seedCutoff) continue;
+              // Self-improvement guard: if `top` had a prior play in this lane
+              // whose totalScore already exceeded `next`'s current best, they
+              // held a rank above `next` before the current play — the
+              // current play is a self-PB, not a snipe.
+              if (
+                top.priorBestTotalScore != null &&
+                top.priorBestTotalScore > next.totalScore
+              ) {
+                continue;
+              }
+              newEvents.push(
+                buildSnipeEvent(
+                  beatmapId,
+                  { beatmap: entry.beatmap, beatmapset: entry.beatmapset },
+                  top,
+                  next,
+                  i + 1,
+                  true,
+                ),
+              );
+            }
           }
         }
       }
