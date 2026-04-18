@@ -37,6 +37,13 @@ export const DEFAULT_THEME_HUE = 333;
 // write fails. Keep this key in sync with the inline bootstrap script in
 // `src/routes/__root.tsx` that applies the hue before React hydrates.
 export const THEME_HUE_STORAGE_KEY = "mania-hub-theme-v1";
+// Same defensive split as the theme key, plus: writes to the main blob are
+// debounced 250ms and only flushed on `pagehide`/`visibilitychange`. Mobile
+// browsers don't reliably fire those on fast reload, so accent writes that
+// landed within the last 250ms before reload were getting dropped. With nothing
+// in storage on reload the username re-faded from white every time. This key
+// writes synchronously and bypasses the debounce entirely.
+export const AVATAR_ACCENTS_STORAGE_KEY = "mania-hub-avatar-accents-v1";
 
 function applyThemeHueToDom(hue: number): void {
   if (typeof document === "undefined") return;
@@ -84,6 +91,44 @@ function removeThemeHueFromStorage(): void {
     localStorage.removeItem(THEME_HUE_STORAGE_KEY);
   } catch (error) {
     warnStorageIssue(`remove "${THEME_HUE_STORAGE_KEY}"`, error);
+  }
+}
+
+function filterFreshAvatarAccents(raw: unknown): Record<string, CachedAvatarAccent> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const result: Record<string, CachedAvatarAccent> = {};
+  const now = Date.now();
+  for (const [key, entry] of Object.entries(raw)) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const fetchedAt = (entry as CachedAvatarAccent).fetchedAt;
+    const value = (entry as CachedAvatarAccent).value;
+    if (!Number.isFinite(fetchedAt)) continue;
+    const ttl = value === null ? AVATAR_ACCENT_FAILURE_TTL : AVATAR_ACCENT_CLIENT_TTL;
+    if (now - fetchedAt >= ttl) continue;
+    if (value !== null && typeof value !== "string") continue;
+    result[key] = { value, fetchedAt };
+  }
+  return result;
+}
+
+function readAvatarAccentsFromStorage(): Record<string, CachedAvatarAccent> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(AVATAR_ACCENTS_STORAGE_KEY);
+    if (!raw) return {};
+    return filterFreshAvatarAccents(JSON.parse(raw));
+  } catch (error) {
+    warnStorageIssue(`read "${AVATAR_ACCENTS_STORAGE_KEY}"`, error);
+    return {};
+  }
+}
+
+function writeAvatarAccentsToStorage(accents: Record<string, CachedAvatarAccent>): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(AVATAR_ACCENTS_STORAGE_KEY, JSON.stringify(accents));
+  } catch (error) {
+    warnStorageIssue(`write "${AVATAR_ACCENTS_STORAGE_KEY}"`, error);
   }
 }
 
@@ -143,7 +188,7 @@ interface AppState {
   setTopPlaysRange: (country: string, range: TopPlaysRange) => void;
   setPopoffs: (country: string, popoffs: CachedPopoff[], window: TopPlaysRange) => void;
   setMapsData: (country: string, data: CountryMapsData) => void;
-  setSnipes: (country: string, events: SnipeEvent[]) => void;
+  setSnipes: (country: string, events: SnipeEvent[], scannedAt: number) => void;
   addFeedScores: (country: string, scores: OsuScore[]) => void;
   markFeedScoresFetched: (country: string) => void;
   setTrackerPpGains: (country: string, gains: Record<number, number>, fetchedAt?: number) => void;
@@ -205,7 +250,6 @@ function writeTopPlaysRangeByCountry(ranges: CountryRecord<TopPlaysRange>): void
 // runs on a later task, after the current render has painted. If the tab is
 // closing we flush synchronously via pagehide so nothing is lost.
 const PERSIST_DEBOUNCE_MS = 250;
-let flushPersistedWrites: (() => void) | null = null;
 const storage = typeof window !== "undefined"
   ? createJSONStorage(() => {
       const pending = new Map<string, string | null>();
@@ -231,8 +275,6 @@ const storage = typeof window !== "undefined"
           }
         }
       };
-      flushPersistedWrites = flush;
-
       const schedule = () => {
         if (timer != null) return;
         timer = setTimeout(flush, PERSIST_DEBOUNCE_MS);
@@ -279,13 +321,18 @@ const initialClientCountry = readCountryCookieClient();
 // before persist hydration runs its async merge. Mirrors the inline bootstrap
 // script so client rendering stays consistent from the first paint.
 const initialClientThemeHue = readThemeHueFromStorage();
+// Same idea for accents: seed the store before persist hydrates so the very
+// first React render after JS executes already has colors. Without this, the
+// initial render uses an empty map and the username flashes white before the
+// hydration re-render swaps in the persisted accents.
+const initialClientAvatarAccents = readAvatarAccentsFromStorage();
 
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       selectedCountry: initialClientCountry ?? DEFAULT_COUNTRY_CODE,
       themeHue: initialClientThemeHue ?? DEFAULT_THEME_HUE,
-      avatarAccents: {},
+      avatarAccents: initialClientAvatarAccents,
       rankingsByCountry: {},
       rankingsFetchedAtByCountry: {},
       rankHistories: {},
@@ -325,8 +372,8 @@ export const useAppStore = create<AppState>()(
         set({ themeHue: DEFAULT_THEME_HUE });
       },
       setAvatarAccents: (accents, fetchedAt = Date.now()) =>
-        set((state) => ({
-          avatarAccents: {
+        set((state) => {
+          const merged = {
             ...state.avatarAccents,
             ...Object.fromEntries(
               Object.entries(accents).map(([url, accent]) => [
@@ -334,8 +381,10 @@ export const useAppStore = create<AppState>()(
                 { value: accent, fetchedAt },
               ]),
             ),
-          },
-        })),
+          };
+          writeAvatarAccentsToStorage(merged);
+          return { avatarAccents: merged };
+        }),
       setRankings: (country, rankings) =>
         set((state) => {
           const normalizedCountry = normalizeCountryCode(country);
@@ -437,7 +486,7 @@ export const useAppStore = create<AppState>()(
             },
           };
         }),
-      setSnipes: (country, events) =>
+      setSnipes: (country, events, scannedAt) =>
         set((state) => {
           const normalizedCountry = normalizeCountryCode(country);
           return {
@@ -447,7 +496,7 @@ export const useAppStore = create<AppState>()(
             },
             snipesFetchedAtByCountry: {
               ...state.snipesFetchedAtByCountry,
-              [normalizedCountry]: Date.now(),
+              [normalizedCountry]: scannedAt,
             },
           };
         }),
@@ -685,19 +734,17 @@ export const useAppStore = create<AppState>()(
           // haven't picked a color since this migration landed.
           themeHue: readThemeHueFromStorage()
             ?? clampThemeHue(nextState.themeHue ?? currentState.themeHue),
-          avatarAccents: Object.fromEntries(
-            Object.entries(
-              nextState.avatarAccents && typeof nextState.avatarAccents === "object"
-                ? nextState.avatarAccents
-                : {},
-            ).filter(([, entry]) => {
-              if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
-              const fetchedAt = (entry as CachedAvatarAccent).fetchedAt;
-              const value = (entry as CachedAvatarAccent).value;
-                const ttl = value === null ? AVATAR_ACCENT_FAILURE_TTL : AVATAR_ACCENT_CLIENT_TTL;
-              return Number.isFinite(fetchedAt) && Date.now() - fetchedAt < ttl;
-            }),
-          ) as Record<string, CachedAvatarAccent>,
+          // Dedicated key wins. The legacy blob fallback only matters for
+          // returning users whose accents still live in `mania-hub-cache-v5`
+          // and haven't been re-fetched since this migration landed; those
+          // entries get copied over to the dedicated key on first hydration.
+          avatarAccents: (() => {
+            const fromDedicated = readAvatarAccentsFromStorage();
+            if (Object.keys(fromDedicated).length > 0) return fromDedicated;
+            const migrated = filterFreshAvatarAccents(nextState.avatarAccents);
+            if (Object.keys(migrated).length > 0) writeAvatarAccentsToStorage(migrated);
+            return migrated;
+          })(),
           topPlaysRangeByCountry: currentState.topPlaysRangeByCountry,
           // Keep persisted top-plays data even when stale so the route can render it
           // immediately after a reload and revalidate in the background.
@@ -742,7 +789,9 @@ export const useAppStore = create<AppState>()(
         // themeHue is persisted separately via THEME_HUE_STORAGE_KEY so a
         // QuotaExceededError on this big blob (common on mobile Safari) can't
         // drop a theme change on the floor.
-        avatarAccents: state.avatarAccents,
+        // avatarAccents is persisted separately via AVATAR_ACCENTS_STORAGE_KEY
+        // for the same reason, plus to bypass the 250ms persist debounce that
+        // mobile reload was eating before pagehide fired.
         rankingsByCountry: state.rankingsByCountry,
         rankingsFetchedAtByCountry: state.rankingsFetchedAtByCountry,
         rankHistories: state.rankHistories,

@@ -474,32 +474,35 @@ function sleep(ms: number): Promise<void> {
 // TanStack Start / Vinxi can end up with multiple module instances of this
 // file in dev, which caused the state to appear empty to the reader fn.
 const RATE_WINDOW_MS = 60_000;
+const MAX_RECENT_CALLS = 200;
+
+type RecentOsuCall = {
+  ts: number;
+  path: string;
+  caller: string;
+  status: number;
+};
 
 type OsuRateState = {
-  callTimestamps: number[];
+  recentCalls: RecentOsuCall[];
   lastRateLimit: { remaining: number; limit: number; at: number } | null;
 };
 
 function getOsuRateState(): OsuRateState {
   const g = globalThis as unknown as { __maniaHubOsuRate?: OsuRateState };
   if (!g.__maniaHubOsuRate) {
-    g.__maniaHubOsuRate = { callTimestamps: [], lastRateLimit: null };
+    g.__maniaHubOsuRate = { recentCalls: [], lastRateLimit: null };
   }
   return g.__maniaHubOsuRate;
 }
 
-function pruneWindow(state: OsuRateState, now: number): void {
-  const cutoff = now - RATE_WINDOW_MS;
-  while (state.callTimestamps.length && state.callTimestamps[0]! < cutoff) {
-    state.callTimestamps.shift();
-  }
-}
-
-function recordOsuCall(res: Response): void {
+function recordOsuCall(res: Response, path: string, caller: string): void {
   const state = getOsuRateState();
   const now = Date.now();
-  state.callTimestamps.push(now);
-  pruneWindow(state, now);
+  state.recentCalls.push({ ts: now, path, caller, status: res.status });
+  if (state.recentCalls.length > MAX_RECENT_CALLS) {
+    state.recentCalls.splice(0, state.recentCalls.length - MAX_RECENT_CALLS);
+  }
 
   const remaining = res.headers.get("x-ratelimit-remaining");
   const limit = res.headers.get("x-ratelimit-limit");
@@ -519,12 +522,17 @@ export const getOsuRateStats = createServerFn({ method: "GET" }).handler(() => {
   }
   const state = getOsuRateState();
   const now = Date.now();
-  pruneWindow(state, now);
+  const windowCutoff = now - RATE_WINDOW_MS;
+  let perMin = 0;
+  for (const c of state.recentCalls) {
+    if (c.ts >= windowCutoff) perMin += 1;
+  }
   return {
-    perMin: state.callTimestamps.length,
+    perMin,
     remaining: state.lastRateLimit?.remaining ?? null,
     limit: state.lastRateLimit?.limit ?? null,
     updatedAgoMs: state.lastRateLimit ? now - state.lastRateLimit.at : null,
+    recent: state.recentCalls.slice().reverse(),
   };
 });
 
@@ -604,7 +612,7 @@ export async function osuFetch<T = unknown>(
         "x-api-version": "20220705",
       },
     });
-    recordOsuCall(res);
+    recordOsuCall(res, url.pathname.replace(/^\/api\/v2/, "") + url.search, caller);
 
     if (res.ok) {
       return res.json() as Promise<T>;
@@ -649,7 +657,7 @@ export async function osuFetchBinary(
         Authorization: `Bearer ${token}`,
       },
     });
-    recordOsuCall(res);
+    recordOsuCall(res, path, caller);
 
     if (res.ok) {
       return res.arrayBuffer();

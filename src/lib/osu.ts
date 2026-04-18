@@ -59,6 +59,7 @@ import type {
   CountryBoardSnapshot,
   CountryBoardSnapshotEntry,
   CountryBoardScore,
+  SnipesResponse,
   SnipesScanStatus,
 } from "./types";
 import { normalizeCountryCode } from "./country";
@@ -1764,10 +1765,13 @@ async function probeCountryBoardLanes(
 
 export const getCountrySnipes = createServerFn({ method: "GET" })
   .inputValidator((data: { country?: string }) => data)
-  .handler(async ({ data }: { data: { country?: string } }): Promise<SnipeEvent[]> => {
+  .handler(async ({ data }: { data: { country?: string } }): Promise<SnipesResponse> => {
     edgeCache(60, 600);
     const country = normalizeCountryCode(data.country);
-    const cacheKey = `country-snipes-response:v2:${country}`;
+    // v3: response shape changed from SnipeEvent[] to { events, scannedAt }.
+    // Old v2 entries would deserialize as an array without scannedAt and
+    // produce NaN "ago" labels, so the key bump forces a fresh scan.
+    const cacheKey = `country-snipes-response:v3:${country}`;
     // v3: snapshot is now keyed by (beatmap, lane) where lane = speedBucket:client.
     // Cross-lane snipes aren't meaningful (HT/normal/DT scoring differs; lazer
     // vs stable use different scoring systems).
@@ -1793,7 +1797,7 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
 
       if (players.length === 0) {
         clearSnipesScanStatus(country);
-        return [];
+        return { events: [], scannedAt: Date.now() };
       }
 
       writeSnipesScanStatus(
@@ -2009,7 +2013,7 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
           country,
           {
             phase: "seed",
-            label: `Seeding new beatmaps (${probeBatch.length} to probe, 15 calls each)`,
+            label: `Checking ${probeBatch.length} new beatmap${probeBatch.length === 1 ? "" : "s"}`,
             current: 0,
             total: probeBatch.length,
           },
@@ -2045,7 +2049,7 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
               seedDone += 1;
               writeSnipesScanStatus(country, {
                 phase: "seed",
-                label: `Seeding new beatmaps (${probeBatch.length} to probe, 15 calls each)`,
+                label: `Checking ${probeBatch.length} new beatmap${probeBatch.length === 1 ? "" : "s"}`,
                 current: seedDone,
                 total: probeBatch.length,
               });
@@ -2099,17 +2103,6 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
         }
       }
 
-      writeSnipesScanStatus(
-        country,
-        {
-          phase: "merge",
-          label: `Merging ${newEvents.length} new event(s) into log`,
-          current: 1,
-          total: 1,
-        },
-        { force: true },
-      );
-
       const existingLog = (await getPersistentCached<SnipeEvent[]>(logKey)) ?? [];
       const merged = new Map<string, SnipeEvent>();
       for (const event of existingLog) {
@@ -2128,7 +2121,7 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
       ]);
 
       clearSnipesScanStatus(country);
-      return mergedLog;
+      return { events: mergedLog, scannedAt: Date.now() };
       } catch (err) {
         clearSnipesScanStatus(country);
         throw err;

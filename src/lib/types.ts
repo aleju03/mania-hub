@@ -534,8 +534,16 @@ export interface CountryBoardSnapshotEntry {
  *  is treated as an independent leaderboard for snipe-detection purposes. */
 export type CountryBoardSnapshot = Record<number, Record<string, CountryBoardSnapshotEntry>>;
 
+export interface SnipesResponse {
+  events: SnipeEvent[];
+  /** Epoch ms when the server produced this list (either by running a scan
+   *  or serving a cached response from a prior scan). The client should use
+   *  this, not receive time, for "last updated" labels. */
+  scannedAt: number;
+}
+
 export interface SnipesScanStatus {
-  phase: "roster" | "recent" | "compare" | "seed" | "merge";
+  phase: "roster" | "recent" | "compare" | "seed";
   label: string;
   current: number;
   total: number;
