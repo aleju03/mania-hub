@@ -1,6 +1,15 @@
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { getRankings, getCountryMapsData, rebuildCountryMapsData } from "../lib/osu";
+import {
+  getRankings,
+  getCountryMapsFarmed,
+  getCountryMapsFavourites,
+  rebuildCountryMapsFarmed,
+  rebuildCountryMapsFavourites,
+  rebuildCountryMapsData,
+  composeCountryMapsData,
+} from "../lib/osu";
+import type { CountryMapsFarmedSection, CountryMapsFavouritesSection } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { formatNumber, formatDuration, formatTimeAgo } from "../lib/format";
@@ -331,15 +340,16 @@ function MapsPage() {
   const rankings = useAppStore((s) => s.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((s) => s.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const mapsData = useAppStore((s) => s.mapsDataByCountry[selectedCountry] ?? null);
-  const mapsDataFetchedAt = useAppStore((s) => s.mapsDataFetchedAtByCountry[selectedCountry] ?? null);
   const setRankings = useAppStore((s) => s.setRankings);
   const setMapsData = useAppStore((s) => s.setMapsData);
   const hasValidMapsData = hasValidMapsDataShape(mapsData);
 
   const [loadingPlayers, setLoadingPlayers] = useState(!rankings);
   const [loadingMaps, setLoadingMaps] = useState(!mapsData);
+  const [loadedSections, setLoadedSections] = useState(0);
   const [rebuilding, setRebuilding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fetchingMapsRef = useRef(false);
   const tab = mapsSearch.tab;
   const page = mapsSearch.page;
   const keyFilter = mapsSearch.key;
@@ -375,7 +385,9 @@ function MapsPage() {
   useEffect(() => {
     setLoadingPlayers(!rankings);
     setLoadingMaps(!mapsData || !hasValidMapsData);
+    setLoadedSections(0);
     setError(null);
+    fetchingMapsRef.current = false;
   }, [selectedCountry]);
 
   const updateMapsSearch = (patch: Partial<MapsSearch>) => {
@@ -425,43 +437,117 @@ function MapsPage() {
     return () => { cancelled = true; };
   }, [rankings, rankingsFetchedAt, selectedCountry, setRankings]);
 
-  // Fetch maps data
+  // Fetch maps data in two parallel sections (farmed + favourites) so the
+  // header can show incremental progress. We intentionally exclude mapsData /
+  // hasValidMapsData / mapsDataFetchedAt from the dep array: those are derived
+  // from the store this effect writes to, and including them would make the
+  // effect re-trigger itself on every setMapsData and race with the cleanup.
+  // fetchingMapsRef guards against concurrent fetches for the same country.
   useEffect(() => {
     if (loadingPlayers || error || players.length === 0) return;
 
-    let cancelled = false;
-    if (!isCacheStale(mapsDataFetchedAt, CLIENT_CACHE_TTL.mapsData) && hasValidMapsData) {
+    // Snapshot the current store state inside the effect rather than depending
+    // on selectors, so a fresh-cache early return is safe from reruns.
+    const snapshot = useAppStore.getState();
+    const currentData = snapshot.mapsDataByCountry[selectedCountry] ?? null;
+    const currentFetchedAt = snapshot.mapsDataFetchedAtByCountry[selectedCountry] ?? null;
+    if (
+      !isCacheStale(currentFetchedAt, CLIENT_CACHE_TTL.mapsData) &&
+      hasValidMapsDataShape(currentData)
+    ) {
       setLoadingMaps(false);
-      return () => { cancelled = true; };
+      setLoadedSections(2);
+      return;
     }
 
-    setLoadingMaps(!mapsData || !hasValidMapsData);
-    getCountryMapsData({ data: { users: players } })
-      .then(({ value, isStale }) => {
-        if (cancelled) return;
-        setMapsData(selectedCountry, value);
-        if (isStale) {
-          rebuildCountryMapsData({ data: { users: players } })
+    if (fetchingMapsRef.current) return;
+
+    let cancelled = false;
+    fetchingMapsRef.current = true;
+    setLoadingMaps(true);
+    setLoadedSections(0);
+
+    const bumpSection = () => {
+      if (!cancelled) setLoadedSections((n) => n + 1);
+    };
+
+    Promise.all([
+      getCountryMapsFarmed({ data: { users: players } }).then((r) => {
+        bumpSection();
+        if (r.isStale) {
+          rebuildCountryMapsFarmed({ data: { users: players } })
             .then((result) => {
-              if (cancelled) return;
-              if (result.value) {
-                setMapsData(selectedCountry, result.value);
-              }
+              if (cancelled || !result.value) return;
+              // Re-compose with the freshest farmed section; reuse current favourites.
+              const state = useAppStore.getState();
+              const existing = state.mapsDataByCountry[selectedCountry];
+              if (!existing) return;
+              setMapsData(selectedCountry, {
+                ...existing,
+                farmed: result.value.farmed,
+                farmedGeneratedAt: result.value.generatedAt,
+                generatedAt:
+                  result.value.generatedAt < existing.favouritesGeneratedAt
+                    ? result.value.generatedAt
+                    : existing.favouritesGeneratedAt,
+              });
             })
             .catch(() => {});
         }
+        return r.value;
+      }),
+      getCountryMapsFavourites({ data: { users: players } }).then((r) => {
+        bumpSection();
+        if (r.isStale) {
+          rebuildCountryMapsFavourites({ data: { users: players } })
+            .then((result) => {
+              if (cancelled || !result.value) return;
+              const state = useAppStore.getState();
+              const existing = state.mapsDataByCountry[selectedCountry];
+              if (!existing) return;
+              setMapsData(selectedCountry, {
+                ...existing,
+                mostPlayed: result.value.mostPlayed,
+                favourites: result.value.favourites,
+                favouritesByPlayer: result.value.favouritesByPlayer,
+                beatmapsetsPool: result.value.beatmapsetsPool,
+                favouritesGeneratedAt: result.value.generatedAt,
+                generatedAt:
+                  existing.farmedGeneratedAt < result.value.generatedAt
+                    ? existing.farmedGeneratedAt
+                    : result.value.generatedAt,
+              });
+            })
+            .catch(() => {});
+        }
+        return r.value;
+      }),
+    ])
+      .then(([farmedSection, favSection]: [CountryMapsFarmedSection, CountryMapsFavouritesSection]) => {
+        if (cancelled) return;
+        setMapsData(selectedCountry, composeCountryMapsData(farmedSection, favSection));
       })
       .catch(() => {
         if (cancelled) return;
-        if (!mapsData || !hasValidMapsData) setError("Couldn't load maps data. Try again later.");
+        const state = useAppStore.getState();
+        const existing = state.mapsDataByCountry[selectedCountry] ?? null;
+        if (!hasValidMapsDataShape(existing)) {
+          setError("Couldn't load maps data. Try again later.");
+        }
       })
       .finally(() => {
-        if (!cancelled) setLoadingMaps(false);
+        // If cancelled (country/players changed), a new fetch may already own
+        // fetchingMapsRef — don't clear it out from under the new owner.
+        if (cancelled) return;
+        fetchingMapsRef.current = false;
+        setLoadingMaps(false);
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadingPlayers, error, hasValidMapsData, mapsData, mapsDataFetchedAt, playerIdsKey, selectedCountry]);
+  }, [loadingPlayers, error, playerIdsKey, selectedCountry]);
 
   // ── Filtered + sorted: farmed (from best scores) ────────────────────────
   const filteredFarmed = useMemo(() => {
@@ -763,8 +849,10 @@ function MapsPage() {
             {isLoading && !error && (
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
-                <span className="text-[10px] text-osu-f1">
-                  {loadingPlayers ? "Loading players..." : "Loading maps..."}
+                <span className="text-[10px] text-osu-f1 tabular-nums">
+                  {loadingPlayers
+                    ? "Loading players..."
+                    : `Loading maps... (${Math.round((loadedSections / 2) * 100)}%)`}
                 </span>
               </div>
             )}

@@ -1170,12 +1170,12 @@ function computeMapsFavouritesCacheKey(users: MapsUser[]): string {
   return `country-maps-favourites:v${MAPS_DATA_CACHE_VERSION}:${computeMapsUserKey(users)}`;
 }
 
-interface CountryMapsFarmedSection {
+export interface CountryMapsFarmedSection {
   farmed: MapsFarmedEntry[];
   generatedAt: string;
 }
 
-interface CountryMapsFavouritesSection {
+export interface CountryMapsFavouritesSection {
   mostPlayed: MapsAggregatedBeatmap[];
   favourites: MapsAggregatedFavourite[];
   favouritesByPlayer: MapsPlayerFavourites[];
@@ -1427,7 +1427,7 @@ async function buildCountryFavourites(users: MapsUser[]): Promise<CountryMapsFav
       };
 }
 
-function composeCountryMapsData(
+export function composeCountryMapsData(
   farmedSection: CountryMapsFarmedSection,
   favSection: CountryMapsFavouritesSection,
 ): CountryMapsData {
@@ -1515,6 +1515,68 @@ export const rebuildCountryMapsData = createServerFn({ method: "POST" })
       rebuilt: farmedRebuild.rebuilt || favRebuild.rebuilt,
       value: farmedValue && favValue ? composeCountryMapsData(farmedValue, favValue) : null,
     };
+  });
+
+// Per-section exports so the client can fetch farmed and favourites in parallel
+// and show incremental progress as each completes.
+export const getCountryMapsFarmed = createServerFn({ method: "GET" })
+  .inputValidator((data: { users: MapsUser[] }) => data)
+  .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
+    edgeCache(3600, 86400);
+    return fetchWithStaleAllowed<CountryMapsFarmedSection>(
+      computeMapsFarmedCacheKey(data.users),
+      MAPS_FARMED_CACHE_TTL,
+      () => buildCountryFarmed(data.users),
+      MAPS_REBUILD_LOCK_TTL_MS,
+    );
+  });
+
+export const getCountryMapsFavourites = createServerFn({ method: "GET" })
+  .inputValidator((data: { users: MapsUser[] }) => data)
+  .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
+    edgeCache(3600, 86400);
+    return fetchWithStaleAllowed<CountryMapsFavouritesSection>(
+      computeMapsFavouritesCacheKey(data.users),
+      MAPS_FAVOURITES_CACHE_TTL,
+      () => buildCountryFavourites(data.users),
+      MAPS_REBUILD_LOCK_TTL_MS,
+    );
+  });
+
+export const rebuildCountryMapsFarmed = createServerFn({ method: "POST" })
+  .inputValidator((data: { users: MapsUser[] }) => data)
+  .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
+    return runCacheRebuild<CountryMapsFarmedSection>(
+      computeMapsFarmedCacheKey(data.users),
+      MAPS_FARMED_CACHE_TTL,
+      async () => {
+        const result = await buildCountryFarmed(data.users);
+        await deleteExpiredCacheEntriesByPrefix(
+          "country-maps-farmed:",
+          MAPS_ORPHAN_CLEANUP_AGE_MS,
+        );
+        return result;
+      },
+      MAPS_REBUILD_LOCK_TTL_MS,
+    );
+  });
+
+export const rebuildCountryMapsFavourites = createServerFn({ method: "POST" })
+  .inputValidator((data: { users: MapsUser[] }) => data)
+  .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
+    return runCacheRebuild<CountryMapsFavouritesSection>(
+      computeMapsFavouritesCacheKey(data.users),
+      MAPS_FAVOURITES_CACHE_TTL,
+      async () => {
+        const result = await buildCountryFavourites(data.users);
+        await deleteExpiredCacheEntriesByPrefix(
+          "country-maps-favourites:",
+          MAPS_ORPHAN_CLEANUP_AGE_MS,
+        );
+        return result;
+      },
+      MAPS_REBUILD_LOCK_TTL_MS,
+    );
   });
 
 // ── Replay (parsed server-side via osu-parsers) ────────────────────────────
