@@ -7,6 +7,7 @@ import {
   rebuildCountryMapsFarmed,
   rebuildCountryMapsFavourites,
   rebuildCountryMapsData,
+  rebuildCountryMapsForUser,
   composeCountryMapsData,
 } from "../lib/osu";
 import type { CountryMapsFarmedSection, CountryMapsFavouritesSection } from "../lib/osu";
@@ -348,6 +349,19 @@ function MapsPage() {
   const [loadingMaps, setLoadingMaps] = useState(!mapsData);
   const [loadedSections, setLoadedSections] = useState(0);
   const [rebuilding, setRebuilding] = useState(false);
+  const [rebuildMenuOpen, setRebuildMenuOpen] = useState(false);
+  const [rebuildQuery, setRebuildQuery] = useState("");
+  const rebuildMenuRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!rebuildMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (rebuildMenuRef.current && !rebuildMenuRef.current.contains(e.target as Node)) {
+        setRebuildMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [rebuildMenuOpen]);
   const [error, setError] = useState<string | null>(null);
   const fetchingMapsRef = useRef(false);
   const tab = mapsSearch.tab;
@@ -824,11 +838,27 @@ function MapsPage() {
     });
   };
 
-  const handleDevRebuild = async () => {
+  const handleDevRebuildAll = async () => {
     if (rebuilding || players.length === 0) return;
     setRebuilding(true);
+    setRebuildMenuOpen(false);
     try {
       const result = await rebuildCountryMapsData({ data: { users: players } });
+      if (result.value) setMapsData(selectedCountry, result.value);
+    } catch {
+      setError("Rebuild failed.");
+    } finally {
+      setRebuilding(false);
+    }
+  };
+
+  const handleDevRebuildUser = async (userId: number) => {
+    if (rebuilding || players.length === 0) return;
+    setRebuilding(true);
+    setRebuildMenuOpen(false);
+    setRebuildQuery("");
+    try {
+      const result = await rebuildCountryMapsForUser({ data: { users: players, userId } });
       if (result.value) setMapsData(selectedCountry, result.value);
     } catch {
       setError("Rebuild failed.");
@@ -862,14 +892,62 @@ function MapsPage() {
               </span>
             )}
             {isDevMode && !isLoading && !error && mapsData && (
-              <button
-                onClick={handleDevRebuild}
-                disabled={rebuilding}
-                className="px-2 py-1 rounded-lg bg-osu-red/20 text-[10px] text-osu-red font-semibold hover:bg-osu-red/30 transition-colors cursor-pointer border border-osu-red/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Force rebuild maps data (dev only)"
-              >
-                {rebuilding ? "Rebuilding..." : "Rebuild"}
-              </button>
+              <div ref={rebuildMenuRef} className="relative">
+                <div className="flex items-stretch rounded-lg bg-osu-red/20 border border-osu-red/30 overflow-hidden">
+                  <button
+                    onClick={handleDevRebuildAll}
+                    disabled={rebuilding}
+                    className="px-2 py-1 text-[10px] text-osu-red font-semibold hover:bg-osu-red/30 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Force rebuild maps data for everyone (dev only)"
+                  >
+                    {rebuilding ? "Rebuilding..." : "Rebuild"}
+                  </button>
+                  <div className="w-px bg-osu-red/30" />
+                  <button
+                    onClick={() => setRebuildMenuOpen((v) => !v)}
+                    disabled={rebuilding}
+                    aria-label="Rebuild for a specific player"
+                    aria-expanded={rebuildMenuOpen}
+                    className="px-1.5 flex items-center text-osu-red hover:bg-osu-red/30 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`w-3 h-3 transition-transform ${rebuildMenuOpen ? "rotate-180" : ""}`}>
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                </div>
+                {rebuildMenuOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-[240px] rounded-lg bg-osu-b4 border border-osu-b3 shadow-xl z-20 flex flex-col">
+                    <div className="px-3 pt-2 pb-1 text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">
+                      Rebuild just one player
+                    </div>
+                    <input
+                      type="text"
+                      value={rebuildQuery}
+                      onChange={(e) => setRebuildQuery(e.target.value)}
+                      placeholder="Search player..."
+                      className="mx-1 mb-1 px-2 py-1 rounded-md bg-osu-b5 border border-osu-b3/60 text-[11px] text-osu-l2 placeholder:text-osu-f1 focus:outline-none focus:border-osu-pink/40"
+                      autoFocus
+                    />
+                    <div className="max-h-[240px] overflow-y-auto">
+                      {players
+                        .filter((p) => p.username.toLowerCase().includes(rebuildQuery.toLowerCase()))
+                        .map((p) => (
+                          <button
+                            key={p.id}
+                            onClick={() => handleDevRebuildUser(p.id)}
+                            disabled={rebuilding}
+                            className="w-full text-left px-3 py-1.5 text-[11px] text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed truncate"
+                          >
+                            {p.username}
+                          </button>
+                        ))}
+                      {players.filter((p) => p.username.toLowerCase().includes(rebuildQuery.toLowerCase())).length === 0 && (
+                        <div className="px-3 py-2 text-[10px] text-osu-f1">No matches</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         }

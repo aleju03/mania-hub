@@ -437,6 +437,22 @@ export async function deleteExpiredCacheEntriesByPrefix(
   }
 }
 
+export async function deletePersistentCacheEntries(keys: string[]): Promise<void> {
+  if (keys.length === 0) return;
+  for (const key of keys) responseCache.delete(key);
+  if (!hasDb() || !db) return;
+  try {
+    await ensureCacheSchema();
+    const placeholders = keys.map(() => "?").join(",");
+    await db.execute({
+      sql: `DELETE FROM cache_entries WHERE cache_key IN (${placeholders})`,
+      args: keys,
+    });
+  } catch (error) {
+    warnCacheIssue("delete entries", keys.join(","), error);
+  }
+}
+
 async function clearServerCachesInternal(): Promise<void> {
   responseCache.clear();
   warnedCacheIssues.clear();

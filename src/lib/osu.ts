@@ -27,6 +27,7 @@ import {
   fetchWithStaleAllowed,
   runCacheRebuild,
   deleteExpiredCacheEntriesByPrefix,
+  deletePersistentCacheEntries,
   getPersistentCacheEntry,
   getPersistentCached,
   setPersistentCache,
@@ -1577,6 +1578,45 @@ export const rebuildCountryMapsFavourites = createServerFn({ method: "POST" })
       },
       MAPS_REBUILD_LOCK_TTL_MS,
     );
+  });
+
+// Invalidate one player's per-user caches (favourites / most-played / best
+// scores) and rebuild the country aggregate. Every other player's per-user
+// data still hits the 6h cache, so only the target player is re-fetched from
+// osu! — useful when a single player updates their favourites and you don't
+// want to force-refresh the entire top 50.
+export const rebuildCountryMapsForUser = createServerFn({ method: "POST" })
+  .inputValidator((data: { users: MapsUser[]; userId: number }) => data)
+  .handler(async ({ data }: { data: { users: MapsUser[]; userId: number } }) => {
+    await deletePersistentCacheEntries([
+      `user-favourites-all:${data.userId}`,
+      `user-most-played:${data.userId}`,
+      `user-best-scores-window:${data.userId}:200`,
+      `user-best-scores-window:${data.userId}:100`,
+    ]);
+
+    const farmedKey = computeMapsFarmedCacheKey(data.users);
+    const favKey = computeMapsFavouritesCacheKey(data.users);
+    const [farmedRebuild, favRebuild] = await Promise.all([
+      runCacheRebuild<CountryMapsFarmedSection>(
+        farmedKey,
+        MAPS_FARMED_CACHE_TTL,
+        () => buildCountryFarmed(data.users),
+        MAPS_REBUILD_LOCK_TTL_MS,
+      ),
+      runCacheRebuild<CountryMapsFavouritesSection>(
+        favKey,
+        MAPS_FAVOURITES_CACHE_TTL,
+        () => buildCountryFavourites(data.users),
+        MAPS_REBUILD_LOCK_TTL_MS,
+      ),
+    ]);
+    const farmedValue = farmedRebuild.value;
+    const favValue = favRebuild.value;
+    return {
+      rebuilt: farmedRebuild.rebuilt || favRebuild.rebuilt,
+      value: farmedValue && favValue ? composeCountryMapsData(farmedValue, favValue) : null,
+    };
   });
 
 // ── Replay (parsed server-side via osu-parsers) ────────────────────────────
