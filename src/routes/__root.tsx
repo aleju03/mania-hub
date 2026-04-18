@@ -2,6 +2,7 @@ import { HeadContent, Link, Outlet, Scripts, createRootRoute } from "@tanstack/r
 import { createServerFn } from "@tanstack/react-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { Nav } from "../components/layout/Nav";
+import { DevRateLimitBadge } from "../components/layout/DevRateLimitBadge";
 import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
 import { InitialCountryContext } from "../lib/country-context";
 import { COUNTRY_COOKIE_NAME, parseCountryCookieValue, resolveInitialCountry } from "../lib/country-cookie";
@@ -86,6 +87,7 @@ function RootLayout() {
             aleju03
           </a>
         </footer>
+        {import.meta.env.VITE_DEV_MODE === "1" ? <DevRateLimitBadge /> : null}
       </PostHogProvider>
     </InitialCountryContext.Provider>
   );

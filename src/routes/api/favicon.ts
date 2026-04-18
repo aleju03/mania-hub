@@ -1,34 +1,38 @@
 import { createFileRoute } from "@tanstack/react-router";
 import sharp from "sharp";
-import path from "node:path";
-import fs from "node:fs/promises";
 import { getCountryFlagGradient, normalizeCountryCode } from "#/lib/country";
 
 const ICON_SIZE = 64;
 const ARROW_SIZE = Math.round(ICON_SIZE * 0.62);
 const ARROW_PAD = Math.round((ICON_SIZE - ARROW_SIZE) / 2);
 
+// Inlined from public/images/notes/arrow-left-pink.png. Vercel doesn't bundle
+// public/ into the serverless function (it's served by the CDN instead), so
+// fs.readFile against process.cwd()+"/public" worked locally but threw ENOENT
+// on prod, leaving the favicon endpoint returning a 500 and the tab icon
+// missing. The asset is 1.8KB; embedding it as base64 keeps the function
+// self-contained.
+const ARROW_PNG_BASE64 =
+  "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";
+const ARROW_PNG_BUFFER = Buffer.from(ARROW_PNG_BASE64, "base64");
+
 const iconCache = new Map<string, Promise<Buffer>>();
 let arrowAlphaPromise: Promise<Buffer> | null = null;
 
 async function loadArrowAlpha(): Promise<Buffer> {
   if (!arrowAlphaPromise) {
-    arrowAlphaPromise = (async () => {
-      const arrowPath = path.join(process.cwd(), "public", "images", "notes", "arrow-left-pink.png");
-      const raw = await fs.readFile(arrowPath);
-      return sharp(raw)
-        .flop()
-        .resize(ARROW_SIZE, ARROW_SIZE, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-        .extend({
-          top: ARROW_PAD,
-          bottom: ICON_SIZE - ARROW_SIZE - ARROW_PAD,
-          left: ARROW_PAD,
-          right: ICON_SIZE - ARROW_SIZE - ARROW_PAD,
-          background: { r: 0, g: 0, b: 0, alpha: 0 },
-        })
-        .png()
-        .toBuffer();
-    })();
+    arrowAlphaPromise = sharp(ARROW_PNG_BUFFER)
+      .flop()
+      .resize(ARROW_SIZE, ARROW_SIZE, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .extend({
+        top: ARROW_PAD,
+        bottom: ICON_SIZE - ARROW_SIZE - ARROW_PAD,
+        left: ARROW_PAD,
+        right: ICON_SIZE - ARROW_SIZE - ARROW_PAD,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
+      .png()
+      .toBuffer();
     arrowAlphaPromise.catch(() => {
       arrowAlphaPromise = null;
     });

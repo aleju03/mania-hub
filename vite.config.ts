@@ -35,6 +35,9 @@ function staticCacheHeaders(): Plugin {
 }
 
 const config = defineConfig({
+  server: {
+    allowedHosts: ['.loca.lt'],
+  },
   plugins: [
     staticCacheHeaders(),
     devtools(),

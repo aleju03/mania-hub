@@ -45,8 +45,7 @@ const INLINE_PHASE_LABEL: Record<SnipesScanStatus["phase"], string> = {
   roster: "Loading country roster…",
   recent: "Loading players' recent plays…",
   compare: "Comparing plays against snapshot…",
-  seed: "Seeding new beatmaps…",
-  merge: "Merging snipe log…",
+  seed: "Checking new beatmaps…",
 };
 
 function readKeys(value: unknown): KeyFilter {
@@ -170,8 +169,12 @@ function SnipesPage() {
     const requestedCountry = selectedCountry;
 
     getCountrySnipes({ data: { country: requestedCountry } })
-      .then((events) => {
-        setSnipes(requestedCountry, events ?? []);
+      .then((response) => {
+        setSnipes(
+          requestedCountry,
+          response?.events ?? [],
+          response?.scannedAt ?? Date.now(),
+        );
         if (useAppStore.getState().selectedCountry === requestedCountry) {
           setError(null);
         }
@@ -807,15 +810,13 @@ const PHASE_ORDER: SnipesScanStatus["phase"][] = [
   "recent",
   "compare",
   "seed",
-  "merge",
 ];
 
 const PHASE_DESCRIPTIONS: Record<SnipesScanStatus["phase"], string> = {
   roster: "Loading the country's top 15 mania players.",
   recent: "Pulling each player's recent plays from the osu! API.",
   compare: "Cross-checking those plays against the saved country leaderboards.",
-  seed: "Probing newly-encountered beatmaps.",
-  merge: "Saving new snipes to the rolling log.",
+  seed: "Looking up country rankings on beatmaps we haven't seen yet.",
 };
 
 function ScanProgress({
@@ -888,8 +889,7 @@ function ScanProgress({
                 {phase === "roster" && "Country roster"}
                 {phase === "recent" && "Recent plays"}
                 {phase === "compare" && "Compare against snapshot"}
-                {phase === "seed" && "Seed new beatmaps"}
-                {phase === "merge" && "Merge snipe log"}
+                {phase === "seed" && "Check new beatmaps"}
               </span>
               {isCurrent && status && status.total > 0 && (
                 <span className="ml-auto text-osu-f1 tabular-nums">

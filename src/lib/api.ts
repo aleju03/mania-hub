@@ -468,6 +468,74 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// ── osu! API rate-limit tracker (dev HUD) ──
+// State is stashed on globalThis so that all server module contexts (SSR
+// loaders, route handlers, and extracted server-function bundles) share it.
+// TanStack Start / Vinxi can end up with multiple module instances of this
+// file in dev, which caused the state to appear empty to the reader fn.
+const RATE_WINDOW_MS = 60_000;
+const MAX_RECENT_CALLS = 200;
+
+type RecentOsuCall = {
+  ts: number;
+  path: string;
+  caller: string;
+  status: number;
+};
+
+type OsuRateState = {
+  recentCalls: RecentOsuCall[];
+  lastRateLimit: { remaining: number; limit: number; at: number } | null;
+};
+
+function getOsuRateState(): OsuRateState {
+  const g = globalThis as unknown as { __maniaHubOsuRate?: OsuRateState };
+  if (!g.__maniaHubOsuRate) {
+    g.__maniaHubOsuRate = { recentCalls: [], lastRateLimit: null };
+  }
+  return g.__maniaHubOsuRate;
+}
+
+function recordOsuCall(res: Response, path: string, caller: string): void {
+  const state = getOsuRateState();
+  const now = Date.now();
+  state.recentCalls.push({ ts: now, path, caller, status: res.status });
+  if (state.recentCalls.length > MAX_RECENT_CALLS) {
+    state.recentCalls.splice(0, state.recentCalls.length - MAX_RECENT_CALLS);
+  }
+
+  const remaining = res.headers.get("x-ratelimit-remaining");
+  const limit = res.headers.get("x-ratelimit-limit");
+  if (remaining != null && limit != null) {
+    const remainingNum = Number(remaining);
+    const limitNum = Number(limit);
+    if (Number.isFinite(remainingNum) && Number.isFinite(limitNum)) {
+      state.lastRateLimit = { remaining: remainingNum, limit: limitNum, at: now };
+    }
+  }
+}
+
+export const getOsuRateStats = createServerFn({ method: "GET" }).handler(() => {
+  const isDevMode = process.env.VITE_DEV_MODE === "1" || process.env.NODE_ENV !== "production";
+  if (!isDevMode) {
+    throw new Error("osu! rate stats only available in dev mode.");
+  }
+  const state = getOsuRateState();
+  const now = Date.now();
+  const windowCutoff = now - RATE_WINDOW_MS;
+  let perMin = 0;
+  for (const c of state.recentCalls) {
+    if (c.ts >= windowCutoff) perMin += 1;
+  }
+  return {
+    perMin,
+    remaining: state.lastRateLimit?.remaining ?? null,
+    limit: state.lastRateLimit?.limit ?? null,
+    updatedAgoMs: state.lastRateLimit ? now - state.lastRateLimit.at : null,
+    recent: state.recentCalls.slice().reverse(),
+  };
+});
+
 function getRetryDelayMs(res: Response, attempt: number): number {
   const retryAfter = res.headers.get("retry-after");
   if (retryAfter) {
@@ -544,6 +612,7 @@ export async function osuFetch<T = unknown>(
         "x-api-version": "20220705",
       },
     });
+    recordOsuCall(res, url.pathname.replace(/^\/api\/v2/, "") + url.search, caller);
 
     if (res.ok) {
       return res.json() as Promise<T>;
@@ -588,6 +657,7 @@ export async function osuFetchBinary(
         Authorization: `Bearer ${token}`,
       },
     });
+    recordOsuCall(res, path, caller);
 
     if (res.ok) {
       return res.arrayBuffer();

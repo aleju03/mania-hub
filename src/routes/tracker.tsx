@@ -727,10 +727,16 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
       {/* Expanded score details */}
       {rendered && (
         <div
-          className={`px-4 pb-3 pt-1 border-t border-osu-b3/20 ${expanded ? "detail-enter" : "detail-exit"}`}
+          className={`relative overflow-hidden px-4 pb-3 pt-1 border-t border-osu-b3/20 ${expanded ? "detail-enter" : "detail-exit"}`}
           onAnimationEnd={() => { if (!expanded) setRendered(false); }}
         >
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
+              {(score.beatmapset?.covers?.["cover@2x"] || score.beatmapset?.covers?.cover) && (
+                <div
+                  className="absolute inset-0 opacity-[0.07] bg-cover bg-center pointer-events-none"
+                  style={{ backgroundImage: `url(${score.beatmapset.covers["cover@2x"] || score.beatmapset.covers.cover})` }}
+                />
+              )}
+              <div className="relative grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
                 <StatCell label="Score" value={totalScore != null ? formatNumber(totalScore) : "-"} />
                 <StatCell label="Combo" value={`${formatNumber(score.max_combo)}x`} />
                 <StatCell label="MAX" value={formatNumber(countMax)} color="text-osu-blue" />
@@ -752,7 +758,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                   <StatCell label="Combo %" value={`${Math.round((score.max_combo / score.beatmap.max_combo) * 100)}%`} />
                 )}
               </div>
-              <div className="mt-2 flex items-center justify-between gap-2">
+              <div className="relative mt-2 flex items-center justify-between gap-2">
                 <span className="text-[10px] text-osu-f1">
                   Played on: <span className={lazer ? "text-osu-pink-light" : "text-osu-l2"}>{lazer ? "Lazer" : "Stable"}</span>
                 </span>

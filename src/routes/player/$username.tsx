@@ -4,7 +4,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   getUser,
   getUserProfileInsights,
-  getUserScoresBest,
   getUserScoresBestWindow,
   getUserScoresRecent,
 } from "../../lib/osu";
@@ -34,15 +33,15 @@ import { UsernameText } from "../../components/ui/UsernameText";
 import type { OsuScore, OsuUser, UserProfileInsights, InsightScoreSnapshot } from "../../lib/types";
 
 const userRequestCache = new Map<string, Promise<OsuUser>>();
-const userScoresRequestCache = new Map<number, Promise<[OsuScore[], OsuScore[]]>>();
+const userRecentRequestCache = new Map<number, Promise<OsuScore[]>>();
 const userBestWindowRequestCache = new Map<number, Promise<OsuScore[]>>();
 const userProfileInsightsRequestCache = new Map<number, Promise<UserProfileInsights>>();
 const userDataCache = new Map<string, { data: OsuUser; expiresAt: number }>();
-const userScoresDataCache = new Map<number, { data: [OsuScore[], OsuScore[]]; expiresAt: number }>();
+const userRecentDataCache = new Map<number, { data: OsuScore[]; expiresAt: number }>();
 const userBestWindowDataCache = new Map<number, { data: OsuScore[]; expiresAt: number }>();
 const userProfileInsightsDataCache = new Map<number, { data: UserProfileInsights; expiresAt: number }>();
 const USER_CLIENT_CACHE_TTL = 2 * 60 * 1000;
-const USER_SCORES_CLIENT_CACHE_TTL = 60 * 1000;
+const USER_RECENT_CLIENT_CACHE_TTL = 60 * 1000;
 const USER_BEST_WINDOW_CLIENT_CACHE_TTL = 60 * 1000;
 const USER_PROFILE_INSIGHTS_CLIENT_CACHE_TTL = 10 * 60 * 1000;
 const INITIAL_SCORE_BATCH_SIZE = 5;
@@ -184,35 +183,34 @@ function loadUserCached(username: string): Promise<OsuUser> {
   return request;
 }
 
-function loadUserScoresCached(userId: number): Promise<[OsuScore[], OsuScore[]]> {
+function loadUserRecentCached(userId: number): Promise<OsuScore[]> {
   const now = Date.now();
-  const cachedData = userScoresDataCache.get(userId);
+  const cachedData = userRecentDataCache.get(userId);
   if (cachedData && cachedData.expiresAt > now) {
     return Promise.resolve(cachedData.data);
   }
   if (cachedData) {
-    userScoresDataCache.delete(userId);
+    userRecentDataCache.delete(userId);
   }
 
-  const cached = userScoresRequestCache.get(userId);
+  const cached = userRecentRequestCache.get(userId);
   if (cached) return cached;
 
-  const request = Promise.all([
-    getUserScoresBest({ data: { userId, limit: INITIAL_SCORE_BATCH_SIZE, offset: 0 } }),
-    getUserScoresRecent({ data: { userId, limit: INITIAL_SCORE_BATCH_SIZE, offset: 0, include_fails: true } }),
-  ])
+  const request = getUserScoresRecent({
+    data: { userId, limit: INITIAL_SCORE_BATCH_SIZE, offset: 0, include_fails: true },
+  })
     .then((scores) => {
-      userScoresDataCache.set(userId, {
+      userRecentDataCache.set(userId, {
         data: scores,
-        expiresAt: Date.now() + USER_SCORES_CLIENT_CACHE_TTL,
+        expiresAt: Date.now() + USER_RECENT_CLIENT_CACHE_TTL,
       });
       return scores;
     })
     .finally(() => {
-      userScoresRequestCache.delete(userId);
+      userRecentRequestCache.delete(userId);
     });
 
-  userScoresRequestCache.set(userId, request);
+  userRecentRequestCache.set(userId, request);
   return request;
 }
 
@@ -281,17 +279,17 @@ function PlayerPage() {
   const [recent, setRecent] = useState<OsuScore[]>([]);
   const [profileInsights, setProfileInsights] = useState<UserProfileInsights | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
-  const [loadingScores, setLoadingScores] = useState(true);
+  const [loadingRecent, setLoadingRecent] = useState(true);
   const [loadingInsights, setLoadingInsights] = useState(true);
   const [userError, setUserError] = useState<string | null>(null);
-  const [scoresError, setScoresError] = useState<string | null>(null);
+  const [bestError, setBestError] = useState<string | null>(null);
+  const [recentError, setRecentError] = useState<string | null>(null);
   const [insightsError, setInsightsError] = useState<string | null>(null);
   const [tab, setTab] = useState<PlayerTab>("best");
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
   const [bestModFilter, setBestModFilter] = useState<ModFilterState>({});
   const [bestSort, setBestSort] = useState<BestSort>("pp");
   const [bestWindowLoaded, setBestWindowLoaded] = useState(false);
-  const bestWindowLoadedRef = useRef(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [recentHasMore, setRecentHasMore] = useState(true);
   const [loadingMoreRecent, setLoadingMoreRecent] = useState(false);
@@ -317,12 +315,12 @@ function PlayerPage() {
     setBestModFilter({});
     setBestSort("pp");
     setBestWindowLoaded(false);
-    bestWindowLoadedRef.current = false;
     setUserError(null);
-    setScoresError(null);
+    setBestError(null);
+    setRecentError(null);
     setInsightsError(null);
     setLoadingUser(true);
-    setLoadingScores(true);
+    setLoadingRecent(true);
     setLoadingInsights(true);
     setRecentHasMore(true);
     setLoadingMoreRecent(false);
@@ -353,42 +351,36 @@ function PlayerPage() {
     if (!user) return;
 
     let cancelled = false;
-    setLoadingScores(true);
+    setLoadingRecent(true);
 
-    loadUserScoresCached(user.id)
-      .then(([bestScores, recentScores]) => {
+    loadUserRecentCached(user.id)
+      .then((recentScores) => {
         if (cancelled) return;
-        // If the full window already resolved ahead of the initial fetch, don't
-        // clobber it with the smaller list.
-        if (!bestWindowLoadedRef.current) {
-          setBest(bestScores);
-        }
         setRecent(recentScores);
         setRecentHasMore(recentScores.length === INITIAL_SCORE_BATCH_SIZE);
-        setScoresError(null);
+        setRecentError(null);
       })
       .catch(() => {
         if (cancelled) return;
-        setScoresError("Couldn't load this player's scores right now.");
+        setRecentError("Couldn't load recent scores right now.");
       })
       .finally(() => {
         if (cancelled) return;
-        setLoadingScores(false);
+        setLoadingRecent(false);
       });
 
-    // Background fetch of the full 200-score window. Upgrades `best` when
-    // ready so the mod filter + sort have the complete dataset. Errors are
-    // swallowed: we keep the initial 5 on screen and leave the filter bar
-    // in its skeleton state.
+    // Single source of truth for the Best tab: the 200-score window also
+    // backs the initial 5-row paint. Skeleton stays up until this resolves.
     loadUserBestWindowCached(user.id)
       .then((windowScores) => {
         if (cancelled) return;
-        bestWindowLoadedRef.current = true;
         setBest(windowScores);
         setBestWindowLoaded(true);
+        setBestError(null);
       })
       .catch(() => {
-        // Intentionally no error surface: the initial 5 still render.
+        if (cancelled) return;
+        setBestError("Couldn't load top plays right now.");
       });
 
     return () => {
@@ -445,7 +437,7 @@ function PlayerPage() {
       setRecent((prev) => [...prev, ...nextScores]);
       setRecentHasMore(nextScores.length === SHOW_MORE_BATCH_SIZE);
     } catch {
-      setScoresError("Couldn't load more scores right now.");
+      setRecentError("Couldn't load more scores right now.");
     } finally {
       setLoadingMoreRecent(false);
     }
@@ -473,7 +465,7 @@ function PlayerPage() {
     if (tab !== "recent") return;
     const filteredScores = recent.filter((score) => matchesKeyFilter(score, keyFilter));
 
-    if (loadingScores || scoresError || loadingMoreRecent) return;
+    if (loadingRecent || recentError || loadingMoreRecent) return;
     if (filteredScores.length >= recentVisibleCount) return;
     if (!recentHasMore) return;
 
@@ -482,11 +474,11 @@ function PlayerPage() {
     fetchMoreRecent,
     keyFilter,
     loadingMoreRecent,
-    loadingScores,
+    loadingRecent,
     recent,
+    recentError,
     recentHasMore,
     recentVisibleCount,
-    scoresError,
     tab,
   ]);
 
@@ -530,9 +522,11 @@ function PlayerPage() {
     )
     : keyFilteredScores;
   const visibleScores = filteredScores.slice(0, currentVisibleCount);
-  // Best tab has "more to come" while the 200-score background window is still
-  // loading; once it resolves, the full set is in hand and there's nothing else
-  // to fetch. Recent still uses its own paginated hasMore.
+  // Best is now backed entirely by the 200-score window, so its loading state
+  // is just whether that window has resolved.
+  const loadingBest = !bestWindowLoaded && !bestError;
+  const loadingScores = tab === "best" ? loadingBest : loadingRecent;
+  const scoresError = tab === "best" ? bestError : recentError;
   const currentHasMore = tab === "best" ? !bestWindowLoaded : recentHasMore;
   const isLoadingMoreCurrentTab = tab === "recent" && loadingMoreRecent;
   const canShowMore = tab === "best"
@@ -822,19 +816,15 @@ function PlayerPage() {
             )}
           </div>
 
-          {tab === "best" && !loadingScores && best.length > 0 && (
-            bestWindowLoaded ? (
-              <BestScoresControlBar
-                mods={relevantBestMods}
-                modFilter={bestModFilter}
-                onCycleMod={cycleBestMod}
-                onClearMods={() => setBestModFilter({})}
-                sort={bestSort}
-                onChangeSort={setBestSort}
-              />
-            ) : (
-              <BestScoresControlBarSkeleton />
-            )
+          {tab === "best" && bestWindowLoaded && best.length > 0 && (
+            <BestScoresControlBar
+              mods={relevantBestMods}
+              modFilter={bestModFilter}
+              onCycleMod={cycleBestMod}
+              onClearMods={() => setBestModFilter({})}
+              sort={bestSort}
+              onChangeSort={setBestSort}
+            />
           )}
         </div>
       </div>
@@ -1124,25 +1114,6 @@ function BestScoresControlBar({
             </button>
           ))}
         </div>
-      </div>
-    </div>
-  );
-}
-
-function BestScoresControlBarSkeleton() {
-  return (
-    <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-      <div className="flex items-center gap-2 min-w-0">
-        <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold shrink-0">Mods</span>
-        <div className="flex items-center gap-1">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-[30px] w-[42px] rounded-md" />
-          ))}
-        </div>
-      </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Sort</span>
-        <Skeleton className="h-[30px] w-[186px] rounded-lg" />
       </div>
     </div>
   );
