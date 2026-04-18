@@ -394,6 +394,8 @@ export interface CountryMapsData {
   favouritesByPlayer: MapsPlayerFavourites[];
   beatmapsetsPool: Record<number, MapsFavouriteBeatmapset>;
   generatedAt: string;
+  farmedGeneratedAt: string;
+  favouritesGeneratedAt: string;
 }
 
 export interface UserProfileKeyBucket {

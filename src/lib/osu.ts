@@ -125,8 +125,9 @@ function toLeanHomeScore(
   };
 }
 
-const MAPS_DATA_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 1 week
-const MAPS_DATA_CACHE_VERSION = 8;
+const MAPS_FARMED_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 1 week
+const MAPS_FAVOURITES_CACHE_TTL = 14 * 24 * 60 * 60 * 1000; // 2 weeks
+const MAPS_DATA_CACHE_VERSION = 9;
 const USER_FAVOURITES_PAGE_SIZE = 100;
 const USER_FAVOURITES_MAX_PAGES = 10;
 const FARMED_SINGLE_PLAYER_PP_MIN = 500;
@@ -1154,26 +1155,41 @@ type MapsUser = { id: number; username: string; avatar_url: string };
 const MAPS_REBUILD_LOCK_TTL_MS = 60_000;
 const MAPS_ORPHAN_CLEANUP_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
-function computeMapsCacheKey(users: MapsUser[]): string {
-  const userKey = users
+function computeMapsUserKey(users: MapsUser[]): string {
+  return users
     .map((user) => user.id)
     .sort((a, b) => a - b)
     .join(",");
-  return `country-maps-data:v${MAPS_DATA_CACHE_VERSION}:${userKey}`;
 }
 
-async function buildCountryMapsData(users: MapsUser[]): Promise<CountryMapsData> {
-      // Fetch best scores + most_played + favourites for all users
+function computeMapsFarmedCacheKey(users: MapsUser[]): string {
+  return `country-maps-farmed:v${MAPS_DATA_CACHE_VERSION}:${computeMapsUserKey(users)}`;
+}
+
+function computeMapsFavouritesCacheKey(users: MapsUser[]): string {
+  return `country-maps-favourites:v${MAPS_DATA_CACHE_VERSION}:${computeMapsUserKey(users)}`;
+}
+
+interface CountryMapsFarmedSection {
+  farmed: MapsFarmedEntry[];
+  generatedAt: string;
+}
+
+interface CountryMapsFavouritesSection {
+  mostPlayed: MapsAggregatedBeatmap[];
+  favourites: MapsAggregatedFavourite[];
+  favouritesByPlayer: MapsPlayerFavourites[];
+  beatmapsetsPool: Record<number, MapsFavouriteBeatmapset>;
+  generatedAt: string;
+}
+
+async function buildCountryFarmed(users: MapsUser[]): Promise<CountryMapsFarmedSection> {
       const userResults = await mapWithConcurrency(
         users,
         MAPS_FETCH_CONCURRENCY,
         async (user) => {
-          const [bestScores, mostPlayed, favourites] = await Promise.all([
-            fetchUserBestScoresWindow(user.id, 200).catch(() => [] as OsuScore[]),
-            fetchUserMostPlayed(user.id).catch(() => [] as BeatmapPlaycount[]),
-            fetchUserFavourites(user.id).catch(() => [] as OsuBeatmapset[]),
-          ]);
-          return { user, bestScores, mostPlayed, favourites };
+          const bestScores = await fetchUserBestScoresWindow(user.id, 200).catch(() => [] as OsuScore[]);
+          return { user, bestScores };
         },
       );
 
@@ -1241,6 +1257,22 @@ async function buildCountryMapsData(users: MapsUser[]): Promise<CountryMapsData>
         farmed.push(entry);
       }
       farmed.sort((a, b) => b.playerCount - a.playerCount || b.avgPp - a.avgPp);
+
+      return { farmed, generatedAt: new Date().toISOString() };
+}
+
+async function buildCountryFavourites(users: MapsUser[]): Promise<CountryMapsFavouritesSection> {
+      const userResults = await mapWithConcurrency(
+        users,
+        MAPS_FETCH_CONCURRENCY,
+        async (user) => {
+          const [mostPlayed, favourites] = await Promise.all([
+            fetchUserMostPlayed(user.id).catch(() => [] as BeatmapPlaycount[]),
+            fetchUserFavourites(user.id).catch(() => [] as OsuBeatmapset[]),
+          ]);
+          return { user, mostPlayed, favourites };
+        },
+      );
 
       // ── Most played: from most_played endpoint (mania only) ──────
       const mpMap = new Map<number, MapsAggregatedBeatmap>();
@@ -1317,7 +1349,7 @@ async function buildCountryMapsData(users: MapsUser[]): Promise<CountryMapsData>
             const starMin = stars.length ? Math.min(...stars) : 0;
             const starMax = stars.length ? Math.max(...stars) : 0;
             const versionNames = maniaBeatmaps.map((bm) => bm.version ?? "");
-            const patterns = detectManiaPatterns(fav.tags ?? "", versionNames);
+            const patterns = detectManiaPatterns(fav.tags ?? "", versionNames, fav.title ?? "");
 
             beatmapsetsPool[fav.id] = {
               id: fav.id,
@@ -1387,47 +1419,102 @@ async function buildCountryMapsData(users: MapsUser[]): Promise<CountryMapsData>
         .slice(0, 100);
 
       return {
-        farmed,
         mostPlayed,
         favourites,
         favouritesByPlayer,
         beatmapsetsPool,
         generatedAt: new Date().toISOString(),
-      } satisfies CountryMapsData;
+      };
+}
+
+function composeCountryMapsData(
+  farmedSection: CountryMapsFarmedSection,
+  favSection: CountryMapsFavouritesSection,
+): CountryMapsData {
+  const farmedAt = farmedSection.generatedAt;
+  const favAt = favSection.generatedAt;
+  return {
+    farmed: farmedSection.farmed,
+    mostPlayed: favSection.mostPlayed,
+    favourites: favSection.favourites,
+    favouritesByPlayer: favSection.favouritesByPlayer,
+    beatmapsetsPool: favSection.beatmapsetsPool,
+    generatedAt: farmedAt < favAt ? farmedAt : favAt,
+    farmedGeneratedAt: farmedAt,
+    favouritesGeneratedAt: favAt,
+  };
 }
 
 export const getCountryMapsData = createServerFn({ method: "GET" })
   .inputValidator((data: { users: MapsUser[] }) => data)
   .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
     edgeCache(3600, 86400);
-    const cacheKey = computeMapsCacheKey(data.users);
-    const { value, isStale } = await fetchWithStaleAllowed<CountryMapsData>(
-      cacheKey,
-      MAPS_DATA_CACHE_TTL,
-      () => buildCountryMapsData(data.users),
-      MAPS_REBUILD_LOCK_TTL_MS,
-    );
-    return { value, isStale };
+    const farmedKey = computeMapsFarmedCacheKey(data.users);
+    const favKey = computeMapsFavouritesCacheKey(data.users);
+    const [farmedRes, favRes] = await Promise.all([
+      fetchWithStaleAllowed<CountryMapsFarmedSection>(
+        farmedKey,
+        MAPS_FARMED_CACHE_TTL,
+        () => buildCountryFarmed(data.users),
+        MAPS_REBUILD_LOCK_TTL_MS,
+      ),
+      fetchWithStaleAllowed<CountryMapsFavouritesSection>(
+        favKey,
+        MAPS_FAVOURITES_CACHE_TTL,
+        () => buildCountryFavourites(data.users),
+        MAPS_REBUILD_LOCK_TTL_MS,
+      ),
+    ]);
+    return {
+      value: composeCountryMapsData(farmedRes.value, favRes.value),
+      isStale: farmedRes.isStale || favRes.isStale,
+    };
   });
 
 export const rebuildCountryMapsData = createServerFn({ method: "POST" })
   .inputValidator((data: { users: MapsUser[] }) => data)
   .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
-    const cacheKey = computeMapsCacheKey(data.users);
-    const { rebuilt, value } = await runCacheRebuild<CountryMapsData>(
-      cacheKey,
-      MAPS_DATA_CACHE_TTL,
-      async () => {
-        const result = await buildCountryMapsData(data.users);
-        await deleteExpiredCacheEntriesByPrefix(
-          "country-maps-data:",
-          MAPS_ORPHAN_CLEANUP_AGE_MS,
-        );
-        return result;
-      },
-      MAPS_REBUILD_LOCK_TTL_MS,
-    );
-    return { rebuilt, value };
+    const farmedKey = computeMapsFarmedCacheKey(data.users);
+    const favKey = computeMapsFavouritesCacheKey(data.users);
+    const [farmedRebuild, favRebuild] = await Promise.all([
+      runCacheRebuild<CountryMapsFarmedSection>(
+        farmedKey,
+        MAPS_FARMED_CACHE_TTL,
+        async () => {
+          const result = await buildCountryFarmed(data.users);
+          await deleteExpiredCacheEntriesByPrefix(
+            "country-maps-farmed:",
+            MAPS_ORPHAN_CLEANUP_AGE_MS,
+          );
+          return result;
+        },
+        MAPS_REBUILD_LOCK_TTL_MS,
+      ),
+      runCacheRebuild<CountryMapsFavouritesSection>(
+        favKey,
+        MAPS_FAVOURITES_CACHE_TTL,
+        async () => {
+          const result = await buildCountryFavourites(data.users);
+          await deleteExpiredCacheEntriesByPrefix(
+            "country-maps-favourites:",
+            MAPS_ORPHAN_CLEANUP_AGE_MS,
+          );
+          // Clean out legacy single-blob entries from before the split.
+          await deleteExpiredCacheEntriesByPrefix(
+            "country-maps-data:",
+            MAPS_ORPHAN_CLEANUP_AGE_MS,
+          );
+          return result;
+        },
+        MAPS_REBUILD_LOCK_TTL_MS,
+      ),
+    ]);
+    const farmedValue = farmedRebuild.value;
+    const favValue = favRebuild.value;
+    return {
+      rebuilt: farmedRebuild.rebuilt || favRebuild.rebuilt,
+      value: farmedValue && favValue ? composeCountryMapsData(farmedValue, favValue) : null,
+    };
   });
 
 // ── Replay (parsed server-side via osu-parsers) ────────────────────────────

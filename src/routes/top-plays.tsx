@@ -340,10 +340,10 @@ function PopOffsPage() {
             {(loadingPlayers || refreshing) && !playersError && (
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
-                <span className="text-[10px] text-osu-f1">
-                  {loadingPlayers
-                    ? "Loading player list..."
-                    : `Loading ${loadedCount}/${players.length} players...`}
+                <span className="text-[10px] text-osu-f1 tabular-nums">
+                  {loadingPlayers || players.length === 0
+                    ? "Loading..."
+                    : `Loading... (${Math.round((loadedCount / players.length) * 100)}%)`}
                 </span>
               </div>
             )}
@@ -540,20 +540,6 @@ function PopOffsPage() {
                   </div>
                 </div>
               ))}
-            </div>
-          )}
-
-          {!playersError && !loading && refreshing && players.length > 0 && (
-            <div className="mb-3 flex items-center gap-3">
-              <div className="flex-1 h-1 rounded-full bg-osu-b3/40 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-osu-pink transition-all duration-500 ease-out"
-                  style={{ width: `${Math.round((loadedCount / players.length) * 100)}%` }}
-                />
-              </div>
-              <span className="text-[11px] text-osu-f1 tabular-nums flex-shrink-0">
-                {loadedCount}/{players.length} players
-              </span>
             </div>
           )}
 

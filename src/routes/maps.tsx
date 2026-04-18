@@ -50,11 +50,31 @@ type MapsSearch = {
   rStars: number;
   rStarsMax: number;
   rWeight: RandomWeight;
+  rAvoidRepeats: boolean;
 };
 
 const PAGE_SIZE = 24;
 const VISIBLE_AVATARS = 4;
 const FARMED_SINGLE_PLAYER_PP_MIN = 500;
+// When "avoid repeats" is on, recently-picked players/maps get 10× less weight
+// rather than being excluded, so the advertised distribution still holds for
+// fresh candidates but the feed doesn't stall on the same person/map.
+const RECENT_BIAS = 0.1;
+const RECENT_PLAYER_HISTORY = 2;
+const RECENT_BEATMAP_HISTORY = 5;
+
+function weightedPick<T>(items: T[], weight: (item: T) => number): T {
+  let total = 0;
+  for (const item of items) total += weight(item);
+  if (total <= 0) return items[Math.floor(Math.random() * items.length)];
+  let r = Math.random() * total;
+  for (const item of items) {
+    r -= weight(item);
+    if (r <= 0) return item;
+  }
+  return items[items.length - 1];
+}
+
 const DEFAULT_MAPS_SEARCH: MapsSearch = {
   tab: "farmed",
   page: 0,
@@ -71,6 +91,7 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   rStars: 0,
   rStarsMax: 0,
   rWeight: "players",
+  rAvoidRepeats: false,
 };
 
 const RANDOM_STATUS_OPTIONS = ["ranked", "loved", "graveyard", "other"] as const;
@@ -219,6 +240,9 @@ function hasValidMapsDataShape(data: CountryMapsData | null): data is CountryMap
   if (!Array.isArray(data.favouritesByPlayer) || !data.beatmapsetsPool || typeof data.beatmapsetsPool !== "object") {
     return false;
   }
+  if (typeof data.farmedGeneratedAt !== "string" || typeof data.favouritesGeneratedAt !== "string") {
+    return false;
+  }
 
   const sampleSet = Object.values(data.beatmapsetsPool)[0];
   if (
@@ -295,6 +319,7 @@ export const Route = createFileRoute("/maps")({
       return Math.round(clamped * 10) / 10;
     })(),
     rWeight: search.rWeight === "favourites" ? "favourites" : DEFAULT_MAPS_SEARCH.rWeight,
+    rAvoidRepeats: typeof search.rAvoidRepeats === "boolean" ? search.rAvoidRepeats : DEFAULT_MAPS_SEARCH.rAvoidRepeats,
   }),
   component: MapsPage,
 });
@@ -330,6 +355,7 @@ function MapsPage() {
   const rStars = mapsSearch.rStars;
   const rStarsMax = mapsSearch.rStarsMax;
   const rWeight = mapsSearch.rWeight;
+  const rAvoidRepeats = mapsSearch.rAvoidRepeats;
   const randomStatus = useMemo(() => parseTriStateCsv(rStatusRaw, RANDOM_STATUS_OPTIONS), [rStatusRaw]);
   const randomKey = useMemo(() => parseTriStateCsv(rKeyRaw, RANDOM_KEY_OPTIONS), [rKeyRaw]);
   const randomPattern = useMemo(() => parseTriStateCsv(rPatternRaw, RANDOM_PATTERN_OPTIONS), [rPatternRaw]);
@@ -361,11 +387,14 @@ function MapsPage() {
   };
 
   const players =
-    rankings?.ranking.slice(0, 30).map((e: RankingsResponse["ranking"][number]) => ({
-      id: e.user.id,
-      username: e.user.username,
-      avatar_url: e.user.avatar_url,
-    })) ?? [];
+    rankings?.ranking
+      .filter((entry: RankingsResponse["ranking"][number]) => entry.user.is_active !== false)
+      .slice(0, 50)
+      .map((e: RankingsResponse["ranking"][number]) => ({
+        id: e.user.id,
+        username: e.user.username,
+        avatar_url: e.user.avatar_url,
+      })) ?? [];
   const playerIdsKey = useMemo(
     () => players.map((player) => player.id).join(","),
     [players],
@@ -525,16 +554,13 @@ function MapsPage() {
 
   const isLoading = loadingPlayers || loadingMaps;
 
-  // ── Random tab: pick a random top-30 player and a single random favourite ──
+  // ── Random tab: pick a random top-50 player and a single random favourite ──
   const [randomPlayer, setRandomPlayer] = useState<MapsPlayerFavourites | null>(null);
   const [randomBeatmapset, setRandomBeatmapset] = useState<MapsFavouriteBeatmapset | null>(null);
   const lastRandomKeyRef = useRef<string | null>(null);
-  // Sliding window of recent player IDs to avoid repeats. Length 2 means three
-  // rolls in a row are guaranteed to be three different people (when possible).
+  // Sliding windows used when "avoid repeats" is on (see reshuffleRandom).
   const recentRandomPlayerIdsRef = useRef<number[]>([]);
   const recentRandomBeatmapIdsRef = useRef<number[]>([]);
-  const RECENT_PLAYER_HISTORY = 2;
-  const RECENT_BEATMAP_HISTORY = 5;
   const [rerollMenuOpen, setRerollMenuOpen] = useState(false);
   const rerollMenuRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -642,62 +668,56 @@ function MapsPage() {
       setRandomBeatmapset(null);
       return;
     }
-    const recentPlayers = new Set(recentRandomPlayerIdsRef.current);
-    const recentMaps = new Set(recentRandomBeatmapIdsRef.current);
+    const recentPlayers = rAvoidRepeats ? new Set(recentRandomPlayerIdsRef.current) : null;
+    const recentMaps = rAvoidRepeats ? new Set(recentRandomBeatmapIdsRef.current) : null;
 
     let pickedPlayer: MapsPlayerFavourites;
     let pickedBeatmapset: MapsFavouriteBeatmapset;
 
     if (rWeight === "favourites") {
-      // Weighted by favourite count: sample a (player, beatmapset) pair
-      // directly from the pool so players contribute proportionally to their
-      // number of eligible favourites.
-      const playerFiltered = recentPlayers.size > 0
-        ? randomPool.filter((p) => !recentPlayers.has(p.player.id))
-        : randomPool;
-      const afterRecentPlayers = playerFiltered.length > 0 ? playerFiltered : randomPool;
-      const mapFiltered = recentMaps.size > 0
-        ? afterRecentPlayers.filter((p) => !recentMaps.has(p.beatmapset.id))
-        : afterRecentPlayers;
-      const pool = mapFiltered.length > 0 ? mapFiltered : afterRecentPlayers;
-      const pair = pool[Math.floor(Math.random() * pool.length)];
+      // "Equal chance per map": sample a (player, beatmapset) pair uniformly
+      // so every eligible favourite is equally likely. Players with bigger
+      // collections show up more often as a side-effect.
+      const pair = weightedPick(randomPool, (p) => {
+        let w = 1;
+        if (recentPlayers?.has(p.player.id)) w *= RECENT_BIAS;
+        if (recentMaps?.has(p.beatmapset.id)) w *= RECENT_BIAS;
+        return w;
+      });
       pickedPlayer = pair.player;
       pickedBeatmapset = pair.beatmapset;
     } else {
-      // Uniform per player: pick a player first (each player equally likely),
-      // then pick one of their eligible favourites.
-      const playerCandidates = recentPlayers.size > 0
-        ? randomPlayerGroups.filter((g) => !recentPlayers.has(g.player.id))
-        : randomPlayerGroups;
-      const playerPool = playerCandidates.length > 0 ? playerCandidates : randomPlayerGroups;
-      const group = playerPool[Math.floor(Math.random() * playerPool.length)];
-
-      const mapCandidates = recentMaps.size > 0
-        ? group.beatmapsets.filter((b) => !recentMaps.has(b.id))
-        : group.beatmapsets;
-      const mapPool = mapCandidates.length > 0 ? mapCandidates : group.beatmapsets;
+      // "Equal chance per player": pick a player uniformly, then pick one of
+      // their eligible favourites uniformly.
+      const group = weightedPick(randomPlayerGroups, (g) =>
+        recentPlayers?.has(g.player.id) ? RECENT_BIAS : 1,
+      );
       pickedPlayer = group.player;
-      pickedBeatmapset = mapPool[Math.floor(Math.random() * mapPool.length)];
+      pickedBeatmapset = weightedPick(group.beatmapsets, (b) =>
+        recentMaps?.has(b.id) ? RECENT_BIAS : 1,
+      );
     }
 
-    const nextPlayers = [...recentRandomPlayerIdsRef.current, pickedPlayer.id];
-    if (nextPlayers.length > RECENT_PLAYER_HISTORY) nextPlayers.shift();
-    recentRandomPlayerIdsRef.current = nextPlayers;
+    if (rAvoidRepeats) {
+      const nextPlayers = [...recentRandomPlayerIdsRef.current, pickedPlayer.id];
+      if (nextPlayers.length > RECENT_PLAYER_HISTORY) nextPlayers.shift();
+      recentRandomPlayerIdsRef.current = nextPlayers;
 
-    const nextMaps = [...recentRandomBeatmapIdsRef.current, pickedBeatmapset.id];
-    if (nextMaps.length > RECENT_BEATMAP_HISTORY) nextMaps.shift();
-    recentRandomBeatmapIdsRef.current = nextMaps;
+      const nextMaps = [...recentRandomBeatmapIdsRef.current, pickedBeatmapset.id];
+      if (nextMaps.length > RECENT_BEATMAP_HISTORY) nextMaps.shift();
+      recentRandomBeatmapIdsRef.current = nextMaps;
+    }
 
     setRandomPlayer(pickedPlayer);
     setRandomBeatmapset(pickedBeatmapset);
-  }, [randomPlayerGroups, randomPool, rWeight]);
+  }, [randomPlayerGroups, randomPool, rWeight, rAvoidRepeats]);
 
   // Only reshuffle on first entry to the tab or when the underlying data
   // changes (country switch / rebuild). Filter changes never auto-reroll —
   // the user must click Reroll explicitly.
   useEffect(() => {
     if (tab !== "random" || !mapsData) return;
-    const dataKey = `${selectedCountry}:${mapsData.generatedAt}`;
+    const dataKey = `${selectedCountry}:${mapsData.favouritesGeneratedAt}`;
     const dataChanged = lastRandomKeyRef.current !== dataKey;
     lastRandomKeyRef.current = dataKey;
     if (dataChanged || !randomBeatmapset) reshuffleRandom();
@@ -750,7 +770,7 @@ function MapsPage() {
             )}
             {!isLoading && !error && mapsData && (
               <span className="text-[10px] text-osu-f1">
-                {tab === "random" ? randomPool.length : currentList.length} maps &middot; updated {formatTimeAgo(mapsData.generatedAt)}
+                {tab === "random" ? randomPool.length : currentList.length} maps &middot; updated {formatTimeAgo(tab === "farmed" ? mapsData.farmedGeneratedAt : mapsData.favouritesGeneratedAt)}
               </span>
             )}
             {isDevMode && !isLoading && !error && mapsData && (
@@ -1123,7 +1143,7 @@ function MapsPage() {
                             {
                               id: "players" as const,
                               label: "Equal chance per player",
-                              desc: "Each top-30 player is equally likely, no matter how many favourites they have.",
+                              desc: "Each player is equally likely, no matter how many favourites they have.",
                             },
                             {
                               id: "favourites" as const,
@@ -1157,6 +1177,28 @@ function MapsPage() {
                               </button>
                             );
                           })}
+                          <div className="h-px bg-osu-b3 mx-2 my-1" />
+                          <button
+                            onClick={() => updateMapsSearch({ rAvoidRepeats: !rAvoidRepeats })}
+                            className="w-full text-left p-2.5 rounded-md transition-colors cursor-pointer hover:bg-osu-b3"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[12px] font-semibold text-osu-l2">
+                                Avoid repeats
+                              </span>
+                              <span
+                                className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors ${rAvoidRepeats ? "bg-osu-pink" : "bg-osu-b3"}`}
+                                aria-hidden
+                              >
+                                <span
+                                  className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-transform ${rAvoidRepeats ? "translate-x-3.5" : "translate-x-0.5"}`}
+                                />
+                              </span>
+                            </div>
+                            <div className="mt-0.5 text-[10px] text-osu-f1 leading-snug">
+                              Makes recent picks much less likely.
+                            </div>
+                          </button>
                         </div>
                       )}
                     </div>
@@ -1169,7 +1211,7 @@ function MapsPage() {
                 <div className="text-center py-16 text-osu-f1 text-sm">
                   {hasActiveFilters
                     ? "No favourites match your filters. Try loosening them."
-                    : "No favourites found for any player in the top 30."}
+                    : "No favourites found for any player in the top 50."}
                 </div>
               )}
             </div>
