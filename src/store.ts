@@ -121,6 +121,7 @@ interface AppState {
   topPlaysRangeByCountry: CountryRecord<TopPlaysRange>;
   popoffsByCountry: CountryRecord<CachedPopoff[]>;
   popoffsFetchedAtByCountry: CountryRecord<number>;
+  popoffsWindowByCountry: CountryRecord<TopPlaysRange>;
   mapsDataByCountry: CountryRecord<CountryMapsData>;
   mapsDataFetchedAtByCountry: CountryRecord<number>;
   feedScoresByCountry: CountryRecord<OsuScore[]>;
@@ -140,7 +141,7 @@ interface AppState {
   setHomeRecentScores: (country: string, scores: LeanHomeScore[]) => void;
   setHomePopoffs: (country: string, popoffs: LeanHomePopoff[]) => void;
   setTopPlaysRange: (country: string, range: TopPlaysRange) => void;
-  setPopoffs: (country: string, popoffs: CachedPopoff[]) => void;
+  setPopoffs: (country: string, popoffs: CachedPopoff[], window: TopPlaysRange) => void;
   setMapsData: (country: string, data: CountryMapsData) => void;
   setSnipes: (country: string, events: SnipeEvent[]) => void;
   addFeedScores: (country: string, scores: OsuScore[]) => void;
@@ -296,6 +297,7 @@ export const useAppStore = create<AppState>()(
       topPlaysRangeByCountry: readTopPlaysRangeByCountry(),
       popoffsByCountry: {},
       popoffsFetchedAtByCountry: {},
+      popoffsWindowByCountry: {},
       mapsDataByCountry: {},
       mapsDataFetchedAtByCountry: {},
       feedScoresByCountry: {},
@@ -403,7 +405,7 @@ export const useAppStore = create<AppState>()(
             topPlaysRangeByCountry: nextTopPlaysRangeByCountry,
           };
         }),
-      setPopoffs: (country, popoffs) =>
+      setPopoffs: (country, popoffs, window) =>
         set((state) => {
           const normalizedCountry = normalizeCountryCode(country);
           return {
@@ -414,6 +416,10 @@ export const useAppStore = create<AppState>()(
             popoffsFetchedAtByCountry: {
               ...state.popoffsFetchedAtByCountry,
               [normalizedCountry]: Date.now(),
+            },
+            popoffsWindowByCountry: {
+              ...state.popoffsWindowByCountry,
+              [normalizedCountry]: window,
             },
           };
         }),
@@ -699,6 +705,17 @@ export const useAppStore = create<AppState>()(
           popoffsFetchedAtByCountry: Object.fromEntries(
             persistedPopoffsFetchedAtEntries.map(([country, fetchedAt]) => [country, Number(fetchedAt)]),
           ) as CountryRecord<number>,
+          popoffsWindowByCountry: (() => {
+            const raw = nextState.popoffsWindowByCountry;
+            if (!raw || typeof raw !== "object") return {};
+            const valid: CountryRecord<TopPlaysRange> = {};
+            for (const [country, value] of Object.entries(raw)) {
+              if (value === "24h" || value === "3d" || value === "7d" || value === "30d") {
+                valid[country] = value;
+              }
+            }
+            return valid;
+          })(),
           trackerPpGainsByCountry: Object.fromEntries(
             Object.entries(
               nextState.trackerPpGainsByCountry && typeof nextState.trackerPpGainsByCountry === "object"
@@ -736,6 +753,7 @@ export const useAppStore = create<AppState>()(
         homePopoffsFetchedAtByCountry: state.homePopoffsFetchedAtByCountry,
         popoffsByCountry: state.popoffsByCountry,
         popoffsFetchedAtByCountry: state.popoffsFetchedAtByCountry,
+        popoffsWindowByCountry: state.popoffsWindowByCountry,
         trackerPpGainsByCountry: state.trackerPpGainsByCountry,
         // mapsDataByCountry, feedScoresByCountry, and snipesByCountry are
         // intentionally NOT persisted. They can balloon past the ~5MB

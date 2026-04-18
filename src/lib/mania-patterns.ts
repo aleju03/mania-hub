@@ -19,6 +19,7 @@ const PATTERN_VARIANTS: Array<{ canonical: string; variants: string[] }> = [
   { canonical: "sv", variants: ["sv", "scroll velocity"] },
   { canonical: "bracket", variants: ["bracket", "brackets"] },
   { canonical: "speed", variants: ["speed"] },
+  { canonical: "tiebreaker", variants: ["tiebreaker", "tb"] },
 ];
 
 // Drop the generic label when a more specific sibling is already detected.
@@ -73,4 +74,5 @@ export const MANIA_PATTERN_LABELS: Record<string, string> = {
   sv: "SV",
   bracket: "Bracket",
   speed: "Speed",
+  tiebreaker: "Tiebreaker",
 };

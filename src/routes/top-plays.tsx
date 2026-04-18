@@ -39,6 +39,20 @@ const RANGE_MS: Record<TimeRange, number> = {
   "30d": 30 * 24 * 60 * 60 * 1000,
 };
 
+// Width order, used to check whether a cached window covers a newly selected range.
+// A cache for "30d" covers any shorter selection; a cache for "7d" covers 7d/3d/24h.
+const RANGE_WIDTH: Record<TimeRange, number> = {
+  "24h": 0,
+  "3d": 1,
+  "7d": 2,
+  "30d": 3,
+};
+
+function windowCoversRange(cached: TimeRange | null, selected: TimeRange): boolean {
+  if (!cached) return false;
+  return RANGE_WIDTH[cached] >= RANGE_WIDTH[selected];
+}
+
 const PAGE_SIZE = 15;
 const FETCH_BATCH_SIZE = 5;
 const PP_GAIN_SKELETON_COUNT = 6;
@@ -73,6 +87,7 @@ function PopOffsPage() {
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const popoffs = useAppStore((state) => state.popoffsByCountry[selectedCountry]) ?? EMPTY_POPOFFS;
   const popoffsFetchedAt = useAppStore((state) => state.popoffsFetchedAtByCountry[selectedCountry]) ?? null;
+  const popoffsWindow = useAppStore((state) => state.popoffsWindowByCountry[selectedCountry] ?? null);
   const rememberedRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? DEFAULT_TOP_PLAYS_SEARCH.range);
   const setRankings = useAppStore((state) => state.setRankings);
   const setCachedPopoffs = useAppStore((state) => state.setPopoffs);
@@ -193,7 +208,8 @@ function PopOffsPage() {
     const shouldRefresh =
       !hasCachedPopoffs ||
       !popoffsFetchedAt ||
-      isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.popoffs);
+      isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.popoffs) ||
+      !windowCoversRange(popoffsWindow, range);
 
     if (!shouldRefresh) {
       setLoading(false);
@@ -202,6 +218,10 @@ function PopOffsPage() {
       return;
     }
 
+    // Fetch at the width of the currently selected range. If the user later
+    // selects a larger range, this effect re-runs and upgrades the window.
+    const fetchWindow = range;
+
     fetchingRef.current = true;
     setLoading(!hasCachedPopoffs);
     setRefreshing(true);
@@ -209,24 +229,33 @@ function PopOffsPage() {
     setPage(0);
 
     try {
-      let merged = hasCachedPopoffs ? [] as PopOff[] : [];
-
+      const batches: (typeof players)[] = [];
       for (let i = 0; i < players.length; i += FETCH_BATCH_SIZE) {
-        const batch = players.slice(i, i + FETCH_BATCH_SIZE);
-        const batchResults = await getCountryPopoffs({ data: { players: batch } });
-        merged = mergePopoffs([...merged, ...batchResults]);
-
-        if (!hasCachedPopoffs) {
-          if (merged.length > 0) {
-            setCachedPopoffs(selectedCountry, merged);
-            setLoading(false);
-          }
-        }
-
-        setLoadedCount(Math.min(i + FETCH_BATCH_SIZE, players.length));
+        batches.push(players.slice(i, i + FETCH_BATCH_SIZE));
       }
 
-      setCachedPopoffs(selectedCountry, merged);
+      let merged: PopOff[] = [];
+      let completed = 0;
+
+      await Promise.all(
+        batches.map(async (batch) => {
+          const batchResults = await getCountryPopoffs({
+            data: { players: batch, window: fetchWindow },
+          });
+          // Writes here are safe: JS is single-threaded, so each post-await
+          // continuation runs to completion before the next batch's does.
+          merged = mergePopoffs([...merged, ...batchResults]);
+          completed += batch.length;
+          setLoadedCount(Math.min(completed, players.length));
+
+          if (!hasCachedPopoffs && merged.length > 0) {
+            setCachedPopoffs(selectedCountry, merged, fetchWindow);
+            setLoading(false);
+          }
+        }),
+      );
+
+      setCachedPopoffs(selectedCountry, merged, fetchWindow);
     } catch (error) {
       const message = error instanceof Error
         ? error.message
@@ -244,7 +273,7 @@ function PopOffsPage() {
       setRefreshing(false);
       fetchingRef.current = false;
     }
-  }, [mergePopoffs, players, popoffs.length, popoffsFetchedAt, setCachedPopoffs, selectedCountry]);
+  }, [mergePopoffs, players, popoffs.length, popoffsFetchedAt, popoffsWindow, range, setCachedPopoffs, selectedCountry]);
 
   useEffect(() => {
     if (loadingPlayers || playersError) return;
@@ -308,7 +337,7 @@ function PopOffsPage() {
         title={`${countryName} mania top plays`}
         right={
           <div className="flex items-center gap-2">
-            {(loadingPlayers || (refreshing && !hasCachedPopoffs)) && !playersError && (
+            {(loadingPlayers || refreshing) && !playersError && (
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
                 <span className="text-[10px] text-osu-f1">
@@ -514,7 +543,7 @@ function PopOffsPage() {
             </div>
           )}
 
-          {!playersError && !loading && refreshing && !hasCachedPopoffs && players.length > 0 && (
+          {!playersError && !loading && refreshing && players.length > 0 && (
             <div className="mb-3 flex items-center gap-3">
               <div className="flex-1 h-1 rounded-full bg-osu-b3/40 overflow-hidden">
                 <div
@@ -674,8 +703,14 @@ function PopOffsPage() {
                     </div>
 
                     <ExpandableDetail expanded={expandedId === p.score.id}>
-                      <div className="px-4 pb-3 pt-1 border-t border-osu-b3/20">
-                            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
+                      <div className="relative px-4 pb-3 pt-1 border-t border-osu-b3/20 overflow-hidden">
+                            {(p.score.beatmapset?.covers?.["cover@2x"] || p.score.beatmapset?.covers?.cover) && (
+                              <div
+                                className="absolute inset-0 opacity-[0.07] bg-cover bg-center pointer-events-none"
+                                style={{ backgroundImage: `url(${p.score.beatmapset.covers["cover@2x"] || p.score.beatmapset.covers.cover})` }}
+                              />
+                            )}
+                            <div className="relative grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
                               <StatCell label="Score" value={getDisplayedTotalScore(p.score) != null ? formatNumber(getDisplayedTotalScore(p.score)!) : "-"} />
                               <StatCell label="Combo" value={`${formatNumber(p.score.max_combo)}x`} />
                               <StatCell label="MAX" value={formatNumber(p.score.statistics.count_geki ?? p.score.statistics.perfect ?? 0)} color="text-osu-blue" />
@@ -695,7 +730,7 @@ function PopOffsPage() {
                                 <StatCell label="Combo %" value={`${Math.round((p.score.max_combo / p.score.beatmap.max_combo) * 100)}%`} />
                               )}
                             </div>
-                            <div className="mt-2 flex items-center justify-between gap-2">
+                            <div className="relative mt-2 flex items-center justify-between gap-2">
                               <span className="text-[10px] text-osu-f1">
                                 Played on: <span className={lazer ? "text-osu-pink-light" : "text-osu-l2"}>{lazer ? "Lazer" : "Stable"}</span>
                               </span>

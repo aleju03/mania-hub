@@ -31,7 +31,7 @@ type KeyFilter = "all" | "4k" | "7k" | "other";
 type BeatmapSort = "plays" | "players" | "stars" | "length";
 type FarmedSort = "players" | "avg-pp" | "max-pp" | "stars";
 type StatusFilter = "all" | "ranked" | "loved" | "graveyard" | "other";
-type PpFilter = 0 | 500 | 700;
+type PpFilter = number;
 type ModFilter = "all" | "dt" | "ht" | "nm";
 type MapsSearch = {
   tab: Tab;
@@ -47,6 +47,7 @@ type MapsSearch = {
   rKey: string;
   rPattern: string;
   rStars: number;
+  rStarsMax: number;
 };
 
 const PAGE_SIZE = 24;
@@ -66,6 +67,7 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   rKey: "",
   rPattern: "",
   rStars: 0,
+  rStarsMax: 0,
 };
 
 const RANDOM_STATUS_OPTIONS = ["ranked", "loved", "graveyard", "other"] as const;
@@ -79,6 +81,7 @@ const RANDOM_PATTERN_OPTIONS = [
   "tech",
   "ln",
   "sv",
+  "tiebreaker",
 ] as const;
 type RandomStatus = (typeof RANDOM_STATUS_OPTIONS)[number];
 type RandomKey = (typeof RANDOM_KEY_OPTIONS)[number];
@@ -95,10 +98,15 @@ const RANDOM_PATTERN_MATCHES: Record<RandomPattern, string[]> = {
   tech: ["tech"],
   ln: ["ln"],
   sv: ["sv"],
+  tiebreaker: ["tiebreaker"],
 };
 
-const RANDOM_STAR_MIN = 4;
+const RANDOM_STAR_MIN = 2;
 const RANDOM_STAR_MAX = 9;
+
+const FARMED_PP_MIN = 200;
+const FARMED_PP_MAX = 1000;
+const FARMED_PP_STEP = 25;
 
 const RANDOM_PATTERN_LABEL: Record<RandomPattern, string> = {
   jack: "Jack",
@@ -109,6 +117,7 @@ const RANDOM_PATTERN_LABEL: Record<RandomPattern, string> = {
   tech: "Tech",
   ln: "LN",
   sv: "SV",
+  tiebreaker: "Tiebreaker",
 };
 
 type TriStateMode = "include" | "exclude";
@@ -259,7 +268,12 @@ export const Route = createFileRoute("/maps")({
     beatmapSort: search.beatmapSort === "plays" || search.beatmapSort === "stars" || search.beatmapSort === "length" ? search.beatmapSort : DEFAULT_MAPS_SEARCH.beatmapSort,
     farmedSort: search.farmedSort === "avg-pp" || search.farmedSort === "max-pp" || search.farmedSort === "stars" ? search.farmedSort : DEFAULT_MAPS_SEARCH.farmedSort,
     status: search.status === "ranked" || search.status === "loved" || search.status === "graveyard" || search.status === "other" ? search.status : DEFAULT_MAPS_SEARCH.status,
-    pp: search.pp === 500 || search.pp === 700 ? search.pp : DEFAULT_MAPS_SEARCH.pp,
+    pp: (() => {
+      const n = Number(search.pp);
+      if (!Number.isFinite(n) || n <= 0) return DEFAULT_MAPS_SEARCH.pp;
+      const clamped = Math.min(Math.max(n, FARMED_PP_MIN), FARMED_PP_MAX);
+      return Math.round(clamped / FARMED_PP_STEP) * FARMED_PP_STEP;
+    })(),
     mod: search.mod === "dt" || search.mod === "ht" || search.mod === "nm" ? search.mod : DEFAULT_MAPS_SEARCH.mod,
     q: typeof search.q === "string" ? search.q : DEFAULT_MAPS_SEARCH.q,
     rStatus: typeof search.rStatus === "string" ? search.rStatus : DEFAULT_MAPS_SEARCH.rStatus,
@@ -268,6 +282,12 @@ export const Route = createFileRoute("/maps")({
     rStars: (() => {
       const n = Number(search.rStars);
       if (!Number.isFinite(n) || n <= 0) return DEFAULT_MAPS_SEARCH.rStars;
+      const clamped = Math.min(Math.max(n, RANDOM_STAR_MIN), RANDOM_STAR_MAX);
+      return Math.round(clamped * 10) / 10;
+    })(),
+    rStarsMax: (() => {
+      const n = Number(search.rStarsMax);
+      if (!Number.isFinite(n) || n <= 0) return DEFAULT_MAPS_SEARCH.rStarsMax;
       const clamped = Math.min(Math.max(n, RANDOM_STAR_MIN), RANDOM_STAR_MAX);
       return Math.round(clamped * 10) / 10;
     })(),
@@ -304,6 +324,7 @@ function MapsPage() {
   const rKeyRaw = mapsSearch.rKey;
   const rPatternRaw = mapsSearch.rPattern;
   const rStars = mapsSearch.rStars;
+  const rStarsMax = mapsSearch.rStarsMax;
   const randomStatus = useMemo(() => parseTriStateCsv(rStatusRaw, RANDOM_STATUS_OPTIONS), [rStatusRaw]);
   const randomKey = useMemo(() => parseTriStateCsv(rKeyRaw, RANDOM_KEY_OPTIONS), [rKeyRaw]);
   const randomPattern = useMemo(() => parseTriStateCsv(rPatternRaw, RANDOM_PATTERN_OPTIONS), [rPatternRaw]);
@@ -317,7 +338,7 @@ function MapsPage() {
     };
     return { includes: expand(randomPattern.includes), excludes: expand(randomPattern.excludes) };
   }, [randomPattern]);
-  const totalRandomActive = triStateActive(randomStatus) + triStateActive(randomKey) + triStateActive(randomPattern) + (rStars > 0 ? 1 : 0);
+  const totalRandomActive = triStateActive(randomStatus) + triStateActive(randomKey) + triStateActive(randomPattern) + (rStars > 0 || rStarsMax > 0 ? 1 : 0);
   const countryName = getCountryName(selectedCountry);
 
   useEffect(() => {
@@ -506,7 +527,9 @@ function MapsPage() {
   // Sliding window of recent player IDs to avoid repeats. Length 2 means three
   // rolls in a row are guaranteed to be three different people (when possible).
   const recentRandomPlayerIdsRef = useRef<number[]>([]);
+  const recentRandomBeatmapIdsRef = useRef<number[]>([]);
   const RECENT_PLAYER_HISTORY = 2;
+  const RECENT_BEATMAP_HISTORY = 5;
 
   // ── Mobile collapsible filter panel (shared across tabs) ────────────────
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -577,28 +600,59 @@ function MapsPage() {
         if (randomPatternCanonical.includes && !patterns.some((p) => randomPatternCanonical.includes!.has(p))) continue;
         if (randomPatternCanonical.excludes && patterns.some((p) => randomPatternCanonical.excludes!.has(p))) continue;
         if (rStars > 0 && (beatmapset.starMax ?? 0) < rStars) continue;
+        if (rStarsMax > 0 && (beatmapset.starMin ?? Number.MAX_VALUE) > rStarsMax) continue;
         pairs.push({ player, beatmapset });
       }
     }
     return pairs;
-  }, [mapsData, randomStatus, randomKey, randomPatternCanonical, rStars]);
+  }, [mapsData, randomStatus, randomKey, randomPatternCanonical, rStars, rStarsMax]);
+
+  // Group eligible pairs by player so sampling can be uniform per-player
+  // rather than per-pair (players with more favourites would otherwise win).
+  const randomPlayerGroups = useMemo(() => {
+    const byId = new Map<number, { player: MapsPlayerFavourites; beatmapsets: MapsFavouriteBeatmapset[] }>();
+    for (const { player, beatmapset } of randomPool) {
+      const g = byId.get(player.id);
+      if (g) g.beatmapsets.push(beatmapset);
+      else byId.set(player.id, { player, beatmapsets: [beatmapset] });
+    }
+    return [...byId.values()];
+  }, [randomPool]);
 
   const reshuffleRandom = useCallback(() => {
-    if (randomPool.length === 0) {
+    if (randomPlayerGroups.length === 0) {
       setRandomPlayer(null);
       setRandomBeatmapset(null);
       return;
     }
-    const recent = new Set(recentRandomPlayerIdsRef.current);
-    const distinctPool = recent.size > 0 ? randomPool.filter((p) => !recent.has(p.player.id)) : randomPool;
-    const pool = distinctPool.length > 0 ? distinctPool : randomPool;
-    const pick = pool[Math.floor(Math.random() * pool.length)];
-    const nextHistory = [...recentRandomPlayerIdsRef.current, pick.player.id];
-    if (nextHistory.length > RECENT_PLAYER_HISTORY) nextHistory.shift();
-    recentRandomPlayerIdsRef.current = nextHistory;
-    setRandomPlayer(pick.player);
-    setRandomBeatmapset(pick.beatmapset);
-  }, [randomPool]);
+    // Step 1: pick a player uniformly, excluding the last few picked when possible.
+    const recentPlayers = new Set(recentRandomPlayerIdsRef.current);
+    const playerCandidates = recentPlayers.size > 0
+      ? randomPlayerGroups.filter((g) => !recentPlayers.has(g.player.id))
+      : randomPlayerGroups;
+    const playerPool = playerCandidates.length > 0 ? playerCandidates : randomPlayerGroups;
+    const group = playerPool[Math.floor(Math.random() * playerPool.length)];
+
+    // Step 2: pick a beatmapset uniformly from that player's eligible favourites,
+    // excluding recently rolled maps when possible.
+    const recentMaps = new Set(recentRandomBeatmapIdsRef.current);
+    const mapCandidates = recentMaps.size > 0
+      ? group.beatmapsets.filter((b) => !recentMaps.has(b.id))
+      : group.beatmapsets;
+    const mapPool = mapCandidates.length > 0 ? mapCandidates : group.beatmapsets;
+    const beatmapset = mapPool[Math.floor(Math.random() * mapPool.length)];
+
+    const nextPlayers = [...recentRandomPlayerIdsRef.current, group.player.id];
+    if (nextPlayers.length > RECENT_PLAYER_HISTORY) nextPlayers.shift();
+    recentRandomPlayerIdsRef.current = nextPlayers;
+
+    const nextMaps = [...recentRandomBeatmapIdsRef.current, beatmapset.id];
+    if (nextMaps.length > RECENT_BEATMAP_HISTORY) nextMaps.shift();
+    recentRandomBeatmapIdsRef.current = nextMaps;
+
+    setRandomPlayer(group.player);
+    setRandomBeatmapset(beatmapset);
+  }, [randomPlayerGroups]);
 
   // Only reshuffle on first entry to the tab or when the underlying data
   // changes (country switch / rebuild). Filter changes never auto-reroll —
@@ -817,10 +871,11 @@ function MapsPage() {
                     ))}
                   </FilterGroup>
 
-                  <FilterGroup label="Min ★">
-                    <StarMinSlider
-                      value={rStars}
-                      onChange={(v) => updateMapsSearch({ rStars: v })}
+                  <FilterGroup label="★ range">
+                    <StarRangeSlider
+                      min={rStars}
+                      max={rStarsMax}
+                      onChange={(nextMin, nextMax) => updateMapsSearch({ rStars: nextMin, rStarsMax: nextMax })}
                     />
                   </FilterGroup>
 
@@ -849,11 +904,10 @@ function MapsPage() {
                   </FilterGroup>
 
                   <FilterGroup label="Min PP">
-                    {([0, 500, 700] as PpFilter[]).map((pp) => (
-                      <FilterPill key={pp} active={ppFilter === pp} onClick={() => updateMapsSearch({ pp, page: 0 })}>
-                        {pp === 0 ? "All" : `${pp}+`}
-                      </FilterPill>
-                    ))}
+                    <MinPpSlider
+                      value={ppFilter}
+                      onChange={(v) => updateMapsSearch({ pp: v, page: 0 })}
+                    />
                   </FilterGroup>
 
                   <FilterGroup label="Sort">
@@ -1135,29 +1189,169 @@ function TriStatePill({
   );
 }
 
-// Range slider for "Min ★" — smooth drag, commits to URL only on release
-// (rounded to 0.1). Left-side "Any" toggle maps to rStars=0 (disabled).
-function StarMinSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  const active = value > 0;
-  const [localValue, setLocalValue] = useState<number>(active ? value : RANDOM_STAR_MIN);
+// Dual-thumb range slider for "★ range". Props use 0 as "unset" for each side:
+// min=0 → thumb at floor, max=0 → thumb at ceiling. Commits on release,
+// rounded to 0.1, clamping thumbs from crossing with a 0.1-star gap.
+function StarRangeSlider({
+  min,
+  max,
+  onChange,
+}: {
+  min: number;
+  max: number;
+  onChange: (nextMin: number, nextMax: number) => void;
+}) {
+  const active = min > 0 || max > 0;
+  const resolvedMin = min > 0 ? min : RANDOM_STAR_MIN;
+  const resolvedMax = max > 0 ? max : RANDOM_STAR_MAX;
+  const [localMin, setLocalMin] = useState<number>(resolvedMin);
+  const [localMax, setLocalMax] = useState<number>(resolvedMax);
+  const [isDragging, setIsDragging] = useState(false);
   const draggingRef = useRef(false);
 
-  // Keep local in sync with the committed prop when the user isn't dragging
-  // (e.g. when URL changes externally, or after commit).
   useEffect(() => {
-    if (!draggingRef.current) setLocalValue(active ? value : RANDOM_STAR_MIN);
+    if (draggingRef.current) return;
+    setLocalMin(min > 0 ? min : RANDOM_STAR_MIN);
+    setLocalMax(max > 0 ? max : RANDOM_STAR_MAX);
+  }, [min, max]);
+
+  const commit = () => {
+    if (!draggingRef.current) return;
+    draggingRef.current = false;
+    setIsDragging(false);
+    const round = (n: number) => Math.round(n * 10) / 10;
+    const nextMin = round(localMin);
+    const nextMax = round(localMax);
+    onChange(
+      nextMin <= RANDOM_STAR_MIN ? 0 : nextMin,
+      nextMax >= RANDOM_STAR_MAX ? 0 : nextMax,
+    );
+  };
+
+  const show = active || isDragging;
+  const span = RANDOM_STAR_MAX - RANDOM_STAR_MIN;
+  const minPct = ((localMin - RANDOM_STAR_MIN) / span) * 100;
+  const maxPct = ((localMax - RANDOM_STAR_MIN) / span) * 100;
+
+  const atFloor = localMin <= RANDOM_STAR_MIN + 1e-6;
+  const atCeiling = localMax >= RANDOM_STAR_MAX - 1e-6;
+  const label = !show
+    ? "—"
+    : atFloor && atCeiling
+      ? "Any"
+      : atCeiling
+        ? `${localMin.toFixed(1)}★+`
+        : atFloor
+          ? `≤${localMax.toFixed(1)}★`
+          : `${localMin.toFixed(1)}-${localMax.toFixed(1)}★`;
+
+  // Put the thumb closer to the centre on top so it's always reachable when
+  // the thumbs meet. Push the min thumb to the front once it's past 50%.
+  const minOnTop = localMin - RANDOM_STAR_MIN > span / 2;
+
+  const thumbClasses =
+    "[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink-light [&::-webkit-slider-thumb]:shadow-[0_0_0_2px_rgba(0,0,0,0.35)] [&::-webkit-slider-thumb]:cursor-grab [&::-webkit-slider-thumb]:pointer-events-auto" +
+    " [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-osu-pink-light [&::-moz-range-thumb]:shadow-[0_0_0_2px_rgba(0,0,0,0.35)] [&::-moz-range-thumb]:cursor-grab [&::-moz-range-thumb]:pointer-events-auto";
+
+  return (
+    <div className="flex items-center gap-2 w-full sm:w-auto">
+      <button
+        type="button"
+        onClick={() => onChange(0, 0)}
+        className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer shrink-0 ${
+          !active
+            ? "bg-osu-pink/20 text-osu-pink-light"
+            : "bg-osu-b4/60 text-osu-f1/70 hover:text-osu-l2 hover:bg-osu-b3"
+        }`}
+      >
+        Any
+      </button>
+      <div className={`relative flex-1 sm:w-28 h-3 transition-opacity ${show ? "" : "opacity-60"}`}>
+        <div
+          className="absolute top-1/2 -translate-y-1/2 inset-x-0 h-1 rounded-full"
+          style={{ background: "var(--color-osu-b3)" }}
+        />
+        {show && (
+          <div
+            className="absolute top-1/2 -translate-y-1/2 h-1 rounded-full"
+            style={{
+              background: "var(--color-osu-pink)",
+              left: `${minPct}%`,
+              right: `${100 - maxPct}%`,
+            }}
+          />
+        )}
+        <input
+          type="range"
+          min={RANDOM_STAR_MIN}
+          max={RANDOM_STAR_MAX}
+          step="any"
+          value={localMin}
+          onChange={(e) => {
+            const v = Math.min(Number(e.target.value), localMax - 0.1);
+            draggingRef.current = true;
+            setIsDragging(true);
+            setLocalMin(Math.max(RANDOM_STAR_MIN, v));
+          }}
+          onMouseUp={commit}
+          onTouchEnd={commit}
+          onKeyUp={commit}
+          aria-label="Minimum star rating"
+          className={`absolute inset-0 w-full h-full appearance-none bg-transparent pointer-events-none ${thumbClasses}`}
+          style={{ zIndex: minOnTop ? 3 : 2 }}
+        />
+        <input
+          type="range"
+          min={RANDOM_STAR_MIN}
+          max={RANDOM_STAR_MAX}
+          step="any"
+          value={localMax}
+          onChange={(e) => {
+            const v = Math.max(Number(e.target.value), localMin + 0.1);
+            draggingRef.current = true;
+            setIsDragging(true);
+            setLocalMax(Math.min(RANDOM_STAR_MAX, v));
+          }}
+          onMouseUp={commit}
+          onTouchEnd={commit}
+          onKeyUp={commit}
+          aria-label="Maximum star rating"
+          className={`absolute inset-0 w-full h-full appearance-none bg-transparent pointer-events-none ${thumbClasses}`}
+          style={{ zIndex: minOnTop ? 2 : 3 }}
+        />
+      </div>
+      <span className="text-[10px] font-semibold tabular-nums text-left text-osu-pink-light shrink-0">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// Single-thumb slider for farmed "Min PP". Commits on release, rounded to
+// FARMED_PP_STEP. 0 = filter disabled (thumb at floor).
+function MinPpSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const active = value > 0;
+  const [localValue, setLocalValue] = useState<number>(active ? value : FARMED_PP_MIN);
+  const [isDragging, setIsDragging] = useState(false);
+  const draggingRef = useRef(false);
+
+  useEffect(() => {
+    if (!draggingRef.current) setLocalValue(active ? value : FARMED_PP_MIN);
   }, [value, active]);
 
   const commit = () => {
     if (!draggingRef.current) return;
     draggingRef.current = false;
-    onChange(Math.round(localValue * 10) / 10);
+    setIsDragging(false);
+    const snapped = Math.round(localValue / FARMED_PP_STEP) * FARMED_PP_STEP;
+    onChange(snapped <= FARMED_PP_MIN ? 0 : snapped);
   };
 
-  const pct = ((localValue - RANDOM_STAR_MIN) / (RANDOM_STAR_MAX - RANDOM_STAR_MIN)) * 100;
+  const show = active || isDragging;
+  const pct = ((localValue - FARMED_PP_MIN) / (FARMED_PP_MAX - FARMED_PP_MIN)) * 100;
   const trackColor = "var(--color-osu-b3)";
   const fillColor = "var(--color-osu-pink)";
-  const background = active
+  const background = show
     ? `linear-gradient(to right, ${fillColor} 0%, ${fillColor} ${pct}%, ${trackColor} ${pct}%, ${trackColor} 100%)`
     : trackColor;
 
@@ -1176,26 +1370,27 @@ function StarMinSlider({ value, onChange }: { value: number; onChange: (v: numbe
       </button>
       <input
         type="range"
-        min={RANDOM_STAR_MIN}
-        max={RANDOM_STAR_MAX}
-        step="any"
+        min={FARMED_PP_MIN}
+        max={FARMED_PP_MAX}
+        step={FARMED_PP_STEP}
         value={localValue}
         onChange={(e) => {
           draggingRef.current = true;
+          setIsDragging(true);
           setLocalValue(Number(e.target.value));
         }}
         onMouseUp={commit}
         onTouchEnd={commit}
         onKeyUp={commit}
-        aria-label="Minimum star rating"
+        aria-label="Minimum PP"
         style={{ background }}
         className={`flex-1 sm:w-28 h-1 appearance-none rounded-full cursor-pointer
           [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink-light [&::-webkit-slider-thumb]:shadow-[0_0_0_2px_rgba(0,0,0,0.35)] [&::-webkit-slider-thumb]:cursor-grab
           [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-osu-pink-light [&::-moz-range-thumb]:shadow-[0_0_0_2px_rgba(0,0,0,0.35)] [&::-moz-range-thumb]:cursor-grab
-          transition-opacity ${active ? "" : "opacity-60"}`}
+          transition-opacity ${show ? "" : "opacity-60"}`}
       />
-      <span className="text-[10px] font-semibold tabular-nums w-10 text-right text-osu-pink-light shrink-0">
-        {active ? `${localValue.toFixed(1)}★+` : "—"}
+      <span className="text-[10px] font-semibold tabular-nums text-left text-osu-pink-light shrink-0">
+        {show ? `${Math.round(localValue)}pp+` : "—"}
       </span>
     </div>
   );
@@ -1612,6 +1807,15 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const rawPreviewUrl = typeof bm.previewUrl === "string" ? bm.previewUrl : "";
   const previewUrl = rawPreviewUrl.startsWith("//") ? `https:${rawPreviewUrl}` : rawPreviewUrl;
 
+  // Some beatmapsets have no background image — the cover URL 404s. Track load
+  // failure so we can swap in a deterministic gradient fallback.
+  const [coverBroken, setCoverBroken] = useState(false);
+  const [coverLoaded, setCoverLoaded] = useState(false);
+  useEffect(() => {
+    setCoverBroken(false);
+    setCoverLoaded(false);
+  }, [bm.id]);
+
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
   }, [volume]);
@@ -1681,7 +1885,18 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   return (
     <div className="rounded-2xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/40 transition-colors overflow-hidden">
       <a href={url} target="_blank" rel="noreferrer" className="block relative">
-        <img src={bm.covers.cover} alt="" className="w-full h-[220px] object-cover" loading="lazy" />
+        <div className="w-full h-[220px] bg-osu-b6">
+          {!coverBroken && (
+            <img
+              src={bm.covers.cover}
+              alt=""
+              className={`w-full h-full object-cover transition-opacity duration-500 ${coverLoaded ? "opacity-100" : "opacity-0"}`}
+              loading="lazy"
+              onLoad={() => setCoverLoaded(true)}
+              onError={() => setCoverBroken(true)}
+            />
+          )}
+        </div>
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
         <span
           className={`absolute top-3 left-3 px-2 py-1 rounded text-[10px] font-bold uppercase ${

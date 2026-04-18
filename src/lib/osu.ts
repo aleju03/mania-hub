@@ -145,14 +145,21 @@ const USER_PROFILE_INSIGHTS_CACHE_VERSION = 3;
 const HOME_PAGE_CACHE_TTL = 60 * 1000;
 const HOME_RECENT_SCORES_CACHE_TTL = 5 * 60 * 1000;
 const HOME_POPOFFS_CACHE_TTL = 10 * 60 * 1000;
-const COUNTRY_POPOFFS_CACHE_TTL = 2 * 60 * 1000;
-const COUNTRY_POPOFFS_CACHE_VERSION = 3;
+const COUNTRY_POPOFFS_CACHE_TTL = 10 * 60 * 1000;
+const COUNTRY_POPOFFS_CACHE_VERSION = 4;
+export type PopoffWindow = "24h" | "3d" | "7d" | "30d";
+const POPOFF_WINDOW_MS: Record<PopoffWindow, number> = {
+  "24h": 24 * 60 * 60 * 1000,
+  "3d": 3 * 24 * 60 * 60 * 1000,
+  "7d": 7 * 24 * 60 * 60 * 1000,
+  "30d": 30 * 24 * 60 * 60 * 1000,
+};
 const HOME_RECENT_SCORES_PLAYER_COUNT = 10;
 const HOME_POPOFFS_PLAYER_COUNT = 10;
 const USER_CACHE_TTL = 2 * 60 * 1000;
 const USER_SCORE_LIST_CACHE_TTL = 60 * 1000;
 const RANK_HISTORY_CONCURRENCY = 20;
-const APPROX_PP_GAINS_CONCURRENCY = 8;
+const APPROX_PP_GAINS_CONCURRENCY = 4;
 const RECENT_SCORES_CONCURRENCY = 10;
 const SNIPES_CACHE_TTL = 6 * 60 * 60 * 1000;
 const SNIPES_LOCK_TTL = 60 * 1000;
@@ -854,7 +861,10 @@ async function buildHomePopoffs(players: HomePreviewPlayer[]): Promise<LeanHomeP
   });
 }
 
-async function buildCountryPopoffs(players: HomePreviewPlayer[]): Promise<Array<{
+async function buildCountryPopoffs(
+  players: HomePreviewPlayer[],
+  window: PopoffWindow,
+): Promise<Array<{
   user: { id: number; username: string; avatar_url: string };
   score: OsuScore;
   pp: number;
@@ -865,7 +875,8 @@ async function buildCountryPopoffs(players: HomePreviewPlayer[]): Promise<Array<
   const topPlayers = players.slice(0, 30);
   if (topPlayers.length === 0) return [];
 
-  const cacheKey = `country-popoffs:v${COUNTRY_POPOFFS_CACHE_VERSION}:${topPlayers.map((player) => player.id).join(",")}`;
+  const windowMs = POPOFF_WINDOW_MS[window];
+  const cacheKey = `country-popoffs:v${COUNTRY_POPOFFS_CACHE_VERSION}:${window}:${topPlayers.map((player) => player.id).join(",")}`;
 
   return fetchWithCacheLock(cacheKey, COUNTRY_POPOFFS_CACHE_TTL, async () => {
     const results = await mapWithConcurrency(
@@ -876,7 +887,7 @@ async function buildCountryPopoffs(players: HomePreviewPlayer[]): Promise<Array<
           const scores = await fetchUserBestScoresWindow(player.id, 100);
           const relevantScores = scores.filter((score) => {
             const age = Date.now() - getTimestampMs(score);
-            return age < 30 * 24 * 60 * 60 * 1000 && score.pp != null && score.pp > 0;
+            return age < windowMs && score.pp != null && score.pp > 0;
           });
           const gainMap = await calculateReplacementPpGainMapForTargets(
             scores,
@@ -960,10 +971,10 @@ export const getHomePopoffs = createServerFn({ method: "GET" })
   });
 
 export const getCountryPopoffs = createServerFn({ method: "GET" })
-  .inputValidator((data: { players: HomePreviewPlayer[] }) => data)
-  .handler(async ({ data }: { data: { players: HomePreviewPlayer[] } }) => {
+  .inputValidator((data: { players: HomePreviewPlayer[]; window?: PopoffWindow }) => data)
+  .handler(async ({ data }: { data: { players: HomePreviewPlayer[]; window?: PopoffWindow } }) => {
     edgeCache(60, 600);
-    return buildCountryPopoffs(data.players);
+    return buildCountryPopoffs(data.players, data.window ?? "30d");
   });
 
 // ── Batch user rank history ────────────────────────────────────────────────
