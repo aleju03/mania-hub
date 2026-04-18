@@ -12,7 +12,7 @@ import { RankingRowSkeleton, ScoreRowSkeleton, Skeleton } from "../components/ui
 import { ManiaRain } from "../components/home/ManiaRain";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse, LeanHomeScore, LeanHomePopoff } from "../lib/types";
-import { useAppStore, useSelectedCountry } from "../store";
+import { useAppStore, useHasHydrated, useSelectedCountry } from "../store";
 
 export const Route = createFileRoute("/")({
   component: HomePage,
@@ -58,6 +58,7 @@ function HomePage() {
   const popoffs = useAppStore((state) => state.homePopoffsByCountry[selectedCountry]) ?? EMPTY_POPOFFS;
   const popoffsFetchedAt = useAppStore((state) => state.homePopoffsFetchedAtByCountry[selectedCountry]) ?? null;
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
+  const hydrated = useHasHydrated();
   const setRankings = useAppStore((state) => state.setRankings);
   const setHomeRecentScores = useAppStore((state) => state.setHomeRecentScores);
   const setHomePopoffs = useAppStore((state) => state.setHomePopoffs);
@@ -307,7 +308,7 @@ function HomePage() {
             <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Recent Top Plays</h2>
             <Link
               to="/top-plays"
-              search={{ range: topPlaysRange }}
+              search={hydrated && topPlaysRange !== "7d" ? { range: topPlaysRange } : undefined}
               className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors"
             >
               view all

@@ -91,6 +91,15 @@ export function DevRateLimitBadge() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   const grouped = useMemo<CallerGroup[]>(() => {
     if (!stats) return [];
     const map = new Map<string, Map<string, number>>();
@@ -126,23 +135,32 @@ export function DevRateLimitBadge() {
     stats.updatedAgoMs != null ? `${Math.round(stats.updatedAgoMs / 1000)}s ago` : "idle";
 
   return (
-    <div className="fixed bottom-3 left-3 z-50">
+    <>
       {open ? (
-        <CallsPanel stats={stats} grouped={grouped} onClose={() => setOpen(false)} />
+        <div
+          onClick={() => setOpen(false)}
+          className="fixed inset-0 z-40 bg-black/50 sm:bg-transparent"
+          aria-hidden
+        />
       ) : null}
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className={`block rounded-md px-2.5 py-1.5 font-mono text-[10px] leading-tight shadow-lg backdrop-blur-sm select-none cursor-pointer text-left transition-colors ${
-          low ? "bg-red-900/80 text-red-100 hover:bg-red-900/90" : "bg-black/70 text-white/80 hover:bg-black/85"
-        } ${open ? "ring-1 ring-white/30" : ""}`}
-        title={`osu! API rate-limit tracker (dev only) · click for call details · last header ${ageText}`}
-      >
-        <div>
-          osu: <span className="text-white">{leftText}</span> left
-        </div>
-        <div className={hot ? "text-yellow-300" : ""}>{perMin}/min</div>
-      </button>
-    </div>
+      <div className="fixed bottom-3 left-3 z-50">
+        {open ? (
+          <CallsPanel stats={stats} grouped={grouped} onClose={() => setOpen(false)} />
+        ) : null}
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className={`block rounded-md px-2.5 py-1.5 font-mono text-[10px] leading-tight shadow-lg backdrop-blur-sm select-none cursor-pointer text-left transition-colors touch-manipulation ${
+            low ? "bg-red-900/80 text-red-100 hover:bg-red-900/90" : "bg-black/70 text-white/80 hover:bg-black/85"
+          } ${open ? "ring-1 ring-white/30" : ""}`}
+          title={`osu! API rate-limit tracker (dev only) · tap for call details · last header ${ageText}`}
+        >
+          <div>
+            osu: <span className="text-white">{leftText}</span> left
+          </div>
+          <div className={hot ? "text-yellow-300" : ""}>{perMin}/min</div>
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -170,16 +188,25 @@ function CallsPanel({
   const now = Date.now();
 
   return (
-    <div className="absolute bottom-full mb-2 left-0 w-[440px] max-h-[70vh] rounded-md bg-black/90 backdrop-blur-sm shadow-xl border border-white/10 font-mono text-[10px] text-white/90 flex flex-col overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 flex-shrink-0">
-        <div className="text-white/70">
+    <div
+      className="
+        fixed left-2 right-2 bottom-[60px] max-h-[75vh]
+        sm:absolute sm:left-0 sm:right-auto sm:bottom-full sm:mb-2 sm:w-[440px] sm:max-h-[70vh]
+        rounded-md bg-black/90 backdrop-blur-sm shadow-xl border border-white/10 font-mono text-[10px] text-white/90 flex flex-col overflow-hidden
+      "
+    >
+      <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 flex-shrink-0 gap-2">
+        <div className="text-white/70 truncate">
           osu! calls{" "}
-          <span className="text-white/40">· {stats.recent.length} tracked · {stats.perMin}/min</span>
+          <span className="text-white/40">
+            · {stats.recent.length} tracked · {stats.perMin}/min
+          </span>
         </div>
         <button
           onClick={onClose}
-          className="text-white/50 hover:text-white cursor-pointer px-1 leading-none"
+          className="text-white/60 hover:text-white cursor-pointer leading-none touch-manipulation w-7 h-7 sm:w-5 sm:h-5 flex items-center justify-center text-base sm:text-sm -mr-1"
           title="close"
+          aria-label="Close"
         >
           ×
         </button>
@@ -199,7 +226,7 @@ function CallsPanel({
                   <div key={g.caller}>
                     <button
                       onClick={() => toggle(g.caller)}
-                      className="w-full flex items-center justify-between px-2 py-1 rounded hover:bg-white/5 cursor-pointer text-left gap-2"
+                      className="w-full flex items-center justify-between px-2 py-1.5 sm:py-1 rounded hover:bg-white/5 cursor-pointer text-left gap-2 touch-manipulation"
                     >
                       <span className="flex items-center gap-1 min-w-0">
                         <span className="text-white/40 w-3 flex-shrink-0">

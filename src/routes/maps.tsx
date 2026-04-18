@@ -33,6 +33,7 @@ type FarmedSort = "players" | "avg-pp" | "max-pp" | "stars";
 type StatusFilter = "all" | "ranked" | "loved" | "graveyard" | "other";
 type PpFilter = number;
 type ModFilter = "all" | "dt" | "ht" | "nm";
+type RandomWeight = "players" | "favourites";
 type MapsSearch = {
   tab: Tab;
   page: number;
@@ -48,6 +49,7 @@ type MapsSearch = {
   rPattern: string;
   rStars: number;
   rStarsMax: number;
+  rWeight: RandomWeight;
 };
 
 const PAGE_SIZE = 24;
@@ -68,6 +70,7 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   rPattern: "",
   rStars: 0,
   rStarsMax: 0,
+  rWeight: "players",
 };
 
 const RANDOM_STATUS_OPTIONS = ["ranked", "loved", "graveyard", "other"] as const;
@@ -291,6 +294,7 @@ export const Route = createFileRoute("/maps")({
       const clamped = Math.min(Math.max(n, RANDOM_STAR_MIN), RANDOM_STAR_MAX);
       return Math.round(clamped * 10) / 10;
     })(),
+    rWeight: search.rWeight === "favourites" ? "favourites" : DEFAULT_MAPS_SEARCH.rWeight,
   }),
   component: MapsPage,
 });
@@ -325,6 +329,7 @@ function MapsPage() {
   const rPatternRaw = mapsSearch.rPattern;
   const rStars = mapsSearch.rStars;
   const rStarsMax = mapsSearch.rStarsMax;
+  const rWeight = mapsSearch.rWeight;
   const randomStatus = useMemo(() => parseTriStateCsv(rStatusRaw, RANDOM_STATUS_OPTIONS), [rStatusRaw]);
   const randomKey = useMemo(() => parseTriStateCsv(rKeyRaw, RANDOM_KEY_OPTIONS), [rKeyRaw]);
   const randomPattern = useMemo(() => parseTriStateCsv(rPatternRaw, RANDOM_PATTERN_OPTIONS), [rPatternRaw]);
@@ -530,6 +535,18 @@ function MapsPage() {
   const recentRandomBeatmapIdsRef = useRef<number[]>([]);
   const RECENT_PLAYER_HISTORY = 2;
   const RECENT_BEATMAP_HISTORY = 5;
+  const [rerollMenuOpen, setRerollMenuOpen] = useState(false);
+  const rerollMenuRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!rerollMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (rerollMenuRef.current && !rerollMenuRef.current.contains(e.target as Node)) {
+        setRerollMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [rerollMenuOpen]);
 
   // ── Mobile collapsible filter panel (shared across tabs) ────────────────
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -625,34 +642,55 @@ function MapsPage() {
       setRandomBeatmapset(null);
       return;
     }
-    // Step 1: pick a player uniformly, excluding the last few picked when possible.
     const recentPlayers = new Set(recentRandomPlayerIdsRef.current);
-    const playerCandidates = recentPlayers.size > 0
-      ? randomPlayerGroups.filter((g) => !recentPlayers.has(g.player.id))
-      : randomPlayerGroups;
-    const playerPool = playerCandidates.length > 0 ? playerCandidates : randomPlayerGroups;
-    const group = playerPool[Math.floor(Math.random() * playerPool.length)];
-
-    // Step 2: pick a beatmapset uniformly from that player's eligible favourites,
-    // excluding recently rolled maps when possible.
     const recentMaps = new Set(recentRandomBeatmapIdsRef.current);
-    const mapCandidates = recentMaps.size > 0
-      ? group.beatmapsets.filter((b) => !recentMaps.has(b.id))
-      : group.beatmapsets;
-    const mapPool = mapCandidates.length > 0 ? mapCandidates : group.beatmapsets;
-    const beatmapset = mapPool[Math.floor(Math.random() * mapPool.length)];
 
-    const nextPlayers = [...recentRandomPlayerIdsRef.current, group.player.id];
+    let pickedPlayer: MapsPlayerFavourites;
+    let pickedBeatmapset: MapsFavouriteBeatmapset;
+
+    if (rWeight === "favourites") {
+      // Weighted by favourite count: sample a (player, beatmapset) pair
+      // directly from the pool so players contribute proportionally to their
+      // number of eligible favourites.
+      const playerFiltered = recentPlayers.size > 0
+        ? randomPool.filter((p) => !recentPlayers.has(p.player.id))
+        : randomPool;
+      const afterRecentPlayers = playerFiltered.length > 0 ? playerFiltered : randomPool;
+      const mapFiltered = recentMaps.size > 0
+        ? afterRecentPlayers.filter((p) => !recentMaps.has(p.beatmapset.id))
+        : afterRecentPlayers;
+      const pool = mapFiltered.length > 0 ? mapFiltered : afterRecentPlayers;
+      const pair = pool[Math.floor(Math.random() * pool.length)];
+      pickedPlayer = pair.player;
+      pickedBeatmapset = pair.beatmapset;
+    } else {
+      // Uniform per player: pick a player first (each player equally likely),
+      // then pick one of their eligible favourites.
+      const playerCandidates = recentPlayers.size > 0
+        ? randomPlayerGroups.filter((g) => !recentPlayers.has(g.player.id))
+        : randomPlayerGroups;
+      const playerPool = playerCandidates.length > 0 ? playerCandidates : randomPlayerGroups;
+      const group = playerPool[Math.floor(Math.random() * playerPool.length)];
+
+      const mapCandidates = recentMaps.size > 0
+        ? group.beatmapsets.filter((b) => !recentMaps.has(b.id))
+        : group.beatmapsets;
+      const mapPool = mapCandidates.length > 0 ? mapCandidates : group.beatmapsets;
+      pickedPlayer = group.player;
+      pickedBeatmapset = mapPool[Math.floor(Math.random() * mapPool.length)];
+    }
+
+    const nextPlayers = [...recentRandomPlayerIdsRef.current, pickedPlayer.id];
     if (nextPlayers.length > RECENT_PLAYER_HISTORY) nextPlayers.shift();
     recentRandomPlayerIdsRef.current = nextPlayers;
 
-    const nextMaps = [...recentRandomBeatmapIdsRef.current, beatmapset.id];
+    const nextMaps = [...recentRandomBeatmapIdsRef.current, pickedBeatmapset.id];
     if (nextMaps.length > RECENT_BEATMAP_HISTORY) nextMaps.shift();
     recentRandomBeatmapIdsRef.current = nextMaps;
 
-    setRandomPlayer(group.player);
-    setRandomBeatmapset(beatmapset);
-  }, [randomPlayerGroups]);
+    setRandomPlayer(pickedPlayer);
+    setRandomBeatmapset(pickedBeatmapset);
+  }, [randomPlayerGroups, randomPool, rWeight]);
 
   // Only reshuffle on first entry to the tab or when the underlying data
   // changes (country switch / rebuild). Filter changes never auto-reroll —
@@ -1056,12 +1094,72 @@ function MapsPage() {
                         </div>
                       </div>
                     </button>
-                    <button
-                      onClick={reshuffleRandom}
-                      className="shrink-0 px-3 py-1.5 rounded-lg bg-osu-pink/20 text-[11px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer border border-osu-pink/30"
-                    >
-                      Reroll
-                    </button>
+                    <div ref={rerollMenuRef} className="shrink-0 relative">
+                      <div className="flex items-stretch rounded-lg bg-osu-pink/20 border border-osu-pink/30 overflow-hidden">
+                        <button
+                          onClick={() => { setRerollMenuOpen(false); reshuffleRandom(); }}
+                          className="px-3 py-1.5 text-[11px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
+                        >
+                          Reroll
+                        </button>
+                        <div className="w-px bg-osu-pink/30" />
+                        <button
+                          onClick={() => setRerollMenuOpen((v) => !v)}
+                          aria-label="Reroll settings"
+                          aria-expanded={rerollMenuOpen}
+                          className="px-1.5 flex items-center text-osu-pink-light hover:bg-osu-pink/30 transition-colors cursor-pointer"
+                        >
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`w-3 h-3 transition-transform ${rerollMenuOpen ? "rotate-180" : ""}`}>
+                            <polyline points="6 9 12 15 18 9" />
+                          </svg>
+                        </button>
+                      </div>
+                      {rerollMenuOpen && (
+                        <div className="absolute right-0 top-full mt-2 w-[280px] rounded-lg bg-osu-b4 border border-osu-b3 shadow-xl p-1 z-20">
+                          <div className="px-3 pt-2 pb-1 text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">
+                            How to pick
+                          </div>
+                          {([
+                            {
+                              id: "players" as const,
+                              label: "Equal chance per player",
+                              desc: "Each top-30 player is equally likely, no matter how many favourites they have.",
+                            },
+                            {
+                              id: "favourites" as const,
+                              label: "Equal chance per map",
+                              desc: "Every favourited map is equally likely. Players with bigger collections show up more often as a result.",
+                            },
+                          ]).map((opt) => {
+                            const active = rWeight === opt.id;
+                            return (
+                              <button
+                                key={opt.id}
+                                onClick={() => {
+                                  updateMapsSearch({ rWeight: opt.id });
+                                  setRerollMenuOpen(false);
+                                }}
+                                className={`w-full text-left p-2.5 rounded-md transition-colors cursor-pointer ${active ? "bg-osu-pink/15" : "hover:bg-osu-b3"}`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className={`text-[12px] font-semibold ${active ? "text-osu-pink-light" : "text-osu-l2"}`}>
+                                    {opt.label}
+                                  </span>
+                                  {active && (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3 text-osu-pink-light shrink-0">
+                                      <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                  )}
+                                </div>
+                                <div className="mt-0.5 text-[10px] text-osu-f1 leading-snug">
+                                  {opt.desc}
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div key={`random-${randomPlayer.id}-${randomBeatmapset.id}`} className="cards-enter">
                     <RandomCard bm={randomBeatmapset} />

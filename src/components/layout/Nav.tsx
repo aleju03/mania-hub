@@ -6,7 +6,7 @@ import { CountrySelector } from "./CountrySelector";
 import { ThemePicker } from "./ThemePicker";
 import { clearDevServerCaches } from "../../lib/api";
 import { searchUsers } from "../../lib/osu";
-import { TOP_PLAYS_RANGE_STORAGE_KEY, useAppStore, useSelectedCountry } from "../../store";
+import { TOP_PLAYS_RANGE_STORAGE_KEY, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
 import { getCountryFlagGradient, getCountryFlagUrl } from "../../lib/country";
 import { useDynamicFavicon } from "../../lib/favicon";
 
@@ -75,6 +75,8 @@ export function Nav() {
   const selectedCountry = useSelectedCountry();
   const devMode = import.meta.env.VITE_DEV_MODE === "1";
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
+  const hydrated = useHasHydrated();
+  const topPlaysSearch = hydrated && topPlaysRange !== "7d" ? { range: topPlaysRange } : undefined;
   const current = links.find((l) => location.pathname.startsWith(l.to === "/" ? "/__home" : l.to)) ||
     (location.pathname === "/" ? links[0] : location.pathname.startsWith("/player") ? null : links[0]);
 
@@ -244,7 +246,7 @@ export function Nav() {
                   else linkRefs.current.delete(l.id);
                 }}
                 to={l.to}
-                search={l.id === "top-plays" && topPlaysRange !== "7d" ? { range: topPlaysRange } : undefined}
+                search={l.id === "top-plays" ? topPlaysSearch : undefined}
                 preload="intent"
                 className={`relative px-2.5 py-[19px] text-[12px] font-semibold capitalize transition-colors duration-[120ms] ${
                   current?.id === l.id
@@ -349,7 +351,7 @@ export function Nav() {
                   <Link
                     key={l.id}
                     to={l.to}
-                    search={l.id === "top-plays" && topPlaysRange !== "7d" ? { range: topPlaysRange } : undefined}
+                    search={l.id === "top-plays" ? topPlaysSearch : undefined}
                     preload="intent"
                     onClick={() => setMenuOpen(false)}
                     className={`flex items-center gap-3 px-5 py-3 text-sm font-medium capitalize transition-colors duration-[120ms] ${
