@@ -360,8 +360,8 @@ function HomePage() {
                   </div>
                   {p.score.mods.length > 0 && (
                     <div className="mt-3 flex items-center justify-center gap-1 flex-wrap max-w-[26ch]">
-                      {p.score.mods.map((acronym) => (
-                        <ModBadge key={acronym} mod={acronym} size={0.8} />
+                      {p.score.mods.map((m) => (
+                        <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} size={0.8} />
                       ))}
                     </div>
                   )}
@@ -410,8 +410,8 @@ function HomePage() {
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {s.mods.length > 0 && (
                       <div className="flex items-center gap-0.5">
-                        {s.mods.map((acronym) => (
-                          <ModBadge key={acronym} mod={acronym} size={0.8} />
+                        {s.mods.map((m) => (
+                          <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} size={0.8} />
                         ))}
                       </div>
                     )}

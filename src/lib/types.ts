@@ -228,7 +228,7 @@ export interface LeanHomeScore {
   displayAcc: number;
   displayRank: string;
   isLazer?: boolean;
-  mods: string[];
+  mods: Array<{ acronym: string; rate?: number }>;
   timestamp: string;
   title: string;
   version: string;

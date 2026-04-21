@@ -643,7 +643,7 @@ export const useAppStore = create<AppState>()(
           if (!value || typeof value !== "object") return false;
           const score = value as Record<string, unknown>;
           if (!Array.isArray(score.mods)) return false;
-          if (score.mods.length > 0 && typeof score.mods[0] !== "string") return false;
+          if (score.mods.length > 0 && typeof (score.mods[0] as Record<string, unknown>)?.acronym !== "string") return false;
           return typeof score.displayRank === "string" && typeof score.title === "string";
         };
         const sanitizeByCountry = <T>(

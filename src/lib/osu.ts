@@ -32,7 +32,7 @@ import {
   getPersistentCached,
   setPersistentCache,
 } from "./api";
-import { calculateApproxPpGainMap, calculateReplacementPpGain, getBoardLaneKey, getModAcronyms, getScoreDisplayValues, getScoreTimestamp, getScoreUrl } from "./score";
+import { calculateApproxPpGainMap, calculateReplacementPpGain, getBoardLaneKey, getModAcronyms, getModDisplayList, getScoreDisplayValues, getScoreTimestamp, getScoreUrl } from "./score";
 import { detectManiaPatterns } from "./mania-patterns";
 import type {
   OsuUser,
@@ -117,7 +117,7 @@ function toLeanHomeScore(
     displayAcc: display.accuracy,
     displayRank: display.rank,
     isLazer: display.isLazer,
-    mods: getModAcronyms(score.mods),
+    mods: getModDisplayList(score.mods),
     timestamp: getScoreTimestamp(score),
     title: score.beatmapset?.title ?? "",
     version: score.beatmap?.version ?? "",
