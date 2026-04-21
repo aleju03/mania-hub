@@ -154,6 +154,20 @@ function getRelevantMods(scores: OsuScore[]): string[] {
   return sorted;
 }
 
+function dedupeScores(scores: OsuScore[]): OsuScore[] {
+  const seen = new Set<string>();
+  const unique: OsuScore[] = [];
+
+  for (const score of scores) {
+    const identity = getScoreIdentity(score);
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    unique.push(score);
+  }
+
+  return unique;
+}
+
 function loadUserCached(username: string): Promise<OsuUser> {
   const now = Date.now();
   const cachedData = userDataCache.get(username);
@@ -356,7 +370,7 @@ function PlayerPage() {
     loadUserRecentCached(user.id)
       .then((recentScores) => {
         if (cancelled) return;
-        setRecent(recentScores);
+        setRecent(dedupeScores(recentScores));
         setRecentHasMore(recentScores.length === INITIAL_SCORE_BATCH_SIZE);
         setRecentError(null);
       })
@@ -434,7 +448,7 @@ function PlayerPage() {
         },
       });
 
-      setRecent((prev) => [...prev, ...nextScores]);
+      setRecent((prev) => dedupeScores([...prev, ...nextScores]));
       setRecentHasMore(nextScores.length === SHOW_MORE_BATCH_SIZE);
     } catch {
       setRecentError("Couldn't load more scores right now.");
@@ -894,14 +908,14 @@ function PlayerPage() {
 function PlayerPageSkeleton() {
   return (
     <div className="flex-1 bg-osu-b5">
-      <div className="relative h-[280px] overflow-hidden bg-osu-b4">
+      <div className="relative h-[220px] sm:h-[280px] overflow-hidden bg-osu-b4">
         <div className="absolute inset-0 bg-gradient-to-b from-osu-d5 to-osu-b5" />
         <div className="absolute bottom-0 left-0 right-0">
-          <div className="max-w-[1200px] mx-auto px-5 pb-5 flex items-end gap-5">
-            <Skeleton className="w-[110px] h-[110px] rounded-2xl translate-y-4 flex-shrink-0" />
+          <div className="max-w-[1200px] mx-auto px-4 sm:px-5 pb-5 flex items-end gap-3 sm:gap-5">
+            <Skeleton className="w-[80px] h-[80px] sm:w-[110px] sm:h-[110px] rounded-2xl translate-y-4 flex-shrink-0" />
             <div className="pb-1 flex-1 min-w-0 space-y-2">
-              <Skeleton className="h-8 w-48" />
-              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-6 sm:h-8 w-36 sm:w-48" />
+              <Skeleton className="h-4 w-24 sm:w-28" />
             </div>
           </div>
         </div>
@@ -1446,23 +1460,46 @@ function PlayerScoreRowSkeleton() {
   );
 }
 
+function ScoreThumbnail({ score }: { score: OsuScore }) {
+  const [failed, setFailed] = useState(false);
+  const coverUrl = score.beatmapset?.covers?.list
+    ?? (score.beatmapset?.id ? `/api/background?beatmapsetId=${score.beatmapset.id}` : null);
+
+  if (coverUrl && !failed) {
+    return (
+      <img
+        src={coverUrl}
+        alt=""
+        className="w-12 h-8 rounded object-cover flex-shrink-0"
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
+  return (
+    <div className="relative w-12 h-8 rounded flex-shrink-0 overflow-hidden border border-osu-b3/50 bg-osu-b4">
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.07),transparent_48%),radial-gradient(circle_at_85%_20%,rgba(255,102,170,0.16),transparent_38%)]" />
+      <div className="absolute inset-0 flex items-center justify-center gap-0.5 opacity-65">
+        {[0, 1, 2, 3].map((lane) => (
+          <span key={lane} className="h-3 w-1 rounded-full bg-osu-f1/70" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
   const keys = score.beatmap?.cs;
   const linkUrl = getScoreUrl(score) ?? getBeatmapUrl(score);
   const canReplay = scoreHasReplay(score);
   const display = getScoreDisplayValues(score);
+  const hasPp = score.pp != null;
 
   const content = (
     <>
       <GradeImg grade={display.rank} size={28} />
-      {score.beatmapset?.covers?.list && (
-        <img
-          src={score.beatmapset.covers.list}
-          alt=""
-          className="w-12 h-8 rounded object-cover flex-shrink-0"
-          loading="lazy"
-        />
-      )}
+      <ScoreThumbnail score={score} />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-white truncate">
@@ -1503,8 +1540,12 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
           <LazerBadge />
         )}
         <span className="text-xs text-osu-l2">{formatAccuracy(display.accuracy)}</span>
-        <span className="text-xs text-osu-f1">{formatNumber(score.max_combo)}x</span>
-        <span className="text-sm font-bold w-16 text-right">{formatPP(score.pp)}</span>
+        {hasPp && (
+          <span className="text-xs text-osu-f1">{formatNumber(score.max_combo)}x</span>
+        )}
+        <span className={`w-16 text-right ${hasPp ? "text-sm font-bold" : "text-xs text-osu-f1"}`}>
+          {hasPp ? formatPP(score.pp) : `${formatNumber(score.max_combo)}x`}
+        </span>
       </div>
     </>
   );
@@ -1534,15 +1575,17 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
           {content}
         </div>
       )}
-      {canReplay && (
-        <Link
-          to="/replay"
-          search={{ scoreId: score.id, beatmapsetId: score.beatmapset?.id }}
-          className="px-2.5 py-1.5 rounded-md bg-osu-pink/15 text-[10px] font-semibold text-osu-pink-light border border-osu-pink/20 hover:bg-osu-pink/25 transition-colors flex-shrink-0 hidden sm:block"
-        >
-          Replay
-        </Link>
-      )}
+      <div className="hidden sm:flex w-[54px] flex-shrink-0 justify-end">
+        {canReplay && (
+          <Link
+            to="/replay"
+            search={{ scoreId: score.id, beatmapsetId: score.beatmapset?.id }}
+            className="px-2.5 py-1.5 rounded-md bg-osu-pink/15 text-[10px] font-semibold text-osu-pink-light border border-osu-pink/20 hover:bg-osu-pink/25 transition-colors"
+          >
+            Replay
+          </Link>
+        )}
+      </div>
     </div>
   );
 }
