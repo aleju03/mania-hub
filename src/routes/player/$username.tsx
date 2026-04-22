@@ -53,7 +53,7 @@ export const Route = createFileRoute("/player/$username")({
   component: PlayerPage,
 });
 
-type KeyFilter = "all" | "4k" | "6k" | "7k";
+type KeyFilter = "all" | string;
 type ModFilterMode = "include" | "exclude";
 type ModFilterState = Record<string, ModFilterMode>;
 type BestSort = "pp" | "newest" | "oldest";
@@ -83,10 +83,15 @@ function getModFilterGroup(key: string): readonly string[] | null {
 
 function matchesKeyFilter(score: OsuScore, keyFilter: KeyFilter): boolean {
   if (keyFilter === "all") return true;
-  if (keyFilter === "4k") return score.beatmap?.cs === 4;
-  if (keyFilter === "6k") return score.beatmap?.cs === 6;
-  if (keyFilter === "7k") return score.beatmap?.cs === 7;
-  return true;
+  return score.beatmap?.cs === Number(keyFilter.replace("k", ""));
+}
+
+function getAvailableKeyModes(scores: OsuScore[]): string[] {
+  const keys = new Set<number>();
+  for (const score of scores) {
+    if (score.beatmap?.cs != null) keys.add(score.beatmap.cs);
+  }
+  return Array.from(keys).sort((a, b) => a - b).map((k) => `${k}k`);
 }
 
 function matchesModFilter(score: OsuScore, modFilter: ModFilterState): boolean {
@@ -504,6 +509,11 @@ function PlayerPage() {
 
   const relevantBestMods = useMemo(() => getRelevantMods(best), [best]);
 
+  const availableKeyModes = useMemo(
+    () => getAvailableKeyModes([...best, ...recent]),
+    [best, recent],
+  );
+
   const cycleBestMod = useCallback((mod: string) => {
     setBestModFilter((prev) => {
       const next = { ...prev };
@@ -871,14 +881,9 @@ function PlayerPage() {
                 </button>
               ))}
             </div>
-            {tab !== "about" && (
+            {tab !== "about" && availableKeyModes.length > 1 && (
               <div className="flex items-center gap-1 rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-1">
-                {([
-                  ["all", "All"],
-                  ["4k", "4K"],
-                  ["6k", "6K"],
-                  ["7k", "7K"],
-                ] as const).map(([value, label]) => (
+                {[["all", "All"] as const, ...availableKeyModes.map((k) => [k, k.toUpperCase()] as const)].map(([value, label]) => (
                   <button
                     key={value}
                     onClick={() => setKeyFilter(value)}
