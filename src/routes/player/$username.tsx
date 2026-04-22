@@ -305,17 +305,23 @@ function PlayerPage() {
   const [bestSort, setBestSort] = useState<BestSort>("pp");
   const [bestWindowLoaded, setBestWindowLoaded] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [modModalOpen, setModModalOpen] = useState(false);
   const [recentHasMore, setRecentHasMore] = useState(true);
   const [loadingMoreRecent, setLoadingMoreRecent] = useState(false);
   const [bestVisibleCount, setBestVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const [recentVisibleCount, setRecentVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
 
   useEffect(() => {
-    if (!avatarOpen) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setAvatarOpen(false);
+    if (!avatarOpen && !modModalOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setAvatarOpen(false);
+        setModModalOpen(false);
+      }
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [avatarOpen]);
+  }, [avatarOpen, modModalOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -606,6 +612,62 @@ function PlayerPage() {
         )}
       </AnimatePresence>
 
+      {/* Mod breakdown modal */}
+      <AnimatePresence>
+        {modModalOpen && profileInsights?.modBreakdown && profileInsights.modBreakdown.length > 0 && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/75 cursor-pointer"
+            onClick={() => setModModalOpen(false)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <motion.div
+              className="bg-osu-b4 border border-osu-b3/20 rounded-2xl p-5 w-[360px] max-h-[80vh] overflow-y-auto shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
+              onClick={(e) => e.stopPropagation()}
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", damping: 30, stiffness: 500 }}
+            >
+              <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">Mod Usage</div>
+              <div className="mt-0.5 text-[11px] text-osu-f1/60">
+                across {profileInsights.sampleSize} top plays
+              </div>
+              <div className="mt-4 space-y-2.5">
+                {(() => {
+                  const noModCount = profileInsights.sampleSize - (profileInsights.mostUsedMod?.total ?? 0);
+                  const entries = [
+                    ...profileInsights.modBreakdown,
+                    ...(noModCount > 0 ? [{ label: "NM", count: noModCount, total: profileInsights.sampleSize }] : []),
+                  ].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+
+                  return entries.map((entry) => {
+                    const pct = Math.round((entry.count / profileInsights.sampleSize) * 100);
+                    return (
+                      <div key={entry.label} className="flex items-center gap-2.5">
+                        <ModBadge mod={entry.label} />
+                        <span className="text-xs font-semibold text-white w-8">{entry.label}</span>
+                        <div className="flex-1 h-1.5 rounded-full bg-osu-b3/40 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-osu-yellow"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className="text-[11px] text-osu-f1 tabular-nums w-14 text-right">
+                          {entry.count} ({pct}%)
+                        </span>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Cover + Avatar */}
       <div className="relative h-[220px] sm:h-[280px] overflow-hidden bg-osu-b4">
         <img
@@ -691,7 +753,10 @@ function PlayerPage() {
                 {/* Row 1: Key Split + Most Used Mod + BPM + PP Range */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <KeySplitCard keySplit={profileInsights.keySplit} sampleSize={profileInsights.sampleSize} />
-                  <div className="bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20">
+                  <div
+                    className={`bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 ${profileInsights.mostUsedMod ? "cursor-pointer hover:border-osu-b3/50 transition-colors" : ""}`}
+                    onClick={profileInsights.mostUsedMod ? () => setModModalOpen(true) : undefined}
+                  >
                     <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Most Used Mod</div>
                     {profileInsights.mostUsedMod ? (
                       <>
@@ -1526,7 +1591,7 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
           </div>
           <span className="text-xs text-osu-l2">{formatAccuracy(display.accuracy)}</span>
           <span className="text-xs text-osu-f1">{formatNumber(score.max_combo)}x</span>
-          <span className="text-sm font-bold ml-auto">{formatPP(score.pp)}</span>
+          {hasPp && <span className="text-sm font-bold ml-auto">{formatPP(score.pp)}</span>}
         </div>
       </div>
       {/* Desktop metadata */}
@@ -1540,12 +1605,10 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
           <LazerBadge />
         )}
         <span className="text-xs text-osu-l2">{formatAccuracy(display.accuracy)}</span>
+        <span className="text-xs text-osu-f1">{formatNumber(score.max_combo)}x</span>
         {hasPp && (
-          <span className="text-xs text-osu-f1">{formatNumber(score.max_combo)}x</span>
+          <span className="text-sm font-bold">{formatPP(score.pp)}</span>
         )}
-        <span className={`w-16 text-right ${hasPp ? "text-sm font-bold" : "text-xs text-osu-f1"}`}>
-          {hasPp ? formatPP(score.pp) : `${formatNumber(score.max_combo)}x`}
-        </span>
       </div>
     </>
   );
@@ -1575,17 +1638,15 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
           {content}
         </div>
       )}
-      <div className="hidden sm:flex w-[54px] flex-shrink-0 justify-end">
-        {canReplay && (
-          <Link
-            to="/replay"
-            search={{ scoreId: score.id, beatmapsetId: score.beatmapset?.id }}
-            className="px-2.5 py-1.5 rounded-md bg-osu-pink/15 text-[10px] font-semibold text-osu-pink-light border border-osu-pink/20 hover:bg-osu-pink/25 transition-colors"
-          >
-            Replay
-          </Link>
-        )}
-      </div>
+      {canReplay && (
+        <Link
+          to="/replay"
+          search={{ scoreId: score.id, beatmapsetId: score.beatmapset?.id }}
+          className="hidden sm:block px-2.5 py-1.5 rounded-md bg-osu-pink/15 text-[10px] font-semibold text-osu-pink-light border border-osu-pink/20 hover:bg-osu-pink/25 transition-colors flex-shrink-0"
+        >
+          Replay
+        </Link>
+      )}
     </div>
   );
 }

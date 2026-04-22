@@ -425,6 +425,7 @@ export interface UserProfileInsights {
   sampleSize: number;
   keySplit: UserProfileKeyBucket[];
   mostUsedMod: UserProfileCountStat | null;
+  modBreakdown: UserProfileCountStat[];
   medianBpm: number | null;
   bpmRange: {
     min: number;
