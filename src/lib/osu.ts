@@ -29,6 +29,7 @@ import {
   deleteExpiredCacheEntriesByPrefix,
   deletePersistentCacheEntries,
   getPersistentCacheEntry,
+  getPersistentCacheEntryAllowStale,
   getPersistentCached,
   setPersistentCache,
 } from "./api";
@@ -1955,370 +1956,361 @@ async function probeCountryBoardLanes(
   return entries;
 }
 
+const snipesBackgroundScanInProgress = new Set<string>();
+
+async function runSnipesScan(
+  country: string,
+  snapshotKey: string,
+  logKey: string,
+): Promise<SnipesResponse> {
+  try {
+    writeSnipesScanStatus(
+      country,
+      { phase: "roster", label: "Fetching country roster", current: 0, total: 1 },
+      { force: true },
+    );
+    const rankings = await getRankings({ data: { type: "performance", page: 1, country } });
+    const players = rankings.ranking
+      .filter((entry) => entry.user.is_active !== false)
+      .slice(0, SNIPES_PLAYER_LIMIT)
+      .map((entry) => ({
+        id: entry.user.id,
+        username: entry.user.username,
+        avatar_url: entry.user.avatar_url,
+      }));
+
+    if (players.length === 0) {
+      clearSnipesScanStatus(country);
+      return { events: [], scannedAt: Date.now() };
+    }
+
+    writeSnipesScanStatus(
+      country,
+      {
+        phase: "recent",
+        label: `Loading recent plays from top ${players.length} players`,
+        current: 0,
+        total: players.length,
+      },
+      { force: true },
+    );
+
+    let recentDone = 0;
+    const recentByPlayer = await mapWithConcurrency(
+      players,
+      SNIPES_SCAN_CONCURRENCY,
+      async (player) => {
+        try {
+          const scores = await fetchUserRecentPlays(player.id);
+          return { player, scores };
+        } catch (error) {
+          console.warn("[osu] failed to fetch recent plays for snipes scan", {
+            playerId: player.id,
+            error: getErrorMessage(error),
+          });
+          return { player, scores: [] as OsuScore[] };
+        } finally {
+          recentDone += 1;
+          writeSnipesScanStatus(country, {
+            phase: "recent",
+            label: `Loading recent plays from top ${players.length} players`,
+            current: recentDone,
+            total: players.length,
+          });
+        }
+      },
+    );
+
+    const candidates: OsuScore[] = [];
+    for (const { scores } of recentByPlayer) {
+      for (const score of scores) {
+        if (!score.passed) continue;
+        if (!score.beatmap || !score.beatmapset || !score.user) continue;
+        if (score.beatmap.mode !== "mania") continue;
+        if (!SNIPES_RANKED_STATUSES.has(score.beatmapset.status)) continue;
+        candidates.push(score);
+      }
+    }
+
+    writeSnipesScanStatus(
+      country,
+      {
+        phase: "compare",
+        label: `Comparing ${candidates.length} recent plays against snapshot`,
+        current: 0,
+        total: candidates.length,
+      },
+      { force: true },
+    );
+
+    const snapshot: CountryBoardSnapshot =
+      (await getPersistentCached<CountryBoardSnapshot>(snapshotKey)) ?? {};
+
+    const newEvents: SnipeEvent[] = [];
+    const seedQueue: { beatmapId: number; bestCandidate: OsuScore }[] = [];
+
+    const candidatesByBeatmap = new Map<number, OsuScore[]>();
+    for (const score of candidates) {
+      const bid = score.beatmap.id;
+      let bucket = candidatesByBeatmap.get(bid);
+      if (!bucket) {
+        bucket = [];
+        candidatesByBeatmap.set(bid, bucket);
+      }
+      bucket.push(score);
+    }
+
+    for (const [bid, scoresForMap] of candidatesByBeatmap.entries()) {
+      scoresForMap.sort((a, b) => {
+        const aMs = new Date(getScoreTimestamp(a)).getTime();
+        const bMs = new Date(getScoreTimestamp(b)).getTime();
+        return aMs - bMs;
+      });
+
+      const existingLanes = snapshot[bid];
+      if (!existingLanes || Object.keys(existingLanes).length === 0) {
+        let bestCandidate = scoresForMap[0];
+        let bestTotal = boardScoreFromScore(bestCandidate)?.totalScore ?? 0;
+        for (const s of scoresForMap.slice(1)) {
+          const t = boardScoreFromScore(s)?.totalScore ?? 0;
+          if (t > bestTotal) {
+            bestCandidate = s;
+            bestTotal = t;
+          }
+        }
+        seedQueue.push({ beatmapId: bid, bestCandidate });
+        continue;
+      }
+
+      let lanesForBid: Record<string, CountryBoardSnapshotEntry> = { ...existingLanes };
+      const anyLaneMeta: BoardMeta | null = (() => {
+        const first = Object.values(existingLanes)[0];
+        return first ? { beatmap: first.beatmap, beatmapset: first.beatmapset } : null;
+      })();
+
+      for (const score of scoresForMap) {
+        const newScore = boardScoreFromScore(score);
+        if (!newScore) continue;
+        const lane = getBoardLaneKey(newScore.mods, newScore.isLazer);
+        const entry = lanesForBid[lane];
+
+        if (!entry) {
+          const meta = boardMetadataFromScore(score) ?? anyLaneMeta;
+          if (!meta) continue;
+          lanesForBid = {
+            ...lanesForBid,
+            [lane]: { ...meta, scores: [newScore], lastTouchedAt: Date.now() },
+          };
+          continue;
+        }
+
+        const oldIdx = entry.scores.findIndex((s) => s.userId === newScore.userId);
+        if (oldIdx >= 0 && entry.scores[oldIdx].totalScore >= newScore.totalScore) {
+          continue;
+        }
+
+        const withoutPlayer =
+          oldIdx >= 0 ? entry.scores.filter((_, i) => i !== oldIdx) : entry.scores;
+        const newSorted = [...withoutPlayer, newScore].sort(
+          (a, b) => b.totalScore - a.totalScore,
+        );
+        const newIdx = newSorted.findIndex((s) => s.userId === newScore.userId);
+
+        const movedUp =
+          oldIdx < 0 ? newIdx < entry.scores.length : newIdx < oldIdx;
+        if (movedUp) {
+          const victim = entry.scores[newIdx];
+          if (victim && victim.userId !== newScore.userId) {
+            newEvents.push(
+              buildSnipeEvent(
+                bid,
+                { beatmap: entry.beatmap, beatmapset: entry.beatmapset },
+                newScore,
+                victim,
+                newIdx + 1,
+              ),
+            );
+          }
+        }
+
+        lanesForBid = {
+          ...lanesForBid,
+          [lane]: { ...entry, scores: newSorted, lastTouchedAt: Date.now() },
+        };
+      }
+
+      snapshot[bid] = lanesForBid;
+    }
+
+    if (seedQueue.length > 0) {
+      seedQueue.sort((a, b) => {
+        const aMs = new Date(getScoreTimestamp(a.bestCandidate)).getTime();
+        const bMs = new Date(getScoreTimestamp(b.bestCandidate)).getTime();
+        return bMs - aMs;
+      });
+      const probeBatch = seedQueue.slice(0, SNIPES_SEED_PROBE_BUDGET);
+      const skipped = seedQueue.slice(SNIPES_SEED_PROBE_BUDGET);
+
+      for (const { beatmapId, bestCandidate } of skipped) {
+        const score = boardScoreFromScore(bestCandidate);
+        const meta = boardMetadataFromScore(bestCandidate);
+        if (score && meta) {
+          const lane = getBoardLaneKey(score.mods, score.isLazer);
+          snapshot[beatmapId] = {
+            [lane]: {
+              ...meta,
+              scores: [score],
+              lastTouchedAt: Date.now(),
+            },
+          };
+        }
+      }
+
+      writeSnipesScanStatus(
+        country,
+        {
+          phase: "seed",
+          label: `Checking ${probeBatch.length} new beatmap${probeBatch.length === 1 ? "" : "s"}`,
+          current: 0,
+          total: probeBatch.length,
+        },
+        { force: true },
+      );
+
+      let seedDone = 0;
+      const seededResults = await mapWithConcurrency(
+        probeBatch,
+        SNIPES_SCAN_CONCURRENCY,
+        async ({ beatmapId, bestCandidate }) => {
+          try {
+            const meta = boardMetadataFromScore(bestCandidate);
+            if (!meta) {
+              return {
+                beatmapId,
+                lanes: null as Record<string, CountryBoardSnapshotEntry> | null,
+              };
+            }
+            const lanes = await probeCountryBoardLanes(beatmapId, players, meta);
+            return { beatmapId, lanes };
+          } catch (error) {
+            console.warn("[osu] snipes seed probe failed", {
+              beatmapId,
+              country,
+              error: getErrorMessage(error),
+            });
+            return {
+              beatmapId,
+              lanes: null as Record<string, CountryBoardSnapshotEntry> | null,
+            };
+          } finally {
+            seedDone += 1;
+            writeSnipesScanStatus(country, {
+              phase: "seed",
+              label: `Checking ${probeBatch.length} new beatmap${probeBatch.length === 1 ? "" : "s"}`,
+              current: seedDone,
+              total: probeBatch.length,
+            });
+          }
+        },
+      );
+
+      const seedCutoff = Date.now() - SNIPES_SEED_MAX_AGE_MS;
+      for (const { beatmapId, lanes } of seededResults) {
+        if (!lanes || Object.keys(lanes).length === 0) continue;
+        snapshot[beatmapId] = lanes;
+
+        for (const entry of Object.values(lanes)) {
+          for (let i = 0; i < entry.scores.length - 1; i++) {
+            const top = entry.scores[i];
+            const next = entry.scores[i + 1];
+            if (top.userId === next.userId) continue;
+            const topMs = new Date(top.endedAt).getTime();
+            const nextMs = new Date(next.endedAt).getTime();
+            if (!Number.isFinite(topMs) || !Number.isFinite(nextMs)) continue;
+            if (topMs <= nextMs) continue;
+            if (topMs < seedCutoff) continue;
+            if (
+              top.priorBestTotalScore != null &&
+              top.priorBestTotalScore > next.totalScore
+            ) {
+              continue;
+            }
+            newEvents.push(
+              buildSnipeEvent(
+                beatmapId,
+                { beatmap: entry.beatmap, beatmapset: entry.beatmapset },
+                top,
+                next,
+                i + 1,
+                true,
+              ),
+            );
+          }
+        }
+      }
+    }
+
+    const existingLog = (await getPersistentCached<SnipeEvent[]>(logKey)) ?? [];
+    const merged = new Map<string, SnipeEvent>();
+    for (const event of existingLog) {
+      merged.set(`${event.beatmap_id}:${event.score_id}`, event);
+    }
+    for (const event of newEvents) {
+      merged.set(`${event.beatmap_id}:${event.score_id}`, event);
+    }
+    const mergedLog = [...merged.values()]
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, SNIPES_LOG_CAP);
+
+    void Promise.allSettled([
+      setPersistentCache(logKey, mergedLog, SNIPES_LOG_TTL),
+      setPersistentCache(snapshotKey, snapshot, SNIPES_SNAPSHOT_TTL),
+    ]);
+
+    clearSnipesScanStatus(country);
+    return { events: mergedLog, scannedAt: Date.now() };
+  } catch (err) {
+    clearSnipesScanStatus(country);
+    throw err;
+  }
+}
+
 export const getCountrySnipes = createServerFn({ method: "GET" })
   .inputValidator((data: { country?: string }) => data)
   .handler(async ({ data }: { data: { country?: string } }): Promise<SnipesResponse> => {
     edgeCache(60, 600);
     const country = normalizeCountryCode(data.country);
-    // v3: response shape changed from SnipeEvent[] to { events, scannedAt }.
-    // Old v2 entries would deserialize as an array without scannedAt and
-    // produce NaN "ago" labels, so the key bump forces a fresh scan.
     const cacheKey = `country-snipes-response:v3:${country}`;
-    // v3: snapshot is now keyed by (beatmap, lane) where lane = speedBucket:client.
-    // Cross-lane snipes aren't meaningful (HT/normal/DT scoring differs; lazer
-    // vs stable use different scoring systems).
     const snapshotKey = `country-board-snapshot:v3:${country}`;
     const logKey = `country-snipes-log:v1:${country}`;
 
-    return fetchWithCacheLock(cacheKey, SNIPES_CACHE_TTL, async () => {
-      try {
-      writeSnipesScanStatus(
-        country,
-        { phase: "roster", label: "Fetching country roster", current: 0, total: 1 },
-        { force: true },
-      );
-      const rankings = await getRankings({ data: { type: "performance", page: 1, country } });
-      const players = rankings.ranking
-        .filter((entry) => entry.user.is_active !== false)
-        .slice(0, SNIPES_PLAYER_LIMIT)
-        .map((entry) => ({
-          id: entry.user.id,
-          username: entry.user.username,
-          avatar_url: entry.user.avatar_url,
-        }));
-
-      if (players.length === 0) {
-        clearSnipesScanStatus(country);
-        return { events: [], scannedAt: Date.now() };
+    // Stale-while-revalidate: return expired data immediately so the client
+    // never blocks on the ~55s scan. A background scan refreshes the cache
+    // for the next request.
+    const cached = await getPersistentCacheEntryAllowStale<SnipesResponse>(cacheKey);
+    if (cached.hit) {
+      if (!cached.isStale) return cached.value;
+      if (!snipesBackgroundScanInProgress.has(country)) {
+        snipesBackgroundScanInProgress.add(country);
+        void fetchWithCacheLock(
+          cacheKey,
+          SNIPES_CACHE_TTL,
+          () => runSnipesScan(country, snapshotKey, logKey),
+          SNIPES_LOCK_TTL,
+        )
+          .catch((err) => console.warn("[snipes] background scan failed:", getErrorMessage(err)))
+          .finally(() => snipesBackgroundScanInProgress.delete(country));
       }
+      return cached.value;
+    }
 
-      writeSnipesScanStatus(
-        country,
-        {
-          phase: "recent",
-          label: `Loading recent plays from top ${players.length} players`,
-          current: 0,
-          total: players.length,
-        },
-        { force: true },
-      );
-
-      let recentDone = 0;
-      const recentByPlayer = await mapWithConcurrency(
-        players,
-        SNIPES_SCAN_CONCURRENCY,
-        async (player) => {
-          try {
-            const scores = await fetchUserRecentPlays(player.id);
-            return { player, scores };
-          } catch (error) {
-            console.warn("[osu] failed to fetch recent plays for snipes scan", {
-              playerId: player.id,
-              error: getErrorMessage(error),
-            });
-            return { player, scores: [] as OsuScore[] };
-          } finally {
-            recentDone += 1;
-            writeSnipesScanStatus(country, {
-              phase: "recent",
-              label: `Loading recent plays from top ${players.length} players`,
-              current: recentDone,
-              total: players.length,
-            });
-          }
-        },
-      );
-
-      const candidates: OsuScore[] = [];
-      for (const { scores } of recentByPlayer) {
-        for (const score of scores) {
-          if (!score.passed) continue;
-          if (!score.beatmap || !score.beatmapset || !score.user) continue;
-          if (score.beatmap.mode !== "mania") continue;
-          if (!SNIPES_RANKED_STATUSES.has(score.beatmapset.status)) continue;
-          candidates.push(score);
-        }
-      }
-
-      writeSnipesScanStatus(
-        country,
-        {
-          phase: "compare",
-          label: `Comparing ${candidates.length} recent plays against snapshot`,
-          current: 0,
-          total: candidates.length,
-        },
-        { force: true },
-      );
-
-      const snapshot: CountryBoardSnapshot =
-        (await getPersistentCached<CountryBoardSnapshot>(snapshotKey)) ?? {};
-
-      const newEvents: SnipeEvent[] = [];
-      const seedQueue: { beatmapId: number; bestCandidate: OsuScore }[] = [];
-
-      // Group all candidates by beatmap. We process every candidate per map
-      // (not just the best) so chained snipes resolve in chrono order: e.g.
-      // Sarou snipes AZ at #3, then a few hours later snipes Aleju at #2 -
-      // we want both events.
-      const candidatesByBeatmap = new Map<number, OsuScore[]>();
-      for (const score of candidates) {
-        const bid = score.beatmap.id;
-        let bucket = candidatesByBeatmap.get(bid);
-        if (!bucket) {
-          bucket = [];
-          candidatesByBeatmap.set(bid, bucket);
-        }
-        bucket.push(score);
-      }
-
-      for (const [bid, scoresForMap] of candidatesByBeatmap.entries()) {
-        scoresForMap.sort((a, b) => {
-          const aMs = new Date(getScoreTimestamp(a)).getTime();
-          const bMs = new Date(getScoreTimestamp(b)).getTime();
-          return aMs - bMs;
-        });
-
-        const existingLanes = snapshot[bid];
-        if (!existingLanes || Object.keys(existingLanes).length === 0) {
-          // No board yet - pick the single highest-scoring candidate to seed
-          // against (the seed probe fans out across all lanes regardless).
-          let bestCandidate = scoresForMap[0];
-          let bestTotal = boardScoreFromScore(bestCandidate)?.totalScore ?? 0;
-          for (const s of scoresForMap.slice(1)) {
-            const t = boardScoreFromScore(s)?.totalScore ?? 0;
-            if (t > bestTotal) {
-              bestCandidate = s;
-              bestTotal = t;
-            }
-          }
-          seedQueue.push({ beatmapId: bid, bestCandidate });
-          continue;
-        }
-
-        // Reuse existing beatmap/beatmapset metadata from any lane for newly
-        // observed lanes that don't have their own entry yet.
-        let lanesForBid: Record<string, CountryBoardSnapshotEntry> = { ...existingLanes };
-        const anyLaneMeta: BoardMeta | null = (() => {
-          const first = Object.values(existingLanes)[0];
-          return first ? { beatmap: first.beatmap, beatmapset: first.beatmapset } : null;
-        })();
-
-        for (const score of scoresForMap) {
-          const newScore = boardScoreFromScore(score);
-          if (!newScore) continue;
-          const lane = getBoardLaneKey(newScore.mods, newScore.isLazer);
-          const entry = lanesForBid[lane];
-
-          if (!entry) {
-            // Beatmap has some lanes but not this one. Add a silent
-            // single-entry baseline (no emit) so subsequent scans have
-            // something to compare against, matching the overflow-skipped
-            // baseline behavior.
-            const meta = boardMetadataFromScore(score) ?? anyLaneMeta;
-            if (!meta) continue;
-            lanesForBid = {
-              ...lanesForBid,
-              [lane]: { ...meta, scores: [newScore], lastTouchedAt: Date.now() },
-            };
-            continue;
-          }
-
-          const oldIdx = entry.scores.findIndex((s) => s.userId === newScore.userId);
-          if (oldIdx >= 0 && entry.scores[oldIdx].totalScore >= newScore.totalScore) {
-            // Not an improvement on the player's own best in this lane; ignore.
-            continue;
-          }
-
-          const withoutPlayer =
-            oldIdx >= 0 ? entry.scores.filter((_, i) => i !== oldIdx) : entry.scores;
-          const newSorted = [...withoutPlayer, newScore].sort(
-            (a, b) => b.totalScore - a.totalScore,
-          );
-          const newIdx = newSorted.findIndex((s) => s.userId === newScore.userId);
-
-          // Did the player jump above someone in this lane? newIdx is their
-          // new rank in the post-play board; entry.scores[newIdx] is whoever
-          // held that exact rank in the pre-play board. That holder is the
-          // only victim we report, even if the player leapfrogged multiple
-          // ranks - we want one snipe per play, naming the highest displaced
-          // player only.
-          const movedUp =
-            oldIdx < 0 ? newIdx < entry.scores.length : newIdx < oldIdx;
-          if (movedUp) {
-            const victim = entry.scores[newIdx];
-            if (victim && victim.userId !== newScore.userId) {
-              newEvents.push(
-                buildSnipeEvent(
-                  bid,
-                  { beatmap: entry.beatmap, beatmapset: entry.beatmapset },
-                  newScore,
-                  victim,
-                  newIdx + 1,
-                ),
-              );
-            }
-          }
-
-          lanesForBid = {
-            ...lanesForBid,
-            [lane]: { ...entry, scores: newSorted, lastTouchedAt: Date.now() },
-          };
-        }
-
-        snapshot[bid] = lanesForBid;
-      }
-
-      if (seedQueue.length > 0) {
-        // Cap seed probes per scan: cold start can otherwise blow up to
-        // hundreds of probes (~15 calls each). Prioritize the most recently
-        // played candidates so the seed reflects active scene.
-        seedQueue.sort((a, b) => {
-          const aMs = new Date(getScoreTimestamp(a.bestCandidate)).getTime();
-          const bMs = new Date(getScoreTimestamp(b.bestCandidate)).getTime();
-          return bMs - aMs;
-        });
-        const probeBatch = seedQueue.slice(0, SNIPES_SEED_PROBE_BUDGET);
-        const skipped = seedQueue.slice(SNIPES_SEED_PROBE_BUDGET);
-
-        // Skipped maps get a single-entry baseline so future scans can still
-        // compare against something. False-positive risk: another roster
-        // player's first observed play on this map will look like a snipe
-        // even if they actually held #1 for years. Bounded to the cold-start
-        // overflow batch.
-        for (const { beatmapId, bestCandidate } of skipped) {
-          const score = boardScoreFromScore(bestCandidate);
-          const meta = boardMetadataFromScore(bestCandidate);
-          if (score && meta) {
-            const lane = getBoardLaneKey(score.mods, score.isLazer);
-            snapshot[beatmapId] = {
-              [lane]: {
-                ...meta,
-                scores: [score],
-                lastTouchedAt: Date.now(),
-              },
-            };
-          }
-        }
-
-        writeSnipesScanStatus(
-          country,
-          {
-            phase: "seed",
-            label: `Checking ${probeBatch.length} new beatmap${probeBatch.length === 1 ? "" : "s"}`,
-            current: 0,
-            total: probeBatch.length,
-          },
-          { force: true },
-        );
-
-        let seedDone = 0;
-        const seededResults = await mapWithConcurrency(
-          probeBatch,
-          SNIPES_SCAN_CONCURRENCY,
-          async ({ beatmapId, bestCandidate }) => {
-            try {
-              const meta = boardMetadataFromScore(bestCandidate);
-              if (!meta) {
-                return {
-                  beatmapId,
-                  lanes: null as Record<string, CountryBoardSnapshotEntry> | null,
-                };
-              }
-              const lanes = await probeCountryBoardLanes(beatmapId, players, meta);
-              return { beatmapId, lanes };
-            } catch (error) {
-              console.warn("[osu] snipes seed probe failed", {
-                beatmapId,
-                country,
-                error: getErrorMessage(error),
-              });
-              return {
-                beatmapId,
-                lanes: null as Record<string, CountryBoardSnapshotEntry> | null,
-              };
-            } finally {
-              seedDone += 1;
-              writeSnipesScanStatus(country, {
-                phase: "seed",
-                label: `Checking ${probeBatch.length} new beatmap${probeBatch.length === 1 ? "" : "s"}`,
-                current: seedDone,
-                total: probeBatch.length,
-              });
-            }
-          },
-        );
-
-        const seedCutoff = Date.now() - SNIPES_SEED_MAX_AGE_MS;
-        for (const { beatmapId, lanes } of seededResults) {
-          if (!lanes || Object.keys(lanes).length === 0) continue;
-          snapshot[beatmapId] = lanes;
-
-          // Heuristic seeded-snipe, applied per lane: within each lane's
-          // ranked board, for each adjacent pair (i, i+1), if rank-i's holder
-          // is more recent than rank-(i+1)'s and within the last 7 days (and
-          // the gap between the two plays is small), treat it as a likely
-          // snipe. Per-lane so cross-bucket / cross-client comparisons never
-          // emit spurious events.
-          for (const entry of Object.values(lanes)) {
-            for (let i = 0; i < entry.scores.length - 1; i++) {
-              const top = entry.scores[i];
-              const next = entry.scores[i + 1];
-              if (top.userId === next.userId) continue;
-              const topMs = new Date(top.endedAt).getTime();
-              const nextMs = new Date(next.endedAt).getTime();
-              if (!Number.isFinite(topMs) || !Number.isFinite(nextMs)) continue;
-              if (topMs <= nextMs) continue;
-              if (topMs < seedCutoff) continue;
-              // Self-improvement guard: if `top` had a prior play in this lane
-              // whose totalScore already exceeded `next`'s current best, they
-              // held a rank above `next` before the current play — the
-              // current play is a self-PB, not a snipe.
-              if (
-                top.priorBestTotalScore != null &&
-                top.priorBestTotalScore > next.totalScore
-              ) {
-                continue;
-              }
-              newEvents.push(
-                buildSnipeEvent(
-                  beatmapId,
-                  { beatmap: entry.beatmap, beatmapset: entry.beatmapset },
-                  top,
-                  next,
-                  i + 1,
-                  true,
-                ),
-              );
-            }
-          }
-        }
-      }
-
-      const existingLog = (await getPersistentCached<SnipeEvent[]>(logKey)) ?? [];
-      const merged = new Map<string, SnipeEvent>();
-      for (const event of existingLog) {
-        merged.set(`${event.beatmap_id}:${event.score_id}`, event);
-      }
-      for (const event of newEvents) {
-        merged.set(`${event.beatmap_id}:${event.score_id}`, event);
-      }
-      const mergedLog = [...merged.values()]
-        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-        .slice(0, SNIPES_LOG_CAP);
-
-      void Promise.allSettled([
-        setPersistentCache(logKey, mergedLog, SNIPES_LOG_TTL),
-        setPersistentCache(snapshotKey, snapshot, SNIPES_SNAPSHOT_TTL),
-      ]);
-
-      clearSnipesScanStatus(country);
-      return { events: mergedLog, scannedAt: Date.now() };
-      } catch (err) {
-        clearSnipesScanStatus(country);
-        throw err;
-      }
-    }, SNIPES_LOCK_TTL);
+    // No data at all (true cold start) - block on the full scan.
+    return fetchWithCacheLock(
+      cacheKey,
+      SNIPES_CACHE_TTL,
+      () => runSnipesScan(country, snapshotKey, logKey),
+      SNIPES_LOCK_TTL,
+    );
   });
 
 export const getSnipesScanStatus = createServerFn({ method: "GET" })
