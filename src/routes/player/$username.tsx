@@ -311,22 +311,24 @@ function PlayerPage() {
   const [bestWindowLoaded, setBestWindowLoaded] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [modModalOpen, setModModalOpen] = useState(false);
+  const [bpmModalOpen, setBpmModalOpen] = useState(false);
   const [recentHasMore, setRecentHasMore] = useState(true);
   const [loadingMoreRecent, setLoadingMoreRecent] = useState(false);
   const [bestVisibleCount, setBestVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const [recentVisibleCount, setRecentVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
 
   useEffect(() => {
-    if (!avatarOpen && !modModalOpen) return;
+    if (!avatarOpen && !modModalOpen && !bpmModalOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setAvatarOpen(false);
         setModModalOpen(false);
+        setBpmModalOpen(false);
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [avatarOpen, modModalOpen]);
+  }, [avatarOpen, modModalOpen, bpmModalOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -678,6 +680,74 @@ function PlayerPage() {
         )}
       </AnimatePresence>
 
+      {/* BPM breakdown modal */}
+      <AnimatePresence>
+        {bpmModalOpen && profileInsights && profileInsights.medianBpm != null && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/75 cursor-pointer p-4"
+            onClick={() => setBpmModalOpen(false)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <motion.div
+              className="bg-osu-b4 border border-osu-b3/20 rounded-2xl p-5 w-[420px] max-w-full max-h-[85vh] overflow-y-auto shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
+              onClick={(e) => e.stopPropagation()}
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: "spring", damping: 30, stiffness: 500 }}
+            >
+              <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">BPM Breakdown</div>
+              <div className="mt-0.5 text-[11px] text-osu-f1/60">
+                across {profileInsights.sampleSize} top plays · adjusted for rate mods
+              </div>
+
+              <div className="mt-4 flex items-baseline gap-2">
+                <span className="text-2xl font-bold text-white">{Math.round(profileInsights.medianBpm)}</span>
+                <span className="text-[11px] text-osu-f1">median BPM</span>
+              </div>
+
+              {profileInsights.bpmByKeyMode && profileInsights.bpmByKeyMode.length > 1 && (
+                <div className="mt-4">
+                  <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Median by Keymode</div>
+                  <div className="space-y-2">
+                    {(() => {
+                      const maxMedian = Math.max(...profileInsights.bpmByKeyMode.map((b) => b.median));
+                      return profileInsights.bpmByKeyMode.map((bucket) => {
+                        const pct = maxMedian > 0 ? (bucket.median / maxMedian) * 100 : 0;
+                        return (
+                          <div key={bucket.keyCount} className="flex items-center gap-2.5">
+                            <span className="text-xs font-semibold text-white w-8 tabular-nums">{bucket.keyCount}K</span>
+                            <div className="flex-1 h-1.5 rounded-full bg-osu-b3/40 overflow-hidden">
+                              <div className="h-full rounded-full bg-osu-yellow" style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className="text-[11px] text-osu-f1 tabular-nums w-20 text-right">
+                              {Math.round(bucket.median)} ({bucket.count})
+                            </span>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+              )}
+
+              {profileInsights.bpmRange?.minScore && profileInsights.bpmRange?.maxScore && (
+                <div className="mt-4">
+                  <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Range</div>
+                  <div className="space-y-2">
+                    <BpmExtremeRow label="Slowest" bpm={profileInsights.bpmRange.min} snapshot={profileInsights.bpmRange.minScore} />
+                    <BpmExtremeRow label="Fastest" bpm={profileInsights.bpmRange.max} snapshot={profileInsights.bpmRange.maxScore} />
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Cover + Avatar */}
       <div className="relative h-[220px] sm:h-[280px] overflow-hidden bg-osu-b4">
         <img
@@ -764,10 +834,13 @@ function PlayerPage() {
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   <KeySplitCard keySplit={profileInsights.keySplit} sampleSize={profileInsights.sampleSize} />
                   <div
-                    className={`bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 ${profileInsights.mostUsedMod ? "cursor-pointer hover:border-osu-b3/50 transition-colors" : ""}`}
+                    className={`bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 group ${profileInsights.mostUsedMod ? "cursor-pointer hover:border-osu-b3/50 transition-colors" : ""}`}
                     onClick={profileInsights.mostUsedMod ? () => setModModalOpen(true) : undefined}
                   >
-                    <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Most Used Mod</div>
+                    <div className="flex items-center justify-between">
+                      <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Most Used Mod</div>
+                      {profileInsights.mostUsedMod && <ExpandHint />}
+                    </div>
                     {profileInsights.mostUsedMod ? (
                       <>
                         <div className="mt-1.5 flex items-center gap-2">
@@ -792,8 +865,14 @@ function PlayerPage() {
                       <div className="mt-1.5 text-sm text-osu-f1">No mod preference</div>
                     )}
                   </div>
-                  <div className="bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20">
-                    <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Median BPM</div>
+                  <div
+                    className={`bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 group ${profileInsights.medianBpm != null ? "cursor-pointer hover:border-osu-b3/50 transition-colors" : ""}`}
+                    onClick={profileInsights.medianBpm != null ? () => setBpmModalOpen(true) : undefined}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Median BPM</div>
+                      {profileInsights.medianBpm != null && <ExpandHint />}
+                    </div>
                     {profileInsights.medianBpm != null ? (
                       <>
                         <div className="mt-1 flex items-baseline gap-2">
@@ -1423,6 +1502,59 @@ function KeySplitCard({ keySplit, sampleSize }: { keySplit: UserProfileInsights[
         <div className="mt-1.5 text-sm text-osu-f1">No key data</div>
       )}
     </div>
+  );
+}
+
+function ExpandHint() {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="text-osu-f1/30 group-hover:text-osu-f1 group-hover:translate-x-0.5 transition-all duration-150 flex-shrink-0"
+      aria-hidden
+    >
+      <path d="M3.5 2 6.5 5 3.5 8" />
+    </svg>
+  );
+}
+
+function BpmExtremeRow({ label, bpm, snapshot }: { label: string; bpm: number; snapshot: InsightScoreSnapshot }) {
+  return (
+    <a
+      href={snapshot.beatmapUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="block relative rounded-lg overflow-hidden border border-osu-b3/20 hover:border-osu-pink/30 transition-colors"
+    >
+      {snapshot.coverUrl && (
+        <img src={snapshot.coverUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/60 to-black/80" />
+      <div className="relative p-2.5 flex items-center gap-2.5">
+        <div className="flex-shrink-0 text-center w-14">
+          <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
+          <div className="text-lg font-bold text-white leading-none tabular-nums mt-0.5">{Math.round(bpm)}</div>
+          <div className="text-[9px] text-osu-f1">BPM</div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-xs font-bold text-white truncate">{snapshot.title}</div>
+          <div className="text-[10px] text-osu-l2 truncate">{snapshot.artist} [{snapshot.version}]</div>
+          {snapshot.mods.length > 0 && (
+            <div className="mt-1 flex items-center gap-1 flex-wrap">
+              {snapshot.mods.map((mod) => (
+                <ModBadge key={mod} mod={mod} size={0.7} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </a>
   );
 }
 

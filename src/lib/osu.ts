@@ -33,7 +33,7 @@ import {
   getPersistentCached,
   setPersistentCache,
 } from "./api";
-import { calculateApproxPpGainMap, calculateReplacementPpGain, getBoardLaneKey, getModAcronyms, getModDisplayList, getScoreDisplayValues, getScoreTimestamp, getScoreUrl } from "./score";
+import { calculateApproxPpGainMap, calculateReplacementPpGain, getBoardLaneKey, getModAcronyms, getModDisplayList, getScoreDisplayValues, getScoreRate, getScoreTimestamp, getScoreUrl } from "./score";
 import { detectManiaPatterns } from "./mania-patterns";
 import type {
   OsuUser,
@@ -146,7 +146,7 @@ const BEATMAP_USER_SCORES_ALL_CACHE_TTL = 10 * 60 * 1000;
 const COUNTRY_BEATMAP_LOOKUP_CONCURRENCY = 10;
 const COUNTRY_BEATMAP_PLAYER_PAGE_LIMIT = 2; // Match the rest of the app's top-100 country player scope.
 const USER_PROFILE_INSIGHTS_CACHE_TTL = 6 * 60 * 60 * 1000;
-const USER_PROFILE_INSIGHTS_CACHE_VERSION = 4;
+const USER_PROFILE_INSIGHTS_CACHE_VERSION = 6;
 const HOME_PAGE_CACHE_TTL = 60 * 1000;
 const HOME_RECENT_SCORES_CACHE_TTL = 5 * 60 * 1000;
 const HOME_POPOFFS_CACHE_TTL = 10 * 60 * 1000;
@@ -487,14 +487,14 @@ function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfileInsigh
   const keyCounts = new Map<number, number>();
   const modCounts = new Map<string, number>();
   let moddedPlayCount = 0;
-  const bpms: number[] = [];
+  const bpmEntries: Array<{ bpm: number; keyCount: number | null; score: OsuScore }> = [];
   const ppValues: number[] = [];
   const datedScores: Array<{ score: OsuScore; ms: number }> = [];
 
   for (const score of scores) {
-    const keyCount = Number(score.beatmap?.cs);
-    if (Number.isFinite(keyCount) && keyCount > 0) {
-      const normalizedKeyCount = Math.round(keyCount);
+    const rawKeyCount = Number(score.beatmap?.cs);
+    const normalizedKeyCount = Number.isFinite(rawKeyCount) && rawKeyCount > 0 ? Math.round(rawKeyCount) : null;
+    if (normalizedKeyCount !== null) {
       keyCounts.set(normalizedKeyCount, (keyCounts.get(normalizedKeyCount) ?? 0) + 1);
     }
 
@@ -508,7 +508,7 @@ function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfileInsigh
 
     const bpm = Number(score.beatmap?.bpm);
     if (Number.isFinite(bpm) && bpm > 0) {
-      bpms.push(bpm);
+      bpmEntries.push({ bpm: bpm * getScoreRate(score.mods), keyCount: normalizedKeyCount, score });
     }
 
     if (score.pp != null && score.pp > 0) {
@@ -527,6 +527,35 @@ function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfileInsigh
   datedScores.sort((a, b) => a.ms - b.ms);
   const sortedPpValues = ppValues.sort((a, b) => b - a);
 
+  const bpms = bpmEntries.map((e) => e.bpm);
+
+  let bpmRange: UserProfileInsights["bpmRange"] = null;
+  if (bpmEntries.length > 0) {
+    let minEntry = bpmEntries[0];
+    let maxEntry = bpmEntries[0];
+    for (const entry of bpmEntries) {
+      if (entry.bpm < minEntry.bpm) minEntry = entry;
+      if (entry.bpm > maxEntry.bpm) maxEntry = entry;
+    }
+    bpmRange = {
+      min: minEntry.bpm,
+      max: maxEntry.bpm,
+      minScore: scoreToSnapshot(minEntry.score),
+      maxScore: scoreToSnapshot(maxEntry.score),
+    };
+  }
+
+  const bpmByKeyMap = new Map<number, number[]>();
+  for (const entry of bpmEntries) {
+    if (entry.keyCount === null) continue;
+    const arr = bpmByKeyMap.get(entry.keyCount);
+    if (arr) arr.push(entry.bpm);
+    else bpmByKeyMap.set(entry.keyCount, [entry.bpm]);
+  }
+  const bpmByKeyMode = [...bpmByKeyMap.entries()]
+    .map(([keyCount, values]) => ({ keyCount, median: getMedian(values) ?? 0, count: values.length }))
+    .sort((a, b) => a.keyCount - b.keyCount);
+
   return {
     sampleSize: scores.length,
     keySplit: sortedKeySplit,
@@ -535,12 +564,8 @@ function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfileInsigh
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .map(([label, count]) => ({ label, count, total: scores.length })),
     medianBpm: getMedian(bpms),
-    bpmRange: bpms.length
-      ? {
-          min: Math.min(...bpms),
-          max: Math.max(...bpms),
-        }
-      : null,
+    bpmRange,
+    bpmByKeyMode,
     newestTopPlay: datedScores.length ? scoreToSnapshot(datedScores[datedScores.length - 1].score) : null,
     oldestTopPlay: datedScores.length ? scoreToSnapshot(datedScores[0].score) : null,
     ppRange: sortedPpValues.length

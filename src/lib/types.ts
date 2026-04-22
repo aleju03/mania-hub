@@ -422,6 +422,12 @@ export interface InsightScoreSnapshot {
   mods: string[];
 }
 
+export interface UserProfileBpmKeyBucket {
+  keyCount: number;
+  median: number;
+  count: number;
+}
+
 export interface UserProfileInsights {
   sampleSize: number;
   keySplit: UserProfileKeyBucket[];
@@ -431,7 +437,10 @@ export interface UserProfileInsights {
   bpmRange: {
     min: number;
     max: number;
+    minScore: InsightScoreSnapshot;
+    maxScore: InsightScoreSnapshot;
   } | null;
+  bpmByKeyMode: UserProfileBpmKeyBucket[];
   newestTopPlay: InsightScoreSnapshot | null;
   oldestTopPlay: InsightScoreSnapshot | null;
   ppRange: {

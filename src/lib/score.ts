@@ -41,6 +41,20 @@ export interface ModDisplay {
   rate?: number;
 }
 
+/** Effective speed multiplier for a score's mods. Returns the lazer custom
+ *  `settings.speed_change` if present, otherwise the mod's default rate, else 1. */
+export function getScoreRate(mods: OsuMod[] | undefined): number {
+  for (const m of mods ?? []) {
+    const acronym = typeof m === "string" ? m : (m as any)?.acronym ?? "";
+    if (!acronym) continue;
+    const defaultRate = MOD_RATE_DEFAULTS[acronym];
+    if (defaultRate === undefined) continue;
+    const rateSetting = typeof m === "object" ? Number((m as any)?.settings?.speed_change) : NaN;
+    return Number.isFinite(rateSetting) && rateSetting > 0 ? rateSetting : defaultRate;
+  }
+  return 1;
+}
+
 /** Like `getModAcronyms`, but preserves lazer custom rate settings so the UI
  *  can render e.g. "0.9x" instead of the plain DC icon. */
 export function getModDisplayList(mods: OsuMod[] | undefined, excludeCl = true): ModDisplay[] {
