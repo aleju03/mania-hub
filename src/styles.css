@@ -32,10 +32,10 @@
 
 @theme inline {
   --font-sans: "Torus", "Inter", "Helvetica Neue", Tahoma, Arial, sans-serif;
-  --color-osu-b6: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 10%); --color-osu-b5: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 15%);
-  --color-osu-b4: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 20%); --color-osu-b3: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 25%);
-  --color-osu-b2: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 30%); --color-osu-b1: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 40%);
-  --color-osu-d6: hsl(var(--theme-hue), calc(20% * var(--theme-sat)), 10%); --color-osu-d5: hsl(var(--theme-hue), calc(20% * var(--theme-sat)), 15%); --color-osu-d4: hsl(var(--theme-hue), calc(20% * var(--theme-sat)), 20%);
+  --color-osu-b6: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(10% - 8% * (1 - var(--theme-sat)))); --color-osu-b5: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(15% - 8% * (1 - var(--theme-sat))));
+  --color-osu-b4: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(20% - 8% * (1 - var(--theme-sat)))); --color-osu-b3: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(25% - 8% * (1 - var(--theme-sat))));
+  --color-osu-b2: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(30% - 8% * (1 - var(--theme-sat)))); --color-osu-b1: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(40% - 8% * (1 - var(--theme-sat))));
+  --color-osu-d6: hsl(var(--theme-hue), calc(20% * var(--theme-sat)), calc(10% - 8% * (1 - var(--theme-sat)))); --color-osu-d5: hsl(var(--theme-hue), calc(20% * var(--theme-sat)), calc(15% - 8% * (1 - var(--theme-sat)))); --color-osu-d4: hsl(var(--theme-hue), calc(20% * var(--theme-sat)), calc(20% - 8% * (1 - var(--theme-sat))));
   --color-osu-c1: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 100%); --color-osu-c2: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 90%);
   --color-osu-l1: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 80%); --color-osu-l2: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 75%);
   --color-osu-f1: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 60%);
