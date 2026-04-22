@@ -80,8 +80,8 @@ export function ModBadge({ mod, size = 1, rate }: { mod: string; size?: number; 
     >
       <div className="absolute inset-0" style={mask("/images/badges/mods/mod-icon.svg")} />
       <span
-        className="relative text-[8px] font-bold leading-none"
-        style={{ color: `color-mix(in srgb-linear, black, ${bg} 10%)` }}
+        className="relative font-bold leading-none"
+        style={{ fontSize: `${12 * size}px`, color: `color-mix(in srgb-linear, black, ${bg} 10%)` }}
       >
         {mod}
       </span>
