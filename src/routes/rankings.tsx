@@ -560,7 +560,7 @@ function MiniSparkline({ data }: { data: number[] }) {
 
   const improved = slice[slice.length - 1] < slice[0];
   const same = slice[slice.length - 1] === slice[0];
-  const color = same ? "hsl(var(--theme-hue),10%,50%)" : improved ? "hsl(100,60%,50%)" : "hsl(0,70%,55%)";
+  const color = same ? "hsl(var(--theme-hue),calc(10% * var(--theme-sat)),50%)" : improved ? "hsl(100,60%,50%)" : "hsl(0,70%,55%)";
 
   return (
     <svg width={w} height={h} className="inline-block align-middle flex-shrink-0">

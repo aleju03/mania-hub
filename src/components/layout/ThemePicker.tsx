@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { DEFAULT_THEME_HUE, useAppStore, useHasHydrated } from "../../store";
+import { DEFAULT_THEME_HUE, DEFAULT_THEME_SAT, useAppStore, useHasHydrated } from "../../store";
 
 interface ThemePickerProps {
   variant?: "desktop" | "mobile";
@@ -24,36 +24,54 @@ const PRESET_HUES: ReadonlyArray<{ hue: number; name: string }> = [
 const RAINBOW_STRIP_GRADIENT =
   "linear-gradient(to right, hsl(0,95%,55%), hsl(30,95%,55%), hsl(60,95%,50%), hsl(120,70%,45%), hsl(170,75%,45%), hsl(200,85%,50%), hsl(240,90%,60%), hsl(280,80%,55%), hsl(320,90%,55%), hsl(360,95%,55%))";
 
-function HueStrip({ hue, onChange }: { hue: number; onChange: (hue: number) => void }) {
-  const stripRef = useRef<HTMLDivElement>(null);
+const THUMB_HALF = 8;
+
+function ThemeStrip({
+  value,
+  min,
+  max,
+  ariaLabel,
+  gradient,
+  thumbColor,
+  onChange,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  ariaLabel: string;
+  gradient: string;
+  thumbColor: string;
+  onChange: (value: number) => void;
+}) {
+  const hitRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
 
   const pickFromClientX = useCallback(
     (clientX: number) => {
-      const el = stripRef.current;
+      const el = hitRef.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
-      if (rect.width <= 0) return;
-      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      onChange(Math.round(ratio * 360));
+      const trackLeft = rect.left + THUMB_HALF;
+      const trackWidth = rect.width - THUMB_HALF * 2;
+      if (trackWidth <= 0) return;
+      const ratio = Math.max(0, Math.min(1, (clientX - trackLeft) / trackWidth));
+      onChange(Math.round(min + ratio * (max - min)));
     },
-    [onChange],
+    [onChange, min, max],
   );
+
+  const pct = ((value - min) / (max - min)) * 100;
 
   return (
     <div
-      ref={stripRef}
+      ref={hitRef}
       role="slider"
       tabIndex={0}
-      aria-label="Custom theme hue"
-      aria-valuemin={0}
-      aria-valuemax={360}
-      aria-valuenow={Math.round(hue)}
-      className="relative h-3 rounded-full cursor-pointer touch-none select-none"
-      style={{
-        background: RAINBOW_STRIP_GRADIENT,
-        boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.4)",
-      }}
+      aria-label={ariaLabel}
+      aria-valuemin={min}
+      aria-valuemax={max}
+      aria-valuenow={Math.round(value)}
+      className="relative h-5 cursor-pointer touch-none select-none flex items-center"
       onPointerDown={(event) => {
         try {
           event.currentTarget.setPointerCapture(event.pointerId);
@@ -82,22 +100,24 @@ function HueStrip({ hue, onChange }: { hue: number; onChange: (hue: number) => v
       onKeyDown={(event) => {
         if (event.key === "ArrowLeft") {
           event.preventDefault();
-          onChange((Math.round(hue) - 1 + 360) % 360);
+          onChange(Math.max(min, Math.round(value) - 1));
         } else if (event.key === "ArrowRight") {
           event.preventDefault();
-          onChange((Math.round(hue) + 1) % 360);
+          onChange(Math.min(max, Math.round(value) + 1));
         }
       }}
     >
-      <div
-        className="absolute top-1/2 w-4 h-4 rounded-full -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-        style={{
-          left: `${(hue / 360) * 100}%`,
-          background: `hsl(${hue}, 100%, 65%)`,
-          boxShadow:
-            "0 0 0 2px rgba(255, 255, 255, 0.95), 0 0 0 3px rgba(0, 0, 0, 0.75), 0 1px 3px rgba(0, 0, 0, 0.5)",
-        }}
-      />
+      <div className="w-full h-3 rounded-full relative" style={{ background: gradient, boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.4)" }}>
+        <div
+          className="absolute top-1/2 w-4 h-4 rounded-full -translate-x-1/2 -translate-y-1/2 cursor-pointer"
+          style={{
+            left: `${pct}%`,
+            background: thumbColor,
+            boxShadow:
+              "0 0 0 2px rgba(255, 255, 255, 0.95), 0 0 0 3px rgba(0, 0, 0, 0.75), 0 1px 3px rgba(0, 0, 0, 0.5)",
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -126,10 +146,13 @@ function PaletteIcon({ className }: { className?: string }) {
 export function ThemePicker({ variant = "desktop" }: ThemePickerProps) {
   const [open, setOpen] = useState(false);
   const hue = useAppStore((state) => state.themeHue);
+  const saturation = useAppStore((state) => state.themeSaturation);
   const setThemeHue = useAppStore((state) => state.setThemeHue);
+  const setThemeSaturation = useAppStore((state) => state.setThemeSaturation);
   const resetThemeHue = useAppStore((state) => state.resetThemeHue);
   const hydrated = useHasHydrated();
   const displayHue = hydrated ? hue : DEFAULT_THEME_HUE;
+  const displaySat = hydrated ? saturation : DEFAULT_THEME_SAT;
 
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -155,7 +178,7 @@ export function ThemePicker({ variant = "desktop" }: ThemePickerProps) {
     };
   }, [open]);
 
-  const isDefault = displayHue === DEFAULT_THEME_HUE;
+  const isDefault = displayHue === DEFAULT_THEME_HUE && displaySat === DEFAULT_THEME_SAT;
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -218,7 +241,7 @@ export function ThemePicker({ variant = "desktop" }: ThemePickerProps) {
                       isActive ? "scale-110" : ""
                     }`}
                     style={{
-                      background: `hsl(${presetHue}, 100%, 65%)`,
+                      background: `hsl(${presetHue}, ${displaySat}%, 65%)`,
                       boxShadow: isActive
                         ? "0 0 0 2px rgba(255, 255, 255, 0.95), 0 0 0 4px rgba(0, 0, 0, 0.75)"
                         : "0 1px 3px rgba(0, 0, 0, 0.4)",
@@ -242,8 +265,25 @@ export function ThemePicker({ variant = "desktop" }: ThemePickerProps) {
                 );
               })}
             </div>
-            <div className="mt-4 px-1">
-              <HueStrip hue={displayHue} onChange={setThemeHue} />
+            <div className="mt-4 px-1 flex flex-col gap-3">
+              <ThemeStrip
+                value={displayHue}
+                min={0}
+                max={359}
+                ariaLabel="Theme hue"
+                gradient={RAINBOW_STRIP_GRADIENT}
+                thumbColor={`hsl(${displayHue}, 100%, 65%)`}
+                onChange={setThemeHue}
+              />
+              <ThemeStrip
+                value={displaySat}
+                min={0}
+                max={100}
+                ariaLabel="Theme saturation"
+                gradient={`linear-gradient(to right, hsl(${displayHue}, 0%, 45%), hsl(${displayHue}, 100%, 65%))`}
+                thumbColor={`hsl(${displayHue}, ${displaySat}%, ${45 + (displaySat / 100) * 20}%)`}
+                onChange={setThemeSaturation}
+              />
             </div>
           </motion.div>
         ) : null}

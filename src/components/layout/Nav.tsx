@@ -174,17 +174,18 @@ export function Nav() {
           src="/images/layout/nav2-background-hue0.png"
           alt=""
           className="absolute inset-0 w-full h-full object-cover opacity-50"
+          style={{ filter: `saturate(var(--theme-sat))` }}
         />
         <div
           className="absolute inset-0 pointer-events-none"
-          style={{ backgroundColor: "hsl(calc(var(--theme-hue) * 1deg) 55% 22% / 0.35)" }}
+          style={{ backgroundColor: "hsl(calc(var(--theme-hue) * 1deg) calc(55% * var(--theme-sat)) 22% / 0.35)" }}
         />
       </div>
       <div className="absolute inset-0 bg-[#111]/60" />
       <div
         className="absolute inset-0 pointer-events-none mix-blend-hue"
         style={{
-          backgroundColor: "hsl(calc(var(--theme-hue) * 1deg) 100% 50%)",
+          backgroundColor: "hsl(calc(var(--theme-hue) * 1deg) calc(100% * var(--theme-sat)) 50%)",
           opacity: "var(--theme-hue-mix, 0)",
         }}
       />

@@ -225,7 +225,7 @@ function HomePage() {
           src="/images/layout/nav2-background-hue0.png"
           alt=""
           className="absolute inset-0 w-full h-full object-cover opacity-15"
-          style={{ filter: "hue-rotate(calc(var(--theme-hue) * 1deg)) saturate(0.6)", transform: "scale(2.5)", transformOrigin: "center" }}
+          style={{ filter: "hue-rotate(calc(var(--theme-hue) * 1deg)) saturate(calc(0.6 * var(--theme-sat)))", transform: "scale(2.5)", transformOrigin: "center" }}
         />
         <ManiaRain />
       </div>

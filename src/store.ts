@@ -37,6 +37,8 @@ export const DEFAULT_THEME_HUE = 333;
 // write fails. Keep this key in sync with the inline bootstrap script in
 // `src/routes/__root.tsx` that applies the hue before React hydrates.
 export const THEME_HUE_STORAGE_KEY = "mania-hub-theme-v1";
+export const THEME_SAT_STORAGE_KEY = "mania-hub-theme-sat-v1";
+export const DEFAULT_THEME_SAT = 100;
 // Same defensive split as the theme key, plus: writes to the main blob are
 // debounced 250ms and only flushed on `pagehide`/`visibilitychange`. Mobile
 // browsers don't reliably fire those on fast reload, so accent writes that
@@ -52,6 +54,43 @@ function applyThemeHueToDom(hue: number): void {
     document.documentElement.style.removeProperty("--theme-hue-mix");
   } else {
     document.documentElement.style.setProperty("--theme-hue-mix", "1");
+  }
+}
+
+function applyThemeSatToDom(sat: number): void {
+  if (typeof document === "undefined") return;
+  document.documentElement.style.setProperty("--theme-sat", String(sat / 100));
+}
+
+function clampThemeSat(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return DEFAULT_THEME_SAT;
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function readThemeSatFromStorage(): number | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(THEME_SAT_STORAGE_KEY);
+    if (raw == null) return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return null;
+    return clampThemeSat(n);
+  } catch {
+    return null;
+  }
+}
+
+function writeThemeSatToStorage(sat: number): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (sat === DEFAULT_THEME_SAT) {
+      localStorage.removeItem(THEME_SAT_STORAGE_KEY);
+    } else {
+      localStorage.setItem(THEME_SAT_STORAGE_KEY, String(sat));
+    }
+  } catch (error) {
+    warnStorageIssue(`write "${THEME_SAT_STORAGE_KEY}"`, error);
   }
 }
 
@@ -154,6 +193,7 @@ type CountryRecord<T> = Record<string, T>;
 interface AppState {
   selectedCountry: string;
   themeHue: number;
+  themeSaturation: number;
   avatarAccents: Record<string, CachedAvatarAccent>;
   rankingsByCountry: CountryRecord<RankingsResponse>;
   rankingsFetchedAtByCountry: CountryRecord<number>;
@@ -179,6 +219,7 @@ interface AppState {
   pollIndexByCountry: CountryRecord<number>;
   setSelectedCountry: (country: string) => void;
   setThemeHue: (hue: number) => void;
+  setThemeSaturation: (sat: number) => void;
   resetThemeHue: () => void;
   setAvatarAccents: (accents: Record<string, string | null>, fetchedAt?: number) => void;
   setRankings: (country: string, rankings: RankingsResponse) => void;
@@ -321,6 +362,7 @@ const initialClientCountry = readCountryCookieClient();
 // before persist hydration runs its async merge. Mirrors the inline bootstrap
 // script so client rendering stays consistent from the first paint.
 const initialClientThemeHue = readThemeHueFromStorage();
+const initialClientThemeSat = readThemeSatFromStorage();
 // Same idea for accents: seed the store before persist hydrates so the very
 // first React render after JS executes already has colors. Without this, the
 // initial render uses an empty map and the username flashes white before the
@@ -332,6 +374,7 @@ export const useAppStore = create<AppState>()(
     (set) => ({
       selectedCountry: initialClientCountry ?? DEFAULT_COUNTRY_CODE,
       themeHue: initialClientThemeHue ?? DEFAULT_THEME_HUE,
+      themeSaturation: initialClientThemeSat ?? DEFAULT_THEME_SAT,
       avatarAccents: initialClientAvatarAccents,
       rankingsByCountry: {},
       rankingsFetchedAtByCountry: {},
@@ -366,10 +409,18 @@ export const useAppStore = create<AppState>()(
         writeThemeHueToStorage(clamped);
         set({ themeHue: clamped });
       },
+      setThemeSaturation: (sat) => {
+        const clamped = clampThemeSat(sat);
+        applyThemeSatToDom(clamped);
+        writeThemeSatToStorage(clamped);
+        set({ themeSaturation: clamped });
+      },
       resetThemeHue: () => {
         applyThemeHueToDom(DEFAULT_THEME_HUE);
         removeThemeHueFromStorage();
-        set({ themeHue: DEFAULT_THEME_HUE });
+        applyThemeSatToDom(DEFAULT_THEME_SAT);
+        writeThemeSatToStorage(DEFAULT_THEME_SAT);
+        set({ themeHue: DEFAULT_THEME_HUE, themeSaturation: DEFAULT_THEME_SAT });
       },
       setAvatarAccents: (accents, fetchedAt = Date.now()) =>
         set((state) => {

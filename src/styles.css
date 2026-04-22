@@ -28,21 +28,21 @@
 }
 .mode-icon { font-family: "osu-extra"; -webkit-font-smoothing: antialiased; }
 
-:root { --theme-hue: 333; }
+:root { --theme-hue: 333; --theme-sat: 1; }
 
 @theme inline {
   --font-sans: "Torus", "Inter", "Helvetica Neue", Tahoma, Arial, sans-serif;
-  --color-osu-b6: hsl(var(--theme-hue), 10%, 10%); --color-osu-b5: hsl(var(--theme-hue), 10%, 15%);
-  --color-osu-b4: hsl(var(--theme-hue), 10%, 20%); --color-osu-b3: hsl(var(--theme-hue), 10%, 25%);
-  --color-osu-b2: hsl(var(--theme-hue), 10%, 30%); --color-osu-b1: hsl(var(--theme-hue), 10%, 40%);
-  --color-osu-d6: hsl(var(--theme-hue), 20%, 10%); --color-osu-d5: hsl(var(--theme-hue), 20%, 15%); --color-osu-d4: hsl(var(--theme-hue), 20%, 20%);
-  --color-osu-c1: hsl(var(--theme-hue), 40%, 100%); --color-osu-c2: hsl(var(--theme-hue), 40%, 90%);
-  --color-osu-l1: hsl(var(--theme-hue), 40%, 80%); --color-osu-l2: hsl(var(--theme-hue), 40%, 75%);
-  --color-osu-f1: hsl(var(--theme-hue), 10%, 60%);
-  --color-osu-h1: hsl(var(--theme-hue), 100%, 70%); --color-osu-h2: hsl(var(--theme-hue), 50%, 45%);
-  --color-osu-pink: hsl(var(--theme-hue), 100%, 70%);
-  --color-osu-pink-light: hsl(var(--theme-hue), 100%, 80%);
-  --color-osu-pink-dark: hsl(var(--theme-hue), 55%, 56%);
+  --color-osu-b6: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 10%); --color-osu-b5: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 15%);
+  --color-osu-b4: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 20%); --color-osu-b3: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 25%);
+  --color-osu-b2: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 30%); --color-osu-b1: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 40%);
+  --color-osu-d6: hsl(var(--theme-hue), calc(20% * var(--theme-sat)), 10%); --color-osu-d5: hsl(var(--theme-hue), calc(20% * var(--theme-sat)), 15%); --color-osu-d4: hsl(var(--theme-hue), calc(20% * var(--theme-sat)), 20%);
+  --color-osu-c1: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 100%); --color-osu-c2: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 90%);
+  --color-osu-l1: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 80%); --color-osu-l2: hsl(var(--theme-hue), calc(40% * var(--theme-sat)), 75%);
+  --color-osu-f1: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), 60%);
+  --color-osu-h1: hsl(var(--theme-hue), calc(100% * var(--theme-sat)), 70%); --color-osu-h2: hsl(var(--theme-hue), calc(50% * var(--theme-sat)), 45%);
+  --color-osu-pink: hsl(var(--theme-hue), calc(100% * var(--theme-sat)), 70%);
+  --color-osu-pink-light: hsl(var(--theme-hue), calc(100% * var(--theme-sat)), 80%);
+  --color-osu-pink-dark: hsl(var(--theme-hue), calc(55% * var(--theme-sat)), 56%);
   --color-osu-yellow: #ffcc22; --color-osu-yellow-light: #ffdd55;
   --color-osu-blue: #66ccff; --color-osu-blue-dark: #44aadd; --color-osu-blue-darker: #2299bb;
   --color-osu-green: #88b300; --color-osu-green-light: #b3d944;
