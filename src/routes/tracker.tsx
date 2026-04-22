@@ -28,8 +28,17 @@ import { TrackerRowSkeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import { TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useSelectedCountry } from "../store";
 import type { OsuScore } from "../lib/types";
+import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/tracker")({
+  head: () =>
+    pageSeo({
+      title: "Live score tracker",
+      description:
+        "Live osu!mania score feed cycling through tracked players in your country. See new scores as they land.",
+      path: "/tracker",
+      noindex: true,
+    }),
   component: ScoresPage,
 });
 

@@ -33,6 +33,7 @@ import type {
   MapsPlayerFavourites,
 } from "../lib/types";
 import { useAppStore, useSelectedCountry } from "../store";
+import { pageSeo } from "../lib/seo";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -295,6 +296,13 @@ function hasValidMapsDataShape(data: CountryMapsData | null): data is CountryMap
 // ── Route ──────────────────────────────────────────────────────────────────
 
 export const Route = createFileRoute("/maps")({
+  head: () =>
+    pageSeo({
+      title: "Beatmaps played by your country",
+      description:
+        "Explore osu!mania beatmaps farmed, played, and favourited by top players in your country. Filter by key count, star rating, PP, mods, and ranked status.",
+      path: "/maps",
+    }),
   search: {
     middlewares: [stripSearchParams(DEFAULT_MAPS_SEARCH)],
   },

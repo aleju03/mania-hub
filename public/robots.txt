@@ -1,9 +1,16 @@
 # https://www.robotstxt.org/robotstxt.html
 User-agent: *
+Allow: /api/og
+Allow: /api/sitemap
 Disallow: /api/
+Disallow: /admin/
 Disallow: /tracker
 Disallow: /replay
 Disallow: /player/
 Disallow: /snipes
 Allow: /
-Crawl-delay: 10
+Crawl-delay: 1
+
+# Set VITE_SITE_URL in your deploy env so SEO tags emit absolute URLs,
+# and replace the domain below with your production URL.
+Sitemap: https://mania-hub.vercel.app/api/sitemap

@@ -18,6 +18,8 @@ import { Route as MapsRouteImport } from './routes/maps'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
+import { Route as ApiSitemapRouteImport } from './routes/api/sitemap'
+import { Route as ApiOgRouteImport } from './routes/api/og'
 import { Route as ApiFaviconRouteImport } from './routes/api/favicon'
 import { Route as ApiBackgroundRouteImport } from './routes/api/background'
 import { Route as ApiAudioRouteImport } from './routes/api/audio'
@@ -68,6 +70,16 @@ const ApiSyncRoute = ApiSyncRouteImport.update({
   path: '/api/sync',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSitemapRoute = ApiSitemapRouteImport.update({
+  id: '/api/sitemap',
+  path: '/api/sitemap',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiOgRoute = ApiOgRouteImport.update({
+  id: '/api/og',
+  path: '/api/og',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiFaviconRoute = ApiFaviconRouteImport.update({
   id: '/api/favicon',
   path: '/api/favicon',
@@ -101,6 +113,8 @@ export interface FileRoutesByFullPath {
   '/api/audio': typeof ApiAudioRoute
   '/api/background': typeof ApiBackgroundRoute
   '/api/favicon': typeof ApiFaviconRoute
+  '/api/og': typeof ApiOgRoute
+  '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
   '/player/$username': typeof PlayerUsernameRoute
 }
@@ -116,6 +130,8 @@ export interface FileRoutesByTo {
   '/api/audio': typeof ApiAudioRoute
   '/api/background': typeof ApiBackgroundRoute
   '/api/favicon': typeof ApiFaviconRoute
+  '/api/og': typeof ApiOgRoute
+  '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
   '/player/$username': typeof PlayerUsernameRoute
 }
@@ -132,6 +148,8 @@ export interface FileRoutesById {
   '/api/audio': typeof ApiAudioRoute
   '/api/background': typeof ApiBackgroundRoute
   '/api/favicon': typeof ApiFaviconRoute
+  '/api/og': typeof ApiOgRoute
+  '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
   '/player/$username': typeof PlayerUsernameRoute
 }
@@ -149,6 +167,8 @@ export interface FileRouteTypes {
     | '/api/audio'
     | '/api/background'
     | '/api/favicon'
+    | '/api/og'
+    | '/api/sitemap'
     | '/api/sync'
     | '/player/$username'
   fileRoutesByTo: FileRoutesByTo
@@ -164,6 +184,8 @@ export interface FileRouteTypes {
     | '/api/audio'
     | '/api/background'
     | '/api/favicon'
+    | '/api/og'
+    | '/api/sitemap'
     | '/api/sync'
     | '/player/$username'
   id:
@@ -179,6 +201,8 @@ export interface FileRouteTypes {
     | '/api/audio'
     | '/api/background'
     | '/api/favicon'
+    | '/api/og'
+    | '/api/sitemap'
     | '/api/sync'
     | '/player/$username'
   fileRoutesById: FileRoutesById
@@ -195,6 +219,8 @@ export interface RootRouteChildren {
   ApiAudioRoute: typeof ApiAudioRoute
   ApiBackgroundRoute: typeof ApiBackgroundRoute
   ApiFaviconRoute: typeof ApiFaviconRoute
+  ApiOgRoute: typeof ApiOgRoute
+  ApiSitemapRoute: typeof ApiSitemapRoute
   ApiSyncRoute: typeof ApiSyncRoute
   PlayerUsernameRoute: typeof PlayerUsernameRoute
 }
@@ -264,6 +290,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSyncRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/sitemap': {
+      id: '/api/sitemap'
+      path: '/api/sitemap'
+      fullPath: '/api/sitemap'
+      preLoaderRoute: typeof ApiSitemapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/og': {
+      id: '/api/og'
+      path: '/api/og'
+      fullPath: '/api/og'
+      preLoaderRoute: typeof ApiOgRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/favicon': {
       id: '/api/favicon'
       path: '/api/favicon'
@@ -307,6 +347,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAudioRoute: ApiAudioRoute,
   ApiBackgroundRoute: ApiBackgroundRoute,
   ApiFaviconRoute: ApiFaviconRoute,
+  ApiOgRoute: ApiOgRoute,
+  ApiSitemapRoute: ApiSitemapRoute,
   ApiSyncRoute: ApiSyncRoute,
   PlayerUsernameRoute: PlayerUsernameRoute,
 }

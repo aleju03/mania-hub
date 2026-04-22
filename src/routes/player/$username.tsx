@@ -31,6 +31,7 @@ import { LazerBadge } from "../../components/ui/LazerBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
 import { UsernameText } from "../../components/ui/UsernameText";
 import type { OsuScore, OsuUser, UserProfileInsights, InsightScoreSnapshot } from "../../lib/types";
+import { pageSeo } from "../../lib/seo";
 
 const userRequestCache = new Map<string, Promise<OsuUser>>();
 const userRecentRequestCache = new Map<number, Promise<OsuScore[]>>();
@@ -50,6 +51,14 @@ const BEST_SCORES_WINDOW_SIZE = 200;
 type PlayerTab = "best" | "recent" | "about";
 
 export const Route = createFileRoute("/player/$username")({
+  head: ({ params }) =>
+    pageSeo({
+      title: `${params.username} — osu!mania profile`,
+      description: `${params.username}'s osu!mania profile: best plays, recent scores, insights, and grade breakdown.`,
+      path: `/player/${encodeURIComponent(params.username)}`,
+      type: "profile",
+      noindex: true,
+    }),
   component: PlayerPage,
 });
 

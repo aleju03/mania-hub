@@ -7,6 +7,7 @@ import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
 import { InitialCountryContext } from "../lib/country-context";
 import { COUNTRY_COOKIE_NAME, parseCountryCookieValue, readCountryCookieClient, resolveInitialCountry } from "../lib/country-cookie";
 import { PostHogProvider } from "../lib/posthog-provider";
+import { DEFAULT_DESCRIPTION, DEFAULT_OG_IMAGE_PATH, SITE_NAME, absoluteUrl } from "../lib/seo";
 import appCss from "../styles.css?url";
 
 const getInitialCountry = createServerFn({ method: "GET" }).handler(() => {
@@ -23,7 +24,22 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "o!mania tracker" },
+      { title: SITE_NAME },
+      { name: "description", content: DEFAULT_DESCRIPTION },
+      { name: "robots", content: "index, follow" },
+      { name: "theme-color", content: "#1a1517" },
+      { property: "og:site_name", content: SITE_NAME },
+      { property: "og:type", content: "website" },
+      { property: "og:title", content: SITE_NAME },
+      { property: "og:description", content: DEFAULT_DESCRIPTION },
+      { property: "og:image", content: absoluteUrl(DEFAULT_OG_IMAGE_PATH) },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { property: "og:image:alt", content: SITE_NAME },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: SITE_NAME },
+      { name: "twitter:description", content: DEFAULT_DESCRIPTION },
+      { name: "twitter:image", content: absoluteUrl(DEFAULT_OG_IMAGE_PATH) },
     ],
     links: [
       { rel: "icon", type: "image/png", href: `/api/favicon?code=${match.context.initialCountry}&v=2` },

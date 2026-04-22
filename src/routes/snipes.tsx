@@ -13,6 +13,7 @@ import { Pagination } from "../components/ui/Pagination";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { SnipeEvent, SnipesScanStatus } from "../lib/types";
 import { useAppStore, useSelectedCountry } from "../store";
+import { pageSeo } from "../lib/seo";
 
 type KeyFilter = "all" | "4k" | "7k";
 type RangeFilter = "24h" | "7d" | "30d" | "all";
@@ -56,6 +57,13 @@ function readRange(value: unknown): RangeFilter {
 }
 
 export const Route = createFileRoute("/snipes")({
+  head: () =>
+    pageSeo({
+      title: "Snipes",
+      description: "Country snipes feed for osu!mania — see when #1s change hands across your country.",
+      path: "/snipes",
+      noindex: true,
+    }),
   search: {
     middlewares: [stripSearchParams(DEFAULT_SNIPES_SEARCH)],
   },

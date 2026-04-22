@@ -11,6 +11,7 @@ import { RankingRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse } from "../lib/types";
 import { useAppStore, useSelectedCountry } from "../store";
+import { pageSeo } from "../lib/seo";
 
 type SortField = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "ss" | "s" | "a";
 
@@ -37,6 +38,13 @@ export const Route = createFileRoute("/rankings")({
   validateSearch: (search: Record<string, unknown>) => ({
     page: search.page === 2 || search.page === "2" ? 2 : 1,
   }),
+  head: () =>
+    pageSeo({
+      title: "Country mania rankings",
+      description:
+        "Browse osu!mania country rankings with 7-day rank changes, accuracy, play count, and grade breakdowns. Sort by PP, accuracy, playcount, or grade counts.",
+      path: "/rankings",
+    }),
   component: RankingsPage,
 });
 

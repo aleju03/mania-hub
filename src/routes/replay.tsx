@@ -15,6 +15,7 @@ import { getCountryName } from "../lib/country";
 import { track } from "../lib/posthog";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import type { OsuScore, OsuBeatmapset, OsuBeatmap, ReplayFrame } from "../lib/types";
+import { pageSeo } from "../lib/seo";
 
 const REPLAY_VOLUME_STORAGE_KEY = "mania-hub-replay-volume";
 const REPLAY_INPUT_OVERLAY_STORAGE_KEY = "mania-hub-replay-input-overlay";
@@ -138,6 +139,14 @@ interface ReplayRendererLike {
 }
 
 export const Route = createFileRoute("/replay")({
+  head: () =>
+    pageSeo({
+      title: "Replay viewer",
+      description:
+        "Watch osu!mania replays in your browser. Browse by player or beatmap and play back any .osr file with scroll speed, speed, and background controls.",
+      path: "/replay",
+      noindex: true,
+    }),
   component: ReplayPage,
   validateSearch: (s: Record<string, unknown>): ReplaySearch => ({
     scoreId: Number(s.scoreId) || undefined,

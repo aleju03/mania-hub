@@ -16,6 +16,7 @@ import { UsernameText } from "../components/ui/UsernameText";
 import { Pagination } from "../components/ui/Pagination";
 import type { OsuScore, RankingsResponse } from "../lib/types";
 import { useAppStore, useSelectedCountry, type CachedPopoff, type TopPlaysRange } from "../store";
+import { pageSeo } from "../lib/seo";
 
 interface PopOff {
   user: { id: number; username: string; avatar_url: string };
@@ -62,6 +63,13 @@ const DEFAULT_TOP_PLAYS_SEARCH: TopPlaysSearch = {
 };
 
 export const Route = createFileRoute("/top-plays")({
+  head: () =>
+    pageSeo({
+      title: "Top mania plays this week",
+      description:
+        "Recent popoffs and the highest PP osu!mania plays from your country over the last 24 hours, 3 days, 7 days, and 30 days.",
+      path: "/top-plays",
+    }),
   search: {
     middlewares: [stripSearchParams(DEFAULT_TOP_PLAYS_SEARCH)],
   },
