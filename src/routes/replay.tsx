@@ -13,7 +13,6 @@ import { formatAccuracy, formatPP } from "../lib/format";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { track } from "../lib/posthog";
-import type { ManiaSkin } from "../lib/skin-parser";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import type { OsuScore, OsuBeatmapset, OsuBeatmap, ReplayFrame } from "../lib/types";
 
@@ -135,7 +134,6 @@ interface ReplayRendererLike {
   setExternalClock: (cb: (() => { time: number; stalled: boolean } | null) | null) => void;
   setScrollSpeed: (value: number) => void;
   setShowInputOverlay: (value: boolean) => void;
-  setSkin: (skin: ManiaSkin | null) => void;
   setSpeed: (value: number) => void;
 }
 
@@ -872,13 +870,10 @@ function ReplayViewer({
   const audioEnabledRef = useRef(true);
   const audioUrlActiveRef = useRef(false);
   const showInputOverlayRef = useRef(false);
-  const [skin, setSkin] = useState<ManiaSkin | null>(null);
-  const [skinLoading, setSkinLoading] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [sharePos, setSharePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [shareLabel, setShareLabel] = useState("");
   const [copied, setCopied] = useState(false);
-  const skinFileRef = useRef<HTMLInputElement>(null);
   const shouldResumeAudioRef = useRef(false);
   const applyScrollSpeed = useCallback((next: number, persistForPlayer = false) => {
     const normalized = Math.max(1, Math.min(40, Math.round(next)));
@@ -1014,7 +1009,6 @@ function ReplayViewer({
         return { time: audio.currentTime * 1000, stalled };
       });
 
-      if (skin) renderer.setSkin(skin);
       if (initialTime != null && initialTime > 0) {
         const gameTimeMs = initialTime * 1000 * modRate;
         renderer.seek(gameTimeMs);
@@ -1035,59 +1029,6 @@ function ReplayViewer({
       }
     };
   }, [replay, beatmap, initialTime, modRate, modAcronyms, displayScoreValues, scoreInfo?.beatmap?.convert]);
-
-  // Pass skin to renderer when it changes
-  useEffect(() => {
-    if (rendererRef.current) {
-      rendererRef.current.setSkin(skin);
-    }
-  }, [skin]);
-
-  // Load persisted skin from IndexedDB on mount
-  useEffect(() => {
-    let cancelled = false;
-
-    void import("../lib/skin-parser").then(async ({ loadSkinFromIDB, parseSkinFile, removeSkinFromIDB }) => {
-      const stored = await loadSkinFromIDB();
-      if (!stored || cancelled) return;
-
-      try {
-        const parsed = await parseSkinFile(stored.data, replay.keyCount);
-        if (!cancelled) setSkin(parsed);
-      } catch {
-        await removeSkinFromIDB();
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [replay.keyCount]);
-
-  const handleSkinUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setSkinLoading(true);
-    try {
-      const { parseSkinFile, saveSkinToIDB } = await import("../lib/skin-parser");
-      const buffer = await file.arrayBuffer();
-      const parsed = await parseSkinFile(buffer, replay.keyCount);
-      setSkin(parsed);
-      await saveSkinToIDB(buffer, parsed.name);
-    } catch (err) {
-      console.error("Failed to parse skin:", err);
-    } finally {
-      setSkinLoading(false);
-      // Reset file input so re-uploading the same file triggers onChange
-      if (skinFileRef.current) skinFileRef.current.value = "";
-    }
-  };
-
-  const handleRemoveSkin = async () => {
-    setSkin(null);
-    const { removeSkinFromIDB } = await import("../lib/skin-parser");
-    await removeSkinFromIDB();
-  };
 
   // Detect when the renderer reaches the end on its own (no more frames) and
   // flip isPlaying back. ReplayProgressBar polls the renderer independently
@@ -1548,28 +1489,6 @@ function ReplayViewer({
             <span className="text-xs text-white font-bold w-5 text-center tabular-nums">{scrollSpeed}</span>
             <button onClick={() => { const v = Math.min(40, scrollSpeed + 1); applyScrollSpeed(v, true); rendererRef.current?.setScrollSpeed(v); }}
               className="w-5 h-5 rounded bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3 transition-colors cursor-pointer flex items-center justify-center text-xs leading-none">+</button>
-          </div>
-
-          {/* Divider */}
-          <div className="w-px h-5 bg-osu-b3/40 hidden sm:block" />
-
-          {/* Skin upload */}
-          <div className="flex items-center gap-1.5">
-            <input ref={skinFileRef} type="file" accept=".osk,.zip" onChange={handleSkinUpload} className="hidden" />
-            {skin ? (
-              <>
-                <span className="text-[10px] text-osu-green-light truncate max-w-24" title={skin.name}>{skin.name}</span>
-                <button onClick={handleRemoveSkin}
-                  className="px-1.5 py-0.5 rounded text-[10px] font-semibold cursor-pointer transition-colors bg-osu-b3/50 text-osu-f1 hover:text-osu-red-light hover:bg-osu-red/20">
-                  &times;
-                </button>
-              </>
-            ) : (
-              <button onClick={() => skinFileRef.current?.click()} disabled={skinLoading}
-                className="px-2.5 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3 disabled:opacity-50">
-                {skinLoading ? "Loading..." : "Skin"}
-              </button>
-            )}
           </div>
 
           {/* BG Dim — pushed right */}

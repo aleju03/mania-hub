@@ -233,6 +233,7 @@ export interface LeanHomeScore {
   title: string;
   version: string;
   keyCount: number;
+  beatmapsetId?: number;
   user: {
     id: number;
     username: string;

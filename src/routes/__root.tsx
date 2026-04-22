@@ -5,7 +5,7 @@ import { Nav } from "../components/layout/Nav";
 import { DevRateLimitBadge } from "../components/layout/DevRateLimitBadge";
 import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
 import { InitialCountryContext } from "../lib/country-context";
-import { COUNTRY_COOKIE_NAME, parseCountryCookieValue, resolveInitialCountry } from "../lib/country-cookie";
+import { COUNTRY_COOKIE_NAME, parseCountryCookieValue, readCountryCookieClient, resolveInitialCountry } from "../lib/country-cookie";
 import { PostHogProvider } from "../lib/posthog-provider";
 import appCss from "../styles.css?url";
 
@@ -15,7 +15,9 @@ const getInitialCountry = createServerFn({ method: "GET" }).handler(() => {
 
 export const Route = createRootRoute({
   beforeLoad: async () => ({
-    initialCountry: await getInitialCountry(),
+    initialCountry: typeof document !== "undefined"
+      ? resolveInitialCountry(readCountryCookieClient())
+      : await getInitialCountry(),
   }),
   head: ({ match }) => ({
     meta: [

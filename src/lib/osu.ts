@@ -123,6 +123,7 @@ function toLeanHomeScore(
     title: score.beatmapset?.title ?? "",
     version: score.beatmap?.version ?? "",
     keyCount: Number(score.beatmap?.cs) || 0,
+    beatmapsetId: score.beatmapset?.id,
     user,
   };
 }
@@ -170,13 +171,13 @@ const SNIPES_LOCK_TTL = 60 * 1000;
 const SNIPES_PLAYER_LIMIT = 15;
 const SNIPES_RECENT_LIMIT = 100;
 const SNIPES_RECENT_PLAYS_CACHE_TTL = 10 * 60 * 1000;
-const SNIPES_SCAN_CONCURRENCY = 8;
-const SNIPES_PROBE_CONCURRENCY = 10;
+const SNIPES_SCAN_CONCURRENCY = 4;
+const SNIPES_PROBE_CONCURRENCY = 5;
 const SNIPES_LOG_CAP = 500;
 const SNIPES_LOG_TTL = 30 * 24 * 60 * 60 * 1000;
 const SNIPES_SNAPSHOT_TTL = 90 * 24 * 60 * 60 * 1000;
 const SNIPES_SEED_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
-const SNIPES_SEED_PROBE_BUDGET = 30;
+const SNIPES_SEED_PROBE_BUDGET = 50;
 const SNIPES_RANKED_STATUSES = new Set(["ranked", "loved", "approved"]);
 const SNIPES_STATUS_TTL = 60 * 1000;
 const SNIPES_STATUS_THROTTLE_MS = 350;
@@ -204,6 +205,22 @@ function clearSnipesScanStatus(country: string): void {
   snipesStatusLastWriteByCountry.delete(country);
   // Overwrite with a 1s-TTL marker so the client's next poll sees it gone.
   void setPersistentCache(snipesStatusKey(country), null, 1000);
+}
+
+function snipesPartialEventsKey(country: string): string {
+  return `snipes-partial-events:${country}`;
+}
+
+function writePartialSnipeEvents(country: string, events: SnipeEvent[]): void {
+  if (events.length === 0) return;
+  const sorted = [...events].sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+  );
+  void setPersistentCache(snipesPartialEventsKey(country), sorted, SNIPES_STATUS_TTL);
+}
+
+function clearPartialSnipeEvents(country: string): void {
+  void setPersistentCache(snipesPartialEventsKey(country), null, 1000);
 }
 const userRecentPlaysPromiseCache = new Map<number, Promise<OsuScore[]>>();
 const userPromiseCache = new Map<string, Promise<OsuUser>>();
@@ -853,18 +870,34 @@ async function buildHomePopoffs(players: HomePreviewPlayer[]): Promise<LeanHomeP
       },
     );
 
-    return results
+    const sorted = results
       .flatMap((entries) => entries)
       .sort((a, b) => {
         const ppDiff = (b.score.pp ?? 0) - (a.score.pp ?? 0);
         if (ppDiff !== 0) return ppDiff;
         return getTimestampMs(b.score) - getTimestampMs(a.score);
-      })
-      .slice(0, 5)
-      .map(({ user, score }) => ({
-        user: { username: user.username, avatar_url: user.avatar_url },
-        score: toLeanHomeScore(score, user),
-      }));
+      });
+
+    const picked: FatPopoff[] = [];
+    const seenUsers = new Set<string>();
+    for (const entry of sorted) {
+      if (picked.length >= 5) break;
+      if (!seenUsers.has(entry.user.username)) {
+        seenUsers.add(entry.user.username);
+        picked.push(entry);
+      }
+    }
+    if (picked.length < 5) {
+      for (const entry of sorted) {
+        if (picked.length >= 5) break;
+        if (!picked.includes(entry)) picked.push(entry);
+      }
+    }
+
+    return picked.map(({ user, score }) => ({
+      user: { username: user.username, avatar_url: user.avatar_url },
+      score: toLeanHomeScore(score, user),
+    }));
   });
 }
 
@@ -1964,6 +1997,7 @@ async function runSnipesScan(
   logKey: string,
 ): Promise<SnipesResponse> {
   try {
+    clearPartialSnipeEvents(country);
     writeSnipesScanStatus(
       country,
       { phase: "roster", label: "Fetching country roster", current: 0, total: 1 },
@@ -1981,6 +2015,7 @@ async function runSnipesScan(
 
     if (players.length === 0) {
       clearSnipesScanStatus(country);
+      clearPartialSnipeEvents(country);
       return { events: [], scannedAt: Date.now() };
     }
 
@@ -2142,6 +2177,8 @@ async function runSnipesScan(
       snapshot[bid] = lanesForBid;
     }
 
+    if (newEvents.length > 0) writePartialSnipeEvents(country, newEvents);
+
     if (seedQueue.length > 0) {
       seedQueue.sort((a, b) => {
         const aMs = new Date(getScoreTimestamp(a.bestCandidate)).getTime();
@@ -2178,30 +2215,65 @@ async function runSnipesScan(
       );
 
       let seedDone = 0;
-      const seededResults = await mapWithConcurrency(
+      const seedCutoff = Date.now() - SNIPES_SEED_MAX_AGE_MS;
+      await mapWithConcurrency(
         probeBatch,
         SNIPES_SCAN_CONCURRENCY,
         async ({ beatmapId, bestCandidate }) => {
           try {
             const meta = boardMetadataFromScore(bestCandidate);
-            if (!meta) {
-              return {
-                beatmapId,
-                lanes: null as Record<string, CountryBoardSnapshotEntry> | null,
-              };
-            }
+            if (!meta) return;
             const lanes = await probeCountryBoardLanes(beatmapId, players, meta);
-            return { beatmapId, lanes };
+            if (!lanes || Object.keys(lanes).length === 0) return;
+            snapshot[beatmapId] = lanes;
+
+            const userHasOlderScore = new Map<number, number>();
+            for (const entry of Object.values(lanes)) {
+              for (const s of entry.scores) {
+                const ms = new Date(s.endedAt).getTime();
+                if (!Number.isFinite(ms)) continue;
+                const prev = userHasOlderScore.get(s.userId);
+                if (prev == null || ms < prev) userHasOlderScore.set(s.userId, ms);
+              }
+            }
+
+            for (const entry of Object.values(lanes)) {
+              for (let i = 0; i < entry.scores.length - 1; i++) {
+                const top = entry.scores[i];
+                const next = entry.scores[i + 1];
+                if (top.userId === next.userId) continue;
+                const topMs = new Date(top.endedAt).getTime();
+                const nextMs = new Date(next.endedAt).getTime();
+                if (!Number.isFinite(topMs) || !Number.isFinite(nextMs)) continue;
+                if (topMs <= nextMs) continue;
+                if (topMs < seedCutoff) continue;
+                if (
+                  top.priorBestTotalScore != null &&
+                  top.priorBestTotalScore > next.totalScore
+                ) {
+                  continue;
+                }
+                const oldestForSniper = userHasOlderScore.get(top.userId);
+                if (oldestForSniper != null && oldestForSniper < topMs) continue;
+                newEvents.push(
+                  buildSnipeEvent(
+                    beatmapId,
+                    { beatmap: entry.beatmap, beatmapset: entry.beatmapset },
+                    top,
+                    next,
+                    i + 1,
+                    true,
+                  ),
+                );
+              }
+            }
+            writePartialSnipeEvents(country, newEvents);
           } catch (error) {
             console.warn("[osu] snipes seed probe failed", {
               beatmapId,
               country,
               error: getErrorMessage(error),
             });
-            return {
-              beatmapId,
-              lanes: null as Record<string, CountryBoardSnapshotEntry> | null,
-            };
           } finally {
             seedDone += 1;
             writeSnipesScanStatus(country, {
@@ -2213,41 +2285,6 @@ async function runSnipesScan(
           }
         },
       );
-
-      const seedCutoff = Date.now() - SNIPES_SEED_MAX_AGE_MS;
-      for (const { beatmapId, lanes } of seededResults) {
-        if (!lanes || Object.keys(lanes).length === 0) continue;
-        snapshot[beatmapId] = lanes;
-
-        for (const entry of Object.values(lanes)) {
-          for (let i = 0; i < entry.scores.length - 1; i++) {
-            const top = entry.scores[i];
-            const next = entry.scores[i + 1];
-            if (top.userId === next.userId) continue;
-            const topMs = new Date(top.endedAt).getTime();
-            const nextMs = new Date(next.endedAt).getTime();
-            if (!Number.isFinite(topMs) || !Number.isFinite(nextMs)) continue;
-            if (topMs <= nextMs) continue;
-            if (topMs < seedCutoff) continue;
-            if (
-              top.priorBestTotalScore != null &&
-              top.priorBestTotalScore > next.totalScore
-            ) {
-              continue;
-            }
-            newEvents.push(
-              buildSnipeEvent(
-                beatmapId,
-                { beatmap: entry.beatmap, beatmapset: entry.beatmapset },
-                top,
-                next,
-                i + 1,
-                true,
-              ),
-            );
-          }
-        }
-      }
     }
 
     const existingLog = (await getPersistentCached<SnipeEvent[]>(logKey)) ?? [];
@@ -2268,9 +2305,11 @@ async function runSnipesScan(
     ]);
 
     clearSnipesScanStatus(country);
+    clearPartialSnipeEvents(country);
     return { events: mergedLog, scannedAt: Date.now() };
   } catch (err) {
     clearSnipesScanStatus(country);
+    clearPartialSnipeEvents(country);
     throw err;
   }
 }
@@ -2319,4 +2358,12 @@ export const getSnipesScanStatus = createServerFn({ method: "GET" })
     edgeCache(0, 0);
     const country = normalizeCountryCode(data.country);
     return (await getPersistentCached<SnipesScanStatus>(snipesStatusKey(country))) ?? null;
+  });
+
+export const getPartialSnipeEvents = createServerFn({ method: "GET" })
+  .inputValidator((data: { country?: string }) => data)
+  .handler(async ({ data }: { data: { country?: string } }): Promise<SnipeEvent[]> => {
+    edgeCache(0, 0);
+    const country = normalizeCountryCode(data.country);
+    return (await getPersistentCached<SnipeEvent[]>(snipesPartialEventsKey(country))) ?? [];
   });

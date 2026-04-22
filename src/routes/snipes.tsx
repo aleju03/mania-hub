@@ -1,6 +1,6 @@
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getCountrySnipes, getSnipesScanStatus } from "../lib/osu";
+import { getCountrySnipes, getPartialSnipeEvents, getSnipesScanStatus } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { formatAccuracy, formatNumber, formatPP, formatTimeAgo } from "../lib/format";
@@ -84,6 +84,7 @@ function SnipesPage() {
   const [scanStartedAt, setScanStartedAt] = useState<number | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [scanStatus, setScanStatus] = useState<SnipesScanStatus | null>(null);
+  const [partialEvents, setPartialEvents] = useState<SnipeEvent[]>([]);
   const fetchingRef = useRef(false);
 
   // Render-driving "elapsed" timer for the secondary header indicator.
@@ -95,24 +96,27 @@ function SnipesPage() {
     return () => window.clearInterval(id);
   }, [scanStartedAt]);
 
-  // Poll real scan progress while the request is in flight. The server writes
-  // status snapshots to Turso at each phase (and throughout the seed loop);
-  // we just read them back on a short interval.
+  // Poll scan progress and partial events while the request is in flight.
   useEffect(() => {
     if (scanStartedAt == null) {
       setScanStatus(null);
+      setPartialEvents([]);
       return;
     }
     let cancelled = false;
     const requestedCountry = selectedCountry;
     const poll = async () => {
       try {
-        const status = await getSnipesScanStatus({ data: { country: requestedCountry } });
+        const [status, partial] = await Promise.all([
+          getSnipesScanStatus({ data: { country: requestedCountry } }),
+          getPartialSnipeEvents({ data: { country: requestedCountry } }),
+        ]);
         if (cancelled) return;
         if (useAppStore.getState().selectedCountry !== requestedCountry) return;
         setScanStatus(status);
+        if (partial.length > 0) setPartialEvents(partial);
       } catch {
-        // Status is best-effort; ignore failures so the main fetch isn't disturbed.
+        // Best-effort; ignore failures so the main fetch isn't disturbed.
       }
     };
     poll();
@@ -143,6 +147,7 @@ function SnipesPage() {
     setRefreshing(false);
     setExpandedKey(null);
     setScanStartedAt(null);
+    setPartialEvents([]);
     setElapsed(0);
     fetchingRef.current = false;
     if (search.page !== 0) updateSearch({ page: 0 });
@@ -410,29 +415,50 @@ function SnipesPage() {
           {!error && (
             <>
               {loading && snipes.length === 0 && (
-                scanStatus?.phase === "seed" ? (
-                  <ScanProgress
-                    elapsed={elapsed}
-                    countryName={countryName}
-                    status={scanStatus}
-                  />
-                ) : (
-                  <div className="flex flex-col items-center justify-center gap-1.5 py-20 text-osu-f1 text-xs">
-                    <div className="flex items-center gap-2">
-                      <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
-                      <span>
-                        {scanStatus
-                          ? INLINE_PHASE_LABEL[scanStatus.phase]
-                          : `Loading ${countryName} snipes…`}
-                      </span>
+                <>
+                  {scanStatus?.phase === "seed" ? (
+                    <ScanProgress
+                      elapsed={elapsed}
+                      countryName={countryName}
+                      status={scanStatus}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center gap-1.5 py-20 text-osu-f1 text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
+                        <span>
+                          {scanStatus
+                            ? INLINE_PHASE_LABEL[scanStatus.phase]
+                            : `Loading ${countryName} snipes…`}
+                        </span>
+                      </div>
+                      {scanStatus && scanStatus.total > 0 && (
+                        <span className="text-[10px] tabular-nums text-osu-f1/70">
+                          {scanStatus.current}/{scanStatus.total}
+                        </span>
+                      )}
                     </div>
-                    {scanStatus && scanStatus.total > 0 && (
-                      <span className="text-[10px] tabular-nums text-osu-f1/70">
-                        {scanStatus.current}/{scanStatus.total}
-                      </span>
-                    )}
-                  </div>
-                )
+                  )}
+                  {partialEvents.length > 0 && (
+                    <div className="space-y-2 mt-4">
+                      <div className="text-[11px] text-osu-f1 mb-2">
+                        Found {partialEvents.length} snipe{partialEvents.length === 1 ? "" : "s"} so far...
+                      </div>
+                      {partialEvents.map((event) => {
+                        const key = `${event.beatmap_id}:${event.score_id}`;
+                        return (
+                          <SnipeRow
+                            key={key}
+                            event={event}
+                            eventKey={key}
+                            expanded={expandedKey === key}
+                            onToggle={(k) => setExpandedKey((prev) => (prev === k ? null : k))}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
               )}
 
               {!loading && sorted.length === 0 && snipes.length === 0 && (
@@ -741,15 +767,13 @@ function SnipeRow({
                 color="text-osu-pink-light"
               />
             )}
-            {heldFor && event.boardRank === 1 && (
-              <StatCell label="Held #1 for" value={heldFor} color="text-osu-yellow" />
+            {heldFor && (
+              <StatCell label="Held for" value={heldFor} color="text-osu-yellow" />
             )}
           </div>
           <div className="relative mt-2 flex items-center justify-between gap-2 text-[10px] text-osu-f1">
             <span>
-              {event.boardRank === 1
-                ? `${event.sniper.username} sniped #1 from ${event.victim.username}`
-                : `${event.sniper.username} sniped ${event.victim.username}`}
+              {`${event.sniper.username} sniped ${event.victim.username}`}
             </span>
             <a
               href={beatmapHref}
@@ -829,13 +853,19 @@ function ScanProgress({
   status: SnipesScanStatus | null;
 }) {
   const phaseIdx = status ? PHASE_ORDER.indexOf(status.phase) : -1;
-  // Per-phase pct based on real current/total; if we don't yet have a
-  // status (the very first poll hasn't returned), show an indeterminate
-  // shimmer instead of pretending we've made progress.
-  const phasePct =
+  const maxRef = useRef({ phase: "", pct: 0, current: 0 });
+  const rawPct =
     status && status.total > 0
       ? Math.min(100, Math.round((status.current / status.total) * 100))
       : 0;
+  if (status && status.phase !== maxRef.current.phase) {
+    maxRef.current = { phase: status.phase, pct: rawPct, current: status?.current ?? 0 };
+  } else {
+    if (rawPct > maxRef.current.pct) maxRef.current.pct = rawPct;
+    if (status && status.current > maxRef.current.current) maxRef.current.current = status.current;
+  }
+  const phasePct = maxRef.current.pct;
+  const flooredCurrent = maxRef.current.current;
   const description = status ? PHASE_DESCRIPTIONS[status.phase] : "Connecting to the scanner...";
 
   return (
@@ -893,7 +923,7 @@ function ScanProgress({
               </span>
               {isCurrent && status && status.total > 0 && (
                 <span className="ml-auto text-osu-f1 tabular-nums">
-                  {status.current}/{status.total}
+                  {flooredCurrent}/{status.total}
                 </span>
               )}
             </li>

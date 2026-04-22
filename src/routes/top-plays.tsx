@@ -55,6 +55,7 @@ function windowCoversRange(cached: TimeRange | null, selected: TimeRange): boole
 
 const PAGE_SIZE = 15;
 const FETCH_BATCH_SIZE = 5;
+const FETCH_MAX_CONCURRENT = 2;
 const PP_GAIN_SKELETON_COUNT = 6;
 const DEFAULT_TOP_PLAYS_SEARCH: TopPlaysSearch = {
   range: "7d",
@@ -182,6 +183,7 @@ function PopOffsPage() {
 
   // Fetch scores for all players, show results once complete
   const fetchingRef = useRef(false);
+  const cancelledRef = useRef(false);
   const mergePopoffs = useCallback((entries: PopOff[]): PopOff[] => {
     const byKey = new Map<string, PopOff>();
 
@@ -223,6 +225,7 @@ function PopOffsPage() {
     const fetchWindow = range;
 
     fetchingRef.current = true;
+    cancelledRef.current = false;
     setLoading(!hasCachedPopoffs);
     setRefreshing(true);
     setLoadedCount(0);
@@ -237,26 +240,35 @@ function PopOffsPage() {
       let merged: PopOff[] = [];
       let completed = 0;
 
-      await Promise.all(
-        batches.map(async (batch) => {
-          const batchResults = await getCountryPopoffs({
-            data: { players: batch, window: fetchWindow },
-          });
-          // Writes here are safe: JS is single-threaded, so each post-await
-          // continuation runs to completion before the next batch's does.
-          merged = mergePopoffs([...merged, ...batchResults]);
-          completed += batch.length;
-          setLoadedCount(Math.min(completed, players.length));
+      for (let i = 0; i < batches.length; i += FETCH_MAX_CONCURRENT) {
+        if (cancelledRef.current) break;
 
-          if (!hasCachedPopoffs && merged.length > 0) {
-            setCachedPopoffs(selectedCountry, merged, fetchWindow);
-            setLoading(false);
-          }
-        }),
-      );
+        const chunk = batches.slice(i, i + FETCH_MAX_CONCURRENT);
+        await Promise.all(
+          chunk.map(async (batch) => {
+            const batchResults = await getCountryPopoffs({
+              data: { players: batch, window: fetchWindow },
+            });
 
-      setCachedPopoffs(selectedCountry, merged, fetchWindow);
+            if (cancelledRef.current) return;
+
+            merged = mergePopoffs([...merged, ...batchResults]);
+            completed += batch.length;
+            setLoadedCount(Math.min(completed, players.length));
+
+            if (!hasCachedPopoffs && merged.length > 0) {
+              setCachedPopoffs(selectedCountry, merged, fetchWindow);
+              setLoading(false);
+            }
+          }),
+        );
+      }
+
+      if (!cancelledRef.current) {
+        setCachedPopoffs(selectedCountry, merged, fetchWindow);
+      }
     } catch (error) {
+      if (cancelledRef.current) return;
       const message = error instanceof Error
         ? error.message
         : typeof error === "string"
@@ -277,7 +289,11 @@ function PopOffsPage() {
 
   useEffect(() => {
     if (loadingPlayers || playersError) return;
+    cancelledRef.current = false;
     fetchAll();
+    return () => {
+      cancelledRef.current = true;
+    };
   }, [fetchAll, loadingPlayers, playersError]);
 
   // Filter by time range

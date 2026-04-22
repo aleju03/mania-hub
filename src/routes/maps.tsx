@@ -348,6 +348,7 @@ function MapsPage() {
   const [loadingPlayers, setLoadingPlayers] = useState(!rankings);
   const [loadingMaps, setLoadingMaps] = useState(!mapsData);
   const [loadedSections, setLoadedSections] = useState(0);
+  const [smoothProgress, setSmoothProgress] = useState(0);
   const [rebuilding, setRebuilding] = useState(false);
   const [rebuildMenuOpen, setRebuildMenuOpen] = useState(false);
   const [rebuildQuery, setRebuildQuery] = useState("");
@@ -400,9 +401,27 @@ function MapsPage() {
     setLoadingPlayers(!rankings);
     setLoadingMaps(!mapsData || !hasValidMapsData);
     setLoadedSections(0);
+    setSmoothProgress(0);
     setError(null);
     fetchingMapsRef.current = false;
   }, [selectedCountry]);
+
+  useEffect(() => {
+    if (!loadingMaps) {
+      setSmoothProgress(0);
+      return;
+    }
+    const realPercent = loadedSections * 50;
+    setSmoothProgress((prev) => Math.max(prev, realPercent));
+    const cap = Math.min(realPercent + 45, 95);
+    const id = setInterval(() => {
+      setSmoothProgress((prev) => {
+        if (prev >= cap) return prev;
+        return Math.min(cap, prev + Math.max(1, (cap - prev) * 0.1));
+      });
+    }, 180);
+    return () => clearInterval(id);
+  }, [loadingMaps, loadedSections]);
 
   const updateMapsSearch = (patch: Partial<MapsSearch>) => {
     navigate({
@@ -882,7 +901,7 @@ function MapsPage() {
                 <span className="text-[10px] text-osu-f1 tabular-nums">
                   {loadingPlayers
                     ? "Loading players..."
-                    : `Loading maps... (${Math.round((loadedSections / 2) * 100)}%)`}
+                    : `Loading maps... (${Math.round(smoothProgress)}%)`}
                 </span>
               </div>
             )}

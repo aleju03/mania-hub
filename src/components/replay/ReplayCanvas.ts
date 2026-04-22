@@ -1,9 +1,7 @@
 import type { ReplayFrame } from "../../lib/types";
 import type { ManiaNote } from "../../lib/beatmap-parser";
-import type { ManiaSkin } from "../../lib/skin-parser";
 import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgementEvent, ReplayNoteState } from "../../lib/mania-replay-judgement";
 import { buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "../../lib/mania-replay-judgement";
-import { getNoteImage, getHoldHeadImage, getHoldBodyImage, getHoldTailImage, getKeyImage } from "../../lib/skin-parser";
 
 // Column colors for mania key modes (matching osu!mania circle skin)
 const COLUMN_COLORS: Record<number, string[]> = {
@@ -112,7 +110,6 @@ export class ManiaReplayRenderer {
   private od = 8;
   private showInputOverlay = false;
   private transparentBackground = false;
-  private skin: ManiaSkin | null = null;
   private cssWidth = 0;
   private cssHeight = 0;
 
@@ -142,7 +139,7 @@ export class ManiaReplayRenderer {
   private lastJudgment: Judgment = 0;
   private lastJudgmentTime = 0;
 
-  // --- Caches rebuilt on resize() / setSkin() / setScrollSpeed() ---
+  // --- Caches rebuilt on resize() / setScrollSpeed() ---
   // Layout + per-column x/width avoid a reduce() loop per call (was called
   // ~115x per frame on 7K charts).
   private cachedLayout: Layout | null = null;
@@ -314,9 +311,9 @@ export class ManiaReplayRenderer {
 
   // --- Layout ---
 
-  // Invalidate cached layout/column/gradient data. Called on resize, skin
-  // change, and scroll-speed change — any time `getLayout()` would return a
-  // different value. Cheap; the caches are rebuilt lazily on next render().
+  // Invalidate cached layout/column/gradient data. Called on resize and
+  // scroll-speed change - any time `getLayout()` would return a different
+  // value. Cheap; the caches are rebuilt lazily on next render().
   private invalidateLayoutCache() {
     this.cachedLayout = null;
     this.cachedColumns = [];
@@ -329,34 +326,12 @@ export class ManiaReplayRenderer {
     const w = this.cssWidth;
     const h = this.cssHeight;
 
-    let playfieldWidth: number;
-    let laneWidth: number;
-
-    if (this.skin) {
-      // Use skin column widths, scaled to fit canvas
-      const skinTotalWidth = this.skin.config.columnWidth.reduce((a, b) => a + b, 0);
-      const maxWidth = Math.min(w * 0.7, 60 * this.keyCount);
-      const scale = Math.min(1, maxWidth / skinTotalWidth);
-      playfieldWidth = skinTotalWidth * scale;
-      laneWidth = playfieldWidth / this.keyCount; // average for layout reference
-    } else {
-      const baseRatio = 0.25 + this.keyCount * 0.025;
-      playfieldWidth = Math.min(w * Math.min(baseRatio, 0.6), 50 * this.keyCount);
-      laneWidth = playfieldWidth / this.keyCount;
-    }
+    const baseRatio = 0.25 + this.keyCount * 0.025;
+    const playfieldWidth = Math.min(w * Math.min(baseRatio, 0.6), 50 * this.keyCount);
+    const laneWidth = playfieldWidth / this.keyCount;
 
     const playfieldX = (w - playfieldWidth) / 2;
-    // osu! stable HitPosition: higher value = closer to bottom.
-    // Formula from lazer: bottomPadding = (480 - clamp(hitPos, 240, 480)) * 1.6
-    // Then judgmentY = h - (bottomPadding / 480) * h (scale to canvas height)
-    let judgmentY: number;
-    if (this.skin) {
-      const clamped = Math.max(240, Math.min(480, this.skin.config.hitPosition));
-      const bottomPadding = (480 - clamped) * 1.6;
-      judgmentY = h - (bottomPadding / (480 * 1.6)) * h;
-    } else {
-      judgmentY = h * 0.88;
-    }
+    const judgmentY = h * 0.88;
     const noteHeight = Math.max(10, h * 0.02);
     const receptorHeight = Math.max(6, h * 0.012);
     const pixelsPerMs = this.scrollSpeed;
@@ -365,23 +340,10 @@ export class ManiaReplayRenderer {
     this.cachedLayout = layout;
 
     // Build per-column (x, width) table in the same pass so every hot-path
-    // caller can just index into cachedColumns[col] instead of re-running the
-    // skin-width reduce loop.
+    // caller can just index into cachedColumns[col].
     const cols: { x: number; width: number }[] = new Array(this.keyCount);
-    if (this.skin) {
-      const skinWidths = this.skin.config.columnWidth;
-      const skinTotalWidth = skinWidths.reduce((a, b) => a + b, 0);
-      const scale = playfieldWidth / skinTotalWidth;
-      let x = playfieldX;
-      for (let i = 0; i < this.keyCount; i++) {
-        const width = skinWidths[i] * scale;
-        cols[i] = { x, width };
-        x += width;
-      }
-    } else {
-      for (let i = 0; i < this.keyCount; i++) {
-        cols[i] = { x: playfieldX + i * laneWidth, width: laneWidth };
-      }
+    for (let i = 0; i < this.keyCount; i++) {
+      cols[i] = { x: playfieldX + i * laneWidth, width: laneWidth };
     }
     this.cachedColumns = cols;
     this.cachedReceptorGradients = new Array(this.keyCount).fill(null);
@@ -469,12 +431,6 @@ export class ManiaReplayRenderer {
     if (!this._isPlaying) this.render();
   }
 
-  setSkin(skin: ManiaSkin | null) {
-    this.skin = skin;
-    this.invalidateLayoutCache();
-    if (!this._isPlaying) this.render();
-  }
-
   setExternalClock(cb: (() => { time: number; stalled: boolean } | null) | null) {
     this.externalClock = cb;
     // Reset wall-clock baseline so a later fallback tick doesn't accumulate a
@@ -536,16 +492,9 @@ export class ManiaReplayRenderer {
     this.renderPlayfield(ctx, layout);
     this.renderSegmentOverlays(ctx, layout);
 
-    // keysUnderNotes: draw receptors before notes so notes render on top
-    if (this.skin?.config.keysUnderNotes) {
-      this.renderReceptors(ctx, layout);
-      this.renderJudgmentLine(ctx, layout);
-      this.renderNotes(ctx, layout);
-    } else {
-      this.renderNotes(ctx, layout);
-      this.renderJudgmentLine(ctx, layout);
-      this.renderReceptors(ctx, layout);
-    }
+    this.renderNotes(ctx, layout);
+    this.renderJudgmentLine(ctx, layout);
+    this.renderReceptors(ctx, layout);
     this.renderHUD(ctx, layout);
   }
 
@@ -631,13 +580,8 @@ export class ManiaReplayRenderer {
     // Lane backgrounds
     for (let col = 0; col < this.keyCount; col++) {
       const { x, width } = this.getColumnLayout(col, layout);
-      if (this.skin && this.skin.config.columnColors[col]) {
-        ctx.fillStyle = this.skin.config.columnColors[col];
-        ctx.fillRect(x, 0, width, h);
-      } else {
-        ctx.fillStyle = col % 2 === 0 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)";
-        ctx.fillRect(x, 0, width, h);
-      }
+      ctx.fillStyle = col % 2 === 0 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)";
+      ctx.fillRect(x, 0, width, h);
     }
 
     // Lane dividers
@@ -651,22 +595,9 @@ export class ManiaReplayRenderer {
       ctx.stroke();
     }
 
-    // Stage borders (skin images or default strokes)
-    if (this.skin?.images.stageLeft) {
-      const img = this.skin.images.stageLeft;
-      const borderWidth = Math.max(8, img.width * (h / img.height));
-      ctx.drawImage(img, playfieldX - borderWidth, 0, borderWidth, h);
-    }
-    if (this.skin?.images.stageRight) {
-      const img = this.skin.images.stageRight;
-      const borderWidth = Math.max(8, img.width * (h / img.height));
-      ctx.drawImage(img, playfieldX + playfieldWidth, 0, borderWidth, h);
-    }
-    if (!this.skin?.images.stageLeft && !this.skin?.images.stageRight) {
-      ctx.strokeStyle = "rgba(255,255,255,0.15)";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(playfieldX, 0, playfieldWidth, h);
-    }
+    ctx.strokeStyle = "rgba(255,255,255,0.15)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(playfieldX, 0, playfieldWidth, h);
   }
 
   private renderNotes(ctx: CanvasRenderingContext2D, layout: Layout) {
@@ -729,50 +660,32 @@ export class ManiaReplayRenderer {
 
         if (top > h + 20 || bottom < -20) continue;
 
-        const bodyImg = this.skin ? getHoldBodyImage(this.skin, col) : null;
-        const headImg = this.skin ? getHoldHeadImage(this.skin, col) : null;
-        const tailImg = this.skin ? getHoldTailImage(this.skin, col) : null;
-
         ctx.globalAlpha = releasedEarly ? 0.45 : 1;
 
-        // Hold body — stretch to fill the full hold duration
-        if (bodyImg) {
-          ctx.drawImage(bodyImg, colX, top, colWidth, bottom - top);
-        } else {
-          ctx.fillStyle = color;
-          ctx.beginPath();
-          ctx.roundRect(x, top, barWidth, bottom - top, 2);
-          ctx.fill();
-          ctx.strokeStyle = color;
-          ctx.globalAlpha = releasedEarly ? 0.55 : 1;
-          ctx.lineWidth = 1;
-          ctx.stroke();
-        }
+        // Hold body
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.roundRect(x, top, barWidth, bottom - top, 2);
+        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = releasedEarly ? 0.55 : 1;
+        ctx.lineWidth = 1;
+        ctx.stroke();
 
-        // Hold head — draw at bottom of hold body, same height as regular notes
+        // Hold head
         ctx.globalAlpha = releasedEarly ? 0.65 : 1;
         if (bottom > top + noteHeight) {
-          if (headImg) {
-            const imgH = this.getSkinNoteHeight(headImg, colWidth, noteHeight);
-            ctx.drawImage(headImg, colX, bottom - imgH, colWidth, imgH);
-          } else {
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.roundRect(x, bottom - noteHeight, barWidth, noteHeight, 4);
-            ctx.fill();
-          }
-        }
-
-        // Hold tail — draw at top of hold body (skip if image is trivially small like 1x1 transparent pixel)
-        if (tailImg && tailImg.width > 2 && tailImg.height > 2) {
-          const imgH = this.getSkinNoteHeight(tailImg, colWidth, noteHeight * 0.6);
-          ctx.drawImage(tailImg, colX, top, colWidth, imgH);
-        } else if (!tailImg) {
-          ctx.beginPath();
           ctx.fillStyle = color;
-          ctx.roundRect(x, top, barWidth, noteHeight / 2, 2);
+          ctx.beginPath();
+          ctx.roundRect(x, bottom - noteHeight, barWidth, noteHeight, 4);
           ctx.fill();
         }
+
+        // Hold tail
+        ctx.beginPath();
+        ctx.fillStyle = color;
+        ctx.roundRect(x, top, barWidth, noteHeight / 2, 2);
+        ctx.fill();
         ctx.globalAlpha = 1;
       } else {
         if (note.time < this.currentTime - 10 && !headResolved) continue;
@@ -780,32 +693,24 @@ export class ManiaReplayRenderer {
         const noteY = judgmentY - (note.time - this.currentTime) * pixelsPerMs;
         if (noteY > h + 20 || noteY < -20) continue;
 
-        const noteImg = this.skin ? getNoteImage(this.skin, col) : null;
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        ctx.roundRect(x, noteY - noteHeight, barWidth, noteHeight, 4);
+        ctx.fill();
 
-        if (noteImg) {
-          const imgH = this.getSkinNoteHeight(noteImg, colWidth, noteHeight);
-          ctx.drawImage(noteImg, colX, noteY - imgH, colWidth, imgH);
-        } else {
-          // Default canvas rendering
-          ctx.fillStyle = color;
-          ctx.globalAlpha = 1;
-          ctx.beginPath();
-          ctx.roundRect(x, noteY - noteHeight, barWidth, noteHeight, 4);
-          ctx.fill();
+        ctx.save();
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 5;
+        ctx.fill();
+        ctx.restore();
 
-          ctx.save();
-          ctx.shadowColor = color;
-          ctx.shadowBlur = 5;
-          ctx.fill();
-          ctx.restore();
-
-          ctx.globalAlpha = 0.2;
-          ctx.fillStyle = "#fff";
-          ctx.beginPath();
-          ctx.roundRect(x + 2, noteY - noteHeight + 1, barWidth - 4, noteHeight / 3, 2);
-          ctx.fill();
-          ctx.globalAlpha = 1;
-        }
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = "#fff";
+        ctx.beginPath();
+        ctx.roundRect(x + 2, noteY - noteHeight + 1, barWidth - 4, noteHeight / 3, 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
       }
     }
   }
@@ -924,23 +829,16 @@ export class ManiaReplayRenderer {
   private renderJudgmentLine(ctx: CanvasRenderingContext2D, layout: Layout) {
     const { playfieldX, playfieldWidth, judgmentY } = layout;
 
-    if (this.skin?.images.stageHint) {
-      const img = this.skin.images.stageHint;
-      // Stage hint is a thin bar at the judgment line — cap height to stay subtle
-      const hintHeight = Math.min(Math.max(4, layout.h * 0.015), 12);
-      ctx.drawImage(img, playfieldX, judgmentY - hintHeight / 2, playfieldWidth, hintHeight);
-    } else {
-      ctx.save();
-      ctx.shadowColor = "#ffffff";
-      ctx.shadowBlur = 8;
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(playfieldX, judgmentY);
-      ctx.lineTo(playfieldX + playfieldWidth, judgmentY);
-      ctx.stroke();
-      ctx.restore();
-    }
+    ctx.save();
+    ctx.shadowColor = "#ffffff";
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(playfieldX, judgmentY);
+    ctx.lineTo(playfieldX + playfieldWidth, judgmentY);
+    ctx.stroke();
+    ctx.restore();
   }
 
   private renderReceptors(ctx: CanvasRenderingContext2D, layout: Layout) {
@@ -959,39 +857,7 @@ export class ManiaReplayRenderer {
       const timeSinceFlash = this.currentTime - (this.receptorFlashTimestamps[col] || 0);
       const flashIntensity = pressed ? 1.0 : Math.max(0, 1.0 - timeSinceFlash / 120);
 
-      // Skin key images
-      const keyImg = this.skin ? getKeyImage(this.skin, col, pressed) : null;
-
-      if (keyImg) {
-        // Draw skin key image at judgment line, same sizing logic as notes
-        const imgH = this.getSkinNoteHeight(keyImg, colWidth, receptorHeight + 6);
-        ctx.globalAlpha = pressed ? 1 : 0.8;
-        ctx.drawImage(keyImg, x, judgmentY + 2, colWidth, imgH);
-        ctx.globalAlpha = 1;
-
-        // Column glow on press
-        if (flashIntensity > 0 && this.skin?.images.stageLight) {
-          const lightImg = this.skin.images.stageLight;
-          const lightH = Math.min(100, colWidth * (lightImg.height / lightImg.width));
-          const lightColor = this.skin.config.columnLightColors[col];
-          ctx.globalAlpha = 0.5 * flashIntensity;
-          ctx.drawImage(lightImg, x, judgmentY - lightH, colWidth, lightH);
-          ctx.globalAlpha = 1;
-          if (lightColor) {
-            ctx.fillStyle = lightColor;
-            ctx.globalAlpha = 0.15 * flashIntensity;
-            ctx.fillRect(x, judgmentY - lightH, colWidth, lightH);
-            ctx.globalAlpha = 1;
-          }
-        } else if (flashIntensity > 0) {
-          // Default beam glow even with skin keys — cached gradient at full
-          // intensity, globalAlpha modulates the live intensity.
-          ctx.fillStyle = this.getReceptorGradient(ctx, col, x, judgmentY, color);
-          ctx.globalAlpha = flashIntensity;
-          ctx.fillRect(x, judgmentY - 80, colWidth, 95);
-          ctx.globalAlpha = 1;
-        }
-      } else if (flashIntensity > 0) {
+      if (flashIntensity > 0) {
         ctx.globalAlpha = flashIntensity;
         ctx.fillStyle = this.getReceptorGradient(ctx, col, x, judgmentY, color);
         ctx.fillRect(x, judgmentY - 80, colWidth, 95);
@@ -1218,19 +1084,6 @@ export class ManiaReplayRenderer {
     return lo;
   }
 
-  // Calculate note height for skin images. Skin note images are drawn at column width;
-  // height preserves aspect ratio but is capped to avoid oversized rendering.
-  // @2x images have double pixel density, so their logical size is halved.
-  private getSkinNoteHeight(img: HTMLImageElement, colWidth: number, minHeight: number): number {
-    // Detect @2x: if the image is significantly larger than expected column width
-    const is2x = img.width > colWidth * 1.5;
-    const logicalW = is2x ? img.width / 2 : img.width;
-    const logicalH = is2x ? img.height / 2 : img.height;
-    const aspectH = colWidth * (logicalH / logicalW);
-    // Cap height: notes should not be taller than the column width (for circles/squares)
-    return Math.max(minHeight, Math.min(aspectH, colWidth));
-  }
-
   private colorWithAlpha(hexColor: string, alpha: number): string {
     const { r, g, b } = parseHexColor(hexColor);
     return `rgba(${r},${g},${b},${alpha})`;
@@ -1238,7 +1091,7 @@ export class ManiaReplayRenderer {
 
   // Receptor beam gradient. Cached per column at flashIntensity=1; live
   // intensity is applied via ctx.globalAlpha in the caller. Invalidated on
-  // layout change (resize/setSkin/setScrollSpeed) via invalidateLayoutCache().
+  // layout change (resize/setScrollSpeed) via invalidateLayoutCache().
   private getReceptorGradient(
     ctx: CanvasRenderingContext2D,
     col: number,

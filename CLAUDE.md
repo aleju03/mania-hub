@@ -75,7 +75,6 @@ Routes in `src/routes/`:
 - `src/lib/avatar.ts` / `avatar-accent.ts` - avatar color extraction via sharp, URL normalization
 - `src/lib/beatmap-parser.ts` - parses `.osu` file format for mania notes
 - `src/lib/replay-parser.ts` - binary `.osr` replay parser
-- `src/lib/skin-parser.ts` - parses osu! skin zips (`.osk`) for mania config
 - `src/components/replay/ReplayCanvas.ts` - canvas renderer for mania replays
 
 ### Lazer/Stable Score Duality

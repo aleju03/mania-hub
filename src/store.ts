@@ -855,12 +855,16 @@ export const useAppStore = create<AppState>()(
         popoffsFetchedAtByCountry: state.popoffsFetchedAtByCountry,
         popoffsWindowByCountry: state.popoffsWindowByCountry,
         trackerPpGainsByCountry: state.trackerPpGainsByCountry,
-        // mapsDataByCountry, feedScoresByCountry, and snipesByCountry are
-        // intentionally NOT persisted. They can balloon past the ~5MB
-        // localStorage quota once more than a country or two accumulates
-        // (the maps beatmapset pool alone is ~1-2MB per country; the snipes
-        // log is up to 500 entries × ~1KB per country). The server cache
-        // serves them in <100ms on hydration so the round-trip is cheap.
+        feedScoresByCountry: state.feedScoresByCountry,
+        feedScoresFetchedAtByCountry: state.feedScoresFetchedAtByCountry,
+        // mapsDataByCountry and snipesByCountry are intentionally NOT
+        // persisted. They can balloon past the ~5MB localStorage quota
+        // once more than a country or two accumulates (the maps beatmapset
+        // pool alone is ~1-2MB per country; the snipes log is up to
+        // 500 entries × ~1KB per country). The server cache serves them
+        // in <100ms on hydration so the round-trip is cheap.
+        // feedScoresByCountry IS persisted: addFeedScores caps it at 100
+        // entries per country, so it stays well under quota.
         trackedUserIdsByCountry: state.trackedUserIdsByCountry,
         trackedUserIdsFetchedAtByCountry: state.trackedUserIdsFetchedAtByCountry,
         pollIndexByCountry: state.pollIndexByCountry,
