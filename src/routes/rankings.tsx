@@ -38,12 +38,13 @@ export const Route = createFileRoute("/rankings")({
   validateSearch: (search: Record<string, unknown>) => ({
     page: search.page === 2 || search.page === "2" ? 2 : 1,
   }),
-  head: () =>
+  head: ({ match }) =>
     pageSeo({
       title: "Country mania rankings",
       description:
         "Browse osu!mania country rankings with 7-day rank changes, accuracy, play count, and grade breakdowns. Sort by PP, accuracy, playcount, or grade counts.",
       path: "/rankings",
+      origin: match.context.origin,
     }),
   component: RankingsPage,
 });
