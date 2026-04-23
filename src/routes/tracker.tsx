@@ -28,17 +28,27 @@ import { TrackerRowSkeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import { TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useSelectedCountry } from "../store";
 import type { OsuScore } from "../lib/types";
-import { pageSeo } from "../lib/seo";
+import { pageSeo, trackerOgImagePath } from "../lib/seo";
+import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 
 export const Route = createFileRoute("/tracker")({
-  head: ({ match }) =>
-    pageSeo({
-      title: "Live score tracker",
-      description: "Live score feed for tracked osu!mania players in your country.",
-      path: "/tracker",
+  validateSearch: (search: Record<string, unknown>) => ({
+    country: parseCountrySearchParam(search.country),
+  }),
+  head: ({ match }) => {
+    const country = match.search.country;
+    const countryName = country ? getCountryName(country) : null;
+    return pageSeo({
+      title: countryName ? `Live score tracker - ${countryName}` : "Live score tracker",
+      description: countryName
+        ? `Live score feed for tracked osu!mania players in ${countryName}.`
+        : "Live score feed for tracked osu!mania players in your country.",
+      path: withSearchParams("/tracker", { country }),
       origin: match.context.origin,
+      image: country ? trackerOgImagePath(country) : undefined,
       noindex: true,
-    }),
+    });
+  },
   component: ScoresPage,
 });
 
@@ -50,7 +60,9 @@ const EMPTY_SCORES: OsuScore[] = [];
 const EMPTY_SCORE_GAINS: Record<number, { fetchedAt: number; value: number }> = {};
 
 function ScoresPage() {
-  const selectedCountry = useSelectedCountry();
+  const { country } = Route.useSearch();
+  const fallbackCountry = useSelectedCountry();
+  const selectedCountry = country ?? fallbackCountry;
   const rankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const feedScores = useAppStore((state) => state.feedScoresByCountry[selectedCountry]) ?? EMPTY_SCORES;

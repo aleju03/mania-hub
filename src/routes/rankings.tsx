@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo, useSyncExternalStore } from "react";
 import { getRankings, getUsersRankHistory } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
+import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { formatNumber, formatAccuracy } from "../lib/format";
 import { getCrRankChanges, getGlobalRankChange } from "../lib/rankings";
 import { Avatar } from "../components/ui/Avatar";
@@ -37,21 +38,29 @@ function useIsDesktop(): boolean {
 export const Route = createFileRoute("/rankings")({
   validateSearch: (search: Record<string, unknown>) => ({
     page: search.page === 2 || search.page === "2" ? 2 : 1,
+    country: parseCountrySearchParam(search.country),
   }),
-  head: ({ match }) =>
-    pageSeo({
-      title: "Country mania rankings",
-      description: "Sort osu!mania country rankings by PP, accuracy, play count, and recent rank changes.",
-      path: "/rankings",
+  head: ({ match }) => {
+    const country = match.search.country;
+    const countryName = country ? getCountryName(country) : null;
+    return pageSeo({
+      title: countryName ? `${countryName} mania rankings` : "Country mania rankings",
+      description: countryName
+        ? `Top osu!mania players in ${countryName}, sortable by PP, accuracy, play count, and recent rank changes.`
+        : "Sort osu!mania country rankings by PP, accuracy, play count, and recent rank changes.",
+      path: withSearchParams("/rankings", { page: match.search.page === 2 ? 2 : undefined, country }),
       origin: match.context.origin,
-    }),
+      imageCountry: country,
+    });
+  },
   component: RankingsPage,
 });
 
 function RankingsPage() {
-  const { page } = Route.useSearch();
+  const { page, country } = Route.useSearch();
   const navigate = useNavigate();
-  const selectedCountry = useSelectedCountry();
+  const fallbackCountry = useSelectedCountry();
+  const selectedCountry = country ?? fallbackCountry;
   const isDesktop = useIsDesktop();
   const cachedPageOneData = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
@@ -79,9 +88,9 @@ function RankingsPage() {
 
   useEffect(() => {
     if (page === 2 && totalPlayers > 0 && !hasNextPage) {
-      navigate({ to: "/rankings", search: { page: 1 }, replace: true });
+      navigate({ to: "/rankings", search: { page: 1, country: selectedCountry }, replace: true });
     }
-  }, [hasNextPage, navigate, page, totalPlayers]);
+  }, [hasNextPage, navigate, page, selectedCountry, totalPlayers]);
 
   useEffect(() => {
     let cancelled = false;
@@ -528,14 +537,14 @@ function RankingsPage() {
           {hasNextPage && (
             <div className="flex items-center justify-center gap-3 pt-4">
               <button
-                onClick={() => navigate({ to: "/rankings", search: { page: 1 } })}
+                onClick={() => navigate({ to: "/rankings", search: { page: 1, country: selectedCountry } })}
                 disabled={page === 1}
                 className="px-4 py-2 rounded-lg bg-osu-b4 text-xs font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
                 Page 1
               </button>
               <button
-                onClick={() => navigate({ to: "/rankings", search: { page: 2 } })}
+                onClick={() => navigate({ to: "/rankings", search: { page: 2, country: selectedCountry } })}
                 disabled={page === 2}
                 className="px-4 py-2 rounded-lg bg-osu-b4 text-xs font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >

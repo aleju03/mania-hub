@@ -7,6 +7,7 @@ import { ThemePicker } from "./ThemePicker";
 import { clearDevServerCaches } from "../../lib/api";
 import { searchUsers } from "../../lib/osu";
 import { TOP_PLAYS_RANGE_STORAGE_KEY, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
+import { readCountryFromSearchStr } from "../../lib/country-search";
 import { getCountryFlagGradient, getCountryFlagUrl } from "../../lib/country";
 import { useDynamicFavicon } from "../../lib/favicon";
 
@@ -22,6 +23,16 @@ const links = [
 
 const CLIENT_CACHE_KEYS = ["mania-hub-cache-v1", "mania-hub-cache-v2", "mania-hub-cache-v3", "mania-hub-cache-v4"];
 const SKIN_DB_NAME = "mania-hub-skins";
+
+/* Nav links to /maps and /snipes target routes whose validateSearch has
+   many required fields. Passing only `{ country }` would be a partial and
+   TanStack Router types the object form strictly. The reducer form is
+   permissive at runtime (validateSearch fills in the rest from defaults),
+   but its `prev` is typed loosely across all routes, so we cast the
+   return to `never` to stop TS from demanding every field. */
+function preserveSearchWithCountry(country: string) {
+  return ((prev: Record<string, unknown>) => ({ ...prev, country })) as never;
+}
 
 function deleteIndexedDb(name: string): Promise<void> {
   return new Promise((resolve) => {
@@ -72,11 +83,15 @@ export function Nav() {
   const location = useLocation();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
-  const selectedCountry = useSelectedCountry();
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false);
+  const fallbackCountry = useSelectedCountry();
+  const setSelectedCountry = useAppStore((state) => state.setSelectedCountry);
+  const routeCountry = readCountryFromSearchStr(location.searchStr);
+  const selectedCountry = routeCountry ?? fallbackCountry;
   const devMode = import.meta.env.VITE_DEV_MODE === "1";
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
   const hydrated = useHasHydrated();
-  const topPlaysSearch = hydrated && topPlaysRange !== "7d" ? { range: topPlaysRange } : undefined;
+  const topPlaysRangeForLink = hydrated && topPlaysRange !== "7d" ? topPlaysRange : "7d";
   const current = links.find((l) => location.pathname.startsWith(l.to === "/" ? "/__home" : l.to)) ||
     (location.pathname === "/" ? links[0] : location.pathname.startsWith("/player") ? null : links[0]);
 
@@ -85,6 +100,7 @@ export function Nav() {
   // layout animation that crashed the React tree on rapid nav clicks when a
   // remount happened mid-spring.
   const linksContainerRef = useRef<HTMLDivElement>(null);
+  const adminMenuRef = useRef<HTMLDivElement>(null);
   const linkRefs = useRef<Map<string, HTMLAnchorElement>>(new Map());
   const [barRect, setBarRect] = useState<{ left: number; width: number } | null>(null);
 
@@ -128,10 +144,30 @@ export function Nav() {
 
   useDynamicFavicon(selectedCountry);
 
+  useEffect(() => {
+    if (routeCountry && routeCountry !== fallbackCountry) {
+      setSelectedCountry(routeCountry);
+    }
+  }, [fallbackCountry, routeCountry, setSelectedCountry]);
+
   // Close drawer on route change
   useEffect(() => {
     setMenuOpen(false);
+    setAdminMenuOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!adminMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && adminMenuRef.current?.contains(target)) return;
+      setAdminMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [adminMenuOpen]);
 
   // Prevent body scroll when drawer is open. Defer the layout-invalidating
   // style write by two rAFs so the drawer's transform transition gets a clean
@@ -167,6 +203,37 @@ export function Nav() {
     }));
   };
 
+  const handleCountrySelect = (country: string) => {
+    setSelectedCountry(country);
+    setMenuOpen(false);
+
+    if (location.pathname === "/") {
+      navigate({ to: "/", search: { country }, replace: true });
+      return;
+    }
+    if (location.pathname === "/rankings") {
+      navigate({ to: "/rankings", search: { country, page: 1 }, replace: true });
+      return;
+    }
+    if (location.pathname === "/top-plays") {
+      navigate({ to: "/top-plays", search: { country, range: topPlaysRangeForLink }, replace: true });
+      return;
+    }
+    if (location.pathname === "/tracker") {
+      navigate({ to: "/tracker", search: { country }, replace: true });
+      return;
+    }
+    // For /snipes and /maps reuse the existing search via the reducer form
+    // (see preserveSearchWithCountry for why we cast).
+    if (location.pathname === "/snipes") {
+      navigate({ to: "/snipes", search: preserveSearchWithCountry(country), replace: true });
+      return;
+    }
+    if (location.pathname === "/maps") {
+      navigate({ to: "/maps", search: preserveSearchWithCountry(country), replace: true });
+    }
+  };
+
   return (
     <header className="fixed top-0 left-0 right-0 z-50">
       <div className="absolute inset-0 bg-osu-b6">
@@ -197,7 +264,7 @@ export function Nav() {
             whileHover={{ scale: 1.11 }}
             transition={{ duration: 0.1 }}
           >
-            <Link to="/" preload="intent" className="flex items-center gap-2">
+            <Link to="/" search={{ country: selectedCountry }} preload="intent" className="flex items-center gap-2">
               <div className="relative w-9 h-9 rounded-full shadow-md ring-1 ring-white/15 overflow-hidden transition-all duration-300">
                 {/* Dimmed flag base */}
                 <div
@@ -247,7 +314,17 @@ export function Nav() {
                   else linkRefs.current.delete(l.id);
                 }}
                 to={l.to}
-                search={l.id === "top-plays" ? topPlaysSearch : undefined}
+                search={
+                  l.id === "home" || l.id === "tracker"
+                    ? { country: selectedCountry }
+                    : l.id === "rankings"
+                      ? { country: selectedCountry, page: 1 }
+                      : l.id === "top-plays"
+                        ? { country: selectedCountry, range: topPlaysRangeForLink }
+                        : l.id === "maps" || l.id === "snipes"
+                          ? preserveSearchWithCountry(selectedCountry)
+                          : undefined
+                }
                 preload="intent"
                 className={`relative px-2.5 py-[19px] text-[12px] font-semibold capitalize transition-colors duration-[120ms] ${
                   current?.id === l.id
@@ -274,13 +351,41 @@ export function Nav() {
         <div className="hidden md:flex items-center gap-2">
           {devMode && (
             <>
-              <Link
-                to="/admin/monitor"
-                className="px-2 py-1 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
-                title="Situation monitor (dev only)"
-              >
-                Monitor
-              </Link>
+              <div ref={adminMenuRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setAdminMenuOpen((open) => !open)}
+                  className="px-2 py-1 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
+                  title="Admin tools (dev only)"
+                  aria-haspopup="menu"
+                  aria-expanded={adminMenuOpen}
+                >
+                  Admin
+                </button>
+                {adminMenuOpen && (
+                  <div
+                    className="absolute right-0 top-full mt-2 w-36 rounded-lg bg-osu-b5 border border-osu-b3/50 shadow-xl overflow-hidden z-[80]"
+                    role="menu"
+                  >
+                    <Link
+                      to="/admin/monitor"
+                      onClick={() => setAdminMenuOpen(false)}
+                      className="block px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
+                      role="menuitem"
+                    >
+                      Monitor
+                    </Link>
+                    <Link
+                      to="/admin/og-preview"
+                      onClick={() => setAdminMenuOpen(false)}
+                      className="block px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors border-t border-osu-b3/30"
+                      role="menuitem"
+                    >
+                      OG preview
+                    </Link>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={async () => {
                   await clearAllDevCaches();
@@ -293,7 +398,7 @@ export function Nav() {
               </button>
             </>
           )}
-          <CountrySelector className="w-52" />
+          <CountrySelector className="w-52" selectedCountry={selectedCountry} onSelect={handleCountrySelect} />
           <SearchInput
             className="w-52"
             placeholder="find player..."
@@ -345,14 +450,24 @@ export function Nav() {
       >
               <div className="py-2">
                 <div className="px-4 pb-3 space-y-2">
-                  <CountrySelector className="w-full" />
+                  <CountrySelector className="w-full" selectedCountry={selectedCountry} onSelect={handleCountrySelect} />
                   <ThemePicker variant="mobile" />
                 </div>
                 {links.map((l) => (
                   <Link
                     key={l.id}
                     to={l.to}
-                    search={l.id === "top-plays" ? topPlaysSearch : undefined}
+                    search={
+                      l.id === "home" || l.id === "tracker"
+                        ? { country: selectedCountry }
+                        : l.id === "rankings"
+                          ? { country: selectedCountry, page: 1 }
+                          : l.id === "top-plays"
+                            ? { country: selectedCountry, range: topPlaysRangeForLink }
+                            : l.id === "maps" || l.id === "snipes"
+                              ? preserveSearchWithCountry(selectedCountry)
+                            : undefined
+                    }
                     preload="intent"
                     onClick={() => setMenuOpen(false)}
                     className={`flex items-center gap-3 px-5 py-3 text-sm font-medium capitalize transition-colors duration-[120ms] ${
@@ -381,12 +496,22 @@ export function Nav() {
 
               {devMode && (
                 <div className="border-t border-osu-b3/30 px-4 py-3 space-y-2">
+                  <div className="text-[10px] uppercase tracking-wide text-osu-f1 font-semibold px-1">
+                    Admin
+                  </div>
                   <Link
                     to="/admin/monitor"
                     onClick={() => setMenuOpen(false)}
                     className="block w-full text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
                   >
                     Monitor
+                  </Link>
+                  <Link
+                    to="/admin/og-preview"
+                    onClick={() => setMenuOpen(false)}
+                    className="block w-full text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
+                  >
+                    OG preview
                   </Link>
                   <button
                     onClick={async () => {
