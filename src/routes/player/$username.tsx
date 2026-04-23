@@ -32,6 +32,7 @@ import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton"
 import { UsernameText } from "../../components/ui/UsernameText";
 import type { OsuScore, OsuUser, UserProfileInsights, InsightScoreSnapshot } from "../../lib/types";
 import { pageSeo } from "../../lib/seo";
+import { getRankTierClass } from "../../lib/rankings";
 
 const userRequestCache = new Map<string, Promise<OsuUser>>();
 const userRecentRequestCache = new Map<number, Promise<OsuScore[]>>();
@@ -1547,7 +1548,7 @@ function RankHeroCard({
           <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">
             {peakRank ? "Peak Rank" : "Global Rank"}
           </div>
-          <div className="mt-0.5 text-4xl sm:text-5xl font-extrabold text-osu-yellow leading-none tabular-nums">
+          <div className={`mt-0.5 text-4xl sm:text-5xl font-extrabold leading-none tabular-nums ${heroRank ? getRankTierClass(heroRank) || "text-osu-yellow" : "text-osu-yellow"}`}>
             {heroRank ? `#${formatNumber(heroRank)}` : "-"}
           </div>
           {peakRank && peakRankDate && (

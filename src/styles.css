@@ -105,6 +105,134 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
   will-change: background-color;
 }
 
+/* Peak rank metallic tiers - classic shimmer pattern.
+   Based on the well-known CSS text shimmer technique
+   (https://codepen.io/joshuapekera/pen/xGjMMq):
+   - Gradient endpoints are the tier's base color with ~25% flat plateau on
+     each side, so when the 200%-wide background tiles, the seam sits in a
+     region of constant color and no derivative discontinuity shows up as a
+     visible line.
+   - Animation travels 200% -> -200% (4x container), giving exactly 2 sheen
+     passes per loop with base color = endpoints = seamless wrap. */
+@keyframes peak-rank-flow {
+  0%   { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+.peak-rank-tier {
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  background-size: 200% 100%;
+  animation: peak-rank-flow 8s linear infinite;
+}
+/* Mythic: full hue cycle. Start=end=red so tiling wraps without a seam;
+   14 stops give a rich iridescent spectrum through coral, amber, lime,
+   teal, indigo, magenta, and back. */
+.peak-rank-mythic {
+  background-image: linear-gradient(100deg,
+    #ff5e5e 0%,
+    #ff8c3d 8%,
+    #ffb63d 15%,
+    #ffe13d 22%,
+    #c9ff4d 29%,
+    #5eff7a 36%,
+    #4dffd9 43%,
+    #4dc8ff 50%,
+    #5e7aff 57%,
+    #9d4dff 64%,
+    #d64dff 71%,
+    #ff4dd9 78%,
+    #ff5e8a 86%,
+    #ff5e5e 100%);
+  filter: drop-shadow(0 0 18px rgba(255, 180, 230, 0.45));
+  animation-duration: 7s;
+}
+/* Base colors are tuned to HSL lightness >= ~55% so the plateau phase stays
+   clearly readable against the dark card background. Plateau is 10% on each
+   side (down from 15%) so less time is spent sitting on the base tone. */
+
+/* Gold: holographic gold foil — rose and cyan hues flash through as the
+   sheen sweeps, matching how rare top-50 peak actually is. */
+.peak-rank-gold {
+  background-image: linear-gradient(100deg,
+    #e3b222 0%, #e3b222 10%,
+    #ffd84a 22%,
+    #ff9ecc 30%,
+    #fff8a8 40%,
+    #ffffff 50%,
+    #c8f5ec 60%,
+    #ffde5c 70%,
+    #eec53a 78%,
+    #e3b222 90%, #e3b222 100%);
+  filter: drop-shadow(0 0 16px rgba(255, 200, 130, 0.5));
+  animation-duration: 7s;
+}
+/* Platinum: aurora silver — teal and violet shimmer through like northern
+   lights across a polished silver base. */
+.peak-rank-platinum {
+  background-image: linear-gradient(100deg,
+    #96adcf 0%, #96adcf 10%,
+    #b8d8ea 22%,
+    #d8b8ff 30%,
+    #ebf4fa 40%,
+    #ffffff 50%,
+    #e0f5e8 60%,
+    #a8dae0 70%,
+    #a3bad2 78%,
+    #96adcf 90%, #96adcf 100%);
+  filter: drop-shadow(0 0 14px rgba(200, 200, 255, 0.5));
+  animation-duration: 8s;
+}
+/* Chrome: teal liquid — distinct hue family from silver platinum. */
+.peak-rank-chrome {
+  background-image: linear-gradient(100deg,
+    #5bb5bc 0%, #5bb5bc 10%,
+    #78c8cf 22%,
+    #a0dde2 34%,
+    #d0f0f4 46%,
+    #ffffff 50%,
+    #d0f0f4 54%,
+    #a0dde2 66%,
+    #78c8cf 78%,
+    #5bb5bc 90%, #5bb5bc 100%);
+  filter: drop-shadow(0 0 12px rgba(130, 225, 230, 0.45));
+  animation-duration: 8.5s;
+}
+/* Steel: amethyst purple — own hue, avoids the blue-gray silver look. */
+.peak-rank-steel {
+  background-image: linear-gradient(100deg,
+    #9a7cbb 0%, #9a7cbb 10%,
+    #ae93cc 22%,
+    #c5aedd 34%,
+    #dfc8ec 46%,
+    #f5eafc 50%,
+    #dfc8ec 54%,
+    #c5aedd 66%,
+    #ae93cc 78%,
+    #9a7cbb 90%, #9a7cbb 100%);
+  filter: drop-shadow(0 0 10px rgba(200, 170, 230, 0.45));
+  animation-duration: 9s;
+}
+/* Bronze: rose-copper with peach sheen — warm-spectrum counterpart. */
+.peak-rank-bronze {
+  background-image: linear-gradient(100deg,
+    #cf8e6f 0%, #cf8e6f 10%,
+    #dca087 22%,
+    #e8b69f 34%,
+    #f4d2bf 46%,
+    #fde8dc 50%,
+    #f4d2bf 54%,
+    #e8b69f 66%,
+    #dca087 78%,
+    #cf8e6f 90%, #cf8e6f 100%);
+  filter: drop-shadow(0 0 10px rgba(235, 170, 140, 0.4));
+  animation-duration: 9.5s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .peak-rank-tier { animation: none !important; }
+}
+
 /* BBCode-rendered profile "me" section from osu! API */
 .bbcode-content { line-height: 1.55; overflow-wrap: anywhere; word-break: break-word; }
 .bbcode-content a { color: var(--color-osu-pink-light); text-decoration: underline; text-decoration-color: rgba(255, 153, 204, 0.35); text-underline-offset: 2px; }
