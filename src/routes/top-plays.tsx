@@ -16,7 +16,8 @@ import { UsernameText } from "../components/ui/UsernameText";
 import { Pagination } from "../components/ui/Pagination";
 import type { OsuScore, RankingsResponse } from "../lib/types";
 import { useAppStore, useSelectedCountry, type CachedPopoff, type TopPlaysRange } from "../store";
-import { pageSeo } from "../lib/seo";
+import { pageSeo, topPlaysOgImagePath } from "../lib/seo";
+import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 
 interface PopOff {
   user: { id: number; username: string; avatar_url: string };
@@ -31,6 +32,7 @@ type TimeRange = TopPlaysRange;
 type SortMode = "recent" | "pp";
 type TopPlaysSearch = {
   range: TimeRange;
+  country: string | undefined;
 };
 
 const RANGE_MS: Record<TimeRange, number> = {
@@ -60,16 +62,26 @@ const FETCH_MAX_CONCURRENT = 2;
 const PP_GAIN_SKELETON_COUNT = 6;
 const DEFAULT_TOP_PLAYS_SEARCH: TopPlaysSearch = {
   range: "7d",
+  country: undefined,
 };
 
 export const Route = createFileRoute("/top-plays")({
-  head: ({ match }) =>
-    pageSeo({
-      title: "Top mania plays this week",
-      description: "Recent popoffs and high-PP osu!mania plays by country.",
-      path: "/top-plays",
+  head: ({ match }) => {
+    const country = match.search.country;
+    const countryName = country ? getCountryName(country) : null;
+    return pageSeo({
+      title: countryName ? `Top mania plays in ${countryName}` : "Top mania plays this week",
+      description: countryName
+        ? `Recent popoffs and high-PP osu!mania plays in ${countryName}.`
+        : "Recent popoffs and high-PP osu!mania plays by country.",
+      path: withSearchParams("/top-plays", {
+        range: match.search.range !== DEFAULT_TOP_PLAYS_SEARCH.range ? match.search.range : undefined,
+        country,
+      }),
       origin: match.context.origin,
-    }),
+      image: country ? topPlaysOgImagePath(country) : undefined,
+    });
+  },
   search: {
     middlewares: [stripSearchParams(DEFAULT_TOP_PLAYS_SEARCH)],
   },
@@ -81,6 +93,7 @@ export const Route = createFileRoute("/top-plays")({
       search.range === "30d"
         ? search.range
         : DEFAULT_TOP_PLAYS_SEARCH.range,
+    country: parseCountrySearchParam(search.country),
   }),
   component: PopOffsPage,
 });
@@ -88,10 +101,11 @@ export const Route = createFileRoute("/top-plays")({
 const EMPTY_POPOFFS: CachedPopoff[] = [];
 
 function PopOffsPage() {
-  const { range } = Route.useSearch();
+  const { range, country } = Route.useSearch();
   const location = useLocation();
   const navigate = useNavigate();
-  const selectedCountry = useSelectedCountry();
+  const fallbackCountry = useSelectedCountry();
+  const selectedCountry = country ?? fallbackCountry;
   const rankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const popoffs = useAppStore((state) => state.popoffsByCountry[selectedCountry]) ?? EMPTY_POPOFFS;
@@ -134,10 +148,10 @@ function PopOffsPage() {
 
     navigate({
       to: "/top-plays",
-      search: { range: rememberedRange },
+      search: { range: rememberedRange, country },
       replace: true,
     });
-  }, [location.searchStr, navigate, range, rememberedRange]);
+  }, [country, location.searchStr, navigate, range, rememberedRange]);
 
   useEffect(() => {
     if (rememberedRange === range) return;
@@ -387,7 +401,7 @@ function PopOffsPage() {
           setTopPlaysRange(selectedCountry, nextRange);
           navigate({
             to: "/top-plays",
-            search: { range: nextRange },
+            search: { range: nextRange, country },
             replace: true,
           });
           setPage(0);

@@ -3,12 +3,62 @@ export const SITE_NAME = "o!mania tracker";
 export const DEFAULT_DESCRIPTION =
   "osu!mania rankings, score feeds, top plays, maps, profiles, and replays by country.";
 
-const DEFAULT_OG_SUBTITLE = "Rankings, scores, top plays, maps, and replays by country.";
-const OG_IMAGE_VERSION = "2";
+const OG_IMAGE_VERSION = "3";
 
-export function ogImagePath(title = SITE_NAME, subtitle = DEFAULT_OG_SUBTITLE): string {
-  const params = new URLSearchParams({ title, subtitle, v: OG_IMAGE_VERSION });
+/* Builds the og:image URL. The image itself only needs title + country —
+   the description stays in the HTML `<meta>` for social-card body text
+   but we don't bake it into the image to avoid duplicating the same
+   sentence both inside the graphic and below it in the embed. */
+export function ogImagePath(
+  title = SITE_NAME,
+  options?: { country?: string | null },
+): string {
+  const params = new URLSearchParams({ title, v: OG_IMAGE_VERSION });
+  if (options?.country) {
+    params.set("country", options.country);
+  }
   return `/api/og?${params.toString()}`;
+}
+
+/* Player OG uses a different render path: the endpoint fetches the user
+   from the osu! API and composes a profile-card image (avatar, rank, PP,
+   country). The `username` arrives raw so the endpoint can re-lookup it
+   the same way the osu! API does (case-insensitive). */
+export function playerOgImagePath(username: string): string {
+  const params = new URLSearchParams({
+    kind: "player",
+    username,
+    v: OG_IMAGE_VERSION,
+  });
+  return `/api/og?${params.toString()}`;
+}
+
+function kindOgImagePath(kind: string, extra: Record<string, string | undefined>): string {
+  const params = new URLSearchParams({ kind, v: OG_IMAGE_VERSION });
+  for (const [k, val] of Object.entries(extra)) {
+    if (val != null && val !== "") params.set(k, val);
+  }
+  return `/api/og?${params.toString()}`;
+}
+
+export function topPlaysOgImagePath(country: string): string {
+  return kindOgImagePath("top-plays", { country });
+}
+
+export function mapsOgImagePath(country: string): string {
+  return kindOgImagePath("maps", { country });
+}
+
+export function trackerOgImagePath(country: string): string {
+  return kindOgImagePath("tracker", { country });
+}
+
+export function snipesOgImagePath(country: string): string {
+  return kindOgImagePath("snipes", { country });
+}
+
+export function replayOgImagePath(scoreId: number): string {
+  return kindOgImagePath("replay", { scoreId: String(scoreId) });
 }
 
 export const DEFAULT_OG_IMAGE_PATH = ogImagePath();
@@ -33,6 +83,7 @@ export interface PageSeoInput {
   path: string;
   origin: string;
   image?: string;
+  imageCountry?: string;
   type?: "website" | "article" | "profile";
   noindex?: boolean;
 }
@@ -48,12 +99,13 @@ export function pageSeo({
   path,
   origin,
   image,
+  imageCountry,
   type = "website",
   noindex = false,
 }: PageSeoInput): PageSeo {
   const fullTitle = title === SITE_NAME ? SITE_NAME : `${title} - ${SITE_NAME}`;
   const url = absoluteUrl(path, origin);
-  const imageUrl = absoluteUrl(image ?? ogImagePath(title, description), origin);
+  const imageUrl = absoluteUrl(image ?? ogImagePath(title, { country: imageCountry }), origin);
 
   const meta: MetaEntry[] = [
     { title: fullTitle },

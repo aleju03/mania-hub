@@ -23,6 +23,7 @@ import { Route as ApiOgRouteImport } from './routes/api/og'
 import { Route as ApiFaviconRouteImport } from './routes/api/favicon'
 import { Route as ApiBackgroundRouteImport } from './routes/api/background'
 import { Route as ApiAudioRouteImport } from './routes/api/audio'
+import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
 import { Route as AdminMonitorRouteImport } from './routes/admin/monitor'
 
 const TrackerRoute = TrackerRouteImport.update({
@@ -95,6 +96,11 @@ const ApiAudioRoute = ApiAudioRouteImport.update({
   path: '/api/audio',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminOgPreviewRoute = AdminOgPreviewRouteImport.update({
+  id: '/admin/og-preview',
+  path: '/admin/og-preview',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminMonitorRoute = AdminMonitorRouteImport.update({
   id: '/admin/monitor',
   path: '/admin/monitor',
@@ -110,6 +116,7 @@ export interface FileRoutesByFullPath {
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/admin/monitor': typeof AdminMonitorRoute
+  '/admin/og-preview': typeof AdminOgPreviewRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/background': typeof ApiBackgroundRoute
   '/api/favicon': typeof ApiFaviconRoute
@@ -127,6 +134,7 @@ export interface FileRoutesByTo {
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/admin/monitor': typeof AdminMonitorRoute
+  '/admin/og-preview': typeof AdminOgPreviewRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/background': typeof ApiBackgroundRoute
   '/api/favicon': typeof ApiFaviconRoute
@@ -145,6 +153,7 @@ export interface FileRoutesById {
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/admin/monitor': typeof AdminMonitorRoute
+  '/admin/og-preview': typeof AdminOgPreviewRoute
   '/api/audio': typeof ApiAudioRoute
   '/api/background': typeof ApiBackgroundRoute
   '/api/favicon': typeof ApiFaviconRoute
@@ -164,6 +173,7 @@ export interface FileRouteTypes {
     | '/top-plays'
     | '/tracker'
     | '/admin/monitor'
+    | '/admin/og-preview'
     | '/api/audio'
     | '/api/background'
     | '/api/favicon'
@@ -181,6 +191,7 @@ export interface FileRouteTypes {
     | '/top-plays'
     | '/tracker'
     | '/admin/monitor'
+    | '/admin/og-preview'
     | '/api/audio'
     | '/api/background'
     | '/api/favicon'
@@ -198,6 +209,7 @@ export interface FileRouteTypes {
     | '/top-plays'
     | '/tracker'
     | '/admin/monitor'
+    | '/admin/og-preview'
     | '/api/audio'
     | '/api/background'
     | '/api/favicon'
@@ -216,6 +228,7 @@ export interface RootRouteChildren {
   TopPlaysRoute: typeof TopPlaysRoute
   TrackerRoute: typeof TrackerRoute
   AdminMonitorRoute: typeof AdminMonitorRoute
+  AdminOgPreviewRoute: typeof AdminOgPreviewRoute
   ApiAudioRoute: typeof ApiAudioRoute
   ApiBackgroundRoute: typeof ApiBackgroundRoute
   ApiFaviconRoute: typeof ApiFaviconRoute
@@ -325,6 +338,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAudioRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/og-preview': {
+      id: '/admin/og-preview'
+      path: '/admin/og-preview'
+      fullPath: '/admin/og-preview'
+      preLoaderRoute: typeof AdminOgPreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/monitor': {
       id: '/admin/monitor'
       path: '/admin/monitor'
@@ -344,6 +364,7 @@ const rootRouteChildren: RootRouteChildren = {
   TopPlaysRoute: TopPlaysRoute,
   TrackerRoute: TrackerRoute,
   AdminMonitorRoute: AdminMonitorRoute,
+  AdminOgPreviewRoute: AdminOgPreviewRoute,
   ApiAudioRoute: ApiAudioRoute,
   ApiBackgroundRoute: ApiBackgroundRoute,
   ApiFaviconRoute: ApiFaviconRoute,

@@ -33,7 +33,8 @@ import type {
   MapsPlayerFavourites,
 } from "../lib/types";
 import { useAppStore, useSelectedCountry } from "../store";
-import { pageSeo } from "../lib/seo";
+import { pageSeo, mapsOgImagePath } from "../lib/seo";
+import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -62,6 +63,7 @@ type MapsSearch = {
   rStarsMax: number;
   rWeight: RandomWeight;
   rAvoidRepeats: boolean;
+  country: string | undefined;
 };
 
 const PAGE_SIZE = 24;
@@ -103,6 +105,7 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   rStarsMax: 0,
   rWeight: "players",
   rAvoidRepeats: false,
+  country: undefined,
 };
 
 const RANDOM_STATUS_OPTIONS = ["ranked", "loved", "graveyard", "other"] as const;
@@ -296,13 +299,19 @@ function hasValidMapsDataShape(data: CountryMapsData | null): data is CountryMap
 // ── Route ──────────────────────────────────────────────────────────────────
 
 export const Route = createFileRoute("/maps")({
-  head: ({ match }) =>
-    pageSeo({
-      title: "Beatmaps played by your country",
-      description: "Find the osu!mania maps your country's top players farm, play, and favourite.",
-      path: "/maps",
+  head: ({ match }) => {
+    const country = match.search.country;
+    const countryName = country ? getCountryName(country) : null;
+    return pageSeo({
+      title: countryName ? `Beatmaps played in ${countryName}` : "Beatmaps played by your country",
+      description: countryName
+        ? `osu!mania maps ${countryName}'s top players farm, play, and favourite.`
+        : "Find the osu!mania maps your country's top players farm, play, and favourite.",
+      path: withSearchParams("/maps", { country }),
       origin: match.context.origin,
-    }),
+      image: country ? mapsOgImagePath(country) : undefined,
+    });
+  },
   search: {
     middlewares: [stripSearchParams(DEFAULT_MAPS_SEARCH)],
   },
@@ -338,6 +347,7 @@ export const Route = createFileRoute("/maps")({
     })(),
     rWeight: search.rWeight === "favourites" ? "favourites" : DEFAULT_MAPS_SEARCH.rWeight,
     rAvoidRepeats: typeof search.rAvoidRepeats === "boolean" ? search.rAvoidRepeats : DEFAULT_MAPS_SEARCH.rAvoidRepeats,
+    country: parseCountrySearchParam(search.country),
   }),
   component: MapsPage,
 });
@@ -345,7 +355,8 @@ export const Route = createFileRoute("/maps")({
 function MapsPage() {
   const navigate = useNavigate();
   const mapsSearch = Route.useSearch();
-  const selectedCountry = useSelectedCountry();
+  const fallbackCountry = useSelectedCountry();
+  const selectedCountry = mapsSearch.country ?? fallbackCountry;
   const rankings = useAppStore((s) => s.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((s) => s.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const mapsData = useAppStore((s) => s.mapsDataByCountry[selectedCountry] ?? null);
@@ -860,7 +871,7 @@ function MapsPage() {
   const resetFilters = () => {
     navigate({
       to: "/maps",
-      search: { ...DEFAULT_MAPS_SEARCH, tab },
+      search: { ...DEFAULT_MAPS_SEARCH, tab, country: mapsSearch.country },
       replace: true,
     });
   };

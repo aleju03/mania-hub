@@ -31,7 +31,7 @@ import { LazerBadge } from "../../components/ui/LazerBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
 import { UsernameText } from "../../components/ui/UsernameText";
 import type { OsuScore, OsuUser, UserProfileInsights, InsightScoreSnapshot } from "../../lib/types";
-import { pageSeo } from "../../lib/seo";
+import { pageSeo, playerOgImagePath } from "../../lib/seo";
 import { getRankTierClass } from "../../lib/rankings";
 
 const userRequestCache = new Map<string, Promise<OsuUser>>();
@@ -58,6 +58,7 @@ export const Route = createFileRoute("/player/$username")({
       description: `${params.username}'s osu!mania profile, best plays, recent scores, and stats.`,
       path: `/player/${encodeURIComponent(params.username)}`,
       origin: match.context.origin,
+      image: playerOgImagePath(params.username),
       type: "profile",
       noindex: true,
     }),

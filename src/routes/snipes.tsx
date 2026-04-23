@@ -13,7 +13,8 @@ import { Pagination } from "../components/ui/Pagination";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { SnipeEvent, SnipesScanStatus } from "../lib/types";
 import { useAppStore, useSelectedCountry } from "../store";
-import { pageSeo } from "../lib/seo";
+import { pageSeo, snipesOgImagePath } from "../lib/seo";
+import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 
 type KeyFilter = "all" | "4k" | "7k";
 type RangeFilter = "24h" | "7d" | "30d" | "all";
@@ -22,12 +23,14 @@ type SnipesSearch = {
   keys: KeyFilter;
   range: RangeFilter;
   page: number;
+  country: string | undefined;
 };
 
 const DEFAULT_SNIPES_SEARCH: SnipesSearch = {
   keys: "all",
   range: "7d",
   page: 0,
+  country: undefined,
 };
 
 const RANGE_MS: Record<Exclude<RangeFilter, "all">, number> = {
@@ -57,14 +60,20 @@ function readRange(value: unknown): RangeFilter {
 }
 
 export const Route = createFileRoute("/snipes")({
-  head: ({ match }) =>
-    pageSeo({
-      title: "Snipes",
-      description: "Track when osu!mania #1 scores change hands in your country.",
-      path: "/snipes",
+  head: ({ match }) => {
+    const country = match.search.country;
+    const countryName = country ? getCountryName(country) : null;
+    return pageSeo({
+      title: countryName ? `Snipes - ${countryName}` : "Snipes",
+      description: countryName
+        ? `Track when osu!mania #1 scores change hands in ${countryName}.`
+        : "Track when osu!mania #1 scores change hands in your country.",
+      path: withSearchParams("/snipes", { country }),
       origin: match.context.origin,
+      image: country ? snipesOgImagePath(country) : undefined,
       noindex: true,
-    }),
+    });
+  },
   search: {
     middlewares: [stripSearchParams(DEFAULT_SNIPES_SEARCH)],
   },
@@ -72,6 +81,7 @@ export const Route = createFileRoute("/snipes")({
     keys: readKeys(search.keys),
     range: readRange(search.range),
     page: typeof search.page === "number" && search.page > 0 ? Math.floor(search.page) : 0,
+    country: parseCountrySearchParam(search.country),
   }),
   component: SnipesPage,
 });
@@ -79,8 +89,17 @@ export const Route = createFileRoute("/snipes")({
 function SnipesPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const selectedCountry = useSelectedCountry();
+  const fallbackCountry = useSelectedCountry();
+  const selectedCountry = search.country ?? fallbackCountry;
   const countryName = getCountryName(selectedCountry);
+
+  // Stale-response guard: compares against the component's view of the
+  // current resolved country (route search > store fallback). The store
+  // alone isn't enough on a fresh `/snipes?country=XX` because Nav's
+  // URL -> store sync runs after our fetch has already started, which
+  // made a valid XX response look stale and silently drop.
+  const currentCountryRef = useRef(selectedCountry);
+  currentCountryRef.current = selectedCountry;
 
   const snipes = useAppStore((state) => state.snipesByCountry[selectedCountry]) ?? EMPTY_SNIPES;
   const snipesFetchedAt = useAppStore((state) => state.snipesFetchedAtByCountry[selectedCountry]) ?? null;
@@ -121,7 +140,7 @@ function SnipesPage() {
           getPartialSnipeEvents({ data: { country: requestedCountry } }),
         ]);
         if (cancelled) return;
-        if (useAppStore.getState().selectedCountry !== requestedCountry) return;
+        if (currentCountryRef.current !== requestedCountry) return;
         setScanStatus(status);
         if (partial.length > 0) setPartialEvents(partial);
       } catch {
@@ -189,18 +208,18 @@ function SnipesPage() {
           response?.events ?? [],
           response?.scannedAt ?? Date.now(),
         );
-        if (useAppStore.getState().selectedCountry === requestedCountry) {
+        if (currentCountryRef.current === requestedCountry) {
           setError(null);
         }
       })
       .catch((err) => {
         const message = err instanceof Error ? err.message : "Couldn't load snipes.";
-        if (useAppStore.getState().selectedCountry === requestedCountry && snipes.length === 0) {
+        if (currentCountryRef.current === requestedCountry && snipes.length === 0) {
           setError(message);
         }
       })
       .finally(() => {
-        if (useAppStore.getState().selectedCountry === requestedCountry) {
+        if (currentCountryRef.current === requestedCountry) {
           setLoading(false);
           setRefreshing(false);
           setScanStartedAt(null);
@@ -277,7 +296,7 @@ function SnipesPage() {
   const hasActiveFilters = activeFilterCount > 0;
 
   const resetFilters = () => {
-    updateSearch(DEFAULT_SNIPES_SEARCH);
+    updateSearch({ ...DEFAULT_SNIPES_SEARCH, country: search.country });
   };
 
   return (

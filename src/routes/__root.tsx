@@ -137,6 +137,7 @@ function NotFoundPage() {
       <div className="text-sm text-osu-f1">This page doesn't exist.</div>
       <Link
         to="/"
+        search={{ country: undefined }}
         className="rounded-md bg-osu-pink/20 px-4 py-2 text-xs font-semibold text-white hover:bg-osu-pink/30 transition-colors"
       >
         Go home

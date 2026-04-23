@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { getHomePopoffs, getHomeRecentScores, getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
+import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
@@ -16,13 +17,22 @@ import { useAppStore, useHasHydrated, useSelectedCountry } from "../store";
 import { pageSeo, SITE_NAME } from "../lib/seo";
 
 export const Route = createFileRoute("/")({
-  head: ({ match }) =>
-    pageSeo({
+  validateSearch: (search: Record<string, unknown>) => ({
+    country: parseCountrySearchParam(search.country),
+  }),
+  head: ({ match }) => {
+    const country = match.search.country;
+    const countryName = country ? getCountryName(country) : null;
+    return pageSeo({
       title: SITE_NAME,
-      description: "osu!mania rankings, fresh scores, and top plays by country.",
-      path: "/",
+      description: countryName
+        ? `Top osu!mania players and recent scores in ${countryName}.`
+        : "osu!mania rankings, fresh scores, and top plays by country.",
+      path: withSearchParams("/", { country }),
       origin: match.context.origin,
-    }),
+      imageCountry: country,
+    });
+  },
   component: HomePage,
 });
 
@@ -58,7 +68,9 @@ const HOME_RECENT_SCORES_SKELETON_COUNT = 2;
 
 function HomePage() {
   const navigate = useNavigate();
-  const selectedCountry = useSelectedCountry();
+  const { country } = Route.useSearch();
+  const fallbackCountry = useSelectedCountry();
+  const selectedCountry = country ?? fallbackCountry;
   const rankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const recentScores = useAppStore((state) => state.homeRecentScoresByCountry[selectedCountry]) ?? EMPTY_SCORES;
@@ -253,7 +265,7 @@ function HomePage() {
         <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Rankings</h2>
-            <Link to="/rankings" search={{ page: 1 }} className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
+            <Link to="/rankings" search={{ page: 1, country: selectedCountry }} className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
           </div>
           <div className="divide-y divide-osu-b3/15">
             {rankingsError ? (
@@ -317,7 +329,7 @@ function HomePage() {
             <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Recent Top Plays</h2>
             <Link
               to="/top-plays"
-              search={{ range: hydrated ? topPlaysRange : "7d" }}
+              search={{ range: hydrated ? topPlaysRange : "7d", country: selectedCountry }}
               className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors"
             >
               view all
@@ -400,7 +412,7 @@ function HomePage() {
         <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden lg:flex-1">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Recent Scores</h2>
-            <Link to="/tracker" className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
+            <Link to="/tracker" search={{ country: selectedCountry }} className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
           </div>
           <div className="divide-y divide-osu-b3/15">
             {loadingScores ? (

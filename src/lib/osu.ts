@@ -285,7 +285,7 @@ function getUserScoreListCacheKey(
   ].join(":");
 }
 
-async function getCachedUser(key: string): Promise<OsuUser> {
+export async function getCachedUser(key: string): Promise<OsuUser> {
   const cacheKey = getUserCacheKey(key);
   const cached = await getPersistentCached<OsuUser>(cacheKey);
   if (cached) return cached;
@@ -313,7 +313,7 @@ async function getCachedUser(key: string): Promise<OsuUser> {
   return request;
 }
 
-async function getCachedUserScores(
+export async function getCachedUserScores(
   type: "best" | "recent" | "firsts" | "pinned",
   userId: number,
   options: { limit: number; offset: number; includeFails?: boolean },
