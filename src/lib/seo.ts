@@ -1,9 +1,16 @@
 export const SITE_NAME = "o!mania tracker";
 
 export const DEFAULT_DESCRIPTION =
-  "Track osu!mania rankings, live scores, top plays, and replays by country. Country leaderboards, recent popoffs, player profiles, and a replay viewer for the osu!mania community.";
+  "osu!mania rankings, score feeds, top plays, maps, profiles, and replays by country.";
 
-export const DEFAULT_OG_IMAGE_PATH = "/api/og";
+const DEFAULT_OG_SUBTITLE = "Rankings, scores, top plays, maps, and replays by country.";
+
+export function ogImagePath(title = SITE_NAME, subtitle = DEFAULT_OG_SUBTITLE): string {
+  const params = new URLSearchParams({ title, subtitle });
+  return `/api/og?${params.toString()}`;
+}
+
+export const DEFAULT_OG_IMAGE_PATH = ogImagePath();
 
 export type MetaEntry =
   | { title: string }
@@ -45,25 +52,25 @@ export function pageSeo({
 }: PageSeoInput): PageSeo {
   const fullTitle = title === SITE_NAME ? SITE_NAME : `${title} - ${SITE_NAME}`;
   const url = absoluteUrl(path, origin);
-  const imageUrl = image ? absoluteUrl(image, origin) : undefined;
+  const imageUrl = absoluteUrl(image ?? ogImagePath(title, description), origin);
 
   const meta: MetaEntry[] = [
     { title: fullTitle },
     { name: "description", content: description },
     { property: "og:type", content: type },
+    { property: "og:site_name", content: SITE_NAME },
     { property: "og:title", content: fullTitle },
     { property: "og:description", content: description },
     { property: "og:url", content: url },
+    { property: "og:image", content: imageUrl },
+    { property: "og:image:width", content: "1200" },
+    { property: "og:image:height", content: "630" },
+    { property: "og:image:alt", content: title },
+    { name: "twitter:card", content: "summary_large_image" },
     { name: "twitter:title", content: fullTitle },
     { name: "twitter:description", content: description },
+    { name: "twitter:image", content: imageUrl },
   ];
-
-  if (imageUrl) {
-    meta.push(
-      { property: "og:image", content: imageUrl },
-      { name: "twitter:image", content: imageUrl },
-    );
-  }
 
   if (noindex) {
     meta.push({ name: "robots", content: "noindex, nofollow" });

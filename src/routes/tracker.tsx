@@ -34,8 +34,7 @@ export const Route = createFileRoute("/tracker")({
   head: ({ match }) =>
     pageSeo({
       title: "Live score tracker",
-      description:
-        "Live osu!mania score feed cycling through tracked players in your country. See new scores as they land.",
+      description: "Live score feed for tracked osu!mania players in your country.",
       path: "/tracker",
       origin: match.context.origin,
       noindex: true,
