@@ -16,12 +16,13 @@ import { useAppStore, useHasHydrated, useSelectedCountry } from "../store";
 import { pageSeo, SITE_NAME } from "../lib/seo";
 
 export const Route = createFileRoute("/")({
-  head: () =>
+  head: ({ match }) =>
     pageSeo({
       title: SITE_NAME,
       description:
         "Live osu!mania country rankings, recent top plays, and fresh scores from your country. Pick any country to see its leaderboard, popoffs, and player profiles.",
       path: "/",
+      origin: match.context.origin,
     }),
   component: HomePage,
 });

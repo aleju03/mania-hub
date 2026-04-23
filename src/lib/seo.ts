@@ -1,9 +1,5 @@
 export const SITE_NAME = "o!mania tracker";
 
-export const SITE_URL: string = (
-  (import.meta.env.VITE_SITE_URL ?? "").replace(/\/+$/, "")
-);
-
 export const DEFAULT_DESCRIPTION =
   "Track osu!mania rankings, live scores, top plays, and replays by country. Country leaderboards, recent popoffs, player profiles, and a replay viewer for the osu!mania community.";
 
@@ -16,16 +12,18 @@ export type MetaEntry =
 
 export type LinkEntry = { rel: string; href: string };
 
-export function absoluteUrl(path: string): string {
+export function absoluteUrl(path: string, origin: string): string {
   if (/^https?:\/\//i.test(path)) return path;
   const normalized = path.startsWith("/") ? path : `/${path}`;
-  return SITE_URL ? `${SITE_URL}${normalized}` : normalized;
+  const base = origin.replace(/\/+$/, "");
+  return base ? `${base}${normalized}` : normalized;
 }
 
 export interface PageSeoInput {
   title: string;
   description?: string;
   path: string;
+  origin: string;
   image?: string;
   type?: "website" | "article" | "profile";
   noindex?: boolean;
@@ -40,13 +38,14 @@ export function pageSeo({
   title,
   description = DEFAULT_DESCRIPTION,
   path,
+  origin,
   image,
   type = "website",
   noindex = false,
 }: PageSeoInput): PageSeo {
   const fullTitle = title === SITE_NAME ? SITE_NAME : `${title} - ${SITE_NAME}`;
-  const url = absoluteUrl(path);
-  const imageUrl = image ? absoluteUrl(image) : undefined;
+  const url = absoluteUrl(path, origin);
+  const imageUrl = image ? absoluteUrl(image, origin) : undefined;
 
   const meta: MetaEntry[] = [
     { title: fullTitle },
@@ -81,20 +80,21 @@ export function pageSeo({
 /* Sitewide WebSite schema with SearchAction. The SearchAction unlocks the
    sitelinks search box in Google results: users can type a username and
    Google deep-links them straight to the player page. Returns undefined
-   when SITE_URL isn't configured (target URL must be absolute). */
-export function websiteJsonLd(): Record<string, unknown> | undefined {
-  if (!SITE_URL) return undefined;
+   when no origin is available (target URL must be absolute). */
+export function websiteJsonLd(origin: string): Record<string, unknown> | undefined {
+  if (!origin) return undefined;
+  const base = origin.replace(/\/+$/, "");
   return {
     "@context": "https://schema.org",
     "@type": "WebSite",
     name: SITE_NAME,
-    url: `${SITE_URL}/`,
+    url: `${base}/`,
     description: DEFAULT_DESCRIPTION,
     potentialAction: {
       "@type": "SearchAction",
       target: {
         "@type": "EntryPoint",
-        urlTemplate: `${SITE_URL}/player/{search_term_string}`,
+        urlTemplate: `${base}/player/{search_term_string}`,
       },
       "query-input": "required name=search_term_string",
     },

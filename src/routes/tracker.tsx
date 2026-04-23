@@ -31,12 +31,13 @@ import type { OsuScore } from "../lib/types";
 import { pageSeo } from "../lib/seo";
 
 export const Route = createFileRoute("/tracker")({
-  head: () =>
+  head: ({ match }) =>
     pageSeo({
       title: "Live score tracker",
       description:
         "Live osu!mania score feed cycling through tracked players in your country. See new scores as they land.",
       path: "/tracker",
+      origin: match.context.origin,
       noindex: true,
     }),
   component: ScoresPage,

@@ -52,11 +52,12 @@ const BEST_SCORES_WINDOW_SIZE = 200;
 type PlayerTab = "best" | "recent" | "about";
 
 export const Route = createFileRoute("/player/$username")({
-  head: ({ params }) =>
+  head: ({ params, match }) =>
     pageSeo({
       title: `${params.username}`,
       description: `${params.username}'s osu!mania profile: best plays, recent scores, insights, and grade breakdown.`,
       path: `/player/${encodeURIComponent(params.username)}`,
+      origin: match.context.origin,
       type: "profile",
       noindex: true,
     }),

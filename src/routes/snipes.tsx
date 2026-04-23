@@ -57,11 +57,12 @@ function readRange(value: unknown): RangeFilter {
 }
 
 export const Route = createFileRoute("/snipes")({
-  head: () =>
+  head: ({ match }) =>
     pageSeo({
       title: "Snipes",
       description: "Country snipes feed for osu!mania. See when #1s change hands across your country.",
       path: "/snipes",
+      origin: match.context.origin,
       noindex: true,
     }),
   search: {

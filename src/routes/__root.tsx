@@ -18,6 +18,23 @@ import { PostHogProvider } from "../lib/posthog-provider";
 import { DEFAULT_DESCRIPTION, DEFAULT_OG_IMAGE_PATH, SITE_NAME, absoluteUrl, websiteJsonLd } from "../lib/seo";
 import appCss from "../styles.css?url";
 
+/* Origin is read from the live request headers instead of a VITE_SITE_URL
+   env var so og:image, canonical, and JSON-LD URLs always match the deployment
+   that served the page. Falls back to Host and request.url if forwarded
+   headers aren't present. */
+const getRequestOrigin = createServerFn({ method: "GET" }).handler(() => {
+  const request = getRequest();
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const hostHeader = request.headers.get("host");
+  const host = forwardedHost ?? hostHeader;
+  if (host) {
+    const proto = forwardedProto ?? (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
+    return `${proto}://${host}`;
+  }
+  return new URL(request.url).origin;
+});
+
 function getRequestCountry(): string | null {
   const headers = getRequest().headers;
   for (const headerName of [
@@ -55,11 +72,18 @@ const getInitialCountry = createServerFn({ method: "GET" }).handler(() => {
 });
 
 export const Route = createRootRoute({
-  beforeLoad: async () => ({
-    initialCountry: typeof document !== "undefined"
-      ? resolveInitialCountry(readCountryCookieClient())
-      : await getInitialCountry(),
-  }),
+  beforeLoad: async () => {
+    const onClient = typeof document !== "undefined";
+    const [initialCountry, origin] = await Promise.all([
+      onClient
+        ? Promise.resolve(resolveInitialCountry(readCountryCookieClient()))
+        : getInitialCountry(),
+      onClient
+        ? Promise.resolve(window.location.origin)
+        : getRequestOrigin(),
+    ]);
+    return { initialCountry, origin };
+  },
   head: ({ match }) => ({
     meta: [
       { charSet: "utf-8" },
@@ -72,14 +96,14 @@ export const Route = createRootRoute({
       { property: "og:type", content: "website" },
       { property: "og:title", content: SITE_NAME },
       { property: "og:description", content: DEFAULT_DESCRIPTION },
-      { property: "og:image", content: absoluteUrl(DEFAULT_OG_IMAGE_PATH) },
+      { property: "og:image", content: absoluteUrl(DEFAULT_OG_IMAGE_PATH, match.context.origin) },
       { property: "og:image:width", content: "1200" },
       { property: "og:image:height", content: "630" },
       { property: "og:image:alt", content: SITE_NAME },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: SITE_NAME },
       { name: "twitter:description", content: DEFAULT_DESCRIPTION },
-      { name: "twitter:image", content: absoluteUrl(DEFAULT_OG_IMAGE_PATH) },
+      { name: "twitter:image", content: absoluteUrl(DEFAULT_OG_IMAGE_PATH, match.context.origin) },
     ],
     links: [
       { rel: "icon", type: "image/png", href: `/api/favicon?code=${match.context.initialCountry}&v=2` },
@@ -152,7 +176,8 @@ function RootLayout() {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  const jsonLd = websiteJsonLd();
+  const { origin } = Route.useRouteContext();
+  const jsonLd = websiteJsonLd(origin);
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
