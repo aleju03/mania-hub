@@ -25,6 +25,7 @@
     "@tanstack/react-virtual": "^3.13.23",
     "@tanstack/router-plugin": "^1.132.0",
     "@vercel/functions": "^3.4.3",
+    "@vercel/og": "^0.11.1",
     "framer-motion": "^12.38.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.545.0",
