@@ -77,3 +77,26 @@ export function pageSeo({
 
   return { meta, links };
 }
+
+/* Sitewide WebSite schema with SearchAction. The SearchAction unlocks the
+   sitelinks search box in Google results: users can type a username and
+   Google deep-links them straight to the player page. Returns undefined
+   when SITE_URL isn't configured (target URL must be absolute). */
+export function websiteJsonLd(): Record<string, unknown> | undefined {
+  if (!SITE_URL) return undefined;
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: SITE_NAME,
+    url: `${SITE_URL}/`,
+    description: DEFAULT_DESCRIPTION,
+    potentialAction: {
+      "@type": "SearchAction",
+      target: {
+        "@type": "EntryPoint",
+        urlTemplate: `${SITE_URL}/player/{search_term_string}`,
+      },
+      "query-input": "required name=search_term_string",
+    },
+  };
+}
