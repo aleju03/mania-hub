@@ -139,12 +139,13 @@ interface ReplayRendererLike {
 }
 
 export const Route = createFileRoute("/replay")({
-  head: () =>
+  head: ({ match }) =>
     pageSeo({
       title: "Replay viewer",
       description:
         "Watch osu!mania replays in your browser. Browse by player or beatmap and play back any .osr file with scroll speed, speed, and background controls.",
       path: "/replay",
+      origin: match.context.origin,
       noindex: true,
     }),
   component: ReplayPage,
