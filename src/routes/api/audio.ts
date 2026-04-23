@@ -3,11 +3,14 @@ import { extractBeatmapArchiveFile } from "#/lib/beatmap-archive";
 
 const AUDIO_CACHE_TTL = 15 * 60 * 1000;
 const AUDIO_CACHE_MAX_ENTRIES = 12;
+const AUDIO_CACHE_MAX_BYTES = 180 * 1024 * 1024;
+const MAX_AUDIO_FILENAME_LENGTH = 260;
 
 type AudioCacheValue = { buffer: Buffer; mimeType: string };
 type AudioCacheEntry = {
   expiresAt: number;
   lastAccessedAt: number;
+  sizeBytes: number;
   promise: Promise<AudioCacheValue>;
 };
 
@@ -16,6 +19,9 @@ const audioCache = new Map<string, AudioCacheEntry>();
 const ALLOWED_AUDIO_EXTENSIONS = [".mp3", ".ogg", ".wav", ".flac"] as const;
 
 function isAllowedAudioFilename(filename: string): boolean {
+  if (filename.length > MAX_AUDIO_FILENAME_LENGTH || filename.includes("\0")) {
+    return false;
+  }
   const lower = filename.toLowerCase();
   return ALLOWED_AUDIO_EXTENSIONS.some((ext) => lower.endsWith(ext));
 }
@@ -36,6 +42,21 @@ function pruneAudioCache(now = Date.now()): void {
   entriesToRemove.forEach(([key]) => {
     audioCache.delete(key);
   });
+}
+
+function pruneAudioCacheByBytes(): void {
+  let totalBytes = [...audioCache.values()].reduce((sum, entry) => sum + entry.sizeBytes, 0);
+  if (totalBytes <= AUDIO_CACHE_MAX_BYTES) return;
+
+  const entriesByAge = [...audioCache.entries()]
+    .filter(([, entry]) => entry.sizeBytes > 0)
+    .sort(([, a], [, b]) => a.lastAccessedAt - b.lastAccessedAt);
+
+  for (const [key, entry] of entriesByAge) {
+    if (totalBytes <= AUDIO_CACHE_MAX_BYTES) break;
+    audioCache.delete(key);
+    totalBytes -= entry.sizeBytes;
+  }
 }
 
 function getMimeType(filename: string): string {
@@ -67,9 +88,16 @@ async function extractAudioFromArchive(beatmapsetId: string, filename: string): 
   audioCache.set(cacheKey, {
     expiresAt: now + AUDIO_CACHE_TTL,
     lastAccessedAt: now,
+    sizeBytes: 0,
     promise: request,
   });
   pruneAudioCache(now);
+  request.then((value) => {
+    const entry = audioCache.get(cacheKey);
+    if (!entry) return;
+    entry.sizeBytes = value.buffer.length;
+    pruneAudioCacheByBytes();
+  }).catch(() => {});
   request.catch(() => {
     audioCache.delete(cacheKey);
   });

@@ -1217,6 +1217,62 @@ type MapsUser = { id: number; username: string; avatar_url: string };
 
 const MAPS_REBUILD_LOCK_TTL_MS = 60_000;
 const MAPS_ORPHAN_CLEANUP_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const MAPS_MAX_USERS = 100;
+const MAPS_MAX_USERNAME_LENGTH = 64;
+const MAPS_MAX_AVATAR_URL_LENGTH = 512;
+
+function normalizeMapsUserId(value: unknown): number | null {
+  const id = Number(value);
+  if (!Number.isSafeInteger(id) || id <= 0 || id > 1_000_000_000) return null;
+  return id;
+}
+
+function normalizeMapsUsers(users: unknown): MapsUser[] {
+  if (!Array.isArray(users)) {
+    throw new Error("Invalid maps users payload.");
+  }
+  if (users.length > MAPS_MAX_USERS) {
+    throw new Error(`Maps requests are limited to ${MAPS_MAX_USERS} users.`);
+  }
+
+  const out: MapsUser[] = [];
+  const seen = new Set<number>();
+
+  for (const raw of users) {
+    if (!raw || typeof raw !== "object") continue;
+    const input = raw as Partial<MapsUser>;
+    const id = normalizeMapsUserId(input.id);
+    if (!id || seen.has(id)) continue;
+
+    seen.add(id);
+    out.push({
+      id,
+      username: String(input.username ?? "Unknown").slice(0, MAPS_MAX_USERNAME_LENGTH),
+      avatar_url: String(input.avatar_url ?? "").slice(0, MAPS_MAX_AVATAR_URL_LENGTH),
+    });
+  }
+
+  return out;
+}
+
+function normalizeMapsUserPayload(data: { users?: unknown }): { users: MapsUser[] } {
+  return { users: normalizeMapsUsers(data?.users) };
+}
+
+function normalizeMapsUserRebuildPayload(data: { users?: unknown; userId?: unknown }): {
+  users: MapsUser[];
+  userId: number;
+} {
+  const users = normalizeMapsUsers(data?.users);
+  const userId = normalizeMapsUserId(data?.userId);
+  if (!userId) {
+    throw new Error("Invalid maps rebuild user.");
+  }
+  if (!users.some((user) => user.id === userId)) {
+    throw new Error("Maps rebuild user must be present in the bounded users payload.");
+  }
+  return { users, userId };
+}
 
 function computeMapsUserKey(users: MapsUser[]): string {
   return users
@@ -1509,7 +1565,7 @@ export function composeCountryMapsData(
 }
 
 export const getCountryMapsData = createServerFn({ method: "GET" })
-  .inputValidator((data: { users: MapsUser[] }) => data)
+  .inputValidator(normalizeMapsUserPayload)
   .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
     edgeCache(3600, 86400);
     const farmedKey = computeMapsFarmedCacheKey(data.users);
@@ -1535,7 +1591,7 @@ export const getCountryMapsData = createServerFn({ method: "GET" })
   });
 
 export const rebuildCountryMapsData = createServerFn({ method: "POST" })
-  .inputValidator((data: { users: MapsUser[] }) => data)
+  .inputValidator(normalizeMapsUserPayload)
   .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
     const farmedKey = computeMapsFarmedCacheKey(data.users);
     const favKey = computeMapsFavouritesCacheKey(data.users);
@@ -1583,7 +1639,7 @@ export const rebuildCountryMapsData = createServerFn({ method: "POST" })
 // Per-section exports so the client can fetch farmed and favourites in parallel
 // and show incremental progress as each completes.
 export const getCountryMapsFarmed = createServerFn({ method: "GET" })
-  .inputValidator((data: { users: MapsUser[] }) => data)
+  .inputValidator(normalizeMapsUserPayload)
   .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
     edgeCache(3600, 86400);
     return fetchWithStaleAllowed<CountryMapsFarmedSection>(
@@ -1595,7 +1651,7 @@ export const getCountryMapsFarmed = createServerFn({ method: "GET" })
   });
 
 export const getCountryMapsFavourites = createServerFn({ method: "GET" })
-  .inputValidator((data: { users: MapsUser[] }) => data)
+  .inputValidator(normalizeMapsUserPayload)
   .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
     edgeCache(3600, 86400);
     return fetchWithStaleAllowed<CountryMapsFavouritesSection>(
@@ -1607,7 +1663,7 @@ export const getCountryMapsFavourites = createServerFn({ method: "GET" })
   });
 
 export const rebuildCountryMapsFarmed = createServerFn({ method: "POST" })
-  .inputValidator((data: { users: MapsUser[] }) => data)
+  .inputValidator(normalizeMapsUserPayload)
   .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
     return runCacheRebuild<CountryMapsFarmedSection>(
       computeMapsFarmedCacheKey(data.users),
@@ -1625,7 +1681,7 @@ export const rebuildCountryMapsFarmed = createServerFn({ method: "POST" })
   });
 
 export const rebuildCountryMapsFavourites = createServerFn({ method: "POST" })
-  .inputValidator((data: { users: MapsUser[] }) => data)
+  .inputValidator(normalizeMapsUserPayload)
   .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
     return runCacheRebuild<CountryMapsFavouritesSection>(
       computeMapsFavouritesCacheKey(data.users),
@@ -1648,7 +1704,7 @@ export const rebuildCountryMapsFavourites = createServerFn({ method: "POST" })
 // osu! — useful when a single player updates their favourites and you don't
 // want to force-refresh the entire top 50.
 export const rebuildCountryMapsForUser = createServerFn({ method: "POST" })
-  .inputValidator((data: { users: MapsUser[]; userId: number }) => data)
+  .inputValidator(normalizeMapsUserRebuildPayload)
   .handler(async ({ data }: { data: { users: MapsUser[]; userId: number } }) => {
     await deletePersistentCacheEntries([
       `user-favourites-all:${data.userId}`,

@@ -2,6 +2,9 @@ import JSZip from "jszip";
 
 const ARCHIVE_CACHE_TTL = 15 * 60 * 1000;
 const ARCHIVE_CACHE_MAX_ENTRIES = 6;
+const ARCHIVE_FETCH_TIMEOUT_MS = 15_000;
+const MAX_ARCHIVE_BYTES = 120 * 1024 * 1024;
+const MAX_EXTRACTED_FILE_BYTES = 60 * 1024 * 1024;
 
 type ArchiveCacheEntry = {
   expiresAt: number;
@@ -29,6 +32,49 @@ function pruneArchiveCache(now = Date.now()): void {
   });
 }
 
+async function readResponseBufferWithLimit(response: Response, limitBytes: number): Promise<ArrayBuffer> {
+  const contentLength = response.headers.get("content-length");
+  if (contentLength) {
+    const length = Number(contentLength);
+    if (!Number.isFinite(length) || length < 0 || length > limitBytes) {
+      throw new Error(`Archive is too large (${contentLength} bytes)`);
+    }
+  }
+
+  if (!response.body) {
+    const buffer = await response.arrayBuffer();
+    if (buffer.byteLength > limitBytes) {
+      throw new Error(`Archive is too large (${buffer.byteLength} bytes)`);
+    }
+    return buffer;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+
+    total += value.byteLength;
+    if (total > limitBytes) {
+      await reader.cancel().catch(() => {});
+      throw new Error(`Archive is too large (>${limitBytes} bytes)`);
+    }
+    chunks.push(value);
+  }
+
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out.buffer;
+}
+
 export async function getBeatmapArchive(beatmapsetId: string): Promise<JSZip> {
   const now = Date.now();
   const cached = archiveCache.get(beatmapsetId);
@@ -42,13 +88,19 @@ export async function getBeatmapArchive(beatmapsetId: string): Promise<JSZip> {
 
   const request = (async () => {
     const archiveUrl = `https://catboy.best/d/${encodeURIComponent(beatmapsetId)}`;
-    const archiveResponse = await fetch(archiveUrl);
-    if (!archiveResponse.ok) {
-      throw new Error(`Archive fetch failed (${archiveResponse.status})`);
-    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
+    try {
+      const archiveResponse = await fetch(archiveUrl, { signal: controller.signal });
+      if (!archiveResponse.ok) {
+        throw new Error(`Archive fetch failed (${archiveResponse.status})`);
+      }
 
-    const archiveBuffer = await archiveResponse.arrayBuffer();
-    return JSZip.loadAsync(archiveBuffer);
+      const archiveBuffer = await readResponseBufferWithLimit(archiveResponse, MAX_ARCHIVE_BYTES);
+      return JSZip.loadAsync(archiveBuffer);
+    } finally {
+      clearTimeout(timeout);
+    }
   })();
 
   archiveCache.set(beatmapsetId, {
@@ -94,5 +146,19 @@ export async function extractBeatmapArchiveFile(beatmapsetId: string, filename: 
     throw new Error(`File "${filename}" not found in archive`);
   }
 
-  return Buffer.from(await file.async("arraybuffer"));
+  const metadata = file as JSZip.JSZipObject & { _data?: { uncompressedSize?: number } };
+  const uncompressedSize = metadata._data?.uncompressedSize;
+  if (
+    typeof uncompressedSize === "number" &&
+    Number.isFinite(uncompressedSize) &&
+    uncompressedSize > MAX_EXTRACTED_FILE_BYTES
+  ) {
+    throw new Error(`File "${filename}" is too large`);
+  }
+
+  const buffer = Buffer.from(await file.async("arraybuffer"));
+  if (buffer.length > MAX_EXTRACTED_FILE_BYTES) {
+    throw new Error(`File "${filename}" is too large`);
+  }
+  return buffer;
 }

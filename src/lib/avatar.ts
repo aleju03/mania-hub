@@ -25,6 +25,10 @@ interface ColorBucket {
 
 const AVATAR_COLOR_CONCURRENCY = 8;
 const AVATAR_ACCENT_CACHE_TTL = 3 * 24 * 60 * 60 * 1000;
+const AVATAR_ACCENT_MAX_URLS = 100;
+const AVATAR_ACCENT_MAX_URL_LENGTH = 512;
+const AVATAR_FETCH_TIMEOUT_MS = 8_000;
+const AVATAR_MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -237,33 +241,94 @@ function extractDominantColors(pixelData: Uint8Array | Buffer, channels: number)
     .sort((a, b) => b.count - a.count);
 }
 
+function normalizeAvatarAccentUrl(url: string): string | null {
+  if (typeof url !== "string" || url.length > AVATAR_ACCENT_MAX_URL_LENGTH) return null;
+
+  try {
+    const parsedUrl = new URL(url);
+    if (parsedUrl.protocol !== "https:" || parsedUrl.hostname !== "a.ppy.sh") {
+      return null;
+    }
+    parsedUrl.hash = "";
+    return parsedUrl.href;
+  } catch {
+    return null;
+  }
+}
+
+async function readImageBufferWithLimit(response: Response, limitBytes: number): Promise<Buffer> {
+  const contentLength = response.headers.get("content-length");
+  if (contentLength) {
+    const length = Number(contentLength);
+    if (!Number.isFinite(length) || length < 0 || length > limitBytes) {
+      throw new Error(`Avatar image is too large (${contentLength} bytes)`);
+    }
+  }
+
+  if (!response.body) {
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > limitBytes) {
+      throw new Error(`Avatar image is too large (${buffer.length} bytes)`);
+    }
+    return buffer;
+  }
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+
+    total += value.byteLength;
+    if (total > limitBytes) {
+      await reader.cancel().catch(() => {});
+      throw new Error(`Avatar image is too large (>${limitBytes} bytes)`);
+    }
+    chunks.push(value);
+  }
+
+  return Buffer.concat(chunks, total);
+}
+
 async function extractAvatarAccent(url: string): Promise<string | null> {
-  const parsedUrl = new URL(url);
-  if (parsedUrl.hostname !== "a.ppy.sh") {
+  const normalizedUrl = normalizeAvatarAccentUrl(url);
+  if (!normalizedUrl) {
     return null;
   }
 
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch avatar: ${response.status}`);
-  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), AVATAR_FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(normalizedUrl, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch avatar: ${response.status}`);
+    }
 
-  const buffer = Buffer.from(await response.arrayBuffer());
-  const { data, info } = await sharp(buffer, { animated: false })
-    .resize(24, 24, { fit: "fill" })
-    .removeAlpha()
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-  const buckets = extractDominantColors(data, info.channels);
-  return pickAccentColor(buckets);
+    const buffer = await readImageBufferWithLimit(response, AVATAR_MAX_IMAGE_BYTES);
+    const { data, info } = await sharp(buffer, { animated: false })
+      .resize(24, 24, { fit: "fill" })
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const buckets = extractDominantColors(data, info.channels);
+    return pickAccentColor(buckets);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function getAvatarAccentCached(url: string): Promise<string | null> {
-  const cacheKey = getAvatarAccentCacheKey(url);
+  const normalizedUrl = normalizeAvatarAccentUrl(url);
+  if (!normalizedUrl) return null;
+
+  const cacheKey = getAvatarAccentCacheKey(normalizedUrl);
   const cached = await getPersistentCacheEntry<string | null>(cacheKey);
   if (cached.hit) return cached.value;
 
-  const accent = await extractAvatarAccent(url);
+  const accent = await extractAvatarAccent(normalizedUrl);
   await setPersistentCache(cacheKey, accent, AVATAR_ACCENT_CACHE_TTL);
   return accent;
 }
@@ -279,19 +344,26 @@ export const getAvatarAccents = createServerFn({ method: "GET" })
   .inputValidator((data: { urls: string[] }) => data)
   .handler(async ({ data }: { data: { urls: string[] } }) => {
     edgeCache(86400, 604800);
-    const urls = [...new Set(data.urls)];
+    if (!Array.isArray(data.urls) || data.urls.length > AVATAR_ACCENT_MAX_URLS) {
+      throw new Error(`Avatar accent requests are limited to ${AVATAR_ACCENT_MAX_URLS} URLs.`);
+    }
+
+    const urlPairs = data.urls
+      .map((url) => ({ original: url, normalized: normalizeAvatarAccentUrl(url) }))
+      .filter((entry): entry is { original: string; normalized: string } => entry.normalized !== null);
+    const urls = [...new Map(urlPairs.map((entry) => [entry.normalized, entry])).values()];
     const output: Record<string, string | null> = {};
 
-    const cacheKeys = urls.map((url) => getAvatarAccentCacheKey(url));
-    const keyToUrl = new Map(urls.map((url, i) => [cacheKeys[i], url]));
+    const cacheKeys = urls.map((entry) => getAvatarAccentCacheKey(entry.normalized));
+    const keyToUrl = new Map(urls.map((entry, i) => [cacheKeys[i], entry]));
     const cached = await getPersistentCacheEntries<string | null>(cacheKeys);
 
-    const missingUrls: string[] = [];
-    for (const [cacheKey, url] of keyToUrl) {
+    const missingUrls: Array<{ original: string; normalized: string }> = [];
+    for (const [cacheKey, entry] of keyToUrl) {
       if (cached.has(cacheKey)) {
-        output[url] = cached.get(cacheKey)!;
+        output[entry.original] = cached.get(cacheKey)!;
       } else {
-        missingUrls.push(url);
+        missingUrls.push(entry);
       }
     }
 
@@ -301,13 +373,13 @@ export const getAvatarAccents = createServerFn({ method: "GET" })
         while (true) {
           const currentIndex = nextIndex++;
           if (currentIndex >= missingUrls.length) return;
-          const url = missingUrls[currentIndex];
+          const { original, normalized } = missingUrls[currentIndex];
           try {
-            const accent = await extractAvatarAccent(url);
-            await setPersistentCache(getAvatarAccentCacheKey(url), accent, AVATAR_ACCENT_CACHE_TTL);
-            output[url] = accent;
+            const accent = await extractAvatarAccent(normalized);
+            await setPersistentCache(getAvatarAccentCacheKey(normalized), accent, AVATAR_ACCENT_CACHE_TTL);
+            output[original] = accent;
           } catch {
-            output[url] = null;
+            output[original] = null;
           }
         }
       }),
