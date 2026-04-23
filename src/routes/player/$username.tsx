@@ -53,7 +53,7 @@ type PlayerTab = "best" | "recent" | "about";
 export const Route = createFileRoute("/player/$username")({
   head: ({ params }) =>
     pageSeo({
-      title: `${params.username} — osu!mania profile`,
+      title: `${params.username}`,
       description: `${params.username}'s osu!mania profile: best plays, recent scores, insights, and grade breakdown.`,
       path: `/player/${encodeURIComponent(params.username)}`,
       type: "profile",

@@ -13,12 +13,12 @@ import { ManiaRain } from "../components/home/ManiaRain";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse, LeanHomeScore, LeanHomePopoff } from "../lib/types";
 import { useAppStore, useHasHydrated, useSelectedCountry } from "../store";
-import { pageSeo } from "../lib/seo";
+import { pageSeo, SITE_NAME } from "../lib/seo";
 
 export const Route = createFileRoute("/")({
   head: () =>
     pageSeo({
-      title: "osu!mania country hub",
+      title: SITE_NAME,
       description:
         "Live osu!mania country rankings, recent top plays, and fresh scores from your country. Pick any country to see its leaderboard, popoffs, and player profiles.",
       path: "/",

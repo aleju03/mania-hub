@@ -3,7 +3,7 @@ import sharp from "sharp";
 
 const WIDTH = 1200;
 const HEIGHT = 630;
-const MAX_TITLE_LEN = 80;
+const MAX_TITLE_LEN = 30;
 const MAX_SUBTITLE_LEN = 140;
 
 const cache = new Map<string, Promise<Buffer>>();
@@ -92,7 +92,7 @@ export const Route = createFileRoute("/api/og")({
 
         try {
           const buffer = await getImage(title, subtitle);
-          return new Response(buffer as unknown as BodyInit, {
+          return new Response(new Uint8Array(buffer), {
             status: 200,
             headers: {
               "Content-Type": "image/png",

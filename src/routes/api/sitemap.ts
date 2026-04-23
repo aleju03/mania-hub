@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { SITE_URL } from "#/lib/seo";
 
-// Paths that should be crawled & indexed. Keep in sync with robots.txt
-// disallow rules — anything disallowed there must not appear here.
+// Paths that should be crawled and indexed. Keep in sync with robots.txt
+// disallow rules: anything disallowed there must not appear here.
 const STATIC_PATHS = [
   { path: "/", changefreq: "hourly", priority: "1.0" },
   { path: "/rankings", changefreq: "hourly", priority: "0.9" },
