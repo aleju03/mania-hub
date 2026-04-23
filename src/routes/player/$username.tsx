@@ -647,13 +647,23 @@ function PlayerPage() {
             transition={{ duration: 0.2 }}
           >
             <motion.div
-              className="bg-osu-b4 border border-osu-b3/20 rounded-2xl p-5 w-[380px] max-h-[85vh] overflow-y-auto shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
+              className="relative bg-osu-b4 border border-osu-b3/20 rounded-2xl p-5 w-[380px] max-h-[85vh] overflow-y-auto shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
               onClick={(e) => e.stopPropagation()}
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               transition={{ type: "spring", damping: 30, stiffness: 500 }}
             >
+              <button
+                type="button"
+                onClick={() => { setModModalOpen(false); setHoveredMod(null); }}
+                aria-label="Close"
+                className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M1 1l12 12M13 1L1 13" />
+                </svg>
+              </button>
               {(() => {
                 const noModCount = profileInsights.sampleSize - (profileInsights.mostUsedMod?.total ?? 0);
                 const entries = [
@@ -817,13 +827,23 @@ function PlayerPage() {
             transition={{ duration: 0.2 }}
           >
             <motion.div
-              className="bg-osu-b4 border border-osu-b3/20 rounded-2xl p-5 w-[420px] max-w-full max-h-[85vh] overflow-y-auto shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
+              className="relative bg-osu-b4 border border-osu-b3/20 rounded-2xl p-5 w-[420px] max-w-full max-h-[85vh] overflow-y-auto shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
               onClick={(e) => e.stopPropagation()}
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               transition={{ type: "spring", damping: 30, stiffness: 500 }}
             >
+              <button
+                type="button"
+                onClick={() => setBpmModalOpen(false)}
+                aria-label="Close"
+                className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M1 1l12 12M13 1L1 13" />
+                </svg>
+              </button>
               <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">BPM Breakdown</div>
               <div className="mt-0.5 text-[11px] text-osu-f1/60">
                 across {profileInsights.sampleSize} top plays · adjusted for rate mods
