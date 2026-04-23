@@ -41,8 +41,7 @@ export const Route = createFileRoute("/rankings")({
   head: ({ match }) =>
     pageSeo({
       title: "Country mania rankings",
-      description:
-        "Browse osu!mania country rankings with 7-day rank changes, accuracy, play count, and grade breakdowns. Sort by PP, accuracy, playcount, or grade counts.",
+      description: "Sort osu!mania country rankings by PP, accuracy, play count, and recent rank changes.",
       path: "/rankings",
       origin: match.context.origin,
     }),

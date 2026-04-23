@@ -19,8 +19,7 @@ export const Route = createFileRoute("/")({
   head: ({ match }) =>
     pageSeo({
       title: SITE_NAME,
-      description:
-        "Live osu!mania country rankings, recent top plays, and fresh scores from your country. Pick any country to see its leaderboard, popoffs, and player profiles.",
+      description: "osu!mania rankings, fresh scores, and top plays by country.",
       path: "/",
       origin: match.context.origin,
     }),

@@ -66,8 +66,7 @@ export const Route = createFileRoute("/top-plays")({
   head: ({ match }) =>
     pageSeo({
       title: "Top mania plays this week",
-      description:
-        "Recent popoffs and the highest PP osu!mania plays from your country over the last 24 hours, 3 days, 7 days, and 30 days.",
+      description: "Recent popoffs and high-PP osu!mania plays by country.",
       path: "/top-plays",
       origin: match.context.origin,
     }),

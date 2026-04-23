@@ -299,8 +299,7 @@ export const Route = createFileRoute("/maps")({
   head: ({ match }) =>
     pageSeo({
       title: "Beatmaps played by your country",
-      description:
-        "Explore osu!mania beatmaps farmed, played, and favourited by top players in your country. Filter by key count, star rating, PP, mods, and ranked status.",
+      description: "Find the osu!mania maps your country's top players farm, play, and favourite.",
       path: "/maps",
       origin: match.context.origin,
     }),

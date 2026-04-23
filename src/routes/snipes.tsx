@@ -60,7 +60,7 @@ export const Route = createFileRoute("/snipes")({
   head: ({ match }) =>
     pageSeo({
       title: "Snipes",
-      description: "Country snipes feed for osu!mania. See when #1s change hands across your country.",
+      description: "Track when osu!mania #1 scores change hands in your country.",
       path: "/snipes",
       origin: match.context.origin,
       noindex: true,
