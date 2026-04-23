@@ -4,9 +4,10 @@ export const DEFAULT_DESCRIPTION =
   "osu!mania rankings, score feeds, top plays, maps, profiles, and replays by country.";
 
 const DEFAULT_OG_SUBTITLE = "Rankings, scores, top plays, maps, and replays by country.";
+const OG_IMAGE_VERSION = "2";
 
 export function ogImagePath(title = SITE_NAME, subtitle = DEFAULT_OG_SUBTITLE): string {
-  const params = new URLSearchParams({ title, subtitle });
+  const params = new URLSearchParams({ title, subtitle, v: OG_IMAGE_VERSION });
   return `/api/og?${params.toString()}`;
 }
 
