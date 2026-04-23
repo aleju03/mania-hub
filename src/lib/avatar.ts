@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import sharp from "sharp";
-import { getPersistentCacheEntry, setPersistentCache } from "./api";
+import { getPersistentCacheEntries, getPersistentCacheEntry, setPersistentCache } from "./api";
 import { getAvatarAccentCacheKey } from "./avatar-accent";
 
 function edgeCache(sMaxage: number, swr?: number): void {
@@ -281,18 +281,31 @@ export const getAvatarAccents = createServerFn({ method: "GET" })
     edgeCache(86400, 604800);
     const urls = [...new Set(data.urls)];
     const output: Record<string, string | null> = {};
-    let nextIndex = 0;
 
+    const cacheKeys = urls.map((url) => getAvatarAccentCacheKey(url));
+    const keyToUrl = new Map(urls.map((url, i) => [cacheKeys[i], url]));
+    const cached = await getPersistentCacheEntries<string | null>(cacheKeys);
+
+    const missingUrls: string[] = [];
+    for (const [cacheKey, url] of keyToUrl) {
+      if (cached.has(cacheKey)) {
+        output[url] = cached.get(cacheKey)!;
+      } else {
+        missingUrls.push(url);
+      }
+    }
+
+    let nextIndex = 0;
     await Promise.all(
-      Array.from({ length: Math.min(AVATAR_COLOR_CONCURRENCY, urls.length) }, async () => {
+      Array.from({ length: Math.min(AVATAR_COLOR_CONCURRENCY, missingUrls.length) }, async () => {
         while (true) {
           const currentIndex = nextIndex++;
-          if (currentIndex >= urls.length) return;
-
-          const url = urls[currentIndex];
-
+          if (currentIndex >= missingUrls.length) return;
+          const url = missingUrls[currentIndex];
           try {
-            output[url] = await getAvatarAccentCached(url);
+            const accent = await extractAvatarAccent(url);
+            await setPersistentCache(getAvatarAccentCacheKey(url), accent, AVATAR_ACCENT_CACHE_TTL);
+            output[url] = accent;
           } catch {
             output[url] = null;
           }

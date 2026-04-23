@@ -207,6 +207,52 @@ export async function getPersistentCacheEntry<T>(key: string): Promise<CacheLook
   }
 }
 
+export async function getPersistentCacheEntries<T>(keys: string[]): Promise<Map<string, T>> {
+  const results = new Map<string, T>();
+  if (keys.length === 0) return results;
+
+  const dbKeys: string[] = [];
+  for (const key of keys) {
+    const mem = getCachedEntry<T>(key);
+    if (mem.hit) {
+      results.set(key, mem.value);
+    } else {
+      dbKeys.push(key);
+    }
+  }
+
+  if (dbKeys.length === 0 || !hasDb() || !db) return results;
+
+  try {
+    await ensureCacheSchema();
+
+    const placeholders = dbKeys.map(() => "?").join(",");
+    const result = await db.execute({
+      sql: `SELECT cache_key, cache_value, expires_at FROM cache_entries WHERE cache_key IN (${placeholders})`,
+      args: dbKeys,
+    });
+
+    const now = Date.now();
+    for (const row of result.rows) {
+      const key = String(row.cache_key);
+      const expiresAt = Number(row.expires_at);
+      if (now >= expiresAt) continue;
+
+      try {
+        const parsed = (await decodeCacheValue(String(row.cache_value))) as T;
+        responseCache.set(key, { value: parsed, expires: expiresAt });
+        results.set(key, parsed);
+      } catch (error) {
+        warnCacheIssue("batch decode", key, error);
+      }
+    }
+  } catch (error) {
+    warnCacheIssue("persistent batch read", `${dbKeys.length} keys`, error);
+  }
+
+  return results;
+}
+
 export async function getPersistentCached<T>(key: string): Promise<T | null> {
   const cached = await getPersistentCacheEntry<T>(key);
   return cached.hit ? cached.value : null;
