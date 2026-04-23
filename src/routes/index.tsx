@@ -248,9 +248,9 @@ function HomePage() {
         </div>
       </section>
 
-      <div className="relative max-w-[1200px] mx-auto px-4 sm:px-5 pb-8 grid grid-cols-1 lg:grid-cols-[1fr_1fr_1fr] gap-4">
+      <div className="relative max-w-[1200px] mx-auto px-4 sm:px-5 pb-8 grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-4">
         {/* CR Top 5 */}
-        <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden lg:row-span-2">
+        <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Rankings</h2>
             <Link to="/rankings" search={{ page: 1 }} className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
@@ -310,8 +310,9 @@ function HomePage() {
           </div>
         </section>
 
+        <div className="flex flex-col gap-4">
         {/* Recent Top Plays - featured */}
-        <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden lg:col-span-2">
+        <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Recent Top Plays</h2>
             <Link
@@ -396,7 +397,7 @@ function HomePage() {
         </section>
 
         {/* Recent Scores */}
-        <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden lg:col-span-2">
+        <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden lg:flex-1">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Recent Scores</h2>
             <Link to="/tracker" className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
@@ -446,6 +447,7 @@ function HomePage() {
             )}
           </div>
         </section>
+        </div>
       </div>
     </div>
   );
