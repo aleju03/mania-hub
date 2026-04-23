@@ -4,7 +4,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { getAvatarAccentStoreKey } from "./lib/avatar-accent";
 import { DEFAULT_COUNTRY_CODE, normalizeCountryCode } from "./lib/country";
 import { InitialCountryContext } from "./lib/country-context";
-import { readCountryCookieClient, writeCountryCookieClient } from "./lib/country-cookie";
+import { readAutoCountryCookieClient, readCountryCookieClient, writeCountryCookieClient } from "./lib/country-cookie";
 import { getScoreIdentity, getScoreTimeMs } from "./lib/score";
 import type {
   OsuScore,
@@ -662,16 +662,23 @@ export const useAppStore = create<AppState>()(
         const nextState = persistedState && typeof persistedState === "object"
           ? persistedState as Partial<AppState>
           : {};
-        const persistedSelectedCountry = normalizeCountryCode(nextState.selectedCountry);
-        // The cookie is the source of truth on first load: it's what the
-        // server used to render the SSR HTML. If it disagrees with the
-        // localStorage value, the cookie wins. Falls back to the in-flight
-        // store value (user mid-session) and finally the persisted value.
+        const hasPersistedSelectedCountry = typeof nextState.selectedCountry === "string";
+        const persistedSelectedCountry = hasPersistedSelectedCountry
+          ? normalizeCountryCode(nextState.selectedCountry)
+          : null;
+        // The country cookie is the source of truth on first load: it's what
+        // the server used to render the SSR HTML. The exception is the
+        // auto-detected first-visit marker: if an older persisted localStorage
+        // preference exists, that preference wins and the cookie is rewritten
+        // after hydration.
         const cookieCountry = readCountryCookieClient();
-        const selectedCountry = cookieCountry
-          ?? (currentState.selectedCountry !== DEFAULT_COUNTRY_CODE
-            ? currentState.selectedCountry
-            : persistedSelectedCountry);
+        const autoCountryCookie = readAutoCountryCookieClient();
+        const selectedCountry = cookieCountry && !(autoCountryCookie && persistedSelectedCountry)
+          ? cookieCountry
+          : (persistedSelectedCountry
+            ?? (currentState.selectedCountry !== DEFAULT_COUNTRY_CODE
+              ? currentState.selectedCountry
+              : DEFAULT_COUNTRY_CODE));
         const persistedPopoffsByCountry =
           nextState.popoffsByCountry && typeof nextState.popoffsByCountry === "object"
             ? nextState.popoffsByCountry
@@ -880,7 +887,7 @@ export const useAppStore = create<AppState>()(
 if (typeof window !== "undefined") {
   const syncCookieToStore = () => {
     const current = useAppStore.getState().selectedCountry;
-    if (readCountryCookieClient() !== current) {
+    if (readCountryCookieClient() !== current || readAutoCountryCookieClient()) {
       writeCountryCookieClient(current);
     }
   };

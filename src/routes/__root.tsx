@@ -1,17 +1,57 @@
 import { HeadContent, Link, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { getCookie } from "@tanstack/react-start/server";
+import { getCookie, getRequest, setCookie } from "@tanstack/react-start/server";
 import { Nav } from "../components/layout/Nav";
 import { DevRateLimitBadge } from "../components/layout/DevRateLimitBadge";
 import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
 import { InitialCountryContext } from "../lib/country-context";
-import { COUNTRY_COOKIE_NAME, parseCountryCookieValue, readCountryCookieClient, resolveInitialCountry } from "../lib/country-cookie";
+import {
+  COUNTRY_AUTO_COOKIE_NAME,
+  COUNTRY_COOKIE_MAX_AGE_SECONDS,
+  COUNTRY_COOKIE_NAME,
+  parseCountryCookieValue,
+  readCountryCookieClient,
+  resolveDetectedCountry,
+  resolveInitialCountry,
+} from "../lib/country-cookie";
 import { PostHogProvider } from "../lib/posthog-provider";
 import { DEFAULT_DESCRIPTION, DEFAULT_OG_IMAGE_PATH, SITE_NAME, absoluteUrl } from "../lib/seo";
 import appCss from "../styles.css?url";
 
+function getRequestCountry(): string | null {
+  const headers = getRequest().headers;
+  for (const headerName of [
+    "x-vercel-ip-country",
+    "cf-ipcountry",
+    "cloudfront-viewer-country",
+    "x-country-code",
+    "x-geo-country",
+  ]) {
+    const country = resolveDetectedCountry(headers.get(headerName));
+    if (country) return country;
+  }
+  return null;
+}
+
 const getInitialCountry = createServerFn({ method: "GET" }).handler(() => {
-  return resolveInitialCountry(parseCountryCookieValue(getCookie(COUNTRY_COOKIE_NAME)));
+  const countryCookie = parseCountryCookieValue(getCookie(COUNTRY_COOKIE_NAME));
+  if (countryCookie) return countryCookie;
+
+  const detectedCountry = getRequestCountry();
+  if (detectedCountry) {
+    setCookie(COUNTRY_COOKIE_NAME, detectedCountry, {
+      path: "/",
+      maxAge: COUNTRY_COOKIE_MAX_AGE_SECONDS,
+      sameSite: "lax",
+    });
+    setCookie(COUNTRY_AUTO_COOKIE_NAME, "1", {
+      path: "/",
+      maxAge: COUNTRY_COOKIE_MAX_AGE_SECONDS,
+      sameSite: "lax",
+    });
+  }
+
+  return resolveInitialCountry(countryCookie, detectedCountry);
 });
 
 export const Route = createRootRoute({

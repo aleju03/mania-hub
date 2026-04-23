@@ -229,6 +229,11 @@ export function normalizeCountryCode(code?: string | null): string {
   return normalized;
 }
 
+export function isSupportedCountryCode(code?: string | null): boolean {
+  const normalized = code?.trim().toUpperCase();
+  return !!normalized && COUNTRY_NAME_BY_CODE.has(normalized);
+}
+
 export function getCountryName(code?: string | null): string {
   const normalized = normalizeCountryCode(code);
   return COUNTRY_NAME_BY_CODE.get(normalized) ?? normalized;

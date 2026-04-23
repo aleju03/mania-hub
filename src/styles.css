@@ -1,13 +1,32 @@
 @import "tailwindcss";
 
-/* Override Tailwind's hover variant to also require a fine pointer. Android
- * browsers lie about `(hover: hover)` on touch, so Tailwind's default gate
- * isn't enough and tap-triggered hover states stick until the next tap
- * elsewhere. Combining with `(pointer: fine)` correctly scopes hover styles
- * to real mice/trackpads. */
+/* Override Tailwind's hover variant:
+ * - Real mice/trackpads keep `:hover`, gated by `(hover: hover) and (pointer: fine)`.
+ *   Android browsers lie about `(hover: hover)` on touch, so combining with
+ *   `(pointer: fine)` prevents tap-triggered hover states from sticking until
+ *   the next tap elsewhere.
+ * - Touch devices get `:active` instead, so taps briefly flash the same
+ *   visual without the stuck-state bug. */
 @custom-variant hover {
   @media (hover: hover) and (pointer: fine) {
     &:hover {
+      @slot;
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    &:active {
+      @slot;
+    }
+  }
+}
+@custom-variant group-hover {
+  @media (hover: hover) and (pointer: fine) {
+    &:is(:where(.group):hover *) {
+      @slot;
+    }
+  }
+  @media (hover: none), (pointer: coarse) {
+    &:is(:where(.group):active *) {
       @slot;
     }
   }

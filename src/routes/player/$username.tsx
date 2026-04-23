@@ -320,6 +320,7 @@ function PlayerPage() {
   const [bestWindowLoaded, setBestWindowLoaded] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [modModalOpen, setModModalOpen] = useState(false);
+  const [hoveredMod, setHoveredMod] = useState<string | null>(null);
   const [bpmModalOpen, setBpmModalOpen] = useState(false);
   const [recentHasMore, setRecentHasMore] = useState(true);
   const [loadingMoreRecent, setLoadingMoreRecent] = useState(false);
@@ -638,52 +639,166 @@ function PlayerPage() {
         {modModalOpen && profileInsights?.modBreakdown && profileInsights.modBreakdown.length > 0 && (
           <motion.div
             className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/75 cursor-pointer"
-            onClick={() => setModModalOpen(false)}
+            onClick={() => { setModModalOpen(false); setHoveredMod(null); }}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
             <motion.div
-              className="bg-osu-b4 border border-osu-b3/20 rounded-2xl p-5 w-[360px] max-h-[80vh] overflow-y-auto shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
+              className="bg-osu-b4 border border-osu-b3/20 rounded-2xl p-5 w-[380px] max-h-[85vh] overflow-y-auto shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
               onClick={(e) => e.stopPropagation()}
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               transition={{ type: "spring", damping: 30, stiffness: 500 }}
             >
-              <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">Mod Usage</div>
-              <div className="mt-0.5 text-[11px] text-osu-f1/60">
-                across {profileInsights.sampleSize} top plays
-              </div>
-              <div className="mt-4 space-y-2.5">
-                {(() => {
-                  const noModCount = profileInsights.sampleSize - (profileInsights.mostUsedMod?.total ?? 0);
-                  const entries = [
-                    ...profileInsights.modBreakdown,
-                    ...(noModCount > 0 ? [{ label: "NM", count: noModCount, total: profileInsights.sampleSize }] : []),
-                  ].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+              {(() => {
+                const noModCount = profileInsights.sampleSize - (profileInsights.mostUsedMod?.total ?? 0);
+                const entries = [
+                  ...profileInsights.modBreakdown,
+                  ...(noModCount > 0 ? [{ label: "NM", count: noModCount, total: profileInsights.sampleSize }] : []),
+                ].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 
-                  return entries.map((entry) => {
-                    const pct = Math.round((entry.count / profileInsights.sampleSize) * 100);
-                    return (
-                      <div key={entry.label} className="flex items-center gap-2.5">
-                        <ModBadge mod={entry.label} />
-                        <span className="text-xs font-semibold text-white w-8">{entry.label}</span>
-                        <div className="flex-1 h-1.5 rounded-full bg-osu-b3/40 overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-osu-yellow"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <span className="text-[11px] text-osu-f1 tabular-nums w-14 text-right">
-                          {entry.count} ({pct}%)
+                const palette = ["#ffcc22", "#66ccff", "#ff6f91", "#a78bfa", "#34d399", "#fb923c", "#f472b6", "#22d3ee"];
+                let paletteIdx = 0;
+                const colored = entries.map((e) => ({
+                  ...e,
+                  color: e.label === "NM" ? "#9ca3af" : palette[paletteIdx++ % palette.length],
+                  pct: (e.count / profileInsights.sampleSize) * 100,
+                }));
+
+                const cx = 110, cy = 110, ro = 96, ri = 62;
+                const polar = (r: number, deg: number) => {
+                  const rad = ((deg - 90) * Math.PI) / 180;
+                  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+                };
+                const slicePath = (start: number, end: number, ringOuter: number, ringInner: number) => {
+                  const so = polar(ringOuter, end);
+                  const eo = polar(ringOuter, start);
+                  const si = polar(ringInner, start);
+                  const ei = polar(ringInner, end);
+                  const large = end - start <= 180 ? 0 : 1;
+                  return `M ${so.x} ${so.y} A ${ringOuter} ${ringOuter} 0 ${large} 0 ${eo.x} ${eo.y} L ${si.x} ${si.y} A ${ringInner} ${ringInner} 0 ${large} 1 ${ei.x} ${ei.y} Z`;
+                };
+                const fullDonut = `M ${cx - ro} ${cy} A ${ro} ${ro} 0 1 0 ${cx + ro} ${cy} A ${ro} ${ro} 0 1 0 ${cx - ro} ${cy} Z M ${cx - ri} ${cy} A ${ri} ${ri} 0 1 1 ${cx + ri} ${cy} A ${ri} ${ri} 0 1 1 ${cx - ri} ${cy} Z`;
+
+                // Normalize slice angles by total mod-usages (not sampleSize): plays
+                // can stack mods so counts can sum to >100%. Without this the last
+                // slice wraps past 360° and overlaps the first one.
+                const totalCount = colored.reduce((sum, e) => sum + e.count, 0) || 1;
+                let acc = 0;
+                const slices = colored.map((entry) => {
+                  const start = (acc / totalCount) * 360;
+                  acc += entry.count;
+                  const end = (acc / totalCount) * 360;
+                  return { ...entry, start, end };
+                });
+                const singleSlice = slices.length === 1;
+                const focused = hoveredMod ? slices.find((s) => s.label === hoveredMod) : null;
+                const HOVER_OFFSET = 8;
+                const stacks = totalCount - profileInsights.sampleSize;
+
+                return (
+                  <>
+                    <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">Mod Usage</div>
+                    <div className="mt-0.5 text-[11px] text-osu-f1/60 flex items-center gap-1.5 flex-wrap">
+                      <span>across {profileInsights.sampleSize} top plays</span>
+                      {stacks > 0 && (
+                        <span
+                          className="px-1.5 py-[1px] rounded bg-osu-b3/40 text-[9px] font-semibold uppercase tracking-wider text-osu-f1 cursor-help"
+                          title={`${stacks} extra mod-use${stacks === 1 ? "" : "s"} from plays that stack mods (e.g. DT+MR). Slice sizes show share of mod-uses; percentages show share of plays.`}
+                        >
+                          +{stacks} stacked
                         </span>
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
+                      )}
+                    </div>
+                    <div className="mt-3 flex justify-center">
+                      <svg viewBox="0 0 220 220" className="w-52 h-52" onMouseLeave={() => setHoveredMod(null)}>
+                        {singleSlice ? (
+                          <path d={fullDonut} fill={slices[0].color} fillRule="evenodd" />
+                        ) : (
+                          slices.map((s) => {
+                            const isFocused = hoveredMod === s.label;
+                            const dimmed = hoveredMod != null && !isFocused;
+                            const midRad = (((s.start + s.end) / 2 - 90) * Math.PI) / 180;
+                            const dx = isFocused ? Math.cos(midRad) * HOVER_OFFSET : 0;
+                            const dy = isFocused ? Math.sin(midRad) * HOVER_OFFSET : 0;
+                            return (
+                              <path
+                                key={s.label}
+                                d={slicePath(s.start, s.end, ro, ri)}
+                                fill={s.color}
+                                stroke="var(--color-osu-b4)"
+                                strokeWidth={2}
+                                strokeLinejoin="round"
+                                transform={`translate(${dx} ${dy})`}
+                                style={{
+                                  opacity: dimmed ? 0.25 : 1,
+                                  transition: "opacity 150ms, transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+                                  cursor: "pointer",
+                                }}
+                                onMouseEnter={() => setHoveredMod(s.label)}
+                              />
+                            );
+                          })
+                        )}
+                        {focused ? (
+                          <>
+                            <text x={cx} y={cy - 14} textAnchor="middle" fill={focused.color} style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1 }}>
+                              {focused.label}
+                            </text>
+                            <text x={cx} y={cy + 8} textAnchor="middle" fill="#fff" style={{ fontSize: 26, fontWeight: 800 }}>
+                              {Math.round(focused.pct)}%
+                            </text>
+                            <text x={cx} y={cy + 24} textAnchor="middle" fill="var(--color-osu-f1)" style={{ fontSize: 10 }}>
+                              {focused.count} of {profileInsights.sampleSize}
+                            </text>
+                          </>
+                        ) : (
+                          <>
+                            <text x={cx} y={cy + 2} textAnchor="middle" fill="#fff" style={{ fontSize: 28, fontWeight: 800 }}>
+                              {profileInsights.sampleSize}
+                            </text>
+                            <text x={cx} y={cy + 20} textAnchor="middle" fill="var(--color-osu-f1)" style={{ fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase" }}>
+                              top plays
+                            </text>
+                          </>
+                        )}
+                      </svg>
+                    </div>
+                    <div className="mt-4 flex flex-col gap-1">
+                      {slices.map((entry) => {
+                        const isFocused = hoveredMod === entry.label;
+                        const dimmed = hoveredMod != null && !isFocused;
+                        return (
+                          <button
+                            key={entry.label}
+                            type="button"
+                            onMouseEnter={() => setHoveredMod(entry.label)}
+                            onMouseLeave={() => setHoveredMod(null)}
+                            className="group flex items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-osu-b3/30"
+                            style={{ opacity: dimmed ? 0.4 : 1, transition: "opacity 150ms, background-color 150ms" }}
+                          >
+                            <span
+                              className="h-7 w-1 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: entry.color, boxShadow: isFocused ? `0 0 8px ${entry.color}` : undefined }}
+                            />
+                            <ModBadge mod={entry.label} size={0.85} />
+                            <div className="flex-1 h-1 rounded-full bg-osu-b3/40 overflow-hidden">
+                              <div className="h-full rounded-full" style={{ width: `${entry.pct}%`, backgroundColor: entry.color }} />
+                            </div>
+                            <div className="flex items-baseline gap-1.5 tabular-nums w-16 justify-end">
+                              <span className="text-sm font-bold text-white">{Math.round(entry.pct)}%</span>
+                              <span className="text-[10px] text-osu-f1/70">{entry.count}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                );
+              })()}
             </motion.div>
           </motion.div>
         )}

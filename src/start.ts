@@ -1,4 +1,5 @@
 import { createStart, createMiddleware } from "@tanstack/react-start";
+import { hasCountryCookieHeader } from "./lib/country-cookie";
 
 interface DocumentCacheConfig {
   sMaxage: number;
@@ -67,6 +68,16 @@ const documentCacheMiddleware = createMiddleware().server(
     const contentType = response.headers.get("content-type") ?? "";
     if (!contentType.toLowerCase().includes("text/html")) return result;
 
+    if (!hasCountryCookieHeader(request.headers.get("cookie"))) {
+      try {
+        response.headers.set("Cache-Control", "private, no-store");
+        response.headers.set("Vary", "Cookie");
+      } catch {
+        // Some response objects have immutable headers — silently skip.
+      }
+      return result;
+    }
+
     const existing = response.headers.get("cache-control") ?? "";
     if (existing && !/max-age=0|no-store|no-cache/i.test(existing)) {
       return result;
@@ -79,11 +90,12 @@ const documentCacheMiddleware = createMiddleware().server(
       // cookie, so responses differ per country. `Vary: Cookie` makes the
       // edge key by cookie value, producing one cached variant per country
       // (plus an anonymous "no cookie" bucket). This only works because
-      // `mania-hub-country` is the ONLY first-party cookie this site
-      // writes — PostHog uses localStorage (see lib/posthog.ts) and
-      // nothing else sets cookies. If a session cookie or other per-user
-      // cookie is ever introduced, this must change: each user would
-      // become a unique cache bucket, defeating the cache.
+      // `mania-hub-country` is the only cookie that affects rendered HTML.
+      // `mania-hub-country-auto` only records whether the value was inferred
+      // from GeoIP, and PostHog uses localStorage (see lib/posthog.ts). If a
+      // session cookie or other per-user cookie is ever introduced, this must
+      // change: each user would become a unique cache bucket, defeating the
+      // cache.
       response.headers.set("Vary", "Cookie");
     } catch {
       // Some response objects have immutable headers — silently skip.
