@@ -30,6 +30,7 @@ import { ModBadge } from "../../components/ui/ModBadge";
 import { LazerBadge } from "../../components/ui/LazerBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
 import { UsernameText } from "../../components/ui/UsernameText";
+import { ManiaCardPanel } from "../../components/player/ManiaCard";
 import type { OsuScore, OsuUser, UserProfileInsights, InsightScoreSnapshot } from "../../lib/types";
 import { pageSeo, playerOgImagePath } from "../../lib/seo";
 import { getRankTierClass } from "../../lib/rankings";
@@ -49,7 +50,7 @@ const USER_PROFILE_INSIGHTS_CLIENT_CACHE_TTL = 10 * 60 * 1000;
 const INITIAL_SCORE_BATCH_SIZE = 5;
 const SHOW_MORE_BATCH_SIZE = 50;
 const BEST_SCORES_WINDOW_SIZE = 200;
-type PlayerTab = "best" | "recent" | "about";
+type PlayerTab = "best" | "recent" | "card" | "about";
 
 export const Route = createFileRoute("/player/$username")({
   head: ({ params, match }) =>
@@ -1093,7 +1094,7 @@ function PlayerPage() {
           {/* Player tabs */}
           <div className="mt-5 pt-1 border-t border-osu-b3/30 flex flex-wrap items-center justify-between gap-3">
             <div className="flex">
-              {((["best", "recent", ...(user.page?.html ? ["about"] : [])]) as PlayerTab[]).map((t) => (
+              {((["best", "recent", ...(user.page?.html ? ["about"] : []), "card"]) as PlayerTab[]).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -1103,11 +1104,11 @@ function PlayerPage() {
                       : "text-osu-f1 hover:text-osu-l2"
                   }`}
                 >
-                  {t === "best" ? "Best Performance" : t === "recent" ? "Recent Plays" : "About"}
+                  {t === "best" ? "Best Performance" : t === "recent" ? "Recent Plays" : t === "card" ? "Maniacard" : "About"}
                 </button>
               ))}
             </div>
-            {tab !== "about" && availableKeyModes.length > 1 && (
+            {tab !== "about" && tab !== "card" && availableKeyModes.length > 1 && (
               <div className="flex items-center gap-1 rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-1">
                 {[["all", "All"] as const, ...availableKeyModes.map((k) => [k, k.toUpperCase()] as const)].map(([value, label]) => (
                   <button
@@ -1153,6 +1154,20 @@ function PlayerPage() {
               >
                 <PlayerAboutCard html={user.page.html} />
               </motion.div>
+            ) : tab === "card" ? (
+              <motion.div
+                key="card"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.14 }}
+              >
+                <ManiaCardPanel
+                  user={user}
+                  scores={best}
+                  loading={!bestWindowLoaded}
+                />
+              </motion.div>
             ) : (
               <motion.div
                 key={scoreListState}
@@ -1183,7 +1198,7 @@ function PlayerPage() {
             )}
           </AnimatePresence>
 
-          {tab !== "about" && !loadingScores && !scoresError && canShowMore && (
+          {tab !== "about" && tab !== "card" && !loadingScores && !scoresError && canShowMore && (
             <div className="pt-3 flex justify-center">
               <button
                 type="button"
