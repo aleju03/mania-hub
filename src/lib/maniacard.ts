@@ -116,6 +116,8 @@ export interface ManiaCardTierStyle {
   background: string;
   border: string;
   glow: string;
+  edgeFill: string;
+  glowColor: string;
   // Star icon fill (text color class).
   starColor: string;
   // Tier badge text color class.
@@ -132,6 +134,8 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
     background: "from-slate-500 via-slate-600 to-slate-800",
     border: "border-slate-300/40",
     glow: "shadow-[0_18px_58px_rgba(51,65,85,0.48)]",
+    edgeFill: "rgba(30, 41, 59, 0.94)",
+    glowColor: "rgba(148, 163, 184, 0.34)",
     starColor: "text-amber-300",
     badgeColor: "text-slate-100",
     badgeGradient:
@@ -144,6 +148,8 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
     background: "from-sky-400 via-sky-600 to-indigo-800",
     border: "border-sky-200/60",
     glow: "shadow-[0_18px_58px_rgba(2,132,199,0.5)]",
+    edgeFill: "rgba(12, 74, 110, 0.94)",
+    glowColor: "rgba(56, 189, 248, 0.36)",
     starColor: "text-amber-300",
     badgeColor: "text-sky-50",
     badgeGradient:
@@ -156,6 +162,8 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
     background: "from-violet-400 via-violet-600 to-purple-800",
     border: "border-violet-200/70",
     glow: "shadow-[0_18px_58px_rgba(109,40,217,0.55)]",
+    edgeFill: "rgba(76, 29, 149, 0.94)",
+    glowColor: "rgba(167, 139, 250, 0.38)",
     starColor: "text-amber-300",
     badgeColor: "text-violet-50",
     badgeGradient:
@@ -168,6 +176,8 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
     background: "from-fuchsia-400 via-purple-600 to-indigo-900",
     border: "border-fuchsia-200/75",
     glow: "shadow-[0_18px_62px_rgba(168,85,247,0.58)]",
+    edgeFill: "rgba(88, 28, 135, 0.94)",
+    glowColor: "rgba(232, 121, 249, 0.4)",
     starColor: "text-amber-300",
     badgeColor: "text-fuchsia-50",
     badgeGradient:
@@ -180,6 +190,8 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
     background: "from-rose-400 via-pink-600 to-fuchsia-900",
     border: "border-rose-200/80",
     glow: "shadow-[0_18px_64px_rgba(219,39,119,0.58)]",
+    edgeFill: "rgba(131, 24, 67, 0.94)",
+    glowColor: "rgba(251, 113, 133, 0.4)",
     starColor: "text-amber-300",
     badgeColor: "text-rose-50",
     badgeGradient:
@@ -192,6 +204,8 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
     background: "from-amber-300 via-orange-500 to-rose-700",
     border: "border-amber-100/90",
     glow: "shadow-[0_18px_68px_rgba(217,119,6,0.62)]",
+    edgeFill: "rgba(154, 52, 18, 0.94)",
+    glowColor: "rgba(251, 191, 36, 0.4)",
     starColor: "text-amber-100",
     badgeColor: "text-amber-50",
     badgeGradient:

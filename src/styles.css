@@ -244,7 +244,10 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
   75% { background-position: 44% 56%, 14% 38%, 88% 58%; filter: hue-rotate(-12deg); }
 }
 .maniacard-stage {
-  --mc-thickness: 16px;
+  --mc-thickness: 10px;
+  --mc-thickness-scale: 1;
+  --mc-edge-fill: rgba(72, 23, 94, 0.92);
+  --mc-glow-color: rgba(168, 85, 247, 0.42);
   --mc-rotate-x: 0deg;
   --mc-rotate-y: 0deg;
   --mc-glare-x: 50%;
@@ -258,6 +261,9 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
+.maniacard-wrap {
+  width: min(100%, 440px);
+}
 .maniacard-stage,
 .maniacard-stage * {
   user-select: none;
@@ -267,11 +273,35 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
   -webkit-user-drag: none;
 }
 .maniacard-tilt {
-  isolation: isolate;
+  position: relative;
   transform: rotateX(var(--mc-rotate-x)) rotateY(var(--mc-rotate-y));
   transform-style: preserve-3d;
   transition: transform 260ms cubic-bezier(0.2, 0.72, 0.28, 1);
   will-change: transform;
+}
+.maniacard-core {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  transform-style: preserve-3d;
+  filter: drop-shadow(0 16px 24px var(--mc-glow-color));
+}
+.maniacard-core > span {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.18), transparent 26%, rgba(0, 0, 0, 0.22) 74%),
+    var(--mc-edge-fill);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    inset 16px 0 24px rgba(255, 255, 255, 0.09),
+    inset -16px 0 24px rgba(0, 0, 0, 0.26),
+    0 0 18px color-mix(in srgb, var(--mc-glow-color) 72%, transparent);
+  transform: translateZ(var(--mc-layer-z));
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 .maniacard-stage[data-dragging="true"] {
   cursor: grabbing;
@@ -301,46 +331,19 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 .maniacard-back {
   transform: rotateY(180deg) translateZ(calc(var(--mc-thickness) / 2));
 }
-.maniacard-edge {
-  position: absolute;
-  display: block;
-  pointer-events: none;
-  opacity: 0.96;
-  filter: brightness(0.78) saturate(1.05);
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  border-radius: 4px;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
-    inset 0 -8px 14px rgba(0, 0, 0, 0.36);
+@media (max-width: 520px) {
+  .maniacard-wrap {
+    width: min(100%, 330px);
+  }
+  .maniacard-stage {
+    --mc-thickness: 8px;
+    --mc-thickness-scale: 0.8;
+  }
 }
-.maniacard-edge-right,
-.maniacard-edge-left {
-  top: 22px;
-  bottom: 22px;
-  width: var(--mc-thickness);
-}
-.maniacard-edge-right {
-  right: calc(var(--mc-thickness) / -2);
-  transform: rotateY(90deg) translateZ(calc(var(--mc-thickness) / 2));
-}
-.maniacard-edge-left {
-  left: calc(var(--mc-thickness) / -2);
-  transform: rotateY(-90deg) translateZ(calc(var(--mc-thickness) / 2));
-}
-.maniacard-edge-top,
-.maniacard-edge-bottom {
-  left: 22px;
-  right: 22px;
-  height: var(--mc-thickness);
-}
-.maniacard-edge-top {
-  top: calc(var(--mc-thickness) / -2);
-  transform: rotateX(-90deg) translateZ(calc(var(--mc-thickness) / 2));
-}
-.maniacard-edge-bottom {
-  bottom: calc(var(--mc-thickness) / -2);
-  transform: rotateX(90deg) translateZ(calc(var(--mc-thickness) / 2));
+@media (max-width: 380px) {
+  .maniacard-wrap {
+    width: min(100%, 305px);
+  }
 }
 .maniacard-stage[data-capturing="true"],
 .maniacard-stage[data-capturing="true"] .maniacard-tilt {

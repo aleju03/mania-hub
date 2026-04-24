@@ -6,8 +6,7 @@ import {
   type ManiaCardTier,
 } from "../../lib/maniacard";
 import type { OsuScore, OsuUser } from "../../lib/types";
-import { toBlob } from "html-to-image";
-import { useCallback, useRef, useState, type PointerEvent, type ReactNode } from "react";
+import { useCallback, useRef, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 
 const STAR_PATH =
   "M12 2.5l2.92 5.92 6.54.95-4.73 4.61 1.12 6.52L12 17.51l-5.85 3 1.12-6.52L2.54 9.37l6.54-.95L12 2.5z";
@@ -65,9 +64,9 @@ function StarRow({ value, color, size = 24 }: { value: number; color: string; si
 function TrianglePattern({ opacity, idSuffix }: { opacity: number; idSuffix: string }) {
   const patternId = `mc-triangles-${idSuffix}`;
   const layers = [
-    { id: `${patternId}-slow`, opacity: 0.46, from: "0 0", to: "0 -78", dur: "15.5s" },
-    { id: `${patternId}-mid`, opacity: 0.34, from: "34 18", to: "34 -60", dur: "10.75s" },
-    { id: `${patternId}-fast`, opacity: 0.22, from: "-26 42", to: "-26 -36", dur: "7.8s" },
+    { id: `${patternId}-slow`, opacity: 0.46, from: "0 0", to: "0 -78", dur: "8.5s" },
+    { id: `${patternId}-mid`, opacity: 0.34, from: "34 18", to: "34 -60", dur: "5.75s" },
+    { id: `${patternId}-fast`, opacity: 0.22, from: "-26 42", to: "-26 -36", dur: "4.2s" },
   ];
 
   return (
@@ -145,7 +144,7 @@ function ManiaModeIcon({ tier }: { tier: ManiaCardTier }) {
   const badgePatternId = `mc-badge-tris-${tier}`;
 
   return (
-    <div className="relative h-[62px] w-[62px] sm:h-[68px] sm:w-[68px]">
+    <div className="relative h-[52px] w-[52px] sm:h-[68px] sm:w-[68px]">
       <div
         className="absolute -inset-2 rounded-[26px] pointer-events-none"
         style={{
@@ -205,6 +204,275 @@ function ManiaModeIcon({ tier }: { tier: ManiaCardTier }) {
   );
 }
 
+function BackStar({
+  x,
+  y,
+  size,
+  opacity = 1,
+  rotate = 0,
+}: {
+  x: number;
+  y: number;
+  size: number;
+  opacity?: number;
+  rotate?: number;
+}) {
+  return (
+    <path
+      d={STAR_PATH}
+      transform={`translate(${x - size / 2} ${y - size / 2}) rotate(${rotate} ${size / 2} ${size / 2}) scale(${size / 24})`}
+      fill="currentColor"
+      opacity={opacity}
+    />
+  );
+}
+
+function BackSparkle({
+  x,
+  y,
+  size,
+  opacity = 1,
+}: {
+  x: number;
+  y: number;
+  size: number;
+  opacity?: number;
+}) {
+  return (
+    <path
+      d={`M${x} ${y - size} L${x + size * 0.22} ${y - size * 0.22} L${x + size} ${y} L${x + size * 0.22} ${y + size * 0.22} L${x} ${y + size} L${x - size * 0.22} ${y + size * 0.22} L${x - size} ${y} L${x - size * 0.22} ${y - size * 0.22} Z`}
+      fill="currentColor"
+      opacity={opacity}
+    />
+  );
+}
+
+function ManiaCardBackDesign({
+  tier,
+  tierLabel,
+  glowColor,
+}: {
+  tier: ManiaCardTier;
+  tierLabel: string;
+  glowColor: string;
+}) {
+  const accent = cssRgb(glowColor);
+  const accentDisc = cssRgba(glowColor, 0.82);
+  const accentLogoBed = cssRgba(glowColor, 0.54);
+  const ringTicks = Array.from({ length: 72 }, (_, index) => {
+    const angle = index * 5;
+    const prominent = index % 6 === 0;
+    return (
+      <line
+        key={index}
+        x1="250"
+        y1={prominent ? "168" : "178"}
+        x2="250"
+        y2="186"
+        stroke="currentColor"
+        strokeWidth={prominent ? 1.6 : 1}
+        strokeLinecap="round"
+        opacity={prominent ? 0.62 : 0.36}
+        transform={`rotate(${angle} 250 350)`}
+      />
+    );
+  });
+  const orbitStars = [
+    [250, 177, 20, 0],
+    [355, 215, 18, 18],
+    [397, 350, 19, -10],
+    [355, 485, 18, 12],
+    [250, 523, 20, 0],
+    [145, 485, 18, -16],
+    [103, 350, 19, 8],
+    [145, 215, 18, -12],
+  ] as const;
+  const laurelMask = {
+    WebkitMaskImage: "url('/images/maniacard/laurel-wreath.svg')",
+    maskImage: "url('/images/maniacard/laurel-wreath.svg')",
+    WebkitMaskRepeat: "no-repeat",
+    maskRepeat: "no-repeat",
+    WebkitMaskPosition: "center",
+    maskPosition: "center",
+    WebkitMaskSize: "contain",
+    maskSize: "contain",
+  } as CSSProperties;
+
+  return (
+    <div
+      className="maniacard-back-design absolute inset-0 text-white"
+      style={{ "--mc-back-accent": accent, "--mc-back-glow": glowColor } as CSSProperties}
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_28%_18%,rgba(255,255,255,0.23),transparent_34%),radial-gradient(circle_at_72%_68%,rgba(8,20,70,0.42),transparent_52%),linear-gradient(155deg,rgba(255,255,255,0.2),transparent_24%,rgba(0,0,0,0.22)_72%)]" />
+      <svg
+        viewBox="0 0 500 700"
+        className="absolute inset-0 h-full w-full"
+        aria-hidden
+        preserveAspectRatio="none"
+      >
+        <defs>
+          <linearGradient id={`mc-back-frame-${tier}`} x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0" stopColor="rgba(255,255,255,0.9)" />
+            <stop offset="0.34" stopColor="rgba(255,255,255,0.34)" />
+            <stop offset="0.62" stopColor={accent} stopOpacity="0.92" />
+            <stop offset="1" stopColor="rgba(255,255,255,0.5)" />
+          </linearGradient>
+          <linearGradient id={`mc-back-disc-${tier}`} x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0" stopColor="rgba(255,255,255,0.72)" />
+            <stop offset="0.24" stopColor={accent} stopOpacity="0.88" />
+            <stop offset="0.55" stopColor={accentDisc} />
+            <stop offset="1" stopColor="rgba(9,16,58,0.82)" />
+          </linearGradient>
+          <filter id={`mc-back-soft-glow-${tier}`} x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="5" result="blur" />
+            <feColorMatrix
+              in="blur"
+              type="matrix"
+              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.72 0"
+            />
+            <feMerge>
+              <feMergeNode />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <pattern id={`mc-back-micro-tris-${tier}`} width="48" height="42" patternUnits="userSpaceOnUse">
+            <polygon points="24,3 45,39 3,39" fill="rgba(255,255,255,0.052)" />
+            <polygon points="3,18 15,39 -9,39" fill="rgba(0,0,0,0.055)" />
+            <polygon points="45,18 57,39 33,39" fill="rgba(255,255,255,0.035)" />
+          </pattern>
+        </defs>
+
+        <rect width="500" height="700" fill={`url(#mc-back-micro-tris-${tier})`} opacity="0.84" />
+
+        <path
+          d="M43 48 Q43 30 61 30 H439 Q457 30 457 48 V170 Q441 178 441 194 V506 Q441 522 457 530 V652 Q457 670 439 670 H61 Q43 670 43 652 V530 Q59 522 59 506 V194 Q59 178 43 170 Z"
+          fill="none"
+          stroke={`url(#mc-back-frame-${tier})`}
+          strokeWidth="4"
+          opacity="0.9"
+          filter={`url(#mc-back-soft-glow-${tier})`}
+        />
+        <path
+          d="M53 54 Q53 40 67 40 H433 Q447 40 447 54 V166 Q431 176 431 194 V506 Q431 524 447 534 V646 Q447 660 433 660 H67 Q53 660 53 646 V534 Q69 524 69 506 V194 Q69 176 53 166 Z"
+          fill="rgba(255,255,255,0.03)"
+          stroke="rgba(255,255,255,0.46)"
+          strokeWidth="1.4"
+        />
+
+        <path
+          d="M166 30 H334 L318 58 Q314 66 304 66 H196 Q186 66 182 58 Z"
+          fill="rgba(32,8,70,0.28)"
+          stroke="rgba(255,255,255,0.28)"
+          strokeWidth="1.4"
+        />
+        <path
+          d="M176 39 H324 M190 54 H310"
+          fill="none"
+          stroke="rgba(255,255,255,0.42)"
+          strokeWidth="1.2"
+          strokeLinecap="round"
+        />
+        {[210, 230, 250, 270, 290].map((x) => (
+          <BackStar key={x} x={x} y={38} size={12} opacity={0.58} />
+        ))}
+
+        <path
+          d="M172 670 H328 L312 656 Q307 652 299 652 H201 Q193 652 188 656 Z"
+          fill="rgba(24,8,64,0.3)"
+          stroke="rgba(255,255,255,0.24)"
+          strokeWidth="1.4"
+        />
+        <path d="M196 663 H238 M262 663 H304" stroke="rgba(255,255,255,0.42)" strokeWidth="1.4" strokeLinecap="round" />
+        <path d="M250 656 L256 663 L250 670 L244 663 Z" fill="none" stroke="currentColor" strokeWidth="2" opacity="0.58" />
+
+        <path d="M35 220 V310 M35 376 V466 M465 220 V310 M465 376 V466" stroke="rgba(255,255,255,0.4)" strokeWidth="1.4" strokeLinecap="round" />
+        {[205, 226, 247, 486, 509, 532].map((y) => (
+          <g key={y}>
+            <circle cx="35" cy={y} r="1.6" fill="currentColor" opacity="0.54" />
+            <circle cx="465" cy={y} r="1.6" fill="currentColor" opacity="0.54" />
+          </g>
+        ))}
+
+        <g filter={`url(#mc-back-soft-glow-${tier})`}>
+          <circle cx="250" cy="350" r="181" fill="none" stroke="currentColor" strokeWidth="2.4" opacity="0.34" />
+          <circle cx="250" cy="350" r="168" fill="none" stroke="currentColor" strokeWidth="1.2" strokeDasharray="2 6" opacity="0.46" />
+          <circle cx="250" cy="350" r="150" fill="none" stroke="rgba(255,255,255,0.26)" strokeWidth="1.5" />
+          {ringTicks}
+          {orbitStars.map(([x, y, size, rotate]) => (
+            <BackStar key={`${x}-${y}`} x={x} y={y} size={size} rotate={rotate} opacity={0.76} />
+          ))}
+        </g>
+
+        <circle cx="250" cy="350" r="129" fill="rgba(0,0,0,0.22)" />
+        <circle cx="250" cy="350" r="121" fill={`url(#mc-back-disc-${tier})`} stroke="rgba(255,255,255,0.56)" strokeWidth="2.8" />
+        <circle cx="250" cy="350" r="97" fill={accentLogoBed} stroke="rgba(255,255,255,0.12)" strokeWidth="1.2" />
+        <circle cx="250" cy="350" r="76" fill="none" stroke="white" strokeWidth="12" opacity="0.98" />
+        <g transform="translate(174 274) scale(0.152)" fill="#ffffff" filter={`url(#mc-back-soft-glow-${tier})`}>
+          <g transform="translate(0 850) scale(1 -1)">
+            <path d={MANIA_GLYPH_D} />
+          </g>
+        </g>
+
+        <BackSparkle x={105} y={180} size={17} opacity={0.82} />
+        <BackSparkle x={405} y={205} size={9} opacity={0.48} />
+        <BackSparkle x={412} y={515} size={14} opacity={0.62} />
+        <BackSparkle x={96} y={525} size={10} opacity={0.54} />
+        <BackSparkle x={149} y={173} size={4} opacity={0.5} />
+        <BackSparkle x={356} y={527} size={4} opacity={0.48} />
+
+      </svg>
+
+      <div
+        className="absolute inset-x-0 bottom-[13.5%] flex justify-center pointer-events-none"
+        aria-hidden
+      >
+        <div className="relative h-[52px] w-[108px] sm:h-[58px] sm:w-[120px]">
+          <span
+            className="absolute inset-0 bg-white/42"
+            style={{
+              ...laurelMask,
+              filter: "drop-shadow(0 0 10px var(--mc-back-glow)) drop-shadow(0 2px 4px rgba(0,0,0,0.34))",
+            }}
+          />
+          <svg
+            viewBox="0 0 24 24"
+            className="absolute left-1/2 top-[47%] h-[28px] w-[28px] -translate-x-1/2 -translate-y-1/2 text-white/68 sm:h-[32px] sm:w-[32px]"
+            style={{ filter: "drop-shadow(0 0 8px var(--mc-back-glow))" }}
+          >
+            <path d={STAR_PATH} fill="currentColor" />
+          </svg>
+        </div>
+      </div>
+
+      <div
+        className="absolute inset-x-0 bottom-[7.8%] flex justify-center text-[20px] sm:text-[23px] font-black uppercase text-white/42"
+        style={{
+          fontFamily: "Torus, sans-serif",
+          textShadow: "0 0 14px var(--mc-back-glow), 0 2px 8px rgba(0,0,0,0.45)",
+        }}
+      >
+        <RarityLabel label={tierLabel} />
+      </div>
+    </div>
+  );
+}
+
+function RarityLabel({ label }: { label: string }) {
+  return (
+    <span className="inline-flex items-center justify-center gap-[0.34em]" aria-label={label}>
+      {label.toUpperCase().split("").map((char, index) => (
+        <span
+          key={`${char}-${index}`}
+          className={char === " " ? "w-[0.48em]" : undefined}
+          aria-hidden
+        >
+          {char === " " ? "" : char}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 interface ManiaCardPanelProps {
   user: Pick<OsuUser, "id" | "username" | "avatar_url" | "country_code"> & {
     statistics?: { global_rank: number | null };
@@ -245,12 +513,20 @@ const TIER_VISUALS: Record<ManiaCardTier, { triangleOpacity: number; extras?: Re
   },
 };
 
-type CopyState = "idle" | "copying" | "copied" | "error";
+const CARD_EDGE_LAYERS = [-5, -3.75, -2.5, -1.25, 0, 1.25, 2.5, 3.75, 5];
+
+function cssRgb(value: string) {
+  const [r = 168, g = 85, b = 247] = value.match(/[\d.]+/g)?.map(Number) ?? [];
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+function cssRgba(value: string, alpha: number) {
+  const [r = 168, g = 85, b = 247] = value.match(/[\d.]+/g)?.map(Number) ?? [];
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
 
 export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const [copyState, setCopyState] = useState<CopyState>("idle");
-  const copyResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragRef = useRef({
     active: false,
     pointerId: -1,
@@ -261,40 +537,6 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
     baseRotateX: 0,
     baseRotateY: 0,
   });
-
-  const copyCardImage = useCallback(async () => {
-    const stage = cardRef.current;
-    if (!stage || copyState === "copying") return;
-
-    setCopyState("copying");
-    if (copyResetTimer.current) clearTimeout(copyResetTimer.current);
-
-    stage.dataset.capturing = "true";
-
-    await new Promise<void>((resolve) =>
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-    );
-
-    try {
-      const blob = await toBlob(stage, {
-        pixelRatio: 2,
-        cacheBust: true,
-        backgroundColor: "rgba(0,0,0,0)",
-      });
-      if (!blob) throw new Error("Failed to render card image");
-      await navigator.clipboard.write([
-        new ClipboardItem({ "image/png": blob }),
-      ]);
-      setCopyState("copied");
-      copyResetTimer.current = setTimeout(() => setCopyState("idle"), 1800);
-    } catch (err) {
-      console.error("[maniacard] copy failed", err);
-      setCopyState("error");
-      copyResetTimer.current = setTimeout(() => setCopyState("idle"), 2200);
-    } finally {
-      delete stage.dataset.capturing;
-    }
-  }, [copyState]);
 
   const applyTilt = useCallback((rotateX: number, rotateY: number, glareOpacity: number) => {
     const card = cardRef.current;
@@ -383,11 +625,15 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
 
   return (
     <div className="py-4 sm:py-6">
-      <div className="max-w-[440px] mx-auto px-2">
+      <div className="maniacard-wrap max-w-[440px] mx-auto px-2">
         <div
           ref={cardRef}
           className="maniacard-stage relative rounded-[24px]"
-          style={{ aspectRatio: "5 / 7" }}
+          style={{
+            aspectRatio: "5 / 7",
+            "--mc-edge-fill": style.edgeFill,
+            "--mc-glow-color": style.glowColor,
+          } as CSSProperties}
           onPointerDown={startDrag}
           onPointerMove={updateTilt}
           onPointerUp={stopDrag}
@@ -396,8 +642,19 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
           onContextMenu={(event) => event.preventDefault()}
         >
           <div
-            className={`maniacard-tilt relative h-full w-full rounded-[24px] ${style.glow}`}
+            className="maniacard-tilt relative h-full w-full rounded-[24px]"
           >
+            <div className="maniacard-core" aria-hidden>
+              {CARD_EDGE_LAYERS.map((z, index) => (
+                <span
+                  key={z}
+                  style={{
+                    "--mc-layer-z": `calc(${z}px * var(--mc-thickness-scale))`,
+                    opacity: 0.82 + index * 0.018,
+                  } as CSSProperties}
+                />
+              ))}
+            </div>
             <div className={`maniacard-face maniacard-front bg-gradient-to-br ${style.background}`}>
               <div className={`maniacard-tier-flow maniacard-tier-${tier}`} aria-hidden />
               <TrianglePattern opacity={visuals.triangleOpacity} idSuffix={`${tier}-front`} />
@@ -408,15 +665,15 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
               <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/38 to-transparent pointer-events-none" />
               {visuals.extras}
 
-              <div className="maniacard-content relative h-full flex flex-col p-4 sm:p-5 gap-2.5">
-                <div className="relative grid grid-cols-[auto_1fr] gap-2.5 pt-0.5">
+              <div className="maniacard-content relative h-full flex flex-col p-3 sm:p-5 gap-1.5 sm:gap-2.5">
+                <div className="relative grid grid-cols-[auto_1fr] gap-2 sm:gap-2.5 pt-0.5">
                   <div className="row-span-2 relative z-10 -ml-1 -mt-1">
                     <ManiaModeIcon tier={tier} />
                   </div>
-                  <div className="relative min-w-0 self-end overflow-hidden rounded-xl bg-black/34 px-4 py-2 shadow-[0_8px_18px_rgba(0,0,0,0.26),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-[2px]">
+                  <div className="relative min-w-0 self-end overflow-hidden rounded-xl bg-black/34 px-3 py-1.5 sm:px-4 sm:py-2 shadow-[0_8px_18px_rgba(0,0,0,0.26),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-[2px]">
                     <NamePixelTrail />
                     <div
-                      className="relative truncate text-center text-white text-lg sm:text-xl leading-tight"
+                      className="relative truncate text-center text-white text-base sm:text-xl leading-tight"
                       style={{
                         fontFamily: "Torus, sans-serif",
                         fontWeight: 900,
@@ -427,7 +684,7 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
                     </div>
                   </div>
                   <div
-                    className={`min-w-0 self-start truncate pr-1 text-right text-lg sm:text-xl italic font-black ${style.badgeColor}`}
+                    className={`min-w-0 self-start truncate pr-1 text-right text-base sm:text-xl italic font-black ${style.badgeColor}`}
                     style={{
                       fontFamily: "Torus, sans-serif",
                       textShadow: "0 2px 4px rgba(0,0,0,0.5)",
@@ -437,7 +694,7 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
                   </div>
                 </div>
 
-                <div className="relative mx-auto w-full max-w-[310px] rounded-xl bg-black/75 p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
+                <div className="relative mx-auto w-full max-w-[220px] sm:max-w-[310px] rounded-xl bg-black/75 p-1 sm:p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
                   <img
                     src={`/api/avatar?u=${user.id}`}
                     alt=""
@@ -458,8 +715,8 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
                   <StatLine label="Accuracy" value={skills.accuracy} />
                 </div>
 
-                <div className="pb-3">
-                  <StarRow value={skills.starAvg} color={style.starColor} size={23} />
+                <div className="pb-1 sm:pb-3">
+                  <StarRow value={skills.starAvg} color={style.starColor} size={18} />
                   <div className="mt-0.5 text-center text-[9px] uppercase tracking-[0.2em] text-white/58 font-semibold">
                     {skills.starAvg.toFixed(2)}★
                   </div>
@@ -469,138 +726,14 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
 
             <div className={`maniacard-face maniacard-back bg-gradient-to-br ${style.background}`}>
               <div className={`maniacard-tier-flow maniacard-tier-${tier}`} aria-hidden />
-              <TrianglePattern opacity={visuals.triangleOpacity * 0.72} idSuffix={`${tier}-back`} />
+              <TrianglePattern opacity={visuals.triangleOpacity * 0.42} idSuffix={`${tier}-back`} />
               <div className="maniacard-foil" aria-hidden />
               <div className="maniacard-glare" aria-hidden />
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_24%,rgba(255,255,255,0.18),transparent_42%)] pointer-events-none" />
-              <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/44 to-transparent pointer-events-none" />
-
-              <div
-                className="maniacard-content relative h-full p-4 sm:p-5 text-white"
-                style={{ fontFamily: "Torus, sans-serif" }}
-              >
-                <div className="flex h-full flex-col rounded-[18px] border border-white/18 bg-black/32 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur-[2px]">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-[9px] uppercase tracking-[0.2em] text-white/55 font-bold">
-                        How it's minted
-                      </div>
-                      <div className="text-lg sm:text-xl font-black leading-tight">
-                        Skill breakdown
-                      </div>
-                    </div>
-                    <div className="shrink-0 scale-[0.78] origin-right">
-                      <ManiaModeIcon tier={tier} />
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex flex-col gap-2">
-                    <StatExplainer
-                      accent="#ff7eb3"
-                      label="Finger Control"
-                      drivers="Star × BPM"
-                      blurb="Rewards raw difficulty scaled by how fast notes arrive."
-                    />
-                    <StatExplainer
-                      accent="#fbbf24"
-                      label="Speed"
-                      drivers="Star × BPM × notes × OD · HP · CS"
-                      blurb="Dense, fast, punishing maps weigh the most."
-                    />
-                    <StatExplainer
-                      accent="#7dd3fc"
-                      label="Accuracy"
-                      drivers="Star^(acc³) × OD · HP"
-                      blurb="Clean hits on hard maps, nonlinear near 100%."
-                    />
-                    <StatExplainer
-                      accent="#f0abfc"
-                      label="Stars"
-                      drivers="Mean of play star ratings"
-                      blurb="Straight average across the sampled plays."
-                    />
-                  </div>
-
-                  <div className="mt-auto pt-3 text-center">
-                    <div className="text-[9px] uppercase tracking-[0.22em] text-white/55 font-bold">
-                      Sample
-                    </div>
-                    <div className="text-[13px] font-bold text-white/88">
-                      Top{" "}
-                      <span className="text-white tabular-nums">
-                        {skills.sampleSize}
-                      </span>{" "}
-                      best plays · avg{" "}
-                      <span className="text-white tabular-nums">
-                        {skills.starAvg.toFixed(2)}★
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <ManiaCardBackDesign tier={tier} tierLabel={style.label} glowColor={style.glowColor} />
             </div>
-
-            <div className={`maniacard-edge maniacard-edge-right bg-gradient-to-b ${style.background}`} aria-hidden />
-            <div className={`maniacard-edge maniacard-edge-left bg-gradient-to-b ${style.background}`} aria-hidden />
-            <div className={`maniacard-edge maniacard-edge-top bg-gradient-to-r ${style.background}`} aria-hidden />
-            <div className={`maniacard-edge maniacard-edge-bottom bg-gradient-to-r ${style.background}`} aria-hidden />
           </div>
         </div>
 
-        <div className="mt-4 flex justify-center">
-          <button
-            type="button"
-            onClick={copyCardImage}
-            disabled={copyState === "copying"}
-            className="px-4 py-2 rounded-lg bg-osu-b4 text-[12px] font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors cursor-pointer disabled:cursor-default disabled:opacity-60"
-          >
-            {copyState === "copying"
-              ? "Copying..."
-              : copyState === "copied"
-                ? "Copied to clipboard"
-                : copyState === "error"
-                  ? "Copy failed"
-                  : "Copy card as image"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StatExplainer({
-  accent,
-  label,
-  drivers,
-  blurb,
-}: {
-  accent: string;
-  label: string;
-  drivers: string;
-  blurb: string;
-}) {
-  return (
-    <div className="rounded-xl border border-white/12 bg-white/6 pl-3 pr-3 py-2 flex gap-3 items-start">
-      <span
-        className="mt-1 h-full min-h-[34px] w-[3px] shrink-0 rounded-full"
-        style={{ backgroundColor: accent, boxShadow: `0 0 8px ${accent}66` }}
-        aria-hidden
-      />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-2">
-          <div className="text-[13px] sm:text-sm font-black leading-tight">
-            {label}
-          </div>
-          <div
-            className="text-[10px] sm:text-[11px] font-bold tracking-tight tabular-nums"
-            style={{ color: accent }}
-          >
-            {drivers}
-          </div>
-        </div>
-        <div className="text-[11px] sm:text-[11.5px] leading-snug text-white/78">
-          {blurb}
-        </div>
       </div>
     </div>
   );
@@ -609,10 +742,10 @@ function StatExplainer({
 function StatLine({ label, value }: { label: string; value: number }) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3 py-0.5">
-      <span className="text-left text-sm sm:text-[15px] font-semibold text-white/84">
+      <span className="text-left text-xs sm:text-[15px] font-semibold text-white/84">
         {label}:
       </span>
-      <span className="text-xl sm:text-2xl font-black tabular-nums text-white min-w-[3ch] text-right leading-none">
+      <span className="text-lg sm:text-2xl font-black tabular-nums text-white min-w-[3ch] text-right leading-none">
         {value}
       </span>
     </div>
