@@ -22,6 +22,7 @@ import { Route as ApiSitemapRouteImport } from './routes/api/sitemap'
 import { Route as ApiOgRouteImport } from './routes/api/og'
 import { Route as ApiFaviconRouteImport } from './routes/api/favicon'
 import { Route as ApiBackgroundRouteImport } from './routes/api/background'
+import { Route as ApiAvatarRouteImport } from './routes/api/avatar'
 import { Route as ApiAudioRouteImport } from './routes/api/audio'
 import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
 import { Route as AdminMonitorRouteImport } from './routes/admin/monitor'
@@ -91,6 +92,11 @@ const ApiBackgroundRoute = ApiBackgroundRouteImport.update({
   path: '/api/background',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAvatarRoute = ApiAvatarRouteImport.update({
+  id: '/api/avatar',
+  path: '/api/avatar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAudioRoute = ApiAudioRouteImport.update({
   id: '/api/audio',
   path: '/api/audio',
@@ -118,6 +124,7 @@ export interface FileRoutesByFullPath {
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/api/audio': typeof ApiAudioRoute
+  '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
@@ -136,6 +143,7 @@ export interface FileRoutesByTo {
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/api/audio': typeof ApiAudioRoute
+  '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
@@ -155,6 +163,7 @@ export interface FileRoutesById {
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/api/audio': typeof ApiAudioRoute
+  '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
@@ -175,6 +184,7 @@ export interface FileRouteTypes {
     | '/admin/monitor'
     | '/admin/og-preview'
     | '/api/audio'
+    | '/api/avatar'
     | '/api/background'
     | '/api/favicon'
     | '/api/og'
@@ -193,6 +203,7 @@ export interface FileRouteTypes {
     | '/admin/monitor'
     | '/admin/og-preview'
     | '/api/audio'
+    | '/api/avatar'
     | '/api/background'
     | '/api/favicon'
     | '/api/og'
@@ -211,6 +222,7 @@ export interface FileRouteTypes {
     | '/admin/monitor'
     | '/admin/og-preview'
     | '/api/audio'
+    | '/api/avatar'
     | '/api/background'
     | '/api/favicon'
     | '/api/og'
@@ -230,6 +242,7 @@ export interface RootRouteChildren {
   AdminMonitorRoute: typeof AdminMonitorRoute
   AdminOgPreviewRoute: typeof AdminOgPreviewRoute
   ApiAudioRoute: typeof ApiAudioRoute
+  ApiAvatarRoute: typeof ApiAvatarRoute
   ApiBackgroundRoute: typeof ApiBackgroundRoute
   ApiFaviconRoute: typeof ApiFaviconRoute
   ApiOgRoute: typeof ApiOgRoute
@@ -331,6 +344,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiBackgroundRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/avatar': {
+      id: '/api/avatar'
+      path: '/api/avatar'
+      fullPath: '/api/avatar'
+      preLoaderRoute: typeof ApiAvatarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/audio': {
       id: '/api/audio'
       path: '/api/audio'
@@ -366,6 +386,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminMonitorRoute: AdminMonitorRoute,
   AdminOgPreviewRoute: AdminOgPreviewRoute,
   ApiAudioRoute: ApiAudioRoute,
+  ApiAvatarRoute: ApiAvatarRoute,
   ApiBackgroundRoute: ApiBackgroundRoute,
   ApiFaviconRoute: ApiFaviconRoute,
   ApiOgRoute: ApiOgRoute,

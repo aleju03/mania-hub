@@ -120,6 +120,10 @@ export interface ManiaCardTierStyle {
   starColor: string;
   // Tier badge text color class.
   badgeColor: string;
+  // Mania mode badge tint (top-left logo tile) tuned to the tier palette.
+  badgeGradient: string;
+  badgeHalo: string;
+  badgeGlyphShadow: string;
 }
 
 export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
@@ -130,6 +134,10 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
     glow: "shadow-[0_18px_58px_rgba(51,65,85,0.48)]",
     starColor: "text-amber-300",
     badgeColor: "text-slate-100",
+    badgeGradient:
+      "linear-gradient(142deg, #cbd5e1 0%, #64748b 44%, #1e293b 100%)",
+    badgeHalo: "rgba(148,163,184,0.55)",
+    badgeGlyphShadow: "rgba(15,23,42,0.45)",
   },
   rare: {
     label: "Rare",
@@ -138,6 +146,10 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
     glow: "shadow-[0_18px_58px_rgba(2,132,199,0.5)]",
     starColor: "text-amber-300",
     badgeColor: "text-sky-50",
+    badgeGradient:
+      "linear-gradient(142deg, #bae6fd 0%, #0ea5e9 44%, #1e3a8a 100%)",
+    badgeHalo: "rgba(56,189,248,0.55)",
+    badgeGlyphShadow: "rgba(12,74,110,0.45)",
   },
   elite: {
     label: "Elite",
@@ -146,6 +158,10 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
     glow: "shadow-[0_18px_58px_rgba(109,40,217,0.55)]",
     starColor: "text-amber-300",
     badgeColor: "text-violet-50",
+    badgeGradient:
+      "linear-gradient(142deg, #ddd6fe 0%, #7c3aed 44%, #4c1d95 100%)",
+    badgeHalo: "rgba(167,139,250,0.55)",
+    badgeGlyphShadow: "rgba(46,16,101,0.45)",
   },
   superRare: {
     label: "Super Rare",
@@ -154,6 +170,10 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
     glow: "shadow-[0_18px_62px_rgba(168,85,247,0.58)]",
     starColor: "text-amber-300",
     badgeColor: "text-fuchsia-50",
+    badgeGradient:
+      "linear-gradient(142deg, #f5d0fe 0%, #c026d3 44%, #581c87 100%)",
+    badgeHalo: "rgba(232,121,249,0.58)",
+    badgeGlyphShadow: "rgba(88,28,135,0.45)",
   },
   ultraRare: {
     label: "Ultra Rare",
@@ -162,6 +182,10 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
     glow: "shadow-[0_18px_64px_rgba(219,39,119,0.58)]",
     starColor: "text-amber-300",
     badgeColor: "text-rose-50",
+    badgeGradient:
+      "linear-gradient(142deg, #ff8ec4 0%, #ff3d8a 44%, #b81f68 100%)",
+    badgeHalo: "rgba(255,70,150,0.58)",
+    badgeGlyphShadow: "rgba(120,20,70,0.45)",
   },
   master: {
     label: "Master",
@@ -170,5 +194,9 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
     glow: "shadow-[0_18px_68px_rgba(217,119,6,0.62)]",
     starColor: "text-amber-100",
     badgeColor: "text-amber-50",
+    badgeGradient:
+      "linear-gradient(142deg, #fef3c7 0%, #f59e0b 44%, #9a3412 100%)",
+    badgeHalo: "rgba(252,211,77,0.6)",
+    badgeGlyphShadow: "rgba(120,53,15,0.45)",
   },
 };

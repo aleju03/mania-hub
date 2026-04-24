@@ -244,6 +244,7 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
   75% { background-position: 44% 56%, 14% 38%, 88% 58%; filter: hue-rotate(-12deg); }
 }
 .maniacard-stage {
+  --mc-thickness: 16px;
   --mc-rotate-x: 0deg;
   --mc-rotate-y: 0deg;
   --mc-glare-x: 50%;
@@ -279,9 +280,8 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
   transition: none;
 }
 .maniacard-content {
+  position: relative;
   z-index: 4;
-  transform: translateZ(24px);
-  transform-style: preserve-3d;
 }
 .maniacard-face {
   position: absolute;
@@ -290,16 +290,61 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
   border-radius: inherit;
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
-  transform-style: preserve-3d;
   box-shadow:
     inset 0 -18px 36px rgba(0, 0, 0, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transform-style: preserve-3d;
 }
 .maniacard-front {
-  transform: translateZ(1px);
+  transform: translateZ(calc(var(--mc-thickness) / 2));
 }
 .maniacard-back {
-  transform: rotateY(180deg) translateZ(1px);
+  transform: rotateY(180deg) translateZ(calc(var(--mc-thickness) / 2));
+}
+.maniacard-edge {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+  opacity: 0.96;
+  filter: brightness(0.78) saturate(1.05);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: 4px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    inset 0 -8px 14px rgba(0, 0, 0, 0.36);
+}
+.maniacard-edge-right,
+.maniacard-edge-left {
+  top: 22px;
+  bottom: 22px;
+  width: var(--mc-thickness);
+}
+.maniacard-edge-right {
+  right: calc(var(--mc-thickness) / -2);
+  transform: rotateY(90deg) translateZ(calc(var(--mc-thickness) / 2));
+}
+.maniacard-edge-left {
+  left: calc(var(--mc-thickness) / -2);
+  transform: rotateY(-90deg) translateZ(calc(var(--mc-thickness) / 2));
+}
+.maniacard-edge-top,
+.maniacard-edge-bottom {
+  left: 22px;
+  right: 22px;
+  height: var(--mc-thickness);
+}
+.maniacard-edge-top {
+  top: calc(var(--mc-thickness) / -2);
+  transform: rotateX(-90deg) translateZ(calc(var(--mc-thickness) / 2));
+}
+.maniacard-edge-bottom {
+  bottom: calc(var(--mc-thickness) / -2);
+  transform: rotateX(90deg) translateZ(calc(var(--mc-thickness) / 2));
+}
+.maniacard-stage[data-capturing="true"],
+.maniacard-stage[data-capturing="true"] .maniacard-tilt {
+  background: transparent !important;
 }
 .maniacard-tier-flow,
 .maniacard-foil,
@@ -374,7 +419,8 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 }
 @media (prefers-reduced-motion: reduce) {
   .maniacard-tier-flow,
-  .maniacard-foil {
+  .maniacard-foil,
+  .maniacard-triangle-pattern {
     animation: none !important;
   }
   .maniacard-tilt,
