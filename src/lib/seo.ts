@@ -85,6 +85,7 @@ export interface PageSeoInput {
   image?: string;
   imageCountry?: string;
   type?: "website" | "article" | "profile";
+  social?: boolean;
   noindex?: boolean;
 }
 
@@ -101,6 +102,7 @@ export function pageSeo({
   image,
   imageCountry,
   type = "website",
+  social = true,
   noindex = false,
 }: PageSeoInput): PageSeo {
   const fullTitle = title === SITE_NAME ? SITE_NAME : `${title} - ${SITE_NAME}`;
@@ -110,20 +112,24 @@ export function pageSeo({
   const meta: MetaEntry[] = [
     { title: fullTitle },
     { name: "description", content: description },
-    { property: "og:type", content: type },
-    { property: "og:site_name", content: SITE_NAME },
-    { property: "og:title", content: fullTitle },
-    { property: "og:description", content: description },
-    { property: "og:url", content: url },
-    { property: "og:image", content: imageUrl },
-    { property: "og:image:width", content: "1200" },
-    { property: "og:image:height", content: "630" },
-    { property: "og:image:alt", content: title },
-    { name: "twitter:card", content: "summary_large_image" },
-    { name: "twitter:title", content: fullTitle },
-    { name: "twitter:description", content: description },
-    { name: "twitter:image", content: imageUrl },
   ];
+
+  if (social) {
+    meta.push(
+      { property: "og:type", content: type },
+      { property: "og:site_name", content: SITE_NAME },
+      { property: "og:title", content: fullTitle },
+      { property: "og:description", content: description },
+      { property: "og:url", content: url },
+      { property: "og:image", content: imageUrl },
+      { property: "og:image:width", content: "1200" },
+      { property: "og:image:height", content: "630" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: fullTitle },
+      { name: "twitter:description", content: description },
+      { name: "twitter:image", content: imageUrl },
+    );
+  }
 
   if (noindex) {
     meta.push({ name: "robots", content: "noindex, nofollow" });

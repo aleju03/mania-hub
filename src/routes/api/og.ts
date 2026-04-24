@@ -1,9 +1,9 @@
 import { ImageResponse } from "@vercel/og";
 import { createFileRoute } from "@tanstack/react-router";
 import { createElement as h } from "react";
-import { getCachedUser, getCachedUserScores, getRankings, getCountrySnipes, getScore } from "../../lib/osu";
+import { getCachedUser, getCachedUserScores, getRankings, getCountryMapsFarmed, getCountrySnipes, getScore } from "../../lib/osu";
 import { getCountryName, isSupportedCountryCode } from "../../lib/country";
-import type { OsuScore } from "../../lib/types";
+import type { MapsFarmedEntry, OsuScore } from "../../lib/types";
 
 const WIDTH = 1200;
 const HEIGHT = 630;
@@ -123,6 +123,20 @@ async function fetchCountryTopPlayer(country: string) {
   return { rankings, topPlayer };
 }
 
+async function fetchCountryMapUsers(country: string) {
+  const rankings = await getRankings({ data: { type: "performance", page: 1, country } });
+  const users = rankings.ranking
+    .filter((entry) => entry.user.is_active !== false)
+    .slice(0, 50)
+    .map((entry) => ({
+      id: entry.user.id,
+      username: entry.user.username,
+      avatar_url: entry.user.avatar_url,
+    }));
+  if (users.length === 0) throw new Error(`no ranked players for ${country}`);
+  return users;
+}
+
 /* Top plays: a single hero card. The #1 country player's #1 best play is
    the focal point — cover art fills the canvas, pp number dominates, rest
    is metadata. Shows "the current hottest play" at a glance. */
@@ -189,7 +203,6 @@ async function renderTopPlaysOg(request: Request, country: string): Promise<Resp
             key: "eyebrow",
             style: {
               position: "relative",
-              zIndex: "1",
               display: "flex",
               flexDirection: "row",
               alignItems: "center",
@@ -216,7 +229,6 @@ async function renderTopPlaysOg(request: Request, country: string): Promise<Resp
             key: "hero",
             style: {
               position: "relative",
-              zIndex: "1",
               display: "flex",
               flexDirection: "column",
               flex: "1",
@@ -289,7 +301,6 @@ async function renderTopPlaysOg(request: Request, country: string): Promise<Resp
             key: "bottom",
             style: {
               position: "relative",
-              zIndex: "1",
               display: "flex",
               flexDirection: "column",
               gap: "10px",
@@ -400,25 +411,14 @@ async function renderTopPlaysOg(request: Request, country: string): Promise<Resp
    top player is currently farming. Different from top-plays (one big score)
    because here the focus is on the *maps*, not a single popoff. */
 async function renderMapsOg(request: Request, country: string): Promise<Response> {
-  const [regularFont, heavyFont, data] = await Promise.all([
+  const [regularFont, heavyFont, users] = await Promise.all([
     getFont(request, "Torus-Regular.otf"),
     getFont(request, "Torus-Heavy.otf"),
-    fetchCountryTopPlayer(country),
+    fetchCountryMapUsers(country),
   ]);
-  const scores = await getCachedUserScores("best", data.topPlayer.user.id, { limit: 10, offset: 0 });
-
-  // Dedupe by beatmapset_id — top plays often include multiple diffs of the
-  // same set, which would make the grid boring.
-  const seen = new Set<number>();
-  const uniqueMaps: OsuScore[] = [];
-  for (const s of scores) {
-    const id = s.beatmapset?.id ?? 0;
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    uniqueMaps.push(s);
-    if (uniqueMaps.length === 3) break;
-  }
-  if (uniqueMaps.length === 0) throw new Error("no maps to show");
+  const farmedSection = await getCountryMapsFarmed({ data: { users } });
+  const farmedMaps = farmedSection.value.farmed.slice(0, 3);
+  if (farmedMaps.length === 0) throw new Error("no maps to show");
 
   const countryName = getCountryName(country) || country;
   const flagUrl = `https://osu.ppy.sh/images/flags/${country}.png`;
@@ -457,7 +457,6 @@ async function renderMapsOg(request: Request, country: string): Promise<Response
             key: "header",
             style: {
               position: "relative",
-              zIndex: "1",
               display: "flex",
               flexDirection: "row",
               alignItems: "center",
@@ -477,7 +476,7 @@ async function renderMapsOg(request: Request, country: string): Promise<Response
                 key: "title",
                 style: { fontSize: "40px", fontWeight: 900 },
               },
-              `${countryName}'s farm list`,
+              `${countryName}'s farmed maps`,
             ),
           ],
         ),
@@ -489,14 +488,13 @@ async function renderMapsOg(request: Request, country: string): Promise<Response
             key: "grid",
             style: {
               position: "relative",
-              zIndex: "1",
               display: "flex",
               flexDirection: "row",
               flex: "1",
               gap: "18px",
             },
           },
-          uniqueMaps.map((score, i) => mapCard(score, i)),
+          farmedMaps.map((map, i) => farmedMapCard(map, i)),
         ),
 
         h(
@@ -505,7 +503,6 @@ async function renderMapsOg(request: Request, country: string): Promise<Response
             key: "footer",
             style: {
               position: "relative",
-              zIndex: "1",
               display: "flex",
               flexDirection: "row",
               alignItems: "center",
@@ -519,7 +516,7 @@ async function renderMapsOg(request: Request, country: string): Promise<Response
             h(
               "div",
               { key: "by" },
-              `via ${data.topPlayer.user.username}`,
+              `${users.length} top players`,
             ),
             h("div", { key: "dot", style: { color: "#5a4a52" } }, "/"),
             h("div", { key: "mark" }, "o!mania tracker"),
@@ -533,8 +530,8 @@ async function renderMapsOg(request: Request, country: string): Promise<Response
   return response;
 }
 
-function mapCard(score: OsuScore, idx: number) {
-  const cover = pickBeatmapsetCover(score);
+function farmedMapCard(map: MapsFarmedEntry, idx: number) {
+  const cover = map.covers["cover@2x"] || map.covers.cover || map.covers["card@2x"] || map.covers.card || null;
   return h(
     "div",
     {
@@ -594,7 +591,7 @@ function mapCard(score: OsuScore, idx: number) {
                 overflow: "hidden",
               },
             },
-            score.beatmapset?.title ?? "Unknown",
+            map.title,
           ),
           h(
             "div",
@@ -606,7 +603,7 @@ function mapCard(score: OsuScore, idx: number) {
                 lineHeight: "1.2",
               },
             },
-            `[${score.beatmap?.version ?? "?"}]  ${(score.beatmap?.difficulty_rating ?? 0).toFixed(2)}★`,
+            `${map.playerCount} players / ${formatOgInt(map.avgPp)} avg pp / ${map.difficultyRating.toFixed(2)} stars`,
           ),
         ],
       ),
@@ -678,7 +675,6 @@ async function renderTrackerOg(request: Request, country: string): Promise<Respo
             key: "header",
             style: {
               position: "relative",
-              zIndex: "1",
               display: "flex",
               flexDirection: "row",
               alignItems: "center",
@@ -706,7 +702,6 @@ async function renderTrackerOg(request: Request, country: string): Promise<Respo
             key: "list",
             style: {
               position: "relative",
-              zIndex: "1",
               display: "flex",
               flexDirection: "column",
               gap: "12px",
@@ -903,7 +898,6 @@ async function renderSnipesOg(request: Request, country: string): Promise<Respon
             key: "eyebrow",
             style: {
               position: "relative",
-              zIndex: "1",
               display: "flex",
               flexDirection: "row",
               alignItems: "center",
@@ -930,7 +924,6 @@ async function renderSnipesOg(request: Request, country: string): Promise<Respon
             key: "body",
             style: {
               position: "relative",
-              zIndex: "1",
               display: "flex",
               flexDirection: "row",
               alignItems: "center",
@@ -1137,7 +1130,6 @@ async function renderSnipesOg(request: Request, country: string): Promise<Respon
             key: "brand",
             style: {
               position: "relative",
-              zIndex: "1",
               fontSize: "18px",
               color: "#7a6b74",
               letterSpacing: "0.06em",
@@ -1214,7 +1206,6 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
             key: "eyebrow",
             style: {
               position: "relative",
-              zIndex: "1",
               fontSize: "22px",
               color: "#ff99cc",
               letterSpacing: "0.1em",
@@ -1230,7 +1221,6 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
             key: "hero",
             style: {
               position: "relative",
-              zIndex: "1",
               display: "flex",
               flexDirection: "row",
               alignItems: "center",
@@ -1300,7 +1290,6 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
             key: "stats",
             style: {
               position: "relative",
-              zIndex: "1",
               display: "flex",
               flexDirection: "row",
               alignItems: "baseline",
@@ -1439,7 +1428,6 @@ async function renderPlayerOg(request: Request, rawUsername: string): Promise<Re
             key: "content",
             style: {
               position: "relative",
-              zIndex: "1",
               display: "flex",
               flexDirection: "row",
               alignItems: "center",
@@ -1714,7 +1702,6 @@ async function renderCountryOg(
             key: "left",
             style: {
               position: "relative",
-              zIndex: "1",
               display: "flex",
               flexDirection: "column",
               width: "520px",
@@ -1795,7 +1782,6 @@ async function renderCountryOg(
             key: "right",
             style: {
               position: "relative",
-              zIndex: "1",
               display: "flex",
               flexDirection: "column",
               width: "680px",
@@ -1972,7 +1958,6 @@ async function renderDefaultOg(request: Request, url: URL): Promise<Response> {
             key: "content",
             style: {
               position: "relative",
-              zIndex: "1",
               display: "flex",
               flexDirection: "column",
             },

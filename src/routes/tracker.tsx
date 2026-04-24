@@ -28,7 +28,7 @@ import { TrackerRowSkeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import { TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useSelectedCountry } from "../store";
 import type { OsuScore } from "../lib/types";
-import { pageSeo, trackerOgImagePath } from "../lib/seo";
+import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 
 export const Route = createFileRoute("/tracker")({
@@ -45,7 +45,7 @@ export const Route = createFileRoute("/tracker")({
         : "Live score feed for tracked osu!mania players in your country.",
       path: withSearchParams("/tracker", { country }),
       origin: match.context.origin,
-      image: country ? trackerOgImagePath(country) : undefined,
+      social: false,
       noindex: true,
     });
   },

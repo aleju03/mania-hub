@@ -16,7 +16,7 @@ import { UsernameText } from "../components/ui/UsernameText";
 import { Pagination } from "../components/ui/Pagination";
 import type { OsuScore, RankingsResponse } from "../lib/types";
 import { useAppStore, useSelectedCountry, type CachedPopoff, type TopPlaysRange } from "../store";
-import { pageSeo, topPlaysOgImagePath } from "../lib/seo";
+import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 
 interface PopOff {
@@ -79,7 +79,7 @@ export const Route = createFileRoute("/top-plays")({
         country,
       }),
       origin: match.context.origin,
-      image: country ? topPlaysOgImagePath(country) : undefined,
+      social: false,
     });
   },
   search: {

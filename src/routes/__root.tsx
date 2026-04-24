@@ -15,7 +15,7 @@ import {
   resolveInitialCountry,
 } from "../lib/country-cookie";
 import { PostHogProvider } from "../lib/posthog-provider";
-import { DEFAULT_DESCRIPTION, DEFAULT_OG_IMAGE_PATH, SITE_NAME, absoluteUrl, websiteJsonLd } from "../lib/seo";
+import { DEFAULT_DESCRIPTION, SITE_NAME, websiteJsonLd } from "../lib/seo";
 import appCss from "../styles.css?url";
 
 /* Origin is read from the live request headers instead of a VITE_SITE_URL
@@ -92,18 +92,6 @@ export const Route = createRootRoute({
       { name: "description", content: DEFAULT_DESCRIPTION },
       { name: "robots", content: "index, follow" },
       { name: "theme-color", content: "#1a1517" },
-      { property: "og:site_name", content: SITE_NAME },
-      { property: "og:type", content: "website" },
-      { property: "og:title", content: SITE_NAME },
-      { property: "og:description", content: DEFAULT_DESCRIPTION },
-      { property: "og:image", content: absoluteUrl(DEFAULT_OG_IMAGE_PATH, match.context.origin) },
-      { property: "og:image:width", content: "1200" },
-      { property: "og:image:height", content: "630" },
-      { property: "og:image:alt", content: SITE_NAME },
-      { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: SITE_NAME },
-      { name: "twitter:description", content: DEFAULT_DESCRIPTION },
-      { name: "twitter:image", content: absoluteUrl(DEFAULT_OG_IMAGE_PATH, match.context.origin) },
     ],
     links: [
       { rel: "icon", type: "image/png", href: `/api/favicon?code=${match.context.initialCountry}&v=2` },
