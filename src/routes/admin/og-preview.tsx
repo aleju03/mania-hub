@@ -5,11 +5,7 @@ import { COUNTRY_OPTIONS } from "../../lib/country";
 type PresetKind =
   | "default"
   | "player"
-  | "top-plays"
-  | "maps"
-  | "tracker"
-  | "snipes"
-  | "replay";
+  | "maps";
 
 type Preset = {
   key: string;
@@ -48,61 +44,22 @@ const PRESETS: Preset[] = [
     countryAware: true,
   },
   {
-    key: "top-plays",
-    label: "Top plays",
-    kind: "top-plays",
-    title: "Top mania plays this week",
-    subtitle: "Recent popoffs and high-PP osu!mania plays by country.",
-    path: "/top-plays",
-    countryAware: true,
-  },
-  {
     key: "maps",
     label: "Maps",
     kind: "maps",
     title: "Beatmaps played by your country",
-    subtitle:
-      "Find the osu!mania maps your country's top players farm, play, and favourite.",
+    subtitle: "osu!mania maps played by top country players.",
     path: "/maps",
     countryAware: true,
-  },
-  {
-    key: "tracker",
-    label: "Tracker",
-    kind: "tracker",
-    title: "Live score tracker",
-    subtitle: "Live score feed for tracked osu!mania players in your country.",
-    path: "/tracker",
-    countryAware: true,
-    noindex: true,
   },
   {
     key: "player",
     label: "Player",
     kind: "player",
     title: "peppy",
-    subtitle: "peppy's osu!mania profile, best plays, recent scores, and stats.",
+    subtitle: "peppy's osu!mania stats.",
     path: "/player/peppy",
     username: "peppy",
-    noindex: true,
-  },
-  {
-    key: "snipes",
-    label: "Snipes",
-    kind: "snipes",
-    title: "Snipes",
-    subtitle: "Track when osu!mania #1 scores change hands in your country.",
-    path: "/snipes",
-    countryAware: true,
-    noindex: true,
-  },
-  {
-    key: "replay",
-    label: "Replay",
-    kind: "replay",
-    title: "Replay viewer",
-    subtitle: "Watch osu!mania .osr replays in your browser.",
-    path: "/replay",
     noindex: true,
   },
 ];
@@ -139,7 +96,6 @@ function OgPreviewPage() {
   const [subtitle, setSubtitle] = useState(PRESETS[0].subtitle);
   const [username, setUsername] = useState("peppy");
   const [country, setCountry] = useState("CR");
-  const [scoreId, setScoreId] = useState("");
   const [cacheBuster, setCacheBuster] = useState(() => Date.now());
   const [origin, setOrigin] = useState("");
   const [copied, setCopied] = useState(false);
@@ -163,20 +119,7 @@ function OgPreviewPage() {
       });
       return `/api/og?${params.toString()}`;
     }
-    if (kind === "replay") {
-      const params = new URLSearchParams({
-        kind: "replay",
-        t: String(cacheBuster),
-      });
-      if (scoreId) params.set("scoreId", scoreId);
-      return `/api/og?${params.toString()}`;
-    }
-    if (
-      kind === "top-plays" ||
-      kind === "maps" ||
-      kind === "tracker" ||
-      kind === "snipes"
-    ) {
+    if (kind === "maps") {
       const params = new URLSearchParams({
         kind,
         country,
@@ -192,7 +135,7 @@ function OgPreviewPage() {
     if (subtitle) params.set("subtitle", subtitle);
     if (countryAware) params.set("country", country);
     return `/api/og?${params.toString()}`;
-  }, [kind, username, scoreId, title, subtitle, countryAware, country, cacheBuster]);
+  }, [kind, username, title, subtitle, countryAware, country, cacheBuster]);
 
   const absoluteImage = origin ? `${origin}${ogPath}` : ogPath;
   const mockTitle = kind === "player"
@@ -201,7 +144,7 @@ function OgPreviewPage() {
       ? title
       : `${title} - ${SITE_NAME}`;
   const mockSubtitle = kind === "player"
-    ? `${username}'s osu!mania profile, best plays, recent scores, and stats.`
+    ? `${username}'s osu!mania stats.`
     : subtitle;
   const domain = origin ? new URL(origin).host : "localhost:3000";
 
@@ -244,20 +187,7 @@ function OgPreviewPage() {
               Player layout ignores title/subtitle. Avatar, flag, rank, PP and acc are pulled from the osu! API using this username.
             </div>
           </div>
-        ) : kind === "replay" ? (
-          <div className="grid gap-3 md:grid-cols-2">
-            <TextField
-              label="Score ID"
-              hint="osu! score id — endpoint fetches the actual score from /scores/{id}"
-              value={scoreId}
-              max={24}
-              onChange={setScoreId}
-            />
-            <div className="flex items-end text-[11px] text-osu-f1/80 leading-relaxed">
-              Replay layout shows the specific score's cover, player, grade, pp, acc. Try a real scoreId from any replay on the site.
-            </div>
-          </div>
-        ) : kind === "top-plays" || kind === "maps" || kind === "tracker" || kind === "snipes" ? (
+        ) : kind === "maps" ? (
           <div className="flex items-center gap-3">
             <label className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">
               Country
@@ -274,13 +204,7 @@ function OgPreviewPage() {
               ))}
             </select>
             <span className="text-[10px] text-osu-f1/70">
-              {kind === "top-plays"
-                ? "shows the #1 country player's top best play (cover + pp + acc)"
-                : kind === "maps"
-                  ? "shows 3 unique beatmaps the #1 country player is farming"
-                  : kind === "tracker"
-                    ? "shows a 3-row feed: top 3 country players with their #1 best score each"
-                    : "shows the latest snipe event (sniper vs victim on a map)"}
+              shows 3 unique beatmaps the #1 country player is farming
             </span>
           </div>
         ) : (

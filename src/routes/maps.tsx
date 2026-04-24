@@ -305,8 +305,8 @@ export const Route = createFileRoute("/maps")({
     return pageSeo({
       title: countryName ? `Beatmaps played in ${countryName}` : "Beatmaps played by your country",
       description: countryName
-        ? `osu!mania maps ${countryName}'s top players farm, play, and favourite.`
-        : "Find the osu!mania maps your country's top players farm, play, and favourite.",
+        ? `osu!mania maps played by top players in ${countryName}.`
+        : "osu!mania maps played by top country players.",
       path: withSearchParams("/maps", { country }),
       origin: match.context.origin,
       image: country ? mapsOgImagePath(country) : undefined,

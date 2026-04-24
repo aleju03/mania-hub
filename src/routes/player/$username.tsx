@@ -55,7 +55,7 @@ export const Route = createFileRoute("/player/$username")({
   head: ({ params, match }) =>
     pageSeo({
       title: `${params.username}`,
-      description: `${params.username}'s osu!mania profile, best plays, recent scores, and stats.`,
+      description: `${params.username}'s osu!mania stats.`,
       path: `/player/${encodeURIComponent(params.username)}`,
       origin: match.context.origin,
       image: playerOgImagePath(params.username),

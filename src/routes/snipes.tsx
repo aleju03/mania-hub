@@ -13,7 +13,7 @@ import { Pagination } from "../components/ui/Pagination";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { SnipeEvent, SnipesScanStatus } from "../lib/types";
 import { useAppStore, useSelectedCountry } from "../store";
-import { pageSeo, snipesOgImagePath } from "../lib/seo";
+import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 
 type KeyFilter = "all" | "4k" | "7k";
@@ -70,7 +70,7 @@ export const Route = createFileRoute("/snipes")({
         : "Track when osu!mania #1 scores change hands in your country.",
       path: withSearchParams("/snipes", { country }),
       origin: match.context.origin,
-      image: country ? snipesOgImagePath(country) : undefined,
+      social: false,
       noindex: true,
     });
   },
