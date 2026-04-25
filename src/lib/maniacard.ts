@@ -37,7 +37,7 @@ export type ManiaCardTier =
   | "grandmaster"
   | "ascendant";
 
-const MAX_PLAYS = 50;
+const MAX_PLAYS = 200;
 
 interface KeymodeBaseline {
   pp: [number, number];
