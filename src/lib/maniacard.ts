@@ -1,19 +1,28 @@
-// Port of TinyBot's mania skill calculator (Tienei/TinyBot,
-// Functions/osu/calc_player_skill.js). The original Discord bot composited a
-// PNG via JIMP; we render the same numbers as a styled React card. Formulas
-// kept verbatim so output matches the long-running community reference.
+// Maniacard player trait model.
+//
+// This intentionally avoids the old TinyBot formulas. Those were mostly
+// star/BPM metadata transforms and treated "finger control" like a renamed
+// aim stat. The model below stays inside data we already have on profile best
+// plays, then normalizes per keymode so 4K and 7K are not compared on the same
+// raw BPM/density scale.
 
 import type { OsuScore } from "./types";
-import { getDisplayedAccuracy } from "./score";
+import { getDisplayedAccuracy, getModAcronyms, getScoreRate } from "./score";
 
 export interface ManiaSkills {
   // Average star rating across the considered plays (raw, unrounded).
   starAvg: number;
-  // The three numbers shown on the card. Each is the per-play average x 100,
-  // rounded to integers (matches the toFixed(0) the bot emitted).
+  // The three numbers shown on the card, on a 0-1000-ish card scale.
   fingerControl: number;
   speed: number;
   accuracy: number;
+  // Extra traits for future card surfaces.
+  stamina: number;
+  versatility: number;
+  peak: number;
+  cardPower: number;
+  mainKeyMode: number;
+  archetype: string;
   // How many of the top plays actually contributed (NaN/Infinity dropped).
   sampleSize: number;
 }
@@ -24,9 +33,72 @@ export type ManiaCardTier =
   | "elite"
   | "superRare"
   | "ultraRare"
-  | "master";
+  | "master"
+  | "grandmaster"
+  | "ascendant";
 
-const MAX_PLAYS = 50;
+const MAX_PLAYS = 200;
+
+interface KeymodeBaseline {
+  pp: [number, number];
+  sr: [number, number];
+  bpm: [number, number];
+  density: [number, number];
+  length: [number, number];
+  objects: [number, number];
+}
+
+interface TraitSums {
+  star: number;
+  precision: number;
+  speed: number;
+  control: number;
+  stamina: number;
+  peak: number;
+  weight: number;
+  count: number;
+}
+
+interface KeymodeProfile {
+  keyMode: number;
+  starAvg: number;
+  precision: number;
+  speed: number;
+  control: number;
+  stamina: number;
+  peak: number;
+  strength: number;
+  weight: number;
+  count: number;
+}
+
+const BASELINES: Record<number, KeymodeBaseline> = {
+  4: {
+    pp: [80, 900],
+    sr: [3.2, 8.8],
+    bpm: [145, 265],
+    density: [3.2, 9.5],
+    length: [65, 240],
+    objects: [280, 1800],
+  },
+  7: {
+    pp: [90, 1000],
+    sr: [3.4, 9.0],
+    bpm: [125, 235],
+    density: [3.5, 12.5],
+    length: [70, 260],
+    objects: [360, 2600],
+  },
+};
+
+const DEFAULT_BASELINE: KeymodeBaseline = {
+  pp: [70, 850],
+  sr: [3.0, 8.6],
+  bpm: [120, 245],
+  density: [3.0, 10.5],
+  length: [65, 245],
+  objects: [300, 2200],
+};
 
 function isUsable(score: OsuScore): boolean {
   const b = score.beatmap;
@@ -42,71 +114,321 @@ function isUsable(score: OsuScore): boolean {
   );
 }
 
+function clamp(value: number, min = 0, max = 1): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function normalize(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value) || max <= min) return 0;
+  return clamp((value - min) / (max - min));
+}
+
+function curve(value: number, power: number): number {
+  return Math.pow(clamp(value), power);
+}
+
+function getKeyMode(score: OsuScore): number {
+  const cs = score.beatmap?.cs ?? 0;
+  return Number.isFinite(cs) && cs > 0 ? Math.round(cs) : 4;
+}
+
+function getBaseline(keyMode: number): KeymodeBaseline {
+  return BASELINES[keyMode] ?? DEFAULT_BASELINE;
+}
+
+function scoreWeight(score: OsuScore, index: number, keyModeCount: number): number {
+  const pp = Math.max(0, score.pp ?? 0);
+  const ppWeight = pp > 0 ? Math.pow(pp, 0.72) : 1;
+  const rankWeight = Math.pow(0.965, index);
+  const sampleWeight = keyModeCount >= 5 ? 1 : 0.72 + keyModeCount * 0.056;
+  return ppWeight * rankWeight * sampleWeight;
+}
+
+function getAccuracyGate(acc: number): number {
+  // Speed/control/stamina should not inflate from messy clears, but low-acc
+  // plays still carry some signal when they are high enough to be in top plays.
+  return 0.35 + curve(normalize(acc, 0.94, 0.995), 0.8) * 0.65;
+}
+
+function getPatternSignals(score: OsuScore): {
+  ln: number;
+  tech: number;
+  speed: number;
+  stamina: number;
+} {
+  const b = score.beatmap;
+  const text = [
+    b.version,
+    score.beatmapset?.title,
+    score.beatmapset?.artist,
+  ].join(" ").toLowerCase();
+  const notes = b.count_circles + b.count_sliders;
+  const lnRatio = notes > 0 ? b.count_sliders / notes : 0;
+
+  const hasAny = (words: string[]) => words.some((word) => text.includes(word));
+
+  return {
+    ln: clamp(lnRatio * 2.4 + (hasAny(["ln", "long note", "longnote"]) ? 0.25 : 0)),
+    tech: hasAny(["tech", "hybrid", "release", "dump", "jack", "chord", "stream"]) ? 1 : 0,
+    speed: hasAny(["speed", "stream", "burst", "dump", "jack"]) ? 1 : 0,
+    stamina: hasAny(["marathon", "stamina", "endurance", "long"]) ? 1 : 0,
+  };
+}
+
+function computePlayTraits(score: OsuScore, baseline: KeymodeBaseline) {
+  const b = score.beatmap;
+  const rate = getScoreRate(score.mods);
+  const star = b.difficulty_rating;
+  const effectiveBpm = b.bpm * rate;
+  const length = Math.max(1, b.total_length / Math.max(0.1, rate));
+  const objects = b.count_circles + b.count_sliders;
+  const density = objects / length;
+  const acc = getDisplayedAccuracy(score);
+  const od = b.accuracy;
+  const maxCombo = b.max_combo && b.max_combo > 0 ? b.max_combo : objects;
+  const comboRatio = maxCombo > 0 ? clamp(score.max_combo / maxCombo) : 1;
+  const missCount = score.statistics.count_miss ?? score.statistics.miss ?? 0;
+  const missPenalty = clamp(1 - missCount * 0.035, 0.75, 1);
+  const comboGate = 0.82 + curve(comboRatio, 0.65) * 0.18;
+  const accGate = getAccuracyGate(acc);
+  const patterns = getPatternSignals(score);
+  const acronyms = getModAcronyms(score.mods);
+  const isRateFarm = acronyms.includes("DT") || acronyms.includes("NC");
+
+  const srScore = curve(normalize(star, ...baseline.sr), 0.9);
+  const bpmScore = curve(normalize(effectiveBpm, ...baseline.bpm), 0.95);
+  const densityScore = curve(normalize(density, ...baseline.density), 0.85);
+  const odScore = curve(normalize(od, 6.0, 9.8), 0.8);
+  const lengthScore = curve(normalize(length, ...baseline.length), 0.8);
+  const objectScore = curve(normalize(objects, ...baseline.objects), 0.75);
+  const ppScore = curve(normalize(score.pp ?? 0, ...baseline.pp), 0.7);
+  const precisionBase = curve(normalize(acc, 0.94, 0.999), 1.55);
+
+  const precision = clamp(
+    (precisionBase * 0.7 + curve(normalize(acc, 0.985, 1), 1.1) * 0.18 + odScore * 0.12) *
+      (0.88 + srScore * 0.12) *
+      missPenalty,
+  );
+
+  const speed = clamp(
+    (bpmScore * 0.42 + densityScore * 0.32 + srScore * 0.18 + patterns.speed * 0.08) *
+      accGate *
+      comboGate,
+  );
+
+  const control = clamp(
+    (srScore * 0.34 +
+      odScore * 0.18 +
+      densityScore * 0.14 +
+      precisionBase * 0.16 +
+      patterns.tech * 0.1 +
+      patterns.ln * 0.08) *
+      (isRateFarm ? 0.96 : 1.03) *
+      accGate *
+      comboGate,
+  );
+
+  const stamina = clamp(
+    (lengthScore * 0.36 +
+      objectScore * 0.25 +
+      densityScore * 0.17 +
+      srScore * 0.14 +
+      patterns.stamina * 0.08) *
+      accGate *
+      comboGate,
+  );
+
+  return {
+    star,
+    precision,
+    speed,
+    control,
+    stamina,
+    peak: ppScore,
+  };
+}
+
+function createEmptySums(): TraitSums {
+  return {
+    star: 0,
+    precision: 0,
+    speed: 0,
+    control: 0,
+    stamina: 0,
+    peak: 0,
+    weight: 0,
+    count: 0,
+  };
+}
+
+function toProfile(keyMode: number, sums: TraitSums): KeymodeProfile | null {
+  if (sums.weight <= 0 || sums.count <= 0) return null;
+
+  const precision = sums.precision / sums.weight;
+  const speed = sums.speed / sums.weight;
+  const control = sums.control / sums.weight;
+  const stamina = sums.stamina / sums.weight;
+  const peak = sums.peak / sums.weight;
+  const strength =
+    peak * 0.34 +
+    precision * 0.2 +
+    control * 0.18 +
+    speed * 0.16 +
+    stamina * 0.12;
+
+  return {
+    keyMode,
+    starAvg: sums.star / sums.weight,
+    precision,
+    speed,
+    control,
+    stamina,
+    peak,
+    strength,
+    weight: sums.weight,
+    count: sums.count,
+  };
+}
+
+function blendProfiles(profiles: KeymodeProfile[]): {
+  starAvg: number;
+  precision: number;
+  speed: number;
+  control: number;
+  stamina: number;
+  peak: number;
+  mainKeyMode: number;
+  versatility: number;
+  archetype: string;
+} {
+  const countOrdered = [...profiles].sort((a, b) => b.count - a.count);
+  const countMain = countOrdered[0];
+  const countSecondary = countOrdered[1];
+  const totalCount = profiles.reduce((sum, p) => sum + p.count, 0);
+  const countMainShare = totalCount > 0 ? countMain.count / totalCount : 1;
+  const countSecondaryShare = countSecondary && totalCount > 0 ? countSecondary.count / totalCount : 0;
+  const isTrueHybrid =
+    !!countSecondary &&
+    countMainShare <= 0.58 &&
+    countSecondaryShare >= 0.35 &&
+    countMainShare - countSecondaryShare <= 0.18;
+
+  const main = countMain;
+  const secondary = countSecondary;
+  const secondaryBlend = secondary
+    ? isTrueHybrid
+      ? clamp(countSecondaryShare * 0.55, 0.18, 0.32)
+      : clamp((1 - countMainShare) * 0.18, 0, 0.12)
+    : 0;
+  const mainBlend = 1 - secondaryBlend;
+
+  const blend = (field: keyof Pick<KeymodeProfile, "precision" | "speed" | "control" | "stamina" | "peak" | "starAvg">) =>
+    main[field] * mainBlend + (secondary?.[field] ?? main[field]) * secondaryBlend;
+
+  const balance =
+    profiles.length <= 1
+      ? 0
+      : 1 - profiles.reduce((max, p) => Math.max(max, p.count / totalCount), 0);
+  const secondaryStrength = secondary ? secondary.strength : 0;
+  const versatility = clamp(balance * 1.3 + secondaryStrength * 0.35);
+
+  const traitEntries = [
+    ["Precision", blend("precision")] as const,
+    ["Speed", blend("speed")] as const,
+    ["Control", blend("control")] as const,
+    ["Stamina", blend("stamina")] as const,
+  ].sort((a, b) => b[1] - a[1]);
+
+  const keyLabel =
+    isTrueHybrid
+      ? `${countMain.keyMode}K/${countSecondary.keyMode}K Hybrid`
+      : `${countMain.keyMode}K ${traitEntries[0][0]}`;
+
+  return {
+    starAvg: blend("starAvg"),
+    precision: blend("precision"),
+    speed: blend("speed"),
+    control: blend("control"),
+    stamina: blend("stamina"),
+    peak: blend("peak"),
+    mainKeyMode: main.keyMode,
+    versatility,
+    archetype: keyLabel,
+  };
+}
+
+function toCardValue(value: number): number {
+  return Math.round(clamp(value) * 1000);
+}
+
 export function computeManiaSkills(scores: OsuScore[]): ManiaSkills | null {
   const pool = scores.filter(isUsable).slice(0, MAX_PLAYS);
   if (pool.length === 0) return null;
 
-  let starSum = 0;
-  let aimSum = 0;
-  let speedSum = 0;
-  let accSum = 0;
-  let count = 0;
-
+  const keyModeCounts = new Map<number, number>();
   for (const score of pool) {
-    const b = score.beatmap;
-    const star = b.difficulty_rating;
-    const bpm = b.bpm;
-    const od = b.accuracy;
-    const hp = b.drain;
-    const cs = b.cs;
-    const notes = b.count_circles + b.count_sliders;
-    const acc = getDisplayedAccuracy(score) * 100;
-
-    // Per-TinyBot mania (modenum == 3):
-    const aim = Math.pow(star / 1.1, Math.log(bpm) / Math.log(star * 20));
-    const accSkill =
-      Math.pow(star, (Math.pow(acc, 3) / Math.pow(100, 3)) * 1.075) *
-      (Math.pow(od, 0.02) / Math.pow(6, 0.02)) *
-      (Math.pow(hp, 0.02) / Math.pow(5, 0.02));
-    const speed = Math.pow(
-      star,
-      1.1 *
-        Math.pow(bpm / 250, 0.4) *
-        (Math.log(notes) / Math.log(star * 900)) *
-        (Math.pow(od, 0.4) / Math.pow(8, 0.4)) *
-        (Math.pow(hp, 0.2) / Math.pow(7.5, 0.2)) *
-        Math.pow(cs / 4, 0.1),
-    );
-
-    if (![aim, accSkill, speed, star].every(Number.isFinite)) continue;
-
-    starSum += star;
-    aimSum += aim;
-    speedSum += speed;
-    accSum += accSkill;
-    count++;
+    const keyMode = getKeyMode(score);
+    keyModeCounts.set(keyMode, (keyModeCounts.get(keyMode) ?? 0) + 1);
   }
 
-  if (count === 0) return null;
+  const byKeyMode = new Map<number, TraitSums>();
 
-  // The bot returned speed_avg with a 1.03 multiplier; preserve that so tier
-  // thresholds line up with the original output.
+  for (const [index, score] of pool.entries()) {
+    const keyMode = getKeyMode(score);
+    const baseline = getBaseline(keyMode);
+    const traits = computePlayTraits(score, baseline);
+    if (!Object.values(traits).every(Number.isFinite)) continue;
+
+    const weight = scoreWeight(score, index, keyModeCounts.get(keyMode) ?? 1);
+    const sums = byKeyMode.get(keyMode) ?? createEmptySums();
+    sums.star += traits.star * weight;
+    sums.precision += traits.precision * weight;
+    sums.speed += traits.speed * weight;
+    sums.control += traits.control * weight;
+    sums.stamina += traits.stamina * weight;
+    sums.peak += traits.peak * weight;
+    sums.weight += weight;
+    sums.count++;
+    byKeyMode.set(keyMode, sums);
+  }
+
+  const profiles = [...byKeyMode.entries()]
+    .map(([keyMode, sums]) => toProfile(keyMode, sums))
+    .filter((profile): profile is KeymodeProfile => profile != null);
+  if (profiles.length === 0) return null;
+
+  const blended = blendProfiles(profiles);
+  const cardPower =
+    blended.peak * 0.42 +
+    blended.control * 0.17 +
+    blended.speed * 0.14 +
+    blended.precision * 0.12 +
+    blended.stamina * 0.1 +
+    blended.versatility * 0.05;
+
   return {
-    starAvg: starSum / count,
-    fingerControl: Math.round((aimSum / count) * 100),
-    speed: Math.round((speedSum / count) * 100 * 1.03),
-    accuracy: Math.round((accSum / count) * 100),
-    sampleSize: count,
+    starAvg: blended.starAvg,
+    fingerControl: toCardValue(blended.control),
+    speed: toCardValue(blended.speed),
+    accuracy: toCardValue(blended.precision),
+    stamina: toCardValue(blended.stamina),
+    versatility: toCardValue(blended.versatility),
+    peak: toCardValue(blended.peak),
+    cardPower: toCardValue(cardPower),
+    mainKeyMode: blended.mainKeyMode,
+    archetype: blended.archetype,
+    sampleSize: profiles.reduce((sum, profile) => sum + profile.count, 0),
   };
 }
 
-// Tier thresholds from Commands/osu.js (acc_avg cutoffs).
-export function getManiaCardTier(accuracy: number): ManiaCardTier {
-  if (accuracy >= 900) return "master";
-  if (accuracy >= 825) return "ultraRare";
-  if (accuracy >= 700) return "superRare";
-  if (accuracy >= 525) return "elite";
-  if (accuracy >= 300) return "rare";
+export function getManiaCardTier(cardPower: number): ManiaCardTier {
+  if (cardPower >= 820) return "ascendant";
+  if (cardPower >= 720) return "grandmaster";
+  if (cardPower >= 620) return "master";
+  if (cardPower >= 500) return "ultraRare";
+  if (cardPower >= 380) return "superRare";
+  if (cardPower >= 260) return "elite";
+  if (cardPower >= 140) return "rare";
   return "common";
 }
 
@@ -212,5 +534,33 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
       "linear-gradient(142deg, #fef3c7 0%, #f59e0b 44%, #9a3412 100%)",
     badgeHalo: "rgba(252,211,77,0.6)",
     badgeGlyphShadow: "rgba(120,53,15,0.45)",
+  },
+  grandmaster: {
+    label: "Grandmaster",
+    background: "from-yellow-200 via-fuchsia-500 to-cyan-700",
+    border: "border-yellow-100/95",
+    glow: "shadow-[0_18px_74px_rgba(236,72,153,0.66)]",
+    edgeFill: "rgba(112, 26, 117, 0.94)",
+    glowColor: "rgba(244, 114, 182, 0.46)",
+    starColor: "text-yellow-100",
+    badgeColor: "text-yellow-50",
+    badgeGradient:
+      "linear-gradient(142deg, #fef9c3 0%, #e879f9 42%, #0e7490 100%)",
+    badgeHalo: "rgba(232,121,249,0.64)",
+    badgeGlyphShadow: "rgba(88,28,135,0.45)",
+  },
+  ascendant: {
+    label: "Ascendant",
+    background: "from-white via-amber-200 to-fuchsia-700",
+    border: "border-white/95",
+    glow: "shadow-[0_18px_82px_rgba(255,255,255,0.5)]",
+    edgeFill: "rgba(120, 53, 15, 0.94)",
+    glowColor: "rgba(255, 255, 255, 0.5)",
+    starColor: "text-white",
+    badgeColor: "text-white",
+    badgeGradient:
+      "linear-gradient(142deg, #ffffff 0%, #fde68a 34%, #f0abfc 68%, #7e22ce 100%)",
+    badgeHalo: "rgba(255,255,255,0.72)",
+    badgeGlyphShadow: "rgba(88,28,135,0.45)",
   },
 };

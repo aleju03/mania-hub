@@ -510,6 +510,30 @@ const TIER_VISUALS: Record<ManiaCardTier, { triangleOpacity: number; extras?: Re
       />
     ),
   },
+  grandmaster: {
+    triangleOpacity: 1,
+    extras: (
+      <div
+        className="absolute inset-0 pointer-events-none mix-blend-screen opacity-80"
+        style={{
+          background:
+            "linear-gradient(120deg, transparent 28%, rgba(255,255,255,0.32) 44%, rgba(255,220,120,0.24) 50%, transparent 66%)",
+        }}
+      />
+    ),
+  },
+  ascendant: {
+    triangleOpacity: 1,
+    extras: (
+      <div
+        className="absolute inset-0 pointer-events-none mix-blend-screen opacity-90"
+        style={{
+          background:
+            "conic-gradient(from 180deg at 50% 50%, rgba(255,255,255,0.34), rgba(255,210,90,0.3), rgba(240,120,255,0.32), rgba(80,220,255,0.26), rgba(255,255,255,0.34))",
+        }}
+      />
+    ),
+  },
 };
 
 const CARD_EDGE_LAYERS = [-5, -3.75, -2.5, -1.25, 0, 1.25, 2.5, 3.75, 5];
@@ -640,7 +664,7 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
     );
   }
 
-  const tier = getManiaCardTier(skills.accuracy);
+  const tier = getManiaCardTier(skills.cardPower);
   const style = MANIA_TIER_STYLES[tier];
   const visuals = TIER_VISUALS[tier];
 
@@ -712,7 +736,7 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
                       textShadow: "0 2px 4px rgba(0,0,0,0.5)",
                     }}
                   >
-                    {style.label}
+                    {skills.archetype}
                   </div>
                 </div>
 
@@ -732,9 +756,9 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
                   className="rounded-2xl border border-white/16 bg-black/30 px-3.5 py-2 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-[2px]"
                   style={{ fontFamily: "Torus, sans-serif", textShadow: "0 2px 3px rgba(0,0,0,0.6)" }}
                 >
-                  <StatLine label="Finger Control" value={skills.fingerControl} />
+                  <StatLine label="Control" value={skills.fingerControl} />
                   <StatLine label="Speed" value={skills.speed} />
-                  <StatLine label="Accuracy" value={skills.accuracy} />
+                  <StatLine label="Precision" value={skills.accuracy} />
                 </div>
 
                 <div className="pb-1 sm:pb-3">
