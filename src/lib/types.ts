@@ -554,6 +554,9 @@ export interface SnipesResponse {
    *  or serving a cached response from a prior scan). The client should use
    *  this, not receive time, for "last updated" labels. */
   scannedAt: number;
+  /** True when this response was served from stale/logged data and a scan was
+   *  started in the background to refresh the country snipes cache. */
+  refreshInProgress?: boolean;
 }
 
 export interface SnipesScanStatus {

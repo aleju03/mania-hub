@@ -2074,6 +2074,24 @@ async function probeCountryBoardLanes(
 
 const snipesBackgroundScanInProgress = new Set<string>();
 
+function refreshCountrySnipesInBackground(
+  country: string,
+  cacheKey: string,
+  snapshotKey: string,
+  logKey: string,
+): void {
+  if (snipesBackgroundScanInProgress.has(country)) return;
+  snipesBackgroundScanInProgress.add(country);
+  void fetchWithCacheLock(
+    cacheKey,
+    SNIPES_CACHE_TTL,
+    () => runSnipesScan(country, snapshotKey, logKey),
+    SNIPES_LOCK_TTL,
+  )
+    .catch((err) => console.warn("[snipes] background scan failed:", getErrorMessage(err)))
+    .finally(() => snipesBackgroundScanInProgress.delete(country));
+}
+
 async function runSnipesScan(
   country: string,
   snapshotKey: string,
@@ -2412,18 +2430,22 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
     const cached = await getPersistentCacheEntryAllowStale<SnipesResponse>(cacheKey);
     if (cached.hit) {
       if (!cached.isStale) return cached.value;
-      if (!snipesBackgroundScanInProgress.has(country)) {
-        snipesBackgroundScanInProgress.add(country);
-        void fetchWithCacheLock(
-          cacheKey,
-          SNIPES_CACHE_TTL,
-          () => runSnipesScan(country, snapshotKey, logKey),
-          SNIPES_LOCK_TTL,
-        )
-          .catch((err) => console.warn("[snipes] background scan failed:", getErrorMessage(err)))
-          .finally(() => snipesBackgroundScanInProgress.delete(country));
-      }
-      return cached.value;
+      refreshCountrySnipesInBackground(country, cacheKey, snapshotKey, logKey);
+      return { ...cached.value, refreshInProgress: true };
+    }
+
+    // The 6h response entry may have been purged while the durable 30d snipe
+    // log is still present. Serve that log immediately and rebuild the shorter
+    // response cache in the background instead of making the page wait for a
+    // full scan.
+    const loggedEvents = await getPersistentCacheEntryAllowStale<SnipeEvent[]>(logKey);
+    if (loggedEvents.hit && loggedEvents.value.length > 0) {
+      refreshCountrySnipesInBackground(country, cacheKey, snapshotKey, logKey);
+      return {
+        events: loggedEvents.value,
+        scannedAt: loggedEvents.updatedAt ?? Date.now(),
+        refreshInProgress: true,
+      };
     }
 
     // No data at all (true cold start) - block on the full scan.

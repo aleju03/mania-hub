@@ -55,7 +55,7 @@ export type CacheLookup<T> =
   | { hit: false };
 
 export type StaleCacheLookup<T> =
-  | { hit: true; value: T; isStale: boolean }
+  | { hit: true; value: T; isStale: boolean; updatedAt?: number }
   | { hit: false };
 
 function warnCacheIssue(action: string, key: string, error: unknown): void {
@@ -270,7 +270,7 @@ export async function getPersistentCacheEntryAllowStale<T>(
 
     const result = await db.execute({
       sql: `
-        SELECT cache_value, expires_at
+        SELECT cache_value, expires_at, updated_at
         FROM cache_entries
         WHERE cache_key = ?
         LIMIT 1
@@ -282,6 +282,7 @@ export async function getPersistentCacheEntryAllowStale<T>(
     if (!row) return { hit: false };
 
     const expiresAt = Number(row.expires_at);
+    const updatedAt = Number(row.updated_at);
     const parsed = (await decodeCacheValue(String(row.cache_value))) as T;
     const isStale = Date.now() >= expiresAt;
 
@@ -289,7 +290,12 @@ export async function getPersistentCacheEntryAllowStale<T>(
       responseCache.set(key, { value: parsed, expires: expiresAt });
     }
 
-    return { hit: true, value: parsed, isStale };
+    return {
+      hit: true,
+      value: parsed,
+      isStale,
+      updatedAt: Number.isFinite(updatedAt) ? updatedAt : undefined,
+    };
   } catch (error) {
     warnCacheIssue("persistent read (stale allowed)", key, error);
     return { hit: false };
