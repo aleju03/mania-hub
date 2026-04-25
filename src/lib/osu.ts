@@ -2168,17 +2168,6 @@ async function runSnipesScan(
       }
     }
 
-    writeSnipesScanStatus(
-      country,
-      {
-        phase: "compare",
-        label: `Comparing ${candidates.length} recent plays against snapshot`,
-        current: 0,
-        total: candidates.length,
-      },
-      { force: true },
-    );
-
     const snapshot: CountryBoardSnapshot =
       (await getPersistentCached<CountryBoardSnapshot>(snapshotKey)) ?? {};
 
@@ -2196,6 +2185,20 @@ async function runSnipesScan(
       bucket.push(score);
     }
 
+    const compareTotal = candidatesByBeatmap.size;
+    const compareLabel = `Comparing ${candidates.length} recent plays across ${compareTotal} beatmap${compareTotal === 1 ? "" : "s"}`;
+    writeSnipesScanStatus(
+      country,
+      {
+        phase: "compare",
+        label: compareLabel,
+        current: 0,
+        total: compareTotal,
+      },
+      { force: true },
+    );
+
+    let compareDone = 0;
     for (const [bid, scoresForMap] of candidatesByBeatmap.entries()) {
       scoresForMap.sort((a, b) => {
         const aMs = new Date(getScoreTimestamp(a)).getTime();
@@ -2215,6 +2218,13 @@ async function runSnipesScan(
           }
         }
         seedQueue.push({ beatmapId: bid, bestCandidate });
+        compareDone += 1;
+        writeSnipesScanStatus(country, {
+          phase: "compare",
+          label: compareLabel,
+          current: compareDone,
+          total: compareTotal,
+        });
         continue;
       }
 
@@ -2276,6 +2286,13 @@ async function runSnipesScan(
       }
 
       snapshot[bid] = lanesForBid;
+      compareDone += 1;
+      writeSnipesScanStatus(country, {
+        phase: "compare",
+        label: compareLabel,
+        current: compareDone,
+        total: compareTotal,
+      });
     }
 
     if (newEvents.length > 0) writePartialSnipeEvents(country, newEvents);
