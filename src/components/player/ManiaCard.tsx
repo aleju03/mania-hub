@@ -10,6 +10,8 @@ import { useCallback, useRef, type CSSProperties, type PointerEvent, type ReactN
 
 const STAR_PATH =
   "M12 2.5l2.92 5.92 6.54.95-4.73 4.61 1.12 6.52L12 17.51l-5.85 3 1.12-6.52L2.54 9.37l6.54-.95L12 2.5z";
+const IDLE_GLARE_OPACITY = 0.32;
+const FOIL_INTENSITY = 0.62;
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
@@ -61,7 +63,15 @@ function StarRow({ value, color, size = 24 }: { value: number; color: string; si
   );
 }
 
-function TrianglePattern({ opacity, idSuffix }: { opacity: number; idSuffix: string }) {
+function TrianglePattern({
+  opacity,
+  idSuffix,
+  animated = true,
+}: {
+  opacity: number;
+  idSuffix: string;
+  animated?: boolean;
+}) {
   const patternId = `mc-triangles-${idSuffix}`;
   const layers = [
     { id: `${patternId}-slow`, opacity: 0.46, from: "0 0", to: "0 -78", dur: "8.5s" },
@@ -78,14 +88,16 @@ function TrianglePattern({ opacity, idSuffix }: { opacity: number; idSuffix: str
       <defs>
         {layers.map((layer) => (
           <pattern key={layer.id} id={layer.id} width="90" height="78" patternUnits="userSpaceOnUse">
-            <animateTransform
-              attributeName="patternTransform"
-              type="translate"
-              from={layer.from}
-              to={layer.to}
-              dur={layer.dur}
-              repeatCount="indefinite"
-            />
+            {animated ? (
+              <animateTransform
+                attributeName="patternTransform"
+                type="translate"
+                from={layer.from}
+                to={layer.to}
+                dur={layer.dur}
+                repeatCount="indefinite"
+              />
+            ) : null}
             <polygon points="45,8 82,70 8,70" fill="rgba(255,255,255,0.08)" />
             <polygon points="10,36 32,74 -12,74" fill="rgba(255,255,255,0.05)" />
             <polygon points="80,36 102,74 58,74" fill="rgba(255,255,255,0.05)" />
@@ -259,8 +271,8 @@ function ManiaCardBackDesign({
   const accent = cssRgb(glowColor);
   const accentDisc = cssRgba(glowColor, 0.82);
   const accentLogoBed = cssRgba(glowColor, 0.54);
-  const ringTicks = Array.from({ length: 72 }, (_, index) => {
-    const angle = index * 5;
+  const ringTicks = Array.from({ length: 36 }, (_, index) => {
+    const angle = index * 10;
     const prominent = index % 6 === 0;
     return (
       <line
@@ -323,18 +335,6 @@ function ManiaCardBackDesign({
             <stop offset="0.55" stopColor={accentDisc} />
             <stop offset="1" stopColor="rgba(9,16,58,0.82)" />
           </linearGradient>
-          <filter id={`mc-back-soft-glow-${tier}`} x="-40%" y="-40%" width="180%" height="180%">
-            <feGaussianBlur stdDeviation="5" result="blur" />
-            <feColorMatrix
-              in="blur"
-              type="matrix"
-              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.72 0"
-            />
-            <feMerge>
-              <feMergeNode />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
           <pattern id={`mc-back-micro-tris-${tier}`} width="48" height="42" patternUnits="userSpaceOnUse">
             <polygon points="24,3 45,39 3,39" fill="rgba(255,255,255,0.052)" />
             <polygon points="3,18 15,39 -9,39" fill="rgba(0,0,0,0.055)" />
@@ -350,7 +350,6 @@ function ManiaCardBackDesign({
           stroke={`url(#mc-back-frame-${tier})`}
           strokeWidth="4"
           opacity="0.9"
-          filter={`url(#mc-back-soft-glow-${tier})`}
         />
         <path
           d="M53 54 Q53 40 67 40 H433 Q447 40 447 54 V166 Q431 176 431 194 V506 Q431 524 447 534 V646 Q447 660 433 660 H67 Q53 660 53 646 V534 Q69 524 69 506 V194 Q69 176 53 166 Z"
@@ -393,7 +392,7 @@ function ManiaCardBackDesign({
           </g>
         ))}
 
-        <g filter={`url(#mc-back-soft-glow-${tier})`}>
+        <g>
           <circle cx="250" cy="350" r="181" fill="none" stroke="currentColor" strokeWidth="2.4" opacity="0.34" />
           <circle cx="250" cy="350" r="168" fill="none" stroke="currentColor" strokeWidth="1.2" strokeDasharray="2 6" opacity="0.46" />
           <circle cx="250" cy="350" r="150" fill="none" stroke="rgba(255,255,255,0.26)" strokeWidth="1.5" />
@@ -407,7 +406,7 @@ function ManiaCardBackDesign({
         <circle cx="250" cy="350" r="121" fill={`url(#mc-back-disc-${tier})`} stroke="rgba(255,255,255,0.56)" strokeWidth="2.8" />
         <circle cx="250" cy="350" r="97" fill={accentLogoBed} stroke="rgba(255,255,255,0.12)" strokeWidth="1.2" />
         <circle cx="250" cy="350" r="76" fill="none" stroke="white" strokeWidth="12" opacity="0.98" />
-        <g transform="translate(174 274) scale(0.152)" fill="#ffffff" filter={`url(#mc-back-soft-glow-${tier})`}>
+        <g transform="translate(174 274) scale(0.152)" fill="#ffffff">
           <g transform="translate(0 850) scale(1 -1)">
             <path d={MANIA_GLYPH_D} />
           </g>
@@ -527,6 +526,12 @@ function cssRgba(value: string, alpha: number) {
 
 export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
   const cardRef = useRef<HTMLDivElement | null>(null);
+  const frameRef = useRef<number | null>(null);
+  const pendingTiltRef = useRef<{
+    rotateX: number;
+    rotateY: number;
+    glareOpacity: number;
+  } | null>(null);
   const dragRef = useRef({
     active: false,
     pointerId: -1,
@@ -538,20 +543,36 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
     baseRotateY: 0,
   });
 
-  const applyTilt = useCallback((rotateX: number, rotateY: number, glareOpacity: number) => {
+  const writeTilt = useCallback((rotateX: number, rotateY: number, glareOpacity: number) => {
     const card = cardRef.current;
     if (!card) return;
 
-    const normalizedY = ((rotateY % 360) + 360) % 360;
     const lightX = clamp(50 - Math.sin((rotateY * Math.PI) / 180) * 42, 8, 92);
     const lightY = clamp(48 + Math.sin((rotateX * Math.PI) / 180) * 42, 10, 90);
+    const backgroundX = clamp(50 + (lightX - 50) * 0.5, 28, 72);
+    const backgroundY = clamp(50 + (lightY - 50) * 0.42, 30, 70);
 
     card.style.setProperty("--mc-rotate-x", `${rotateX.toFixed(2)}deg`);
     card.style.setProperty("--mc-rotate-y", `${rotateY.toFixed(2)}deg`);
     card.style.setProperty("--mc-glare-x", `${lightX.toFixed(1)}%`);
     card.style.setProperty("--mc-glare-y", `${lightY.toFixed(1)}%`);
-    card.style.setProperty("--mc-glare-opacity", `${glareOpacity.toFixed(2)}`);
+    card.style.setProperty("--mc-background-x", `${backgroundX.toFixed(1)}%`);
+    card.style.setProperty("--mc-background-y", `${backgroundY.toFixed(1)}%`);
+    card.style.setProperty("--mc-pointer-from-center", `${FOIL_INTENSITY}`);
+    card.style.setProperty("--mc-glare-opacity", `${IDLE_GLARE_OPACITY}`);
   }, []);
+
+  const applyTilt = useCallback((rotateX: number, rotateY: number, glareOpacity: number) => {
+    pendingTiltRef.current = { rotateX, rotateY, glareOpacity };
+    if (frameRef.current !== null) return;
+
+    frameRef.current = window.requestAnimationFrame(() => {
+      frameRef.current = null;
+      const next = pendingTiltRef.current;
+      pendingTiltRef.current = null;
+      if (next) writeTilt(next.rotateX, next.rotateY, next.glareOpacity);
+    });
+  }, [writeTilt]);
 
   const startDrag = useCallback((event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -569,7 +590,7 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
 
     card.setPointerCapture(event.pointerId);
     card.dataset.dragging = "true";
-    applyTilt(dragRef.current.rotateX, dragRef.current.rotateY, 0.42);
+    applyTilt(dragRef.current.rotateX, dragRef.current.rotateY, IDLE_GLARE_OPACITY);
   }, [applyTilt]);
 
   const updateTilt = useCallback((event: PointerEvent<HTMLDivElement>) => {
@@ -578,7 +599,7 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
 
     const deltaX = event.clientX - drag.startX;
     const deltaY = event.clientY - drag.startY;
-    const nextRotateY = clamp(drag.baseRotateY + deltaX * 0.58, -185, 185);
+    const nextRotateY = drag.baseRotateY + deltaX * 0.58;
     const nextRotateX = clamp(drag.baseRotateX - deltaY * 0.22, -24, 24);
     const intensity = clamp(
       0.28 + (Math.abs(nextRotateX) / 24) * 0.2 + (Math.abs(nextRotateY - drag.baseRotateY) / 180) * 0.42,
@@ -601,7 +622,7 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
     if (!card) return;
     if (card.hasPointerCapture(event.pointerId)) card.releasePointerCapture(event.pointerId);
     delete card.dataset.dragging;
-    applyTilt(drag.rotateX, drag.rotateY, 0.18);
+    applyTilt(drag.rotateX, drag.rotateY, IDLE_GLARE_OPACITY);
   }, [applyTilt]);
 
   const cancelDrag = useCallback((event: PointerEvent<HTMLDivElement>) => {
@@ -629,6 +650,7 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
         <div
           ref={cardRef}
           className="maniacard-stage relative rounded-[24px]"
+          data-tier={tier}
           style={{
             aspectRatio: "5 / 7",
             "--mc-edge-fill": style.edgeFill,
@@ -694,11 +716,11 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
                   </div>
                 </div>
 
-                <div className="relative mx-auto w-full max-w-[220px] sm:max-w-[310px] rounded-xl bg-black/75 p-1 sm:p-1.5 shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
+                <div className="maniacard-avatar-frame relative mx-auto w-full max-w-[220px] sm:max-w-[310px] rounded-xl bg-white/14 p-[2px] sm:p-[3px] shadow-[0_10px_24px_rgba(0,0,0,0.22)]">
                   <img
                     src={`/api/avatar?u=${user.id}`}
                     alt=""
-                    className="aspect-square w-full rounded-lg object-cover object-center"
+                    className="maniacard-avatar aspect-square w-full rounded-lg object-cover object-center"
                     loading="eager"
                     crossOrigin="anonymous"
                     referrerPolicy="no-referrer"
@@ -725,10 +747,7 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
             </div>
 
             <div className={`maniacard-face maniacard-back bg-gradient-to-br ${style.background}`}>
-              <div className={`maniacard-tier-flow maniacard-tier-${tier}`} aria-hidden />
-              <TrianglePattern opacity={visuals.triangleOpacity * 0.42} idSuffix={`${tier}-back`} />
-              <div className="maniacard-foil" aria-hidden />
-              <div className="maniacard-glare" aria-hidden />
+              <TrianglePattern opacity={visuals.triangleOpacity * 0.42} idSuffix={`${tier}-back`} animated={false} />
               <ManiaCardBackDesign tier={tier} tierLabel={style.label} glowColor={style.glowColor} />
             </div>
           </div>

@@ -252,7 +252,10 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
   --mc-rotate-y: 0deg;
   --mc-glare-x: 50%;
   --mc-glare-y: 38%;
-  --mc-glare-opacity: 0;
+  --mc-background-x: 50%;
+  --mc-background-y: 50%;
+  --mc-pointer-from-center: 0.62;
+  --mc-glare-opacity: 0.32;
   perspective: 1100px;
   transform-style: preserve-3d;
   touch-action: none;
@@ -324,12 +327,16 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
     inset 0 -18px 36px rgba(0, 0, 0, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
   transform-style: preserve-3d;
+  will-change: transform;
 }
 .maniacard-front {
   transform: translateZ(calc(var(--mc-thickness) / 2));
 }
 .maniacard-back {
   transform: rotateY(180deg) translateZ(calc(var(--mc-thickness) / 2));
+}
+.maniacard-back-design {
+  filter: drop-shadow(0 0 16px var(--mc-back-glow));
 }
 @media (max-width: 520px) {
   .maniacard-wrap {
@@ -402,23 +409,177 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 }
 .maniacard-foil {
   z-index: 1;
-  opacity: 0.3;
+  opacity: calc(0.24 + (var(--mc-pointer-from-center) * 0.18));
   mix-blend-mode: color-dodge;
+  transform: translateZ(0.01px);
   background-image:
     conic-gradient(from 0deg at 50% 50%, rgba(255,255,255,0), rgba(255,255,255,0.24), rgba(80,220,255,0.22), rgba(255,128,220,0.2), rgba(255,230,100,0.2), rgba(255,255,255,0)),
     radial-gradient(circle at 18% 20%, rgba(255,255,255,0.42), transparent 24%),
     radial-gradient(circle at 82% 78%, rgba(255,255,255,0.24), transparent 28%);
   background-size: 170% 170%, 210% 210%, 190% 190%;
+  background-position: var(--mc-background-x) var(--mc-background-y), 20% 18%, 78% 84%;
   animation: maniacard-foil-drift 16s ease-in-out infinite;
+}
+.maniacard-foil::before,
+.maniacard-foil::after,
+.maniacard-glare::after,
+.maniacard-avatar-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+.maniacard-foil::before,
+.maniacard-avatar-shine::before {
+  background-image:
+    repeating-linear-gradient(
+      105deg,
+      rgba(255,255,255,0) 0 5%,
+      rgba(255,255,255,0.42) 7%,
+      rgba(255,255,255,0) 10%,
+      rgba(80,220,255,0.22) 13%,
+      rgba(255,255,255,0) 18%
+    );
+  background-size: 220% 220%;
+  background-position: calc(100% - var(--mc-background-x)) var(--mc-background-y);
+  filter: brightness(1.12) contrast(1.2);
+  mix-blend-mode: hard-light;
+}
+.maniacard-foil::after,
+.maniacard-avatar-shine::after {
+  background-image:
+    radial-gradient(
+      farthest-corner circle at var(--mc-glare-x) var(--mc-glare-y),
+      rgba(255,255,255,0.72) 0%,
+      rgba(255,255,255,0.12) 28%,
+      rgba(0,0,0,0.68) 82%
+    );
+  filter: brightness(0.72) contrast(2.4);
+  mix-blend-mode: luminosity;
 }
 .maniacard-glare {
   z-index: 2;
   opacity: var(--mc-glare-opacity);
-  mix-blend-mode: screen;
+  mix-blend-mode: overlay;
+  transform: translateZ(0.02px);
   background:
     radial-gradient(circle at var(--mc-glare-x) var(--mc-glare-y), rgba(255,255,255,0.56), rgba(255,255,255,0.22) 16%, rgba(255,255,255,0.05) 31%, transparent 48%),
     radial-gradient(circle at calc(100% - var(--mc-glare-x)) calc(100% - var(--mc-glare-y)), rgba(80,220,255,0.18), transparent 34%);
   transition: opacity 160ms ease;
+}
+.maniacard-glare::after {
+  background-image:
+    linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.5) 46%, transparent 62%);
+  background-size: 260% 260%;
+  background-position: var(--mc-background-x) var(--mc-background-y);
+  mix-blend-mode: screen;
+  opacity: calc(0.16 + (var(--mc-pointer-from-center) * 0.48));
+}
+.maniacard-stage[data-tier="common"] .maniacard-foil {
+  opacity: calc(0.12 + (var(--mc-pointer-from-center) * 0.12));
+  mix-blend-mode: soft-light;
+  background-image:
+    repeating-linear-gradient(110deg, rgba(255,255,255,0.08) 0 2px, rgba(0,0,0,0.24) 2px 4px),
+    linear-gradient(135deg, rgba(226,232,240,0.24), rgba(125,211,252,0.14), rgba(15,23,42,0.24));
+  background-size: cover, 180% 180%;
+}
+.maniacard-stage[data-tier="rare"] .maniacard-foil {
+  background-image:
+    repeating-linear-gradient(110deg, #8b5cf6, #22d3ee 8%, #a7f3d0 16%, #fde68a 24%, #fb7185 32%, #8b5cf6 40%),
+    repeating-linear-gradient(90deg, #111 0 2px, #aaa 2px 4px);
+  background-size: 420% 420%, cover;
+  background-blend-mode: overlay;
+  filter: brightness(1.08) contrast(1.14) saturate(1.18);
+}
+.maniacard-stage[data-tier="elite"] .maniacard-foil {
+  background-image:
+    radial-gradient(circle at var(--mc-glare-x) var(--mc-glare-y), rgba(255,255,255,0.58), rgba(216,180,254,0.18) 30%, rgba(0,0,0,0.72) 86%),
+    repeating-linear-gradient(82deg, #fde68a 0 4%, #86efac 4% 8%, #67e8f9 8% 12%, #818cf8 12% 16%, #e879f9 16% 20%, #f472b6 20% 24%);
+  background-size: cover, 360% 680%;
+  background-position: center, var(--mc-background-x) var(--mc-background-y);
+  background-blend-mode: color-burn, multiply;
+  filter: brightness(1.05) contrast(1.35) saturate(0.95);
+}
+.maniacard-stage[data-tier="superRare"] .maniacard-foil {
+  background-image:
+    radial-gradient(circle at 18% 20%, rgba(255,255,255,0.7), transparent 5%),
+    radial-gradient(circle at 72% 28%, rgba(103,232,249,0.76), transparent 4%),
+    radial-gradient(circle at 36% 72%, rgba(244,114,182,0.72), transparent 5%),
+    radial-gradient(circle at 82% 78%, rgba(253,224,71,0.62), transparent 4%),
+    repeating-linear-gradient(82deg, #fde68a 0 4%, #86efac 4% 8%, #67e8f9 8% 12%, #818cf8 12% 16%, #e879f9 16% 20%, #f472b6 20% 24%);
+  background-size: 190% 190%, 170% 170%, 210% 210%, 180% 180%, 420% 760%;
+  background-position:
+    calc(var(--mc-background-x) * 0.8) calc(var(--mc-background-y) * 0.8),
+    calc(100% - var(--mc-background-x)) var(--mc-background-y),
+    var(--mc-background-x) calc(100% - var(--mc-background-y)),
+    72% 76%,
+    var(--mc-background-x) var(--mc-background-y);
+  background-blend-mode: screen, screen, screen, screen, multiply;
+  filter: brightness(1.18) contrast(1.42) saturate(0.92);
+}
+.maniacard-stage[data-tier="ultraRare"] .maniacard-foil {
+  background-image:
+    linear-gradient(-45deg, rgba(255,64,120,0.72), rgba(34,211,238,0.72)),
+    radial-gradient(circle at 18% 20%, rgba(255,255,255,0.72), transparent 2px),
+    radial-gradient(circle at 70% 66%, rgba(255,255,255,0.5), transparent 2px),
+    linear-gradient(-30deg, #991b1b, #a16207, #3f6212, #0f766e, #1d4ed8, #6d28d9, #be185d, #991b1b);
+  background-size: 220% 220%, 18px 18px, 24px 24px, 430% 430%;
+  background-position:
+    calc(25% + (var(--mc-glare-x) / 2)) calc(25% + (var(--mc-glare-y) / 2)),
+    40% 40%,
+    70% 70%,
+    var(--mc-background-x) var(--mc-background-y);
+  background-blend-mode: luminosity, soft-light, soft-light;
+  filter: brightness(calc(0.68 + (var(--mc-pointer-from-center) * 0.28))) contrast(2.05) saturate(0.92);
+}
+.maniacard-stage[data-tier="master"] .maniacard-foil {
+  opacity: calc(0.38 + (var(--mc-pointer-from-center) * 0.28));
+  background-image:
+    radial-gradient(circle at var(--mc-glare-x) var(--mc-glare-y), rgba(255,255,255,0.86) 0%, rgba(255,255,255,0.16) 28%, rgba(0,0,0,0.72) 78%),
+    repeating-linear-gradient(0deg, #ff4d6d 0 5%, #ffe066 5% 10%, #7cff6b 10% 15%, #5cf6ff 15% 20%, #7286ff 20% 25%, #e070ff 25% 30%, #ff4d6d 30% 35%),
+    repeating-linear-gradient(133deg, #0e152e 0%, #a6c9cf 3.8%, #e7ffff 4.5%, #a6c9cf 5.2%, #0e152e 10%, #0e152e 12%);
+  background-size: cover, 220% 640%, 310% 110%;
+  background-position: center, 0% var(--mc-background-y), var(--mc-background-x) var(--mc-background-y);
+  background-blend-mode: screen, hue, hard-light;
+  filter: brightness(0.92) contrast(2.8) saturate(0.9);
+}
+.maniacard-avatar-frame {
+  overflow: hidden;
+  transform: translateZ(0.03px);
+  box-shadow:
+    0 10px 24px rgba(0,0,0,0.22),
+    inset 0 0 0 1px rgba(255,255,255,0.18),
+    inset 0 0 16px rgba(255,255,255,0.04);
+}
+.maniacard-avatar-frame::after {
+  z-index: 2;
+  inset: 2px;
+  border-radius: 0.5rem;
+  background:
+    radial-gradient(circle at var(--mc-glare-x) var(--mc-glare-y), rgba(255,255,255,0.3), rgba(255,255,255,0.08) 24%, transparent 54%),
+    linear-gradient(120deg, transparent 4%, rgba(255,255,255,0.08) 34%, transparent 72%),
+    repeating-linear-gradient(
+      110deg,
+      rgba(255,77,109,0.16) 0 7%,
+      rgba(255,224,102,0.14) 7% 14%,
+      rgba(92,246,255,0.16) 14% 21%,
+      rgba(224,112,255,0.14) 21% 28%
+    );
+  background-size: cover, 240% 240%, 260% 260%;
+  background-position: center, var(--mc-background-x) var(--mc-background-y), var(--mc-background-x) var(--mc-background-y);
+  background-blend-mode: screen, screen, overlay;
+  mix-blend-mode: screen;
+  opacity: 0.2;
+  transition: opacity 160ms ease;
+}
+.maniacard-stage[data-dragging="true"] .maniacard-avatar-frame::after {
+  opacity: 0.3;
+}
+.maniacard-avatar {
+  position: relative;
+  z-index: 0;
+  filter: saturate(1.04) contrast(1.02);
 }
 @media (prefers-reduced-motion: reduce) {
   .maniacard-tier-flow,
