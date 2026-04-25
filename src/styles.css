@@ -486,10 +486,12 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 }
 .maniacard-stage[data-tier="rare"] .maniacard-foil {
   background-image:
-    repeating-linear-gradient(110deg, #8b5cf6, #22d3ee 8%, #a7f3d0 16%, #fde68a 24%, #fb7185 32%, #8b5cf6 40%),
-    repeating-linear-gradient(90deg, #111 0 2px, #aaa 2px 4px);
-  background-size: 420% 420%, cover;
-  background-blend-mode: overlay;
+    conic-gradient(from 145deg at var(--mc-glare-x) var(--mc-glare-y), rgba(139,92,246,0.4), rgba(34,211,238,0.5), rgba(167,243,208,0.32), rgba(253,230,138,0.28), rgba(251,113,133,0.34), rgba(139,92,246,0.4)),
+    radial-gradient(circle at 22% 18%, rgba(255,255,255,0.52), transparent 24%),
+    radial-gradient(circle at 82% 78%, rgba(125,211,252,0.34), transparent 30%);
+  background-size: 240% 240%, 180% 180%, 170% 170%;
+  background-position: var(--mc-background-x) var(--mc-background-y), 20% 18%, 78% 82%;
+  background-blend-mode: overlay, screen, screen;
   filter: brightness(1.08) contrast(1.14) saturate(1.18);
 }
 .maniacard-stage[data-tier="elite"] .maniacard-foil {
