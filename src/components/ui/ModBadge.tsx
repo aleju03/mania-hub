@@ -42,10 +42,10 @@ const iconInset: Record<string, number> = {
   NC: 1,
 };
 
-export function ModBadge({ mod, size = 1, rate }: { mod: string; size?: number; rate?: number }) {
+export function ModBadge({ mod, size = 1, rate, color }: { mod: string; size?: number; rate?: number; color?: string }) {
   if (!mod) return null;
   const file = fileMap[mod];
-  const bg = typeColor[mod] || "#ff6666";
+  const bg = color ?? typeColor[mod] ?? "#ff6666";
   const inset = (iconInset[mod] ?? 1) * size;
   const width = 36 * size;
   const height = 24 * size;

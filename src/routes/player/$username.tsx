@@ -74,6 +74,45 @@ type BestSort = "pp" | "newest" | "oldest";
 // Synthetic chip used to filter for scores submitted without any mods.
 const NO_MOD_KEY = "NM";
 
+const MOD_USAGE_COLORS: Record<string, string> = {
+  NM: "#4d8dff",
+  NC: "#aa88ff",
+  DT: "#ff6666",
+  HR: "#ff6666",
+  SD: "#ff6666",
+  PF: "#ff6666",
+  AC: "#ff6666",
+  BL: "#ff6666",
+  ST: "#ff6666",
+  MU: "#ff6666",
+  EZ: "#b3d944",
+  NF: "#b3d944",
+  HT: "#b3d944",
+  DC: "#b3d944",
+  NR: "#b3d944",
+  HD: "#ffcc22",
+  FL: "#ffcc22",
+  FI: "#ffcc22",
+  AP: "#66ccff",
+  RX: "#66ccff",
+  SO: "#66ccff",
+  RD: "#66ccff",
+  AT: "#66ccff",
+  CN: "#66ccff",
+  MR: "#66ccff",
+  AS: "#66ccff",
+  CS: "#66ccff",
+  TD: "#ff66aa",
+  CL: "#aa88ff",
+  CO: "#ffcc22",
+  SV2: "#ffcc22",
+};
+
+function getModUsageColor(mod: string, fallbackIndex: number): string {
+  const fallbackPalette = ["#ff66aa", "#ffcc22", "#34d399", "#fb923c", "#f472b6", "#22d3ee"];
+  return MOD_USAGE_COLORS[mod] ?? fallbackPalette[fallbackIndex % fallbackPalette.length];
+}
+
 // DT and NC apply the same 1.5x rate (NC is DT with an audio swap); HT and DC
 // are the same 0.75x rate. Scores carry one or the other, so collapse them into
 // a single filter chip that matches either mod in the group.
@@ -674,11 +713,9 @@ function PlayerPage() {
                   ...(noModCount > 0 ? [{ label: "NM", count: noModCount, total: profileInsights.sampleSize }] : []),
                 ].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 
-                const palette = ["#ffcc22", "#66ccff", "#ff6f91", "#a78bfa", "#34d399", "#fb923c", "#f472b6", "#22d3ee"];
-                let paletteIdx = 0;
-                const colored = entries.map((e) => ({
+                const colored = entries.map((e, index) => ({
                   ...e,
-                  color: e.label === "NM" ? "#9ca3af" : palette[paletteIdx++ % palette.length],
+                  color: getModUsageColor(e.label, index),
                   pct: (e.count / profileInsights.sampleSize) * 100,
                 }));
 
@@ -798,7 +835,7 @@ function PlayerPage() {
                               className="h-7 w-1 rounded-full flex-shrink-0"
                               style={{ backgroundColor: entry.color, boxShadow: isFocused ? `0 0 8px ${entry.color}` : undefined }}
                             />
-                            <ModBadge mod={entry.label} size={0.85} />
+                            <ModBadge mod={entry.label} size={0.85} color={entry.color} />
                             <div className="flex-1 h-1 rounded-full bg-osu-b3/40 overflow-hidden">
                               <div className="h-full rounded-full" style={{ width: `${entry.pct}%`, backgroundColor: entry.color }} />
                             </div>
@@ -1687,17 +1724,18 @@ function ExpandHint() {
 }
 
 function BpmExtremeRow({ label, bpm, snapshot }: { label: string; bpm: number; snapshot: InsightScoreSnapshot }) {
+  const backgroundImage = snapshot.coverUrl
+    ? `linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.60) 50%, rgba(0,0,0,0.80) 100%), url(${JSON.stringify(snapshot.coverUrl)})`
+    : "linear-gradient(90deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.60) 50%, rgba(0,0,0,0.80) 100%)";
+
   return (
     <a
       href={snapshot.beatmapUrl}
       target="_blank"
       rel="noreferrer"
       className="block relative rounded-lg overflow-hidden border border-osu-b3/20 hover:border-osu-pink/30 transition-colors"
+      style={{ backgroundImage, backgroundSize: "cover", backgroundPosition: "center" }}
     >
-      {snapshot.coverUrl && (
-        <img src={snapshot.coverUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-      )}
-      <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/60 to-black/80" />
       <div className="relative p-2.5 flex items-center gap-2.5">
         <div className="flex-shrink-0 text-center w-14">
           <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>

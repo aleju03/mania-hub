@@ -640,7 +640,7 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
     );
   }
 
-  const tier = getManiaCardTier(skills.accuracy);
+  const tier = getManiaCardTier(skills.cardPower);
   const style = MANIA_TIER_STYLES[tier];
   const visuals = TIER_VISUALS[tier];
 
@@ -712,7 +712,7 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
                       textShadow: "0 2px 4px rgba(0,0,0,0.5)",
                     }}
                   >
-                    {style.label}
+                    {skills.archetype}
                   </div>
                 </div>
 
@@ -732,9 +732,9 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
                   className="rounded-2xl border border-white/16 bg-black/30 px-3.5 py-2 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-[2px]"
                   style={{ fontFamily: "Torus, sans-serif", textShadow: "0 2px 3px rgba(0,0,0,0.6)" }}
                 >
-                  <StatLine label="Finger Control" value={skills.fingerControl} />
+                  <StatLine label="Control" value={skills.fingerControl} />
                   <StatLine label="Speed" value={skills.speed} />
-                  <StatLine label="Accuracy" value={skills.accuracy} />
+                  <StatLine label="Precision" value={skills.accuracy} />
                 </div>
 
                 <div className="pb-1 sm:pb-3">
