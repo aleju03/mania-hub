@@ -422,8 +422,8 @@ export function computeManiaSkills(scores: OsuScore[]): ManiaSkills | null {
 }
 
 export function getManiaCardTier(cardPower: number): ManiaCardTier {
-  if (cardPower >= 820) return "ascendant";
-  if (cardPower >= 720) return "grandmaster";
+  if (cardPower >= 725) return "ascendant";
+  if (cardPower >= 675) return "grandmaster";
   if (cardPower >= 620) return "master";
   if (cardPower >= 500) return "ultraRare";
   if (cardPower >= 380) return "superRare";
