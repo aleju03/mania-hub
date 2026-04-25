@@ -114,6 +114,8 @@ function SnipesPage() {
   const [scanStatus, setScanStatus] = useState<SnipesScanStatus | null>(null);
   const [partialEvents, setPartialEvents] = useState<SnipeEvent[]>([]);
   const fetchingRef = useRef(false);
+  const sawScanActivityRef = useRef(false);
+  const finalizingRefreshRef = useRef(false);
 
   // Render-driving "elapsed" timer for the secondary header indicator.
   useEffect(() => {
@@ -133,6 +135,7 @@ function SnipesPage() {
     }
     let cancelled = false;
     const requestedCountry = selectedCountry;
+    const startedAt = scanStartedAt;
     const poll = async () => {
       try {
         const [status, partial] = await Promise.all([
@@ -142,9 +145,36 @@ function SnipesPage() {
         if (cancelled) return;
         if (currentCountryRef.current !== requestedCountry) return;
         setScanStatus(status);
-        if (partial.length > 0) setPartialEvents(partial);
+        if (status || partial.length > 0) sawScanActivityRef.current = true;
+        if (partial.length > 0) {
+          setPartialEvents(partial);
+        }
+
+        if (
+          !status &&
+          sawScanActivityRef.current &&
+          Date.now() - startedAt > 1500 &&
+          !finalizingRefreshRef.current
+        ) {
+          finalizingRefreshRef.current = true;
+          const response = await getCountrySnipes({ data: { country: requestedCountry } });
+          if (cancelled) return;
+          if (currentCountryRef.current !== requestedCountry) return;
+          setSnipes(
+            requestedCountry,
+            response?.events ?? [],
+            response?.scannedAt ?? Date.now(),
+          );
+          setRefreshing(response?.refreshInProgress === true);
+          setScanStartedAt(response?.refreshInProgress === true ? Date.now() : null);
+          setPartialEvents([]);
+          setScanStatus(null);
+          sawScanActivityRef.current = false;
+          finalizingRefreshRef.current = false;
+        }
       } catch {
         // Best-effort; ignore failures so the main fetch isn't disturbed.
+        finalizingRefreshRef.current = false;
       }
     };
     poll();
@@ -153,7 +183,7 @@ function SnipesPage() {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [scanStartedAt, selectedCountry]);
+  }, [scanStartedAt, selectedCountry, setSnipes]);
 
   const searchRef = useRef(search);
   searchRef.current = search;
@@ -178,6 +208,8 @@ function SnipesPage() {
     setPartialEvents([]);
     setElapsed(0);
     fetchingRef.current = false;
+    sawScanActivityRef.current = false;
+    finalizingRefreshRef.current = false;
     if (search.page !== 0) updateSearch({ page: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCountry]);
@@ -200,9 +232,11 @@ function SnipesPage() {
     setScanStartedAt(Date.now());
     setElapsed(0);
     const requestedCountry = selectedCountry;
+    let keepPollingRefresh = false;
 
     getCountrySnipes({ data: { country: requestedCountry } })
       .then((response) => {
+        keepPollingRefresh = response?.refreshInProgress === true;
         setSnipes(
           requestedCountry,
           response?.events ?? [],
@@ -210,6 +244,10 @@ function SnipesPage() {
         );
         if (currentCountryRef.current === requestedCountry) {
           setError(null);
+          if (keepPollingRefresh) {
+            setRefreshing(true);
+            setScanStartedAt(Date.now());
+          }
         }
       })
       .catch((err) => {
@@ -221,17 +259,32 @@ function SnipesPage() {
       .finally(() => {
         if (currentCountryRef.current === requestedCountry) {
           setLoading(false);
-          setRefreshing(false);
-          setScanStartedAt(null);
+          if (!keepPollingRefresh) {
+            setRefreshing(false);
+            setScanStartedAt(null);
+          }
         }
         fetchingRef.current = false;
       });
   }, [selectedCountry, snipesFetchedAt, snipes.length, setSnipes]);
 
   // ── Filter + sort ──────────────────────────────────────────────────────
+  const visibleSnipes = useMemo(() => {
+    if (partialEvents.length === 0) return snipes;
+    const merged = new Map<string, SnipeEvent>();
+    for (const event of partialEvents) {
+      merged.set(`${event.beatmap_id}:${event.score_id}`, event);
+    }
+    for (const event of snipes) {
+      const key = `${event.beatmap_id}:${event.score_id}`;
+      if (!merged.has(key)) merged.set(key, event);
+    }
+    return [...merged.values()];
+  }, [snipes, partialEvents]);
+
   const filtered = useMemo(() => {
     const cutoff = search.range === "all" ? 0 : Date.now() - RANGE_MS[search.range];
-    return snipes.filter((event) => {
+    return visibleSnipes.filter((event) => {
       const ts = new Date(event.timestamp).getTime();
       if (cutoff && ts < cutoff) return false;
       if (search.keys !== "all") {
@@ -241,7 +294,7 @@ function SnipesPage() {
       }
       return true;
     });
-  }, [snipes, search.range, search.keys]);
+  }, [visibleSnipes, search.range, search.keys]);
 
   const sorted = useMemo(() => {
     const out = [...filtered];
@@ -294,6 +347,7 @@ function SnipesPage() {
     (search.keys !== "all" ? 1 : 0) +
     (search.range !== "7d" ? 1 : 0);
   const hasActiveFilters = activeFilterCount > 0;
+  const scanProgressPercent = getScanProgressPercent(scanStatus);
 
   const resetFilters = () => {
     updateSearch({ ...DEFAULT_SNIPES_SEARCH, country: search.country });
@@ -312,11 +366,11 @@ function SnipesPage() {
                 <span className="text-[10px] text-osu-f1">
                   {loading
                     ? `Scanning... ${formatElapsedSeconds(elapsed)}`
-                    : "Refreshing..."}
+                    : `Refreshing...${scanProgressPercent == null ? "" : ` (${scanProgressPercent}%)`}`}
                 </span>
               </div>
             )}
-            {!loading && !refreshing && !error && snipes.length > 0 && (
+            {!loading && !refreshing && !error && visibleSnipes.length > 0 && (
               <span className="text-[10px] text-osu-f1">
                 {sorted.length} {sorted.length === 1 ? "snipe" : "snipes"}
                 {snipesFetchedAt ? ` · updated ${formatTimeAgo(new Date(snipesFetchedAt).toISOString())}` : ""}
@@ -489,7 +543,7 @@ function SnipesPage() {
                 </>
               )}
 
-              {!loading && sorted.length === 0 && snipes.length === 0 && (
+              {!loading && sorted.length === 0 && visibleSnipes.length === 0 && (
                 <div className="text-center py-16 text-osu-f1 text-sm">
                   <p>No snipes tracked yet for {countryName}.</p>
                   <p className="mt-1 text-[11px]">
@@ -503,7 +557,7 @@ function SnipesPage() {
                 </div>
               )}
 
-              {!loading && sorted.length === 0 && snipes.length > 0 && (
+              {!loading && sorted.length === 0 && visibleSnipes.length > 0 && (
                 <div className="text-center py-16 text-osu-f1 text-sm">
                   <p>No snipes match the current filters.</p>
                   {hasActiveFilters && (
@@ -855,6 +909,11 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
 
 function formatElapsedSeconds(ms: number): string {
   return `${Math.floor(ms / 1000)}s`;
+}
+
+function getScanProgressPercent(status: SnipesScanStatus | null): number | null {
+  if (!status || status.total <= 0) return null;
+  return Math.max(0, Math.min(100, Math.round((status.current / status.total) * 100)));
 }
 
 const PHASE_ORDER: SnipesScanStatus["phase"][] = [

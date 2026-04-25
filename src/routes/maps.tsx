@@ -75,6 +75,7 @@ const FARMED_SINGLE_PLAYER_PP_MIN = 500;
 const RECENT_BIAS = 0.1;
 const RECENT_PLAYER_HISTORY = 2;
 const RECENT_BEATMAP_HISTORY = 5;
+const RANDOM_PICK_SETTINGS_STORAGE_KEY = "mania-hub-maps-random-pick-settings-v1";
 
 function weightedPick<T>(items: T[], weight: (item: T) => number): T {
   let total = 0;
@@ -103,10 +104,49 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   rPattern: "",
   rStars: 0,
   rStarsMax: 0,
-  rWeight: "players",
+  rWeight: "favourites",
   rAvoidRepeats: false,
   country: undefined,
 };
+
+type RandomPickSettings = Pick<MapsSearch, "rWeight" | "rAvoidRepeats">;
+
+function readRandomPickSettings(): Partial<RandomPickSettings> {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = localStorage.getItem(RANDOM_PICK_SETTINGS_STORAGE_KEY);
+    if (!raw) return {};
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+    const settings: Partial<RandomPickSettings> = {};
+    const { rWeight, rAvoidRepeats } = parsed as Record<string, unknown>;
+    if (rWeight === "players" || rWeight === "favourites") settings.rWeight = rWeight;
+    if (typeof rAvoidRepeats === "boolean") settings.rAvoidRepeats = rAvoidRepeats;
+    return settings;
+  } catch (error) {
+    console.warn("[maps] failed to read random pick settings", error);
+    return {};
+  }
+}
+
+function writeRandomPickSettings(patch: Partial<RandomPickSettings>): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    localStorage.setItem(
+      RANDOM_PICK_SETTINGS_STORAGE_KEY,
+      JSON.stringify({
+        ...readRandomPickSettings(),
+        ...patch,
+      }),
+    );
+  } catch (error) {
+    console.warn("[maps] failed to write random pick settings", error);
+  }
+}
 
 const RANDOM_STATUS_OPTIONS = ["ranked", "loved", "graveyard", "other"] as const;
 const RANDOM_KEY_OPTIONS = ["4k", "7k", "other"] as const;
@@ -359,7 +399,7 @@ export const Route = createFileRoute("/maps")({
       const clamped = Math.min(Math.max(n, RANDOM_STAR_MIN), RANDOM_STAR_MAX);
       return Math.round(clamped * 10) / 10;
     })(),
-    rWeight: search.rWeight === "favourites" ? "favourites" : DEFAULT_MAPS_SEARCH.rWeight,
+    rWeight: search.rWeight === "players" || search.rWeight === "favourites" ? search.rWeight : DEFAULT_MAPS_SEARCH.rWeight,
     rAvoidRepeats: typeof search.rAvoidRepeats === "boolean" ? search.rAvoidRepeats : DEFAULT_MAPS_SEARCH.rAvoidRepeats,
     country: parseCountrySearchParam(search.country),
   }),
@@ -463,6 +503,21 @@ function MapsPage() {
       replace: true,
     });
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const saved = readRandomPickSettings();
+    const patch: Partial<MapsSearch> = {};
+
+    if (!params.has("rWeight") && saved.rWeight && saved.rWeight !== rWeight) {
+      patch.rWeight = saved.rWeight;
+    }
+    if (!params.has("rAvoidRepeats") && typeof saved.rAvoidRepeats === "boolean" && saved.rAvoidRepeats !== rAvoidRepeats) {
+      patch.rAvoidRepeats = saved.rAvoidRepeats;
+    }
+
+    if (Object.keys(patch).length > 0) updateMapsSearch(patch);
+  }, []);
 
   const players =
     rankings?.ranking
@@ -1363,14 +1418,14 @@ function MapsPage() {
                           </div>
                           {([
                             {
-                              id: "players" as const,
-                              label: "Equal chance per player",
-                              desc: "Each player is equally likely, no matter how many favourites they have.",
-                            },
-                            {
                               id: "favourites" as const,
                               label: "Equal chance per map",
                               desc: "Every favourited map is equally likely. Players with bigger collections show up more often as a result.",
+                            },
+                            {
+                              id: "players" as const,
+                              label: "Equal chance per player",
+                              desc: "Each player is equally likely, no matter how many favourites they have.",
                             },
                           ]).map((opt) => {
                             const active = rWeight === opt.id;
@@ -1378,6 +1433,7 @@ function MapsPage() {
                               <button
                                 key={opt.id}
                                 onClick={() => {
+                                  writeRandomPickSettings({ rWeight: opt.id });
                                   updateMapsSearch({ rWeight: opt.id });
                                   setRerollMenuOpen(false);
                                 }}
@@ -1401,7 +1457,11 @@ function MapsPage() {
                           })}
                           <div className="h-px bg-osu-b3 mx-2 my-1" />
                           <button
-                            onClick={() => updateMapsSearch({ rAvoidRepeats: !rAvoidRepeats })}
+                            onClick={() => {
+                              const nextAvoidRepeats = !rAvoidRepeats;
+                              writeRandomPickSettings({ rAvoidRepeats: nextAvoidRepeats });
+                              updateMapsSearch({ rAvoidRepeats: nextAvoidRepeats });
+                            }}
                             className="w-full text-left p-2.5 rounded-md transition-colors cursor-pointer hover:bg-osu-b3"
                           >
                             <div className="flex items-center justify-between gap-2">

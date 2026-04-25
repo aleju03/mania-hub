@@ -736,7 +736,7 @@ export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
                       textShadow: "0 2px 4px rgba(0,0,0,0.5)",
                     }}
                   >
-                    {skills.archetype}
+                    {style.label}
                   </div>
                 </div>
 
