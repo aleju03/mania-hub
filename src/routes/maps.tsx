@@ -41,7 +41,7 @@ import { parseCountrySearchParam, withSearchParams } from "../lib/country-search
 type Tab = "farmed" | "popular" | "favourites" | "random";
 type KeyFilter = "all" | "4k" | "7k" | "other";
 type BeatmapSort = "plays" | "players" | "stars" | "length";
-type FarmedSort = "players" | "avg-pp" | "max-pp" | "stars";
+type FarmedSort = "players" | "avg-pp" | "max-pp" | "stars" | "recent";
 type StatusFilter = "all" | "ranked" | "loved" | "graveyard" | "other";
 type PpFilter = number;
 type ModFilter = "all" | "dt" | "ht" | "nm";
@@ -246,6 +246,13 @@ function matchesSearch(title: string, artist: string, query: string): boolean {
   return (title ?? "").toLowerCase().includes(q) || (artist ?? "").toLowerCase().includes(q);
 }
 
+function getLatestFarmedPlayTime(entry: MapsFarmedEntry): number {
+  return entry.players.reduce((latest, player) => {
+    const time = new Date(player.playedAt ?? 0).getTime();
+    return Number.isFinite(time) ? Math.max(latest, time) : latest;
+  }, 0);
+}
+
 function hasValidMapsDataShape(data: CountryMapsData | null): data is CountryMapsData {
   if (!data) return false;
   if (!Array.isArray(data.farmed) || !Array.isArray(data.mostPlayed) || !Array.isArray(data.favourites)) {
@@ -286,7 +293,8 @@ function hasValidMapsDataShape(data: CountryMapsData | null): data is CountryMap
       samplePlayer && (
         typeof samplePlayer.pp !== "number" ||
         !Array.isArray(samplePlayer.mods) ||
-        (samplePlayer.scoreUrl !== null && typeof samplePlayer.scoreUrl !== "string")
+        (samplePlayer.scoreUrl !== null && typeof samplePlayer.scoreUrl !== "string") ||
+        (samplePlayer.playedAt !== null && typeof samplePlayer.playedAt !== "string")
       )
     ) {
       return false;
@@ -320,7 +328,13 @@ export const Route = createFileRoute("/maps")({
     page: Math.max(0, Number(search.page) || DEFAULT_MAPS_SEARCH.page),
     key: search.key === "4k" || search.key === "7k" || search.key === "other" ? search.key : DEFAULT_MAPS_SEARCH.key,
     beatmapSort: search.beatmapSort === "plays" || search.beatmapSort === "stars" || search.beatmapSort === "length" ? search.beatmapSort : DEFAULT_MAPS_SEARCH.beatmapSort,
-    farmedSort: search.farmedSort === "avg-pp" || search.farmedSort === "max-pp" || search.farmedSort === "stars" ? search.farmedSort : DEFAULT_MAPS_SEARCH.farmedSort,
+    farmedSort:
+      search.farmedSort === "avg-pp" ||
+      search.farmedSort === "max-pp" ||
+      search.farmedSort === "stars" ||
+      search.farmedSort === "recent"
+        ? search.farmedSort
+        : DEFAULT_MAPS_SEARCH.farmedSort,
     status: search.status === "ranked" || search.status === "loved" || search.status === "graveyard" || search.status === "other" ? search.status : DEFAULT_MAPS_SEARCH.status,
     pp: (() => {
       const n = Number(search.pp);
@@ -636,6 +650,9 @@ function MapsPage() {
         if (farmedSort === "players") return b.playerCount - a.playerCount || b.avgPp - a.avgPp;
         if (farmedSort === "avg-pp") return b.avgPp - a.avgPp;
         if (farmedSort === "max-pp") return b.maxPp - a.maxPp;
+        if (farmedSort === "recent") {
+          return getLatestFarmedPlayTime(b) - getLatestFarmedPlayTime(a) || b.playerCount - a.playerCount || b.avgPp - a.avgPp;
+        }
         return b.difficultyRating - a.difficultyRating;
       });
   }, [mapsData, keyFilter, searchQuery, farmedSort, ppFilter, modFilter]);
@@ -1178,6 +1195,7 @@ function MapsPage() {
                       ["avg-pp", "Avg PP"],
                       ["max-pp", "Max PP"],
                       ["stars", "Stars"],
+                      ["recent", "Recent Plays"],
                     ] as [FarmedSort, string][]).map(([id, label]) => (
                       <FilterPill key={id} active={farmedSort === id} onClick={() => updateMapsSearch({ farmedSort: id, page: 0 })}>
                         {label}

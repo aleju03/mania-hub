@@ -33,7 +33,9 @@ export type ManiaCardTier =
   | "elite"
   | "superRare"
   | "ultraRare"
-  | "master";
+  | "master"
+  | "grandmaster"
+  | "ascendant";
 
 const MAX_PLAYS = 50;
 
@@ -299,13 +301,25 @@ function blendProfiles(profiles: KeymodeProfile[]): {
   versatility: number;
   archetype: string;
 } {
-  const ordered = [...profiles].sort((a, b) => b.strength - a.strength);
-  const main = ordered[0];
-  const secondary = ordered[1];
+  const countOrdered = [...profiles].sort((a, b) => b.count - a.count);
+  const countMain = countOrdered[0];
+  const countSecondary = countOrdered[1];
   const totalCount = profiles.reduce((sum, p) => sum + p.count, 0);
-  const totalWeight = profiles.reduce((sum, p) => sum + p.weight, 0);
-  const mainShare = totalWeight > 0 ? main.weight / totalWeight : 1;
-  const secondaryBlend = secondary ? clamp((1 - mainShare) * 0.45, 0.08, 0.28) : 0;
+  const countMainShare = totalCount > 0 ? countMain.count / totalCount : 1;
+  const countSecondaryShare = countSecondary && totalCount > 0 ? countSecondary.count / totalCount : 0;
+  const isTrueHybrid =
+    !!countSecondary &&
+    countMainShare <= 0.58 &&
+    countSecondaryShare >= 0.35 &&
+    countMainShare - countSecondaryShare <= 0.18;
+
+  const main = countMain;
+  const secondary = countSecondary;
+  const secondaryBlend = secondary
+    ? isTrueHybrid
+      ? clamp(countSecondaryShare * 0.55, 0.18, 0.32)
+      : clamp((1 - countMainShare) * 0.18, 0, 0.12)
+    : 0;
   const mainBlend = 1 - secondaryBlend;
 
   const blend = (field: keyof Pick<KeymodeProfile, "precision" | "speed" | "control" | "stamina" | "peak" | "starAvg">) =>
@@ -326,9 +340,9 @@ function blendProfiles(profiles: KeymodeProfile[]): {
   ].sort((a, b) => b[1] - a[1]);
 
   const keyLabel =
-    profiles.length > 1 && mainShare < 0.62 && secondary
-      ? `${main.keyMode}K/${secondary.keyMode}K Hybrid`
-      : `${main.keyMode}K ${traitEntries[0][0]}`;
+    isTrueHybrid
+      ? `${countMain.keyMode}K/${countSecondary.keyMode}K Hybrid`
+      : `${countMain.keyMode}K ${traitEntries[0][0]}`;
 
   return {
     starAvg: blend("starAvg"),
@@ -385,10 +399,10 @@ export function computeManiaSkills(scores: OsuScore[]): ManiaSkills | null {
 
   const blended = blendProfiles(profiles);
   const cardPower =
-    blended.peak * 0.3 +
-    blended.precision * 0.22 +
-    blended.control * 0.18 +
-    blended.speed * 0.15 +
+    blended.peak * 0.42 +
+    blended.control * 0.17 +
+    blended.speed * 0.14 +
+    blended.precision * 0.12 +
     blended.stamina * 0.1 +
     blended.versatility * 0.05;
 
@@ -408,11 +422,13 @@ export function computeManiaSkills(scores: OsuScore[]): ManiaSkills | null {
 }
 
 export function getManiaCardTier(cardPower: number): ManiaCardTier {
-  if (cardPower >= 900) return "master";
-  if (cardPower >= 800) return "ultraRare";
-  if (cardPower >= 680) return "superRare";
-  if (cardPower >= 520) return "elite";
-  if (cardPower >= 320) return "rare";
+  if (cardPower >= 820) return "ascendant";
+  if (cardPower >= 720) return "grandmaster";
+  if (cardPower >= 620) return "master";
+  if (cardPower >= 500) return "ultraRare";
+  if (cardPower >= 380) return "superRare";
+  if (cardPower >= 260) return "elite";
+  if (cardPower >= 140) return "rare";
   return "common";
 }
 
@@ -518,5 +534,33 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
       "linear-gradient(142deg, #fef3c7 0%, #f59e0b 44%, #9a3412 100%)",
     badgeHalo: "rgba(252,211,77,0.6)",
     badgeGlyphShadow: "rgba(120,53,15,0.45)",
+  },
+  grandmaster: {
+    label: "Grandmaster",
+    background: "from-yellow-200 via-fuchsia-500 to-cyan-700",
+    border: "border-yellow-100/95",
+    glow: "shadow-[0_18px_74px_rgba(236,72,153,0.66)]",
+    edgeFill: "rgba(112, 26, 117, 0.94)",
+    glowColor: "rgba(244, 114, 182, 0.46)",
+    starColor: "text-yellow-100",
+    badgeColor: "text-yellow-50",
+    badgeGradient:
+      "linear-gradient(142deg, #fef9c3 0%, #e879f9 42%, #0e7490 100%)",
+    badgeHalo: "rgba(232,121,249,0.64)",
+    badgeGlyphShadow: "rgba(88,28,135,0.45)",
+  },
+  ascendant: {
+    label: "Ascendant",
+    background: "from-white via-amber-200 to-fuchsia-700",
+    border: "border-white/95",
+    glow: "shadow-[0_18px_82px_rgba(255,255,255,0.5)]",
+    edgeFill: "rgba(120, 53, 15, 0.94)",
+    glowColor: "rgba(255, 255, 255, 0.5)",
+    starColor: "text-white",
+    badgeColor: "text-white",
+    badgeGradient:
+      "linear-gradient(142deg, #ffffff 0%, #fde68a 34%, #f0abfc 68%, #7e22ce 100%)",
+    badgeHalo: "rgba(255,255,255,0.72)",
+    badgeGlyphShadow: "rgba(88,28,135,0.45)",
   },
 };

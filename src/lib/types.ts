@@ -343,6 +343,7 @@ export interface MapsFarmedPlayer {
   mods: string[];
   pp: number;
   scoreUrl: string | null;
+  playedAt: string | null;
 }
 
 export interface MapsFarmedEntry {

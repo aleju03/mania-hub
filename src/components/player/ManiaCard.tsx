@@ -510,6 +510,30 @@ const TIER_VISUALS: Record<ManiaCardTier, { triangleOpacity: number; extras?: Re
       />
     ),
   },
+  grandmaster: {
+    triangleOpacity: 1,
+    extras: (
+      <div
+        className="absolute inset-0 pointer-events-none mix-blend-screen opacity-80"
+        style={{
+          background:
+            "linear-gradient(120deg, transparent 28%, rgba(255,255,255,0.32) 44%, rgba(255,220,120,0.24) 50%, transparent 66%)",
+        }}
+      />
+    ),
+  },
+  ascendant: {
+    triangleOpacity: 1,
+    extras: (
+      <div
+        className="absolute inset-0 pointer-events-none mix-blend-screen opacity-90"
+        style={{
+          background:
+            "conic-gradient(from 180deg at 50% 50%, rgba(255,255,255,0.34), rgba(255,210,90,0.3), rgba(240,120,255,0.32), rgba(80,220,255,0.26), rgba(255,255,255,0.34))",
+        }}
+      />
+    ),
+  },
 };
 
 const CARD_EDGE_LAYERS = [-5, -3.75, -2.5, -1.25, 0, 1.25, 2.5, 3.75, 5];

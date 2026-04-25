@@ -407,6 +407,18 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
     radial-gradient(circle at 18% 18%, rgba(252,211,77,0.5), transparent 34%),
     radial-gradient(circle at 78% 72%, rgba(244,114,182,0.36), transparent 42%);
 }
+.maniacard-tier-grandmaster {
+  background-image:
+    conic-gradient(from 150deg at 50% 50%, rgba(253,224,71,0.22), rgba(255,255,255,0.62), rgba(232,121,249,0.52), rgba(34,211,238,0.5), rgba(253,224,71,0.22)),
+    radial-gradient(circle at 18% 18%, rgba(254,240,138,0.52), transparent 34%),
+    radial-gradient(circle at 78% 72%, rgba(103,232,249,0.42), transparent 42%);
+}
+.maniacard-tier-ascendant {
+  background-image:
+    conic-gradient(from 150deg at 50% 50%, rgba(255,255,255,0.3), rgba(254,240,138,0.66), rgba(255,255,255,0.64), rgba(240,171,252,0.56), rgba(125,211,252,0.5), rgba(255,255,255,0.3)),
+    radial-gradient(circle at 18% 18%, rgba(255,255,255,0.58), transparent 34%),
+    radial-gradient(circle at 78% 72%, rgba(253,224,71,0.44), transparent 42%);
+}
 .maniacard-foil {
   z-index: 1;
   opacity: calc(0.24 + (var(--mc-pointer-from-center) * 0.18));
@@ -545,6 +557,28 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
   background-position: center, 0% var(--mc-background-y), var(--mc-background-x) var(--mc-background-y);
   background-blend-mode: screen, hue, hard-light;
   filter: brightness(0.92) contrast(2.8) saturate(0.9);
+}
+.maniacard-stage[data-tier="grandmaster"] .maniacard-foil {
+  opacity: calc(0.42 + (var(--mc-pointer-from-center) * 0.3));
+  background-image:
+    radial-gradient(circle at var(--mc-glare-x) var(--mc-glare-y), rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.18) 26%, rgba(0,0,0,0.72) 78%),
+    repeating-linear-gradient(35deg, #fef08a 0 5%, #f0abfc 5% 10%, #67e8f9 10% 15%, #ffffff 15% 20%, #fef08a 20% 25%),
+    repeating-linear-gradient(130deg, #2e1065 0%, #fef3c7 4%, #ffffff 4.8%, #fef3c7 5.6%, #164e63 10%, #2e1065 13%);
+  background-size: cover, 260% 680%, 340% 120%;
+  background-position: center, var(--mc-background-x) var(--mc-background-y), var(--mc-background-x) var(--mc-background-y);
+  background-blend-mode: screen, hue, hard-light;
+  filter: brightness(1.02) contrast(2.95) saturate(1.08);
+}
+.maniacard-stage[data-tier="ascendant"] .maniacard-foil {
+  opacity: calc(0.48 + (var(--mc-pointer-from-center) * 0.32));
+  background-image:
+    radial-gradient(circle at var(--mc-glare-x) var(--mc-glare-y), rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.22) 28%, rgba(0,0,0,0.66) 78%),
+    repeating-linear-gradient(0deg, #ffffff 0 5%, #fde68a 5% 10%, #f0abfc 10% 15%, #67e8f9 15% 20%, #ffffff 20% 25%),
+    repeating-linear-gradient(135deg, #111827 0%, #ffffff 3.8%, #fef3c7 4.8%, #ffffff 5.8%, #111827 10%, #111827 12%);
+  background-size: cover, 240% 720%, 360% 120%;
+  background-position: center, 0% var(--mc-background-y), var(--mc-background-x) var(--mc-background-y);
+  background-blend-mode: screen, hue, hard-light;
+  filter: brightness(1.12) contrast(3.05) saturate(0.98);
 }
 .maniacard-avatar-frame {
   overflow: hidden;
