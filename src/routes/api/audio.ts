@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { extractBeatmapArchiveFile } from "#/lib/beatmap-archive";
+import { getCachedBeatmapAssetUrl, isR2ReplayCacheConfigured, putBeatmapAssetAndGetUrl } from "#/lib/r2-cache";
 
 const AUDIO_CACHE_TTL = 15 * 60 * 1000;
 const AUDIO_CACHE_MAX_ENTRIES = 12;
@@ -144,6 +145,24 @@ export const Route = createFileRoute("/api/audio")({
           return new Response("Invalid filename", { status: 400 });
         }
 
+        const cacheHeaders = {
+          "Cache-Control":
+            "public, max-age=300, s-maxage=300, stale-while-revalidate=3600",
+        };
+
+        if (isR2ReplayCacheConfigured()) {
+          const cached = await getCachedBeatmapAssetUrl("audio", beatmapsetId, filename);
+          if (cached) {
+            return new Response(null, {
+              status: 302,
+              headers: {
+                ...cacheHeaders,
+                Location: cached.signedUrl,
+              },
+            });
+          }
+        }
+
         let buffer: Buffer;
         let mimeType: string;
         try {
@@ -153,6 +172,23 @@ export const Route = createFileRoute("/api/audio")({
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unknown audio extraction error";
           return new Response(message, { status: 404 });
+        }
+
+        if (isR2ReplayCacheConfigured()) {
+          try {
+            const cached = await putBeatmapAssetAndGetUrl("audio", beatmapsetId, filename, mimeType, buffer);
+            if (cached) {
+              return new Response(null, {
+                status: 302,
+                headers: {
+                  ...cacheHeaders,
+                  Location: cached.signedUrl,
+                },
+              });
+            }
+          } catch {
+            // Fall through to the legacy in-process response so playback still works.
+          }
         }
 
         const size = buffer.length;
