@@ -10,6 +10,10 @@ function edgeCache(sMaxage: number, swr?: number): void {
   );
 }
 
+function noStore(): void {
+  setResponseHeader("Cache-Control", "no-store");
+}
+
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
@@ -33,6 +37,7 @@ import {
   getPersistentCached,
   setPersistentCache,
 } from "./api";
+import { db, ensureCacheSchema, hasDb } from "./db";
 import { calculateApproxPpGainMap, calculateReplacementPpGain, getBoardLaneKey, getModAcronyms, getModDisplayList, getScoreDisplayValues, getScoreRate, getScoreTimestamp, getScoreUrl } from "./score";
 import { detectManiaPatterns } from "./mania-patterns";
 import type {
@@ -130,7 +135,7 @@ function toLeanHomeScore(
 
 const MAPS_FARMED_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 1 week
 const MAPS_FAVOURITES_CACHE_TTL = 14 * 24 * 60 * 60 * 1000; // 2 weeks
-const MAPS_DATA_CACHE_VERSION = 10;
+const MAPS_DATA_CACHE_VERSION = 12;
 const USER_FAVOURITES_PAGE_SIZE = 100;
 const USER_FAVOURITES_MAX_PAGES = 10;
 const FARMED_SINGLE_PLAYER_PP_MIN = 500;
@@ -152,6 +157,10 @@ const HOME_RECENT_SCORES_CACHE_TTL = 5 * 60 * 1000;
 const HOME_POPOFFS_CACHE_TTL = 10 * 60 * 1000;
 const COUNTRY_POPOFFS_CACHE_TTL = 10 * 60 * 1000;
 const COUNTRY_POPOFFS_CACHE_VERSION = 4;
+const COUNTRY_TOP_PLAYS_REFRESH_TTL = 15 * 60 * 1000;
+const COUNTRY_TOP_PLAYS_REFRESH_LOCK_TTL = 90 * 1000;
+const COUNTRY_TOP_PLAYS_RETENTION_MS = 31 * 24 * 60 * 60 * 1000;
+const COUNTRY_TOP_PLAYS_QUERY_LIMIT = 500;
 export type PopoffWindow = "24h" | "3d" | "7d" | "30d";
 const POPOFF_WINDOW_MS: Record<PopoffWindow, number> = {
   "24h": 24 * 60 * 60 * 1000,
@@ -869,6 +878,15 @@ type HomePreviewPlayer = {
   avatar_url: string;
 };
 
+type CountryPopoff = {
+  user: { id: number; username: string; avatar_url: string };
+  score: OsuScore;
+  pp: number;
+  weightedPP: number;
+  ppGain: number;
+  time: string;
+};
+
 async function buildHomePopoffs(players: HomePreviewPlayer[]): Promise<LeanHomePopoff[]> {
   const topPlayersForPopoffs = players.slice(0, HOME_POPOFFS_PLAYER_COUNT);
   if (topPlayersForPopoffs.length === 0) return [];
@@ -926,17 +944,26 @@ async function buildHomePopoffs(players: HomePreviewPlayer[]): Promise<LeanHomeP
   });
 }
 
-async function buildCountryPopoffs(
+function filterPopoffsForWindow(popoffs: CountryPopoff[], window: PopoffWindow): CountryPopoff[] {
+  const windowMs = POPOFF_WINDOW_MS[window];
+  const cutoff = Date.now() - windowMs;
+  return popoffs.filter((popoff) => {
+    const scoreTime = new Date(popoff.time).getTime();
+    return Number.isFinite(scoreTime) && scoreTime >= cutoff;
+  });
+}
+
+function sortCountryPopoffs(popoffs: CountryPopoff[]): CountryPopoff[] {
+  return [...popoffs].sort((a, b) => {
+    if (b.pp !== a.pp) return b.pp - a.pp;
+    return new Date(b.time).getTime() - new Date(a.time).getTime();
+  });
+}
+
+async function buildLiveCountryPopoffs(
   players: HomePreviewPlayer[],
   window: PopoffWindow,
-): Promise<Array<{
-  user: { id: number; username: string; avatar_url: string };
-  score: OsuScore;
-  pp: number;
-  weightedPP: number;
-  ppGain: number;
-  time: string;
-}>> {
+): Promise<CountryPopoff[]> {
   const topPlayers = players.slice(0, 30);
   if (topPlayers.length === 0) return [];
 
@@ -979,20 +1006,201 @@ async function buildCountryPopoffs(
             username: player.username,
             error: getErrorMessage(error),
           });
-          return [] as Array<{
-            user: { id: number; username: string; avatar_url: string };
-            score: OsuScore;
-            pp: number;
-            weightedPP: number;
-            ppGain: number;
-            time: string;
-          }>;
+          return [] as CountryPopoff[];
         }
       },
     );
 
     return results.flatMap((scores) => scores);
   });
+}
+
+async function getStoredCountryTopPlays(country: string, window: PopoffWindow): Promise<CountryPopoff[]> {
+  if (!hasDb() || !db) return [];
+
+  try {
+    await ensureCacheSchema();
+
+    const result = await db.execute({
+      sql: `
+        SELECT user_id, username, avatar_url, score_json, pp, weighted_pp, pp_gain, score_time
+        FROM country_top_plays
+        WHERE country = ?
+          AND score_time >= ?
+        ORDER BY pp DESC, score_time DESC
+        LIMIT ?
+      `,
+      args: [
+        normalizeCountryCode(country),
+        Date.now() - POPOFF_WINDOW_MS[window],
+        COUNTRY_TOP_PLAYS_QUERY_LIMIT,
+      ],
+    });
+
+    const popoffs: CountryPopoff[] = [];
+    for (const row of result.rows) {
+      try {
+        popoffs.push({
+          user: {
+            id: Number(row.user_id),
+            username: String(row.username),
+            avatar_url: String(row.avatar_url),
+          },
+          score: JSON.parse(String(row.score_json)) as OsuScore,
+          pp: Number(row.pp),
+          weightedPP: Number(row.weighted_pp),
+          ppGain: Number(row.pp_gain),
+          time: new Date(Number(row.score_time)).toISOString(),
+        });
+      } catch (error) {
+        console.warn("[osu] failed to parse stored country top play", {
+          country,
+          error: getErrorMessage(error),
+        });
+      }
+    }
+
+    return sortCountryPopoffs(popoffs);
+  } catch (error) {
+    console.warn("[osu] failed to read stored country top plays", {
+      country,
+      error: getErrorMessage(error),
+    });
+    return [];
+  }
+}
+
+async function upsertStoredCountryTopPlays(country: string, popoffs: CountryPopoff[]): Promise<void> {
+  if (!hasDb() || !db) return;
+
+  const normalizedCountry = normalizeCountryCode(country);
+  const now = Date.now();
+  const cutoff = now - COUNTRY_TOP_PLAYS_RETENTION_MS;
+
+  try {
+    await ensureCacheSchema();
+
+    const statements = popoffs
+      .filter((popoff) => popoff.score.id > 0)
+      .map((popoff) => {
+        const scoreTime = new Date(popoff.time).getTime();
+        return {
+          sql: `
+            INSERT INTO country_top_plays (
+              country, score_id, user_id, username, avatar_url, score_json,
+              pp, weighted_pp, pp_gain, score_time, discovered_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(country, score_id) DO UPDATE SET
+              user_id = excluded.user_id,
+              username = excluded.username,
+              avatar_url = excluded.avatar_url,
+              score_json = excluded.score_json,
+              pp = excluded.pp,
+              weighted_pp = excluded.weighted_pp,
+              pp_gain = excluded.pp_gain,
+              score_time = excluded.score_time,
+              updated_at = excluded.updated_at
+          `,
+          args: [
+            normalizedCountry,
+            popoff.score.id,
+            popoff.user.id,
+            popoff.user.username,
+            popoff.user.avatar_url,
+            JSON.stringify(popoff.score),
+            popoff.pp,
+            popoff.weightedPP,
+            popoff.ppGain,
+            Number.isFinite(scoreTime) ? scoreTime : now,
+            now,
+            now,
+          ],
+        };
+      });
+
+    if (statements.length > 0) {
+      await db.batch(statements);
+    }
+
+    await db.execute({
+      sql: "DELETE FROM country_top_plays WHERE country = ? AND score_time < ?",
+      args: [normalizedCountry, cutoff],
+    });
+  } catch (error) {
+    console.warn("[osu] failed to write stored country top plays", {
+      country,
+      error: getErrorMessage(error),
+    });
+  }
+}
+
+async function refreshStoredCountryTopPlays(country: string, players: HomePreviewPlayer[]): Promise<number> {
+  const refreshed = await buildLiveCountryPopoffs(players, "30d");
+  await upsertStoredCountryTopPlays(country, refreshed);
+  return Date.now();
+}
+
+async function refreshStoredCountryTopPlaysWithLock(country: string, players: HomePreviewPlayer[]): Promise<void> {
+  const normalizedCountry = normalizeCountryCode(country);
+  const cacheKey = `country-top-plays-refresh:v1:${normalizedCountry}`;
+  await fetchWithCacheLock(
+    cacheKey,
+    COUNTRY_TOP_PLAYS_REFRESH_TTL,
+    () => refreshStoredCountryTopPlays(normalizedCountry, players),
+    COUNTRY_TOP_PLAYS_REFRESH_LOCK_TTL,
+  );
+}
+
+async function buildCountryPopoffs(
+  country: string | undefined,
+  players: HomePreviewPlayer[],
+  window: PopoffWindow,
+): Promise<CountryPopoff[]> {
+  if (!country || !hasDb()) {
+    return buildLiveCountryPopoffs(players, window);
+  }
+
+  const normalizedCountry = normalizeCountryCode(country);
+  const stored = await getStoredCountryTopPlays(normalizedCountry, window);
+  if (stored.length > 0) {
+    refreshStoredCountryTopPlaysWithLock(normalizedCountry, players).catch((error) => {
+      console.warn("[osu] failed to refresh stored country top plays in background", {
+        country: normalizedCountry,
+        error: getErrorMessage(error),
+      });
+    });
+    return stored;
+  }
+
+  const live = await buildLiveCountryPopoffs(players, window);
+  await upsertStoredCountryTopPlays(normalizedCountry, live);
+
+  if (window !== "30d") {
+    refreshStoredCountryTopPlaysWithLock(normalizedCountry, players).catch((error) => {
+      console.warn("[osu] failed to warm stored country top plays in background", {
+        country: normalizedCountry,
+        error: getErrorMessage(error),
+      });
+    });
+  }
+
+  const selectedWindow = sortCountryPopoffs(filterPopoffsForWindow(live, window));
+  if (selectedWindow.length > 0 || window !== "30d") return selectedWindow;
+
+  try {
+    await refreshStoredCountryTopPlaysWithLock(normalizedCountry, players);
+  } catch (error) {
+    console.warn("[osu] failed to warm stored country top plays", {
+      country: normalizedCountry,
+      error: getErrorMessage(error),
+    });
+    return selectedWindow;
+  }
+
+  const refreshed = await getStoredCountryTopPlays(normalizedCountry, window);
+  if (refreshed.length > 0) return refreshed;
+  return selectedWindow;
 }
 
 export const getHomePageData = createServerFn({ method: "GET" })
@@ -1036,10 +1244,10 @@ export const getHomePopoffs = createServerFn({ method: "GET" })
   });
 
 export const getCountryPopoffs = createServerFn({ method: "GET" })
-  .inputValidator((data: { players: HomePreviewPlayer[]; window?: PopoffWindow }) => data)
-  .handler(async ({ data }: { data: { players: HomePreviewPlayer[]; window?: PopoffWindow } }) => {
+  .inputValidator((data: { country?: string; players: HomePreviewPlayer[]; window?: PopoffWindow }) => data)
+  .handler(async ({ data }: { data: { country?: string; players: HomePreviewPlayer[]; window?: PopoffWindow } }) => {
     edgeCache(60, 600);
-    return buildCountryPopoffs(data.players, data.window ?? "30d");
+    return buildCountryPopoffs(data.country, data.players, data.window ?? "30d");
   });
 
 // ── Batch user rank history ────────────────────────────────────────────────
@@ -1483,6 +1691,15 @@ async function buildCountryFavourites(users: MapsUser[]): Promise<CountryMapsFav
               globalFavouriteCount: fav.favourite_count,
               previewUrl: fav.preview_url,
               maniaKeys: [...maniaKeysSet].sort((a, b) => a - b),
+              maniaBeatmaps: maniaBeatmaps
+                .map((bm) => ({
+                  id: bm.id,
+                  version: bm.version,
+                  difficultyRating: bm.difficulty_rating,
+                  totalLength: bm.total_length,
+                  cs: bm.cs,
+                }))
+                .sort((a, b) => b.difficultyRating - a.difficultyRating),
               starMin,
               starMax,
               bpm: typeof fav.bpm === "number" ? fav.bpm : 0,
@@ -1816,7 +2033,7 @@ export const getReplayParsed = createServerFn({ method: "GET" })
 export const getBeatmapFile = createServerFn({ method: "GET" })
   .inputValidator((data: { beatmapId: number }) => data)
   .handler(async ({ data }: { data: { beatmapId: number } }) => {
-    edgeCache(86400, 604800);
+    noStore();
     const osuFile = await fetchBeatmapFile(data.beatmapId);
     return { content: osuFile };
   });

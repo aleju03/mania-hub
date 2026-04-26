@@ -1008,6 +1008,7 @@ function ReplayViewer({
           showInputOverlay: showInputOverlayRef.current,
           mods: modAcronyms,
           transparentBackground: true,
+          scrollVelocities: beatmap?.scrollVelocities,
         },
       ) as ReplayRendererLike;
 

@@ -59,8 +59,6 @@ function windowCoversRange(cached: TimeRange | null, selected: TimeRange): boole
 }
 
 const PAGE_SIZE = 15;
-const FETCH_BATCH_SIZE = 5;
-const FETCH_MAX_CONCURRENT = 2;
 const PP_GAIN_SKELETON_COUNT = 6;
 const DEFAULT_TOP_PLAYS_SEARCH: TopPlaysSearch = {
   range: "7d",
@@ -121,7 +119,6 @@ function PopOffsPage() {
   const [loadingPlayers, setLoadingPlayers] = useState(!rankings);
   const [loading, setLoading] = useState(popoffs.length === 0);
   const [refreshing, setRefreshing] = useState(false);
-  const [loadedCount, setLoadedCount] = useState(0);
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [page, setPage] = useState(0);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -134,7 +131,6 @@ function PopOffsPage() {
     setLoadingPlayers(!rankings);
     setLoading(popoffs.length === 0);
     setRefreshing(false);
-    setLoadedCount(0);
     setPage(0);
     setExpandedId(null);
     fetchingRef.current = false;
@@ -226,7 +222,6 @@ function PopOffsPage() {
       if (players.length === 0) {
         setLoading(false);
         setRefreshing(false);
-        setLoadedCount(0);
       }
       return;
     }
@@ -240,7 +235,6 @@ function PopOffsPage() {
     if (!shouldRefresh) {
       setLoading(false);
       setRefreshing(false);
-      setLoadedCount(players.length);
       return;
     }
 
@@ -252,41 +246,14 @@ function PopOffsPage() {
     cancelledRef.current = false;
     setLoading(!hasCachedPopoffs);
     setRefreshing(true);
-    setLoadedCount(0);
     setPage(0);
 
     try {
-      const batches: (typeof players)[] = [];
-      for (let i = 0; i < players.length; i += FETCH_BATCH_SIZE) {
-        batches.push(players.slice(i, i + FETCH_BATCH_SIZE));
-      }
+      const merged = mergePopoffs(await getCountryPopoffs({
+        data: { country: selectedCountry, players, window: fetchWindow },
+      }));
 
-      let merged: PopOff[] = [];
-      let completed = 0;
-
-      for (let i = 0; i < batches.length; i += FETCH_MAX_CONCURRENT) {
-        if (cancelledRef.current) break;
-
-        const chunk = batches.slice(i, i + FETCH_MAX_CONCURRENT);
-        await Promise.all(
-          chunk.map(async (batch) => {
-            const batchResults = await getCountryPopoffs({
-              data: { players: batch, window: fetchWindow },
-            });
-
-            if (cancelledRef.current) return;
-
-            merged = mergePopoffs([...merged, ...batchResults]);
-            completed += batch.length;
-            setLoadedCount(Math.min(completed, players.length));
-
-            if (!hasCachedPopoffs && merged.length > 0) {
-              setCachedPopoffs(selectedCountry, merged, fetchWindow);
-              setLoading(false);
-            }
-          }),
-        );
-      }
+      if (cancelledRef.current) return;
 
       if (!cancelledRef.current) {
         setCachedPopoffs(selectedCountry, merged, fetchWindow);
@@ -362,6 +329,11 @@ function PopOffsPage() {
   // Paginate
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const loadingLabel = loadingPlayers || players.length === 0
+    ? "Loading players..."
+    : hasCachedPopoffs
+      ? "Refreshing..."
+      : "Loading top plays...";
 
   const ranges: { id: TimeRange; label: string }[] = [
     { id: "24h", label: "24 hours" },
@@ -381,9 +353,7 @@ function PopOffsPage() {
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
                 <span className="text-[10px] text-osu-f1 tabular-nums">
-                  {loadingPlayers || players.length === 0
-                    ? "Loading..."
-                    : `Loading... (${Math.round((loadedCount / players.length) * 100)}%)`}
+                  {loadingLabel}
                 </span>
               </div>
             )}

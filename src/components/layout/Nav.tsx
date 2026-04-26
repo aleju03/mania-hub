@@ -380,6 +380,14 @@ export function Nav() {
                       Monitor
                     </Link>
                     <Link
+                      to="/admin/maniacard"
+                      onClick={() => setAdminMenuOpen(false)}
+                      className="block px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors border-t border-osu-b3/30"
+                      role="menuitem"
+                    >
+                      Maniacard
+                    </Link>
+                    <Link
                       to="/admin/og-preview"
                       onClick={() => setAdminMenuOpen(false)}
                       className="block px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors border-t border-osu-b3/30"
@@ -509,6 +517,13 @@ export function Nav() {
                     className="block w-full text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
                   >
                     Monitor
+                  </Link>
+                  <Link
+                    to="/admin/maniacard"
+                    onClick={() => setMenuOpen(false)}
+                    className="block w-full text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
+                  >
+                    Maniacard
                   </Link>
                   <Link
                     to="/admin/og-preview"
