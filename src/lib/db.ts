@@ -69,6 +69,29 @@ export async function ensureCacheSchema(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_country_top_plays_country_pp
       ON country_top_plays (country, pp DESC)
     `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS beatmap_asset_cache (
+        storage_key TEXT PRIMARY KEY,
+        beatmapset_id TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        last_accessed_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    `);
+
+    await db.execute(`
+      CREATE INDEX IF NOT EXISTS idx_beatmap_asset_cache_accessed
+      ON beatmap_asset_cache (last_accessed_at)
+    `);
+
+    await db.execute(`
+      CREATE INDEX IF NOT EXISTS idx_beatmap_asset_cache_set_kind
+      ON beatmap_asset_cache (beatmapset_id, kind)
+    `);
   })().catch((error) => {
     cacheSchemaReady = null;
     throw error;

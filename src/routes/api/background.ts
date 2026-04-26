@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { extractBeatmapArchiveFile } from "#/lib/beatmap-archive";
+import { getCachedBeatmapAssetUrl, isR2ReplayCacheConfigured, putBeatmapAssetAndGetUrl } from "#/lib/r2-cache";
 
 const OSU_COVER_BASE = "https://assets.ppy.sh/beatmaps";
 const MAX_IMAGE_FILENAME_LENGTH = 260;
@@ -50,6 +51,24 @@ export const Route = createFileRoute("/api/background")({
           return new Response("Invalid filename", { status: 400 });
         }
 
+        const cacheHeaders = {
+          "Cache-Control":
+            "public, max-age=300, s-maxage=300, stale-while-revalidate=3600",
+        };
+
+        if (isR2ReplayCacheConfigured()) {
+          const cached = await getCachedBeatmapAssetUrl("background", beatmapsetId, filename);
+          if (cached) {
+            return new Response(null, {
+              status: 302,
+              headers: {
+                ...cacheHeaders,
+                Location: cached.signedUrl,
+              },
+            });
+          }
+        }
+
         let buffer: Buffer;
         try {
           buffer = await extractBeatmapArchiveFile(beatmapsetId, filename);
@@ -58,10 +77,28 @@ export const Route = createFileRoute("/api/background")({
           return new Response(message, { status: 404 });
         }
 
+        const mimeType = getMimeType(filename);
+        if (isR2ReplayCacheConfigured()) {
+          try {
+            const cached = await putBeatmapAssetAndGetUrl("background", beatmapsetId, filename, mimeType, buffer);
+            if (cached) {
+              return new Response(null, {
+                status: 302,
+                headers: {
+                  ...cacheHeaders,
+                  Location: cached.signedUrl,
+                },
+              });
+            }
+          } catch {
+            // Fall through to the legacy in-process response so the background still loads.
+          }
+        }
+
         return new Response(buffer as unknown as BodyInit, {
           status: 200,
           headers: {
-            "Content-Type": getMimeType(filename),
+            "Content-Type": mimeType,
             "Content-Length": String(buffer.length),
             "Cache-Control":
               "public, max-age=86400, s-maxage=31536000, stale-while-revalidate=604800, immutable",
