@@ -103,6 +103,11 @@ export class ManiaReplayRenderer {
   private scrollSpeed = 0.74;
   private animFrameId = 0;
   private lastRenderTime = 0;
+  private audioClockAnchorTime: number | null = null;
+  private audioClockAnchorNow = 0;
+  private fpsSampleStartedAt = 0;
+  private fpsFrameCount = 0;
+  private measuredFps = 0;
   private colors: string[];
   private totalDuration: number;
   private segments: ReturnType<typeof buildReplaySegments>;
@@ -363,6 +368,7 @@ export class ManiaReplayRenderer {
     if (this._isPlaying) return;
     this._isPlaying = true;
     this.lastRenderTime = performance.now();
+    this.resetFpsCounter(this.lastRenderTime);
     this.tick();
   }
 
@@ -380,6 +386,7 @@ export class ManiaReplayRenderer {
     this.currentTime = Math.max(0, Math.min(timeMs, this.totalDuration));
     this.recomputeStatsUpTo(this.currentTime);
     this.lastRenderTime = performance.now();
+    this.resetAudioClockSmoothing();
     this.render();
   }
 
@@ -414,6 +421,7 @@ export class ManiaReplayRenderer {
   setExternalClock(cb: (() => { time: number; stalled: boolean } | null) | null) {
     this.externalClock = cb;
     this.lastRenderTime = performance.now();
+    this.resetAudioClockSmoothing();
   }
 
   get time() { return this.currentTime; }
@@ -427,15 +435,20 @@ export class ManiaReplayRenderer {
 
     if (external) {
       if (!external.stalled) {
-        const newTime = Math.max(0, Math.min(external.time, this.totalDuration));
-        if (newTime > this.currentTime) {
+        const audioTime = Math.max(0, Math.min(external.time, this.totalDuration));
+        const newTime = this.getSmoothedExternalTime(audioTime, now);
+        if (newTime >= this.currentTime || newTime > this.currentTime - 6) {
           this.currentTime = newTime;
         } else if (newTime < this.currentTime - 50) {
-          this.currentTime = newTime;
+          this.currentTime = audioTime;
           this.recomputeStatsUpTo(this.currentTime);
+          this.resetAudioClockSmoothing(audioTime, now);
         }
+      } else {
+        this.resetAudioClockSmoothing();
       }
     } else {
+      this.resetAudioClockSmoothing();
       const dt = (now - this.lastRenderTime) * this.playbackSpeed * this.modRate;
       this.currentTime += dt;
     }
@@ -446,8 +459,55 @@ export class ManiaReplayRenderer {
       this._isPlaying = false;
     }
     this.advanceStats();
+    this.updateFpsCounter(now);
     this.render();
     if (this._isPlaying) this.animFrameId = requestAnimationFrame(() => this.tick());
+  }
+
+  private getSmoothedExternalTime(audioTime: number, now: number): number {
+    if (this.audioClockAnchorTime == null) {
+      this.resetAudioClockSmoothing(audioTime, now);
+      return audioTime;
+    }
+
+    const predicted = this.audioClockAnchorTime + (now - this.audioClockAnchorNow) * this.playbackSpeed * this.modRate;
+    const drift = audioTime - predicted;
+
+    if (Math.abs(drift) > 80) {
+      this.resetAudioClockSmoothing(audioTime, now);
+      return audioTime;
+    }
+
+    if (Math.abs(drift) > 8) {
+      const corrected = predicted + drift * 0.18;
+      this.audioClockAnchorTime = corrected;
+      this.audioClockAnchorNow = now;
+      return corrected;
+    }
+
+    return predicted;
+  }
+
+  private resetAudioClockSmoothing(time: number | null = null, now = performance.now()) {
+    this.audioClockAnchorTime = time;
+    this.audioClockAnchorNow = now;
+  }
+
+  private resetFpsCounter(now = performance.now()) {
+    this.fpsSampleStartedAt = now;
+    this.fpsFrameCount = 0;
+    this.measuredFps = 0;
+  }
+
+  private updateFpsCounter(now: number) {
+    if (this.fpsSampleStartedAt <= 0) this.resetFpsCounter(now);
+    this.fpsFrameCount++;
+    const elapsed = now - this.fpsSampleStartedAt;
+    if (elapsed >= 500) {
+      this.measuredFps = Math.round((this.fpsFrameCount * 1000) / elapsed);
+      this.fpsSampleStartedAt = now;
+      this.fpsFrameCount = 0;
+    }
   }
 
   private render() {
@@ -826,6 +886,13 @@ export class ManiaReplayRenderer {
       alpha: 0.4,
       anchorX: 1,
       anchorY: 1,
+    });
+    this.addText(`FPS ${this.measuredFps || "--"}`, w - 8, 8, {
+      fontSize: 11,
+      fill: this.measuredFps >= 55 || this.measuredFps === 0 ? "#ffffff" : "#ffcc22",
+      alpha: 0.52,
+      fontWeight: "700",
+      anchorX: 1,
     });
   }
 

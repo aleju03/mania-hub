@@ -26,6 +26,7 @@ import { Route as ApiAvatarRouteImport } from './routes/api/avatar'
 import { Route as ApiAudioRouteImport } from './routes/api/audio'
 import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
 import { Route as AdminMonitorRouteImport } from './routes/admin/monitor'
+import { Route as AdminManiacardRouteImport } from './routes/admin/maniacard'
 
 const TrackerRoute = TrackerRouteImport.update({
   id: '/tracker',
@@ -112,6 +113,11 @@ const AdminMonitorRoute = AdminMonitorRouteImport.update({
   path: '/admin/monitor',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminManiacardRoute = AdminManiacardRouteImport.update({
+  id: '/admin/maniacard',
+  path: '/admin/maniacard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -121,6 +127,7 @@ export interface FileRoutesByFullPath {
   '/snipes': typeof SnipesRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
+  '/admin/maniacard': typeof AdminManiacardRoute
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/api/audio': typeof ApiAudioRoute
@@ -140,6 +147,7 @@ export interface FileRoutesByTo {
   '/snipes': typeof SnipesRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
+  '/admin/maniacard': typeof AdminManiacardRoute
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/api/audio': typeof ApiAudioRoute
@@ -160,6 +168,7 @@ export interface FileRoutesById {
   '/snipes': typeof SnipesRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
+  '/admin/maniacard': typeof AdminManiacardRoute
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/api/audio': typeof ApiAudioRoute
@@ -181,6 +190,7 @@ export interface FileRouteTypes {
     | '/snipes'
     | '/top-plays'
     | '/tracker'
+    | '/admin/maniacard'
     | '/admin/monitor'
     | '/admin/og-preview'
     | '/api/audio'
@@ -200,6 +210,7 @@ export interface FileRouteTypes {
     | '/snipes'
     | '/top-plays'
     | '/tracker'
+    | '/admin/maniacard'
     | '/admin/monitor'
     | '/admin/og-preview'
     | '/api/audio'
@@ -219,6 +230,7 @@ export interface FileRouteTypes {
     | '/snipes'
     | '/top-plays'
     | '/tracker'
+    | '/admin/maniacard'
     | '/admin/monitor'
     | '/admin/og-preview'
     | '/api/audio'
@@ -239,6 +251,7 @@ export interface RootRouteChildren {
   SnipesRoute: typeof SnipesRoute
   TopPlaysRoute: typeof TopPlaysRoute
   TrackerRoute: typeof TrackerRoute
+  AdminManiacardRoute: typeof AdminManiacardRoute
   AdminMonitorRoute: typeof AdminMonitorRoute
   AdminOgPreviewRoute: typeof AdminOgPreviewRoute
   ApiAudioRoute: typeof ApiAudioRoute
@@ -372,6 +385,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminMonitorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/maniacard': {
+      id: '/admin/maniacard'
+      path: '/admin/maniacard'
+      fullPath: '/admin/maniacard'
+      preLoaderRoute: typeof AdminManiacardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -383,6 +403,7 @@ const rootRouteChildren: RootRouteChildren = {
   SnipesRoute: SnipesRoute,
   TopPlaysRoute: TopPlaysRoute,
   TrackerRoute: TrackerRoute,
+  AdminManiacardRoute: AdminManiacardRoute,
   AdminMonitorRoute: AdminMonitorRoute,
   AdminOgPreviewRoute: AdminOgPreviewRoute,
   ApiAudioRoute: ApiAudioRoute,
