@@ -997,6 +997,7 @@ function PlayerPage() {
             countryRank={stats.country_rank}
             countryCode={user.country_code}
             rankHistory={user.rank_history?.data ?? null}
+            showTungTungSahur={user.username.toLowerCase() === "sebasrj"}
           />
 
           {/* Secondary stats strip: compact inline row for the remaining mirror stats */}
@@ -1252,6 +1253,95 @@ function PlayerPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function TungTungSahurKeycap() {
+  const [pressed, setPressed] = useState(false);
+
+  const release = useCallback(() => setPressed(false), []);
+
+  return (
+    <button
+      type="button"
+      aria-label="Tung tung sahur keycap"
+      title="Tung tung sahur keycap"
+      className="group absolute right-3 bottom-full z-20 h-28 w-16 translate-y-1 cursor-pointer touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-osu-pink/80 focus-visible:ring-offset-2 focus-visible:ring-offset-osu-b5 sm:right-5 sm:h-32 sm:w-[4.5rem]"
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        setPressed(true);
+      }}
+      onPointerUp={release}
+      onPointerCancel={release}
+      onPointerLeave={release}
+      onBlur={release}
+      onKeyDown={(event) => {
+        if (event.key === " " || event.key === "Enter") setPressed(true);
+      }}
+      onKeyUp={(event) => {
+        if (event.key === " " || event.key === "Enter") release();
+      }}
+    >
+      <span className="absolute inset-x-5 bottom-0 h-3 rounded-full bg-black/35 blur-md transition-opacity duration-200 group-hover:opacity-90" />
+      <motion.img
+        src="/images/easter-eggs/tung-tung-sahur-keycap-base.png"
+        alt=""
+        draggable={false}
+        className="absolute inset-x-0 bottom-0 z-10 mx-auto w-[61%] object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.38)]"
+        animate={{ y: pressed ? 1 : 0, scaleY: pressed ? 0.985 : 1 }}
+        transition={{ type: "spring", stiffness: 520, damping: 34, mass: 0.65 }}
+      />
+      <motion.img
+        src="/images/easter-eggs/tung-tung-sahur-keycap-top.png"
+        alt=""
+        draggable={false}
+        className="absolute inset-x-0 bottom-[35%] z-20 mx-auto w-[78%] object-contain drop-shadow-[0_8px_14px_rgba(0,0,0,0.42)]"
+        animate={{
+          x: -3.25,
+          y: pressed ? 17 : 4,
+          scaleY: pressed ? 0.972 : 1,
+          filter: pressed ? "brightness(0.92)" : "brightness(1)",
+        }}
+        transition={{ type: "spring", stiffness: 640, damping: 31, mass: 0.55 }}
+      />
+      <motion.img
+        src="/images/easter-eggs/tung-tung-sahur-keycap-base.png"
+        alt=""
+        draggable={false}
+        className="absolute inset-x-0 bottom-0 z-30 mx-auto w-[61%] object-contain"
+        style={{ clipPath: "inset(12% 0 0 0)" }}
+        animate={{ y: pressed ? 1 : 0, scaleY: pressed ? 0.985 : 1 }}
+        transition={{ type: "spring", stiffness: 520, damping: 34, mass: 0.65 }}
+      />
+      <motion.img
+        src="/images/easter-eggs/tung-tung-sahur-keycap-top.png"
+        alt=""
+        draggable={false}
+        className="absolute inset-x-0 bottom-[35%] z-40 mx-auto w-[78%] object-contain"
+        style={{ clipPath: "inset(0 70% 0 0)" }}
+        animate={{
+          x: -3.25,
+          y: pressed ? 17 : 4,
+          scaleY: pressed ? 0.972 : 1,
+          filter: pressed ? "brightness(0.92)" : "brightness(1)",
+        }}
+        transition={{ type: "spring", stiffness: 640, damping: 31, mass: 0.55 }}
+      />
+      <motion.img
+        src="/images/easter-eggs/tung-tung-sahur-keycap-top.png"
+        alt=""
+        draggable={false}
+        className="absolute inset-x-0 bottom-[35%] z-40 mx-auto w-[78%] object-contain"
+        style={{ clipPath: "inset(0 0 0 80%)" }}
+        animate={{
+          x: -3.25,
+          y: pressed ? 17 : 4,
+          scaleY: pressed ? 0.972 : 1,
+          filter: pressed ? "brightness(0.92)" : "brightness(1)",
+        }}
+        transition={{ type: "spring", stiffness: 640, damping: 31, mass: 0.55 }}
+      />
+    </button>
   );
 }
 
@@ -1559,6 +1649,7 @@ function RankHeroCard({
   countryRank,
   countryCode,
   rankHistory,
+  showTungTungSahur = false,
 }: {
   peakRank: number | null;
   peakRankDate: string | null;
@@ -1566,6 +1657,7 @@ function RankHeroCard({
   countryRank: number | null;
   countryCode: string;
   rankHistory: number[] | null;
+  showTungTungSahur?: boolean;
 }) {
   const valid = (rankHistory ?? []).filter((d) => d > 0);
   const has90d = valid.length >= 2;
@@ -1590,7 +1682,9 @@ function RankHeroCard({
   const heroRank = peakRank ?? currentRank;
 
   return (
-    <div className="relative bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
+    <div className="relative">
+      {showTungTungSahur && <TungTungSahurKeycap />}
+      <div className="relative bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
       {/* 90-day sparkline as background texture */}
       {has90d && (
         <svg
@@ -1666,6 +1760,7 @@ function RankHeroCard({
             )}
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

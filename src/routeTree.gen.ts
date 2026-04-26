@@ -27,6 +27,7 @@ import { Route as ApiAudioRouteImport } from './routes/api/audio'
 import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
 import { Route as AdminMonitorRouteImport } from './routes/admin/monitor'
 import { Route as AdminManiacardRouteImport } from './routes/admin/maniacard'
+import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
 
 const TrackerRoute = TrackerRouteImport.update({
   id: '/tracker',
@@ -118,6 +119,11 @@ const AdminManiacardRoute = AdminManiacardRouteImport.update({
   path: '/admin/maniacard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminDanClassifierRoute = AdminDanClassifierRouteImport.update({
+  id: '/admin/dan-classifier',
+  path: '/admin/dan-classifier',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/snipes': typeof SnipesRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
+  '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/maniacard': typeof AdminManiacardRoute
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
@@ -147,6 +154,7 @@ export interface FileRoutesByTo {
   '/snipes': typeof SnipesRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
+  '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/maniacard': typeof AdminManiacardRoute
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
@@ -168,6 +176,7 @@ export interface FileRoutesById {
   '/snipes': typeof SnipesRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
+  '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/maniacard': typeof AdminManiacardRoute
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
@@ -190,6 +199,7 @@ export interface FileRouteTypes {
     | '/snipes'
     | '/top-plays'
     | '/tracker'
+    | '/admin/dan-classifier'
     | '/admin/maniacard'
     | '/admin/monitor'
     | '/admin/og-preview'
@@ -210,6 +220,7 @@ export interface FileRouteTypes {
     | '/snipes'
     | '/top-plays'
     | '/tracker'
+    | '/admin/dan-classifier'
     | '/admin/maniacard'
     | '/admin/monitor'
     | '/admin/og-preview'
@@ -230,6 +241,7 @@ export interface FileRouteTypes {
     | '/snipes'
     | '/top-plays'
     | '/tracker'
+    | '/admin/dan-classifier'
     | '/admin/maniacard'
     | '/admin/monitor'
     | '/admin/og-preview'
@@ -251,6 +263,7 @@ export interface RootRouteChildren {
   SnipesRoute: typeof SnipesRoute
   TopPlaysRoute: typeof TopPlaysRoute
   TrackerRoute: typeof TrackerRoute
+  AdminDanClassifierRoute: typeof AdminDanClassifierRoute
   AdminManiacardRoute: typeof AdminManiacardRoute
   AdminMonitorRoute: typeof AdminMonitorRoute
   AdminOgPreviewRoute: typeof AdminOgPreviewRoute
@@ -392,6 +405,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminManiacardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/dan-classifier': {
+      id: '/admin/dan-classifier'
+      path: '/admin/dan-classifier'
+      fullPath: '/admin/dan-classifier'
+      preLoaderRoute: typeof AdminDanClassifierRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -403,6 +423,7 @@ const rootRouteChildren: RootRouteChildren = {
   SnipesRoute: SnipesRoute,
   TopPlaysRoute: TopPlaysRoute,
   TrackerRoute: TrackerRoute,
+  AdminDanClassifierRoute: AdminDanClassifierRoute,
   AdminManiacardRoute: AdminManiacardRoute,
   AdminMonitorRoute: AdminMonitorRoute,
   AdminOgPreviewRoute: AdminOgPreviewRoute,
