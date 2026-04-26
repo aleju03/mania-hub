@@ -53,6 +53,8 @@ const BEST_SCORES_WINDOW_SIZE = 200;
 const DEV_MODE = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === "1";
 const TUNG_TUNG_SAHUR_AUDIO_SRC = "/audio/tung-tung-sahur-keycap.mp3";
 const TUNG_TUNG_SAHUR_GLOW_COLORS = ["#38d9ff", "#ff3f57", "#8bff3f", "#b45cff", "#ffd53d", "#ff7a2f"];
+const TUNG_TUNG_SAHUR_BASE_REST = { y: 0, scaleY: 1 };
+const TUNG_TUNG_SAHUR_TOP_REST = { x: -3.25, y: 4, scaleY: 1, filter: "brightness(1)" };
 type PlayerTab = "best" | "recent" | "card" | "about";
 
 export const Route = createFileRoute("/player/$username")({
@@ -1291,7 +1293,6 @@ function TungTungSahurKeycap() {
     <button
       type="button"
       aria-label="Tung tung sahur keycap"
-      title="Tung tung sahur keycap"
       className="group absolute right-3 bottom-full z-20 h-28 w-16 translate-y-1 cursor-pointer touch-none select-none outline-none focus-visible:ring-2 focus-visible:ring-osu-pink/80 focus-visible:ring-offset-2 focus-visible:ring-offset-osu-b5 sm:right-5 sm:h-32 sm:w-[4.5rem]"
       onPointerDown={(event) => {
         event.currentTarget.setPointerCapture(event.pointerId);
@@ -1314,25 +1315,28 @@ function TungTungSahurKeycap() {
         alt=""
         draggable={false}
         className="absolute inset-x-0 bottom-0 z-10 mx-auto w-[61%] object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.38)]"
+        initial={TUNG_TUNG_SAHUR_BASE_REST}
         animate={{ y: pressed ? 1 : 0, scaleY: pressed ? 0.985 : 1 }}
         transition={{ type: "spring", stiffness: 520, damping: 34, mass: 0.65 }}
       />
       <motion.span
-        className="absolute left-1/2 bottom-[39%] z-[11] h-7 w-12 -translate-x-1/2 rounded-full blur-md"
+        className="absolute left-1/2 bottom-[37.5%] z-[18] h-3 w-8 -translate-x-1/2 rounded-full blur-sm"
         style={{
-          background: `radial-gradient(circle, ${glowColor} 0%, ${glowColor}99 34%, transparent 72%)`,
-          boxShadow: `0 0 18px 6px ${glowColor}`,
+          background: `radial-gradient(ellipse, ${glowColor} 0%, ${glowColor}bb 38%, transparent 74%)`,
+          boxShadow: `0 0 10px 3px ${glowColor}`,
         }}
-        animate={{ opacity: pressed ? 0.78 : 0, scale: pressed ? 1.08 : 0.78 }}
+        initial={{ opacity: 0, scale: 0.78 }}
+        animate={{ opacity: pressed ? 1 : 0, scale: pressed ? 1.08 : 0.78 }}
         transition={{ duration: pressed ? 0.05 : 0.24, ease: "easeOut" }}
       />
       <motion.span
-        className="absolute left-1/2 bottom-[41%] z-[12] h-3 w-9 -translate-x-1/2 rounded-full blur-[2px]"
+        className="absolute left-1/2 bottom-[38.6%] z-[19] h-1.5 w-6 -translate-x-1/2 rounded-full blur-[1px]"
         style={{
-          background: `radial-gradient(circle, white 0%, ${glowColor} 42%, transparent 74%)`,
-          boxShadow: `0 0 10px 3px ${glowColor}`,
+          background: `radial-gradient(ellipse, white 0%, ${glowColor} 45%, transparent 78%)`,
+          boxShadow: `0 0 7px 2px ${glowColor}`,
         }}
-        animate={{ opacity: pressed ? 0.82 : 0, scaleX: pressed ? 1.05 : 0.86 }}
+        initial={{ opacity: 0, scaleX: 0.86 }}
+        animate={{ opacity: pressed ? 1 : 0, scaleX: pressed ? 1.08 : 0.86 }}
         transition={{ duration: pressed ? 0.04 : 0.2, ease: "easeOut" }}
       />
       <motion.img
@@ -1340,6 +1344,7 @@ function TungTungSahurKeycap() {
         alt=""
         draggable={false}
         className="absolute inset-x-0 bottom-[35%] z-20 mx-auto w-[78%] object-contain drop-shadow-[0_8px_14px_rgba(0,0,0,0.42)]"
+        initial={TUNG_TUNG_SAHUR_TOP_REST}
         animate={{
           x: -3.25,
           y: pressed ? 17 : 4,
@@ -1354,6 +1359,7 @@ function TungTungSahurKeycap() {
         draggable={false}
         className="absolute inset-x-0 bottom-0 z-30 mx-auto w-[61%] object-contain"
         style={{ clipPath: "inset(12% 0 0 0)" }}
+        initial={TUNG_TUNG_SAHUR_BASE_REST}
         animate={{ y: pressed ? 1 : 0, scaleY: pressed ? 0.985 : 1 }}
         transition={{ type: "spring", stiffness: 520, damping: 34, mass: 0.65 }}
       />
@@ -1363,6 +1369,7 @@ function TungTungSahurKeycap() {
         draggable={false}
         className="absolute inset-x-0 bottom-[35%] z-40 mx-auto w-[78%] object-contain"
         style={{ clipPath: "inset(0 70% 0 0)" }}
+        initial={TUNG_TUNG_SAHUR_TOP_REST}
         animate={{
           x: -3.25,
           y: pressed ? 17 : 4,
@@ -1377,6 +1384,7 @@ function TungTungSahurKeycap() {
         draggable={false}
         className="absolute inset-x-0 bottom-[35%] z-40 mx-auto w-[78%] object-contain"
         style={{ clipPath: "inset(0 0 0 80%)" }}
+        initial={TUNG_TUNG_SAHUR_TOP_REST}
         animate={{
           x: -3.25,
           y: pressed ? 17 : 4,
