@@ -1,9 +1,9 @@
+import { Application, Container, FillGradient, Graphics, Sprite, Text, Texture } from "pixi.js";
 import type { ReplayFrame } from "../../lib/types";
 import type { ManiaNote } from "../../lib/beatmap-parser";
 import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgementEvent, ReplayNoteState } from "../../lib/mania-replay-judgement";
 import { buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "../../lib/mania-replay-judgement";
 
-// Column colors for mania key modes (matching osu!mania circle skin)
 const COLUMN_COLORS: Record<number, string[]> = {
   1: ["#fff"],
   2: ["#5a8fff", "#5a8fff"],
@@ -18,12 +18,12 @@ const COLUMN_COLORS: Record<number, string[]> = {
 };
 
 const JUDGMENT_COLORS: Record<number, string> = {
-  1: "#b3f5ff",  // MAX - rainbow/cyan
-  2: "#ffcc22",  // 300 - yellow
-  3: "#88da20",  // 200 - green
-  4: "#5a8fff",  // 100 - blue
-  5: "#cc8800",  // 50 - orange
-  6: "#ff4444",  // miss - red
+  1: "#b3f5ff",
+  2: "#ffcc22",
+  3: "#88da20",
+  4: "#5a8fff",
+  5: "#cc8800",
+  6: "#ff4444",
 };
 
 const JUDGMENT_LABELS: Record<number, string> = {
@@ -33,28 +33,27 @@ const JUDGMENT_LABELS: Record<number, string> = {
 const HOLD_VISUAL_GRACE_MS = 60;
 const BACKGROUND_FADE_DURATION_MS = 180;
 
-// Memoized hex → rgb parse. Call sites pass a tiny set of static hex strings
-// (column colors, judgment colors, UR bar cyan), so the cache stays bounded.
-const HEX_RGB_CACHE = new Map<string, { r: number; g: number; b: number }>();
-function parseHexColor(hex: string): { r: number; g: number; b: number } {
-  const cached = HEX_RGB_CACHE.get(hex);
-  if (cached) return cached;
-  let r = 0, g = 0, b = 0;
-  if (hex.startsWith("#")) {
-    const raw = hex.slice(1);
-    if (raw.length === 3) {
-      r = parseInt(raw[0] + raw[0], 16);
-      g = parseInt(raw[1] + raw[1], 16);
-      b = parseInt(raw[2] + raw[2], 16);
-    } else if (raw.length === 6) {
-      r = parseInt(raw.slice(0, 2), 16);
-      g = parseInt(raw.slice(2, 4), 16);
-      b = parseInt(raw.slice(4, 6), 16);
-    }
+const HEX_NUMBER_CACHE = new Map<string, number>();
+
+function hexToNumber(color: string): number {
+  const cached = HEX_NUMBER_CACHE.get(color);
+  if (cached != null) return cached;
+  let out = 0xffffff;
+  if (color.startsWith("#")) {
+    const raw = color.slice(1);
+    const expanded = raw.length === 3 ? raw.split("").map((c) => c + c).join("") : raw;
+    out = Number.parseInt(expanded, 16);
   }
-  const out = { r, g, b };
-  HEX_RGB_CACHE.set(hex, out);
+  HEX_NUMBER_CACHE.set(color, out);
   return out;
+}
+
+function colorWithAlpha(color: string, alpha: number): string {
+  const value = hexToNumber(color);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 interface RendererOptions {
@@ -64,7 +63,7 @@ interface RendererOptions {
   isLazer?: boolean;
   od?: number;
   showInputOverlay?: boolean;
-  mods?: string[]; // mod acronyms, e.g. ["DT", "MR"]
+  mods?: string[];
   transparentBackground?: boolean;
 }
 
@@ -84,7 +83,16 @@ type Hand = "left" | "right" | "center";
 
 export class ManiaReplayRenderer {
   private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
+  private app: Application | null = null;
+  private graphics = new Graphics();
+  private textLayer = new Container();
+  private backgroundLayer = new Container();
+  private backgroundSprite: Sprite | null = null;
+  private previousBackgroundSprite: Sprite | null = null;
+  private receptorBeamGradients = new Map<string, FillGradient>();
+  private initPromise: Promise<void>;
+  private destroyed = false;
+
   private frames: ReplayFrame[];
   private notes: ManiaNote[];
   private keyCount: number;
@@ -92,7 +100,7 @@ export class ManiaReplayRenderer {
   private playbackSpeed = 1;
   private modRate = 1;
   private _isPlaying = false;
-  private scrollSpeed = 0.74; // default = speed 32: 0.1 + (32/40) * 0.8
+  private scrollSpeed = 0.74;
   private animFrameId = 0;
   private lastRenderTime = 0;
   private colors: string[];
@@ -102,7 +110,6 @@ export class ManiaReplayRenderer {
   private ruleset: ManiaReplayRuleset;
   private hitWindows: ManiaReplayHitWindows;
 
-  // Background
   private backgroundImage: HTMLImageElement | null = null;
   private previousBackgroundImage: HTMLImageElement | null = null;
   private backgroundDim = 80;
@@ -112,49 +119,27 @@ export class ManiaReplayRenderer {
   private transparentBackground = false;
   private cssWidth = 0;
   private cssHeight = 0;
+  private dpr = 1;
 
-  // Optional external clock (e.g., audio element). When set, replaces the
-  // wall-clock dt in tick() with the external source. Returning `stalled: true`
-  // freezes currentTime (used while audio is buffering/seeking) so the replay
-  // never drifts ahead of the song.
   private externalClock: (() => { time: number; stalled: boolean } | null) | null = null;
-
-  // Receptor flash state
   private receptorFlashTimestamps: number[];
-
-  // Replay judgement state (pre-computed)
   private judgmentEvents: ReplayJudgementEvent[];
   private noteStates: ReplayNoteState[];
 
-  // Live stats (computed incrementally during playback)
   private combo = 0;
   private maxComboSoFar = 0;
   private statsScanIndex = 0;
-  private judgmentCounts: number[] = [0, 0, 0, 0, 0, 0, 0]; // indexed by Judgment
+  private judgmentCounts: number[] = [0, 0, 0, 0, 0, 0, 0];
   private leftHandMisses = 0;
   private rightHandMisses = 0;
   private recentHitOffsets: number[] = [];
-
-  // Last judgment display
   private lastJudgment: Judgment = 0;
   private lastJudgmentTime = 0;
 
-  // --- Caches rebuilt on resize() / setScrollSpeed() ---
-  // Layout + per-column x/width avoid a reduce() loop per call (was called
-  // ~115x per frame on 7K charts).
   private cachedLayout: Layout | null = null;
   private cachedColumns: { x: number; width: number }[] = [];
-  // Receptor beam gradients, cached at flashIntensity=1; live intensity is
-  // applied via ctx.globalAlpha in renderReceptors.
-  private cachedReceptorGradients: (CanvasGradient | null)[] = [];
-
-  // Forward cursor into frames for getCurrentKeyState() — avoids a binary
-  // search per call. Reset on backward seek in seek()/recomputeStatsUpTo().
   private keyStateCursor = 0;
-  // Cached once per render() so receptor + HUD share the same read.
   private currentKeyState = 0;
-
-  // Running UR stats maintained incrementally in advanceStats().
   private urSum = 0;
   private urSumSq = 0;
 
@@ -166,15 +151,11 @@ export class ManiaReplayRenderer {
     options?: RendererOptions,
   ) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext("2d")!;
     this.frames = frames;
     this.keyCount = keyCount;
     this.colors = COLUMN_COLORS[keyCount] || this.generateColors(keyCount);
-    // Warm the module-level hex-parse cache so the first render() call has
-    // all column colors memoized.
-    for (const c of this.colors) parseHexColor(c);
+    for (const c of this.colors) hexToNumber(c);
 
-    // Apply mod transformations to notes
     const mods = new Set((options?.mods ?? []).filter(Boolean).map((m) => m.toUpperCase()));
     const mirror = mods.has("MR");
     this.modRate = mods.has("DT") || mods.has("NC") ? 1.5 : mods.has("HT") ? 0.75 : 1;
@@ -198,10 +179,7 @@ export class ManiaReplayRenderer {
 
     this.maxHoldDuration = 0;
     for (const n of notes) {
-      if (n.isHold) {
-        const dur = n.endTime - n.time;
-        if (dur > this.maxHoldDuration) this.maxHoldDuration = dur;
-      }
+      if (n.isHold) this.maxHoldDuration = Math.max(this.maxHoldDuration, n.endTime - n.time);
     }
 
     this.segments = buildReplaySegments(this.frames, this.keyCount, this.totalDuration);
@@ -218,15 +196,42 @@ export class ManiaReplayRenderer {
       ? this.judgmentEvents[this.judgmentEvents.length - 1].time
       : 0;
     this.totalDuration = Math.max(this.totalDuration, lastJudgementTime);
+
+    this.measureCanvas();
+    this.initPromise = this.initPixi();
+  }
+
+  private async initPixi() {
+    const app = new Application();
+    await app.init({
+      canvas: this.canvas,
+      width: Math.max(1, this.cssWidth),
+      height: Math.max(1, this.cssHeight),
+      resolution: this.dpr,
+      autoDensity: true,
+      autoStart: false,
+      antialias: true,
+      backgroundAlpha: 0,
+      preference: "webgl",
+    });
+
+    if (this.destroyed) {
+      app.destroy({ removeView: false }, { children: true });
+      return;
+    }
+
+    this.app = app;
+    app.stage.addChild(this.backgroundLayer);
+    app.stage.addChild(this.graphics);
+    app.stage.addChild(this.textLayer);
+    this.rebuildBackgroundSprites();
     this.resize();
-    this.render();
   }
 
   private generateColors(n: number): string[] {
-    return Array.from({ length: n }, (_, i) => `hsl(${(i / n) * 360}, 70%, 60%)`);
+    return Array.from({ length: n }, (_, i) => `#${Math.floor(0xffffff * (0.45 + 0.55 * Math.sin((i / n) * Math.PI))).toString(16).padStart(6, "0")}`);
   }
 
-  // Recompute live stats (combo, accuracy) up to currentTime
   private recomputeStatsUpTo(time: number) {
     this.statsScanIndex = 0;
     this.combo = 0;
@@ -239,7 +244,6 @@ export class ManiaReplayRenderer {
     this.urSumSq = 0;
     this.lastJudgment = 0;
     this.lastJudgmentTime = 0;
-    // Backward seek past the cursor — rescan frame cursor from 0.
     this.keyStateCursor = 0;
     this.advanceStats(time);
   }
@@ -251,19 +255,16 @@ export class ManiaReplayRenderer {
       if (event.time > time) break;
 
       if (event.judgment == null) {
-        // hold-break: combo reset only
         this.combo = 0;
         this.statsScanIndex++;
         continue;
       }
 
-      if (event.judgment > 0) {
-        this.judgmentCounts[event.judgment]++;
-      }
+      if (event.judgment > 0) this.judgmentCounts[event.judgment]++;
 
       if (event.judgment <= 5) {
         this.combo++;
-        if (this.combo > this.maxComboSoFar) this.maxComboSoFar = this.combo;
+        this.maxComboSoFar = Math.max(this.maxComboSoFar, this.combo);
         const offset = event.offsetMs;
         this.recentHitOffsets.push(offset);
         this.urSum += offset;
@@ -303,21 +304,22 @@ export class ManiaReplayRenderer {
     const n = this.recentHitOffsets.length;
     if (n < 2) return 0;
     const mean = this.urSum / n;
-    // sumSq/n - mean^2 can drift slightly negative on a 40-element rolling
-    // window; clamp before sqrt.
     const variance = Math.max(0, this.urSumSq / n - mean * mean);
     return Math.sqrt(variance) * 10;
   }
 
-  // --- Layout ---
+  private measureCanvas() {
+    const rect = this.canvas.getBoundingClientRect();
+    const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+    const dprCap = coarsePointer ? 1.5 : 2;
+    this.dpr = Math.min(window.devicePixelRatio || 1, dprCap);
+    this.cssWidth = rect.width;
+    this.cssHeight = rect.height;
+  }
 
-  // Invalidate cached layout/column/gradient data. Called on resize and
-  // scroll-speed change - any time `getLayout()` would return a different
-  // value. Cheap; the caches are rebuilt lazily on next render().
   private invalidateLayoutCache() {
     this.cachedLayout = null;
     this.cachedColumns = [];
-    this.cachedReceptorGradients = [];
   }
 
   private getLayout(): Layout {
@@ -325,11 +327,9 @@ export class ManiaReplayRenderer {
 
     const w = this.cssWidth;
     const h = this.cssHeight;
-
     const baseRatio = 0.25 + this.keyCount * 0.025;
     const playfieldWidth = Math.min(w * Math.min(baseRatio, 0.6), 50 * this.keyCount);
     const laneWidth = playfieldWidth / this.keyCount;
-
     const playfieldX = (w - playfieldWidth) / 2;
     const judgmentY = h * 0.88;
     const noteHeight = Math.max(10, h * 0.02);
@@ -338,43 +338,24 @@ export class ManiaReplayRenderer {
 
     const layout: Layout = { w, h, playfieldWidth, playfieldX, laneWidth, judgmentY, noteHeight, receptorHeight, pixelsPerMs };
     this.cachedLayout = layout;
-
-    // Build per-column (x, width) table in the same pass so every hot-path
-    // caller can just index into cachedColumns[col].
-    const cols: { x: number; width: number }[] = new Array(this.keyCount);
-    for (let i = 0; i < this.keyCount; i++) {
-      cols[i] = { x: playfieldX + i * laneWidth, width: laneWidth };
-    }
-    this.cachedColumns = cols;
-    this.cachedReceptorGradients = new Array(this.keyCount).fill(null);
-
+    this.cachedColumns = Array.from({ length: this.keyCount }, (_, i) => ({
+      x: playfieldX + i * laneWidth,
+      width: laneWidth,
+    }));
     return layout;
   }
 
-  // Get the X position and width of a specific column. Reads from the
-  // layout cache built in getLayout(); caller must have called getLayout()
-  // first (all render() entry points do).
   private getColumnLayout(col: number, layout: Layout): { x: number; width: number } {
-    const cached = this.cachedColumns[col];
-    if (cached) return cached;
-    // Fallback if the cache wasn't built yet (shouldn't happen on the render
-    // path, but be defensive).
-    return { x: layout.playfieldX + col * layout.laneWidth, width: layout.laneWidth };
+    return this.cachedColumns[col] ?? { x: layout.playfieldX + col * layout.laneWidth, width: layout.laneWidth };
   }
 
-  // --- Public API ---
-
   resize() {
-    const rect = this.canvas.getBoundingClientRect();
-    const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
-    const dprCap = coarsePointer ? 1.5 : 2;
-    const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
-    this.cssWidth = rect.width;
-    this.cssHeight = rect.height;
-    this.canvas.width = rect.width * dpr;
-    this.canvas.height = rect.height * dpr;
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.measureCanvas();
     this.invalidateLayoutCache();
+    if (this.app) {
+      this.app.renderer.resize(Math.max(1, this.cssWidth), Math.max(1, this.cssHeight), this.dpr);
+      this.positionBackgroundSprites();
+    }
     this.render();
   }
 
@@ -387,7 +368,10 @@ export class ManiaReplayRenderer {
 
   pause() {
     this._isPlaying = false;
-    if (this.animFrameId) { cancelAnimationFrame(this.animFrameId); this.animFrameId = 0; }
+    if (this.animFrameId) {
+      cancelAnimationFrame(this.animFrameId);
+      this.animFrameId = 0;
+    }
   }
 
   get isPlaying() { return this._isPlaying; }
@@ -395,10 +379,6 @@ export class ManiaReplayRenderer {
   seek(timeMs: number) {
     this.currentTime = Math.max(0, Math.min(timeMs, this.totalDuration));
     this.recomputeStatsUpTo(this.currentTime);
-    // Baseline the next tick's dt from right after the seek so the next rAF
-    // doesn't push currentTime forward by the (possibly large) gap between the
-    // previous tick and this seek — that gap is what caused the post-scrub
-    // note teleport/jiggle.
     this.lastRenderTime = performance.now();
     this.render();
   }
@@ -406,7 +386,6 @@ export class ManiaReplayRenderer {
   setSpeed(speed: number) { this.playbackSpeed = speed; }
 
   setScrollSpeed(speed: number) {
-    // osu!mania scroll speed 1-40 → pixels per ms
     this.scrollSpeed = 0.1 + (speed / 40) * 0.8;
     this.invalidateLayoutCache();
     if (!this._isPlaying) this.render();
@@ -423,6 +402,7 @@ export class ManiaReplayRenderer {
     this.previousBackgroundImage = shouldFade ? this.backgroundImage : null;
     this.backgroundImage = img;
     this.backgroundTransitionStartedAt = shouldFade ? performance.now() : 0;
+    this.rebuildBackgroundSprites();
     if (!this._isPlaying) this.render();
   }
 
@@ -433,17 +413,12 @@ export class ManiaReplayRenderer {
 
   setExternalClock(cb: (() => { time: number; stalled: boolean } | null) | null) {
     this.externalClock = cb;
-    // Reset wall-clock baseline so a later fallback tick doesn't accumulate a
-    // stale dt from before the clock switch.
     this.lastRenderTime = performance.now();
   }
 
   get time() { return this.currentTime; }
   get duration() { return this.totalDuration; }
-  // Wall-clock adjusted duration for display (HT makes it longer, DT shorter)
   get displayDuration() { return this.totalDuration / this.modRate; }
-
-  // --- Tick loop ---
 
   private tick() {
     if (!this._isPlaying) return;
@@ -451,21 +426,14 @@ export class ManiaReplayRenderer {
     const external = this.externalClock?.() ?? null;
 
     if (external) {
-      // Drive from an external clock (audio element). If stalled, freeze
-      // currentTime so we wait for the audio to catch up — this is what makes
-      // mid-replay seeks on bad internet stay in sync, and what keeps a
-      // backgrounded tab from drifting on return.
       if (!external.stalled) {
         const newTime = Math.max(0, Math.min(external.time, this.totalDuration));
         if (newTime > this.currentTime) {
           this.currentTime = newTime;
         } else if (newTime < this.currentTime - 50) {
-          // Significant backward jump (e.g., user scrubbed backwards) —
-          // rescanning stats from the start is the only correct option.
           this.currentTime = newTime;
           this.recomputeStatsUpTo(this.currentTime);
         }
-        // Sub-50ms backward jitter is ignored to keep combo/stats monotonic.
       }
     } else {
       const dt = (now - this.lastRenderTime) * this.playbackSpeed * this.modRate;
@@ -473,88 +441,55 @@ export class ManiaReplayRenderer {
     }
 
     this.lastRenderTime = now;
-    if (this.currentTime >= this.totalDuration) { this.currentTime = this.totalDuration; this._isPlaying = false; }
+    if (this.currentTime >= this.totalDuration) {
+      this.currentTime = this.totalDuration;
+      this._isPlaying = false;
+    }
     this.advanceStats();
     this.render();
     if (this._isPlaying) this.animFrameId = requestAnimationFrame(() => this.tick());
   }
 
-  // --- Rendering ---
-
   private render() {
+    if (!this.app) return;
+
     const layout = this.getLayout();
-    // Cache once per frame; receptor + HUD both read it.
     this.currentKeyState = this.getCurrentKeyState();
-    const ctx = this.ctx;
-    ctx.clearRect(0, 0, layout.w, layout.h);
+    this.graphics.clear();
+    this.clearTextLayer();
 
-    this.renderBackground(ctx, layout);
-    this.renderPlayfield(ctx, layout);
-    this.renderSegmentOverlays(ctx, layout);
-
-    this.renderNotes(ctx, layout);
-    this.renderJudgmentLine(ctx, layout);
-    this.renderReceptors(ctx, layout);
-    this.renderHUD(ctx, layout);
+    this.renderBackground(layout);
+    this.renderPlayfield(layout);
+    this.renderSegmentOverlays(layout);
+    this.renderNotes(layout);
+    this.renderJudgmentLine(layout);
+    this.renderReceptors(layout);
+    this.renderHUD(layout);
+    this.app.render();
   }
 
-  private renderBackground(ctx: CanvasRenderingContext2D, layout: Layout) {
+  private renderBackground(layout: Layout) {
     if (this.transparentBackground) return;
 
+    const g = this.graphics;
     const { w, h } = layout;
+    this.fillRect(0, 0, w, h, "#0a0a18", 1);
+    this.fillRect(0, h * 0.34, w, h * 0.33, "#1a1016", 0.8);
+    this.fillRect(0, h * 0.66, w, h * 0.34, "#0c0c14", 1);
+
     const transitionProgress = this.backgroundTransitionStartedAt > 0
       ? Math.min(1, (performance.now() - this.backgroundTransitionStartedAt) / BACKGROUND_FADE_DURATION_MS)
       : 1;
-
-    const drawBackgroundImage = (image: HTMLImageElement, alpha = 1) => {
-      if (image.width <= 0 || image.height <= 0) return;
-      const imgAspect = image.width / image.height;
-      const canvasAspect = w / h;
-      let dw: number, dh: number, dx: number, dy: number;
-
-      if (imgAspect > canvasAspect) {
-        dh = h; dw = h * imgAspect;
-        dx = (w - dw) / 2; dy = 0;
-      } else {
-        dw = w; dh = w / imgAspect;
-        dx = 0; dy = (h - dh) / 2;
-      }
-
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.drawImage(image, dx, dy, dw, dh);
-      ctx.restore();
-    };
-
-    const drawFallback = () => {
-      const grad = ctx.createLinearGradient(0, 0, 0, h);
-      grad.addColorStop(0, "#0a0a18");
-      grad.addColorStop(0.5, "#1a1016");
-      grad.addColorStop(1, "#0c0c14");
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, w, h);
-    };
-
-    if (this.previousBackgroundImage && transitionProgress < 1) {
-      drawBackgroundImage(this.previousBackgroundImage, 1);
-      if (this.backgroundImage) {
-        drawBackgroundImage(this.backgroundImage, transitionProgress);
-      }
-    } else if (this.backgroundImage) {
-      if (transitionProgress < 1) {
-        drawFallback();
-        drawBackgroundImage(this.backgroundImage, transitionProgress);
-      } else {
-        drawBackgroundImage(this.backgroundImage, 1);
-      }
-    } else {
-      drawFallback();
-    }
-
-    ctx.fillStyle = `rgba(0, 0, 0, ${this.backgroundDim / 100})`;
-    ctx.fillRect(0, 0, w, h);
+    if (this.previousBackgroundSprite) this.previousBackgroundSprite.alpha = 1 - transitionProgress;
+    if (this.backgroundSprite) this.backgroundSprite.alpha = transitionProgress;
+    g.rect(0, 0, w, h).fill({ color: 0x000000, alpha: this.backgroundDim / 100 });
 
     if (transitionProgress >= 1) {
+      if (this.previousBackgroundSprite) {
+        this.backgroundLayer.removeChild(this.previousBackgroundSprite);
+        this.previousBackgroundSprite.destroy({ texture: false, textureSource: false });
+      }
+      this.previousBackgroundSprite = null;
       this.previousBackgroundImage = null;
       this.backgroundTransitionStartedAt = 0;
     } else if (!this._isPlaying) {
@@ -564,57 +499,37 @@ export class ManiaReplayRenderer {
     }
   }
 
-  private renderPlayfield(ctx: CanvasRenderingContext2D, layout: Layout) {
+  private renderPlayfield(layout: Layout) {
     const { w, h, playfieldX, playfieldWidth } = layout;
 
-    // Darken areas outside the playfield
-    ctx.fillStyle = "rgba(0, 0, 0, 0.24)";
-    ctx.fillRect(0, 0, playfieldX, h);
-    ctx.fillRect(playfieldX + playfieldWidth, 0, w - playfieldX - playfieldWidth, h);
+    this.fillRect(0, 0, playfieldX, h, "#000000", 0.24);
+    this.fillRect(playfieldX + playfieldWidth, 0, w - playfieldX - playfieldWidth, h, "#000000", 0.24);
+    this.fillRect(playfieldX, 0, playfieldWidth, h, "#000000", 0.12);
 
-    // Apply a subtle base shade across the playfield so the center doesn't read
-    // much brighter than the side gutters once the lane overlays are added.
-    ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
-    ctx.fillRect(playfieldX, 0, playfieldWidth, h);
-
-    // Lane backgrounds
     for (let col = 0; col < this.keyCount; col++) {
       const { x, width } = this.getColumnLayout(col, layout);
-      ctx.fillStyle = col % 2 === 0 ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.04)";
-      ctx.fillRect(x, 0, width, h);
+      this.fillRect(x, 0, width, h, "#ffffff", col % 2 === 0 ? 0.02 : 0.04);
     }
 
-    // Lane dividers
-    ctx.strokeStyle = "rgba(255,255,255,0.08)";
-    ctx.lineWidth = 1;
     for (let i = 0; i <= this.keyCount; i++) {
-      const { x } = i < this.keyCount ? this.getColumnLayout(i, layout) : { x: playfieldX + playfieldWidth };
-      ctx.beginPath();
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, h);
-      ctx.stroke();
+      const x = i < this.keyCount ? this.getColumnLayout(i, layout).x : playfieldX + playfieldWidth;
+      this.line(x, 0, x, h, "#ffffff", 0.08, 1);
     }
-
-    ctx.strokeStyle = "rgba(255,255,255,0.15)";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(playfieldX, 0, playfieldWidth, h);
+    this.rect(playfieldX, 0, playfieldWidth, h, "#ffffff", 0.15, 2);
   }
 
-  private renderNotes(ctx: CanvasRenderingContext2D, layout: Layout) {
+  private renderNotes(layout: Layout) {
     const { judgmentY, noteHeight, pixelsPerMs, h } = layout;
-
     if (this.notes.length === 0) return;
 
     const timeWindow = judgmentY / pixelsPerMs;
     const visibleMinTime = this.currentTime - timeWindow * 0.15;
     const visibleMaxTime = this.currentTime + timeWindow * 1.1;
-
-    let startIdx = this.binarySearchNoteIndex(visibleMinTime - this.maxHoldDuration);
+    const startIdx = this.binarySearchNoteIndex(visibleMinTime - this.maxHoldDuration);
 
     for (let i = startIdx; i < this.notes.length; i++) {
       const note = this.notes[i];
       if (note.time > visibleMaxTime) break;
-
       const col = note.column;
       if (col >= this.keyCount) continue;
 
@@ -622,13 +537,7 @@ export class ManiaReplayRenderer {
       const headResolved = noteState.headTime <= this.currentTime;
       const tailResolved = noteState.tailTime != null && noteState.tailTime <= this.currentTime;
 
-      if (headResolved) {
-        if (note.isHold && !tailResolved) {
-          // Keep rendering the active LN until the tail resolves.
-        } else {
-          continue;
-        }
-      }
+      if (headResolved && (!note.isHold || tailResolved)) continue;
 
       const { x: colX, width: colWidth } = this.getColumnLayout(col, layout);
       const x = colX + 3;
@@ -648,76 +557,34 @@ export class ManiaReplayRenderer {
           this.currentTime < (noteState.tailTime ?? note.endTime) &&
           !stillPhysicallyHeld;
 
-        if (!shouldLetPassLine) {
-          headY = Math.min(headY, judgmentY);
-        }
+        if (!shouldLetPassLine) headY = Math.min(headY, judgmentY);
         const top = Math.min(headY, tailY);
         let bottom = Math.max(headY, tailY);
-
-        if (!shouldLetPassLine) {
-          bottom = Math.min(bottom, judgmentY);
-        }
-
+        if (!shouldLetPassLine) bottom = Math.min(bottom, judgmentY);
         if (top > h + 20 || bottom < -20) continue;
 
-        ctx.globalAlpha = releasedEarly ? 0.45 : 1;
-
-        // Hold body
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.roundRect(x, top, barWidth, bottom - top, 2);
-        ctx.fill();
-        ctx.strokeStyle = color;
-        ctx.globalAlpha = releasedEarly ? 0.55 : 1;
-        ctx.lineWidth = 1;
-        ctx.stroke();
-
-        // Hold head
-        ctx.globalAlpha = releasedEarly ? 0.65 : 1;
-        if (bottom > top + noteHeight) {
-          ctx.fillStyle = color;
-          ctx.beginPath();
-          ctx.roundRect(x, bottom - noteHeight, barWidth, noteHeight, 4);
-          ctx.fill();
-        }
-
-        // Hold tail
-        ctx.beginPath();
-        ctx.fillStyle = color;
-        ctx.roundRect(x, top, barWidth, noteHeight / 2, 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
+        const bodyAlpha = releasedEarly ? 0.45 : 1;
+        const strokeAlpha = releasedEarly ? 0.55 : 1;
+        const headAlpha = releasedEarly ? 0.65 : 1;
+        this.roundRect(x, top, barWidth, bottom - top, 2, color, bodyAlpha);
+        this.rect(x, top, barWidth, bottom - top, color, strokeAlpha, 1);
+        if (bottom > top + noteHeight) this.roundRect(x, bottom - noteHeight, barWidth, noteHeight, 4, color, headAlpha);
+        this.roundRect(x, top, barWidth, noteHeight / 2, 2, color, headAlpha);
       } else {
         if (note.time < this.currentTime - 10 && !headResolved) continue;
 
         const noteY = judgmentY - (note.time - this.currentTime) * pixelsPerMs;
         if (noteY > h + 20 || noteY < -20) continue;
 
-        ctx.fillStyle = color;
-        ctx.globalAlpha = 1;
-        ctx.beginPath();
-        ctx.roundRect(x, noteY - noteHeight, barWidth, noteHeight, 4);
-        ctx.fill();
-
-        ctx.save();
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 5;
-        ctx.fill();
-        ctx.restore();
-
-        ctx.globalAlpha = 0.2;
-        ctx.fillStyle = "#fff";
-        ctx.beginPath();
-        ctx.roundRect(x + 2, noteY - noteHeight + 1, barWidth - 4, noteHeight / 3, 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
+        this.roundRect(x, noteY - noteHeight, barWidth, noteHeight, 4, color, 1);
+        this.roundRect(x + 1, noteY - noteHeight, barWidth - 2, noteHeight, 4, color, 0.32);
+        this.roundRect(x + 2, noteY - noteHeight + 1, barWidth - 4, noteHeight / 3, 2, "#ffffff", 0.2);
       }
     }
   }
 
-  private renderSegmentOverlays(ctx: CanvasRenderingContext2D, layout: Layout) {
+  private renderSegmentOverlays(layout: Layout) {
     const { judgmentY, pixelsPerMs, h } = layout;
-
     if (this.frames.length === 0 || !this.showInputOverlay) return;
 
     const timeWindow = judgmentY / pixelsPerMs;
@@ -731,7 +598,6 @@ export class ManiaReplayRenderer {
 
     if (hasNotes) {
       const startIdx = this.binarySearchNoteIndex(visibleMinTime - this.maxHoldDuration);
-
       for (let i = startIdx; i < this.notes.length; i++) {
         const note = this.notes[i];
         if (note.time > visibleMaxTime) break;
@@ -740,26 +606,18 @@ export class ManiaReplayRenderer {
         const noteState = this.noteStates[i];
         const headResolved = noteState.headTime <= this.currentTime;
         const tailResolved = noteState.tailTime != null && noteState.tailTime <= this.currentTime;
-        if (headResolved && tailResolved) {
-          continue;
-        }
+        if (headResolved && tailResolved) continue;
 
         let headY = judgmentY - (note.time - this.currentTime) * pixelsPerMs;
         const tailY = judgmentY - (note.endTime - this.currentTime) * pixelsPerMs;
-        if (headResolved) {
-          headY = Math.min(headY, judgmentY);
-        }
+        if (headResolved) headY = Math.min(headY, judgmentY);
 
         const top = Math.min(headY, tailY);
         const bottom = Math.min(Math.max(headY, tailY), judgmentY);
         if (top > h + 20 || bottom < -20 || bottom - top <= 0) continue;
-
         holdOcclusionRanges[note.column].push({ top, bottom });
       }
-
-      holdOcclusionRanges.forEach((ranges) => {
-        ranges.sort((a, b) => a.top - b.top);
-      });
+      holdOcclusionRanges.forEach((ranges) => ranges.sort((a, b) => a.top - b.top));
     }
 
     for (let col = 0; col < this.keyCount; col++) {
@@ -770,8 +628,8 @@ export class ManiaReplayRenderer {
       const occlusions = holdOcclusionRanges[col];
 
       for (const seg of this.segments[col]) {
-        if (seg.end < this.currentTime - timeWindow * 0.15) continue;
-        if (seg.start > this.currentTime + timeWindow * 1.1) break;
+        if (seg.end < visibleMinTime) continue;
+        if (seg.start > visibleMaxTime) break;
 
         const startY = judgmentY - (seg.start - this.currentTime) * pixelsPerMs;
         const endY = judgmentY - (seg.end - this.currentTime) * pixelsPerMs;
@@ -785,22 +643,10 @@ export class ManiaReplayRenderer {
         const drawOverlayPiece = (pieceTop: number, pieceBottom: number) => {
           const barH = Math.max(pieceBottom - pieceTop, 2);
           if (barH <= 0) return;
-
-          ctx.fillStyle = hasNotes ? "#a855f7" : color;
-          ctx.globalAlpha = hasNotes ? 0.18 : 0.7;
-          ctx.beginPath();
-          ctx.roundRect(x, pieceTop, barWidth, barH, 3);
-          ctx.fill();
-
+          this.roundRect(x, pieceTop, barWidth, barH, 3, hasNotes ? "#a855f7" : color, hasNotes ? 0.18 : 0.7);
           if (pieceTop < judgmentY && pieceBottom > judgmentY - 20) {
-            ctx.globalAlpha = 0.08;
-            ctx.save();
-            ctx.shadowColor = "#a855f7";
-            ctx.shadowBlur = 12;
-            ctx.fillRect(x, pieceTop, barWidth, barH);
-            ctx.restore();
+            this.fillRect(x, pieceTop, barWidth, barH, "#a855f7", 0.08);
           }
-          ctx.globalAlpha = 1;
         };
 
         if (!occlusions.length) {
@@ -811,37 +657,21 @@ export class ManiaReplayRenderer {
         for (const range of occlusions) {
           if (range.bottom <= cursor) continue;
           if (range.top >= bottom) break;
-
-          if (range.top > cursor) {
-            drawOverlayPiece(cursor, Math.min(range.top, bottom));
-          }
+          if (range.top > cursor) drawOverlayPiece(cursor, Math.min(range.top, bottom));
           cursor = Math.max(cursor, range.bottom);
           if (cursor >= bottom) break;
         }
-
-        if (cursor < bottom) {
-          drawOverlayPiece(cursor, bottom);
-        }
+        if (cursor < bottom) drawOverlayPiece(cursor, bottom);
       }
     }
   }
 
-  private renderJudgmentLine(ctx: CanvasRenderingContext2D, layout: Layout) {
+  private renderJudgmentLine(layout: Layout) {
     const { playfieldX, playfieldWidth, judgmentY } = layout;
-
-    ctx.save();
-    ctx.shadowColor = "#ffffff";
-    ctx.shadowBlur = 8;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(playfieldX, judgmentY);
-    ctx.lineTo(playfieldX + playfieldWidth, judgmentY);
-    ctx.stroke();
-    ctx.restore();
+    this.line(playfieldX, judgmentY, playfieldX + playfieldWidth, judgmentY, "#ffffff", 0.82, 2);
   }
 
-  private renderReceptors(ctx: CanvasRenderingContext2D, layout: Layout) {
+  private renderReceptors(layout: Layout) {
     const { judgmentY, receptorHeight } = layout;
     const currentState = this.currentKeyState;
 
@@ -849,82 +679,63 @@ export class ManiaReplayRenderer {
       const { x, width: colWidth } = this.getColumnLayout(col, layout);
       const pressed = (currentState & (1 << col)) !== 0;
       const color = this.colors[col];
-
-      if (pressed) {
-        this.receptorFlashTimestamps[col] = this.currentTime;
-      }
+      if (pressed) this.receptorFlashTimestamps[col] = this.currentTime;
 
       const timeSinceFlash = this.currentTime - (this.receptorFlashTimestamps[col] || 0);
-      const flashIntensity = pressed ? 1.0 : Math.max(0, 1.0 - timeSinceFlash / 120);
+      const flashIntensity = pressed ? 1 : Math.max(0, 1 - timeSinceFlash / 120);
 
       if (flashIntensity > 0) {
-        ctx.globalAlpha = flashIntensity;
-        ctx.fillStyle = this.getReceptorGradient(ctx, col, x, judgmentY, color);
-        ctx.fillRect(x, judgmentY - 80, colWidth, 95);
-
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.roundRect(x + 3, judgmentY + 2, colWidth - 6, receptorHeight, 2);
-        ctx.fill();
-        ctx.globalAlpha = 1;
+        this.receptorBeam(x, judgmentY - 80, colWidth, 95, color, flashIntensity);
+        this.roundRect(x + 3, judgmentY + 2, colWidth - 6, receptorHeight, 2, color, flashIntensity);
       } else {
-        ctx.fillStyle = "rgba(255,255,255,0.12)";
-        ctx.beginPath();
-        ctx.roundRect(x + 3, judgmentY + 2, colWidth - 6, receptorHeight, 2);
-        ctx.fill();
+        this.roundRect(x + 3, judgmentY + 2, colWidth - 6, receptorHeight, 2, "#ffffff", 0.12);
       }
     }
   }
 
-  private renderHUD(ctx: CanvasRenderingContext2D, layout: Layout) {
+  private renderHUD(layout: Layout) {
     const { w, h, playfieldX, playfieldWidth, judgmentY } = layout;
     const playfieldCenterX = playfieldX + playfieldWidth / 2;
-    const playfieldMiddleY = judgmentY * 0.5; // vertical center of the play area
+    const playfieldMiddleY = judgmentY * 0.5;
 
-    // --- Judgment text (centered in playfield, fades out) ---
     if (this.lastJudgment > 0) {
       const timeSince = this.currentTime - this.lastJudgmentTime;
       if (timeSince < 400) {
-        const alpha = Math.max(0, 1.0 - timeSince / 400);
-        const jColor = JUDGMENT_COLORS[this.lastJudgment];
-        const label = JUDGMENT_LABELS[this.lastJudgment];
-        const offsetY = -timeSince * 0.03;
-
-        ctx.save();
-        ctx.font = `bold ${Math.max(16, h * 0.035)}px Torus, sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillStyle = jColor;
-        ctx.globalAlpha = alpha;
-        ctx.fillText(label, playfieldCenterX, playfieldMiddleY + offsetY);
-        ctx.globalAlpha = 1;
-        ctx.restore();
+        const alpha = Math.max(0, 1 - timeSince / 400);
+        this.addText(
+          JUDGMENT_LABELS[this.lastJudgment],
+          playfieldCenterX,
+          playfieldMiddleY - timeSince * 0.03,
+          {
+            fontSize: Math.max(16, h * 0.035),
+            fill: JUDGMENT_COLORS[this.lastJudgment],
+            fontWeight: "700",
+            anchorX: 0.5,
+            anchorY: 0.5,
+            alpha,
+          },
+        );
       }
     }
 
-    // --- Combo (centered in playfield, above judgment) ---
     if (this.combo > 0) {
-      ctx.save();
-      const fontSize = Math.max(22, h * 0.05);
-      ctx.font = `bold ${fontSize}px Torus, sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
-      ctx.fillText(`${this.combo}x`, playfieldCenterX, playfieldMiddleY - h * 0.06);
-      ctx.restore();
+      this.addText(`${this.combo}x`, playfieldCenterX, playfieldMiddleY - h * 0.06, {
+        fontSize: Math.max(22, h * 0.05),
+        fill: "#ffffff",
+        alpha: 0.85,
+        fontWeight: "700",
+        anchorX: 0.5,
+        anchorY: 0.5,
+      });
     }
 
-    // --- Live accuracy (top-right outside the playfield) ---
-    const acc = this.getAccuracy();
-    ctx.save();
-    ctx.font = `bold ${Math.max(16, h * 0.032)}px Torus, sans-serif`;
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
-    ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
-    ctx.fillText(`${acc.toFixed(2)}%`, playfieldX + playfieldWidth + 16, 16);
-    ctx.restore();
+    this.addText(`${this.getAccuracy().toFixed(2)}%`, playfieldX + playfieldWidth + 16, 16, {
+      fontSize: Math.max(16, h * 0.032),
+      fill: "#ffffff",
+      alpha: 0.85,
+      fontWeight: "700",
+    });
 
-    // --- Left-side key overlay + hand misses ---
     const currentState = this.currentKeyState;
     const keyBoxSize = 32;
     const keyGap = 6;
@@ -937,116 +748,86 @@ export class ManiaReplayRenderer {
       const pressed = (currentState & (1 << col)) !== 0;
       const color = this.colors[col];
 
-      ctx.fillStyle = "rgba(10, 10, 18, 0.82)";
-      ctx.fillRect(x, keyRowY, keyBoxSize, keyBoxSize);
-      ctx.strokeStyle = "rgba(255,255,255,0.12)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x, keyRowY, keyBoxSize, keyBoxSize);
-
-      if (pressed) {
-        ctx.fillStyle = color;
-        ctx.globalAlpha = 0.95;
-        ctx.fillRect(x + 1, keyRowY + 1, keyBoxSize - 2, keyBoxSize - 2);
-      } else {
-        ctx.fillStyle = this.colorWithAlpha(color, 0.18);
-        ctx.fillRect(x + 1, keyRowY + 1, keyBoxSize - 2, keyBoxSize - 2);
-      }
-
-      ctx.globalAlpha = 1;
-      ctx.font = "bold 14px Torus, sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = pressed ? "rgba(10,10,18,0.9)" : "rgba(255,255,255,0.75)";
-      ctx.fillText(String(col + 1), x + keyBoxSize / 2, keyRowY + keyBoxSize / 2 + 0.5);
+      this.fillRect(x, keyRowY, keyBoxSize, keyBoxSize, "#0a0a12", 0.82);
+      this.rect(x, keyRowY, keyBoxSize, keyBoxSize, "#ffffff", 0.12, 1);
+      this.fillRect(x + 1, keyRowY + 1, keyBoxSize - 2, keyBoxSize - 2, color, pressed ? 0.95 : 0.18);
+      this.addText(String(col + 1), x + keyBoxSize / 2, keyRowY + keyBoxSize / 2 + 0.5, {
+        fontSize: 14,
+        fill: pressed ? "#0a0a12" : "#ffffff",
+        alpha: pressed ? 0.9 : 0.75,
+        fontWeight: "700",
+        anchorX: 0.5,
+        anchorY: 0.5,
+      });
     }
 
-    const missStats = [
+    [
       { label: "L MISS", value: String(this.leftHandMisses), color: "#5a8fff" },
       { label: "R MISS", value: String(this.rightHandMisses), color: "#de31ae" },
-    ];
-    missStats.forEach((item, index) => {
+    ].forEach((item, index) => {
       const x = keyRowX + index * 68;
       const y = keyRowY + keyBoxSize + 10;
-      ctx.fillStyle = "rgba(10, 10, 18, 0.78)";
-      ctx.fillRect(x, y, 60, 36);
-      ctx.fillStyle = item.color;
-      ctx.fillRect(x, y, 3, 36);
-      ctx.font = "bold 9px Torus, sans-serif";
-      ctx.textAlign = "left";
-      ctx.textBaseline = "top";
-      ctx.fillStyle = "rgba(255,255,255,0.58)";
-      ctx.fillText(item.label, x + 9, y + 5);
-      ctx.font = "bold 16px Torus, sans-serif";
-      ctx.textBaseline = "bottom";
-      ctx.fillStyle = "rgba(255,255,255,0.95)";
-      ctx.fillText(item.value, x + 9, y + 32);
+      this.fillRect(x, y, 60, 36, "#0a0a12", 0.78);
+      this.fillRect(x, y, 3, 36, item.color, 1);
+      this.addText(item.label, x + 9, y + 5, { fontSize: 9, fill: "#ffffff", alpha: 0.58, fontWeight: "700" });
+      this.addText(item.value, x + 9, y + 28, { fontSize: 16, fill: "#ffffff", alpha: 0.95, fontWeight: "700", anchorY: 1 });
     });
 
-    // --- Right-side live judgment counter ---
     const judgmentCounterX = playfieldX + playfieldWidth + 16;
     const judgmentCounterY = 52;
-    const displayCounts = this.judgmentCounts;
-    const judgmentItems = [
-      { label: "MAX", value: displayCounts[1], color: JUDGMENT_COLORS[1] },
-      { label: "300", value: displayCounts[2], color: JUDGMENT_COLORS[2] },
-      { label: "200", value: displayCounts[3], color: JUDGMENT_COLORS[3] },
-      { label: "100", value: displayCounts[4], color: JUDGMENT_COLORS[4] },
-      { label: "50", value: displayCounts[5], color: JUDGMENT_COLORS[5] },
-      { label: "MISS", value: displayCounts[6], color: JUDGMENT_COLORS[6] },
-    ];
-
-    judgmentItems.forEach((item, index) => {
+    [
+      { label: "MAX", value: this.judgmentCounts[1], color: JUDGMENT_COLORS[1] },
+      { label: "300", value: this.judgmentCounts[2], color: JUDGMENT_COLORS[2] },
+      { label: "200", value: this.judgmentCounts[3], color: JUDGMENT_COLORS[3] },
+      { label: "100", value: this.judgmentCounts[4], color: JUDGMENT_COLORS[4] },
+      { label: "50", value: this.judgmentCounts[5], color: JUDGMENT_COLORS[5] },
+      { label: "MISS", value: this.judgmentCounts[6], color: JUDGMENT_COLORS[6] },
+    ].forEach((item, index) => {
       const y = judgmentCounterY + index * 18;
-      ctx.font = "bold 10px Torus, sans-serif";
-      ctx.textAlign = "left";
-      ctx.textBaseline = "top";
-      ctx.fillStyle = item.color;
-      ctx.fillText(item.label, judgmentCounterX, y);
-      ctx.textAlign = "right";
-      ctx.fillStyle = "rgba(255,255,255,0.88)";
-      ctx.fillText(String(item.value), judgmentCounterX + 52, y);
+      this.addText(item.label, judgmentCounterX, y, { fontSize: 10, fill: item.color, fontWeight: "700" });
+      this.addText(String(item.value), judgmentCounterX + 52, y, {
+        fontSize: 10,
+        fill: "#ffffff",
+        alpha: 0.88,
+        fontWeight: "700",
+        anchorX: 1,
+      });
     });
 
-    // --- Bottom-center UR bar ---
     const urBarWidth = Math.min(playfieldWidth * 0.68, 180);
     const urBarX = playfieldCenterX - urBarWidth / 2;
     const urBarY = h - 26;
     const urRange = this.hitWindows.meh;
 
-    ctx.fillStyle = "rgba(255,255,255,0.08)";
-    ctx.fillRect(urBarX, urBarY, urBarWidth, 3);
-    ctx.fillStyle = "rgba(255,255,255,0.25)";
-    ctx.fillRect(playfieldCenterX - 1, urBarY - 4, 2, 11);
-
+    this.fillRect(urBarX, urBarY, urBarWidth, 3, "#ffffff", 0.08);
+    this.fillRect(playfieldCenterX - 1, urBarY - 4, 2, 11, "#ffffff", 0.25);
     this.recentHitOffsets.forEach((offset, index) => {
       const normalized = Math.max(-1, Math.min(1, offset / urRange));
       const x = playfieldCenterX + normalized * (urBarWidth / 2);
       const alpha = 0.2 + ((index + 1) / this.recentHitOffsets.length) * 0.8;
-      ctx.fillStyle = this.colorWithAlpha("#b3f5ff", alpha);
-      ctx.fillRect(x - 1.5, urBarY - 3, 3, 9);
+      this.fillRect(x - 1.5, urBarY - 3, 3, 9, "#b3f5ff", alpha);
+    });
+    this.addText(`UR ${this.getUr().toFixed(0)}`, playfieldCenterX, urBarY - 6, {
+      fontSize: 10,
+      fill: "#ffffff",
+      alpha: 0.72,
+      fontWeight: "700",
+      anchorX: 0.5,
+      anchorY: 1,
     });
 
-    ctx.font = "bold 10px Torus, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "bottom";
-    ctx.fillStyle = "rgba(255,255,255,0.72)";
-    ctx.fillText(`UR ${this.getUr().toFixed(0)}`, playfieldCenterX, urBarY - 6);
-
-    // --- Time display (bottom-left, wall-clock adjusted) ---
-    ctx.fillStyle = "rgba(255,255,255,0.4)";
-    ctx.font = "11px Torus, sans-serif";
-    ctx.textAlign = "left";
     const wallTime = this.currentTime / this.modRate;
     const mins = Math.floor(wallTime / 60000);
     const secs = String(Math.floor((wallTime % 60000) / 1000)).padStart(2, "0");
-    ctx.fillText(`${mins}:${secs}`, 8, h - 8);
-
-    // Speed display (bottom-right)
-    ctx.textAlign = "right";
-    ctx.fillText(`${this.playbackSpeed * this.modRate}x`, w - 8, h - 8);
+    this.addText(`${mins}:${secs}`, 8, h - 8, { fontSize: 11, fill: "#ffffff", alpha: 0.4, anchorY: 1 });
+    this.addText(`${this.playbackSpeed * this.modRate}x`, w - 8, h - 8, {
+      fontSize: 11,
+      fill: "#ffffff",
+      alpha: 0.4,
+      anchorX: 1,
+      anchorY: 1,
+    });
   }
-
-  // --- Utilities ---
 
   private getCurrentKeyState(): number {
     const t = this.currentTime;
@@ -1054,11 +835,7 @@ export class ManiaReplayRenderer {
     if (f.length === 0) return 0;
     let cursor = this.keyStateCursor;
     if (cursor >= f.length) cursor = f.length - 1;
-    // Advance forward while the next frame is still behind currentTime.
     while (cursor + 1 < f.length && f[cursor + 1].time <= t) cursor++;
-    // Rewind if we somehow ended up past currentTime (small backward jitter
-    // from external-clock corrections that aren't large enough to trip the
-    // >50ms recomputeStatsUpTo path).
     while (cursor > 0 && f[cursor].time > t) cursor--;
     this.keyStateCursor = cursor;
     return f[cursor].keyState;
@@ -1075,7 +852,8 @@ export class ManiaReplayRenderer {
   }
 
   private binarySearchNoteIndex(targetTime: number): number {
-    let lo = 0, hi = this.notes.length - 1;
+    let lo = 0;
+    let hi = this.notes.length - 1;
     while (lo < hi) {
       const mid = (lo + hi) >> 1;
       if (this.notes[mid].time < targetTime) lo = mid + 1;
@@ -1084,34 +862,151 @@ export class ManiaReplayRenderer {
     return lo;
   }
 
-  private colorWithAlpha(hexColor: string, alpha: number): string {
-    const { r, g, b } = parseHexColor(hexColor);
-    return `rgba(${r},${g},${b},${alpha})`;
+  private fillRect(x: number, y: number, w: number, h: number, color: string, alpha: number) {
+    if (w <= 0 || h <= 0) return;
+    this.graphics.rect(x, y, w, h).fill({ color: hexToNumber(color), alpha });
   }
 
-  // Receptor beam gradient. Cached per column at flashIntensity=1; live
-  // intensity is applied via ctx.globalAlpha in the caller. Invalidated on
-  // layout change (resize/setScrollSpeed) via invalidateLayoutCache().
-  private getReceptorGradient(
-    ctx: CanvasRenderingContext2D,
-    col: number,
+  private roundRect(x: number, y: number, w: number, h: number, radius: number, color: string, alpha: number) {
+    if (w <= 0 || h <= 0) return;
+    this.graphics.roundRect(x, y, w, h, radius).fill({ color: hexToNumber(color), alpha });
+  }
+
+  private rect(x: number, y: number, w: number, h: number, color: string, alpha: number, width: number) {
+    if (w <= 0 || h <= 0) return;
+    this.graphics.rect(x, y, w, h).stroke({ color: hexToNumber(color), alpha, width });
+  }
+
+  private line(x1: number, y1: number, x2: number, y2: number, color: string, alpha: number, width: number) {
+    this.graphics.moveTo(x1, y1).lineTo(x2, y2).stroke({ color: hexToNumber(color), alpha, width });
+  }
+
+  private receptorBeam(x: number, y: number, w: number, h: number, color: string, intensity: number) {
+    if (w <= 0 || h <= 0) return;
+    this.graphics.rect(x, y, w, h).fill({
+      fill: this.getReceptorBeamGradient(color),
+      alpha: intensity,
+    });
+  }
+
+  private addText(
+    text: string,
     x: number,
-    judgmentY: number,
-    color: string,
-  ): CanvasGradient {
-    const cached = this.cachedReceptorGradients[col];
+    y: number,
+    options: {
+      fontSize: number;
+      fill: string;
+      alpha?: number;
+      fontWeight?: "400" | "700";
+      anchorX?: number;
+      anchorY?: number;
+    },
+  ) {
+    const label = new Text({
+      text,
+      style: {
+        fontFamily: "Torus, sans-serif",
+        fontSize: options.fontSize,
+        fontWeight: options.fontWeight ?? "400",
+        fill: options.fill,
+      },
+    });
+    label.x = x;
+    label.y = y;
+    label.alpha = options.alpha ?? 1;
+    label.anchor.set(options.anchorX ?? 0, options.anchorY ?? 0);
+    this.textLayer.addChild(label);
+  }
+
+  private clearTextLayer() {
+    const children = this.textLayer.removeChildren();
+    for (const child of children) child.destroy();
+  }
+
+  private getReceptorBeamGradient(color: string): FillGradient {
+    const cached = this.receptorBeamGradients.get(color);
     if (cached) return cached;
-    const grad = ctx.createLinearGradient(x, judgmentY - 80, x, judgmentY + 15);
-    grad.addColorStop(0, "transparent");
-    grad.addColorStop(0.6, this.colorWithAlpha(color, 0.2));
-    grad.addColorStop(1, this.colorWithAlpha(color, 0.7));
-    this.cachedReceptorGradients[col] = grad;
-    return grad;
+
+    const gradient = new FillGradient({
+      type: "linear",
+      start: { x: 0, y: 0 },
+      end: { x: 0, y: 1 },
+      textureSpace: "local",
+      textureSize: 128,
+      colorStops: [
+        { offset: 0, color: colorWithAlpha(color, 0) },
+        { offset: 0.58, color: colorWithAlpha(color, 0.2) },
+        { offset: 1, color: colorWithAlpha(color, 0.7) },
+      ],
+    });
+    this.receptorBeamGradients.set(color, gradient);
+    return gradient;
+  }
+
+  private rebuildBackgroundSprites() {
+    if (!this.app) return;
+
+    if (this.previousBackgroundSprite) {
+      this.backgroundLayer.removeChild(this.previousBackgroundSprite);
+      this.previousBackgroundSprite.destroy({ texture: false, textureSource: false });
+      this.previousBackgroundSprite = null;
+    }
+
+    if (this.backgroundSprite && this.previousBackgroundImage) {
+      this.previousBackgroundSprite = this.backgroundSprite;
+    } else if (this.backgroundSprite) {
+      this.backgroundLayer.removeChild(this.backgroundSprite);
+      this.backgroundSprite.destroy({ texture: false, textureSource: false });
+    }
+
+    this.backgroundSprite = this.backgroundImage
+      ? new Sprite(Texture.from(this.backgroundImage))
+      : null;
+
+    if (this.previousBackgroundSprite && !this.backgroundLayer.children.includes(this.previousBackgroundSprite)) {
+      this.backgroundLayer.addChild(this.previousBackgroundSprite);
+    }
+    if (this.backgroundSprite) this.backgroundLayer.addChild(this.backgroundSprite);
+    this.positionBackgroundSprites();
+  }
+
+  private positionBackgroundSprites() {
+    const layout = this.getLayout();
+    for (const sprite of [this.previousBackgroundSprite, this.backgroundSprite]) {
+      if (!sprite || sprite.texture.width <= 0 || sprite.texture.height <= 0) continue;
+      const imgAspect = sprite.texture.width / sprite.texture.height;
+      const canvasAspect = layout.w / layout.h;
+      if (imgAspect > canvasAspect) {
+        sprite.height = layout.h;
+        sprite.width = layout.h * imgAspect;
+        sprite.x = (layout.w - sprite.width) / 2;
+        sprite.y = 0;
+      } else {
+        sprite.width = layout.w;
+        sprite.height = layout.w / imgAspect;
+        sprite.x = 0;
+        sprite.y = (layout.h - sprite.height) / 2;
+      }
+    }
   }
 
   destroy() {
     this.pause();
+    this.destroyed = true;
     this.previousBackgroundImage = null;
     this.backgroundTransitionStartedAt = 0;
+    const destroyApp = () => {
+      if (!this.app) return;
+      this.clearTextLayer();
+      for (const gradient of this.receptorBeamGradients.values()) gradient.destroy();
+      this.receptorBeamGradients.clear();
+      this.app.destroy({ removeView: false }, { children: true });
+      this.app = null;
+    };
+    if (this.app) {
+      destroyApp();
+    } else {
+      void this.initPromise.then(destroyApp);
+    }
   }
 }
