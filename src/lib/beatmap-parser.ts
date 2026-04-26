@@ -7,6 +7,11 @@ export interface ManiaNote {
   isHold: boolean;
 }
 
+export interface ManiaScrollVelocity {
+  time: number;
+  multiplier: number;
+}
+
 export interface ManiaBeatmap {
   title: string;
   artist: string;
@@ -20,6 +25,7 @@ export interface ManiaBeatmap {
   audioFilename: string;
   previewTime: number;
   backgroundFilename: string;
+  scrollVelocities: ManiaScrollVelocity[];
 }
 
 export function parseManiaBeatmap(content: string): ManiaBeatmap {
@@ -37,6 +43,7 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
   let section = "";
   const notes: ManiaNote[] = [];
   const timingPoints: { time: number; beatLength: number }[] = [];
+  const scrollVelocities: ManiaScrollVelocity[] = [];
 
   for (const line of lines) {
     if (line.startsWith("[") && line.endsWith("]")) {
@@ -71,8 +78,14 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
       if (parts.length >= 2) {
         const time = parseFloat(parts[0]);
         const beatLength = parseFloat(parts[1]);
-        if (beatLength > 0) {
+        const uninherited = parts.length < 7 || parts[6].trim() !== "0";
+        if (beatLength > 0 && uninherited) {
           timingPoints.push({ time, beatLength });
+        } else if (beatLength < 0 && !uninherited) {
+          scrollVelocities.push({
+            time,
+            multiplier: Math.max(0.01, Math.min(20, -100 / beatLength)),
+          });
         }
       }
     }
@@ -123,5 +136,6 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
     audioFilename,
     previewTime,
     backgroundFilename,
+    scrollVelocities: scrollVelocities.sort((a, b) => a.time - b.time),
   };
 }

@@ -4,6 +4,7 @@ import {
   getRankings,
   getCountryMapsFarmed,
   getCountryMapsFavourites,
+  getBeatmapFile,
   rebuildCountryMapsFarmed,
   rebuildCountryMapsFavourites,
   rebuildCountryMapsData,
@@ -15,6 +16,7 @@ import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { formatNumber, formatDuration, formatTimeAgo } from "../lib/format";
 import { MANIA_PATTERN_LABELS } from "../lib/mania-patterns";
+import { parseManiaBeatmap } from "../lib/beatmap-parser";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
@@ -31,7 +33,9 @@ import type {
   MapsFavouriteBeatmapset,
   MapsPlayerEntry,
   MapsPlayerFavourites,
+  ReplayFrame,
 } from "../lib/types";
+import type { ManiaBeatmap, ManiaNote } from "../lib/beatmap-parser";
 import { useAppStore, useSelectedCountry } from "../store";
 import { pageSeo, mapsOgImagePath } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
@@ -309,6 +313,7 @@ function hasValidMapsDataShape(data: CountryMapsData | null): data is CountryMap
   if (
     sampleSet && (
       !Array.isArray(sampleSet.maniaKeys) ||
+      !Array.isArray(sampleSet.maniaBeatmaps) ||
       typeof sampleSet.previewUrl !== "string" ||
       typeof sampleSet.starMax !== "number" ||
       !Array.isArray(sampleSet.patterns)
@@ -2214,12 +2219,283 @@ function formatStars(bm: MapsFavouriteBeatmapset): string | null {
   return `${fmt(min)}–${fmt(max)}`;
 }
 
+const RANDOM_REPLAY_PREVIEW_MS = 10_000;
+const RANDOM_REPLAY_TAP_HOLD_MS = 48;
+
+interface RandomPreviewRendererLike {
+  readonly isPlaying: boolean;
+  readonly time: number;
+  readonly duration: number;
+  destroy: () => void;
+  pause: () => void;
+  play: () => void;
+  resize: () => void;
+  seek: (timeMs: number) => void;
+  setExternalClock: (cb: (() => { time: number; stalled: boolean } | null) | null) => void;
+  setScrollSpeed: (value: number) => void;
+}
+
+function getPreviewNotes(beatmap: ManiaBeatmap): ManiaNote[] {
+  const start = Math.max(0, beatmap.previewTime || 0);
+  const end = start + RANDOM_REPLAY_PREVIEW_MS;
+
+  return beatmap.notes
+    .filter((note) => note.endTime >= start && note.time <= end)
+    .map((note) => ({
+      ...note,
+      time: Math.max(0, note.time - start),
+      endTime: Math.min(RANDOM_REPLAY_PREVIEW_MS, Math.max(0, note.endTime - start)),
+    }))
+    .filter((note) => note.endTime >= 0 && note.time <= RANDOM_REPLAY_PREVIEW_MS);
+}
+
+function getPreviewScrollVelocities(beatmap: ManiaBeatmap): ManiaBeatmap["scrollVelocities"] {
+  const start = Math.max(0, beatmap.previewTime || 0);
+  const end = start + RANDOM_REPLAY_PREVIEW_MS;
+  const velocities = beatmap.scrollVelocities ?? [];
+  let initialMultiplier = 1;
+
+  for (const point of velocities) {
+    if (point.time > start) break;
+    initialMultiplier = point.multiplier;
+  }
+
+  return [
+    { time: 0, multiplier: initialMultiplier },
+    ...velocities
+      .filter((point) => point.time > start && point.time <= end)
+      .map((point) => ({ ...point, time: point.time - start })),
+  ];
+}
+
+function buildAutoplayFrames(notes: ManiaNote[], keyCount: number): ReplayFrame[] {
+  const events: Array<{ time: number; column: number; pressed: boolean }> = [];
+
+  for (const note of notes) {
+    const column = Math.max(0, Math.min(keyCount - 1, note.column));
+    const start = Math.max(0, Math.round(note.time));
+    const end = Math.max(start + 1, Math.round(note.isHold ? note.endTime : note.time + RANDOM_REPLAY_TAP_HOLD_MS));
+    events.push({ time: start, column, pressed: true });
+    events.push({ time: Math.min(RANDOM_REPLAY_PREVIEW_MS, end), column, pressed: false });
+  }
+
+  events.sort((a, b) => a.time - b.time || (a.pressed === b.pressed ? 0 : a.pressed ? -1 : 1));
+
+  const frames: ReplayFrame[] = [{ time: 0, keyState: 0 }];
+  let keyState = 0;
+  let i = 0;
+  while (i < events.length) {
+    const time = events[i].time;
+    while (i < events.length && events[i].time === time) {
+      const bit = 1 << events[i].column;
+      keyState = events[i].pressed ? keyState | bit : keyState & ~bit;
+      i++;
+    }
+    frames.push({ time, keyState });
+  }
+  frames.push({ time: RANDOM_REPLAY_PREVIEW_MS, keyState: 0 });
+  return frames;
+}
+
+function RandomReplayPreview({
+  beatmap,
+  isPlaying,
+  getClock,
+  onEnded,
+}: {
+  beatmap: ManiaBeatmap | null;
+  isPlaying: boolean;
+  getClock: () => { time: number; stalled: boolean } | null;
+  onEnded: () => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const rendererRef = useRef<RandomPreviewRendererLike | null>(null);
+  const isPlayingRef = useRef(isPlaying);
+  const getClockRef = useRef(getClock);
+  const notes = useMemo(() => beatmap ? getPreviewNotes(beatmap) : [], [beatmap]);
+  const scrollVelocities = useMemo(() => beatmap ? getPreviewScrollVelocities(beatmap) : [], [beatmap]);
+  const frames = useMemo(() => beatmap ? buildAutoplayFrames(notes, beatmap.keyCount) : [], [beatmap, notes]);
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  useEffect(() => {
+    getClockRef.current = getClock;
+  }, [getClock]);
+
+  useEffect(() => {
+    if (!canvasRef.current || !beatmap) return;
+
+    let cancelled = false;
+    let renderer: RandomPreviewRendererLike | null = null;
+    let handleResize: (() => void) | null = null;
+
+    void import("../components/replay/ReplayCanvas").then(({ ManiaReplayRenderer }) => {
+      if (cancelled || !canvasRef.current) return;
+      renderer = new ManiaReplayRenderer(
+        canvasRef.current,
+        frames,
+        beatmap.keyCount,
+        notes,
+        {
+          od: beatmap.od,
+          showInputOverlay: false,
+          transparentBackground: true,
+          hideHud: true,
+          barePlayfield: true,
+          scrollVelocities,
+        },
+      ) as RandomPreviewRendererLike;
+      renderer.setScrollSpeed(18);
+      renderer.setExternalClock(() => getClockRef.current());
+      rendererRef.current = renderer;
+      if (isPlayingRef.current) renderer.play();
+      handleResize = () => renderer?.resize();
+      window.addEventListener("resize", handleResize);
+    });
+
+    return () => {
+      cancelled = true;
+      if (handleResize) window.removeEventListener("resize", handleResize);
+      rendererRef.current?.destroy();
+      rendererRef.current = null;
+    };
+  }, [beatmap, frames, notes, scrollVelocities]);
+
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+    if (isPlaying) renderer.play();
+    else renderer.pause();
+  }, [isPlaying]);
+
+  useEffect(() => {
+    if (!isPlaying) rendererRef.current?.seek(0);
+  }, [beatmap, isPlaying]);
+
+  useEffect(() => {
+    if (!isPlaying) return;
+    const id = setInterval(() => {
+      const renderer = rendererRef.current;
+      if (!renderer) return;
+      if (!renderer.isPlaying || renderer.time >= renderer.duration) onEnded();
+    }, 50);
+    return () => clearInterval(id);
+  }, [isPlaying, onEnded]);
+
+  return (
+    <div className="absolute inset-0">
+      <canvas ref={canvasRef} className="relative z-10 h-full w-full" />
+    </div>
+  );
+}
+
+function DifficultyPicker({
+  beatmaps,
+  selectedId,
+  onChange,
+}: {
+  beatmaps: NonNullable<MapsFavouriteBeatmapset["maniaBeatmaps"]>;
+  selectedId: number | null;
+  onChange: (id: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+
+  const selected = beatmaps.find((m) => m.id === selectedId) ?? beatmaps[0];
+  if (!selected) return null;
+
+  return (
+    <div className="relative min-w-0 flex-1" ref={containerRef}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className={`flex h-8 w-full items-center justify-between gap-2 rounded-md border py-1 pl-3 pr-2 text-[11px] font-semibold outline-none transition-all cursor-pointer ${
+          open
+            ? "border-osu-pink/50 bg-osu-pink/10 text-white"
+            : "border-osu-b3/70 bg-osu-b5/70 text-osu-l2 hover:border-osu-pink/40 hover:bg-osu-b4 hover:text-white"
+        }`}
+      >
+        <span className="truncate flex items-center gap-1.5">
+          <span className="text-osu-f1">{Math.round(selected.cs)}K</span>
+          <span className="text-osu-yellow">{"\u2605"}{selected.difficultyRating.toFixed(2)}</span>
+          <span className="opacity-80 text-osu-f1">·</span>
+          <span className="truncate">{selected.version}</span>
+        </span>
+        <svg
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className={`h-4 w-4 shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${open ? "rotate-180 text-osu-pink-light" : "text-osu-f1"}`}
+          aria-hidden
+        >
+          <path d="M5.25 7.5 10 12.25 14.75 7.5H5.25Z" />
+        </svg>
+      </button>
+
+      <div
+        className={`absolute left-0 right-0 top-full mt-1.5 z-50 overflow-hidden rounded-lg border border-osu-pink/20 bg-osu-b4/95 shadow-xl shadow-black/40 backdrop-blur-md transition-all duration-200 origin-top ${
+          open ? "opacity-100 scale-y-100 translate-y-0 pointer-events-auto" : "opacity-0 scale-y-95 -translate-y-1 pointer-events-none"
+        }`}
+      >
+        <div className="max-h-[220px] overflow-y-auto p-1">
+          {beatmaps.map((map) => {
+            const isSelected = selectedId === map.id;
+            return (
+              <button
+                key={map.id}
+                type="button"
+                onClick={() => {
+                  onChange(map.id);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[11px] font-semibold transition-all cursor-pointer ${
+                  isSelected
+                    ? "bg-osu-pink/15 text-osu-pink-light"
+                    : "text-osu-l2 hover:bg-osu-b3 hover:text-white"
+                }`}
+                role="option"
+                aria-selected={isSelected}
+              >
+                <span className={`flex h-3 w-3 shrink-0 items-center justify-center transition-all ${isSelected ? 'opacity-100' : 'opacity-0 scale-75'}`}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3 text-osu-pink">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </span>
+                <span className="text-osu-f1 w-[20px]">{Math.round(map.cs)}K</span>
+                <span className="text-osu-yellow w-[36px]">{"\u2605"}{map.difficultyRating.toFixed(2)}</span>
+                <span className="truncate flex-1">{map.version}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const url = `https://osu.ppy.sh/beatmapsets/${bm.id}`;
   const keys = bm.maniaKeys ?? [];
   const patterns = (bm.patterns ?? []).slice(0, 5);
   const starLabel = formatStars(bm);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const replayAudioStartPendingRef = useRef(false);
+  const replayPreviewEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestedAudioModeRef = useRef<"audio" | "replay" | null>(null);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
@@ -2228,6 +2504,18 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const lastNonZeroVolumeRef = useRef<number>(volume > 0 ? volume : DEFAULT_PREVIEW_VOLUME);
   const rawPreviewUrl = typeof bm.previewUrl === "string" ? bm.previewUrl : "";
   const previewUrl = rawPreviewUrl.startsWith("//") ? `https:${rawPreviewUrl}` : rawPreviewUrl;
+  const maniaBeatmaps = useMemo(
+    () => [...(bm.maniaBeatmaps ?? [])].sort((a, b) => b.difficultyRating - a.difficultyRating),
+    [bm.maniaBeatmaps],
+  );
+  const [selectedBeatmapId, setSelectedBeatmapId] = useState<number | null>(() => maniaBeatmaps[0]?.id ?? null);
+  const selectedBeatmap = maniaBeatmaps.find((map) => map.id === selectedBeatmapId) ?? maniaBeatmaps[0] ?? null;
+  const [previewBeatmap, setPreviewBeatmap] = useState<ManiaBeatmap | null>(null);
+  const [replayPreviewRequested, setReplayPreviewRequested] = useState(false);
+  const [isReplayPreviewPlaying, setIsReplayPreviewPlaying] = useState(false);
+  const [isReplayPreviewEnding, setIsReplayPreviewEnding] = useState(false);
+  const [replayPreviewLoading, setReplayPreviewLoading] = useState(false);
+  const [replayPreviewError, setReplayPreviewError] = useState<string | null>(null);
 
   // Some beatmapsets have no background image — the cover URL 404s. Track load
   // failure so we can swap in a deterministic gradient fallback.
@@ -2236,7 +2524,43 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   useEffect(() => {
     setCoverBroken(false);
     setCoverLoaded(false);
-  }, [bm.id]);
+    setSelectedBeatmapId(maniaBeatmaps[0]?.id ?? null);
+    setReplayPreviewRequested(false);
+    setIsReplayPreviewPlaying(false);
+    setIsReplayPreviewEnding(false);
+    setPreviewBeatmap(null);
+    replayAudioStartPendingRef.current = false;
+    requestedAudioModeRef.current = null;
+  }, [bm.id, maniaBeatmaps]);
+
+  useEffect(() => {
+    if (!selectedBeatmap || !replayPreviewRequested) {
+      setPreviewBeatmap(null);
+      return;
+    }
+
+    let cancelled = false;
+    setReplayPreviewLoading(true);
+    setIsReplayPreviewPlaying(false);
+    setReplayPreviewError(null);
+    getBeatmapFile({ data: { beatmapId: selectedBeatmap.id } })
+      .then((result) => {
+        if (cancelled) return;
+        setPreviewBeatmap(parseManiaBeatmap(result.content));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPreviewBeatmap(null);
+        setReplayPreviewError("Couldn't load replay preview");
+      })
+      .finally(() => {
+        if (!cancelled) setReplayPreviewLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [replayPreviewRequested, selectedBeatmap]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
@@ -2264,6 +2588,49 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     setCurrentTime(0);
   }, []);
 
+  const clearReplayPreviewEndTimer = useCallback(() => {
+    if (replayPreviewEndTimerRef.current) {
+      clearTimeout(replayPreviewEndTimerRef.current);
+      replayPreviewEndTimerRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => () => clearReplayPreviewEndTimer(), [clearReplayPreviewEndTimer]);
+
+  const finishReplayPreview = useCallback(() => {
+    if (replayPreviewEndTimerRef.current) return;
+    const audio = audioRef.current;
+    replayAudioStartPendingRef.current = false;
+    requestedAudioModeRef.current = null;
+    setIsPreviewPlaying(false);
+    setCurrentTime(0);
+    setIsReplayPreviewEnding(true);
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+    replayPreviewEndTimerRef.current = setTimeout(() => {
+      replayPreviewEndTimerRef.current = null;
+      setReplayPreviewRequested(false);
+      setIsReplayPreviewPlaying(false);
+      setIsReplayPreviewEnding(false);
+    }, 220);
+  }, []);
+
+  const resetReplayPreview = useCallback(() => {
+    clearReplayPreviewEndTimer();
+    replayAudioStartPendingRef.current = false;
+    setReplayPreviewRequested(false);
+    setIsReplayPreviewPlaying(false);
+    setIsReplayPreviewEnding(false);
+    setPreviewBeatmap(null);
+    setReplayPreviewError(null);
+    if (requestedAudioModeRef.current === "replay") {
+      requestedAudioModeRef.current = null;
+      stopPreview();
+    }
+  }, [clearReplayPreviewEndTimer, stopPreview]);
+
   const togglePreview = useCallback(async () => {
     if (!previewUrl) return;
     const audio = audioRef.current;
@@ -2274,14 +2641,75 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       return;
     }
 
+    setIsReplayPreviewPlaying(false);
+    setReplayPreviewRequested(false);
+    setIsReplayPreviewEnding(false);
+    replayAudioStartPendingRef.current = false;
+    requestedAudioModeRef.current = "audio";
     setPreviewError(null);
     try {
+      audio.currentTime = 0;
       await audio.play();
     } catch {
       setPreviewError("Couldn't play preview");
       setIsPreviewPlaying(false);
     }
   }, [isPreviewPlaying, previewUrl]);
+
+  const startReplayPreviewAudio = useCallback(async () => {
+    const audio = audioRef.current;
+    if (!audio || !previewUrl) return;
+    requestedAudioModeRef.current = "replay";
+    replayAudioStartPendingRef.current = false;
+    setIsPreviewPlaying(false);
+    setCurrentTime(0);
+    setPreviewError(null);
+    audio.pause();
+    audio.currentTime = 0;
+    audio.volume = volume;
+    try {
+      await audio.play();
+    } catch {
+      setPreviewError("Couldn't play preview audio");
+    }
+  }, [previewUrl, volume]);
+
+  const getReplayPreviewClock = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio || requestedAudioModeRef.current !== "replay") {
+      return { time: 0, stalled: true };
+    }
+    return {
+      time: Math.min(RANDOM_REPLAY_PREVIEW_MS, audio.currentTime * 1000),
+      stalled: audio.paused || audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA,
+    };
+  }, []);
+
+  const startReplayPreview = useCallback(() => {
+    const audio = audioRef.current;
+    clearReplayPreviewEndTimer();
+    requestedAudioModeRef.current = "replay";
+    setIsReplayPreviewEnding(false);
+    setIsPreviewPlaying(false);
+    setCurrentTime(0);
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+    }
+    setReplayPreviewRequested(true);
+    replayAudioStartPendingRef.current = true;
+    if (previewBeatmap) {
+      setIsReplayPreviewPlaying(true);
+      void startReplayPreviewAudio();
+    }
+  }, [clearReplayPreviewEndTimer, previewBeatmap, startReplayPreviewAudio]);
+
+  useEffect(() => {
+    if (replayPreviewRequested && previewBeatmap && !replayPreviewLoading && replayAudioStartPendingRef.current) {
+      setIsReplayPreviewPlaying(true);
+      void startReplayPreviewAudio();
+    }
+  }, [previewBeatmap, replayPreviewLoading, replayPreviewRequested, startReplayPreviewAudio]);
 
   const applyVolume = useCallback((v: number) => {
     const clamped = Math.min(1, Math.max(0, v));
@@ -2302,12 +2730,14 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     }
   }, [applyVolume, volume]);
 
-  const progressRatio = duration > 0 ? Math.min(1, currentTime / duration) : 0;
+  const displayDuration = duration > 0 ? Math.min(duration, RANDOM_REPLAY_PREVIEW_MS / 1000) : 0;
+  const progressRatio = displayDuration > 0 ? Math.min(1, currentTime / displayDuration) : 0;
 
   return (
-    <div className="rounded-2xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/40 transition-colors overflow-hidden">
-      <a href={url} target="_blank" rel="noreferrer" className="block relative">
-        <div className="w-full h-[220px] bg-osu-b6">
+    <div className="relative w-[640px] max-w-full">
+      <div className="rounded-2xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/40 transition-colors">
+        <a href={url} target="_blank" rel="noreferrer" className="block relative rounded-t-2xl overflow-hidden">
+        <div className="relative w-full h-[220px] bg-osu-b6 overflow-hidden">
           {!coverBroken && (
             <img
               src={bm.covers.cover}
@@ -2347,9 +2777,9 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
           <div className="text-[18px] font-semibold text-white truncate leading-tight drop-shadow-lg">{bm.title}</div>
           <div className="text-[13px] text-white/75 truncate leading-tight drop-shadow-lg">{bm.artist}</div>
         </div>
-      </a>
+        </a>
 
-      <div className="px-4 py-3 space-y-3">
+        <div className="px-4 py-3 space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[11px] text-osu-f1 truncate">mapped by {bm.creator}</div>
@@ -2393,6 +2823,25 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
           </div>
         )}
 
+        {maniaBeatmaps.length > 1 && (
+          <div className="flex items-center gap-2">
+            <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-osu-f1/80">
+              Diff
+            </span>
+            <DifficultyPicker
+              beatmaps={maniaBeatmaps}
+              selectedId={selectedBeatmap?.id ?? null}
+              onChange={(id) => {
+                resetReplayPreview();
+                setSelectedBeatmapId(id);
+              }}
+            />
+            <span className="shrink-0 rounded-md bg-osu-b3/50 px-2 py-1 text-[10px] font-semibold text-osu-f1">
+              {maniaBeatmaps.length} diffs
+            </span>
+          </div>
+        )}
+
         {previewUrl ? (
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -2424,10 +2873,10 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
               <div
                 onClick={(e) => {
                   const audio = audioRef.current;
-                  if (!audio || !duration) return;
+                  if (!audio || !displayDuration || requestedAudioModeRef.current !== "audio") return;
                   const rect = e.currentTarget.getBoundingClientRect();
                   const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-                  audio.currentTime = ratio * duration;
+                  audio.currentTime = ratio * displayDuration;
                   setCurrentTime(audio.currentTime);
                 }}
                 className="flex-1 h-1 bg-osu-b3/60 rounded-full cursor-pointer relative group"
@@ -2439,7 +2888,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
               </div>
 
               <span className="text-[9px] text-osu-f1 tabular-nums shrink-0">
-                {formatDuration(Math.floor(currentTime))}/{duration > 0 ? formatDuration(Math.floor(duration)) : "--:--"}
+                {formatDuration(Math.floor(currentTime))}/{displayDuration > 0 ? formatDuration(Math.floor(displayDuration)) : "--:--"}
               </span>
             </div>
 
@@ -2483,10 +2932,29 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
               src={previewUrl}
               preload="metadata"
               onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
-              onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-              onEnded={stopPreview}
+              onTimeUpdate={(e) => {
+                const audio = e.currentTarget;
+                const maxSeconds = RANDOM_REPLAY_PREVIEW_MS / 1000;
+                if (requestedAudioModeRef.current === "audio") {
+                  setCurrentTime(Math.min(audio.currentTime, maxSeconds));
+                }
+                if (audio.currentTime >= maxSeconds && audio.duration > maxSeconds + 0.5) {
+                  if (requestedAudioModeRef.current === "replay") {
+                    finishReplayPreview();
+                  } else {
+                    stopPreview();
+                  }
+                }
+              }}
+              onEnded={() => {
+                if (requestedAudioModeRef.current === "replay") {
+                  finishReplayPreview();
+                } else {
+                  stopPreview();
+                }
+              }}
               onPause={() => setIsPreviewPlaying(false)}
-              onPlay={() => setIsPreviewPlaying(true)}
+              onPlay={() => setIsPreviewPlaying(requestedAudioModeRef.current === "audio")}
               onError={() => {
                 setPreviewError("Couldn't load preview");
                 setIsPreviewPlaying(false);
@@ -2496,6 +2964,52 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         ) : null}
         {previewError ? (
           <div className="text-[10px] text-rose-300">{previewError}</div>
+        ) : null}
+        </div>
+      </div>
+
+      <div className="relative mt-4 min-h-[360px] overflow-visible md:absolute md:left-[calc(100%+48px)] md:top-0 md:mt-0 md:h-full md:w-[300px] md:min-h-full">
+        <div
+          className={`absolute inset-0 transition-opacity duration-200 ${
+            previewBeatmap && !isReplayPreviewEnding ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          {previewBeatmap ? (
+            <RandomReplayPreview
+              key={selectedBeatmap?.id ?? "preview"}
+              beatmap={previewBeatmap}
+              isPlaying={isReplayPreviewPlaying}
+              getClock={getReplayPreviewClock}
+              onEnded={finishReplayPreview}
+            />
+          ) : null}
+        </div>
+        {replayPreviewLoading ? (
+          <div className="absolute inset-0 grid place-items-center">
+            <div className="h-7 w-7 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
+          </div>
+        ) : null}
+        <button
+          type="button"
+          onClick={startReplayPreview}
+          className={`absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-md border border-osu-f1/35 bg-osu-b5/70 px-3 py-1.5 text-[11px] font-semibold text-osu-l2 backdrop-blur-sm transition-all duration-200 hover:border-osu-l2/70 hover:bg-osu-b4/80 hover:text-white cursor-pointer ${
+            replayPreviewRequested && !isReplayPreviewEnding ? "pointer-events-none opacity-0 scale-95" : "opacity-100 scale-100"
+          }`}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            className="h-3 w-3"
+            aria-hidden
+          >
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          <span>chart preview</span>
+        </button>
+        {replayPreviewError ? (
+          <div className="absolute inset-x-3 top-3 rounded-md bg-black/60 px-2 py-1 text-[10px] text-rose-300">
+            {replayPreviewError}
+          </div>
         ) : null}
       </div>
     </div>

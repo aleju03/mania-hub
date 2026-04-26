@@ -10,6 +10,10 @@ function edgeCache(sMaxage: number, swr?: number): void {
   );
 }
 
+function noStore(): void {
+  setResponseHeader("Cache-Control", "no-store");
+}
+
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "string") return error;
@@ -131,7 +135,7 @@ function toLeanHomeScore(
 
 const MAPS_FARMED_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 1 week
 const MAPS_FAVOURITES_CACHE_TTL = 14 * 24 * 60 * 60 * 1000; // 2 weeks
-const MAPS_DATA_CACHE_VERSION = 11;
+const MAPS_DATA_CACHE_VERSION = 12;
 const USER_FAVOURITES_PAGE_SIZE = 100;
 const USER_FAVOURITES_MAX_PAGES = 10;
 const FARMED_SINGLE_PLAYER_PP_MIN = 500;
@@ -1687,6 +1691,15 @@ async function buildCountryFavourites(users: MapsUser[]): Promise<CountryMapsFav
               globalFavouriteCount: fav.favourite_count,
               previewUrl: fav.preview_url,
               maniaKeys: [...maniaKeysSet].sort((a, b) => a - b),
+              maniaBeatmaps: maniaBeatmaps
+                .map((bm) => ({
+                  id: bm.id,
+                  version: bm.version,
+                  difficultyRating: bm.difficulty_rating,
+                  totalLength: bm.total_length,
+                  cs: bm.cs,
+                }))
+                .sort((a, b) => b.difficultyRating - a.difficultyRating),
               starMin,
               starMax,
               bpm: typeof fav.bpm === "number" ? fav.bpm : 0,
@@ -2020,7 +2033,7 @@ export const getReplayParsed = createServerFn({ method: "GET" })
 export const getBeatmapFile = createServerFn({ method: "GET" })
   .inputValidator((data: { beatmapId: number }) => data)
   .handler(async ({ data }: { data: { beatmapId: number } }) => {
-    edgeCache(86400, 604800);
+    noStore();
     const osuFile = await fetchBeatmapFile(data.beatmapId);
     return { content: osuFile };
   });

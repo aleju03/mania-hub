@@ -376,6 +376,13 @@ export interface MapsFavouriteBeatmapset {
   globalFavouriteCount: number;
   previewUrl: string;
   maniaKeys: number[];
+  maniaBeatmaps: Array<{
+    id: number;
+    version: string;
+    difficultyRating: number;
+    totalLength: number;
+    cs: number;
+  }>;
   starMin: number;
   starMax: number;
   bpm: number;
