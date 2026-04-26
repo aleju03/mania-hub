@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings } from "../lib/osu";
@@ -148,6 +148,16 @@ export const Route = createFileRoute("/replay")({
       social: false,
       noindex: true,
     }),
+  beforeLoad: () => {
+    if (typeof window !== "undefined") {
+      const host = window.location.hostname;
+      const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1";
+      const isDevMode = import.meta.env.VITE_DEV_MODE === "1";
+      if (!isLocal && !isDevMode) throw notFound();
+    } else if (process.env.VITE_DEV_MODE !== "1" && process.env.NODE_ENV === "production") {
+      throw notFound();
+    }
+  },
   component: ReplayPage,
   validateSearch: (s: Record<string, unknown>): ReplaySearch => ({
     scoreId: Number(s.scoreId) || undefined,

@@ -50,6 +50,7 @@ const USER_PROFILE_INSIGHTS_CLIENT_CACHE_TTL = 10 * 60 * 1000;
 const INITIAL_SCORE_BATCH_SIZE = 5;
 const SHOW_MORE_BATCH_SIZE = 50;
 const BEST_SCORES_WINDOW_SIZE = 200;
+const DEV_MODE = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === "1";
 type PlayerTab = "best" | "recent" | "card" | "about";
 
 export const Route = createFileRoute("/player/$username")({
@@ -497,6 +498,7 @@ function PlayerPage() {
   // Safety: if we're on the About tab but the user has no page content, fall back to Best
   useEffect(() => {
     if (tab === "about" && !user?.page?.html) setTab("best");
+    if (tab === "card" && !DEV_MODE) setTab("best");
   }, [tab, user]);
 
   const fetchMoreRecent = useCallback(async () => {
@@ -1131,7 +1133,7 @@ function PlayerPage() {
           {/* Player tabs */}
           <div className="mt-5 pt-1 border-t border-osu-b3/30 flex flex-wrap items-center justify-between gap-3">
             <div className="flex">
-              {((["best", "recent", ...(user.page?.html ? ["about"] : []), "card"]) as PlayerTab[]).map((t) => (
+              {((["best", "recent", ...(user.page?.html ? ["about"] : []), ...(DEV_MODE ? ["card"] : [])]) as PlayerTab[]).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -1191,7 +1193,7 @@ function PlayerPage() {
               >
                 <PlayerAboutCard html={user.page.html} />
               </motion.div>
-            ) : tab === "card" ? (
+            ) : tab === "card" && DEV_MODE ? (
               <motion.div
                 key="card"
                 initial={{ opacity: 0, y: 6 }}
@@ -1773,16 +1775,16 @@ function TopPlayCard({ label, snapshot }: { label: string; snapshot: InsightScor
       href={snapshot.beatmapUrl}
       target="_blank"
       rel="noreferrer"
-      className="block relative rounded-xl overflow-hidden border border-osu-b3/20 hover:border-osu-pink/30 transition-colors group/topplay"
+      className="block relative rounded-xl overflow-hidden border border-osu-b3/20 bg-osu-b4 hover:border-osu-pink/30 transition-colors group/topplay"
     >
       {snapshot.coverUrl && (
         <img
           src={snapshot.coverUrl}
           alt=""
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute -inset-px h-[calc(100%+2px)] w-[calc(100%+2px)] max-w-none object-cover brightness-[0.42]"
         />
       )}
-      <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/50 to-black/75" />
+      <div className="absolute -inset-px bg-gradient-to-r from-black/45 via-black/10 to-black/35" />
       <div className="relative p-3.5 flex items-center gap-3">
         <div className="flex-1 min-w-0">
           <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
@@ -1894,7 +1896,7 @@ function ScoreThumbnail({ score }: { score: OsuScore }) {
 function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
   const keys = score.beatmap?.cs;
   const linkUrl = getScoreUrl(score) ?? getBeatmapUrl(score);
-  const canReplay = scoreHasReplay(score);
+  const canReplay = DEV_MODE && scoreHasReplay(score);
   const display = getScoreDisplayValues(score);
   const hasPp = score.pp != null;
 

@@ -31,6 +31,8 @@ import type { OsuScore } from "../lib/types";
 import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 
+const DEV_MODE = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === "1";
+
 export const Route = createFileRoute("/tracker")({
   validateSearch: (search: Record<string, unknown>) => ({
     country: parseCountrySearchParam(search.country),
@@ -692,7 +694,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               {approxPpGain != null && (
                 <span className="text-[10px] font-semibold text-osu-green">+{formatNumber(Math.round(approxPpGain))}</span>
               )}
-              {scoreHasReplay(score) && (
+              {DEV_MODE && scoreHasReplay(score) && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -727,7 +729,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               </span>
             )}
           </span>
-          {scoreHasReplay(score) && (
+          {DEV_MODE && scoreHasReplay(score) && (
             <button
               onClick={(e) => {
                 e.stopPropagation();

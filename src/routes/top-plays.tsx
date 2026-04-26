@@ -19,6 +19,8 @@ import { useAppStore, useSelectedCountry, type CachedPopoff, type TopPlaysRange 
 import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 
+const DEV_MODE = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === "1";
+
 interface PopOff {
   user: { id: number; username: string; avatar_url: string };
   score: OsuScore;
@@ -679,7 +681,7 @@ function PopOffsPage() {
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <span className={`text-xs ${accColorClass}`}>{formatAccuracy(getDisplayedAccuracy(p.score))}</span>
-                            {scoreHasReplay(p.score) && (
+                            {DEV_MODE && scoreHasReplay(p.score) && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -709,7 +711,7 @@ function PopOffsPage() {
                         <span className="text-xs text-osu-f1">
                           {formatNumber(p.score.max_combo)}x
                         </span>
-                        {scoreHasReplay(p.score) && (
+                        {DEV_MODE && scoreHasReplay(p.score) && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();

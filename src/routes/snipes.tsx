@@ -16,6 +16,8 @@ import { useAppStore, useSelectedCountry } from "../store";
 import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 
+const DEV_MODE = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === "1";
+
 type KeyFilter = "all" | "4k" | "7k";
 type RangeFilter = "24h" | "7d" | "30d" | "all";
 
@@ -624,7 +626,7 @@ function SnipeRow({
   const sniperHref = `/player/${encodeURIComponent(event.sniper.username)}`;
   const previousHref = `/player/${encodeURIComponent(event.victim.username)}`;
   const beatmapHref = event.beatmap.url;
-  const replayHref = event.hasReplay
+  const replayHref = DEV_MODE && event.hasReplay
     ? `/replay?scoreId=${event.score_id}&beatmapsetId=${event.beatmapset_id}`
     : null;
 

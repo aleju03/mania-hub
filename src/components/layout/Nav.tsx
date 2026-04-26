@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { SearchInput } from "../ui/SearchInput";
@@ -88,11 +88,15 @@ export function Nav() {
   const setSelectedCountry = useAppStore((state) => state.setSelectedCountry);
   const routeCountry = readCountryFromSearchStr(location.searchStr);
   const selectedCountry = routeCountry ?? fallbackCountry;
-  const devMode = import.meta.env.VITE_DEV_MODE === "1";
+  const devMode = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === "1";
+  const visibleLinks = useMemo(
+    () => links.filter((link) => devMode || link.id !== "replay"),
+    [devMode],
+  );
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
   const hydrated = useHasHydrated();
   const topPlaysRangeForLink = hydrated && topPlaysRange !== "7d" ? topPlaysRange : "7d";
-  const current = links.find((l) => location.pathname.startsWith(l.to === "/" ? "/__home" : l.to)) ||
+  const current = visibleLinks.find((l) => location.pathname.startsWith(l.to === "/" ? "/__home" : l.to)) ||
     (location.pathname === "/" ? links[0] : location.pathname.startsWith("/player") ? null : links[0]);
 
   // Active-link indicator: single always-mounted bar, measured from the
@@ -306,7 +310,7 @@ export function Nav() {
 
           {/* Desktop nav links */}
           <div ref={linksContainerRef} className="relative hidden md:flex items-center gap-1">
-            {links.map((l) => (
+            {visibleLinks.map((l) => (
               <Link
                 key={l.id}
                 ref={(el: HTMLAnchorElement | null) => {
@@ -453,7 +457,7 @@ export function Nav() {
                   <CountrySelector className="w-full" selectedCountry={selectedCountry} onSelect={handleCountrySelect} />
                   <ThemePicker variant="mobile" />
                 </div>
-                {links.map((l) => (
+                {visibleLinks.map((l) => (
                   <Link
                     key={l.id}
                     to={l.to}
