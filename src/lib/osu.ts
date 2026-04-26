@@ -2299,14 +2299,24 @@ function refreshCountrySnipesInBackground(
 ): void {
   if (snipesBackgroundScanInProgress.has(country)) return;
   snipesBackgroundScanInProgress.add(country);
+  let ranScan = false;
   void fetchWithCacheLock(
     cacheKey,
     SNIPES_CACHE_TTL,
-    () => runSnipesScan(country, snapshotKey, logKey),
+    () => {
+      ranScan = true;
+      return runSnipesScan(country, snapshotKey, logKey);
+    },
     SNIPES_LOCK_TTL,
   )
     .catch((err) => console.warn("[snipes] background scan failed:", getErrorMessage(err)))
-    .finally(() => snipesBackgroundScanInProgress.delete(country));
+    .finally(() => {
+      if (ranScan) {
+        clearSnipesScanStatus(country);
+        clearPartialSnipeEvents(country);
+      }
+      snipesBackgroundScanInProgress.delete(country);
+    });
 }
 
 async function runSnipesScan(
@@ -2639,8 +2649,6 @@ async function runSnipesScan(
       setPersistentCache(snapshotKey, snapshot, SNIPES_SNAPSHOT_TTL),
     ]);
 
-    clearSnipesScanStatus(country);
-    clearPartialSnipeEvents(country);
     return { events: mergedLog, scannedAt: Date.now() };
   } catch (err) {
     clearSnipesScanStatus(country);
@@ -2683,12 +2691,21 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
     }
 
     // No data at all (true cold start) - block on the full scan.
+    let ranScan = false;
     return fetchWithCacheLock(
       cacheKey,
       SNIPES_CACHE_TTL,
-      () => runSnipesScan(country, snapshotKey, logKey),
+      () => {
+        ranScan = true;
+        return runSnipesScan(country, snapshotKey, logKey);
+      },
       SNIPES_LOCK_TTL,
-    );
+    ).finally(() => {
+      if (ranScan) {
+        clearSnipesScanStatus(country);
+        clearPartialSnipeEvents(country);
+      }
+    });
   });
 
 export const getSnipesScanStatus = createServerFn({ method: "GET" })

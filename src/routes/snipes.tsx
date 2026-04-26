@@ -167,11 +167,14 @@ function SnipesPage() {
             response?.events ?? [],
             response?.scannedAt ?? Date.now(),
           );
-          setRefreshing(response?.refreshInProgress === true);
-          setScanStartedAt(response?.refreshInProgress === true ? Date.now() : null);
-          setPartialEvents([]);
-          setScanStatus(null);
-          sawScanActivityRef.current = false;
+          const refreshStillInProgress = response?.refreshInProgress === true;
+          setRefreshing(refreshStillInProgress);
+          setScanStartedAt(refreshStillInProgress ? Date.now() : null);
+          if (!refreshStillInProgress) {
+            setPartialEvents([]);
+            setScanStatus(null);
+            sawScanActivityRef.current = false;
+          }
           finalizingRefreshRef.current = false;
         }
       } catch {
