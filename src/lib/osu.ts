@@ -1301,6 +1301,50 @@ export const searchBeatmaps = createServerFn({ method: "GET" })
     );
   });
 
+export const searchBeatmapsByMappers = createServerFn({ method: "GET" })
+  .inputValidator((data: { usernames?: string[] }) => data)
+  .handler(async ({ data }: { data: { usernames?: string[] } }) => {
+    edgeCache(300, 3600);
+
+    const usernames = [...new Set((data.usernames ?? [])
+      .map((username) => username.trim())
+      .filter((username) => /^[\w[\]-]{3,24}$/.test(username)))]
+      .slice(0, 3);
+    const beatmapsetTypes = ["loved", "ranked", "pending", "graveyard"] as const;
+    const beatmapsetsById = new Map<number, OsuBeatmapset>();
+
+    for (const username of usernames) {
+      try {
+        const user = await osuFetch<OsuUser>(
+          `/users/${encodeURIComponent(username)}/mania`,
+          undefined,
+          { caller: "searchBeatmapsByMappers:user" },
+        );
+
+        for (const type of beatmapsetTypes) {
+          try {
+            const beatmapsets = await osuFetch<OsuBeatmapset[]>(
+              `/users/${user.id}/beatmapsets/${type}`,
+              { limit: 50, offset: 0 },
+              { caller: "searchBeatmapsByMappers:beatmapsets" },
+            );
+            for (const beatmapset of beatmapsets) {
+              if ((beatmapset.beatmaps ?? []).some((beatmap) => beatmap.mode === "mania")) {
+                beatmapsetsById.set(beatmapset.id, beatmapset);
+              }
+            }
+          } catch {
+            // Some users simply have no sets in a category.
+          }
+        }
+      } catch {
+        // Treat non-user tokens from broad searches as misses.
+      }
+    }
+
+    return { beatmapsets: [...beatmapsetsById.values()] };
+  });
+
 async function getBeatmapUserScore(beatmapId: number, userId: number): Promise<OsuScore | null> {
   const cacheKey = `beatmap-user-score:${beatmapId}:${userId}`;
   return fetchWithCacheLock(cacheKey, COUNTRY_BEATMAP_USER_SCORE_CACHE_TTL, async () => {

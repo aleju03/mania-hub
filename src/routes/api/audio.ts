@@ -132,6 +132,69 @@ function parseRangeHeader(header: string, size: number): { start: number; end: n
 export const Route = createFileRoute("/api/audio")({
   server: {
     handlers: {
+      HEAD: async ({ request }) => {
+        const url = new URL(request.url);
+        const beatmapsetId = url.searchParams.get("beatmapsetId");
+        const filename = url.searchParams.get("filename");
+
+        if (!beatmapsetId || !/^\d+$/.test(beatmapsetId)) {
+          return new Response(null, { status: 400 });
+        }
+
+        if (!filename || !isAllowedAudioFilename(filename)) {
+          return new Response(null, { status: 400 });
+        }
+
+        const cacheHeaders = {
+          "Cache-Control":
+            "public, max-age=300, s-maxage=300, stale-while-revalidate=3600",
+        };
+
+        if (isR2ReplayCacheConfigured()) {
+          const cached = await getCachedBeatmapAssetUrl("audio", beatmapsetId, filename);
+          if (cached) {
+            return new Response(null, {
+              status: 200,
+              headers: {
+                ...cacheHeaders,
+                "Accept-Ranges": "bytes",
+                "Content-Length": String(cached.sizeBytes),
+                "Content-Type": cached.mimeType,
+                "X-Audio-Size-Bytes": String(cached.sizeBytes),
+              },
+            });
+          }
+        }
+
+        let buffer: Buffer;
+        let mimeType: string;
+        try {
+          const extracted = await extractAudioFromArchive(beatmapsetId, filename);
+          buffer = extracted.buffer;
+          mimeType = extracted.mimeType;
+        } catch {
+          return new Response(null, { status: 404 });
+        }
+
+        if (isR2ReplayCacheConfigured()) {
+          try {
+            await putBeatmapAssetAndGetUrl("audio", beatmapsetId, filename, mimeType, buffer);
+          } catch {
+            // Size reporting should still work even if persistent caching fails.
+          }
+        }
+
+        return new Response(null, {
+          status: 200,
+          headers: {
+            ...cacheHeaders,
+            "Accept-Ranges": "bytes",
+            "Content-Length": String(buffer.length),
+            "Content-Type": mimeType,
+            "X-Audio-Size-Bytes": String(buffer.length),
+          },
+        });
+      },
       GET: async ({ request }) => {
         const url = new URL(request.url);
         const beatmapsetId = url.searchParams.get("beatmapsetId");

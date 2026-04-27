@@ -55,7 +55,7 @@ const TUNG_TUNG_SAHUR_AUDIO_SRC = "/audio/tung-tung-sahur-keycap.mp3";
 const TUNG_TUNG_SAHUR_GLOW_COLORS = ["#38d9ff", "#ff3f57", "#8bff3f", "#b45cff", "#ffd53d", "#ff7a2f"];
 const TUNG_TUNG_SAHUR_BASE_REST = { y: 0, scaleY: 1 };
 const TUNG_TUNG_SAHUR_TOP_REST = { x: -3.25, y: 4, scaleY: 1, filter: "brightness(1)" };
-const TUNG_TUNG_SAHUR_ACTUATION_MS = 70;
+const TUNG_TUNG_SAHUR_ACTUATION_MS = 49;
 type PlayerTab = "best" | "recent" | "card" | "about";
 
 export const Route = createFileRoute("/player/$username")({
@@ -369,6 +369,7 @@ function PlayerPage() {
   const [bestWindowLoaded, setBestWindowLoaded] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [modModalOpen, setModModalOpen] = useState(false);
+  const [includeNoModUsage, setIncludeNoModUsage] = useState(true);
   const [hoveredMod, setHoveredMod] = useState<string | null>(null);
   const [bpmModalOpen, setBpmModalOpen] = useState(false);
   const [recentHasMore, setRecentHasMore] = useState(true);
@@ -570,6 +571,13 @@ function PlayerPage() {
   ]);
 
   const relevantBestMods = useMemo(() => getRelevantMods(best), [best]);
+  const bestPositionByIdentity = useMemo(() => {
+    const positions = new Map<string, number>();
+    best.forEach((score, index) => {
+      positions.set(getScoreIdentity(score), index + 1);
+    });
+    return positions;
+  }, [best]);
 
   const availableKeyModes = useMemo(
     () => getAvailableKeyModes([...best, ...recent]),
@@ -715,15 +723,18 @@ function PlayerPage() {
               </button>
               {(() => {
                 const noModCount = profileInsights.sampleSize - (profileInsights.mostUsedMod?.total ?? 0);
+                const usageSampleSize = includeNoModUsage
+                  ? profileInsights.sampleSize
+                  : Math.max(profileInsights.sampleSize - noModCount, 0);
                 const entries = [
                   ...profileInsights.modBreakdown,
-                  ...(noModCount > 0 ? [{ label: "NM", count: noModCount, total: profileInsights.sampleSize }] : []),
+                  ...(includeNoModUsage && noModCount > 0 ? [{ label: "NM", count: noModCount, total: profileInsights.sampleSize }] : []),
                 ].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 
                 const colored = entries.map((e, index) => ({
                   ...e,
                   color: getModUsageColor(e.label, index),
-                  pct: (e.count / profileInsights.sampleSize) * 100,
+                  pct: usageSampleSize > 0 ? (e.count / usageSampleSize) * 100 : 0,
                 }));
 
                 const cx = 110, cy = 110, ro = 96, ri = 62;
@@ -755,20 +766,47 @@ function PlayerPage() {
                 const singleSlice = slices.length === 1;
                 const focused = hoveredMod ? slices.find((s) => s.label === hoveredMod) : null;
                 const HOVER_OFFSET = 8;
-                const stacks = totalCount - profileInsights.sampleSize;
+                const stacks = totalCount - usageSampleSize;
 
                 return (
                   <>
-                    <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">Mod Usage</div>
-                    <div className="mt-0.5 text-[11px] text-osu-f1/60 flex items-center gap-1.5 flex-wrap">
-                      <span>across {profileInsights.sampleSize} top plays</span>
-                      {stacks > 0 && (
-                        <span
-                          className="px-1.5 py-[1px] rounded bg-osu-b3/40 text-[9px] font-semibold uppercase tracking-wider text-osu-f1 cursor-help"
-                          title={`${stacks} extra mod-use${stacks === 1 ? "" : "s"} from plays that stack mods (e.g. DT+MR). Slice sizes show share of mod-uses; percentages show share of plays.`}
+                    <div className="pr-8 flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">Mod Usage</div>
+                        <div className="mt-0.5 text-[11px] text-osu-f1/60 flex items-center gap-1.5 flex-wrap">
+                          <span>across {usageSampleSize} {includeNoModUsage ? "top plays" : "modded top plays"}</span>
+                          {stacks > 0 && (
+                            <span
+                              className="px-1.5 py-[1px] rounded bg-osu-b3/40 text-[9px] font-semibold uppercase tracking-wider text-osu-f1 cursor-help"
+                              title={`${stacks} extra mod-use${stacks === 1 ? "" : "s"} from plays that stack mods (e.g. DT+MR). Slice sizes show share of mod-uses; percentages show share of plays.`}
+                            >
+                              +{stacks} stacked
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {noModCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIncludeNoModUsage((value) => !value);
+                            setHoveredMod(null);
+                          }}
+                          aria-pressed={includeNoModUsage}
+                          title={includeNoModUsage ? "NM is included in mod usage" : "NM is excluded from mod usage"}
+                          className="mt-0.5 flex h-6 flex-shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-osu-b2/60 bg-osu-b3/30 px-1.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1 transition-colors hover:border-osu-b1/80 hover:bg-osu-b3/50 hover:text-white"
                         >
-                          +{stacks} stacked
-                        </span>
+                          <span>NM</span>
+                          <span
+                            className={`relative h-3.5 w-7 rounded-full transition-colors ${includeNoModUsage ? "bg-osu-f1/80" : "bg-osu-b2"}`}
+                            aria-hidden="true"
+                          >
+                            <span
+                              className="absolute left-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-white/95 transition-transform"
+                              style={{ transform: includeNoModUsage ? "translateX(14px)" : "translateX(0)" }}
+                            />
+                          </span>
+                        </button>
                       )}
                     </div>
                     <div className="mt-3 flex justify-center">
@@ -810,16 +848,16 @@ function PlayerPage() {
                               {Math.round(focused.pct)}%
                             </text>
                             <text x={cx} y={cy + 24} textAnchor="middle" fill="var(--color-osu-f1)" style={{ fontSize: 10 }}>
-                              {focused.count} of {profileInsights.sampleSize}
+                              {focused.count} of {usageSampleSize}
                             </text>
                           </>
                         ) : (
                           <>
                             <text x={cx} y={cy + 2} textAnchor="middle" fill="#fff" style={{ fontSize: 28, fontWeight: 800 }}>
-                              {profileInsights.sampleSize}
+                              {usageSampleSize}
                             </text>
                             <text x={cx} y={cy + 20} textAnchor="middle" fill="var(--color-osu-f1)" style={{ fontSize: 9, letterSpacing: 1.5, textTransform: "uppercase" }}>
-                              top plays
+                              {includeNoModUsage ? "top plays" : "modded plays"}
                             </text>
                           </>
                         )}
@@ -1233,9 +1271,11 @@ function PlayerPage() {
                 ) : scoreListState === "error" ? (
                   <div className="text-center py-8 text-osu-f1 text-sm">{scoresError}</div>
                 ) : scoreListState === "loaded" ? (
-                  visibleScores.map((s: OsuScore, i: number) => (
-                    <ScoreRow key={getScoreIdentity(s)} score={s} position={i + 1} />
-                  ))
+                  visibleScores.map((s: OsuScore, i: number) => {
+                    const identity = getScoreIdentity(s);
+                    const position = tab === "best" ? (bestPositionByIdentity.get(identity) ?? i + 1) : i + 1;
+                    return <ScoreRow key={identity} score={s} position={position} />;
+                  })
                 ) : (
                   <div className="text-center py-8 text-osu-f1 text-sm">No scores found</div>
                 )}
@@ -2123,12 +2163,12 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
   );
 
   return (
-    <div className="relative group/score flex items-center gap-2 sm:gap-3 py-2.5 px-3 rounded-lg bg-osu-b4/50 hover:bg-osu-b4 transition-colors duration-[120ms]">
+    <div className="player-score-row relative flex items-center gap-2 sm:gap-3 py-2.5 px-3 rounded-lg bg-osu-b4/50 hover:bg-osu-b4 transition-colors duration-[120ms]">
       {/* Mobile inline position number */}
       <span className="sm:hidden text-xs text-osu-f1 font-bold flex-shrink-0">{position}.</span>
       {/* Desktop hover position number */}
       <div
-        className="pointer-events-none absolute -left-14 top-1/2 -translate-y-1/2 w-10 text-right text-white/90 opacity-0 translate-x-2 transition-all duration-150 ease-out group-hover/score:opacity-100 group-hover/score:translate-x-0 hidden sm:block"
+        className="score-position-indicator pointer-events-none absolute -left-14 top-1/2 -translate-y-1/2 w-10 text-right text-white/90 opacity-0 translate-x-2 transition-all duration-150 ease-out hidden sm:block"
         style={{ fontFamily: "Venera" }}
       >
         <span className="block text-[24px] leading-none">{position}</span>
