@@ -3461,9 +3461,8 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         </div>
         {replayAudioLoading ? (
           <div className="absolute inset-0 z-30 grid place-items-center bg-osu-b5/45 backdrop-blur-[1px]">
-            <div className="flex items-center gap-2 rounded-md border border-osu-b3/50 bg-osu-b5/85 px-3 py-2 text-[11px] font-semibold text-osu-l2 shadow-lg">
+            <div className="grid h-8 w-8 place-items-center rounded-md border border-osu-b3/50 bg-osu-b5/85 shadow-lg">
               <div className="h-4 w-4 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
-              <span>{replayAudioSizeLabel ? `Downloading audio... ${replayAudioSizeLabel}` : "Downloading audio..."}</span>
             </div>
           </div>
         ) : null}
