@@ -55,7 +55,7 @@ const TUNG_TUNG_SAHUR_AUDIO_SRC = "/audio/tung-tung-sahur-keycap.mp3";
 const TUNG_TUNG_SAHUR_GLOW_COLORS = ["#38d9ff", "#ff3f57", "#8bff3f", "#b45cff", "#ffd53d", "#ff7a2f"];
 const TUNG_TUNG_SAHUR_BASE_REST = { y: 0, scaleY: 1 };
 const TUNG_TUNG_SAHUR_TOP_REST = { x: -3.25, y: 4, scaleY: 1, filter: "brightness(1)" };
-const TUNG_TUNG_SAHUR_ACTUATION_MS = 70;
+const TUNG_TUNG_SAHUR_ACTUATION_MS = 49;
 type PlayerTab = "best" | "recent" | "card" | "about";
 
 export const Route = createFileRoute("/player/$username")({
