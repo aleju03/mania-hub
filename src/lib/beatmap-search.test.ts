@@ -70,6 +70,29 @@ describe("filterBeatmapSearchResults", () => {
     expect(results.map((beatmapset) => beatmapset.id)).toEqual([1240883, 1877490, 827679]);
   });
 
+  it("keeps title-prefix variants in upstream relevance order", () => {
+    const results = filterBeatmapSearchResults([
+      createBeatmapset({
+        id: 1877490,
+        beatmaps: [{ id: 3, beatmapset_id: 1877490, difficulty_rating: 5.2, mode: "mania", status: "ranked", total_length: 125, cs: 4, drain: 8, accuracy: 8, ar: 8, bpm: 210, convert: false, count_circles: 0, count_sliders: 0, count_spinners: 0, version: "[4K] Icy X2", url: "" }],
+      }),
+      createBeatmapset({
+        id: 827679,
+        title: "Cyber Inductance (Speed Up Ver.)",
+        status: "loved",
+        beatmaps: [{ id: 1938169, beatmapset_id: 827679, difficulty_rating: 6.92, mode: "mania", status: "loved", total_length: 120, cs: 4, drain: 8, accuracy: 8, ar: 8, bpm: 230, convert: false, count_circles: 0, count_sliders: 0, count_spinners: 0, version: "[4K] NB4 1.4x", url: "" }],
+      }),
+      createBeatmapset({
+        id: 1240883,
+        status: "loved",
+        creator: "kasam53",
+        beatmaps: [{ id: 2, beatmapset_id: 1240883, difficulty_rating: 5.6, mode: "mania", status: "loved", total_length: 130, cs: 7, drain: 8, accuracy: 8, ar: 8, bpm: 210, convert: false, count_circles: 0, count_sliders: 0, count_spinners: 0, version: "[7K] AAA", url: "" }],
+      }),
+    ], "cyber inductance");
+
+    expect(results.map((beatmapset) => beatmapset.id)).toEqual([1877490, 827679, 1240883]);
+  });
+
   it("falls back to broader metadata matching when there is no strict title or version phrase hit", () => {
     const results = filterBeatmapSearchResults([
       createBeatmapset({
@@ -109,5 +132,27 @@ describe("filterBeatmapSearchResults", () => {
     ], "nb4 1.4x");
 
     expect(results.map((beatmapset) => beatmapset.id)).toEqual([827679]);
+  });
+
+  it("prefers mapper-owned sets over pack diffs that only mention the mapper", () => {
+    const results = filterBeatmapSearchResults([
+      createBeatmapset({
+        id: 1362856,
+        title: "suckawa's Epsilon Chordjack practice paq",
+        artist: "Various Artists",
+        creator: "suckawa",
+        beatmaps: [{ id: 7, beatmapset_id: 1362856, difficulty_rating: 7.6, mode: "mania", status: "graveyard", total_length: 90, cs: 4, drain: 8, accuracy: 8, ar: 8, bpm: 210, convert: false, count_circles: 0, count_sliders: 0, count_spinners: 0, version: "[4K] The Quick Brown Fox | Break 1.3 (beary605)", url: "" }],
+      }),
+      createBeatmapset({
+        id: 500905,
+        title: "Break",
+        artist: "The Quick Brown Fox",
+        creator: "beary605",
+        status: "loved",
+        beatmaps: [{ id: 3065262, beatmapset_id: 500905, difficulty_rating: 6.54, mode: "mania", status: "loved", total_length: 90, cs: 4, drain: 8, accuracy: 8, ar: 8, bpm: 210, convert: false, count_circles: 0, count_sliders: 0, count_spinners: 0, version: "[4K] Smash 1.1x", url: "" }],
+      }),
+    ], "Break beary605");
+
+    expect(results.map((beatmapset) => beatmapset.id)).toEqual([500905, 1362856]);
   });
 });

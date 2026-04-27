@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="4 dan">
+  <defs>
+    <linearGradient id="fill" x1="23%" x2="76%" y1="10%" y2="92%">
+      <stop offset="0" stop-color="#7b543f"/>
+      <stop offset="0.48" stop-color="#9a7b6c"/>
+      <stop offset="0.7" stop-color="#d2c6c1"/>
+      <stop offset="1" stop-color="#3a1f14"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="22" stdDeviation="16" flood-color="#000" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+  <text x="512" y="535" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, 'Times New Roman', serif" font-size="860" font-weight="900" fill="none" stroke="#070707" stroke-width="104" stroke-linejoin="round" filter="url(#shadow)">4</text>
+  <text x="512" y="535" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, 'Times New Roman', serif" font-size="860" font-weight="900" fill="none" stroke="#1b1717" stroke-width="72" stroke-linejoin="round">4</text>
+  <text x="512" y="535" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, 'Times New Roman', serif" font-size="860" font-weight="900" fill="url(#fill)" stroke="#4a3025" stroke-width="34" stroke-linejoin="round">4</text>
+</svg>

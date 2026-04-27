@@ -266,11 +266,11 @@ function ScoresPage() {
   }, [feedScores, filter, gradeFilter, failedFilter]);
 
   const activePlayers = useMemo(() => {
-    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    const activeCutoff = Date.now() - 40 * 60 * 1000;
     const seen = new Map<number, { username: string; avatar_url: string; latestTime: number }>();
     for (const score of feedScores) {
       const timeMs = getScoreTimeMs(score);
-      if (timeMs < oneHourAgo || !score.user) continue;
+      if (timeMs < activeCutoff || !score.user) continue;
       const existing = seen.get(score.user_id);
       if (!existing || timeMs > existing.latestTime) {
         seen.set(score.user_id, {

@@ -70,6 +70,18 @@
   --color-osu-orange: #ff8e5d;
 }
 body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family: var(--font-sans); }
+@media (hover: hover) and (pointer: fine) {
+  .player-score-row:hover .score-position-indicator {
+    opacity: 1;
+    translate: 0 var(--tw-translate-y);
+  }
+}
+@media (hover: none), (pointer: coarse) {
+  .player-score-row:active .score-position-indicator {
+    opacity: 1;
+    translate: 0 var(--tw-translate-y);
+  }
+}
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: var(--color-osu-b6); }
 ::-webkit-scrollbar-thumb { background: var(--color-osu-b2); border-radius: 4px; }

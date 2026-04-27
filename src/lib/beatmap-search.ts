@@ -28,10 +28,11 @@ function rankBeatmapsetMatch(beatmapset: OsuBeatmapset, normalizedQuery: string)
   const creator = normalizeBeatmapSearchText(beatmapset.creator);
   const versions = maniaBeatmaps.map((beatmap) => normalizeBeatmapSearchText(beatmap.version)).filter(Boolean);
   const titleMatchesExactly = title === normalizedQuery;
+  const titleStartsWithPhrase = title.startsWith(`${normalizedQuery} `);
   const titleContainsPhrase = title.includes(normalizedQuery);
   const versionContainsPhrase = versions.some((version) => version.includes(normalizedQuery));
 
-  if (titleMatchesExactly) {
+  if (titleMatchesExactly || titleStartsWithPhrase) {
     return { score: 500, tier: "strict" };
   }
   if (titleContainsPhrase) {
@@ -47,9 +48,13 @@ function rankBeatmapsetMatch(beatmapset: OsuBeatmapset, normalizedQuery: string)
   const combinedMetadata = [title, artist, creator, ...versions].join(" ");
   const titleContainsAllTokens = tokens.every((token) => title.includes(token));
   const metadataContainsAllTokens = tokens.every((token) => combinedMetadata.includes(token));
+  const creatorContainsSomeTokens = tokens.some((token) => creator.includes(token));
 
   if (titleContainsAllTokens) {
     return { score: 300, tier: "broad" };
+  }
+  if (metadataContainsAllTokens && creatorContainsSomeTokens) {
+    return { score: 260, tier: "broad" };
   }
   if (metadataContainsAllTokens) {
     return { score: 200, tier: "broad" };

@@ -256,6 +256,295 @@ function parseKeyCount(version: string): number | null {
   return match ? parseInt(match[1]) : null;
 }
 
+function parseDifficultyRate(version: string): number {
+  const matches = [...version.matchAll(/(^|[^\da-z])(?:x\s*)?([01](?:\.\d{1,3})|2(?:\.0{1,3})?)(?:\s*[x×])?(?=$|[^\d])/gi)];
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const value = Number.parseFloat(matches[i][2]);
+    if (Number.isFinite(value) && value >= 0.5 && value <= 2) return value;
+  }
+  return 1;
+}
+
+function parseBracketBpm(version: string): number | null {
+  const matches = [...version.matchAll(/\[(\d{2,3})\]/g)];
+  for (let i = matches.length - 1; i >= 0; i--) {
+    const value = Number.parseInt(matches[i][1], 10);
+    if (Number.isFinite(value) && value >= 60 && value <= 400) return value;
+  }
+  return null;
+}
+
+function normalizeRateVariantVersion(version: string): string {
+  return stripRateVariantDecorations(version)
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function stripRateVariantDecorations(version: string): string {
+  return version
+    .toLowerCase()
+    .replace(/\[[^\]]*?\b\d+k\b[^\]]*?\]/gi, " ")
+    .replace(/\b\d+k\b/gi, " ")
+    .replace(/(^|[^\da-z])x?\s*(?:[01](?:\.\d{1,3})|2(?:\.0{1,3})?)\s*[x×]?(?=$|[^\d])/gi, "$1 ")
+    .replace(/\b\d{2,3}\s*bpm\b/gi, " ")
+    .replace(/\brate\b/gi, " ")
+    .trim();
+}
+
+function normalizeBracketBpmVariantVersion(version: string): string {
+  return version
+    .toLowerCase()
+    .replace(/\[[^\]]*?\b\d+k\b[^\]]*?\]/gi, " ")
+    .replace(/\b\d+k\b/gi, " ")
+    .replace(/\[\d{2,3}\]/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function normalizeNumericVariantVersion(version: string): string {
+  return version
+    .toLowerCase()
+    .replace(/\[[^\]]*?\b\d+k\b[^\]]*?\]/gi, " ")
+    .replace(/\b\d+k\b/gi, " ")
+    .replace(/\b\d[\d,.]*\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+const ORDINARY_DIFFICULTY_WORDS = new Set([
+  "4k",
+  "5k",
+  "6k",
+  "7k",
+  "8k",
+  "9k",
+  "10k",
+  "11k",
+  "12k",
+  "13k",
+  "14k",
+  "15k",
+  "16k",
+  "beginner",
+  "easy",
+  "normal",
+  "hard",
+  "insane",
+  "expert",
+  "extra",
+  "extreme",
+  "advanced",
+  "hyper",
+  "another",
+  "oni",
+  "ura",
+  "master",
+  "ultimate",
+  "challenge",
+  "light",
+  "standard",
+  "heavy",
+  "novice",
+  "apprentice",
+  "intermediate",
+  "advanced",
+  "diff",
+  "difficulty",
+  "lv",
+  "lvl",
+  "level",
+  "ez",
+  "nm",
+  "hd",
+  "shd",
+  "ex",
+  "mx",
+  "sc",
+]);
+
+function normalizeOrdinaryDifficultyVersion(version: string): string[] {
+  return version
+    .toLowerCase()
+    .replace(/\[[^\]]*?\b\d+k\b[^\]]*?\]/gi, " ")
+    .replace(/\b[\w.-]+(?:'s|’s)\b/gi, " ")
+    .replace(/(^|[^\da-z])x?\s*(?:[01](?:\.\d{1,3})|2(?:\.0{1,3})?)\s*[x×]?(?=$|[^\d])/gi, "$1 ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function isOrdinaryDifficultyName(version: string): boolean {
+  const words = normalizeOrdinaryDifficultyVersion(version);
+  return words.length > 0 && words.every((word) => /^\d+$/.test(word) || ORDINARY_DIFFICULTY_WORDS.has(word));
+}
+
+function looksLikeSongPackVersion(version: string): boolean {
+  const cleaned = version
+    .replace(/\[[^\]]*?\b\d+k\b[^\]]*?\]/gi, " ")
+    .replace(/\b\d+k\b/gi, " ")
+    .trim();
+  return /\s[-–—]\s/.test(cleaned);
+}
+
+function isLikelyRateVariantSet(beatmaps: NonNullable<MapsFavouriteBeatmapset["maniaBeatmaps"]>): boolean {
+  if (beatmaps.length <= 1) return false;
+  const names = new Set(beatmaps.map((beatmap) => normalizeRateVariantVersion(beatmap.version)).filter(Boolean));
+  const hasRateVariant = beatmaps.some((beatmap) => parseDifficultyRate(beatmap.version) !== 1);
+  if (names.size === 1 && hasRateVariant) return true;
+  const keyCounts = new Set(beatmaps.map((beatmap) => Math.round(beatmap.cs)).filter((keyCount) => Number.isFinite(keyCount)));
+  return (
+    names.size === 0 &&
+    hasRateVariant &&
+    keyCounts.size <= 1 &&
+    beatmaps.every((beatmap) => !/[a-z0-9]/i.test(stripRateVariantDecorations(beatmap.version)))
+  );
+}
+
+function isLikelyBracketBpmVariantSet(beatmaps: NonNullable<MapsFavouriteBeatmapset["maniaBeatmaps"]>): boolean {
+  if (beatmaps.length <= 1) return false;
+  const variants = beatmaps
+    .map((beatmap) => ({
+      bpm: parseBracketBpm(beatmap.version),
+      name: normalizeBracketBpmVariantVersion(beatmap.version),
+    }))
+    .filter((variant) => variant.bpm !== null && variant.name);
+  if (variants.length !== beatmaps.length) return false;
+  const names = new Set(variants.map((variant) => variant.name));
+  const bpms = new Set(variants.map((variant) => variant.bpm));
+  return names.size === 1 && bpms.size > 1;
+}
+
+function getBracketBpmBase(beatmaps: NonNullable<MapsFavouriteBeatmapset["maniaBeatmaps"]>): number | null {
+  const bpms = beatmaps
+    .map((beatmap) => parseBracketBpm(beatmap.version))
+    .filter((bpm): bpm is number => bpm !== null)
+    .sort((a, b) => a - b);
+  if (!bpms.length) return null;
+  return bpms.includes(130) ? 130 : bpms[0];
+}
+
+function isLikelyNumericVariantSet(beatmaps: NonNullable<MapsFavouriteBeatmapset["maniaBeatmaps"]>): boolean {
+  if (beatmaps.length <= 1) return false;
+  const names = new Set(beatmaps.map((beatmap) => normalizeNumericVariantVersion(beatmap.version)).filter(Boolean));
+  if (names.size !== 1) return false;
+  return beatmaps.some((beatmap) => /\b\d[\d,.]*\b/.test(beatmap.version));
+}
+
+function parseSelectedDifficultyRate(
+  selected: NonNullable<MapsFavouriteBeatmapset["maniaBeatmaps"]>[number] | null,
+  beatmaps: NonNullable<MapsFavouriteBeatmapset["maniaBeatmaps"]>,
+): number {
+  if (!selected) return 1;
+  const bracketBpm = parseBracketBpm(selected.version);
+  const baseBpm = isLikelyBracketBpmVariantSet(beatmaps) ? getBracketBpmBase(beatmaps) : null;
+  if (bracketBpm && baseBpm) return bracketBpm / baseBpm;
+  return parseDifficultyRate(selected.version);
+}
+
+function getSetPreviewReferenceBeatmap(
+  beatmaps: NonNullable<MapsFavouriteBeatmapset["maniaBeatmaps"]>,
+): NonNullable<MapsFavouriteBeatmapset["maniaBeatmaps"]>[number] | null {
+  const meaningfulBeatmaps = beatmaps.filter((beatmap) => beatmap.difficultyRating >= 0.5);
+  if (!meaningfulBeatmaps.length) return beatmaps[0] ?? null;
+
+  if (isLikelyBracketBpmVariantSet(meaningfulBeatmaps)) {
+    const baseBpm = getBracketBpmBase(meaningfulBeatmaps);
+    return meaningfulBeatmaps.find((beatmap) => parseBracketBpm(beatmap.version) === baseBpm) ?? meaningfulBeatmaps[0] ?? null;
+  }
+
+  if (isLikelyRateVariantSet(meaningfulBeatmaps)) {
+    return meaningfulBeatmaps.find((beatmap) => parseDifficultyRate(beatmap.version) === 1) ?? meaningfulBeatmaps.at(-1) ?? null;
+  }
+
+  return null;
+}
+
+function isLikelyOrdinaryDifficultySet(beatmaps: NonNullable<MapsFavouriteBeatmapset["maniaBeatmaps"]>): boolean {
+  if (beatmaps.length <= 1) return false;
+  return beatmaps.every((beatmap) => isOrdinaryDifficultyName(beatmap.version));
+}
+
+function isLikelySmallSameSongDifficultySet(beatmaps: NonNullable<MapsFavouriteBeatmapset["maniaBeatmaps"]>): boolean {
+  if (beatmaps.length < 2 || beatmaps.length > 4) return false;
+  const keyCounts = new Set(beatmaps.map((beatmap) => Math.round(beatmap.cs)).filter((keyCount) => Number.isFinite(keyCount)));
+  if (keyCounts.size > 1) return false;
+  if (beatmaps.some((beatmap) => looksLikeSongPackVersion(beatmap.version))) return false;
+  return beatmaps.some((beatmap) => isOrdinaryDifficultyName(beatmap.version));
+}
+
+function shouldUseSetPreviewForReplayAudio(beatmaps: NonNullable<MapsFavouriteBeatmapset["maniaBeatmaps"]>): boolean {
+  const playableBeatmaps = beatmaps.filter((beatmap) => beatmap.difficultyRating > 0);
+  const meaningfulBeatmaps = playableBeatmaps.filter((beatmap) => beatmap.difficultyRating >= 0.5);
+  return (
+    beatmaps.length <= 1 ||
+    playableBeatmaps.length <= 1 ||
+    meaningfulBeatmaps.length <= 1 ||
+    isLikelyRateVariantSet(meaningfulBeatmaps) ||
+    isLikelyBracketBpmVariantSet(meaningfulBeatmaps) ||
+    isLikelyNumericVariantSet(meaningfulBeatmaps) ||
+    isLikelyOrdinaryDifficultySet(meaningfulBeatmaps) ||
+    isLikelySmallSameSongDifficultySet(meaningfulBeatmaps)
+  );
+}
+
+function isLikelyTimedRateVariantSet(beatmaps: NonNullable<MapsFavouriteBeatmapset["maniaBeatmaps"]>): boolean {
+  const meaningfulBeatmaps = beatmaps.filter((beatmap) => beatmap.difficultyRating >= 0.5);
+  return isLikelyRateVariantSet(meaningfulBeatmaps) || isLikelyBracketBpmVariantSet(meaningfulBeatmaps);
+}
+
+function getDefaultRandomBeatmapId(beatmaps: NonNullable<MapsFavouriteBeatmapset["maniaBeatmaps"]>): number | null {
+  if (!beatmaps.length) return null;
+  const meaningfulBeatmaps = beatmaps.filter((beatmap) => beatmap.difficultyRating >= 0.5);
+  if (isLikelyBracketBpmVariantSet(meaningfulBeatmaps)) {
+    const baseBpm = getBracketBpmBase(meaningfulBeatmaps);
+    const base = meaningfulBeatmaps.find((beatmap) => parseBracketBpm(beatmap.version) === baseBpm);
+    if (base) return base.id;
+  }
+  if (isLikelyRateVariantSet(meaningfulBeatmaps)) {
+    const base = meaningfulBeatmaps.find((beatmap) => parseDifficultyRate(beatmap.version) === 1);
+    if (base) return base.id;
+    const lowest = [...meaningfulBeatmaps].sort((a, b) => a.difficultyRating - b.difficultyRating)[0];
+    return lowest?.id ?? beatmaps.at(-1)?.id ?? null;
+  }
+  return beatmaps[0]?.id ?? null;
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function getBeatmapFileWithRetry(beatmapId: number) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const result = await getBeatmapFile({ data: { beatmapId } });
+      if (!result.content.trim()) throw new Error("Empty beatmap file");
+      return result;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await wait(250 * (attempt + 1));
+    }
+  }
+  throw lastError;
+}
+
+function setAudioPreservesPitch(audio: HTMLAudioElement, preservesPitch: boolean): void {
+  const pitchAudio = audio as HTMLAudioElement & {
+    mozPreservesPitch?: boolean;
+    preservesPitch?: boolean;
+    webkitPreservesPitch?: boolean;
+  };
+  pitchAudio.preservesPitch = preservesPitch;
+  pitchAudio.mozPreservesPitch = preservesPitch;
+  pitchAudio.webkitPreservesPitch = preservesPitch;
+}
+
+function formatMegabytes(bytes: number | null): string | null {
+  if (bytes == null || !Number.isFinite(bytes) || bytes <= 0) return null;
+  return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
+}
+
 function matchesKeyFilter(kc: number | null, filter: KeyFilter): boolean {
   if (filter === "all") return true;
   if (filter === "4k") return kc === 4;
@@ -2229,29 +2518,32 @@ interface RandomPreviewRendererLike {
   destroy: () => void;
   pause: () => void;
   play: () => void;
+  ready: () => Promise<void>;
   resize: () => void;
   seek: (timeMs: number) => void;
   setExternalClock: (cb: (() => { time: number; stalled: boolean } | null) | null) => void;
   setScrollSpeed: (value: number) => void;
 }
 
-function getPreviewNotes(beatmap: ManiaBeatmap): ManiaNote[] {
-  const start = Math.max(0, beatmap.previewTime || 0);
-  const end = start + RANDOM_REPLAY_PREVIEW_MS;
+function getPreviewNotes(beatmap: ManiaBeatmap, startTimeMs = beatmap.previewTime, timeScale = 1): ManiaNote[] {
+  const start = Math.max(0, startTimeMs || 0);
+  const scale = Math.max(0.1, timeScale);
+  const end = start + (RANDOM_REPLAY_PREVIEW_MS * scale);
 
   return beatmap.notes
     .filter((note) => note.endTime >= start && note.time <= end)
     .map((note) => ({
       ...note,
-      time: Math.max(0, note.time - start),
-      endTime: Math.min(RANDOM_REPLAY_PREVIEW_MS, Math.max(0, note.endTime - start)),
+      time: Math.max(0, (note.time - start) / scale),
+      endTime: Math.min(RANDOM_REPLAY_PREVIEW_MS, Math.max(0, (note.endTime - start) / scale)),
     }))
     .filter((note) => note.endTime >= 0 && note.time <= RANDOM_REPLAY_PREVIEW_MS);
 }
 
-function getPreviewScrollVelocities(beatmap: ManiaBeatmap): ManiaBeatmap["scrollVelocities"] {
-  const start = Math.max(0, beatmap.previewTime || 0);
-  const end = start + RANDOM_REPLAY_PREVIEW_MS;
+function getPreviewScrollVelocities(beatmap: ManiaBeatmap, startTimeMs = beatmap.previewTime, timeScale = 1): ManiaBeatmap["scrollVelocities"] {
+  const start = Math.max(0, startTimeMs || 0);
+  const scale = Math.max(0.1, timeScale);
+  const end = start + (RANDOM_REPLAY_PREVIEW_MS * scale);
   const velocities = beatmap.scrollVelocities ?? [];
   let initialMultiplier = 1;
 
@@ -2264,7 +2556,7 @@ function getPreviewScrollVelocities(beatmap: ManiaBeatmap): ManiaBeatmap["scroll
     { time: 0, multiplier: initialMultiplier },
     ...velocities
       .filter((point) => point.time > start && point.time <= end)
-      .map((point) => ({ ...point, time: point.time - start })),
+      .map((point) => ({ ...point, time: (point.time - start) / scale })),
   ];
 }
 
@@ -2299,21 +2591,27 @@ function buildAutoplayFrames(notes: ManiaNote[], keyCount: number): ReplayFrame[
 
 function RandomReplayPreview({
   beatmap,
+  startTimeMs,
+  timeScale,
   isPlaying,
   getClock,
+  onReady,
   onEnded,
 }: {
   beatmap: ManiaBeatmap | null;
+  startTimeMs: number;
+  timeScale: number;
   isPlaying: boolean;
   getClock: () => { time: number; stalled: boolean } | null;
+  onReady: () => void;
   onEnded: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<RandomPreviewRendererLike | null>(null);
   const isPlayingRef = useRef(isPlaying);
   const getClockRef = useRef(getClock);
-  const notes = useMemo(() => beatmap ? getPreviewNotes(beatmap) : [], [beatmap]);
-  const scrollVelocities = useMemo(() => beatmap ? getPreviewScrollVelocities(beatmap) : [], [beatmap]);
+  const notes = useMemo(() => beatmap ? getPreviewNotes(beatmap, startTimeMs, timeScale) : [], [beatmap, startTimeMs, timeScale]);
+  const scrollVelocities = useMemo(() => beatmap ? getPreviewScrollVelocities(beatmap, startTimeMs, timeScale) : [], [beatmap, startTimeMs, timeScale]);
   const frames = useMemo(() => beatmap ? buildAutoplayFrames(notes, beatmap.keyCount) : [], [beatmap, notes]);
 
   useEffect(() => {
@@ -2350,9 +2648,13 @@ function RandomReplayPreview({
       renderer.setScrollSpeed(18);
       renderer.setExternalClock(() => getClockRef.current());
       rendererRef.current = renderer;
-      if (isPlayingRef.current) renderer.play();
       handleResize = () => renderer?.resize();
       window.addEventListener("resize", handleResize);
+      void renderer.ready().then(() => {
+        if (cancelled || rendererRef.current !== renderer) return;
+        onReady();
+        if (isPlayingRef.current) renderer.play();
+      });
     });
 
     return () => {
@@ -2361,7 +2663,7 @@ function RandomReplayPreview({
       rendererRef.current?.destroy();
       rendererRef.current = null;
     };
-  }, [beatmap, frames, notes, scrollVelocities]);
+  }, [beatmap, frames, notes, onReady, scrollVelocities]);
 
   useEffect(() => {
     const renderer = rendererRef.current;
@@ -2493,6 +2795,8 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const patterns = (bm.patterns ?? []).slice(0, 5);
   const starLabel = formatStars(bm);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const replayAudioRef = useRef<HTMLAudioElement | null>(null);
+  const replayAudioStartSecondsRef = useRef(0);
   const replayAudioStartPendingRef = useRef(false);
   const replayPreviewEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestedAudioModeRef = useRef<"audio" | "replay" | null>(null);
@@ -2508,14 +2812,36 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     () => [...(bm.maniaBeatmaps ?? [])].sort((a, b) => b.difficultyRating - a.difficultyRating),
     [bm.maniaBeatmaps],
   );
-  const [selectedBeatmapId, setSelectedBeatmapId] = useState<number | null>(() => maniaBeatmaps[0]?.id ?? null);
+  const usesSetPreviewForReplayAudio = useMemo(
+    () => shouldUseSetPreviewForReplayAudio(maniaBeatmaps),
+    [maniaBeatmaps],
+  );
+  const [selectedBeatmapId, setSelectedBeatmapId] = useState<number | null>(() => getDefaultRandomBeatmapId(maniaBeatmaps));
   const selectedBeatmap = maniaBeatmaps.find((map) => map.id === selectedBeatmapId) ?? maniaBeatmaps[0] ?? null;
+  const selectedDifficultyRate = parseSelectedDifficultyRate(selectedBeatmap, maniaBeatmaps.filter((beatmap) => beatmap.difficultyRating >= 0.5));
   const [previewBeatmap, setPreviewBeatmap] = useState<ManiaBeatmap | null>(null);
+  const [replayChartStartMs, setReplayChartStartMs] = useState(0);
+  const [replayChartTimeScale, setReplayChartTimeScale] = useState(1);
+  const [replayAudioMode, setReplayAudioMode] = useState<"set-preview" | "selected-file">("set-preview");
   const [replayPreviewRequested, setReplayPreviewRequested] = useState(false);
   const [isReplayPreviewPlaying, setIsReplayPreviewPlaying] = useState(false);
   const [isReplayPreviewEnding, setIsReplayPreviewEnding] = useState(false);
+  const [isReplayPreviewReady, setIsReplayPreviewReady] = useState(false);
   const [replayPreviewLoading, setReplayPreviewLoading] = useState(false);
+  const [replayAudioLoading, setReplayAudioLoading] = useState(false);
+  const [replayAudioSizeBytes, setReplayAudioSizeBytes] = useState<number | null>(null);
   const [replayPreviewError, setReplayPreviewError] = useState<string | null>(null);
+  const replayAudioUrl = replayAudioMode === "set-preview"
+    ? previewUrl
+    : previewBeatmap?.audioFilename
+    ? `/api/audio?beatmapsetId=${encodeURIComponent(String(bm.id))}&filename=${encodeURIComponent(previewBeatmap.audioFilename)}`
+    : null;
+  const replayAudioPlaybackRate = replayAudioMode === "set-preview" ? selectedDifficultyRate : 1;
+  const replayClockRateDivisor = replayAudioMode === "set-preview" ? selectedDifficultyRate : 1;
+  const replayPreviewStartSeconds = replayAudioMode === "set-preview"
+    ? 0
+    : Math.max(0, replayChartStartMs / 1000);
+  const replayAudioSizeLabel = formatMegabytes(replayAudioSizeBytes);
 
   // Some beatmapsets have no background image — the cover URL 404s. Track load
   // failure so we can swap in a deterministic gradient fallback.
@@ -2524,33 +2850,70 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   useEffect(() => {
     setCoverBroken(false);
     setCoverLoaded(false);
-    setSelectedBeatmapId(maniaBeatmaps[0]?.id ?? null);
+    setSelectedBeatmapId(getDefaultRandomBeatmapId(maniaBeatmaps));
     setReplayPreviewRequested(false);
     setIsReplayPreviewPlaying(false);
     setIsReplayPreviewEnding(false);
+    setIsReplayPreviewReady(false);
+    setReplayAudioLoading(false);
+    setReplayAudioSizeBytes(null);
+    setCurrentTime(0);
     setPreviewBeatmap(null);
+    setReplayChartStartMs(0);
+    setReplayChartTimeScale(1);
+    setReplayAudioMode("set-preview");
     replayAudioStartPendingRef.current = false;
+    replayAudioStartSecondsRef.current = 0;
     requestedAudioModeRef.current = null;
   }, [bm.id, maniaBeatmaps]);
 
   useEffect(() => {
     if (!selectedBeatmap || !replayPreviewRequested) {
       setPreviewBeatmap(null);
+      setReplayChartStartMs(0);
+      setReplayChartTimeScale(1);
+      setReplayAudioMode("set-preview");
+      setIsReplayPreviewReady(false);
       return;
     }
 
     let cancelled = false;
     setReplayPreviewLoading(true);
     setIsReplayPreviewPlaying(false);
+    setIsReplayPreviewReady(false);
+    setReplayAudioLoading(false);
+    setReplayAudioSizeBytes(null);
     setReplayPreviewError(null);
-    getBeatmapFile({ data: { beatmapId: selectedBeatmap.id } })
-      .then((result) => {
+    const referenceBeatmap = usesSetPreviewForReplayAudio ? getSetPreviewReferenceBeatmap(maniaBeatmaps) : null;
+    const referenceBeatmapId = referenceBeatmap?.id && referenceBeatmap.id !== selectedBeatmap.id ? referenceBeatmap.id : null;
+    Promise.all([
+      getBeatmapFileWithRetry(selectedBeatmap.id),
+      referenceBeatmapId ? getBeatmapFileWithRetry(referenceBeatmapId).catch(() => null) : Promise.resolve(null),
+    ])
+      .then(([selectedResult, referenceResult]) => {
         if (cancelled) return;
-        setPreviewBeatmap(parseManiaBeatmap(result.content));
+        const selectedParsed = parseManiaBeatmap(selectedResult.content);
+        const referenceParsed = referenceResult ? parseManiaBeatmap(referenceResult.content) : selectedParsed;
+        const timedRateVariant = usesSetPreviewForReplayAudio && isLikelyTimedRateVariantSet(maniaBeatmaps);
+        const visualParsed = timedRateVariant ? referenceParsed : selectedParsed;
+        const referenceStartMs = Math.max(0, referenceParsed.previewTime || selectedParsed.previewTime || 0);
+        const shouldUseSelectedAudio = !usesSetPreviewForReplayAudio;
+        const chartStartMs = shouldUseSelectedAudio
+          ? Math.max(0, selectedParsed.previewTime || 0)
+          : timedRateVariant
+          ? referenceStartMs
+          : usesSetPreviewForReplayAudio
+          ? Math.max(0, selectedParsed.previewTime || referenceStartMs || 0)
+          : Math.max(0, selectedParsed.previewTime || 0);
+        setPreviewBeatmap(visualParsed);
+        setReplayChartStartMs(chartStartMs);
+        setReplayChartTimeScale(timedRateVariant ? selectedDifficultyRate : 1);
+        setReplayAudioMode(shouldUseSelectedAudio ? "selected-file" : "set-preview");
       })
       .catch(() => {
         if (cancelled) return;
         setPreviewBeatmap(null);
+        setIsReplayPreviewReady(false);
         setReplayPreviewError("Couldn't load replay preview");
       })
       .finally(() => {
@@ -2560,7 +2923,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     return () => {
       cancelled = true;
     };
-  }, [replayPreviewRequested, selectedBeatmap]);
+  }, [maniaBeatmaps, replayPreviewRequested, selectedBeatmap, selectedDifficultyRate, usesSetPreviewForReplayAudio]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
@@ -2578,15 +2941,26 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     return () => cancelAnimationFrame(rafId);
   }, [isPreviewPlaying]);
 
-  const stopPreview = useCallback(() => {
+  const pausePreviewAudio = useCallback((reset = false) => {
     const audio = audioRef.current;
     if (audio) {
+      const pausedAt = audio.currentTime;
       audio.pause();
-      audio.currentTime = 0;
+      audio.playbackRate = 1;
+      setAudioPreservesPitch(audio, true);
+      if (reset) {
+        audio.currentTime = 0;
+        setCurrentTime(0);
+      } else {
+        setCurrentTime(pausedAt);
+      }
     }
     setIsPreviewPlaying(false);
-    setCurrentTime(0);
   }, []);
+
+  const stopPreview = useCallback(() => {
+    pausePreviewAudio(true);
+  }, [pausePreviewAudio]);
 
   const clearReplayPreviewEndTimer = useCallback(() => {
     if (replayPreviewEndTimerRef.current) {
@@ -2599,37 +2973,55 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
 
   const finishReplayPreview = useCallback(() => {
     if (replayPreviewEndTimerRef.current) return;
-    const audio = audioRef.current;
+    const audio = replayAudioRef.current;
     replayAudioStartPendingRef.current = false;
+    replayAudioStartSecondsRef.current = 0;
     requestedAudioModeRef.current = null;
     setIsPreviewPlaying(false);
-    setCurrentTime(0);
+    setReplayAudioLoading(false);
     setIsReplayPreviewEnding(true);
     if (audio) {
       audio.pause();
       audio.currentTime = 0;
+      audio.playbackRate = 1;
+      setAudioPreservesPitch(audio, true);
     }
     replayPreviewEndTimerRef.current = setTimeout(() => {
       replayPreviewEndTimerRef.current = null;
       setReplayPreviewRequested(false);
       setIsReplayPreviewPlaying(false);
       setIsReplayPreviewEnding(false);
+      setIsReplayPreviewReady(false);
+      setReplayAudioLoading(false);
     }, 220);
   }, []);
 
   const resetReplayPreview = useCallback(() => {
     clearReplayPreviewEndTimer();
     replayAudioStartPendingRef.current = false;
+    replayAudioStartSecondsRef.current = 0;
     setReplayPreviewRequested(false);
     setIsReplayPreviewPlaying(false);
     setIsReplayPreviewEnding(false);
+    setIsReplayPreviewReady(false);
+    setReplayAudioLoading(false);
+    setReplayAudioSizeBytes(null);
     setPreviewBeatmap(null);
+    setReplayChartStartMs(0);
+    setReplayChartTimeScale(1);
+    setReplayAudioMode("set-preview");
     setReplayPreviewError(null);
     if (requestedAudioModeRef.current === "replay") {
+      const audio = replayAudioRef.current;
       requestedAudioModeRef.current = null;
-      stopPreview();
+      if (audio) {
+        audio.pause();
+        audio.currentTime = 0;
+        audio.playbackRate = 1;
+        setAudioPreservesPitch(audio, true);
+      }
     }
-  }, [clearReplayPreviewEndTimer, stopPreview]);
+  }, [clearReplayPreviewEndTimer]);
 
   const togglePreview = useCallback(async () => {
     if (!previewUrl) return;
@@ -2637,79 +3029,112 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     if (!audio) return;
 
     if (isPreviewPlaying) {
+      setCurrentTime(audio.currentTime);
       audio.pause();
       return;
     }
 
-    setIsReplayPreviewPlaying(false);
-    setReplayPreviewRequested(false);
-    setIsReplayPreviewEnding(false);
-    replayAudioStartPendingRef.current = false;
+    resetReplayPreview();
     requestedAudioModeRef.current = "audio";
     setPreviewError(null);
     try {
-      audio.currentTime = 0;
+      const resumeTime = currentTime > 0 && (!duration || currentTime < Math.min(duration, RANDOM_REPLAY_PREVIEW_MS / 1000))
+        ? currentTime
+        : 0;
+      audio.currentTime = resumeTime;
+      setCurrentTime(resumeTime);
+      audio.playbackRate = 1;
+      setAudioPreservesPitch(audio, true);
       await audio.play();
     } catch {
       setPreviewError("Couldn't play preview");
       setIsPreviewPlaying(false);
     }
-  }, [isPreviewPlaying, previewUrl]);
+  }, [currentTime, duration, isPreviewPlaying, previewUrl, resetReplayPreview]);
 
   const startReplayPreviewAudio = useCallback(async () => {
-    const audio = audioRef.current;
-    if (!audio || !previewUrl) return;
+    const audio = replayAudioRef.current;
+    if (!replayAudioUrl) {
+      replayAudioStartPendingRef.current = false;
+      setReplayAudioLoading(false);
+      setReplayPreviewError("Couldn't find chart preview audio");
+      return;
+    }
+    if (!audio) return;
     requestedAudioModeRef.current = "replay";
     replayAudioStartPendingRef.current = false;
-    setIsPreviewPlaying(false);
-    setCurrentTime(0);
+    pausePreviewAudio(false);
     setPreviewError(null);
+    replayAudioStartSecondsRef.current = replayPreviewStartSeconds;
     audio.pause();
-    audio.currentTime = 0;
+    audio.currentTime = replayPreviewStartSeconds;
     audio.volume = volume;
+    audio.playbackRate = replayAudioPlaybackRate;
+    setAudioPreservesPitch(audio, replayAudioMode !== "set-preview");
     try {
+      setReplayAudioLoading(replayAudioMode === "selected-file");
+      if (replayAudioMode === "selected-file" && replayAudioSizeBytes == null) {
+        try {
+          const sizeResponse = await fetch(replayAudioUrl, { method: "HEAD" });
+          const sizeRaw = sizeResponse.headers.get("x-audio-size-bytes") ?? sizeResponse.headers.get("content-length");
+          const size = sizeRaw ? Number(sizeRaw) : NaN;
+          if (Number.isFinite(size) && size > 0) setReplayAudioSizeBytes(size);
+        } catch {
+          // Keep showing the generic loading label if size probing fails.
+        }
+      }
       await audio.play();
+      setReplayAudioLoading(false);
     } catch {
+      setReplayAudioLoading(false);
       setPreviewError("Couldn't play preview audio");
     }
-  }, [previewUrl, volume]);
+  }, [pausePreviewAudio, replayAudioMode, replayAudioPlaybackRate, replayAudioSizeBytes, replayAudioUrl, replayPreviewStartSeconds, volume]);
 
   const getReplayPreviewClock = useCallback(() => {
-    const audio = audioRef.current;
+    const audio = replayAudioRef.current;
     if (!audio || requestedAudioModeRef.current !== "replay") {
       return { time: 0, stalled: true };
     }
+    const rate = Math.max(0.1, replayClockRateDivisor);
+    const elapsedSeconds = Math.max(0, audio.currentTime - replayAudioStartSecondsRef.current);
     return {
-      time: Math.min(RANDOM_REPLAY_PREVIEW_MS, audio.currentTime * 1000),
+      time: Math.min(RANDOM_REPLAY_PREVIEW_MS, (elapsedSeconds * 1000) / rate),
       stalled: audio.paused || audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA,
     };
+  }, [replayClockRateDivisor]);
+
+  const markReplayPreviewReady = useCallback(() => {
+    setIsReplayPreviewReady(true);
   }, []);
 
   const startReplayPreview = useCallback(() => {
-    const audio = audioRef.current;
+    const audio = replayAudioRef.current;
     clearReplayPreviewEndTimer();
     requestedAudioModeRef.current = "replay";
     setIsReplayPreviewEnding(false);
-    setIsPreviewPlaying(false);
-    setCurrentTime(0);
+    pausePreviewAudio(false);
     if (audio) {
       audio.pause();
-      audio.currentTime = 0;
+      audio.currentTime = replayPreviewStartSeconds;
+      audio.playbackRate = replayAudioPlaybackRate;
+      setAudioPreservesPitch(audio, replayAudioMode !== "set-preview");
     }
+    replayAudioStartSecondsRef.current = replayPreviewStartSeconds;
     setReplayPreviewRequested(true);
     replayAudioStartPendingRef.current = true;
-    if (previewBeatmap) {
+    if (previewBeatmap && isReplayPreviewReady) {
       setIsReplayPreviewPlaying(true);
       void startReplayPreviewAudio();
     }
-  }, [clearReplayPreviewEndTimer, previewBeatmap, startReplayPreviewAudio]);
+  }, [clearReplayPreviewEndTimer, isReplayPreviewReady, pausePreviewAudio, previewBeatmap, replayAudioMode, replayAudioPlaybackRate, replayPreviewStartSeconds, startReplayPreviewAudio]);
 
   useEffect(() => {
-    if (replayPreviewRequested && previewBeatmap && !replayPreviewLoading && replayAudioStartPendingRef.current) {
+    if (replayPreviewRequested && previewBeatmap && isReplayPreviewReady && !replayPreviewLoading && replayAudioStartPendingRef.current) {
       setIsReplayPreviewPlaying(true);
       void startReplayPreviewAudio();
     }
-  }, [previewBeatmap, replayPreviewLoading, replayPreviewRequested, startReplayPreviewAudio]);
+  }, [isReplayPreviewReady, previewBeatmap, replayPreviewLoading, replayPreviewRequested, startReplayPreviewAudio]);
 
   const applyVolume = useCallback((v: number) => {
     const clamped = Math.min(1, Math.max(0, v));
@@ -2934,22 +3359,15 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
               onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
               onTimeUpdate={(e) => {
                 const audio = e.currentTarget;
+                if (requestedAudioModeRef.current !== "audio") return;
                 const maxSeconds = RANDOM_REPLAY_PREVIEW_MS / 1000;
-                if (requestedAudioModeRef.current === "audio") {
-                  setCurrentTime(Math.min(audio.currentTime, maxSeconds));
-                }
+                setCurrentTime(Math.min(audio.currentTime, maxSeconds));
                 if (audio.currentTime >= maxSeconds && audio.duration > maxSeconds + 0.5) {
-                  if (requestedAudioModeRef.current === "replay") {
-                    finishReplayPreview();
-                  } else {
-                    stopPreview();
-                  }
+                  stopPreview();
                 }
               }}
               onEnded={() => {
-                if (requestedAudioModeRef.current === "replay") {
-                  finishReplayPreview();
-                } else {
+                if (requestedAudioModeRef.current === "audio") {
                   stopPreview();
                 }
               }}
@@ -2960,6 +3378,29 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
                 setIsPreviewPlaying(false);
               }}
             />
+            {replayAudioUrl ? (
+              <audio
+                ref={replayAudioRef}
+                src={replayAudioUrl}
+                preload="metadata"
+                onCanPlay={() => setReplayAudioLoading(false)}
+                onPlaying={() => setReplayAudioLoading(false)}
+                onTimeUpdate={(e) => {
+                  const audio = e.currentTarget;
+                  const maxSeconds = replayAudioStartSecondsRef.current + ((RANDOM_REPLAY_PREVIEW_MS / 1000) * replayAudioPlaybackRate);
+                  if (audio.currentTime >= maxSeconds && audio.duration > maxSeconds + 0.5) {
+                    finishReplayPreview();
+                  }
+                }}
+                onEnded={finishReplayPreview}
+                onError={() => {
+                  setReplayAudioLoading(false);
+                  setPreviewError("Couldn't load chart preview audio");
+                  setIsReplayPreviewPlaying(false);
+                  replayAudioStartPendingRef.current = false;
+                }}
+              />
+            ) : null}
           </div>
         ) : null}
         {previewError ? (
@@ -2978,15 +3419,21 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
             <RandomReplayPreview
               key={selectedBeatmap?.id ?? "preview"}
               beatmap={previewBeatmap}
+              startTimeMs={replayChartStartMs}
+              timeScale={replayChartTimeScale}
               isPlaying={isReplayPreviewPlaying}
               getClock={getReplayPreviewClock}
+              onReady={markReplayPreviewReady}
               onEnded={finishReplayPreview}
             />
           ) : null}
         </div>
-        {replayPreviewLoading ? (
-          <div className="absolute inset-0 grid place-items-center">
-            <div className="h-7 w-7 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
+        {replayAudioLoading ? (
+          <div className="absolute inset-0 z-30 grid place-items-center bg-osu-b5/45 backdrop-blur-[1px]">
+            <div className="flex items-center gap-2 rounded-md border border-osu-b3/50 bg-osu-b5/85 px-3 py-2 text-[11px] font-semibold text-osu-l2 shadow-lg">
+              <div className="h-4 w-4 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
+              <span>{replayAudioSizeLabel ? `Downloading audio... ${replayAudioSizeLabel}` : "Downloading audio..."}</span>
+            </div>
           </div>
         ) : null}
         <button

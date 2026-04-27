@@ -482,6 +482,10 @@ export class ManiaReplayRenderer {
 
   get isPlaying() { return this._isPlaying; }
 
+  ready() {
+    return this.initPromise;
+  }
+
   seek(timeMs: number) {
     this.currentTime = Math.max(0, Math.min(timeMs, this.totalDuration));
     this.recomputeStatsUpTo(this.currentTime);
