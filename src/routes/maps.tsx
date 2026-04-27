@@ -330,6 +330,7 @@ const ORDINARY_DIFFICULTY_WORDS = new Set([
   "normal",
   "hard",
   "insane",
+  "desperate",
   "expert",
   "extra",
   "extreme",
@@ -377,6 +378,15 @@ function normalizeOrdinaryDifficultyVersion(version: string): string[] {
 function isOrdinaryDifficultyName(version: string): boolean {
   const words = normalizeOrdinaryDifficultyVersion(version);
   return words.length > 0 && words.every((word) => /^\d+$/.test(word) || ORDINARY_DIFFICULTY_WORDS.has(word));
+}
+
+function hasOrdinaryDifficultySuffix(version: string): boolean {
+  const parts = version
+    .split(/[|:/\\]+/g)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const suffix = parts.at(-1);
+  return !!suffix && parts.length > 1 && isOrdinaryDifficultyName(suffix);
 }
 
 function looksLikeSongPackVersion(version: string): boolean {
@@ -470,7 +480,26 @@ function isLikelySmallSameSongDifficultySet(beatmaps: NonNullable<MapsFavouriteB
   const keyCounts = new Set(beatmaps.map((beatmap) => Math.round(beatmap.cs)).filter((keyCount) => Number.isFinite(keyCount)));
   if (keyCounts.size > 1) return false;
   if (beatmaps.some((beatmap) => looksLikeSongPackVersion(beatmap.version))) return false;
-  return beatmaps.some((beatmap) => isOrdinaryDifficultyName(beatmap.version));
+  return (
+    beatmaps.some((beatmap) => isOrdinaryDifficultyName(beatmap.version)) ||
+    beatmaps.every((beatmap) => hasOrdinaryDifficultySuffix(beatmap.version))
+  );
+}
+
+function getSvVariantMarker(version: string): "sv" | "nsv" | null {
+  if (/(^|[^a-z0-9])nsv($|[^a-z0-9])/i.test(version)) return "nsv";
+  if (/(^|[^a-z0-9])sv($|[^a-z0-9])/i.test(version)) return "sv";
+  return null;
+}
+
+function isLikelySvVariantSet(beatmaps: NonNullable<MapsFavouriteBeatmapset["maniaBeatmaps"]>): boolean {
+  if (beatmaps.length <= 1) return false;
+  const keyCounts = new Set(beatmaps.map((beatmap) => Math.round(beatmap.cs)).filter((keyCount) => Number.isFinite(keyCount)));
+  if (keyCounts.size > 1) return false;
+  if (beatmaps.some((beatmap) => looksLikeSongPackVersion(beatmap.version))) return false;
+
+  const markers = beatmaps.map((beatmap) => getSvVariantMarker(beatmap.version));
+  return markers.every(Boolean) && markers.includes("sv") && markers.includes("nsv");
 }
 
 function shouldUseSetPreviewForReplayAudio(beatmaps: NonNullable<MapsFavouriteBeatmapset["maniaBeatmaps"]>): boolean {
@@ -484,7 +513,8 @@ function shouldUseSetPreviewForReplayAudio(beatmaps: NonNullable<MapsFavouriteBe
     isLikelyBracketBpmVariantSet(meaningfulBeatmaps) ||
     isLikelyNumericVariantSet(meaningfulBeatmaps) ||
     isLikelyOrdinaryDifficultySet(meaningfulBeatmaps) ||
-    isLikelySmallSameSongDifficultySet(meaningfulBeatmaps)
+    isLikelySmallSameSongDifficultySet(meaningfulBeatmaps) ||
+    isLikelySvVariantSet(meaningfulBeatmaps)
   );
 }
 
@@ -2927,6 +2957,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
+    if (replayAudioRef.current) replayAudioRef.current.volume = volume;
   }, [volume]);
 
   useEffect(() => {
