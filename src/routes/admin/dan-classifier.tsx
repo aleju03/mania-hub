@@ -174,8 +174,8 @@ function DanClassifierPage() {
   }
 
   return (
-    <main className="min-h-screen bg-osu-b5 text-osu-c1">
-      <div className="max-w-[1200px] mx-auto px-5 py-7 sm:py-10">
+    <main className="min-h-screen overflow-x-hidden bg-osu-b5 text-osu-c1">
+      <div className="max-w-[1200px] mx-auto px-4 py-7 sm:px-5 sm:py-10">
         <div className="pb-6 border-b border-osu-b3/30">
           <div className="text-[11px] uppercase tracking-[0.16em] text-osu-yellow font-bold">
             Admin
@@ -188,8 +188,8 @@ function DanClassifierPage() {
           </div>
         </div>
 
-        <div className="mt-6 grid lg:grid-cols-[minmax(0,1fr)_360px] gap-6 items-start">
-          <section className="rounded-lg border border-osu-b3/30 bg-osu-b4/35 p-4 sm:p-5">
+        <div className="mt-6 grid min-w-0 lg:grid-cols-[minmax(0,1fr)_360px] gap-6 items-start">
+          <section className="min-w-0 rounded-lg border border-osu-b3/30 bg-osu-b4/35 p-4 sm:p-5">
             <div className="relative">
               <input
                 type="text"
@@ -242,7 +242,7 @@ function DanClassifierPage() {
                 const coverUrl = beatmapset.covers?.["cover@2x"] || beatmapset.covers?.cover;
 
                 return (
-                  <div key={beatmapset.id} className="relative overflow-hidden rounded-lg border border-osu-b3/30 bg-osu-b5">
+                  <div key={beatmapset.id} className="relative min-w-0 overflow-hidden rounded-lg border border-osu-b3/30 bg-osu-b5">
                     {coverUrl && (
                       <img src={coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-35" loading="lazy" />
                     )}
@@ -265,21 +265,21 @@ function DanClassifierPage() {
                         </a>
                       </div>
 
-                      <div className="mt-3 flex flex-wrap gap-1.5">
+                      <div className="mt-3 flex min-w-0 flex-wrap gap-1.5 overflow-hidden">
                         {maniaDiffs.map((beatmap) => (
                           <button
                             key={beatmap.id}
                             type="button"
                             onClick={() => analyzeBeatmap(beatmapset, beatmap)}
-                            className={`px-2.5 py-1 rounded-md text-[11px] cursor-pointer transition-colors border backdrop-blur-sm ${
+                            className={`inline-flex max-w-full min-w-0 items-center gap-1 overflow-hidden px-2.5 py-1 rounded-md text-left text-[11px] cursor-pointer transition-colors border backdrop-blur-sm ${
                               selectedBeatmap?.id === beatmap.id
                                 ? "bg-osu-pink/30 border-osu-pink/60 text-white"
                                 : "bg-black/40 hover:bg-black/60 border-white/10 text-white/90"
                             }`}
                           >
-                            <span className="text-osu-yellow font-semibold">{beatmap.cs}K</span>{" "}
-                            <span>{beatmap.version.replace(/\s*\[\d+[Kk]\]\s*/g, " ").trim()}</span>{" "}
-                            <span className="text-osu-l2">&#9733;{beatmap.difficulty_rating.toFixed(2)}</span>
+                            <span className="shrink-0 text-osu-yellow font-semibold">{beatmap.cs}K</span>
+                            <span className="min-w-0 truncate">{beatmap.version.replace(/\s*\[\d+[Kk]\]\s*/g, " ").trim()}</span>
+                            <span className="shrink-0 text-osu-l2">&#9733;{beatmap.difficulty_rating.toFixed(2)}</span>
                           </button>
                         ))}
                       </div>
@@ -298,7 +298,7 @@ function DanClassifierPage() {
             </div>
           </section>
 
-          <aside className="rounded-lg border border-osu-b3/30 bg-osu-b4/35 p-5 lg:sticky lg:top-24">
+          <aside className="min-w-0 rounded-lg border border-osu-b3/30 bg-osu-b4/35 p-4 sm:p-5 lg:sticky lg:top-24">
             <div className="text-[11px] uppercase tracking-[0.14em] text-osu-f1 font-bold">Estimate</div>
             {analysisLoading ? (
               <div className="mt-8 flex flex-col items-center gap-3 py-10">
@@ -306,19 +306,19 @@ function DanClassifierPage() {
                 <div className="text-sm text-osu-f1">Analyzing .osu file...</div>
               </div>
             ) : estimate ? (
-              <div className="mt-4">
+              <div className="mt-4 min-w-0">
                 <div className="text-sm text-osu-f1 truncate">{selectedTitle}</div>
                 <div className="mt-4 flex items-center gap-4">
                   {getDanImageSrc(estimate.label) ? (
                     <img
                       src={getDanImageSrc(estimate.label) ?? undefined}
                       alt=""
-                      className="h-20 w-20 object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.45)]"
+                      className="h-16 w-16 shrink-0 object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.45)] sm:h-20 sm:w-20"
                     />
                   ) : null}
                   <div className="min-w-0">
                     {!isNumericDanLabel(estimate.label) && (
-                      <div className="text-4xl font-black text-white leading-none">{estimate.displayName}</div>
+                      <div className="truncate text-3xl font-black leading-none text-white sm:text-4xl">{estimate.displayName}</div>
                     )}
                     <div className={`${isNumericDanLabel(estimate.label) ? "" : "mt-2"} text-sm font-bold text-osu-yellow`}>
                       {estimate.family}
@@ -329,7 +329,7 @@ function DanClassifierPage() {
                   SR proxy {estimate.estimatedSr.toFixed(2)} · raw dan {estimate.rawDan.toFixed(2)} · confidence {Math.round(estimate.confidence * 100)}%
                 </div>
 
-                <div className="mt-5 grid grid-cols-2 gap-2">
+                <div className="mt-5 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">
                   <Metric label="Notes" value={estimate.metrics.noteCount.toLocaleString()} />
                   <Metric label="Keys" value={`${estimate.metrics.keyCount}K`} />
                   <Metric label="Peak 5s" value={`${estimate.metrics.peakNps5s.toFixed(1)} n/s`} />
@@ -394,9 +394,9 @@ function DanClassifierPage() {
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg bg-osu-b5 border border-osu-b3/30 px-3 py-2">
+    <div className="min-w-0 rounded-lg bg-osu-b5 border border-osu-b3/30 px-3 py-2">
       <div className="text-[10px] uppercase tracking-wide text-osu-f1 font-bold">{label}</div>
-      <div className="mt-1 text-sm font-black text-white">{value}</div>
+      <div className="mt-1 truncate text-sm font-black text-white">{value}</div>
     </div>
   );
 }
