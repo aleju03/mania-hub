@@ -86,7 +86,7 @@ const MOD_USAGE_COLORS: Record<string, string> = {
   DT: "#ff6666",
   HR: "#ff6666",
   SD: "#ff6666",
-  PF: "#ff6666",
+  PF: "#ffcc22",
   AC: "#ff6666",
   BL: "#ff6666",
   ST: "#ff6666",
