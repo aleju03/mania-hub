@@ -30,6 +30,7 @@ import { ModBadge } from "../../components/ui/ModBadge";
 import { LazerBadge } from "../../components/ui/LazerBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
 import { UsernameText } from "../../components/ui/UsernameText";
+import { avatarImageSrc } from "../../components/ui/Avatar";
 import { ManiaCardPanel } from "../../components/player/ManiaCard";
 import type { OsuScore, OsuUser, UserProfileInsights, InsightScoreSnapshot } from "../../lib/types";
 import { pageSeo, playerOgImagePath } from "../../lib/seo";
@@ -647,6 +648,8 @@ function PlayerPage() {
           ? "loaded"
           : "empty";
 
+  const avatarSrc = avatarImageSrc(user.avatar_url, user.id);
+
   return (
     <div className="flex-1">
       {/* Avatar modal */}
@@ -661,7 +664,7 @@ function PlayerPage() {
             transition={{ duration: 0.2 }}
           >
             <motion.img
-              src={user.avatar_url}
+              src={avatarSrc}
               alt={`${user.username}'s avatar`}
               className="w-[300px] h-[300px] rounded-2xl shadow-[0_12px_60px_rgba(0,0,0,0.7)] object-cover"
               onClick={(e) => e.stopPropagation()}
@@ -995,7 +998,7 @@ function PlayerPage() {
               className="w-[80px] h-[80px] sm:w-[110px] sm:h-[110px] rounded-2xl overflow-hidden border-2 border-osu-b3/60 shadow-[0_4px_20px_rgba(0,0,0,0.5)] translate-y-4 flex-shrink-0 cursor-pointer hover:border-osu-l2/60 transition-colors duration-150"
             >
               <img
-                src={user.avatar_url}
+                src={avatarSrc}
                 alt={`${user.username}'s avatar`}
                 className="w-full h-full object-cover"
                 loading="lazy"

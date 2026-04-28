@@ -1,3 +1,23 @@
+function parseAvatarUserId(url: string | undefined): number | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url, "http://localhost");
+    if (parsed.hostname !== "a.ppy.sh") return null;
+    const id = Number(parsed.pathname.split("/").filter(Boolean)[0]);
+    return Number.isSafeInteger(id) && id > 0 ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+export function avatarImageSrc(url: string | undefined, userId?: number | string | null): string | undefined {
+  const parsedUserId = userId == null || userId === "" ? null : Number(userId);
+  const id = Number.isSafeInteger(parsedUserId) && parsedUserId > 0
+    ? parsedUserId
+    : parseAvatarUserId(url);
+  return id ? `/api/avatar?u=${id}` : url;
+}
+
 export function Avatar({
   url,
   seed,
@@ -19,7 +39,7 @@ export function Avatar({
   if (url) {
     return (
       <img
-        src={url}
+        src={avatarImageSrc(url)}
         alt="avatar"
         width={size}
         height={size}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { avatarImageSrc } from "./Avatar";
 
 interface SearchResult {
   id: number;
@@ -86,7 +87,7 @@ export function SearchInput({
                 className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3 transition-colors duration-[120ms] cursor-pointer text-left"
               >
                 <img
-                  src={u.avatar_url}
+                  src={avatarImageSrc(u.avatar_url, u.id)}
                   alt=""
                   className="w-7 h-7 rounded-full"
                   loading="lazy"
