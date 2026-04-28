@@ -61,17 +61,19 @@ function requestOrigin(request: Request): string {
   }
 }
 
-export function getCanonicalOrigin(request: Request): string {
-  const configured =
+function getConfiguredOrigin(): string | null {
+  return (
     normalizeOrigin(readEnv("SITE_URL")) ??
     normalizeOrigin(readEnv("VITE_SITE_URL")) ??
-    normalizeOrigin(readEnv("VERCEL_PROJECT_PRODUCTION_URL"));
-  if (configured) return configured;
+    normalizeOrigin(readEnv("VERCEL_PROJECT_PRODUCTION_URL"))
+  );
+}
 
+function getAllowedRequestOrigin(request: Request): string | null {
   const forwardedHost = normalizeHost(request.headers.get("x-forwarded-host"));
   const hostHeader = normalizeHost(request.headers.get("host"));
   const host = forwardedHost ?? hostHeader;
-  if (!host || !isAllowedHost(host)) return requestOrigin(request);
+  if (!host || !isAllowedHost(host)) return null;
 
   const forwardedProto = firstHeaderValue(request.headers.get("x-forwarded-proto"));
   const proto = forwardedProto === "http" || forwardedProto === "https"
@@ -80,4 +82,14 @@ export function getCanonicalOrigin(request: Request): string {
     ? "http"
     : "https";
   return `${proto}://${host}`;
+}
+
+export function getCanonicalOrigin(request: Request): string {
+  const configured = getConfiguredOrigin();
+  if (configured) return configured;
+  return getAllowedRequestOrigin(request) ?? requestOrigin(request);
+}
+
+export function getAssetOrigin(request: Request): string {
+  return getAllowedRequestOrigin(request) ?? getConfiguredOrigin() ?? requestOrigin(request);
 }

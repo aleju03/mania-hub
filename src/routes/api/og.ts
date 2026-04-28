@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createElement as h } from "react";
 import { getCachedUser, getCachedUserScores, getRankings, getCountryMapsFarmed, getCountrySnipes, getScore } from "../../lib/osu";
 import { getCountryName, isSupportedCountryCode } from "../../lib/country";
-import { getCanonicalOrigin } from "../../lib/origin";
+import { getAssetOrigin } from "../../lib/origin";
 import type { MapsFarmedEntry, OsuScore } from "../../lib/types";
 
 const WIDTH = 1200;
@@ -21,7 +21,7 @@ function clamp(value: string | null | undefined, max: number): string {
 }
 
 function getFont(request: Request, fileName: string): Promise<ArrayBuffer> {
-  const url = new URL(`/fonts/${fileName}`, getCanonicalOrigin(request)).toString();
+  const url = new URL(`/fonts/${fileName}`, getAssetOrigin(request)).toString();
   const cached = fontCache.get(url);
   if (cached) return cached;
 
