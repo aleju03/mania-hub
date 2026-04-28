@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { estimateDan } from "./dan-estimator";
-import { parseManiaBeatmap } from "./beatmap-parser";
 import type { ManiaBeatmap, ManiaNote } from "./beatmap-parser";
 
 function makeMap(notes: ManiaNote[], keyCount = 4): ManiaBeatmap {
@@ -164,6 +163,104 @@ describe("estimateDan", () => {
     expect(estimate.family).toBe("stream");
   });
 
+  it("promotes gamma-star sustained low-chord speed out of beta", () => {
+    const notes: ManiaNote[] = [];
+    for (let row = 0; row < 2300; row++) {
+      const time = row * 38;
+      notes.push({
+        column: row % 4,
+        time,
+        endTime: time,
+        isHold: false,
+      });
+    }
+
+    const estimate = estimateDan(makeMap(notes), { starRating: 5.7, totalLength: 118 });
+
+    expect(estimate.metrics.chordRatio).toBeLessThan(0.02);
+    expect(estimate.metrics.sustainedNps10s).toBeGreaterThan(26);
+    expect(estimate.label).toBe("gamma");
+    expect(estimate.family).toBe("stream");
+    expect(estimate.skillScores.handstream).toBeLessThan(estimate.skillScores.stream);
+  });
+
+  it("promotes lower-rate light-chord gamma speed out of beta", () => {
+    const notes: ManiaNote[] = [];
+    const lastByColumn = [-Infinity, -Infinity, -Infinity, -Infinity];
+
+    for (let row = 0; row < 2058; row++) {
+      const time = row * 44;
+      const noteCount = row % 10 === 0 ? 2 : 1;
+      const columns = [0, 1, 2, 3]
+        .sort((a, b) => lastByColumn[a] - lastByColumn[b])
+        .slice(0, noteCount);
+
+      for (const column of columns) {
+        notes.push({ column, time, endTime: time, isHold: false });
+        lastByColumn[column] = time;
+      }
+    }
+
+    const estimate = estimateDan(makeMap(notes), { starRating: 5.44 });
+
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.09);
+    expect(estimate.metrics.chordRatio).toBeLessThan(0.16);
+    expect(estimate.metrics.sustainedNps10s).toBeGreaterThan(24);
+    expect(estimate.debug?.scoring.terms.lightChordGammaSpeedFloorBonus).toBeGreaterThan(0);
+    expect(estimate.family).toBe("stream");
+    expect(estimate.label).toBe("gamma");
+  });
+
+  it("keeps base-rate low-chord stream near gamma thresholds in beta", () => {
+    const notes: ManiaNote[] = [];
+
+    for (let row = 0; row < 2580; row++) {
+      const time = row * 49;
+      const column = row % 4;
+      notes.push({ column, time, endTime: time, isHold: false });
+      if (row % 100 < 23) {
+        notes.push({ column: (column + 2) % 4, time, endTime: time, isHold: false });
+      }
+    }
+
+    const estimate = estimateDan(makeMap(notes), { starRating: 5.53, totalLength: 206 });
+
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.18);
+    expect(estimate.metrics.chordRatio).toBeLessThan(0.28);
+    expect(estimate.metrics.peakNps5s).toBeGreaterThan(25.4);
+    expect(estimate.metrics.peakNps5s).toBeLessThan(26);
+    expect(estimate.debug?.scoring.terms.baseRateSubGammaStreamBonus).toBeGreaterThan(0);
+    expect(estimate.family).toBe("stream");
+    expect(estimate.displayName).toBe("beta++");
+  });
+
+  it("promotes compact moderate-chord speed into high beta", () => {
+    const notes: ManiaNote[] = [];
+    const lastByColumn = [-Infinity, -Infinity, -Infinity, -Infinity];
+
+    for (let row = 0; row < 1450; row++) {
+      const time = row * 47.5;
+      const noteCount = row % 5 === 0 ? 2 : 1;
+      const columns = [0, 1, 2, 3]
+        .sort((a, b) => lastByColumn[a] - lastByColumn[b])
+        .slice(0, noteCount);
+
+      for (const column of columns) {
+        notes.push({ column, time, endTime: time, isHold: false });
+        lastByColumn[column] = time;
+      }
+    }
+
+    const estimate = estimateDan(makeMap(notes), { starRating: 5.71 });
+
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.18);
+    expect(estimate.metrics.chordRatio).toBeLessThan(0.28);
+    expect(estimate.metrics.sustainedNps10s).toBeGreaterThan(25);
+    expect(estimate.debug?.scoring.terms.compactModerateChordSpeedBonus).toBeGreaterThan(0);
+    expect(estimate.family).toBe("stream");
+    expect(estimate.displayName).toBe("beta++");
+  });
+
   it("recognizes delta-range speed endurance above low delta", () => {
     const notes: ManiaNote[] = [];
     for (let row = 0; row < 3200; row++) {
@@ -180,6 +277,114 @@ describe("estimateDan", () => {
 
     expect(estimate.label).toBe("delta");
     expect(estimate.family).toBe("stream");
+  });
+
+  it("compresses low-chord burst streams with jack pressure out of epsilon", () => {
+    const notes: ManiaNote[] = [];
+    let time = 0;
+
+    for (let row = 0; row < 3481; row++) {
+      const inBurst = row >= 1400 && row < 1440;
+      time += inBurst ? 20 : 41;
+      const column = row % 4;
+      notes.push({ column, time, endTime: time, isHold: false });
+      if (row % 100 < 21) {
+        notes.push({ column: (column + 2) % 4, time, endTime: time, isHold: false });
+      }
+    }
+
+    const estimate = estimateDan(makeMap(notes), { starRating: 7.04, totalLength: time / 1000 });
+
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.16);
+    expect(estimate.metrics.chordRatio).toBeLessThan(0.28);
+    expect(estimate.metrics.peakNps1s).toBeGreaterThan(38);
+    expect(estimate.debug?.scoring.terms.lowChordBurstStreamNerf).toBeGreaterThan(0);
+    expect(estimate.family).toBe("stream");
+    expect(estimate.label).toBe("delta");
+  });
+
+  it("compresses farm jumptrills while treating rated vibro as jack pressure", () => {
+    const notes: ManiaNote[] = [];
+    const masks = [[0], [1], [2], [3], [0, 2], [1, 3], [0, 2], [1, 3]];
+    let time = 0;
+    let row = 0;
+    const addRow = (gap: number) => {
+      time += gap;
+      for (const column of masks[row % masks.length]) {
+        const isHold = notes.length % 6 === 0;
+        notes.push({ column, time, endTime: isHold ? time + 90 : time, isHold });
+      }
+      row++;
+    };
+
+    for (let block = 0; block < 12; block++) {
+      for (let i = 0; i < 235; i++) addRow(64);
+      for (let i = 0; i < 30; i++) addRow(44);
+    }
+    while (notes.length < 4757) addRow(64);
+    notes.length = 4757;
+
+    const map = makeMap(notes);
+    const base = estimateDan(map, { starRating: 6.26, totalLength: 348, rate: 1 });
+    const dt = estimateDan(map, { starRating: 6.26, totalLength: 348, rate: 1.5 });
+
+    expect(base.metrics.chordRatio).toBeGreaterThan(0.42);
+    expect(base.metrics.holdRatio).toBeGreaterThan(0.1);
+    expect(base.debug?.scoring.gates.farmJumptrillGate).toBeGreaterThan(0);
+    expect(base.debug?.scoring.gates.ratedVibroJumptrillGate).toBe(0);
+    expect(base.rawDan).toBeLessThan(12);
+    expect(dt.debug?.scoring.gates.ratedVibroJumptrillGate).toBeGreaterThan(0);
+    expect(dt.family).toBe("jack");
+    expect(dt.label).toBe("delta");
+    expect(dt.rawDan).toBeLessThan(14.5);
+  });
+
+  it("rewards low-SR technical row bursts as tech pressure", () => {
+    const notes: ManiaNote[] = [];
+    const masks = [[0], [2], [1, 3], [0], [3], [0, 2], [1], [2, 3], [0], [1]];
+    const gaps = [24, 42, 44, 62, 84, 42, 24, 44, 68, 34, 90, 42];
+    let time = 0;
+
+    for (let row = 0; row < 1900; row++) {
+      time += gaps[row % gaps.length];
+      for (const column of masks[row % masks.length]) {
+        notes.push({ column, time, endTime: time, isHold: false });
+      }
+    }
+
+    const estimate = estimateDan(makeMap(notes), { starRating: 5.55, totalLength: 125 });
+
+    expect(estimate.metrics.rowBurstPressure).toBeGreaterThan(20);
+    expect(estimate.metrics.fastRowRatio).toBeGreaterThan(0.5);
+    expect(estimate.metrics.rowIntervalEntropy).toBeGreaterThan(2);
+    expect(estimate.debug?.scoring.terms.lowSrTechnicalRhythmBonus).toBeGreaterThan(0);
+    expect(estimate.family).toBe("tech");
+    expect(estimate.rawDan).toBeGreaterThan(12.5);
+    expect(estimate.rawDan).toBeLessThan(14.5);
+  });
+
+  it("rewards compact chord-switch tech with anchor pressure", () => {
+    const notes: ManiaNote[] = [];
+    const masks = [[0], [0, 2], [1], [1, 3], [2], [3], [3, 1], [0], [0, 3], [1], [2], [1, 2], [3], [0]];
+    const gaps = [53, 53, 53, 53, 53, 53, 53, 53, 53, 53, 83];
+    let time = 0;
+
+    for (let row = 0; row < 1480; row++) {
+      time += gaps[row % gaps.length];
+      for (const column of masks[row % masks.length]) {
+        const isHold = notes.length % 15 === 0;
+        notes.push({ column, time, endTime: isHold ? time + 120 : time, isHold });
+      }
+    }
+
+    const estimate = estimateDan(makeMap(notes), { starRating: 5.45, totalLength: 114 });
+
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.3);
+    expect(estimate.metrics.chordSizeChangeRate).toBeGreaterThan(0.55);
+    expect(estimate.metrics.fastRowRatio).toBeGreaterThan(0.72);
+    expect(estimate.debug?.scoring.terms.compactChordSwitchTechBonus).toBeGreaterThan(0);
+    expect(estimate.family).toBe("tech");
+    expect(estimate.displayName).toBe("gamma-");
   });
 
   it("recognizes chorded technical speed as gamma-range pressure", () => {
@@ -412,20 +617,132 @@ describe("estimateDan", () => {
 
   it("keeps long mid-chord stamina ladders from inflating into tech or delta too early", () => {
     const makeCyberLike = (rowMs: number, starRating: number) => {
-      const file = rowMs === 65 ? "/tmp/cyber-icy-12.osu" : "/tmp/cyber-icy-14.osu";
-      const fs = require("node:fs") as typeof import("node:fs");
-      const map = parseManiaBeatmap(fs.readFileSync(file, "utf8"));
+      const notes: ManiaNote[] = [];
+      const masks = [[0], [1, 2], [3], [0, 2], [1], [2, 3], [0, 1], [2], [3, 1], [0], [1, 3], [2]];
+      for (let row = 0; row < 3340; row++) {
+        const time = row * rowMs;
+        for (const column of masks[row % masks.length]) {
+          notes.push({ column, time, endTime: time, isHold: false });
+        }
+      }
 
-      return estimateDan(map, { starRating });
+      return estimateDan(makeMap(notes), { starRating });
     };
 
-    const mid = makeCyberLike(65, 6.06);
-    const fast = makeCyberLike(56, 6.92);
+    const mid = makeCyberLike(73, 6.06);
+    const fast = makeCyberLike(68, 6.49);
 
+    expect(mid.metrics.chordRatio).toBeGreaterThan(0.42);
+    expect(mid.metrics.noteCount).toBeGreaterThan(4500);
     expect(mid.family).toBe("stamina");
-    expect(mid.label).toBe("alpha");
+    expect(mid.rawDan).toBeLessThan(11);
     expect(fast.family).toBe("stamina");
-    expect(fast.label).toBe("gamma");
+    expect(fast.skillScores.handstream).toBeGreaterThan(fast.skillScores.stream);
+    expect(fast.label).toBe("beta");
+  });
+
+  it("surfaces sustained mid-chord streams as handstream pressure", () => {
+    const notes: ManiaNote[] = [];
+    const sections: Array<[number, number]> = [
+      [731, 0.41],
+      [778, 0.40],
+      [761, 0.46],
+      [934, 0.56],
+      [241, 0.15],
+      [731, 0.44],
+      [932, 0.55],
+      [822, 0.37],
+      [117, 0.52],
+    ];
+
+    sections.forEach(([noteCount, chordRatio], section) => {
+      const rowCount = Math.round(noteCount / (1 + chordRatio));
+      const chordRows = Math.round(rowCount * chordRatio);
+      const start = section * 30000;
+      const gap = 30000 / rowCount;
+
+      for (let row = 0; row < rowCount; row++) {
+        const time = start + row * gap;
+        const column = (section + row) % 4;
+        notes.push({ column, time, endTime: time, isHold: false });
+        if (row < chordRows) {
+          notes.push({ column: (column + 2) % 4, time, endTime: time, isHold: false });
+        }
+      }
+    });
+
+    const estimate = estimateDan(makeMap(notes), { starRating: 7.27, totalLength: 270 });
+
+    expect(estimate.family).toBe("stamina");
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.38);
+    expect(estimate.metrics.chordRatio).toBeLessThan(0.56);
+    expect(estimate.skillScores.handstream).toBeGreaterThan(estimate.skillScores.stream);
+    expect(estimate.skillScores.handstream).toBeGreaterThan(estimate.skillScores.chordjack);
+    expect(estimate.skillScores.handstream).toBeGreaterThan(estimate.skillScores.tech);
+  });
+
+  it("keeps short dense jack files from being classified as tech", () => {
+    const notes: ManiaNote[] = [];
+    for (let row = 0; row < 1500; row++) {
+      const time = row * 62;
+      const baseColumn = row % 8 < 4 ? 0 : 3;
+      notes.push({ column: baseColumn, time, endTime: time, isHold: false });
+      if (row % 100 < 63) {
+        notes.push({ column: baseColumn === 0 ? 1 : 2, time, endTime: time, isHold: false });
+      }
+    }
+
+    const deltaRate = estimateDan(makeMap(notes), { starRating: 7.34, totalLength: 93000 });
+    const zetaRate = estimateDan(makeMap(notes), { starRating: 8.32, totalLength: 93000 });
+
+    expect(deltaRate.metrics.chordRatio).toBeGreaterThan(0.54);
+    expect(deltaRate.metrics.jackPressure).toBeGreaterThan(160);
+    expect(deltaRate.family).toBe("jack");
+    expect(deltaRate.label).toBe("delta");
+    expect(zetaRate.family).toBe("jack");
+    expect(zetaRate.label).toBe("zeta");
+  });
+
+  it("promotes low-SR dense wall-jacks out of numeric dan", () => {
+    const notes: ManiaNote[] = [];
+    for (let row = 0; row < 1435; row++) {
+      const time = row * 80;
+      const columns = row % 17 === 0
+        ? [row % 4]
+        : row % 4 < 2 ? [0, 1] : [2, 3];
+
+      for (const column of columns) {
+        notes.push({ column, time, endTime: time, isHold: false });
+      }
+    }
+
+    const estimate = estimateDan(makeMap(notes), { starRating: 5.51 });
+
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.9);
+    expect(estimate.debug?.scoring.terms.lowSrDenseWallJackBonus).toBeGreaterThan(0);
+    expect(estimate.family).toBe("jack");
+    expect(estimate.label).toBe("gamma");
+  });
+
+  it("compresses high-SR medium wall-jacks that read as jack, not epsilon tech", () => {
+    const notes: ManiaNote[] = [];
+    for (let row = 0; row < 2200; row++) {
+      const time = row * 50;
+      const columns = row % 19 < 13
+        ? row % 2 === 0 ? [0, 1] : [2, 3]
+        : [row % 4];
+
+      for (const column of columns) {
+        notes.push({ column, time, endTime: time, isHold: false });
+      }
+    }
+
+    const estimate = estimateDan(makeMap(notes), { starRating: 7.03 });
+
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.62);
+    expect(estimate.debug?.scoring.terms.mediumWallJackSrCompression).toBeGreaterThan(0);
+    expect(estimate.family).toBe("jack");
+    expect(estimate.rawDan).toBeLessThan(13.5);
   });
 
   it("keeps high-SR LN hybrids below zeta when hold density is high", () => {

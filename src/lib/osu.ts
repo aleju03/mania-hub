@@ -1345,6 +1345,33 @@ export const searchBeatmapsByMappers = createServerFn({ method: "GET" })
     return { beatmapsets: [...beatmapsetsById.values()] };
   });
 
+export const getBeatmapset = createServerFn({ method: "GET" })
+  .inputValidator((data: { beatmapsetId: number }) => data)
+  .handler(async ({ data }: { data: { beatmapsetId: number } }) => {
+    edgeCache(300, 3600);
+    return osuFetch<OsuBeatmapset>(
+      `/beatmapsets/${data.beatmapsetId}`,
+      undefined,
+      { caller: "getBeatmapset" },
+    );
+  });
+
+export const getBeatmapsetForBeatmap = createServerFn({ method: "GET" })
+  .inputValidator((data: { beatmapId: number }) => data)
+  .handler(async ({ data }: { data: { beatmapId: number } }) => {
+    edgeCache(300, 3600);
+    const beatmap = await osuFetch<OsuBeatmap>(
+      `/beatmaps/${data.beatmapId}`,
+      undefined,
+      { caller: "getBeatmapsetForBeatmap" },
+    );
+    return osuFetch<OsuBeatmapset>(
+      `/beatmapsets/${beatmap.beatmapset_id}`,
+      undefined,
+      { caller: "getBeatmapsetForBeatmap:beatmapset" },
+    );
+  });
+
 async function getBeatmapUserScore(beatmapId: number, userId: number): Promise<OsuScore | null> {
   const cacheKey = `beatmap-user-score:${beatmapId}:${userId}`;
   return fetchWithCacheLock(cacheKey, COUNTRY_BEATMAP_USER_SCORE_CACHE_TTL, async () => {
