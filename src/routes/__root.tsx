@@ -15,24 +15,15 @@ import {
   resolveInitialCountry,
 } from "../lib/country-cookie";
 import { PostHogProvider } from "../lib/posthog-provider";
+import { getCanonicalOrigin } from "../lib/origin";
 import { DEFAULT_DESCRIPTION, SITE_NAME, websiteJsonLd } from "../lib/seo";
 import appCss from "../styles.css?url";
 
-/* Origin is read from the live request headers instead of a VITE_SITE_URL
-   env var so og:image, canonical, and JSON-LD URLs always match the deployment
-   that served the page. Falls back to Host and request.url if forwarded
-   headers aren't present. */
+/* Origin is resolved through a configured canonical URL first, then through
+   allowlisted request hosts. That keeps SEO URLs stable without trusting
+   arbitrary Host / X-Forwarded-Host headers. */
 const getRequestOrigin = createServerFn({ method: "GET" }).handler(() => {
-  const request = getRequest();
-  const forwardedHost = request.headers.get("x-forwarded-host");
-  const forwardedProto = request.headers.get("x-forwarded-proto");
-  const hostHeader = request.headers.get("host");
-  const host = forwardedHost ?? hostHeader;
-  if (host) {
-    const proto = forwardedProto ?? (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
-    return `${proto}://${host}`;
-  }
-  return new URL(request.url).origin;
+  return getCanonicalOrigin(getRequest());
 });
 
 function getRequestCountry(): string | null {

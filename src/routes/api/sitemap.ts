@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { getCanonicalOrigin } from "#/lib/origin";
 
 // Paths that should be crawled and indexed. Keep in sync with robots.txt
 // disallow rules: anything disallowed there must not appear here.
@@ -30,12 +31,7 @@ export const Route = createFileRoute("/api/sitemap")({
   server: {
     handlers: {
       GET: async ({ request }) => {
-        const forwardedHost = request.headers.get("x-forwarded-host");
-        const forwardedProto = request.headers.get("x-forwarded-proto");
-        const url = new URL(request.url);
-        const host = forwardedHost ?? url.host;
-        const proto = forwardedProto ?? url.protocol.replace(/:$/, "");
-        const origin = `${proto}://${host}`;
+        const origin = getCanonicalOrigin(request);
         const xml = buildSitemap(origin);
         return new Response(xml, {
           status: 200,

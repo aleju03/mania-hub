@@ -3,6 +3,7 @@ import { waitUntil } from "@vercel/functions";
 
 const POSTHOG_CAPTURE_URL = "https://us.i.posthog.com/capture/";
 const MAX_SYNC_BODY_BYTES = 64 * 1024;
+const POSTHOG_FORWARD_TIMEOUT_MS = 5_000;
 
 async function readRequestBodyWithLimit(request: Request, limitBytes: number): Promise<ArrayBuffer | null> {
   const contentLength = request.headers.get("content-length");
@@ -71,12 +72,17 @@ async function forwardCapture(request: Request): Promise<Response> {
   // waitUntil keeps the Vercel function alive until the upstream fetch
   // resolves so events aren't dropped when the runtime recycles the
   // instance; it's a no-op outside Vercel.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), POSTHOG_FORWARD_TIMEOUT_MS);
   waitUntil(
     fetch(POSTHOG_CAPTURE_URL, {
       method: "POST",
       headers,
       body,
-    }).catch(() => {}),
+      signal: controller.signal,
+    }).catch(() => {}).finally(() => {
+      clearTimeout(timeout);
+    }),
   );
 
   return new Response(null, { status: 202 });

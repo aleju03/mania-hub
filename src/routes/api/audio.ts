@@ -166,33 +166,9 @@ export const Route = createFileRoute("/api/audio")({
           }
         }
 
-        let buffer: Buffer;
-        let mimeType: string;
-        try {
-          const extracted = await extractAudioFromArchive(beatmapsetId, filename);
-          buffer = extracted.buffer;
-          mimeType = extracted.mimeType;
-        } catch {
-          return new Response(null, { status: 404 });
-        }
-
-        if (isR2ReplayCacheConfigured()) {
-          try {
-            await putBeatmapAssetAndGetUrl("audio", beatmapsetId, filename, mimeType, buffer);
-          } catch {
-            // Size reporting should still work even if persistent caching fails.
-          }
-        }
-
         return new Response(null, {
-          status: 200,
-          headers: {
-            ...cacheHeaders,
-            "Accept-Ranges": "bytes",
-            "Content-Length": String(buffer.length),
-            "Content-Type": mimeType,
-            "X-Audio-Size-Bytes": String(buffer.length),
-          },
+          status: 404,
+          headers: cacheHeaders,
         });
       },
       GET: async ({ request }) => {

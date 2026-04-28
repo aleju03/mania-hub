@@ -84,6 +84,7 @@ const RANGE_LABEL: Record<Range, string> = {
   "7d": "Last 7 days",
   "30d": "Last 30 days",
 };
+const POSTHOG_QUERY_TIMEOUT_MS = 15_000;
 
 function isRange(value: unknown): value is Range {
   return typeof value === "string" && (RANGES as readonly string[]).includes(value);
@@ -128,6 +129,8 @@ const getMonitorData = createServerFn({ method: "GET" })
     const since = RANGE_SQL[data.range];
 
     async function runQuery(query: string): Promise<unknown[][]> {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), POSTHOG_QUERY_TIMEOUT_MS);
       const res = await fetch(endpoint, {
         method: "POST",
         headers: {
@@ -135,6 +138,9 @@ const getMonitorData = createServerFn({ method: "GET" })
           authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
+        signal: controller.signal,
+      }).finally(() => {
+        clearTimeout(timeout);
       });
       if (!res.ok) {
         const text = await res.text();

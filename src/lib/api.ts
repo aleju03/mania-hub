@@ -33,10 +33,14 @@ function getZlib(): Promise<ZlibAsync> {
 
 let tokenCache: { access_token: string; expires_at: number } | null = null;
 const OSU_FETCH_RETRIES = 2;
+const OAUTH_FETCH_TIMEOUT_MS = 10_000;
+const OSU_FETCH_TIMEOUT_MS = 15_000;
+const BEATMAP_FILE_FETCH_TIMEOUT_MS = 15_000;
 
 // Simple response cache (5 min TTL)
 const responseCache = new Map<string, { value: unknown; expires: number }>();
 const CACHE_TTL = 5 * 60 * 1000;
+const MAX_RESPONSE_CACHE_ENTRIES = 1000;
 const CACHE_ENVELOPE_MARKER = "__mania_hub_cache_v1";
 // Anything above this gets gzipped before storage. Below it, gzip header
 // overhead dominates and compression would hurt more than help.
@@ -64,6 +68,43 @@ function warnCacheIssue(action: string, key: string, error: unknown): void {
   if (warnedCacheIssues.has(warningKey)) return;
   warnedCacheIssues.add(warningKey);
   console.warn(`[cache] ${action} failed for "${key}": ${message}`);
+}
+
+function makeLockOwner(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function setMemoryCache(key: string, value: unknown, expires: number): void {
+  responseCache.delete(key);
+  responseCache.set(key, { value, expires });
+
+  const now = Date.now();
+  for (const [entryKey, entry] of responseCache) {
+    if (entry.expires <= now) responseCache.delete(entryKey);
+  }
+
+  while (responseCache.size > MAX_RESPONSE_CACHE_ENTRIES) {
+    const oldestKey = responseCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    responseCache.delete(oldestKey);
+  }
+}
+
+async function fetchWithTimeout(
+  input: string | URL | Request,
+  init: RequestInit | undefined,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function encodeCacheValue(data: unknown): Promise<string> {
@@ -149,6 +190,8 @@ function scheduleOpportunisticPurge(): void {
 export function getCachedEntry<T>(key: string): CacheLookup<T> {
   const entry = responseCache.get(key);
   if (entry && Date.now() < entry.expires) {
+    responseCache.delete(key);
+    responseCache.set(key, entry);
     return { hit: true, value: entry.value as T };
   }
   if (entry) responseCache.delete(key);
@@ -161,7 +204,7 @@ export function getCached<T>(key: string): T | null {
 }
 
 export function setCache(key: string, data: unknown, ttlMs = CACHE_TTL): void {
-  responseCache.set(key, { value: data, expires: Date.now() + ttlMs });
+  setMemoryCache(key, data, Date.now() + ttlMs);
 }
 
 export async function getPersistentCacheEntry<T>(key: string): Promise<CacheLookup<T>> {
@@ -199,7 +242,7 @@ export async function getPersistentCacheEntry<T>(key: string): Promise<CacheLook
     }
 
     const parsed = (await decodeCacheValue(String(row.cache_value))) as T;
-    responseCache.set(key, { value: parsed, expires: expiresAt });
+    setMemoryCache(key, parsed, expiresAt);
     return { hit: true, value: parsed };
   } catch (error) {
     warnCacheIssue("persistent read", key, error);
@@ -240,7 +283,7 @@ export async function getPersistentCacheEntries<T>(keys: string[]): Promise<Map<
 
       try {
         const parsed = (await decodeCacheValue(String(row.cache_value))) as T;
-        responseCache.set(key, { value: parsed, expires: expiresAt });
+        setMemoryCache(key, parsed, expiresAt);
         results.set(key, parsed);
       } catch (error) {
         warnCacheIssue("batch decode", key, error);
@@ -287,7 +330,7 @@ export async function getPersistentCacheEntryAllowStale<T>(
     const isStale = Date.now() >= expiresAt;
 
     if (!isStale) {
-      responseCache.set(key, { value: parsed, expires: expiresAt });
+      setMemoryCache(key, parsed, expiresAt);
     }
 
     return {
@@ -304,7 +347,7 @@ export async function getPersistentCacheEntryAllowStale<T>(
 
 export async function setPersistentCache(key: string, data: unknown, ttlMs = CACHE_TTL): Promise<void> {
   const expiresAt = Date.now() + ttlMs;
-  responseCache.set(key, { value: data, expires: expiresAt });
+  setMemoryCache(key, data, expiresAt);
   if (!hasDb() || !db) return;
 
   try {
@@ -334,34 +377,36 @@ const LOCK_WAIT_MS = 300;
 const LOCK_WAIT_RETRIES = 5;
 const DEFAULT_LOCK_TTL = 15_000;
 
-async function acquireCacheLock(key: string, lockTtlMs: number): Promise<boolean> {
-  if (!hasDb() || !db) return true;
+async function acquireCacheLock(key: string, lockTtlMs: number): Promise<string | null> {
+  if (!hasDb() || !db) return makeLockOwner();
   try {
     await ensureCacheSchema();
     const now = Date.now();
+    const owner = makeLockOwner();
     const results = await db.batch([
       {
         sql: "DELETE FROM cache_locks WHERE lock_key = ? AND expires_at <= ?",
         args: [key, now],
       },
       {
-        sql: "INSERT INTO cache_locks (lock_key, expires_at) VALUES (?, ?) ON CONFLICT(lock_key) DO NOTHING",
-        args: [key, now + lockTtlMs],
+        sql: "INSERT INTO cache_locks (lock_key, lock_owner, expires_at) VALUES (?, ?, ?) ON CONFLICT(lock_key) DO NOTHING",
+        args: [key, owner, now + lockTtlMs],
       },
     ]);
-    return (results[1].rowsAffected ?? 0) > 0;
+    return (results[1].rowsAffected ?? 0) > 0 ? owner : null;
   } catch (error) {
     warnCacheIssue("acquire lock", key, error);
-    return true;
+    return makeLockOwner();
   }
 }
 
-async function releaseCacheLock(key: string): Promise<void> {
+async function releaseCacheLock(key: string, owner: string | null): Promise<void> {
   if (!hasDb() || !db) return;
+  if (!owner) return;
   try {
     await db.execute({
-      sql: "DELETE FROM cache_locks WHERE lock_key = ?",
-      args: [key],
+      sql: "DELETE FROM cache_locks WHERE lock_key = ? AND lock_owner = ?",
+      args: [key, owner],
     });
   } catch (error) {
     warnCacheIssue("release lock", key, error);
@@ -377,9 +422,9 @@ export async function fetchWithCacheLock<T>(
   const cached = await getPersistentCached<T>(cacheKey);
   if (cached) return cached;
 
-  const acquired = await acquireCacheLock(cacheKey, lockTtlMs);
+  const lockOwner = await acquireCacheLock(cacheKey, lockTtlMs);
 
-  if (acquired) {
+  if (lockOwner) {
     try {
       const rechecked = await getPersistentCached<T>(cacheKey);
       if (rechecked) return rechecked;
@@ -388,7 +433,7 @@ export async function fetchWithCacheLock<T>(
       await setPersistentCache(cacheKey, result, cacheTtlMs);
       return result;
     } finally {
-      await releaseCacheLock(cacheKey);
+      await releaseCacheLock(cacheKey, lockOwner);
     }
   }
 
@@ -412,9 +457,9 @@ export async function fetchWithStaleAllowed<T>(
   const cached = await getPersistentCacheEntryAllowStale<T>(cacheKey);
   if (cached.hit) return { value: cached.value, isStale: cached.isStale };
 
-  const acquired = await acquireCacheLock(cacheKey, lockTtlMs);
+  const lockOwner = await acquireCacheLock(cacheKey, lockTtlMs);
 
-  if (acquired) {
+  if (lockOwner) {
     try {
       const rechecked = await getPersistentCacheEntryAllowStale<T>(cacheKey);
       if (rechecked.hit) return { value: rechecked.value, isStale: rechecked.isStale };
@@ -423,7 +468,7 @@ export async function fetchWithStaleAllowed<T>(
       await setPersistentCache(cacheKey, result, cacheTtlMs);
       return { value: result, isStale: false };
     } finally {
-      await releaseCacheLock(cacheKey);
+      await releaseCacheLock(cacheKey, lockOwner);
     }
   }
 
@@ -447,15 +492,15 @@ export async function runCacheRebuild<T>(
   fetchFn: () => Promise<T>,
   lockTtlMs: number = DEFAULT_LOCK_TTL,
 ): Promise<{ rebuilt: boolean; value: T | null }> {
-  const acquired = await acquireCacheLock(cacheKey, lockTtlMs);
+  const lockOwner = await acquireCacheLock(cacheKey, lockTtlMs);
 
-  if (acquired) {
+  if (lockOwner) {
     try {
       const result = await fetchFn();
       await setPersistentCache(cacheKey, result, cacheTtlMs);
       return { rebuilt: true, value: result };
     } finally {
-      await releaseCacheLock(cacheKey);
+      await releaseCacheLock(cacheKey, lockOwner);
     }
   }
 
@@ -621,16 +666,20 @@ async function getToken(): Promise<string> {
     return tokenCache.access_token;
   }
 
-  const res = await fetch("https://osu.ppy.sh/oauth/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({
-      client_id: Number(process.env.OSU_CLIENT_ID),
-      client_secret: process.env.OSU_CLIENT_SECRET,
-      grant_type: "client_credentials",
-      scope: "public",
-    }),
-  });
+  const res = await fetchWithTimeout(
+    "https://osu.ppy.sh/oauth/token",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        client_id: Number(process.env.OSU_CLIENT_ID),
+        client_secret: process.env.OSU_CLIENT_SECRET,
+        grant_type: "client_credentials",
+        scope: "public",
+      }),
+    },
+    OAUTH_FETCH_TIMEOUT_MS,
+  );
 
   if (!res.ok) {
     const text = await res.text();
@@ -672,14 +721,18 @@ export async function osuFetch<T = unknown>(
   }
 
   for (let attempt = 0; attempt <= OSU_FETCH_RETRIES; attempt++) {
-    const res = await fetch(url.toString(), {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-        "Content-Type": "application/json",
-        "x-api-version": "20220705",
+    const res = await fetchWithTimeout(
+      url.toString(),
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "x-api-version": "20220705",
+        },
       },
-    });
+      OSU_FETCH_TIMEOUT_MS,
+    );
     recordOsuCall(res, url.pathname.replace(/^\/api\/v2/, "") + url.search, caller);
 
     if (res.ok) {
@@ -720,11 +773,15 @@ export async function osuFetchBinary(
   const token = await getToken();
 
   for (let attempt = 0; attempt <= OSU_FETCH_RETRIES; attempt++) {
-    const res = await fetch(`https://osu.ppy.sh/api/v2${path}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
+    const res = await fetchWithTimeout(
+      `https://osu.ppy.sh/api/v2${path}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       },
-    });
+      OSU_FETCH_TIMEOUT_MS,
+    );
     recordOsuCall(res, path, caller);
 
     if (res.ok) {
@@ -759,7 +816,11 @@ export async function osuFetchBinary(
 }
 
 export async function fetchBeatmapFile(beatmapId: number): Promise<string> {
-  const res = await fetch(`https://osu.ppy.sh/osu/${beatmapId}`);
+  const res = await fetchWithTimeout(
+    `https://osu.ppy.sh/osu/${beatmapId}`,
+    undefined,
+    BEATMAP_FILE_FETCH_TIMEOUT_MS,
+  );
   if (!res.ok) {
     throw new Error(`Failed to fetch .osu file for beatmap ${beatmapId}`);
   }

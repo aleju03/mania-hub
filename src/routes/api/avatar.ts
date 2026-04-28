@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 
 const AVATAR_TTL_MS = 6 * 60 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 256;
+const AVATAR_FETCH_TIMEOUT_MS = 10_000;
 
 type AvatarEntry = {
   buffer: Buffer;
@@ -24,9 +25,14 @@ function pruneCache(now = Date.now()) {
 }
 
 async function fetchAvatar(userId: number): Promise<AvatarEntry> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), AVATAR_FETCH_TIMEOUT_MS);
   const response = await fetch(`https://a.ppy.sh/${userId}`, {
     redirect: "follow",
     headers: { "User-Agent": "mania-hub-avatar" },
+    signal: controller.signal,
+  }).finally(() => {
+    clearTimeout(timeout);
   });
   if (!response.ok) {
     throw new Error(`avatar fetch ${response.status}`);
