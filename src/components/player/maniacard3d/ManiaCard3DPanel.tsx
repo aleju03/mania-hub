@@ -52,12 +52,18 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
     let renderer: ManiaCardRenderer | null = null;
     let resizeObserver: ResizeObserver | null = null;
     let removeResizeFallback = () => {};
+    let active = true;
 
-    const cleanup = () => {
+    const disposeRenderer = () => {
       resizeObserver?.disconnect();
       removeResizeFallback();
       renderer?.dispose();
       if (rendererRef.current === renderer) rendererRef.current = null;
+    };
+
+    const cleanup = () => {
+      active = false;
+      disposeRenderer();
     };
 
     try {
@@ -67,6 +73,11 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
         mobile: isMobileViewport(),
         reducedMotion,
         devicePixelRatio: getDevicePixelRatio(),
+        onError: (error) => {
+          if (!active) return;
+          disposeRenderer();
+          setRenderError(error instanceof Error ? error.message : "3D renderer unavailable.");
+        },
       });
       rendererRef.current = renderer;
 
@@ -107,7 +118,7 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
           ref={hostRef}
           role="img"
           className="relative w-full overflow-visible"
-          style={{ aspectRatio: "5 / 7" }}
+          style={{ aspectRatio: "5 / 7", touchAction: "none" }}
           aria-label={`${data.user.username} ${data.tierStyle.label} Maniacard. Control ${data.skills.fingerControl}, Speed ${data.skills.speed}, Precision ${data.skills.accuracy}.`}
         />
       </div>

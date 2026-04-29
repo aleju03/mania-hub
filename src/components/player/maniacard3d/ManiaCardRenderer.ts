@@ -30,12 +30,14 @@ export interface ManiaCardRendererOptions {
   mobile: boolean;
   reducedMotion: boolean;
   devicePixelRatio: number;
+  onError?: (error: unknown) => void;
 }
 
 export class ManiaCardRenderer {
   private readonly host: HTMLElement;
   private readonly renderer: WebGLRenderer;
   private readonly mobile: boolean;
+  private readonly onError?: (error: unknown) => void;
   private readonly scene = new Scene();
   private readonly camera = new PerspectiveCamera(35, 5 / 7, 0.1, 100);
   private readonly group = new Group();
@@ -54,6 +56,7 @@ export class ManiaCardRenderer {
   constructor(options: ManiaCardRendererOptions) {
     this.host = options.host;
     this.mobile = options.mobile;
+    this.onError = options.onError;
     this.quality = resolveQualityProfile({
       mobile: options.mobile,
       reducedMotion: options.reducedMotion,
@@ -73,7 +76,13 @@ export class ManiaCardRenderer {
 
   async setData(data: ManiaCardReadyData) {
     const requestId = ++this.dataRequestId;
-    const textures = await createCardTextures(data);
+    let textures: CardTextureSet;
+    try {
+      textures = await createCardTextures(data);
+    } catch (error) {
+      if (!this.disposed && requestId === this.dataRequestId) this.onError?.(error);
+      return;
+    }
     if (this.disposed || requestId !== this.dataRequestId) {
       textures.dispose();
       return;
@@ -104,9 +113,11 @@ export class ManiaCardRenderer {
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
+    this.start();
   }
 
   dispose() {
+    if (this.disposed) return;
     this.disposed = true;
     this.dataRequestId += 1;
     if (this.frameId !== null) cancelAnimationFrame(this.frameId);
@@ -142,8 +153,8 @@ export class ManiaCardRenderer {
     if (this.frameId !== null) return;
     const tick = (time: number) => {
       if (this.disposed) return;
-      this.frameId = requestAnimationFrame(tick);
-      this.tick(time * 0.001);
+      this.frameId = null;
+      if (this.tick(time * 0.001)) this.start();
     };
     this.frameId = requestAnimationFrame(tick);
   }
@@ -167,13 +178,17 @@ export class ManiaCardRenderer {
     }
 
     this.renderer.render(this.scene, this.camera);
+    return this.shouldKeepAnimating();
   }
 
   private onPointerDown = (event: PointerEvent) => {
+    event.preventDefault();
     void this.requestOrientationPermission();
     this.dragStart = { x: event.clientX, y: event.clientY };
     this.interaction.dragging = true;
+    this.interaction.lastInputAt = performance.now();
     this.renderer.domElement.setPointerCapture(event.pointerId);
+    this.start();
   };
 
   private onPointerMove = (event: PointerEvent) => {
@@ -185,6 +200,7 @@ export class ManiaCardRenderer {
     this.interaction.rotation = rotation;
     this.interaction.light = pointerToLight(rotation);
     this.interaction.lastInputAt = performance.now();
+    this.start();
   };
 
   private onPointerUp = (event: PointerEvent) => {
@@ -198,6 +214,8 @@ export class ManiaCardRenderer {
     }
     this.dragStart = null;
     this.interaction.dragging = false;
+    this.interaction.lastInputAt = performance.now();
+    this.start();
   };
 
   private onDeviceOrientation = (event: DeviceOrientationEvent) => {
@@ -213,7 +231,16 @@ export class ManiaCardRenderer {
     this.interaction.rotation = rotation;
     this.interaction.light = pointerToLight(rotation);
     this.interaction.lastInputAt = performance.now();
+    this.start();
   };
+
+  private shouldKeepAnimating() {
+    if (this.quality.idleMotion === "continuous") return true;
+    if (this.interaction.dragging) return true;
+    const inputAge = performance.now() - this.interaction.lastInputAt;
+    if (this.quality.idleMotion === "wake-on-input" && inputAge < 900) return true;
+    return Math.abs(this.interaction.rotation.x) > 0.05 || Math.abs(this.interaction.rotation.y) > 0.05;
+  }
 
   private getOrientationPermissionRequester() {
     if (!this.mobile || typeof window === "undefined" || !("DeviceOrientationEvent" in window)) return null;

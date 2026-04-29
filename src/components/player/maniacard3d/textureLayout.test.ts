@@ -56,6 +56,7 @@ describe("buildFaceLayout", () => {
 
     expect(layout.front.username.text.endsWith("...")).toBe(true);
     expect(layout.front.avatar).toEqual({ x: 185, y: 280, size: 630, radius: 32 });
+    expect(layout.front.tierLabel.text).toBe("Ultra Rare");
     expect(layout.masks.avatar).toEqual({ x: 185, y: 280, width: 630, height: 630 });
     expect(layout.front.stats.map((stat) => stat.label)).toEqual(["Control", "Speed", "Precision"]);
   });

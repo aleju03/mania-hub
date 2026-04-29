@@ -85,6 +85,7 @@ function drawFront(
   drawTrianglePattern(context, 0.28);
   drawModeBadge(context, data);
   drawUsername(context, layout);
+  drawTierLabel(context, data, layout);
   drawAvatar(context, layout, avatar);
   drawStats(context, layout);
   drawStars(context, layout);
@@ -168,6 +169,23 @@ function drawUsername(context: CanvasRenderingContext2D, layout: FaceLayout) {
   context.textAlign = "center";
   context.fillStyle = "white";
   context.fillText(username.text, centerX, username.y);
+  context.restore();
+}
+
+function drawTierLabel(
+  context: CanvasRenderingContext2D,
+  data: ManiaCardReadyData,
+  layout: FaceLayout,
+) {
+  const label = layout.front.tierLabel;
+  context.save();
+  context.font = `italic 900 ${label.fontSize}px ${FONT}`;
+  context.textAlign = "right";
+  context.fillStyle = "rgba(255,255,255,0.95)";
+  context.shadowColor = `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.58)`;
+  context.shadowBlur = 18;
+  context.shadowOffsetY = 4;
+  context.fillText(label.text, label.x, label.y);
   context.restore();
 }
 
