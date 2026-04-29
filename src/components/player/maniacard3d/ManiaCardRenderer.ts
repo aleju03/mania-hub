@@ -10,12 +10,13 @@ import { createCardBodyGeometry, createCardFaceGeometry, FACE_Z_OFFSET, OVERLAY_
 import { createEdgeMaterial, createFaceMaterial, createOverlayMaterial } from "./cardMaterials";
 import { createCardTextures, type CardTextureSet } from "./cardTexture";
 import {
+  addRotation,
   createInteractionState,
   orientationToRotation,
   pointerToLight,
   pointerToRotation,
-  settleRotation,
   type InteractionState,
+  type Rotation2D,
 } from "./interactions";
 import { resolveQualityProfile, type QualityProfile } from "./layout";
 import type { ManiaCardReadyData } from "./types";
@@ -47,7 +48,7 @@ export class ManiaCardRenderer {
   private frameId: number | null = null;
   private disposed = false;
   private dataRequestId = 0;
-  private dragStart: { x: number; y: number } | null = null;
+  private dragStart: { x: number; y: number; rotation: Rotation2D } | null = null;
   private overlay: Mesh | null = null;
   private restBeta: number | null = null;
   private orientationAttached = false;
@@ -160,10 +161,6 @@ export class ManiaCardRenderer {
   }
 
   private tick(time: number) {
-    if (!this.interaction.dragging && this.quality.idleMotion !== "continuous") {
-      this.interaction.rotation = settleRotation(this.interaction.rotation, 0.08);
-    }
-
     const frontFacingOffset = this.interaction.flipped ? Math.PI : 0;
     this.group.rotation.x = (this.interaction.rotation.x * Math.PI) / 180;
     this.group.rotation.y = frontFacingOffset + (this.interaction.rotation.y * Math.PI) / 180;
@@ -181,7 +178,11 @@ export class ManiaCardRenderer {
   private onPointerDown = (event: PointerEvent) => {
     event.preventDefault();
     void this.requestOrientationPermission();
-    this.dragStart = { x: event.clientX, y: event.clientY };
+    this.dragStart = {
+      x: event.clientX,
+      y: event.clientY,
+      rotation: { ...this.interaction.rotation },
+    };
     this.interaction.dragging = true;
     this.interaction.lastInputAt = performance.now();
     this.renderer.domElement.setPointerCapture(event.pointerId);
@@ -190,10 +191,11 @@ export class ManiaCardRenderer {
 
   private onPointerMove = (event: PointerEvent) => {
     if (!this.dragStart) return;
-    const rotation = pointerToRotation({
+    const deltaRotation = pointerToRotation({
       deltaX: event.clientX - this.dragStart.x,
       deltaY: event.clientY - this.dragStart.y,
     });
+    const rotation = addRotation(this.dragStart.rotation, deltaRotation);
     this.interaction.rotation = rotation;
     this.interaction.light = pointerToLight(rotation);
     this.interaction.lastInputAt = performance.now();
@@ -231,7 +233,7 @@ export class ManiaCardRenderer {
     if (this.interaction.dragging) return true;
     const inputAge = performance.now() - this.interaction.lastInputAt;
     if (this.quality.idleMotion === "wake-on-input" && inputAge < 900) return true;
-    return Math.abs(this.interaction.rotation.x) > 0.05 || Math.abs(this.interaction.rotation.y) > 0.05;
+    return false;
   }
 
   private getOrientationPermissionRequester() {

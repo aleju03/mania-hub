@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  addRotation,
   createInteractionState,
   orientationToRotation,
   pointerToLight,
@@ -12,6 +13,22 @@ describe("pointerToRotation", () => {
     expect(pointerToRotation({ deltaX: 100, deltaY: -100 })).toEqual({
       x: -22,
       y: 35,
+    });
+  });
+});
+
+describe("addRotation", () => {
+  test("applies pointer deltas from the current card pose", () => {
+    expect(addRotation({ x: 8, y: 30 }, { x: 5, y: -12 })).toEqual({
+      x: 13,
+      y: 18,
+    });
+  });
+
+  test("keeps accumulated rotation bounded", () => {
+    expect(addRotation({ x: 20, y: 170 }, { x: 20, y: 30 })).toEqual({
+      x: 24,
+      y: 180,
     });
   });
 });

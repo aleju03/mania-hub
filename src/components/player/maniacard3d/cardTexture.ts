@@ -216,15 +216,16 @@ function drawTierBackground(context: CanvasRenderingContext2D, data: ManiaCardRe
 function drawTrianglePattern(context: CanvasRenderingContext2D, opacity: number) {
   context.save();
   context.globalAlpha = opacity;
-  for (let y = -40; y < CARD_TEXTURE_HEIGHT + 80; y += 78) {
-    for (let x = -40; x < CARD_TEXTURE_WIDTH + 90; x += 90) {
-      context.beginPath();
-      context.moveTo(x + 45, y + 8);
-      context.lineTo(x + 82, y + 70);
-      context.lineTo(x + 8, y + 70);
-      context.closePath();
-      context.fillStyle = "rgba(255,255,255,0.08)";
-      context.fill();
+  for (let row = -1; row < 20; row += 1) {
+    const y = row * 74 - 34;
+    const rowShift = row % 2 === 0 ? 0 : 43;
+    for (let col = -1; col < 14; col += 1) {
+      const seed = Math.abs(Math.sin(row * 12.9898 + col * 78.233));
+      if (seed < 0.12) continue;
+      const x = col * 86 + rowShift - 24;
+      const width = 34 + seed * 20;
+      const height = 34 + Math.abs(Math.sin(seed * 9.1)) * 16;
+      drawTriangle(context, x, y, width, height, seed > 0.62 ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.07)");
     }
   }
   context.restore();
@@ -237,6 +238,11 @@ function drawModeBadge(context: CanvasRenderingContext2D, data: ManiaCardReadyDa
   roundedRect(context, 38, 38, 132, 132, 30);
   context.fillStyle = data.badgeGradientStops.length ? gradient : "rgba(255,255,255,0.22)";
   context.fill();
+  context.save();
+  roundedRect(context, 38, 38, 132, 132, 30);
+  context.clip();
+  drawBadgeTrianglePattern(context);
+  context.restore();
   context.strokeStyle = "rgba(255,255,255,0.35)";
   context.lineWidth = 4;
   context.stroke();
@@ -246,16 +252,21 @@ function drawModeBadge(context: CanvasRenderingContext2D, data: ManiaCardReadyDa
 
 function drawUsername(context: CanvasRenderingContext2D, layout: FaceLayout) {
   const username = layout.front.username;
-  const centerX = username.x + username.maxWidth / 2;
+  const box = { x: 244, y: 76, width: 640, height: 104, radius: 24 };
+  const centerX = box.x + box.width / 2;
 
   context.save();
-  roundedRect(context, 244, 76, 640, 104, 24);
+  roundedRect(context, box.x, box.y, box.width, box.height, box.radius);
   context.fillStyle = "rgba(0,0,0,0.34)";
   context.fill();
+  drawUsernamePixelTrail(context, box.x, box.y);
   context.font = `900 ${username.fontSize}px ${FONT}`;
   context.textAlign = "center";
   context.fillStyle = "white";
-  context.fillText(username.text, centerX, username.y);
+  context.shadowColor = "rgba(0,0,0,0.52)";
+  context.shadowBlur = 5;
+  context.shadowOffsetY = 3;
+  context.fillText(username.text, centerX, box.y + box.height / 2 + username.fontSize * 0.34);
   context.restore();
 }
 
@@ -354,6 +365,56 @@ function roundedRect(
   context.arcTo(x, y + height, x, y, radius);
   context.arcTo(x, y, x + width, y, radius);
   context.closePath();
+}
+
+function drawTriangle(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  fillStyle: string,
+) {
+  context.beginPath();
+  context.moveTo(x + width / 2, y);
+  context.lineTo(x + width, y + height);
+  context.lineTo(x, y + height);
+  context.closePath();
+  context.fillStyle = fillStyle;
+  context.fill();
+}
+
+function drawBadgeTrianglePattern(context: CanvasRenderingContext2D) {
+  context.save();
+  context.globalAlpha = 0.9;
+  const triangles = [
+    [54, 54, 28, 25, "rgba(255,255,255,0.16)"],
+    [104, 50, 34, 30, "rgba(255,255,255,0.10)"],
+    [72, 92, 32, 28, "rgba(0,0,0,0.13)"],
+    [126, 96, 30, 27, "rgba(255,255,255,0.12)"],
+    [44, 126, 34, 30, "rgba(0,0,0,0.12)"],
+    [96, 132, 26, 24, "rgba(255,255,255,0.10)"],
+  ] as const;
+  for (const [x, y, width, height, fill] of triangles) {
+    drawTriangle(context, x, y, width, height, fill);
+  }
+  context.restore();
+}
+
+function drawUsernamePixelTrail(context: CanvasRenderingContext2D, x: number, y: number) {
+  const blocks = [
+    [0, 0, 32, 32, "rgba(0,0,0,0.28)"],
+    [0, 44, 18, 18, "rgba(0,0,0,0.36)"],
+    [32, 34, 14, 14, "rgba(255,255,255,0.13)"],
+    [58, 0, 24, 24, "rgba(0,0,0,0.20)"],
+    [70, 36, 19, 19, "rgba(0,0,0,0.32)"],
+    [102, 14, 16, 16, "rgba(0,0,0,0.24)"],
+    [142, 36, 12, 12, "rgba(255,255,255,0.12)"],
+  ] as const;
+  for (const [left, top, width, height, fill] of blocks) {
+    context.fillStyle = fill;
+    context.fillRect(x + left, y + top, width, height);
+  }
 }
 
 function trapezoid(

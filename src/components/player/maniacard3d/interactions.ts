@@ -37,6 +37,13 @@ export function pointerToRotation(delta: { deltaX: number; deltaY: number }): Ro
   };
 }
 
+export function addRotation(base: Rotation2D, delta: Rotation2D): Rotation2D {
+  return {
+    x: Math.round(clamp(base.x + delta.x, -24, 24)),
+    y: Math.round(clamp(base.y + delta.y, -180, 180)),
+  };
+}
+
 export function orientationToRotation(input: { beta: number; gamma: number; restBeta: number }): Rotation2D {
   return {
     x: Math.round(clamp(-(input.beta - input.restBeta), -24, 24)),
