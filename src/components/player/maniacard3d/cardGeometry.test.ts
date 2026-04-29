@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest";
 import { BoxGeometry, PlaneGeometry } from "three";
-import { createCardBodyGeometry, createCardFaceGeometry } from "./cardGeometry";
+import {
+  CARD_WORLD_THICKNESS,
+  FACE_Z_OFFSET,
+  OVERLAY_Z_OFFSET,
+  createCardBodyGeometry,
+  createCardFaceGeometry,
+} from "./cardGeometry";
 import { CARD_ASPECT } from "./layout";
 
 describe("card geometry", () => {
@@ -25,5 +31,10 @@ describe("card geometry", () => {
     if (!box) throw new Error("expected bounding box");
     expect(box.max.x - box.min.x).toBeCloseTo(3.5 * CARD_ASPECT, 3);
     expect(box.max.y - box.min.y).toBeCloseTo(3.5, 3);
+  });
+
+  test("keeps rendered layers above the card body", () => {
+    expect(FACE_Z_OFFSET).toBeGreaterThan(CARD_WORLD_THICKNESS / 2);
+    expect(OVERLAY_Z_OFFSET).toBeGreaterThan(FACE_Z_OFFSET);
   });
 });
