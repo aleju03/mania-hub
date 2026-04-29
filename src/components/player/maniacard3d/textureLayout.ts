@@ -38,6 +38,7 @@ export interface FaceLayout {
 export function buildFaceLayout(data: ManiaCardReadyData, measure: MeasureText): FaceLayout {
   const usernameMaxWidth = 610;
   const usernameFontSize = 52;
+  const avatar = { x: 185, y: 280, size: 630, radius: 32 };
   const username = truncateToWidth(
     data.user.username,
     usernameMaxWidth,
@@ -48,7 +49,7 @@ export function buildFaceLayout(data: ManiaCardReadyData, measure: MeasureText):
     front: {
       username: { text: username, x: 310, y: 158, maxWidth: usernameMaxWidth, fontSize: usernameFontSize },
       tierLabel: { text: data.tierStyle.label, x: 930, y: 224, fontSize: 48 },
-      avatar: { x: 185, y: 280, size: 630, radius: 32 },
+      avatar,
       stats: data.stats.map((stat, index) => ({
         label: stat.label,
         value: stat.value,
@@ -63,7 +64,7 @@ export function buildFaceLayout(data: ManiaCardReadyData, measure: MeasureText):
       logoCenter: { x: 500, y: 700 },
     },
     masks: {
-      avatar: { x: 185, y: 280, width: 630, height: 630 },
+      avatar: { x: avatar.x, y: avatar.y, width: avatar.size, height: avatar.size },
     },
   };
 }
