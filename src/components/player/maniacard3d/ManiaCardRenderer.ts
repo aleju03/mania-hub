@@ -20,6 +20,10 @@ import {
 import { resolveQualityProfile, type QualityProfile } from "./layout";
 import type { ManiaCardReadyData } from "./types";
 
+type DeviceOrientationEventWithPermission = typeof DeviceOrientationEvent & {
+  requestPermission?: () => Promise<PermissionState>;
+};
+
 export interface ManiaCardRendererOptions {
   host: HTMLElement;
   data: ManiaCardReadyData;
@@ -31,6 +35,7 @@ export interface ManiaCardRendererOptions {
 export class ManiaCardRenderer {
   private readonly host: HTMLElement;
   private readonly renderer: WebGLRenderer;
+  private readonly mobile: boolean;
   private readonly scene = new Scene();
   private readonly camera = new PerspectiveCamera(35, 5 / 7, 0.1, 100);
   private readonly group = new Group();
@@ -44,9 +49,11 @@ export class ManiaCardRenderer {
   private overlay: Mesh | null = null;
   private restBeta: number | null = null;
   private orientationAttached = false;
+  private orientationPermissionRequested = false;
 
   constructor(options: ManiaCardRendererOptions) {
     this.host = options.host;
+    this.mobile = options.mobile;
     this.quality = resolveQualityProfile({
       mobile: options.mobile,
       reducedMotion: options.reducedMotion,
@@ -60,10 +67,7 @@ export class ManiaCardRenderer {
     this.scene.add(new AmbientLight(0xffffff, 1.4));
     this.scene.add(this.group);
     this.attachPointerEvents();
-    if (options.mobile && typeof window !== "undefined" && "DeviceOrientationEvent" in window) {
-      window.addEventListener("deviceorientation", this.onDeviceOrientation);
-      this.orientationAttached = true;
-    }
+    if (options.mobile && !this.getOrientationPermissionRequester()) this.attachOrientationListener();
     void this.setData(options.data);
   }
 
@@ -166,6 +170,7 @@ export class ManiaCardRenderer {
   }
 
   private onPointerDown = (event: PointerEvent) => {
+    void this.requestOrientationPermission();
     this.dragStart = { x: event.clientX, y: event.clientY };
     this.interaction.dragging = true;
     this.renderer.domElement.setPointerCapture(event.pointerId);
@@ -210,6 +215,26 @@ export class ManiaCardRenderer {
     this.interaction.lastInputAt = performance.now();
   };
 
+  private getOrientationPermissionRequester() {
+    if (!this.mobile || typeof window === "undefined" || !("DeviceOrientationEvent" in window)) return null;
+
+    const OrientationEvent = window.DeviceOrientationEvent as DeviceOrientationEventWithPermission;
+    return typeof OrientationEvent.requestPermission === "function" ? OrientationEvent.requestPermission.bind(OrientationEvent) : null;
+  }
+
+  private async requestOrientationPermission() {
+    if (this.orientationPermissionRequested || this.orientationAttached) return;
+    const requestPermission = this.getOrientationPermissionRequester();
+    if (!requestPermission) return;
+
+    this.orientationPermissionRequested = true;
+    try {
+      if ((await requestPermission()) === "granted") this.attachOrientationListener();
+    } catch {
+      // Touch drag remains the fallback when orientation permission is unavailable.
+    }
+  }
+
   private attachPointerEvents() {
     this.renderer.domElement.addEventListener("pointerdown", this.onPointerDown);
     this.renderer.domElement.addEventListener("pointermove", this.onPointerMove);
@@ -222,5 +247,19 @@ export class ManiaCardRenderer {
     this.renderer.domElement.removeEventListener("pointermove", this.onPointerMove);
     this.renderer.domElement.removeEventListener("pointerup", this.onPointerUp);
     this.renderer.domElement.removeEventListener("pointercancel", this.onPointerUp);
+  }
+
+  private attachOrientationListener() {
+    if (
+      this.disposed ||
+      this.orientationAttached ||
+      !this.mobile ||
+      typeof window === "undefined" ||
+      !("DeviceOrientationEvent" in window)
+    ) {
+      return;
+    }
+    window.addEventListener("deviceorientation", this.onDeviceOrientation);
+    this.orientationAttached = true;
   }
 }
