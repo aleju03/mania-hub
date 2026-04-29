@@ -33,12 +33,17 @@ import type {
   MapsFavouriteBeatmapset,
   MapsPlayerEntry,
   MapsPlayerFavourites,
-  ReplayFrame,
 } from "../lib/types";
-import type { ManiaBeatmap, ManiaNote } from "../lib/beatmap-parser";
+import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import { useAppStore, useSelectedCountry } from "../store";
 import { pageSeo, mapsOgImagePath } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
+import {
+  RANDOM_REPLAY_PREVIEW_MS,
+  buildAutoplayFrames,
+  getPreviewNotes,
+  getPreviewScrollVelocities,
+} from "../lib/chart-preview";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -2538,9 +2543,6 @@ function formatStars(bm: MapsFavouriteBeatmapset): string | null {
   return `${fmt(min)}–${fmt(max)}`;
 }
 
-const RANDOM_REPLAY_PREVIEW_MS = 10_000;
-const RANDOM_REPLAY_TAP_HOLD_MS = 48;
-
 interface RandomPreviewRendererLike {
   readonly isPlaying: boolean;
   readonly time: number;
@@ -2553,70 +2555,6 @@ interface RandomPreviewRendererLike {
   seek: (timeMs: number) => void;
   setExternalClock: (cb: (() => { time: number; stalled: boolean } | null) | null) => void;
   setScrollSpeed: (value: number) => void;
-}
-
-function getPreviewNotes(beatmap: ManiaBeatmap, startTimeMs = beatmap.previewTime, timeScale = 1): ManiaNote[] {
-  const start = Math.max(0, startTimeMs || 0);
-  const scale = Math.max(0.1, timeScale);
-  const end = start + (RANDOM_REPLAY_PREVIEW_MS * scale);
-
-  return beatmap.notes
-    .filter((note) => note.endTime >= start && note.time <= end)
-    .map((note) => ({
-      ...note,
-      time: Math.max(0, (note.time - start) / scale),
-      endTime: Math.min(RANDOM_REPLAY_PREVIEW_MS, Math.max(0, (note.endTime - start) / scale)),
-    }))
-    .filter((note) => note.endTime >= 0 && note.time <= RANDOM_REPLAY_PREVIEW_MS);
-}
-
-function getPreviewScrollVelocities(beatmap: ManiaBeatmap, startTimeMs = beatmap.previewTime, timeScale = 1): ManiaBeatmap["scrollVelocities"] {
-  const start = Math.max(0, startTimeMs || 0);
-  const scale = Math.max(0.1, timeScale);
-  const end = start + (RANDOM_REPLAY_PREVIEW_MS * scale);
-  const velocities = beatmap.scrollVelocities ?? [];
-  let initialMultiplier = 1;
-
-  for (const point of velocities) {
-    if (point.time > start) break;
-    initialMultiplier = point.multiplier;
-  }
-
-  return [
-    { time: 0, multiplier: initialMultiplier },
-    ...velocities
-      .filter((point) => point.time > start && point.time <= end)
-      .map((point) => ({ ...point, time: (point.time - start) / scale })),
-  ];
-}
-
-function buildAutoplayFrames(notes: ManiaNote[], keyCount: number): ReplayFrame[] {
-  const events: Array<{ time: number; column: number; pressed: boolean }> = [];
-
-  for (const note of notes) {
-    const column = Math.max(0, Math.min(keyCount - 1, note.column));
-    const start = Math.max(0, Math.round(note.time));
-    const end = Math.max(start + 1, Math.round(note.isHold ? note.endTime : note.time + RANDOM_REPLAY_TAP_HOLD_MS));
-    events.push({ time: start, column, pressed: true });
-    events.push({ time: Math.min(RANDOM_REPLAY_PREVIEW_MS, end), column, pressed: false });
-  }
-
-  events.sort((a, b) => a.time - b.time || (a.pressed === b.pressed ? 0 : a.pressed ? -1 : 1));
-
-  const frames: ReplayFrame[] = [{ time: 0, keyState: 0 }];
-  let keyState = 0;
-  let i = 0;
-  while (i < events.length) {
-    const time = events[i].time;
-    while (i < events.length && events[i].time === time) {
-      const bit = 1 << events[i].column;
-      keyState = events[i].pressed ? keyState | bit : keyState & ~bit;
-      i++;
-    }
-    frames.push({ time, keyState });
-  }
-  frames.push({ time: RANDOM_REPLAY_PREVIEW_MS, keyState: 0 });
-  return frames;
 }
 
 function RandomReplayPreview({
