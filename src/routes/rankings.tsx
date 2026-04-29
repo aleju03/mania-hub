@@ -399,7 +399,7 @@ function RankingsPage() {
                   >
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-bold text-osu-f1 w-8">#{originalRank}</span>
-                      <Avatar url={entry.user.avatar_url} size={36} online={entry.user.is_online} />
+                      <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={36} online={entry.user.is_online} />
                       <div className="flex-1 min-w-0">
                         <UsernameText
                           username={entry.user.username}
@@ -479,7 +479,7 @@ function RankingsPage() {
                         <td className="py-2.5 px-3 text-sm font-bold text-osu-f1">#{originalRank}</td>
                         <td className="py-2.5 px-3">
                           <div className="flex items-center gap-3">
-                            <Avatar url={entry.user.avatar_url} size={30} online={entry.user.is_online} />
+                            <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} online={entry.user.is_online} />
                             <UsernameText
                               username={entry.user.username}
                               avatarUrl={entry.user.avatar_url}
