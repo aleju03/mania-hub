@@ -3,11 +3,11 @@ import {
   MeshBasicMaterial,
   MeshStandardMaterial,
   ShaderMaterial,
-  Texture,
   Vector2,
   Vector3,
   Vector4,
 } from "three";
+import type { Texture } from "three";
 import { CARD_TEXTURE_HEIGHT, CARD_TEXTURE_WIDTH } from "./layout";
 import { cardOverlayFragmentShader, cardOverlayVertexShader } from "./cardShaders";
 import type { FaceLayout } from "./textureLayout";
