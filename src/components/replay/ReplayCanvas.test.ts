@@ -26,4 +26,59 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("(MANIA_MAX_TIME_RANGE / Math.max(1, Math.min(40, this.scrollSpeed))) * this.modRate");
     expect(source).toContain("(MANIA_REFERENCE_HEIGHT - MANIA_DEFAULT_HIT_POSITION) / MANIA_REFERENCE_HEIGHT");
   });
+
+  it("counts the odd-key middle column as the right hand", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("const leftCount = Math.floor(this.keyCount / 2);");
+    expect(source).toContain("const rightStart = leftCount;");
+  });
+
+  it("renders the recorded replay life bar beside the playfield", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("lifeBarFrames?: ReplayLifeBarFrame[]");
+    expect(source).toContain("private renderHealthBar(layout: Layout)");
+    expect(source).toContain("this.renderHealthBar(layout);");
+    expect(source).toContain("private getHealthAtTime(time: number)");
+    expect(source).toContain("playfieldX + playfieldWidth + 13");
+    expect(source).toContain("const height = Math.max(120, h * 0.46);");
+    expect(source).toContain("const y = h - height;");
+    expect(source).toContain("this.fillRect(x, fillY, barWidth, fillHeight");
+    expect(source).toContain("private buildFallbackLifeBarFrames(events: ReplayJudgementEvent[])");
+  });
+});
+
+describe("ManiaReplayRenderer skin customization", () => {
+  it("accepts replay skin settings and exposes a live updater", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain('import type { ReplaySkinSettings } from "../../lib/replay-skin";');
+    expect(source).toContain("skinSettings?: ReplaySkinSettings");
+    expect(source).toContain("private skinSettings: ReplaySkinSettings");
+    expect(source).toContain("setSkinSettings(settings: ReplaySkinSettings)");
+  });
+
+  it("hides the horizontal judgment line in circle mode", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain('if (this.skinSettings.style === "circles") return;');
+  });
+
+  it("draws circle receptors without the bar receptor beam or glow path", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+    const match = /private renderCircleReceptors\(layout: Layout\) \{([\s\S]*?)\n  \}/.exec(source);
+
+    expect(match?.[1]).toBeTruthy();
+    expect(match![1]).toContain('this.circle(');
+    expect(match![1]).toContain("pressed ? 1 : 0.5");
+    expect(match![1]).not.toContain("receptorBeam");
+    expect(match![1]).not.toContain("flashIntensity");
+  });
+
+  it("uses a readable circle LN body width", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("const bodyWidth = Math.max(14, circleDiameter * 0.72);");
+  });
 });

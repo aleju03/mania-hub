@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ManiaNote } from "./beatmap-parser";
 import type { ReplayFrame } from "./types";
-import { countReplayJudgements, validateReplaySimulation } from "./replay-validation";
+import { countReplayJudgements, resolveReplayJudgementEvents, validateReplaySimulation } from "./replay-validation";
 import type { ReplayJudgementEvent } from "./mania-replay-judgement";
 
 describe("replay validation", () => {
@@ -166,5 +166,75 @@ describe("replay validation", () => {
     expect(result.rawSimulatedCounts.countMiss).toBe(1);
     expect(result.legacyReplayAmbiguityResolved).toBe(true);
     expect(result.matched).toBe(true);
+  });
+
+  it("allows stable sampled early-miss presses to match the stored score bucket", () => {
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 1000, isHold: false },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 860, keyState: 1 },
+      { time: 1040, keyState: 0 },
+    ];
+
+    const result = validateReplaySimulation({
+      expectedCounts: {
+        countGeki: 1,
+        count300: 0,
+        countKatu: 0,
+        count100: 0,
+        count50: 0,
+        countMiss: 0,
+      },
+      frames,
+      keyCount: 1,
+      legacyReplayFrameRounding: true,
+      notes,
+      od: 8,
+    });
+
+    expect(result.rawSimulatedCounts.countMiss).toBe(1);
+    expect(result.legacyReplayAmbiguityResolved).toBe(true);
+    expect(result.matched).toBe(true);
+  });
+
+  it("can reconcile stable sampled replay counts when exact edge ambiguity is insufficient", () => {
+    const events: ReplayJudgementEvent[] = [
+      { column: 0, judgment: 1, noteIndex: 0, offsetMs: 0, part: "note", time: 1000 },
+      { column: 0, judgment: 2, noteIndex: 1, offsetMs: 30, part: "note", time: 1100 },
+      { column: 0, judgment: 3, noteIndex: 2, offsetMs: 70, part: "note", time: 1200 },
+      { column: 0, judgment: 4, noteIndex: 3, offsetMs: 100, part: "note", time: 1300 },
+      { column: 0, judgment: 6, noteIndex: 4, offsetMs: 160, part: "note", time: 1400 },
+    ];
+
+    const unresolved = resolveReplayJudgementEvents(events, {
+      countGeki: 0,
+      count300: 1,
+      countKatu: 1,
+      count100: 0,
+      count50: 2,
+      countMiss: 1,
+    });
+    expect(unresolved.resolved).toBe(false);
+
+    const resolved = resolveReplayJudgementEvents(events, {
+      countGeki: 0,
+      count300: 1,
+      countKatu: 1,
+      count100: 0,
+      count50: 2,
+      countMiss: 1,
+    }, { allowLegacyScoreReconciliation: true });
+
+    expect(resolved.resolved).toBe(true);
+    expect(countReplayJudgements(resolved.events)).toEqual({
+      countGeki: 0,
+      count300: 1,
+      countKatu: 1,
+      count100: 0,
+      count50: 2,
+      countMiss: 1,
+    });
   });
 });

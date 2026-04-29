@@ -575,7 +575,7 @@ export function simulateManiaReplayJudgements(
           events,
           accuracyMode,
           undefined,
-          !isLazer && options.legacyReplayFrameRounding ? [4, 5, 6] : undefined,
+          !isLazer && options.legacyReplayFrameRounding ? [1, 2, 3, 4, 5, 6] : undefined,
         );
         continue;
       }
@@ -597,6 +597,7 @@ export function simulateManiaReplayJudgements(
           events,
           accuracyMode,
           { time: headSegment.start, offsetMs: headOffsetMs, releaseTime: headSegment.end },
+          options.legacyReplayFrameRounding ? [1, 2, 3, 4, 5, 6] : undefined,
         );
         segmentCursor = matchedSegmentIndex + 1;
         continue;

@@ -1,6 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { sanitizeProfilePageHtml } from "./profile-page";
+import {
+  beatmapScoreLookupPartialKey,
+  beatmapScoreLookupStatusKey,
+  sortBeatmapScores,
+} from "./beatmap-score-progress";
 
 function edgeCache(sMaxage: number, swr?: number): void {
   const effectiveSwr = swr ?? sMaxage * 4;
@@ -51,6 +56,7 @@ import type {
   LeanHomePopoff,
   BeatmapsetSearchResponse,
   BeatmapScoresResponse,
+  BeatmapScoreLookupStatus,
   UserSearchResponse,
   BeatmapPlaycount,
   CountryMapsData,
@@ -151,7 +157,7 @@ const BEST_SCORES_WINDOW_CACHE_TTL = 2 * 60 * 1000;
 const COUNTRY_BEATMAP_SCORES_CACHE_TTL = 2 * 60 * 1000;
 const COUNTRY_BEATMAP_USER_SCORE_CACHE_TTL = 10 * 60 * 1000;
 const BEATMAP_USER_SCORES_ALL_CACHE_TTL = 10 * 60 * 1000;
-const COUNTRY_BEATMAP_LOOKUP_CONCURRENCY = 10;
+const COUNTRY_BEATMAP_LOOKUP_CONCURRENCY = 15;
 const COUNTRY_BEATMAP_PLAYER_PAGE_LIMIT = 2; // Match the rest of the app's top-100 country player scope.
 const USER_PROFILE_INSIGHTS_CACHE_TTL = 6 * 60 * 60 * 1000;
 const USER_PROFILE_INSIGHTS_CACHE_VERSION = 6;
@@ -197,6 +203,7 @@ const snipesStatusLastWriteByCountry = new Map<string, number>();
 const TOP_PLAYS_STATUS_TTL = 60 * 1000;
 const TOP_PLAYS_STATUS_THROTTLE_MS = 350;
 const topPlaysStatusLastWriteByCountry = new Map<string, number>();
+const beatmapScoreLookupLastWriteByKey = new Map<string, number>();
 
 function snipesStatusKey(country: string): string {
   return `snipes-scan-status:${country}`;
@@ -257,6 +264,34 @@ function writeTopPlaysRefreshStatus(
 function clearTopPlaysRefreshStatus(country: string): void {
   topPlaysStatusLastWriteByCountry.delete(country);
   void setPersistentCache(topPlaysStatusKey(country), null, 1000);
+}
+
+function writeBeatmapScoreLookupStatus(
+  beatmapId: number,
+  country: string,
+  status: Omit<BeatmapScoreLookupStatus, "updatedAt">,
+  options: { force?: boolean } = {},
+): void {
+  const key = beatmapScoreLookupStatusKey(beatmapId, country);
+  const now = Date.now();
+  const last = beatmapScoreLookupLastWriteByKey.get(key) ?? 0;
+  if (!options.force && now - last < 350) return;
+  beatmapScoreLookupLastWriteByKey.set(key, now);
+  void setPersistentCache(key, { ...status, updatedAt: now }, TOP_PLAYS_STATUS_TTL);
+}
+
+function writePartialBeatmapScores(beatmapId: number, country: string, scores: OsuScore[]): void {
+  void setPersistentCache(
+    beatmapScoreLookupPartialKey(beatmapId, country),
+    sortBeatmapScores(scores),
+    TOP_PLAYS_STATUS_TTL,
+  );
+}
+
+function clearBeatmapScoreLookupStatus(beatmapId: number, country: string): void {
+  const key = beatmapScoreLookupStatusKey(beatmapId, country);
+  beatmapScoreLookupLastWriteByKey.delete(key);
+  void setPersistentCache(key, null, 1000);
 }
 
 function topPlaysPartialKey(country: string): string {
@@ -556,11 +591,13 @@ function normalizeBeatmapPayload(data: unknown): { beatmapId: number } {
   return { beatmapId: parseOsuId(input.beatmapId, "beatmap id") };
 }
 
-function normalizeBeatmapScoresPayload(data: unknown): { beatmapId: number; country?: string } {
+function normalizeBeatmapScoresPayload(data: unknown): { beatmapId: number; country?: string; page: number } {
   const input = asInputRecord(data);
+  const page = parseBoundedInt(input.page, "page", { min: 1, max: 2, fallback: 1 });
   return {
     beatmapId: parseOsuId(input.beatmapId, "beatmap id"),
     country: parseOptionalCountry(input.country),
+    page,
   };
 }
 
@@ -1836,47 +1873,73 @@ async function getBeatmapUserScore(beatmapId: number, userId: number): Promise<O
   });
 }
 
-async function getCountryBeatmapScores(beatmapId: number, country: string): Promise<OsuScore[]> {
+async function getCountryBeatmapScores(beatmapId: number, country: string, page: number): Promise<OsuScore[]> {
   const normalizedCountry = country.trim().toUpperCase();
-  const cacheKey = `country-beatmap-scores:${beatmapId}:${normalizedCountry}`;
+  const safePage = Math.max(1, Math.min(2, Math.round(page)));
+  const cacheKey = `country-beatmap-scores:${beatmapId}:${normalizedCountry}:page:${safePage}`;
 
   return fetchWithCacheLock(cacheKey, COUNTRY_BEATMAP_SCORES_CACHE_TTL, async () => {
-    const firstPage = await getRankings({ data: { type: "performance", page: 1, country: normalizedCountry } });
-    const totalPages = Math.max(1, Math.min(Math.ceil(firstPage.total / 50), COUNTRY_BEATMAP_PLAYER_PAGE_LIMIT));
-    const remainingPages = await Promise.all(
-      Array.from({ length: Math.max(0, totalPages - 1) }, (_, index) =>
-        getRankings({ data: { type: "performance", page: index + 2, country: normalizedCountry } })),
-    );
+    writeBeatmapScoreLookupStatus(beatmapId, normalizedCountry, {
+      phase: "scores",
+      label: "Loading country players",
+      current: 0,
+      total: 0,
+      found: 0,
+    }, { force: true });
+    writePartialBeatmapScores(beatmapId, normalizedCountry, []);
 
-    const rankedUsers = [firstPage, ...remainingPages].flatMap((page) => page.ranking);
-    const userIds = Array.from(new Set(rankedUsers.map((entry) => entry.user.id)));
-    const scores = await mapWithConcurrency(
-      userIds,
-      COUNTRY_BEATMAP_LOOKUP_CONCURRENCY,
-      async (userId) => getBeatmapUserScore(beatmapId, userId).catch(() => null),
-    );
+    try {
+      const rankingPage = await getRankings({ data: { type: "performance", page: safePage, country: normalizedCountry } });
+      const rankedUsers = rankingPage.ranking;
+      const userIds = Array.from(new Set(rankedUsers.map((entry) => entry.user.id)));
+      const partialScores: OsuScore[] = [];
+      let checked = 0;
 
-    return scores
-      .filter((score): score is OsuScore => score !== null)
-      .filter((score) => score.user?.country_code === normalizedCountry)
-      .sort((left, right) => {
-        const scoreDelta = (getScoreDisplayValues(right).totalScore ?? 0) - (getScoreDisplayValues(left).totalScore ?? 0);
-        if (scoreDelta !== 0) return scoreDelta;
+      writeBeatmapScoreLookupStatus(beatmapId, normalizedCountry, {
+        phase: "scores",
+        label: "Checking player scores",
+        current: checked,
+        total: userIds.length,
+        found: partialScores.length,
+      }, { force: true });
 
-        const ppDelta = (right.pp ?? 0) - (left.pp ?? 0);
-        if (ppDelta !== 0) return ppDelta;
+      await mapWithConcurrency(
+        userIds,
+        COUNTRY_BEATMAP_LOOKUP_CONCURRENCY,
+        async (userId) => {
+          const score = await getBeatmapUserScore(beatmapId, userId).catch(() => null);
+          checked += 1;
 
-        return right.accuracy - left.accuracy;
-      });
+          if (score?.user?.country_code === normalizedCountry) {
+            partialScores.push(score);
+            writePartialBeatmapScores(beatmapId, normalizedCountry, partialScores);
+          }
+
+          writeBeatmapScoreLookupStatus(beatmapId, normalizedCountry, {
+            phase: "scores",
+            label: "Checking player scores",
+            current: checked,
+            total: userIds.length,
+            found: partialScores.length,
+          });
+        },
+      );
+
+      const sortedScores = sortBeatmapScores(partialScores);
+      writePartialBeatmapScores(beatmapId, normalizedCountry, sortedScores);
+      return sortedScores;
+    } finally {
+      clearBeatmapScoreLookupStatus(beatmapId, normalizedCountry);
+    }
   });
 }
 
 export const getBeatmapScores = createServerFn({ method: "GET" })
   .inputValidator(normalizeBeatmapScoresPayload)
-  .handler(async ({ data }: { data: { beatmapId: number; country?: string } }) => {
+  .handler(async ({ data }: { data: { beatmapId: number; country?: string; page: number } }) => {
     edgeCache(120, 600);
     if (data.country?.trim()) {
-      return { scores: await getCountryBeatmapScores(data.beatmapId, data.country) };
+      return { scores: await getCountryBeatmapScores(data.beatmapId, data.country, data.page) };
     }
 
     return osuFetch<BeatmapScoresResponse>(
@@ -1887,6 +1950,26 @@ export const getBeatmapScores = createServerFn({ method: "GET" })
       },
       { caller: "getBeatmapScores" },
     );
+  });
+
+export const getBeatmapScoreLookupStatus = createServerFn({ method: "GET" })
+  .inputValidator(normalizeBeatmapScoresPayload)
+  .handler(async ({ data }: { data: { beatmapId: number; country?: string; page: number } }): Promise<BeatmapScoreLookupStatus | null> => {
+    noStore();
+    if (!data.country?.trim()) return null;
+    return (await getPersistentCached<BeatmapScoreLookupStatus>(
+      beatmapScoreLookupStatusKey(data.beatmapId, data.country),
+    )) ?? null;
+  });
+
+export const getPartialBeatmapScores = createServerFn({ method: "GET" })
+  .inputValidator(normalizeBeatmapScoresPayload)
+  .handler(async ({ data }: { data: { beatmapId: number; country?: string; page: number } }): Promise<OsuScore[]> => {
+    noStore();
+    if (!data.country?.trim()) return [];
+    return (await getPersistentCached<OsuScore[]>(
+      beatmapScoreLookupPartialKey(data.beatmapId, data.country),
+    )) ?? [];
   });
 
 // ── Search ──────────────────────────────────────────────────────────────────
@@ -2507,6 +2590,13 @@ export const getReplayParsed = createServerFn({ method: "GET" })
 
     const info = score.info;
     const rawFrames = (score.replay?.frames ?? []) as any[];
+    const lifeBarFrames = (score.replay?.lifeBar ?? [])
+      .map((frame: any) => ({
+        time: Math.round(Number(frame.startTime ?? frame.time ?? 0)),
+        health: Math.max(0, Math.min(1, Number(frame.health ?? 0))),
+      }))
+      .filter((frame) => Number.isFinite(frame.time) && Number.isFinite(frame.health))
+      .sort((a, b) => a.time - b.time);
 
     // Pack frames into typed arrays to shrink the wire payload ~20x vs JSON.
     // Little-endian host is assumed (every x86/ARM server and client is LE).
@@ -2548,6 +2638,7 @@ export const getReplayParsed = createServerFn({ method: "GET" })
         countMiss: info?.countMiss ?? 0,
         isPerfect: info?.perfect ?? false,
       },
+      lifeBarFrames,
       framesPacked: { count: frameCount, times: timesB64, keys: keysB64 },
       keyCount,
     };

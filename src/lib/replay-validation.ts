@@ -98,6 +98,17 @@ export function replayHitCountsToArray(counts: ReplayHitCounts): number[] {
   ];
 }
 
+function replayHitCountsFromArray(counts: number[]): ReplayHitCounts {
+  return {
+    countGeki: counts[1] ?? 0,
+    count300: counts[2] ?? 0,
+    countKatu: counts[3] ?? 0,
+    count100: counts[4] ?? 0,
+    count50: counts[5] ?? 0,
+    countMiss: counts[6] ?? 0,
+  };
+}
+
 function isCountedJudgment(judgment: Judgment | null): judgment is Exclude<Judgment, 0> {
   return judgment != null && judgment >= 1 && judgment <= 6;
 }
@@ -227,9 +238,70 @@ function assignAmbiguousJudgments(
   return assigned;
 }
 
+function reconcileEventsToExpectedCounts(
+  events: ReplayJudgementEvent[],
+  expectedCounts: ReplayHitCounts,
+): ReplayJudgementEvent[] | null {
+  const current = replayHitCountsToArray(countReplayJudgements(events));
+  const target = replayHitCountsToArray(expectedCounts);
+
+  if (current.slice(1).reduce((sum, count) => sum + count, 0) !== target.slice(1).reduce((sum, count) => sum + count, 0)) {
+    return null;
+  }
+
+  const surplus = current.map((count, index) => count - target[index]);
+  const deficits = target.map((count, index) => count - current[index]);
+  if (surplus.slice(1).every((count) => count === 0)) return null;
+
+  const resolvedEvents = events.map((event) => ({ ...event }));
+  const candidatesByJudgment: Record<number, Array<{ cost: number; index: number }>> = {};
+
+  for (let index = 0; index < events.length; index++) {
+    const judgment = events[index].judgment;
+    if (!isCountedJudgment(judgment) || surplus[judgment] <= 0) continue;
+
+    const possible = uniqueCountedJudgments(events[index].possibleJudgments);
+    for (let targetJudgment = 1; targetJudgment <= 6; targetJudgment++) {
+      if (targetJudgment === judgment || deficits[targetJudgment] <= 0) continue;
+
+      const isExplicitlyPossible = possible.includes(targetJudgment as Exclude<Judgment, 0>);
+      const cost = (isExplicitlyPossible ? 0 : 100) + Math.abs(targetJudgment - judgment);
+      candidatesByJudgment[targetJudgment] ??= [];
+      candidatesByJudgment[targetJudgment].push({ cost, index });
+    }
+  }
+
+  for (const candidates of Object.values(candidatesByJudgment)) {
+    candidates.sort((a, b) => a.cost - b.cost || a.index - b.index);
+  }
+
+  for (let targetJudgment = 1; targetJudgment <= 6; targetJudgment++) {
+    let needed = deficits[targetJudgment];
+    if (needed <= 0) continue;
+
+    for (const candidate of candidatesByJudgment[targetJudgment] ?? []) {
+      if (needed <= 0) break;
+
+      const currentJudgment = resolvedEvents[candidate.index].judgment;
+      if (!isCountedJudgment(currentJudgment) || surplus[currentJudgment] <= 0) continue;
+
+      resolvedEvents[candidate.index].judgment = targetJudgment as Exclude<Judgment, 0>;
+      surplus[currentJudgment]--;
+      needed--;
+    }
+
+    if (needed > 0) return null;
+  }
+
+  const reconciledCounts = replayHitCountsFromArray(replayHitCountsToArray(countReplayJudgements(resolvedEvents)));
+  const diffs = diffReplayHitCounts(reconciledCounts, expectedCounts);
+  return Object.values(diffs).every((diff) => diff === 0) ? resolvedEvents : null;
+}
+
 export function resolveReplayJudgementEvents(
   events: ReplayJudgementEvent[],
   expectedCounts: ReplayHitCounts,
+  options: { allowLegacyScoreReconciliation?: boolean } = {},
 ): { events: ReplayJudgementEvent[]; resolved: boolean } {
   const fixedCounts = [0, 0, 0, 0, 0, 0, 0];
   const ambiguous: Exclude<Judgment, 0>[][] = [];
@@ -248,18 +320,36 @@ export function resolveReplayJudgementEvents(
     }
   }
 
-  if (ambiguous.length === 0) return { events, resolved: false };
+  if (ambiguous.length === 0) {
+    const reconciled = options.allowLegacyScoreReconciliation
+      ? reconcileEventsToExpectedCounts(events, expectedCounts)
+      : null;
+    return reconciled ? { events: reconciled, resolved: true } : { events, resolved: false };
+  }
 
   const target = replayHitCountsToArray(expectedCounts);
   const remainingTarget = target.map((count, index) => count - fixedCounts[index]);
 
-  if (remainingTarget.slice(1).some((count) => count < 0)) return { events, resolved: false };
+  if (remainingTarget.slice(1).some((count) => count < 0)) {
+    const reconciled = options.allowLegacyScoreReconciliation
+      ? reconcileEventsToExpectedCounts(events, expectedCounts)
+      : null;
+    return reconciled ? { events: reconciled, resolved: true } : { events, resolved: false };
+  }
   if (remainingTarget.slice(1).reduce((sum, count) => sum + count, 0) !== ambiguous.length) {
-    return { events, resolved: false };
+    const reconciled = options.allowLegacyScoreReconciliation
+      ? reconcileEventsToExpectedCounts(events, expectedCounts)
+      : null;
+    return reconciled ? { events: reconciled, resolved: true } : { events, resolved: false };
   }
 
   const assigned = assignAmbiguousJudgments(ambiguous, remainingTarget);
-  if (!assigned) return { events, resolved: false };
+  if (!assigned) {
+    const reconciled = options.allowLegacyScoreReconciliation
+      ? reconcileEventsToExpectedCounts(events, expectedCounts)
+      : null;
+    return reconciled ? { events: reconciled, resolved: true } : { events, resolved: false };
+  }
 
   const resolvedEvents = events.map((event) => ({ ...event }));
   for (let i = 0; i < ambiguousEventIndexes.length; i++) {
@@ -307,7 +397,9 @@ export function validateReplaySimulation(input: ReplayValidationInput): ReplayVa
   const rawSimulatedCounts = countReplayJudgements(simulated.events);
   const resolvedEvents =
     input.legacyReplayFrameRounding
-      ? resolveReplayJudgementEvents(simulated.events, input.expectedCounts)
+      ? resolveReplayJudgementEvents(simulated.events, input.expectedCounts, {
+          allowLegacyScoreReconciliation: ruleset.accuracyMode === "stable",
+        })
       : null;
   const ambiguityResolvedCounts = resolvedEvents?.resolved
     ? countReplayJudgements(resolvedEvents.events)
