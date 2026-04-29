@@ -28,6 +28,13 @@ describe("truncateToWidth", () => {
     expect(result).toBe("Very...");
     expect(measure(result)).toBeLessThanOrEqual(70);
   });
+
+  test("returns empty text when even the ellipsis cannot fit", () => {
+    const measure = (text: string) => text.length * 10;
+    const result = truncateToWidth("Long", 20, measure);
+    expect(result).toBe("");
+    expect(measure(result)).toBeLessThanOrEqual(20);
+  });
 });
 
 describe("buildStarSegments", () => {

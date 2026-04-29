@@ -31,6 +31,7 @@ export function truncateToWidth(
 ) {
   if (measure(text) <= maxWidth) return text;
   const ellipsis = "...";
+  if (measure(ellipsis) > maxWidth) return "";
   let next = text;
   while (next.length > 0 && measure(`${next}${ellipsis}`) > maxWidth) {
     next = next.slice(0, -1);
