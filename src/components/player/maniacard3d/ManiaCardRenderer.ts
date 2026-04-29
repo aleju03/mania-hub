@@ -9,7 +9,14 @@ import {
 import { createCardBodyGeometry, createCardFaceGeometry, FACE_Z_OFFSET, OVERLAY_Z_OFFSET } from "./cardGeometry";
 import { createEdgeMaterial, createFaceMaterial, createOverlayMaterial } from "./cardMaterials";
 import { createCardTextures, type CardTextureSet } from "./cardTexture";
-import { createInteractionState, pointerToLight, pointerToRotation, settleRotation, type InteractionState } from "./interactions";
+import {
+  createInteractionState,
+  orientationToRotation,
+  pointerToLight,
+  pointerToRotation,
+  settleRotation,
+  type InteractionState,
+} from "./interactions";
 import { resolveQualityProfile, type QualityProfile } from "./layout";
 import type { ManiaCardReadyData } from "./types";
 
@@ -35,6 +42,8 @@ export class ManiaCardRenderer {
   private dataRequestId = 0;
   private dragStart: { x: number; y: number } | null = null;
   private overlay: Mesh | null = null;
+  private restBeta: number | null = null;
+  private orientationAttached = false;
 
   constructor(options: ManiaCardRendererOptions) {
     this.host = options.host;
@@ -51,6 +60,10 @@ export class ManiaCardRenderer {
     this.scene.add(new AmbientLight(0xffffff, 1.4));
     this.scene.add(this.group);
     this.attachPointerEvents();
+    if (options.mobile && typeof window !== "undefined" && "DeviceOrientationEvent" in window) {
+      window.addEventListener("deviceorientation", this.onDeviceOrientation);
+      this.orientationAttached = true;
+    }
     void this.setData(options.data);
   }
 
@@ -94,6 +107,10 @@ export class ManiaCardRenderer {
     this.dataRequestId += 1;
     if (this.frameId !== null) cancelAnimationFrame(this.frameId);
     this.detachPointerEvents();
+    if (this.orientationAttached && typeof window !== "undefined") {
+      window.removeEventListener("deviceorientation", this.onDeviceOrientation);
+      this.orientationAttached = false;
+    }
     this.textures?.dispose();
     this.group.traverse((object) => {
       const mesh = object as Mesh;
@@ -176,6 +193,21 @@ export class ManiaCardRenderer {
     }
     this.dragStart = null;
     this.interaction.dragging = false;
+  };
+
+  private onDeviceOrientation = (event: DeviceOrientationEvent) => {
+    if (event.beta === null || event.gamma === null) return;
+    if (this.restBeta === null) this.restBeta = event.beta;
+    if (this.interaction.dragging) return;
+
+    const rotation = orientationToRotation({
+      beta: event.beta,
+      gamma: event.gamma,
+      restBeta: this.restBeta,
+    });
+    this.interaction.rotation = rotation;
+    this.interaction.light = pointerToLight(rotation);
+    this.interaction.lastInputAt = performance.now();
   };
 
   private attachPointerEvents() {

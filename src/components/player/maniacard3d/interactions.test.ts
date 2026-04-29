@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import {
   createInteractionState,
+  orientationToRotation,
   pointerToLight,
   pointerToRotation,
   settleRotation,
@@ -20,6 +21,15 @@ describe("pointerToLight", () => {
     expect(pointerToLight({ x: 22, y: 35 })).toEqual({
       x: 0.36,
       y: 0.82,
+    });
+  });
+});
+
+describe("orientationToRotation", () => {
+  test("maps device orientation into bounded card rotation", () => {
+    expect(orientationToRotation({ beta: 55, gamma: 8, restBeta: 45 })).toEqual({
+      x: -10,
+      y: -8,
     });
   });
 });

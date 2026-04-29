@@ -37,6 +37,13 @@ export function pointerToRotation(delta: { deltaX: number; deltaY: number }): Ro
   };
 }
 
+export function orientationToRotation(input: { beta: number; gamma: number; restBeta: number }): Rotation2D {
+  return {
+    x: Math.round(clamp(-(input.beta - input.restBeta), -24, 24)),
+    y: Math.round(clamp(-input.gamma, -24, 24)),
+  };
+}
+
 export function pointerToLight(rotation: Rotation2D): Light2D {
   return {
     x: Number(clamp(0.5 - rotation.y * 0.004, 0.08, 0.92).toFixed(2)),
