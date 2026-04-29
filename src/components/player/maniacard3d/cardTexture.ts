@@ -157,14 +157,17 @@ function drawModeBadge(context: CanvasRenderingContext2D, data: ManiaCardReadyDa
 }
 
 function drawUsername(context: CanvasRenderingContext2D, layout: FaceLayout) {
+  const username = layout.front.username;
+  const centerX = username.x + username.maxWidth / 2;
+
   context.save();
   roundedRect(context, 244, 76, 640, 104, 24);
   context.fillStyle = "rgba(0,0,0,0.34)";
   context.fill();
-  context.font = `900 ${layout.front.username.fontSize}px ${FONT}`;
+  context.font = `900 ${username.fontSize}px ${FONT}`;
   context.textAlign = "center";
   context.fillStyle = "white";
-  context.fillText(layout.front.username.text, 564, layout.front.username.y);
+  context.fillText(username.text, centerX, username.y);
   context.restore();
 }
 
@@ -210,11 +213,21 @@ function drawStats(context: CanvasRenderingContext2D, layout: FaceLayout) {
 }
 
 function drawStars(context: CanvasRenderingContext2D, layout: FaceLayout) {
+  const starSpacing = 48;
+  const startX = 500 - ((layout.front.stars.length - 1) * starSpacing) / 2;
+
   context.save();
   context.textAlign = "center";
   context.font = `900 42px ${FONT}`;
-  context.fillStyle = "#fcd34d";
-  context.fillText(layout.front.stars.map((star) => star === "empty" ? "☆" : "★").join(" "), 500, 1252);
+  for (const [index, star] of layout.front.stars.entries()) {
+    const x = startX + index * starSpacing;
+    context.fillStyle = star === "full"
+      ? "#fcd34d"
+      : star === "half"
+        ? "rgba(252,211,77,0.58)"
+        : "rgba(252,211,77,0.30)";
+    context.fillText(star === "empty" ? "☆" : "★", x, 1252);
+  }
   context.font = `800 24px ${FONT}`;
   context.fillStyle = "rgba(255,255,255,0.62)";
   context.fillText(layout.front.starAverage, 500, 1292);
