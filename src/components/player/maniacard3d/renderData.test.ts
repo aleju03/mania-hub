@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { buildManiaCardRenderData, parseCssRgba, parseGradientStops } from "./renderData";
-import type { OsuScore, OsuUser } from "../../../lib/types";
+import type { OsuScore, OsuUser } from "#/lib/types";
 
 const user = {
   id: 123,

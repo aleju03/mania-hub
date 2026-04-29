@@ -1,5 +1,5 @@
-import type { ManiaCardTier, ManiaCardTierStyle, ManiaSkills } from "../../../lib/maniacard";
-import type { OsuScore, OsuUser } from "../../../lib/types";
+import type { ManiaCardTier, ManiaCardTierStyle, ManiaSkills } from "#/lib/maniacard";
+import type { OsuScore, OsuUser } from "#/lib/types";
 
 export interface ManiaCardPanelProps {
   user: Pick<OsuUser, "id" | "username" | "avatar_url" | "country_code"> & {

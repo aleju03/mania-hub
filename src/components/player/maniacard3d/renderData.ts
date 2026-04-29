@@ -2,7 +2,7 @@ import {
   computeManiaSkills,
   getManiaCardTier,
   MANIA_TIER_STYLES,
-} from "../../../lib/maniacard";
+} from "#/lib/maniacard";
 import type {
   GradientStop,
   ManiaCardRenderData,
