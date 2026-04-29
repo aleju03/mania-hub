@@ -2507,9 +2507,6 @@ export const getReplayParsed = createServerFn({ method: "GET" })
 
     const info = score.info;
     const rawFrames = (score.replay?.frames ?? []) as any[];
-    const replayScrollY = rawFrames
-      .map((f: any) => Number(f.mouseY ?? f.position?.y))
-      .find((value: number) => Number.isFinite(value) && value > 0);
 
     // Pack frames into typed arrays to shrink the wire payload ~20x vs JSON.
     // Little-endian host is assumed (every x86/ARM server and client is LE).
@@ -2553,7 +2550,6 @@ export const getReplayParsed = createServerFn({ method: "GET" })
       },
       framesPacked: { count: frameCount, times: timesB64, keys: keysB64 },
       keyCount,
-      replayScrollY,
     };
   });
 

@@ -19,6 +19,7 @@ import { useAppStore, useSelectedCountry, type CachedPopoff, type TopPlaysRange 
 import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { hasTopPlaysCache, shouldRefreshTopPlays } from "../lib/top-plays-cache";
+import { getReplaySearch } from "../lib/replay-navigation";
 
 const DEV_MODE = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === "1";
 
@@ -755,7 +756,7 @@ function PopOffsPage() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  window.location.href = `/replay?scoreId=${p.score.id}&beatmapsetId=${p.score.beatmapset?.id}`;
+                                  navigate({ to: "/replay", search: getReplaySearch(p.score.id, p.score.beatmapset?.id) });
                                 }}
                                 className="px-1.5 py-0.5 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
                                 title="Watch replay"
@@ -785,7 +786,7 @@ function PopOffsPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              window.location.href = `/replay?scoreId=${p.score.id}&beatmapsetId=${p.score.beatmapset?.id}`;
+                              navigate({ to: "/replay", search: getReplaySearch(p.score.id, p.score.beatmapset?.id) });
                             }}
                             className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
                           >

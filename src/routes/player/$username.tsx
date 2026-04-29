@@ -833,11 +833,17 @@ function PlayerPage() {
                           }}
                           aria-pressed={includeNoModUsage}
                           title={includeNoModUsage ? "NM is included in mod usage" : "NM is excluded from mod usage"}
-                          className="mt-0.5 flex h-6 flex-shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-osu-b2/60 bg-osu-b3/30 px-1.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1 transition-colors hover:border-osu-b1/80 hover:bg-osu-b3/50 hover:text-white"
+                          className={`mt-0.5 flex h-6 flex-shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-1.5 text-[9px] font-semibold uppercase tracking-wider transition-colors hover:text-white ${
+                            includeNoModUsage
+                              ? "border-osu-green-light/45 bg-osu-green-light/12 text-osu-green-light hover:border-osu-green-light/65 hover:bg-osu-green-light/18"
+                              : "border-osu-b2/60 bg-osu-b3/30 text-osu-f1 hover:border-osu-b1/80 hover:bg-osu-b3/50"
+                          }`}
                         >
                           <span>NM</span>
                           <span
-                            className={`relative h-3.5 w-7 rounded-full transition-colors ${includeNoModUsage ? "bg-osu-f1/80" : "bg-osu-b2"}`}
+                            className={`relative h-3.5 w-7 rounded-full transition-colors ${
+                              includeNoModUsage ? "bg-osu-green-light/80 shadow-[0_0_0_1px_rgba(179,217,68,0.28)]" : "bg-osu-b2"
+                            }`}
                             aria-hidden="true"
                           >
                             <span

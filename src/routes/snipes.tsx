@@ -15,6 +15,7 @@ import type { SnipeEvent, SnipesScanStatus } from "../lib/types";
 import { useAppStore, useSelectedCountry } from "../store";
 import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
+import { getReplaySearch } from "../lib/replay-navigation";
 
 const DEV_MODE = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === "1";
 
@@ -620,6 +621,7 @@ function SnipeRow({
   expanded: boolean;
   onToggle: (key: string) => void;
 }) {
+  const navigate = useNavigate();
   const [rendered, setRendered] = useState(expanded);
   useEffect(() => {
     if (expanded) setRendered(true);
@@ -629,8 +631,8 @@ function SnipeRow({
   const sniperHref = `/player/${encodeURIComponent(event.sniper.username)}`;
   const previousHref = `/player/${encodeURIComponent(event.victim.username)}`;
   const beatmapHref = event.beatmap.url;
-  const replayHref = DEV_MODE && event.hasReplay
-    ? `/replay?scoreId=${event.score_id}&beatmapsetId=${event.beatmapset_id}`
+  const replaySearch = DEV_MODE && event.hasReplay
+    ? getReplaySearch(event.score_id, event.beatmapset_id)
     : null;
 
   const heldFor = useMemo(() => {
@@ -760,11 +762,11 @@ function SnipeRow({
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className="text-xs text-osu-l2">{formatAccuracy(event.accuracy)}</span>
               <span className="text-sm font-bold">{formatPP(event.pp)}</span>
-              {replayHref && (
+              {replaySearch && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    window.location.href = replayHref;
+                    navigate({ to: "/replay", search: replaySearch });
                   }}
                   className="px-1.5 py-0.5 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
                   title="Watch replay"
@@ -787,11 +789,11 @@ function SnipeRow({
           {event.isLazer && <LazerBadge />}
           <span className="text-xs text-osu-l2 tabular-nums">{formatAccuracy(event.accuracy)}</span>
           <span className="text-sm font-bold tabular-nums">{formatPP(event.pp)}</span>
-          {replayHref && (
+          {replaySearch && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                window.location.href = replayHref;
+                navigate({ to: "/replay", search: replaySearch });
               }}
               className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
               title="Watch replay"

@@ -1,21 +1,24 @@
-import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, notFound, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings } from "../lib/osu";
 import { parseManiaBeatmap } from "../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
-import { getDisplayedAccuracy, getDisplayedRank, getScoreDisplayValues, scoreHasReplay } from "../lib/score";
+import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreDisplayValues, scoreHasReplay } from "../lib/score";
 import { useAppStore, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SearchInput } from "../components/ui/SearchInput";
 import { avatarImageSrc } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
+import { ModBadge } from "../components/ui/ModBadge";
 import { formatAccuracy, formatPP } from "../lib/format";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { track } from "../lib/posthog";
 import { withTimeout } from "../lib/promise-timeout";
+import type { ReplayHitCounts } from "../lib/replay-validation";
 import { normalizeReplayPlayerParam, shouldStartReplayPlayerLoad } from "../lib/replay-player-autoload";
+import { getReplayBackNavigation } from "../lib/replay-navigation";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import type { OsuScore, OsuBeatmapset, OsuBeatmap, ReplayFrame } from "../lib/types";
 import { pageSeo } from "../lib/seo";
@@ -23,7 +26,8 @@ import { pageSeo } from "../lib/seo";
 const REPLAY_VOLUME_STORAGE_KEY = "mania-hub-replay-volume";
 const REPLAY_INPUT_OVERLAY_STORAGE_KEY = "mania-hub-replay-input-overlay";
 const REPLAY_BG_DIM_STORAGE_KEY = "mania-hub-replay-bg-dim";
-const REPLAY_PLAYER_SCROLL_STORAGE_KEY = "mania-hub-replay-player-scroll";
+const REPLAY_SCROLL_SPEED_STORAGE_KEY = "mania-hub-replay-scroll-speed";
+const DEFAULT_REPLAY_SCROLL_SPEED = 20;
 
 interface ReplaySearch {
   scoreId?: number;
@@ -49,7 +53,19 @@ interface ServerReplay {
   };
   frames: ReplayFrame[];
   keyCount: number;
-  replayScrollY?: number;
+}
+
+function getScoreExpectedCounts(score: OsuScore | null, replay: ServerReplay): ReplayHitCounts {
+  const stats = score?.statistics ?? {};
+
+  return {
+    countGeki: stats.count_geki ?? stats.perfect ?? replay.header.countGeki,
+    count300: stats.count_300 ?? stats.great ?? replay.header.count300,
+    countKatu: stats.count_katu ?? stats.good ?? replay.header.countKatu,
+    count100: stats.count_100 ?? stats.ok ?? replay.header.count100,
+    count50: stats.count_50 ?? stats.meh ?? replay.header.count50,
+    countMiss: stats.count_miss ?? stats.miss ?? replay.header.countMiss,
+  };
 }
 
 // Server returns frames as two base64-packed typed arrays (Int32 times, Uint16 keys).
@@ -78,49 +94,16 @@ function base64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
-const REPLAY_SCROLL_CALIBRATION_SLOPE = 2.3819505316513596;
-const REPLAY_SCROLL_CALIBRATION_INTERCEPT = -6.496179351347244;
+function readReplayScrollSpeed(): number {
+  if (typeof window === "undefined") return DEFAULT_REPLAY_SCROLL_SPEED;
 
-function getReplayScrollSpeed(replay: ServerReplay): number | null {
-  if (!Number.isFinite(replay.replayScrollY) || (replay.replayScrollY ?? 0) <= 0) return null;
-
-  // Heuristic calibration from verified replay samples:
-  // Aleju replay y=16.16162 -> 32 scroll
-  // Anthony replay y=14.0625 -> 27 scroll
-  const derived = Math.round(REPLAY_SCROLL_CALIBRATION_SLOPE * replay.replayScrollY! + REPLAY_SCROLL_CALIBRATION_INTERCEPT);
-  return Math.max(1, Math.min(40, derived));
+  const stored = Number(window.localStorage.getItem(REPLAY_SCROLL_SPEED_STORAGE_KEY));
+  return Number.isFinite(stored) ? Math.max(1, Math.min(40, Math.round(stored))) : DEFAULT_REPLAY_SCROLL_SPEED;
 }
 
-function readPlayerScrollOverrides(): Record<string, number> {
-  if (typeof window === "undefined") return {};
-
-  const raw = window.localStorage.getItem(REPLAY_PLAYER_SCROLL_STORAGE_KEY);
-  if (!raw) return {};
-
-  try {
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-
-    return Object.fromEntries(
-      Object.entries(parsed).filter(([, value]) => Number.isFinite(value)).map(([key, value]) => [
-        key,
-        Math.max(1, Math.min(40, Math.round(Number(value)))),
-      ]),
-    );
-  } catch {
-    return {};
-  }
-}
-
-function writePlayerScrollOverride(userId: number, scrollSpeed: number) {
+function writeReplayScrollSpeed(scrollSpeed: number) {
   if (typeof window === "undefined") return;
-
-  const next = {
-    ...readPlayerScrollOverrides(),
-    [String(userId)]: Math.max(1, Math.min(40, Math.round(scrollSpeed))),
-  };
-
-  window.localStorage.setItem(REPLAY_PLAYER_SCROLL_STORAGE_KEY, JSON.stringify(next));
+  window.localStorage.setItem(REPLAY_SCROLL_SPEED_STORAGE_KEY, String(Math.max(1, Math.min(40, Math.round(scrollSpeed)))));
 }
 
 interface ReplayRendererLike {
@@ -174,9 +157,32 @@ export const Route = createFileRoute("/replay")({
 
 type BrowseMode = "player" | "beatmap";
 
+function ScoreModBadges({
+  score,
+  className,
+  hideWhenEmpty = false,
+}: {
+  score: OsuScore;
+  className: string;
+  hideWhenEmpty?: boolean;
+}) {
+  const mods = getModDisplayList(score.mods);
+  if (hideWhenEmpty && mods.length === 0) return null;
+
+  return (
+    <div className={className}>
+      {mods.map((m, index) => (
+        <ModBadge key={`${m.acronym}-${index}`} mod={m.acronym} rate={m.rate} size={0.75} />
+      ))}
+    </div>
+  );
+}
+
 function ReplayPage() {
   const { scoreId, beatmapsetId, t: initialTime, tab, player: playerParam } = Route.useSearch();
   const navigate = useNavigate();
+  const router = useRouter();
+  const canGoBack = useCanGoBack();
   const selectedCountry = useSelectedCountry();
   const cachedRankings = useAppStore((s) => s.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((s) => s.rankingsFetchedAtByCountry[selectedCountry] ?? null);
@@ -250,7 +256,6 @@ function ReplayPage() {
         header: parsed.header,
         frames: unpackReplayFrames(parsed.framesPacked),
         keyCount: parsed.keyCount,
-        replayScrollY: parsed.replayScrollY,
       });
       if (bmResult) {
         setBeatmap(parseManiaBeatmap(bmResult.content));
@@ -433,6 +438,20 @@ function ReplayPage() {
     }
   };
 
+  const handleClearReplay = () => {
+    setReplay(null);
+    setBeatmap(null);
+    setScoreInfo(null);
+
+    const backNavigation = getReplayBackNavigation({ canGoBack, playerParam, tab });
+    if (backNavigation.type === "history") {
+      router.history.back();
+      return;
+    }
+
+    navigate({ to: "/replay", search: backNavigation.search });
+  };
+
   return (
     <div className="flex-1">
       <PageHeader iconSrc="/images/icons/home.svg" title="mania replay viewer" />
@@ -447,10 +466,7 @@ function ReplayPage() {
               </motion.div>
             ) : replay ? (
               <motion.div key="viewer" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <ReplayInfo replay={replay} score={scoreInfo} beatmap={beatmap} onClear={() => {
-                  setReplay(null); setBeatmap(null); setScoreInfo(null);
-                  navigate({ to: "/replay", search: playerParam ? { player: playerParam } : tab === "beatmap" ? { tab: "beatmap" } : {} });
-                }} />
+                <ReplayInfo replay={replay} score={scoreInfo} beatmap={beatmap} onClear={handleClearReplay} />
                 <ReplayViewer replay={replay} beatmap={beatmap} scoreInfo={scoreInfo} fallbackBeatmapsetId={beatmapsetId} initialTime={initialTime} />
               </motion.div>
             ) : (
@@ -531,8 +547,10 @@ function ReplayPage() {
                                   <div className="flex-1 min-w-0">
                                     <div className="text-sm text-white truncate">{s.beatmapset?.title}</div>
                                     <div className="text-[10px] text-osu-f1">[{s.beatmap?.version}] {s.beatmap?.cs && `${s.beatmap.cs}K`}</div>
+                                    <ScoreModBadges score={s} className="mt-1 flex gap-0.5 sm:hidden" hideWhenEmpty />
                                   </div>
-                                  <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(s))}</span>
+                                  <ScoreModBadges score={s} className="hidden sm:flex w-28 flex-shrink-0 justify-end gap-0.5" />
+                                  <span className="text-xs text-osu-l2 flex-shrink-0">{formatAccuracy(getDisplayedAccuracy(s))}</span>
                                   <span className="text-sm font-bold">{formatPP(s.pp)}</span>
                                   <span className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold">Watch</span>
                                 </motion.div>
@@ -693,8 +711,10 @@ function ReplayPage() {
                             <img src={avatarImageSrc(s.user?.avatar_url, s.user?.id)} alt="" className="w-7 h-7 rounded-full flex-shrink-0" loading="lazy" />
                             <div className="flex-1 min-w-0">
                               <div className="text-sm text-white truncate">{s.user?.username}</div>
+                              <ScoreModBadges score={s} className="mt-1 flex gap-0.5 sm:hidden" hideWhenEmpty />
                             </div>
-                            <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(s))}</span>
+                            <ScoreModBadges score={s} className="hidden sm:flex w-28 flex-shrink-0 justify-end gap-0.5" />
+                            <span className="text-xs text-osu-l2 flex-shrink-0">{formatAccuracy(getDisplayedAccuracy(s))}</span>
                             <span className="text-sm font-bold">{formatPP(s.pp)}</span>
                             <span className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold">Watch</span>
                           </motion.div>
@@ -877,7 +897,7 @@ function ReplayViewer({
   );
   const modRate = modAcronyms.includes("DT") || modAcronyms.includes("NC") ? 1.5 : modAcronyms.includes("HT") ? 0.75 : 1;
   const effectiveRate = speed * modRate;
-  const [scrollSpeed, setScrollSpeed] = useState(32);
+  const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
   const [bgDim, setBgDim] = useState(() => {
     if (typeof window === "undefined") return 80;
     const raw = window.localStorage.getItem(REPLAY_BG_DIM_STORAGE_KEY);
@@ -912,19 +932,17 @@ function ReplayViewer({
   const audioEnabledRef = useRef(true);
   const audioUrlActiveRef = useRef(false);
   const showInputOverlayRef = useRef(false);
-  const scrollSpeedRef = useRef(32);
+  const scrollSpeedRef = useRef(DEFAULT_REPLAY_SCROLL_SPEED);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [sharePos, setSharePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [shareLabel, setShareLabel] = useState("");
   const [copied, setCopied] = useState(false);
   const shouldResumeAudioRef = useRef(false);
-  const applyScrollSpeed = useCallback((next: number, persistForPlayer = false) => {
+  const applyScrollSpeed = useCallback((next: number, persist = false) => {
     const normalized = Math.max(1, Math.min(40, Math.round(next)));
     setScrollSpeed(normalized);
-    if (persistForPlayer && scoreInfo?.user_id) {
-      writePlayerScrollOverride(scoreInfo.user_id, normalized);
-    }
-  }, [scoreInfo?.user_id]);
+    if (persist) writeReplayScrollSpeed(normalized);
+  }, []);
 
   // Build full audio URL from Sayobot CDN using beatmapset ID + audio filename from .osu
   const effectiveBeatmapsetId = scoreInfo?.beatmapset?.id ?? fallbackBeatmapsetId;
@@ -996,19 +1014,6 @@ function ReplayViewer({
     }
   }, [scrollSpeed]);
 
-  useEffect(() => {
-    const userId = scoreInfo?.user_id;
-    const storedOverrides = readPlayerScrollOverrides();
-
-    if (userId && Number.isFinite(storedOverrides[String(userId)])) {
-      applyScrollSpeed(storedOverrides[String(userId)]);
-      return;
-    }
-
-    const replayScrollSpeed = getReplayScrollSpeed(replay);
-    applyScrollSpeed(replayScrollSpeed ?? 32);
-  }, [applyScrollSpeed, replay, scoreInfo?.user_id]);
-
   // Create renderer
   useEffect(() => {
     if (!canvasRef.current || replay.frames.length === 0) return;
@@ -1040,6 +1045,7 @@ function ReplayViewer({
             mods: modAcronyms,
             transparentBackground: true,
             scrollVelocities: beatmap?.scrollVelocities,
+            expectedCounts: getScoreExpectedCounts(scoreInfo, replay),
           },
         ) as ReplayRendererLike;
 

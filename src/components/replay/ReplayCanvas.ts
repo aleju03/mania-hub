@@ -3,6 +3,8 @@ import type { ReplayFrame } from "../../lib/types";
 import type { ManiaNote, ManiaScrollVelocity } from "../../lib/beatmap-parser";
 import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgementEvent, ReplayNoteState } from "../../lib/mania-replay-judgement";
 import { buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "../../lib/mania-replay-judgement";
+import type { ReplayHitCounts } from "../../lib/replay-validation";
+import { resolveReplayJudgementEvents } from "../../lib/replay-validation";
 import { formatPixiRendererType } from "./renderer-debug";
 
 const COLUMN_COLORS: Record<number, string[]> = {
@@ -33,6 +35,10 @@ const JUDGMENT_LABELS: Record<number, string> = {
 
 const HOLD_VISUAL_GRACE_MS = 60;
 const BACKGROUND_FADE_DURATION_MS = 180;
+const MANIA_MAX_TIME_RANGE = 11485;
+const MANIA_REFERENCE_HEIGHT = 768;
+const MANIA_DEFAULT_HIT_POSITION = (480 - 402) * 1.6;
+const MANIA_HIT_TARGET_POSITION = 110;
 
 const HEX_NUMBER_CACHE = new Map<string, number>();
 
@@ -69,6 +75,7 @@ interface RendererOptions {
   hideHud?: boolean;
   barePlayfield?: boolean;
   scrollVelocities?: ManiaScrollVelocity[];
+  expectedCounts?: ReplayHitCounts;
 }
 
 interface Layout {
@@ -104,7 +111,7 @@ export class ManiaReplayRenderer {
   private playbackSpeed = 1;
   private modRate = 1;
   private _isPlaying = false;
-  private scrollSpeed = 0.74;
+  private scrollSpeed = 20;
   private animFrameId = 0;
   private lastRenderTime = 0;
   private audioClockAnchorTime: number | null = null;
@@ -209,8 +216,13 @@ export class ManiaReplayRenderer {
       this.keyCount,
       this.hitWindows,
       this.ruleset.accuracyMode,
+      {
+        legacyReplayFrameRounding: options?.expectedCounts != null,
+      },
     );
-    this.judgmentEvents = simulated.events;
+    this.judgmentEvents = options?.expectedCounts
+      ? resolveReplayJudgementEvents(simulated.events, options.expectedCounts).events
+      : simulated.events;
     this.noteStates = simulated.noteStates;
     const lastJudgementTime = this.judgmentEvents.length > 0
       ? this.judgmentEvents[this.judgmentEvents.length - 1].time
@@ -437,10 +449,12 @@ export class ManiaReplayRenderer {
     );
     const laneWidth = playfieldWidth / this.keyCount;
     const playfieldX = (w - playfieldWidth) / 2;
-    const judgmentY = h * 0.88;
+    const judgmentY = h * (MANIA_REFERENCE_HEIGHT - MANIA_HIT_TARGET_POSITION) / MANIA_REFERENCE_HEIGHT;
     const noteHeight = Math.max(10, h * 0.02);
     const receptorHeight = Math.max(6, h * 0.012);
-    const pixelsPerMs = this.scrollSpeed;
+    const scrollTimeRange = (MANIA_MAX_TIME_RANGE / Math.max(1, Math.min(40, this.scrollSpeed))) * this.modRate;
+    const scrollLength = h * (MANIA_REFERENCE_HEIGHT - MANIA_DEFAULT_HIT_POSITION) / MANIA_REFERENCE_HEIGHT;
+    const pixelsPerMs = scrollLength / scrollTimeRange;
 
     const layout: Layout = { w, h, playfieldWidth, playfieldX, laneWidth, judgmentY, noteHeight, receptorHeight, pixelsPerMs };
     this.cachedLayout = layout;
@@ -498,7 +512,7 @@ export class ManiaReplayRenderer {
   setSpeed(speed: number) { this.playbackSpeed = speed; }
 
   setScrollSpeed(speed: number) {
-    this.scrollSpeed = 0.1 + (speed / 40) * 0.8;
+    this.scrollSpeed = Math.max(1, Math.min(40, speed));
     this.invalidateLayoutCache();
     if (!this._isPlaying) this.render();
   }

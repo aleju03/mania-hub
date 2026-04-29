@@ -301,7 +301,7 @@ async function validateScoreId(scoreId: number, options: CliOptions): Promise<Re
     isConvert: fixture.score.beatmap?.convert ?? false,
     isLazer,
     keyCount,
-    legacyReplayFrameRounding: isLazer,
+    legacyReplayFrameRounding: true,
     mods,
     notes: beatmap.notes,
     od: beatmap.od,
@@ -334,7 +334,7 @@ function printResult(result: ReplayValidationResult & { scoreId: number; title: 
   console.log(`${result.player} - ${result.title} [${result.version}]`);
   console.log(`Accuracy expected ${formatPct(result.expectedAccuracy)} simulated ${formatPct(result.simulatedAccuracy)} (${result.accuracyDiff >= 0 ? "+" : ""}${result.accuracyDiff.toFixed(4)}pp)`);
   if (result.legacyReplayAmbiguityResolved) {
-    console.log("Resolved via lazer legacy .osr frame rounding ambiguity.");
+    console.log("Resolved via legacy .osr frame timing ambiguity.");
   }
   console.log(`Hits expected ${result.totalExpected} simulated ${result.totalSimulated} (total abs diff ${result.totalCountDiff})`);
   console.log("       expected  simulated  diff");

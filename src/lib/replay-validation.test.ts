@@ -99,4 +99,72 @@ describe("replay validation", () => {
     expect(result.matched).toBe(true);
     expect(result.totalCountDiff).toBe(0);
   });
+
+  it("resolves stable legacy replay frame-edge ambiguity", () => {
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 1000, isHold: false },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 1000, keyState: 0 },
+      { time: 1017, keyState: 1 },
+      { time: 1030, keyState: 0 },
+    ];
+
+    const result = validateReplaySimulation({
+      expectedCounts: {
+        countGeki: 1,
+        count300: 0,
+        countKatu: 0,
+        count100: 0,
+        count50: 0,
+        countMiss: 0,
+      },
+      frames,
+      keyCount: 1,
+      legacyReplayFrameRounding: true,
+      notes,
+      od: 8,
+    });
+
+    expect(result.rawSimulatedCounts).toEqual({
+      countGeki: 0,
+      count300: 1,
+      countKatu: 0,
+      count100: 0,
+      count50: 0,
+      countMiss: 0,
+    });
+    expect(result.legacyReplayAmbiguityResolved).toBe(true);
+    expect(result.matched).toBe(true);
+  });
+
+  it("allows stable sampled replay gaps to explain short unrecorded hits", () => {
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 1000, isHold: false },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 990, keyState: 0 },
+      { time: 1004, keyState: 0 },
+    ];
+
+    const result = validateReplaySimulation({
+      expectedCounts: {
+        countGeki: 0,
+        count300: 0,
+        countKatu: 0,
+        count100: 1,
+        count50: 0,
+        countMiss: 0,
+      },
+      frames,
+      keyCount: 1,
+      legacyReplayFrameRounding: true,
+      notes,
+      od: 8,
+    });
+
+    expect(result.rawSimulatedCounts.countMiss).toBe(1);
+    expect(result.legacyReplayAmbiguityResolved).toBe(true);
+    expect(result.matched).toBe(true);
+  });
 });
