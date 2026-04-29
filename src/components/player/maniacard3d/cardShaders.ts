@@ -36,9 +36,8 @@ float triangleWave(vec2 uv, vec2 grid, float offset) {
     0.18 + random(id + vec2(3.7, 9.4)) * 0.62
   );
   vec2 cell = fract(p);
-  float width = 0.42 + random(id + vec2(11.2, 5.8)) * 0.28;
-  float height = 0.44 + random(id + vec2(1.3, 14.6)) * 0.22;
-  vec2 local = vec2((cell.x - center.x) / width, (cell.y - center.y) / height);
+  float scale = 0.44 + random(id + vec2(11.2, 5.8)) * 0.24;
+  vec2 local = vec2((cell.x - center.x) / scale, (cell.y - center.y) / (scale * 0.88));
   float tri = max(abs(local.x) * 0.92 + local.y * 0.82, -local.y * 0.56);
   float shape = 1.0 - smoothstep(0.46, 0.51, tri);
   return shape * sparse * mix(0.45, 1.0, variant);

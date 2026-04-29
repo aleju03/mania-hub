@@ -6,6 +6,7 @@ import type { ManiaCardReadyData } from "./types";
 
 const FONT = "Torus, Arial, sans-serif";
 const CARD_CORNER_RADIUS = 58;
+const TRIANGLE_HEIGHT_RATIO = 0.88;
 const MANIA_GLYPH_D =
   "M500 48q-21 0-35 15t-15 35v504q0 21 15 36t35 14 36-14 14-36v-504q0-21-14-35t-36-15z m-110 192v220q0 21-14 36t-36 14-35-14-15-36v-220q0-21 15-35t35-15 36 15 14 35z m320 0v220q0 21-14 36t-36 14-35-14-15-36v-220q0-21 15-35t35-15 36 15 14 35z m-210 500q-106 0-197-53-88-52-140-140-53-91-53-197t53-197q52-88 140-140 91-53 197-53t197 53q88 52 140 140 53 91 53 197t-53 197q-52 88-140 140-91 53-197 53z m0 80q97 0 182-36t150-102q64-62 101-148t37-184-36-182-102-150q-62-64-148-101t-184-37-182 36-150 102q-64 62-101 149t-37 183 37 182 101 150q62 64 149 101t183 37v0z";
 
@@ -225,11 +226,10 @@ function drawTrianglePattern(context: CanvasRenderingContext2D, opacity: number)
       const y = 54 + row * 78 + (random01(index * 29.37 + 12.4) - 0.5) * 72;
       if (x < 34 || x > CARD_TEXTURE_WIDTH - 34 || y < 34 || y > CARD_TEXTURE_HEIGHT - 34) continue;
       const size = 30 + random01(index * 13.81 + 2.7) * 34;
-      const squish = 0.82 + random01(index * 7.33 + 9.1) * 0.22;
       const alpha = 0.035 + random01(index * 5.21 + 1.3) * 0.055;
       const tone = random01(index * 3.11 + 6.9) > 0.54 ? "255,255,255" : "0,0,0";
       const rotation = (random01(index * 31.7 + 11.2) - 0.5) * 0.42;
-      drawTriangle(context, x, y, size, size * squish, `rgba(${tone},${alpha.toFixed(3)})`, rotation);
+      drawTriangle(context, x, y, size, size * TRIANGLE_HEIGHT_RATIO, `rgba(${tone},${alpha.toFixed(3)})`, rotation);
     }
   }
   for (let index = 0; index < 20; index += 1) {
@@ -238,11 +238,10 @@ function drawTrianglePattern(context: CanvasRenderingContext2D, opacity: number)
     const x = 80 + random01(index * 37.13 + 4.8) * (CARD_TEXTURE_WIDTH - 160);
     const y = 80 + random01(index * 61.27 + 2.2) * (CARD_TEXTURE_HEIGHT - 160);
     const size = 24 + random01(index * 11.33 + 1.7) * 20;
-    const squish = 0.88 + random01(index * 5.9 + 7.2) * 0.16;
     const alpha = 0.025 + random01(index * 3.7 + 5.4) * 0.03;
     const tone = random01(index * 8.19 + 1.1) > 0.5 ? "255,255,255" : "0,0,0";
     const rotation = (random01(index * 17.7 + 10.1) - 0.5) * 0.56;
-    drawTriangle(context, x, y, size, size * squish, `rgba(${tone},${alpha.toFixed(3)})`, rotation);
+    drawTriangle(context, x, y, size, size * TRIANGLE_HEIGHT_RATIO, `rgba(${tone},${alpha.toFixed(3)})`, rotation);
   }
   context.restore();
 }
@@ -407,14 +406,12 @@ function drawTriangle(
 
 function drawBadgeTrianglePattern(context: CanvasRenderingContext2D) {
   context.save();
-  context.globalAlpha = 0.55;
+  context.globalAlpha = 0.28;
   const triangles = [
-    [66, 64, 24, 22, "rgba(255,255,255,0.10)", -0.1],
-    [120, 58, 27, 24, "rgba(255,255,255,0.07)", 0.14],
-    [72, 104, 26, 23, "rgba(0,0,0,0.11)", 0.08],
-    [132, 112, 24, 22, "rgba(255,255,255,0.07)", -0.12],
-    [58, 142, 26, 23, "rgba(0,0,0,0.09)", 0.05],
-    [108, 144, 22, 20, "rgba(255,255,255,0.06)", -0.16],
+    [62, 64, 24, 21, "rgba(0,0,0,0.12)", -0.1],
+    [124, 60, 27, 24, "rgba(255,255,255,0.045)", 0.14],
+    [76, 108, 26, 23, "rgba(0,0,0,0.10)", 0.08],
+    [136, 108, 24, 21, "rgba(255,255,255,0.035)", -0.12],
   ] as const;
   for (const [x, y, width, height, fill, rotation] of triangles) {
     drawTriangle(context, x, y, width, height, fill, rotation);
