@@ -95,6 +95,7 @@ describe("replay validation", () => {
       count50: 0,
       countMiss: 0,
     });
+    expect(result.legacyReplayResolution).toBe("ambiguity");
     expect(result.legacyReplayAmbiguityResolved).toBe(true);
     expect(result.matched).toBe(true);
     expect(result.totalCountDiff).toBe(0);
@@ -134,8 +135,85 @@ describe("replay validation", () => {
       count50: 0,
       countMiss: 0,
     });
+    expect(result.legacyReplayResolution).toBe("ambiguity");
     expect(result.legacyReplayAmbiguityResolved).toBe(true);
     expect(result.matched).toBe(true);
+  });
+
+  it("treats stable late OK as open on the right edge", () => {
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 1000, isHold: false },
+      { column: 0, time: 2000, endTime: 2000, isHold: false },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1111, keyState: 1 },
+      { time: 1120, keyState: 0 },
+      { time: 2112, keyState: 1 },
+      { time: 2120, keyState: 0 },
+    ];
+
+    const result = validateReplaySimulation({
+      expectedCounts: {
+        countGeki: 0,
+        count300: 0,
+        countKatu: 0,
+        count100: 1,
+        count50: 0,
+        countMiss: 1,
+      },
+      frames,
+      keyCount: 1,
+      notes,
+      od: 5,
+    });
+
+    expect(result.matched).toBe(true);
+    expect(result.rawSimulatedCounts).toEqual({
+      countGeki: 0,
+      count300: 0,
+      countKatu: 0,
+      count100: 1,
+      count50: 0,
+      countMiss: 1,
+    });
+  });
+
+  it("cuts stable note hitability off at the next note start", () => {
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 1000, isHold: false },
+      { column: 0, time: 1080, endTime: 1080, isHold: false },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1090, keyState: 1 },
+      { time: 1100, keyState: 0 },
+    ];
+
+    const result = validateReplaySimulation({
+      expectedCounts: {
+        countGeki: 1,
+        count300: 0,
+        countKatu: 0,
+        count100: 0,
+        count50: 0,
+        countMiss: 1,
+      },
+      frames,
+      keyCount: 1,
+      notes,
+      od: 5,
+    });
+
+    expect(result.matched).toBe(true);
+    expect(result.rawSimulatedCounts).toEqual({
+      countGeki: 1,
+      count300: 0,
+      countKatu: 0,
+      count100: 0,
+      count50: 0,
+      countMiss: 1,
+    });
   });
 
   it("allows stable sampled replay gaps to explain short unrecorded hits", () => {
@@ -199,6 +277,46 @@ describe("replay validation", () => {
     expect(result.matched).toBe(true);
   });
 
+  it("allows stable sampled long-note body breaks hidden between pressed samples", () => {
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 2000, isHold: true },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1000, keyState: 1 },
+      { time: 1500, keyState: 1 },
+      { time: 2000, keyState: 0 },
+    ];
+
+    const result = validateReplaySimulation({
+      expectedCounts: {
+        countGeki: 0,
+        count300: 0,
+        countKatu: 0,
+        count100: 0,
+        count50: 1,
+        countMiss: 0,
+      },
+      frames,
+      keyCount: 1,
+      legacyReplayFrameRounding: true,
+      notes,
+      od: 8,
+    });
+
+    expect(result.rawSimulatedCounts).toEqual({
+      countGeki: 1,
+      count300: 0,
+      countKatu: 0,
+      count100: 0,
+      count50: 0,
+      countMiss: 0,
+    });
+    expect(result.legacyReplayResolution).toBe("ambiguity");
+    expect(result.legacyReplayAmbiguityResolved).toBe(true);
+    expect(result.matched).toBe(true);
+  });
+
   it("can reconcile stable sampled replay counts when exact edge ambiguity is insufficient", () => {
     const events: ReplayJudgementEvent[] = [
       { column: 0, judgment: 1, noteIndex: 0, offsetMs: 0, part: "note", time: 1000 },
@@ -228,6 +346,7 @@ describe("replay validation", () => {
     }, { allowLegacyScoreReconciliation: true });
 
     expect(resolved.resolved).toBe(true);
+    expect(resolved.mode).toBe("score-header");
     expect(countReplayJudgements(resolved.events)).toEqual({
       countGeki: 0,
       count300: 1,

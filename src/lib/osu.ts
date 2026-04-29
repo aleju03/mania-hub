@@ -103,6 +103,7 @@ function toLeanRankingEntry(raw: RawRankingsResponse["ranking"][number]): LeanRa
       id: raw.user.id,
       username: raw.user.username,
       avatar_url: raw.user.avatar_url,
+      cover_url: raw.user.cover?.url ?? raw.user.cover_url ?? "",
       country_code: raw.user.country_code,
       is_online: raw.user.is_online,
       is_active: raw.user.is_active,
@@ -1133,9 +1134,10 @@ export const getRankings = createServerFn({ method: "GET" })
   .handler(async ({ data }: { data: { type?: string; page?: number; country?: string } }): Promise<RankingsResponse> => {
     edgeCache(60, 300);
     const type = data.type ?? "performance";
-    // v2: payload trimmed to LeanRankingEntry. Bumped so old full-OsuUser
-    // blobs in Turso aren't returned with the new lean consumer types.
-    const cacheKey = `rankings:v2:${type}:${data.page ?? 1}:${data.country ?? ""}`;
+    // v4: lean ranking users read cover_url from user.cover.url for replay
+    // suggestion banners. Bumped so broken v3 entries with undefined banners
+    // are refetched.
+    const cacheKey = `rankings:v4:${type}:${data.page ?? 1}:${data.country ?? ""}`;
     return fetchWithCacheLock(cacheKey, RANKINGS_CACHE_TTL, async () => {
       const raw = await osuFetch<RawRankingsResponse>(
         `/rankings/mania/${type}`,

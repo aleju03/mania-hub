@@ -21,6 +21,8 @@ import type { ReplayHitCounts } from "../lib/replay-validation";
 import { DEFAULT_REPLAY_SKIN_SETTINGS, normalizeReplaySkinSettings, readReplaySkinSettings, writeReplaySkinSettings } from "../lib/replay-skin";
 import { normalizeReplayPlayerParam, shouldStartReplayPlayerLoad } from "../lib/replay-player-autoload";
 import { getReplayBackNavigation } from "../lib/replay-navigation";
+import { parseReplayScoreInput } from "../lib/replay-score-input";
+import { getReplayScoreAvailability } from "../lib/replay-score-availability";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import type { ReplaySkinSettings, ReplaySkinStyle } from "../lib/replay-skin";
 import type { BeatmapScoreLookupStatus, OsuScore, OsuBeatmapset, OsuBeatmap, ReplayFrame, ReplayLifeBarFrame } from "../lib/types";
@@ -199,6 +201,77 @@ function ScoreModBadges({
   );
 }
 
+function ScoreInputPreview({
+  scoreId,
+  score,
+  loading,
+  error,
+  onOpen,
+}: {
+  scoreId: number;
+  score: OsuScore | null;
+  loading: boolean;
+  error: string | null;
+  onOpen: () => void;
+}) {
+  if (loading) {
+    return (
+      <div className="mt-2 flex items-center gap-2 rounded-lg bg-osu-b4/70 border border-osu-b3/30 px-3 py-2 text-xs text-osu-f1">
+        <div className="w-3.5 h-3.5 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
+        Looking up score #{scoreId}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        className="mt-2 w-full rounded-lg bg-osu-b4/70 hover:bg-osu-b3 border border-osu-b3/30 px-3 py-2 text-left text-xs text-osu-f1 hover:text-white transition-colors cursor-pointer"
+      >
+        {error}. Press Enter or click to try replay #{scoreId}.
+      </button>
+    );
+  }
+
+  if (!score) return null;
+
+  const coverUrl = score.beatmapset?.covers?.list;
+  const availability = getReplayScoreAvailability(score);
+  const unavailable = !availability.available;
+  return (
+    <button
+      type="button"
+      onClick={unavailable ? undefined : onOpen}
+      disabled={unavailable}
+      className={`mt-2 w-full flex items-center gap-3 rounded-lg bg-osu-b4 border border-osu-b3/30 px-3 py-2 text-left transition-colors ${
+        unavailable ? "cursor-default opacity-80" : "hover:bg-osu-b3 cursor-pointer"
+      }`}
+    >
+      {coverUrl && (
+        <img src={coverUrl} alt="" className="w-12 h-8 rounded object-cover flex-shrink-0" loading="lazy" />
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-semibold text-white truncate">
+          {score.beatmapset?.title ?? `Score #${scoreId}`}
+        </div>
+        <div className="text-[10px] text-osu-f1 truncate">
+          {unavailable
+            ? availability.message
+            : `${score.user?.username ?? "Unknown player"}${score.beatmap?.version ? ` // [${score.beatmap.version}]` : ""}`}
+        </div>
+      </div>
+      <ScoreModBadges score={score} className="hidden sm:flex flex-shrink-0 gap-0.5" hideWhenEmpty />
+      <span className={`text-[10px] font-semibold uppercase tracking-wider flex-shrink-0 ${
+        unavailable ? "text-osu-f1" : "text-osu-pink-light"
+      }`}>
+        {unavailable ? "Unavailable" : "Watch"}
+      </span>
+    </button>
+  );
+}
+
 function ReplayPage() {
   const { scoreId, beatmapsetId, t: initialTime, tab, player: playerParam } = Route.useSearch();
   const navigate = useNavigate();
@@ -213,6 +286,10 @@ function ReplayPage() {
   const [scoreInfo, setScoreInfo] = useState<OsuScore | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [playerSearchQuery, setPlayerSearchQuery] = useState("");
+  const [scorePreview, setScorePreview] = useState<OsuScore | null>(null);
+  const [scorePreviewLoading, setScorePreviewLoading] = useState(false);
+  const [scorePreviewError, setScorePreviewError] = useState<string | null>(null);
 
   // Player browse state
   const [playerScoreGroups, setPlayerScoreGroups] = useState<{ best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScore[]; recent: OsuScore[] } | null>(null);
@@ -237,6 +314,7 @@ function ReplayPage() {
   const [loadingBeatmapScores, setLoadingBeatmapScores] = useState(false);
   const beatmapTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const beatmapScoreRequestRef = useRef(0);
+  const scorePreviewTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const visibleRawBeatmapScores = loadingBeatmapScores && partialBeatmapScores.length > 0
     ? mergeScoresById(beatmapScorePage > 1 ? rawBeatmapScores : [], partialBeatmapScores)
@@ -247,17 +325,24 @@ function ReplayPage() {
     [visibleRawBeatmapScores],
   );
   const normalizedPlayerParam = normalizeReplayPlayerParam(playerParam);
+  const playerSearchScoreId = parseReplayScoreInput(playerSearchQuery);
 
   const loadReplay = useCallback(async (sid: number) => {
     setError(null);
     setLoading(true);
     setReplay(null);
     setBeatmap(null);
+    setScoreInfo(null);
 
     try {
       // Fetch score first to get key count (beatmap.cs) for correct replay parsing
       const score = await getScore({ data: { scoreId: sid, mode: "mania" } }).catch(() => null);
       if (score) {
+        const availability = getReplayScoreAvailability(score);
+        if (!availability.available) {
+          throw new Error(availability.message);
+        }
+
         setScoreInfo(score);
         track("replay_view", {
           replay_score_id: String(sid),
@@ -338,6 +423,8 @@ function ReplayPage() {
   }, [beatmapQuery, browseMode]);
 
   const handlePlayerSearch = async (q: string) => {
+    if (parseReplayScoreInput(q)) return [];
+
     const res = await searchUsers({ data: { query: q } });
     return (res.user?.data ?? []).slice(0, 6).map((u: { id: number; username: string; avatar_url: string; country_code: string }) => ({
       id: u.id, username: u.username, avatar_url: u.avatar_url, country_code: u.country_code,
@@ -374,6 +461,54 @@ function ReplayPage() {
     setLoadedPlayerParam(null);
   };
 
+  const handlePlayerSearchSubmit = (query: string) => {
+    const parsedScoreId = parseReplayScoreInput(query);
+    if (!parsedScoreId) return;
+    navigate({ to: "/replay", search: { scoreId: parsedScoreId } });
+  };
+
+  const handleOpenScorePreview = () => {
+    const parsedScoreId = parseReplayScoreInput(playerSearchQuery);
+    if (!parsedScoreId) return;
+    navigate({ to: "/replay", search: { scoreId: parsedScoreId } });
+  };
+
+  useEffect(() => {
+    clearTimeout(scorePreviewTimerRef.current);
+
+    if (!playerSearchScoreId || scoreId || browseMode !== "player") {
+      setScorePreview(null);
+      setScorePreviewLoading(false);
+      setScorePreviewError(null);
+      return;
+    }
+
+    setScorePreview(null);
+    setScorePreviewError(null);
+    setScorePreviewLoading(true);
+
+    let cancelled = false;
+    scorePreviewTimerRef.current = setTimeout(async () => {
+      try {
+        const score = await getScore({ data: { scoreId: playerSearchScoreId, mode: "mania" } });
+        if (cancelled) return;
+        setScorePreview(score);
+        setScorePreviewError(null);
+      } catch {
+        if (cancelled) return;
+        setScorePreview(null);
+        setScorePreviewError("Couldn't find score details");
+      } finally {
+        if (!cancelled) setScorePreviewLoading(false);
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(scorePreviewTimerRef.current);
+    };
+  }, [browseMode, playerSearchScoreId, scoreId]);
+
   // Fetch country rankings to power the player suggestions grid (cached in store).
   useEffect(() => {
     if (browseMode !== "player") return;
@@ -397,6 +532,7 @@ function ReplayPage() {
         id: entry.user.id,
         username: entry.user.username,
         avatar_url: entry.user.avatar_url,
+        cover_url: entry.user.cover_url,
         global_rank: entry.global_rank,
       })),
     [cachedRankings],
@@ -556,7 +692,7 @@ function ReplayPage() {
             ) : (
               <motion.div key="browse" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 {/* Tab toggle */}
-                <div className="flex justify-center mb-6">
+                <div className="flex justify-center mb-3">
                   <div className="flex bg-osu-b4 rounded-lg border border-osu-b3/50 overflow-hidden">
                     {(["player", "beatmap"] as const).map((m) => (
                       <button
@@ -595,9 +731,24 @@ function ReplayPage() {
                   <>
                     <div className="max-w-lg mx-auto mb-8">
                       <h3 className="text-sm font-semibold text-osu-f1 uppercase tracking-wider mb-3 text-center">
-                        Search a player to view their replays
+                        Search a player, or paste a score ID
                       </h3>
-                      <SearchInput placeholder="Search player..." onSearch={handlePlayerSearch} onSelect={handleSelectPlayer} />
+                      <SearchInput
+                        placeholder="Search player... or score ID"
+                        onSearch={handlePlayerSearch}
+                        onSelect={handleSelectPlayer}
+                        onSubmit={handlePlayerSearchSubmit}
+                        onQueryChange={setPlayerSearchQuery}
+                      />
+                      {playerSearchScoreId && (
+                        <ScoreInputPreview
+                          scoreId={playerSearchScoreId}
+                          score={scorePreview}
+                          loading={scorePreviewLoading}
+                          error={scorePreviewError}
+                          onOpen={handleOpenScorePreview}
+                        />
+                      )}
                     </div>
 
                     {loadingScores && (
@@ -676,10 +827,18 @@ function ReplayPage() {
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: i * 0.02 }}
                                 onClick={() => handleSelectPlayer(p)}
-                                className="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20 text-left"
+                                className="relative overflow-hidden flex items-center gap-3 py-2.5 px-3 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20 text-left"
                               >
-                                <img src={avatarImageSrc(p.avatar_url, p.id)} alt="" className="w-9 h-9 rounded-full flex-shrink-0 object-cover" loading="lazy" />
-                                <div className="flex-1 min-w-0">
+                                {p.cover_url && (
+                                  <div
+                                    className="absolute inset-0 bg-cover bg-center opacity-35"
+                                    style={{ backgroundImage: `url(${p.cover_url})` }}
+                                    aria-hidden="true"
+                                  />
+                                )}
+                                <div className="absolute inset-0 bg-osu-b4/80" aria-hidden="true" />
+                                <img src={avatarImageSrc(p.avatar_url, p.id)} alt="" className="relative w-9 h-9 rounded-full flex-shrink-0 object-cover" loading="lazy" />
+                                <div className="relative flex-1 min-w-0">
                                   <div className="text-sm text-white truncate">{p.username}</div>
                                   <div className="text-[10px] text-osu-f1">#{p.global_rank.toLocaleString()}</div>
                                 </div>

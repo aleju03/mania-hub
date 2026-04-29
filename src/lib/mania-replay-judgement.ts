@@ -256,7 +256,9 @@ function getStableHeadJudgmentForOffset(
   offsetMs: number,
   windows: ManiaReplayHitWindows,
 ): Judgment {
-  if (offsetMs > windows.ok) {
+  // Stable's score-v1 mania late OK window is open. For example, OD5 has
+  // late OK at 111ms, while 112ms is already a miss.
+  if (offsetMs >= Math.floor(windows.ok)) {
     return offsetMs <= windows.miss ? 6 : 0;
   }
   return getJudgmentForOffset(offsetMs, windows);
@@ -354,6 +356,53 @@ function judgeStableLongNoteCombined(
   return result;
 }
 
+function stableSegmentCanHideBodyBreak(
+  segment: ReplaySegment,
+  startTime: number,
+  endTime: number,
+): boolean {
+  const samples = segment.samples ?? [];
+  let previousPressedSample: number | null = null;
+
+  for (const sample of samples) {
+    if (sample < startTime) {
+      previousPressedSample = sample;
+      continue;
+    }
+
+    if (sample > endTime) break;
+
+    if (previousPressedSample != null && sample > Math.max(previousPressedSample, startTime)) {
+      return true;
+    }
+
+    previousPressedSample = sample;
+  }
+
+  // Stable downloaded replays are sampled key states. Even an observed key-up
+  // edge can hide a release/re-press/release sequence after the previous
+  // pressed sample, which would body-break an LN during live scoring.
+  if (segment.end <= endTime && segment.endPrevious != null) {
+    return segment.end > Math.max(segment.endPrevious, startTime);
+  }
+
+  return false;
+}
+
+function stableLongNoteCanHideBodyBreak(
+  note: ManiaNote,
+  scannedSegments: ReplaySegment[],
+  judgmentTime: number,
+): boolean {
+  const startTime = note.time;
+  const endTime = Math.max(startTime, judgmentTime);
+
+  return scannedSegments.some((segment) => {
+    if (segment.end <= startTime || segment.start >= endTime) return false;
+    return stableSegmentCanHideBodyBreak(segment, startTime, endTime);
+  });
+}
+
 function getStableLongNotePossibleJudgments(
   note: ManiaNote,
   headSegment: ReplaySegment,
@@ -361,6 +410,7 @@ function getStableLongNotePossibleJudgments(
   currentJudgment: Judgment,
   currentTailOffsetMs: number,
   hadBodyBreak: boolean,
+  hiddenBodyBreakPossible: boolean,
   windows: ManiaReplayHitWindows,
 ): Judgment[] {
   const possible = new Set<Judgment>([currentJudgment]);
@@ -403,6 +453,7 @@ function getStableLongNotePossibleJudgments(
     }
   }
 
+  if (hiddenBodyBreakPossible) possible.add(5);
   if (missPossible) possible.add(6);
 
   return [...possible].sort((a, b) => a - b);
@@ -546,10 +597,10 @@ export function simulateManiaReplayJudgements(
 
       let matchedSegmentIndex = -1;
       let headJudgment: Judgment = 0;
-      const stableHeadDeadline = note.time + windows.ok;
+      const stableHeadDeadline = note.time + Math.floor(windows.ok) - Number.EPSILON;
       const latestHeadHitTime = isLazer
         ? Math.min(note.time + windows.meh, nextNote ? nextNote.time - Number.EPSILON : note.time + windows.meh)
-        : stableHeadDeadline;
+        : Math.min(stableHeadDeadline, nextNote ? nextNote.time - Number.EPSILON : stableHeadDeadline);
 
       for (let s = segmentCursor; s < columnSegments.length; s++) {
         const segment = columnSegments[s];
@@ -740,7 +791,7 @@ export function simulateManiaReplayJudgements(
 
       // --- Stable LN: one combined judgement event at tail release time ---
       const tailEarlyBound = note.endTime - windows.meh;
-      const tailLateBound = note.endTime + windows.ok;
+      const tailLateBound = note.endTime + Math.floor(windows.ok) - Number.EPSILON;
 
       let bodyBreakTime: number | null = null;
       let releaseTime = headSegment.end;
@@ -828,6 +879,11 @@ export function simulateManiaReplayJudgements(
                 combinedJudgment,
                 tailOffsetMs,
                 bodyBreakTime != null,
+                stableLongNoteCanHideBodyBreak(
+                  note,
+                  columnSegments.slice(matchedSegmentIndex, lastScannedSegmentIndex + 1),
+                  combinedTime,
+                ),
                 windows,
               ),
             }

@@ -733,8 +733,13 @@ export const useAppStore = create<AppState>()(
           if (ranking.length === 0) return true;
           const first = ranking[0] as Record<string, unknown> | null;
           const user = first?.user as Record<string, unknown> | undefined;
-          // Reject v4 full `OsuUser` shape (has `page`, `badges`, `statistics`).
-          return !!user && !("page" in user) && !("badges" in user) && !("statistics" in user);
+          // Reject v4 full `OsuUser` shape (has `page`, `badges`, `statistics`)
+          // and v5 lean ranking entries that predate replay suggestion banners.
+          return !!user &&
+            !("page" in user) &&
+            !("badges" in user) &&
+            !("statistics" in user) &&
+            typeof user.cover_url === "string";
         };
         const sanitizedRankingsByCountry: CountryRecord<RankingsResponse> = {};
         if (nextState.rankingsByCountry && typeof nextState.rankingsByCountry === "object") {

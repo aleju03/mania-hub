@@ -12,11 +12,15 @@ interface SearchResult {
 export function SearchInput({
   onSearch,
   onSelect,
+  onSubmit,
+  onQueryChange,
   placeholder = "Search player...",
   className = "",
 }: {
   onSearch: (q: string) => Promise<SearchResult[]>;
   onSelect: (user: SearchResult) => void;
+  onSubmit?: (q: string) => void;
+  onQueryChange?: (q: string) => void;
   placeholder?: string;
   className?: string;
 }) {
@@ -57,7 +61,15 @@ export function SearchInput({
       <input
         type="text"
         value={query}
-        onChange={(e) => setQuery(e.target.value)}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          onQueryChange?.(e.target.value);
+        }}
+        onKeyDown={(e) => {
+          if (e.key !== "Enter" || !onSubmit) return;
+          e.preventDefault();
+          onSubmit(query);
+        }}
         onFocus={() => results.length > 0 && setOpen(true)}
         placeholder={placeholder}
         className="w-full px-4 py-2.5 rounded-lg bg-osu-b4 text-osu-c1 text-sm placeholder:text-osu-f1 border border-osu-b3/50 focus:border-osu-h1/40 focus:outline-none transition-colors duration-[120ms] shadow-[inset_0_1px_3px_rgba(0,0,0,0.3)]"
@@ -82,6 +94,7 @@ export function SearchInput({
                 onClick={() => {
                   onSelect(u);
                   setQuery("");
+                  onQueryChange?.("");
                   setOpen(false);
                 }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3 transition-colors duration-[120ms] cursor-pointer text-left"

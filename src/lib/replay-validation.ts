@@ -24,6 +24,7 @@ export interface ReplayValidationResult {
   expectedAccuracy: number;
   expectedCounts: ReplayHitCounts;
   legacyReplayAmbiguityResolved: boolean;
+  legacyReplayResolution: "none" | "ambiguity" | "score-header";
   matched: boolean;
   rawSimulatedCounts: ReplayHitCounts;
   simulatedAccuracy: number;
@@ -302,7 +303,7 @@ export function resolveReplayJudgementEvents(
   events: ReplayJudgementEvent[],
   expectedCounts: ReplayHitCounts,
   options: { allowLegacyScoreReconciliation?: boolean } = {},
-): { events: ReplayJudgementEvent[]; resolved: boolean } {
+): { events: ReplayJudgementEvent[]; mode: "none" | "ambiguity" | "score-header"; resolved: boolean } {
   const fixedCounts = [0, 0, 0, 0, 0, 0, 0];
   const ambiguous: Exclude<Judgment, 0>[][] = [];
   const ambiguousEventIndexes: number[] = [];
@@ -324,7 +325,9 @@ export function resolveReplayJudgementEvents(
     const reconciled = options.allowLegacyScoreReconciliation
       ? reconcileEventsToExpectedCounts(events, expectedCounts)
       : null;
-    return reconciled ? { events: reconciled, resolved: true } : { events, resolved: false };
+    return reconciled
+      ? { events: reconciled, mode: "score-header", resolved: true }
+      : { events, mode: "none", resolved: false };
   }
 
   const target = replayHitCountsToArray(expectedCounts);
@@ -334,13 +337,17 @@ export function resolveReplayJudgementEvents(
     const reconciled = options.allowLegacyScoreReconciliation
       ? reconcileEventsToExpectedCounts(events, expectedCounts)
       : null;
-    return reconciled ? { events: reconciled, resolved: true } : { events, resolved: false };
+    return reconciled
+      ? { events: reconciled, mode: "score-header", resolved: true }
+      : { events, mode: "none", resolved: false };
   }
   if (remainingTarget.slice(1).reduce((sum, count) => sum + count, 0) !== ambiguous.length) {
     const reconciled = options.allowLegacyScoreReconciliation
       ? reconcileEventsToExpectedCounts(events, expectedCounts)
       : null;
-    return reconciled ? { events: reconciled, resolved: true } : { events, resolved: false };
+    return reconciled
+      ? { events: reconciled, mode: "score-header", resolved: true }
+      : { events, mode: "none", resolved: false };
   }
 
   const assigned = assignAmbiguousJudgments(ambiguous, remainingTarget);
@@ -348,7 +355,9 @@ export function resolveReplayJudgementEvents(
     const reconciled = options.allowLegacyScoreReconciliation
       ? reconcileEventsToExpectedCounts(events, expectedCounts)
       : null;
-    return reconciled ? { events: reconciled, resolved: true } : { events, resolved: false };
+    return reconciled
+      ? { events: reconciled, mode: "score-header", resolved: true }
+      : { events, mode: "none", resolved: false };
   }
 
   const resolvedEvents = events.map((event) => ({ ...event }));
@@ -356,7 +365,7 @@ export function resolveReplayJudgementEvents(
     resolvedEvents[ambiguousEventIndexes[i]].judgment = assigned[i];
   }
 
-  return { events: resolvedEvents, resolved: true };
+  return { events: resolvedEvents, mode: "ambiguity", resolved: true };
 }
 
 export function getReplayHitCountTotal(counts: ReplayHitCounts): number {
@@ -423,6 +432,7 @@ export function validateReplaySimulation(input: ReplayValidationInput): ReplayVa
     expectedAccuracy,
     expectedCounts: input.expectedCounts,
     legacyReplayAmbiguityResolved: ambiguityResolvedCounts != null,
+    legacyReplayResolution: resolvedEvents?.mode ?? "none",
     matched: totalCountDiff === 0,
     rawSimulatedCounts,
     simulatedAccuracy,
