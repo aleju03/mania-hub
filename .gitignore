@@ -17,3 +17,7 @@ inspirations
 tmp-*.mjs
 tmp-*.js
 tmp-*.ts
+cache/replay-fixtures/
+
+# Local classifier datasets
+datasets/

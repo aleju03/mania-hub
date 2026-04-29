@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { estimateDan } from "./dan-estimator";
-import type { ManiaBeatmap, ManiaNote } from "./beatmap-parser";
+import { parseManiaBeatmap, type ManiaBeatmap, type ManiaNote } from "./beatmap-parser";
 
 function makeMap(notes: ManiaNote[], keyCount = 4): ManiaBeatmap {
   return {
@@ -18,6 +19,10 @@ function makeMap(notes: ManiaNote[], keyCount = 4): ManiaBeatmap {
     backgroundFilename: "",
     scrollVelocities: [],
   };
+}
+
+function readFixtureBeatmap(name: string): ManiaBeatmap {
+  return parseManiaBeatmap(readFileSync(new URL(`./__fixtures__/dan-classifier/${name}`, import.meta.url), "utf8"));
 }
 
 describe("estimateDan", () => {
@@ -363,6 +368,122 @@ describe("estimateDan", () => {
     expect(estimate.rawDan).toBeLessThan(14.5);
   });
 
+  it("continues technical rhythm pressure across higher rate-pack difficulties", () => {
+    const makeTechRate = (gapScale: number, starRating: number) => {
+      const notes: ManiaNote[] = [];
+      const masks = [[0], [2], [1, 3], [0], [3], [0, 2], [1], [2, 3], [0], [1]];
+      const gaps = [48, 66, 68, 86, 108, 66, 48, 68, 92, 58, 114, 66];
+      let time = 0;
+
+      for (let row = 0; row < 1900; row++) {
+        time += gaps[row % gaps.length] * gapScale;
+        for (const column of masks[row % masks.length]) {
+          notes.push({ column, time, endTime: time, isHold: false });
+        }
+      }
+
+      return estimateDan(makeMap(notes), { starRating, totalLength: 125 * gapScale });
+    };
+
+    const officialRate = makeTechRate(0.72, 5.94);
+    const higherRate = makeTechRate(0.64, 6.7);
+
+    expect(officialRate.family).toBe("tech");
+    expect(higherRate.family).toBe("tech");
+    expect(officialRate.rawDan).toBeGreaterThan(14);
+    expect(higherRate.rawDan).toBeGreaterThan(officialRate.rawDan);
+  });
+
+  it("keeps Crescent Moon Island Kuro rates ordered around the official delta cut", () => {
+    const lowerRate = estimateDan(readFixtureBeatmap("crescent-kuro-0.95.osu"), {
+      starRating: 5.43444,
+      totalLength: 122,
+    });
+    const baseRate = estimateDan(readFixtureBeatmap("crescent-kuro-1.0.osu"), {
+      starRating: 5.6926,
+      totalLength: 116,
+    });
+    const officialDelta = estimateDan(readFixtureBeatmap("crescent-kuro-1.05.osu"), {
+      starRating: 5.93634,
+      totalLength: 111,
+    });
+
+    expect(lowerRate.displayName).toBe("beta++");
+    expect(baseRate.displayName).toBe("gamma+");
+    expect(officialDelta.label).toBe("delta");
+    expect(lowerRate.rawDan).toBeLessThan(baseRate.rawDan);
+    expect(baseRate.rawDan).toBeLessThan(officialDelta.rawDan);
+    expect(lowerRate.debug?.scoring.terms.lowerRateTechBridgeBonus).toBeGreaterThan(0);
+    expect(baseRate.debug?.scoring.terms.baseRateTechCompression).toBeGreaterThan(0);
+  });
+
+  it("keeps long low-end Future Dominators stamina at 10th dan", () => {
+    const estimate = estimateDan(readFixtureBeatmap("future-dominators-nb5-hard-54235.osu"), {
+      starRating: 5.76,
+      totalLength: 290,
+    });
+
+    expect(estimate.metrics.noteCount).toBeGreaterThan(5600);
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.4);
+    expect(estimate.metrics.chordRatio).toBeLessThan(0.5);
+    expect(estimate.family).toBe("stamina");
+    expect(estimate.debug?.scoring.terms.lowEndLongMidChordStaminaFloorBonus).toBeGreaterThan(0);
+    expect(estimate.label).toBe("10");
+  });
+
+  it("routes far in the blue sky 0.95 to delta chordjack instead of epsilon tech", () => {
+    const estimate = estimateDan(readFixtureBeatmap("far-in-the-blue-sky-42-0.95.osu"), {
+      starRating: 7.17,
+      totalLength: 109,
+    });
+
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.62);
+    expect(estimate.metrics.chordRatio).toBeLessThan(0.72);
+    expect(estimate.metrics.chordjackPressure).toBeGreaterThan(170);
+    expect(estimate.family).toBe("chordjack");
+    expect(estimate.label).toBe("delta");
+    expect(estimate.rawDan).toBeLessThan(14.3);
+  });
+
+  it("tracks the Road from Gamma to Delta jack practice pack targets", () => {
+    const packCases: Array<{
+      file: string;
+      starRating: number;
+      totalLength: number;
+      displayName: string;
+      family: "jack" | "chordjack";
+    }> = [
+      ["STRONGER-0.91x-Delta-Mid", 7.10832, 201, "delta", "jack"],
+      ["Lockdown-Delta-Low", 7.08251, 186, "delta-", "jack"],
+      ["EDM-Jumpers-Cut-1.1x-Gamma-High", 6.52607, 132, "gamma++", "jack"],
+      ["Hatsuki-Yura-Onyx-Veil-0.95x-Delta-Lowmid", 7.37861, 298, "delta", "chordjack"],
+      ["Hatsuki-Yura-Snow-Veil-0.9x-Gamma-High", 6.55346, 257, "gamma+", "jack"],
+      ["Hiasobi-1.2x-Delta-Lowmid", 6.9271, 133, "delta", "jack"],
+      ["Hot-But-A-Psycho-1-3x-Delta-Mid", 6.73083, 104, "delta", "jack"],
+      ["Impossible-1.05x-Gamma-High", 7.38473, 112, "gamma++", "jack"],
+      ["J.A.C.K.E.L.L.I.T.E.-Cut-Gamma-High", 6.78578, 136, "gamma+", "jack"],
+      ["Jack-Digger-1.5x-Delta-Lowmid", 6.18453, 143, "gamma+", "jack"],
+      ["Promise-0.95x-Gamma-High", 6.46791, 231, "gamma++", "chordjack"],
+      ["Decoy-Omega-Ver.-0.85x-Delta-MidHigh", 7.35814, 156, "delta++", "jack"],
+      ["Unique-Idol-Delta-Mid", 7.12569, 210, "delta+", "jack"],
+    ].map(([name, starRating, totalLength, displayName, family]) => ({
+      file: `gamma-delta-jack-pack/Various-Artists-Road-from-Gamma-to-Delta-practice-pack-Jack-PureDePapa-${name}-.osu`,
+      starRating,
+      totalLength,
+      displayName,
+      family,
+    }));
+
+    for (const packCase of packCases) {
+      const estimate = estimateDan(readFixtureBeatmap(packCase.file), {
+        starRating: packCase.starRating,
+        totalLength: packCase.totalLength,
+      });
+
+      expect(`${packCase.file}: ${estimate.displayName} ${estimate.family}`).toBe(`${packCase.file}: ${packCase.displayName} ${packCase.family}`);
+    }
+  });
+
   it("rewards compact chord-switch tech with anchor pressure", () => {
     const notes: ManiaNote[] = [];
     const masks = [[0], [0, 2], [1], [1, 3], [2], [3], [3, 1], [0], [0, 3], [1], [2], [1, 2], [3], [0]];
@@ -679,6 +800,62 @@ describe("estimateDan", () => {
     expect(estimate.skillScores.handstream).toBeGreaterThan(estimate.skillScores.stream);
     expect(estimate.skillScores.handstream).toBeGreaterThan(estimate.skillScores.chordjack);
     expect(estimate.skillScores.handstream).toBeGreaterThan(estimate.skillScores.tech);
+  });
+
+  it("routes compact Quadraphinix-like handstream away from tech", () => {
+    const notes: ManiaNote[] = [];
+    const masks = [[0], [1], [2, 3], [0, 1], [2], [3], [0, 2], [1, 3], [0], [1], [2, 3], [0, 1]];
+    for (let row = 0; row < 1650; row++) {
+      const time = row * 52;
+      for (const column of masks[row % masks.length]) {
+        notes.push({ column, time, endTime: time, isHold: false });
+      }
+    }
+
+    const estimate = estimateDan(makeMap(notes), { starRating: 6.86, totalLength: 111 });
+
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.38);
+    expect(estimate.metrics.jackPressure).toBeLessThan(150);
+    expect(estimate.family).toBe("handstream");
+    expect(estimate.rawDan).toBeLessThan(14.5);
+  });
+
+  it("compresses long sparse jack-drop files out of delta tech", () => {
+    const notes: ManiaNote[] = [];
+    const masks = [[0, 1], [0, 1], [2, 3], [2], [0, 3], [0], [1, 2, 3], [1], [2], [2, 3]];
+    let time = 0;
+    for (let row = 0; row < 3700; row++) {
+      time += row % 4 === 0 ? 70 : 100;
+      for (const column of masks[row % masks.length]) {
+        notes.push({ column, time: Math.round(time), endTime: Math.round(time), isHold: false });
+      }
+      if (row % 420 === 0) time += 3500;
+    }
+
+    const estimate = estimateDan(makeMap(notes), { starRating: 6.54, totalLength: 402 });
+
+    expect(estimate.metrics.noteCount).toBeGreaterThan(4800);
+    expect(estimate.metrics.fastRowRatio).toBeLessThan(0.38);
+    expect(estimate.family).toBe("jack");
+    expect(estimate.rawDan).toBeLessThan(11);
+  });
+
+  it("compresses dense base-rate stamina that SR overpromotes into epsilon", () => {
+    const notes: ManiaNote[] = [];
+    const masks = [[1], [0, 3], [1], [2], [1, 3], [0, 2], [1, 3], [0, 2], [1], [0, 2, 3], [1], [0, 2, 3]];
+    for (let row = 0; row < 3300; row++) {
+      const time = row * 52;
+      for (const column of masks[row % masks.length]) {
+        notes.push({ column, time, endTime: time, isHold: false });
+      }
+    }
+
+    const estimate = estimateDan(makeMap(notes), { starRating: 7.37, totalLength: 253 });
+
+    expect(estimate.metrics.sustainedNps10s).toBeGreaterThan(33);
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.56);
+    expect(estimate.family).toBe("stamina");
+    expect(estimate.rawDan).toBeLessThan(14.5);
   });
 
   it("keeps short dense jack files from being classified as tech", () => {

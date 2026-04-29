@@ -574,6 +574,31 @@ export interface SnipesScanStatus {
   updatedAt: number;
 }
 
+export interface CountryTopPlay {
+  user: { id: number; username: string; avatar_url: string };
+  score: OsuScore;
+  pp: number;
+  weightedPP: number;
+  ppGain: number;
+  time: string;
+}
+
+export interface TopPlaysResponse {
+  popoffs: CountryTopPlay[];
+  scannedAt: number;
+  window: "24h" | "3d" | "7d" | "30d";
+  refreshInProgress?: boolean;
+}
+
+export interface TopPlaysRefreshStatus {
+  phase: "scores";
+  label: string;
+  current: number;
+  total: number;
+  found: number;
+  updatedAt: number;
+}
+
 // Replay types
 export interface ReplayHeader {
   gameMode: number;

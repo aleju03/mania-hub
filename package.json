@@ -10,6 +10,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "replay:validate": "node --env-file-if-exists=.env scripts/replay-validate.ts",
     "db:init": "turso db shell mania-hub < db/schema.sql",
     "db:inspect": "turso db shell mania-hub",
     "snipes:reset": "node --env-file=.env scripts/reset-snipes.mjs"

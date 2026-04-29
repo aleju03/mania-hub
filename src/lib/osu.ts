@@ -68,6 +68,9 @@ import type {
   CountryBoardScore,
   SnipesResponse,
   SnipesScanStatus,
+  CountryTopPlay,
+  TopPlaysRefreshStatus,
+  TopPlaysResponse,
 } from "./types";
 import { isSupportedCountryCode, normalizeCountryCode } from "./country";
 
@@ -191,6 +194,9 @@ const SNIPES_RANKED_STATUSES = new Set(["ranked", "loved", "approved"]);
 const SNIPES_STATUS_TTL = 60 * 1000;
 const SNIPES_STATUS_THROTTLE_MS = 350;
 const snipesStatusLastWriteByCountry = new Map<string, number>();
+const TOP_PLAYS_STATUS_TTL = 60 * 1000;
+const TOP_PLAYS_STATUS_THROTTLE_MS = 350;
+const topPlaysStatusLastWriteByCountry = new Map<string, number>();
 
 function snipesStatusKey(country: string): string {
   return `snipes-scan-status:${country}`;
@@ -231,6 +237,44 @@ function writePartialSnipeEvents(country: string, events: SnipeEvent[]): void {
 function clearPartialSnipeEvents(country: string): void {
   void setPersistentCache(snipesPartialEventsKey(country), null, 1000);
 }
+
+function topPlaysStatusKey(country: string): string {
+  return `top-plays-refresh-status:${country}`;
+}
+
+function writeTopPlaysRefreshStatus(
+  country: string,
+  status: Omit<TopPlaysRefreshStatus, "updatedAt">,
+  options: { force?: boolean } = {},
+): void {
+  const now = Date.now();
+  const last = topPlaysStatusLastWriteByCountry.get(country) ?? 0;
+  if (!options.force && now - last < TOP_PLAYS_STATUS_THROTTLE_MS) return;
+  topPlaysStatusLastWriteByCountry.set(country, now);
+  void setPersistentCache(topPlaysStatusKey(country), { ...status, updatedAt: now }, TOP_PLAYS_STATUS_TTL);
+}
+
+function clearTopPlaysRefreshStatus(country: string): void {
+  topPlaysStatusLastWriteByCountry.delete(country);
+  void setPersistentCache(topPlaysStatusKey(country), null, 1000);
+}
+
+function topPlaysPartialKey(country: string): string {
+  return `top-plays-partial:v1:${country}`;
+}
+
+function writePartialTopPlays(country: string, popoffs: CountryTopPlay[]): void {
+  if (popoffs.length === 0) return;
+  void setPersistentCache(
+    topPlaysPartialKey(country),
+    sortCountryPopoffs(popoffs).slice(0, COUNTRY_TOP_PLAYS_QUERY_LIMIT),
+    TOP_PLAYS_STATUS_TTL,
+  );
+}
+
+function clearPartialTopPlays(country: string): void {
+  void setPersistentCache(topPlaysPartialKey(country), null, 1000);
+}
 const userRecentPlaysPromiseCache = new Map<number, Promise<OsuScore[]>>();
 const userPromiseCache = new Map<string, Promise<OsuUser>>();
 const userScoresListPromiseCache = new Map<string, Promise<OsuScore[]>>();
@@ -259,6 +303,7 @@ interface ScorePpGainLookup {
 }
 
 const MAX_OSU_ID = 1_000_000_000;
+const MAX_OSU_SCORE_ID = Number.MAX_SAFE_INTEGER;
 const MAX_SCORE_LIMIT = 100;
 const MAX_SCORE_OFFSET = 500;
 const MAX_BEST_WINDOW_LIMIT = 200;
@@ -330,6 +375,10 @@ function parseOptionalBoundedInt(
 
 function parseOsuId(value: unknown, label: string): number {
   return parseBoundedInt(value, label, { min: 1, max: MAX_OSU_ID });
+}
+
+function parseOsuScoreId(value: unknown, label: string): number {
+  return parseBoundedInt(value, label, { min: 1, max: MAX_OSU_SCORE_ID });
 }
 
 function parseString(value: unknown, label: string, maxLength: number, fallback?: string): string {
@@ -452,12 +501,14 @@ function normalizeCountryPopoffsPayload(data: unknown): {
   country?: string;
   players: HomePreviewPlayer[];
   window?: PopoffWindow;
+  refresh?: boolean;
 } {
   const input = asInputRecord(data);
   return {
     country: parseOptionalCountry(input.country),
     players: parseHomePlayers(input.players, MAX_BATCH_USERS),
     window: parsePopoffWindow(input.window),
+    refresh: input.refresh !== false,
   };
 }
 
@@ -541,7 +592,7 @@ function normalizeReplayParsedPayload(data: unknown): { scoreId: number; mode: s
     ? undefined
     : parseBoundedInt(input.keyCount, "keyCount", { min: 1, max: 18 });
   return {
-    scoreId: parseOsuId(input.scoreId, "score id"),
+    scoreId: parseOsuScoreId(input.scoreId, "score id"),
     mode,
     keyCount,
   };
@@ -551,7 +602,7 @@ function normalizeScorePayload(data: unknown): { scoreId: number; mode?: string 
   const input = asInputRecord(data);
   const mode = input.mode == null || input.mode === "" ? "mania" : String(input.mode);
   if (!REPLAY_MODES.has(mode)) throw new Error("Invalid score mode.");
-  return { scoreId: parseOsuId(input.scoreId, "score id"), mode };
+  return { scoreId: parseOsuScoreId(input.scoreId, "score id"), mode };
 }
 
 function assertDevMutationAllowed(action: string): void {
@@ -1181,14 +1232,7 @@ type HomePreviewPlayer = {
   avatar_url: string;
 };
 
-type CountryPopoff = {
-  user: { id: number; username: string; avatar_url: string };
-  score: OsuScore;
-  pp: number;
-  weightedPP: number;
-  ppGain: number;
-  time: string;
-};
+type CountryPopoff = CountryTopPlay;
 
 async function buildHomePopoffs(players: HomePreviewPlayer[]): Promise<LeanHomePopoff[]> {
   const topPlayersForPopoffs = players.slice(0, HOME_POPOFFS_PLAYER_COUNT);
@@ -1263,9 +1307,40 @@ function sortCountryPopoffs(popoffs: CountryPopoff[]): CountryPopoff[] {
   });
 }
 
+async function buildCountryPopoffsForPlayer(
+  player: HomePreviewPlayer,
+  windowMs: number,
+): Promise<CountryPopoff[]> {
+  const scores = await fetchUserBestScoresWindow(player.id, 100);
+  const relevantScores = scores.filter((score) => {
+    const age = Date.now() - getTimestampMs(score);
+    return age < windowMs && score.pp != null && score.pp > 0;
+  });
+  const gainMap = await calculateReplacementPpGainMapForTargets(
+    scores,
+    relevantScores.map((score) => ({
+      beatmapId: score.beatmap_id ?? score.beatmap?.id ?? 0,
+      scoreId: score.id,
+      timestamp: getScoreTimestamp(score),
+      userId: player.id,
+    })),
+  );
+
+  return relevantScores
+    .map((score) => ({
+      user: player,
+      score,
+      pp: score.pp ?? 0,
+      weightedPP: score.weight?.pp ?? 0,
+      ppGain: gainMap[score.id] ?? 0,
+      time: getScoreTimestamp(score),
+    }));
+}
+
 async function buildLiveCountryPopoffs(
   players: HomePreviewPlayer[],
   window: PopoffWindow,
+  options: { progressCountry?: string } = {},
 ): Promise<CountryPopoff[]> {
   const topPlayers = players.slice(0, 30);
   if (topPlayers.length === 0) return [];
@@ -1274,35 +1349,32 @@ async function buildLiveCountryPopoffs(
   const cacheKey = `country-popoffs:v${COUNTRY_POPOFFS_CACHE_VERSION}:${window}:${topPlayers.map((player) => player.id).join(",")}`;
 
   return fetchWithCacheLock(cacheKey, COUNTRY_POPOFFS_CACHE_TTL, async () => {
+    let completed = 0;
+    const partialPopoffs: CountryPopoff[] = [];
+    const progressCountry = options.progressCountry;
+    if (progressCountry) {
+      clearPartialTopPlays(progressCountry);
+      writeTopPlaysRefreshStatus(
+        progressCountry,
+        {
+          phase: "scores",
+          label: "Checking players' best scores",
+          current: 0,
+          total: topPlayers.length,
+          found: 0,
+        },
+        { force: true },
+      );
+    }
+
     const results = await mapWithConcurrency(
       topPlayers,
       APPROX_PP_GAINS_CONCURRENCY,
       async (player) => {
+        let playerPopoffs: CountryPopoff[] = [];
         try {
-          const scores = await fetchUserBestScoresWindow(player.id, 100);
-          const relevantScores = scores.filter((score) => {
-            const age = Date.now() - getTimestampMs(score);
-            return age < windowMs && score.pp != null && score.pp > 0;
-          });
-          const gainMap = await calculateReplacementPpGainMapForTargets(
-            scores,
-            relevantScores.map((score) => ({
-              beatmapId: score.beatmap_id ?? score.beatmap?.id ?? 0,
-              scoreId: score.id,
-              timestamp: getScoreTimestamp(score),
-              userId: player.id,
-            })),
-          );
-
-          return relevantScores
-            .map((score) => ({
-              user: player,
-              score,
-              pp: score.pp ?? 0,
-              weightedPP: score.weight?.pp ?? 0,
-              ppGain: gainMap[score.id] ?? 0,
-              time: getScoreTimestamp(score),
-            }));
+          playerPopoffs = await buildCountryPopoffsForPlayer(player, windowMs);
+          return playerPopoffs;
         } catch (error) {
           console.warn("[osu] failed to build country popoff scores for player", {
             playerId: player.id,
@@ -1310,11 +1382,25 @@ async function buildLiveCountryPopoffs(
             error: getErrorMessage(error),
           });
           return [] as CountryPopoff[];
+        } finally {
+          completed += 1;
+          partialPopoffs.push(...playerPopoffs);
+          const latest = sortCountryPopoffs(partialPopoffs);
+          if (progressCountry) {
+            writeTopPlaysRefreshStatus(progressCountry, {
+              phase: "scores",
+              label: "Checking players' best scores",
+              current: completed,
+              total: topPlayers.length,
+              found: latest.length,
+            });
+            writePartialTopPlays(progressCountry, latest);
+          }
         }
       },
     );
 
-    return results.flatMap((scores) => scores);
+    return sortCountryPopoffs(results.flatMap((scores) => scores));
   });
 }
 
@@ -1439,71 +1525,118 @@ async function upsertStoredCountryTopPlays(country: string, popoffs: CountryPopo
 }
 
 async function refreshStoredCountryTopPlays(country: string, players: HomePreviewPlayer[]): Promise<number> {
-  const refreshed = await buildLiveCountryPopoffs(players, "30d");
+  const refreshed = await buildLiveCountryPopoffs(players, "30d", { progressCountry: country });
   await upsertStoredCountryTopPlays(country, refreshed);
   return Date.now();
 }
 
-async function refreshStoredCountryTopPlaysWithLock(country: string, players: HomePreviewPlayer[]): Promise<void> {
+async function refreshStoredCountryTopPlaysWithLock(country: string, players: HomePreviewPlayer[]): Promise<boolean> {
   const normalizedCountry = normalizeCountryCode(country);
   const cacheKey = `country-top-plays-refresh:v1:${normalizedCountry}`;
+  let ranRefresh = false;
   await fetchWithCacheLock(
     cacheKey,
     COUNTRY_TOP_PLAYS_REFRESH_TTL,
-    () => refreshStoredCountryTopPlays(normalizedCountry, players),
+    () => {
+      ranRefresh = true;
+      return refreshStoredCountryTopPlays(normalizedCountry, players);
+    },
     COUNTRY_TOP_PLAYS_REFRESH_LOCK_TTL,
   );
+  return ranRefresh;
+}
+
+const topPlaysBackgroundRefreshInProgress = new Set<string>();
+
+function refreshStoredCountryTopPlaysInBackground(country: string, players: HomePreviewPlayer[]): boolean {
+  const normalizedCountry = normalizeCountryCode(country);
+  if (topPlaysBackgroundRefreshInProgress.has(normalizedCountry)) return true;
+  topPlaysBackgroundRefreshInProgress.add(normalizedCountry);
+  void refreshStoredCountryTopPlaysWithLock(normalizedCountry, players)
+    .then((ranRefresh) => {
+      if (!ranRefresh) return;
+      clearTopPlaysRefreshStatus(normalizedCountry);
+      clearPartialTopPlays(normalizedCountry);
+    })
+    .catch((error) => {
+      console.warn("[osu] failed to refresh stored country top plays in background", {
+        country: normalizedCountry,
+        error: getErrorMessage(error),
+      });
+    })
+    .finally(() => {
+      topPlaysBackgroundRefreshInProgress.delete(normalizedCountry);
+    });
+  return true;
 }
 
 async function buildCountryPopoffs(
   country: string | undefined,
   players: HomePreviewPlayer[],
   window: PopoffWindow,
-): Promise<CountryPopoff[]> {
+  refresh: boolean,
+): Promise<TopPlaysResponse> {
   if (!country || !hasDb()) {
-    return buildLiveCountryPopoffs(players, window);
+    const popoffs = await buildLiveCountryPopoffs(
+      players,
+      window,
+      country ? { progressCountry: normalizeCountryCode(country) } : {},
+    );
+    return { popoffs, scannedAt: Date.now(), window };
   }
 
   const normalizedCountry = normalizeCountryCode(country);
   const stored = await getStoredCountryTopPlays(normalizedCountry, window);
   if (stored.length > 0) {
-    refreshStoredCountryTopPlaysWithLock(normalizedCountry, players).catch((error) => {
-      console.warn("[osu] failed to refresh stored country top plays in background", {
-        country: normalizedCountry,
-        error: getErrorMessage(error),
-      });
-    });
-    return stored;
+    const refreshInProgress = refresh && refreshStoredCountryTopPlaysInBackground(normalizedCountry, players);
+    return {
+      popoffs: stored,
+      scannedAt: Date.now(),
+      window,
+      refreshInProgress,
+    };
   }
 
-  const live = await buildLiveCountryPopoffs(players, window);
+  let live: CountryPopoff[] = [];
+  try {
+    live = await buildLiveCountryPopoffs(players, window, { progressCountry: normalizedCountry });
+  } finally {
+    clearTopPlaysRefreshStatus(normalizedCountry);
+    clearPartialTopPlays(normalizedCountry);
+  }
   await upsertStoredCountryTopPlays(normalizedCountry, live);
 
   if (window !== "30d") {
-    refreshStoredCountryTopPlaysWithLock(normalizedCountry, players).catch((error) => {
-      console.warn("[osu] failed to warm stored country top plays in background", {
-        country: normalizedCountry,
-        error: getErrorMessage(error),
-      });
-    });
+    refreshStoredCountryTopPlaysInBackground(normalizedCountry, players);
   }
 
   const selectedWindow = sortCountryPopoffs(filterPopoffsForWindow(live, window));
-  if (selectedWindow.length > 0 || window !== "30d") return selectedWindow;
+  if (selectedWindow.length > 0 || window !== "30d") {
+    return {
+      popoffs: selectedWindow,
+      scannedAt: Date.now(),
+      window,
+      refreshInProgress: window !== "30d",
+    };
+  }
 
   try {
     await refreshStoredCountryTopPlaysWithLock(normalizedCountry, players);
+    clearTopPlaysRefreshStatus(normalizedCountry);
+    clearPartialTopPlays(normalizedCountry);
   } catch (error) {
     console.warn("[osu] failed to warm stored country top plays", {
       country: normalizedCountry,
       error: getErrorMessage(error),
     });
-    return selectedWindow;
+    return { popoffs: selectedWindow, scannedAt: Date.now(), window };
   }
 
   const refreshed = await getStoredCountryTopPlays(normalizedCountry, window);
-  if (refreshed.length > 0) return refreshed;
-  return selectedWindow;
+  if (refreshed.length > 0) {
+    return { popoffs: refreshed, scannedAt: Date.now(), window };
+  }
+  return { popoffs: selectedWindow, scannedAt: Date.now(), window };
 }
 
 export const getHomePageData = createServerFn({ method: "GET" })
@@ -1548,9 +1681,25 @@ export const getHomePopoffs = createServerFn({ method: "GET" })
 
 export const getCountryPopoffs = createServerFn({ method: "GET" })
   .inputValidator(normalizeCountryPopoffsPayload)
-  .handler(async ({ data }: { data: { country?: string; players: HomePreviewPlayer[]; window?: PopoffWindow } }) => {
-    edgeCache(60, 600);
-    return buildCountryPopoffs(data.country, data.players, data.window ?? "30d");
+  .handler(async ({ data }: { data: { country?: string; players: HomePreviewPlayer[]; window?: PopoffWindow; refresh?: boolean } }) => {
+    noStore();
+    return buildCountryPopoffs(data.country, data.players, data.window ?? "30d", data.refresh !== false);
+  });
+
+export const getTopPlaysRefreshStatus = createServerFn({ method: "GET" })
+  .inputValidator(normalizeCountryPayload)
+  .handler(async ({ data }: { data?: { country?: string } }): Promise<TopPlaysRefreshStatus | null> => {
+    noStore();
+    const country = normalizeCountryCode(data?.country ?? "CR");
+    return (await getPersistentCached<TopPlaysRefreshStatus>(topPlaysStatusKey(country))) ?? null;
+  });
+
+export const getPartialTopPlays = createServerFn({ method: "GET" })
+  .inputValidator(normalizeCountryPayload)
+  .handler(async ({ data }: { data?: { country?: string } }): Promise<CountryTopPlay[]> => {
+    noStore();
+    const country = normalizeCountryCode(data?.country ?? "CR");
+    return (await getPersistentCached<CountryTopPlay[]>(topPlaysPartialKey(country))) ?? [];
   });
 
 // ── Batch user rank history ────────────────────────────────────────────────

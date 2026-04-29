@@ -22,6 +22,7 @@ export interface ManiaReplayHitWindows {
 export interface ManiaReplayRuleset {
   accuracyMode: ReplayAccuracyMode;
   difficultyMultiplier: number;
+  effectiveOdMultiplier: number;
   isConvert: boolean;
   speedMultiplier: number;
   useClassicWindows: boolean;
@@ -82,8 +83,9 @@ export function getManiaReplayRuleset(
   return {
     accuracyMode: isLazer ? "lazer" : "stable",
     difficultyMultiplier: modSet.has("HR") ? 1.4 : modSet.has("EZ") ? 1 / 1.4 : 1,
+    effectiveOdMultiplier: modSet.has("HR") ? 1.4 : modSet.has("EZ") ? 0.5 : 1,
     isConvert,
-    speedMultiplier: modSet.has("DT") || modSet.has("NC") ? 1.5 : modSet.has("HT") ? 0.75 : 1,
+    speedMultiplier: modSet.has("DT") || modSet.has("NC") ? 1.5 : modSet.has("HT") || modSet.has("DC") ? 0.75 : 1,
     useClassicWindows: !isLazer || (modSet.has("CL") && !modSet.has("SV2")),
   };
 }
@@ -92,21 +94,27 @@ export function getManiaReplayHitWindows(
   od: number,
   ruleset: ManiaReplayRuleset,
 ): ManiaReplayHitWindows {
-  const totalMultiplier = ruleset.speedMultiplier / ruleset.difficultyMultiplier;
+  const totalMultiplier = ruleset.accuracyMode === "stable"
+    ? 1
+    : ruleset.speedMultiplier / ruleset.difficultyMultiplier;
 
   if (ruleset.useClassicWindows) {
+    const effectiveOd = ruleset.accuracyMode === "stable"
+      ? Math.max(0, Math.min(10, od * ruleset.effectiveOdMultiplier))
+      : od;
+
     if (ruleset.isConvert) {
       return {
         perfect: Math.floor(16 * totalMultiplier) + 0.5,
-        great: Math.floor((Math.round(od) > 4 ? 34 : 47) * totalMultiplier) + 0.5,
-        good: Math.floor((Math.round(od) > 4 ? 67 : 77) * totalMultiplier) + 0.5,
+        great: Math.floor((Math.round(effectiveOd) > 4 ? 34 : 47) * totalMultiplier) + 0.5,
+        good: Math.floor((Math.round(effectiveOd) > 4 ? 67 : 77) * totalMultiplier) + 0.5,
         ok: Math.floor(97 * totalMultiplier) + 0.5,
         meh: Math.floor(121 * totalMultiplier) + 0.5,
         miss: Math.floor(158 * totalMultiplier) + 0.5,
       };
     }
 
-    const invertedOd = Math.max(0, Math.min(10, 10 - od));
+    const invertedOd = 10 - effectiveOd;
     return {
       perfect: Math.floor(16 * totalMultiplier) + 0.5,
       great: Math.floor((34 + 3 * invertedOd) * totalMultiplier) + 0.5,
@@ -172,6 +180,16 @@ function getJudgmentForOffset(
   return 0;
 }
 
+function getStableHeadJudgmentForOffset(
+  offsetMs: number,
+  windows: ManiaReplayHitWindows,
+): Judgment {
+  if (offsetMs > windows.ok) {
+    return offsetMs <= windows.miss ? 6 : 0;
+  }
+  return getJudgmentForOffset(offsetMs, windows);
+}
+
 // Stable (ScoreV1) long-note combined judgement rule.
 // Wiki: https://osu.ppy.sh/wiki/en/Gameplay/Judgement/osu%21mania
 // The tail's judgement for an LN depends on head error AND the combined error
@@ -217,27 +235,31 @@ function createMissState(
   accuracyMode: ReplayAccuracyMode,
   actualHead?: { time: number; offsetMs: number; releaseTime: number },
 ): ReplayNoteState {
-  const headTime = actualHead?.time ?? note.time + windows.miss;
-  const headOffsetMs = actualHead?.offsetMs ?? windows.miss;
+  const passiveHeadWindow = accuracyMode === "lazer" ? windows.meh : windows.miss;
+  const headTime = actualHead?.time ?? note.time + passiveHeadWindow;
+  const headOffsetMs = actualHead?.offsetMs ?? passiveHeadWindow;
   const releaseTime = actualHead?.releaseTime ?? 0;
   const isLN = note.isHold && note.endTime > note.time;
 
   if (!isLN) {
+    const stableTimeout = accuracyMode === "stable" && !actualHead;
+    const lazerTimeout = accuracyMode === "lazer" && !actualHead;
+    const eventTime = stableTimeout ? note.time + windows.ok : lazerTimeout ? note.time + windows.meh : headTime;
     events.push({
       column,
       judgment: 6,
       noteIndex,
       offsetMs: headOffsetMs,
       part: "note",
-      time: headTime,
+      time: eventTime,
     });
     return {
       bodyBreakTime: null,
       displayJudgment: 6,
-      displayTime: headTime,
+      displayTime: eventTime,
       headJudgment: 6,
       headOffsetMs,
-      headTime,
+      headTime: eventTime,
       releaseTime,
       tailJudgment: null,
       tailOffsetMs: 0,
@@ -246,7 +268,7 @@ function createMissState(
   }
 
   if (accuracyMode === "lazer") {
-    const tailTime = note.endTime + windows.miss * RELEASE_WINDOW_LENIENCE;
+    const tailTime = note.endTime + windows.meh * RELEASE_WINDOW_LENIENCE;
     events.push({
       column,
       judgment: 6,
@@ -259,7 +281,7 @@ function createMissState(
       column,
       judgment: 6,
       noteIndex,
-      offsetMs: windows.miss * RELEASE_WINDOW_LENIENCE,
+      offsetMs: windows.meh * RELEASE_WINDOW_LENIENCE,
       part: "hold-tail",
       time: tailTime,
     });
@@ -272,7 +294,7 @@ function createMissState(
       headTime,
       releaseTime,
       tailJudgment: 6,
-      tailOffsetMs: windows.miss * RELEASE_WINDOW_LENIENCE,
+      tailOffsetMs: windows.meh * RELEASE_WINDOW_LENIENCE,
       tailTime,
     };
   }
@@ -326,9 +348,10 @@ export function simulateManiaReplayJudgements(
     const columnSegments = segments[column];
     let segmentCursor = 0;
 
-    for (const noteIndex of columnNotes) {
+    for (let notePosition = 0; notePosition < columnNotes.length; notePosition++) {
+      const noteIndex = columnNotes[notePosition];
       const note = notes[noteIndex];
-      const nextNoteIndex = columnNotes.find((candidateIndex) => candidateIndex > noteIndex) ?? null;
+      const nextNoteIndex = columnNotes[notePosition + 1] ?? null;
       const nextNote = nextNoteIndex != null ? notes[nextNoteIndex] : null;
 
       while (segmentCursor < columnSegments.length && columnSegments[segmentCursor].start < note.time - windows.miss) {
@@ -337,15 +360,18 @@ export function simulateManiaReplayJudgements(
 
       let matchedSegmentIndex = -1;
       let headJudgment: Judgment = 0;
+      const stableHeadDeadline = note.time + windows.ok;
       const latestHeadHitTime = nextNote
-        ? Math.min(note.time + windows.miss, nextNote.time - Number.EPSILON)
-        : note.time + windows.miss;
+        ? Math.min(isLazer ? note.time + windows.meh : stableHeadDeadline, nextNote.time - Number.EPSILON)
+        : isLazer ? note.time + windows.meh : stableHeadDeadline;
 
       for (let s = segmentCursor; s < columnSegments.length; s++) {
         const segment = columnSegments[s];
         if (segment.start > latestHeadHitTime) break;
 
-        headJudgment = getJudgmentForOffset(segment.start - note.time, windows);
+        headJudgment = isLazer
+          ? getJudgmentForOffset(segment.start - note.time, windows)
+          : getStableHeadJudgmentForOffset(segment.start - note.time, windows);
         if (headJudgment !== 0) {
           matchedSegmentIndex = s;
           break;
@@ -421,9 +447,9 @@ export function simulateManiaReplayJudgements(
         let bodyBreakTime: number | null = null;
         let releaseTime = headSegment.end;
         let scanIndex = matchedSegmentIndex;
-        const tailDeadline = note.endTime + windows.miss * RELEASE_WINDOW_LENIENCE;
+        const tailDeadline = note.endTime + windows.meh * RELEASE_WINDOW_LENIENCE;
         let tailJudgment: Judgment = 6;
-        let tailOffsetMs = windows.miss * RELEASE_WINDOW_LENIENCE;
+        let tailOffsetMs = windows.meh * RELEASE_WINDOW_LENIENCE;
         let tailTime = tailDeadline;
 
         // Lazer's DrawableHoldNoteTail.GetCappedResult: the tail is capped to
@@ -433,6 +459,13 @@ export function simulateManiaReplayJudgements(
         while (scanIndex < columnSegments.length) {
           const segment = columnSegments[scanIndex];
           releaseTime = Math.max(releaseTime, segment.end);
+
+          if (segment.end > tailDeadline) {
+            tailJudgment = 6;
+            tailOffsetMs = tailDeadline - note.endTime;
+            tailTime = tailDeadline;
+            break;
+          }
 
           const releaseOffsetMs = (segment.end - note.endTime) / RELEASE_WINDOW_LENIENCE;
           const rawTailJudgment = getJudgmentForOffset(releaseOffsetMs, windows);
@@ -508,9 +541,11 @@ export function simulateManiaReplayJudgements(
       let scanIndex = matchedSegmentIndex;
       let tailReleaseTime: number | null = null;
       let tailOffsetMs = windows.miss;
+      let lastScannedSegmentIndex = matchedSegmentIndex;
 
       while (scanIndex < columnSegments.length) {
         const segment = columnSegments[scanIndex];
+        lastScannedSegmentIndex = scanIndex;
         releaseTime = Math.max(releaseTime, segment.end);
 
         // Case A: released before tail window. Body break, then look for a
@@ -544,11 +579,10 @@ export function simulateManiaReplayJudgements(
           break;
         }
 
-        // Case D: segment ends after the late OK window but the user was
-        // clearly pressing during the tail window. Treat as if they released
-        // at the note's end (offset 0) so holding too long does not penalise.
-        tailReleaseTime = note.endTime;
-        tailOffsetMs = 0;
+        // Case D: segment ends after the late OK window. Stable does require
+        // a release at the tail; late MEH releases are impossible and miss.
+        tailReleaseTime = null;
+        tailOffsetMs = windows.miss;
         break;
       }
 
@@ -591,7 +625,7 @@ export function simulateManiaReplayJudgements(
         tailTime: combinedTime,
       };
 
-      segmentCursor = matchedSegmentIndex + 1;
+      segmentCursor = Math.max(matchedSegmentIndex + 1, lastScannedSegmentIndex + 1);
     }
   }
 

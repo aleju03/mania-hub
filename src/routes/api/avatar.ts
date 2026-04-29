@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-const AVATAR_TTL_MS = 6 * 60 * 60 * 1000;
+const AVATAR_TTL_MS = 10 * 60 * 1000;
 const CACHE_MAX_ENTRIES = 256;
 const AVATAR_FETCH_TIMEOUT_MS = 10_000;
 
@@ -76,7 +76,7 @@ export const Route = createFileRoute("/api/avatar")({
             headers: {
               "Content-Type": entry.contentType,
               "Content-Length": String(entry.buffer.length),
-              "Cache-Control": "public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400",
+              "Cache-Control": "public, max-age=60, s-maxage=600, stale-while-revalidate=3600",
               "Access-Control-Allow-Origin": "*",
             },
           });

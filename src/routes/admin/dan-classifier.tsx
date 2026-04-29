@@ -397,7 +397,7 @@ function DanClassifierPage() {
                   </div>
                 </div>
                 <div className="mt-2 text-sm text-osu-f1">
-                  SR proxy {estimate.estimatedSr.toFixed(2)} · raw dan {estimate.rawDan.toFixed(2)} · confidence {Math.round(estimate.confidence * 100)}%
+                  SR proxy {estimate.estimatedSr.toFixed(2)} · raw dan {estimate.rawDan.toFixed(2)}
                 </div>
 
                 <div className="mt-5 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">
