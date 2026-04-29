@@ -34,6 +34,11 @@ export interface DanEstimate {
     rowBurstPressure: number;
     fastRowRatio: number;
     rowIntervalEntropy: number;
+    patternVariety: number;
+    strainSpikiness: number;
+    sustainedPressureRatio: number;
+    anchorPressure: number;
+    lnReleasePressure: number;
     chordSizeChangeRate: number;
     directionChangeRate: number;
     staminaPressure: number;
@@ -175,6 +180,53 @@ function bucketEntropy(values: number[], bucketSize: number): number {
     entropy -= probability * Math.log2(probability);
   }
   return entropy;
+}
+
+function bucketValues(values: number[], bucketSize: number): number[] {
+  if (bucketSize <= 0) return values;
+  return values.map((value) => Math.round(value / bucketSize) * bucketSize);
+}
+
+function raoQuadraticEntropyLog(values: number[], logIterations: number): number {
+  if (values.length < 2) return 0;
+  const counts = new Map<number, number>();
+  for (const value of values) {
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+
+  const entries = [...counts.entries()];
+  const total = values.length;
+  let entropy = 0;
+  for (const [left, leftCount] of entries) {
+    for (const [right, rightCount] of entries) {
+      let distance = Math.abs(left - right);
+      for (let i = 0; i < logIterations; i++) {
+        distance = Math.log1p(distance);
+      }
+      entropy += (leftCount / total) * (rightCount / total) * distance;
+    }
+  }
+  return entropy;
+}
+
+function powerMean(values: number[], weights: number[], exponent: number): number {
+  if (!values.length) return 0;
+  const weightSum = weights.reduce((sum, weight) => sum + weight, 0);
+  if (weightSum <= 0) return 0;
+  return (values.reduce((sum, value, index) => sum + (value ** exponent) * weights[index], 0) / weightSum) ** (1 / exponent);
+}
+
+function strainSpikiness(values: number[], weights: number[]): number {
+  if (values.length < 3) return 0;
+  const mean = powerMean(values, weights, 5);
+  if (mean <= 0) return 0;
+  const weightSum = weights.reduce((sum, weight) => sum + weight, 0);
+  if (weightSum <= 0) return 0;
+  const variance = values.reduce((sum, value, index) => {
+    const diff = (value ** 8) - (mean ** 8);
+    return sum + diff * diff * weights[index];
+  }, 0) / weightSum;
+  return Math.sqrt(variance ** (1 / 8)) / mean;
 }
 
 function srToRawDan(sr: number, family: DanPrimaryFamily): number {
@@ -355,6 +407,35 @@ function estimateFamilyScores(metrics: DanEstimate["metrics"], starRating: numbe
         + Math.max(0, metrics.peakNps5s - 26) * 0.035,
     )
     : 0;
+  const sustainedLightJumpstreamGate = metrics.chordRatio >= 0.18
+    && metrics.chordRatio <= 0.32
+    && metrics.holdRatio < 0.03
+    && metrics.noteCount >= 2800
+    && metrics.noteCount <= 3800
+    && metrics.sustainedNps10s >= 27
+    && metrics.peakNps5s >= 28
+    && metrics.fastRowRatio >= 0.78
+    && metrics.sustainedPressureRatio >= 0.82
+    && metrics.streamPressure >= 6
+    && metrics.jackPressure < 160
+    && metrics.patternVariety >= 2.4
+    && starRating >= 5.65
+    && starRating <= 6.35
+    ? minGate(
+      (metrics.noteCount - 2600) / 600,
+      (4000 - metrics.noteCount) / 800,
+      (metrics.chordRatio - 0.16) / 0.08,
+      (0.34 - metrics.chordRatio) / 0.08,
+      (metrics.sustainedNps10s - 26.6) / 2,
+      (31.5 - metrics.sustainedNps10s) / 2.5,
+      (metrics.fastRowRatio - 0.74) / 0.16,
+      (metrics.sustainedPressureRatio - 0.78) / 0.12,
+      (160 - metrics.jackPressure) / 40,
+      (starRating - 5.6) / 0.25,
+      (6.45 - starRating) / 0.35,
+    )
+    : 0;
+  const sustainedLightJumpstreamBonus = sustainedLightJumpstreamGate * 0.12;
   const baseRateSubGammaStreamBonus = metrics.chordRatio >= 0.18
     && metrics.chordRatio <= 0.28
     && metrics.holdRatio < 0.03
@@ -651,6 +732,24 @@ function estimateFamilyScores(metrics: DanEstimate["metrics"], starRating: numbe
         + Math.max(0, starRating - 6.1) * 0.25,
     )
     : 0;
+  const shortSpikeGate = metrics.noteCount >= 250
+    && metrics.noteCount <= 2200
+    && metrics.strainSpikiness >= 0.55
+    && metrics.sustainedPressureRatio <= 0.58
+    && metrics.peakNps1s >= metrics.sustainedNps10s * 1.9
+    ? minGate(
+      (metrics.strainSpikiness - 0.45) / 0.55,
+      (0.62 - metrics.sustainedPressureRatio) / 0.25,
+      (metrics.peakNps1s / Math.max(1, metrics.sustainedNps10s) - 1.5) / 2.5,
+      (2400 - metrics.noteCount) / 1400,
+    )
+    : 0;
+  const shortSpikeCompression = shortSpikeGate * Math.min(
+    2.45,
+    0.85
+      + Math.max(0, metrics.peakNps1s - metrics.sustainedNps10s) * 0.018
+      + Math.max(0, metrics.strainSpikiness - 0.55) * 0.7,
+  );
   const chordedSpeedBonus = chordedSpeedGate * Math.min(
     0.95,
     Math.max(0, metrics.sustainedNps10s - 23) * 0.24 + Math.max(0, metrics.peakNps5s - 25) * 0.05,
@@ -918,6 +1017,31 @@ function estimateFamilyScores(metrics: DanEstimate["metrics"], starRating: numbe
         + Math.max(0, metrics.noteCount - 5400) * 0.00005,
     )
     : 0;
+  const longJumpstreamStaminaCompression = metrics.noteCount >= 7600
+    && metrics.chordRatio >= 0.45
+    && metrics.chordRatio <= 0.56
+    && metrics.holdRatio < 0.03
+    && metrics.jackPressure < 135
+    && metrics.sustainedNps10s >= 29
+    && metrics.sustainedNps10s <= 32
+    && metrics.fastRowRatio >= 0.8
+    && metrics.sustainedPressureRatio >= 0.9
+    && metrics.patternVariety <= 2.2
+    && durationMs >= 340000
+    && starRating >= 6.2
+    && starRating <= 6.7
+    ? minGate(
+      (metrics.noteCount - 7200) / 1400,
+      (metrics.chordRatio - 0.42) / 0.08,
+      (0.58 - metrics.chordRatio) / 0.08,
+      (135 - metrics.jackPressure) / 25,
+      (metrics.sustainedNps10s - 28.5) / 2,
+      (32.5 - metrics.sustainedNps10s) / 2,
+      (metrics.fastRowRatio - 0.76) / 0.14,
+      (2.3 - metrics.patternVariety) / 0.7,
+      (durationMs - 320000) / 90000,
+    ) * 0.38
+    : 0;
   const deltaHighMidChordTransitionNerf = metrics.noteCount >= 5500
     && metrics.chordRatio >= 0.38
     && metrics.chordRatio <= 0.56
@@ -1142,7 +1266,7 @@ function estimateFamilyScores(metrics: DanEstimate["metrics"], starRating: numbe
     ) * 0.08
     : 0;
   const jackBonus = Math.min(0.82, Math.max(0, (metrics.jackPressure - 92) / 240) + chordGate * 0.12 + highChordJackBonus);
-  const streamBonus = Math.min(1.65, Math.max(0, metrics.streamPressure / 16) + Math.max(0, metrics.peakNps5s - 25) * 0.008 + speedBonus + pureSpeedBonus + lowChordSustainedSpeedBonus + longLowChordSpeedBonus + lightChordGammaSpeedFloorBonus + lowSrSpeedUnderrateBonus + baseRateSubGammaStreamBonus + compactModerateChordSpeedBonus + speedEnduranceBonus + longSteadyStreamBonus);
+  const streamBonus = Math.min(1.65, Math.max(0, metrics.streamPressure / 16) + Math.max(0, metrics.peakNps5s - 25) * 0.008 + speedBonus + pureSpeedBonus + lowChordSustainedSpeedBonus + longLowChordSpeedBonus + lightChordGammaSpeedFloorBonus + lowSrSpeedUnderrateBonus + sustainedLightJumpstreamBonus + baseRateSubGammaStreamBonus + compactModerateChordSpeedBonus + speedEnduranceBonus + longSteadyStreamBonus);
   const staminaBonus = Math.min(1.45, Math.max(0, metrics.sustainedNps10s - 23) * 0.018 + Math.min(0.16, metrics.noteCount / 16000) + speedBonus * 0.8 + staminaEnduranceBonus + longSteadyStreamBonus * 0.45 + fastLongMidChordStaminaGate * 0.02 - longMidChordSrNerf * 0.6 + Math.max(0, longMidChordStaminaMapGate - cyberLikeStaminaGate) * 0.28);
   const handstreamBonus = handstreamChordGate * Math.min(
     1.35,
@@ -1185,12 +1309,12 @@ function estimateFamilyScores(metrics: DanEstimate["metrics"], starRating: numbe
   );
 
   const skillScores: Record<DanSkillFamily, number> = {
-    jack: (base + jackBonus + lowSrDenseWallJackBonus + compactJackUnderrateBonus + lowRateHighChordJackBonus + compactHighChordDeltaJackBonus + denseWallJackPenaltyRelief + midChordSpeedjackJackBonus + longGammaHighChordjackFloorBonus + heldLongGammaHighChordjackFloorBonus - highChordSoftJackPenalty - denseJackSrCompression - mediumWallJackSrCompression - compactJackOverboostCompression - farmJumptrillJackCompression - longSparseJackDropJackCompression - shortDenseWallSrCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression) * lnNerf,
-    stream: (base + streamBonus - lowChordBurstStreamNerf - farmJumptrillStreamCompression - longSparseJackDropStreamCompression - shortDenseWallSrCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression) * lnNerf,
-    handstream: (base + handstreamBonus - moderateMidChordStaminaNerf * 0.25 - highEndMidChordStaminaNerf * 0.35 - farmJumptrillHandstreamCompression - longSparseJackDropHandstreamCompression - shortDenseWallSrCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression) * lnNerf,
-    stamina: (base + staminaBonus + lowEndLongMidChordStaminaFloorBonus - moderateMidChordStaminaNerf - midChordRateCompressionNerf - highNoteMidRateHandstreamNerf - highEndMidChordStaminaNerf - deltaHighMidChordTransitionNerf - farmJumptrillStaminaCompression - longSparseJackDropStaminaCompression - denseChordStaminaCompression - shortDenseWallSrCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression) * lnNerf,
-    chordjack: (base + chordjackBonus + midChordSpeedjackJackBonus + longGammaHighChordjackFloorBonus + heldLongGammaHighChordjackFloorBonus - farmJumptrillChordjackCompression - longSparseJackDropChordjackCompression - shortDenseWallSrCompression - mediumWallJackOverrateCompression - longHighChordChordjackCompression - midHighChordGammaCompression) * lnNerf,
-    tech: (base + techBonus - baseRateTechCompression - denseJackTechNerf - wallJackTechNerf - lowChordBurstTechNerf - farmJumptrillTechCompression - longSparseJackDropTechCompression - shortDenseWallSrCompression - mediumWallJackOverrateCompression - midChordSpeedjackTechCompression - midHighChordGammaCompression) * lnNerf,
+    jack: (base + jackBonus + lowSrDenseWallJackBonus + compactJackUnderrateBonus + lowRateHighChordJackBonus + compactHighChordDeltaJackBonus + denseWallJackPenaltyRelief + midChordSpeedjackJackBonus + longGammaHighChordjackFloorBonus + heldLongGammaHighChordjackFloorBonus - highChordSoftJackPenalty - denseJackSrCompression - mediumWallJackSrCompression - compactJackOverboostCompression - farmJumptrillJackCompression - longSparseJackDropJackCompression - shortDenseWallSrCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression - shortSpikeCompression) * lnNerf,
+    stream: (base + streamBonus - lowChordBurstStreamNerf - farmJumptrillStreamCompression - longSparseJackDropStreamCompression - shortDenseWallSrCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression - shortSpikeCompression) * lnNerf,
+    handstream: (base + handstreamBonus - moderateMidChordStaminaNerf * 0.25 - highEndMidChordStaminaNerf * 0.35 - longJumpstreamStaminaCompression * 0.45 - farmJumptrillHandstreamCompression - longSparseJackDropHandstreamCompression - shortDenseWallSrCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression - shortSpikeCompression) * lnNerf,
+    stamina: (base + staminaBonus + lowEndLongMidChordStaminaFloorBonus - moderateMidChordStaminaNerf - midChordRateCompressionNerf - highNoteMidRateHandstreamNerf - highEndMidChordStaminaNerf - longJumpstreamStaminaCompression - deltaHighMidChordTransitionNerf - farmJumptrillStaminaCompression - longSparseJackDropStaminaCompression - denseChordStaminaCompression - shortDenseWallSrCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression - shortSpikeCompression) * lnNerf,
+    chordjack: (base + chordjackBonus + midChordSpeedjackJackBonus + longGammaHighChordjackFloorBonus + heldLongGammaHighChordjackFloorBonus - farmJumptrillChordjackCompression - longSparseJackDropChordjackCompression - shortDenseWallSrCompression - mediumWallJackOverrateCompression - longHighChordChordjackCompression - midHighChordGammaCompression - shortSpikeCompression) * lnNerf,
+    tech: (base + techBonus - baseRateTechCompression - denseJackTechNerf - wallJackTechNerf - lowChordBurstTechNerf - farmJumptrillTechCompression - longSparseJackDropTechCompression - shortDenseWallSrCompression - mediumWallJackOverrateCompression - midChordSpeedjackTechCompression - midHighChordGammaCompression - shortSpikeCompression) * lnNerf,
     dan: 0,
   };
   const gates = {
@@ -1205,6 +1329,7 @@ function estimateFamilyScores(metrics: DanEstimate["metrics"], starRating: numbe
     handstreamChordGate,
     pureSpeedGate,
     speedGate,
+    sustainedLightJumpstreamGate,
     chordjackEnduranceGate,
     strongJackGate,
     etaJackPressureGate,
@@ -1215,6 +1340,7 @@ function estimateFamilyScores(metrics: DanEstimate["metrics"], starRating: numbe
     fastLongMidChordStaminaGate,
     cyberLikeStaminaGate,
     denseChordStaminaOverrateGate,
+    longJumpstreamStaminaCompressionGate: longJumpstreamStaminaCompression > 0 ? longJumpstreamStaminaCompression / 0.38 : 0,
     midChordSpeedjackGate,
     farmJumptrillGate,
     ratedVibroJumptrillGate,
@@ -1223,6 +1349,7 @@ function estimateFamilyScores(metrics: DanEstimate["metrics"], starRating: numbe
     syncopatedChordTechGate,
     compactChordSwitchTechGate,
     technicalAnchorGate,
+    shortSpikeGate,
   };
   const terms = {
     speedBonus,
@@ -1231,6 +1358,7 @@ function estimateFamilyScores(metrics: DanEstimate["metrics"], starRating: numbe
     longLowChordSpeedBonus,
     lightChordGammaSpeedFloorBonus,
     lowSrSpeedUnderrateBonus,
+    sustainedLightJumpstreamBonus,
     baseRateSubGammaStreamBonus,
     compactModerateChordSpeedBonus,
     speedEnduranceBonus,
@@ -1244,6 +1372,7 @@ function estimateFamilyScores(metrics: DanEstimate["metrics"], starRating: numbe
     compactChordSwitchTechBonus,
     technicalAnchorBonus,
     moderateBurstTechCompression,
+    shortSpikeCompression,
     chordedSpeedBonus,
     denseChordedSpeedBonus,
     chordjackEnduranceMultiplier,
@@ -1274,6 +1403,7 @@ function estimateFamilyScores(metrics: DanEstimate["metrics"], starRating: numbe
     midChordRateCompressionNerf,
     highNoteMidRateHandstreamNerf,
     highEndMidChordStaminaNerf,
+    longJumpstreamStaminaCompression,
     deltaHighMidChordTransitionNerf,
     longSparseJackDropJackCompression,
     longSparseJackDropStreamCompression,
@@ -1327,11 +1457,13 @@ function estimateFamilyScores(metrics: DanEstimate["metrics"], starRating: numbe
           { id: "longSparseJackDropJackCompression", value: -longSparseJackDropJackCompression, description: "Compression for long files whose difficulty is concentrated in jack drops rather than full-chart dan pressure." },
           { id: "shortDenseWallSrCompression", value: -shortDenseWallSrCompression, description: "Compression for short dense wall-jack files where SR overstates dan pressure." },
           { id: "mediumWallJackOverrateCompression", value: -mediumWallJackOverrateCompression, description: "Compression for medium wall-jacks where jack pressure is already represented by SR." },
+          { id: "shortSpikeCompression", value: -shortSpikeCompression, description: "Compression for files whose difficulty is mostly a short isolated spike." },
         ],
         stream: [
           { id: "base", value: base, description: "Base SR blend from star rating and structural density." },
           { id: "streamBonus", value: streamBonus, description: "Speed and sustained stream pressure." },
           { id: "lightChordGammaSpeedFloorBonus", value: lightChordGammaSpeedFloorBonus, description: "Gamma floor for lower-rate light-chord steady speed." },
+          { id: "sustainedLightJumpstreamBonus", value: sustainedLightJumpstreamBonus, description: "Rate-scaled reward for continuous light jumpstream with high sustain and low jack pressure." },
           { id: "baseRateSubGammaStreamBonus", value: baseRateSubGammaStreamBonus, description: "Beta floor for base-rate low-chord stream sitting just below gamma speed thresholds." },
           { id: "compactModerateChordSpeedBonus", value: compactModerateChordSpeedBonus, description: "Compact moderate-chord speed reward around beta." },
           { id: "lowChordBurstStreamNerf", value: -lowChordBurstStreamNerf, description: "Compression for low-chord burst streams with jack pressure." },
@@ -1339,16 +1471,19 @@ function estimateFamilyScores(metrics: DanEstimate["metrics"], starRating: numbe
           { id: "longSparseJackDropStreamCompression", value: -longSparseJackDropStreamCompression, description: "Compression for long sparse jack-drop files." },
           { id: "shortDenseWallSrCompression", value: -shortDenseWallSrCompression, description: "Shared compression for short dense wall-jack files." },
           { id: "mediumWallJackOverrateCompression", value: -mediumWallJackOverrateCompression, description: "Shared compression for medium wall-jack files." },
+          { id: "shortSpikeCompression", value: -shortSpikeCompression, description: "Compression for files whose pressure is concentrated in one short spike." },
         ],
         handstream: [
           { id: "base", value: base, description: "Base SR blend from star rating and structural density." },
           { id: "handstreamBonus", value: handstreamBonus, description: "Mid-chord sustained stream pressure." },
           { id: "moderateMidChordStaminaNerf", value: -moderateMidChordStaminaNerf * 0.25, description: "Shared mid-chord stamina compression." },
           { id: "highEndMidChordStaminaNerf", value: -highEndMidChordStaminaNerf * 0.35, description: "Shared high-end mid-chord stamina compression." },
+          { id: "longJumpstreamStaminaCompression", value: -longJumpstreamStaminaCompression * 0.45, description: "Compression for long steady jumpstream stamina marathons with low jack pressure." },
           { id: "farmJumptrillHandstreamCompression", value: -farmJumptrillHandstreamCompression, description: "Compression for jumptrill farm patterns mistaken for handstream." },
           { id: "longSparseJackDropHandstreamCompression", value: -longSparseJackDropHandstreamCompression, description: "Compression for long sparse jack-drop files." },
           { id: "shortDenseWallSrCompression", value: -shortDenseWallSrCompression, description: "Shared compression for short dense wall-jack files." },
           { id: "mediumWallJackOverrateCompression", value: -mediumWallJackOverrateCompression, description: "Shared compression for medium wall-jack files." },
+          { id: "shortSpikeCompression", value: -shortSpikeCompression, description: "Compression for short spike-dominant files." },
         ],
         stamina: [
           { id: "base", value: base, description: "Base SR blend from star rating and structural density." },
@@ -1357,6 +1492,7 @@ function estimateFamilyScores(metrics: DanEstimate["metrics"], starRating: numbe
           { id: "midChordRateCompressionNerf", value: -midChordRateCompressionNerf, description: "Compression for early mid-chord rate scaling." },
           { id: "highNoteMidRateHandstreamNerf", value: -highNoteMidRateHandstreamNerf, description: "Compression for long handstream rates before delta range." },
           { id: "highEndMidChordStaminaNerf", value: -highEndMidChordStaminaNerf, description: "Compression for high-end mid-chord stamina." },
+          { id: "longJumpstreamStaminaCompression", value: -longJumpstreamStaminaCompression, description: "Compression for long steady jumpstream stamina where endurance matters but pattern density is not beta-level." },
           { id: "deltaHighMidChordTransitionNerf", value: -deltaHighMidChordTransitionNerf, description: "Transition compression around delta high handstream." },
           { id: "farmJumptrillStaminaCompression", value: -farmJumptrillStaminaCompression, description: "Compression for long jumptrill farm patterns with easy base stamina." },
           { id: "longSparseJackDropStaminaCompression", value: -longSparseJackDropStaminaCompression, description: "Compression for long sparse jack-drop files." },
@@ -1364,6 +1500,7 @@ function estimateFamilyScores(metrics: DanEstimate["metrics"], starRating: numbe
           { id: "lowEndLongMidChordStaminaFloorBonus", value: lowEndLongMidChordStaminaFloorBonus, description: "Small floor for long low-end mid-chord stamina files sitting on a dan boundary." },
           { id: "shortDenseWallSrCompression", value: -shortDenseWallSrCompression, description: "Shared compression for short dense wall-jack files." },
           { id: "mediumWallJackOverrateCompression", value: -mediumWallJackOverrateCompression, description: "Shared compression for medium wall-jack files." },
+          { id: "shortSpikeCompression", value: -shortSpikeCompression, description: "Compression for files with low sustained pressure relative to peak burst pressure." },
         ],
         chordjack: [
           { id: "base", value: base, description: "Base SR blend from star rating and structural density." },
@@ -1374,6 +1511,7 @@ function estimateFamilyScores(metrics: DanEstimate["metrics"], starRating: numbe
           { id: "shortDenseWallSrCompression", value: -shortDenseWallSrCompression, description: "Shared compression for short dense wall-jack files." },
           { id: "mediumWallJackOverrateCompression", value: -mediumWallJackOverrateCompression, description: "Shared compression for medium wall-jack files." },
           { id: "longHighChordChordjackCompression", value: -longHighChordChordjackCompression, description: "Compression for long high-chord chordjack where SR overstates the dan jump." },
+          { id: "shortSpikeCompression", value: -shortSpikeCompression, description: "Compression for short spike-dominant files." },
         ],
         tech: [
           { id: "base", value: base, description: "Base SR blend from star rating and structural density." },
@@ -1393,6 +1531,7 @@ function estimateFamilyScores(metrics: DanEstimate["metrics"], starRating: numbe
           { id: "shortDenseWallSrCompression", value: -shortDenseWallSrCompression, description: "Shared compression for short dense wall-jack files." },
           { id: "mediumWallJackOverrateCompression", value: -mediumWallJackOverrateCompression, description: "Shared compression for medium wall-jack files." },
           { id: "midChordSpeedjackTechCompression", value: -midChordSpeedjackTechCompression, description: "Tech inflation removed from mid-chord speedjack files." },
+          { id: "shortSpikeCompression", value: -shortSpikeCompression, description: "Compression for tech estimates driven by a short isolated burst." },
         ],
         dan: [],
       },
@@ -1416,6 +1555,21 @@ interface DanFamilyChoiceRule {
 }
 
 const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
+  {
+    id: "long-jumpstream-stamina",
+    family: "stamina",
+    applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 7600
+      && metrics.chordRatio >= 0.45
+      && metrics.chordRatio <= 0.56
+      && metrics.holdRatio < 0.03
+      && metrics.jackPressure < 135
+      && metrics.sustainedNps10s >= 29
+      && metrics.sustainedNps10s <= 32
+      && metrics.fastRowRatio >= 0.8
+      && metrics.sustainedPressureRatio >= 0.9
+      && metrics.patternVariety <= 2.2
+      && skillScores.stamina >= topScore - 1.35,
+  },
   {
     id: "mid-chord-speedjack",
     family: "jack",
@@ -1775,8 +1929,13 @@ function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, rate: nu
   const jackValues: number[] = [];
   const streamValues: number[] = [];
   const rowDensities: number[] = [];
+  const rowDensityWeights: number[] = [];
   const rowIntervals: number[] = [];
   const rowRates: number[] = [];
+  const columnIntervals: number[] = [];
+  const tailIntervals: number[] = [];
+  const columnCounts = Array.from({ length: Math.max(1, map.keyCount) }, () => 0);
+  const releaseTimes = notes.filter((note) => note.isHold && note.endTime > note.time).map((note) => note.endTime).sort((a, b) => a - b);
   let directionChanges = 0;
   let previousColumn: number | null = null;
   let previousDirection = 0;
@@ -1786,6 +1945,9 @@ function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, rate: nu
 
   for (const [time, rowNotes] of orderedRows) {
     const columns = rowNotes.map((note) => note.column).sort((a, b) => a - b);
+    for (const column of columns) {
+      columnCounts[column]++;
+    }
     if (previousChordSize && previousChordSize !== columns.length) chordSizeChanges++;
     if (previousRowTime != null) {
       const rowDelta = time - previousRowTime;
@@ -1793,6 +1955,7 @@ function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, rate: nu
         rowIntervals.push(rowDelta);
         rowRates.push(1000 / rowDelta);
         rowDensities.push((columns.length * 1000) / rowDelta);
+        rowDensityWeights.push(Math.max(1, rowDelta));
       }
     }
     previousChordSize = columns.length;
@@ -1802,6 +1965,9 @@ function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, rate: nu
       const sameDelta = time - lastByColumn[column];
       if (sameDelta > 0 && sameDelta < 1000) {
         jackValues.push(Math.min(230, 15000 / sameDelta));
+      }
+      if (sameDelta > 0 && sameDelta < 1600) {
+        columnIntervals.push(sameDelta);
       }
 
       for (const neighbor of [column - 1, column + 1]) {
@@ -1822,6 +1988,13 @@ function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, rate: nu
     }
   }
 
+  for (let i = 1; i < releaseTimes.length; i++) {
+    const tailDelta = releaseTimes[i] - releaseTimes[i - 1];
+    if (tailDelta > 0 && tailDelta < 1600) {
+      tailIntervals.push(tailDelta);
+    }
+  }
+
   const peakNps1s = countInWindow(noteTimes, 1000);
   const peakNps5s = countInWindow(noteTimes, 5000) / 5;
   const sustainedNps10s = countInWindow(noteTimes, 10000) / 10;
@@ -1833,6 +2006,19 @@ function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, rate: nu
     ? rowIntervals.filter((interval) => interval <= 80).length / rowIntervals.length
     : 0;
   const rowIntervalEntropy = bucketEntropy(rowIntervals, 5);
+  const patternVariety = 0.5 * raoQuadraticEntropyLog(bucketValues(rowIntervals, 5), 1)
+    + 1.125 * raoQuadraticEntropyLog(bucketValues(columnIntervals, 5), 2)
+    + 0.11 * raoQuadraticEntropyLog(bucketValues(tailIntervals, 5), 1);
+  const spikiness = strainSpikiness(rowDensities, rowDensityWeights);
+  const sustainedPressureRatio = sustainedNps10s / Math.max(1, peakNps1s, peakNps5s);
+  const averageColumnCount = average(columnCounts);
+  const columnImbalance = averageColumnCount > 0
+    ? columnCounts.reduce((sum, count) => sum + Math.abs(count - averageColumnCount), 0) / (columnCounts.length * averageColumnCount)
+    : 0;
+  const anchorPressure = columnImbalance * (0.5 + Math.min(1.5, jackPressure / 150)) + Math.max(0, quantile(columnIntervals.map((interval) => 1000 / interval), 0.9) - 7) * 0.04;
+  const lnReleasePressure = releaseTimes.length
+    ? countInWindow(releaseTimes, 5000) / 5 + quantile(tailIntervals.map((interval) => 1000 / interval), 0.9) * 0.15
+    : 0;
   const chordSizeChangeRate = orderedRows.length ? chordSizeChanges / orderedRows.length : 0;
   const directionChangeRate = notes.length ? directionChanges / notes.length : 0;
   const chordjackPressure = jackPressure * (0.28 + chordRatio * 1.35) + burstDensity * chordRatio * 0.6;
@@ -1861,6 +2047,11 @@ function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, rate: nu
       rowBurstPressure,
       fastRowRatio,
       rowIntervalEntropy,
+      patternVariety,
+      strainSpikiness: spikiness,
+      sustainedPressureRatio,
+      anchorPressure,
+      lnReleasePressure,
       chordSizeChangeRate,
       directionChangeRate,
       staminaPressure: sustainedNps10s,

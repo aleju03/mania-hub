@@ -47,6 +47,105 @@ describe("estimateDan", () => {
     expect(dense.estimatedSr).toBeGreaterThan(sparse.estimatedSr);
   });
 
+  it("extracts advanced pressure signals for sustained versus spiky patterns", () => {
+    const sustainedNotes: ManiaNote[] = [];
+    for (let row = 0; row < 480; row++) {
+      for (const column of [0, 1, 2, 3]) {
+        sustainedNotes.push({
+          column,
+          time: row * 125,
+          endTime: row * 125,
+          isHold: false,
+        });
+      }
+    }
+
+    const spikyNotes: ManiaNote[] = [];
+    for (let row = 0; row < 160; row++) {
+      spikyNotes.push({
+        column: row % 4,
+        time: row * 350,
+        endTime: row * 350,
+        isHold: false,
+      });
+    }
+    for (let row = 0; row < 56; row++) {
+      for (const column of [0, 1, 2, 3]) {
+        spikyNotes.push({
+          column,
+          time: 60000 + row * 25,
+          endTime: 60000 + row * 25,
+          isHold: false,
+        });
+      }
+    }
+
+    const variedNotes: ManiaNote[] = [];
+    const gaps = [80, 120, 55, 180, 95, 140, 65, 210];
+    let time = 0;
+    for (let row = 0; row < 360; row++) {
+      for (const column of row % 3 === 0 ? [0, 2] : [row % 4]) {
+        variedNotes.push({
+          column,
+          time,
+          endTime: time,
+          isHold: false,
+        });
+      }
+      time += gaps[row % gaps.length];
+    }
+
+    const sustained = estimateDan(makeMap(sustainedNotes), { starRating: 6.8, totalLength: 60 });
+    const spiky = estimateDan(makeMap(spikyNotes), { starRating: 6.8, totalLength: 62 });
+    const varied = estimateDan(makeMap(variedNotes), { starRating: 6.8, totalLength: time / 1000 });
+
+    expect(sustained.metrics.sustainedPressureRatio).toBeGreaterThan(spiky.metrics.sustainedPressureRatio);
+    expect(spiky.metrics.strainSpikiness).toBeGreaterThan(sustained.metrics.strainSpikiness + 0.25);
+    expect(varied.metrics.patternVariety).toBeGreaterThan(sustained.metrics.patternVariety + 0.3);
+    expect(spiky.metrics.sustainedPressureRatio).toBeLessThan(0.5);
+  });
+
+  it("compresses charts whose pressure is mostly one short spike", () => {
+    const sustainedNotes: ManiaNote[] = [];
+    for (let row = 0; row < 480; row++) {
+      for (const column of [0, 1, 2, 3]) {
+        sustainedNotes.push({
+          column,
+          time: row * 125,
+          endTime: row * 125,
+          isHold: false,
+        });
+      }
+    }
+
+    const spikyNotes: ManiaNote[] = [];
+    for (let row = 0; row < 160; row++) {
+      spikyNotes.push({
+        column: row % 4,
+        time: row * 350,
+        endTime: row * 350,
+        isHold: false,
+      });
+    }
+    for (let row = 0; row < 56; row++) {
+      for (const column of [0, 1, 2, 3]) {
+        spikyNotes.push({
+          column,
+          time: 60000 + row * 25,
+          endTime: 60000 + row * 25,
+          isHold: false,
+        });
+      }
+    }
+
+    const sustained = estimateDan(makeMap(sustainedNotes), { starRating: 6.8, totalLength: 60 });
+    const spiky = estimateDan(makeMap(spikyNotes), { starRating: 6.8, totalLength: 62 });
+
+    expect(spiky.metrics.strainSpikiness).toBeGreaterThan(sustained.metrics.strainSpikiness + 0.25);
+    expect(spiky.rawDan).toBeLessThan(sustained.rawDan);
+    expect(spiky.debug?.scoring.terms.shortSpikeCompression).toBeGreaterThan(0);
+  });
+
   it("refuses key counts outside the 4K calibration target", () => {
     const notes = Array.from({ length: 100 }, (_, index) => ({
       column: index % 7,
@@ -443,6 +542,41 @@ describe("estimateDan", () => {
     expect(estimate.family).toBe("chordjack");
     expect(estimate.label).toBe("delta");
     expect(estimate.rawDan).toBeLessThan(14.3);
+  });
+
+  it("keeps Eighto rates in the high-gamma to middle-delta stream range", () => {
+    const map = readFixtureBeatmap("wh1teh/Jomekka-Eighto-Wh1teh-4K-k.osu");
+    const lowerRate = estimateDan(map, {
+      starRating: 5.53183,
+      totalLength: 206,
+      rate: 1.1,
+    });
+    const higherRate = estimateDan(map, {
+      starRating: 5.53183,
+      totalLength: 206,
+      rate: 1.15,
+    });
+
+    expect(lowerRate.family).toBe("stream");
+    expect(lowerRate.displayName).toBe("delta--");
+    expect(higherRate.family).toBe("stream");
+    expect(higherRate.displayName).toBe("delta");
+    expect(higherRate.rawDan).toBeGreaterThan(lowerRate.rawDan);
+  });
+
+  it("keeps Lolit Speed marathon in alpha stamina instead of beta", () => {
+    const estimate = estimateDan(readFixtureBeatmap("icyworld/DJ-Sharpnel-Lolit-Speed-IcyWorld-4K-Marathon.osu"), {
+      starRating: 6.43949,
+      totalLength: 405,
+    });
+
+    expect(estimate.metrics.noteCount).toBeGreaterThan(8000);
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.45);
+    expect(estimate.metrics.chordRatio).toBeLessThan(0.56);
+    expect(estimate.metrics.jackPressure).toBeLessThan(135);
+    expect(estimate.family).toBe("stamina");
+    expect(estimate.label).toBe("alpha");
+    expect(estimate.debug?.scoring.terms.longJumpstreamStaminaCompression).toBeGreaterThan(0);
   });
 
   it("tracks the Road from Gamma to Delta jack practice pack targets", () => {
