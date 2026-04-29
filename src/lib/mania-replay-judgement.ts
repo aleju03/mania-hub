@@ -34,7 +34,12 @@ export interface ReplayJudgementEvent {
   noteIndex: number;
   offsetMs: number;
   part: "note" | "hold-head" | "hold-tail" | "hold-combined" | "hold-break";
+  possibleJudgments?: Judgment[];
   time: number;
+}
+
+export interface ManiaReplaySimulationOptions {
+  legacyReplayFrameRounding?: boolean;
 }
 
 export interface ReplayNoteState {
@@ -178,6 +183,54 @@ function getJudgmentForOffset(
   if (delta <= windows.meh) return 5;
   if (delta <= windows.miss) return 6;
   return 0;
+}
+
+function capLazerTailJudgment(judgment: Judgment, capToMeh: boolean): Judgment {
+  return capToMeh && judgment !== 0 && judgment < 5 ? 5 : judgment;
+}
+
+function getRoundedLegacyTailPossibleJudgments(
+  rawTailOffsetMs: number,
+  windows: ManiaReplayHitWindows,
+  capToMeh: boolean,
+): Judgment[] {
+  const minRaw = rawTailOffsetMs - 0.5;
+  const maxRaw = rawTailOffsetMs + 0.5;
+  const epsilon = 1e-7;
+  const samples = new Set<number>([
+    minRaw,
+    rawTailOffsetMs,
+    maxRaw - epsilon,
+  ]);
+
+  for (const window of [
+    windows.perfect,
+    windows.great,
+    windows.good,
+    windows.ok,
+    windows.meh,
+    windows.miss,
+  ]) {
+    const rawBoundary = window * RELEASE_WINDOW_LENIENCE;
+
+    for (const sign of [-1, 1]) {
+      const boundary = sign * rawBoundary;
+      if (boundary >= minRaw && boundary < maxRaw) {
+        samples.add(boundary - epsilon);
+        samples.add(boundary);
+        samples.add(boundary + epsilon);
+      }
+    }
+  }
+
+  const possible = new Set<Judgment>();
+  for (const raw of samples) {
+    let judgment = getJudgmentForOffset(raw / RELEASE_WINDOW_LENIENCE, windows);
+    if (judgment === 0) judgment = 6;
+    possible.add(capLazerTailJudgment(judgment, capToMeh));
+  }
+
+  return [...possible].sort((a, b) => a - b);
 }
 
 function getStableHeadJudgmentForOffset(
@@ -330,6 +383,7 @@ export function simulateManiaReplayJudgements(
   keyCount: number,
   windows: ManiaReplayHitWindows,
   accuracyMode: ReplayAccuracyMode = "lazer",
+  options: ManiaReplaySimulationOptions = {},
 ): { events: ReplayJudgementEvent[]; noteStates: ReplayNoteState[] } {
   const noteStates: ReplayNoteState[] = new Array(notes.length);
   const events: ReplayJudgementEvent[] = [];
@@ -451,6 +505,7 @@ export function simulateManiaReplayJudgements(
         let tailJudgment: Judgment = 6;
         let tailOffsetMs = windows.meh * RELEASE_WINDOW_LENIENCE;
         let tailTime = tailDeadline;
+        let possibleTailJudgments: Judgment[] | undefined;
 
         // Lazer's DrawableHoldNoteTail.GetCappedResult: the tail is capped to
         // Meh if the head was missed OR the body had a hold break.
@@ -472,9 +527,12 @@ export function simulateManiaReplayJudgements(
 
           if (rawTailJudgment !== 0) {
             const hasComboBreak = bodyBreakTime != null || headMissed;
-            tailJudgment = hasComboBreak && rawTailJudgment < 5 ? 5 : rawTailJudgment;
+            tailJudgment = capLazerTailJudgment(rawTailJudgment, hasComboBreak);
             tailOffsetMs = segment.end - note.endTime;
             tailTime = segment.end;
+            possibleTailJudgments = options.legacyReplayFrameRounding
+              ? getRoundedLegacyTailPossibleJudgments(tailOffsetMs, windows, hasComboBreak)
+              : undefined;
             break;
           }
 
@@ -512,6 +570,9 @@ export function simulateManiaReplayJudgements(
           noteIndex,
           offsetMs: tailOffsetMs,
           part: "hold-tail",
+          ...(possibleTailJudgments && possibleTailJudgments.length > 1
+            ? { possibleJudgments: possibleTailJudgments }
+            : {}),
           time: tailTime,
         });
 

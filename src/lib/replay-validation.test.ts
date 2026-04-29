@@ -59,4 +59,44 @@ describe("replay validation", () => {
     expect(result.totalCountDiff).toBe(0);
     expect(result.simulatedAccuracy).toBeCloseTo(result.expectedAccuracy, 6);
   });
+
+  it("resolves lazer legacy replay rounding ambiguity on hold-note tails", () => {
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 2000, isHold: true },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1000, keyState: 1 },
+      { time: 1974, keyState: 0 },
+    ];
+
+    const result = validateReplaySimulation({
+      expectedCounts: {
+        countGeki: 1,
+        count300: 1,
+        countKatu: 0,
+        count100: 0,
+        count50: 0,
+        countMiss: 0,
+      },
+      frames,
+      isLazer: true,
+      keyCount: 1,
+      legacyReplayFrameRounding: true,
+      notes,
+      od: 7,
+    });
+
+    expect(result.rawSimulatedCounts).toEqual({
+      countGeki: 2,
+      count300: 0,
+      countKatu: 0,
+      count100: 0,
+      count50: 0,
+      countMiss: 0,
+    });
+    expect(result.legacyReplayAmbiguityResolved).toBe(true);
+    expect(result.matched).toBe(true);
+    expect(result.totalCountDiff).toBe(0);
+  });
 });
