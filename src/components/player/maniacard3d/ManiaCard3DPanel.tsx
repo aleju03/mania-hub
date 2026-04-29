@@ -7,23 +7,38 @@ function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
 
   useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
+
     const query = window.matchMedia("(prefers-reduced-motion: reduce)");
     const update = () => setReduced(query.matches);
     update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
+    if (typeof query.addEventListener === "function") {
+      query.addEventListener("change", update);
+      return () => query.removeEventListener("change", update);
+    }
+    query.addListener(update);
+    return () => query.removeListener(update);
   }, []);
 
   return reduced;
 }
 
 function isMobileViewport() {
-  return typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches;
+  return (
+    typeof window !== "undefined" &&
+    typeof window.matchMedia === "function" &&
+    window.matchMedia("(max-width: 640px)").matches
+  );
+}
+
+function getDevicePixelRatio() {
+  return typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
 }
 
 export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<ManiaCardRenderer | null>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
   const reducedMotion = useReducedMotion();
   const data = useMemo(() => buildManiaCardRenderData({ user, scores }), [user, scores]);
 
@@ -32,24 +47,45 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
     const host = hostRef.current;
     if (!host) return;
 
-    const renderer = new ManiaCardRenderer({
-      host,
-      data,
-      mobile: isMobileViewport(),
-      reducedMotion,
-      devicePixelRatio: window.devicePixelRatio || 1,
-    });
-    rendererRef.current = renderer;
+    setRenderError(null);
 
-    const resize = new ResizeObserver(() => renderer.resize());
-    resize.observe(host);
-    renderer.resize();
+    let renderer: ManiaCardRenderer | null = null;
+    let resizeObserver: ResizeObserver | null = null;
+    let removeResizeFallback = () => {};
 
-    return () => {
-      resize.disconnect();
-      renderer.dispose();
+    const cleanup = () => {
+      resizeObserver?.disconnect();
+      removeResizeFallback();
+      renderer?.dispose();
       if (rendererRef.current === renderer) rendererRef.current = null;
     };
+
+    try {
+      renderer = new ManiaCardRenderer({
+        host,
+        data,
+        mobile: isMobileViewport(),
+        reducedMotion,
+        devicePixelRatio: getDevicePixelRatio(),
+      });
+      rendererRef.current = renderer;
+
+      const resize = () => renderer?.resize();
+      if (typeof ResizeObserver === "function") {
+        resizeObserver = new ResizeObserver(resize);
+        resizeObserver.observe(host);
+      } else if (typeof window !== "undefined") {
+        window.addEventListener("resize", resize);
+        removeResizeFallback = () => window.removeEventListener("resize", resize);
+      }
+      renderer.resize();
+    } catch (error) {
+      cleanup();
+      setRenderError(error instanceof Error ? error.message : "3D renderer unavailable.");
+      return;
+    }
+
+    return cleanup;
   }, [data, loading, reducedMotion]);
 
   if (loading) return <ManiaCard3DLoading />;
@@ -62,15 +98,33 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
     );
   }
 
+  if (renderError) return <ManiaCard3DFallback />;
+
   return (
     <div className="py-4 sm:py-6">
       <div className="mx-auto w-full max-w-[440px] px-2">
         <div
           ref={hostRef}
+          role="img"
           className="relative w-full overflow-visible"
           style={{ aspectRatio: "5 / 7" }}
           aria-label={`${data.user.username} ${data.tierStyle.label} Maniacard. Control ${data.skills.fingerControl}, Speed ${data.skills.speed}, Precision ${data.skills.accuracy}.`}
         />
+      </div>
+    </div>
+  );
+}
+
+function ManiaCard3DFallback() {
+  return (
+    <div className="py-4 sm:py-6">
+      <div className="max-w-[440px] mx-auto px-2">
+        <div
+          className="relative grid place-items-center rounded-[22px] border-2 border-osu-b3/30 bg-osu-b4/40 px-6 text-center text-sm text-osu-f1"
+          style={{ aspectRatio: "5 / 7" }}
+        >
+          3D card preview is unavailable on this device.
+        </div>
       </div>
     </div>
   );
