@@ -32,6 +32,7 @@ export class ManiaCardRenderer {
   private textures: CardTextureSet | null = null;
   private frameId: number | null = null;
   private disposed = false;
+  private dataRequestId = 0;
   private dragStart: { x: number; y: number } | null = null;
   private overlay: Mesh | null = null;
 
@@ -54,8 +55,9 @@ export class ManiaCardRenderer {
   }
 
   async setData(data: ManiaCardReadyData) {
+    const requestId = ++this.dataRequestId;
     const textures = await createCardTextures(data);
-    if (this.disposed) {
+    if (this.disposed || requestId !== this.dataRequestId) {
       textures.dispose();
       return;
     }
@@ -89,6 +91,7 @@ export class ManiaCardRenderer {
 
   dispose() {
     this.disposed = true;
+    this.dataRequestId += 1;
     if (this.frameId !== null) cancelAnimationFrame(this.frameId);
     this.detachPointerEvents();
     this.textures?.dispose();
