@@ -21,17 +21,26 @@ vec3 screen(vec3 base, vec3 blend) {
   return 1.0 - (1.0 - base) * (1.0 - blend);
 }
 
-float triangleWave(vec2 uv, float offset) {
-  vec2 grid = vec2(9.0, 11.0);
-  vec2 id = floor(vec2(uv.x * grid.x, uv.y * grid.y - offset));
-  vec2 cell = fract(vec2(uv.x * grid.x + mod(id.y, 2.0) * 0.48, uv.y * grid.y - offset));
-  float variant = fract(sin(dot(id, vec2(17.17, 41.91))) * 43758.5453);
-  float width = mix(0.48, 0.72, variant);
-  float height = mix(0.52, 0.78, fract(variant * 7.13));
-  vec2 centered = vec2((cell.x - 0.5) / width, (cell.y - 0.48) / height);
-  float tri = max(abs(centered.x) + centered.y * 0.82, -centered.y * 0.52);
+float random(vec2 value) {
+  return fract(sin(dot(value, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+float triangleWave(vec2 uv, vec2 grid, float offset) {
+  vec2 p = uv * grid;
+  p.y -= offset;
+  vec2 id = floor(p);
+  float variant = random(id);
+  float sparse = step(0.22, variant);
+  vec2 center = vec2(
+    0.22 + random(id + vec2(7.1, 2.9)) * 0.58,
+    0.18 + random(id + vec2(3.7, 9.4)) * 0.62
+  );
+  vec2 cell = fract(p);
+  float width = 0.42 + random(id + vec2(11.2, 5.8)) * 0.28;
+  float height = 0.44 + random(id + vec2(1.3, 14.6)) * 0.22;
+  vec2 local = vec2((cell.x - center.x) / width, (cell.y - center.y) / height);
+  float tri = max(abs(local.x) * 0.92 + local.y * 0.82, -local.y * 0.56);
   float shape = 1.0 - smoothstep(0.46, 0.51, tri);
-  float sparse = step(0.18, variant);
   return shape * sparse * mix(0.45, 1.0, variant);
 }
 
@@ -47,7 +56,7 @@ void main() {
   vec2 light = clamp(uLight, vec2(0.0), vec2(1.0));
   float dist = distance(vUv, light);
   float glare = 1.0 - smoothstep(0.0, 0.58, dist);
-  float triangles = triangleWave(vUv, uTime * 0.09) * 0.68 + triangleWave(vUv + vec2(0.12, 0.07), uTime * 0.052) * 0.32;
+  float triangles = triangleWave(vUv, vec2(7.0, 9.0), uTime * 0.09) * 0.58 + triangleWave(vUv + vec2(0.19, 0.11), vec2(5.0, 7.0), uTime * 0.052) * 0.42;
   float softFoil = smoothstep(0.2, 0.9, vUv.x * 0.72 + (1.0 - vUv.y) * 0.34 + light.x * 0.18);
   vec3 rainbow = 0.5 + 0.5 * cos(6.28318 * (vec3(0.0, 0.33, 0.67) + vUv.x * 0.35 + vUv.y * 0.22));
   vec3 holo = screen(uTierColor * 0.42, rainbow * 0.58) * (triangles * 0.42 + softFoil * 0.18);

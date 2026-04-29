@@ -25,10 +25,17 @@ describe("addRotation", () => {
     });
   });
 
-  test("keeps accumulated rotation bounded", () => {
+  test("keeps vertical tilt bounded while allowing full horizontal spins", () => {
     expect(addRotation({ x: 20, y: 170 }, { x: 20, y: 30 })).toEqual({
       x: 24,
-      y: 180,
+      y: 200,
+    });
+  });
+
+  test("keeps accumulating through multiple full rotations", () => {
+    expect(addRotation({ x: 0, y: 720 }, { x: 0, y: 95 })).toEqual({
+      x: 0,
+      y: 815,
     });
   });
 });
@@ -36,6 +43,13 @@ describe("addRotation", () => {
 describe("pointerToLight", () => {
   test("maps rotation into normalized shader light coordinates", () => {
     expect(pointerToLight({ x: -22, y: 35 })).toEqual({
+      x: 0.36,
+      y: 0.1,
+    });
+  });
+
+  test("wraps horizontal rotation before mapping light", () => {
+    expect(pointerToLight({ x: -22, y: 395 })).toEqual({
       x: 0.36,
       y: 0.1,
     });
