@@ -24,7 +24,9 @@ describe("truncateToWidth", () => {
 
   test("adds an ellipsis when text is too wide", () => {
     const measure = (text: string) => text.length * 10;
-    expect(truncateToWidth("VeryLongPlayerName", 70, measure)).toBe("VeryLo...");
+    const result = truncateToWidth("VeryLongPlayerName", 70, measure);
+    expect(result).toBe("Very...");
+    expect(measure(result)).toBeLessThanOrEqual(70);
   });
 });
 
