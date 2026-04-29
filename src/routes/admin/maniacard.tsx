@@ -1,6 +1,6 @@
 import { Link, createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
-import { ManiaCardPanel } from "../../components/player/ManiaCard";
+import { CssManiaCardPanel, ManiaCardPanel } from "../../components/player/ManiaCard";
 import { SearchInput } from "../../components/ui/SearchInput";
 import { getUser, getUserScoresBestWindow, searchUsers } from "../../lib/osu";
 import type { OsuScore, OsuUser } from "../../lib/types";
@@ -120,16 +120,49 @@ function ManiacardAdminPage() {
                 <div className="mt-2 text-sm text-osu-f1">{error}</div>
               </div>
             ) : user ? (
-              <ManiaCardPanel user={user} scores={scores} loading={loading} />
+              <div className="grid gap-5 xl:grid-cols-2">
+                <div>
+                  <div className="mb-3 text-[11px] uppercase tracking-[0.14em] text-osu-f1 font-bold">
+                    CSS reference
+                  </div>
+                  <CssManiaCardPanel user={user} scores={scores} loading={loading} />
+                </div>
+                <div>
+                  <div className="mb-3 text-[11px] uppercase tracking-[0.14em] text-osu-yellow font-bold">
+                    ThreeJS production
+                  </div>
+                  <ManiaCardPanel user={user} scores={scores} loading={loading} />
+                </div>
+              </div>
             ) : (
-              <ManiaCardPanel
-                user={{
-                  id: 0,
-                  username: player,
-                } as OsuUser}
-                scores={[]}
-                loading
-              />
+              <div className="grid gap-5 xl:grid-cols-2">
+                <div>
+                  <div className="mb-3 text-[11px] uppercase tracking-[0.14em] text-osu-f1 font-bold">
+                    CSS reference
+                  </div>
+                  <CssManiaCardPanel
+                    user={{
+                      id: 0,
+                      username: player,
+                    } as OsuUser}
+                    scores={[]}
+                    loading
+                  />
+                </div>
+                <div>
+                  <div className="mb-3 text-[11px] uppercase tracking-[0.14em] text-osu-yellow font-bold">
+                    ThreeJS production
+                  </div>
+                  <ManiaCardPanel
+                    user={{
+                      id: 0,
+                      username: player,
+                    } as OsuUser}
+                    scores={[]}
+                    loading
+                  />
+                </div>
+              </div>
             )}
           </section>
 
@@ -162,7 +195,7 @@ function ManiacardAdminPage() {
               </>
             )}
             <div className="mt-5 border-t border-osu-b3/30 pt-4 text-xs leading-relaxed text-osu-f1">
-              The page fetches the same best-score window used by the profile card tab, so visual changes here should match the in-profile card.
+              The ThreeJS column is the same shared <code>ManiaCardPanel</code> used by profile pages. The CSS column is only a reference while tuning the new renderer.
             </div>
           </aside>
         </div>
