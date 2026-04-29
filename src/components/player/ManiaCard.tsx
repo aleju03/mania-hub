@@ -5,6 +5,7 @@ import {
   type ManiaSkills,
   type ManiaCardTier,
 } from "../../lib/maniacard";
+import { ManiaCard3DPanel } from "./maniacard3d/ManiaCard3DPanel";
 import type { OsuScore, OsuUser } from "../../lib/types";
 import { useCallback, useRef, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 
@@ -548,7 +549,11 @@ function cssRgba(value: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-export function ManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
+export function ManiaCardPanel(props: ManiaCardPanelProps) {
+  return <ManiaCard3DPanel {...props} />;
+}
+
+export function CssManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps) {
   const cardRef = useRef<HTMLDivElement | null>(null);
   const frameRef = useRef<number | null>(null);
   const pendingTiltRef = useRef<{

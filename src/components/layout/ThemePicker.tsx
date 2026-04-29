@@ -26,6 +26,17 @@ const RAINBOW_STRIP_GRADIENT =
 
 const THUMB_HALF = 8;
 
+function getSaturationStripGradient(hue: number): string {
+  return [
+    "linear-gradient(to right",
+    `hsl(${hue}, 0%, 2%) 0%`,
+    `hsl(${hue}, 3%, 8%) 22%`,
+    `hsl(${hue}, 18%, 18%) 48%`,
+    `hsl(${hue}, 55%, 56%) 76%`,
+    `hsl(${hue}, 100%, 70%) 100%)`,
+  ].join(", ");
+}
+
 function ThemeStrip({
   value,
   min,
@@ -107,7 +118,7 @@ function ThemeStrip({
         }
       }}
     >
-      <div className="w-full h-3 rounded-full relative" style={{ background: gradient, boxShadow: "inset 0 0 0 1px rgba(0, 0, 0, 0.4)" }}>
+      <div className="w-full h-3 rounded-full relative" style={{ background: gradient }}>
         <div
           className="absolute top-1/2 w-4 h-4 rounded-full -translate-x-1/2 -translate-y-1/2 cursor-pointer"
           style={{
@@ -280,7 +291,7 @@ export function ThemePicker({ variant = "desktop" }: ThemePickerProps) {
                 min={0}
                 max={100}
                 ariaLabel="Theme saturation"
-                gradient={`linear-gradient(to right, hsl(${displayHue}, 0%, 45%), hsl(${displayHue}, 100%, 65%))`}
+                gradient={getSaturationStripGradient(displayHue)}
                 thumbColor={`hsl(${displayHue}, ${displaySat}%, ${45 + (displaySat / 100) * 20}%)`}
                 onChange={setThemeSaturation}
               />

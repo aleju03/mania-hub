@@ -38,9 +38,17 @@ export async function ensureCacheSchema(): Promise<void> {
     await db.execute(`
       CREATE TABLE IF NOT EXISTS cache_locks (
         lock_key TEXT PRIMARY KEY,
+        lock_owner TEXT,
         expires_at INTEGER NOT NULL
       )
     `);
+
+    try {
+      await db.execute("ALTER TABLE cache_locks ADD COLUMN lock_owner TEXT");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/duplicate column|already exists/i.test(message)) throw error;
+    }
 
     await db.execute(`
       CREATE TABLE IF NOT EXISTS country_top_plays (

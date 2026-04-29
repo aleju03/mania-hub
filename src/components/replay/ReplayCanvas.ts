@@ -3,6 +3,7 @@ import type { ReplayFrame } from "../../lib/types";
 import type { ManiaNote, ManiaScrollVelocity } from "../../lib/beatmap-parser";
 import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgementEvent, ReplayNoteState } from "../../lib/mania-replay-judgement";
 import { buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "../../lib/mania-replay-judgement";
+import { formatPixiRendererType } from "./renderer-debug";
 
 const COLUMN_COLORS: Record<number, string[]> = {
   1: ["#fff"],
@@ -231,7 +232,7 @@ export class ManiaReplayRenderer {
       autoStart: false,
       antialias: true,
       backgroundAlpha: 0,
-      preference: "webgl",
+      preference: ["canvas", "webgl"],
     });
 
     if (this.destroyed) {
@@ -1010,6 +1011,20 @@ export class ManiaReplayRenderer {
       fontWeight: "700",
       anchorX: 1,
     });
+    if (import.meta.env.DEV && this.app) {
+      this.addText(
+        `Renderer ${formatPixiRendererType(this.app.renderer.type, this.app.renderer.name)}`,
+        w - 8,
+        24,
+        {
+          fontSize: 10,
+          fill: "#ffffff",
+          alpha: 0.42,
+          fontWeight: "700",
+          anchorX: 1,
+        },
+      );
+    }
   }
 
   private getCurrentKeyState(): number {

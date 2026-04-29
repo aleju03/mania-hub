@@ -3,11 +3,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createElement as h } from "react";
 import { getCachedUser, getCachedUserScores, getRankings, getCountryMapsFarmed, getCountrySnipes, getScore } from "../../lib/osu";
 import { getCountryName, isSupportedCountryCode } from "../../lib/country";
+import { getAssetOrigin } from "../../lib/origin";
 import type { MapsFarmedEntry, OsuScore } from "../../lib/types";
 
 const WIDTH = 1200;
 const HEIGHT = 630;
 const MAX_TITLE_LEN = 38;
+const FONT_FETCH_TIMEOUT_MS = 10_000;
 
 const fontCache = new Map<string, Promise<ArrayBuffer>>();
 
@@ -19,16 +21,23 @@ function clamp(value: string | null | undefined, max: number): string {
 }
 
 function getFont(request: Request, fileName: string): Promise<ArrayBuffer> {
-  const url = new URL(`/fonts/${fileName}`, request.url).toString();
+  const url = new URL(`/fonts/${fileName}`, getAssetOrigin(request)).toString();
   const cached = fontCache.get(url);
   if (cached) return cached;
 
-  const promise = fetch(url).then(async (response) => {
-    if (!response.ok) {
-      throw new Error(`Failed to load font ${fileName}: ${response.status}`);
+  const promise = (async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FONT_FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      if (!response.ok) {
+        throw new Error(`Failed to load font ${fileName}: ${response.status}`);
+      }
+      return response.arrayBuffer();
+    } finally {
+      clearTimeout(timeout);
     }
-    return response.arrayBuffer();
-  });
+  })();
 
   fontCache.set(url, promise);
   promise.catch(() => fontCache.delete(url));

@@ -918,7 +918,13 @@ function formatElapsedSeconds(ms: number): string {
 
 function getScanProgressPercent(status: SnipesScanStatus | null): number | null {
   if (!status || status.total <= 0) return null;
-  return Math.max(0, Math.min(100, Math.round((status.current / status.total) * 100)));
+  const phaseIdx = PHASE_ORDER.indexOf(status.phase);
+  if (phaseIdx < 0) return null;
+  const phaseProgress = Math.max(0, Math.min(1, status.current / status.total));
+  return Math.max(
+    0,
+    Math.min(100, Math.round(((phaseIdx + phaseProgress) / PHASE_ORDER.length) * 100)),
+  );
 }
 
 const PHASE_ORDER: SnipesScanStatus["phase"][] = [

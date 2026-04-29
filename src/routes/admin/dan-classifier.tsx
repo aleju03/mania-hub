@@ -3,9 +3,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { parseManiaBeatmap } from "../../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../../lib/beatmap-search";
 import { estimateDan } from "../../lib/dan-estimator";
-import { getBeatmapFile, searchBeatmaps, searchBeatmapsByMappers } from "../../lib/osu";
+import { estimateDanielDan } from "../../lib/daniel-estimator";
+import { getBeatmapFile, getBeatmapset, getBeatmapsetForBeatmap, searchBeatmaps, searchBeatmapsByMappers } from "../../lib/osu";
 import type { DanEstimate } from "../../lib/dan-estimator";
 import type { OsuBeatmap, OsuBeatmapset } from "../../lib/types";
+
+type DanClassifierId = "aleju" | "daniel";
+
+const DAN_CLASSIFIERS: Array<{ id: DanClassifierId; label: string }> = [
+  { id: "aleju", label: "aleju" },
+  { id: "daniel", label: "Daniel" },
+];
 
 const DAN_IMAGE_EXTENSIONS: Record<string, "png" | "svg"> = {
   "1": "svg",
@@ -62,6 +70,20 @@ function mergeBeatmapsets(...groups: OsuBeatmapset[][]): OsuBeatmapset[] {
   return [...beatmapsetsById.values()];
 }
 
+function extractBeatmapsetId(query: string): number | null {
+  const beatmapsetUrlMatch = query.match(/beatmapsets\/(\d+)/i);
+  const numericQueryMatch = query.trim().match(/^(\d{5,})$/);
+  const id = Number(beatmapsetUrlMatch?.[1] ?? numericQueryMatch?.[1]);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+function extractBeatmapId(query: string): number | null {
+  const beatmapUrlMatch = query.match(/(?:beatmaps\/|#mania\/)(\d+)/i);
+  const numericQueryMatch = query.trim().match(/^(\d{5,})$/);
+  const id = Number(beatmapUrlMatch?.[1] ?? numericQueryMatch?.[1]);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
 function getDanImageSrc(label: string): string | null {
   const extension = DAN_IMAGE_EXTENSIONS[label];
   return extension ? `/images/dans/reform/${label}.${extension}` : null;
@@ -94,6 +116,7 @@ export const Route = createFileRoute("/admin/dan-classifier")({
 function DanClassifierPage() {
   const [query, setQuery] = useState("");
   const [rate, setRate] = useState(1);
+  const [classifier, setClassifier] = useState<DanClassifierId>("aleju");
   const [results, setResults] = useState<OsuBeatmapset[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedSet, setSelectedSet] = useState<OsuBeatmapset | null>(null);
@@ -114,20 +137,42 @@ function DanClassifierPage() {
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(async () => {
       try {
-        const response = await searchBeatmaps({
-          data: {
-            query,
-            sort: "relevance_desc",
-            status: "any",
-          },
-        });
+        const directBeatmapsetId = extractBeatmapsetId(query);
+        const directBeatmapId = extractBeatmapId(query);
+        const [relevanceResponse, updatedResponse, directBeatmapset, directBeatmapParentSet] = await Promise.all([
+          searchBeatmaps({
+            data: {
+              query,
+              sort: "relevance_desc",
+              status: "any",
+            },
+          }),
+          searchBeatmaps({
+            data: {
+              query,
+              sort: "updated_desc",
+              status: "any",
+            },
+          }).catch(() => ({ beatmapsets: [] })),
+          directBeatmapsetId
+            ? getBeatmapset({ data: { beatmapsetId: directBeatmapsetId } }).catch(() => null)
+            : Promise.resolve(null),
+          directBeatmapId
+            ? getBeatmapsetForBeatmap({ data: { beatmapId: directBeatmapId } }).catch(() => null)
+            : Promise.resolve(null),
+        ]);
         const mapperCandidates = extractMapperCandidates(query);
         const mapperResponse = mapperCandidates.length > 0
           ? await searchBeatmapsByMappers({ data: { usernames: mapperCandidates } })
           : { beatmapsets: [] };
-        setResults(filterBeatmapSearchResults(
-          mergeBeatmapsets(response.beatmapsets, mapperResponse.beatmapsets),
+        const searchedResults = filterBeatmapSearchResults(
+          mergeBeatmapsets(relevanceResponse.beatmapsets, updatedResponse.beatmapsets, mapperResponse.beatmapsets),
           query,
+        );
+        setResults(mergeBeatmapsets(
+          directBeatmapset ? [directBeatmapset] : [],
+          directBeatmapParentSet ? [directBeatmapParentSet] : [],
+          searchedResults,
         ).slice(0, 12));
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not search beatmaps.");
@@ -144,7 +189,7 @@ function DanClassifierPage() {
     return `${selectedSet.artist} - ${selectedSet.title} [${selectedBeatmap.version}]`;
   }, [selectedBeatmap, selectedSet]);
 
-  async function analyzeBeatmap(beatmapset: OsuBeatmapset, beatmap: OsuBeatmap) {
+  async function analyzeBeatmap(beatmapset: OsuBeatmapset, beatmap: OsuBeatmap, classifierId = classifier) {
     setSelectedSet(beatmapset);
     setSelectedBeatmap(beatmap);
     setEstimate(null);
@@ -159,13 +204,16 @@ function DanClassifierPage() {
         return;
       }
 
-      setEstimate(estimateDan(parsed, {
+      const estimateInput = {
         starRating: beatmap.difficulty_rating,
         totalLength: beatmap.total_length,
         title: beatmapset.title,
         version: beatmap.version,
         rate,
-      }));
+      };
+      setEstimate(classifierId === "daniel"
+        ? estimateDanielDan(parsed, estimateInput)
+        : estimateDan(parsed, estimateInput));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not analyze this beatmap.");
     } finally {
@@ -174,7 +222,7 @@ function DanClassifierPage() {
   }
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-osu-b5 text-osu-c1">
+    <main className="min-h-screen overflow-x-clip bg-osu-b5 text-osu-c1">
       <div className="max-w-[1200px] mx-auto px-4 py-7 sm:px-5 sm:py-10">
         <div className="pb-6 border-b border-osu-b3/30">
           <div className="text-[11px] uppercase tracking-[0.16em] text-osu-yellow font-bold">
@@ -226,6 +274,26 @@ function DanClassifierPage() {
                 className="w-24 px-3 py-2 rounded-md bg-osu-b5 text-osu-c1 text-xs border border-osu-b3/50 focus:border-osu-h1/40 focus:outline-none"
               />
               <div className="text-xs text-osu-f1">x</div>
+            </div>
+
+            <div className="mt-3 flex items-center gap-3">
+              <label className="text-[11px] uppercase tracking-wide text-osu-f1 font-bold" htmlFor="dan-classifier">
+                Classifier
+              </label>
+              <select
+                id="dan-classifier"
+                value={classifier}
+                onChange={(event) => {
+                  const next = event.target.value as DanClassifierId;
+                  setClassifier(next);
+                  if (selectedSet && selectedBeatmap) void analyzeBeatmap(selectedSet, selectedBeatmap, next);
+                }}
+                className="w-32 px-3 py-2 rounded-md bg-osu-b5 text-osu-c1 text-xs border border-osu-b3/50 focus:border-osu-h1/40 focus:outline-none"
+              >
+                {DAN_CLASSIFIERS.map((option) => (
+                  <option key={option.id} value={option.id}>{option.label}</option>
+                ))}
+              </select>
             </div>
 
             {error && (
@@ -300,6 +368,9 @@ function DanClassifierPage() {
 
           <aside className="min-w-0 rounded-lg border border-osu-b3/30 bg-osu-b4/35 p-4 sm:p-5 lg:sticky lg:top-24">
             <div className="text-[11px] uppercase tracking-[0.14em] text-osu-f1 font-bold">Estimate</div>
+            <div className="mt-1 text-[11px] font-bold text-osu-yellow">
+              {DAN_CLASSIFIERS.find((option) => option.id === classifier)?.label}
+            </div>
             {analysisLoading ? (
               <div className="mt-8 flex flex-col items-center gap-3 py-10">
                 <div className="w-7 h-7 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
@@ -326,7 +397,7 @@ function DanClassifierPage() {
                   </div>
                 </div>
                 <div className="mt-2 text-sm text-osu-f1">
-                  SR proxy {estimate.estimatedSr.toFixed(2)} · raw dan {estimate.rawDan.toFixed(2)} · confidence {Math.round(estimate.confidence * 100)}%
+                  SR proxy {estimate.estimatedSr.toFixed(2)} · raw dan {estimate.rawDan.toFixed(2)}
                 </div>
 
                 <div className="mt-5 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">

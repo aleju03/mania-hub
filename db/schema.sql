@@ -10,6 +10,7 @@ ON cache_entries (expires_at);
 
 CREATE TABLE IF NOT EXISTS cache_locks (
   lock_key TEXT PRIMARY KEY,
+  lock_owner TEXT,
   expires_at INTEGER NOT NULL
 );
 

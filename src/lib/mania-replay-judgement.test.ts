@@ -16,6 +16,27 @@ describe("mania replay judgement helpers", () => {
     expect(windows.miss).toBe(164.5);
   });
 
+  it("applies stable HR and EZ through OD before calculating classic windows", () => {
+    const hardRock = getManiaReplayHitWindows(8, getManiaReplayRuleset(false, ["HR"]));
+    const easy = getManiaReplayHitWindows(8, getManiaReplayRuleset(false, ["EZ"]));
+
+    expect(hardRock.great).toBe(34.5);
+    expect(hardRock.good).toBe(67.5);
+    expect(easy.great).toBe(52.5);
+    expect(easy.good).toBe(85.5);
+  });
+
+  it("does not resize stable mania hit windows for rate-changing mods", () => {
+    const normal = getManiaReplayHitWindows(8, getManiaReplayRuleset(false, []));
+    const doubleTime = getManiaReplayHitWindows(8, getManiaReplayRuleset(false, ["DT"]));
+    const halfTime = getManiaReplayHitWindows(8, getManiaReplayRuleset(false, ["HT"]));
+    const daycore = getManiaReplayHitWindows(8, getManiaReplayRuleset(false, ["DC"]));
+
+    expect(doubleTime).toEqual(normal);
+    expect(halfTime).toEqual(normal);
+    expect(daycore).toEqual(normal);
+  });
+
   it("uses lazer windows for lazer scores", () => {
     const ruleset = getManiaReplayRuleset(true, []);
     const windows = getManiaReplayHitWindows(5, ruleset);
@@ -33,6 +54,42 @@ describe("mania replay judgement helpers", () => {
 
     expect(calculateReplayAccuracy(counts, "stable")).toBe(100);
     expect(calculateReplayAccuracy(counts, "lazer")).toBeCloseTo(((305 + 300) / (2 * 305)) * 100, 6);
+  });
+
+  it("stable mode misses tap notes after the late OK window instead of awarding late 50s", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 1000, isHold: false }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1120, keyState: 1 },
+      { time: 1130, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable");
+
+    expect(simulated.events).toEqual([
+      expect.objectContaining({ part: "note", judgment: 6, time: 1103.5 }),
+    ]);
+  });
+
+  it("stable mode still allows early 50s on tap notes", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 1000, isHold: false }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 880, keyState: 1 },
+      { time: 890, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable");
+
+    expect(simulated.events).toEqual([
+      expect.objectContaining({ part: "note", judgment: 5, time: 880 }),
+    ]);
   });
 
   it("lazer mode emits separate head and tail judgements for a hold", () => {
@@ -87,6 +144,61 @@ describe("mania replay judgement helpers", () => {
     }));
   });
 
+  it("lazer mode times out untouched tap notes after the 50 window", () => {
+    const ruleset = getManiaReplayRuleset(true, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 1000, isHold: false }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1135, keyState: 1 },
+      { time: 1145, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "lazer");
+
+    expect(simulated.events).toEqual([
+      expect.objectContaining({ part: "note", judgment: 6, time: 1127.5 }),
+    ]);
+  });
+
+  it("lazer mode times out untouched hold tails after the lenient 50 window", () => {
+    const ruleset = getManiaReplayRuleset(true, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 2000, isHold: true }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1000, keyState: 1 },
+      { time: 2200, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 2500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "lazer");
+
+    expect(simulated.events.filter((event) => event.judgment != null)).toEqual([
+      expect.objectContaining({ part: "hold-head", judgment: 1, time: 1000 }),
+      expect.objectContaining({ part: "hold-tail", judgment: 6, time: 2191.25 }),
+    ]);
+  });
+
+  it("lazer mode times out untouched hold heads after the 50 window", () => {
+    const ruleset = getManiaReplayRuleset(true, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 2000, isHold: true }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 2500, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 2500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "lazer");
+
+    expect(simulated.events.filter((event) => event.judgment != null)).toEqual([
+      expect.objectContaining({ part: "hold-head", judgment: 6, time: 1127.5 }),
+      expect.objectContaining({ part: "hold-tail", judgment: 6, time: 2191.25 }),
+    ]);
+  });
+
   it("stable mode emits a single combined judgement for a perfectly held LN", () => {
     const ruleset = getManiaReplayRuleset(false, []);
     const windows = getManiaReplayHitWindows(8, ruleset);
@@ -137,6 +249,24 @@ describe("mania replay judgement helpers", () => {
       tailJudgment: 5,
       displayJudgment: 5,
     }));
+  });
+
+  it("stable mode misses a hold note when the tail is released after the late OK window", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 2000, isHold: true }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1000, keyState: 1 },
+      { time: 2200, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 2500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable");
+
+    expect(simulated.events).toEqual([
+      expect.objectContaining({ part: "hold-combined", judgment: 6, time: 2103.5 }),
+    ]);
   });
 
   it("stable mode downgrades via the combined hit error tier", () => {

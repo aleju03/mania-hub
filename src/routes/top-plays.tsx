@@ -1,7 +1,7 @@
 import { createFileRoute, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getCountryPopoffs, getRankings } from "../lib/osu";
+import { getCountryPopoffs, getPartialTopPlays, getRankings, getTopPlaysRefreshStatus } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { formatNumber, formatAccuracy, formatTimeAgo } from "../lib/format";
@@ -14,21 +14,15 @@ import { ModBadge } from "../components/ui/ModBadge";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import { Pagination } from "../components/ui/Pagination";
-import type { OsuScore, RankingsResponse } from "../lib/types";
+import type { CountryTopPlay, OsuScore, RankingsResponse, TopPlaysRefreshStatus } from "../lib/types";
 import { useAppStore, useSelectedCountry, type CachedPopoff, type TopPlaysRange } from "../store";
 import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
+import { hasTopPlaysCache, shouldRefreshTopPlays } from "../lib/top-plays-cache";
 
 const DEV_MODE = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === "1";
 
-interface PopOff {
-  user: { id: number; username: string; avatar_url: string };
-  score: OsuScore;
-  pp: number;
-  weightedPP: number;
-  ppGain: number;
-  time: string;
-}
+type PopOff = CountryTopPlay;
 
 type TimeRange = TopPlaysRange;
 type SortMode = "recent" | "pp";
@@ -43,20 +37,6 @@ const RANGE_MS: Record<TimeRange, number> = {
   "7d": 7 * 24 * 60 * 60 * 1000,
   "30d": 30 * 24 * 60 * 60 * 1000,
 };
-
-// Width order, used to check whether a cached window covers a newly selected range.
-// A cache for "30d" covers any shorter selection; a cache for "7d" covers 7d/3d/24h.
-const RANGE_WIDTH: Record<TimeRange, number> = {
-  "24h": 0,
-  "3d": 1,
-  "7d": 2,
-  "30d": 3,
-};
-
-function windowCoversRange(cached: TimeRange | null, selected: TimeRange): boolean {
-  if (!cached) return false;
-  return RANGE_WIDTH[cached] >= RANGE_WIDTH[selected];
-}
 
 const PAGE_SIZE = 15;
 const PP_GAIN_SKELETON_COUNT = 6;
@@ -106,6 +86,8 @@ function PopOffsPage() {
   const navigate = useNavigate();
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = country ?? fallbackCountry;
+  const currentCountryRef = useRef(selectedCountry);
+  currentCountryRef.current = selectedCountry;
   const rankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const popoffs = useAppStore((state) => state.popoffsByCountry[selectedCountry]) ?? EMPTY_POPOFFS;
@@ -115,27 +97,47 @@ function PopOffsPage() {
   const setRankings = useAppStore((state) => state.setRankings);
   const setCachedPopoffs = useAppStore((state) => state.setPopoffs);
   const setTopPlaysRange = useAppStore((state) => state.setTopPlaysRange);
+  const hasCachedPopoffs = hasTopPlaysCache(popoffsFetchedAt, popoffsWindow);
   const [playersError, setPlayersError] = useState<string | null>(null);
   const [loadingPlayers, setLoadingPlayers] = useState(!rankings);
-  const [loading, setLoading] = useState(popoffs.length === 0);
+  const [loading, setLoading] = useState(!hasCachedPopoffs);
   const [refreshing, setRefreshing] = useState(false);
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [page, setPage] = useState(0);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [scanStartedAt, setScanStartedAt] = useState<number | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const [refreshStatus, setRefreshStatus] = useState<TopPlaysRefreshStatus | null>(null);
+  const [partialPopoffs, setPartialPopoffs] = useState<PopOff[]>([]);
   const hasRestoredRememberedRangeRef = useRef(false);
+  const sawRefreshActivityRef = useRef(false);
+  const finalizingRefreshRef = useRef(false);
   const countryName = getCountryName(selectedCountry);
-  const hasCachedPopoffs = popoffs.length > 0;
 
   useEffect(() => {
     setPlayersError(null);
     setLoadingPlayers(!rankings);
-    setLoading(popoffs.length === 0);
+    setLoading(!hasCachedPopoffs);
     setRefreshing(false);
     setPage(0);
     setExpandedId(null);
+    setScanStartedAt(null);
+    setElapsed(0);
+    setRefreshStatus(null);
+    setPartialPopoffs([]);
     fetchingRef.current = false;
+    sawRefreshActivityRef.current = false;
+    finalizingRefreshRef.current = false;
     hasRestoredRememberedRangeRef.current = false;
   }, [selectedCountry]);
+
+  useEffect(() => {
+    if (scanStartedAt == null) return;
+    const tick = () => setElapsed(Date.now() - scanStartedAt);
+    tick();
+    const id = window.setInterval(tick, 250);
+    return () => window.clearInterval(id);
+  }, [scanStartedAt]);
 
   useEffect(() => {
     if (hasRestoredRememberedRangeRef.current) return;
@@ -217,24 +219,95 @@ function PopOffsPage() {
     });
   }, []);
 
+  useEffect(() => {
+    if (scanStartedAt == null) {
+      setRefreshStatus(null);
+      setPartialPopoffs([]);
+      return;
+    }
+
+    let cancelled = false;
+    const requestedCountry = selectedCountry;
+    const startedAt = scanStartedAt;
+
+    const poll = async () => {
+      try {
+        const [status, partial] = await Promise.all([
+          getTopPlaysRefreshStatus({ data: { country: requestedCountry } }),
+          getPartialTopPlays({ data: { country: requestedCountry } }),
+        ]);
+        if (cancelled || currentCountryRef.current !== requestedCountry) return;
+
+        setRefreshStatus(status);
+        if (status || partial.length > 0) sawRefreshActivityRef.current = true;
+        if (partial.length > 0) {
+          setPartialPopoffs(partial);
+        }
+
+        if (!status && !sawRefreshActivityRef.current && Date.now() - startedAt > 5000) {
+          setRefreshing(false);
+          setScanStartedAt(null);
+          return;
+        }
+
+        if (
+          !status &&
+          sawRefreshActivityRef.current &&
+          Date.now() - startedAt > 1500 &&
+          !finalizingRefreshRef.current &&
+          players.length > 0
+        ) {
+          finalizingRefreshRef.current = true;
+          try {
+            const response = await getCountryPopoffs({
+              data: { country: requestedCountry, players, window: "30d", refresh: false },
+            });
+            if (cancelled || currentCountryRef.current !== requestedCountry) return;
+            setCachedPopoffs(requestedCountry, mergePopoffs(response.popoffs), response.window);
+            const stillRefreshing = response.refreshInProgress === true;
+            setRefreshing(stillRefreshing);
+            setScanStartedAt(stillRefreshing ? Date.now() : null);
+            if (!stillRefreshing) {
+              setPartialPopoffs([]);
+              setRefreshStatus(null);
+              sawRefreshActivityRef.current = false;
+            }
+          } finally {
+            finalizingRefreshRef.current = false;
+          }
+        }
+      } catch {
+        finalizingRefreshRef.current = false;
+      }
+    };
+
+    poll();
+    const id = window.setInterval(poll, 750);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [mergePopoffs, players, scanStartedAt, selectedCountry, setCachedPopoffs]);
+
   const fetchAll = useCallback(async () => {
     if (players.length === 0 || fetchingRef.current) {
       if (players.length === 0) {
         setLoading(false);
         setRefreshing(false);
+        setScanStartedAt(null);
       }
       return;
     }
 
-    const shouldRefresh =
-      !hasCachedPopoffs ||
-      !popoffsFetchedAt ||
-      isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.popoffs) ||
-      !windowCoversRange(popoffsWindow, range);
-
-    if (!shouldRefresh) {
+    if (!shouldRefreshTopPlays({
+      fetchedAt: popoffsFetchedAt,
+      cachedWindow: popoffsWindow,
+      selectedRange: range,
+      cacheTtlMs: CLIENT_CACHE_TTL.popoffs,
+    })) {
       setLoading(false);
       setRefreshing(false);
+      setScanStartedAt(null);
       return;
     }
 
@@ -246,17 +319,32 @@ function PopOffsPage() {
     cancelledRef.current = false;
     setLoading(!hasCachedPopoffs);
     setRefreshing(true);
+    setScanStartedAt(Date.now());
+    setElapsed(0);
     setPage(0);
+    let keepPollingRefresh = false;
 
     try {
-      const merged = mergePopoffs(await getCountryPopoffs({
+      const response = await getCountryPopoffs({
         data: { country: selectedCountry, players, window: fetchWindow },
-      }));
+      });
+      keepPollingRefresh = response.refreshInProgress === true;
+      const merged = mergePopoffs(response.popoffs);
 
       if (cancelledRef.current) return;
 
       if (!cancelledRef.current) {
-        setCachedPopoffs(selectedCountry, merged, fetchWindow);
+        setCachedPopoffs(selectedCountry, merged, response.window);
+        if (keepPollingRefresh) {
+          setRefreshing(true);
+          setScanStartedAt(Date.now());
+        } else {
+          setRefreshing(false);
+          setScanStartedAt(null);
+          setRefreshStatus(null);
+          setPartialPopoffs([]);
+          sawRefreshActivityRef.current = false;
+        }
       }
     } catch (error) {
       if (cancelledRef.current) return;
@@ -273,10 +361,13 @@ function PopOffsPage() {
       });
     } finally {
       setLoading(false);
-      setRefreshing(false);
+      if (!keepPollingRefresh) {
+        setRefreshing(false);
+        setScanStartedAt(null);
+      }
       fetchingRef.current = false;
     }
-  }, [mergePopoffs, players, popoffs.length, popoffsFetchedAt, popoffsWindow, range, setCachedPopoffs, selectedCountry]);
+  }, [hasCachedPopoffs, mergePopoffs, players, popoffsFetchedAt, popoffsWindow, range, setCachedPopoffs, selectedCountry]);
 
   useEffect(() => {
     if (loadingPlayers || playersError) return;
@@ -287,9 +378,14 @@ function PopOffsPage() {
     };
   }, [fetchAll, loadingPlayers, playersError]);
 
+  const livePopoffs = useMemo(() => {
+    if (partialPopoffs.length === 0) return popoffs;
+    return mergePopoffs([...popoffs, ...partialPopoffs]);
+  }, [mergePopoffs, partialPopoffs, popoffs]);
+
   // Filter by time range
   const filtered = useMemo(() => {
-    const withinRange = popoffs.filter((popoff) => {
+    const withinRange = livePopoffs.filter((popoff) => {
       const age = Date.now() - new Date(popoff.time).getTime();
       return age < RANGE_MS[range];
     });
@@ -301,7 +397,7 @@ function PopOffsPage() {
 
       return new Date(b.time).getTime() - new Date(a.time).getTime();
     });
-  }, [popoffs, range, sortMode]);
+  }, [livePopoffs, range, sortMode]);
 
   const playerPpGains = useMemo(() => {
     const byUser = new Map<number, { username: string; avatar_url: string; totalGain: number }>();
@@ -334,6 +430,10 @@ function PopOffsPage() {
     : hasCachedPopoffs
       ? "Refreshing..."
       : "Loading top plays...";
+  const elapsedSeconds = Math.max(0, Math.floor(elapsed / 1000));
+  const scanProgressLabel = refreshStatus
+    ? `${refreshStatus.current}/${refreshStatus.total} players · ${refreshStatus.found} found · ${elapsedSeconds}s`
+    : loadingLabel;
 
   const ranges: { id: TimeRange; label: string }[] = [
     { id: "24h", label: "24 hours" },
@@ -353,7 +453,7 @@ function PopOffsPage() {
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
                 <span className="text-[10px] text-osu-f1 tabular-nums">
-                  {loadingLabel}
+                  {scanProgressLabel}
                 </span>
               </div>
             )}

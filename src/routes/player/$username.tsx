@@ -183,6 +183,36 @@ function sortBestScores(scores: OsuScore[], sort: BestSort): OsuScore[] {
   return copy;
 }
 
+function scoreToInsightSnapshot(score: OsuScore): InsightScoreSnapshot {
+  const display = getScoreDisplayValues(score);
+
+  return {
+    title: score.beatmapset?.title ?? "Unknown",
+    artist: score.beatmapset?.artist ?? "",
+    version: score.beatmap?.version ?? "",
+    pp: score.pp,
+    rank: display.rank,
+    coverUrl: score.beatmapset?.covers?.cover ?? "",
+    beatmapUrl: score.beatmap?.url ?? `https://osu.ppy.sh/b/${score.beatmap?.id ?? 0}`,
+    date: getScoreTimestamp(score) ?? "",
+    mods: getModAcronyms(score.mods),
+  };
+}
+
+function getTopPlayDateExtremes(scores: OsuScore[]): Pick<UserProfileInsights, "newestTopPlay" | "oldestTopPlay"> | null {
+  const datedScores = scores
+    .map((score) => ({ score, ms: getScoreTimeMs(score) }))
+    .filter(({ ms }) => Number.isFinite(ms) && ms > 0)
+    .sort((a, b) => a.ms - b.ms);
+
+  if (datedScores.length === 0) return null;
+
+  return {
+    newestTopPlay: scoreToInsightSnapshot(datedScores[datedScores.length - 1].score),
+    oldestTopPlay: scoreToInsightSnapshot(datedScores[0].score),
+  };
+}
+
 function cycleModFilterMode(current: ModFilterMode | undefined): ModFilterMode | undefined {
   if (current === undefined) return "include";
   if (current === "include") return "exclude";
@@ -583,6 +613,13 @@ function PlayerPage() {
     () => getAvailableKeyModes([...best, ...recent]),
     [best, recent],
   );
+  const displayedProfileInsights = useMemo(() => {
+    if (!profileInsights) return null;
+    if (!bestWindowLoaded || best.length === 0) return profileInsights;
+
+    const topPlayExtremes = getTopPlayDateExtremes(best);
+    return topPlayExtremes ? { ...profileInsights, ...topPlayExtremes } : profileInsights;
+  }, [best, bestWindowLoaded, profileInsights]);
 
   const cycleBestMod = useCallback((mod: string) => {
     setBestModFilter((prev) => {
@@ -647,6 +684,8 @@ function PlayerPage() {
           ? "loaded"
           : "empty";
 
+  const avatarSrc = user.avatar_url;
+
   return (
     <div className="flex-1">
       {/* Avatar modal */}
@@ -661,7 +700,7 @@ function PlayerPage() {
             transition={{ duration: 0.2 }}
           >
             <motion.img
-              src={user.avatar_url}
+              src={avatarSrc}
               alt={`${user.username}'s avatar`}
               className="w-[300px] h-[300px] rounded-2xl shadow-[0_12px_60px_rgba(0,0,0,0.7)] object-cover"
               onClick={(e) => e.stopPropagation()}
@@ -995,7 +1034,7 @@ function PlayerPage() {
               className="w-[80px] h-[80px] sm:w-[110px] sm:h-[110px] rounded-2xl overflow-hidden border-2 border-osu-b3/60 shadow-[0_4px_20px_rgba(0,0,0,0.5)] translate-y-4 flex-shrink-0 cursor-pointer hover:border-osu-l2/60 transition-colors duration-150"
             >
               <img
-                src={user.avatar_url}
+                src={avatarSrc}
                 alt={`${user.username}'s avatar`}
                 className="w-full h-full object-cover"
                 loading="lazy"
@@ -1059,7 +1098,7 @@ function PlayerPage() {
               <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 px-4 py-3 text-sm text-osu-f1">
                 {insightsError}
               </div>
-            ) : profileInsights && profileInsights.sampleSize > 0 ? (
+            ) : displayedProfileInsights && displayedProfileInsights.sampleSize > 0 ? (
               <div className="space-y-3">
                 {/* Row 1: Key Split + Most Used Mod + BPM + PP Range */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -1140,8 +1179,8 @@ function PlayerPage() {
 
                 {/* Row 2: Newest + Oldest top play with map backgrounds */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <TopPlayCard label="Newest Top Play" snapshot={profileInsights.newestTopPlay} />
-                  <TopPlayCard label="Oldest Top Play" snapshot={profileInsights.oldestTopPlay} />
+                  <TopPlayCard label="Newest Top Play" snapshot={displayedProfileInsights.newestTopPlay} />
+                  <TopPlayCard label="Oldest Top Play" snapshot={displayedProfileInsights.oldestTopPlay} />
                 </div>
               </div>
             ) : null}

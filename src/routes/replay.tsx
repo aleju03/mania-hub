@@ -8,11 +8,14 @@ import { getDisplayedAccuracy, getDisplayedRank, getScoreDisplayValues, scoreHas
 import { useAppStore, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SearchInput } from "../components/ui/SearchInput";
+import { avatarImageSrc } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { formatAccuracy, formatPP } from "../lib/format";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { track } from "../lib/posthog";
+import { withTimeout } from "../lib/promise-timeout";
+import { normalizeReplayPlayerParam, shouldStartReplayPlayerLoad } from "../lib/replay-player-autoload";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import type { OsuScore, OsuBeatmapset, OsuBeatmap, ReplayFrame } from "../lib/types";
 import { pageSeo } from "../lib/seo";
@@ -136,6 +139,7 @@ interface ReplayRendererLike {
   setScrollSpeed: (value: number) => void;
   setShowInputOverlay: (value: boolean) => void;
   setSpeed: (value: number) => void;
+  ready: () => Promise<void>;
 }
 
 export const Route = createFileRoute("/replay")({
@@ -188,6 +192,7 @@ function ReplayPage() {
   const [loadingScores, setLoadingScores] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [loadedPlayerParam, setLoadedPlayerParam] = useState<string | null>(null);
+  const loadingPlayerParamRef = useRef<string | null>(null);
 
   // Browse mode
   const [browseMode, setBrowseMode] = useState<BrowseMode>(tab === "beatmap" ? "beatmap" : "player");
@@ -206,7 +211,7 @@ function ReplayPage() {
     () => rawBeatmapScores.filter((s) => scoreHasReplay(s)),
     [rawBeatmapScores],
   );
-  const normalizedPlayerParam = playerParam?.trim().toLowerCase() ?? null;
+  const normalizedPlayerParam = normalizeReplayPlayerParam(playerParam);
 
   const loadReplay = useCallback(async (sid: number) => {
     setError(null);
@@ -332,8 +337,6 @@ function ReplayPage() {
     navigate({ to: "/replay", search: { player: user.username } });
     setPlayerScoreGroups(null);
     setLoadedPlayerParam(null);
-    await loadPlayerScores(user.id);
-    setLoadedPlayerParam(user.username.trim().toLowerCase());
   };
 
   // Fetch country rankings to power the player suggestions grid (cached in store).
@@ -370,12 +373,20 @@ function ReplayPage() {
     if (!normalizedPlayerParam) {
       setPlayerScoreGroups(null);
       setLoadedPlayerParam(null);
+      loadingPlayerParamRef.current = null;
       setExpandedSections({});
       return;
     }
-    if (loadingScores || loadedPlayerParam === normalizedPlayerParam) return;
+    if (!shouldStartReplayPlayerLoad({
+      normalizedPlayerParam,
+      loadedPlayerParam,
+      loadingPlayerParam: loadingPlayerParamRef.current,
+      hasScoreId: Boolean(scoreId),
+    })) return;
 
     setPlayerScoreGroups(null);
+    setLoadedPlayerParam(null);
+    loadingPlayerParamRef.current = normalizedPlayerParam;
     let cancelled = false;
     (async () => {
       try {
@@ -394,9 +405,19 @@ function ReplayPage() {
         setPlayerScoreGroups({ best: [], firsts: [], pinned: [], recent: [] });
         setLoadedPlayerParam(normalizedPlayerParam);
       } catch { /* ignore */ }
+      finally {
+        if (loadingPlayerParamRef.current === normalizedPlayerParam) {
+          loadingPlayerParamRef.current = null;
+        }
+      }
     })();
-    return () => { cancelled = true; };
-  }, [normalizedPlayerParam, playerParam, scoreId, loadingScores, loadedPlayerParam, loadPlayerScores]);
+    return () => {
+      cancelled = true;
+      if (loadingPlayerParamRef.current === normalizedPlayerParam) {
+        loadingPlayerParamRef.current = null;
+      }
+    };
+  }, [normalizedPlayerParam, playerParam, scoreId, loadedPlayerParam, loadPlayerScores]);
 
   const handleSelectDifficulty = async (bm: OsuBeatmap) => {
     setSelectedDiffId(bm.id);
@@ -552,7 +573,7 @@ function ReplayPage() {
                                 onClick={() => handleSelectPlayer(p)}
                                 className="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20 text-left"
                               >
-                                <img src={p.avatar_url} alt="" className="w-9 h-9 rounded-full flex-shrink-0 object-cover" loading="lazy" />
+                                <img src={avatarImageSrc(p.avatar_url, p.id)} alt="" className="w-9 h-9 rounded-full flex-shrink-0 object-cover" loading="lazy" />
                                 <div className="flex-1 min-w-0">
                                   <div className="text-sm text-white truncate">{p.username}</div>
                                   <div className="text-[10px] text-osu-f1">#{p.global_rank.toLocaleString()}</div>
@@ -669,7 +690,7 @@ function ReplayPage() {
                             className="flex items-center gap-3 py-2.5 px-4 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20"
                             onClick={() => navigate({ to: "/replay", search: { scoreId: s.id, beatmapsetId: selectedBeatmapset?.id, tab: "beatmap" } })}>
                             <GradeImg grade={getDisplayedRank(s)} size={26} />
-                            <img src={s.user?.avatar_url} alt="" className="w-7 h-7 rounded-full flex-shrink-0" loading="lazy" />
+                            <img src={avatarImageSrc(s.user?.avatar_url, s.user?.id)} alt="" className="w-7 h-7 rounded-full flex-shrink-0" loading="lazy" />
                             <div className="flex-1 min-w-0">
                               <div className="text-sm text-white truncate">{s.user?.username}</div>
                             </div>
@@ -878,6 +899,7 @@ function ReplayViewer({
     return stored == null ? false : stored === "true";
   });
   const [audioError, setAudioError] = useState<string | null>(null);
+  const [rendererError, setRendererError] = useState<string | null>(null);
   const [audioReady, setAudioReady] = useState(false);
   const [pendingPlay, setPendingPlay] = useState(false);
   const [buffering, setBuffering] = useState(false);
@@ -890,6 +912,7 @@ function ReplayViewer({
   const audioEnabledRef = useRef(true);
   const audioUrlActiveRef = useRef(false);
   const showInputOverlayRef = useRef(false);
+  const scrollSpeedRef = useRef(32);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [sharePos, setSharePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [shareLabel, setShareLabel] = useState("");
@@ -967,6 +990,7 @@ function ReplayViewer({
   }, [showInputOverlay]);
 
   useEffect(() => {
+    scrollSpeedRef.current = scrollSpeed;
     if (rendererRef.current) {
       rendererRef.current.setScrollSpeed(scrollSpeed);
     }
@@ -992,54 +1016,85 @@ function ReplayViewer({
     let cancelled = false;
     let renderer: ReplayRendererLike | null = null;
     let handleResize: (() => void) | null = null;
+    setRendererError(null);
 
-    void import("../components/replay/ReplayCanvas").then(({ ManiaReplayRenderer }) => {
-      if (cancelled || !canvasRef.current) return;
+    void (async () => {
+      try {
+        const { ManiaReplayRenderer } = await withTimeout(
+          import("../components/replay/ReplayCanvas"),
+          8000,
+          "Timed out loading the replay renderer.",
+        );
+        if (cancelled || !canvasRef.current) return;
 
-      renderer = new ManiaReplayRenderer(
-        canvasRef.current,
-        replay.frames,
-        replay.keyCount,
-        beatmap?.notes ?? [],
-        {
-          isConvert: scoreInfo?.beatmap?.convert ?? false,
-          isLazer: displayScoreValues?.isLazer ?? false,
-          od: beatmap?.od,
-          showInputOverlay: showInputOverlayRef.current,
-          mods: modAcronyms,
-          transparentBackground: true,
-          scrollVelocities: beatmap?.scrollVelocities,
-        },
-      ) as ReplayRendererLike;
+        renderer = new ManiaReplayRenderer(
+          canvasRef.current,
+          replay.frames,
+          replay.keyCount,
+          beatmap?.notes ?? [],
+          {
+            isConvert: scoreInfo?.beatmap?.convert ?? false,
+            isLazer: displayScoreValues?.isLazer ?? false,
+            od: beatmap?.od,
+            showInputOverlay: showInputOverlayRef.current,
+            mods: modAcronyms,
+            transparentBackground: true,
+            scrollVelocities: beatmap?.scrollVelocities,
+          },
+        ) as ReplayRendererLike;
 
-      rendererRef.current = renderer;
+        await withTimeout(
+          renderer.ready(),
+          8000,
+          "Timed out starting the replay renderer.",
+        );
 
-      // Install the audio-driven clock. When audio is enabled and actually
-      // making sound, the renderer derives currentTime from audio.currentTime
-      // (i.e. audio is the master). When audio is seeking/buffering we
-      // freeze the renderer so it can't drift ahead of the song. When audio
-      // is disabled we return null and the renderer falls back to wall clock.
-      renderer.setExternalClock(() => {
-        if (!audioEnabledRef.current || !audioUrlActiveRef.current) return null;
-        const audio = audioRef.current;
-        if (!audio) return null;
-        const stalled =
-          audio.paused ||
-          audio.seeking ||
-          audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA;
-        return { time: audio.currentTime * 1000, stalled };
-      });
+        if (cancelled) {
+          renderer.destroy();
+          return;
+        }
 
-      if (initialTime != null && initialTime > 0) {
-        const gameTimeMs = initialTime * 1000 * modRate;
-        renderer.seek(gameTimeMs);
-        // ReplayProgressBar polls the renderer on an interval, so it will pick
-        // up the seeked position on its next tick.
+        renderer.setScrollSpeed(scrollSpeedRef.current);
+        renderer.setShowInputOverlay(showInputOverlayRef.current);
+        rendererRef.current = renderer;
+
+        // Install the audio-driven clock. When audio is enabled and actually
+        // making sound, the renderer derives currentTime from audio.currentTime
+        // (i.e. audio is the master). When audio is seeking/buffering we
+        // freeze the renderer so it can't drift ahead of the song. When audio
+        // is disabled we return null and the renderer falls back to wall clock.
+        renderer.setExternalClock(() => {
+          if (!audioEnabledRef.current || !audioUrlActiveRef.current) return null;
+          const audio = audioRef.current;
+          if (!audio) return null;
+          const stalled =
+            audio.paused ||
+            audio.seeking ||
+            audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA;
+          return { time: audio.currentTime * 1000, stalled };
+        });
+
+        if (initialTime != null && initialTime > 0) {
+          const gameTimeMs = initialTime * 1000 * modRate;
+          renderer.seek(gameTimeMs);
+          // ReplayProgressBar polls the renderer on an interval, so it will pick
+          // up the seeked position on its next tick.
+        }
+
+        handleResize = () => renderer?.resize();
+        window.addEventListener("resize", handleResize);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "Failed to start the replay renderer.";
+        console.error("Replay renderer failed to start", e);
+        renderer?.destroy();
+        renderer = null;
+        if (!cancelled) {
+          rendererRef.current = null;
+          setIsPlaying(false);
+          setRendererError(message);
+        }
       }
-
-      handleResize = () => renderer?.resize();
-      window.addEventListener("resize", handleResize);
-    });
+    })();
 
     return () => {
       cancelled = true;
@@ -1360,6 +1415,13 @@ function ReplayViewer({
           style={{ opacity: bgDim / 100 }}
         />
         <canvas ref={canvasRef} className="relative z-10 w-full" style={{ height: "min(70vh, 600px)" }} />
+        {rendererError && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/55 px-6 text-center">
+            <div className="max-w-md rounded-lg border border-red-400/30 bg-red-950/70 px-4 py-3 text-sm font-semibold text-red-100">
+              {rendererError}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Audio element (hidden) — streamed from /api/audio with Range requests so the browser only pulls what it plays */}

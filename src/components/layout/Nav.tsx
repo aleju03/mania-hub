@@ -244,6 +244,7 @@ export function Nav() {
         <img
           src="/images/layout/nav2-background-hue0.png"
           alt=""
+          draggable={false}
           className="absolute inset-0 w-full h-full object-cover opacity-50"
           style={{ filter: `saturate(var(--theme-sat))` }}
         />
@@ -261,14 +262,17 @@ export function Nav() {
         }}
       />
       <div className="absolute bottom-0 left-0 right-0 h-px bg-osu-pink/20" />
-      <nav className="relative flex items-center justify-between h-[60px] px-4 sm:px-5 max-w-[1200px] mx-auto">
+      <nav
+        className="relative flex items-center justify-between h-[60px] px-4 sm:px-5 max-w-[1200px] mx-auto select-none"
+        onDragStart={(event) => event.preventDefault()}
+      >
         <div className="flex items-center gap-1">
           <motion.div
             className="cursor-pointer mr-2"
             whileHover={{ scale: 1.11 }}
             transition={{ duration: 0.1 }}
           >
-            <Link to="/" search={{ country: selectedCountry }} preload="intent" className="flex items-center gap-2">
+            <Link to="/" search={{ country: selectedCountry }} preload="intent" draggable={false} className="flex items-center gap-2">
               <div className="relative w-9 h-9 rounded-full shadow-md ring-1 ring-white/15 overflow-hidden transition-all duration-300">
                 {/* Dimmed flag base */}
                 <div
@@ -330,6 +334,7 @@ export function Nav() {
                           : undefined
                 }
                 preload="intent"
+                draggable={false}
                 className={`relative px-2.5 py-[19px] text-[12px] font-semibold capitalize transition-colors duration-[120ms] ${
                   current?.id === l.id
                     ? "text-white"
@@ -337,7 +342,7 @@ export function Nav() {
                 }`}
               >
                 {l.label}
-                {l.id === "snipes" && <img src="/images/icons/sniper.webp" alt="" className="inline w-4 h-4 ml-1 -mt-0.5" />}
+                {l.id === "snipes" && <img src="/images/icons/sniper.webp" alt="" draggable={false} className="inline w-4 h-4 ml-1 -mt-0.5" />}
               </Link>
             ))}
             {barRect && (
@@ -490,6 +495,7 @@ export function Nav() {
                     }
                     preload="intent"
                     onClick={() => setMenuOpen(false)}
+                    draggable={false}
                     className={`flex items-center gap-3 px-5 py-3 text-sm font-medium capitalize transition-colors duration-[120ms] ${
                       current?.id === l.id
                         ? "text-white bg-osu-pink/10 border-l-3 border-osu-yellow"
@@ -497,7 +503,7 @@ export function Nav() {
                     }`}
                   >
                     {l.label}
-                    {l.id === "snipes" && <img src="/images/icons/sniper.webp" alt="" className="inline w-4 h-4" />}
+                    {l.id === "snipes" && <img src="/images/icons/sniper.webp" alt="" draggable={false} className="inline w-4 h-4" />}
                   </Link>
                 ))}
               </div>

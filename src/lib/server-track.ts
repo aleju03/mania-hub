@@ -4,6 +4,7 @@
 import { waitUntil } from "@vercel/functions";
 
 const POSTHOG_CAPTURE_URL = "https://us.i.posthog.com/capture/";
+const POSTHOG_CAPTURE_TIMEOUT_MS = 5_000;
 
 export function trackServerEvent(
   event: string,
@@ -25,12 +26,17 @@ export function trackServerEvent(
   };
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), POSTHOG_CAPTURE_TIMEOUT_MS);
     waitUntil(
       fetch(POSTHOG_CAPTURE_URL, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
-      }).catch(() => {}),
+        signal: controller.signal,
+      }).catch(() => {}).finally(() => {
+        clearTimeout(timeout);
+      }),
     );
   } catch {
     // waitUntil may throw outside a request context; swallow.

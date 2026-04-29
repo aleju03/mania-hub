@@ -5,6 +5,7 @@ import { getCountryFlagGradient, normalizeCountryCode } from "#/lib/country";
 const ICON_SIZE = 64;
 const ARROW_SIZE = Math.round(ICON_SIZE * 0.62);
 const ARROW_PAD = Math.round((ICON_SIZE - ARROW_SIZE) / 2);
+const FLAG_FETCH_TIMEOUT_MS = 10_000;
 
 // Inlined from public/images/notes/arrow-left-pink.png. Vercel doesn't bundle
 // public/ into the serverless function (it's served by the CDN instead), so
@@ -71,9 +72,14 @@ function gradientToSvgBuffer(gradient: string): Buffer | null {
 }
 
 async function fetchFlagBuffer(code: string): Promise<Buffer> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FLAG_FETCH_TIMEOUT_MS);
   const response = await fetch(`https://osu.ppy.sh/images/flags/${code}.png`, {
     redirect: "follow",
     headers: { "User-Agent": "mania-hub-favicon" },
+    signal: controller.signal,
+  }).finally(() => {
+    clearTimeout(timeout);
   });
   if (!response.ok) {
     throw new Error(`Flag fetch failed for ${code}: ${response.status}`);
