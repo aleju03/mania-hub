@@ -393,6 +393,10 @@ function ReplayPage() {
     setBeatmap(null);
     setScoreInfo(null);
     setError(null);
+    setPlayerSearchQuery("");
+    setScorePreview(null);
+    setScorePreviewLoading(false);
+    setScorePreviewError(null);
   }, [scoreId, loadReplay]);
 
   useEffect(() => {

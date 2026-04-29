@@ -13,6 +13,8 @@ describe("replay direct score input", () => {
     expect(source).toContain("Looking up score #");
     expect(source).toContain("getReplayScoreAvailability(score)");
     expect(source).toContain("Unavailable");
+    expect(source).toContain('setPlayerSearchQuery("");');
+    expect(source).toContain("setScorePreview(null);");
     expect(source).toContain("parseReplayScoreInput(query)");
   });
 });
