@@ -162,9 +162,6 @@ export class ManiaCardRenderer {
   private tick(time: number) {
     if (!this.interaction.dragging && this.quality.idleMotion !== "continuous") {
       this.interaction.rotation = settleRotation(this.interaction.rotation, 0.08);
-    } else if (this.quality.idleMotion === "continuous") {
-      this.interaction.rotation.x += Math.sin(time * 0.9) * 0.005;
-      this.interaction.rotation.y += Math.sin(time * 0.7) * 0.01;
     }
 
     const frontFacingOffset = this.interaction.flipped ? Math.PI : 0;
@@ -206,11 +203,6 @@ export class ManiaCardRenderer {
   private onPointerUp = (event: PointerEvent) => {
     if (this.renderer.domElement.hasPointerCapture(event.pointerId)) {
       this.renderer.domElement.releasePointerCapture(event.pointerId);
-    }
-    if (this.dragStart) {
-      const dx = Math.abs(event.clientX - this.dragStart.x);
-      const dy = Math.abs(event.clientY - this.dragStart.y);
-      if (dx < 8 && dy < 8) this.interaction.flipped = !this.interaction.flipped;
     }
     this.dragStart = null;
     this.interaction.dragging = false;

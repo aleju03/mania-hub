@@ -10,7 +10,7 @@ import {
 describe("pointerToRotation", () => {
   test("maps pointer delta into bounded card rotation", () => {
     expect(pointerToRotation({ deltaX: 100, deltaY: -100 })).toEqual({
-      x: 22,
+      x: -22,
       y: 35,
     });
   });
@@ -18,9 +18,9 @@ describe("pointerToRotation", () => {
 
 describe("pointerToLight", () => {
   test("maps rotation into normalized shader light coordinates", () => {
-    expect(pointerToLight({ x: 22, y: 35 })).toEqual({
+    expect(pointerToLight({ x: -22, y: 35 })).toEqual({
       x: 0.36,
-      y: 0.82,
+      y: 0.1,
     });
   });
 });

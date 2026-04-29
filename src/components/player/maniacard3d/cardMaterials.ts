@@ -24,7 +24,7 @@ export function createEdgeMaterial(data: ManiaCardReadyData) {
 export function createFaceMaterial(texture: Texture) {
   return new MeshBasicMaterial({
     map: texture,
-    transparent: false,
+    transparent: true,
     toneMapped: false,
   });
 }

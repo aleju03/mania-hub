@@ -32,7 +32,7 @@ export function createInteractionState(): InteractionState {
 
 export function pointerToRotation(delta: { deltaX: number; deltaY: number }): Rotation2D {
   return {
-    x: Math.round(clamp(-delta.deltaY * 0.22, -24, 24)),
+    x: Math.round(clamp(delta.deltaY * 0.22, -24, 24)),
     y: Math.round(clamp(delta.deltaX * 0.35, -180, 180)),
   };
 }

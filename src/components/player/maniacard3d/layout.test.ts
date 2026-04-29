@@ -61,6 +61,13 @@ describe("resolveQualityProfile", () => {
       idleMotion: "off",
     });
   });
+
+  test("keeps desktop shader motion without mobile adaptive throttling", () => {
+    expect(resolveQualityProfile({ mobile: false, reducedMotion: false, devicePixelRatio: 2 })).toMatchObject({
+      adaptiveIdle: false,
+      idleMotion: "continuous",
+    });
+  });
 });
 
 describe("clamp", () => {

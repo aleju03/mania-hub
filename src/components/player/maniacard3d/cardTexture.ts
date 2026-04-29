@@ -5,6 +5,9 @@ import type { FaceLayout } from "./textureLayout";
 import type { ManiaCardReadyData } from "./types";
 
 const FONT = "Torus, Arial, sans-serif";
+const CARD_CORNER_RADIUS = 58;
+const MANIA_GLYPH_D =
+  "M500 48q-21 0-35 15t-15 35v504q0 21 15 36t35 14 36-14 14-36v-504q0-21-14-35t-36-15z m-110 192v220q0 21-14 36t-36 14-35-14-15-36v-220q0-21 15-35t35-15 36 15 14 35z m320 0v220q0 21-14 36t-36 14-35-14-15-36v-220q0-21 15-35t35-15 36 15 14 35z m-210 500q-106 0-197-53-88-52-140-140-53-91-53-197t53-197q52-88 140-140 91-53 197-53t197 53q88 52 140 140 53 91 53 197t-53 197q-52 88-140 140-91 53-197 53z m0 80q97 0 182-36t150-102q64-62 101-148t37-184-36-182-102-150q-62-64-148-101t-184-37-182 36-150 102q-64 62-101 149t-37 183 37 182 101 150q62 64 149 101t183 37v0z";
 
 export interface CardTextureSet {
   frontTexture: CanvasTexture;
@@ -81,6 +84,8 @@ function drawFront(
   layout: FaceLayout,
   avatar: HTMLImageElement | null,
 ) {
+  context.save();
+  clipCard(context);
   drawTierBackground(context, data);
   drawTrianglePattern(context, 0.28);
   drawModeBadge(context, data);
@@ -89,27 +94,112 @@ function drawFront(
   drawAvatar(context, layout, avatar);
   drawStats(context, layout);
   drawStars(context, layout);
+  context.restore();
 }
 
 function drawBack(context: CanvasRenderingContext2D, data: ManiaCardReadyData, layout: FaceLayout) {
+  context.save();
+  clipCard(context);
   drawTierBackground(context, data);
   drawTrianglePattern(context, 0.16);
+  drawBackFrame(context, data);
+  drawBackEmblem(context, data, layout);
+  context.restore();
+}
+
+function clipCard(context: CanvasRenderingContext2D) {
+  roundedRect(context, 0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT, CARD_CORNER_RADIUS);
+  context.clip();
+}
+
+function drawBackFrame(context: CanvasRenderingContext2D, data: ManiaCardReadyData) {
   context.save();
-  context.strokeStyle = "rgba(255,255,255,0.55)";
-  context.lineWidth = 8;
-  roundedRect(context, 86, 80, 828, 1240, 42);
+  context.strokeStyle = `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.72)`;
+  context.shadowColor = `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.55)`;
+  context.shadowBlur = 22;
+  context.lineWidth = 7;
+  roundedRect(context, 92, 88, 816, 1224, 42);
   context.stroke();
-  context.beginPath();
-  context.arc(layout.back.logoCenter.x, layout.back.logoCenter.y, 176, 0, Math.PI * 2);
-  context.fillStyle = "rgba(255,255,255,0.22)";
+
+  context.shadowBlur = 0;
+  context.strokeStyle = "rgba(255,255,255,0.52)";
+  context.lineWidth = 3;
+  roundedRect(context, 116, 118, 768, 1164, 28);
+  context.stroke();
+
+  context.fillStyle = "rgba(255,255,255,0.18)";
+  trapezoid(context, 360, 92, 640, 92, 604, 142, 396, 142);
   context.fill();
-  context.lineWidth = 28;
-  context.strokeStyle = "rgba(255,255,255,0.92)";
-  context.stroke();
-  context.font = `900 54px ${FONT}`;
+  context.font = `900 24px ${FONT}`;
   context.textAlign = "center";
   context.fillStyle = "rgba(255,255,255,0.48)";
-  context.fillText(layout.back.rarityLabel, 500, 1255);
+  context.fillText("✦ ✦ ✦ ✦ ✦", 500, 126);
+  context.beginPath();
+  context.moveTo(276, 1188);
+  context.lineTo(724, 1188);
+  context.strokeStyle = "rgba(255,255,255,0.26)";
+  context.lineWidth = 2;
+  context.stroke();
+  context.restore();
+}
+
+function drawBackEmblem(context: CanvasRenderingContext2D, data: ManiaCardReadyData, layout: FaceLayout) {
+  const { x, y } = layout.back.logoCenter;
+  context.save();
+  context.translate(x, y);
+
+  context.strokeStyle = "rgba(255,255,255,0.22)";
+  context.lineWidth = 2;
+  for (const radius of [310, 280, 236]) {
+    context.beginPath();
+    context.arc(0, 0, radius, 0, Math.PI * 2);
+    context.stroke();
+  }
+
+  for (let index = 0; index < 36; index += 1) {
+    const angle = (index / 36) * Math.PI * 2;
+    const inner = index % 6 === 0 ? 246 : 260;
+    const outer = 278;
+    context.beginPath();
+    context.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+    context.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+    context.strokeStyle = index % 6 === 0 ? "rgba(255,255,255,0.46)" : "rgba(255,255,255,0.24)";
+    context.lineWidth = index % 6 === 0 ? 4 : 2;
+    context.stroke();
+  }
+
+  context.font = `900 34px ${FONT}`;
+  context.textAlign = "center";
+  context.fillStyle = "rgba(255,255,255,0.72)";
+  for (let index = 0; index < 8; index += 1) {
+    const angle = (index / 8) * Math.PI * 2 - Math.PI / 2;
+    context.fillText("★", Math.cos(angle) * 292, Math.sin(angle) * 292 + 12);
+  }
+
+  const disc = context.createRadialGradient(-60, -70, 20, 0, 0, 205);
+  disc.addColorStop(0, "rgba(255,255,255,0.54)");
+  disc.addColorStop(0.42, `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.78)`);
+  disc.addColorStop(1, "rgba(20,20,60,0.78)");
+  context.beginPath();
+  context.arc(0, 0, 198, 0, Math.PI * 2);
+  context.fillStyle = "rgba(0,0,0,0.22)";
+  context.fill();
+  context.beginPath();
+  context.arc(0, 0, 176, 0, Math.PI * 2);
+  context.fillStyle = disc;
+  context.fill();
+  context.strokeStyle = "rgba(255,255,255,0.58)";
+  context.lineWidth = 6;
+  context.stroke();
+
+  drawManiaGlyph(context, -96, -96, 192, "rgba(255,255,255,0.96)");
+
+  context.font = `900 44px ${FONT}`;
+  context.textAlign = "center";
+  context.fillStyle = "rgba(255,255,255,0.50)";
+  context.shadowColor = `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.58)`;
+  context.shadowBlur = 16;
+  context.fillText(layout.back.rarityLabel, 0, 436);
   context.restore();
 }
 
@@ -150,10 +240,7 @@ function drawModeBadge(context: CanvasRenderingContext2D, data: ManiaCardReadyDa
   context.strokeStyle = "rgba(255,255,255,0.35)";
   context.lineWidth = 4;
   context.stroke();
-  context.font = `900 48px ${FONT}`;
-  context.textAlign = "center";
-  context.fillStyle = "white";
-  context.fillText("M", 104, 122);
+  drawManiaGlyph(context, 64, 64, 80, "white");
   context.restore();
 }
 
@@ -267,4 +354,39 @@ function roundedRect(
   context.arcTo(x, y + height, x, y, radius);
   context.arcTo(x, y, x + width, y, radius);
   context.closePath();
+}
+
+function trapezoid(
+  context: CanvasRenderingContext2D,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  x3: number,
+  y3: number,
+  x4: number,
+  y4: number,
+) {
+  context.beginPath();
+  context.moveTo(x1, y1);
+  context.lineTo(x2, y2);
+  context.lineTo(x3, y3);
+  context.lineTo(x4, y4);
+  context.closePath();
+}
+
+function drawManiaGlyph(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  fillStyle: string,
+) {
+  const path = new Path2D(MANIA_GLYPH_D);
+  context.save();
+  context.translate(x, y + size * 0.86);
+  context.scale(size / 1000, -size / 1000);
+  context.fillStyle = fillStyle;
+  context.fill(path);
+  context.restore();
 }

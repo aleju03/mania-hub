@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { BoxGeometry, PlaneGeometry } from "three";
+import { ExtrudeGeometry, PlaneGeometry } from "three";
 import {
   CARD_WORLD_THICKNESS,
   FACE_Z_OFFSET,
@@ -13,7 +13,7 @@ describe("card geometry", () => {
   test("creates a thin 5:7 card body", () => {
     const geometry = createCardBodyGeometry(3.5);
 
-    expect(geometry).toBeInstanceOf(BoxGeometry);
+    expect(geometry).toBeInstanceOf(ExtrudeGeometry);
     geometry.computeBoundingBox();
     const box = geometry.boundingBox;
     if (!box) throw new Error("expected bounding box");
