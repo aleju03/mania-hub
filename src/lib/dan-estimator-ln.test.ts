@@ -13,6 +13,7 @@ interface LnManifestEntry {
 }
 
 const LN_MAPS_DIR = join(process.cwd(), "datasets/dan-classifier/ln-maps");
+const LN_DETECTION_FIXTURES_DIR = join(process.cwd(), "src/lib/__fixtures__/dan-classifier/ln-detection");
 const manifest = JSON.parse(readFileSync(join(LN_MAPS_DIR, "manifest.json"), "utf8")) as LnManifestEntry[];
 
 function targetForEntry(entry: LnManifestEntry): string | null {
@@ -66,5 +67,22 @@ describe("estimateDan LN calibration", () => {
       const estimate = estimateEntry(entry);
       expect(`${entry.file}: ${estimate.displayName} ${estimate.family}`).toBe(`${entry.file}: ${targetForEntry(entry)} ln`);
     }
+  });
+
+  it("detects LN-heavy charts even when metadata does not say LN", () => {
+    const content = readFileSync(join(LN_DETECTION_FIXTURES_DIR, "Laur-SEV-26-Deranged-Desire-feat-Auros.osu"), "utf8");
+    const map = parseManiaBeatmap(content);
+    const estimate = estimateDan(map, {
+      starRating: 8.81,
+      totalLength: map.totalLength / 1000,
+      title: map.title,
+      version: map.version,
+      rate: 1,
+    });
+
+    expect(estimate.metrics.holdRatio).toBeGreaterThan(0.3);
+    expect(estimate.metrics.lnDensity).toBeGreaterThan(0.15);
+    expect(estimate.family).toBe("ln");
+    expect(estimate.displayName).toMatch(/^LN \d{1,2}/);
   });
 });

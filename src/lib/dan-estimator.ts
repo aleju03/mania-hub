@@ -32,6 +32,9 @@ export function estimateDan(map: ManiaBeatmap, input: DanEstimateInput = {}): Da
   const features = extractDanFeatures(map, input, rate);
   const { notes, durationMs, orderedRows, metrics } = features;
   const warnings = [...features.warnings];
+  if (metrics.holdRatio > 0.28) {
+    warnings.push("This looks LN-heavy; using LN dan calibration when chart pressure is strong.");
+  }
 
   const baseStarRating = Number.isFinite(input.starRating) ? Math.max(0, input.starRating ?? 0) : 0;
   const starRating = baseStarRating > 0 ? baseStarRating * Math.pow(rate, 0.7) : 0;
@@ -84,10 +87,6 @@ export function estimateDan(map: ManiaBeatmap, input: DanEstimateInput = {}): Da
         - (metrics.holdRatio > 0.45 ? 0.18 : 0),
     ),
   );
-
-  if (metrics.holdRatio > 0.28) {
-    warnings.push("This looks LN-heavy; LN dan handling is intentionally conservative for now.");
-  }
 
   return {
     ...parsed,

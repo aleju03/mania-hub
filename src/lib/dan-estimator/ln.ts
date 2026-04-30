@@ -143,12 +143,23 @@ export function estimateLnDan(
 
   const metadata = normalize(`${map.title} ${map.version} ${input.title ?? ""} ${input.version ?? ""}`);
   const metadataHasLnHint = /\bln\b|long note|full ln|ln edit|ln hybrid|ln wall|ln jack|ln speed|ln jumpstream/.test(metadata);
-  const lnCandidate = metadataHasLnHint && (
+  const metadataLnSignal = metadataHasLnHint && (
     metrics.holdRatio >= 0.12
     || metrics.lnDensity >= 0.08
     || metrics.lnReleasePressure >= 1.5
     || metrics.lnOverlapPressure >= 0.9
   );
+  const chartLnSignal = (
+    metrics.holdRatio >= 0.28
+    && metrics.lnDensity >= 0.14
+    && metrics.lnHoldDurationP90 >= 220
+    && metrics.lnChordPressure >= 0.12
+  ) || (
+    metrics.holdRatio >= 0.34
+    && metrics.lnDensity >= 0.1
+    && metrics.lnOverlapPressure >= 0.75
+  );
+  const lnCandidate = metadataLnSignal || chartLnSignal;
   if (!lnCandidate) return null;
 
   const sr = starRating > 0 ? starRating : Math.max(1, metrics.peakNps5s * 0.18 + metrics.lnReleasePressure * 0.55);
@@ -161,7 +172,7 @@ export function estimateLnDan(
     + metrics.lnChordPressure * 0.9
     + Math.min(1.15, Math.log2(durationMinutes + 1) * 0.42)
     + Math.min(0.75, metrics.lnHoldDurationP90 / 2200)
-    - 1.65;
+    - 2.1;
 
   return parseRawLnDan(rawDan);
 }
