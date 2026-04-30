@@ -211,4 +211,24 @@ describe("estimateDan LN calibration", () => {
     expect(estimate.debug?.familyChoice.reason).toBe("ln-reference-neighbor");
     expect(`${estimate.displayName} ${estimate.family}`).toBe("LN 14 ln");
   });
+
+  it("keeps rated LN estimates monotonic on high-end reference-like charts", () => {
+    const content = readFileSync(join(LN_REFERENCE_FIXTURES_DIR, "Laur-Exitium-Vandalism.osu"), "utf8");
+    const map = parseManiaBeatmap(content);
+    const rates = [1, 1.05, 1.1, 1.15, 1.2];
+    const estimates = rates.map((rate) => estimateDan(map, {
+      starRating: 7.28,
+      totalLength: map.totalLength / 1000,
+      title: map.title,
+      version: map.version,
+      rate,
+    }));
+
+    for (let index = 1; index < estimates.length; index++) {
+      expect(estimates[index].rawDan).toBeGreaterThanOrEqual(estimates[index - 1].rawDan);
+      expect(estimates[index].debug?.familyChoice.reason).toBe(estimates[0].debug?.familyChoice.reason);
+    }
+    expect(estimates[2].displayName).toBe("LN 15");
+    expect(estimates[3].displayName).toBe("LN 15");
+  });
 });

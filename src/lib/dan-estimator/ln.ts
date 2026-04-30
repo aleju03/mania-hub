@@ -102,9 +102,23 @@ function pressureDistance(metrics: DanFeatureMetrics, reference: LnReferenceChar
     + Math.abs(metrics.chordRatio - reference.q) / 0.16;
 }
 
+function referenceMetrics(metrics: DanFeatureMetrics, rate: number): DanFeatureMetrics {
+  if (rate <= 1) return metrics;
+  return {
+    ...metrics,
+    peakNps1s: metrics.peakNps1s / rate,
+    peakNps5s: metrics.peakNps5s / rate,
+    sustainedNps10s: metrics.sustainedNps10s / rate,
+    staminaPressure: metrics.staminaPressure / rate,
+    lnDensity: metrics.lnDensity / rate,
+    lnReleasePressure: metrics.lnReleasePressure / rate,
+  };
+}
+
 function officialReferenceNeighborTarget(metrics: DanFeatureMetrics, rate: number): LnDanEstimateResult | null {
+  const comparisonMetrics = referenceMetrics(metrics, rate);
   const nearest = LN_REFERENCE_CHARTS
-    .map((reference) => ({ reference, distance: pressureDistance(metrics, reference) }))
+    .map((reference) => ({ reference, distance: pressureDistance(comparisonMetrics, reference) }))
     .sort((left, right) => left.distance - right.distance)
     .slice(0, 8);
   const [best] = nearest;
@@ -118,14 +132,14 @@ function officialReferenceNeighborTarget(metrics: DanFeatureMetrics, rate: numbe
     };
   }, { level: 0, weight: 0 });
   const neighborDan = weighted.weight > 0 ? weighted.level / weighted.weight : best.reference.level;
-  const rateCompression = Math.max(0, rate - 1) * 12;
   const highEndSpeedBonus = Math.min(
     0.85,
     Math.max(0, (metrics.sustainedNps10s - 28) / 4) * 0.8
       + Math.max(0, (metrics.lnReleasePressure - 30) / 5) * 0.6
       + Math.max(0, (metrics.peakNps5s - 29) / 4) * 0.35,
   );
-  const rawDan = Math.max(1, neighborDan - rateCompression + highEndSpeedBonus);
+  const ratePressureBonus = Math.min(0.45, Math.max(0, rate - 1) * 1.5);
+  const rawDan = Math.max(1, neighborDan + highEndSpeedBonus + ratePressureBonus);
 
   return {
     ...parseRawLnDan(rawDan),
@@ -137,7 +151,9 @@ function officialReferenceNeighborTarget(metrics: DanFeatureMetrics, rate: numbe
 function parseRawLnDan(rawDan: number): LnDanEstimateResult {
   const level = Math.max(1, Math.min(15, Math.round(rawDan)));
   const offset = rawDan - level;
-  const variant = offset <= -0.36 ? "-" : offset >= 0.36 ? "+" : null;
+  const variant = level >= 15
+    ? (offset <= -0.36 ? "-" : null)
+    : offset <= -0.36 ? "-" : offset >= 0.36 ? "+" : null;
   return {
     label: String(level),
     variant,
