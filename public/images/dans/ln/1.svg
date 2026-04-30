@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="LN 1 dan">
+  <defs>
+    <linearGradient id="lnfill" x1="18%" x2="84%" y1="8%" y2="92%">
+      <stop offset="0" stop-color="#f3bfd2"/>
+      <stop offset="0.43" stop-color="#e85f93"/>
+      <stop offset="0.72" stop-color="#f9fbff"/>
+      <stop offset="1" stop-color="#65e0d3"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="22" stdDeviation="17" flood-color="#000" flood-opacity="0.68"/>
+    </filter>
+    <filter id="badgeGlow" x="-35%" y="-35%" width="170%" height="170%">
+      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#e85f93" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <text x="512" y="526" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, 'Times New Roman', serif" font-size="820" font-weight="900" fill="none" stroke="#050509" stroke-width="104" stroke-linejoin="round">1</text>
+    <text x="512" y="526" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, 'Times New Roman', serif" font-size="820" font-weight="900" fill="none" stroke="#693a91" stroke-width="68" stroke-linejoin="round">1</text>
+    <text x="512" y="526" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, 'Times New Roman', serif" font-size="820" font-weight="900" fill="url(#lnfill)" stroke="#0d0a12" stroke-width="24" stroke-linejoin="round">1</text>
+    <g transform="translate(610 690) rotate(-8)" filter="url(#badgeGlow)">
+      <rect x="0" y="0" width="220" height="104" rx="30" fill="#07070d" stroke="#e85f93" stroke-width="12"/>
+      <text x="110" y="54" text-anchor="middle" dominant-baseline="middle" font-family="Inter, Arial, sans-serif" font-size="58" font-weight="900" fill="#f7ffff" letter-spacing="2">LN</text>
+    </g>
+  </g>
+</svg>

@@ -1,7 +1,7 @@
 import type { ManiaNote } from "../beatmap-parser";
 
-export type DanSkillFamily = "jack" | "stream" | "handstream" | "stamina" | "chordjack" | "tech" | "dan";
-export type DanPrimaryFamily = Exclude<DanSkillFamily, "dan">;
+export type DanSkillFamily = "jack" | "stream" | "handstream" | "stamina" | "chordjack" | "tech" | "ln" | "dan";
+export type DanPrimaryFamily = Exclude<DanSkillFamily, "ln" | "dan">;
 
 export interface DanEstimateInput {
   starRating?: number;
@@ -45,6 +45,11 @@ export interface DanFeatureMetrics {
   sustainedPressureRatio: number;
   anchorPressure: number;
   lnReleasePressure: number;
+  lnDensity: number;
+  lnOverlapPressure: number;
+  lnChordPressure: number;
+  lnHoldDurationAvg: number;
+  lnHoldDurationP90: number;
   chordSizeChangeRate: number;
   directionChangeRate: number;
   staminaPressure: number;
@@ -73,9 +78,9 @@ export interface DanScoreContribution {
 }
 
 export interface DanFamilyChoiceDebug {
-  topFamily: DanPrimaryFamily;
+  topFamily: DanSkillFamily;
   topScore: number;
-  selectedFamily: DanPrimaryFamily;
+  selectedFamily: DanSkillFamily;
   reason: string;
 }
 

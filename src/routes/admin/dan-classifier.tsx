@@ -84,7 +84,11 @@ function extractBeatmapId(query: string): number | null {
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
-function getDanImageSrc(label: string): string | null {
+function getDanImageSrc(label: string, family?: string): string | null {
+  if (family === "ln" && /^(1[0-5]|[1-9])$/.test(label)) {
+    return `/images/dans/ln/${label}.svg`;
+  }
+
   const extension = DAN_IMAGE_EXTENSIONS[label];
   return extension ? `/images/dans/reform/${label}.${extension}` : null;
 }
@@ -380,9 +384,9 @@ function DanClassifierPage() {
               <div className="mt-4 min-w-0">
                 <div className="text-sm text-osu-f1 truncate">{selectedTitle}</div>
                 <div className="mt-4 flex items-center gap-4">
-                  {getDanImageSrc(estimate.label) ? (
+                  {getDanImageSrc(estimate.label, estimate.family) ? (
                     <img
-                      src={getDanImageSrc(estimate.label) ?? undefined}
+                      src={getDanImageSrc(estimate.label, estimate.family) ?? undefined}
                       alt=""
                       className="h-16 w-16 shrink-0 object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.45)] sm:h-20 sm:w-20"
                     />
