@@ -15,9 +15,12 @@ let zlibPromise: Promise<ZlibAsync> | null = null;
 function getZlib(): Promise<ZlibAsync> {
   if (!zlibPromise) {
     zlibPromise = (async () => {
+      // Keep Node built-ins invisible to Vite's client resolver; this path only
+      // runs on the server when persistent cache compression is used.
+      const importNodeModule = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<any>;
       const [zlib, util] = await Promise.all([
-        import("node:zlib"),
-        import("node:util"),
+        importNodeModule("node:zlib"),
+        importNodeModule("node:util"),
       ]);
       return {
         gzipAsync: util.promisify(zlib.gzip) as (buf: Buffer) => Promise<Buffer>,

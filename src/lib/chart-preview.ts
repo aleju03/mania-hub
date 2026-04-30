@@ -28,6 +28,11 @@ export function getPreviewNotes(beatmap: ManiaBeatmap, startTimeMs = beatmap.pre
     .filter((note) => note.endTime >= 0 && note.time <= playbackEnd);
 }
 
+export function getPreviewInitialCombo(beatmap: ManiaBeatmap, startTimeMs = beatmap.previewTime): number {
+  const start = Math.max(0, startTimeMs || 0);
+  return beatmap.notes.reduce((combo, note) => combo + (note.time < start ? 1 : 0), 0);
+}
+
 export function getPreviewScrollVelocities(beatmap: ManiaBeatmap, startTimeMs = beatmap.previewTime, timeScale = 1): ManiaBeatmap["scrollVelocities"] {
   const start = Math.max(0, startTimeMs || 0);
   const scale = Math.max(0.1, timeScale);

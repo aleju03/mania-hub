@@ -75,6 +75,8 @@ interface RendererOptions {
   mods?: string[];
   transparentBackground?: boolean;
   hideHud?: boolean;
+  showCombo?: boolean;
+  initialCombo?: number;
   barePlayfield?: boolean;
   scrollVelocities?: ManiaScrollVelocity[];
   expectedCounts?: ReplayHitCounts;
@@ -147,6 +149,8 @@ export class ManiaReplayRenderer {
   private showInputOverlay = false;
   private transparentBackground = false;
   private hideHud = false;
+  private showCombo = false;
+  private initialCombo = 0;
   private barePlayfield = false;
   private showHealthBar = true;
   private skinSettings: ReplaySkinSettings = DEFAULT_REPLAY_SKIN_SETTINGS;
@@ -214,6 +218,10 @@ export class ManiaReplayRenderer {
     this.showInputOverlay = options?.showInputOverlay ?? false;
     this.transparentBackground = options?.transparentBackground ?? false;
     this.hideHud = options?.hideHud ?? false;
+    this.showCombo = options?.showCombo ?? false;
+    this.initialCombo = Math.max(0, Math.floor(options?.initialCombo ?? 0));
+    this.combo = this.initialCombo;
+    this.maxComboSoFar = this.initialCombo;
     this.barePlayfield = options?.barePlayfield ?? false;
     this.showHealthBar = options?.showHealthBar ?? true;
     this.skinSettings = normalizeReplaySkinSettings(options?.skinSettings);
@@ -295,8 +303,8 @@ export class ManiaReplayRenderer {
 
   private recomputeStatsUpTo(time: number) {
     this.statsScanIndex = 0;
-    this.combo = 0;
-    this.maxComboSoFar = 0;
+    this.combo = this.initialCombo;
+    this.maxComboSoFar = this.initialCombo;
     this.judgmentCounts = [0, 0, 0, 0, 0, 0, 0];
     this.leftHandMisses = 0;
     this.rightHandMisses = 0;
@@ -703,6 +711,7 @@ export class ManiaReplayRenderer {
     this.renderReceptors(layout);
     if (this.showHealthBar) this.renderHealthBar(layout);
     if (!this.hideHud) this.renderHUD(layout);
+    else if (this.showCombo) this.renderCombo(layout);
     this.finishTextFrame();
     this.app.render();
   }
@@ -1047,16 +1056,7 @@ export class ManiaReplayRenderer {
       }
     }
 
-    if (this.combo > 0) {
-      this.addText(`${this.combo}x`, playfieldCenterX, playfieldMiddleY - h * 0.06, {
-        fontSize: Math.max(22, h * 0.05),
-        fill: "#ffffff",
-        alpha: 0.85,
-        fontWeight: "700",
-        anchorX: 0.5,
-        anchorY: 0.5,
-      });
-    }
+    this.renderCombo(layout);
 
     const compactHud = w < 520;
 
@@ -1183,6 +1183,22 @@ export class ManiaReplayRenderer {
     }
   }
 
+  private renderCombo(layout: Layout) {
+    if (this.combo <= 0) return;
+
+    const { h, playfieldX, playfieldWidth, judgmentY } = layout;
+    const playfieldCenterX = playfieldX + playfieldWidth / 2;
+    const playfieldMiddleY = judgmentY * 0.5;
+    this.addText(`${this.combo}x`, playfieldCenterX, playfieldMiddleY - h * 0.06, {
+      fontSize: Math.max(22, h * 0.05),
+      fill: "#ffffff",
+      alpha: 0.85,
+      fontWeight: "700",
+      anchorX: 0.5,
+      anchorY: 0.5,
+    });
+  }
+
   private getCurrentKeyState(): number {
     const t = this.currentTime;
     const f = this.frames;
@@ -1274,7 +1290,8 @@ export class ManiaReplayRenderer {
 
   private getCircleDiameter(layout: Layout): number {
     const laneSizedDiameter = layout.laneWidth * 0.74;
-    return Math.max(18, Math.min(layout.laneWidth - 4, Math.max(28, laneSizedDiameter)));
+    const minDiameter = this.barePlayfield ? 38 : 28;
+    return Math.max(18, Math.min(layout.laneWidth - 4, Math.max(minDiameter, laneSizedDiameter)));
   }
 
   private fillRect(x: number, y: number, w: number, h: number, color: string, alpha: number) {

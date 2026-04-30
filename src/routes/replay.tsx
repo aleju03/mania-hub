@@ -32,6 +32,7 @@ import { normalizeReplayPlayerParam, shouldStartReplayPlayerLoad } from "../lib/
 import { getReplayBackNavigation } from "../lib/replay-navigation";
 import { parseReplayScoreInput } from "../lib/replay-score-input";
 import { getReplayScoreAvailability } from "../lib/replay-score-availability";
+import { DEFAULT_REPLAY_SCROLL_SPEED, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../lib/replay-scroll-speed";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import type { ReplaySkinKeymodeProfile, ReplaySkinSettings, ReplaySkinStyle } from "../lib/replay-skin";
 import type { BeatmapScoreLookupStatus, OsuScore, OsuBeatmapset, OsuBeatmap, ReplayFrame, ReplayLifeBarFrame } from "../lib/types";
@@ -40,9 +41,6 @@ import { pageSeo } from "../lib/seo";
 const REPLAY_VOLUME_STORAGE_KEY = "mania-hub-replay-volume";
 const REPLAY_INPUT_OVERLAY_STORAGE_KEY = "mania-hub-replay-input-overlay";
 const REPLAY_BG_DIM_STORAGE_KEY = "mania-hub-replay-bg-dim";
-const REPLAY_SCROLL_SPEED_STORAGE_KEY = "mania-hub-replay-scroll-speed";
-const REPLAY_SCROLL_SPEED_MIGRATION_KEY = "mania-hub-replay-scroll-speed-v2";
-const DEFAULT_REPLAY_SCROLL_SPEED = 20;
 
 interface ReplaySearch {
   scoreId?: number;
@@ -108,25 +106,6 @@ function base64ToBytes(b64: string): Uint8Array {
   const out = new Uint8Array(len);
   for (let i = 0; i < len; i++) out[i] = binary.charCodeAt(i);
   return out;
-}
-
-function readReplayScrollSpeed(): number {
-  if (typeof window === "undefined") return DEFAULT_REPLAY_SCROLL_SPEED;
-
-  const raw = window.localStorage.getItem(REPLAY_SCROLL_SPEED_STORAGE_KEY);
-  const migrated = window.localStorage.getItem(REPLAY_SCROLL_SPEED_MIGRATION_KEY) === "1";
-  if (raw == null) return DEFAULT_REPLAY_SCROLL_SPEED;
-
-  const stored = Number(raw);
-  if (!Number.isFinite(stored)) return DEFAULT_REPLAY_SCROLL_SPEED;
-  if (!migrated && Math.round(stored) === 1) return DEFAULT_REPLAY_SCROLL_SPEED;
-  return Math.max(1, Math.min(40, Math.round(stored)));
-}
-
-function writeReplayScrollSpeed(scrollSpeed: number) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(REPLAY_SCROLL_SPEED_STORAGE_KEY, String(Math.max(1, Math.min(40, Math.round(scrollSpeed)))));
-  window.localStorage.setItem(REPLAY_SCROLL_SPEED_MIGRATION_KEY, "1");
 }
 
 interface ReplayRendererLike {
@@ -1299,7 +1278,7 @@ function ReplayViewer({
   const [copied, setCopied] = useState(false);
   const shouldResumeAudioRef = useRef(false);
   const applyScrollSpeed = useCallback((next: number, persist = false) => {
-    const normalized = Math.max(1, Math.min(40, Math.round(next)));
+    const normalized = normalizeReplayScrollSpeed(next);
     setScrollSpeed(normalized);
     if (persist) writeReplayScrollSpeed(normalized);
   }, []);
