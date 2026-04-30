@@ -506,6 +506,19 @@ describe("estimateDan", () => {
     expect(estimate.displayName).toBe("delta--");
   });
 
+  it("routes slow repetitive Lone Digger jackstream away from tech", () => {
+    const estimate = estimateDan(readFixtureBeatmap("lone-digger-jack-digger.osu"), {
+      starRating: 4.45,
+      totalLength: 215,
+    });
+
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.48);
+    expect(estimate.metrics.jackPressure).toBeGreaterThan(115);
+    expect(estimate.metrics.rowIntervalEntropy).toBeLessThan(1.3);
+    expect(estimate.family).toBe("jack");
+    expect(estimate.debug?.familyChoice.reason).toBe("slow-repetitive-jackstream");
+  });
+
   it("keeps Crescent Moon Island Kuro rates ordered around the official delta cut", () => {
     const lowerRate = estimateDan(readFixtureBeatmap("crescent-kuro-0.95.osu"), {
       starRating: 5.43444,

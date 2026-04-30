@@ -76,6 +76,23 @@ const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
       && skillScores.jack >= topScore - 0.25,
   },
   {
+    id: "slow-repetitive-jackstream",
+    family: "jack",
+    applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 1800
+      && metrics.noteCount <= 3200
+      && metrics.chordRatio >= 0.45
+      && metrics.chordRatio <= 0.6
+      && metrics.holdRatio < 0.06
+      && metrics.jackPressure >= 115
+      && metrics.chordjackPressure >= 105
+      && metrics.sustainedNps10s >= 16
+      && metrics.sustainedNps10s <= 22
+      && metrics.fastRowRatio < 0.08
+      && metrics.rowIntervalEntropy < 1.6
+      && metrics.sustainedPressureRatio >= 0.65
+      && skillScores.jack >= topScore - 0.5,
+  },
+  {
     id: "dense-wall-jack",
     family: "jack",
     applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 1800
