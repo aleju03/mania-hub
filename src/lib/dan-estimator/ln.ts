@@ -11,12 +11,6 @@ export interface LnDanEstimateResult {
   reason: string;
 }
 
-interface KnownLnTarget {
-  version: string;
-  target: string;
-  rate?: number;
-}
-
 interface LnReferenceChart {
   level: number;
   n: number;
@@ -30,73 +24,6 @@ interface LnReferenceChart {
   u: number;
   q: number;
 }
-
-const KNOWN_LN_TARGETS: KnownLnTarget[] = [
-  { version: "1st Dan (Marathon)", target: "LN 1" },
-  { version: "2nd Dan (Marathon)", target: "LN 2" },
-  { version: "3rd Dan (Marathon)", target: "LN 3" },
-  { version: "4th Dan (Marathon)", target: "LN 4" },
-  { version: "5th Dan (Marathon)", target: "LN 5" },
-  { version: "6th Dan (Marathon)", target: "LN 6" },
-  { version: "7th Dan (Marathon)", target: "LN 7" },
-  { version: "8th Dan (Marathon)", target: "LN 8" },
-  { version: "9th Dan (Marathon)", target: "LN 9" },
-  { version: "10th Dan (Marathon)", target: "LN 10" },
-  { version: "11th Dan - Yoake (Marathon)", target: "LN 11" },
-  { version: "12th Dan - Yuugure (Marathon)", target: "LN 12" },
-  { version: "13th Dan - Yoru (Marathon)", target: "LN 13" },
-  { version: "14th Dan - Yami (Marathon)", target: "LN 14" },
-  { version: "15th Dan - Yume (Marathon)", target: "LN 15" },
-  { version: "in the dark", target: "LN 14" },
-  { version: "Youmu's Dream 1.1x", target: "LN 15", rate: 1.025 },
-  { version: "a_hisa - Celestial Exploring (Short Edit) [FULL LN]", target: "LN 9" },
-  { version: "Camellia feat. nanahira - finorza [zzzzzzsa6177 feat. Hylotl]", target: "LN 12+" },
-  { version: "Hoshino Kanako - Medicine of love", target: "LN 8" },
-  { version: "katagiri - Nyan-Nyan Naughty Night", target: "LN 13+" },
-  { version: "katagiri - Sendan Life (katagiri bootleg)", target: "LN 13" },
-  { version: "Ogura Yui - Heart Forest", target: "LN 9" },
-  { version: "sak feat.myui - Unleashed World", target: "LN 12" },
-  { version: "SHIKI - Pure Ruby", target: "LN 10" },
-  { version: "sound piercer - Ten, Sen, Men, Rittai [LN JACK]", target: "LN 12" },
-  { version: "xi - Akasha", target: "LN 10" },
-  { version: "Camellia - Kisaragi [zzzzzzsa6177's Tsuki no Youni]", target: "LN 12+" },
-  { version: "Co shu Nie - bullet", target: "LN 10" },
-  { version: "DJ Sharpnel - Shihen (Piece of Poetry)", target: "LN 11+" },
-  { version: "Gothpheus - Rosen Vampir [Muses' Full LN Challenge]", target: "LN 9" },
-  { version: "Hana - Sakura no Uta", target: "LN 8" },
-  { version: "Kanae Tachibana composed by nmk - Elsa de la bibliotheque [Sayonara]", target: "LN 11" },
-  { version: "Kanae Tachibana composed by nmk - Elsa de la bibliotheque [Yumemiru]", target: "LN 6+" },
-  { version: "katagiri - ch3rry [Too Sweet!!]", target: "LN 13" },
-  { version: "katagiri - ch3rry", target: "LN 10" },
-  { version: "katagiri - L4.8TS", target: "LN 11+" },
-  { version: "Kurenainagi Tabibito - Otenba Koimusume [zzzzzzsa6177's Frozen World]", target: "LN 9+" },
-  { version: "Laur - Exitium", target: "LN 14" },
-  { version: "Shaman Cure-All - Tuk Tuk Boshi", target: "LN 13" },
-  { version: "Shimotsuki Haruka - Re:Call", target: "LN 7" },
-  { version: "Ariabl'eyeS - Kegare Naki Bara Juuji", target: "LN 14+" },
-  { version: "Ayase Eli (Yoshino Nanjo) - Kaku mo Yuubi na Hi to Narite (Cut ver.)", target: "LN 13+" },
-  { version: "Ayase Eli (Yoshino Nanjo) - Kaku mo Yuubi na Hi to Narite", target: "LN 14" },
-  { version: "Feryquitous feat. Aitsuki Nakuru - Kairikou (Cut ver.) [Mapped by zzzzzzsa6177]", target: "LN 12" },
-  { version: "Kaneko Chiharu - Zettai Reido [Muses' LN Challenge]", target: "LN 10+" },
-  { version: "Kucchi - Sitairyokou (Edit from tera's map)", target: "LN 12" },
-  { version: "Omoi, Hatsune Miku - Snow Drive (Cut ver.)", target: "LN 12+" },
-  { version: "Silentroom - Shuu no Hazama", target: "LN 13" },
-  { version: "Sound piercer feat. DAZBEE - Hanatachi ni Kibouwo", target: "LN 9" },
-  { version: "Unison Square Garden - Sugar Song to Bitter Step", target: "LN 9+" },
-  { version: "Bad Religion - 21st Century (Kopophobia remix) [Full LN Challenge]", target: "LN 14" },
-  { version: "Camellia - Circles of Death", target: "LN 12" },
-  { version: "Camellia - Enantiomorphs", target: "LN 11" },
-  { version: "Chroma - Hoshi ga Furanai Machi (Cut) [LN Edit]", target: "LN 8+" },
-  { version: "EMILIA - Stay Alive (Zekk Remix) [LN Edit]", target: "LN 11+" },
-  { version: "goreshit - satori de pon!", target: "LN 13-" },
-  { version: "Kaf - Hissei yo [LN Edit]", target: "LN 10" },
-  { version: "Lia - I miss you (DJ Sharpnel Remix)", target: "LN 9" },
-  { version: "MisomyL - Amnehilesie", target: "LN 12" },
-  { version: "MisomyL - Catalinesie", target: "LN 13-" },
-  { version: "Papiyon / GUMI - Kokoronashi", target: "LN 8" },
-  { version: "Sangatsu no Phantasia - Pastel Rain [LN Edited from hinako1804]", target: "LN 12+" },
-  { version: "Camellia as \"fluX Xroise\" - Xronier (\"geneXe\" Long ver.)", target: "LN 13+" },
-];
 
 const LN_REFERENCE_CHARTS: LnReferenceChart[] = [
   { level: 1, n: 717, s: 88.7, h: 0.245, d: 0.153, o: 2.012, r: 4.829, c: 0.594, p: 10.8, u: 10.3, q: 0.577 },
@@ -164,62 +91,6 @@ function normalize(value: string | undefined): string {
   return (value ?? "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-function parseLnLabel(displayName: string): LnDanEstimateResult {
-  const match = displayName.match(/^LN\s*(\d{1,2})([+-])?$/i);
-  const level = Math.max(1, Math.min(15, Number(match?.[1] ?? 1)));
-  const variant = match?.[2] ?? null;
-  const rawDan = level + (variant === "+" ? 0.25 : variant === "-" ? -0.25 : 0);
-  return {
-    label: String(level),
-    variant,
-    displayName: `LN ${level}${variant ?? ""}`,
-    rawDan,
-    estimatedSr: rawDan,
-    confidence: 0.94,
-    reason: "known-ln-reference",
-  };
-}
-
-function knownLnTarget(map: ManiaBeatmap, input: DanEstimateInput, rate: number): LnDanEstimateResult | null {
-  const identities = [
-    map.version,
-    input.version,
-    `${map.artist} - ${map.title}`,
-  ].map(normalize).filter(Boolean);
-  for (const target of KNOWN_LN_TARGETS) {
-    const targetVersion = normalize(target.version);
-    if (!identities.includes(targetVersion)) continue;
-    if (target.rate && Math.abs(target.rate - rate) > 0.001) continue;
-    return parseLnLabel(target.target);
-  }
-  return null;
-}
-
-function officialReferenceTarget(metrics: DanFeatureMetrics, durationMs: number): LnDanEstimateResult | null {
-  const seconds = durationMs / 1000;
-  let best: { reference: LnReferenceChart; distance: number } | null = null;
-  for (const reference of LN_REFERENCE_CHARTS) {
-    const distance =
-      Math.abs(metrics.noteCount - reference.n) / Math.max(metrics.noteCount, reference.n, 1) / 0.025
-      + Math.abs(seconds - reference.s) / Math.max(seconds, reference.s, 1) / 0.03
-      + Math.abs(metrics.holdRatio - reference.h) / 0.05
-      + Math.abs(metrics.lnDensity - reference.d) / 0.05
-      + Math.abs(metrics.lnOverlapPressure - reference.o) / 0.18
-      + Math.abs(metrics.lnReleasePressure - reference.r) / 1.4
-      + Math.abs(metrics.lnChordPressure - reference.c) / 0.06
-      + Math.abs(metrics.peakNps5s - reference.p) / 1.4
-      + Math.abs(metrics.sustainedNps10s - reference.u) / 1.4
-      + Math.abs(metrics.chordRatio - reference.q) / 0.06;
-    if (!best || distance < best.distance) best = { reference, distance };
-  }
-  if (!best || best.distance > 2.4) return null;
-  return {
-    ...parseLnLabel(`LN ${best.reference.level}`),
-    confidence: Math.max(0.82, 0.96 - best.distance * 0.04),
-    reason: "official-ln-reference-chart",
-  };
-}
-
 function pressureDistance(metrics: DanFeatureMetrics, reference: LnReferenceChart): number {
   return Math.abs(metrics.holdRatio - reference.h) / 0.13
     + Math.abs(metrics.lnDensity - reference.d) / 0.11
@@ -231,15 +102,33 @@ function pressureDistance(metrics: DanFeatureMetrics, reference: LnReferenceChar
     + Math.abs(metrics.chordRatio - reference.q) / 0.16;
 }
 
-function officialReferenceNeighborTarget(metrics: DanFeatureMetrics): LnDanEstimateResult | null {
+function officialReferenceNeighborTarget(metrics: DanFeatureMetrics, rate: number): LnDanEstimateResult | null {
   const nearest = LN_REFERENCE_CHARTS
     .map((reference) => ({ reference, distance: pressureDistance(metrics, reference) }))
-    .sort((left, right) => left.distance - right.distance);
+    .sort((left, right) => left.distance - right.distance)
+    .slice(0, 8);
   const [best] = nearest;
   if (!best || best.distance > 2.6) return null;
 
+  const weighted = nearest.reduce((sum, item) => {
+    const weight = 1 / Math.pow(item.distance + 0.35, 1.5);
+    return {
+      level: sum.level + item.reference.level * weight,
+      weight: sum.weight + weight,
+    };
+  }, { level: 0, weight: 0 });
+  const neighborDan = weighted.weight > 0 ? weighted.level / weighted.weight : best.reference.level;
+  const rateCompression = Math.max(0, rate - 1) * 12;
+  const highEndSpeedBonus = Math.min(
+    0.85,
+    Math.max(0, (metrics.sustainedNps10s - 28) / 4) * 0.8
+      + Math.max(0, (metrics.lnReleasePressure - 30) / 5) * 0.6
+      + Math.max(0, (metrics.peakNps5s - 29) / 4) * 0.35,
+  );
+  const rawDan = Math.max(1, neighborDan - rateCompression + highEndSpeedBonus);
+
   return {
-    ...parseLnLabel(`LN ${best.reference.level}`),
+    ...parseRawLnDan(rawDan),
     confidence: Math.max(0.72, 0.9 - best.distance * 0.05),
     reason: "ln-reference-neighbor",
   };
@@ -248,7 +137,7 @@ function officialReferenceNeighborTarget(metrics: DanFeatureMetrics): LnDanEstim
 function parseRawLnDan(rawDan: number): LnDanEstimateResult {
   const level = Math.max(1, Math.min(15, Math.round(rawDan)));
   const offset = rawDan - level;
-  const variant = offset <= -0.18 ? "-" : offset >= 0.18 ? "+" : null;
+  const variant = offset <= -0.36 ? "-" : offset >= 0.36 ? "+" : null;
   return {
     label: String(level),
     variant,
@@ -268,9 +157,6 @@ export function estimateLnDan(
   durationMs: number,
   rate: number,
 ): LnDanEstimateResult | null {
-  const known = knownLnTarget(map, input, rate);
-  if (known) return known;
-
   const metadata = normalize(`${map.title} ${map.version} ${input.title ?? ""} ${input.version ?? ""}`);
   const metadataHasLnHint = /\bln\b|long note|full ln|ln edit|ln hybrid|ln wall|ln jack|ln speed|ln jumpstream/.test(metadata);
   const metadataLnSignal = metadataHasLnHint && (
@@ -292,9 +178,7 @@ export function estimateLnDan(
   const lnCandidate = metadataLnSignal || chartLnSignal;
   if (!lnCandidate) return null;
 
-  const reference = officialReferenceTarget(metrics, durationMs);
-  if (reference) return reference;
-  const referenceNeighbor = officialReferenceNeighborTarget(metrics);
+  const referenceNeighbor = officialReferenceNeighborTarget(metrics, rate);
   if (referenceNeighbor) return referenceNeighbor;
 
   const sr = starRating > 0 ? starRating : Math.max(1, metrics.peakNps5s * 0.18 + metrics.lnReleasePressure * 0.55);

@@ -27,6 +27,13 @@ function targetForEntry(entry: LnManifestEntry): string | null {
   return numeric ? `LN ${Number(numeric[1])}${numeric[2] ?? ""}` : null;
 }
 
+function targetRawForEntry(entry: LnManifestEntry): number | null {
+  const target = targetForEntry(entry);
+  const match = target?.match(/^LN\s*(\d{1,2})([+-])?$/i);
+  if (!match) return null;
+  return Number(match[1]) + (match[2] === "+" ? 0.25 : match[2] === "-" ? -0.25 : 0);
+}
+
 function estimateEntry(entry: LnManifestEntry) {
   const content = readFileSync(join(LN_MAPS_DIR, entry.file), "utf8");
   const map = parseManiaBeatmap(content);
@@ -60,14 +67,18 @@ function breakRanges(content: string): Array<[number, number]> {
 }
 
 describe("estimateDan LN calibration", () => {
-  it("classifies official _underjoy 4K LN dan courses exactly", () => {
+  it("classifies official _underjoy 4K LN dan courses as LN without metadata identity lookup", () => {
     const officialEntries = manifest.filter((entry) => /\b\d{1,2}(?:st|nd|rd|th) Dan\b/i.test(entry.version));
     expect(officialEntries).toHaveLength(15);
+    const estimates = officialEntries.map((entry) => estimateEntry(entry));
 
-    for (const entry of officialEntries) {
-      const estimate = estimateEntry(entry);
-      expect(`${entry.file}: ${estimate.displayName} ${estimate.family}`).toBe(`${entry.file}: ${targetForEntry(entry)} ln`);
+    for (const [index, estimate] of estimates.entries()) {
+      expect(`${officialEntries[index].file}: ${estimate.displayName} ${estimate.family}`).toMatch(/\.osu: LN \d{1,2}[+-]? ln$/);
+      expect(estimate.debug?.familyChoice.reason).not.toBe("known-ln-reference");
     }
+
+    expect(estimates[0].rawDan).toBeLessThan(estimates[9].rawDan);
+    expect(estimates[9].rawDan).toBeLessThan(estimates[14].rawDan);
   });
 
   it("classifies explicit LN reference singles", () => {
@@ -76,18 +87,26 @@ describe("estimateDan LN calibration", () => {
 
     for (const entry of singles) {
       const estimate = estimateEntry(entry);
+      expect(estimate.debug?.familyChoice.reason).not.toBe("known-ln-reference");
       expect(`${entry.file}: ${estimate.displayName} ${estimate.family}`).toBe(`${entry.file}: ${targetForEntry(entry)} ln`);
     }
   });
 
-  it("classifies Hylotl numeric LN estimates from the manifest", () => {
+  it("keeps Hylotl numeric LN estimates near the manifest calibration", () => {
     const hylotlEntries = manifest.filter((entry) => targetForEntry(entry) && !/\b\d{1,2}(?:st|nd|rd|th) Dan\b|in the dark|Youmu's Dream/i.test(entry.version));
     expect(hylotlEntries.length).toBeGreaterThan(40);
+    const diffs: number[] = [];
 
     for (const entry of hylotlEntries) {
+      const targetRaw = targetRawForEntry(entry);
+      expect(targetRaw).not.toBeNull();
       const estimate = estimateEntry(entry);
-      expect(`${entry.file}: ${estimate.displayName} ${estimate.family}`).toBe(`${entry.file}: ${targetForEntry(entry)} ln`);
+      expect(`${entry.file}: ${estimate.displayName} ${estimate.family}`).toMatch(/\.osu: LN \d{1,2}[+-]? ln$/);
+      diffs.push(Math.abs(estimate.rawDan - targetRaw!));
     }
+
+    expect(diffs.filter((diff) => diff <= 1.25).length).toBeGreaterThanOrEqual(40);
+    expect(Math.max(...diffs)).toBeLessThanOrEqual(3.25);
   });
 
   it("detects LN-heavy charts even when metadata does not say LN", () => {
@@ -129,7 +148,10 @@ describe("estimateDan LN calibration", () => {
           rate: 1,
         });
 
-        expect(`${entry.file} component ${index + 1}: ${estimate.displayName} ${estimate.family}`).toBe(`${entry.file} component ${index + 1}: ${target} ln`);
+        const targetRaw = targetRawForEntry(entry);
+        expect(targetRaw).not.toBeNull();
+        expect(`${entry.file} component ${index + 1}: ${estimate.displayName} ${estimate.family}`).toMatch(/\.osu component \d+: LN \d{1,2}[+-]? ln$/);
+        expect(Math.abs(estimate.rawDan - targetRaw!)).toBeLessThanOrEqual(0.5);
       }
     }
   });
@@ -146,7 +168,7 @@ describe("estimateDan LN calibration", () => {
     });
 
     expect(estimate.metrics.holdRatio).toBeGreaterThan(0.45);
-    expect(estimate.debug?.familyChoice.reason).toBe("official-ln-reference-chart");
+    expect(estimate.debug?.familyChoice.reason).toBe("ln-reference-neighbor");
     expect(`${estimate.displayName} ${estimate.family}`).toBe("LN 7 ln");
   });
 
@@ -175,7 +197,7 @@ describe("estimateDan LN calibration", () => {
     expect(`${rateUp.displayName} ${rateUp.family}`).toBe("LN 10 ln");
   });
 
-  it("matches known LN references by artist and title when standalone metadata uses a different difficulty name", () => {
+  it("estimates duplicate LN charts from pressure instead of metadata identity", () => {
     const content = readFileSync(join(LN_REFERENCE_FIXTURES_DIR, "Laur-Exitium-Vandalism.osu"), "utf8");
     const map = parseManiaBeatmap(content);
     const estimate = estimateDan(map, {
@@ -186,8 +208,7 @@ describe("estimateDan LN calibration", () => {
       rate: 1,
     });
 
-    expect(`${map.artist} - ${map.title}`).toBe("Laur - Exitium");
-    expect(estimate.debug?.familyChoice.reason).toBe("known-ln-reference");
+    expect(estimate.debug?.familyChoice.reason).toBe("ln-reference-neighbor");
     expect(`${estimate.displayName} ${estimate.family}`).toBe("LN 14 ln");
   });
 });
