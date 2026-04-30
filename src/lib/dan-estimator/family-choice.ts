@@ -128,6 +128,21 @@ const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
       && skillScores.handstream >= topScore - 0.65,
   },
   {
+    id: "sustained-mid-chord-handstream-speed",
+    family: "handstream",
+    applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 3000
+      && metrics.noteCount <= 4300
+      && metrics.chordRatio >= 0.32
+      && metrics.chordRatio <= 0.42
+      && metrics.holdRatio < 0.08
+      && metrics.jackPressure < 155
+      && metrics.peakNps5s >= 30
+      && metrics.sustainedNps10s >= 29
+      && metrics.sustainedPressureRatio >= 0.75
+      && metrics.rowIntervalEntropy < 2
+      && skillScores.handstream >= topScore - 0.25,
+  },
+  {
     id: "low-sr-technical-rhythm",
     family: "tech",
     applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 2200
@@ -300,4 +315,3 @@ export function chooseSkillFamily(skillScores: Record<DanSkillFamily, number>, m
 
   return choose(topFamily, "top-score");
 }
-

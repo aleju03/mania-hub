@@ -493,6 +493,19 @@ describe("estimateDan", () => {
     expect(higherRate.rawDan).toBeGreaterThan(officialRate.rawDan);
   });
 
+  it("routes Elder Dragon Legend x1.3 sustained mid-chord speed as handstream", () => {
+    const estimate = estimateDan(readFixtureBeatmap("elder-dragon-legend-dragon-slayer-x1.3.osu"), {
+      starRating: 6.69,
+      totalLength: 158,
+    });
+
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.35);
+    expect(estimate.metrics.sustainedNps10s).toBeGreaterThan(30);
+    expect(estimate.skillScores.handstream).toBeGreaterThan(estimate.skillScores.tech);
+    expect(estimate.family).toBe("handstream");
+    expect(estimate.displayName).toBe("delta--");
+  });
+
   it("keeps Crescent Moon Island Kuro rates ordered around the official delta cut", () => {
     const lowerRate = estimateDan(readFixtureBeatmap("crescent-kuro-0.95.osu"), {
       starRating: 5.43444,
