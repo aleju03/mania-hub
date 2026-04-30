@@ -6,6 +6,7 @@ import {
   buildAutoplayFrames,
   getPreviewNotes,
   getPreviewScrollVelocities,
+  pickPreviewStartTime,
 } from "./chart-preview";
 
 const baseBeatmap: ManiaBeatmap = {
@@ -52,5 +53,11 @@ describe("chart preview helpers", () => {
     ]);
     expect(frames.at(-1)).toEqual({ time: RANDOM_REPLAY_PREVIEW_MS, keyState: 0 });
     expect(frames.every((frame) => frame.time <= RANDOM_REPLAY_PREVIEW_MS)).toBe(true);
+  });
+
+  it("falls back past missing reference preview times", () => {
+    expect(pickPreviewStartTime(-1, 54_744)).toBe(54_744);
+    expect(pickPreviewStartTime(0, 54_744)).toBe(54_744);
+    expect(pickPreviewStartTime(59_716, 54_744)).toBe(59_716);
   });
 });

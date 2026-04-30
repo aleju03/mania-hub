@@ -3,8 +3,8 @@ import type { ReplayFrame, ReplayLifeBarFrame } from "../../lib/types";
 import type { ManiaNote, ManiaScrollVelocity } from "../../lib/beatmap-parser";
 import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgementEvent, ReplayNoteState } from "../../lib/mania-replay-judgement";
 import { buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "../../lib/mania-replay-judgement";
-import { DEFAULT_REPLAY_SKIN_SETTINGS, normalizeReplaySkinSettings } from "../../lib/replay-skin";
-import type { ReplaySkinSettings } from "../../lib/replay-skin";
+import { DEFAULT_REPLAY_SKIN_SETTINGS, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplaySkinProfile, normalizeReplaySkinSettings } from "../../lib/replay-skin";
+import type { ReplaySkinKeymodeProfile, ReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayHitCounts } from "../../lib/replay-validation";
 import { resolveReplayJudgementEvents } from "../../lib/replay-validation";
 import { formatPixiRendererType } from "./renderer-debug";
@@ -40,7 +40,7 @@ const BACKGROUND_FADE_DURATION_MS = 180;
 const MANIA_MAX_TIME_RANGE = 11485;
 const MANIA_REFERENCE_HEIGHT = 768;
 const MANIA_DEFAULT_HIT_POSITION = (480 - 402) * 1.6;
-const MANIA_HIT_TARGET_POSITION = 110;
+const MANIA_HIT_TARGET_POSITION = REPLAY_SKIN_DEFAULT_HIT_POSITION;
 
 const HEX_NUMBER_CACHE = new Map<string, number>();
 
@@ -79,6 +79,7 @@ interface RendererOptions {
   scrollVelocities?: ManiaScrollVelocity[];
   expectedCounts?: ReplayHitCounts;
   lifeBarFrames?: ReplayLifeBarFrame[];
+  showHealthBar?: boolean;
   skinSettings?: ReplaySkinSettings;
 }
 
@@ -101,6 +102,8 @@ export class ManiaReplayRenderer {
   private app: Application | null = null;
   private graphics = new Graphics();
   private textLayer = new Container();
+  private textPool: Text[] = [];
+  private textPoolCursor = 0;
   private backgroundLayer = new Container();
   private backgroundSprite: Sprite | null = null;
   private previousBackgroundSprite: Sprite | null = null;
@@ -145,7 +148,12 @@ export class ManiaReplayRenderer {
   private transparentBackground = false;
   private hideHud = false;
   private barePlayfield = false;
+  private showHealthBar = true;
   private skinSettings: ReplaySkinSettings = DEFAULT_REPLAY_SKIN_SETTINGS;
+  private skinProfile: ReplaySkinKeymodeProfile = getReplaySkinProfile(DEFAULT_REPLAY_SKIN_SETTINGS, 4);
+  private barTapColors: string[] = [];
+  private circleTapColors: string[] = [];
+  private circleLnHeadColors: string[] = [];
   private cssWidth = 0;
   private cssHeight = 0;
   private dpr = 1;
@@ -207,7 +215,9 @@ export class ManiaReplayRenderer {
     this.transparentBackground = options?.transparentBackground ?? false;
     this.hideHud = options?.hideHud ?? false;
     this.barePlayfield = options?.barePlayfield ?? false;
+    this.showHealthBar = options?.showHealthBar ?? true;
     this.skinSettings = normalizeReplaySkinSettings(options?.skinSettings);
+    this.updateSkinCache();
     this.scrollVelocities = options?.scrollVelocities ?? [];
     this.prepareScrollVelocities();
     this.receptorFlashTimestamps = new Array(keyCount).fill(0);
@@ -263,7 +273,7 @@ export class ManiaReplayRenderer {
       autoStart: false,
       antialias: true,
       backgroundAlpha: 0,
-      preference: ["canvas", "webgl"],
+      preference: ["webgl", "canvas"],
     });
 
     if (this.destroyed) {
@@ -342,6 +352,22 @@ export class ManiaReplayRenderer {
     return calculateReplayAccuracy(this.judgmentCounts, this.ruleset.accuracyMode);
   }
 
+  private updateSkinCache() {
+    this.skinProfile = getReplaySkinProfile(this.skinSettings, this.keyCount);
+    this.barTapColors = Array.from(
+      { length: this.keyCount },
+      (_, col) => this.skinProfile.tapColors[col] || this.colors[col],
+    );
+    this.circleTapColors = Array.from(
+      { length: this.keyCount },
+      (_, col) => this.skinProfile.tapColors[col] || this.skinProfile.tapColor,
+    );
+    this.circleLnHeadColors = Array.from(
+      { length: this.keyCount },
+      (_, col) => this.skinProfile.lnHeadColors[col] || this.skinProfile.lnHeadColor,
+    );
+  }
+
   private getHandForColumn(column: number): Hand {
     if (column < 0 || column >= this.keyCount) return "center";
     const leftCount = Math.floor(this.keyCount / 2);
@@ -378,8 +404,12 @@ export class ManiaReplayRenderer {
       }
     }
 
-    if (collapsed.length === 0 || collapsed[0].time > 0) {
+    if (collapsed.length === 0) {
       collapsed.unshift({ time: 0, multiplier: 1 });
+    } else if (collapsed[0].time > 0) {
+      const firstNoteTime = this.notes[0]?.time ?? Number.POSITIVE_INFINITY;
+      const initialMultiplier = collapsed[0].time <= firstNoteTime ? collapsed[0].multiplier : 1;
+      collapsed.unshift({ time: 0, multiplier: initialMultiplier });
     }
 
     this.scrollVelocityTimes = collapsed.map((point) => point.time);
@@ -462,13 +492,15 @@ export class ManiaReplayRenderer {
     const baseRatio = this.barePlayfield
       ? 0.4 + this.keyCount * 0.045
       : 0.25 + this.keyCount * 0.025;
+    const columnWidthScale = this.skinProfile.columnWidth / 100;
     const playfieldWidth = Math.min(
-      w * Math.min(baseRatio, this.barePlayfield ? 0.72 : 0.6),
-      (this.barePlayfield ? 68 : 50) * this.keyCount,
+      w * Math.min(baseRatio * columnWidthScale, this.barePlayfield ? 0.82 : 0.72),
+      (this.barePlayfield ? 68 : 50) * this.keyCount * columnWidthScale,
     );
     const laneWidth = playfieldWidth / this.keyCount;
     const playfieldX = (w - playfieldWidth) / 2;
-    const judgmentY = h * (MANIA_REFERENCE_HEIGHT - MANIA_HIT_TARGET_POSITION) / MANIA_REFERENCE_HEIGHT;
+    const hitPosition = this.skinSettings.hitPosition || MANIA_HIT_TARGET_POSITION;
+    const judgmentY = h * (MANIA_REFERENCE_HEIGHT - hitPosition) / MANIA_REFERENCE_HEIGHT;
     const noteHeight = Math.max(10, h * 0.02);
     const receptorHeight = Math.max(6, h * 0.012);
     const scrollTimeRange = (MANIA_MAX_TIME_RANGE / Math.max(1, Math.min(40, this.scrollSpeed))) * this.modRate;
@@ -558,6 +590,8 @@ export class ManiaReplayRenderer {
 
   setSkinSettings(settings: ReplaySkinSettings) {
     this.skinSettings = normalizeReplaySkinSettings(settings);
+    this.updateSkinCache();
+    this.invalidateLayoutCache();
     if (!this._isPlaying) this.render();
   }
 
@@ -659,7 +693,7 @@ export class ManiaReplayRenderer {
     const layout = this.getLayout();
     this.currentKeyState = this.getCurrentKeyState();
     this.graphics.clear();
-    this.clearTextLayer();
+    this.beginTextFrame();
 
     this.renderBackground(layout);
     this.renderPlayfield(layout);
@@ -667,8 +701,9 @@ export class ManiaReplayRenderer {
     this.renderNotes(layout);
     this.renderJudgmentLine(layout);
     this.renderReceptors(layout);
-    this.renderHealthBar(layout);
+    if (this.showHealthBar) this.renderHealthBar(layout);
     if (!this.hideHud) this.renderHUD(layout);
+    this.finishTextFrame();
     this.app.render();
   }
 
@@ -705,22 +740,25 @@ export class ManiaReplayRenderer {
 
   private renderPlayfield(layout: Layout) {
     const { w, h, playfieldX, playfieldWidth } = layout;
+    const isCircleSkin = this.skinSettings.style === "circles";
 
     if (!this.barePlayfield) {
       this.fillRect(0, 0, playfieldX, h, "#000000", 0.24);
       this.fillRect(playfieldX + playfieldWidth, 0, w - playfieldX - playfieldWidth, h, "#000000", 0.24);
       this.fillRect(playfieldX, 0, playfieldWidth, h, "#000000", 0.12);
 
-      for (let col = 0; col < this.keyCount; col++) {
+      for (let col = 0; !isCircleSkin && col < this.keyCount; col++) {
         const { x, width } = this.getColumnLayout(col, layout);
         this.fillRect(x, 0, width, h, "#ffffff", col % 2 === 0 ? 0.02 : 0.04);
       }
     }
 
     const topFadeHeight = this.barePlayfield ? Math.min(56, h * 0.14) : 0;
-    for (let i = 0; i <= this.keyCount; i++) {
-      const x = i < this.keyCount ? this.getColumnLayout(i, layout).x : playfieldX + playfieldWidth;
-      this.lineWithTopFade(x, 0, x, h, "#ffffff", 0.08, 1, topFadeHeight);
+    if (!isCircleSkin) {
+      for (let i = 0; i <= this.keyCount; i++) {
+        const x = i < this.keyCount ? this.getColumnLayout(i, layout).x : playfieldX + playfieldWidth;
+        this.lineWithTopFade(x, 0, x, h, "#ffffff", 0.08, 1, topFadeHeight);
+      }
     }
     if (this.barePlayfield) {
       this.line(playfieldX, h - 1, playfieldX + playfieldWidth, h - 1, "#ffffff", 0.1, 2);
@@ -736,7 +774,7 @@ export class ManiaReplayRenderer {
     const health = this.getHealthAtTime(this.currentTime);
     const barWidth = Math.max(6, Math.min(8, layout.laneWidth * 0.14));
     const x = playfieldX + playfieldWidth + 13;
-    const height = Math.max(120, h * 0.46);
+    const height = Math.max(136, h * 0.52);
     const y = h - height;
     const fillHeight = height * health;
     const fillY = y + height - fillHeight;
@@ -751,6 +789,8 @@ export class ManiaReplayRenderer {
     const { judgmentY, noteHeight, pixelsPerMs, h } = layout;
     if (this.notes.length === 0) return;
 
+    const currentScrollPosition = this.getScrollPosition(this.currentTime);
+    const getVisualDelta = (targetTime: number) => this.getScrollPosition(targetTime) - currentScrollPosition;
     const noteFadeHeight = this.barePlayfield ? Math.min(46, h * 0.11) : 0;
     const timeWindow = judgmentY / pixelsPerMs;
     const velocityWindow = timeWindow / this.scrollVelocityMinMultiplier;
@@ -775,13 +815,15 @@ export class ManiaReplayRenderer {
       const { x: colX, width: colWidth } = this.getColumnLayout(col, layout);
       const x = colX + 3;
       const barWidth = colWidth - 6;
-      const color = this.colors[col];
+      const color = this.skinSettings.style === "bars" ? this.barTapColors[col] : this.colors[col];
+      const circleTapColor = this.circleTapColors[col];
+      const circleLnHeadColor = this.circleLnHeadColors[col];
       const circleDiameter = this.getCircleDiameter(layout);
       const circleRadius = circleDiameter / 2;
 
       if (note.isHold) {
-        let headY = judgmentY - this.getVisualTimeDelta(note.time) * pixelsPerMs;
-        const tailY = judgmentY - this.getVisualTimeDelta(note.endTime) * pixelsPerMs;
+        let headY = judgmentY - getVisualDelta(note.time) * pixelsPerMs;
+        const tailY = judgmentY - getVisualDelta(note.endTime) * pixelsPerMs;
         const awaitingJudgment = !headResolved;
         const shouldLetPassLine = awaitingJudgment && note.time < this.currentTime - 10;
         const withinMatchedSegment = this.currentTime < noteState.releaseTime;
@@ -799,43 +841,41 @@ export class ManiaReplayRenderer {
         if (top > h + 20 || bottom < -20) continue;
 
         const bodyAlpha = releasedEarly ? 0.45 : 1;
-        const strokeAlpha = releasedEarly ? 0.55 : 1;
         const headAlpha = releasedEarly ? 0.65 : 1;
+        const percyTrim = this.skinSettings.percy
+          ? Math.min(18, Math.max(noteHeight * 0.9, circleDiameter * 0.34))
+          : 0;
         if (this.skinSettings.style === "circles") {
           const bodyWidth = Math.max(14, circleDiameter * 0.72);
           const bodyX = colX + colWidth / 2 - bodyWidth / 2;
-          const bodyTopTrim = this.skinSettings.percy ? Math.min(8, circleDiameter * 0.18) : 0;
-          const bodyBottomTrim = this.skinSettings.percy ? Math.min(6, circleDiameter * 0.14) : 0;
-          const bodyTop = top + bodyTopTrim;
-          const bodyBottom = Math.max(bodyTop, bottom - bodyBottomTrim);
-          this.roundRectWithTopFade(
+          const bodyTop = top + percyTrim;
+          const bodyBottom = Math.max(bodyTop, bottom - percyTrim);
+          this.circleLnBodyWithTopFade(
             bodyX,
             bodyTop,
             bodyWidth,
             bodyBottom - bodyTop,
-            bodyWidth / 2,
             this.skinSettings.lnBodyColor,
             bodyAlpha,
             noteFadeHeight,
             0.55,
           );
-          this.circleWithTopFade(colX + colWidth / 2, bottom, circleRadius, this.skinSettings.lnHeadColor, headAlpha, noteFadeHeight, 0.55);
+          this.circleWithTopFade(colX + colWidth / 2, bottom, circleRadius, circleLnHeadColor, headAlpha, noteFadeHeight, 0.55);
           this.strokeCircleWithTopFade(colX + colWidth / 2, bottom, circleRadius, "#ffffff", headAlpha * 0.55, 2, noteFadeHeight, 0.55);
           continue;
         }
 
-        this.roundRectWithTopFade(x, top, barWidth, bottom - top, 2, color, bodyAlpha, noteFadeHeight, 0.55);
-        this.rectWithTopFade(x, top, barWidth, bottom - top, color, strokeAlpha, 1, noteFadeHeight, 0.55);
-        if (bottom > top + noteHeight) this.roundRectWithTopFade(x, bottom - noteHeight, barWidth, noteHeight, 4, color, headAlpha, noteFadeHeight, 0.55);
-        this.roundRectWithTopFade(x, top, barWidth, noteHeight / 2, 2, color, headAlpha, noteFadeHeight, 0.55);
+        const bodyBottom = bottom;
+        const bodyTop = Math.min(top + percyTrim, bodyBottom - noteHeight);
+        this.roundRectWithTopFade(x, bodyTop, barWidth, bodyBottom - bodyTop, 2, color, bodyAlpha, noteFadeHeight, 0.55);
       } else {
         if (note.time < this.currentTime - 10 && !headResolved) continue;
 
-        const noteY = judgmentY - this.getVisualTimeDelta(note.time) * pixelsPerMs;
+        const noteY = judgmentY - getVisualDelta(note.time) * pixelsPerMs;
         if (noteY > h + 20 || noteY < -20) continue;
 
         if (this.skinSettings.style === "circles") {
-          this.circleWithTopFade(colX + colWidth / 2, noteY, circleRadius, this.skinSettings.tapColor, 1, noteFadeHeight, 0.55);
+          this.circleWithTopFade(colX + colWidth / 2, noteY, circleRadius, circleTapColor, 1, noteFadeHeight, 0.55);
           this.strokeCircleWithTopFade(colX + colWidth / 2, noteY, circleRadius, "#ffffff", 0.55, 2, noteFadeHeight, 0.55);
           continue;
         }
@@ -851,6 +891,8 @@ export class ManiaReplayRenderer {
     const { judgmentY, pixelsPerMs, h } = layout;
     if (this.frames.length === 0 || !this.showInputOverlay) return;
 
+    const currentScrollPosition = this.getScrollPosition(this.currentTime);
+    const getVisualDelta = (targetTime: number) => this.getScrollPosition(targetTime) - currentScrollPosition;
     const timeWindow = judgmentY / pixelsPerMs;
     const velocityWindow = timeWindow / this.scrollVelocityMinMultiplier;
     const visibleMinTime = this.currentTime - velocityWindow * 0.2;
@@ -873,8 +915,8 @@ export class ManiaReplayRenderer {
         const tailResolved = noteState.tailTime != null && noteState.tailTime <= this.currentTime;
         if (headResolved && tailResolved) continue;
 
-        let headY = judgmentY - this.getVisualTimeDelta(note.time) * pixelsPerMs;
-        const tailY = judgmentY - this.getVisualTimeDelta(note.endTime) * pixelsPerMs;
+        let headY = judgmentY - getVisualDelta(note.time) * pixelsPerMs;
+        const tailY = judgmentY - getVisualDelta(note.endTime) * pixelsPerMs;
         if (headResolved) headY = Math.min(headY, judgmentY);
 
         const top = Math.min(headY, tailY);
@@ -891,13 +933,15 @@ export class ManiaReplayRenderer {
       const barWidth = colWidth - 4;
       const color = this.colors[col];
       const occlusions = holdOcclusionRanges[col];
+      const segments = this.segments[col];
+      const startSegmentIndex = this.binarySearchSegmentEndIndex(segments, visibleMinTime);
 
-      for (const seg of this.segments[col]) {
-        if (seg.end < visibleMinTime) continue;
+      for (let i = startSegmentIndex; i < segments.length; i++) {
+        const seg = segments[i];
         if (seg.start > visibleMaxTime) break;
 
-        const startY = judgmentY - this.getVisualTimeDelta(seg.start) * pixelsPerMs;
-        const endY = judgmentY - this.getVisualTimeDelta(seg.end) * pixelsPerMs;
+        const startY = judgmentY - getVisualDelta(seg.start) * pixelsPerMs;
+        const endY = judgmentY - getVisualDelta(seg.end) * pixelsPerMs;
         if (startY < -20 && endY < -20) continue;
         if (startY > h + 20 && endY > h + 20) continue;
 
@@ -1014,6 +1058,8 @@ export class ManiaReplayRenderer {
       });
     }
 
+    const compactHud = w < 520;
+
     this.addText(`${this.getAccuracy().toFixed(2)}%`, playfieldX + playfieldWidth + 16, 16, {
       fontSize: Math.max(16, h * 0.032),
       fill: "#ffffff",
@@ -1028,35 +1074,37 @@ export class ManiaReplayRenderer {
     const keyRowX = Math.max(12, playfieldX - keyRowWidth - 18);
     const keyRowY = judgmentY - 36;
 
-    for (let col = 0; col < this.keyCount; col++) {
-      const x = keyRowX + col * (keyBoxSize + keyGap);
-      const pressed = (currentState & (1 << col)) !== 0;
-      const color = this.colors[col];
+    if (!compactHud) {
+      for (let col = 0; col < this.keyCount; col++) {
+        const x = keyRowX + col * (keyBoxSize + keyGap);
+        const pressed = (currentState & (1 << col)) !== 0;
+        const color = this.colors[col];
 
-      this.fillRect(x, keyRowY, keyBoxSize, keyBoxSize, "#0a0a12", 0.82);
-      this.rect(x, keyRowY, keyBoxSize, keyBoxSize, "#ffffff", 0.12, 1);
-      this.fillRect(x + 1, keyRowY + 1, keyBoxSize - 2, keyBoxSize - 2, color, pressed ? 0.95 : 0.18);
-      this.addText(String(col + 1), x + keyBoxSize / 2, keyRowY + keyBoxSize / 2 + 0.5, {
-        fontSize: 14,
-        fill: pressed ? "#0a0a12" : "#ffffff",
-        alpha: pressed ? 0.9 : 0.75,
-        fontWeight: "700",
-        anchorX: 0.5,
-        anchorY: 0.5,
+        this.fillRect(x, keyRowY, keyBoxSize, keyBoxSize, "#0a0a12", 0.82);
+        this.rect(x, keyRowY, keyBoxSize, keyBoxSize, "#ffffff", 0.12, 1);
+        this.fillRect(x + 1, keyRowY + 1, keyBoxSize - 2, keyBoxSize - 2, color, pressed ? 0.95 : 0.18);
+        this.addText(String(col + 1), x + keyBoxSize / 2, keyRowY + keyBoxSize / 2 + 0.5, {
+          fontSize: 14,
+          fill: pressed ? "#0a0a12" : "#ffffff",
+          alpha: pressed ? 0.9 : 0.75,
+          fontWeight: "700",
+          anchorX: 0.5,
+          anchorY: 0.5,
+        });
+      }
+
+      [
+        { label: "L MISS", value: String(this.leftHandMisses), color: "#5a8fff" },
+        { label: "R MISS", value: String(this.rightHandMisses), color: "#de31ae" },
+      ].forEach((item, index) => {
+        const x = keyRowX + index * 68;
+        const y = keyRowY + keyBoxSize + 10;
+        this.fillRect(x, y, 60, 36, "#0a0a12", 0.78);
+        this.fillRect(x, y, 3, 36, item.color, 1);
+        this.addText(item.label, x + 9, y + 5, { fontSize: 9, fill: "#ffffff", alpha: 0.58, fontWeight: "700" });
+        this.addText(item.value, x + 9, y + 28, { fontSize: 16, fill: "#ffffff", alpha: 0.95, fontWeight: "700", anchorY: 1 });
       });
     }
-
-    [
-      { label: "L MISS", value: String(this.leftHandMisses), color: "#5a8fff" },
-      { label: "R MISS", value: String(this.rightHandMisses), color: "#de31ae" },
-    ].forEach((item, index) => {
-      const x = keyRowX + index * 68;
-      const y = keyRowY + keyBoxSize + 10;
-      this.fillRect(x, y, 60, 36, "#0a0a12", 0.78);
-      this.fillRect(x, y, 3, 36, item.color, 1);
-      this.addText(item.label, x + 9, y + 5, { fontSize: 9, fill: "#ffffff", alpha: 0.58, fontWeight: "700" });
-      this.addText(item.value, x + 9, y + 28, { fontSize: 16, fill: "#ffffff", alpha: 0.95, fontWeight: "700", anchorY: 1 });
-    });
 
     const judgmentCounterX = playfieldX + playfieldWidth + 16;
     const judgmentCounterY = 52;
@@ -1119,7 +1167,7 @@ export class ManiaReplayRenderer {
       fontWeight: "700",
       anchorX: 1,
     });
-    if (import.meta.env.DEV && this.app) {
+    if (import.meta.env.DEV && this.app && w >= 520) {
       this.addText(
         `Renderer ${formatPixiRendererType(this.app.renderer.type, this.app.renderer.name)}`,
         w - 8,
@@ -1193,7 +1241,9 @@ export class ManiaReplayRenderer {
   private isColumnEffectivelyHeldAtTime(column: number, time: number, graceMs = HOLD_VISUAL_GRACE_MS): boolean {
     if (column < 0 || column >= this.keyCount) return false;
     const segments = this.segments[column];
-    for (const seg of segments) {
+    const startIndex = this.binarySearchSegmentEndIndex(segments, time - graceMs);
+    for (let i = startIndex; i < segments.length; i++) {
+      const seg = segments[i];
       if (seg.start > time + graceMs) break;
       if (seg.start - graceMs <= time && seg.end + graceMs > time) return true;
     }
@@ -1211,8 +1261,20 @@ export class ManiaReplayRenderer {
     return lo;
   }
 
+  private binarySearchSegmentEndIndex(segments: ReplaySegment[], targetTime: number): number {
+    let lo = 0;
+    let hi = segments.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (segments[mid].end < targetTime) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+
   private getCircleDiameter(layout: Layout): number {
-    return Math.max(24, Math.min(layout.laneWidth - 6, layout.noteHeight * 3.4));
+    const laneSizedDiameter = layout.laneWidth * 0.74;
+    return Math.max(18, Math.min(layout.laneWidth - 4, Math.max(28, laneSizedDiameter)));
   }
 
   private fillRect(x: number, y: number, w: number, h: number, color: string, alpha: number) {
@@ -1269,6 +1331,22 @@ export class ManiaReplayRenderer {
     if (bottom > fadeHeight) {
       this.roundRect(x, fadeHeight, w, bottom - fadeHeight, radius, color, alpha);
     }
+  }
+
+  private circleLnBodyWithTopFade(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    color: string,
+    alpha: number,
+    fadeHeight: number,
+    minAlpha = 0,
+  ) {
+    if (w <= 0 || h <= 0 || alpha <= 0) return;
+    const bottom = y + h;
+    if (bottom <= 0) return;
+    this.roundRect(x, y, w, h, w / 2, color, alpha);
   }
 
   private circleWithTopFade(
@@ -1347,20 +1425,41 @@ export class ManiaReplayRenderer {
       anchorY?: number;
     },
   ) {
-    const label = new Text({
-      text,
-      style: {
-        fontFamily: "Torus, sans-serif",
-        fontSize: options.fontSize,
-        fontWeight: options.fontWeight ?? "400",
-        fill: options.fill,
-      },
-    });
+    let label = this.textPool[this.textPoolCursor];
+    if (!label) {
+      label = new Text({
+        text: "",
+        style: {
+          fontFamily: "Torus, sans-serif",
+        },
+      });
+      this.textPool.push(label);
+      this.textLayer.addChild(label);
+    }
+
+    this.textPoolCursor++;
+    label.visible = true;
+    label.text = text;
+    label.style = {
+      fontFamily: "Torus, sans-serif",
+      fontSize: options.fontSize,
+      fontWeight: options.fontWeight ?? "400",
+      fill: options.fill,
+    };
     label.x = x;
     label.y = y;
     label.alpha = options.alpha ?? 1;
     label.anchor.set(options.anchorX ?? 0, options.anchorY ?? 0);
-    this.textLayer.addChild(label);
+  }
+
+  private beginTextFrame() {
+    this.textPoolCursor = 0;
+  }
+
+  private finishTextFrame() {
+    for (let i = this.textPoolCursor; i < this.textPool.length; i++) {
+      this.textPool[i].visible = false;
+    }
   }
 
   private clearTextLayer() {

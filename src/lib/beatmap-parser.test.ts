@@ -37,7 +37,7 @@ OverallDifficulty:8
     ]);
   });
 
-  it("does not treat BPM-only timing changes as mania scroll velocities", () => {
+  it("treats BPM timing changes as mania scroll multiplier changes", () => {
     const beatmap = parseManiaBeatmap(`
 osu file format v14
 
@@ -58,6 +58,36 @@ OverallDifficulty:8
 [HitObjects]
 64,192,1000,1,0,0:0:0:0:
 64,192,3000,1,0,0:0:0:0:
+`);
+
+    expect(beatmap.scrollVelocities).toEqual([
+      { time: 2000, multiplier: 2 },
+    ]);
+  });
+
+  it("combines inherited SV with BPM scaling like osu!mania", () => {
+    const beatmap = parseManiaBeatmap(`
+osu file format v14
+
+[Metadata]
+Title:Test
+Artist:Tester
+Creator:Mapper
+Version:BPM compensated SV
+
+[Difficulty]
+CircleSize:4
+OverallDifficulty:8
+
+[TimingPoints]
+0,500,4,1,0,100,1,0
+0,-66.6666666666667,4,1,0,100,0,0
+2000,333.333333333333,4,1,0,100,1,0
+2000,-100,4,1,0,100,0,0
+
+[HitObjects]
+64,192,1000,1,0,0:0:0:0:
+64,192,6000,1,0,0:0:0:0:
 `);
 
     expect(beatmap.scrollVelocities).toEqual([]);

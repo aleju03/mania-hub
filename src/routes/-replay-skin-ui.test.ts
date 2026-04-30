@@ -11,10 +11,22 @@ describe("replay skin settings UI", () => {
     expect(source).toContain("rendererRef.current?.setSkinSettings");
     expect(source).toContain('aria-label="Replay skin settings"');
     expect(source).toContain("Replay skin");
-    expect(source).toContain("Tap notes");
-    expect(source).toContain("LN head");
-    expect(source).toContain("LN body");
-    expect(source).toContain("Percy");
+    expect(source).toContain("Note color");
+    expect(source).toContain("LN Head color");
+    expect(source).toContain("LN Body color");
+    expect(source).toContain("Cut LN tail");
+    expect(source).toContain("Keymode");
+    expect(source).toContain("Skin preset");
+    expect(source).toContain("Note shape");
+    expect(source).toContain("Per-column colors");
+    expect(source).toContain("Column width");
+    expect(source).toContain("Hit position");
+    expect(source).toContain("ReplaySkinPreview");
+    expect(source).toContain("ReplaySkinColorPanel");
+    expect(source).toContain("Apply");
+    expect(source).toContain("Cancel");
+    expect(source).toContain("Reset");
+    expect(source).not.toContain('type="color"');
   });
 
   it("only highlights the gear button while the skin modal is open", () => {

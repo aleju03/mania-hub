@@ -73,7 +73,7 @@ export const Route = createFileRoute("/player/$username")({
 });
 
 type KeyFilter = "all" | string;
-type ModFilterMode = "include" | "exclude";
+export type ModFilterMode = "include" | "exclude";
 type ModFilterState = Record<string, ModFilterMode>;
 type BestSort = "pp" | "newest" | "oldest";
 
@@ -213,9 +213,15 @@ function getTopPlayDateExtremes(scores: OsuScore[]): Pick<UserProfileInsights, "
   };
 }
 
-function cycleModFilterMode(current: ModFilterMode | undefined): ModFilterMode | undefined {
+export function cycleModFilterMode(current: ModFilterMode | undefined): ModFilterMode | undefined {
   if (current === undefined) return "include";
   if (current === "include") return "exclude";
+  return undefined;
+}
+
+export function reverseCycleModFilterMode(current: ModFilterMode | undefined): ModFilterMode | undefined {
+  if (current === undefined) return "exclude";
+  if (current === "exclude") return "include";
   return undefined;
 }
 
@@ -625,6 +631,19 @@ function PlayerPage() {
     setBestModFilter((prev) => {
       const next = { ...prev };
       const cycled = cycleModFilterMode(prev[mod]);
+      if (cycled === undefined) {
+        delete next[mod];
+      } else {
+        next[mod] = cycled;
+      }
+      return next;
+    });
+  }, []);
+
+  const reverseCycleBestMod = useCallback((mod: string) => {
+    setBestModFilter((prev) => {
+      const next = { ...prev };
+      const cycled = reverseCycleModFilterMode(prev[mod]);
       if (cycled === undefined) {
         delete next[mod];
       } else {
@@ -1260,6 +1279,7 @@ function PlayerPage() {
               mods={relevantBestMods}
               modFilter={bestModFilter}
               onCycleMod={cycleBestMod}
+              onReverseCycleMod={reverseCycleBestMod}
               onClearMods={() => setBestModFilter({})}
               sort={bestSort}
               onChangeSort={setBestSort}
@@ -1664,6 +1684,7 @@ function BestScoresControlBar({
   mods,
   modFilter,
   onCycleMod,
+  onReverseCycleMod,
   onClearMods,
   sort,
   onChangeSort,
@@ -1671,6 +1692,7 @@ function BestScoresControlBar({
   mods: string[];
   modFilter: ModFilterState;
   onCycleMod: (mod: string) => void;
+  onReverseCycleMod: (mod: string) => void;
   onClearMods: () => void;
   sort: BestSort;
   onChangeSort: (sort: BestSort) => void;
@@ -1692,6 +1714,7 @@ function BestScoresControlBar({
                   mod={mod}
                   mode={modFilter[mod]}
                   onClick={() => onCycleMod(mod)}
+                  onContextMenu={() => onReverseCycleMod(mod)}
                 />
               ))}
             </div>
@@ -1737,10 +1760,12 @@ function ModFilterChip({
   mod,
   mode,
   onClick,
+  onContextMenu,
 }: {
   mod: string;
   mode: ModFilterMode | undefined;
   onClick: () => void;
+  onContextMenu: () => void;
 }) {
   const groupMods = getModFilterGroup(mod);
   const label = mod === NO_MOD_KEY
@@ -1766,6 +1791,10 @@ function ModFilterChip({
     <button
       type="button"
       onClick={onClick}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onContextMenu();
+      }}
       title={title}
       aria-label={title}
       className={`relative flex items-center gap-1 rounded-md border px-1.5 py-1 transition-colors cursor-pointer ${ringClass}`}
