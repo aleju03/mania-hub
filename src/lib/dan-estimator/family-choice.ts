@@ -19,6 +19,21 @@ interface DanFamilyChoiceRule {
 
 const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
   {
+    id: "localized-high-density-jack-spike",
+    family: "jack",
+    applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 4000
+      && metrics.chordRatio >= 0.48
+      && metrics.chordRatio <= 0.64
+      && metrics.holdRatio < 0.1
+      && metrics.peakNps5s >= 35
+      && metrics.sustainedNps10s >= 34
+      && metrics.jackPressure >= 190
+      && metrics.strainSpikiness >= 1.6
+      && metrics.nps5sP90 <= metrics.peakNps5s - 4
+      && metrics.nps5sP50 <= metrics.peakNps5s - 10
+      && skillScores.jack >= topScore - 0.45,
+  },
+  {
     id: "long-jumpstream-stamina",
     family: "stamina",
     applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 7600

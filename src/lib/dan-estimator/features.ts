@@ -30,6 +30,20 @@ function groupNotesByTime(notes: ManiaNote[]): Array<[number, ManiaNote[]]> {
   return [...rows.entries()].sort((a, b) => a[0] - b[0]);
 }
 
+function sampledWindowNps(noteTimes: number[], windowMs: number, durationMs: number): number[] {
+  if (noteTimes.length === 0 || durationMs <= 0) return [];
+
+  const samples: number[] = [];
+  let left = 0;
+  let right = 0;
+  for (let start = 0; start <= durationMs; start += 1000) {
+    while (left < noteTimes.length && noteTimes[left] < start) left++;
+    while (right < noteTimes.length && noteTimes[right] < start + windowMs) right++;
+    samples.push((right - left) / (windowMs / 1000));
+  }
+  return samples;
+}
+
 export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, rate: number): DanFeatureExtractionResult {
   const notes = getRatedNotes(map, rate);
   const warnings: string[] = [];
@@ -121,6 +135,10 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
 
   const peakNps1s = countInWindow(noteTimes, 1000);
   const peakNps5s = countInWindow(noteTimes, 5000) / 5;
+  const nps5sSamples = sampledWindowNps(noteTimes, 5000, durationMs);
+  const nps5sP50 = quantile(nps5sSamples, 0.5);
+  const nps5sP90 = quantile(nps5sSamples, 0.9);
+  const nps5sP95 = quantile(nps5sSamples, 0.95);
   const sustainedNps10s = countInWindow(noteTimes, 10000) / 10;
   const jackPressure = quantile(jackValues, 0.92);
   const streamPressure = quantile(streamValues, 0.9);
@@ -184,6 +202,9 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
       chordRatio,
       peakNps1s,
       peakNps5s,
+      nps5sP50,
+      nps5sP90,
+      nps5sP95,
       sustainedNps10s,
       jackPressure,
       streamPressure,

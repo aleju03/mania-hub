@@ -531,6 +531,32 @@ describe("estimateDan", () => {
     expect(rateUp.rawDan).toBeGreaterThanOrEqual(13.6);
   });
 
+  it("compresses Galaxy Collapse DT into high-end jack instead of eta tech", () => {
+    const estimate = estimateDan(readFixtureBeatmap("galaxy-collapse-cataclysmic-hypernova.osu"), {
+      starRating: 6.54,
+      totalLength: 405,
+      rate: 1.5,
+    });
+
+    expect(estimate.metrics.peakNps5s - estimate.metrics.nps5sP90).toBeGreaterThan(5);
+    expect(estimate.family).toBe("jack");
+    expect(estimate.debug?.familyChoice.reason).toBe("localized-high-density-jack-spike");
+    expect(estimate.label).toBe("epsilon");
+    expect(estimate.rawDan).toBeLessThan(15.6);
+  });
+
+  it("compresses Architecture's famous jumptrill spike below zeta", () => {
+    const estimate = estimateDan(readFixtureBeatmap("architecture-mats-4k-death.osu"), {
+      starRating: 8.02,
+      totalLength: 245,
+    });
+
+    expect(estimate.metrics.peakNps5s - estimate.metrics.nps5sP90).toBeGreaterThan(10);
+    expect(estimate.debug?.scoring.terms.localizedJumptrillSpikeCompression).toBeGreaterThan(1);
+    expect(estimate.label).toBe("beta");
+    expect(estimate.rawDan).toBeLessThan(12.6);
+  });
+
   it("keeps Crescent Moon Island Kuro rates ordered around the official delta cut", () => {
     const lowerRate = estimateDan(readFixtureBeatmap("crescent-kuro-0.95.osu"), {
       starRating: 5.43444,

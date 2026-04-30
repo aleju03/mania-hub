@@ -32,6 +32,9 @@ export interface DanFeatureMetrics {
   chordRatio: number;
   peakNps1s: number;
   peakNps5s: number;
+  nps5sP50: number;
+  nps5sP90: number;
+  nps5sP95: number;
   sustainedNps10s: number;
   jackPressure: number;
   streamPressure: number;
