@@ -307,7 +307,7 @@ const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
     applies: ({ metrics, skillScores, topScore }) => metrics.chordRatio <= 0.28
       && metrics.sustainedNps10s >= 25
       && metrics.peakNps5s >= 26
-      && metrics.jackPressure < 165
+      && metrics.jackPressure < 175
       && metrics.techPressure < 6.4
       && skillScores.stream >= topScore - 0.7,
   },

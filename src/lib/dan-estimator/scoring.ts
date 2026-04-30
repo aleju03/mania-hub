@@ -176,13 +176,13 @@ export function estimateFamilyScores(metrics: DanFeatureMetrics, starRating: num
         + Math.max(0, 5.7 - starRating) * 0.12,
     )
     : 0;
-  const lowSrSpeedUnderrateBonus = metrics.chordRatio >= 0.18
+  const lowSrSpeedUnderrateBaseBonus = metrics.chordRatio >= 0.18
     && metrics.chordRatio <= 0.3
     && metrics.sustainedNps10s >= 25
     && metrics.peakNps5s >= 26
     && metrics.jackPressure < 165
     && starRating > 0
-    && starRating < 6.5
+    && starRating < 7
     ? Math.min(
       0.54,
       Math.max(0, 6.6 - starRating) * 0.54
@@ -190,6 +190,10 @@ export function estimateFamilyScores(metrics: DanFeatureMetrics, starRating: num
         + Math.max(0, metrics.peakNps5s - 26) * 0.035,
     )
     : 0;
+  const lowSrSpeedUnderrateTaper = starRating <= 6.4
+    ? 1
+    : Math.max(0.2, 1 - (starRating - 6.4) / 0.35);
+  const lowSrSpeedUnderrateBonus = lowSrSpeedUnderrateBaseBonus * lowSrSpeedUnderrateTaper;
   const compactDeltaSpeedBridgeGate = metrics.chordRatio >= 0.18
     && metrics.chordRatio <= 0.3
     && metrics.holdRatio < 0.06

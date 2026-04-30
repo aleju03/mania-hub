@@ -384,10 +384,21 @@ describe("estimateDan", () => {
   });
 
   it("keeps Reflec 1.1x in middle delta speed instead of low delta", () => {
-    const estimate = estimateDan(readFixtureBeatmap("reflec-attang-lv25.osu"), {
+    const map = readFixtureBeatmap("reflec-attang-lv25.osu");
+    const estimate = estimateDan(map, {
       starRating: 5.76,
       totalLength: 142,
       rate: 1.1,
+    });
+    const higherRate = estimateDan(map, {
+      starRating: 5.76,
+      totalLength: 142,
+      rate: 1.2,
+    });
+    const highestRate = estimateDan(map, {
+      starRating: 5.76,
+      totalLength: 142,
+      rate: 1.3,
     });
 
     expect(estimate.metrics.chordRatio).toBeGreaterThan(0.2);
@@ -396,6 +407,11 @@ describe("estimateDan", () => {
     expect(estimate.debug?.scoring.terms.compactDeltaSpeedBridgeBonus).toBeGreaterThan(0);
     expect(estimate.family).toBe("stream");
     expect(estimate.displayName).toBe("delta");
+    expect(higherRate.family).toBe("stream");
+    expect(higherRate.rawDan).toBeGreaterThan(estimate.rawDan);
+    expect(higherRate.label).toBe("delta");
+    expect(highestRate.family).toBe("stream");
+    expect(highestRate.rawDan).toBeGreaterThan(higherRate.rawDan);
   });
 
   it("compresses low-chord burst streams with jack pressure out of epsilon", () => {
