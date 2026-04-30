@@ -26,15 +26,16 @@ describe("mania replay judgement helpers", () => {
     expect(easy.good).toBe(85.5);
   });
 
-  it("does not resize stable mania hit windows for rate-changing mods", () => {
+  it("applies stable replay-time hit windows for rate-changing mods", () => {
     const normal = getManiaReplayHitWindows(8, getManiaReplayRuleset(false, []));
     const doubleTime = getManiaReplayHitWindows(8, getManiaReplayRuleset(false, ["DT"]));
     const halfTime = getManiaReplayHitWindows(8, getManiaReplayRuleset(false, ["HT"]));
     const daycore = getManiaReplayHitWindows(8, getManiaReplayRuleset(false, ["DC"]));
 
-    expect(doubleTime).toEqual(normal);
-    expect(halfTime).toEqual(normal);
-    expect(daycore).toEqual(normal);
+    expect(doubleTime.great).toBe(60.5);
+    expect(halfTime.great).toBe(30.5);
+    expect(daycore).toEqual(halfTime);
+    expect(normal.great).toBe(40.5);
   });
 
   it("uses lazer windows for lazer scores", () => {
@@ -251,7 +252,7 @@ describe("mania replay judgement helpers", () => {
     }));
   });
 
-  it("stable mode misses a hold note when the tail is released after the late OK window", () => {
+  it("stable mode judges a hold note that is still held through the late OK window", () => {
     const ruleset = getManiaReplayRuleset(false, []);
     const windows = getManiaReplayHitWindows(8, ruleset);
     const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 2000, isHold: true }];
@@ -265,7 +266,25 @@ describe("mania replay judgement helpers", () => {
     const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable");
 
     expect(simulated.events).toEqual([
-      expect.objectContaining({ part: "hold-combined", judgment: 6, time: 2103.5 }),
+      expect.objectContaining({ offsetMs: 103, part: "hold-combined", judgment: 3, time: 2103.5 }),
+    ]);
+  });
+
+  it("stable mode truncates LN combined judgement thresholds", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 2000, isHold: true }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1000, keyState: 1 },
+      { time: 2039, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 2500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable");
+
+    expect(simulated.events).toEqual([
+      expect.objectContaining({ part: "hold-combined", judgment: 2, time: 2039 }),
     ]);
   });
 

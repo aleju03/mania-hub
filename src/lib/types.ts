@@ -198,6 +198,7 @@ export interface LeanRankingUser {
   id: number;
   username: string;
   avatar_url: string;
+  cover_url: string;
   country_code: string;
   is_online: boolean;
   is_active?: boolean;
@@ -599,6 +600,15 @@ export interface TopPlaysRefreshStatus {
   updatedAt: number;
 }
 
+export interface BeatmapScoreLookupStatus {
+  phase: "scores";
+  label: string;
+  current: number;
+  total: number;
+  found: number;
+  updatedAt: number;
+}
+
 // Replay types
 export interface ReplayHeader {
   gameMode: number;
@@ -626,8 +636,14 @@ export interface ReplayFrame {
   keyState: number; // bitmask: bit N = column N pressed
 }
 
+export interface ReplayLifeBarFrame {
+  time: number;   // absolute time in ms
+  health: number; // 0..1
+}
+
 export interface ParsedReplay {
   header: ReplayHeader;
   frames: ReplayFrame[];
+  lifeBarFrames: ReplayLifeBarFrame[];
   keyCount: number;
 }

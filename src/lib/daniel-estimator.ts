@@ -742,6 +742,7 @@ export function estimateDanielDan(map: ManiaBeatmap, input: DanEstimateInput = {
     stamina: result.sr,
     chordjack: factorAverages["Cross-Column Pressure"],
     tech: factorAverages.Unevenness,
+    ln: 0,
     dan: result.sr,
   };
   const warnings: string[] = [

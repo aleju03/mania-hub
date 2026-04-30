@@ -383,6 +383,37 @@ describe("estimateDan", () => {
     expect(estimate.family).toBe("stream");
   });
 
+  it("keeps Reflec 1.1x in middle delta speed instead of low delta", () => {
+    const map = readFixtureBeatmap("reflec-attang-lv25.osu");
+    const estimate = estimateDan(map, {
+      starRating: 5.76,
+      totalLength: 142,
+      rate: 1.1,
+    });
+    const higherRate = estimateDan(map, {
+      starRating: 5.76,
+      totalLength: 142,
+      rate: 1.2,
+    });
+    const highestRate = estimateDan(map, {
+      starRating: 5.76,
+      totalLength: 142,
+      rate: 1.3,
+    });
+
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.2);
+    expect(estimate.metrics.chordRatio).toBeLessThan(0.28);
+    expect(estimate.metrics.sustainedNps10s).toBeGreaterThan(28);
+    expect(estimate.debug?.scoring.terms.compactDeltaSpeedBridgeBonus).toBeGreaterThan(0);
+    expect(estimate.family).toBe("stream");
+    expect(estimate.displayName).toBe("delta");
+    expect(higherRate.family).toBe("stream");
+    expect(higherRate.rawDan).toBeGreaterThan(estimate.rawDan);
+    expect(higherRate.label).toBe("delta");
+    expect(highestRate.family).toBe("stream");
+    expect(highestRate.rawDan).toBeGreaterThan(higherRate.rawDan);
+  });
+
   it("compresses low-chord burst streams with jack pressure out of epsilon", () => {
     const notes: ManiaNote[] = [];
     let time = 0;
@@ -491,6 +522,70 @@ describe("estimateDan", () => {
     expect(higherRate.family).toBe("tech");
     expect(officialRate.rawDan).toBeGreaterThan(14);
     expect(higherRate.rawDan).toBeGreaterThan(officialRate.rawDan);
+  });
+
+  it("routes Elder Dragon Legend x1.3 sustained mid-chord speed as handstream", () => {
+    const estimate = estimateDan(readFixtureBeatmap("elder-dragon-legend-dragon-slayer-x1.3.osu"), {
+      starRating: 6.69,
+      totalLength: 158,
+    });
+
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.35);
+    expect(estimate.metrics.sustainedNps10s).toBeGreaterThan(30);
+    expect(estimate.skillScores.handstream).toBeGreaterThan(estimate.skillScores.tech);
+    expect(estimate.family).toBe("handstream");
+    expect(estimate.displayName).toBe("delta--");
+  });
+
+  it("routes slow repetitive Lone Digger jackstream away from tech", () => {
+    const map = readFixtureBeatmap("lone-digger-jack-digger.osu");
+    const estimate = estimateDan(map, {
+      starRating: 4.45,
+      totalLength: 215,
+    });
+    const rateUp = estimateDan(map, {
+      starRating: 4.45,
+      totalLength: 215,
+      rate: 1.5,
+    });
+
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.48);
+    expect(estimate.metrics.jackPressure).toBeGreaterThan(115);
+    expect(estimate.metrics.rowIntervalEntropy).toBeLessThan(1.3);
+    expect(estimate.family).toBe("jack");
+    expect(estimate.debug?.familyChoice.reason).toBe("slow-repetitive-jackstream");
+    expect(estimate.label).toBe("6");
+    expect(estimate.rawDan).toBeGreaterThan(6.2);
+    expect(rateUp.family).toBe("jack");
+    expect(rateUp.debug?.familyChoice.reason).toBe("rated-repetitive-speedjack");
+    expect(rateUp.label).toBe("delta");
+    expect(rateUp.rawDan).toBeGreaterThanOrEqual(13.6);
+  });
+
+  it("compresses Galaxy Collapse DT into high-end jack instead of eta tech", () => {
+    const estimate = estimateDan(readFixtureBeatmap("galaxy-collapse-cataclysmic-hypernova.osu"), {
+      starRating: 6.54,
+      totalLength: 405,
+      rate: 1.5,
+    });
+
+    expect(estimate.metrics.peakNps5s - estimate.metrics.nps5sP90).toBeGreaterThan(5);
+    expect(estimate.family).toBe("jack");
+    expect(estimate.debug?.familyChoice.reason).toBe("localized-high-density-jack-spike");
+    expect(estimate.label).toBe("epsilon");
+    expect(estimate.rawDan).toBeLessThan(15.6);
+  });
+
+  it("compresses Architecture's famous jumptrill spike below zeta", () => {
+    const estimate = estimateDan(readFixtureBeatmap("architecture-mats-4k-death.osu"), {
+      starRating: 8.02,
+      totalLength: 245,
+    });
+
+    expect(estimate.metrics.peakNps5s - estimate.metrics.nps5sP90).toBeGreaterThan(10);
+    expect(estimate.debug?.scoring.terms.localizedJumptrillSpikeCompression).toBeGreaterThan(1);
+    expect(estimate.label).toBe("beta");
+    expect(estimate.rawDan).toBeLessThan(12.6);
   });
 
   it("keeps Crescent Moon Island Kuro rates ordered around the official delta cut", () => {

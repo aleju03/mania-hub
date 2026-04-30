@@ -73,7 +73,7 @@ export const Route = createFileRoute("/player/$username")({
 });
 
 type KeyFilter = "all" | string;
-type ModFilterMode = "include" | "exclude";
+export type ModFilterMode = "include" | "exclude";
 type ModFilterState = Record<string, ModFilterMode>;
 type BestSort = "pp" | "newest" | "oldest";
 
@@ -213,9 +213,15 @@ function getTopPlayDateExtremes(scores: OsuScore[]): Pick<UserProfileInsights, "
   };
 }
 
-function cycleModFilterMode(current: ModFilterMode | undefined): ModFilterMode | undefined {
+export function cycleModFilterMode(current: ModFilterMode | undefined): ModFilterMode | undefined {
   if (current === undefined) return "include";
   if (current === "include") return "exclude";
+  return undefined;
+}
+
+export function reverseCycleModFilterMode(current: ModFilterMode | undefined): ModFilterMode | undefined {
+  if (current === undefined) return "exclude";
+  if (current === "exclude") return "include";
   return undefined;
 }
 
@@ -634,6 +640,19 @@ function PlayerPage() {
     });
   }, []);
 
+  const reverseCycleBestMod = useCallback((mod: string) => {
+    setBestModFilter((prev) => {
+      const next = { ...prev };
+      const cycled = reverseCycleModFilterMode(prev[mod]);
+      if (cycled === undefined) {
+        delete next[mod];
+      } else {
+        next[mod] = cycled;
+      }
+      return next;
+    });
+  }, []);
+
   if (loadingUser && !user) {
     return <PlayerPageSkeleton />;
   }
@@ -833,11 +852,17 @@ function PlayerPage() {
                           }}
                           aria-pressed={includeNoModUsage}
                           title={includeNoModUsage ? "NM is included in mod usage" : "NM is excluded from mod usage"}
-                          className="mt-0.5 flex h-6 flex-shrink-0 cursor-pointer items-center gap-1.5 rounded-full border border-osu-b2/60 bg-osu-b3/30 px-1.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1 transition-colors hover:border-osu-b1/80 hover:bg-osu-b3/50 hover:text-white"
+                          className={`mt-0.5 flex h-6 flex-shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-1.5 text-[9px] font-semibold uppercase tracking-wider transition-colors hover:text-white ${
+                            includeNoModUsage
+                              ? "border-osu-green-light/45 bg-osu-green-light/12 text-osu-green-light hover:border-osu-green-light/65 hover:bg-osu-green-light/18"
+                              : "border-osu-b2/60 bg-osu-b3/30 text-osu-f1 hover:border-osu-b1/80 hover:bg-osu-b3/50"
+                          }`}
                         >
                           <span>NM</span>
                           <span
-                            className={`relative h-3.5 w-7 rounded-full transition-colors ${includeNoModUsage ? "bg-osu-f1/80" : "bg-osu-b2"}`}
+                            className={`relative h-3.5 w-7 rounded-full transition-colors ${
+                              includeNoModUsage ? "bg-osu-green-light/80 shadow-[0_0_0_1px_rgba(179,217,68,0.28)]" : "bg-osu-b2"
+                            }`}
                             aria-hidden="true"
                           >
                             <span
@@ -1254,6 +1279,7 @@ function PlayerPage() {
               mods={relevantBestMods}
               modFilter={bestModFilter}
               onCycleMod={cycleBestMod}
+              onReverseCycleMod={reverseCycleBestMod}
               onClearMods={() => setBestModFilter({})}
               sort={bestSort}
               onChangeSort={setBestSort}
@@ -1658,6 +1684,7 @@ function BestScoresControlBar({
   mods,
   modFilter,
   onCycleMod,
+  onReverseCycleMod,
   onClearMods,
   sort,
   onChangeSort,
@@ -1665,6 +1692,7 @@ function BestScoresControlBar({
   mods: string[];
   modFilter: ModFilterState;
   onCycleMod: (mod: string) => void;
+  onReverseCycleMod: (mod: string) => void;
   onClearMods: () => void;
   sort: BestSort;
   onChangeSort: (sort: BestSort) => void;
@@ -1686,6 +1714,7 @@ function BestScoresControlBar({
                   mod={mod}
                   mode={modFilter[mod]}
                   onClick={() => onCycleMod(mod)}
+                  onContextMenu={() => onReverseCycleMod(mod)}
                 />
               ))}
             </div>
@@ -1731,10 +1760,12 @@ function ModFilterChip({
   mod,
   mode,
   onClick,
+  onContextMenu,
 }: {
   mod: string;
   mode: ModFilterMode | undefined;
   onClick: () => void;
+  onContextMenu: () => void;
 }) {
   const groupMods = getModFilterGroup(mod);
   const label = mod === NO_MOD_KEY
@@ -1760,6 +1791,10 @@ function ModFilterChip({
     <button
       type="button"
       onClick={onClick}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onContextMenu();
+      }}
       title={title}
       aria-label={title}
       className={`relative flex items-center gap-1 rounded-md border px-1.5 py-1 transition-colors cursor-pointer ${ringClass}`}

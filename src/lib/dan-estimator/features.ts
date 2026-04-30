@@ -30,6 +30,20 @@ function groupNotesByTime(notes: ManiaNote[]): Array<[number, ManiaNote[]]> {
   return [...rows.entries()].sort((a, b) => a[0] - b[0]);
 }
 
+function sampledWindowNps(noteTimes: number[], windowMs: number, durationMs: number): number[] {
+  if (noteTimes.length === 0 || durationMs <= 0) return [];
+
+  const samples: number[] = [];
+  let left = 0;
+  let right = 0;
+  for (let start = 0; start <= durationMs; start += 1000) {
+    while (left < noteTimes.length && noteTimes[left] < start) left++;
+    while (right < noteTimes.length && noteTimes[right] < start + windowMs) right++;
+    samples.push((right - left) / (windowMs / 1000));
+  }
+  return samples;
+}
+
 export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, rate: number): DanFeatureExtractionResult {
   const notes = getRatedNotes(map, rate);
   const warnings: string[] = [];
@@ -55,7 +69,11 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
   const columnIntervals: number[] = [];
   const tailIntervals: number[] = [];
   const columnCounts = Array.from({ length: Math.max(1, map.keyCount) }, () => 0);
-  const releaseTimes = notes.filter((note) => note.isHold && note.endTime > note.time).map((note) => note.endTime).sort((a, b) => a - b);
+  const holdNotes = notes.filter((note) => note.isHold && note.endTime > note.time);
+  const holdDurations = holdNotes.map((note) => note.endTime - note.time);
+  const releaseTimes = holdNotes.map((note) => note.endTime).sort((a, b) => a - b);
+  const holdRows = orderedRows.filter(([, rowNotes]) => rowNotes.some((note) => note.isHold));
+  const lnChordRows = holdRows.filter(([, rowNotes]) => rowNotes.length >= 2).length;
   let directionChanges = 0;
   let previousColumn: number | null = null;
   let previousDirection = 0;
@@ -117,6 +135,10 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
 
   const peakNps1s = countInWindow(noteTimes, 1000);
   const peakNps5s = countInWindow(noteTimes, 5000) / 5;
+  const nps5sSamples = sampledWindowNps(noteTimes, 5000, durationMs);
+  const nps5sP50 = quantile(nps5sSamples, 0.5);
+  const nps5sP90 = quantile(nps5sSamples, 0.9);
+  const nps5sP95 = quantile(nps5sSamples, 0.95);
   const sustainedNps10s = countInWindow(noteTimes, 10000) / 10;
   const jackPressure = quantile(jackValues, 0.92);
   const streamPressure = quantile(streamValues, 0.9);
@@ -139,6 +161,27 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
   const lnReleasePressure = releaseTimes.length
     ? countInWindow(releaseTimes, 5000) / 5 + quantile(tailIntervals.map((interval) => 1000 / interval), 0.9) * 0.15
     : 0;
+  const totalHoldMs = holdDurations.reduce((sum, duration) => sum + duration, 0);
+  const lnDensity = durationMs > 0 ? totalHoldMs / (durationMs * Math.max(1, map.keyCount)) : 0;
+  const lnChordPressure = holdRows.length ? lnChordRows / holdRows.length : 0;
+  const lnHoldDurationAvg = average(holdDurations);
+  const lnHoldDurationP90 = quantile(holdDurations, 0.9);
+  const holdEvents = holdNotes.flatMap((note) => [
+    { time: note.time, delta: 1 },
+    { time: note.endTime, delta: -1 },
+  ]).sort((left, right) => left.time - right.time || right.delta - left.delta);
+  let activeHolds = 0;
+  let activeHoldPeak = 0;
+  let activeHoldArea = 0;
+  let previousHoldEventTime = holdEvents[0]?.time ?? 0;
+  for (const event of holdEvents) {
+    activeHoldArea += Math.max(0, event.time - previousHoldEventTime) * activeHolds;
+    activeHolds = Math.max(0, activeHolds + event.delta);
+    activeHoldPeak = Math.max(activeHoldPeak, activeHolds);
+    previousHoldEventTime = event.time;
+  }
+  const averageActiveHolds = durationMs > 0 ? activeHoldArea / durationMs : 0;
+  const lnOverlapPressure = averageActiveHolds + activeHoldPeak * 0.35;
   const chordSizeChangeRate = orderedRows.length ? chordSizeChanges / orderedRows.length : 0;
   const directionChangeRate = notes.length ? directionChanges / notes.length : 0;
   const chordjackPressure = jackPressure * (0.28 + chordRatio * 1.35) + burstDensity * chordRatio * 0.6;
@@ -159,6 +202,9 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
       chordRatio,
       peakNps1s,
       peakNps5s,
+      nps5sP50,
+      nps5sP90,
+      nps5sP95,
       sustainedNps10s,
       jackPressure,
       streamPressure,
@@ -172,6 +218,11 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
       sustainedPressureRatio,
       anchorPressure,
       lnReleasePressure,
+      lnDensity,
+      lnOverlapPressure,
+      lnChordPressure,
+      lnHoldDurationAvg,
+      lnHoldDurationP90,
       chordSizeChangeRate,
       directionChangeRate,
       staminaPressure: sustainedNps10s,

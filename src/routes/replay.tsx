@@ -1,29 +1,48 @@
-import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, notFound, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import type { ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings } from "../lib/osu";
+import { Circle, Copy, MousePointer2, RectangleHorizontal, Settings, X } from "lucide-react";
+import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores } from "../lib/osu";
 import { parseManiaBeatmap } from "../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
-import { getDisplayedAccuracy, getDisplayedRank, getScoreDisplayValues, scoreHasReplay } from "../lib/score";
+import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreDisplayValues, scoreHasReplay } from "../lib/score";
 import { useAppStore, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SearchInput } from "../components/ui/SearchInput";
 import { avatarImageSrc } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
+import { ModBadge } from "../components/ui/ModBadge";
 import { formatAccuracy, formatPP } from "../lib/format";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { track } from "../lib/posthog";
 import { withTimeout } from "../lib/promise-timeout";
+import type { ReplayHitCounts } from "../lib/replay-validation";
+import {
+  DEFAULT_REPLAY_SKIN_SETTINGS,
+  REPLAY_SKIN_MAX_HIT_POSITION,
+  REPLAY_SKIN_MIN_HIT_POSITION,
+  getReplaySkinProfile,
+  normalizeReplaySkinSettings,
+  readReplaySkinSettings,
+  writeReplaySkinSettings,
+} from "../lib/replay-skin";
 import { normalizeReplayPlayerParam, shouldStartReplayPlayerLoad } from "../lib/replay-player-autoload";
+import { getReplayBackNavigation } from "../lib/replay-navigation";
+import { parseReplayScoreInput } from "../lib/replay-score-input";
+import { getReplayScoreAvailability } from "../lib/replay-score-availability";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
-import type { OsuScore, OsuBeatmapset, OsuBeatmap, ReplayFrame } from "../lib/types";
+import type { ReplaySkinKeymodeProfile, ReplaySkinSettings, ReplaySkinStyle } from "../lib/replay-skin";
+import type { BeatmapScoreLookupStatus, OsuScore, OsuBeatmapset, OsuBeatmap, ReplayFrame, ReplayLifeBarFrame } from "../lib/types";
 import { pageSeo } from "../lib/seo";
 
 const REPLAY_VOLUME_STORAGE_KEY = "mania-hub-replay-volume";
 const REPLAY_INPUT_OVERLAY_STORAGE_KEY = "mania-hub-replay-input-overlay";
 const REPLAY_BG_DIM_STORAGE_KEY = "mania-hub-replay-bg-dim";
-const REPLAY_PLAYER_SCROLL_STORAGE_KEY = "mania-hub-replay-player-scroll";
+const REPLAY_SCROLL_SPEED_STORAGE_KEY = "mania-hub-replay-scroll-speed";
+const REPLAY_SCROLL_SPEED_MIGRATION_KEY = "mania-hub-replay-scroll-speed-v2";
+const DEFAULT_REPLAY_SCROLL_SPEED = 20;
 
 interface ReplaySearch {
   scoreId?: number;
@@ -48,8 +67,21 @@ interface ServerReplay {
     isPerfect: boolean;
   };
   frames: ReplayFrame[];
+  lifeBarFrames: ReplayLifeBarFrame[];
   keyCount: number;
-  replayScrollY?: number;
+}
+
+function getScoreExpectedCounts(score: OsuScore | null, replay: ServerReplay): ReplayHitCounts {
+  const stats = score?.statistics ?? {};
+
+  return {
+    countGeki: stats.count_geki ?? stats.perfect ?? replay.header.countGeki,
+    count300: stats.count_300 ?? stats.great ?? replay.header.count300,
+    countKatu: stats.count_katu ?? stats.good ?? replay.header.countKatu,
+    count100: stats.count_100 ?? stats.ok ?? replay.header.count100,
+    count50: stats.count_50 ?? stats.meh ?? replay.header.count50,
+    countMiss: stats.count_miss ?? stats.miss ?? replay.header.countMiss,
+  };
 }
 
 // Server returns frames as two base64-packed typed arrays (Int32 times, Uint16 keys).
@@ -78,49 +110,23 @@ function base64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
-const REPLAY_SCROLL_CALIBRATION_SLOPE = 2.3819505316513596;
-const REPLAY_SCROLL_CALIBRATION_INTERCEPT = -6.496179351347244;
+function readReplayScrollSpeed(): number {
+  if (typeof window === "undefined") return DEFAULT_REPLAY_SCROLL_SPEED;
 
-function getReplayScrollSpeed(replay: ServerReplay): number | null {
-  if (!Number.isFinite(replay.replayScrollY) || (replay.replayScrollY ?? 0) <= 0) return null;
+  const raw = window.localStorage.getItem(REPLAY_SCROLL_SPEED_STORAGE_KEY);
+  const migrated = window.localStorage.getItem(REPLAY_SCROLL_SPEED_MIGRATION_KEY) === "1";
+  if (raw == null) return DEFAULT_REPLAY_SCROLL_SPEED;
 
-  // Heuristic calibration from verified replay samples:
-  // Aleju replay y=16.16162 -> 32 scroll
-  // Anthony replay y=14.0625 -> 27 scroll
-  const derived = Math.round(REPLAY_SCROLL_CALIBRATION_SLOPE * replay.replayScrollY! + REPLAY_SCROLL_CALIBRATION_INTERCEPT);
-  return Math.max(1, Math.min(40, derived));
+  const stored = Number(raw);
+  if (!Number.isFinite(stored)) return DEFAULT_REPLAY_SCROLL_SPEED;
+  if (!migrated && Math.round(stored) === 1) return DEFAULT_REPLAY_SCROLL_SPEED;
+  return Math.max(1, Math.min(40, Math.round(stored)));
 }
 
-function readPlayerScrollOverrides(): Record<string, number> {
-  if (typeof window === "undefined") return {};
-
-  const raw = window.localStorage.getItem(REPLAY_PLAYER_SCROLL_STORAGE_KEY);
-  if (!raw) return {};
-
-  try {
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-
-    return Object.fromEntries(
-      Object.entries(parsed).filter(([, value]) => Number.isFinite(value)).map(([key, value]) => [
-        key,
-        Math.max(1, Math.min(40, Math.round(Number(value)))),
-      ]),
-    );
-  } catch {
-    return {};
-  }
-}
-
-function writePlayerScrollOverride(userId: number, scrollSpeed: number) {
+function writeReplayScrollSpeed(scrollSpeed: number) {
   if (typeof window === "undefined") return;
-
-  const next = {
-    ...readPlayerScrollOverrides(),
-    [String(userId)]: Math.max(1, Math.min(40, Math.round(scrollSpeed))),
-  };
-
-  window.localStorage.setItem(REPLAY_PLAYER_SCROLL_STORAGE_KEY, JSON.stringify(next));
+  window.localStorage.setItem(REPLAY_SCROLL_SPEED_STORAGE_KEY, String(Math.max(1, Math.min(40, Math.round(scrollSpeed)))));
+  window.localStorage.setItem(REPLAY_SCROLL_SPEED_MIGRATION_KEY, "1");
 }
 
 interface ReplayRendererLike {
@@ -138,6 +144,7 @@ interface ReplayRendererLike {
   setExternalClock: (cb: (() => { time: number; stalled: boolean } | null) | null) => void;
   setScrollSpeed: (value: number) => void;
   setShowInputOverlay: (value: boolean) => void;
+  setSkinSettings: (settings: ReplaySkinSettings) => void;
   setSpeed: (value: number) => void;
   ready: () => Promise<void>;
 }
@@ -174,9 +181,111 @@ export const Route = createFileRoute("/replay")({
 
 type BrowseMode = "player" | "beatmap";
 
+function mergeScoresById(...groups: OsuScore[][]): OsuScore[] {
+  const byId = new Map<number, OsuScore>();
+  for (const group of groups) {
+    for (const score of group) byId.set(score.id, score);
+  }
+  return Array.from(byId.values());
+}
+
+function ScoreModBadges({
+  score,
+  className,
+  hideWhenEmpty = false,
+}: {
+  score: OsuScore;
+  className: string;
+  hideWhenEmpty?: boolean;
+}) {
+  const mods = getModDisplayList(score.mods);
+  if (hideWhenEmpty && mods.length === 0) return null;
+
+  return (
+    <div className={className}>
+      {mods.map((m, index) => (
+        <ModBadge key={`${m.acronym}-${index}`} mod={m.acronym} rate={m.rate} size={0.75} />
+      ))}
+    </div>
+  );
+}
+
+function ScoreInputPreview({
+  scoreId,
+  score,
+  loading,
+  error,
+  onOpen,
+}: {
+  scoreId: number;
+  score: OsuScore | null;
+  loading: boolean;
+  error: string | null;
+  onOpen: () => void;
+}) {
+  if (loading) {
+    return (
+      <div className="mt-2 flex items-center gap-2 rounded-lg bg-osu-b4/70 border border-osu-b3/30 px-3 py-2 text-xs text-osu-f1">
+        <div className="w-3.5 h-3.5 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
+        Looking up score #{scoreId}
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        className="mt-2 w-full rounded-lg bg-osu-b4/70 hover:bg-osu-b3 border border-osu-b3/30 px-3 py-2 text-left text-xs text-osu-f1 hover:text-white transition-colors cursor-pointer"
+      >
+        {error}. Press Enter or click to try replay #{scoreId}.
+      </button>
+    );
+  }
+
+  if (!score) return null;
+
+  const coverUrl = score.beatmapset?.covers?.list;
+  const availability = getReplayScoreAvailability(score);
+  const unavailable = !availability.available;
+  return (
+    <button
+      type="button"
+      onClick={unavailable ? undefined : onOpen}
+      disabled={unavailable}
+      className={`mt-2 w-full flex items-center gap-3 rounded-lg bg-osu-b4 border border-osu-b3/30 px-3 py-2 text-left transition-colors ${
+        unavailable ? "cursor-default opacity-80" : "hover:bg-osu-b3 cursor-pointer"
+      }`}
+    >
+      {coverUrl && (
+        <img src={coverUrl} alt="" className="w-12 h-8 rounded object-cover flex-shrink-0" loading="lazy" />
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-semibold text-white truncate">
+          {score.beatmapset?.title ?? `Score #${scoreId}`}
+        </div>
+        <div className="text-[10px] text-osu-f1 truncate">
+          {unavailable
+            ? availability.message
+            : `${score.user?.username ?? "Unknown player"}${score.beatmap?.version ? ` // [${score.beatmap.version}]` : ""}`}
+        </div>
+      </div>
+      <ScoreModBadges score={score} className="hidden sm:flex flex-shrink-0 gap-0.5" hideWhenEmpty />
+      <span className={`text-[10px] font-semibold uppercase tracking-wider flex-shrink-0 ${
+        unavailable ? "text-osu-f1" : "text-osu-pink-light"
+      }`}>
+        {unavailable ? "Unavailable" : "Watch"}
+      </span>
+    </button>
+  );
+}
+
 function ReplayPage() {
   const { scoreId, beatmapsetId, t: initialTime, tab, player: playerParam } = Route.useSearch();
   const navigate = useNavigate();
+  const router = useRouter();
+  const canGoBack = useCanGoBack();
   const selectedCountry = useSelectedCountry();
   const cachedRankings = useAppStore((s) => s.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((s) => s.rankingsFetchedAtByCountry[selectedCountry] ?? null);
@@ -186,6 +295,10 @@ function ReplayPage() {
   const [scoreInfo, setScoreInfo] = useState<OsuScore | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [playerSearchQuery, setPlayerSearchQuery] = useState("");
+  const [scorePreview, setScorePreview] = useState<OsuScore | null>(null);
+  const [scorePreviewLoading, setScorePreviewLoading] = useState(false);
+  const [scorePreviewError, setScorePreviewError] = useState<string | null>(null);
 
   // Player browse state
   const [playerScoreGroups, setPlayerScoreGroups] = useState<{ best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScore[]; recent: OsuScore[] } | null>(null);
@@ -204,25 +317,41 @@ function ReplayPage() {
   const [selectedBeatmapset, setSelectedBeatmapset] = useState<OsuBeatmapset | null>(null);
   const [selectedDiffId, setSelectedDiffId] = useState<number | null>(null);
   const [rawBeatmapScores, setRawBeatmapScores] = useState<OsuScore[]>([]);
+  const [partialBeatmapScores, setPartialBeatmapScores] = useState<OsuScore[]>([]);
+  const [beatmapScoreLookupStatus, setBeatmapScoreLookupStatus] = useState<BeatmapScoreLookupStatus | null>(null);
+  const [beatmapScorePage, setBeatmapScorePage] = useState(1);
   const [loadingBeatmapScores, setLoadingBeatmapScores] = useState(false);
   const beatmapTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const beatmapScoreRequestRef = useRef(0);
+  const scorePreviewTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const visibleRawBeatmapScores = loadingBeatmapScores && partialBeatmapScores.length > 0
+    ? mergeScoresById(beatmapScorePage > 1 ? rawBeatmapScores : [], partialBeatmapScores)
+    : rawBeatmapScores;
 
   const beatmapScores = useMemo(
-    () => rawBeatmapScores.filter((s) => scoreHasReplay(s)),
-    [rawBeatmapScores],
+    () => visibleRawBeatmapScores.filter((s) => scoreHasReplay(s)),
+    [visibleRawBeatmapScores],
   );
   const normalizedPlayerParam = normalizeReplayPlayerParam(playerParam);
+  const playerSearchScoreId = parseReplayScoreInput(playerSearchQuery);
 
   const loadReplay = useCallback(async (sid: number) => {
     setError(null);
     setLoading(true);
     setReplay(null);
     setBeatmap(null);
+    setScoreInfo(null);
 
     try {
       // Fetch score first to get key count (beatmap.cs) for correct replay parsing
       const score = await getScore({ data: { scoreId: sid, mode: "mania" } }).catch(() => null);
       if (score) {
+        const availability = getReplayScoreAvailability(score);
+        if (!availability.available) {
+          throw new Error(availability.message);
+        }
+
         setScoreInfo(score);
         track("replay_view", {
           replay_score_id: String(sid),
@@ -249,8 +378,8 @@ function ReplayPage() {
       setReplay({
         header: parsed.header,
         frames: unpackReplayFrames(parsed.framesPacked),
+        lifeBarFrames: parsed.lifeBarFrames ?? [],
         keyCount: parsed.keyCount,
-        replayScrollY: parsed.replayScrollY,
       });
       if (bmResult) {
         setBeatmap(parseManiaBeatmap(bmResult.content));
@@ -273,6 +402,10 @@ function ReplayPage() {
     setBeatmap(null);
     setScoreInfo(null);
     setError(null);
+    setPlayerSearchQuery("");
+    setScorePreview(null);
+    setScorePreviewLoading(false);
+    setScorePreviewError(null);
   }, [scoreId, loadReplay]);
 
   useEffect(() => {
@@ -291,7 +424,7 @@ function ReplayPage() {
     clearTimeout(beatmapTimerRef.current);
     beatmapTimerRef.current = setTimeout(async () => {
       try {
-        const res = await searchBeatmaps({ data: { query: beatmapQuery } });
+        const res = await searchBeatmaps({ data: { query: beatmapQuery, sort: "relevance_desc" } });
         setBeatmapResults(filterBeatmapSearchResults(res.beatmapsets, beatmapQuery).slice(0, 12));
       } catch {
         setBeatmapResults([]);
@@ -303,6 +436,8 @@ function ReplayPage() {
   }, [beatmapQuery, browseMode]);
 
   const handlePlayerSearch = async (q: string) => {
+    if (parseReplayScoreInput(q)) return [];
+
     const res = await searchUsers({ data: { query: q } });
     return (res.user?.data ?? []).slice(0, 6).map((u: { id: number; username: string; avatar_url: string; country_code: string }) => ({
       id: u.id, username: u.username, avatar_url: u.avatar_url, country_code: u.country_code,
@@ -339,6 +474,54 @@ function ReplayPage() {
     setLoadedPlayerParam(null);
   };
 
+  const handlePlayerSearchSubmit = (query: string) => {
+    const parsedScoreId = parseReplayScoreInput(query);
+    if (!parsedScoreId) return;
+    navigate({ to: "/replay", search: { scoreId: parsedScoreId } });
+  };
+
+  const handleOpenScorePreview = () => {
+    const parsedScoreId = parseReplayScoreInput(playerSearchQuery);
+    if (!parsedScoreId) return;
+    navigate({ to: "/replay", search: { scoreId: parsedScoreId } });
+  };
+
+  useEffect(() => {
+    clearTimeout(scorePreviewTimerRef.current);
+
+    if (!playerSearchScoreId || scoreId || browseMode !== "player") {
+      setScorePreview(null);
+      setScorePreviewLoading(false);
+      setScorePreviewError(null);
+      return;
+    }
+
+    setScorePreview(null);
+    setScorePreviewError(null);
+    setScorePreviewLoading(true);
+
+    let cancelled = false;
+    scorePreviewTimerRef.current = setTimeout(async () => {
+      try {
+        const score = await getScore({ data: { scoreId: playerSearchScoreId, mode: "mania" } });
+        if (cancelled) return;
+        setScorePreview(score);
+        setScorePreviewError(null);
+      } catch {
+        if (cancelled) return;
+        setScorePreview(null);
+        setScorePreviewError("Couldn't find score details");
+      } finally {
+        if (!cancelled) setScorePreviewLoading(false);
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(scorePreviewTimerRef.current);
+    };
+  }, [browseMode, playerSearchScoreId, scoreId]);
+
   // Fetch country rankings to power the player suggestions grid (cached in store).
   useEffect(() => {
     if (browseMode !== "player") return;
@@ -362,6 +545,7 @@ function ReplayPage() {
         id: entry.user.id,
         username: entry.user.username,
         avatar_url: entry.user.avatar_url,
+        cover_url: entry.user.cover_url,
         global_rank: entry.global_rank,
       })),
     [cachedRankings],
@@ -419,26 +603,96 @@ function ReplayPage() {
     };
   }, [normalizedPlayerParam, playerParam, scoreId, loadedPlayerParam, loadPlayerScores]);
 
-  const handleSelectDifficulty = async (bm: OsuBeatmap) => {
+  const loadBeatmapScorePage = async (bm: OsuBeatmap, nextPage: number) => {
+    const requestId = beatmapScoreRequestRef.current + 1;
+    beatmapScoreRequestRef.current = requestId;
     setSelectedDiffId(bm.id);
+    setBeatmapScorePage(nextPage);
     setLoadingBeatmapScores(true);
-    setRawBeatmapScores([]);
+    if (nextPage === 1) setRawBeatmapScores([]);
+    setPartialBeatmapScores([]);
+    setBeatmapScoreLookupStatus(null);
     try {
-      const res = await getBeatmapScores({ data: { beatmapId: bm.id, country: selectedCountry } });
-      setRawBeatmapScores(res.scores);
+      const res = await getBeatmapScores({ data: { beatmapId: bm.id, country: selectedCountry, page: nextPage } });
+      if (beatmapScoreRequestRef.current !== requestId) return;
+      setRawBeatmapScores((current) => nextPage > 1 ? mergeScoresById(current, res.scores) : res.scores);
     } catch {
-      setRawBeatmapScores([]);
+      if (beatmapScoreRequestRef.current !== requestId) return;
+      if (nextPage === 1) setRawBeatmapScores([]);
     } finally {
-      setLoadingBeatmapScores(false);
+      if (beatmapScoreRequestRef.current === requestId) {
+        setLoadingBeatmapScores(false);
+        setBeatmapScoreLookupStatus(null);
+      }
     }
   };
 
+  const handleSelectDifficulty = async (bm: OsuBeatmap) => {
+    await loadBeatmapScorePage(bm, 1);
+  };
+
+  const handleLoadMoreBeatmapScores = async () => {
+    const beatmap = selectedBeatmapset?.beatmaps?.find((b) => b.id === selectedDiffId);
+    if (!beatmap || beatmapScorePage >= 2 || loadingBeatmapScores) return;
+    const nextPage = 2;
+    await loadBeatmapScorePage(beatmap, nextPage);
+  };
+
+  useEffect(() => {
+    if (!loadingBeatmapScores || !selectedDiffId) return;
+
+    let cancelled = false;
+    const requestId = beatmapScoreRequestRef.current;
+    const poll = async () => {
+      try {
+        const [status, partial] = await Promise.all([
+          getBeatmapScoreLookupStatus({ data: { beatmapId: selectedDiffId, country: selectedCountry, page: beatmapScorePage } }),
+          getPartialBeatmapScores({ data: { beatmapId: selectedDiffId, country: selectedCountry, page: beatmapScorePage } }),
+        ]);
+        if (cancelled || beatmapScoreRequestRef.current !== requestId) return;
+        setBeatmapScoreLookupStatus(status);
+        if (partial.length > 0) {
+          setPartialBeatmapScores(partial);
+        }
+      } catch {
+        // The full lookup is still authoritative; polling is just progressive UI.
+      }
+    };
+
+    poll();
+    const id = window.setInterval(poll, 750);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [beatmapScorePage, loadingBeatmapScores, selectedDiffId, selectedCountry]);
+
+  const handleClearReplay = () => {
+    setReplay(null);
+    setBeatmap(null);
+    setScoreInfo(null);
+
+    const backNavigation = getReplayBackNavigation({ canGoBack, playerParam, tab });
+    if (backNavigation.type === "history") {
+      router.history.back();
+      return;
+    }
+
+    navigate({ to: "/replay", search: backNavigation.search });
+  };
+
+  const beatmapScoreProgressLabel = beatmapScoreLookupStatus
+    ? `${beatmapScoreLookupStatus.current}/${beatmapScoreLookupStatus.total} players checked · ${beatmapScores.length} replays found`
+    : `Checking players · ${beatmapScores.length} replays found`;
+
   return (
     <div className="flex-1">
-      <PageHeader iconSrc="/images/icons/home.svg" title="mania replay viewer" />
+      <div className={replay ? "hidden sm:block" : ""}>
+        <PageHeader iconSrc="/images/icons/home.svg" title="mania replay viewer" />
+      </div>
 
       <div className="bg-osu-b5 min-h-[80vh]">
-        <div className="max-w-[1200px] mx-auto px-5 py-6">
+        <div className="max-w-[1200px] mx-auto px-3 py-3 sm:px-5 sm:py-6">
           <AnimatePresence mode="wait">
             {loading ? (
               <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-20">
@@ -447,16 +701,13 @@ function ReplayPage() {
               </motion.div>
             ) : replay ? (
               <motion.div key="viewer" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <ReplayInfo replay={replay} score={scoreInfo} beatmap={beatmap} onClear={() => {
-                  setReplay(null); setBeatmap(null); setScoreInfo(null);
-                  navigate({ to: "/replay", search: playerParam ? { player: playerParam } : tab === "beatmap" ? { tab: "beatmap" } : {} });
-                }} />
+                <ReplayInfo replay={replay} score={scoreInfo} beatmap={beatmap} onClear={handleClearReplay} />
                 <ReplayViewer replay={replay} beatmap={beatmap} scoreInfo={scoreInfo} fallbackBeatmapsetId={beatmapsetId} initialTime={initialTime} />
               </motion.div>
             ) : (
               <motion.div key="browse" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 {/* Tab toggle */}
-                <div className="flex justify-center mb-6">
+                <div className="flex justify-center mb-3">
                   <div className="flex bg-osu-b4 rounded-lg border border-osu-b3/50 overflow-hidden">
                     {(["player", "beatmap"] as const).map((m) => (
                       <button
@@ -466,6 +717,9 @@ function ReplayPage() {
                           setPlayerScoreGroups(null);
                           setBeatmapResults([]);
                           setRawBeatmapScores([]);
+                          setPartialBeatmapScores([]);
+                          setBeatmapScoreLookupStatus(null);
+                          setBeatmapScorePage(1);
                           setSelectedBeatmapset(null);
                           setSelectedDiffId(null);
                           setBeatmapQuery("");
@@ -492,9 +746,24 @@ function ReplayPage() {
                   <>
                     <div className="max-w-lg mx-auto mb-8">
                       <h3 className="text-sm font-semibold text-osu-f1 uppercase tracking-wider mb-3 text-center">
-                        Search a player to view their replays
+                        Search a player, or paste a score ID
                       </h3>
-                      <SearchInput placeholder="Search player..." onSearch={handlePlayerSearch} onSelect={handleSelectPlayer} />
+                      <SearchInput
+                        placeholder="Search player... or score ID"
+                        onSearch={handlePlayerSearch}
+                        onSelect={handleSelectPlayer}
+                        onSubmit={handlePlayerSearchSubmit}
+                        onQueryChange={setPlayerSearchQuery}
+                      />
+                      {playerSearchScoreId && (
+                        <ScoreInputPreview
+                          scoreId={playerSearchScoreId}
+                          score={scorePreview}
+                          loading={scorePreviewLoading}
+                          error={scorePreviewError}
+                          onOpen={handleOpenScorePreview}
+                        />
+                      )}
                     </div>
 
                     {loadingScores && (
@@ -531,8 +800,10 @@ function ReplayPage() {
                                   <div className="flex-1 min-w-0">
                                     <div className="text-sm text-white truncate">{s.beatmapset?.title}</div>
                                     <div className="text-[10px] text-osu-f1">[{s.beatmap?.version}] {s.beatmap?.cs && `${s.beatmap.cs}K`}</div>
+                                    <ScoreModBadges score={s} className="mt-1 flex gap-0.5 sm:hidden" hideWhenEmpty />
                                   </div>
-                                  <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(s))}</span>
+                                  <ScoreModBadges score={s} className="hidden sm:flex w-28 flex-shrink-0 justify-end gap-0.5" />
+                                  <span className="text-xs text-osu-l2 flex-shrink-0">{formatAccuracy(getDisplayedAccuracy(s))}</span>
                                   <span className="text-sm font-bold">{formatPP(s.pp)}</span>
                                   <span className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold">Watch</span>
                                 </motion.div>
@@ -571,10 +842,18 @@ function ReplayPage() {
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: i * 0.02 }}
                                 onClick={() => handleSelectPlayer(p)}
-                                className="flex items-center gap-3 py-2.5 px-3 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20 text-left"
+                                className="relative overflow-hidden flex items-center gap-3 py-2.5 px-3 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20 text-left"
                               >
-                                <img src={avatarImageSrc(p.avatar_url, p.id)} alt="" className="w-9 h-9 rounded-full flex-shrink-0 object-cover" loading="lazy" />
-                                <div className="flex-1 min-w-0">
+                                {p.cover_url && (
+                                  <div
+                                    className="absolute inset-0 bg-cover bg-center opacity-35"
+                                    style={{ backgroundImage: `url(${p.cover_url})` }}
+                                    aria-hidden="true"
+                                  />
+                                )}
+                                <div className="absolute inset-0 bg-osu-b4/80" aria-hidden="true" />
+                                <img src={avatarImageSrc(p.avatar_url, p.id)} alt="" className="relative w-9 h-9 rounded-full flex-shrink-0 object-cover" loading="lazy" />
+                                <div className="relative flex-1 min-w-0">
                                   <div className="text-sm text-white truncate">{p.username}</div>
                                   <div className="text-[10px] text-osu-f1">#{p.global_rank.toLocaleString()}</div>
                                 </div>
@@ -605,6 +884,9 @@ function ReplayPage() {
                             setBeatmapQuery(e.target.value);
                             setSelectedDiffId(null);
                             setRawBeatmapScores([]);
+                            setPartialBeatmapScores([]);
+                            setBeatmapScoreLookupStatus(null);
+                            setBeatmapScorePage(1);
                           }}
                           placeholder="Search beatmap..."
                           className="w-full px-4 py-2.5 rounded-lg bg-osu-b4 text-osu-c1 text-sm placeholder:text-osu-f1 border border-osu-b3/50 focus:border-osu-h1/40 focus:outline-none transition-colors duration-[120ms] shadow-[inset_0_1px_3px_rgba(0,0,0,0.3)]"
@@ -674,16 +956,19 @@ function ReplayPage() {
 
                     {/* Loading beatmap scores */}
                     {loadingBeatmapScores && (
-                      <div className="flex justify-center py-8">
+                      <div className="flex flex-col items-center justify-center gap-3 py-8">
                         <div className="w-6 h-6 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
+                        <div className="text-xs font-semibold uppercase tracking-wider text-osu-f1">
+                          {beatmapScoreProgressLabel}
+                        </div>
                       </div>
                     )}
 
                     {/* Beatmap score results */}
-                    {!loadingBeatmapScores && selectedDiffId && beatmapScores.length > 0 && (
+                    {selectedDiffId && beatmapScores.length > 0 && (
                       <div className="space-y-1.5">
                         <h4 className="text-xs font-semibold text-osu-f1 uppercase tracking-wider mb-2">
-                          Replays available ({beatmapScores.length})
+                          {loadingBeatmapScores ? "Replays available so far" : "Replays available"} ({beatmapScores.length})
                         </h4>
                         {beatmapScores.map((s: OsuScore, i: number) => (
                           <motion.div key={s.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.02 }}
@@ -693,8 +978,10 @@ function ReplayPage() {
                             <img src={avatarImageSrc(s.user?.avatar_url, s.user?.id)} alt="" className="w-7 h-7 rounded-full flex-shrink-0" loading="lazy" />
                             <div className="flex-1 min-w-0">
                               <div className="text-sm text-white truncate">{s.user?.username}</div>
+                              <ScoreModBadges score={s} className="mt-1 flex gap-0.5 sm:hidden" hideWhenEmpty />
                             </div>
-                            <span className="text-xs text-osu-l2">{formatAccuracy(getDisplayedAccuracy(s))}</span>
+                            <ScoreModBadges score={s} className="hidden sm:flex w-28 flex-shrink-0 justify-end gap-0.5" />
+                            <span className="text-xs text-osu-l2 flex-shrink-0">{formatAccuracy(getDisplayedAccuracy(s))}</span>
                             <span className="text-sm font-bold">{formatPP(s.pp)}</span>
                             <span className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold">Watch</span>
                           </motion.div>
@@ -702,13 +989,24 @@ function ReplayPage() {
                       </div>
                     )}
 
+                    {!loadingBeatmapScores && selectedDiffId && beatmapScorePage < 2 && (
+                      <div className="flex justify-center py-4">
+                        <button
+                          onClick={handleLoadMoreBeatmapScores}
+                          className="px-3 py-1.5 rounded-lg bg-osu-b4 hover:bg-osu-b3 border border-osu-b3/40 text-xs font-semibold text-osu-f1 hover:text-white transition-colors cursor-pointer"
+                        >
+                          Load more
+                        </button>
+                      </div>
+                    )}
+
                     {/* Empty states */}
-                    {!loadingBeatmapScores && selectedDiffId && beatmapScores.length === 0 && rawBeatmapScores.length > 0 && (
+                    {!loadingBeatmapScores && selectedDiffId && beatmapScores.length === 0 && visibleRawBeatmapScores.length > 0 && (
                       <div className="text-center py-6 text-osu-f1 text-sm">
                         No replays available from {selectedCountry.toUpperCase()} players on this difficulty
                       </div>
                     )}
-                    {!loadingBeatmapScores && selectedDiffId && rawBeatmapScores.length === 0 && (
+                    {!loadingBeatmapScores && selectedDiffId && visibleRawBeatmapScores.length === 0 && (
                       <div className="text-center py-6 text-osu-f1 text-sm">
                         No scores found from {selectedCountry.toUpperCase()} players on this difficulty
                       </div>
@@ -745,10 +1043,78 @@ function ReplayInfo({ replay, score, beatmap, onClear }: {
   const mapUrl = beatmapsetId ? `https://osu.ppy.sh/beatmapsets/${beatmapsetId}${beatmapId ? `#mania/${beatmapId}` : ""}` : null;
 
   return (
-    <div className="bg-osu-b4 rounded-xl p-4 mb-4 border border-osu-b3/20">
-      <div className="flex flex-wrap items-center gap-x-4 sm:gap-x-6 gap-y-2">
-        <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Player</div><div className="text-sm font-bold text-white">{h.playerName}</div></div>
-        {beatmap && <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Map</div>{mapUrl ? <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-osu-l2 hover:text-osu-pink-light transition-colors">{beatmap.title} [{beatmap.version}]</a> : <div className="text-sm font-medium text-osu-l2">{beatmap.title} [{beatmap.version}]</div>}</div>}
+    <>
+    <div className="sm:hidden bg-osu-b4 rounded-xl p-3 mb-3 border border-osu-b3/20">
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="text-[8px] uppercase tracking-wider text-osu-f1">Player</div>
+              <div className="truncate text-sm font-bold text-white">{h.playerName}</div>
+            </div>
+            <div className="h-7 w-px bg-osu-b3/40" />
+            <div className="min-w-0 flex-1">
+              <div className="text-[8px] uppercase tracking-wider text-osu-f1">Map</div>
+              {beatmap ? (
+                mapUrl ? (
+                  <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="block truncate text-xs font-semibold text-osu-l2" title={`${beatmap.title} [${beatmap.version}]`}>
+                    {beatmap.title} [{beatmap.version}]
+                  </a>
+                ) : (
+                  <div className="truncate text-xs font-semibold text-osu-l2" title={`${beatmap.title} [${beatmap.version}]`}>{beatmap.title} [{beatmap.version}]</div>
+                )
+              ) : (
+                <div className="truncate text-xs font-semibold text-osu-l2">Replay loaded</div>
+              )}
+            </div>
+          </div>
+        </div>
+        <button onClick={onClear} className="shrink-0 px-3 py-1.5 rounded-lg bg-osu-b3/50 text-xs text-osu-f1 hover:text-white hover:bg-osu-b2 transition-colors cursor-pointer">Back</button>
+      </div>
+
+      <div className="mt-3 grid grid-cols-4 gap-1.5">
+        <MobileReplayStat label="Keys" value={`${replay.keyCount}K`} valueClassName="text-osu-yellow" compact />
+        <MobileReplayStat label="Acc" value={`${accuracy.toFixed(2)}%`} compact />
+        <MobileReplayStat label="Score" value={h.totalScore.toLocaleString()} compact />
+        <MobileReplayStat label="Combo" value={`${h.maxCombo}x`} compact />
+      </div>
+      <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-osu-b5/55 px-3 py-2.5">
+        <div className="min-w-0">
+          <div className="mb-1 text-[8px] uppercase tracking-wider text-osu-f1">Judgments</div>
+          <div className="grid grid-cols-6 gap-1.5 text-center text-[11px] font-bold tabular-nums">
+            <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-yellow">{h.countGeki}</span>
+            <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-blue">{h.count300}</span>
+            <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-green-light">{h.countKatu}</span>
+            <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-green">{h.count100}</span>
+            <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-orange">{h.count50}</span>
+            <span className="rounded bg-osu-b4/70 px-1 py-1 text-osu-red-light">{h.countMiss}</span>
+          </div>
+        </div>
+        {beatmap && (
+          <div className="shrink-0 text-right">
+            <div className="text-[8px] uppercase tracking-wider text-osu-f1">Notes</div>
+            <div className="text-xs font-bold text-osu-f1">{beatmap.notes.length.toLocaleString()}</div>
+          </div>
+        )}
+      </div>
+    </div>
+
+    <div className="hidden sm:block bg-osu-b4 rounded-xl p-4 mb-4 border border-osu-b3/20">
+      <div className="grid grid-cols-[minmax(56px,max-content)_minmax(0,1fr)_auto] lg:grid-cols-[minmax(64px,max-content)_minmax(160px,1fr)_auto_auto] items-center gap-x-4 sm:gap-x-6 gap-y-2">
+        <div className="min-w-0"><div className="text-[9px] uppercase tracking-wider text-osu-f1">Player</div><div className="text-sm font-bold text-white truncate">{h.playerName}</div></div>
+        {beatmap && (
+          <div className="min-w-0">
+            <div className="text-[9px] uppercase tracking-wider text-osu-f1">Map</div>
+            {mapUrl ? (
+              <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="block truncate text-sm font-medium text-osu-l2 hover:text-osu-pink-light transition-colors" title={`${beatmap.title} [${beatmap.version}]`}>
+                {beatmap.title} [{beatmap.version}]
+              </a>
+            ) : (
+              <div className="truncate text-sm font-medium text-osu-l2" title={`${beatmap.title} [${beatmap.version}]`}>{beatmap.title} [{beatmap.version}]</div>
+            )}
+          </div>
+        )}
+        <div className="col-span-1 lg:col-span-1 flex flex-wrap items-center justify-end gap-x-4 sm:gap-x-6 gap-y-2 min-w-0">
         <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Keys</div><div className="text-sm font-bold text-osu-yellow">{replay.keyCount}K</div></div>
         <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Accuracy</div><div className="text-sm font-bold text-white">{accuracy.toFixed(2)}%</div></div>
         <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Score</div><div className="text-sm font-bold text-white">{h.totalScore.toLocaleString()}</div></div>
@@ -760,8 +1126,19 @@ function ReplayInfo({ replay, score, beatmap, onClear }: {
           </div>
         </div>
         {beatmap && <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Notes</div><div className="text-sm font-bold text-osu-f1">{beatmap.notes.length.toLocaleString()}</div></div>}
-        <button onClick={onClear} className="ml-auto px-3 py-1.5 rounded-lg bg-osu-b3/50 text-xs text-osu-f1 hover:text-white hover:bg-osu-b2 transition-colors cursor-pointer">Back</button>
+        </div>
+        <button onClick={onClear} className="justify-self-end px-3 py-1.5 rounded-lg bg-osu-b3/50 text-xs text-osu-f1 hover:text-white hover:bg-osu-b2 transition-colors cursor-pointer">Back</button>
       </div>
+    </div>
+    </>
+  );
+}
+
+function MobileReplayStat({ label, value, valueClassName = "text-white", compact = false }: { label: string; value: string; valueClassName?: string; compact?: boolean }) {
+  return (
+    <div className={`min-w-0 rounded-lg bg-osu-b5/55 text-center ${compact ? "px-1 py-1.5" : "px-2 py-2"}`}>
+      <div className="text-[8px] uppercase tracking-wider text-osu-f1">{label}</div>
+      <div className={`truncate text-xs font-bold tabular-nums ${valueClassName}`}>{value}</div>
     </div>
   );
 }
@@ -877,7 +1254,7 @@ function ReplayViewer({
   );
   const modRate = modAcronyms.includes("DT") || modAcronyms.includes("NC") ? 1.5 : modAcronyms.includes("HT") ? 0.75 : 1;
   const effectiveRate = speed * modRate;
-  const [scrollSpeed, setScrollSpeed] = useState(32);
+  const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
   const [bgDim, setBgDim] = useState(() => {
     if (typeof window === "undefined") return 80;
     const raw = window.localStorage.getItem(REPLAY_BG_DIM_STORAGE_KEY);
@@ -898,6 +1275,8 @@ function ReplayViewer({
     const stored = window.localStorage.getItem(REPLAY_INPUT_OVERLAY_STORAGE_KEY);
     return stored == null ? false : stored === "true";
   });
+  const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
+  const [skinSettingsOpen, setSkinSettingsOpen] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [rendererError, setRendererError] = useState<string | null>(null);
   const [audioReady, setAudioReady] = useState(false);
@@ -912,19 +1291,26 @@ function ReplayViewer({
   const audioEnabledRef = useRef(true);
   const audioUrlActiveRef = useRef(false);
   const showInputOverlayRef = useRef(false);
-  const scrollSpeedRef = useRef(32);
+  const scrollSpeedRef = useRef(DEFAULT_REPLAY_SCROLL_SPEED);
+  const skinSettingsRef = useRef<ReplaySkinSettings>(skinSettings);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [sharePos, setSharePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [shareLabel, setShareLabel] = useState("");
   const [copied, setCopied] = useState(false);
   const shouldResumeAudioRef = useRef(false);
-  const applyScrollSpeed = useCallback((next: number, persistForPlayer = false) => {
+  const applyScrollSpeed = useCallback((next: number, persist = false) => {
     const normalized = Math.max(1, Math.min(40, Math.round(next)));
     setScrollSpeed(normalized);
-    if (persistForPlayer && scoreInfo?.user_id) {
-      writePlayerScrollOverride(scoreInfo.user_id, normalized);
-    }
-  }, [scoreInfo?.user_id]);
+    if (persist) writeReplayScrollSpeed(normalized);
+  }, []);
+
+  const applySkinSettings = useCallback((next: ReplaySkinSettings) => {
+    const normalized = normalizeReplaySkinSettings(next);
+    skinSettingsRef.current = normalized;
+    setSkinSettings(normalized);
+    rendererRef.current?.setSkinSettings(normalized);
+    writeReplaySkinSettings(normalized);
+  }, []);
 
   // Build full audio URL from Sayobot CDN using beatmapset ID + audio filename from .osu
   const effectiveBeatmapsetId = scoreInfo?.beatmapset?.id ?? fallbackBeatmapsetId;
@@ -997,17 +1383,11 @@ function ReplayViewer({
   }, [scrollSpeed]);
 
   useEffect(() => {
-    const userId = scoreInfo?.user_id;
-    const storedOverrides = readPlayerScrollOverrides();
-
-    if (userId && Number.isFinite(storedOverrides[String(userId)])) {
-      applyScrollSpeed(storedOverrides[String(userId)]);
-      return;
+    skinSettingsRef.current = skinSettings;
+    if (rendererRef.current) {
+      rendererRef.current.setSkinSettings(skinSettings);
     }
-
-    const replayScrollSpeed = getReplayScrollSpeed(replay);
-    applyScrollSpeed(replayScrollSpeed ?? 32);
-  }, [applyScrollSpeed, replay, scoreInfo?.user_id]);
+  }, [skinSettings]);
 
   // Create renderer
   useEffect(() => {
@@ -1040,6 +1420,9 @@ function ReplayViewer({
             mods: modAcronyms,
             transparentBackground: true,
             scrollVelocities: beatmap?.scrollVelocities,
+            expectedCounts: getScoreExpectedCounts(scoreInfo, replay),
+            lifeBarFrames: replay.lifeBarFrames,
+            skinSettings: skinSettingsRef.current,
           },
         ) as ReplayRendererLike;
 
@@ -1056,6 +1439,7 @@ function ReplayViewer({
 
         renderer.setScrollSpeed(scrollSpeedRef.current);
         renderer.setShowInputOverlay(showInputOverlayRef.current);
+        renderer.setSkinSettings(skinSettingsRef.current);
         rendererRef.current = renderer;
 
         // Install the audio-driven clock. When audio is enabled and actually
@@ -1157,6 +1541,14 @@ function ReplayViewer({
 
     const resumeAudioIfNeeded = () => {
       if (!audioEnabled || !isPlaying) return;
+      const renderer = rendererRef.current;
+      if (audio.ended || !renderer?.isPlaying || renderer.time >= renderer.duration) {
+        shouldResumeAudioRef.current = false;
+        setBuffering(false);
+        setIsPlaying(false);
+        audio.pause();
+        return;
+      }
       if (!audio.paused) return;
       if (audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
       shouldResumeAudioRef.current = false;
@@ -1188,6 +1580,16 @@ function ReplayViewer({
     const handleWaiting = () => updateBuffering();
     const handleStalled = () => updateBuffering();
     const handleSeeking = () => updateBuffering();
+    const handleEnded = () => {
+      const renderer = rendererRef.current;
+      if (renderer) {
+        renderer.seek(renderer.duration);
+        renderer.pause();
+      }
+      shouldResumeAudioRef.current = false;
+      setBuffering(false);
+      setIsPlaying(false);
+    };
     // We deliberately don't try to auto-resume from the "pause" event — user
     // pauses (togglePlay, scrub) fire this synchronously, and resuming here
     // would immediately undo them. Browser-initiated background-tab pauses
@@ -1203,6 +1605,7 @@ function ReplayViewer({
     audio.addEventListener("waiting", handleWaiting);
     audio.addEventListener("stalled", handleStalled);
     audio.addEventListener("seeking", handleSeeking);
+    audio.addEventListener("ended", handleEnded);
     audio.addEventListener("pause", handlePause);
 
     if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) setAudioReady(true);
@@ -1231,6 +1634,7 @@ function ReplayViewer({
       audio.removeEventListener("waiting", handleWaiting);
       audio.removeEventListener("stalled", handleStalled);
       audio.removeEventListener("seeking", handleSeeking);
+      audio.removeEventListener("ended", handleEnded);
       audio.removeEventListener("pause", handlePause);
       if (typeof document !== "undefined") {
         document.removeEventListener("visibilitychange", handleVisibility);
@@ -1414,7 +1818,7 @@ function ReplayViewer({
           className="absolute inset-0 pointer-events-none bg-black transition-opacity"
           style={{ opacity: bgDim / 100 }}
         />
-        <canvas ref={canvasRef} className="relative z-10 w-full" style={{ height: "min(70vh, 600px)" }} />
+        <canvas ref={canvasRef} className="relative z-10 h-[calc(100dvh-315px)] min-h-[390px] max-h-[560px] w-full sm:h-[min(70vh,600px)] sm:min-h-0 sm:max-h-none" />
         {rendererError && (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/55 px-6 text-center">
             <div className="max-w-md rounded-lg border border-red-400/30 bg-red-950/70 px-4 py-3 text-sm font-semibold text-red-100">
@@ -1564,6 +1968,20 @@ function ReplayViewer({
             Input
           </button>
 
+          {/* Skin settings */}
+          <button
+            onClick={() => setSkinSettingsOpen(true)}
+            aria-label="Replay skin settings"
+            title="Replay skin settings"
+            className={`w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors ${
+              skinSettingsOpen
+                ? "bg-osu-pink text-white"
+                : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
+            }`}
+          >
+            <Settings className="h-4 w-4" strokeWidth={2.2} />
+          </button>
+
           {/* Scroll Speed */}
           <div className="flex items-center gap-1">
             <span className="text-[10px] text-osu-f1 mr-0.5">Scroll</span>
@@ -1584,6 +2002,672 @@ function ReplayViewer({
           </div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {skinSettingsOpen && (
+          <ReplaySkinSettingsModal
+            settings={skinSettings}
+            keyCount={replay.keyCount}
+            onSave={applySkinSettings}
+            onClose={() => setSkinSettingsOpen(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
+  );
+}
+
+function ReplaySkinSettingsModal({
+  settings,
+  keyCount,
+  onSave,
+  onClose,
+}: {
+  settings: ReplaySkinSettings;
+  keyCount: number;
+  onSave: (settings: ReplaySkinSettings) => void;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState(() => normalizeReplaySkinSettings(settings));
+  const [selectedKeyCount, setSelectedKeyCount] = useState(() => Math.max(1, Math.min(10, keyCount)));
+  const [activeColor, setActiveColor] = useState<"tap" | "lnHead" | "lnBody" | null>(null);
+  const [columnEditorOpen, setColumnEditorOpen] = useState(false);
+  const [overrideKind, setOverrideKind] = useState<"tap" | "lnHead">("tap");
+  const [overrideColumn, setOverrideColumn] = useState(0);
+  const profile = getReplaySkinProfile(draft, selectedKeyCount);
+  const update = (patch: Partial<ReplaySkinSettings>) => {
+    setDraft((current) => normalizeReplaySkinSettings({ ...current, ...patch, version: 1 }));
+  };
+  const updateStyle = (style: ReplaySkinStyle) => update({ style });
+  const updateProfile = (patch: Partial<ReplaySkinKeymodeProfile>) => {
+    setDraft((current) => {
+      const currentProfile = getReplaySkinProfile(current, selectedKeyCount);
+      return normalizeReplaySkinSettings({
+        ...current,
+        keymodeProfiles: {
+          ...current.keymodeProfiles,
+          [selectedKeyCount]: {
+            ...currentProfile,
+            ...patch,
+          },
+        },
+        version: 1,
+      });
+    });
+  };
+  const updateBaseColor = (kind: "tap" | "lnHead", value: string) => {
+    if (kind === "tap") updateProfile({ tapColor: value });
+    else updateProfile({ lnHeadColor: value });
+  };
+  const updateOverrideColor = (kind: "tap" | "lnHead", column: number, value: string) => {
+    setDraft((current) => {
+      const currentProfile = getReplaySkinProfile(current, selectedKeyCount);
+      const key = kind === "tap" ? "tapColors" : "lnHeadColors";
+      const colors = [...currentProfile[key]];
+      colors[column] = value;
+      return normalizeReplaySkinSettings({
+        ...current,
+        keymodeProfiles: {
+          ...current.keymodeProfiles,
+          [selectedKeyCount]: {
+            ...currentProfile,
+            [key]: colors,
+          },
+        },
+        version: 1,
+      });
+    });
+  };
+  const updateLnBodyColor = (value: string) => {
+    update({ lnBodyColor: value });
+  };
+  const save = () => {
+    onSave(draft);
+    onClose();
+  };
+  const columns = Array.from({ length: selectedKeyCount }, (_, index) => index);
+  const overrideColors = overrideKind === "tap" ? profile.tapColors : profile.lnHeadColors;
+  const overrideBaseColor = overrideKind === "tap" ? profile.tapColor : profile.lnHeadColor;
+  const hasOverride = !!overrideColors[overrideColumn];
+  const overrideValue = overrideColors[overrideColumn] || overrideBaseColor;
+
+  return (
+    <>
+      <motion.div
+        className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-[2px]"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.12 }}
+        onClick={onClose}
+      />
+      <motion.div
+        className="fixed inset-x-3 top-1/2 z-[111] mx-auto max-h-[calc(100vh-2rem)] max-w-3xl overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
+        initial={{ opacity: 0, y: "-48%", scale: 0.98 }}
+        animate={{ opacity: 1, y: "-50%", scale: 1 }}
+        exit={{ opacity: 0, y: "-48%", scale: 0.98 }}
+        transition={{ duration: 0.14 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 border-b border-osu-b3/50 px-5 py-4">
+          <div>
+            <h3 className="text-base font-bold text-white">Replay Skin</h3>
+            <div className="text-[10px] uppercase tracking-wider text-osu-f1">{draft.style === "circles" ? "Circle playfield" : "Bar playfield"}</div>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="Close replay skin settings"
+            className="ml-auto flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg bg-osu-b3/50 text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
+          >
+            <X className="h-4 w-4" strokeWidth={2.4} />
+          </button>
+        </div>
+
+        <div className="grid max-h-[calc(100vh-9rem)] overflow-y-auto md:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="space-y-4 p-5">
+            <label className="block">
+              <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-osu-f1">Skin preset</span>
+              <select
+                value="mania-dark"
+                onChange={() => {}}
+                className="h-10 w-full cursor-pointer rounded-lg border border-osu-b3/60 bg-osu-b5/70 px-3 text-sm font-semibold text-white outline-none transition-colors focus:border-osu-pink/70"
+              >
+                <option value="mania-dark">Mania Dark (Default)</option>
+              </select>
+            </label>
+
+            <section>
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Note shape</div>
+              <div className="grid grid-cols-3 gap-2">
+                <ReplaySkinShapeButton
+                  active={draft.style === "circles"}
+                  icon={<Circle className="h-4 w-4" />}
+                  label="Circles"
+                  onClick={() => updateStyle("circles")}
+                />
+                <ReplaySkinShapeButton
+                  active={draft.style === "bars"}
+                  icon={<RectangleHorizontal className="h-4 w-4" />}
+                  label="Bars"
+                  onClick={() => updateStyle("bars")}
+                />
+                <ReplaySkinShapeButton
+                  active={false}
+                  disabled
+                  icon={<MousePointer2 className="h-4 w-4" />}
+                  label="Arrows"
+                  onClick={() => {}}
+                />
+              </div>
+            </section>
+
+            <section className="space-y-3 pt-2">
+              <ReplaySkinColorRow
+                label="Note color"
+                value={profile.tapColor}
+                selected={activeColor === "tap"}
+                onOpen={() => setActiveColor((current) => current === "tap" ? null : "tap")}
+              />
+              <ReplaySkinColorRow
+                label="LN Head color"
+                value={profile.lnHeadColor}
+                selected={activeColor === "lnHead"}
+                onOpen={() => setActiveColor((current) => current === "lnHead" ? null : "lnHead")}
+              />
+              <ReplaySkinColorRow
+                label="LN Body color"
+                value={draft.lnBodyColor}
+                selected={activeColor === "lnBody"}
+                onOpen={() => setActiveColor((current) => current === "lnBody" ? null : "lnBody")}
+              />
+              {activeColor ? (
+                <ReplaySkinColorPanel
+                  value={activeColor === "tap" ? profile.tapColor : activeColor === "lnHead" ? profile.lnHeadColor : draft.lnBodyColor}
+                  onChange={(value) => {
+                    if (activeColor === "tap") updateBaseColor("tap", value);
+                    else if (activeColor === "lnHead") updateBaseColor("lnHead", value);
+                    else updateLnBodyColor(value);
+                  }}
+                />
+              ) : null}
+            </section>
+
+            <section className="relative space-y-3 pt-2">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-osu-l1">Per-column colors</span>
+                <span className="flex items-center gap-2">
+                  <ReplaySkinSwitch checked={columnEditorOpen} onChange={setColumnEditorOpen} />
+                  <button
+                    type="button"
+                    onClick={() => setColumnEditorOpen((value) => !value)}
+                    aria-label="Edit per-column colors"
+                    className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg border border-osu-b3/60 bg-osu-b5/70 text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white"
+                  >
+                    <Settings className="h-4 w-4" />
+                  </button>
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-osu-l1">Cut LN tail</span>
+                <ReplaySkinSwitch checked={draft.percy} onChange={(checked) => update({ percy: checked })} />
+              </div>
+              <label className="block pt-1">
+                <span className="mb-2 flex items-center justify-between text-sm font-semibold text-osu-l1">
+                  <span>Column width</span>
+                  <span className="text-xs text-white tabular-nums">{profile.columnWidth}%</span>
+                </span>
+                <input
+                  type="range"
+                  min={70}
+                  max={130}
+                  step={5}
+                  value={profile.columnWidth}
+                  onChange={(e) => updateProfile({ columnWidth: Number(e.target.value) })}
+                  className="w-full cursor-pointer accent-osu-pink"
+                />
+              </label>
+              <label className="block pt-1">
+                <span className="mb-2 flex items-center justify-between text-sm font-semibold text-osu-l1">
+                  <span>Hit position</span>
+                  <span className="text-xs text-white tabular-nums">{draft.hitPosition}</span>
+                </span>
+                <input
+                  type="range"
+                  min={REPLAY_SKIN_MIN_HIT_POSITION}
+                  max={REPLAY_SKIN_MAX_HIT_POSITION}
+                  step={5}
+                  value={draft.hitPosition}
+                  onChange={(e) => update({ hitPosition: Number(e.target.value) })}
+                  className="w-full cursor-pointer accent-osu-pink"
+                />
+              </label>
+
+              {columnEditorOpen ? (
+                <div className="absolute left-[46%] top-3 z-10 w-80 rounded-xl border border-osu-b2/70 bg-osu-b4/95 p-4 shadow-2xl backdrop-blur">
+                  <div className="mb-3 grid grid-cols-7 gap-1.5">
+                    {columns.map((column) => (
+                      <button
+                        key={column}
+                        type="button"
+                        onClick={() => setOverrideColumn(column)}
+                        className={`h-8 cursor-pointer rounded-md text-xs font-bold transition-colors ${
+                          overrideColumn === column
+                            ? "bg-osu-pink text-white"
+                            : "bg-osu-b5/80 text-osu-f1 hover:text-white"
+                        }`}
+                      >
+                        {column + 1}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mb-3 inline-grid grid-cols-2 overflow-hidden rounded-lg bg-osu-b5/70 p-1">
+                    {(["tap", "lnHead"] as const).map((kind) => (
+                      <button
+                        key={kind}
+                        type="button"
+                        onClick={() => setOverrideKind(kind)}
+                        className={`cursor-pointer rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
+                          overrideKind === kind ? "bg-osu-pink text-white" : "text-osu-f1 hover:text-white"
+                        }`}
+                      >
+                        {kind === "tap" ? "Note" : "LN Head"}
+                      </button>
+                    ))}
+                  </div>
+                  <ReplaySkinColumnColorRow
+                    label={overrideKind === "tap" ? "Note" : "LN Head"}
+                    value={overrideValue}
+                    onChange={(value) => updateOverrideColor(overrideKind, overrideColumn, value)}
+                  />
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        for (const column of columns) updateOverrideColor(overrideKind, column, overrideValue);
+                      }}
+                      className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-osu-b3/60 bg-osu-b5/70 px-2.5 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Copy to all
+                    </button>
+                    {hasOverride ? (
+                      <button
+                        type="button"
+                        onClick={() => updateOverrideColor(overrideKind, overrideColumn, "")}
+                        className="cursor-pointer rounded-lg px-2.5 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:text-white"
+                      >
+                        Use base
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </section>
+          </div>
+
+          <div className="border-l border-osu-b3/50 p-5">
+            <div className="mb-2 text-sm font-semibold text-white">Live preview</div>
+            <ReplaySkinPreview settings={draft} profile={profile} keyCount={selectedKeyCount} />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 border-t border-osu-b3/50 px-5 py-4">
+          <button
+            onClick={() => {
+              setDraft(DEFAULT_REPLAY_SKIN_SETTINGS);
+              setActiveColor(null);
+              setOverrideColumn(0);
+            }}
+            className="mr-auto cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
+          >
+            Reset
+          </button>
+          <button
+            onClick={onClose}
+            className="cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            className="cursor-pointer rounded-lg bg-osu-pink px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-osu-pink-light"
+          >
+            Apply
+          </button>
+        </div>
+      </motion.div>
+    </>
+  );
+}
+
+const REPLAY_SKIN_PALETTE = [
+  "#9cf2ae",
+  "#dfffe6",
+  "#5a8fff",
+  "#de31ae",
+  "#ffcc22",
+  "#88da20",
+  "#e3a5de",
+  "#8b8b93",
+  "#ffffff",
+  "#20222b",
+];
+
+function hexToRgbParts(value: string): [number, number, number] {
+  const normalized = /^#[0-9a-f]{6}$/i.test(value) ? value : "#ffffff";
+  const raw = normalized.slice(1);
+  return [
+    Number.parseInt(raw.slice(0, 2), 16),
+    Number.parseInt(raw.slice(2, 4), 16),
+    Number.parseInt(raw.slice(4, 6), 16),
+  ];
+}
+
+function rgbPartsToHex(r: number, g: number, b: number): string {
+  return `#${[r, g, b].map((value) => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, "0")).join("")}`;
+}
+
+function normalizeEditableHex(value: string): string | null {
+  const trimmed = value.trim();
+  if (/^#[0-9a-f]{6}$/i.test(trimmed)) return trimmed.toLowerCase();
+  if (/^[0-9a-f]{6}$/i.test(trimmed)) return `#${trimmed.toLowerCase()}`;
+  return null;
+}
+
+function ReplaySkinPreview({
+  settings,
+  profile,
+  keyCount,
+}: {
+  settings: ReplaySkinSettings;
+  profile: ReplaySkinKeymodeProfile;
+  keyCount: number;
+}) {
+  const width = 260;
+  const height = 300;
+  const playfieldWidth = Math.min(230, keyCount * 30 * (profile.columnWidth / 100));
+  const laneWidth = playfieldWidth / keyCount;
+  const playfieldX = (width - playfieldWidth) / 2;
+  const receptorY = height * (768 - settings.hitPosition) / 768;
+  const noteSize = settings.style === "circles"
+    ? Math.max(18, Math.min(laneWidth - 4, Math.max(28, laneWidth * 0.74)))
+    : Math.max(8, Math.min(18, laneWidth - 6));
+  const lnCol = Math.min(keyCount - 1, Math.max(0, Math.floor(keyCount / 2)));
+  const tapCols = [0, Math.max(0, keyCount - 2)].filter((col, index, arr) => arr.indexOf(col) === index && col !== lnCol);
+  const colorFor = (colors: string[], fallback: string, col: number) => colors[col] || fallback;
+
+  return (
+    <div className="relative h-[300px] overflow-hidden rounded-lg border border-osu-b3/60 bg-[#07070c]">
+      <div className="absolute inset-0 bg-gradient-to-b from-[#050509] to-[#10101a]" />
+      {settings.style === "bars" ? (
+        <div className="absolute inset-y-0" style={{ left: playfieldX, width: playfieldWidth }}>
+          {Array.from({ length: keyCount + 1 }, (_, index) => (
+            <div
+              key={index}
+              className="absolute inset-y-0 w-px bg-white/10"
+              style={{ left: index * laneWidth }}
+            />
+          ))}
+        </div>
+      ) : null}
+      {settings.style === "bars" ? (
+        <div className="absolute h-0.5 bg-white/70" style={{ left: playfieldX, width: playfieldWidth, top: receptorY }} />
+      ) : null}
+      {Array.from({ length: keyCount }, (_, col) => {
+        const cx = playfieldX + laneWidth * col + laneWidth / 2;
+        const pressed = col === lnCol;
+        if (settings.style === "circles") {
+          return (
+            <div
+              key={col}
+              className="absolute rounded-full border-2 border-white"
+              style={{
+                left: cx - noteSize / 2,
+                top: receptorY - noteSize / 2,
+                width: noteSize,
+                height: noteSize,
+                opacity: pressed ? 1 : 0.5,
+              }}
+            />
+          );
+        }
+        return (
+          <div
+            key={col}
+            className="absolute rounded-sm"
+            style={{
+              left: cx - noteSize / 2,
+              top: receptorY + 4,
+              width: noteSize,
+              height: 7,
+              backgroundColor: pressed ? colorFor(profile.tapColors, profile.tapColor, col) : "#ffffff",
+              opacity: pressed ? 1 : 0.16,
+            }}
+          />
+        );
+      })}
+      {tapCols.map((col, index) => {
+        const cx = playfieldX + laneWidth * col + laneWidth / 2;
+        const y = index === 0 ? 54 : 104;
+        const color = colorFor(profile.tapColors, profile.tapColor, col);
+        return settings.style === "circles" ? (
+          <div
+            key={`tap-${col}`}
+            className="absolute rounded-full ring-2 ring-white/55"
+            style={{ left: cx - noteSize / 2, top: y, width: noteSize, height: noteSize, backgroundColor: color }}
+          />
+        ) : (
+          <div
+            key={`tap-${col}`}
+            className="absolute rounded"
+            style={{ left: cx - noteSize / 2, top: y, width: noteSize, height: 10, backgroundColor: color }}
+          />
+        );
+      })}
+      {(() => {
+        const cx = playfieldX + laneWidth * lnCol + laneWidth / 2;
+        const bodyWidth = settings.style === "circles" ? Math.max(10, noteSize * 0.72) : noteSize;
+        const bodyHeight = settings.percy ? 92 : 122;
+        const bodyTop = settings.percy ? 72 : 56;
+        const headColor = colorFor(profile.lnHeadColors, profile.lnHeadColor, lnCol);
+        return (
+          <>
+            <div
+              className={`absolute ${settings.style === "circles" ? "rounded-t-full rounded-b-md" : "rounded-t-md rounded-b-sm"}`}
+              style={{
+                left: cx - bodyWidth / 2,
+                top: bodyTop,
+                width: bodyWidth,
+                height: bodyHeight,
+                backgroundColor: settings.lnBodyColor,
+              }}
+            />
+            {settings.style === "circles" ? (
+              <div
+                className="absolute rounded-full ring-2 ring-white/55"
+                style={{ left: cx - noteSize / 2, top: bodyTop + bodyHeight - noteSize / 2, width: noteSize, height: noteSize, backgroundColor: headColor }}
+              />
+            ) : (
+              <div
+                className="absolute rounded"
+                style={{ left: cx - noteSize / 2, top: bodyTop + bodyHeight - 10, width: noteSize, height: 10, backgroundColor: headColor }}
+              />
+            )}
+          </>
+        );
+      })()}
+    </div>
+  );
+}
+
+function ReplaySkinShapeButton({
+  active,
+  disabled = false,
+  icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`flex h-16 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border text-xs font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
+        active
+          ? "border-osu-pink bg-osu-pink/15 text-white"
+          : "border-osu-b3/60 bg-osu-b5/55 text-osu-f1 hover:border-osu-b2 hover:text-white"
+      }`}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function ReplaySkinColorRow({
+  label,
+  value,
+  selected,
+  onOpen,
+}: {
+  label: string;
+  value: string;
+  selected: boolean;
+  onOpen: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={`grid w-full cursor-pointer grid-cols-[1fr_auto] items-center gap-3 rounded-lg text-left transition-colors ${
+        selected ? "text-white" : "text-osu-f1 hover:text-white"
+      }`}
+    >
+      <span className="text-sm font-semibold">{label}</span>
+      <span className={`flex h-9 min-w-36 items-center gap-2 rounded-md border px-2 transition-colors ${
+        selected ? "border-osu-pink/70 bg-osu-pink/10" : "border-osu-b3/60 bg-osu-b5/60"
+      }`}>
+        <span className="h-5 w-7 rounded-sm border border-white/35" style={{ backgroundColor: value }} />
+        <span className="font-mono text-xs font-semibold text-osu-c1">{value}</span>
+      </span>
+    </button>
+  );
+}
+
+function ReplaySkinColumnColorRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <ReplaySkinColorRow
+        label={label}
+        value={value}
+        selected
+        onOpen={() => {}}
+      />
+      <ReplaySkinColorPanel value={value} onChange={onChange} compact />
+    </div>
+  );
+}
+
+function ReplaySkinSwitch({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`relative h-6 w-10 cursor-pointer rounded-full transition-colors ${
+        checked ? "bg-osu-pink" : "bg-osu-b2"
+      }`}
+    >
+      <span
+        className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${
+          checked ? "translate-x-5" : "translate-x-1"
+        }`}
+      />
+    </button>
+  );
+}
+
+function ReplaySkinColorPanel({ value, onChange, compact = false }: { value: string; onChange: (value: string) => void; compact?: boolean }) {
+  const [r, g, b] = hexToRgbParts(value);
+  const updateRgb = (index: 0 | 1 | 2, next: number) => {
+    const parts: [number, number, number] = [r, g, b];
+    parts[index] = next;
+    onChange(rgbPartsToHex(parts[0], parts[1], parts[2]));
+  };
+
+  return (
+    <div className={`${compact ? "mt-2" : "mt-3 border-t border-osu-b3/45 pt-3"}`}>
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {REPLAY_SKIN_PALETTE.map((color) => (
+          <button
+            key={color}
+            type="button"
+            onClick={() => onChange(color)}
+            className={`h-7 w-7 cursor-pointer rounded-md border transition-transform hover:scale-105 ${
+              value === color ? "border-white" : "border-white/20"
+            }`}
+            style={{ backgroundColor: color }}
+            title={color}
+          />
+        ))}
+      </div>
+      <div className="space-y-1.5">
+        <ReplaySkinRgbSlider label="R" value={r} color="#ff5f7e" onChange={(next) => updateRgb(0, next)} />
+        <ReplaySkinRgbSlider label="G" value={g} color="#45e37a" onChange={(next) => updateRgb(1, next)} />
+        <ReplaySkinRgbSlider label="B" value={b} color="#5a8fff" onChange={(next) => updateRgb(2, next)} />
+      </div>
+      <input
+        type="text"
+        value={value}
+        onChange={(event) => {
+          const normalized = normalizeEditableHex(event.target.value);
+          if (normalized) onChange(normalized);
+        }}
+        className="mt-3 w-full max-w-44 cursor-text rounded-md border border-osu-b3/50 bg-osu-b5 px-2 py-1.5 font-mono text-[11px] text-osu-c1 outline-none transition-colors focus:border-osu-pink/60"
+      />
+    </div>
+  );
+}
+
+function ReplaySkinRgbSlider({
+  label,
+  value,
+  color,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  color: string;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <label className="grid grid-cols-[14px_1fr_32px] items-center gap-2 text-[10px] font-semibold text-osu-f1">
+      <span>{label}</span>
+      <input
+        type="range"
+        min={0}
+        max={255}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value))}
+        className="h-1.5 cursor-pointer appearance-none rounded-full bg-osu-b2 accent-osu-pink"
+        style={{ backgroundImage: `linear-gradient(90deg, #15141d, ${color})` }}
+      />
+      <span className="text-right font-mono text-osu-c1">{value}</span>
+    </label>
   );
 }

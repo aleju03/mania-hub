@@ -6,6 +6,12 @@ export const RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS = 1_200;
 
 const RANDOM_REPLAY_TAP_HOLD_MS = 48;
 
+export function pickPreviewStartTime(primaryTimeMs: number, fallbackTimeMs = 0): number {
+  if (Number.isFinite(primaryTimeMs) && primaryTimeMs > 0) return primaryTimeMs;
+  if (Number.isFinite(fallbackTimeMs) && fallbackTimeMs > 0) return fallbackTimeMs;
+  return 0;
+}
+
 export function getPreviewNotes(beatmap: ManiaBeatmap, startTimeMs = beatmap.previewTime, timeScale = 1): ManiaNote[] {
   const start = Math.max(0, startTimeMs || 0);
   const scale = Math.max(0.1, timeScale);

@@ -293,13 +293,15 @@ async function validateScoreId(scoreId: number, options: CliOptions): Promise<Re
   const decoded = await decoder.decodeFromBuffer(fixture.replayBuffer);
   const frames = decodeFrames(decoded);
   const mods = getModAcronyms(fixture.score.mods, false);
+  const isLazer = isLazerScore(fixture.score);
   const keyCount = beatmap.keyCount || Math.round(Number(fixture.score.beatmap?.cs)) || decoded.keyCount || 4;
   const result = validateReplaySimulation({
     expectedCounts: pickExpectedCounts(fixture.score, decoded.info),
     frames,
     isConvert: fixture.score.beatmap?.convert ?? false,
-    isLazer: isLazerScore(fixture.score),
+    isLazer,
     keyCount,
+    legacyReplayFrameRounding: true,
     mods,
     notes: beatmap.notes,
     od: beatmap.od,
@@ -331,6 +333,11 @@ function printResult(result: ReplayValidationResult & { scoreId: number; title: 
   console.log(`\n[${status}] ${result.scoreId} ${result.accuracyMode} ${result.keyCount}K${mods}`);
   console.log(`${result.player} - ${result.title} [${result.version}]`);
   console.log(`Accuracy expected ${formatPct(result.expectedAccuracy)} simulated ${formatPct(result.simulatedAccuracy)} (${result.accuracyDiff >= 0 ? "+" : ""}${result.accuracyDiff.toFixed(4)}pp)`);
+  if (result.legacyReplayResolution === "score-header") {
+    console.log("Resolved using stored stable score counts after replay timing data was insufficient.");
+  } else if (result.legacyReplayAmbiguityResolved) {
+    console.log("Resolved via legacy .osr frame timing ambiguity.");
+  }
   console.log(`Hits expected ${result.totalExpected} simulated ${result.totalSimulated} (total abs diff ${result.totalCountDiff})`);
   console.log("       expected  simulated  diff");
 

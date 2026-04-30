@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { getRankings, getCountryRecentScores } from "../lib/osu";
@@ -30,6 +30,7 @@ import { TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useSelectedCountry } from "../
 import type { OsuScore } from "../lib/types";
 import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
+import { getReplaySearch } from "../lib/replay-navigation";
 
 const DEV_MODE = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === "1";
 
@@ -593,6 +594,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   expanded: boolean;
   onToggle: (key: string) => void;
 }) {
+  const navigate = useNavigate();
   const [rendered, setRendered] = useState(expanded);
   useEffect(() => { if (expanded) setRendered(true); }, [expanded]);
 
@@ -698,7 +700,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    window.location.href = `/replay?scoreId=${score.id}&beatmapsetId=${score.beatmapset?.id}`;
+                    navigate({ to: "/replay", search: getReplaySearch(score.id, score.beatmapset?.id) });
                   }}
                   className="px-1.5 py-0.5 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
                   title="Watch replay"
@@ -733,7 +735,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                window.location.href = `/replay?scoreId=${score.id}&beatmapsetId=${score.beatmapset?.id}`;
+                navigate({ to: "/replay", search: getReplaySearch(score.id, score.beatmapset?.id) });
               }}
               className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold hover:bg-osu-pink/30 transition-colors cursor-pointer"
               title="Watch replay"

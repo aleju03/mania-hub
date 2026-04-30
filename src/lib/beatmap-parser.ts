@@ -28,6 +28,91 @@ export interface ManiaBeatmap {
   scrollVelocities: ManiaScrollVelocity[];
 }
 
+type TimingPoint = { time: number; beatLength: number };
+type ParsedControlPoint =
+  | { kind: "timing"; order: number; time: number; beatLength: number }
+  | { kind: "effect"; order: number; time: number; scrollSpeed: number };
+
+const DEFAULT_BEAT_LENGTH = 1000;
+const SCROLL_MULTIPLIER_EPSILON = 1e-4;
+
+function getMostCommonBeatLength(timingPoints: TimingPoint[], lastObjectTime: number): number {
+  if (timingPoints.length === 0) return DEFAULT_BEAT_LENGTH;
+
+  const lastTime = lastObjectTime > 0 ? lastObjectTime : timingPoints.at(-1)?.time ?? 0;
+  const durations = new Map<number, number>();
+
+  for (let i = 0; i < timingPoints.length; i++) {
+    const point = timingPoints[i];
+    if (point.time > lastTime) {
+      durations.set(point.beatLength, durations.get(point.beatLength) ?? 0);
+      continue;
+    }
+
+    // osu! forces the first timing point to act from 0 for mania scroll speed.
+    const currentTime = i === 0 ? 0 : point.time;
+    const nextTime = i === timingPoints.length - 1 ? lastTime : timingPoints[i + 1].time;
+    const duration = Math.max(0, nextTime - currentTime);
+    const roundedBeatLength = Math.round(point.beatLength * 1000) / 1000;
+    durations.set(roundedBeatLength, (durations.get(roundedBeatLength) ?? 0) + duration);
+  }
+
+  let mostCommonBeatLength = 0;
+  let longestDuration = -1;
+  for (const [beatLength, duration] of durations) {
+    if (duration > longestDuration) {
+      mostCommonBeatLength = beatLength;
+      longestDuration = duration;
+    }
+  }
+
+  if (mostCommonBeatLength <= 0) return DEFAULT_BEAT_LENGTH;
+
+  const rawBeatLengths = timingPoints.map((point) => point.beatLength);
+  return Math.max(Math.min(...rawBeatLengths), Math.min(Math.max(...rawBeatLengths), mostCommonBeatLength));
+}
+
+function buildManiaScrollVelocities(
+  timingPoints: TimingPoint[],
+  controlPoints: ParsedControlPoint[],
+  lastObjectTime: number,
+): ManiaScrollVelocity[] {
+  if (controlPoints.length === 0 || timingPoints.length === 0) return [];
+
+  const baseBeatLength = getMostCommonBeatLength(timingPoints, lastObjectTime);
+  const collapsed: ManiaScrollVelocity[] = [];
+  let currentBeatLength = DEFAULT_BEAT_LENGTH;
+  let currentScrollSpeed = 1;
+
+  for (const point of [...controlPoints].sort((a, b) => a.time - b.time || a.order - b.order)) {
+    if (point.time > lastObjectTime) break;
+
+    if (point.kind === "timing") currentBeatLength = point.beatLength;
+    else currentScrollSpeed = point.scrollSpeed;
+
+    const rawMultiplier = Math.max(0.01, Math.min(20, currentScrollSpeed * baseBeatLength / currentBeatLength));
+    const multiplier = Math.abs(rawMultiplier - 1) <= SCROLL_MULTIPLIER_EPSILON ? 1 : rawMultiplier;
+    const previous = collapsed[collapsed.length - 1];
+
+    if (previous && previous.time === point.time) {
+      previous.multiplier = multiplier;
+    } else {
+      collapsed.push({ time: point.time, multiplier });
+    }
+  }
+
+  const output: ManiaScrollVelocity[] = [];
+  let previousMultiplier = 1;
+
+  for (const point of collapsed) {
+    if (Math.abs(point.multiplier - previousMultiplier) <= SCROLL_MULTIPLIER_EPSILON) continue;
+    output.push(point);
+    previousMultiplier = point.multiplier;
+  }
+
+  return output;
+}
+
 export function parseManiaBeatmap(content: string): ManiaBeatmap {
   const lines = content.split("\n").map((l) => l.trim());
 
@@ -42,8 +127,9 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
   let backgroundFilename = "";
   let section = "";
   const notes: ManiaNote[] = [];
-  const timingPoints: { time: number; beatLength: number }[] = [];
-  const scrollVelocities: ManiaScrollVelocity[] = [];
+  const timingPoints: TimingPoint[] = [];
+  const controlPoints: ParsedControlPoint[] = [];
+  let controlPointOrder = 0;
 
   for (const line of lines) {
     if (line.startsWith("[") && line.endsWith("]")) {
@@ -81,10 +167,13 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
         const uninherited = parts.length < 7 || parts[6].trim() !== "0";
         if (beatLength > 0 && uninherited) {
           timingPoints.push({ time, beatLength });
+          controlPoints.push({ kind: "timing", order: controlPointOrder++, time, beatLength });
         } else if (beatLength < 0 && !uninherited) {
-          scrollVelocities.push({
+          controlPoints.push({
+            kind: "effect",
+            order: controlPointOrder++,
             time,
-            multiplier: Math.max(0.01, Math.min(20, -100 / beatLength)),
+            scrollSpeed: Math.max(0.01, Math.min(20, -100 / beatLength)),
           });
         }
       }
@@ -122,6 +211,7 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
   const totalLength = notes.length > 0
     ? Math.max(...notes.map((n) => n.endTime))
     : 0;
+  const sortedNotes = notes.sort((a, b) => a.time - b.time);
 
   return {
     title,
@@ -131,11 +221,11 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
     keyCount: Math.round(circleSize),
     od: overallDifficulty,
     bpm,
-    notes: notes.sort((a, b) => a.time - b.time),
+    notes: sortedNotes,
     totalLength,
     audioFilename,
     previewTime,
     backgroundFilename,
-    scrollVelocities: scrollVelocities.sort((a, b) => a.time - b.time),
+    scrollVelocities: buildManiaScrollVelocities(timingPoints, controlPoints, totalLength),
   };
 }

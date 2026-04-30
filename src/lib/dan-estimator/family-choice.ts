@@ -19,6 +19,21 @@ interface DanFamilyChoiceRule {
 
 const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
   {
+    id: "localized-high-density-jack-spike",
+    family: "jack",
+    applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 4000
+      && metrics.chordRatio >= 0.48
+      && metrics.chordRatio <= 0.64
+      && metrics.holdRatio < 0.1
+      && metrics.peakNps5s >= 35
+      && metrics.sustainedNps10s >= 34
+      && metrics.jackPressure >= 190
+      && metrics.strainSpikiness >= 1.6
+      && metrics.nps5sP90 <= metrics.peakNps5s - 4
+      && metrics.nps5sP50 <= metrics.peakNps5s - 10
+      && skillScores.jack >= topScore - 0.45,
+  },
+  {
     id: "long-jumpstream-stamina",
     family: "stamina",
     applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 7600
@@ -76,6 +91,40 @@ const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
       && skillScores.jack >= topScore - 0.25,
   },
   {
+    id: "slow-repetitive-jackstream",
+    family: "jack",
+    applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 1800
+      && metrics.noteCount <= 3200
+      && metrics.chordRatio >= 0.45
+      && metrics.chordRatio <= 0.6
+      && metrics.holdRatio < 0.06
+      && metrics.jackPressure >= 115
+      && metrics.chordjackPressure >= 105
+      && metrics.sustainedNps10s >= 16
+      && metrics.sustainedNps10s <= 22
+      && metrics.fastRowRatio < 0.08
+      && metrics.rowIntervalEntropy < 1.6
+      && metrics.sustainedPressureRatio >= 0.65
+      && skillScores.jack >= topScore - 0.5,
+  },
+  {
+    id: "rated-repetitive-speedjack",
+    family: "jack",
+    applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 1800
+      && metrics.noteCount <= 3200
+      && metrics.chordRatio >= 0.45
+      && metrics.chordRatio <= 0.6
+      && metrics.holdRatio < 0.06
+      && metrics.jackPressure >= 150
+      && metrics.chordjackPressure >= 150
+      && metrics.sustainedNps10s >= 22.5
+      && metrics.sustainedNps10s <= 30
+      && metrics.fastRowRatio < 0.1
+      && metrics.rowIntervalEntropy < 1.7
+      && metrics.sustainedPressureRatio >= 0.65
+      && skillScores.jack >= topScore - 0.5,
+  },
+  {
     id: "dense-wall-jack",
     family: "jack",
     applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 1800
@@ -126,6 +175,21 @@ const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
       && metrics.chordSizeChangeRate >= 0.45
       && metrics.directionChangeRate >= 0.55
       && skillScores.handstream >= topScore - 0.65,
+  },
+  {
+    id: "sustained-mid-chord-handstream-speed",
+    family: "handstream",
+    applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 3000
+      && metrics.noteCount <= 4300
+      && metrics.chordRatio >= 0.32
+      && metrics.chordRatio <= 0.42
+      && metrics.holdRatio < 0.08
+      && metrics.jackPressure < 155
+      && metrics.peakNps5s >= 30
+      && metrics.sustainedNps10s >= 29
+      && metrics.sustainedPressureRatio >= 0.75
+      && metrics.rowIntervalEntropy < 2
+      && skillScores.handstream >= topScore - 0.25,
   },
   {
     id: "low-sr-technical-rhythm",
@@ -243,7 +307,7 @@ const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
     applies: ({ metrics, skillScores, topScore }) => metrics.chordRatio <= 0.28
       && metrics.sustainedNps10s >= 25
       && metrics.peakNps5s >= 26
-      && metrics.jackPressure < 165
+      && metrics.jackPressure < 175
       && metrics.techPressure < 6.4
       && skillScores.stream >= topScore - 0.7,
   },
@@ -300,4 +364,3 @@ export function chooseSkillFamily(skillScores: Record<DanSkillFamily, number>, m
 
   return choose(topFamily, "top-score");
 }
-

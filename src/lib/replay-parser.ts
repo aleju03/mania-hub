@@ -1,4 +1,4 @@
-import type { ReplayHeader, ReplayFrame, ParsedReplay } from "./types";
+import type { ReplayHeader, ReplayFrame, ReplayLifeBarFrame, ParsedReplay } from "./types";
 
 class BinaryReader {
   private view: DataView;
@@ -431,6 +431,24 @@ function detectKeyCount(frames: ReplayFrame[], modsUsed: number): number {
   return Math.max(maxBit, 4);
 }
 
+function parseLifeBarGraph(graph: string): ReplayLifeBarFrame[] {
+  if (!graph) return [];
+
+  return graph
+    .split(",")
+    .map((entry) => {
+      const [timeRaw, healthRaw] = entry.split("|");
+      const time = Number.parseInt(timeRaw, 10);
+      const health = Number.parseFloat(healthRaw);
+      return {
+        time,
+        health: Math.max(0, Math.min(1, health)),
+      };
+    })
+    .filter((frame) => Number.isFinite(frame.time) && Number.isFinite(frame.health))
+    .sort((a, b) => a.time - b.time);
+}
+
 export async function parseReplay(buffer: ArrayBuffer): Promise<ParsedReplay> {
   const reader = new BinaryReader(buffer);
   const header = parseHeader(reader);
@@ -455,6 +473,7 @@ export async function parseReplay(buffer: ArrayBuffer): Promise<ParsedReplay> {
   }
 
   const keyCount = detectKeyCount(frames, header.modsUsed);
+  const lifeBarFrames = parseLifeBarGraph(header.lifeBarGraph);
 
-  return { header, frames, keyCount };
+  return { header, frames, lifeBarFrames, keyCount };
 }

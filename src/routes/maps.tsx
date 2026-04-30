@@ -43,7 +43,10 @@ import {
   buildAutoplayFrames,
   getPreviewNotes,
   getPreviewScrollVelocities,
+  pickPreviewStartTime,
 } from "../lib/chart-preview";
+import { readReplaySkinSettings } from "../lib/replay-skin";
+import type { ReplaySkinSettings } from "../lib/replay-skin";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -2554,6 +2557,7 @@ interface RandomPreviewRendererLike {
   resize: () => void;
   seek: (timeMs: number) => void;
   setExternalClock: (cb: (() => { time: number; stalled: boolean } | null) | null) => void;
+  setSkinSettings: (settings: ReplaySkinSettings) => void;
   setScrollSpeed: (value: number) => void;
 }
 
@@ -2578,6 +2582,7 @@ function RandomReplayPreview({
   const rendererRef = useRef<RandomPreviewRendererLike | null>(null);
   const isPlayingRef = useRef(isPlaying);
   const getClockRef = useRef(getClock);
+  const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
   const notes = useMemo(() => beatmap ? getPreviewNotes(beatmap, startTimeMs, timeScale) : [], [beatmap, startTimeMs, timeScale]);
   const scrollVelocities = useMemo(() => beatmap ? getPreviewScrollVelocities(beatmap, startTimeMs, timeScale) : [], [beatmap, startTimeMs, timeScale]);
   const frames = useMemo(() => beatmap ? buildAutoplayFrames(notes, beatmap.keyCount) : [], [beatmap, notes]);
@@ -2589,6 +2594,20 @@ function RandomReplayPreview({
   useEffect(() => {
     getClockRef.current = getClock;
   }, [getClock]);
+
+  useEffect(() => {
+    const refreshSkinSettings = () => setSkinSettings(readReplaySkinSettings());
+    window.addEventListener("storage", refreshSkinSettings);
+    window.addEventListener("focus", refreshSkinSettings);
+    return () => {
+      window.removeEventListener("storage", refreshSkinSettings);
+      window.removeEventListener("focus", refreshSkinSettings);
+    };
+  }, []);
+
+  useEffect(() => {
+    rendererRef.current?.setSkinSettings(skinSettings);
+  }, [skinSettings]);
 
   useEffect(() => {
     if (!canvasRef.current || !beatmap) return;
@@ -2610,10 +2629,13 @@ function RandomReplayPreview({
           transparentBackground: true,
           hideHud: true,
           barePlayfield: true,
+          showHealthBar: false,
           scrollVelocities,
+          skinSettings,
         },
       ) as RandomPreviewRendererLike;
       renderer.setScrollSpeed(18);
+      renderer.setSkinSettings(skinSettings);
       renderer.setExternalClock(() => getClockRef.current());
       rendererRef.current = renderer;
       handleResize = () => renderer?.resize();
@@ -2864,15 +2886,15 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         const referenceParsed = referenceResult ? parseManiaBeatmap(referenceResult.content) : selectedParsed;
         const timedRateVariant = usesSetPreviewForReplayAudio && isLikelyTimedRateVariantSet(maniaBeatmaps);
         const visualParsed = timedRateVariant ? referenceParsed : selectedParsed;
-        const referenceStartMs = Math.max(0, referenceParsed.previewTime || selectedParsed.previewTime || 0);
+        const referenceStartMs = pickPreviewStartTime(referenceParsed.previewTime, selectedParsed.previewTime);
         const shouldUseSelectedAudio = !usesSetPreviewForReplayAudio;
         const chartStartMs = shouldUseSelectedAudio
-          ? Math.max(0, selectedParsed.previewTime || 0)
+          ? pickPreviewStartTime(selectedParsed.previewTime)
           : timedRateVariant
           ? referenceStartMs
           : usesSetPreviewForReplayAudio
-          ? Math.max(0, selectedParsed.previewTime || referenceStartMs || 0)
-          : Math.max(0, selectedParsed.previewTime || 0);
+          ? pickPreviewStartTime(selectedParsed.previewTime, referenceStartMs)
+          : pickPreviewStartTime(selectedParsed.previewTime);
         setPreviewBeatmap(visualParsed);
         setReplayChartStartMs(chartStartMs);
         setReplayChartTimeScale(timedRateVariant ? selectedDifficultyRate : 1);
