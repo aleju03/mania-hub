@@ -414,6 +414,36 @@ describe("estimateDan", () => {
     expect(highestRate.rawDan).toBeGreaterThan(higherRate.rawDan);
   });
 
+  it("keeps long fast mid-chord stamina rates ordered on NB4 Challenge 29", () => {
+    const map = readFixtureBeatmap("we-luv-lama-nb4-challenge-29.osu");
+    const previousRate = estimateDan(map, {
+      starRating: 6.48123,
+      totalLength: 321,
+      rate: 1.1,
+    });
+    const lowerRate = estimateDan(map, {
+      starRating: 6.48123,
+      totalLength: 321,
+      rate: 1.2,
+    });
+    const higherRate = estimateDan(map, {
+      starRating: 6.48123,
+      totalLength: 321,
+      rate: 1.3,
+    });
+
+    expect(lowerRate.metrics.noteCount).toBeGreaterThan(5000);
+    expect(lowerRate.metrics.chordRatio).toBeGreaterThan(0.42);
+    expect(lowerRate.metrics.chordRatio).toBeLessThan(0.58);
+    expect(lowerRate.metrics.fastRowRatio).toBeGreaterThan(0.8);
+    expect(lowerRate.family).toBe("stamina");
+    expect(lowerRate.label).toBe("gamma");
+    expect(lowerRate.debug?.familyChoice.reason).toBe("long-fast-mid-chord-stamina-transition");
+    expect(higherRate.family).toBe("stamina");
+    expect(lowerRate.rawDan).toBeGreaterThan(previousRate.rawDan);
+    expect(higherRate.rawDan).toBeGreaterThan(lowerRate.rawDan);
+  });
+
   it("compresses low-chord burst streams with jack pressure out of epsilon", () => {
     const notes: ManiaNote[] = [];
     let time = 0;

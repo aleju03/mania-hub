@@ -270,6 +270,21 @@ const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
       && skillScores.stamina >= topScore - 0.95,
   },
   {
+    id: "long-fast-mid-chord-stamina-transition",
+    family: "stamina",
+    applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 5000
+      && metrics.chordRatio >= 0.42
+      && metrics.chordRatio <= 0.58
+      && metrics.holdRatio < 0.04
+      && metrics.jackPressure < 145
+      && metrics.sustainedNps10s >= 27
+      && metrics.sustainedNps10s <= 33
+      && metrics.fastRowRatio >= 0.8
+      && metrics.sustainedPressureRatio >= 0.86
+      && metrics.patternVariety <= 2.6
+      && skillScores.stamina >= topScore - 1.35,
+  },
+  {
     id: "long-mid-chord-stamina",
     family: "stamina",
     applies: ({ metrics, skillScores, topScore }) => metrics.sustainedNps10s >= 28
