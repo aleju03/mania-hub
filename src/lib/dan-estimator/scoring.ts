@@ -190,6 +190,33 @@ export function estimateFamilyScores(metrics: DanFeatureMetrics, starRating: num
         + Math.max(0, metrics.peakNps5s - 26) * 0.035,
     )
     : 0;
+  const compactDeltaSpeedBridgeGate = metrics.chordRatio >= 0.18
+    && metrics.chordRatio <= 0.3
+    && metrics.holdRatio < 0.06
+    && metrics.noteCount >= 1800
+    && metrics.noteCount <= 2600
+    && metrics.sustainedNps10s >= 27.8
+    && metrics.sustainedNps10s <= 29.2
+    && metrics.peakNps5s >= 28.5
+    && metrics.peakNps5s <= 31.5
+    && metrics.nps5sP90 >= metrics.peakNps5s - 1.4
+    && metrics.fastRowRatio >= 0.55
+    && metrics.jackPressure < 155
+    && starRating >= 5.55
+    && starRating <= 6.4
+    ? minGate(
+      (metrics.chordRatio - 0.16) / 0.08,
+      (0.32 - metrics.chordRatio) / 0.08,
+      (metrics.noteCount - 1700) / 400,
+      (2700 - metrics.noteCount) / 400,
+      (metrics.sustainedNps10s - 27.5) / 1.2,
+      (29.5 - metrics.sustainedNps10s) / 1.2,
+      (metrics.peakNps5s - 28.2) / 1.2,
+      (32 - metrics.peakNps5s) / 1.6,
+      (155 - metrics.jackPressure) / 30,
+    )
+    : 0;
+  const compactDeltaSpeedBridgeBonus = compactDeltaSpeedBridgeGate * 0.06;
   const sustainedLightJumpstreamGate = metrics.chordRatio >= 0.18
     && metrics.chordRatio <= 0.32
     && metrics.holdRatio < 0.03
@@ -1077,7 +1104,7 @@ export function estimateFamilyScores(metrics: DanFeatureMetrics, starRating: num
     ) * 0.08
     : 0;
   const jackBonus = Math.min(0.82, Math.max(0, (metrics.jackPressure - 92) / 240) + chordGate * 0.12 + highChordJackBonus);
-  const streamBonus = Math.min(1.65, Math.max(0, metrics.streamPressure / 16) + Math.max(0, metrics.peakNps5s - 25) * 0.008 + speedBonus + pureSpeedBonus + lowChordSustainedSpeedBonus + longLowChordSpeedBonus + lightChordGammaSpeedFloorBonus + lowSrSpeedUnderrateBonus + sustainedLightJumpstreamBonus + baseRateSubGammaStreamBonus + compactModerateChordSpeedBonus + speedEnduranceBonus + longSteadyStreamBonus);
+  const streamBonus = Math.min(1.65, Math.max(0, metrics.streamPressure / 16) + Math.max(0, metrics.peakNps5s - 25) * 0.008 + speedBonus + pureSpeedBonus + lowChordSustainedSpeedBonus + longLowChordSpeedBonus + lightChordGammaSpeedFloorBonus + lowSrSpeedUnderrateBonus + compactDeltaSpeedBridgeBonus + sustainedLightJumpstreamBonus + baseRateSubGammaStreamBonus + compactModerateChordSpeedBonus + speedEnduranceBonus + longSteadyStreamBonus);
   const staminaBonus = Math.min(1.45, Math.max(0, metrics.sustainedNps10s - 23) * 0.018 + Math.min(0.16, metrics.noteCount / 16000) + speedBonus * 0.8 + staminaEnduranceBonus + longSteadyStreamBonus * 0.45 + fastLongMidChordStaminaGate * 0.02 - longMidChordSrNerf * 0.6 + Math.max(0, longMidChordStaminaMapGate - cyberLikeStaminaGate) * 0.28);
   const handstreamBonus = handstreamChordGate * Math.min(
     1.35,
@@ -1159,6 +1186,7 @@ export function estimateFamilyScores(metrics: DanFeatureMetrics, starRating: num
     farmJumptrillGate,
     ratedVibroJumptrillGate,
     lowSrTechnicalRhythmGate,
+    compactDeltaSpeedBridgeGate,
     ratePackTechShapeGate,
     syncopatedChordTechGate,
     compactChordSwitchTechGate,
@@ -1173,6 +1201,7 @@ export function estimateFamilyScores(metrics: DanFeatureMetrics, starRating: num
     longLowChordSpeedBonus,
     lightChordGammaSpeedFloorBonus,
     lowSrSpeedUnderrateBonus,
+    compactDeltaSpeedBridgeBonus,
     sustainedLightJumpstreamBonus,
     baseRateSubGammaStreamBonus,
     compactModerateChordSpeedBonus,
@@ -1285,6 +1314,7 @@ export function estimateFamilyScores(metrics: DanFeatureMetrics, starRating: num
           { id: "base", value: base, description: "Base SR blend from star rating and structural density." },
           { id: "streamBonus", value: streamBonus, description: "Speed and sustained stream pressure." },
           { id: "lightChordGammaSpeedFloorBonus", value: lightChordGammaSpeedFloorBonus, description: "Gamma floor for lower-rate light-chord steady speed." },
+          { id: "compactDeltaSpeedBridgeBonus", value: compactDeltaSpeedBridgeBonus, description: "Small bridge for compact low-chord speed files sitting just below the middle-delta boundary." },
           { id: "sustainedLightJumpstreamBonus", value: sustainedLightJumpstreamBonus, description: "Rate-scaled reward for continuous light jumpstream with high sustain and low jack pressure." },
           { id: "baseRateSubGammaStreamBonus", value: baseRateSubGammaStreamBonus, description: "Beta floor for base-rate low-chord stream sitting just below gamma speed thresholds." },
           { id: "compactModerateChordSpeedBonus", value: compactModerateChordSpeedBonus, description: "Compact moderate-chord speed reward around beta." },

@@ -383,6 +383,21 @@ describe("estimateDan", () => {
     expect(estimate.family).toBe("stream");
   });
 
+  it("keeps Reflec 1.1x in middle delta speed instead of low delta", () => {
+    const estimate = estimateDan(readFixtureBeatmap("reflec-attang-lv25.osu"), {
+      starRating: 5.76,
+      totalLength: 142,
+      rate: 1.1,
+    });
+
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.2);
+    expect(estimate.metrics.chordRatio).toBeLessThan(0.28);
+    expect(estimate.metrics.sustainedNps10s).toBeGreaterThan(28);
+    expect(estimate.debug?.scoring.terms.compactDeltaSpeedBridgeBonus).toBeGreaterThan(0);
+    expect(estimate.family).toBe("stream");
+    expect(estimate.displayName).toBe("delta");
+  });
+
   it("compresses low-chord burst streams with jack pressure out of epsilon", () => {
     const notes: ManiaNote[] = [];
     let time = 0;
