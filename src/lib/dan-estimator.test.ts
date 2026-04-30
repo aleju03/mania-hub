@@ -507,9 +507,15 @@ describe("estimateDan", () => {
   });
 
   it("routes slow repetitive Lone Digger jackstream away from tech", () => {
-    const estimate = estimateDan(readFixtureBeatmap("lone-digger-jack-digger.osu"), {
+    const map = readFixtureBeatmap("lone-digger-jack-digger.osu");
+    const estimate = estimateDan(map, {
       starRating: 4.45,
       totalLength: 215,
+    });
+    const rateUp = estimateDan(map, {
+      starRating: 4.45,
+      totalLength: 215,
+      rate: 1.5,
     });
 
     expect(estimate.metrics.chordRatio).toBeGreaterThan(0.48);
@@ -517,6 +523,12 @@ describe("estimateDan", () => {
     expect(estimate.metrics.rowIntervalEntropy).toBeLessThan(1.3);
     expect(estimate.family).toBe("jack");
     expect(estimate.debug?.familyChoice.reason).toBe("slow-repetitive-jackstream");
+    expect(estimate.label).toBe("6");
+    expect(estimate.rawDan).toBeGreaterThan(6.2);
+    expect(rateUp.family).toBe("jack");
+    expect(rateUp.debug?.familyChoice.reason).toBe("rated-repetitive-speedjack");
+    expect(rateUp.label).toBe("delta");
+    expect(rateUp.rawDan).toBeGreaterThanOrEqual(13.6);
   });
 
   it("keeps Crescent Moon Island Kuro rates ordered around the official delta cut", () => {
