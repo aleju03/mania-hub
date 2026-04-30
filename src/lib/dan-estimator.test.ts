@@ -1204,6 +1204,20 @@ describe("estimateDan", () => {
     expect(estimate.warnings.some((warning) => warning.includes("LN"))).toBe(true);
   });
 
+  it("routes release-heavy LN hybrids through LN calibration", () => {
+    const estimate = estimateDan(readFixtureBeatmap("saishuu-calamity-scarlet-mansion.osu"), {
+      starRating: 8.48,
+      totalLength: 252,
+    });
+
+    expect(estimate.metrics.holdRatio).toBeGreaterThan(0.28);
+    expect(estimate.metrics.lnDensity).toBeGreaterThan(0.16);
+    expect(estimate.metrics.lnReleasePressure).toBeGreaterThan(22);
+    expect(estimate.metrics.lnChordPressure).toBeGreaterThan(0.25);
+    expect(estimate.family).toBe("ln");
+    expect(estimate.displayName).toMatch(/^LN /);
+  });
+
   it("detects multi-section dan marathon files as dans", () => {
     const notes: ManiaNote[] = [];
     let offset = 0;

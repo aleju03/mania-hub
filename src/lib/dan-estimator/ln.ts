@@ -187,6 +187,11 @@ export function estimateLnDan(
     && metrics.lnHoldDurationP90 >= 220
     && metrics.lnChordPressure >= 0.12
   ) || (
+    metrics.holdRatio >= 0.28
+    && metrics.lnDensity >= 0.16
+    && metrics.lnReleasePressure >= 22
+    && metrics.lnChordPressure >= 0.25
+  ) || (
     metrics.holdRatio >= 0.34
     && metrics.lnDensity >= 0.1
     && metrics.lnOverlapPressure >= 0.75
