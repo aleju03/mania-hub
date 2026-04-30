@@ -216,6 +216,31 @@ function officialReferenceTarget(metrics: DanFeatureMetrics, durationMs: number)
   };
 }
 
+function pressureDistance(metrics: DanFeatureMetrics, reference: LnReferenceChart): number {
+  return Math.abs(metrics.holdRatio - reference.h) / 0.13
+    + Math.abs(metrics.lnDensity - reference.d) / 0.11
+    + Math.abs(metrics.lnOverlapPressure - reference.o) / 0.45
+    + Math.abs(metrics.lnReleasePressure - reference.r) / 4
+    + Math.abs(metrics.lnChordPressure - reference.c) / 0.16
+    + Math.abs(metrics.peakNps5s - reference.p) / 4
+    + Math.abs(metrics.sustainedNps10s - reference.u) / 4
+    + Math.abs(metrics.chordRatio - reference.q) / 0.16;
+}
+
+function officialReferenceNeighborTarget(metrics: DanFeatureMetrics): LnDanEstimateResult | null {
+  const nearest = LN_REFERENCE_CHARTS
+    .map((reference) => ({ reference, distance: pressureDistance(metrics, reference) }))
+    .sort((left, right) => left.distance - right.distance);
+  const [best] = nearest;
+  if (!best || best.distance > 2.6) return null;
+
+  return {
+    ...parseLnLabel(`LN ${best.reference.level}`),
+    confidence: Math.max(0.72, 0.9 - best.distance * 0.05),
+    reason: "ln-reference-neighbor",
+  };
+}
+
 function parseRawLnDan(rawDan: number): LnDanEstimateResult {
   const level = Math.max(1, Math.min(15, Math.round(rawDan)));
   const offset = rawDan - level;
@@ -265,6 +290,8 @@ export function estimateLnDan(
 
   const reference = officialReferenceTarget(metrics, durationMs);
   if (reference) return reference;
+  const referenceNeighbor = officialReferenceNeighborTarget(metrics);
+  if (referenceNeighbor) return referenceNeighbor;
 
   const sr = starRating > 0 ? starRating : Math.max(1, metrics.peakNps5s * 0.18 + metrics.lnReleasePressure * 0.55);
   const durationMinutes = Math.max(0.6, durationMs / 60000);

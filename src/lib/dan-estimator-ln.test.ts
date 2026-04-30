@@ -149,4 +149,29 @@ describe("estimateDan LN calibration", () => {
     expect(estimate.debug?.familyChoice.reason).toBe("official-ln-reference-chart");
     expect(`${estimate.displayName} ${estimate.family}`).toBe("LN 7 ln");
   });
+
+  it("keeps long standalone LN charts near their closest official component pressure", () => {
+    const content = readFileSync(join(LN_REFERENCE_FIXTURES_DIR, "Nekomata-Master-Element-of-SPADA-Element-of-LN.osu"), "utf8");
+    const map = parseManiaBeatmap(content);
+    const base = estimateDan(map, {
+      starRating: 7.44,
+      totalLength: map.totalLength / 1000,
+      title: map.title,
+      version: map.version,
+      rate: 1,
+    });
+    const rateUp = estimateDan(map, {
+      starRating: 7.44,
+      totalLength: map.totalLength / 1000,
+      title: map.title,
+      version: map.version,
+      rate: 1.1,
+    });
+
+    expect(base.metrics.holdRatio).toBeGreaterThan(0.7);
+    expect(base.debug?.familyChoice.reason).toBe("ln-reference-neighbor");
+    expect(`${base.displayName} ${base.family}`).toBe("LN 10 ln");
+    expect(rateUp.debug?.familyChoice.reason).toBe("ln-reference-neighbor");
+    expect(`${rateUp.displayName} ${rateUp.family}`).toBe("LN 10 ln");
+  });
 });
