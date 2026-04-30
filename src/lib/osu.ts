@@ -186,7 +186,9 @@ const RANK_HISTORY_CONCURRENCY = 20;
 const APPROX_PP_GAINS_CONCURRENCY = 4;
 const RECENT_SCORES_CONCURRENCY = 10;
 const SNIPES_CACHE_TTL = 6 * 60 * 60 * 1000;
-const SNIPES_LOCK_TTL = 60 * 1000;
+const SNIPES_LOCK_TTL = 5 * 60 * 1000;
+const SNIPES_LOCK_WAIT_MS = 1000;
+const SNIPES_LOCK_WAIT_RETRIES = 90;
 const SNIPES_PLAYER_LIMIT = 15;
 const SNIPES_RECENT_LIMIT = 100;
 const SNIPES_RECENT_PLAYS_CACHE_TTL = 10 * 60 * 1000;
@@ -2924,6 +2926,11 @@ function refreshCountrySnipesInBackground(
       return runSnipesScan(country, snapshotKey, logKey);
     },
     SNIPES_LOCK_TTL,
+    {
+      waitMs: SNIPES_LOCK_WAIT_MS,
+      waitRetries: SNIPES_LOCK_WAIT_RETRIES,
+      runWithoutLockOnTimeout: false,
+    },
   )
     .catch((err) => console.warn("[snipes] background scan failed:", getErrorMessage(err)))
     .finally(() => {
@@ -3316,6 +3323,11 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
         return runSnipesScan(country, snapshotKey, logKey);
       },
       SNIPES_LOCK_TTL,
+      {
+        waitMs: SNIPES_LOCK_WAIT_MS,
+        waitRetries: SNIPES_LOCK_WAIT_RETRIES,
+        runWithoutLockOnTimeout: false,
+      },
     ).finally(() => {
       if (ranScan) {
         clearSnipesScanStatus(country);
