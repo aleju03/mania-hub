@@ -34,6 +34,10 @@ function preserveSearchWithCountry(country: string) {
   return ((prev: Record<string, unknown>) => ({ ...prev, country })) as never;
 }
 
+function preserveSearchWithCountryOnFirstPage(country: string) {
+  return ((prev: Record<string, unknown>) => ({ ...prev, country, page: 0 })) as never;
+}
+
 function deleteIndexedDb(name: string): Promise<void> {
   return new Promise((resolve) => {
     if (typeof indexedDB === "undefined") {
@@ -227,14 +231,15 @@ export function Nav() {
       navigate({ to: "/tracker", search: { country }, replace: true });
       return;
     }
-    // For /snipes and /maps reuse the existing search via the reducer form
-    // (see preserveSearchWithCountry for why we cast).
+    // For /snipes and /maps reuse route search via the reducer form
+    // (see preserveSearchWithCountry for why we cast). Maps resets page
+    // because other routes also use `page` with different expectations.
     if (location.pathname === "/snipes") {
       navigate({ to: "/snipes", search: preserveSearchWithCountry(country), replace: true });
       return;
     }
     if (location.pathname === "/maps") {
-      navigate({ to: "/maps", search: preserveSearchWithCountry(country), replace: true });
+      navigate({ to: "/maps", search: preserveSearchWithCountryOnFirstPage(country), replace: true });
     }
   };
 
@@ -329,9 +334,11 @@ export function Nav() {
                       ? { country: selectedCountry, page: 1 }
                       : l.id === "top-plays"
                         ? { country: selectedCountry, range: topPlaysRangeForLink }
-                        : l.id === "maps" || l.id === "snipes"
-                          ? preserveSearchWithCountry(selectedCountry)
-                          : undefined
+                        : l.id === "maps"
+                          ? preserveSearchWithCountryOnFirstPage(selectedCountry)
+                          : l.id === "snipes"
+                            ? preserveSearchWithCountry(selectedCountry)
+                            : undefined
                 }
                 preload="intent"
                 draggable={false}
@@ -489,9 +496,11 @@ export function Nav() {
                           ? { country: selectedCountry, page: 1 }
                           : l.id === "top-plays"
                             ? { country: selectedCountry, range: topPlaysRangeForLink }
-                            : l.id === "maps" || l.id === "snipes"
-                              ? preserveSearchWithCountry(selectedCountry)
-                            : undefined
+                            : l.id === "maps"
+                              ? preserveSearchWithCountryOnFirstPage(selectedCountry)
+                              : l.id === "snipes"
+                                ? preserveSearchWithCountry(selectedCountry)
+                                : undefined
                     }
                     preload="intent"
                     onClick={() => setMenuOpen(false)}

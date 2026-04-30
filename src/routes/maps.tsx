@@ -697,10 +697,11 @@ export const Route = createFileRoute("/maps")({
   },
   validateSearch: (search: Record<string, unknown>): MapsSearch => ({
     tab: search.tab === "popular" || search.tab === "favourites" || search.tab === "random" ? search.tab : DEFAULT_MAPS_SEARCH.tab,
-    page: Math.max(0, Number(search.page) || DEFAULT_MAPS_SEARCH.page),
+    page: Math.max(0, Math.floor(Number(search.page) || DEFAULT_MAPS_SEARCH.page)),
     key: search.key === "4k" || search.key === "7k" || search.key === "other" ? search.key : DEFAULT_MAPS_SEARCH.key,
-    beatmapSort: search.beatmapSort === "plays" || search.beatmapSort === "stars" || search.beatmapSort === "length" ? search.beatmapSort : DEFAULT_MAPS_SEARCH.beatmapSort,
+    beatmapSort: search.beatmapSort === "players" || search.beatmapSort === "plays" || search.beatmapSort === "stars" || search.beatmapSort === "length" ? search.beatmapSort : DEFAULT_MAPS_SEARCH.beatmapSort,
     farmedSort:
+      search.farmedSort === "players" ||
       search.farmedSort === "avg-pp" ||
       search.farmedSort === "max-pp" ||
       search.farmedSort === "stars" ||
@@ -1085,6 +1086,12 @@ function MapsPage() {
           ? filteredFavourites
           : [];
   const totalPages = tab === "random" ? 0 : Math.ceil(currentList.length / PAGE_SIZE);
+
+  useEffect(() => {
+    if (tab === "random" || totalPages === 0 || page < totalPages) return;
+    updateMapsSearch({ page: totalPages - 1 });
+  }, [page, tab, totalPages]);
+
   const paginated = tab === "random" ? [] : currentList.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const tabs: { id: Tab; label: string }[] = [
