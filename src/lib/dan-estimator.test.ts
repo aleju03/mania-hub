@@ -1229,7 +1229,9 @@ describe("estimateDan", () => {
     expect(estimate.metrics.lnReleasePressure).toBeGreaterThan(22);
     expect(estimate.metrics.lnChordPressure).toBeGreaterThan(0.25);
     expect(estimate.family).toBe("ln");
-    expect(estimate.displayName).toMatch(/^LN /);
+    expect(estimate.displayName).toBe("LN 13");
+    expect(estimate.rawDan).toBeGreaterThan(13);
+    expect(estimate.rawDan).toBeLessThan(13.35);
   });
 
   it("detects multi-section dan marathon files as dans", () => {

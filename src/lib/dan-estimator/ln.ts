@@ -204,6 +204,23 @@ export function estimateLnDan(
 
   const sr = starRating > 0 ? starRating : Math.max(1, metrics.peakNps5s * 0.18 + metrics.lnReleasePressure * 0.55);
   const durationMinutes = Math.max(0.6, durationMs / 60000);
+  const shortReleaseHybridCompression = metrics.holdRatio >= 0.28
+    && metrics.holdRatio <= 0.45
+    && metrics.lnDensity >= 0.14
+    && metrics.lnDensity <= 0.25
+    && metrics.lnReleasePressure >= 22
+    && metrics.lnChordPressure >= 0.25
+    && metrics.lnHoldDurationP90 < 220
+    && metrics.peakNps5s < 27
+    && metrics.sustainedNps10s < 27
+    ? Math.min(
+      1.1,
+      0.78
+        + Math.max(0, 220 - metrics.lnHoldDurationP90) * 0.004
+        + Math.max(0, 0.5 - metrics.holdRatio) * 0.6
+        + Math.max(0, 27 - metrics.peakNps5s) * 0.05,
+    )
+    : 0;
   const rawDan = -8.15
     + sr * 2.6502
     + Math.max(0, sr - 5) * -1.3038
@@ -213,7 +230,8 @@ export function estimateLnDan(
     + metrics.lnDensity * 0.3841
     + (metrics.lnOverlapPressure / 4) * 0.3841
     + metrics.lnChordPressure * 0.1443
-    + Math.log2(durationMinutes) * 0.4391;
+    + Math.log2(durationMinutes) * 0.4391
+    - shortReleaseHybridCompression;
 
   return parseRawLnDan(rawDan);
 }
