@@ -174,4 +174,20 @@ describe("estimateDan LN calibration", () => {
     expect(rateUp.debug?.familyChoice.reason).toBe("ln-reference-neighbor");
     expect(`${rateUp.displayName} ${rateUp.family}`).toBe("LN 10 ln");
   });
+
+  it("matches known LN references by artist and title when standalone metadata uses a different difficulty name", () => {
+    const content = readFileSync(join(LN_REFERENCE_FIXTURES_DIR, "Laur-Exitium-Vandalism.osu"), "utf8");
+    const map = parseManiaBeatmap(content);
+    const estimate = estimateDan(map, {
+      starRating: 7.28,
+      totalLength: map.totalLength / 1000,
+      title: map.title,
+      version: map.version,
+      rate: 1,
+    });
+
+    expect(`${map.artist} - ${map.title}`).toBe("Laur - Exitium");
+    expect(estimate.debug?.familyChoice.reason).toBe("known-ln-reference");
+    expect(`${estimate.displayName} ${estimate.family}`).toBe("LN 14 ln");
+  });
 });

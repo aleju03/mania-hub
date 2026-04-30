@@ -181,10 +181,14 @@ function parseLnLabel(displayName: string): LnDanEstimateResult {
 }
 
 function knownLnTarget(map: ManiaBeatmap, input: DanEstimateInput, rate: number): LnDanEstimateResult | null {
-  const versions = [map.version, input.version].map(normalize).filter(Boolean);
+  const identities = [
+    map.version,
+    input.version,
+    `${map.artist} - ${map.title}`,
+  ].map(normalize).filter(Boolean);
   for (const target of KNOWN_LN_TARGETS) {
     const targetVersion = normalize(target.version);
-    if (!versions.includes(targetVersion)) continue;
+    if (!identities.includes(targetVersion)) continue;
     if (target.rate && Math.abs(target.rate - rate) > 0.001) continue;
     return parseLnLabel(target.target);
   }
