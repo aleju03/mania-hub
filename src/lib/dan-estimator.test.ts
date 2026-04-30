@@ -444,6 +444,20 @@ describe("estimateDan", () => {
     expect(higherRate.rawDan).toBeGreaterThan(lowerRate.rawDan);
   });
 
+  it("compresses long sparse dumpstreams below epsilon", () => {
+    const estimate = estimateDan(readFixtureBeatmap("credens-justitiam-s.osu"), {
+      starRating: 5.91,
+      totalLength: 227,
+    });
+
+    expect(estimate.metrics.noteCount).toBeGreaterThan(4200);
+    expect(estimate.metrics.chordRatio).toBeLessThan(0.17);
+    expect(estimate.metrics.sustainedNps10s).toBeGreaterThan(27);
+    expect(estimate.debug?.scoring.terms.longSparseStreamCompression).toBeGreaterThan(0);
+    expect(estimate.family).toBe("stream");
+    expect(estimate.displayName).toBe("delta");
+  });
+
   it("compresses low-chord burst streams with jack pressure out of epsilon", () => {
     const notes: ManiaNote[] = [];
     let time = 0;

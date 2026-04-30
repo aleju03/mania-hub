@@ -334,6 +334,36 @@ export function estimateFamilyScores(metrics: DanFeatureMetrics, starRating: num
         + Math.max(0, metrics.sustainedNps10s - 25) * 0.055,
     )
     : 0;
+  const longSparseStreamCompression = metrics.noteCount >= 4200
+    && metrics.noteCount <= 5600
+    && metrics.chordRatio >= 0.08
+    && metrics.chordRatio <= 0.17
+    && metrics.holdRatio < 0.03
+    && metrics.sustainedNps10s >= 27
+    && metrics.sustainedNps10s <= 31
+    && metrics.peakNps5s >= 28
+    && metrics.peakNps5s <= 31
+    && metrics.jackPressure >= 120
+    && metrics.jackPressure <= 165
+    && metrics.streamPressure >= 6.1
+    && metrics.techPressure < 5.4
+    && metrics.chordSizeChangeRate < 0.22
+    && metrics.rowIntervalEntropy < 2.1
+    && starRating >= 5.65
+    && starRating <= 6.35
+    ? minGate(
+      (metrics.noteCount - 4000) / 700,
+      (5800 - metrics.noteCount) / 900,
+      (metrics.chordRatio - 0.06) / 0.05,
+      (0.19 - metrics.chordRatio) / 0.05,
+      (metrics.sustainedNps10s - 26.5) / 2,
+      (31.5 - metrics.sustainedNps10s) / 2,
+      (metrics.peakNps5s - 27.5) / 1.8,
+      (31.5 - metrics.peakNps5s) / 1.8,
+      (165 - metrics.jackPressure) / 35,
+      (2.2 - metrics.rowIntervalEntropy) / 0.8,
+    ) * 0.55
+    : 0;
   const burstTechBonus = metrics.peakNps1s >= 34
     && metrics.chordRatio >= 0.18
     && metrics.chordRatio <= 0.36
@@ -1152,7 +1182,7 @@ export function estimateFamilyScores(metrics: DanFeatureMetrics, starRating: num
 
   const skillScores: Record<DanSkillFamily, number> = {
     jack: (base + jackBonus + lowSrDenseWallJackBonus + compactJackUnderrateBonus + lowRateHighChordJackBonus + slowRepetitiveJackstreamBonus + ratedRepetitiveSpeedjackBonus + compactHighChordDeltaJackBonus + denseWallJackPenaltyRelief + midChordSpeedjackJackBonus + longGammaHighChordjackFloorBonus + heldLongGammaHighChordjackFloorBonus - highChordSoftJackPenalty - denseJackSrCompression - mediumWallJackSrCompression - compactJackOverboostCompression - farmJumptrillJackCompression - longSparseJackDropJackCompression - shortDenseWallSrCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression - shortSpikeCompression - localizedJumptrillSpikeCompression) * lnNerf,
-    stream: (base + streamBonus - lowChordBurstStreamNerf - farmJumptrillStreamCompression - longSparseJackDropStreamCompression - shortDenseWallSrCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression - shortSpikeCompression - localizedJumptrillSpikeCompression) * lnNerf,
+    stream: (base + streamBonus - lowChordBurstStreamNerf - longSparseStreamCompression - farmJumptrillStreamCompression - longSparseJackDropStreamCompression - shortDenseWallSrCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression - shortSpikeCompression - localizedJumptrillSpikeCompression) * lnNerf,
     handstream: (base + handstreamBonus - moderateMidChordStaminaNerf * 0.25 - highEndMidChordStaminaNerf * 0.35 - longJumpstreamStaminaCompression * 0.45 - farmJumptrillHandstreamCompression - longSparseJackDropHandstreamCompression - shortDenseWallSrCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression - shortSpikeCompression - localizedJumptrillSpikeCompression) * lnNerf,
     stamina: (base + staminaBonus + lowEndLongMidChordStaminaFloorBonus - moderateMidChordStaminaNerf - midChordRateCompressionNerf - highNoteMidRateHandstreamNerf - highEndMidChordStaminaNerf - longJumpstreamStaminaCompression - deltaHighMidChordTransitionNerf - farmJumptrillStaminaCompression - longSparseJackDropStaminaCompression - denseChordStaminaCompression - shortDenseWallSrCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression - shortSpikeCompression - localizedJumptrillSpikeCompression) * lnNerf,
     chordjack: (base + chordjackBonus + slowRepetitiveJackstreamBonus * 0.55 + ratedRepetitiveSpeedjackBonus * 0.55 + midChordSpeedjackJackBonus + longGammaHighChordjackFloorBonus + heldLongGammaHighChordjackFloorBonus - farmJumptrillChordjackCompression - longSparseJackDropChordjackCompression - shortDenseWallSrCompression - mediumWallJackOverrateCompression - longHighChordChordjackCompression - midHighChordGammaCompression - shortSpikeCompression - localizedJumptrillSpikeCompression) * lnNerf,
@@ -1257,6 +1287,7 @@ export function estimateFamilyScores(metrics: DanFeatureMetrics, starRating: num
     highEndMidChordStaminaNerf,
     longJumpstreamStaminaCompression,
     deltaHighMidChordTransitionNerf,
+    longSparseStreamCompression,
     longSparseJackDropJackCompression,
     longSparseJackDropStreamCompression,
     longSparseJackDropHandstreamCompression,
@@ -1322,6 +1353,7 @@ export function estimateFamilyScores(metrics: DanFeatureMetrics, starRating: num
           { id: "sustainedLightJumpstreamBonus", value: sustainedLightJumpstreamBonus, description: "Rate-scaled reward for continuous light jumpstream with high sustain and low jack pressure." },
           { id: "baseRateSubGammaStreamBonus", value: baseRateSubGammaStreamBonus, description: "Beta floor for base-rate low-chord stream sitting just below gamma speed thresholds." },
           { id: "compactModerateChordSpeedBonus", value: compactModerateChordSpeedBonus, description: "Compact moderate-chord speed reward around beta." },
+          { id: "longSparseStreamCompression", value: -longSparseStreamCompression, description: "Compression for long sparse dumpstreams with steady density but low chord and tech variety." },
           { id: "lowChordBurstStreamNerf", value: -lowChordBurstStreamNerf, description: "Compression for low-chord burst streams with jack pressure." },
           { id: "farmJumptrillStreamCompression", value: -farmJumptrillStreamCompression, description: "Compression for long farm jumptrills with non-stream difficulty profile." },
           { id: "longSparseJackDropStreamCompression", value: -longSparseJackDropStreamCompression, description: "Compression for long sparse jack-drop files." },
