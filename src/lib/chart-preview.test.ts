@@ -22,6 +22,7 @@ const baseBeatmap: ManiaBeatmap = {
   audioFilename: "audio.mp3",
   previewTime: 5_000,
   backgroundFilename: "",
+  breakPeriods: [],
   scrollVelocities: [],
 };
 

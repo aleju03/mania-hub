@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="LN 16 dan">
+  <defs>
+    <linearGradient id="lnfill" x1="16%" x2="86%" y1="6%" y2="94%">
+      <stop offset="0" stop-color="#f4fbff"/>
+      <stop offset="0.32" stop-color="#86d8ff"/>
+      <stop offset="0.58" stop-color="#2732a8"/>
+      <stop offset="0.78" stop-color="#fff4c5"/>
+      <stop offset="1" stop-color="#cf5f9c"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="22" stdDeviation="17" flood-color="#000" flood-opacity="0.68"/>
+    </filter>
+  </defs>
+  <g filter="url(#shadow)">
+    <text x="512" y="528" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, 'Times New Roman', serif" font-size="610" font-weight="900" fill="none" stroke="#050509" stroke-width="104" stroke-linejoin="round">16</text>
+    <text x="512" y="528" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, 'Times New Roman', serif" font-size="610" font-weight="900" fill="none" stroke="#10143f" stroke-width="68" stroke-linejoin="round">16</text>
+    <text x="512" y="528" text-anchor="middle" dominant-baseline="middle" font-family="Georgia, 'Times New Roman', serif" font-size="610" font-weight="900" fill="url(#lnfill)" stroke="#0d0a12" stroke-width="24" stroke-linejoin="round">16</text>
+  </g>
+</svg>

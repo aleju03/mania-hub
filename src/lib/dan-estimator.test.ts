@@ -19,6 +19,7 @@ function makeMap(notes: ManiaNote[], keyCount = 4): ManiaBeatmap {
     audioFilename: "",
     previewTime: 0,
     backgroundFilename: "",
+    breakPeriods: [],
     scrollVelocities: [],
   };
 }

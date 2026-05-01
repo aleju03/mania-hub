@@ -15,7 +15,15 @@ interface LnManifestEntry {
 const LN_MAPS_DIR = join(process.cwd(), "datasets/dan-classifier/ln-maps");
 const LN_DETECTION_FIXTURES_DIR = join(process.cwd(), "src/lib/__fixtures__/dan-classifier/ln-detection");
 const LN_REFERENCE_FIXTURES_DIR = join(process.cwd(), "src/lib/__fixtures__/dan-classifier/ln-references");
+const LN_YOKAZE_FIXTURES_DIR = join(process.cwd(), "src/lib/__fixtures__/dan-classifier/ln-yokaze");
 const manifest = JSON.parse(readFileSync(join(LN_MAPS_DIR, "manifest.json"), "utf8")) as LnManifestEntry[];
+const yokazeDanCases = [
+  ["4767800-16th-dan-yokaze-marathon.osu", 9.78239],
+  ["5113804-1-05x-16th-dan-yokaze-marathon.osu", 10.1405],
+  ["5113806-1-1x-16th-dan-yokaze-marathon.osu", 10.4981],
+  ["5113805-1-15x-16th-dan-yokaze-marathon.osu", 10.8797],
+  ["5113807-1-2x-16th-dan-yokaze-marathon.osu", 11.2181],
+] as const;
 
 function targetForEntry(entry: LnManifestEntry): string | null {
   const official = entry.version.match(/\b(\d{1,2})(?:st|nd|rd|th) Dan\b/i);
@@ -194,7 +202,7 @@ describe("estimateDan LN calibration", () => {
     expect(base.debug?.familyChoice.reason).toBe("ln-reference-neighbor");
     expect(`${base.displayName} ${base.family}`).toBe("LN 10 ln");
     expect(rateUp.debug?.familyChoice.reason).toBe("ln-reference-neighbor");
-    expect(`${rateUp.displayName} ${rateUp.family}`).toBe("LN 10 ln");
+    expect(`${rateUp.displayName} ${rateUp.family}`).toBe("LN 10+ ln");
   });
 
   it("estimates duplicate LN charts from pressure instead of metadata identity", () => {
@@ -212,7 +220,128 @@ describe("estimateDan LN calibration", () => {
     expect(`${estimate.displayName} ${estimate.family}`).toBe("LN 14 ln");
   });
 
-  it("keeps rated LN estimates monotonic on high-end reference-like charts", () => {
+  it("keeps the full official Yami course at 14th LN dan", () => {
+    const content = readFileSync(join(LN_REFERENCE_FIXTURES_DIR, "2332319-4k-ln-dan-courses-v2-final-14th-dan-yami-marathon.osu"), "utf8");
+    const map = parseManiaBeatmap(content);
+    const estimate = estimateDan(map, {
+      starRating: 8.03931,
+      totalLength: map.totalLength / 1000,
+      title: map.title,
+      version: map.version,
+      rate: 1,
+    });
+
+    expect(estimate.debug?.familyChoice.reason).toBe("ln-course-components");
+    expect(`${estimate.displayName} ${estimate.family}`).toBe("LN 14 ln");
+  });
+
+  it("falls back to exactly four raw-gap components when break events are missing", () => {
+    const content = readFileSync(join(LN_REFERENCE_FIXTURES_DIR, "3071546-indomitable-spirit-hommarju-remix-l-u-n-atic-yami-buff-1-5x.osu"), "utf8");
+    const source = parseManiaBeatmap(content);
+    const sectionLength = source.totalLength + 6000;
+    const map: ManiaBeatmap = {
+      ...source,
+      notes: [0, 1, 2, 3].flatMap((section) => source.notes.map((note) => ({
+        ...note,
+        time: note.time + section * sectionLength,
+        endTime: note.endTime + section * sectionLength,
+      }))),
+      totalLength: source.totalLength + sectionLength * 3,
+      breakPeriods: [],
+    };
+    const estimate = estimateDan(map, {
+      starRating: 7.48744,
+      totalLength: map.totalLength / 1000,
+      title: map.title,
+      version: map.version,
+      rate: 1,
+    });
+
+    expect(estimate.debug?.familyChoice.reason).toBe("ln-course-components");
+    expect(`${estimate.displayName} ${estimate.family}`).toBe("LN 14 ln");
+  });
+
+  it("does not use raw-gap course segmentation without exactly four sections", () => {
+    const content = readFileSync(join(LN_REFERENCE_FIXTURES_DIR, "3071546-indomitable-spirit-hommarju-remix-l-u-n-atic-yami-buff-1-5x.osu"), "utf8");
+    const source = parseManiaBeatmap(content);
+    const sectionLength = source.totalLength + 6000;
+    const map: ManiaBeatmap = {
+      ...source,
+      notes: [0, 1, 2].flatMap((section) => source.notes.map((note) => ({
+        ...note,
+        time: note.time + section * sectionLength,
+        endTime: note.endTime + section * sectionLength,
+      }))),
+      totalLength: source.totalLength + sectionLength * 2,
+      breakPeriods: [],
+    };
+    const estimate = estimateDan(map, {
+      starRating: 7.48744,
+      totalLength: map.totalLength / 1000,
+      title: map.title,
+      version: map.version,
+      rate: 1,
+    });
+
+    expect(estimate.debug?.familyChoice.reason).not.toBe("ln-course-components");
+  });
+
+  it("classifies Indomitable Spirit Yami Buff 1.5x as 14th LN dan", () => {
+    const content = readFileSync(join(LN_REFERENCE_FIXTURES_DIR, "3071546-indomitable-spirit-hommarju-remix-l-u-n-atic-yami-buff-1-5x.osu"), "utf8");
+    const map = parseManiaBeatmap(content);
+    const estimate = estimateDan(map, {
+      starRating: 7.48744,
+      totalLength: map.totalLength / 1000,
+      title: map.title,
+      version: map.version,
+      rate: 1,
+    });
+
+    expect(estimate.metrics.holdRatio).toBeGreaterThan(0.7);
+    expect(estimate.metrics.lnDensity).toBeGreaterThan(0.45);
+    expect(estimate.debug?.familyChoice.reason).toBe("ln-reference-neighbor");
+    expect(`${estimate.displayName} ${estimate.family}`).toBe("LN 14 ln");
+  });
+
+  it("recognizes standalone Yokaze as the 16th LN dan pressure profile", () => {
+    const content = readFileSync(join(LN_YOKAZE_FIXTURES_DIR, "4608753-protoflicker-1-25x-yokaze-marathon.osu"), "utf8");
+    const map = parseManiaBeatmap(content);
+    const estimate = estimateDan(map, {
+      starRating: 6.94235,
+      totalLength: map.totalLength / 1000,
+      title: map.title,
+      version: map.version,
+      rate: 1,
+    });
+
+    expect(estimate.metrics.holdRatio).toBeGreaterThan(0.95);
+    expect(estimate.metrics.chordRatio).toBeGreaterThan(0.75);
+    expect(estimate.metrics.lnDensity).toBeGreaterThan(0.55);
+    expect(estimate.metrics.lnReleasePressure).toBeGreaterThan(32);
+    expect(estimate.debug?.familyChoice.reason).toBe("ln-reference-neighbor");
+    expect(`${estimate.displayName} ${estimate.family}`).toBe("LN 16 ln");
+  });
+
+  it("allows official Yokaze marathon charts to exceed the previous LN 15 cap", () => {
+    for (const [file, starRating] of yokazeDanCases) {
+      const content = readFileSync(join(LN_YOKAZE_FIXTURES_DIR, file), "utf8");
+      const map = parseManiaBeatmap(content);
+      const estimate = estimateDan(map, {
+        starRating,
+        totalLength: map.totalLength / 1000,
+        title: map.title,
+        version: map.version,
+        rate: 1,
+      });
+
+      expect(`${file}: ${estimate.displayName} ${estimate.family}`).toBe(`${file}: LN 16 ln`);
+      expect(estimate.metrics.peakNps5s).toBeGreaterThanOrEqual(32);
+      expect(estimate.metrics.sustainedNps10s).toBeGreaterThanOrEqual(30);
+      expect(estimate.rawDan).toBeGreaterThan(16);
+    }
+  });
+
+  it("keeps Exitium LN14 at base rate while allowing rate-up pressure to promote", () => {
     const content = readFileSync(join(LN_REFERENCE_FIXTURES_DIR, "Laur-Exitium-Vandalism.osu"), "utf8");
     const map = parseManiaBeatmap(content);
     const rates = [1, 1.05, 1.1, 1.15, 1.2];
@@ -228,7 +357,6 @@ describe("estimateDan LN calibration", () => {
       expect(estimates[index].rawDan).toBeGreaterThanOrEqual(estimates[index - 1].rawDan);
       expect(estimates[index].debug?.familyChoice.reason).toBe(estimates[0].debug?.familyChoice.reason);
     }
-    expect(estimates[2].displayName).toBe("LN 15");
-    expect(estimates[3].displayName).toBe("LN 15");
+    expect(estimates.map((estimate) => estimate.displayName)).toEqual(["LN 14", "LN 14", "LN 15", "LN 15", "LN 15"]);
   });
 });

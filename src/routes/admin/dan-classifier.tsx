@@ -85,7 +85,7 @@ function extractBeatmapId(query: string): number | null {
 }
 
 function getDanImageSrc(label: string, family?: string): string | null {
-  if (family === "ln" && /^(1[0-5]|[1-9])$/.test(label)) {
+  if (family === "ln" && /^(1[0-6]|[1-9])$/.test(label)) {
     return `/images/dans/ln/${label}.svg`;
   }
 

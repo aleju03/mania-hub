@@ -16,7 +16,7 @@ Important routes include `index.tsx`, `rankings.tsx`, `tracker.tsx`, `top-plays.
 - `npm run build` creates a production build and checks routing/SSR-sensitive code.
 - `npm run preview` serves the production build locally.
 - `npm run test` runs Vitest once.
-- `npm run dan:analyze -- <path|beatmapsetId|osuUrl>` diagnoses dan/LN classifier output for local `.osu`/`.osz` files or downloaded beatmapsets; useful flags include `--rate 1,1.5`, `--segments`, `--json`, `--neighbors N`, and `--sr N`.
+- `npm run dan:analyze -- <path|beatmapsetId|osuUrl>` diagnoses dan/LN classifier output for local `.osu`/`.osz` files or downloaded beatmapsets; useful flags include `--rate 1,1.5`, `--segments`, `--explain`, `--json`, `--neighbors N`, and `--sr N`. Use `--explain` for calibration/debugging work because it shows confidence, LN distributions, segmentation, top skill families, and nearest-reference deltas; use the default table for bulk comparisons and `--json` for machine-readable details.
 - `npm run replay:validate` runs `scripts/replay-validate.ts` with `.env` if present.
 - `npm run db:init` initializes the Turso database from `db/schema.sql`.
 - `npm run db:inspect` opens the Turso shell.
@@ -29,6 +29,8 @@ Keep authenticated osu! API access on the server through server functions in `sr
 Client state uses Zustand in `src/store.ts`, usually with `fetchedAt` plus TTL checks from `src/lib/cache.ts`. Server-side persistent cache tables are in Turso: `cache_entries`, `cache_locks`, `country_top_plays`, and `beatmap_asset_cache`. R2-backed replay or beatmap asset caching is handled in `src/lib/r2-cache.ts`.
 
 Replay-related logic is split across parser, validation, score input, skin, navigation, scroll speed, judgement, beatmap parsing, and canvas rendering modules. Score handling must account for stable/lazer API differences; use existing score utilities rather than duplicating normalization logic.
+
+Dan and LN dan classification must be algorithmic. Do not add title, artist, creator, beatmap ID, beatmapset ID, filename, or narrowly chart-specific metadata shortcuts to force a dan result. Calibration changes should generalize through extracted chart-pressure features, broad reference distributions, or documented formulas, and tests should verify behavior without relying on identity lookup.
 
 ## Coding Style & Naming Conventions
 
