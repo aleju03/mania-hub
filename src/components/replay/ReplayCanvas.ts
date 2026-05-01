@@ -500,15 +500,15 @@ export class ManiaReplayRenderer {
     const baseRatio = this.barePlayfield
       ? 0.4 + this.keyCount * 0.045
       : 0.25 + this.keyCount * 0.025;
-    const columnWidthScale = this.skinProfile.columnWidth / 100;
+    const configuredColumnWidth = this.skinProfile.columnWidth;
     const playfieldWidth = Math.min(
-      w * Math.min(baseRatio * columnWidthScale, this.barePlayfield ? 0.82 : 0.72),
-      (this.barePlayfield ? 68 : 50) * this.keyCount * columnWidthScale,
+      w * Math.min(baseRatio * (configuredColumnWidth / 50), this.barePlayfield ? 0.82 : 0.72),
+      configuredColumnWidth * this.keyCount,
     );
     const laneWidth = playfieldWidth / this.keyCount;
     const playfieldX = (w - playfieldWidth) / 2;
-    const hitPosition = this.skinSettings.hitPosition || MANIA_HIT_TARGET_POSITION;
-    const judgmentY = h * (MANIA_REFERENCE_HEIGHT - hitPosition) / MANIA_REFERENCE_HEIGHT;
+    const hitPosition = this.skinSettings.hitPosition ?? MANIA_HIT_TARGET_POSITION;
+    const judgmentY = h * (this.skinSettings.upscroll ? hitPosition : MANIA_REFERENCE_HEIGHT - hitPosition) / MANIA_REFERENCE_HEIGHT;
     const noteHeight = Math.max(10, h * 0.02);
     const receptorHeight = Math.max(6, h * 0.012);
     const scrollTimeRange = (MANIA_MAX_TIME_RANGE / Math.max(1, Math.min(40, this.scrollSpeed))) * this.modRate;
@@ -801,7 +801,7 @@ export class ManiaReplayRenderer {
     const currentScrollPosition = this.getScrollPosition(this.currentTime);
     const getVisualDelta = (targetTime: number) => this.getScrollPosition(targetTime) - currentScrollPosition;
     const noteFadeHeight = this.barePlayfield ? Math.min(46, h * 0.11) : 0;
-    const timeWindow = judgmentY / pixelsPerMs;
+    const timeWindow = (this.skinSettings.upscroll ? h - judgmentY : judgmentY) / pixelsPerMs;
     const velocityWindow = timeWindow / this.scrollVelocityMinMultiplier;
     const visibleMinTime = this.currentTime - velocityWindow * 0.2;
     const visibleMaxTime = this.currentTime + velocityWindow * 1.1;
@@ -831,8 +831,9 @@ export class ManiaReplayRenderer {
       const circleRadius = circleDiameter / 2;
 
       if (note.isHold) {
-        let headY = judgmentY - getVisualDelta(note.time) * pixelsPerMs;
-        const tailY = judgmentY - getVisualDelta(note.endTime) * pixelsPerMs;
+        const direction = this.skinSettings.upscroll ? 1 : -1;
+        let headY = judgmentY + getVisualDelta(note.time) * pixelsPerMs * direction;
+        const tailY = judgmentY + getVisualDelta(note.endTime) * pixelsPerMs * direction;
         const awaitingJudgment = !headResolved;
         const shouldLetPassLine = awaitingJudgment && note.time < this.currentTime - 10;
         const withinMatchedSegment = this.currentTime < noteState.releaseTime;
@@ -843,10 +844,10 @@ export class ManiaReplayRenderer {
           this.currentTime < (noteState.tailTime ?? note.endTime) &&
           !stillPhysicallyHeld;
 
-        if (!shouldLetPassLine) headY = Math.min(headY, judgmentY);
+        if (!shouldLetPassLine) headY = this.skinSettings.upscroll ? Math.max(headY, judgmentY) : Math.min(headY, judgmentY);
         const top = Math.min(headY, tailY);
         let bottom = Math.max(headY, tailY);
-        if (!shouldLetPassLine) bottom = Math.min(bottom, judgmentY);
+        if (!shouldLetPassLine && !this.skinSettings.upscroll) bottom = Math.min(bottom, judgmentY);
         if (top > h + 20 || bottom < -20) continue;
 
         const bodyAlpha = releasedEarly ? 0.45 : 1;
@@ -869,8 +870,9 @@ export class ManiaReplayRenderer {
             noteFadeHeight,
             0.55,
           );
-          this.circleWithTopFade(colX + colWidth / 2, bottom, circleRadius, circleLnHeadColor, headAlpha, noteFadeHeight, 0.55);
-          this.strokeCircleWithTopFade(colX + colWidth / 2, bottom, circleRadius, "#ffffff", headAlpha * 0.55, 2, noteFadeHeight, 0.55);
+          const headCenterY = this.skinSettings.upscroll ? top : bottom;
+          this.circleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, circleLnHeadColor, headAlpha, noteFadeHeight, 0.55);
+          this.strokeCircleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, "#ffffff", headAlpha * 0.55, 2, noteFadeHeight, 0.55);
           continue;
         }
 
@@ -880,7 +882,7 @@ export class ManiaReplayRenderer {
       } else {
         if (note.time < this.currentTime - 10 && !headResolved) continue;
 
-        const noteY = judgmentY - getVisualDelta(note.time) * pixelsPerMs;
+        const noteY = judgmentY + getVisualDelta(note.time) * pixelsPerMs * (this.skinSettings.upscroll ? 1 : -1);
         if (noteY > h + 20 || noteY < -20) continue;
 
         if (this.skinSettings.style === "circles") {
@@ -889,9 +891,10 @@ export class ManiaReplayRenderer {
           continue;
         }
 
-        this.roundRectWithTopFade(x, noteY - noteHeight, barWidth, noteHeight, 4, color, 1, noteFadeHeight, 0.55);
-        this.roundRectWithTopFade(x + 1, noteY - noteHeight, barWidth - 2, noteHeight, 4, color, 0.32, noteFadeHeight, 0.55);
-        this.roundRectWithTopFade(x + 2, noteY - noteHeight + 1, barWidth - 4, noteHeight / 3, 2, "#ffffff", 0.2, noteFadeHeight, 0.55);
+        const noteTop = this.skinSettings.upscroll ? noteY : noteY - noteHeight;
+        this.roundRectWithTopFade(x, noteTop, barWidth, noteHeight, 4, color, 1, noteFadeHeight, 0.55);
+        this.roundRectWithTopFade(x + 1, noteTop, barWidth - 2, noteHeight, 4, color, 0.32, noteFadeHeight, 0.55);
+        this.roundRectWithTopFade(x + 2, noteTop + 1, barWidth - 4, noteHeight / 3, 2, "#ffffff", 0.2, noteFadeHeight, 0.55);
       }
     }
   }
@@ -902,7 +905,7 @@ export class ManiaReplayRenderer {
 
     const currentScrollPosition = this.getScrollPosition(this.currentTime);
     const getVisualDelta = (targetTime: number) => this.getScrollPosition(targetTime) - currentScrollPosition;
-    const timeWindow = judgmentY / pixelsPerMs;
+    const timeWindow = (this.skinSettings.upscroll ? h - judgmentY : judgmentY) / pixelsPerMs;
     const velocityWindow = timeWindow / this.scrollVelocityMinMultiplier;
     const visibleMinTime = this.currentTime - velocityWindow * 0.2;
     const visibleMaxTime = this.currentTime + velocityWindow * 1.1;
@@ -924,12 +927,14 @@ export class ManiaReplayRenderer {
         const tailResolved = noteState.tailTime != null && noteState.tailTime <= this.currentTime;
         if (headResolved && tailResolved) continue;
 
-        let headY = judgmentY - getVisualDelta(note.time) * pixelsPerMs;
-        const tailY = judgmentY - getVisualDelta(note.endTime) * pixelsPerMs;
-        if (headResolved) headY = Math.min(headY, judgmentY);
+        let headY = judgmentY + getVisualDelta(note.time) * pixelsPerMs * (this.skinSettings.upscroll ? 1 : -1);
+        const tailY = judgmentY + getVisualDelta(note.endTime) * pixelsPerMs * (this.skinSettings.upscroll ? 1 : -1);
+        if (headResolved) headY = this.skinSettings.upscroll ? Math.max(headY, judgmentY) : Math.min(headY, judgmentY);
 
         const top = Math.min(headY, tailY);
-        const bottom = Math.min(Math.max(headY, tailY), judgmentY);
+        const bottom = this.skinSettings.upscroll
+          ? Math.max(Math.max(headY, tailY), judgmentY)
+          : Math.min(Math.max(headY, tailY), judgmentY);
         if (top > h + 20 || bottom < -20 || bottom - top <= 0) continue;
         holdOcclusionRanges[note.column].push({ top, bottom });
       }
@@ -949,13 +954,15 @@ export class ManiaReplayRenderer {
         const seg = segments[i];
         if (seg.start > visibleMaxTime) break;
 
-        const startY = judgmentY - getVisualDelta(seg.start) * pixelsPerMs;
-        const endY = judgmentY - getVisualDelta(seg.end) * pixelsPerMs;
+        const startY = judgmentY + getVisualDelta(seg.start) * pixelsPerMs * (this.skinSettings.upscroll ? 1 : -1);
+        const endY = judgmentY + getVisualDelta(seg.end) * pixelsPerMs * (this.skinSettings.upscroll ? 1 : -1);
         if (startY < -20 && endY < -20) continue;
         if (startY > h + 20 && endY > h + 20) continue;
 
         const top = Math.min(startY, endY);
-        const bottom = Math.min(Math.max(startY, endY), judgmentY);
+        const bottom = this.skinSettings.upscroll
+          ? Math.max(Math.max(startY, endY), judgmentY)
+          : Math.min(Math.max(startY, endY), judgmentY);
         let cursor = top;
 
         const drawOverlayPiece = (pieceTop: number, pieceBottom: number) => {
@@ -1008,11 +1015,12 @@ export class ManiaReplayRenderer {
       const timeSinceFlash = this.currentTime - (this.receptorFlashTimestamps[col] || 0);
       const flashIntensity = pressed ? 1 : Math.max(0, 1 - timeSinceFlash / 120);
 
+      const receptorY = this.skinSettings.upscroll ? judgmentY - receptorHeight - 2 : judgmentY + 2;
       if (flashIntensity > 0) {
-        this.receptorBeam(x, judgmentY - 80, colWidth, 95, color, flashIntensity);
-        this.roundRect(x + 3, judgmentY + 2, colWidth - 6, receptorHeight, 2, color, flashIntensity);
+        this.receptorBeam(x, this.skinSettings.upscroll ? judgmentY - 15 : judgmentY - 80, colWidth, 95, color, flashIntensity);
+        this.roundRect(x + 3, receptorY, colWidth - 6, receptorHeight, 2, color, flashIntensity);
       } else {
-        this.roundRect(x + 3, judgmentY + 2, colWidth - 6, receptorHeight, 2, "#ffffff", 0.12);
+        this.roundRect(x + 3, receptorY, colWidth - 6, receptorHeight, 2, "#ffffff", 0.12);
       }
     }
   }
@@ -1129,7 +1137,11 @@ export class ManiaReplayRenderer {
 
     const urBarWidth = Math.min(playfieldWidth * 0.68, 180);
     const urBarX = playfieldCenterX - urBarWidth / 2;
-    const urBarY = h - 26;
+    const receptorBottom = this.skinSettings.style === "circles"
+      ? judgmentY + this.getCircleDiameter(layout) / 2
+      : judgmentY + layout.receptorHeight + 2;
+    const urBarY = Math.min(h - 10, receptorBottom > h - 40 ? receptorBottom + 12 : h - 26);
+    const showUrLabel = urBarY - 8 > receptorBottom;
     const urRange = this.hitWindows.meh;
 
     this.fillRect(urBarX, urBarY, urBarWidth, 3, "#ffffff", 0.08);
@@ -1140,14 +1152,16 @@ export class ManiaReplayRenderer {
       const alpha = 0.2 + ((index + 1) / this.recentHitOffsets.length) * 0.8;
       this.fillRect(x - 1.5, urBarY - 3, 3, 9, "#b3f5ff", alpha);
     });
-    this.addText(`UR ${this.getUr().toFixed(0)}`, playfieldCenterX, urBarY - 6, {
-      fontSize: 10,
-      fill: "#ffffff",
-      alpha: 0.72,
-      fontWeight: "700",
-      anchorX: 0.5,
-      anchorY: 1,
-    });
+    if (showUrLabel) {
+      this.addText(`UR ${this.getUr().toFixed(0)}`, playfieldCenterX, urBarY - 6, {
+        fontSize: 10,
+        fill: "#ffffff",
+        alpha: 0.72,
+        fontWeight: "700",
+        anchorX: 0.5,
+        anchorY: 1,
+      });
+    }
 
     const wallTime = this.currentTime / this.modRate;
     const mins = Math.floor(wallTime / 60000);

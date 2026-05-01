@@ -126,7 +126,7 @@ describe("ManiaReplayRenderer skin customization", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
     expect(source).toContain("const laneSizedDiameter = layout.laneWidth * 0.74;");
-    expect(source).toContain("Math.min(layout.laneWidth - 4, Math.max(28, laneSizedDiameter))");
+    expect(source).toContain("Math.min(layout.laneWidth - 4, Math.max(minDiameter, laneSizedDiameter))");
   });
 
   it("hides playfield lane dividers and lane tint for circle skins", () => {
@@ -158,15 +158,22 @@ describe("ManiaReplayRenderer skin customization", () => {
   it("applies the configured keymode column width to layout", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    expect(source).toContain("const columnWidthScale = this.skinProfile.columnWidth / 100;");
-    expect(source).toContain("* this.keyCount * columnWidthScale");
+    expect(source).toContain("const configuredColumnWidth = this.skinProfile.columnWidth;");
+    expect(source).toContain("configuredColumnWidth * this.keyCount");
   });
 
   it("uses the configured hit position for receptors without changing scroll density", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    expect(source).toContain("const hitPosition = this.skinSettings.hitPosition || MANIA_HIT_TARGET_POSITION;");
-    expect(source).toContain("const judgmentY = h * (MANIA_REFERENCE_HEIGHT - hitPosition) / MANIA_REFERENCE_HEIGHT;");
+    expect(source).toContain("const hitPosition = this.skinSettings.hitPosition ?? MANIA_HIT_TARGET_POSITION;");
+    expect(source).toContain("const judgmentY = h * (this.skinSettings.upscroll ? hitPosition : MANIA_REFERENCE_HEIGHT - hitPosition) / MANIA_REFERENCE_HEIGHT;");
     expect(source).toContain("const scrollLength = h * (MANIA_REFERENCE_HEIGHT - MANIA_DEFAULT_HIT_POSITION) / MANIA_REFERENCE_HEIGHT;");
+  });
+
+  it("supports upscroll note positioning", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("const direction = this.skinSettings.upscroll ? 1 : -1;");
+    expect(source).toContain("const timeWindow = (this.skinSettings.upscroll ? h - judgmentY : judgmentY) / pixelsPerMs;");
   });
 });

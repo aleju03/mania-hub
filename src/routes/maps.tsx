@@ -235,8 +235,8 @@ function parseTriStateCsv<T extends string>(raw: string, allowed: readonly T[]):
   return { includes, excludes };
 }
 
-// Cycle: none → include → exclude → none
-function cycleTriStateCsv(raw: string, value: string): string {
+// Cycle: none -> include -> exclude -> none
+export function cycleTriStateCsv(raw: string, value: string): string {
   const parts = raw ? raw.split(",").filter(Boolean) : [];
   const includeIdx = parts.indexOf(value);
   const excludeIdx = parts.indexOf(`-${value}`);
@@ -246,6 +246,21 @@ function cycleTriStateCsv(raw: string, value: string): string {
     parts.splice(excludeIdx, 1);
   } else {
     parts.push(value);
+  }
+  return parts.join(",");
+}
+
+// Reverse cycle: none -> exclude -> include -> none
+export function reverseCycleTriStateCsv(raw: string, value: string): string {
+  const parts = raw ? raw.split(",").filter(Boolean) : [];
+  const includeIdx = parts.indexOf(value);
+  const excludeIdx = parts.indexOf(`-${value}`);
+  if (includeIdx >= 0) {
+    parts.splice(includeIdx, 1);
+  } else if (excludeIdx >= 0) {
+    parts[excludeIdx] = value;
+  } else {
+    parts.push(`-${value}`);
   }
   return parts.join(",");
 }
@@ -1515,6 +1530,7 @@ function MapsPage() {
                         mode={getTriStateMode(randomStatus, s)}
                         hasAnyActive={triStateActive(randomStatus) > 0}
                         onClick={() => updateMapsSearch({ rStatus: cycleTriStateCsv(rStatusRaw, s) })}
+                        onContextMenu={() => updateMapsSearch({ rStatus: reverseCycleTriStateCsv(rStatusRaw, s) })}
                       >
                         {s.charAt(0).toUpperCase() + s.slice(1)}
                       </TriStatePill>
@@ -1528,6 +1544,7 @@ function MapsPage() {
                         mode={getTriStateMode(randomKey, k)}
                         hasAnyActive={triStateActive(randomKey) > 0}
                         onClick={() => updateMapsSearch({ rKey: cycleTriStateCsv(rKeyRaw, k) })}
+                        onContextMenu={() => updateMapsSearch({ rKey: reverseCycleTriStateCsv(rKeyRaw, k) })}
                       >
                         {k.toUpperCase()}
                       </TriStatePill>
@@ -1541,6 +1558,7 @@ function MapsPage() {
                         mode={getTriStateMode(randomPattern, p)}
                         hasAnyActive={triStateActive(randomPattern) > 0}
                         onClick={() => updateMapsSearch({ rPattern: cycleTriStateCsv(rPatternRaw, p) })}
+                        onContextMenu={() => updateMapsSearch({ rPattern: reverseCycleTriStateCsv(rPatternRaw, p) })}
                       >
                         {RANDOM_PATTERN_LABEL[p]}
                       </TriStatePill>
@@ -1915,11 +1933,13 @@ function TriStatePill({
   mode,
   hasAnyActive,
   onClick,
+  onContextMenu,
   children,
 }: {
   mode: TriStateMode | undefined;
   hasAnyActive: boolean;
   onClick: () => void;
+  onContextMenu: () => void;
   children: React.ReactNode;
 }) {
   const styleClass = mode === "include"
@@ -1938,6 +1958,10 @@ function TriStatePill({
     <button
       type="button"
       onClick={onClick}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onContextMenu();
+      }}
       title={title}
       aria-label={title}
       className={`relative px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${styleClass}`}

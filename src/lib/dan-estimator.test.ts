@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { estimateDan } from "./dan-estimator";
+import { estimateFamilyScores } from "./dan-estimator/scoring";
 import { parseManiaBeatmap, type ManiaBeatmap, type ManiaNote } from "./beatmap-parser";
+import type { DanFeatureMetrics } from "./dan-estimator/types";
 
 function makeMap(notes: ManiaNote[], keyCount = 4): ManiaBeatmap {
   return {
@@ -1193,6 +1195,66 @@ describe("estimateDan", () => {
     expect(estimate.debug?.scoring.terms.mediumWallJackSrCompression).toBeGreaterThan(0);
     expect(estimate.family).toBe("jack");
     expect(estimate.rawDan).toBeLessThan(13.5);
+  });
+
+  it("keeps dense high-chord jack rates ordered through the gamma transition", () => {
+    const onePointOneMetrics: DanFeatureMetrics = {
+      keyCount: 4,
+      noteCount: 2531,
+      holdRatio: 0.0063,
+      chordRatio: 0.921,
+      peakNps1s: 38,
+      peakNps5s: 29,
+      nps5sP50: 0,
+      nps5sP90: 0,
+      nps5sP95: 0,
+      sustainedNps10s: 28.4,
+      jackPressure: 154.6392,
+      streamPressure: 4.6571,
+      chordjackPressure: 252.6548,
+      techPressure: 11.0369,
+      rowBurstPressure: 10.3093,
+      fastRowRatio: 0,
+      rowIntervalEntropy: 0.9729,
+      patternVariety: 2.0086,
+      strainSpikiness: 1.1589,
+      sustainedPressureRatio: 0.7474,
+      anchorPressure: 0.1753,
+      lnReleasePressure: 1.5692,
+      lnDensity: 0,
+      lnOverlapPressure: 0.7,
+      lnChordPressure: 1,
+      lnHoldDurationAvg: 194.8125,
+      lnHoldDurationP90: 195,
+      chordSizeChangeRate: 0.441,
+      directionChangeRate: 0.6962,
+      staminaPressure: 28.4,
+    };
+    const onePointFifteenMetrics: DanFeatureMetrics = {
+      ...onePointOneMetrics,
+      peakNps5s: 30.2,
+      sustainedNps10s: 29.6,
+      jackPressure: 161.2903,
+      streamPressure: 4.7714,
+      chordjackPressure: 263.5216,
+      techPressure: 11.0577,
+      rowBurstPressure: 10.7527,
+      rowIntervalEntropy: 0,
+      patternVariety: 1.4325,
+      sustainedPressureRatio: 0.7789,
+      anchorPressure: 0.1943,
+      lnReleasePressure: 1.6065,
+      lnHoldDurationAvg: 186.375,
+      lnHoldDurationP90: 187,
+      staminaPressure: 29.6,
+    };
+
+    const onePointOne = estimateFamilyScores(onePointOneMetrics, 6.46234, 102000);
+    const onePointFifteen = estimateFamilyScores(onePointFifteenMetrics, 6.63627, 98000);
+
+    expect(onePointOne.debug.terms.lowRateHighChordJackBonus).toBeGreaterThan(0);
+    expect(onePointFifteen.debug.terms.lowRateHighChordJackBonus).toBeGreaterThan(0);
+    expect(onePointFifteen.skillScores.jack).toBeGreaterThan(onePointOne.skillScores.jack);
   });
 
   it("keeps high-SR LN hybrids below zeta when hold density is high", () => {

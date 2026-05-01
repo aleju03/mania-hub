@@ -5,7 +5,9 @@ import {
   getReplaySkinColumnColor,
   getReplaySkinProfile,
   normalizeReplaySkinSettings,
+  osuManiaHitPositionToReplayHitPosition,
   readReplaySkinSettings,
+  replayHitPositionToOsuManiaHitPosition,
   writeReplaySkinSettings,
 } from "./replay-skin";
 
@@ -29,7 +31,7 @@ describe("replay skin settings", () => {
 
   it("uses bar defaults that preserve the existing replay skin", () => {
     expect(DEFAULT_REPLAY_SKIN_SETTINGS).toEqual({
-      version: 1,
+      version: 2,
       style: "bars",
       tapColor: "#9cf2ae",
       tapColors: [],
@@ -37,7 +39,8 @@ describe("replay skin settings", () => {
       lnHeadColors: [],
       lnBodyColor: "#8b8b93",
       percy: false,
-      columnWidth: 100,
+      upscroll: false,
+      columnWidth: 50,
       hitPosition: 110,
       keymodeProfiles: {},
     });
@@ -54,7 +57,7 @@ describe("replay skin settings", () => {
       style: "circles",
       tapColor: "#aabbcc",
       tapColors: ["#ffffff", "", "#123456"],
-      columnWidth: 100,
+      columnWidth: 50,
       hitPosition: 110,
       percy: true,
     });
@@ -70,13 +73,33 @@ describe("replay skin settings", () => {
       lnHeadColors: ["#456"],
       lnBodyColor: "#123456",
       percy: "yes",
+      upscroll: "yes",
       hitPosition: 900,
     })).toEqual({
       ...DEFAULT_REPLAY_SKIN_SETTINGS,
       lnHeadColors: ["#445566"],
       lnBodyColor: "#123456",
-      hitPosition: 180,
+      hitPosition: 768,
     });
+  });
+
+  it("migrates legacy percent column widths to skin.ini-style pixels", () => {
+    const settings = normalizeReplaySkinSettings({
+      version: 1,
+      columnWidth: 100,
+      keymodeProfiles: {
+        4: { columnWidth: 160 },
+      },
+    });
+
+    expect(settings.columnWidth).toBe(50);
+    expect(getReplaySkinProfile(settings, 4).columnWidth).toBe(80);
+  });
+
+  it("maps osu!mania skin.ini HitPosition values to replay coordinates", () => {
+    expect(osuManiaHitPositionToReplayHitPosition(450)).toBe(48);
+    expect(replayHitPositionToOsuManiaHitPosition(48)).toBe(450);
+    expect(osuManiaHitPositionToReplayHitPosition(402)).toBe(125);
   });
 
   it("resolves per-column colors over the shared fallback", () => {
@@ -101,7 +124,7 @@ describe("replay skin settings", () => {
           tapColor: "#222222",
           tapColors: ["", "", "", "#ffcc22"],
           lnHeadColor: "#333333",
-          columnWidth: 115,
+          columnWidth: 80,
         },
       },
       hitPosition: 84,
@@ -109,7 +132,7 @@ describe("replay skin settings", () => {
 
     expect(getReplaySkinProfile(settings, 4).tapColor).toBe("#111111");
     expect(getReplaySkinProfile(settings, 7).tapColor).toBe("#222222");
-    expect(getReplaySkinProfile(settings, 7).columnWidth).toBe(115);
+    expect(getReplaySkinProfile(settings, 7).columnWidth).toBe(80);
     expect(getReplaySkinColumnColor(settings, "tap", 3, 7)).toBe("#ffcc22");
     expect(settings.hitPosition).toBe(84);
   });
@@ -126,7 +149,7 @@ describe("replay skin settings", () => {
     });
 
     expect(JSON.parse(window.localStorage.getItem(REPLAY_SKIN_STORAGE_KEY) ?? "{}")).toEqual({
-      version: 1,
+      version: 2,
       style: "circles",
       tapColor: "#101820",
       tapColors: [],
@@ -134,12 +157,13 @@ describe("replay skin settings", () => {
       lnHeadColors: [],
       lnBodyColor: "#8b8b93",
       percy: true,
-      columnWidth: 100,
+      upscroll: false,
+      columnWidth: 50,
       hitPosition: 110,
       keymodeProfiles: {},
     });
     expect(readReplaySkinSettings()).toEqual({
-      version: 1,
+      version: 2,
       style: "circles",
       tapColor: "#101820",
       tapColors: [],
@@ -147,7 +171,8 @@ describe("replay skin settings", () => {
       lnHeadColors: [],
       lnBodyColor: "#8b8b93",
       percy: true,
-      columnWidth: 100,
+      upscroll: false,
+      columnWidth: 50,
       hitPosition: 110,
       keymodeProfiles: {},
     });

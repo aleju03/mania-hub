@@ -1,5 +1,6 @@
 import { createFileRoute, notFound, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Circle, Copy, MousePointer2, RectangleHorizontal, Settings, X } from "lucide-react";
@@ -21,10 +22,14 @@ import { withTimeout } from "../lib/promise-timeout";
 import type { ReplayHitCounts } from "../lib/replay-validation";
 import {
   DEFAULT_REPLAY_SKIN_SETTINGS,
-  REPLAY_SKIN_MAX_HIT_POSITION,
-  REPLAY_SKIN_MIN_HIT_POSITION,
   getReplaySkinProfile,
   normalizeReplaySkinSettings,
+  OSU_MANIA_MAX_HIT_POSITION,
+  OSU_MANIA_MIN_HIT_POSITION,
+  osuManiaHitPositionToReplayHitPosition,
+  REPLAY_SKIN_MAX_COLUMN_WIDTH,
+  REPLAY_SKIN_MIN_COLUMN_WIDTH,
+  replayHitPositionToOsuManiaHitPosition,
   readReplaySkinSettings,
   writeReplaySkinSettings,
 } from "../lib/replay-skin";
@@ -2069,8 +2074,11 @@ function ReplaySkinSettingsModal({
   const overrideBaseColor = overrideKind === "tap" ? profile.tapColor : profile.lnHeadColor;
   const hasOverride = !!overrideColors[overrideColumn];
   const overrideValue = overrideColors[overrideColumn] || overrideBaseColor;
+  const osuHitPosition = replayHitPositionToOsuManiaHitPosition(draft.hitPosition);
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <>
       <motion.div
         className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-[2px]"
@@ -2190,35 +2198,41 @@ function ReplaySkinSettingsModal({
                 <span className="text-sm font-semibold text-osu-l1">Cut LN tail</span>
                 <ReplaySkinSwitch checked={draft.percy} onChange={(checked) => update({ percy: checked })} />
               </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-semibold text-osu-l1">Upscroll</span>
+                <ReplaySkinSwitch checked={draft.upscroll} onChange={(checked) => update({ upscroll: checked })} />
+              </div>
               <label className="block pt-1">
                 <span className="mb-2 flex items-center justify-between text-sm font-semibold text-osu-l1">
                   <span>Column width</span>
-                  <span className="text-xs text-white tabular-nums">{profile.columnWidth}%</span>
+                  <span className="text-[10px] uppercase tracking-wide text-osu-f1">osu!mania skin.ini</span>
                 </span>
                 <input
-                  type="range"
-                  min={70}
-                  max={130}
-                  step={5}
+                  type="number"
+                  min={REPLAY_SKIN_MIN_COLUMN_WIDTH}
+                  max={REPLAY_SKIN_MAX_COLUMN_WIDTH}
+                  step={1}
                   value={profile.columnWidth}
                   onChange={(e) => updateProfile({ columnWidth: Number(e.target.value) })}
-                  className="w-full cursor-pointer accent-osu-pink"
+                  className="h-9 w-full rounded-lg border border-osu-b3/60 bg-osu-b5/70 px-3 text-sm font-semibold text-white outline-none transition-colors focus:border-osu-pink/70"
                 />
+                <span className="mt-1 block text-[10px] text-osu-f1">Your skin uses ColumnWidth: 80. Default osu!mania value is 30.</span>
               </label>
               <label className="block pt-1">
                 <span className="mb-2 flex items-center justify-between text-sm font-semibold text-osu-l1">
                   <span>Hit position</span>
-                  <span className="text-xs text-white tabular-nums">{draft.hitPosition}</span>
+                  <span className="text-[10px] uppercase tracking-wide text-osu-f1">osu!mania skin.ini</span>
                 </span>
                 <input
-                  type="range"
-                  min={REPLAY_SKIN_MIN_HIT_POSITION}
-                  max={REPLAY_SKIN_MAX_HIT_POSITION}
-                  step={5}
-                  value={draft.hitPosition}
-                  onChange={(e) => update({ hitPosition: Number(e.target.value) })}
-                  className="w-full cursor-pointer accent-osu-pink"
+                  type="number"
+                  min={OSU_MANIA_MIN_HIT_POSITION}
+                  max={OSU_MANIA_MAX_HIT_POSITION}
+                  step={1}
+                  value={osuHitPosition}
+                  onChange={(e) => update({ hitPosition: osuManiaHitPositionToReplayHitPosition(Number(e.target.value)) })}
+                  className="h-9 w-full rounded-lg border border-osu-b3/60 bg-osu-b5/70 px-3 text-sm font-semibold text-white outline-none transition-colors focus:border-osu-pink/70"
                 />
+                <span className="mt-1 block text-[10px] text-osu-f1">Default osu!mania value is 402. Higher values move receptors lower.</span>
               </label>
 
               {columnEditorOpen ? (
@@ -2315,7 +2329,8 @@ function ReplaySkinSettingsModal({
           </button>
         </div>
       </motion.div>
-    </>
+    </>,
+    document.body,
   );
 }
 
@@ -2364,10 +2379,10 @@ function ReplaySkinPreview({
 }) {
   const width = 260;
   const height = 300;
-  const playfieldWidth = Math.min(230, keyCount * 30 * (profile.columnWidth / 100));
+  const playfieldWidth = Math.min(230, keyCount * profile.columnWidth);
   const laneWidth = playfieldWidth / keyCount;
   const playfieldX = (width - playfieldWidth) / 2;
-  const receptorY = height * (768 - settings.hitPosition) / 768;
+  const receptorY = height * (settings.upscroll ? settings.hitPosition : 768 - settings.hitPosition) / 768;
   const noteSize = settings.style === "circles"
     ? Math.max(18, Math.min(laneWidth - 4, Math.max(28, laneWidth * 0.74)))
     : Math.max(8, Math.min(18, laneWidth - 6));
@@ -2427,7 +2442,7 @@ function ReplaySkinPreview({
       })}
       {tapCols.map((col, index) => {
         const cx = playfieldX + laneWidth * col + laneWidth / 2;
-        const y = index === 0 ? 54 : 104;
+        const y = settings.upscroll ? (index === 0 ? 204 : 154) : (index === 0 ? 54 : 104);
         const color = colorFor(profile.tapColors, profile.tapColor, col);
         return settings.style === "circles" ? (
           <div
@@ -2447,7 +2462,9 @@ function ReplaySkinPreview({
         const cx = playfieldX + laneWidth * lnCol + laneWidth / 2;
         const bodyWidth = settings.style === "circles" ? Math.max(10, noteSize * 0.72) : noteSize;
         const bodyHeight = settings.percy ? 92 : 122;
-        const bodyTop = settings.percy ? 72 : 56;
+        const bodyTop = settings.upscroll
+          ? receptorY + 18
+          : settings.percy ? 72 : 56;
         const headColor = colorFor(profile.lnHeadColors, profile.lnHeadColor, lnCol);
         return (
           <>

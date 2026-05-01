@@ -661,6 +661,9 @@ export function estimateFamilyScores(metrics: DanFeatureMetrics, starRating: num
         + Math.max(0, metrics.jackPressure - 160) * 0.015
         + Math.max(0, metrics.sustainedNps10s - 25) * 0.075,
     );
+  const lowRateHighChordJackTaper = metrics.holdRatio >= 0.08 || starRating <= 6.55
+    ? 1
+    : clamp01((6.72 - starRating) / 0.17);
   const lowRateHighChordJackBonus = metrics.noteCount >= 1800
     && metrics.noteCount <= 2700
     && metrics.chordRatio >= 0.8
@@ -670,8 +673,7 @@ export function estimateFamilyScores(metrics: DanFeatureMetrics, starRating: num
     && metrics.sustainedNps10s >= 27
     && starRating >= 5.9
     && starRating <= 6.8
-    && (starRating <= 6.55 || metrics.holdRatio >= 0.08)
-    ? Math.min(
+    ? lowRateHighChordJackTaper * Math.min(
       0.34,
       0.12
         + Math.max(0, metrics.sustainedNps10s - 27) * 0.04

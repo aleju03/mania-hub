@@ -11,7 +11,7 @@ export interface ReplaySkinKeymodeProfile {
 }
 
 export interface ReplaySkinSettings {
-  version: 1;
+  version: 2;
   style: ReplaySkinStyle;
   tapColor: string;
   tapColors: string[];
@@ -19,28 +19,31 @@ export interface ReplaySkinSettings {
   lnHeadColors: string[];
   lnBodyColor: string;
   percy: boolean;
+  upscroll: boolean;
   columnWidth: number;
   hitPosition: number;
   keymodeProfiles: Record<string, ReplaySkinKeymodeProfile>;
 }
 
 export const REPLAY_SKIN_MAX_COLUMNS = 10;
-export const REPLAY_SKIN_MIN_COLUMN_WIDTH = 70;
-export const REPLAY_SKIN_MAX_COLUMN_WIDTH = 130;
-export const REPLAY_SKIN_MIN_HIT_POSITION = 60;
-export const REPLAY_SKIN_MAX_HIT_POSITION = 180;
+export const REPLAY_SKIN_MIN_COLUMN_WIDTH = 20;
+export const REPLAY_SKIN_MAX_COLUMN_WIDTH = 160;
+export const REPLAY_SKIN_DEFAULT_COLUMN_WIDTH = 50;
 export const REPLAY_SKIN_DEFAULT_HIT_POSITION = 110;
+export const OSU_MANIA_MIN_HIT_POSITION = 0;
+export const OSU_MANIA_MAX_HIT_POSITION = 480;
+const OSU_MANIA_COORDINATE_SCALE = 768 / 480;
 
 export const DEFAULT_REPLAY_SKIN_PROFILE: ReplaySkinKeymodeProfile = {
   tapColor: "#9cf2ae",
   tapColors: [],
   lnHeadColor: "#dfffe6",
   lnHeadColors: [],
-  columnWidth: 100,
+  columnWidth: REPLAY_SKIN_DEFAULT_COLUMN_WIDTH,
 };
 
 export const DEFAULT_REPLAY_SKIN_SETTINGS: ReplaySkinSettings = {
-  version: 1,
+  version: 2,
   style: "bars",
   tapColor: DEFAULT_REPLAY_SKIN_PROFILE.tapColor,
   tapColors: [],
@@ -48,6 +51,7 @@ export const DEFAULT_REPLAY_SKIN_SETTINGS: ReplaySkinSettings = {
   lnHeadColors: [],
   lnBodyColor: "#8b8b93",
   percy: false,
+  upscroll: false,
   columnWidth: DEFAULT_REPLAY_SKIN_PROFILE.columnWidth,
   hitPosition: REPLAY_SKIN_DEFAULT_HIT_POSITION,
   keymodeProfiles: {},
@@ -72,19 +76,30 @@ function normalizeColumnColors(value: unknown): string[] {
     .map((color) => color || "");
 }
 
-function normalizeColumnWidth(value: unknown): number {
+function normalizeColumnWidth(value: unknown, persistedVersion = 2): number {
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(parsed)) return DEFAULT_REPLAY_SKIN_PROFILE.columnWidth;
-  return Math.max(REPLAY_SKIN_MIN_COLUMN_WIDTH, Math.min(REPLAY_SKIN_MAX_COLUMN_WIDTH, Math.round(parsed)));
+  const migrated = persistedVersion < 2 ? parsed / 2 : parsed;
+  return Math.max(REPLAY_SKIN_MIN_COLUMN_WIDTH, Math.min(REPLAY_SKIN_MAX_COLUMN_WIDTH, Math.round(migrated)));
 }
 
 function normalizeHitPosition(value: unknown): number {
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(parsed)) return REPLAY_SKIN_DEFAULT_HIT_POSITION;
-  return Math.max(REPLAY_SKIN_MIN_HIT_POSITION, Math.min(REPLAY_SKIN_MAX_HIT_POSITION, Math.round(parsed)));
+  return Math.max(0, Math.min(768, Math.round(parsed)));
 }
 
-function normalizeKeymodeProfile(value: unknown, fallback?: Partial<ReplaySkinKeymodeProfile>): ReplaySkinKeymodeProfile {
+export function osuManiaHitPositionToReplayHitPosition(hitPosition: number): number {
+  const normalized = Math.max(OSU_MANIA_MIN_HIT_POSITION, Math.min(OSU_MANIA_MAX_HIT_POSITION, Math.round(hitPosition)));
+  return Math.round((OSU_MANIA_MAX_HIT_POSITION - normalized) * OSU_MANIA_COORDINATE_SCALE);
+}
+
+export function replayHitPositionToOsuManiaHitPosition(hitPosition: number): number {
+  const normalized = normalizeHitPosition(hitPosition);
+  return Math.round(OSU_MANIA_MAX_HIT_POSITION - (normalized / OSU_MANIA_COORDINATE_SCALE));
+}
+
+function normalizeKeymodeProfile(value: unknown, fallback?: Partial<ReplaySkinKeymodeProfile>, persistedVersion = 2): ReplaySkinKeymodeProfile {
   const raw = value && typeof value === "object" && !Array.isArray(value)
     ? value as Partial<Record<keyof ReplaySkinKeymodeProfile, unknown>>
     : {};
@@ -93,17 +108,17 @@ function normalizeKeymodeProfile(value: unknown, fallback?: Partial<ReplaySkinKe
     tapColors: normalizeColumnColors(raw.tapColors),
     lnHeadColor: normalizeHexColor(raw.lnHeadColor) ?? fallback?.lnHeadColor ?? DEFAULT_REPLAY_SKIN_PROFILE.lnHeadColor,
     lnHeadColors: normalizeColumnColors(raw.lnHeadColors),
-    columnWidth: normalizeColumnWidth(raw.columnWidth ?? fallback?.columnWidth),
+    columnWidth: normalizeColumnWidth(raw.columnWidth ?? fallback?.columnWidth, persistedVersion),
   };
 }
 
-function normalizeKeymodeProfiles(value: unknown, fallback: ReplaySkinKeymodeProfile): Record<string, ReplaySkinKeymodeProfile> {
+function normalizeKeymodeProfiles(value: unknown, fallback: ReplaySkinKeymodeProfile, persistedVersion: number): Record<string, ReplaySkinKeymodeProfile> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const profiles: Record<string, ReplaySkinKeymodeProfile> = {};
   for (const [key, profile] of Object.entries(value)) {
     const keyCount = Number(key);
     if (!Number.isInteger(keyCount) || keyCount < 1 || keyCount > REPLAY_SKIN_MAX_COLUMNS) continue;
-    profiles[String(keyCount)] = normalizeKeymodeProfile(profile, fallback);
+    profiles[String(keyCount)] = normalizeKeymodeProfile(profile, fallback, persistedVersion);
   }
   return profiles;
 }
@@ -138,15 +153,16 @@ export function normalizeReplaySkinSettings(value: unknown): ReplaySkinSettings 
   }
 
   const raw = value as Partial<Record<keyof ReplaySkinSettings, unknown>>;
+  const persistedVersion = raw.version === 1 ? 1 : 2;
   const fallbackProfile = normalizeKeymodeProfile({
     tapColor: raw.tapColor,
     tapColors: raw.tapColors,
     lnHeadColor: raw.lnHeadColor,
     lnHeadColors: raw.lnHeadColors,
     columnWidth: raw.columnWidth,
-  });
+  }, undefined, persistedVersion);
   return {
-    version: 1,
+    version: 2,
     style: raw.style === "circles" || raw.style === "bars"
       ? raw.style
       : DEFAULT_REPLAY_SKIN_SETTINGS.style,
@@ -156,9 +172,10 @@ export function normalizeReplaySkinSettings(value: unknown): ReplaySkinSettings 
     lnHeadColors: fallbackProfile.lnHeadColors,
     lnBodyColor: normalizeHexColor(raw.lnBodyColor) ?? DEFAULT_REPLAY_SKIN_SETTINGS.lnBodyColor,
     percy: typeof raw.percy === "boolean" ? raw.percy : DEFAULT_REPLAY_SKIN_SETTINGS.percy,
+    upscroll: typeof raw.upscroll === "boolean" ? raw.upscroll : DEFAULT_REPLAY_SKIN_SETTINGS.upscroll,
     columnWidth: fallbackProfile.columnWidth,
     hitPosition: normalizeHitPosition(raw.hitPosition),
-    keymodeProfiles: normalizeKeymodeProfiles(raw.keymodeProfiles, fallbackProfile),
+    keymodeProfiles: normalizeKeymodeProfiles(raw.keymodeProfiles, fallbackProfile, persistedVersion),
   };
 }
 
