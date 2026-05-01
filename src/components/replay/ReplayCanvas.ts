@@ -72,6 +72,8 @@ interface RendererOptions {
   isLazer?: boolean;
   od?: number;
   showInputOverlay?: boolean;
+  inputOverlayOnly?: boolean;
+  inputOverlayColor?: string;
   mods?: string[];
   transparentBackground?: boolean;
   hideHud?: boolean;
@@ -147,6 +149,8 @@ export class ManiaReplayRenderer {
   private backgroundTransitionStartedAt = 0;
   private od = 8;
   private showInputOverlay = false;
+  private inputOverlayOnly = false;
+  private inputOverlayColor = "#a855f7";
   private transparentBackground = false;
   private hideHud = false;
   private showCombo = false;
@@ -216,6 +220,8 @@ export class ManiaReplayRenderer {
     this.backgroundDim = options?.backgroundDim ?? 80;
     this.od = options?.od ?? 8;
     this.showInputOverlay = options?.showInputOverlay ?? false;
+    this.inputOverlayOnly = options?.inputOverlayOnly ?? false;
+    this.inputOverlayColor = options?.inputOverlayColor ?? "#a855f7";
     this.transparentBackground = options?.transparentBackground ?? false;
     this.hideHud = options?.hideHud ?? false;
     this.showCombo = options?.showCombo ?? false;
@@ -601,6 +607,12 @@ export class ManiaReplayRenderer {
     if (!this._isPlaying) this.render();
   }
 
+  setInputOverlayOptions(options: { only?: boolean; color?: string }) {
+    if (typeof options.only === "boolean") this.inputOverlayOnly = options.only;
+    if (options.color) this.inputOverlayColor = options.color;
+    if (!this._isPlaying) this.render();
+  }
+
   setSkinSettings(settings: ReplaySkinSettings) {
     this.skinSettings = normalizeReplaySkinSettings(settings);
     this.updateSkinCache();
@@ -711,7 +723,7 @@ export class ManiaReplayRenderer {
     this.renderBackground(layout);
     this.renderPlayfield(layout);
     this.renderSegmentOverlays(layout);
-    this.renderNotes(layout);
+    if (!this.inputOverlayOnly) this.renderNotes(layout);
     this.renderJudgmentLine(layout);
     this.renderReceptors(layout);
     if (this.showHealthBar) this.renderHealthBar(layout);
@@ -914,7 +926,7 @@ export class ManiaReplayRenderer {
     const velocityWindow = timeWindow / this.scrollVelocityMinMultiplier;
     const visibleMinTime = this.currentTime - velocityWindow * 0.2;
     const visibleMaxTime = this.currentTime + velocityWindow * 1.1;
-    const hasNotes = this.notes.length > 0;
+    const hasNotes = this.notes.length > 0 && !this.inputOverlayOnly;
     const holdOcclusionRanges: Array<Array<{ top: number; bottom: number }>> = Array.from(
       { length: this.keyCount },
       () => [],
@@ -973,9 +985,9 @@ export class ManiaReplayRenderer {
         const drawOverlayPiece = (pieceTop: number, pieceBottom: number) => {
           const barH = Math.max(pieceBottom - pieceTop, 2);
           if (barH <= 0) return;
-          this.roundRect(x, pieceTop, barWidth, barH, 3, hasNotes ? "#a855f7" : color, hasNotes ? 0.18 : 0.7);
+          this.roundRect(x, pieceTop, barWidth, barH, 3, hasNotes ? this.inputOverlayColor : color, hasNotes ? 0.18 : 0.7);
           if (pieceTop < judgmentY && pieceBottom > judgmentY - 20) {
-            this.fillRect(x, pieceTop, barWidth, barH, "#a855f7", 0.08);
+            this.fillRect(x, pieceTop, barWidth, barH, this.inputOverlayColor, 0.08);
           }
         };
 

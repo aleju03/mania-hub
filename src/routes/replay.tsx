@@ -47,6 +47,8 @@ import { pageSeo } from "../lib/seo";
 
 const REPLAY_VOLUME_STORAGE_KEY = "mania-hub-replay-volume";
 const REPLAY_INPUT_OVERLAY_STORAGE_KEY = "mania-hub-replay-input-overlay";
+const REPLAY_INPUT_ONLY_STORAGE_KEY = "mania-hub-replay-input-only";
+const REPLAY_INPUT_COLOR_STORAGE_KEY = "mania-hub-replay-input-color";
 const REPLAY_BG_DIM_STORAGE_KEY = "mania-hub-replay-bg-dim";
 
 interface ReplaySearch {
@@ -130,6 +132,7 @@ interface ReplayRendererLike {
   setExternalClock: (cb: (() => { time: number; stalled: boolean } | null) | null) => void;
   setScrollSpeed: (value: number) => void;
   setShowInputOverlay: (value: boolean) => void;
+  setInputOverlayOptions: (options: { only?: boolean; color?: string }) => void;
   setSkinSettings: (settings: ReplaySkinSettings) => void;
   setSpeed: (value: number) => void;
   ready: () => Promise<void>;
@@ -1261,6 +1264,15 @@ function ReplayViewer({
     const stored = window.localStorage.getItem(REPLAY_INPUT_OVERLAY_STORAGE_KEY);
     return stored == null ? false : stored === "true";
   });
+  const [inputOverlayOnly, setInputOverlayOnly] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const stored = window.localStorage.getItem(REPLAY_INPUT_ONLY_STORAGE_KEY);
+    return stored == null ? false : stored === "true";
+  });
+  const [inputOverlayColor, setInputOverlayColor] = useState(() => {
+    if (typeof window === "undefined") return "#a855f7";
+    return normalizeReplayInputColor(window.localStorage.getItem(REPLAY_INPUT_COLOR_STORAGE_KEY));
+  });
   const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
   const [skinSettingsOpen, setSkinSettingsOpen] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
@@ -1277,6 +1289,8 @@ function ReplayViewer({
   const audioEnabledRef = useRef(true);
   const audioUrlActiveRef = useRef(false);
   const showInputOverlayRef = useRef(false);
+  const inputOverlayOnlyRef = useRef(false);
+  const inputOverlayColorRef = useRef("#a855f7");
   const scrollSpeedRef = useRef(DEFAULT_REPLAY_SCROLL_SPEED);
   const skinSettingsRef = useRef<ReplaySkinSettings>(skinSettings);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -1362,6 +1376,12 @@ function ReplayViewer({
   }, [showInputOverlay]);
 
   useEffect(() => {
+    inputOverlayOnlyRef.current = inputOverlayOnly;
+    inputOverlayColorRef.current = inputOverlayColor;
+    rendererRef.current?.setInputOverlayOptions({ only: inputOverlayOnly, color: inputOverlayColor });
+  }, [inputOverlayOnly, inputOverlayColor]);
+
+  useEffect(() => {
     scrollSpeedRef.current = scrollSpeed;
     if (rendererRef.current) {
       rendererRef.current.setScrollSpeed(scrollSpeed);
@@ -1409,6 +1429,8 @@ function ReplayViewer({
             expectedCounts: getScoreExpectedCounts(scoreInfo, replay),
             lifeBarFrames: replay.lifeBarFrames,
             skinSettings: skinSettingsRef.current,
+            inputOverlayOnly: inputOverlayOnlyRef.current,
+            inputOverlayColor: inputOverlayColorRef.current,
           },
         ) as ReplayRendererLike;
 
@@ -1425,6 +1447,7 @@ function ReplayViewer({
 
         renderer.setScrollSpeed(scrollSpeedRef.current);
         renderer.setShowInputOverlay(showInputOverlayRef.current);
+        renderer.setInputOverlayOptions({ only: inputOverlayOnlyRef.current, color: inputOverlayColorRef.current });
         renderer.setSkinSettings(skinSettingsRef.current);
         rendererRef.current = renderer;
 
@@ -1515,6 +1538,16 @@ function ReplayViewer({
     if (typeof window === "undefined") return;
     window.localStorage.setItem(REPLAY_INPUT_OVERLAY_STORAGE_KEY, String(showInputOverlay));
   }, [showInputOverlay]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(REPLAY_INPUT_ONLY_STORAGE_KEY, String(inputOverlayOnly));
+  }, [inputOverlayOnly]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(REPLAY_INPUT_COLOR_STORAGE_KEY, inputOverlayColor);
+  }, [inputOverlayColor]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1953,6 +1986,28 @@ function ReplayViewer({
           >
             Input
           </button>
+          {showInputOverlay ? (
+            <>
+              <button
+                onClick={() => setInputOverlayOnly((value) => !value)}
+                className={`px-2.5 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
+                  inputOverlayOnly ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
+                }`}
+              >
+                Only
+              </button>
+              <label className="relative h-6 w-6 cursor-pointer overflow-hidden rounded border border-osu-b3/60 bg-osu-b3/50" title="Input overlay color">
+                <span className="absolute inset-1 rounded" style={{ backgroundColor: inputOverlayColor }} />
+                <input
+                  type="color"
+                  value={inputOverlayColor}
+                  onChange={(e) => setInputOverlayColor(normalizeReplayInputColor(e.target.value))}
+                  className="absolute inset-0 cursor-pointer opacity-0"
+                  aria-label="Input overlay color"
+                />
+              </label>
+            </>
+          ) : null}
 
           {/* Skin settings */}
           <button
@@ -2458,6 +2513,10 @@ function normalizeEditableHex(value: string): string | null {
   if (/^#[0-9a-f]{6}$/i.test(trimmed)) return trimmed.toLowerCase();
   if (/^[0-9a-f]{6}$/i.test(trimmed)) return `#${trimmed.toLowerCase()}`;
   return null;
+}
+
+function normalizeReplayInputColor(value: string | null): string {
+  return normalizeEditableHex(value ?? "") ?? "#a855f7";
 }
 
 function ReplaySkinPreview({
