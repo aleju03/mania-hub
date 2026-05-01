@@ -11,7 +11,7 @@ export interface LnDanEstimateResult {
   reason: string;
 }
 
-interface LnReferenceChart {
+export interface LnReferenceChart {
   level: number;
   n: number;
   s: number;
@@ -23,6 +23,12 @@ interface LnReferenceChart {
   p: number;
   u: number;
   q: number;
+}
+
+export interface LnReferenceNeighbor {
+  level: number;
+  distance: number;
+  metrics: LnReferenceChart;
 }
 
 const LN_REFERENCE_CHARTS: LnReferenceChart[] = [
@@ -115,23 +121,31 @@ function referenceMetrics(metrics: DanFeatureMetrics, rate: number): DanFeatureM
   };
 }
 
-function officialReferenceNeighborTarget(metrics: DanFeatureMetrics, rate: number): LnDanEstimateResult | null {
+export function getLnReferenceNeighbors(metrics: DanFeatureMetrics, rate: number, limit = 8): LnReferenceNeighbor[] {
   const comparisonMetrics = referenceMetrics(metrics, rate);
-  const nearest = LN_REFERENCE_CHARTS
-    .map((reference) => ({ reference, distance: pressureDistance(comparisonMetrics, reference) }))
+  return LN_REFERENCE_CHARTS
+    .map((reference) => ({
+      level: reference.level,
+      distance: pressureDistance(comparisonMetrics, reference),
+      metrics: reference,
+    }))
     .sort((left, right) => left.distance - right.distance)
-    .slice(0, 8);
+    .slice(0, Math.max(0, limit));
+}
+
+function officialReferenceNeighborTarget(metrics: DanFeatureMetrics, rate: number): LnDanEstimateResult | null {
+  const nearest = getLnReferenceNeighbors(metrics, rate, 8);
   const [best] = nearest;
   if (!best || best.distance > 2.6) return null;
 
   const weighted = nearest.reduce((sum, item) => {
     const weight = 1 / Math.pow(item.distance + 0.35, 1.5);
     return {
-      level: sum.level + item.reference.level * weight,
+      level: sum.level + item.level * weight,
       weight: sum.weight + weight,
     };
   }, { level: 0, weight: 0 });
-  const neighborDan = weighted.weight > 0 ? weighted.level / weighted.weight : best.reference.level;
+  const neighborDan = weighted.weight > 0 ? weighted.level / weighted.weight : best.level;
   const highEndSpeedBonus = Math.min(
     0.85,
     Math.max(0, (metrics.sustainedNps10s - 28) / 4) * 0.8

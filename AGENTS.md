@@ -16,6 +16,7 @@ Important routes include `index.tsx`, `rankings.tsx`, `tracker.tsx`, `top-plays.
 - `npm run build` creates a production build and checks routing/SSR-sensitive code.
 - `npm run preview` serves the production build locally.
 - `npm run test` runs Vitest once.
+- `npm run dan:analyze -- <path|beatmapsetId|osuUrl>` diagnoses dan/LN classifier output for local `.osu`/`.osz` files or downloaded beatmapsets; useful flags include `--rate 1,1.5`, `--segments`, `--json`, `--neighbors N`, and `--sr N`.
 - `npm run replay:validate` runs `scripts/replay-validate.ts` with `.env` if present.
 - `npm run db:init` initializes the Turso database from `db/schema.sql`.
 - `npm run db:inspect` opens the Turso shell.
