@@ -28,7 +28,9 @@ import {
   OSU_MANIA_MIN_HIT_POSITION,
   osuManiaHitPositionToReplayHitPosition,
   REPLAY_SKIN_MAX_COLUMN_WIDTH,
+  REPLAY_SKIN_MAX_COLUMN_SPACING,
   REPLAY_SKIN_MIN_COLUMN_WIDTH,
+  REPLAY_SKIN_MIN_COLUMN_SPACING,
   replayHitPositionToOsuManiaHitPosition,
   readReplaySkinSettings,
   writeReplaySkinSettings,
@@ -2019,8 +2021,20 @@ function ReplaySkinSettingsModal({
   const [overrideKind, setOverrideKind] = useState<"tap" | "lnHead">("tap");
   const [overrideColumn, setOverrideColumn] = useState(0);
   const profile = getReplaySkinProfile(draft, selectedKeyCount);
+  const [columnWidthInput, setColumnWidthInput] = useState(() => String(profile.columnWidth));
+  const [columnSpacingInput, setColumnSpacingInput] = useState(() => String(profile.columnSpacing));
+  const [hitPositionInput, setHitPositionInput] = useState(() => String(replayHitPositionToOsuManiaHitPosition(draft.hitPosition)));
+  useEffect(() => {
+    setColumnWidthInput(String(profile.columnWidth));
+  }, [profile.columnWidth]);
+  useEffect(() => {
+    setColumnSpacingInput(String(profile.columnSpacing));
+  }, [profile.columnSpacing]);
+  useEffect(() => {
+    setHitPositionInput(String(replayHitPositionToOsuManiaHitPosition(draft.hitPosition)));
+  }, [draft.hitPosition]);
   const update = (patch: Partial<ReplaySkinSettings>) => {
-    setDraft((current) => normalizeReplaySkinSettings({ ...current, ...patch, version: 1 }));
+    setDraft((current) => normalizeReplaySkinSettings({ ...current, ...patch, version: 2 }));
   };
   const updateStyle = (style: ReplaySkinStyle) => update({ style });
   const updateProfile = (patch: Partial<ReplaySkinKeymodeProfile>) => {
@@ -2035,7 +2049,7 @@ function ReplaySkinSettingsModal({
             ...patch,
           },
         },
-        version: 1,
+        version: 2,
       });
     });
   };
@@ -2058,7 +2072,7 @@ function ReplaySkinSettingsModal({
             [key]: colors,
           },
         },
-        version: 1,
+        version: 2,
       });
     });
   };
@@ -2074,7 +2088,57 @@ function ReplaySkinSettingsModal({
   const overrideBaseColor = overrideKind === "tap" ? profile.tapColor : profile.lnHeadColor;
   const hasOverride = !!overrideColors[overrideColumn];
   const overrideValue = overrideColors[overrideColumn] || overrideBaseColor;
-  const osuHitPosition = replayHitPositionToOsuManiaHitPosition(draft.hitPosition);
+  const commitColumnWidthInput = () => {
+    const parsed = Number(columnWidthInput);
+    if (!Number.isFinite(parsed)) {
+      setColumnWidthInput(String(profile.columnWidth));
+      return;
+    }
+    const next = Math.max(REPLAY_SKIN_MIN_COLUMN_WIDTH, Math.min(REPLAY_SKIN_MAX_COLUMN_WIDTH, Math.round(parsed)));
+    setColumnWidthInput(String(next));
+    updateProfile({ columnWidth: next });
+  };
+  const commitColumnSpacingInput = () => {
+    const parsed = Number(columnSpacingInput);
+    if (!Number.isFinite(parsed)) {
+      setColumnSpacingInput(String(profile.columnSpacing));
+      return;
+    }
+    const next = Math.max(REPLAY_SKIN_MIN_COLUMN_SPACING, Math.min(REPLAY_SKIN_MAX_COLUMN_SPACING, Math.round(parsed)));
+    setColumnSpacingInput(String(next));
+    updateProfile({ columnSpacing: next });
+  };
+  const commitHitPositionInput = () => {
+    const parsed = Number(hitPositionInput);
+    if (!Number.isFinite(parsed)) {
+      setHitPositionInput(String(replayHitPositionToOsuManiaHitPosition(draft.hitPosition)));
+      return;
+    }
+    const next = Math.max(OSU_MANIA_MIN_HIT_POSITION, Math.min(OSU_MANIA_MAX_HIT_POSITION, Math.round(parsed)));
+    setHitPositionInput(String(next));
+    update({ hitPosition: osuManiaHitPositionToReplayHitPosition(next) });
+  };
+  const handleColumnWidthInputChange = (value: string) => {
+    setColumnWidthInput(value);
+    if (value.trim() === "") return;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < REPLAY_SKIN_MIN_COLUMN_WIDTH || parsed > REPLAY_SKIN_MAX_COLUMN_WIDTH) return;
+    updateProfile({ columnWidth: Math.round(parsed) });
+  };
+  const handleColumnSpacingInputChange = (value: string) => {
+    setColumnSpacingInput(value);
+    if (value.trim() === "") return;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < REPLAY_SKIN_MIN_COLUMN_SPACING || parsed > REPLAY_SKIN_MAX_COLUMN_SPACING) return;
+    updateProfile({ columnSpacing: Math.round(parsed) });
+  };
+  const handleHitPositionInputChange = (value: string) => {
+    setHitPositionInput(value);
+    if (value.trim() === "") return;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < OSU_MANIA_MIN_HIT_POSITION || parsed > OSU_MANIA_MAX_HIT_POSITION) return;
+    update({ hitPosition: osuManiaHitPositionToReplayHitPosition(Math.round(parsed)) });
+  };
 
   if (typeof document === "undefined") return null;
 
@@ -2212,11 +2276,35 @@ function ReplaySkinSettingsModal({
                   min={REPLAY_SKIN_MIN_COLUMN_WIDTH}
                   max={REPLAY_SKIN_MAX_COLUMN_WIDTH}
                   step={1}
-                  value={profile.columnWidth}
-                  onChange={(e) => updateProfile({ columnWidth: Number(e.target.value) })}
+                  value={columnWidthInput}
+                  onChange={(e) => handleColumnWidthInputChange(e.target.value)}
+                  onBlur={commitColumnWidthInput}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
                   className="h-9 w-full rounded-lg border border-osu-b3/60 bg-osu-b5/70 px-3 text-sm font-semibold text-white outline-none transition-colors focus:border-osu-pink/70"
                 />
-                <span className="mt-1 block text-[10px] text-osu-f1">Your skin uses ColumnWidth: 80. Default osu!mania value is 30.</span>
+                <span className="mt-1 block text-[10px] text-osu-f1">Default osu!mania value is 30.</span>
+              </label>
+              <label className="block pt-1">
+                <span className="mb-2 flex items-center justify-between text-sm font-semibold text-osu-l1">
+                  <span>Column spacing</span>
+                  <span className="text-[10px] uppercase tracking-wide text-osu-f1">osu!mania skin.ini</span>
+                </span>
+                <input
+                  type="number"
+                  min={REPLAY_SKIN_MIN_COLUMN_SPACING}
+                  max={REPLAY_SKIN_MAX_COLUMN_SPACING}
+                  step={1}
+                  value={columnSpacingInput}
+                  onChange={(e) => handleColumnSpacingInputChange(e.target.value)}
+                  onBlur={commitColumnSpacingInput}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                  className="h-9 w-full rounded-lg border border-osu-b3/60 bg-osu-b5/70 px-3 text-sm font-semibold text-white outline-none transition-colors focus:border-osu-pink/70"
+                />
+                <span className="mt-1 block text-[10px] text-osu-f1">Default osu!mania value is 0.</span>
               </label>
               <label className="block pt-1">
                 <span className="mb-2 flex items-center justify-between text-sm font-semibold text-osu-l1">
@@ -2228,8 +2316,12 @@ function ReplaySkinSettingsModal({
                   min={OSU_MANIA_MIN_HIT_POSITION}
                   max={OSU_MANIA_MAX_HIT_POSITION}
                   step={1}
-                  value={osuHitPosition}
-                  onChange={(e) => update({ hitPosition: osuManiaHitPositionToReplayHitPosition(Number(e.target.value)) })}
+                  value={hitPositionInput}
+                  onChange={(e) => handleHitPositionInputChange(e.target.value)}
+                  onBlur={commitHitPositionInput}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
                   className="h-9 w-full rounded-lg border border-osu-b3/60 bg-osu-b5/70 px-3 text-sm font-semibold text-white outline-none transition-colors focus:border-osu-pink/70"
                 />
                 <span className="mt-1 block text-[10px] text-osu-f1">Default osu!mania value is 402. Higher values move receptors lower.</span>
@@ -2379,8 +2471,11 @@ function ReplaySkinPreview({
 }) {
   const width = 260;
   const height = 300;
-  const playfieldWidth = Math.min(230, keyCount * profile.columnWidth);
-  const laneWidth = playfieldWidth / keyCount;
+  const desiredPlayfieldWidth = keyCount * profile.columnWidth + Math.max(0, keyCount - 1) * profile.columnSpacing;
+  const playfieldWidth = Math.min(230, desiredPlayfieldWidth);
+  const layoutScale = desiredPlayfieldWidth > 0 ? playfieldWidth / desiredPlayfieldWidth : 1;
+  const laneWidth = profile.columnWidth * layoutScale;
+  const columnSpacing = profile.columnSpacing * layoutScale;
   const playfieldX = (width - playfieldWidth) / 2;
   const receptorY = height * (settings.upscroll ? settings.hitPosition : 768 - settings.hitPosition) / 768;
   const noteSize = settings.style === "circles"
@@ -2399,7 +2494,7 @@ function ReplaySkinPreview({
             <div
               key={index}
               className="absolute inset-y-0 w-px bg-white/10"
-              style={{ left: index * laneWidth }}
+              style={{ left: index < keyCount ? index * (laneWidth + columnSpacing) : playfieldWidth }}
             />
           ))}
         </div>
@@ -2408,7 +2503,7 @@ function ReplaySkinPreview({
         <div className="absolute h-0.5 bg-white/70" style={{ left: playfieldX, width: playfieldWidth, top: receptorY }} />
       ) : null}
       {Array.from({ length: keyCount }, (_, col) => {
-        const cx = playfieldX + laneWidth * col + laneWidth / 2;
+        const cx = playfieldX + (laneWidth + columnSpacing) * col + laneWidth / 2;
         const pressed = col === lnCol;
         if (settings.style === "circles") {
           return (
@@ -2441,7 +2536,7 @@ function ReplaySkinPreview({
         );
       })}
       {tapCols.map((col, index) => {
-        const cx = playfieldX + laneWidth * col + laneWidth / 2;
+        const cx = playfieldX + (laneWidth + columnSpacing) * col + laneWidth / 2;
         const y = settings.upscroll ? (index === 0 ? 204 : 154) : (index === 0 ? 54 : 104);
         const color = colorFor(profile.tapColors, profile.tapColor, col);
         return settings.style === "circles" ? (
@@ -2459,7 +2554,7 @@ function ReplaySkinPreview({
         );
       })}
       {(() => {
-        const cx = playfieldX + laneWidth * lnCol + laneWidth / 2;
+        const cx = playfieldX + (laneWidth + columnSpacing) * lnCol + laneWidth / 2;
         const bodyWidth = settings.style === "circles" ? Math.max(10, noteSize * 0.72) : noteSize;
         const bodyHeight = settings.percy ? 92 : 122;
         const bodyTop = settings.upscroll

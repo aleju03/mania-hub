@@ -41,6 +41,7 @@ describe("replay skin settings", () => {
       percy: false,
       upscroll: false,
       columnWidth: 50,
+      columnSpacing: 0,
       hitPosition: 110,
       keymodeProfiles: {},
     });
@@ -58,6 +59,7 @@ describe("replay skin settings", () => {
       tapColor: "#aabbcc",
       tapColors: ["#ffffff", "", "#123456"],
       columnWidth: 50,
+      columnSpacing: 0,
       hitPosition: 110,
       percy: true,
     });
@@ -94,6 +96,7 @@ describe("replay skin settings", () => {
 
     expect(settings.columnWidth).toBe(50);
     expect(getReplaySkinProfile(settings, 4).columnWidth).toBe(80);
+    expect(settings.columnSpacing).toBe(0);
   });
 
   it("maps osu!mania skin.ini HitPosition values to replay coordinates", () => {
@@ -125,6 +128,7 @@ describe("replay skin settings", () => {
           tapColors: ["", "", "", "#ffcc22"],
           lnHeadColor: "#333333",
           columnWidth: 80,
+          columnSpacing: 2,
         },
       },
       hitPosition: 84,
@@ -133,6 +137,7 @@ describe("replay skin settings", () => {
     expect(getReplaySkinProfile(settings, 4).tapColor).toBe("#111111");
     expect(getReplaySkinProfile(settings, 7).tapColor).toBe("#222222");
     expect(getReplaySkinProfile(settings, 7).columnWidth).toBe(80);
+    expect(getReplaySkinProfile(settings, 7).columnSpacing).toBe(2);
     expect(getReplaySkinColumnColor(settings, "tap", 3, 7)).toBe("#ffcc22");
     expect(settings.hitPosition).toBe(84);
   });
@@ -159,6 +164,7 @@ describe("replay skin settings", () => {
       percy: true,
       upscroll: false,
       columnWidth: 50,
+      columnSpacing: 0,
       hitPosition: 110,
       keymodeProfiles: {},
     });
@@ -173,6 +179,7 @@ describe("replay skin settings", () => {
       percy: true,
       upscroll: false,
       columnWidth: 50,
+      columnSpacing: 0,
       hitPosition: 110,
       keymodeProfiles: {},
     });

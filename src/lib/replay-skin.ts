@@ -8,6 +8,7 @@ export interface ReplaySkinKeymodeProfile {
   lnHeadColor: string;
   lnHeadColors: string[];
   columnWidth: number;
+  columnSpacing: number;
 }
 
 export interface ReplaySkinSettings {
@@ -29,6 +30,9 @@ export const REPLAY_SKIN_MAX_COLUMNS = 10;
 export const REPLAY_SKIN_MIN_COLUMN_WIDTH = 20;
 export const REPLAY_SKIN_MAX_COLUMN_WIDTH = 160;
 export const REPLAY_SKIN_DEFAULT_COLUMN_WIDTH = 50;
+export const REPLAY_SKIN_MIN_COLUMN_SPACING = 0;
+export const REPLAY_SKIN_MAX_COLUMN_SPACING = 40;
+export const REPLAY_SKIN_DEFAULT_COLUMN_SPACING = 0;
 export const REPLAY_SKIN_DEFAULT_HIT_POSITION = 110;
 export const OSU_MANIA_MIN_HIT_POSITION = 0;
 export const OSU_MANIA_MAX_HIT_POSITION = 480;
@@ -40,6 +44,7 @@ export const DEFAULT_REPLAY_SKIN_PROFILE: ReplaySkinKeymodeProfile = {
   lnHeadColor: "#dfffe6",
   lnHeadColors: [],
   columnWidth: REPLAY_SKIN_DEFAULT_COLUMN_WIDTH,
+  columnSpacing: REPLAY_SKIN_DEFAULT_COLUMN_SPACING,
 };
 
 export const DEFAULT_REPLAY_SKIN_SETTINGS: ReplaySkinSettings = {
@@ -53,6 +58,7 @@ export const DEFAULT_REPLAY_SKIN_SETTINGS: ReplaySkinSettings = {
   percy: false,
   upscroll: false,
   columnWidth: DEFAULT_REPLAY_SKIN_PROFILE.columnWidth,
+  columnSpacing: DEFAULT_REPLAY_SKIN_PROFILE.columnSpacing,
   hitPosition: REPLAY_SKIN_DEFAULT_HIT_POSITION,
   keymodeProfiles: {},
 };
@@ -83,6 +89,12 @@ function normalizeColumnWidth(value: unknown, persistedVersion = 2): number {
   return Math.max(REPLAY_SKIN_MIN_COLUMN_WIDTH, Math.min(REPLAY_SKIN_MAX_COLUMN_WIDTH, Math.round(migrated)));
 }
 
+function normalizeColumnSpacing(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_REPLAY_SKIN_PROFILE.columnSpacing;
+  return Math.max(REPLAY_SKIN_MIN_COLUMN_SPACING, Math.min(REPLAY_SKIN_MAX_COLUMN_SPACING, Math.round(parsed)));
+}
+
 function normalizeHitPosition(value: unknown): number {
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(parsed)) return REPLAY_SKIN_DEFAULT_HIT_POSITION;
@@ -109,6 +121,7 @@ function normalizeKeymodeProfile(value: unknown, fallback?: Partial<ReplaySkinKe
     lnHeadColor: normalizeHexColor(raw.lnHeadColor) ?? fallback?.lnHeadColor ?? DEFAULT_REPLAY_SKIN_PROFILE.lnHeadColor,
     lnHeadColors: normalizeColumnColors(raw.lnHeadColors),
     columnWidth: normalizeColumnWidth(raw.columnWidth ?? fallback?.columnWidth, persistedVersion),
+    columnSpacing: normalizeColumnSpacing(raw.columnSpacing ?? fallback?.columnSpacing),
   };
 }
 
@@ -131,6 +144,7 @@ export function getReplaySkinProfile(settings: ReplaySkinSettings, keyCount: num
     lnHeadColor: normalized.lnHeadColor,
     lnHeadColors: normalized.lnHeadColors,
     columnWidth: normalized.columnWidth,
+    columnSpacing: normalized.columnSpacing,
   });
   return normalized.keymodeProfiles[String(keyCount)] ?? fallback;
 }
@@ -160,6 +174,7 @@ export function normalizeReplaySkinSettings(value: unknown): ReplaySkinSettings 
     lnHeadColor: raw.lnHeadColor,
     lnHeadColors: raw.lnHeadColors,
     columnWidth: raw.columnWidth,
+    columnSpacing: raw.columnSpacing,
   }, undefined, persistedVersion);
   return {
     version: 2,
@@ -174,6 +189,7 @@ export function normalizeReplaySkinSettings(value: unknown): ReplaySkinSettings 
     percy: typeof raw.percy === "boolean" ? raw.percy : DEFAULT_REPLAY_SKIN_SETTINGS.percy,
     upscroll: typeof raw.upscroll === "boolean" ? raw.upscroll : DEFAULT_REPLAY_SKIN_SETTINGS.upscroll,
     columnWidth: fallbackProfile.columnWidth,
+    columnSpacing: fallbackProfile.columnSpacing,
     hitPosition: normalizeHitPosition(raw.hitPosition),
     keymodeProfiles: normalizeKeymodeProfiles(raw.keymodeProfiles, fallbackProfile, persistedVersion),
   };

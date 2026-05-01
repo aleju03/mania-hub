@@ -501,11 +501,16 @@ export class ManiaReplayRenderer {
       ? 0.4 + this.keyCount * 0.045
       : 0.25 + this.keyCount * 0.025;
     const configuredColumnWidth = this.skinProfile.columnWidth;
-    const playfieldWidth = Math.min(
+    const configuredColumnSpacing = this.skinProfile.columnSpacing;
+    const desiredPlayfieldWidth = configuredColumnWidth * this.keyCount + configuredColumnSpacing * Math.max(0, this.keyCount - 1);
+    const maxPlayfieldWidth = Math.min(
       w * Math.min(baseRatio * (configuredColumnWidth / 50), this.barePlayfield ? 0.82 : 0.72),
-      configuredColumnWidth * this.keyCount,
+      desiredPlayfieldWidth,
     );
-    const laneWidth = playfieldWidth / this.keyCount;
+    const layoutScale = desiredPlayfieldWidth > 0 ? maxPlayfieldWidth / desiredPlayfieldWidth : 1;
+    const playfieldWidth = desiredPlayfieldWidth * layoutScale;
+    const laneWidth = configuredColumnWidth * layoutScale;
+    const columnSpacing = configuredColumnSpacing * layoutScale;
     const playfieldX = (w - playfieldWidth) / 2;
     const hitPosition = this.skinSettings.hitPosition ?? MANIA_HIT_TARGET_POSITION;
     const judgmentY = h * (this.skinSettings.upscroll ? hitPosition : MANIA_REFERENCE_HEIGHT - hitPosition) / MANIA_REFERENCE_HEIGHT;
@@ -518,7 +523,7 @@ export class ManiaReplayRenderer {
     const layout: Layout = { w, h, playfieldWidth, playfieldX, laneWidth, judgmentY, noteHeight, receptorHeight, pixelsPerMs };
     this.cachedLayout = layout;
     this.cachedColumns = Array.from({ length: this.keyCount }, (_, i) => ({
-      x: playfieldX + i * laneWidth,
+      x: playfieldX + i * (laneWidth + columnSpacing),
       width: laneWidth,
     }));
     return layout;
@@ -1123,6 +1128,7 @@ export class ManiaReplayRenderer {
       { label: "100", value: this.judgmentCounts[4], color: JUDGMENT_COLORS[4] },
       { label: "50", value: this.judgmentCounts[5], color: JUDGMENT_COLORS[5] },
       { label: "MISS", value: this.judgmentCounts[6], color: JUDGMENT_COLORS[6] },
+      { label: "UR", value: this.getUr().toFixed(0), color: "#b3f5ff" },
     ].forEach((item, index) => {
       const y = judgmentCounterY + index * 18;
       this.addText(item.label, judgmentCounterX, y, { fontSize: 10, fill: item.color, fontWeight: "700" });
@@ -1141,7 +1147,6 @@ export class ManiaReplayRenderer {
       ? judgmentY + this.getCircleDiameter(layout) / 2
       : judgmentY + layout.receptorHeight + 2;
     const urBarY = Math.min(h - 10, receptorBottom > h - 40 ? receptorBottom + 12 : h - 26);
-    const showUrLabel = urBarY - 8 > receptorBottom;
     const urRange = this.hitWindows.meh;
 
     this.fillRect(urBarX, urBarY, urBarWidth, 3, "#ffffff", 0.08);
@@ -1152,17 +1157,6 @@ export class ManiaReplayRenderer {
       const alpha = 0.2 + ((index + 1) / this.recentHitOffsets.length) * 0.8;
       this.fillRect(x - 1.5, urBarY - 3, 3, 9, "#b3f5ff", alpha);
     });
-    if (showUrLabel) {
-      this.addText(`UR ${this.getUr().toFixed(0)}`, playfieldCenterX, urBarY - 6, {
-        fontSize: 10,
-        fill: "#ffffff",
-        alpha: 0.72,
-        fontWeight: "700",
-        anchorX: 0.5,
-        anchorY: 1,
-      });
-    }
-
     const wallTime = this.currentTime / this.modRate;
     const mins = Math.floor(wallTime / 60000);
     const secs = String(Math.floor((wallTime % 60000) / 1000)).padStart(2, "0");
