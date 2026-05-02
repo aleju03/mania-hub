@@ -819,11 +819,11 @@ function ReplayPage() {
 
                     {!loadingScores && !playerScoreGroups && !error && (
                       suggestionPlayers.length > 0 ? (
-                        <div>
-                          <h4 className="text-xs font-semibold text-osu-f1 uppercase tracking-wider mb-3 text-center">
+                        <div className="max-w-5xl mx-auto">
+                          <h4 className="text-xs font-semibold text-osu-f1 uppercase tracking-wider mb-4 text-center">
                             Top {getCountryName(selectedCountry)} Players
                           </h4>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             {suggestionPlayers.map((p, i) => (
                               <motion.button
                                 key={p.id}
@@ -831,20 +831,20 @@ function ReplayPage() {
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: i * 0.02 }}
                                 onClick={() => handleSelectPlayer(p)}
-                                className="relative overflow-hidden flex items-center gap-3 py-2.5 px-3 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20 text-left"
+                                className="relative min-h-[86px] overflow-hidden flex items-center gap-4 p-4 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20 text-left"
                               >
                                 {p.cover_url && (
                                   <div
-                                    className="absolute inset-0 bg-cover bg-center opacity-35"
+                                    className="absolute inset-0 bg-cover bg-center opacity-40"
                                     style={{ backgroundImage: `url(${p.cover_url})` }}
                                     aria-hidden="true"
                                   />
                                 )}
-                                <div className="absolute inset-0 bg-osu-b4/80" aria-hidden="true" />
-                                <img src={avatarImageSrc(p.avatar_url, p.id)} alt="" className="relative w-9 h-9 rounded-full flex-shrink-0 object-cover" loading="lazy" />
+                                <div className="absolute inset-0 bg-gradient-to-r from-osu-b4/95 via-osu-b4/80 to-osu-b4/65" aria-hidden="true" />
+                                <img src={avatarImageSrc(p.avatar_url, p.id)} alt="" className="relative w-14 h-14 rounded-full flex-shrink-0 object-cover ring-2 ring-white/10" loading="lazy" />
                                 <div className="relative flex-1 min-w-0">
-                                  <div className="text-sm text-white truncate">{p.username}</div>
-                                  <div className="text-[10px] text-osu-f1">#{p.global_rank.toLocaleString()}</div>
+                                  <div className="text-base font-semibold text-white truncate">{p.username}</div>
+                                  <div className="mt-1 text-xs text-osu-f1">#{p.global_rank.toLocaleString()}</div>
                                 </div>
                               </motion.button>
                             ))}
