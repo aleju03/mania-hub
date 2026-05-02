@@ -7,7 +7,7 @@ import { Circle, Copy, MousePointer2, RectangleHorizontal, Settings, X } from "l
 import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores } from "../lib/osu";
 import { parseManiaBeatmap } from "../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
-import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreDisplayValues, scoreHasReplay } from "../lib/score";
+import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreDisplayValues, getScoreRate, scoreHasReplay } from "../lib/score";
 import { useAppStore, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SearchInput } from "../components/ui/SearchInput";
@@ -169,6 +169,14 @@ export const Route = createFileRoute("/replay")({
 });
 
 type BrowseMode = "player" | "beatmap";
+type PlayerReplaySectionKey = "pinned" | "recent" | "best" | "firsts";
+
+const PLAYER_REPLAY_SECTIONS: { key: PlayerReplaySectionKey; label: string }[] = [
+  { key: "pinned", label: "Pinned" },
+  { key: "recent", label: "Recent Plays" },
+  { key: "best", label: "Best Scores" },
+  { key: "firsts", label: "First Places" },
+];
 
 function mergeScoresById(...groups: OsuScore[][]): OsuScore[] {
   const byId = new Map<number, OsuScore>();
@@ -293,6 +301,7 @@ function ReplayPage() {
   const [playerScoreGroups, setPlayerScoreGroups] = useState<{ best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScore[]; recent: OsuScore[] } | null>(null);
   const [loadingScores, setLoadingScores] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [activePlayerSection, setActivePlayerSection] = useState<PlayerReplaySectionKey>("pinned");
   const [loadedPlayerParam, setLoadedPlayerParam] = useState<string | null>(null);
   const loadingPlayerParamRef = useRef<string | null>(null);
 
@@ -452,7 +461,9 @@ function ReplayPage() {
       // Recent is intentionally NOT deduped against the others — a recent play
       // that is also a best score is exactly what you want to see as "new".
       const recentFiltered = filterReplayable(recent);
-      setPlayerScoreGroups({ best: bestFiltered, firsts: firstsFiltered, pinned: pinnedFiltered, recent: recentFiltered });
+      const nextGroups = { best: bestFiltered, firsts: firstsFiltered, pinned: pinnedFiltered, recent: recentFiltered };
+      setPlayerScoreGroups(nextGroups);
+      setActivePlayerSection(PLAYER_REPLAY_SECTIONS.find((section) => nextGroups[section.key].length > 0)?.key ?? "pinned");
     } catch { setPlayerScoreGroups({ best: [], firsts: [], pinned: [], recent: [] }); }
     finally { setLoadingScores(false); }
   }, []);
@@ -761,55 +772,113 @@ function ReplayPage() {
                       </div>
                     )}
 
-                    {playerScoreGroups && (playerScoreGroups.best.length > 0 || playerScoreGroups.firsts.length > 0 || playerScoreGroups.pinned.length > 0 || playerScoreGroups.recent.length > 0) && (
-                      <div className="space-y-5">
-                        {([
-                          { key: "pinned", label: "Pinned", scores: playerScoreGroups.pinned },
-                          { key: "recent", label: "Recent Plays", scores: playerScoreGroups.recent },
-                          { key: "best", label: "Best Scores", scores: playerScoreGroups.best },
-                          { key: "firsts", label: "First Places", scores: playerScoreGroups.firsts },
-                        ] as const).map(({ key, label, scores }) => {
-                          if (scores.length === 0) return null;
-                          const isExpanded = expandedSections[key];
-                          const visible = isExpanded ? scores : scores.slice(0, 5);
-                          const hasMore = scores.length > 5;
-                          return (
-                            <div key={key} className="space-y-1.5">
-                              <h4 className="text-xs font-semibold text-osu-f1 uppercase tracking-wider mb-2">
-                                {label} ({scores.length})
+                    {playerScoreGroups && (playerScoreGroups.best.length > 0 || playerScoreGroups.firsts.length > 0 || playerScoreGroups.pinned.length > 0 || playerScoreGroups.recent.length > 0) && (() => {
+                      const sections = PLAYER_REPLAY_SECTIONS
+                        .map((section) => ({ ...section, scores: playerScoreGroups[section.key] }))
+                        .filter((section) => section.scores.length > 0);
+                      const mobileSection = sections.find((section) => section.key === activePlayerSection) ?? sections[0];
+                      const renderScorePanel = (
+                        section: typeof sections[number],
+                        sectionIndex: number,
+                        extraClassName = "",
+                        listClassName = "max-h-[370px]",
+                      ) => {
+                        const isExpanded = expandedSections[section.key];
+                        const hasMore = section.scores.length > 5;
+                        return (
+                          <motion.section
+                            key={section.key}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: sectionIndex * 0.03 }}
+                            className={`min-w-0 overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4 ${extraClassName}`}
+                          >
+                            <div className="flex items-center justify-between gap-3 border-b border-osu-b3/25 bg-osu-b5/35 px-3 py-2.5">
+                              <h4 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">
+                                {section.label}
                               </h4>
-                              {visible.map((s: OsuScore, i: number) => (
-                                <motion.div key={s.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.02 }}
-                                  className="flex items-center gap-3 py-2.5 px-4 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20"
-                                  onClick={() => navigate({ to: "/replay", search: { scoreId: s.id, beatmapsetId: s.beatmapset?.id, player: playerParam } })}>
-                                  <GradeImg grade={getDisplayedRank(s)} size={26} />
+                              <span className="rounded bg-osu-pink/15 px-2 py-0.5 text-[10px] font-bold tabular-nums text-osu-pink-light">
+                                {section.scores.length}
+                              </span>
+                            </div>
+
+                            <div className={`replay-score-scroll overflow-x-hidden transition-[max-height] duration-150 ease-out ${isExpanded ? `${listClassName} overflow-y-auto overscroll-contain` : "max-h-[276px] [overflow-y:clip]"}`}>
+                              {section.scores.map((s: OsuScore) => (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors cursor-pointer hover:bg-osu-b3/65 focus:outline-none focus-visible:bg-osu-b3/65"
+                                  onClick={() => navigate({ to: "/replay", search: { scoreId: s.id, beatmapsetId: s.beatmapset?.id, player: playerParam } })}
+                                >
+                                  <GradeImg grade={getDisplayedRank(s)} size={24} />
                                   {s.beatmapset?.covers?.list && (
-                                    <img src={s.beatmapset.covers.list} alt="" className="w-12 h-8 rounded object-cover flex-shrink-0" loading="lazy" />
+                                    <img src={s.beatmapset.covers.list} alt="" className="h-8 w-12 flex-shrink-0 rounded object-cover" loading="lazy" />
                                   )}
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-sm text-white truncate">{s.beatmapset?.title}</div>
-                                    <div className="text-[10px] text-osu-f1">[{s.beatmap?.version}] {s.beatmap?.cs && `${s.beatmap.cs}K`}</div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="truncate text-sm font-medium text-white">{s.beatmapset?.title}</div>
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      <div className="truncate text-[10px] text-osu-f1">[{s.beatmap?.version}] {s.beatmap?.cs && `${s.beatmap.cs}K`}</div>
+                                      <ScoreModBadges score={s} className="hidden shrink-0 gap-0.5 sm:flex" hideWhenEmpty />
+                                    </div>
                                     <ScoreModBadges score={s} className="mt-1 flex gap-0.5 sm:hidden" hideWhenEmpty />
                                   </div>
-                                  <ScoreModBadges score={s} className="hidden sm:flex w-28 flex-shrink-0 justify-end gap-0.5" />
-                                  <span className="text-xs text-osu-l2 flex-shrink-0">{formatAccuracy(getDisplayedAccuracy(s))}</span>
-                                  <span className="text-sm font-bold">{formatPP(s.pp)}</span>
-                                  <span className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold">Watch</span>
-                                </motion.div>
-                              ))}
-                              {hasMore && (
-                                <button
-                                  onClick={() => setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }))}
-                                  className="w-full py-2 text-xs font-semibold text-osu-f1 hover:text-white transition-colors cursor-pointer"
-                                >
-                                  {isExpanded ? "Show Less" : `Show ${scores.length - 5} More`}
+                                  <div className="hidden shrink-0 text-right sm:block">
+                                    <div className="text-xs font-semibold text-osu-l2">{formatAccuracy(getDisplayedAccuracy(s))}</div>
+                                    <div className="text-sm font-bold text-white">{formatPP(s.pp)}</div>
+                                  </div>
+                                  <div className="shrink-0 text-sm font-bold text-white sm:hidden">{formatPP(s.pp)}</div>
                                 </button>
-                              )}
+                              ))}
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
+
+                            {hasMore && (
+                              <button
+                                onClick={() => setExpandedSections((prev) => ({ ...prev, [section.key]: !prev[section.key] }))}
+                                className="replay-score-action w-full bg-osu-b5/25 px-3 py-2 text-xs font-semibold text-osu-f1 outline-none transition-colors cursor-pointer hover:bg-osu-b3/50 hover:text-white focus:outline-none focus-visible:bg-osu-b3/50 focus-visible:text-white active:outline-none"
+                              >
+                                {isExpanded ? "Collapse" : `Show ${section.scores.length - 5} More`}
+                              </button>
+                            )}
+                          </motion.section>
+                        );
+                      };
+
+                      return (
+                        <>
+                          <div className="sm:hidden">
+                            <div className="-mx-3 overflow-x-auto px-3 pb-2">
+                              <div className="flex min-w-max gap-1.5">
+                                {sections.map((section) => (
+                                  <button
+                                    key={section.key}
+                                    type="button"
+                                    onClick={() => setActivePlayerSection(section.key)}
+                                    className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors cursor-pointer ${
+                                      mobileSection.key === section.key
+                                        ? "bg-osu-pink/25 text-osu-pink-light"
+                                        : "bg-osu-b4 text-osu-f1 hover:bg-osu-b3 hover:text-white"
+                                    }`}
+                                  >
+                                    {section.label}
+                                    <span className="ml-1.5 text-[10px] opacity-70">{section.scores.length}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <AnimatePresence mode="wait">
+                              {renderScorePanel(mobileSection, 0, "", "max-h-[58dvh]")}
+                            </AnimatePresence>
+                          </div>
+
+                          <div className="hidden gap-3 sm:grid lg:grid-cols-2">
+                            {sections.map((section, sectionIndex) => {
+                              const shouldSpan = sections.length % 2 === 1 && sectionIndex === sections.length - 1;
+                              return renderScorePanel(section, sectionIndex, shouldSpan ? "lg:col-span-2" : "");
+                            })}
+                          </div>
+                        </>
+                      );
+                    })()}
 
                     {!loadingScores && playerScoreGroups && playerScoreGroups.best.length === 0 && playerScoreGroups.firsts.length === 0 && playerScoreGroups.pinned.length === 0 && playerScoreGroups.recent.length === 0 && (
                       <div className="text-center py-8 text-osu-f1 text-sm">
@@ -1241,7 +1310,7 @@ function ReplayViewer({
     () => (scoreInfo ? getScoreDisplayValues(scoreInfo) : null),
     [scoreInfo],
   );
-  const modRate = modAcronyms.includes("DT") || modAcronyms.includes("NC") ? 1.5 : modAcronyms.includes("HT") ? 0.75 : 1;
+  const modRate = getScoreRate(scoreInfo?.mods);
   const effectiveRate = speed * modRate;
   const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
   const [bgDim, setBgDim] = useState(() => {
@@ -1424,6 +1493,7 @@ function ReplayViewer({
             od: beatmap?.od,
             showInputOverlay: showInputOverlayRef.current,
             mods: modAcronyms,
+            speedMultiplier: modRate,
             transparentBackground: true,
             scrollVelocities: beatmap?.scrollVelocities,
             expectedCounts: getScoreExpectedCounts(scoreInfo, replay),

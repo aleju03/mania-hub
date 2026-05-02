@@ -75,6 +75,7 @@ interface RendererOptions {
   inputOverlayOnly?: boolean;
   inputOverlayColor?: string;
   mods?: string[];
+  speedMultiplier?: number;
   transparentBackground?: boolean;
   hideHud?: boolean;
   showCombo?: boolean;
@@ -210,11 +211,18 @@ export class ManiaReplayRenderer {
 
     const mods = new Set((options?.mods ?? []).filter(Boolean).map((m) => m.toUpperCase()));
     const mirror = mods.has("MR");
-    this.modRate = mods.has("DT") || mods.has("NC") ? 1.5 : mods.has("HT") ? 0.75 : 1;
+    const speedMultiplier = Number(options?.speedMultiplier);
+    this.modRate = Number.isFinite(speedMultiplier) && speedMultiplier > 0
+      ? speedMultiplier
+      : mods.has("DT") || mods.has("NC")
+        ? 1.5
+        : mods.has("HT") || mods.has("DC")
+          ? 0.75
+          : 1;
     this.notes = mirror
       ? notes.map((n) => ({ ...n, column: keyCount - 1 - n.column }))
       : [...notes];
-    this.ruleset = getManiaReplayRuleset(options?.isLazer ?? false, [...mods], options?.isConvert ?? false);
+    this.ruleset = getManiaReplayRuleset(options?.isLazer ?? false, [...mods], options?.isConvert ?? false, this.modRate);
 
     this.backgroundImage = options?.backgroundImage ?? null;
     this.backgroundDim = options?.backgroundDim ?? 80;
