@@ -119,6 +119,7 @@ function SnipesPage() {
   const fetchingRef = useRef(false);
   const sawScanActivityRef = useRef(false);
   const finalizingRefreshRef = useRef(false);
+  const refreshInProgressRef = useRef(false);
 
   // Render-driving "elapsed" timer for the secondary header indicator.
   useEffect(() => {
@@ -147,7 +148,7 @@ function SnipesPage() {
         ]);
         if (cancelled) return;
         if (currentCountryRef.current !== requestedCountry) return;
-        setScanStatus(status);
+        setScanStatus((prev) => getMonotonicScanStatus(prev, status));
         if (status || partial.length > 0) sawScanActivityRef.current = true;
         if (partial.length > 0) {
           setPartialEvents(partial);
@@ -169,6 +170,7 @@ function SnipesPage() {
             response?.scannedAt ?? Date.now(),
           );
           const refreshStillInProgress = response?.refreshInProgress === true;
+          refreshInProgressRef.current = refreshStillInProgress;
           setRefreshing(refreshStillInProgress);
           setScanStartedAt(refreshStillInProgress ? Date.now() : null);
           if (!refreshStillInProgress) {
@@ -216,6 +218,7 @@ function SnipesPage() {
     fetchingRef.current = false;
     sawScanActivityRef.current = false;
     finalizingRefreshRef.current = false;
+    refreshInProgressRef.current = false;
     if (search.page !== 0) updateSearch({ page: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCountry]);
@@ -228,7 +231,14 @@ function SnipesPage() {
     if (fetchingRef.current) return;
     const stale = isCacheStale(snipesFetchedAt, CLIENT_CACHE_TTL.snipes);
     if (!stale) {
+      refreshInProgressRef.current = false;
       setLoading(false);
+      return;
+    }
+    if (refreshInProgressRef.current) {
+      setLoading(false);
+      if (snipes.length > 0) setRefreshing(true);
+      if (scanStartedAt == null) setScanStartedAt(Date.now());
       return;
     }
 
@@ -243,6 +253,7 @@ function SnipesPage() {
     getCountrySnipes({ data: { country: requestedCountry } })
       .then((response) => {
         keepPollingRefresh = response?.refreshInProgress === true;
+        refreshInProgressRef.current = keepPollingRefresh;
         setSnipes(
           requestedCountry,
           response?.events ?? [],
@@ -266,13 +277,14 @@ function SnipesPage() {
         if (currentCountryRef.current === requestedCountry) {
           setLoading(false);
           if (!keepPollingRefresh) {
+            refreshInProgressRef.current = false;
             setRefreshing(false);
             setScanStartedAt(null);
           }
         }
         fetchingRef.current = false;
       });
-  }, [selectedCountry, snipesFetchedAt, snipes.length, setSnipes]);
+  }, [selectedCountry, snipesFetchedAt, snipes.length, scanStartedAt, setSnipes]);
 
   // ── Filter + sort ──────────────────────────────────────────────────────
   const visibleSnipes = useMemo(() => {
@@ -927,6 +939,17 @@ function getScanProgressPercent(status: SnipesScanStatus | null): number | null 
     0,
     Math.min(100, Math.round(((phaseIdx + phaseProgress) / PHASE_ORDER.length) * 100)),
   );
+}
+
+function getMonotonicScanStatus(
+  previous: SnipesScanStatus | null,
+  next: SnipesScanStatus | null,
+): SnipesScanStatus | null {
+  if (!previous || !next) return next;
+  const previousPercent = getScanProgressPercent(previous);
+  const nextPercent = getScanProgressPercent(next);
+  if (previousPercent == null || nextPercent == null) return next;
+  return nextPercent >= previousPercent ? next : previous;
 }
 
 const PHASE_ORDER: SnipesScanStatus["phase"][] = [

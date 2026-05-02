@@ -34,9 +34,28 @@ function staticCacheHeaders(): Plugin {
   }
 }
 
+function suppressDependencyBuildWarnings(warning: any, warn: (warning: any) => void) {
+  const message = String(warning.message ?? '')
+  if (warning.code === 'MODULE_LEVEL_DIRECTIVE' && message.includes('node_modules/')) return
+  if (warning.code === 'UNUSED_EXTERNAL_IMPORT' && message.includes('node_modules/')) return
+  if (warning.code === 'EMPTY_BUNDLE' && message.startsWith('Generated an empty chunk:')) return
+  warn(warning)
+}
+
 const config = defineConfig({
   server: {
     allowedHosts: ['.loca.lt'],
+  },
+  build: {
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      onwarn: suppressDependencyBuildWarnings,
+    },
+  },
+  nitro: {
+    rollupConfig: {
+      onwarn: suppressDependencyBuildWarnings,
+    },
   },
   plugins: [
     staticCacheHeaders(),

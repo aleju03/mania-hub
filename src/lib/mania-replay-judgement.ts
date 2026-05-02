@@ -85,15 +85,23 @@ export function getManiaReplayRuleset(
   isLazer: boolean,
   mods: string[] = [],
   isConvert = false,
+  speedMultiplierOverride?: number,
 ): ManiaReplayRuleset {
   const modSet = new Set(mods.map((mod) => mod.toUpperCase()));
+  const speedMultiplier = Number(speedMultiplierOverride);
 
   return {
     accuracyMode: isLazer ? "lazer" : "stable",
     difficultyMultiplier: modSet.has("HR") ? 1.4 : modSet.has("EZ") ? 1 / 1.4 : 1,
     effectiveOdMultiplier: modSet.has("HR") ? 1.4 : modSet.has("EZ") ? 0.5 : 1,
     isConvert,
-    speedMultiplier: modSet.has("DT") || modSet.has("NC") ? 1.5 : modSet.has("HT") || modSet.has("DC") ? 0.75 : 1,
+    speedMultiplier: Number.isFinite(speedMultiplier) && speedMultiplier > 0
+      ? speedMultiplier
+      : modSet.has("DT") || modSet.has("NC")
+        ? 1.5
+        : modSet.has("HT") || modSet.has("DC")
+          ? 0.75
+          : 1,
     useClassicWindows: !isLazer || (modSet.has("CL") && !modSet.has("SV2")),
   };
 }

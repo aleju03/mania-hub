@@ -1,12 +1,13 @@
 import { createFileRoute, notFound, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import type { ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Circle, Copy, MousePointer2, RectangleHorizontal, Settings, X } from "lucide-react";
 import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores } from "../lib/osu";
 import { parseManiaBeatmap } from "../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
-import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreDisplayValues, scoreHasReplay } from "../lib/score";
+import { getDisplayedAccuracy, getDisplayedRank, getModDisplayList, getScoreDisplayValues, getScoreRate, scoreHasReplay } from "../lib/score";
 import { useAppStore, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { SearchInput } from "../components/ui/SearchInput";
@@ -21,10 +22,16 @@ import { withTimeout } from "../lib/promise-timeout";
 import type { ReplayHitCounts } from "../lib/replay-validation";
 import {
   DEFAULT_REPLAY_SKIN_SETTINGS,
-  REPLAY_SKIN_MAX_HIT_POSITION,
-  REPLAY_SKIN_MIN_HIT_POSITION,
   getReplaySkinProfile,
   normalizeReplaySkinSettings,
+  OSU_MANIA_MAX_HIT_POSITION,
+  OSU_MANIA_MIN_HIT_POSITION,
+  osuManiaHitPositionToReplayHitPosition,
+  REPLAY_SKIN_MAX_COLUMN_WIDTH,
+  REPLAY_SKIN_MAX_COLUMN_SPACING,
+  REPLAY_SKIN_MIN_COLUMN_WIDTH,
+  REPLAY_SKIN_MIN_COLUMN_SPACING,
+  replayHitPositionToOsuManiaHitPosition,
   readReplaySkinSettings,
   writeReplaySkinSettings,
 } from "../lib/replay-skin";
@@ -32,6 +39,7 @@ import { normalizeReplayPlayerParam, shouldStartReplayPlayerLoad } from "../lib/
 import { getReplayBackNavigation } from "../lib/replay-navigation";
 import { parseReplayScoreInput } from "../lib/replay-score-input";
 import { getReplayScoreAvailability } from "../lib/replay-score-availability";
+import { DEFAULT_REPLAY_SCROLL_SPEED, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../lib/replay-scroll-speed";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import type { ReplaySkinKeymodeProfile, ReplaySkinSettings, ReplaySkinStyle } from "../lib/replay-skin";
 import type { BeatmapScoreLookupStatus, OsuScore, OsuBeatmapset, OsuBeatmap, ReplayFrame, ReplayLifeBarFrame } from "../lib/types";
@@ -39,10 +47,9 @@ import { pageSeo } from "../lib/seo";
 
 const REPLAY_VOLUME_STORAGE_KEY = "mania-hub-replay-volume";
 const REPLAY_INPUT_OVERLAY_STORAGE_KEY = "mania-hub-replay-input-overlay";
+const REPLAY_INPUT_ONLY_STORAGE_KEY = "mania-hub-replay-input-only";
+const REPLAY_INPUT_COLOR_STORAGE_KEY = "mania-hub-replay-input-color";
 const REPLAY_BG_DIM_STORAGE_KEY = "mania-hub-replay-bg-dim";
-const REPLAY_SCROLL_SPEED_STORAGE_KEY = "mania-hub-replay-scroll-speed";
-const REPLAY_SCROLL_SPEED_MIGRATION_KEY = "mania-hub-replay-scroll-speed-v2";
-const DEFAULT_REPLAY_SCROLL_SPEED = 20;
 
 interface ReplaySearch {
   scoreId?: number;
@@ -110,25 +117,6 @@ function base64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
-function readReplayScrollSpeed(): number {
-  if (typeof window === "undefined") return DEFAULT_REPLAY_SCROLL_SPEED;
-
-  const raw = window.localStorage.getItem(REPLAY_SCROLL_SPEED_STORAGE_KEY);
-  const migrated = window.localStorage.getItem(REPLAY_SCROLL_SPEED_MIGRATION_KEY) === "1";
-  if (raw == null) return DEFAULT_REPLAY_SCROLL_SPEED;
-
-  const stored = Number(raw);
-  if (!Number.isFinite(stored)) return DEFAULT_REPLAY_SCROLL_SPEED;
-  if (!migrated && Math.round(stored) === 1) return DEFAULT_REPLAY_SCROLL_SPEED;
-  return Math.max(1, Math.min(40, Math.round(stored)));
-}
-
-function writeReplayScrollSpeed(scrollSpeed: number) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(REPLAY_SCROLL_SPEED_STORAGE_KEY, String(Math.max(1, Math.min(40, Math.round(scrollSpeed)))));
-  window.localStorage.setItem(REPLAY_SCROLL_SPEED_MIGRATION_KEY, "1");
-}
-
 interface ReplayRendererLike {
   readonly duration: number;
   readonly displayDuration: number;
@@ -144,6 +132,7 @@ interface ReplayRendererLike {
   setExternalClock: (cb: (() => { time: number; stalled: boolean } | null) | null) => void;
   setScrollSpeed: (value: number) => void;
   setShowInputOverlay: (value: boolean) => void;
+  setInputOverlayOptions: (options: { only?: boolean; color?: string }) => void;
   setSkinSettings: (settings: ReplaySkinSettings) => void;
   setSpeed: (value: number) => void;
   ready: () => Promise<void>;
@@ -180,6 +169,14 @@ export const Route = createFileRoute("/replay")({
 });
 
 type BrowseMode = "player" | "beatmap";
+type PlayerReplaySectionKey = "pinned" | "recent" | "best" | "firsts";
+
+const PLAYER_REPLAY_SECTIONS: { key: PlayerReplaySectionKey; label: string }[] = [
+  { key: "pinned", label: "Pinned" },
+  { key: "recent", label: "Recent Plays" },
+  { key: "best", label: "Best Scores" },
+  { key: "firsts", label: "First Places" },
+];
 
 function mergeScoresById(...groups: OsuScore[][]): OsuScore[] {
   const byId = new Map<number, OsuScore>();
@@ -304,6 +301,7 @@ function ReplayPage() {
   const [playerScoreGroups, setPlayerScoreGroups] = useState<{ best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScore[]; recent: OsuScore[] } | null>(null);
   const [loadingScores, setLoadingScores] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
+  const [activePlayerSection, setActivePlayerSection] = useState<PlayerReplaySectionKey>("pinned");
   const [loadedPlayerParam, setLoadedPlayerParam] = useState<string | null>(null);
   const loadingPlayerParamRef = useRef<string | null>(null);
 
@@ -463,7 +461,9 @@ function ReplayPage() {
       // Recent is intentionally NOT deduped against the others — a recent play
       // that is also a best score is exactly what you want to see as "new".
       const recentFiltered = filterReplayable(recent);
-      setPlayerScoreGroups({ best: bestFiltered, firsts: firstsFiltered, pinned: pinnedFiltered, recent: recentFiltered });
+      const nextGroups = { best: bestFiltered, firsts: firstsFiltered, pinned: pinnedFiltered, recent: recentFiltered };
+      setPlayerScoreGroups(nextGroups);
+      setActivePlayerSection(PLAYER_REPLAY_SECTIONS.find((section) => nextGroups[section.key].length > 0)?.key ?? "pinned");
     } catch { setPlayerScoreGroups({ best: [], firsts: [], pinned: [], recent: [] }); }
     finally { setLoadingScores(false); }
   }, []);
@@ -772,55 +772,113 @@ function ReplayPage() {
                       </div>
                     )}
 
-                    {playerScoreGroups && (playerScoreGroups.best.length > 0 || playerScoreGroups.firsts.length > 0 || playerScoreGroups.pinned.length > 0 || playerScoreGroups.recent.length > 0) && (
-                      <div className="space-y-5">
-                        {([
-                          { key: "pinned", label: "Pinned", scores: playerScoreGroups.pinned },
-                          { key: "recent", label: "Recent Plays", scores: playerScoreGroups.recent },
-                          { key: "best", label: "Best Scores", scores: playerScoreGroups.best },
-                          { key: "firsts", label: "First Places", scores: playerScoreGroups.firsts },
-                        ] as const).map(({ key, label, scores }) => {
-                          if (scores.length === 0) return null;
-                          const isExpanded = expandedSections[key];
-                          const visible = isExpanded ? scores : scores.slice(0, 5);
-                          const hasMore = scores.length > 5;
-                          return (
-                            <div key={key} className="space-y-1.5">
-                              <h4 className="text-xs font-semibold text-osu-f1 uppercase tracking-wider mb-2">
-                                {label} ({scores.length})
+                    {playerScoreGroups && (playerScoreGroups.best.length > 0 || playerScoreGroups.firsts.length > 0 || playerScoreGroups.pinned.length > 0 || playerScoreGroups.recent.length > 0) && (() => {
+                      const sections = PLAYER_REPLAY_SECTIONS
+                        .map((section) => ({ ...section, scores: playerScoreGroups[section.key] }))
+                        .filter((section) => section.scores.length > 0);
+                      const mobileSection = sections.find((section) => section.key === activePlayerSection) ?? sections[0];
+                      const renderScorePanel = (
+                        section: typeof sections[number],
+                        sectionIndex: number,
+                        extraClassName = "",
+                        listClassName = "max-h-[370px]",
+                      ) => {
+                        const isExpanded = expandedSections[section.key];
+                        const hasMore = section.scores.length > 5;
+                        return (
+                          <motion.section
+                            key={section.key}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: sectionIndex * 0.03 }}
+                            className={`min-w-0 overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4 ${extraClassName}`}
+                          >
+                            <div className="flex items-center justify-between gap-3 border-b border-osu-b3/25 bg-osu-b5/35 px-3 py-2.5">
+                              <h4 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">
+                                {section.label}
                               </h4>
-                              {visible.map((s: OsuScore, i: number) => (
-                                <motion.div key={s.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.02 }}
-                                  className="flex items-center gap-3 py-2.5 px-4 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20"
-                                  onClick={() => navigate({ to: "/replay", search: { scoreId: s.id, beatmapsetId: s.beatmapset?.id, player: playerParam } })}>
-                                  <GradeImg grade={getDisplayedRank(s)} size={26} />
+                              <span className="rounded bg-osu-pink/15 px-2 py-0.5 text-[10px] font-bold tabular-nums text-osu-pink-light">
+                                {section.scores.length}
+                              </span>
+                            </div>
+
+                            <div className={`replay-score-scroll overflow-x-hidden transition-[max-height] duration-150 ease-out ${isExpanded ? `${listClassName} overflow-y-auto overscroll-contain` : "max-h-[276px] [overflow-y:clip]"}`}>
+                              {section.scores.map((s: OsuScore) => (
+                                <button
+                                  key={s.id}
+                                  type="button"
+                                  className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors cursor-pointer hover:bg-osu-b3/65 focus:outline-none focus-visible:bg-osu-b3/65"
+                                  onClick={() => navigate({ to: "/replay", search: { scoreId: s.id, beatmapsetId: s.beatmapset?.id, player: playerParam } })}
+                                >
+                                  <GradeImg grade={getDisplayedRank(s)} size={24} />
                                   {s.beatmapset?.covers?.list && (
-                                    <img src={s.beatmapset.covers.list} alt="" className="w-12 h-8 rounded object-cover flex-shrink-0" loading="lazy" />
+                                    <img src={s.beatmapset.covers.list} alt="" className="h-8 w-12 flex-shrink-0 rounded object-cover" loading="lazy" />
                                   )}
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-sm text-white truncate">{s.beatmapset?.title}</div>
-                                    <div className="text-[10px] text-osu-f1">[{s.beatmap?.version}] {s.beatmap?.cs && `${s.beatmap.cs}K`}</div>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="truncate text-sm font-medium text-white">{s.beatmapset?.title}</div>
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      <div className="truncate text-[10px] text-osu-f1">[{s.beatmap?.version}] {s.beatmap?.cs && `${s.beatmap.cs}K`}</div>
+                                      <ScoreModBadges score={s} className="hidden shrink-0 gap-0.5 sm:flex" hideWhenEmpty />
+                                    </div>
                                     <ScoreModBadges score={s} className="mt-1 flex gap-0.5 sm:hidden" hideWhenEmpty />
                                   </div>
-                                  <ScoreModBadges score={s} className="hidden sm:flex w-28 flex-shrink-0 justify-end gap-0.5" />
-                                  <span className="text-xs text-osu-l2 flex-shrink-0">{formatAccuracy(getDisplayedAccuracy(s))}</span>
-                                  <span className="text-sm font-bold">{formatPP(s.pp)}</span>
-                                  <span className="px-2 py-1 rounded bg-osu-pink/20 text-[10px] text-osu-pink-light font-semibold">Watch</span>
-                                </motion.div>
-                              ))}
-                              {hasMore && (
-                                <button
-                                  onClick={() => setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }))}
-                                  className="w-full py-2 text-xs font-semibold text-osu-f1 hover:text-white transition-colors cursor-pointer"
-                                >
-                                  {isExpanded ? "Show Less" : `Show ${scores.length - 5} More`}
+                                  <div className="hidden shrink-0 text-right sm:block">
+                                    <div className="text-xs font-semibold text-osu-l2">{formatAccuracy(getDisplayedAccuracy(s))}</div>
+                                    <div className="text-sm font-bold text-white">{formatPP(s.pp)}</div>
+                                  </div>
+                                  <div className="shrink-0 text-sm font-bold text-white sm:hidden">{formatPP(s.pp)}</div>
                                 </button>
-                              )}
+                              ))}
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
+
+                            {hasMore && (
+                              <button
+                                onClick={() => setExpandedSections((prev) => ({ ...prev, [section.key]: !prev[section.key] }))}
+                                className="replay-score-action w-full bg-osu-b5/25 px-3 py-2 text-xs font-semibold text-osu-f1 outline-none transition-colors cursor-pointer hover:bg-osu-b3/50 hover:text-white focus:outline-none focus-visible:bg-osu-b3/50 focus-visible:text-white active:outline-none"
+                              >
+                                {isExpanded ? "Collapse" : `Show ${section.scores.length - 5} More`}
+                              </button>
+                            )}
+                          </motion.section>
+                        );
+                      };
+
+                      return (
+                        <>
+                          <div className="sm:hidden">
+                            <div className="-mx-3 overflow-x-auto px-3 pb-2">
+                              <div className="flex min-w-max gap-1.5">
+                                {sections.map((section) => (
+                                  <button
+                                    key={section.key}
+                                    type="button"
+                                    onClick={() => setActivePlayerSection(section.key)}
+                                    className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors cursor-pointer ${
+                                      mobileSection.key === section.key
+                                        ? "bg-osu-pink/25 text-osu-pink-light"
+                                        : "bg-osu-b4 text-osu-f1 hover:bg-osu-b3 hover:text-white"
+                                    }`}
+                                  >
+                                    {section.label}
+                                    <span className="ml-1.5 text-[10px] opacity-70">{section.scores.length}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <AnimatePresence mode="wait">
+                              {renderScorePanel(mobileSection, 0, "", "max-h-[58dvh]")}
+                            </AnimatePresence>
+                          </div>
+
+                          <div className="hidden gap-3 sm:grid lg:grid-cols-2">
+                            {sections.map((section, sectionIndex) => {
+                              const shouldSpan = sections.length % 2 === 1 && sectionIndex === sections.length - 1;
+                              return renderScorePanel(section, sectionIndex, shouldSpan ? "lg:col-span-2" : "");
+                            })}
+                          </div>
+                        </>
+                      );
+                    })()}
 
                     {!loadingScores && playerScoreGroups && playerScoreGroups.best.length === 0 && playerScoreGroups.firsts.length === 0 && playerScoreGroups.pinned.length === 0 && playerScoreGroups.recent.length === 0 && (
                       <div className="text-center py-8 text-osu-f1 text-sm">
@@ -830,11 +888,11 @@ function ReplayPage() {
 
                     {!loadingScores && !playerScoreGroups && !error && (
                       suggestionPlayers.length > 0 ? (
-                        <div>
-                          <h4 className="text-xs font-semibold text-osu-f1 uppercase tracking-wider mb-3 text-center">
+                        <div className="max-w-5xl mx-auto">
+                          <h4 className="text-xs font-semibold text-osu-f1 uppercase tracking-wider mb-4 text-center">
                             Top {getCountryName(selectedCountry)} Players
                           </h4>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                             {suggestionPlayers.map((p, i) => (
                               <motion.button
                                 key={p.id}
@@ -842,20 +900,20 @@ function ReplayPage() {
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: i * 0.02 }}
                                 onClick={() => handleSelectPlayer(p)}
-                                className="relative overflow-hidden flex items-center gap-3 py-2.5 px-3 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20 text-left"
+                                className="relative min-h-[86px] overflow-hidden flex items-center gap-4 p-4 rounded-xl bg-osu-b4 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/20 text-left"
                               >
                                 {p.cover_url && (
                                   <div
-                                    className="absolute inset-0 bg-cover bg-center opacity-35"
+                                    className="absolute inset-0 bg-cover bg-center opacity-40"
                                     style={{ backgroundImage: `url(${p.cover_url})` }}
                                     aria-hidden="true"
                                   />
                                 )}
-                                <div className="absolute inset-0 bg-osu-b4/80" aria-hidden="true" />
-                                <img src={avatarImageSrc(p.avatar_url, p.id)} alt="" className="relative w-9 h-9 rounded-full flex-shrink-0 object-cover" loading="lazy" />
+                                <div className="absolute inset-0 bg-gradient-to-r from-osu-b4/95 via-osu-b4/80 to-osu-b4/65" aria-hidden="true" />
+                                <img src={avatarImageSrc(p.avatar_url, p.id)} alt="" className="relative w-14 h-14 rounded-full flex-shrink-0 object-cover ring-2 ring-white/10" loading="lazy" />
                                 <div className="relative flex-1 min-w-0">
-                                  <div className="text-sm text-white truncate">{p.username}</div>
-                                  <div className="text-[10px] text-osu-f1">#{p.global_rank.toLocaleString()}</div>
+                                  <div className="text-base font-semibold text-white truncate">{p.username}</div>
+                                  <div className="mt-1 text-xs text-osu-f1">#{p.global_rank.toLocaleString()}</div>
                                 </div>
                               </motion.button>
                             ))}
@@ -1252,7 +1310,7 @@ function ReplayViewer({
     () => (scoreInfo ? getScoreDisplayValues(scoreInfo) : null),
     [scoreInfo],
   );
-  const modRate = modAcronyms.includes("DT") || modAcronyms.includes("NC") ? 1.5 : modAcronyms.includes("HT") ? 0.75 : 1;
+  const modRate = getScoreRate(scoreInfo?.mods);
   const effectiveRate = speed * modRate;
   const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
   const [bgDim, setBgDim] = useState(() => {
@@ -1275,6 +1333,15 @@ function ReplayViewer({
     const stored = window.localStorage.getItem(REPLAY_INPUT_OVERLAY_STORAGE_KEY);
     return stored == null ? false : stored === "true";
   });
+  const [inputOverlayOnly, setInputOverlayOnly] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const stored = window.localStorage.getItem(REPLAY_INPUT_ONLY_STORAGE_KEY);
+    return stored == null ? false : stored === "true";
+  });
+  const [inputOverlayColor, setInputOverlayColor] = useState(() => {
+    if (typeof window === "undefined") return "#a855f7";
+    return normalizeReplayInputColor(window.localStorage.getItem(REPLAY_INPUT_COLOR_STORAGE_KEY));
+  });
   const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
   const [skinSettingsOpen, setSkinSettingsOpen] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
@@ -1291,6 +1358,8 @@ function ReplayViewer({
   const audioEnabledRef = useRef(true);
   const audioUrlActiveRef = useRef(false);
   const showInputOverlayRef = useRef(false);
+  const inputOverlayOnlyRef = useRef(false);
+  const inputOverlayColorRef = useRef("#a855f7");
   const scrollSpeedRef = useRef(DEFAULT_REPLAY_SCROLL_SPEED);
   const skinSettingsRef = useRef<ReplaySkinSettings>(skinSettings);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -1299,7 +1368,7 @@ function ReplayViewer({
   const [copied, setCopied] = useState(false);
   const shouldResumeAudioRef = useRef(false);
   const applyScrollSpeed = useCallback((next: number, persist = false) => {
-    const normalized = Math.max(1, Math.min(40, Math.round(next)));
+    const normalized = normalizeReplayScrollSpeed(next);
     setScrollSpeed(normalized);
     if (persist) writeReplayScrollSpeed(normalized);
   }, []);
@@ -1376,6 +1445,12 @@ function ReplayViewer({
   }, [showInputOverlay]);
 
   useEffect(() => {
+    inputOverlayOnlyRef.current = inputOverlayOnly;
+    inputOverlayColorRef.current = inputOverlayColor;
+    rendererRef.current?.setInputOverlayOptions({ only: inputOverlayOnly, color: inputOverlayColor });
+  }, [inputOverlayOnly, inputOverlayColor]);
+
+  useEffect(() => {
     scrollSpeedRef.current = scrollSpeed;
     if (rendererRef.current) {
       rendererRef.current.setScrollSpeed(scrollSpeed);
@@ -1418,11 +1493,14 @@ function ReplayViewer({
             od: beatmap?.od,
             showInputOverlay: showInputOverlayRef.current,
             mods: modAcronyms,
+            speedMultiplier: modRate,
             transparentBackground: true,
             scrollVelocities: beatmap?.scrollVelocities,
             expectedCounts: getScoreExpectedCounts(scoreInfo, replay),
             lifeBarFrames: replay.lifeBarFrames,
             skinSettings: skinSettingsRef.current,
+            inputOverlayOnly: inputOverlayOnlyRef.current,
+            inputOverlayColor: inputOverlayColorRef.current,
           },
         ) as ReplayRendererLike;
 
@@ -1439,6 +1517,7 @@ function ReplayViewer({
 
         renderer.setScrollSpeed(scrollSpeedRef.current);
         renderer.setShowInputOverlay(showInputOverlayRef.current);
+        renderer.setInputOverlayOptions({ only: inputOverlayOnlyRef.current, color: inputOverlayColorRef.current });
         renderer.setSkinSettings(skinSettingsRef.current);
         rendererRef.current = renderer;
 
@@ -1529,6 +1608,16 @@ function ReplayViewer({
     if (typeof window === "undefined") return;
     window.localStorage.setItem(REPLAY_INPUT_OVERLAY_STORAGE_KEY, String(showInputOverlay));
   }, [showInputOverlay]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(REPLAY_INPUT_ONLY_STORAGE_KEY, String(inputOverlayOnly));
+  }, [inputOverlayOnly]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(REPLAY_INPUT_COLOR_STORAGE_KEY, inputOverlayColor);
+  }, [inputOverlayColor]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1967,12 +2056,34 @@ function ReplayViewer({
           >
             Input
           </button>
+          {showInputOverlay ? (
+            <>
+              <button
+                onClick={() => setInputOverlayOnly((value) => !value)}
+                className={`px-2.5 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
+                  inputOverlayOnly ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
+                }`}
+              >
+                Only
+              </button>
+              <label className="relative h-6 w-6 cursor-pointer overflow-hidden rounded border border-osu-b3/60 bg-osu-b3/50" title="Input overlay color">
+                <span className="absolute inset-1 rounded" style={{ backgroundColor: inputOverlayColor }} />
+                <input
+                  type="color"
+                  value={inputOverlayColor}
+                  onChange={(e) => setInputOverlayColor(normalizeReplayInputColor(e.target.value))}
+                  className="absolute inset-0 cursor-pointer opacity-0"
+                  aria-label="Input overlay color"
+                />
+              </label>
+            </>
+          ) : null}
 
           {/* Skin settings */}
           <button
             onClick={() => setSkinSettingsOpen(true)}
-            aria-label="Replay skin settings"
-            title="Replay skin settings"
+            aria-label="Replay settings"
+            title="Replay settings"
             className={`w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors ${
               skinSettingsOpen
                 ? "bg-osu-pink text-white"
@@ -2031,12 +2142,25 @@ function ReplaySkinSettingsModal({
   const [draft, setDraft] = useState(() => normalizeReplaySkinSettings(settings));
   const [selectedKeyCount, setSelectedKeyCount] = useState(() => Math.max(1, Math.min(10, keyCount)));
   const [activeColor, setActiveColor] = useState<"tap" | "lnHead" | "lnBody" | null>(null);
+  const [activeTab, setActiveTab] = useState<"style" | "layout">("style");
   const [columnEditorOpen, setColumnEditorOpen] = useState(false);
   const [overrideKind, setOverrideKind] = useState<"tap" | "lnHead">("tap");
   const [overrideColumn, setOverrideColumn] = useState(0);
   const profile = getReplaySkinProfile(draft, selectedKeyCount);
+  const [columnWidthInput, setColumnWidthInput] = useState(() => String(profile.columnWidth));
+  const [columnSpacingInput, setColumnSpacingInput] = useState(() => String(profile.columnSpacing));
+  const [hitPositionInput, setHitPositionInput] = useState(() => String(replayHitPositionToOsuManiaHitPosition(draft.hitPosition)));
+  useEffect(() => {
+    setColumnWidthInput(String(profile.columnWidth));
+  }, [profile.columnWidth]);
+  useEffect(() => {
+    setColumnSpacingInput(String(profile.columnSpacing));
+  }, [profile.columnSpacing]);
+  useEffect(() => {
+    setHitPositionInput(String(replayHitPositionToOsuManiaHitPosition(draft.hitPosition)));
+  }, [draft.hitPosition]);
   const update = (patch: Partial<ReplaySkinSettings>) => {
-    setDraft((current) => normalizeReplaySkinSettings({ ...current, ...patch, version: 1 }));
+    setDraft((current) => normalizeReplaySkinSettings({ ...current, ...patch, version: 2 }));
   };
   const updateStyle = (style: ReplaySkinStyle) => update({ style });
   const updateProfile = (patch: Partial<ReplaySkinKeymodeProfile>) => {
@@ -2051,7 +2175,7 @@ function ReplaySkinSettingsModal({
             ...patch,
           },
         },
-        version: 1,
+        version: 2,
       });
     });
   };
@@ -2074,7 +2198,7 @@ function ReplaySkinSettingsModal({
             [key]: colors,
           },
         },
-        version: 1,
+        version: 2,
       });
     });
   };
@@ -2090,8 +2214,61 @@ function ReplaySkinSettingsModal({
   const overrideBaseColor = overrideKind === "tap" ? profile.tapColor : profile.lnHeadColor;
   const hasOverride = !!overrideColors[overrideColumn];
   const overrideValue = overrideColors[overrideColumn] || overrideBaseColor;
+  const commitColumnWidthInput = () => {
+    const parsed = Number(columnWidthInput);
+    if (!Number.isFinite(parsed)) {
+      setColumnWidthInput(String(profile.columnWidth));
+      return;
+    }
+    const next = Math.max(REPLAY_SKIN_MIN_COLUMN_WIDTH, Math.min(REPLAY_SKIN_MAX_COLUMN_WIDTH, Math.round(parsed)));
+    setColumnWidthInput(String(next));
+    updateProfile({ columnWidth: next });
+  };
+  const commitColumnSpacingInput = () => {
+    const parsed = Number(columnSpacingInput);
+    if (!Number.isFinite(parsed)) {
+      setColumnSpacingInput(String(profile.columnSpacing));
+      return;
+    }
+    const next = Math.max(REPLAY_SKIN_MIN_COLUMN_SPACING, Math.min(REPLAY_SKIN_MAX_COLUMN_SPACING, Math.round(parsed)));
+    setColumnSpacingInput(String(next));
+    updateProfile({ columnSpacing: next });
+  };
+  const commitHitPositionInput = () => {
+    const parsed = Number(hitPositionInput);
+    if (!Number.isFinite(parsed)) {
+      setHitPositionInput(String(replayHitPositionToOsuManiaHitPosition(draft.hitPosition)));
+      return;
+    }
+    const next = Math.max(OSU_MANIA_MIN_HIT_POSITION, Math.min(OSU_MANIA_MAX_HIT_POSITION, Math.round(parsed)));
+    setHitPositionInput(String(next));
+    update({ hitPosition: osuManiaHitPositionToReplayHitPosition(next) });
+  };
+  const handleColumnWidthInputChange = (value: string) => {
+    setColumnWidthInput(value);
+    if (value.trim() === "") return;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < REPLAY_SKIN_MIN_COLUMN_WIDTH || parsed > REPLAY_SKIN_MAX_COLUMN_WIDTH) return;
+    updateProfile({ columnWidth: Math.round(parsed) });
+  };
+  const handleColumnSpacingInputChange = (value: string) => {
+    setColumnSpacingInput(value);
+    if (value.trim() === "") return;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < REPLAY_SKIN_MIN_COLUMN_SPACING || parsed > REPLAY_SKIN_MAX_COLUMN_SPACING) return;
+    updateProfile({ columnSpacing: Math.round(parsed) });
+  };
+  const handleHitPositionInputChange = (value: string) => {
+    setHitPositionInput(value);
+    if (value.trim() === "") return;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < OSU_MANIA_MIN_HIT_POSITION || parsed > OSU_MANIA_MAX_HIT_POSITION) return;
+    update({ hitPosition: osuManiaHitPositionToReplayHitPosition(Math.round(parsed)) });
+  };
 
-  return (
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
     <>
       <motion.div
         className="fixed inset-0 z-[110] bg-black/60 backdrop-blur-[2px]"
@@ -2102,7 +2279,7 @@ function ReplaySkinSettingsModal({
         onClick={onClose}
       />
       <motion.div
-        className="fixed inset-x-3 top-1/2 z-[111] mx-auto max-h-[calc(100vh-2rem)] max-w-3xl overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
+        className="fixed inset-x-3 top-1/2 z-[111] mx-auto flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
         initial={{ opacity: 0, y: "-48%", scale: 0.98 }}
         animate={{ opacity: 1, y: "-50%", scale: 1 }}
         exit={{ opacity: 0, y: "-48%", scale: 0.98 }}
@@ -2111,19 +2288,19 @@ function ReplaySkinSettingsModal({
       >
         <div className="flex items-center gap-3 border-b border-osu-b3/50 px-5 py-4">
           <div>
-            <h3 className="text-base font-bold text-white">Replay Skin</h3>
-            <div className="text-[10px] uppercase tracking-wider text-osu-f1">{draft.style === "circles" ? "Circle playfield" : "Bar playfield"}</div>
+            <h3 className="text-base font-bold text-white">Replay settings</h3>
+            <div className="text-[10px] uppercase tracking-wider text-osu-f1">{activeTab === "style" ? "Style" : "Layout"}</div>
           </div>
           <button
             onClick={onClose}
-            aria-label="Close replay skin settings"
+            aria-label="Close replay settings"
             className="ml-auto flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg bg-osu-b3/50 text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
           >
             <X className="h-4 w-4" strokeWidth={2.4} />
           </button>
         </div>
 
-        <div className="grid max-h-[calc(100vh-9rem)] overflow-y-auto md:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="grid min-h-0 flex-1 overflow-y-auto md:grid-cols-[minmax(0,1fr)_300px]">
           <div className="space-y-4 p-5">
             <label className="block">
               <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-osu-f1">Skin preset</span>
@@ -2136,173 +2313,250 @@ function ReplaySkinSettingsModal({
               </select>
             </label>
 
-            <section>
-              <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Note shape</div>
-              <div className="grid grid-cols-3 gap-2">
-                <ReplaySkinShapeButton
-                  active={draft.style === "circles"}
-                  icon={<Circle className="h-4 w-4" />}
-                  label="Circles"
-                  onClick={() => updateStyle("circles")}
-                />
-                <ReplaySkinShapeButton
-                  active={draft.style === "bars"}
-                  icon={<RectangleHorizontal className="h-4 w-4" />}
-                  label="Bars"
-                  onClick={() => updateStyle("bars")}
-                />
-                <ReplaySkinShapeButton
-                  active={false}
-                  disabled
-                  icon={<MousePointer2 className="h-4 w-4" />}
-                  label="Arrows"
-                  onClick={() => {}}
-                />
-              </div>
-            </section>
+            <div className="grid grid-cols-2 rounded-lg bg-osu-b5/55 p-1">
+              {([
+                ["style", "Style"],
+                ["layout", "Layout"],
+              ] as const).map(([tab, label]) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className={`h-8 cursor-pointer rounded-md text-xs font-bold transition-colors ${
+                    activeTab === tab
+                      ? "bg-osu-pink/20 text-white"
+                      : "text-osu-f1 hover:text-white hover:bg-osu-b3/40"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
-            <section className="space-y-3 pt-2">
-              <ReplaySkinColorRow
-                label="Note color"
-                value={profile.tapColor}
-                selected={activeColor === "tap"}
-                onOpen={() => setActiveColor((current) => current === "tap" ? null : "tap")}
-              />
-              <ReplaySkinColorRow
-                label="LN Head color"
-                value={profile.lnHeadColor}
-                selected={activeColor === "lnHead"}
-                onOpen={() => setActiveColor((current) => current === "lnHead" ? null : "lnHead")}
-              />
-              <ReplaySkinColorRow
-                label="LN Body color"
-                value={draft.lnBodyColor}
-                selected={activeColor === "lnBody"}
-                onOpen={() => setActiveColor((current) => current === "lnBody" ? null : "lnBody")}
-              />
-              {activeColor ? (
-                <ReplaySkinColorPanel
-                  value={activeColor === "tap" ? profile.tapColor : activeColor === "lnHead" ? profile.lnHeadColor : draft.lnBodyColor}
-                  onChange={(value) => {
-                    if (activeColor === "tap") updateBaseColor("tap", value);
-                    else if (activeColor === "lnHead") updateBaseColor("lnHead", value);
-                    else updateLnBodyColor(value);
-                  }}
-                />
-              ) : null}
-            </section>
+            {activeTab === "style" ? (
+              <>
+                <section>
+                  <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Note shape</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <ReplaySkinShapeButton
+                      active={draft.style === "circles"}
+                      icon={<Circle className="h-4 w-4" />}
+                      label="Circles"
+                      onClick={() => updateStyle("circles")}
+                    />
+                    <ReplaySkinShapeButton
+                      active={draft.style === "bars"}
+                      icon={<RectangleHorizontal className="h-4 w-4" />}
+                      label="Bars"
+                      onClick={() => updateStyle("bars")}
+                    />
+                    <ReplaySkinShapeButton
+                      active={false}
+                      disabled
+                      icon={<MousePointer2 className="h-4 w-4" />}
+                      label="Arrows"
+                      onClick={() => {}}
+                    />
+                  </div>
+                </section>
 
-            <section className="relative space-y-3 pt-2">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold text-osu-l1">Per-column colors</span>
-                <span className="flex items-center gap-2">
-                  <ReplaySkinSwitch checked={columnEditorOpen} onChange={setColumnEditorOpen} />
-                  <button
-                    type="button"
-                    onClick={() => setColumnEditorOpen((value) => !value)}
-                    aria-label="Edit per-column colors"
-                    className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg border border-osu-b3/60 bg-osu-b5/70 text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white"
+                <section className="space-y-3 pt-2">
+                  <ReplaySkinColorRow
+                    label="Note color"
+                    value={profile.tapColor}
+                    selected={activeColor === "tap"}
+                    onOpen={() => setActiveColor((current) => current === "tap" ? null : "tap")}
+                  />
+                  <ReplaySkinColorRow
+                    label="LN Head color"
+                    value={profile.lnHeadColor}
+                    selected={activeColor === "lnHead"}
+                    onOpen={() => setActiveColor((current) => current === "lnHead" ? null : "lnHead")}
+                  />
+                  <ReplaySkinColorRow
+                    label="LN Body color"
+                    value={draft.lnBodyColor}
+                    selected={activeColor === "lnBody"}
+                    onOpen={() => setActiveColor((current) => current === "lnBody" ? null : "lnBody")}
+                  />
+                  {activeColor ? (
+                    <ReplaySkinColorPanel
+                      value={activeColor === "tap" ? profile.tapColor : activeColor === "lnHead" ? profile.lnHeadColor : draft.lnBodyColor}
+                      onChange={(value) => {
+                        if (activeColor === "tap") updateBaseColor("tap", value);
+                        else if (activeColor === "lnHead") updateBaseColor("lnHead", value);
+                        else updateLnBodyColor(value);
+                      }}
+                    />
+                  ) : null}
+                </section>
+
+                <section className="relative space-y-3 pt-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-osu-l1">Per-column colors</span>
+                    <span className="flex items-center gap-2">
+                      <ReplaySkinSwitch checked={columnEditorOpen} onChange={setColumnEditorOpen} />
+                      <button
+                        type="button"
+                        onClick={() => setColumnEditorOpen((value) => !value)}
+                        aria-label="Edit per-column colors"
+                        className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg border border-osu-b3/60 bg-osu-b5/70 text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white"
+                      >
+                        <Settings className="h-4 w-4" />
+                      </button>
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-osu-l1">Cut LN tail</span>
+                    <ReplaySkinSwitch checked={draft.percy} onChange={(checked) => update({ percy: checked })} />
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-osu-l1">Upscroll</span>
+                    <ReplaySkinSwitch checked={draft.upscroll} onChange={(checked) => update({ upscroll: checked })} />
+                  </div>
+
+                  {columnEditorOpen ? (
+                    <div className="absolute left-0 top-10 z-10 w-full rounded-xl border border-osu-b2/70 bg-osu-b4/95 p-4 shadow-2xl backdrop-blur sm:left-[46%] sm:w-80">
+                      <div className="mb-3 grid grid-cols-7 gap-1.5">
+                        {columns.map((column) => (
+                          <button
+                            key={column}
+                            type="button"
+                            onClick={() => setOverrideColumn(column)}
+                            className={`h-8 cursor-pointer rounded-md text-xs font-bold transition-colors ${
+                              overrideColumn === column
+                                ? "bg-osu-pink text-white"
+                                : "bg-osu-b5/80 text-osu-f1 hover:text-white"
+                            }`}
+                          >
+                            {column + 1}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="mb-3 inline-grid grid-cols-2 overflow-hidden rounded-lg bg-osu-b5/70 p-1">
+                        {(["tap", "lnHead"] as const).map((kind) => (
+                          <button
+                            key={kind}
+                            type="button"
+                            onClick={() => setOverrideKind(kind)}
+                            className={`cursor-pointer rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
+                              overrideKind === kind ? "bg-osu-pink text-white" : "text-osu-f1 hover:text-white"
+                            }`}
+                          >
+                            {kind === "tap" ? "Note" : "LN Head"}
+                          </button>
+                        ))}
+                      </div>
+                      <ReplaySkinColumnColorRow
+                        label={overrideKind === "tap" ? "Note" : "LN Head"}
+                        value={overrideValue}
+                        onChange={(value) => updateOverrideColor(overrideKind, overrideColumn, value)}
+                      />
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            for (const column of columns) updateOverrideColor(overrideKind, column, overrideValue);
+                          }}
+                          className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-osu-b3/60 bg-osu-b5/70 px-2.5 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                          Copy to all
+                        </button>
+                        {hasOverride ? (
+                          <button
+                            type="button"
+                            onClick={() => updateOverrideColor(overrideKind, overrideColumn, "")}
+                            className="cursor-pointer rounded-lg px-2.5 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:text-white"
+                          >
+                            Use base
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+                </section>
+              </>
+            ) : (
+              <section className="space-y-4">
+                <label className="block">
+                  <span className="mb-2 flex items-center justify-between text-sm font-semibold text-osu-l1">
+                    <span>Keymode</span>
+                    <span className="text-[10px] uppercase tracking-wide text-osu-f1">Preview</span>
+                  </span>
+                  <select
+                    value={selectedKeyCount}
+                    onChange={(e) => setSelectedKeyCount(Number(e.target.value))}
+                    className="h-9 w-full cursor-pointer rounded-lg border border-osu-b3/60 bg-osu-b5/70 px-3 text-sm font-semibold text-white outline-none transition-colors focus:border-osu-pink/70"
                   >
-                    <Settings className="h-4 w-4" />
-                  </button>
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold text-osu-l1">Cut LN tail</span>
-                <ReplaySkinSwitch checked={draft.percy} onChange={(checked) => update({ percy: checked })} />
-              </div>
+                    {Array.from({ length: 10 }, (_, index) => index + 1).map((count) => (
+                      <option key={count} value={count}>{count}K</option>
+                    ))}
+                  </select>
+                </label>
+
               <label className="block pt-1">
                 <span className="mb-2 flex items-center justify-between text-sm font-semibold text-osu-l1">
                   <span>Column width</span>
-                  <span className="text-xs text-white tabular-nums">{profile.columnWidth}%</span>
+                  <span className="text-[10px] uppercase tracking-wide text-osu-f1">osu!mania skin.ini</span>
                 </span>
                 <input
-                  type="range"
-                  min={70}
-                  max={130}
-                  step={5}
-                  value={profile.columnWidth}
-                  onChange={(e) => updateProfile({ columnWidth: Number(e.target.value) })}
-                  className="w-full cursor-pointer accent-osu-pink"
+                  type="number"
+                  min={REPLAY_SKIN_MIN_COLUMN_WIDTH}
+                  max={REPLAY_SKIN_MAX_COLUMN_WIDTH}
+                  step={1}
+                  value={columnWidthInput}
+                  onChange={(e) => handleColumnWidthInputChange(e.target.value)}
+                  onBlur={commitColumnWidthInput}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                  className="h-9 w-full rounded-lg border border-osu-b3/60 bg-osu-b5/70 px-3 text-sm font-semibold text-white outline-none transition-colors focus:border-osu-pink/70"
                 />
+                <span className="mt-1 block text-[10px] text-osu-f1">Default osu!mania value is 30.</span>
+              </label>
+              <label className="block pt-1">
+                <span className="mb-2 flex items-center justify-between text-sm font-semibold text-osu-l1">
+                  <span>Column spacing</span>
+                  <span className="text-[10px] uppercase tracking-wide text-osu-f1">osu!mania skin.ini</span>
+                </span>
+                <input
+                  type="number"
+                  min={REPLAY_SKIN_MIN_COLUMN_SPACING}
+                  max={REPLAY_SKIN_MAX_COLUMN_SPACING}
+                  step={1}
+                  value={columnSpacingInput}
+                  onChange={(e) => handleColumnSpacingInputChange(e.target.value)}
+                  onBlur={commitColumnSpacingInput}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                  className="h-9 w-full rounded-lg border border-osu-b3/60 bg-osu-b5/70 px-3 text-sm font-semibold text-white outline-none transition-colors focus:border-osu-pink/70"
+                />
+                <span className="mt-1 block text-[10px] text-osu-f1">Default osu!mania value is 0.</span>
               </label>
               <label className="block pt-1">
                 <span className="mb-2 flex items-center justify-between text-sm font-semibold text-osu-l1">
                   <span>Hit position</span>
-                  <span className="text-xs text-white tabular-nums">{draft.hitPosition}</span>
+                  <span className="text-[10px] uppercase tracking-wide text-osu-f1">osu!mania skin.ini</span>
                 </span>
                 <input
-                  type="range"
-                  min={REPLAY_SKIN_MIN_HIT_POSITION}
-                  max={REPLAY_SKIN_MAX_HIT_POSITION}
-                  step={5}
-                  value={draft.hitPosition}
-                  onChange={(e) => update({ hitPosition: Number(e.target.value) })}
-                  className="w-full cursor-pointer accent-osu-pink"
+                  type="number"
+                  min={OSU_MANIA_MIN_HIT_POSITION}
+                  max={OSU_MANIA_MAX_HIT_POSITION}
+                  step={1}
+                  value={hitPositionInput}
+                  onChange={(e) => handleHitPositionInputChange(e.target.value)}
+                  onBlur={commitHitPositionInput}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                  className="h-9 w-full rounded-lg border border-osu-b3/60 bg-osu-b5/70 px-3 text-sm font-semibold text-white outline-none transition-colors focus:border-osu-pink/70"
                 />
+                <span className="mt-1 block text-[10px] text-osu-f1">Default osu!mania value is 402. Higher values move receptors lower.</span>
               </label>
-
-              {columnEditorOpen ? (
-                <div className="absolute left-[46%] top-3 z-10 w-80 rounded-xl border border-osu-b2/70 bg-osu-b4/95 p-4 shadow-2xl backdrop-blur">
-                  <div className="mb-3 grid grid-cols-7 gap-1.5">
-                    {columns.map((column) => (
-                      <button
-                        key={column}
-                        type="button"
-                        onClick={() => setOverrideColumn(column)}
-                        className={`h-8 cursor-pointer rounded-md text-xs font-bold transition-colors ${
-                          overrideColumn === column
-                            ? "bg-osu-pink text-white"
-                            : "bg-osu-b5/80 text-osu-f1 hover:text-white"
-                        }`}
-                      >
-                        {column + 1}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="mb-3 inline-grid grid-cols-2 overflow-hidden rounded-lg bg-osu-b5/70 p-1">
-                    {(["tap", "lnHead"] as const).map((kind) => (
-                      <button
-                        key={kind}
-                        type="button"
-                        onClick={() => setOverrideKind(kind)}
-                        className={`cursor-pointer rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
-                          overrideKind === kind ? "bg-osu-pink text-white" : "text-osu-f1 hover:text-white"
-                        }`}
-                      >
-                        {kind === "tap" ? "Note" : "LN Head"}
-                      </button>
-                    ))}
-                  </div>
-                  <ReplaySkinColumnColorRow
-                    label={overrideKind === "tap" ? "Note" : "LN Head"}
-                    value={overrideValue}
-                    onChange={(value) => updateOverrideColor(overrideKind, overrideColumn, value)}
-                  />
-                  <div className="mt-3 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        for (const column of columns) updateOverrideColor(overrideKind, column, overrideValue);
-                      }}
-                      className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-osu-b3/60 bg-osu-b5/70 px-2.5 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      Copy to all
-                    </button>
-                    {hasOverride ? (
-                      <button
-                        type="button"
-                        onClick={() => updateOverrideColor(overrideKind, overrideColumn, "")}
-                        className="cursor-pointer rounded-lg px-2.5 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:text-white"
-                      >
-                        Use base
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-            </section>
+              </section>
+            )}
           </div>
 
           <div className="border-l border-osu-b3/50 p-5">
@@ -2311,7 +2565,7 @@ function ReplaySkinSettingsModal({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 border-t border-osu-b3/50 px-5 py-4">
+        <div className="flex shrink-0 items-center gap-2 border-t border-osu-b3/50 px-5 py-4">
           <button
             onClick={() => {
               setDraft(DEFAULT_REPLAY_SKIN_SETTINGS);
@@ -2336,7 +2590,8 @@ function ReplaySkinSettingsModal({
           </button>
         </div>
       </motion.div>
-    </>
+    </>,
+    document.body,
   );
 }
 
@@ -2374,6 +2629,10 @@ function normalizeEditableHex(value: string): string | null {
   return null;
 }
 
+function normalizeReplayInputColor(value: string | null): string {
+  return normalizeEditableHex(value ?? "") ?? "#a855f7";
+}
+
 function ReplaySkinPreview({
   settings,
   profile,
@@ -2385,10 +2644,13 @@ function ReplaySkinPreview({
 }) {
   const width = 260;
   const height = 300;
-  const playfieldWidth = Math.min(230, keyCount * 30 * (profile.columnWidth / 100));
-  const laneWidth = playfieldWidth / keyCount;
+  const desiredPlayfieldWidth = keyCount * profile.columnWidth + Math.max(0, keyCount - 1) * profile.columnSpacing;
+  const playfieldWidth = Math.min(230, desiredPlayfieldWidth);
+  const layoutScale = desiredPlayfieldWidth > 0 ? playfieldWidth / desiredPlayfieldWidth : 1;
+  const laneWidth = profile.columnWidth * layoutScale;
+  const columnSpacing = profile.columnSpacing * layoutScale;
   const playfieldX = (width - playfieldWidth) / 2;
-  const receptorY = height * (768 - settings.hitPosition) / 768;
+  const receptorY = height * (settings.upscroll ? settings.hitPosition : 768 - settings.hitPosition) / 768;
   const noteSize = settings.style === "circles"
     ? Math.max(18, Math.min(laneWidth - 4, Math.max(28, laneWidth * 0.74)))
     : Math.max(8, Math.min(18, laneWidth - 6));
@@ -2405,7 +2667,7 @@ function ReplaySkinPreview({
             <div
               key={index}
               className="absolute inset-y-0 w-px bg-white/10"
-              style={{ left: index * laneWidth }}
+              style={{ left: index < keyCount ? index * (laneWidth + columnSpacing) : playfieldWidth }}
             />
           ))}
         </div>
@@ -2414,7 +2676,7 @@ function ReplaySkinPreview({
         <div className="absolute h-0.5 bg-white/70" style={{ left: playfieldX, width: playfieldWidth, top: receptorY }} />
       ) : null}
       {Array.from({ length: keyCount }, (_, col) => {
-        const cx = playfieldX + laneWidth * col + laneWidth / 2;
+        const cx = playfieldX + (laneWidth + columnSpacing) * col + laneWidth / 2;
         const pressed = col === lnCol;
         if (settings.style === "circles") {
           return (
@@ -2447,8 +2709,8 @@ function ReplaySkinPreview({
         );
       })}
       {tapCols.map((col, index) => {
-        const cx = playfieldX + laneWidth * col + laneWidth / 2;
-        const y = index === 0 ? 54 : 104;
+        const cx = playfieldX + (laneWidth + columnSpacing) * col + laneWidth / 2;
+        const y = settings.upscroll ? (index === 0 ? 204 : 154) : (index === 0 ? 54 : 104);
         const color = colorFor(profile.tapColors, profile.tapColor, col);
         return settings.style === "circles" ? (
           <div
@@ -2465,10 +2727,12 @@ function ReplaySkinPreview({
         );
       })}
       {(() => {
-        const cx = playfieldX + laneWidth * lnCol + laneWidth / 2;
+        const cx = playfieldX + (laneWidth + columnSpacing) * lnCol + laneWidth / 2;
         const bodyWidth = settings.style === "circles" ? Math.max(10, noteSize * 0.72) : noteSize;
         const bodyHeight = settings.percy ? 92 : 122;
-        const bodyTop = settings.percy ? 72 : 56;
+        const bodyTop = settings.upscroll
+          ? receptorY + 18
+          : settings.percy ? 72 : 56;
         const headColor = colorFor(profile.lnHeadColors, profile.lnHeadColor, lnCol);
         return (
           <>
@@ -2589,13 +2853,13 @@ function ReplaySkinSwitch({ checked, onChange }: { checked: boolean; onChange: (
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className={`relative h-6 w-10 cursor-pointer rounded-full transition-colors ${
-        checked ? "bg-osu-pink" : "bg-osu-b2"
+      className={`inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border p-0.5 transition-colors ${
+        checked ? "border-osu-pink bg-osu-pink" : "border-osu-b3/60 bg-osu-b5/80"
       }`}
     >
       <span
-        className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${
-          checked ? "translate-x-5" : "translate-x-1"
+        className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? "translate-x-4" : "translate-x-0"
         }`}
       />
     </button>

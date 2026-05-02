@@ -85,6 +85,7 @@ function ScoresPage() {
   const [filter, setFilter] = useState<ScoreFilter>("all");
   const [gradeFilter, setGradeFilter] = useState<GradeFilter>("all");
   const [failedFilter, setFailedFilter] = useState<FailedFilter>("hide");
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<number[]>([]);
   const [initialLoaded, setInitialLoaded] = useState(feedScores.length > 0 || !!feedScoresFetchedAt);
   const [initialRefreshDone, setInitialRefreshDone] = useState(false);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -102,6 +103,7 @@ function ScoresPage() {
     setInitialLoaded(feedScores.length > 0 || !!feedScoresFetchedAt);
     setInitialRefreshDone(false);
     setExpandedKey(null);
+    setSelectedPlayerIds([]);
     resetPollIndex(selectedCountry);
   }, [selectedCountry]);
 
@@ -242,8 +244,26 @@ function ScoresPage() {
     [trackerPpGainEntries],
   );
 
+  const selectedPlayerIdSet = useMemo(() => new Set(selectedPlayerIds), [selectedPlayerIds]);
+
+  const togglePlayerFilter = useCallback((playerId: number) => {
+    setSelectedPlayerIds((current) =>
+      current.includes(playerId)
+        ? current.filter((id) => id !== playerId)
+        : [...current, playerId]
+    );
+  }, []);
+
+  const clearPlayerFilter = useCallback(() => {
+    setSelectedPlayerIds([]);
+  }, []);
+
   const filtered = useMemo(() => {
-    return feedScores.filter((score: OsuScore) => {
+    const playerFiltered = selectedPlayerIds.length > 0
+      ? feedScores.filter((score: OsuScore) => selectedPlayerIdSet.has(score.user_id))
+      : feedScores;
+
+    return playerFiltered.filter((score: OsuScore) => {
       const passed = isDisplayedPassed(score);
       if (failedFilter === "hide" && !passed) return false;
       if (failedFilter === "only" && passed) return false;
@@ -264,7 +284,7 @@ function ScoresPage() {
       }
       return true;
     });
-  }, [feedScores, filter, gradeFilter, failedFilter]);
+  }, [feedScores, filter, gradeFilter, failedFilter, selectedPlayerIdSet, selectedPlayerIds.length]);
 
   const activePlayers = useMemo(() => {
     const activeCutoff = Date.now() - 40 * 60 * 1000;
@@ -333,6 +353,17 @@ function ScoresPage() {
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-0">
           {/* Desktop: single row with all filters */}
           <div className="hidden sm:flex items-center gap-0 w-auto">
+            {selectedPlayerIds.length > 0 && (
+              <>
+                <button
+                  onClick={clearPlayerFilter}
+                  className="mr-2 px-2.5 py-1 rounded-lg bg-osu-pink/15 text-[11px] font-medium text-osu-pink-light hover:bg-osu-pink/25 transition-colors cursor-pointer"
+                >
+                  Clear player filter
+                </button>
+                <div className="w-px h-5 bg-osu-b3/40 mr-2" />
+              </>
+            )}
             {filters.map((item) => (
               <button
                 key={item.id}
@@ -367,6 +398,14 @@ function ScoresPage() {
           </div>
           {/* Mobile: compact single row */}
           <div className="sm:hidden w-full py-2">
+            {selectedPlayerIds.length > 0 && (
+              <button
+                onClick={clearPlayerFilter}
+                className="mb-2 px-2.5 py-1 rounded-lg bg-osu-pink/15 text-[11px] font-medium text-osu-pink-light hover:bg-osu-pink/25 transition-colors cursor-pointer"
+              >
+                Clear player filter
+              </button>
+            )}
             <div className="flex items-center justify-between gap-2">
               <div className="flex rounded-lg overflow-hidden border border-osu-b3/30 flex-shrink-0">
                 {filters.map((item) => (
@@ -433,13 +472,19 @@ function ScoresPage() {
                 {activePlayers.map((player) => (
                   <button
                     key={player.id}
-                    onClick={() => {
-                      window.location.href = `/player/${encodeURIComponent(player.username)}`;
+                    onClick={() => togglePlayerFilter(player.id)}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
                     }}
+                    aria-pressed={selectedPlayerIdSet.has(player.id)}
                     className="cursor-pointer group relative flex-shrink-0"
-                    title={player.username}
+                    title={`${player.username} - click to filter`}
                   >
-                    <div className="ring-2 ring-inset ring-osu-green/50 rounded-full group-hover:ring-osu-green transition-all">
+                    <div className={`ring-2 ring-inset rounded-full transition-all ${
+                      selectedPlayerIdSet.has(player.id)
+                        ? "ring-osu-pink shadow-[0_0_0_3px_rgba(255,102,171,0.18)]"
+                        : "ring-osu-pink/40 group-hover:ring-osu-pink"
+                    }`}>
                       <Avatar url={player.avatar_url} size={32} />
                     </div>
                   </button>
@@ -451,13 +496,19 @@ function ScoresPage() {
                 {activePlayers.map((player) => (
                   <button
                     key={player.id}
-                    onClick={() => {
-                      window.location.href = `/player/${encodeURIComponent(player.username)}`;
+                    onClick={() => togglePlayerFilter(player.id)}
+                    onContextMenu={(event) => {
+                      event.preventDefault();
                     }}
+                    aria-pressed={selectedPlayerIdSet.has(player.id)}
                     className="cursor-pointer group relative"
-                    title={player.username}
+                    title={`${player.username} - click to filter`}
                   >
-                    <div className="ring-2 ring-osu-green/50 rounded-full group-hover:ring-osu-green transition-all">
+                    <div className={`ring-2 rounded-full transition-all ${
+                      selectedPlayerIdSet.has(player.id)
+                        ? "ring-osu-pink shadow-[0_0_0_3px_rgba(255,102,171,0.18)]"
+                        : "ring-osu-pink/40 group-hover:ring-osu-pink"
+                    }`}>
                       <Avatar url={player.avatar_url} size={32} />
                     </div>
                   </button>

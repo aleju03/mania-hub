@@ -92,4 +92,23 @@ OverallDifficulty:8
 
     expect(beatmap.scrollVelocities).toEqual([]);
   });
+
+  it("parses explicit break periods from events", () => {
+    const beatmap = parseManiaBeatmap(`
+osu file format v14
+
+[Events]
+0,0,"bg.jpg",0,0
+2,1234,5678
+
+[Difficulty]
+CircleSize:4
+
+[HitObjects]
+64,192,1000,1,0,0:0:0:0:
+`);
+
+    expect(beatmap.backgroundFilename).toBe("bg.jpg");
+    expect(beatmap.breakPeriods).toEqual([{ startTime: 1234, endTime: 5678 }]);
+  });
 });

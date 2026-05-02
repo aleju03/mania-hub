@@ -87,6 +87,21 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 ::-webkit-scrollbar-thumb { background: var(--color-osu-b2); border-radius: 4px; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.replay-score-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.replay-score-scroll::-webkit-scrollbar {
+  display: none;
+}
+.replay-score-action {
+  -webkit-tap-highlight-color: transparent;
+}
+.replay-score-action:focus,
+.replay-score-action:active {
+  outline: none;
+  box-shadow: none;
+}
 
 @keyframes detail-in {
   from { opacity: 0; transform: translateY(-6px); }

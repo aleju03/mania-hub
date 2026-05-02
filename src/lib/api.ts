@@ -15,9 +15,12 @@ let zlibPromise: Promise<ZlibAsync> | null = null;
 function getZlib(): Promise<ZlibAsync> {
   if (!zlibPromise) {
     zlibPromise = (async () => {
+      // Keep Node built-ins invisible to Vite's client resolver; this path only
+      // runs on the server when persistent cache compression is used.
+      const importNodeModule = new Function("specifier", "return import(specifier)") as (specifier: string) => Promise<any>;
       const [zlib, util] = await Promise.all([
-        import("node:zlib"),
-        import("node:util"),
+        importNodeModule("node:zlib"),
+        importNodeModule("node:util"),
       ]);
       return {
         gzipAsync: util.promisify(zlib.gzip) as (buf: Buffer) => Promise<Buffer>,
@@ -413,12 +416,52 @@ async function releaseCacheLock(key: string, owner: string | null): Promise<void
   }
 }
 
+async function renewCacheLock(key: string, owner: string | null, lockTtlMs: number): Promise<void> {
+  if (!hasDb() || !db) return;
+  if (!owner) return;
+  try {
+    await db.execute({
+      sql: "UPDATE cache_locks SET expires_at = ? WHERE lock_key = ? AND lock_owner = ?",
+      args: [Date.now() + lockTtlMs, key, owner],
+    });
+  } catch (error) {
+    warnCacheIssue("renew lock", key, error);
+  }
+}
+
+async function runWithCacheLockRenewal<T>(
+  key: string,
+  owner: string,
+  lockTtlMs: number,
+  fn: () => Promise<T>,
+): Promise<T> {
+  let renewalTimer: ReturnType<typeof setInterval> | null = null;
+  if (hasDb() && db) {
+    renewalTimer = setInterval(() => {
+      renewCacheLock(key, owner, lockTtlMs).catch(() => {});
+    }, Math.max(1000, Math.floor(lockTtlMs / 2)));
+  }
+  try {
+    return await fn();
+  } finally {
+    if (renewalTimer) clearInterval(renewalTimer);
+  }
+}
+
 export async function fetchWithCacheLock<T>(
   cacheKey: string,
   cacheTtlMs: number,
   fetchFn: () => Promise<T>,
   lockTtlMs: number = DEFAULT_LOCK_TTL,
+  options: {
+    waitMs?: number;
+    waitRetries?: number;
+    runWithoutLockOnTimeout?: boolean;
+  } = {},
 ): Promise<T> {
+  const waitMs = options.waitMs ?? LOCK_WAIT_MS;
+  const waitRetries = options.waitRetries ?? LOCK_WAIT_RETRIES;
+  const runWithoutLockOnTimeout = options.runWithoutLockOnTimeout ?? true;
   const cached = await getPersistentCached<T>(cacheKey);
   if (cached) return cached;
 
@@ -429,7 +472,7 @@ export async function fetchWithCacheLock<T>(
       const rechecked = await getPersistentCached<T>(cacheKey);
       if (rechecked) return rechecked;
 
-      const result = await fetchFn();
+      const result = await runWithCacheLockRenewal(cacheKey, lockOwner, lockTtlMs, fetchFn);
       await setPersistentCache(cacheKey, result, cacheTtlMs);
       return result;
     } finally {
@@ -437,10 +480,28 @@ export async function fetchWithCacheLock<T>(
     }
   }
 
-  for (let i = 0; i < LOCK_WAIT_RETRIES; i++) {
-    await sleep(LOCK_WAIT_MS);
+  for (let i = 0; i < waitRetries; i++) {
+    await sleep(waitMs);
     const cached = await getPersistentCached<T>(cacheKey);
     if (cached) return cached;
+  }
+
+  if (!runWithoutLockOnTimeout) {
+    const retryLockOwner = await acquireCacheLock(cacheKey, lockTtlMs);
+    if (retryLockOwner) {
+      try {
+        const rechecked = await getPersistentCached<T>(cacheKey);
+        if (rechecked) return rechecked;
+
+        const result = await runWithCacheLockRenewal(cacheKey, retryLockOwner, lockTtlMs, fetchFn);
+        await setPersistentCache(cacheKey, result, cacheTtlMs);
+        return result;
+      } finally {
+        await releaseCacheLock(cacheKey, retryLockOwner);
+      }
+    }
+
+    throw new Error(`Timed out waiting for cache rebuild: ${cacheKey}`);
   }
 
   const result = await fetchFn();

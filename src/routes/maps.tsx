@@ -1,5 +1,6 @@
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import type { CSSProperties } from "react";
 import {
   getRankings,
   getCountryMapsFarmed,
@@ -41,10 +42,12 @@ import { parseCountrySearchParam, withSearchParams } from "../lib/country-search
 import {
   RANDOM_REPLAY_PREVIEW_MS,
   buildAutoplayFrames,
+  getPreviewInitialCombo,
   getPreviewNotes,
   getPreviewScrollVelocities,
   pickPreviewStartTime,
 } from "../lib/chart-preview";
+import { readReplayScrollSpeed } from "../lib/replay-scroll-speed";
 import { readReplaySkinSettings } from "../lib/replay-skin";
 import type { ReplaySkinSettings } from "../lib/replay-skin";
 
@@ -232,8 +235,8 @@ function parseTriStateCsv<T extends string>(raw: string, allowed: readonly T[]):
   return { includes, excludes };
 }
 
-// Cycle: none → include → exclude → none
-function cycleTriStateCsv(raw: string, value: string): string {
+// Cycle: none -> include -> exclude -> none
+export function cycleTriStateCsv(raw: string, value: string): string {
   const parts = raw ? raw.split(",").filter(Boolean) : [];
   const includeIdx = parts.indexOf(value);
   const excludeIdx = parts.indexOf(`-${value}`);
@@ -243,6 +246,21 @@ function cycleTriStateCsv(raw: string, value: string): string {
     parts.splice(excludeIdx, 1);
   } else {
     parts.push(value);
+  }
+  return parts.join(",");
+}
+
+// Reverse cycle: none -> exclude -> include -> none
+export function reverseCycleTriStateCsv(raw: string, value: string): string {
+  const parts = raw ? raw.split(",").filter(Boolean) : [];
+  const includeIdx = parts.indexOf(value);
+  const excludeIdx = parts.indexOf(`-${value}`);
+  if (includeIdx >= 0) {
+    parts.splice(includeIdx, 1);
+  } else if (excludeIdx >= 0) {
+    parts[excludeIdx] = value;
+  } else {
+    parts.push(`-${value}`);
   }
   return parts.join(",");
 }
@@ -697,10 +715,11 @@ export const Route = createFileRoute("/maps")({
   },
   validateSearch: (search: Record<string, unknown>): MapsSearch => ({
     tab: search.tab === "popular" || search.tab === "favourites" || search.tab === "random" ? search.tab : DEFAULT_MAPS_SEARCH.tab,
-    page: Math.max(0, Number(search.page) || DEFAULT_MAPS_SEARCH.page),
+    page: Math.max(0, Math.floor(Number(search.page) || DEFAULT_MAPS_SEARCH.page)),
     key: search.key === "4k" || search.key === "7k" || search.key === "other" ? search.key : DEFAULT_MAPS_SEARCH.key,
-    beatmapSort: search.beatmapSort === "plays" || search.beatmapSort === "stars" || search.beatmapSort === "length" ? search.beatmapSort : DEFAULT_MAPS_SEARCH.beatmapSort,
+    beatmapSort: search.beatmapSort === "players" || search.beatmapSort === "plays" || search.beatmapSort === "stars" || search.beatmapSort === "length" ? search.beatmapSort : DEFAULT_MAPS_SEARCH.beatmapSort,
     farmedSort:
+      search.farmedSort === "players" ||
       search.farmedSort === "avg-pp" ||
       search.farmedSort === "max-pp" ||
       search.farmedSort === "stars" ||
@@ -1085,6 +1104,12 @@ function MapsPage() {
           ? filteredFavourites
           : [];
   const totalPages = tab === "random" ? 0 : Math.ceil(currentList.length / PAGE_SIZE);
+
+  useEffect(() => {
+    if (tab === "random" || totalPages === 0 || page < totalPages) return;
+    updateMapsSearch({ page: totalPages - 1 });
+  }, [page, tab, totalPages]);
+
   const paginated = tab === "random" ? [] : currentList.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const tabs: { id: Tab; label: string }[] = [
@@ -1505,6 +1530,7 @@ function MapsPage() {
                         mode={getTriStateMode(randomStatus, s)}
                         hasAnyActive={triStateActive(randomStatus) > 0}
                         onClick={() => updateMapsSearch({ rStatus: cycleTriStateCsv(rStatusRaw, s) })}
+                        onContextMenu={() => updateMapsSearch({ rStatus: reverseCycleTriStateCsv(rStatusRaw, s) })}
                       >
                         {s.charAt(0).toUpperCase() + s.slice(1)}
                       </TriStatePill>
@@ -1518,6 +1544,7 @@ function MapsPage() {
                         mode={getTriStateMode(randomKey, k)}
                         hasAnyActive={triStateActive(randomKey) > 0}
                         onClick={() => updateMapsSearch({ rKey: cycleTriStateCsv(rKeyRaw, k) })}
+                        onContextMenu={() => updateMapsSearch({ rKey: reverseCycleTriStateCsv(rKeyRaw, k) })}
                       >
                         {k.toUpperCase()}
                       </TriStatePill>
@@ -1531,6 +1558,7 @@ function MapsPage() {
                         mode={getTriStateMode(randomPattern, p)}
                         hasAnyActive={triStateActive(randomPattern) > 0}
                         onClick={() => updateMapsSearch({ rPattern: cycleTriStateCsv(rPatternRaw, p) })}
+                        onContextMenu={() => updateMapsSearch({ rPattern: reverseCycleTriStateCsv(rPatternRaw, p) })}
                       >
                         {RANDOM_PATTERN_LABEL[p]}
                       </TriStatePill>
@@ -1905,11 +1933,13 @@ function TriStatePill({
   mode,
   hasAnyActive,
   onClick,
+  onContextMenu,
   children,
 }: {
   mode: TriStateMode | undefined;
   hasAnyActive: boolean;
   onClick: () => void;
+  onContextMenu: () => void;
   children: React.ReactNode;
 }) {
   const styleClass = mode === "include"
@@ -1928,6 +1958,10 @@ function TriStatePill({
     <button
       type="button"
       onClick={onClick}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        onContextMenu();
+      }}
       title={title}
       aria-label={title}
       className={`relative px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer ${styleClass}`}
@@ -2582,7 +2616,10 @@ function RandomReplayPreview({
   const rendererRef = useRef<RandomPreviewRendererLike | null>(null);
   const isPlayingRef = useRef(isPlaying);
   const getClockRef = useRef(getClock);
+  const scrollSpeedRef = useRef(readReplayScrollSpeed());
+  const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
   const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
+  const initialCombo = useMemo(() => beatmap ? getPreviewInitialCombo(beatmap, startTimeMs) : 0, [beatmap, startTimeMs]);
   const notes = useMemo(() => beatmap ? getPreviewNotes(beatmap, startTimeMs, timeScale) : [], [beatmap, startTimeMs, timeScale]);
   const scrollVelocities = useMemo(() => beatmap ? getPreviewScrollVelocities(beatmap, startTimeMs, timeScale) : [], [beatmap, startTimeMs, timeScale]);
   const frames = useMemo(() => beatmap ? buildAutoplayFrames(notes, beatmap.keyCount) : [], [beatmap, notes]);
@@ -2596,14 +2633,22 @@ function RandomReplayPreview({
   }, [getClock]);
 
   useEffect(() => {
-    const refreshSkinSettings = () => setSkinSettings(readReplaySkinSettings());
-    window.addEventListener("storage", refreshSkinSettings);
-    window.addEventListener("focus", refreshSkinSettings);
+    const refreshSharedReplaySettings = () => {
+      setScrollSpeed(readReplayScrollSpeed());
+      setSkinSettings(readReplaySkinSettings());
+    };
+    window.addEventListener("storage", refreshSharedReplaySettings);
+    window.addEventListener("focus", refreshSharedReplaySettings);
     return () => {
-      window.removeEventListener("storage", refreshSkinSettings);
-      window.removeEventListener("focus", refreshSkinSettings);
+      window.removeEventListener("storage", refreshSharedReplaySettings);
+      window.removeEventListener("focus", refreshSharedReplaySettings);
     };
   }, []);
+
+  useEffect(() => {
+    scrollSpeedRef.current = scrollSpeed;
+    rendererRef.current?.setScrollSpeed(scrollSpeed);
+  }, [scrollSpeed]);
 
   useEffect(() => {
     rendererRef.current?.setSkinSettings(skinSettings);
@@ -2628,13 +2673,15 @@ function RandomReplayPreview({
           showInputOverlay: false,
           transparentBackground: true,
           hideHud: true,
+          showCombo: true,
+          initialCombo,
           barePlayfield: true,
           showHealthBar: false,
           scrollVelocities,
           skinSettings,
         },
       ) as RandomPreviewRendererLike;
-      renderer.setScrollSpeed(18);
+      renderer.setScrollSpeed(scrollSpeedRef.current);
       renderer.setSkinSettings(skinSettings);
       renderer.setExternalClock(() => getClockRef.current());
       rendererRef.current = renderer;
@@ -2653,7 +2700,7 @@ function RandomReplayPreview({
       rendererRef.current?.destroy();
       rendererRef.current = null;
     };
-  }, [beatmap, frames, notes, onReady, scrollVelocities]);
+  }, [beatmap, frames, initialCombo, notes, onReady, scrollVelocities]);
 
   useEffect(() => {
     const renderer = rendererRef.current;
@@ -2828,6 +2875,13 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     : null;
   const replayAudioPlaybackRate = replayAudioMode === "set-preview" ? selectedDifficultyRate : 1;
   const replayClockRateDivisor = replayAudioMode === "set-preview" ? selectedDifficultyRate : 1;
+  const replayPreviewKeyCount = previewBeatmap?.keyCount ?? Math.round(selectedBeatmap?.cs ?? 0);
+  const replayPreviewWidth = replayPreviewKeyCount >= 7
+    ? 460
+    : replayPreviewKeyCount >= 6
+    ? 390
+    : 300;
+  const replayPreviewGap = replayPreviewKeyCount >= 5 ? 24 : 48;
   const replayPreviewStartSeconds = replayAudioMode === "set-preview"
     ? 0
     : Math.max(0, replayChartStartMs / 1000);
@@ -3400,7 +3454,13 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         </div>
       </div>
 
-      <div className="relative mt-4 min-h-[360px] overflow-visible md:absolute md:left-[calc(100%+48px)] md:top-0 md:mt-0 md:h-full md:w-[300px] md:min-h-full">
+      <div
+        className="relative mt-4 min-h-[360px] overflow-visible md:absolute md:left-[calc(100%_+_var(--replay-preview-gap))] md:top-0 md:mt-0 md:h-full md:w-[var(--replay-preview-width)] md:min-h-full"
+        style={{
+          "--replay-preview-gap": `${replayPreviewGap}px`,
+          "--replay-preview-width": `${replayPreviewWidth}px`,
+        } as CSSProperties}
+      >
         <div
           className={`absolute inset-0 transition-opacity duration-200 ${
             previewBeatmap && !isReplayPreviewEnding ? "opacity-100" : "opacity-0"
@@ -3429,7 +3489,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         <button
           type="button"
           onClick={startReplayPreview}
-          className={`absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-md border border-osu-f1/35 bg-osu-b5/70 px-3 py-1.5 text-[11px] font-semibold text-osu-l2 backdrop-blur-sm transition-all duration-200 hover:border-osu-l2/70 hover:bg-osu-b4/80 hover:text-white cursor-pointer ${
+          className={`absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-md border border-osu-f1/35 bg-osu-b5/70 px-3 py-1.5 text-[11px] font-semibold text-osu-l2 backdrop-blur-sm transition-all duration-200 hover:border-osu-l2/70 hover:bg-osu-b4/80 hover:text-white cursor-pointer md:left-[150px] ${
             replayPreviewRequested && !isReplayPreviewEnding ? "pointer-events-none opacity-0 scale-95" : "opacity-100 scale-100"
           }`}
         >

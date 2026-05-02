@@ -110,6 +110,7 @@ function PopOffsPage() {
   const [elapsed, setElapsed] = useState(0);
   const [refreshStatus, setRefreshStatus] = useState<TopPlaysRefreshStatus | null>(null);
   const [partialPopoffs, setPartialPopoffs] = useState<PopOff[]>([]);
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<number[]>([]);
   const hasRestoredRememberedRangeRef = useRef(false);
   const sawRefreshActivityRef = useRef(false);
   const finalizingRefreshRef = useRef(false);
@@ -126,6 +127,7 @@ function PopOffsPage() {
     setElapsed(0);
     setRefreshStatus(null);
     setPartialPopoffs([]);
+    setSelectedPlayerIds([]);
     fetchingRef.current = false;
     sawRefreshActivityRef.current = false;
     finalizingRefreshRef.current = false;
@@ -384,25 +386,47 @@ function PopOffsPage() {
     return mergePopoffs([...popoffs, ...partialPopoffs]);
   }, [mergePopoffs, partialPopoffs, popoffs]);
 
+  const selectedPlayerIdSet = useMemo(() => new Set(selectedPlayerIds), [selectedPlayerIds]);
+
+  const togglePlayerFilter = useCallback((playerId: number) => {
+    setSelectedPlayerIds((current) =>
+      current.includes(playerId)
+        ? current.filter((id) => id !== playerId)
+        : [...current, playerId]
+    );
+    setPage(0);
+  }, []);
+
+  const clearPlayerFilter = useCallback(() => {
+    setSelectedPlayerIds([]);
+    setPage(0);
+  }, []);
+
   // Filter by time range
-  const filtered = useMemo(() => {
-    const withinRange = livePopoffs.filter((popoff) => {
+  const rangedPopoffs = useMemo(() => {
+    return livePopoffs.filter((popoff) => {
       const age = Date.now() - new Date(popoff.time).getTime();
       return age < RANGE_MS[range];
     });
+  }, [livePopoffs, range]);
 
-    return [...withinRange].sort((a, b) => {
+  const filtered = useMemo(() => {
+    const playerFiltered = selectedPlayerIds.length > 0
+      ? rangedPopoffs.filter((popoff) => selectedPlayerIdSet.has(popoff.user.id))
+      : rangedPopoffs;
+
+    return [...playerFiltered].sort((a, b) => {
       if (sortMode === "pp") {
         if (b.pp !== a.pp) return b.pp - a.pp;
       }
 
       return new Date(b.time).getTime() - new Date(a.time).getTime();
     });
-  }, [livePopoffs, range, sortMode]);
+  }, [rangedPopoffs, selectedPlayerIdSet, selectedPlayerIds.length, sortMode]);
 
   const playerPpGains = useMemo(() => {
     const byUser = new Map<number, { username: string; avatar_url: string; totalGain: number }>();
-    for (const p of filtered) {
+    for (const p of rangedPopoffs) {
       if (!p.ppGain) continue;
       const existing = byUser.get(p.user.id);
       if (existing) {
@@ -419,7 +443,7 @@ function PopOffsPage() {
       .filter(([, info]) => Math.round(info.totalGain) > 0)
       .sort((a, b) => b[1].totalGain - a[1].totalGain)
       .map(([id, info]) => ({ id, ...info }));
-  }, [filtered]);
+  }, [rangedPopoffs]);
 
   const showPpGainsRail = playerPpGains.length > 0 || loadingPlayers || loading;
 
@@ -482,33 +506,45 @@ function PopOffsPage() {
       />
 
       <div className="bg-osu-d5 border-b border-osu-b3/20">
-        <div className="max-w-[1200px] mx-auto px-5 py-2 flex items-center justify-end gap-2">
-          <button
-            onClick={() => {
-              setSortMode("recent");
-              setPage(0);
-            }}
-            className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
-              sortMode === "recent"
-                ? "bg-osu-pink/15 text-osu-pink-light"
-                : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3"
-            }`}
-          >
-            Most Recent
-          </button>
-          <button
-            onClick={() => {
-              setSortMode("pp");
-              setPage(0);
-            }}
-            className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
-              sortMode === "pp"
-                ? "bg-osu-pink/15 text-osu-pink-light"
-                : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3"
-            }`}
-          >
-            Highest PP
-          </button>
+        <div className="max-w-[1200px] mx-auto px-5 py-2 flex items-center justify-between gap-2">
+          <div className="min-h-7 flex items-center">
+            {selectedPlayerIds.length > 0 && (
+              <button
+                onClick={clearPlayerFilter}
+                className="px-2.5 py-1 rounded-lg bg-osu-pink/15 text-[11px] font-medium text-osu-pink-light hover:bg-osu-pink/25 transition-colors cursor-pointer"
+              >
+                Clear player filter
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setSortMode("recent");
+                setPage(0);
+              }}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+                sortMode === "recent"
+                  ? "bg-osu-pink/15 text-osu-pink-light"
+                  : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3"
+              }`}
+            >
+              Most Recent
+            </button>
+            <button
+              onClick={() => {
+                setSortMode("pp");
+                setPage(0);
+              }}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+                sortMode === "pp"
+                  ? "bg-osu-pink/15 text-osu-pink-light"
+                  : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3"
+              }`}
+            >
+              Highest PP
+            </button>
+          </div>
         </div>
       </div>
 
@@ -523,11 +559,19 @@ function PopOffsPage() {
                   playerPpGains.map((player) => (
                     <button
                       key={player.id}
-                      onClick={() => navigate({ to: "/player/$username", params: { username: player.username } })}
+                      onClick={() => togglePlayerFilter(player.id)}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                      }}
+                      aria-pressed={selectedPlayerIdSet.has(player.id)}
                       className="cursor-pointer group relative flex-shrink-0 flex flex-col items-center gap-0.5"
-                      title={`${player.username}: +${formatNumber(Math.round(player.totalGain))}pp`}
+                      title={`${player.username}: +${formatNumber(Math.round(player.totalGain))}pp - click to filter`}
                     >
-                      <div className="ring-2 ring-inset ring-osu-pink/40 rounded-full group-hover:ring-osu-pink transition-all">
+                      <div className={`ring-2 ring-inset rounded-full transition-all ${
+                        selectedPlayerIdSet.has(player.id)
+                          ? "ring-osu-pink shadow-[0_0_0_3px_rgba(255,102,171,0.18)]"
+                          : "ring-osu-pink/40 group-hover:ring-osu-pink"
+                      }`}>
                         <Avatar url={player.avatar_url} size={32} />
                       </div>
                       <span className="text-[9px] font-semibold text-osu-green">
@@ -564,11 +608,19 @@ function PopOffsPage() {
                         {col.map((player) => (
                           <button
                             key={player.id}
-                            onClick={() => navigate({ to: "/player/$username", params: { username: player.username } })}
+                            onClick={() => togglePlayerFilter(player.id)}
+                            onContextMenu={(event) => {
+                              event.preventDefault();
+                            }}
+                            aria-pressed={selectedPlayerIdSet.has(player.id)}
                             className="cursor-pointer group relative flex flex-col items-center gap-0.5"
-                            title={`${player.username}: +${formatNumber(Math.round(player.totalGain))}pp`}
+                            title={`${player.username}: +${formatNumber(Math.round(player.totalGain))}pp - click to filter`}
                           >
-                            <div className="ring-2 ring-osu-pink/40 rounded-full group-hover:ring-osu-pink transition-all">
+                            <div className={`ring-2 rounded-full transition-all ${
+                              selectedPlayerIdSet.has(player.id)
+                                ? "ring-osu-pink shadow-[0_0_0_3px_rgba(255,102,171,0.18)]"
+                                : "ring-osu-pink/40 group-hover:ring-osu-pink"
+                            }`}>
                               <Avatar url={player.avatar_url} size={32} />
                             </div>
                             <span className="text-[9px] font-semibold text-osu-green">

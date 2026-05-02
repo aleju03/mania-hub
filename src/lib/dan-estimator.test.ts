@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { estimateDan } from "./dan-estimator";
+import { estimateFamilyScores } from "./dan-estimator/scoring";
 import { parseManiaBeatmap, type ManiaBeatmap, type ManiaNote } from "./beatmap-parser";
+import type { DanFeatureMetrics } from "./dan-estimator/types";
 
 function makeMap(notes: ManiaNote[], keyCount = 4): ManiaBeatmap {
   return {
@@ -17,6 +19,7 @@ function makeMap(notes: ManiaNote[], keyCount = 4): ManiaBeatmap {
     audioFilename: "",
     previewTime: 0,
     backgroundFilename: "",
+    breakPeriods: [],
     scrollVelocities: [],
   };
 }
@@ -412,6 +415,50 @@ describe("estimateDan", () => {
     expect(higherRate.label).toBe("delta");
     expect(highestRate.family).toBe("stream");
     expect(highestRate.rawDan).toBeGreaterThan(higherRate.rawDan);
+  });
+
+  it("keeps long fast mid-chord stamina rates ordered on NB4 Challenge 29", () => {
+    const map = readFixtureBeatmap("we-luv-lama-nb4-challenge-29.osu");
+    const previousRate = estimateDan(map, {
+      starRating: 6.48123,
+      totalLength: 321,
+      rate: 1.1,
+    });
+    const lowerRate = estimateDan(map, {
+      starRating: 6.48123,
+      totalLength: 321,
+      rate: 1.2,
+    });
+    const higherRate = estimateDan(map, {
+      starRating: 6.48123,
+      totalLength: 321,
+      rate: 1.3,
+    });
+
+    expect(lowerRate.metrics.noteCount).toBeGreaterThan(5000);
+    expect(lowerRate.metrics.chordRatio).toBeGreaterThan(0.42);
+    expect(lowerRate.metrics.chordRatio).toBeLessThan(0.58);
+    expect(lowerRate.metrics.fastRowRatio).toBeGreaterThan(0.8);
+    expect(lowerRate.family).toBe("stamina");
+    expect(lowerRate.label).toBe("gamma");
+    expect(lowerRate.debug?.familyChoice.reason).toBe("long-fast-mid-chord-stamina-transition");
+    expect(higherRate.family).toBe("stamina");
+    expect(lowerRate.rawDan).toBeGreaterThan(previousRate.rawDan);
+    expect(higherRate.rawDan).toBeGreaterThan(lowerRate.rawDan);
+  });
+
+  it("compresses long sparse dumpstreams below epsilon", () => {
+    const estimate = estimateDan(readFixtureBeatmap("credens-justitiam-s.osu"), {
+      starRating: 5.91,
+      totalLength: 227,
+    });
+
+    expect(estimate.metrics.noteCount).toBeGreaterThan(4200);
+    expect(estimate.metrics.chordRatio).toBeLessThan(0.17);
+    expect(estimate.metrics.sustainedNps10s).toBeGreaterThan(27);
+    expect(estimate.debug?.scoring.terms.longSparseStreamCompression).toBeGreaterThan(0);
+    expect(estimate.family).toBe("stream");
+    expect(estimate.displayName).toBe("delta");
   });
 
   it("compresses low-chord burst streams with jack pressure out of epsilon", () => {
@@ -1151,6 +1198,66 @@ describe("estimateDan", () => {
     expect(estimate.rawDan).toBeLessThan(13.5);
   });
 
+  it("keeps dense high-chord jack rates ordered through the gamma transition", () => {
+    const onePointOneMetrics: DanFeatureMetrics = {
+      keyCount: 4,
+      noteCount: 2531,
+      holdRatio: 0.0063,
+      chordRatio: 0.921,
+      peakNps1s: 38,
+      peakNps5s: 29,
+      nps5sP50: 0,
+      nps5sP90: 0,
+      nps5sP95: 0,
+      sustainedNps10s: 28.4,
+      jackPressure: 154.6392,
+      streamPressure: 4.6571,
+      chordjackPressure: 252.6548,
+      techPressure: 11.0369,
+      rowBurstPressure: 10.3093,
+      fastRowRatio: 0,
+      rowIntervalEntropy: 0.9729,
+      patternVariety: 2.0086,
+      strainSpikiness: 1.1589,
+      sustainedPressureRatio: 0.7474,
+      anchorPressure: 0.1753,
+      lnReleasePressure: 1.5692,
+      lnDensity: 0,
+      lnOverlapPressure: 0.7,
+      lnChordPressure: 1,
+      lnHoldDurationAvg: 194.8125,
+      lnHoldDurationP90: 195,
+      chordSizeChangeRate: 0.441,
+      directionChangeRate: 0.6962,
+      staminaPressure: 28.4,
+    };
+    const onePointFifteenMetrics: DanFeatureMetrics = {
+      ...onePointOneMetrics,
+      peakNps5s: 30.2,
+      sustainedNps10s: 29.6,
+      jackPressure: 161.2903,
+      streamPressure: 4.7714,
+      chordjackPressure: 263.5216,
+      techPressure: 11.0577,
+      rowBurstPressure: 10.7527,
+      rowIntervalEntropy: 0,
+      patternVariety: 1.4325,
+      sustainedPressureRatio: 0.7789,
+      anchorPressure: 0.1943,
+      lnReleasePressure: 1.6065,
+      lnHoldDurationAvg: 186.375,
+      lnHoldDurationP90: 187,
+      staminaPressure: 29.6,
+    };
+
+    const onePointOne = estimateFamilyScores(onePointOneMetrics, 6.46234, 102000);
+    const onePointFifteen = estimateFamilyScores(onePointFifteenMetrics, 6.63627, 98000);
+
+    expect(onePointOne.debug.terms.lowRateHighChordJackBonus).toBeGreaterThan(0);
+    expect(onePointFifteen.debug.terms.lowRateHighChordJackBonus).toBeGreaterThan(0);
+    expect(onePointFifteen.skillScores.jack).toBeGreaterThan(onePointOne.skillScores.jack);
+  });
+
   it("keeps high-SR LN hybrids below zeta when hold density is high", () => {
     const notes: ManiaNote[] = [];
     for (let row = 0; row < 4568; row++) {
@@ -1172,6 +1279,22 @@ describe("estimateDan", () => {
 
     expect(estimate.rawDan).toBeLessThan(14);
     expect(estimate.warnings.some((warning) => warning.includes("LN"))).toBe(true);
+  });
+
+  it("routes release-heavy LN hybrids through LN calibration", () => {
+    const estimate = estimateDan(readFixtureBeatmap("saishuu-calamity-scarlet-mansion.osu"), {
+      starRating: 8.48,
+      totalLength: 252,
+    });
+
+    expect(estimate.metrics.holdRatio).toBeGreaterThan(0.28);
+    expect(estimate.metrics.lnDensity).toBeGreaterThan(0.16);
+    expect(estimate.metrics.lnReleasePressure).toBeGreaterThan(22);
+    expect(estimate.metrics.lnChordPressure).toBeGreaterThan(0.25);
+    expect(estimate.family).toBe("ln");
+    expect(estimate.displayName).toBe("LN 13");
+    expect(estimate.rawDan).toBeGreaterThan(13);
+    expect(estimate.rawDan).toBeLessThan(13.35);
   });
 
   it("detects multi-section dan marathon files as dans", () => {

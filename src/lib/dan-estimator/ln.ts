@@ -1,4 +1,5 @@
 import type { ManiaBeatmap } from "../beatmap-parser";
+import { extractDanFeatures } from "./features";
 import type { DanEstimateInput, DanFeatureMetrics } from "./types";
 
 export interface LnDanEstimateResult {
@@ -11,7 +12,7 @@ export interface LnDanEstimateResult {
   reason: string;
 }
 
-interface LnReferenceChart {
+export interface LnReferenceChart {
   level: number;
   n: number;
   s: number;
@@ -23,6 +24,12 @@ interface LnReferenceChart {
   p: number;
   u: number;
   q: number;
+}
+
+export interface LnReferenceNeighbor {
+  level: number;
+  distance: number;
+  metrics: LnReferenceChart;
 }
 
 const LN_REFERENCE_CHARTS: LnReferenceChart[] = [
@@ -85,14 +92,17 @@ const LN_REFERENCE_CHARTS: LnReferenceChart[] = [
   { level: 15, n: 3216, s: 167.7, h: 0.913, d: 0.506, o: 3.423, r: 31.246, c: 0.34, p: 28.6, u: 27.5, q: 0.327 },
   { level: 15, n: 6487, s: 348.6, h: 0.783, d: 0.487, o: 3.347, r: 30.459, c: 0.445, p: 27.4, u: 26.9, q: 0.407 },
   { level: 15, n: 3149, s: 193.3, h: 0.894, d: 0.444, o: 3.175, r: 28.454, c: 0.352, p: 26, u: 24.9, q: 0.34 },
+  { level: 16, n: 2565, s: 133, h: 0.97, d: 0.581, o: 3.72, r: 32.63, c: 0.818, p: 30, u: 29.7, q: 0.798 },
 ];
 
 function normalize(value: string | undefined): string {
   return (value ?? "").toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-function pressureDistance(metrics: DanFeatureMetrics, reference: LnReferenceChart): number {
+function pressureDistance(metrics: DanFeatureMetrics, reference: LnReferenceChart, durationSeconds?: number): number {
   return Math.abs(metrics.holdRatio - reference.h) / 0.13
+    + (durationSeconds ? Math.abs(durationSeconds - reference.s) / 80 : 0)
+    + (durationSeconds ? Math.abs(metrics.noteCount - reference.n) / 2200 : 0)
     + Math.abs(metrics.lnDensity - reference.d) / 0.11
     + Math.abs(metrics.lnOverlapPressure - reference.o) / 0.45
     + Math.abs(metrics.lnReleasePressure - reference.r) / 4
@@ -102,7 +112,7 @@ function pressureDistance(metrics: DanFeatureMetrics, reference: LnReferenceChar
     + Math.abs(metrics.chordRatio - reference.q) / 0.16;
 }
 
-function referenceMetrics(metrics: DanFeatureMetrics, rate: number): DanFeatureMetrics {
+export function getLnReferenceComparisonMetrics(metrics: DanFeatureMetrics, rate: number): DanFeatureMetrics {
   if (rate <= 1) return metrics;
   return {
     ...metrics,
@@ -115,23 +125,40 @@ function referenceMetrics(metrics: DanFeatureMetrics, rate: number): DanFeatureM
   };
 }
 
-function officialReferenceNeighborTarget(metrics: DanFeatureMetrics, rate: number): LnDanEstimateResult | null {
-  const comparisonMetrics = referenceMetrics(metrics, rate);
-  const nearest = LN_REFERENCE_CHARTS
-    .map((reference) => ({ reference, distance: pressureDistance(comparisonMetrics, reference) }))
+export function getLnReferenceNeighbors(metrics: DanFeatureMetrics, rate: number, limit = 8, durationSeconds?: number): LnReferenceNeighbor[] {
+  const comparisonMetrics = getLnReferenceComparisonMetrics(metrics, rate);
+  return LN_REFERENCE_CHARTS
+    .map((reference) => ({
+      level: reference.level,
+      distance: pressureDistance(comparisonMetrics, reference, durationSeconds),
+      metrics: reference,
+    }))
     .sort((left, right) => left.distance - right.distance)
-    .slice(0, 8);
+    .slice(0, Math.max(0, limit));
+}
+
+function officialReferenceNeighborTarget(metrics: DanFeatureMetrics, rate: number, durationMs: number): LnDanEstimateResult | null {
+  const [pressureBest] = getLnReferenceNeighbors(metrics, rate, 1);
+  const nearest = getLnReferenceNeighbors(metrics, rate, 8, durationMs / 1000);
   const [best] = nearest;
-  if (!best || best.distance > 2.6) return null;
+  if (!best || !pressureBest || pressureBest.distance > 2.6) return null;
+
+  if (best.distance < 0.08) {
+    return {
+      ...parseRawLnDan(best.level),
+      confidence: 0.9,
+      reason: "ln-reference-neighbor",
+    };
+  }
 
   const weighted = nearest.reduce((sum, item) => {
     const weight = 1 / Math.pow(item.distance + 0.35, 1.5);
     return {
-      level: sum.level + item.reference.level * weight,
+      level: sum.level + item.level * weight,
       weight: sum.weight + weight,
     };
   }, { level: 0, weight: 0 });
-  const neighborDan = weighted.weight > 0 ? weighted.level / weighted.weight : best.reference.level;
+  const neighborDan = weighted.weight > 0 ? weighted.level / weighted.weight : best.level;
   const highEndSpeedBonus = Math.min(
     0.85,
     Math.max(0, (metrics.sustainedNps10s - 28) / 4) * 0.8
@@ -149,11 +176,11 @@ function officialReferenceNeighborTarget(metrics: DanFeatureMetrics, rate: numbe
 }
 
 function parseRawLnDan(rawDan: number): LnDanEstimateResult {
-  const level = Math.max(1, Math.min(15, Math.round(rawDan)));
+  const level = Math.max(1, Math.min(16, Math.round(rawDan)));
   const offset = rawDan - level;
   const variant = level >= 15
-    ? (offset <= -0.36 ? "-" : null)
-    : offset <= -0.36 ? "-" : offset >= 0.36 ? "+" : null;
+    ? (offset <= -0.49 ? "-" : null)
+    : offset <= -0.49 ? "-" : offset >= 0.49 ? "+" : null;
   return {
     label: String(level),
     variant,
@@ -165,6 +192,140 @@ function parseRawLnDan(rawDan: number): LnDanEstimateResult {
   };
 }
 
+function highSrLnPressureFloor(metrics: DanFeatureMetrics, starRating: number): number {
+  if (starRating < 7
+    || metrics.holdRatio < 0.65
+    || metrics.lnDensity < 0.34
+    || metrics.lnOverlapPressure < 2.75
+    || metrics.lnReleasePressure < 20
+    || metrics.chordRatio < 0.37
+    || metrics.lnChordPressure < 0.43
+    || metrics.peakNps5s > 24.5
+    || metrics.sustainedNps10s > 23.5) {
+    return 0;
+  }
+
+  return 12.8
+    + Math.max(0, starRating - 7) * 1.22
+    + Math.min(0.45, Math.max(0, metrics.lnReleasePressure - 24) * 0.07)
+    + Math.min(0.35, Math.max(0, metrics.lnDensity - 0.4) * 1.2)
+    + Math.min(0.35, Math.max(0, 24 - metrics.peakNps5s) * 0.08);
+}
+
+function applyHighSrLnPressureFloor(rawDan: number, metrics: DanFeatureMetrics, starRating: number): number {
+  if (Math.abs(rawDan - Math.round(rawDan)) < 0.001) return rawDan;
+  if (rawDan < 11.4) return rawDan;
+  return Math.max(rawDan, highSrLnPressureFloor(metrics, starRating));
+}
+
+function makeComponent(map: ManiaBeatmap, startTime: number, endTime: number): ManiaBeatmap | null {
+  const segmentNotes = map.notes.filter((note) => note.time >= startTime && note.time < endTime);
+  if (endTime - startTime < 30000 || segmentNotes.length < 300) return null;
+
+  return {
+    ...map,
+    notes: segmentNotes.map((segmentNote) => ({
+      ...segmentNote,
+      time: segmentNote.time - startTime,
+      endTime: Math.max(segmentNote.endTime, segmentNote.time) - startTime,
+    })),
+    totalLength: endTime - startTime,
+    breakPeriods: [],
+  };
+}
+
+function splitComponentsByBreakPeriods(map: ManiaBeatmap): ManiaBeatmap[] {
+  if (map.notes.length === 0 || map.breakPeriods.length === 0) return [];
+
+  const sortedBreaks = [...map.breakPeriods]
+    .filter((period) => period.endTime > period.startTime)
+    .sort((left, right) => left.startTime - right.startTime);
+  const components: ManiaBeatmap[] = [];
+  let segmentStart = map.notes[0].time;
+
+  for (const period of sortedBreaks) {
+    const component = makeComponent(map, segmentStart, period.startTime);
+    if (component) components.push(component);
+    segmentStart = period.endTime;
+  }
+
+  const component = makeComponent(map, segmentStart, Math.max(map.totalLength, map.notes.at(-1)?.endTime ?? segmentStart));
+  if (component) components.push(component);
+
+  return components;
+}
+
+function splitComponentsByRawGaps(map: ManiaBeatmap): ManiaBeatmap[] {
+  if (map.notes.length === 0) return [];
+
+  const gaps: Array<{ start: number; end: number }> = [];
+  for (let index = 0; index < map.notes.length - 1; index++) {
+    const current = map.notes[index];
+    const next = map.notes[index + 1];
+    const currentEnd = Math.max(current.time, current.endTime);
+    if (next.time - currentEnd >= 4500) {
+      gaps.push({ start: currentEnd, end: next.time });
+    }
+  }
+
+  if (gaps.length !== 3) return [];
+
+  const components: ManiaBeatmap[] = [];
+  let segmentStart = map.notes[0].time;
+  for (const gap of gaps) {
+    const component = makeComponent(map, segmentStart, gap.start);
+    if (component) components.push(component);
+    segmentStart = gap.end;
+  }
+
+  const component = makeComponent(map, segmentStart, Math.max(map.totalLength, map.notes.at(-1)?.endTime ?? segmentStart));
+  if (component) components.push(component);
+
+  return components.length === 4 ? components : [];
+}
+
+function splitCourseComponents(map: ManiaBeatmap): ManiaBeatmap[] {
+  const explicitBreakComponents = splitComponentsByBreakPeriods(map);
+  if (explicitBreakComponents.length >= 3) return explicitBreakComponents;
+
+  return splitComponentsByRawGaps(map);
+}
+
+function estimateLnCourseFromComponents(
+  map: ManiaBeatmap,
+  input: DanEstimateInput,
+  starRating: number,
+  rate: number,
+): LnDanEstimateResult | null {
+  const components = splitCourseComponents(map);
+  if (components.length < 3) return null;
+
+  const estimates = components
+    .map((component) => {
+      const features = extractDanFeatures(component, { ...input, totalLength: component.totalLength / 1000 }, rate);
+      return estimateLnDan(
+        component,
+        { ...input, totalLength: component.totalLength / 1000 },
+        features.metrics,
+        starRating,
+        features.durationMs,
+        rate,
+        false,
+      );
+    })
+    .filter((estimate): estimate is LnDanEstimateResult => estimate !== null);
+
+  if (estimates.length < 3) return null;
+
+  const rawDans = estimates.map((estimate) => estimate.rawDan).sort((left, right) => left - right);
+  const rawDan = rawDans[Math.floor((rawDans.length - 1) * 0.75)];
+  return {
+    ...parseRawLnDan(rawDan),
+    confidence: Math.min(0.9, 0.72 + estimates.length * 0.03),
+    reason: "ln-course-components",
+  };
+}
+
 export function estimateLnDan(
   map: ManiaBeatmap,
   input: DanEstimateInput,
@@ -172,6 +333,7 @@ export function estimateLnDan(
   starRating: number,
   durationMs: number,
   rate: number,
+  allowCourseSegmentation = true,
 ): LnDanEstimateResult | null {
   const metadata = normalize(`${map.title} ${map.version} ${input.title ?? ""} ${input.version ?? ""}`);
   const metadataHasLnHint = /\bln\b|long note|full ln|ln edit|ln hybrid|ln wall|ln jack|ln speed|ln jumpstream/.test(metadata);
@@ -187,6 +349,11 @@ export function estimateLnDan(
     && metrics.lnHoldDurationP90 >= 220
     && metrics.lnChordPressure >= 0.12
   ) || (
+    metrics.holdRatio >= 0.28
+    && metrics.lnDensity >= 0.16
+    && metrics.lnReleasePressure >= 22
+    && metrics.lnChordPressure >= 0.25
+  ) || (
     metrics.holdRatio >= 0.34
     && metrics.lnDensity >= 0.1
     && metrics.lnOverlapPressure >= 0.75
@@ -194,11 +361,40 @@ export function estimateLnDan(
   const lnCandidate = metadataLnSignal || chartLnSignal;
   if (!lnCandidate) return null;
 
-  const referenceNeighbor = officialReferenceNeighborTarget(metrics, rate);
-  if (referenceNeighbor) return referenceNeighbor;
+  if (allowCourseSegmentation) {
+    const courseEstimate = estimateLnCourseFromComponents(map, input, starRating, rate);
+    if (courseEstimate) return courseEstimate;
+  }
+
+  const referenceNeighbor = officialReferenceNeighborTarget(metrics, rate, durationMs);
+  if (referenceNeighbor) {
+    const rawDan = applyHighSrLnPressureFloor(referenceNeighbor.rawDan, metrics, starRating);
+    return {
+      ...parseRawLnDan(rawDan),
+      confidence: referenceNeighbor.confidence,
+      reason: referenceNeighbor.reason,
+    };
+  }
 
   const sr = starRating > 0 ? starRating : Math.max(1, metrics.peakNps5s * 0.18 + metrics.lnReleasePressure * 0.55);
   const durationMinutes = Math.max(0.6, durationMs / 60000);
+  const shortReleaseHybridCompression = metrics.holdRatio >= 0.28
+    && metrics.holdRatio <= 0.45
+    && metrics.lnDensity >= 0.14
+    && metrics.lnDensity <= 0.25
+    && metrics.lnReleasePressure >= 22
+    && metrics.lnChordPressure >= 0.25
+    && metrics.lnHoldDurationP90 < 220
+    && metrics.peakNps5s < 27
+    && metrics.sustainedNps10s < 27
+    ? Math.min(
+      1.1,
+      0.78
+        + Math.max(0, 220 - metrics.lnHoldDurationP90) * 0.004
+        + Math.max(0, 0.5 - metrics.holdRatio) * 0.6
+        + Math.max(0, 27 - metrics.peakNps5s) * 0.05,
+    )
+    : 0;
   const rawDan = -8.15
     + sr * 2.6502
     + Math.max(0, sr - 5) * -1.3038
@@ -208,7 +404,8 @@ export function estimateLnDan(
     + metrics.lnDensity * 0.3841
     + (metrics.lnOverlapPressure / 4) * 0.3841
     + metrics.lnChordPressure * 0.1443
-    + Math.log2(durationMinutes) * 0.4391;
+    + Math.log2(durationMinutes) * 0.4391
+    - shortReleaseHybridCompression;
 
-  return parseRawLnDan(rawDan);
+  return parseRawLnDan(applyHighSrLnPressureFloor(rawDan, metrics, starRating));
 }

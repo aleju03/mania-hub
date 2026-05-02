@@ -976,67 +976,69 @@ function PlayerPage() {
             transition={{ duration: 0.2 }}
           >
             <motion.div
-              className="relative bg-osu-b4 border border-osu-b3/20 rounded-2xl p-5 w-[420px] max-w-full max-h-[85vh] overflow-y-auto shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
+              className="relative bg-osu-b4 border border-osu-b3/20 rounded-2xl w-[420px] max-w-full max-h-[85vh] overflow-hidden shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
               onClick={(e) => e.stopPropagation()}
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              transition={{ type: "spring", damping: 30, stiffness: 500 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.16, ease: "easeOut" }}
             >
               <button
                 type="button"
                 onClick={() => setBpmModalOpen(false)}
                 aria-label="Close"
-                className="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
+                className="absolute top-3 right-3 z-10 w-7 h-7 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <path d="M1 1l12 12M13 1L1 13" />
                 </svg>
               </button>
-              <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">BPM Breakdown</div>
-              <div className="mt-0.5 text-[11px] text-osu-f1/60">
-                across {profileInsights.sampleSize} top plays · adjusted for rate mods
-              </div>
+              <div className="max-h-[85vh] overflow-y-auto p-5 [scrollbar-gutter:stable]">
+                <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">BPM Breakdown</div>
+                <div className="mt-0.5 text-[11px] text-osu-f1/60">
+                  across {profileInsights.sampleSize} top plays · adjusted for rate mods
+                </div>
 
-              <div className="mt-4 flex items-baseline gap-2">
-                <span className="text-2xl font-bold text-white">{Math.round(profileInsights.medianBpm)}</span>
-                <span className="text-[11px] text-osu-f1">median BPM</span>
-              </div>
+                <div className="mt-4 flex items-baseline gap-2">
+                  <span className="text-2xl font-bold text-white">{Math.round(profileInsights.medianBpm)}</span>
+                  <span className="text-[11px] text-osu-f1">median BPM</span>
+                </div>
 
-              {profileInsights.bpmByKeyMode && profileInsights.bpmByKeyMode.length > 1 && (
-                <div className="mt-4">
-                  <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Median by Keymode</div>
-                  <div className="space-y-2">
-                    {(() => {
-                      const maxMedian = Math.max(...profileInsights.bpmByKeyMode.map((b) => b.median));
-                      return profileInsights.bpmByKeyMode.map((bucket) => {
-                        const pct = maxMedian > 0 ? (bucket.median / maxMedian) * 100 : 0;
-                        return (
-                          <div key={bucket.keyCount} className="flex items-center gap-2.5">
-                            <span className="text-xs font-semibold text-white w-8 tabular-nums">{bucket.keyCount}K</span>
-                            <div className="flex-1 h-1.5 rounded-full bg-osu-b3/40 overflow-hidden">
-                              <div className="h-full rounded-full bg-osu-yellow" style={{ width: `${pct}%` }} />
+                {profileInsights.bpmByKeyMode && profileInsights.bpmByKeyMode.length > 1 && (
+                  <div className="mt-4">
+                    <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Median by Keymode</div>
+                    <div className="space-y-2">
+                      {(() => {
+                        const maxMedian = Math.max(...profileInsights.bpmByKeyMode.map((b) => b.median));
+                        return profileInsights.bpmByKeyMode.map((bucket) => {
+                          const pct = maxMedian > 0 ? (bucket.median / maxMedian) * 100 : 0;
+                          return (
+                            <div key={bucket.keyCount} className="flex items-center gap-2.5">
+                              <span className="text-xs font-semibold text-white w-8 tabular-nums">{bucket.keyCount}K</span>
+                              <div className="flex-1 h-1.5 rounded-full bg-osu-b3/40 overflow-hidden">
+                                <div className="h-full rounded-full bg-osu-yellow" style={{ width: `${pct}%` }} />
+                              </div>
+                              <span className="text-[11px] text-osu-f1 tabular-nums w-20 text-right">
+                                {Math.round(bucket.median)} ({bucket.count})
+                              </span>
                             </div>
-                            <span className="text-[11px] text-osu-f1 tabular-nums w-20 text-right">
-                              {Math.round(bucket.median)} ({bucket.count})
-                            </span>
-                          </div>
-                        );
-                      });
-                    })()}
+                          );
+                        });
+                      })()}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {profileInsights.bpmRange?.minScore && profileInsights.bpmRange?.maxScore && (
-                <div className="mt-4">
-                  <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Range</div>
-                  <div className="space-y-2">
-                    <BpmExtremeRow label="Slowest" bpm={profileInsights.bpmRange.min} snapshot={profileInsights.bpmRange.minScore} />
-                    <BpmExtremeRow label="Fastest" bpm={profileInsights.bpmRange.max} snapshot={profileInsights.bpmRange.maxScore} />
+                {profileInsights.bpmRange?.minScore && profileInsights.bpmRange?.maxScore && (
+                  <div className="mt-4">
+                    <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Range</div>
+                    <div className="space-y-2">
+                      <BpmExtremeRow label="Slowest" bpm={profileInsights.bpmRange.min} snapshot={profileInsights.bpmRange.minScore} />
+                      <BpmExtremeRow label="Fastest" bpm={profileInsights.bpmRange.max} snapshot={profileInsights.bpmRange.maxScore} />
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </motion.div>
           </motion.div>
         )}

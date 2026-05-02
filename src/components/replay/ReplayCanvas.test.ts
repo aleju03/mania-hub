@@ -90,6 +90,15 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).toContain('if (this.skinSettings.style === "circles") return;');
   });
 
+  it("hides the bottom UR timing bar in circle mode", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+    const hud = /private renderHUD\(layout: Layout\) \{([\s\S]*?)\n  private renderCombo/.exec(source);
+
+    expect(hud?.[1]).toBeTruthy();
+    expect(hud![1]).toContain('if (this.skinSettings.style !== "circles") {');
+    expect(hud![1]).toContain('this.fillRect(urBarX, urBarY, urBarWidth, 3, "#ffffff", 0.08);');
+  });
+
   it("draws circle receptors without the bar receptor beam or glow path", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
     const match = /private renderCircleReceptors\(layout: Layout\) \{([\s\S]*?)\n  \}/.exec(source);
@@ -126,7 +135,7 @@ describe("ManiaReplayRenderer skin customization", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
     expect(source).toContain("const laneSizedDiameter = layout.laneWidth * 0.74;");
-    expect(source).toContain("Math.min(layout.laneWidth - 4, Math.max(28, laneSizedDiameter))");
+    expect(source).toContain("Math.min(layout.laneWidth - 4, Math.max(minDiameter, laneSizedDiameter))");
   });
 
   it("hides playfield lane dividers and lane tint for circle skins", () => {
@@ -135,6 +144,20 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).toContain('const isCircleSkin = this.skinSettings.style === "circles";');
     expect(source).toContain("for (let col = 0; !isCircleSkin && col < this.keyCount; col++)");
     expect(source).toContain("if (!isCircleSkin) {");
+  });
+
+  it("hides the bare playfield bottom guide for circle skins", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("if (this.barePlayfield) {");
+    expect(source).toContain('if (!isCircleSkin) this.line(playfieldX, h - 1, playfieldX + playfieldWidth, h - 1, "#ffffff", 0.1, 2);');
+  });
+
+  it("biases 5k+ wide bare preview playfields left", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("const barePreviewBias = this.barePlayfield && this.keyCount >= 5 && w >= 380 ? 0.32 : 0.5;");
+    expect(source).toContain("const playfieldX = (w - playfieldWidth) * barePreviewBias;");
   });
 
   it("draws bar LNs as one continuous body without separate caps", () => {
@@ -158,15 +181,22 @@ describe("ManiaReplayRenderer skin customization", () => {
   it("applies the configured keymode column width to layout", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    expect(source).toContain("const columnWidthScale = this.skinProfile.columnWidth / 100;");
-    expect(source).toContain("* this.keyCount * columnWidthScale");
+    expect(source).toContain("const configuredColumnWidth = this.skinProfile.columnWidth;");
+    expect(source).toContain("configuredColumnWidth * this.keyCount");
   });
 
   it("uses the configured hit position for receptors without changing scroll density", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    expect(source).toContain("const hitPosition = this.skinSettings.hitPosition || MANIA_HIT_TARGET_POSITION;");
-    expect(source).toContain("const judgmentY = h * (MANIA_REFERENCE_HEIGHT - hitPosition) / MANIA_REFERENCE_HEIGHT;");
+    expect(source).toContain("const hitPosition = this.skinSettings.hitPosition ?? MANIA_HIT_TARGET_POSITION;");
+    expect(source).toContain("const judgmentY = h * (this.skinSettings.upscroll ? hitPosition : MANIA_REFERENCE_HEIGHT - hitPosition) / MANIA_REFERENCE_HEIGHT;");
     expect(source).toContain("const scrollLength = h * (MANIA_REFERENCE_HEIGHT - MANIA_DEFAULT_HIT_POSITION) / MANIA_REFERENCE_HEIGHT;");
+  });
+
+  it("supports upscroll note positioning", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("const direction = this.skinSettings.upscroll ? 1 : -1;");
+    expect(source).toContain("const timeWindow = (this.skinSettings.upscroll ? h - judgmentY : judgmentY) / pixelsPerMs;");
   });
 });

@@ -12,6 +12,11 @@ export interface ManiaScrollVelocity {
   multiplier: number;
 }
 
+export interface ManiaBreakPeriod {
+  startTime: number;
+  endTime: number;
+}
+
 export interface ManiaBeatmap {
   title: string;
   artist: string;
@@ -25,6 +30,7 @@ export interface ManiaBeatmap {
   audioFilename: string;
   previewTime: number;
   backgroundFilename: string;
+  breakPeriods: ManiaBreakPeriod[];
   scrollVelocities: ManiaScrollVelocity[];
 }
 
@@ -127,6 +133,7 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
   let backgroundFilename = "";
   let section = "";
   const notes: ManiaNote[] = [];
+  const breakPeriods: ManiaBreakPeriod[] = [];
   const timingPoints: TimingPoint[] = [];
   const controlPoints: ParsedControlPoint[] = [];
   let controlPointOrder = 0;
@@ -149,9 +156,18 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
       if (line.startsWith("Creator:")) creator = line.slice(8).trim();
     }
 
-    if (section === "Events" && !backgroundFilename) {
-      const match = line.match(/^0,0,"([^"]+)"/);
-      if (match) backgroundFilename = match[1];
+    if (section === "Events") {
+      if (!backgroundFilename) {
+        const match = line.match(/^0,0,"([^"]+)"/);
+        if (match) backgroundFilename = match[1];
+      }
+
+      const breakMatch = line.match(/^2,(\d+),(\d+)/);
+      if (breakMatch) {
+        const startTime = Number(breakMatch[1]);
+        const endTime = Number(breakMatch[2]);
+        if (endTime > startTime) breakPeriods.push({ startTime, endTime });
+      }
     }
 
     if (section === "Difficulty") {
@@ -226,6 +242,7 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
     audioFilename,
     previewTime,
     backgroundFilename,
+    breakPeriods,
     scrollVelocities: buildManiaScrollVelocities(timingPoints, controlPoints, totalLength),
   };
 }

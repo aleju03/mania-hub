@@ -9,8 +9,10 @@ describe("replay skin settings UI", () => {
     expect(source).toContain("readReplaySkinSettings");
     expect(source).toContain("writeReplaySkinSettings");
     expect(source).toContain("rendererRef.current?.setSkinSettings");
-    expect(source).toContain('aria-label="Replay skin settings"');
-    expect(source).toContain("Replay skin");
+    expect(source).toContain('aria-label="Replay settings"');
+    expect(source).toContain("Replay settings");
+    expect(source).toContain("Style");
+    expect(source).toContain("Layout");
     expect(source).toContain("Note color");
     expect(source).toContain("LN Head color");
     expect(source).toContain("LN Body color");
@@ -26,7 +28,14 @@ describe("replay skin settings UI", () => {
     expect(source).toContain("Apply");
     expect(source).toContain("Cancel");
     expect(source).toContain("Reset");
-    expect(source).not.toContain('type="color"');
+  });
+
+  it("exposes input overlay-only and color controls", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+
+    expect(source).toContain("setInputOverlayOptions");
+    expect(source).toContain("Input overlay color");
+    expect(source).toContain("inputOverlayOnly");
   });
 
   it("only highlights the gear button while the skin modal is open", () => {
