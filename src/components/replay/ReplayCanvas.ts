@@ -517,7 +517,8 @@ export class ManiaReplayRenderer {
     const playfieldWidth = desiredPlayfieldWidth * layoutScale;
     const laneWidth = configuredColumnWidth * layoutScale;
     const columnSpacing = configuredColumnSpacing * layoutScale;
-    const playfieldX = (w - playfieldWidth) / 2;
+    const barePreviewBias = this.barePlayfield && this.keyCount >= 5 && w >= 380 ? 0.32 : 0.5;
+    const playfieldX = (w - playfieldWidth) * barePreviewBias;
     const hitPosition = this.skinSettings.hitPosition ?? MANIA_HIT_TARGET_POSITION;
     const judgmentY = h * (this.skinSettings.upscroll ? hitPosition : MANIA_REFERENCE_HEIGHT - hitPosition) / MANIA_REFERENCE_HEIGHT;
     const noteHeight = Math.max(10, h * 0.02);
@@ -787,7 +788,7 @@ export class ManiaReplayRenderer {
       }
     }
     if (this.barePlayfield) {
-      this.line(playfieldX, h - 1, playfieldX + playfieldWidth, h - 1, "#ffffff", 0.1, 2);
+      if (!isCircleSkin) this.line(playfieldX, h - 1, playfieldX + playfieldWidth, h - 1, "#ffffff", 0.1, 2);
     } else {
       this.rect(playfieldX, 0, playfieldWidth, h, "#ffffff", 0.15, 2);
     }
@@ -1153,22 +1154,22 @@ export class ManiaReplayRenderer {
       });
     });
 
-    const urBarWidth = Math.min(playfieldWidth * 0.68, 180);
-    const urBarX = playfieldCenterX - urBarWidth / 2;
-    const receptorBottom = this.skinSettings.style === "circles"
-      ? judgmentY + this.getCircleDiameter(layout) / 2
-      : judgmentY + layout.receptorHeight + 2;
-    const urBarY = Math.min(h - 10, receptorBottom > h - 40 ? receptorBottom + 12 : h - 26);
-    const urRange = this.hitWindows.meh;
+    if (this.skinSettings.style !== "circles") {
+      const urBarWidth = Math.min(playfieldWidth * 0.68, 180);
+      const urBarX = playfieldCenterX - urBarWidth / 2;
+      const receptorBottom = judgmentY + layout.receptorHeight + 2;
+      const urBarY = Math.min(h - 10, receptorBottom > h - 40 ? receptorBottom + 12 : h - 26);
+      const urRange = this.hitWindows.meh;
 
-    this.fillRect(urBarX, urBarY, urBarWidth, 3, "#ffffff", 0.08);
-    this.fillRect(playfieldCenterX - 1, urBarY - 4, 2, 11, "#ffffff", 0.25);
-    this.recentHitOffsets.forEach((offset, index) => {
-      const normalized = Math.max(-1, Math.min(1, offset / urRange));
-      const x = playfieldCenterX + normalized * (urBarWidth / 2);
-      const alpha = 0.2 + ((index + 1) / this.recentHitOffsets.length) * 0.8;
-      this.fillRect(x - 1.5, urBarY - 3, 3, 9, "#b3f5ff", alpha);
-    });
+      this.fillRect(urBarX, urBarY, urBarWidth, 3, "#ffffff", 0.08);
+      this.fillRect(playfieldCenterX - 1, urBarY - 4, 2, 11, "#ffffff", 0.25);
+      this.recentHitOffsets.forEach((offset, index) => {
+        const normalized = Math.max(-1, Math.min(1, offset / urRange));
+        const x = playfieldCenterX + normalized * (urBarWidth / 2);
+        const alpha = 0.2 + ((index + 1) / this.recentHitOffsets.length) * 0.8;
+        this.fillRect(x - 1.5, urBarY - 3, 3, 9, "#b3f5ff", alpha);
+      });
+    }
     const wallTime = this.currentTime / this.modRate;
     const mins = Math.floor(wallTime / 60000);
     const secs = String(Math.floor((wallTime % 60000) / 1000)).padStart(2, "0");

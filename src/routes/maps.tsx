@@ -2881,6 +2881,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     : replayPreviewKeyCount >= 6
     ? 390
     : 300;
+  const replayPreviewGap = replayPreviewKeyCount >= 5 ? 24 : 48;
   const replayPreviewStartSeconds = replayAudioMode === "set-preview"
     ? 0
     : Math.max(0, replayChartStartMs / 1000);
@@ -3454,8 +3455,11 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       </div>
 
       <div
-        className="relative mt-4 min-h-[360px] overflow-visible md:absolute md:left-[calc(100%+48px)] md:top-0 md:mt-0 md:h-full md:w-[var(--replay-preview-width)] md:min-h-full"
-        style={{ "--replay-preview-width": `${replayPreviewWidth}px` } as CSSProperties}
+        className="relative mt-4 min-h-[360px] overflow-visible md:absolute md:left-[calc(100%_+_var(--replay-preview-gap))] md:top-0 md:mt-0 md:h-full md:w-[var(--replay-preview-width)] md:min-h-full"
+        style={{
+          "--replay-preview-gap": `${replayPreviewGap}px`,
+          "--replay-preview-width": `${replayPreviewWidth}px`,
+        } as CSSProperties}
       >
         <div
           className={`absolute inset-0 transition-opacity duration-200 ${
