@@ -9,8 +9,10 @@ describe("replay skin settings UI", () => {
     expect(source).toContain("readReplaySkinSettings");
     expect(source).toContain("writeReplaySkinSettings");
     expect(source).toContain("rendererRef.current?.setSkinSettings");
-    expect(source).toContain('aria-label="Replay skin settings"');
-    expect(source).toContain("Replay skin");
+    expect(source).toContain('aria-label="Replay settings"');
+    expect(source).toContain("Replay settings");
+    expect(source).toContain("Style");
+    expect(source).toContain("Layout");
     expect(source).toContain("Note color");
     expect(source).toContain("LN Head color");
     expect(source).toContain("LN Body color");

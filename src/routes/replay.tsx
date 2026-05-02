@@ -2082,8 +2082,8 @@ function ReplayViewer({
           {/* Skin settings */}
           <button
             onClick={() => setSkinSettingsOpen(true)}
-            aria-label="Replay skin settings"
-            title="Replay skin settings"
+            aria-label="Replay settings"
+            title="Replay settings"
             className={`w-7 h-7 rounded flex items-center justify-center cursor-pointer transition-colors ${
               skinSettingsOpen
                 ? "bg-osu-pink text-white"
@@ -2142,6 +2142,7 @@ function ReplaySkinSettingsModal({
   const [draft, setDraft] = useState(() => normalizeReplaySkinSettings(settings));
   const [selectedKeyCount, setSelectedKeyCount] = useState(() => Math.max(1, Math.min(10, keyCount)));
   const [activeColor, setActiveColor] = useState<"tap" | "lnHead" | "lnBody" | null>(null);
+  const [activeTab, setActiveTab] = useState<"style" | "layout">("style");
   const [columnEditorOpen, setColumnEditorOpen] = useState(false);
   const [overrideKind, setOverrideKind] = useState<"tap" | "lnHead">("tap");
   const [overrideColumn, setOverrideColumn] = useState(0);
@@ -2278,7 +2279,7 @@ function ReplaySkinSettingsModal({
         onClick={onClose}
       />
       <motion.div
-        className="fixed inset-x-3 top-1/2 z-[111] mx-auto max-h-[calc(100vh-2rem)] max-w-3xl overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
+        className="fixed inset-x-3 top-1/2 z-[111] mx-auto flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
         initial={{ opacity: 0, y: "-48%", scale: 0.98 }}
         animate={{ opacity: 1, y: "-50%", scale: 1 }}
         exit={{ opacity: 0, y: "-48%", scale: 0.98 }}
@@ -2287,19 +2288,19 @@ function ReplaySkinSettingsModal({
       >
         <div className="flex items-center gap-3 border-b border-osu-b3/50 px-5 py-4">
           <div>
-            <h3 className="text-base font-bold text-white">Replay Skin</h3>
-            <div className="text-[10px] uppercase tracking-wider text-osu-f1">{draft.style === "circles" ? "Circle playfield" : "Bar playfield"}</div>
+            <h3 className="text-base font-bold text-white">Replay settings</h3>
+            <div className="text-[10px] uppercase tracking-wider text-osu-f1">{activeTab === "style" ? "Style" : "Layout"}</div>
           </div>
           <button
             onClick={onClose}
-            aria-label="Close replay skin settings"
+            aria-label="Close replay settings"
             className="ml-auto flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg bg-osu-b3/50 text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
           >
             <X className="h-4 w-4" strokeWidth={2.4} />
           </button>
         </div>
 
-        <div className="grid max-h-[calc(100vh-9rem)] overflow-y-auto md:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="grid min-h-0 flex-1 overflow-y-auto md:grid-cols-[minmax(0,1fr)_300px]">
           <div className="space-y-4 p-5">
             <label className="block">
               <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-osu-f1">Skin preset</span>
@@ -2312,85 +2313,188 @@ function ReplaySkinSettingsModal({
               </select>
             </label>
 
-            <section>
-              <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Note shape</div>
-              <div className="grid grid-cols-3 gap-2">
-                <ReplaySkinShapeButton
-                  active={draft.style === "circles"}
-                  icon={<Circle className="h-4 w-4" />}
-                  label="Circles"
-                  onClick={() => updateStyle("circles")}
-                />
-                <ReplaySkinShapeButton
-                  active={draft.style === "bars"}
-                  icon={<RectangleHorizontal className="h-4 w-4" />}
-                  label="Bars"
-                  onClick={() => updateStyle("bars")}
-                />
-                <ReplaySkinShapeButton
-                  active={false}
-                  disabled
-                  icon={<MousePointer2 className="h-4 w-4" />}
-                  label="Arrows"
-                  onClick={() => {}}
-                />
-              </div>
-            </section>
+            <div className="grid grid-cols-2 rounded-lg bg-osu-b5/55 p-1">
+              {([
+                ["style", "Style"],
+                ["layout", "Layout"],
+              ] as const).map(([tab, label]) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className={`h-8 cursor-pointer rounded-md text-xs font-bold transition-colors ${
+                    activeTab === tab
+                      ? "bg-osu-pink/20 text-white"
+                      : "text-osu-f1 hover:text-white hover:bg-osu-b3/40"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
-            <section className="space-y-3 pt-2">
-              <ReplaySkinColorRow
-                label="Note color"
-                value={profile.tapColor}
-                selected={activeColor === "tap"}
-                onOpen={() => setActiveColor((current) => current === "tap" ? null : "tap")}
-              />
-              <ReplaySkinColorRow
-                label="LN Head color"
-                value={profile.lnHeadColor}
-                selected={activeColor === "lnHead"}
-                onOpen={() => setActiveColor((current) => current === "lnHead" ? null : "lnHead")}
-              />
-              <ReplaySkinColorRow
-                label="LN Body color"
-                value={draft.lnBodyColor}
-                selected={activeColor === "lnBody"}
-                onOpen={() => setActiveColor((current) => current === "lnBody" ? null : "lnBody")}
-              />
-              {activeColor ? (
-                <ReplaySkinColorPanel
-                  value={activeColor === "tap" ? profile.tapColor : activeColor === "lnHead" ? profile.lnHeadColor : draft.lnBodyColor}
-                  onChange={(value) => {
-                    if (activeColor === "tap") updateBaseColor("tap", value);
-                    else if (activeColor === "lnHead") updateBaseColor("lnHead", value);
-                    else updateLnBodyColor(value);
-                  }}
-                />
-              ) : null}
-            </section>
+            {activeTab === "style" ? (
+              <>
+                <section>
+                  <div className="mb-2 text-[10px] font-bold uppercase tracking-wider text-osu-f1">Note shape</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <ReplaySkinShapeButton
+                      active={draft.style === "circles"}
+                      icon={<Circle className="h-4 w-4" />}
+                      label="Circles"
+                      onClick={() => updateStyle("circles")}
+                    />
+                    <ReplaySkinShapeButton
+                      active={draft.style === "bars"}
+                      icon={<RectangleHorizontal className="h-4 w-4" />}
+                      label="Bars"
+                      onClick={() => updateStyle("bars")}
+                    />
+                    <ReplaySkinShapeButton
+                      active={false}
+                      disabled
+                      icon={<MousePointer2 className="h-4 w-4" />}
+                      label="Arrows"
+                      onClick={() => {}}
+                    />
+                  </div>
+                </section>
 
-            <section className="relative space-y-3 pt-2">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold text-osu-l1">Per-column colors</span>
-                <span className="flex items-center gap-2">
-                  <ReplaySkinSwitch checked={columnEditorOpen} onChange={setColumnEditorOpen} />
-                  <button
-                    type="button"
-                    onClick={() => setColumnEditorOpen((value) => !value)}
-                    aria-label="Edit per-column colors"
-                    className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg border border-osu-b3/60 bg-osu-b5/70 text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white"
+                <section className="space-y-3 pt-2">
+                  <ReplaySkinColorRow
+                    label="Note color"
+                    value={profile.tapColor}
+                    selected={activeColor === "tap"}
+                    onOpen={() => setActiveColor((current) => current === "tap" ? null : "tap")}
+                  />
+                  <ReplaySkinColorRow
+                    label="LN Head color"
+                    value={profile.lnHeadColor}
+                    selected={activeColor === "lnHead"}
+                    onOpen={() => setActiveColor((current) => current === "lnHead" ? null : "lnHead")}
+                  />
+                  <ReplaySkinColorRow
+                    label="LN Body color"
+                    value={draft.lnBodyColor}
+                    selected={activeColor === "lnBody"}
+                    onOpen={() => setActiveColor((current) => current === "lnBody" ? null : "lnBody")}
+                  />
+                  {activeColor ? (
+                    <ReplaySkinColorPanel
+                      value={activeColor === "tap" ? profile.tapColor : activeColor === "lnHead" ? profile.lnHeadColor : draft.lnBodyColor}
+                      onChange={(value) => {
+                        if (activeColor === "tap") updateBaseColor("tap", value);
+                        else if (activeColor === "lnHead") updateBaseColor("lnHead", value);
+                        else updateLnBodyColor(value);
+                      }}
+                    />
+                  ) : null}
+                </section>
+
+                <section className="relative space-y-3 pt-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-osu-l1">Per-column colors</span>
+                    <span className="flex items-center gap-2">
+                      <ReplaySkinSwitch checked={columnEditorOpen} onChange={setColumnEditorOpen} />
+                      <button
+                        type="button"
+                        onClick={() => setColumnEditorOpen((value) => !value)}
+                        aria-label="Edit per-column colors"
+                        className="grid h-8 w-8 cursor-pointer place-items-center rounded-lg border border-osu-b3/60 bg-osu-b5/70 text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white"
+                      >
+                        <Settings className="h-4 w-4" />
+                      </button>
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-osu-l1">Cut LN tail</span>
+                    <ReplaySkinSwitch checked={draft.percy} onChange={(checked) => update({ percy: checked })} />
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-osu-l1">Upscroll</span>
+                    <ReplaySkinSwitch checked={draft.upscroll} onChange={(checked) => update({ upscroll: checked })} />
+                  </div>
+
+                  {columnEditorOpen ? (
+                    <div className="absolute left-0 top-10 z-10 w-full rounded-xl border border-osu-b2/70 bg-osu-b4/95 p-4 shadow-2xl backdrop-blur sm:left-[46%] sm:w-80">
+                      <div className="mb-3 grid grid-cols-7 gap-1.5">
+                        {columns.map((column) => (
+                          <button
+                            key={column}
+                            type="button"
+                            onClick={() => setOverrideColumn(column)}
+                            className={`h-8 cursor-pointer rounded-md text-xs font-bold transition-colors ${
+                              overrideColumn === column
+                                ? "bg-osu-pink text-white"
+                                : "bg-osu-b5/80 text-osu-f1 hover:text-white"
+                            }`}
+                          >
+                            {column + 1}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="mb-3 inline-grid grid-cols-2 overflow-hidden rounded-lg bg-osu-b5/70 p-1">
+                        {(["tap", "lnHead"] as const).map((kind) => (
+                          <button
+                            key={kind}
+                            type="button"
+                            onClick={() => setOverrideKind(kind)}
+                            className={`cursor-pointer rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
+                              overrideKind === kind ? "bg-osu-pink text-white" : "text-osu-f1 hover:text-white"
+                            }`}
+                          >
+                            {kind === "tap" ? "Note" : "LN Head"}
+                          </button>
+                        ))}
+                      </div>
+                      <ReplaySkinColumnColorRow
+                        label={overrideKind === "tap" ? "Note" : "LN Head"}
+                        value={overrideValue}
+                        onChange={(value) => updateOverrideColor(overrideKind, overrideColumn, value)}
+                      />
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            for (const column of columns) updateOverrideColor(overrideKind, column, overrideValue);
+                          }}
+                          className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-osu-b3/60 bg-osu-b5/70 px-2.5 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                          Copy to all
+                        </button>
+                        {hasOverride ? (
+                          <button
+                            type="button"
+                            onClick={() => updateOverrideColor(overrideKind, overrideColumn, "")}
+                            className="cursor-pointer rounded-lg px-2.5 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:text-white"
+                          >
+                            Use base
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+                </section>
+              </>
+            ) : (
+              <section className="space-y-4">
+                <label className="block">
+                  <span className="mb-2 flex items-center justify-between text-sm font-semibold text-osu-l1">
+                    <span>Keymode</span>
+                    <span className="text-[10px] uppercase tracking-wide text-osu-f1">Preview</span>
+                  </span>
+                  <select
+                    value={selectedKeyCount}
+                    onChange={(e) => setSelectedKeyCount(Number(e.target.value))}
+                    className="h-9 w-full cursor-pointer rounded-lg border border-osu-b3/60 bg-osu-b5/70 px-3 text-sm font-semibold text-white outline-none transition-colors focus:border-osu-pink/70"
                   >
-                    <Settings className="h-4 w-4" />
-                  </button>
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold text-osu-l1">Cut LN tail</span>
-                <ReplaySkinSwitch checked={draft.percy} onChange={(checked) => update({ percy: checked })} />
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-semibold text-osu-l1">Upscroll</span>
-                <ReplaySkinSwitch checked={draft.upscroll} onChange={(checked) => update({ upscroll: checked })} />
-              </div>
+                    {Array.from({ length: 10 }, (_, index) => index + 1).map((count) => (
+                      <option key={count} value={count}>{count}K</option>
+                    ))}
+                  </select>
+                </label>
+
               <label className="block pt-1">
                 <span className="mb-2 flex items-center justify-between text-sm font-semibold text-osu-l1">
                   <span>Column width</span>
@@ -2451,68 +2555,8 @@ function ReplaySkinSettingsModal({
                 />
                 <span className="mt-1 block text-[10px] text-osu-f1">Default osu!mania value is 402. Higher values move receptors lower.</span>
               </label>
-
-              {columnEditorOpen ? (
-                <div className="absolute left-[46%] top-3 z-10 w-80 rounded-xl border border-osu-b2/70 bg-osu-b4/95 p-4 shadow-2xl backdrop-blur">
-                  <div className="mb-3 grid grid-cols-7 gap-1.5">
-                    {columns.map((column) => (
-                      <button
-                        key={column}
-                        type="button"
-                        onClick={() => setOverrideColumn(column)}
-                        className={`h-8 cursor-pointer rounded-md text-xs font-bold transition-colors ${
-                          overrideColumn === column
-                            ? "bg-osu-pink text-white"
-                            : "bg-osu-b5/80 text-osu-f1 hover:text-white"
-                        }`}
-                      >
-                        {column + 1}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="mb-3 inline-grid grid-cols-2 overflow-hidden rounded-lg bg-osu-b5/70 p-1">
-                    {(["tap", "lnHead"] as const).map((kind) => (
-                      <button
-                        key={kind}
-                        type="button"
-                        onClick={() => setOverrideKind(kind)}
-                        className={`cursor-pointer rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
-                          overrideKind === kind ? "bg-osu-pink text-white" : "text-osu-f1 hover:text-white"
-                        }`}
-                      >
-                        {kind === "tap" ? "Note" : "LN Head"}
-                      </button>
-                    ))}
-                  </div>
-                  <ReplaySkinColumnColorRow
-                    label={overrideKind === "tap" ? "Note" : "LN Head"}
-                    value={overrideValue}
-                    onChange={(value) => updateOverrideColor(overrideKind, overrideColumn, value)}
-                  />
-                  <div className="mt-3 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        for (const column of columns) updateOverrideColor(overrideKind, column, overrideValue);
-                      }}
-                      className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-osu-b3/60 bg-osu-b5/70 px-2.5 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      Copy to all
-                    </button>
-                    {hasOverride ? (
-                      <button
-                        type="button"
-                        onClick={() => updateOverrideColor(overrideKind, overrideColumn, "")}
-                        className="cursor-pointer rounded-lg px-2.5 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:text-white"
-                      >
-                        Use base
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-            </section>
+              </section>
+            )}
           </div>
 
           <div className="border-l border-osu-b3/50 p-5">
@@ -2521,7 +2565,7 @@ function ReplaySkinSettingsModal({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 border-t border-osu-b3/50 px-5 py-4">
+        <div className="flex shrink-0 items-center gap-2 border-t border-osu-b3/50 px-5 py-4">
           <button
             onClick={() => {
               setDraft(DEFAULT_REPLAY_SKIN_SETTINGS);
@@ -2809,13 +2853,13 @@ function ReplaySkinSwitch({ checked, onChange }: { checked: boolean; onChange: (
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className={`relative h-6 w-10 cursor-pointer rounded-full transition-colors ${
-        checked ? "bg-osu-pink" : "bg-osu-b2"
+      className={`inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border p-0.5 transition-colors ${
+        checked ? "border-osu-pink bg-osu-pink" : "border-osu-b3/60 bg-osu-b5/80"
       }`}
     >
       <span
-        className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${
-          checked ? "translate-x-5" : "translate-x-1"
+        className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? "translate-x-4" : "translate-x-0"
         }`}
       />
     </button>
