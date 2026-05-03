@@ -7,6 +7,7 @@ import type { ReplayRendererLike } from "#/lib/replay-types";
 
 interface ReplayControlsProps {
   rendererRef: MutableRefObject<ReplayRendererLike | null>;
+  heatmap: number[];
   audioUrl: string | null;
   audioError: string | null;
   isPlaying: boolean;
@@ -40,6 +41,7 @@ interface ReplayControlsProps {
 
 export function ReplayControls({
   rendererRef,
+  heatmap,
   audioUrl,
   audioError,
   isPlaying,
@@ -89,15 +91,16 @@ export function ReplayControls({
   };
 
   return (
-    <div className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
+    <div className="bg-osu-b4 rounded-xl border border-osu-b3/20">
       {audioError && (
-        <div className="text-[11px] text-osu-yellow bg-osu-yellow/10 border-b border-osu-yellow/20 px-4 py-2">
+        <div className="text-[11px] text-osu-yellow bg-osu-yellow/10 border-b border-osu-yellow/20 px-4 py-2 rounded-t-xl">
           {audioError}
         </div>
       )}
 
       <ReplayProgressBar
         rendererRef={rendererRef}
+        heatmap={heatmap}
         sliderClass=""
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
@@ -324,6 +327,7 @@ function ShareTimestampTooltip({
 
 function ReplayProgressBar({
   rendererRef,
+  heatmap,
   sliderClass,
   onPointerDown,
   onPointerUp,
@@ -332,6 +336,7 @@ function ReplayProgressBar({
   children,
 }: {
   rendererRef: MutableRefObject<ReplayRendererLike | null>;
+  heatmap: number[];
   sliderClass: string;
   onPointerDown: () => void;
   onPointerUp: () => void;
@@ -358,7 +363,7 @@ function ReplayProgressBar({
 
   return (
     <div
-      className="relative flex items-center gap-3 px-4 pt-3 pb-1"
+      className="group relative flex items-center gap-3 px-4 pt-3 pb-1"
       onContextMenu={(e) => {
         e.preventDefault();
         const r = rendererRef.current;
@@ -367,25 +372,78 @@ function ReplayProgressBar({
       }}
     >
       <span className="text-[10px] text-osu-f1 tabular-nums w-10">{leftLabel}</span>
-      <input
-        type="range"
-        min={0}
-        max={1}
-        step={0.001}
-        value={progress}
-        onPointerDown={onPointerDown}
-        onPointerUp={onPointerUp}
-        onChange={(e) => {
-          const v = Number(e.target.value);
-          setProgress(v);
-          const r = rendererRef.current;
-          if (r) onSeek(v * r.duration);
-        }}
-        className={`flex-1 h-1.5 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink ${sliderClass}`}
-      />
+      <div className="relative flex-1">
+        <KeypressHeatmap heatmap={heatmap} />
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.001}
+          value={progress}
+          onPointerDown={onPointerDown}
+          onPointerUp={onPointerUp}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            setProgress(v);
+            const r = rendererRef.current;
+            if (r) onSeek(v * r.duration);
+          }}
+          className={`block w-full h-1.5 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink ${sliderClass}`}
+        />
+      </div>
       <span className="text-[10px] text-osu-f1 tabular-nums w-10 text-right">{rightLabel}</span>
       {children}
     </div>
+  );
+}
+
+function KeypressHeatmap({ heatmap }: { heatmap: number[] }) {
+  const n = heatmap.length;
+  if (n === 0) return null;
+  const width = 1000;
+  const height = 100;
+  const step = width / (n - 1 || 1);
+  const points = new Array<{ x: number; y: number }>(n);
+  for (let i = 0; i < n; i++) {
+    points[i] = { x: i * step, y: height - heatmap[i] * height };
+  }
+  const first = `${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
+  let curve = "";
+  for (let i = 0; i < n - 1; i++) {
+    const cur = points[i];
+    const next = points[i + 1];
+    const mx = (cur.x + next.x) / 2;
+    const my = (cur.y + next.y) / 2;
+    curve += ` Q ${cur.x.toFixed(2)} ${cur.y.toFixed(2)} ${mx.toFixed(2)} ${my.toFixed(2)}`;
+  }
+  const last = `${points[n - 1].x.toFixed(2)} ${points[n - 1].y.toFixed(2)}`;
+  const topD = `M ${first}${curve} L ${last}`;
+  const fillD = `M 0 ${height} L ${first}${curve} L ${last} L ${width} ${height} Z`;
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      className="absolute inset-x-0 bottom-full h-5 w-full pointer-events-none text-osu-pink opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+      aria-hidden="true"
+    >
+      <defs>
+        <linearGradient id="replay-keypress-heatmap-fade" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.6" />
+          <stop offset="40%" stopColor="currentColor" stopOpacity="0.1" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={fillD} fill="url(#replay-keypress-heatmap-fade)" />
+      <path
+        d={topD}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
   );
 }
 

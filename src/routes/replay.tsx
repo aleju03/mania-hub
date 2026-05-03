@@ -23,6 +23,7 @@ import {
 import { normalizeReplayPlayerParam, shouldStartReplayPlayerLoad } from "../lib/replay-player-autoload";
 import { getReplayBackNavigation } from "../lib/replay-navigation";
 import { unpackReplayFrames } from "../lib/replay-frames";
+import { buildKeypressHeatmap } from "../lib/replay-keypress-heatmap";
 import { parseReplayScoreInput } from "../lib/replay-score-input";
 import { getReplayScoreAvailability } from "../lib/replay-score-availability";
 import { DEFAULT_REPLAY_SCROLL_SPEED, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../lib/replay-scroll-speed";
@@ -607,6 +608,12 @@ function ReplayViewer({
     () => (scoreInfo ? getScoreDisplayValues(scoreInfo) : null),
     [scoreInfo],
   );
+  const keypressHeatmap = useMemo(() => {
+    const frames = replay.frames;
+    if (frames.length < 2) return [];
+    const lastTime = frames[frames.length - 1].time;
+    return buildKeypressHeatmap(frames, lastTime);
+  }, [replay.frames]);
   const modRate = getScoreRate(scoreInfo?.mods);
   const effectiveRate = speed * modRate;
   const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
@@ -1188,6 +1195,7 @@ function ReplayViewer({
 
       <ReplayControls
         rendererRef={rendererRef}
+        heatmap={keypressHeatmap}
         audioUrl={audioUrl}
         audioError={audioError}
         isPlaying={isPlaying}

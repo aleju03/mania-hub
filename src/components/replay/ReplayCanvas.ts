@@ -245,6 +245,26 @@ export class ManiaReplayRenderer {
   private urSum = 0;
   private urSumSq = 0;
 
+  private staticGraphics = new Graphics();
+  private staticDirty = true;
+
+  private hudSnapshotTime = -Infinity;
+  private hudCachedAccuracy = "100.00%";
+  private hudCachedUr = "0";
+  private hudCachedTime = "0:00";
+  private hudCachedFps = "--";
+  private hudCachedJudgmentCounts: string[] = ["0", "0", "0", "0", "0", "0", "0"];
+  private hudCachedLeftMisses = "0";
+  private hudCachedRightMisses = "0";
+
+  private audioStallCount = 0;
+  private lastAudioStallAt = 0;
+  private perfReportAt = 0;
+  private perfFrames = 0;
+  private perfSlowFrames = 0;
+  private perfMaxRenderMs = 0;
+  private perfSumRenderMs = 0;
+
   constructor(
     canvas: HTMLCanvasElement,
     frames: ReplayFrame[],
@@ -367,10 +387,12 @@ export class ManiaReplayRenderer {
 
     this.app = app;
     app.stage.addChild(this.backgroundLayer);
+    app.stage.addChild(this.staticGraphics);
     app.stage.addChild(this.graphics);
     app.stage.addChild(this.skinSpriteLayer);
     app.stage.addChild(this.textLayer);
     this.rebuildBackgroundSprites();
+    this.prewarmSkinTextures();
     this.resize();
   }
 
@@ -446,6 +468,26 @@ export class ManiaReplayRenderer {
 
   private getAccuracy(): number {
     return calculateReplayAccuracy(this.judgmentCounts, this.ruleset.accuracyMode);
+  }
+
+  private updateHudSnapshotIfNeeded() {
+    const elapsed = performance.now() - this.hudSnapshotTime;
+    if (elapsed < 50 && Number.isFinite(this.hudSnapshotTime)) return;
+    this.hudSnapshotTime = performance.now();
+
+    this.hudCachedAccuracy = `${this.getAccuracy().toFixed(2)}%`;
+    this.hudCachedUr = String(Math.round(this.getUr()));
+    const wallTime = this.currentTime / this.modRate;
+    const mins = Math.floor(wallTime / 60000);
+    const secs = String(Math.floor((wallTime % 60000) / 1000)).padStart(2, "0");
+    this.hudCachedTime = `${mins}:${secs}`;
+    this.hudCachedFps = this.measuredFps > 0 ? String(this.measuredFps) : "--";
+    for (let i = 1; i < this.judgmentCounts.length; i++) {
+      const v = String(this.judgmentCounts[i]);
+      if (this.hudCachedJudgmentCounts[i] !== v) this.hudCachedJudgmentCounts[i] = v;
+    }
+    this.hudCachedLeftMisses = String(this.leftHandMisses);
+    this.hudCachedRightMisses = String(this.rightHandMisses);
   }
 
   private updateSkinCache() {
@@ -574,6 +616,7 @@ export class ManiaReplayRenderer {
   private invalidateLayoutCache() {
     this.cachedLayout = null;
     this.cachedColumns = [];
+    this.staticDirty = true;
   }
 
   private getLayout(): Layout {
@@ -691,7 +734,9 @@ export class ManiaReplayRenderer {
   }
 
   setBackgroundDim(dim: number) {
+    if (this.backgroundDim === dim) return;
     this.backgroundDim = dim;
+    this.staticDirty = true;
     if (!this._isPlaying) this.render();
   }
 
@@ -720,6 +765,7 @@ export class ManiaReplayRenderer {
     this.skinSettings = normalizeReplaySkinSettings(settings);
     this.updateSkinCache();
     this.invalidateLayoutCache();
+    this.prewarmSkinTextures();
     if (!this._isPlaying) this.render();
   }
 
@@ -750,6 +796,8 @@ export class ManiaReplayRenderer {
           this.resetAudioClockSmoothing(audioTime, now);
         }
       } else {
+        if (now - this.lastAudioStallAt > 100) this.audioStallCount++;
+        this.lastAudioStallAt = now;
         this.resetAudioClockSmoothing();
       }
     } else {
@@ -818,14 +866,23 @@ export class ManiaReplayRenderer {
   private render() {
     if (!this.app) return;
 
+    const perfStart = import.meta.env.DEV ? performance.now() : 0;
+
     const layout = this.getLayout();
     this.currentKeyState = this.getCurrentKeyState();
+    this.updateHudSnapshotIfNeeded();
+
+    if (this.staticDirty) {
+      this.staticGraphics.clear();
+      this.renderStaticPlayfield(layout);
+      this.staticDirty = false;
+    }
+
     this.graphics.clear();
     this.beginSkinSpriteFrame();
     this.beginTextFrame();
 
     this.renderBackground(layout);
-    this.renderPlayfield(layout);
     this.renderSegmentOverlays(layout);
     if (this.skinSettings.keysUnderNotes) this.renderReceptors(layout);
     if (!this.inputOverlayOnly) this.renderNotes(layout);
@@ -837,23 +894,46 @@ export class ManiaReplayRenderer {
     this.finishSkinSpriteFrame();
     this.finishTextFrame();
     this.app.render();
+
+    if (import.meta.env.DEV) this.recordRenderPerf(performance.now() - perfStart);
   }
 
-  private renderBackground(layout: Layout) {
-    if (this.transparentBackground) return;
+  private recordRenderPerf(durationMs: number) {
+    this.perfFrames++;
+    this.perfSumRenderMs += durationMs;
+    if (durationMs > this.perfMaxRenderMs) this.perfMaxRenderMs = durationMs;
+    if (durationMs > 4) this.perfSlowFrames++;
 
-    const g = this.graphics;
-    const { w, h } = layout;
-    this.fillRect(0, 0, w, h, "#0a0a18", 1);
-    this.fillRect(0, h * 0.34, w, h * 0.33, "#1a1016", 0.8);
-    this.fillRect(0, h * 0.66, w, h * 0.34, "#0c0c14", 1);
+    const now = performance.now();
+    if (this.perfReportAt === 0) this.perfReportAt = now;
+    if (now - this.perfReportAt < 5000) return;
 
+    if (this.perfSlowFrames > 0 || this.perfMaxRenderMs > 4) {
+      const avg = this.perfFrames > 0 ? this.perfSumRenderMs / this.perfFrames : 0;
+      console.debug("[replay perf]", {
+        frames: this.perfFrames,
+        avgMs: Number(avg.toFixed(2)),
+        maxMs: Number(this.perfMaxRenderMs.toFixed(2)),
+        slowFrames: this.perfSlowFrames,
+        audioStalls: this.audioStallCount,
+        skinSprites: this.skinSpritePool.length,
+        textObjects: this.textPool.length,
+      });
+    }
+
+    this.perfReportAt = now;
+    this.perfFrames = 0;
+    this.perfSumRenderMs = 0;
+    this.perfMaxRenderMs = 0;
+    this.perfSlowFrames = 0;
+  }
+
+  private renderBackground(_layout: Layout) {
     const transitionProgress = this.backgroundTransitionStartedAt > 0
       ? Math.min(1, (performance.now() - this.backgroundTransitionStartedAt) / BACKGROUND_FADE_DURATION_MS)
       : 1;
     if (this.previousBackgroundSprite) this.previousBackgroundSprite.alpha = 1 - transitionProgress;
     if (this.backgroundSprite) this.backgroundSprite.alpha = transitionProgress;
-    g.rect(0, 0, w, h).fill({ color: 0x000000, alpha: this.backgroundDim / 100 });
 
     if (transitionProgress >= 1) {
       if (this.previousBackgroundSprite) {
@@ -870,19 +950,31 @@ export class ManiaReplayRenderer {
     }
   }
 
-  private renderPlayfield(layout: Layout) {
+  private renderStaticBackgroundBands(layout: Layout) {
+    if (this.transparentBackground) return;
+    const g = this.staticGraphics;
+    const { w, h } = layout;
+    this.fillRectInto(g, 0, 0, w, h, "#0a0a18", 1);
+    this.fillRectInto(g, 0, h * 0.34, w, h * 0.33, "#1a1016", 0.8);
+    this.fillRectInto(g, 0, h * 0.66, w, h * 0.34, "#0c0c14", 1);
+    g.rect(0, 0, w, h).fill({ color: 0x000000, alpha: this.backgroundDim / 100 });
+  }
+
+  private renderStaticPlayfield(layout: Layout) {
+    this.renderStaticBackgroundBands(layout);
     const { w, h, playfieldX, playfieldWidth } = layout;
     const isCircleSkin = this.skinSettings.style === "circles";
     const showColumnDividers = !isCircleSkin;
+    const g = this.staticGraphics;
 
     if (!this.barePlayfield) {
-      this.fillRect(0, 0, playfieldX, h, "#000000", 0.24);
-      this.fillRect(playfieldX + playfieldWidth, 0, w - playfieldX - playfieldWidth, h, "#000000", 0.24);
-      this.fillRect(playfieldX, 0, playfieldWidth, h, "#000000", 0.12);
+      this.fillRectInto(g, 0, 0, playfieldX, h, "#000000", 0.24);
+      this.fillRectInto(g, playfieldX + playfieldWidth, 0, w - playfieldX - playfieldWidth, h, "#000000", 0.24);
+      this.fillRectInto(g, playfieldX, 0, playfieldWidth, h, "#000000", 0.12);
 
       for (let col = 0; showColumnDividers && col < this.keyCount; col++) {
         const { x, width } = this.getColumnLayout(col, layout);
-        this.fillRect(x, 0, width, h, "#ffffff", col % 2 === 0 ? 0.02 : 0.04);
+        this.fillRectInto(g, x, 0, width, h, "#ffffff", col % 2 === 0 ? 0.02 : 0.04);
       }
     }
 
@@ -890,13 +982,13 @@ export class ManiaReplayRenderer {
     if (showColumnDividers) {
       for (let i = 0; i <= this.keyCount; i++) {
         const x = i < this.keyCount ? this.getColumnLayout(i, layout).x : playfieldX + playfieldWidth;
-        this.lineWithTopFade(x, 0, x, h, "#ffffff", 0.08, 1, topFadeHeight);
+        this.lineWithTopFadeInto(g, x, 0, x, h, "#ffffff", 0.08, 1, topFadeHeight);
       }
     }
     if (this.barePlayfield) {
-      if (showColumnDividers) this.line(playfieldX, h - 1, playfieldX + playfieldWidth, h - 1, "#ffffff", 0.1, 2);
+      if (showColumnDividers) this.lineInto(g, playfieldX, h - 1, playfieldX + playfieldWidth, h - 1, "#ffffff", 0.1, 2);
     } else {
-      this.rect(playfieldX, 0, playfieldWidth, h, "#ffffff", 0.15, 2);
+      this.rectInto(g, playfieldX, 0, playfieldWidth, h, "#ffffff", 0.15, 2);
     }
   }
 
@@ -1311,7 +1403,7 @@ export class ManiaReplayRenderer {
 
     const compactHud = w < 520;
 
-    this.addText(`${this.getAccuracy().toFixed(2)}%`, playfieldX + playfieldWidth + 16, 16, {
+    this.addText(this.hudCachedAccuracy, playfieldX + playfieldWidth + 16, 16, {
       fontSize: Math.max(16, h * 0.032),
       fill: "#ffffff",
       alpha: 0.85,
@@ -1345,8 +1437,8 @@ export class ManiaReplayRenderer {
       }
 
       [
-        { label: "L MISS", value: String(this.leftHandMisses), color: "#5a8fff" },
-        { label: "R MISS", value: String(this.rightHandMisses), color: "#de31ae" },
+        { label: "L MISS", value: this.hudCachedLeftMisses, color: "#5a8fff" },
+        { label: "R MISS", value: this.hudCachedRightMisses, color: "#de31ae" },
       ].forEach((item, index) => {
         const x = keyRowX + index * 68;
         const y = keyRowY + keyBoxSize + 10;
@@ -1360,17 +1452,17 @@ export class ManiaReplayRenderer {
     const judgmentCounterX = playfieldX + playfieldWidth + 16;
     const judgmentCounterY = 52;
     [
-      { label: "MAX", value: this.judgmentCounts[1], color: JUDGMENT_COLORS[1] },
-      { label: "300", value: this.judgmentCounts[2], color: JUDGMENT_COLORS[2] },
-      { label: "200", value: this.judgmentCounts[3], color: JUDGMENT_COLORS[3] },
-      { label: "100", value: this.judgmentCounts[4], color: JUDGMENT_COLORS[4] },
-      { label: "50", value: this.judgmentCounts[5], color: JUDGMENT_COLORS[5] },
-      { label: "MISS", value: this.judgmentCounts[6], color: JUDGMENT_COLORS[6] },
-      { label: "UR", value: this.getUr().toFixed(0), color: "#b3f5ff" },
+      { label: "MAX", value: this.hudCachedJudgmentCounts[1], color: JUDGMENT_COLORS[1] },
+      { label: "300", value: this.hudCachedJudgmentCounts[2], color: JUDGMENT_COLORS[2] },
+      { label: "200", value: this.hudCachedJudgmentCounts[3], color: JUDGMENT_COLORS[3] },
+      { label: "100", value: this.hudCachedJudgmentCounts[4], color: JUDGMENT_COLORS[4] },
+      { label: "50", value: this.hudCachedJudgmentCounts[5], color: JUDGMENT_COLORS[5] },
+      { label: "MISS", value: this.hudCachedJudgmentCounts[6], color: JUDGMENT_COLORS[6] },
+      { label: "UR", value: this.hudCachedUr, color: "#b3f5ff" },
     ].forEach((item, index) => {
       const y = judgmentCounterY + index * 18;
       this.addText(item.label, judgmentCounterX, y, { fontSize: 10, fill: item.color, fontWeight: "700" });
-      this.addText(String(item.value), judgmentCounterX + 52, y, {
+      this.addText(item.value, judgmentCounterX + 52, y, {
         fontSize: 10,
         fill: "#ffffff",
         alpha: 0.88,
@@ -1395,10 +1487,7 @@ export class ManiaReplayRenderer {
         this.fillRect(x - 1.5, urBarY - 3, 3, 9, "#b3f5ff", alpha);
       });
     }
-    const wallTime = this.currentTime / this.modRate;
-    const mins = Math.floor(wallTime / 60000);
-    const secs = String(Math.floor((wallTime % 60000) / 1000)).padStart(2, "0");
-    this.addText(`${mins}:${secs}`, 8, h - 8, { fontSize: 11, fill: "#ffffff", alpha: 0.4, anchorY: 1 });
+    this.addText(this.hudCachedTime, 8, h - 8, { fontSize: 11, fill: "#ffffff", alpha: 0.4, anchorY: 1 });
     this.addText(`${this.playbackSpeed * this.modRate}x`, w - 8, h - 8, {
       fontSize: 11,
       fill: "#ffffff",
@@ -1406,7 +1495,7 @@ export class ManiaReplayRenderer {
       anchorX: 1,
       anchorY: 1,
     });
-    this.addText(`FPS ${this.measuredFps || "--"}`, w - 8, 8, {
+    this.addText(`FPS ${this.hudCachedFps}`, w - 8, 8, {
       fontSize: 11,
       fill: this.measuredFps >= 55 || this.measuredFps === 0 ? "#ffffff" : "#ffcc22",
       alpha: 0.52,
@@ -1717,6 +1806,45 @@ export class ManiaReplayRenderer {
     this.graphics.rect(x, y, w, h).fill({ color: hexToNumber(color), alpha });
   }
 
+  private fillRectInto(g: Graphics, x: number, y: number, w: number, h: number, color: string, alpha: number) {
+    if (w <= 0 || h <= 0) return;
+    g.rect(x, y, w, h).fill({ color: hexToNumber(color), alpha });
+  }
+
+  private rectInto(g: Graphics, x: number, y: number, w: number, h: number, color: string, alpha: number, width: number) {
+    if (w <= 0 || h <= 0) return;
+    g.rect(x, y, w, h).stroke({ color: hexToNumber(color), alpha, width });
+  }
+
+  private lineInto(g: Graphics, x1: number, y1: number, x2: number, y2: number, color: string, alpha: number, width: number) {
+    g.moveTo(x1, y1).lineTo(x2, y2).stroke({ color: hexToNumber(color), alpha, width });
+  }
+
+  private lineWithTopFadeInto(
+    g: Graphics,
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    color: string,
+    alpha: number,
+    width: number,
+    fadeHeight: number,
+  ) {
+    if (fadeHeight <= 0 || y1 !== 0 || x1 !== x2) {
+      this.lineInto(g, x1, y1, x2, y2, color, alpha, width);
+      return;
+    }
+
+    const sliceCount = 8;
+    const sliceHeight = fadeHeight / sliceCount;
+    for (let i = 0; i < sliceCount; i++) {
+      const y = sliceHeight * i;
+      this.lineInto(g, x1, y, x2, y + sliceHeight + 0.5, color, alpha * this.topFadeAlpha(y + sliceHeight, fadeHeight), width);
+    }
+    this.lineInto(g, x1, fadeHeight, x2, y2, color, alpha, width);
+  }
+
   private roundRect(x: number, y: number, w: number, h: number, radius: number, color: string, alpha: number) {
     if (w <= 0 || h <= 0) return;
     this.graphics.roundRect(x, y, w, h, radius).fill({ color: hexToNumber(color), alpha });
@@ -1852,21 +1980,6 @@ export class ManiaReplayRenderer {
     this.graphics.moveTo(x1, y1).lineTo(x2, y2).stroke({ color: hexToNumber(color), alpha, width });
   }
 
-  private lineWithTopFade(x1: number, y1: number, x2: number, y2: number, color: string, alpha: number, width: number, fadeHeight: number) {
-    if (fadeHeight <= 0 || y1 !== 0 || x1 !== x2) {
-      this.line(x1, y1, x2, y2, color, alpha, width);
-      return;
-    }
-
-    const sliceCount = 8;
-    const sliceHeight = fadeHeight / sliceCount;
-    for (let i = 0; i < sliceCount; i++) {
-      const y = sliceHeight * i;
-      this.line(x1, y, x2, y + sliceHeight + 0.5, color, alpha * this.topFadeAlpha(y + sliceHeight, fadeHeight), width);
-    }
-    this.line(x1, fadeHeight, x2, y2, color, alpha, width);
-  }
-
   private receptorBeam(x: number, y: number, w: number, h: number, color: string, intensity: number) {
     if (w <= 0 || h <= 0) return;
     this.graphics.rect(x, y, w, h).fill({
@@ -1888,31 +2001,45 @@ export class ManiaReplayRenderer {
       anchorY?: number;
     },
   ) {
-    let label = this.textPool[this.textPoolCursor];
+    let label = this.textPool[this.textPoolCursor] as
+      | (Text & { __sig?: string; __ax?: number; __ay?: number })
+      | undefined;
     if (!label) {
       label = new Text({
         text: "",
         style: {
           fontFamily: "Torus, sans-serif",
         },
-      });
+      }) as Text & { __sig?: string; __ax?: number; __ay?: number };
       this.textPool.push(label);
       this.textLayer.addChild(label);
     }
 
     this.textPoolCursor++;
-    label.visible = true;
-    label.text = text;
-    label.style = {
-      fontFamily: "Torus, sans-serif",
-      fontSize: options.fontSize,
-      fontWeight: options.fontWeight ?? "400",
-      fill: options.fill,
-    };
-    label.x = x;
-    label.y = y;
-    label.alpha = options.alpha ?? 1;
-    label.anchor.set(options.anchorX ?? 0, options.anchorY ?? 0);
+    if (!label.visible) label.visible = true;
+    if (label.text !== text) label.text = text;
+
+    const fontWeight = options.fontWeight ?? "400";
+    const sig = `${options.fontSize}|${fontWeight}|${options.fill}`;
+    if (label.__sig !== sig) {
+      label.style.fontSize = options.fontSize;
+      label.style.fontWeight = fontWeight;
+      label.style.fill = options.fill;
+      label.__sig = sig;
+    }
+
+    if (label.x !== x) label.x = x;
+    if (label.y !== y) label.y = y;
+    const alpha = options.alpha ?? 1;
+    if (label.alpha !== alpha) label.alpha = alpha;
+
+    const ax = options.anchorX ?? 0;
+    const ay = options.anchorY ?? 0;
+    if (label.__ax !== ax || label.__ay !== ay) {
+      label.anchor.set(ax, ay);
+      label.__ax = ax;
+      label.__ay = ay;
+    }
   }
 
   private drawSkinImage(
@@ -1952,6 +2079,28 @@ export class ManiaReplayRenderer {
     const texture = Texture.from(asset.src);
     this.skinTextureCache.set(asset.src, texture);
     return texture;
+  }
+
+  private prewarmSkinTextures() {
+    if (!this.app) return;
+    const assets = this.skinProfile.assets;
+    for (const column of assets.columns) {
+      if (column.tap) this.getTexture(column.tap);
+      if (column.lnHead) this.getTexture(column.lnHead);
+      if (column.lnBody) this.getTexture(column.lnBody);
+      if (column.lnTail) this.getTexture(column.lnTail);
+      if (column.receptor) this.getTexture(column.receptor);
+      if (column.receptorPressed) this.getTexture(column.receptorPressed);
+    }
+    for (const judgement of Object.values(assets.judgements)) {
+      if (judgement) this.getTexture(judgement);
+    }
+    if (assets.combo) {
+      for (const digit of assets.combo.digits) {
+        if (digit) this.getTexture(digit);
+      }
+      if (assets.combo.x) this.getTexture(assets.combo.x);
+    }
   }
 
   private beginSkinSpriteFrame() {
