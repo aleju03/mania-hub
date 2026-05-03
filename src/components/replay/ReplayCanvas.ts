@@ -80,7 +80,6 @@ interface RendererOptions {
   hideHud?: boolean;
   showCombo?: boolean;
   initialCombo?: number;
-  maxCombo?: number;
   barePlayfield?: boolean;
   scrollVelocities?: ManiaScrollVelocity[];
   expectedCounts?: ReplayHitCounts;
@@ -273,7 +272,6 @@ export class ManiaReplayRenderer {
     this.judgmentEvents = options?.expectedCounts
       ? resolveReplayJudgementEvents(simulated.events, options.expectedCounts, {
           allowLegacyScoreReconciliation: this.ruleset.accuracyMode === "stable",
-          expectedMaxCombo: options.maxCombo,
         }).events
       : simulated.events;
     if (this.lifeBarFrames.length === 0) {

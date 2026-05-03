@@ -47,11 +47,13 @@ export interface ManiaReplaySimulationOptions {
 
 export interface ReplayNoteState {
   bodyBreakTime: number | null;
+  bodyBreakTimes?: number[];
   displayJudgment: Judgment;
   displayTime: number;
   headJudgment: Judgment;
   headOffsetMs: number;
   headTime: number;
+  heldSegments?: ReplaySegment[];
   releaseTime: number;
   tailJudgment: Judgment | null;
   tailOffsetMs: number;
@@ -802,6 +804,8 @@ export function simulateManiaReplayJudgements(
       const tailLateBound = note.endTime + Math.floor(windows.ok) - Number.EPSILON;
 
       let bodyBreakTime: number | null = null;
+      const bodyBreakTimes: number[] = [];
+      const heldSegments: ReplaySegment[] = [];
       let releaseTime = headSegment.end;
       let scanIndex = matchedSegmentIndex;
       let tailReleaseTime: number | null = null;
@@ -813,10 +817,14 @@ export function simulateManiaReplayJudgements(
         const segment = columnSegments[scanIndex];
         lastScannedSegmentIndex = scanIndex;
         releaseTime = Math.max(releaseTime, segment.end);
+        if (segment.end > note.time && segment.start < note.endTime) {
+          heldSegments.push(segment);
+        }
 
         // Case A: released before tail window. Body break, then look for a
         // re-press that can still cover the tail window.
         if (segment.end < tailEarlyBound) {
+          bodyBreakTimes.push(segment.end);
           if (bodyBreakTime == null) {
             bodyBreakTime = segment.end;
             events.push({
@@ -901,11 +909,13 @@ export function simulateManiaReplayJudgements(
 
       noteStates[noteIndex] = {
         bodyBreakTime,
+        bodyBreakTimes,
         displayJudgment: combinedJudgment,
         displayTime: combinedTime,
         headJudgment,
         headOffsetMs,
         headTime: headSegment.start,
+        heldSegments,
         releaseTime,
         tailJudgment: combinedJudgment,
         tailOffsetMs,

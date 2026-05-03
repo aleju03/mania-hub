@@ -778,7 +778,6 @@ function ReplayViewer({
             showInputOverlay: showInputOverlayRef.current,
             mods: modAcronyms,
             speedMultiplier: modRate,
-            maxCombo: scoreInfo?.max_combo && scoreInfo.max_combo > 0 ? scoreInfo.max_combo : replay.header.maxCombo,
             transparentBackground: true,
             scrollVelocities: beatmap?.scrollVelocities,
             expectedCounts: getScoreExpectedCounts(scoreInfo, replay),
