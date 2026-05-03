@@ -77,7 +77,15 @@ function ManiacardAdminPage() {
     };
   }, [player]);
 
-  const handleSearch = useCallback((query: string) => searchUsers({ data: { q: query } }), []);
+  const handleSearch = useCallback(async (query: string) => {
+    const res = await searchUsers({ data: { query } });
+    return (res.user?.data ?? []).slice(0, 6).map((u: { id: number; username: string; avatar_url: string; country_code: string }) => ({
+      id: u.id,
+      username: u.username,
+      avatar_url: u.avatar_url,
+      country_code: u.country_code,
+    }));
+  }, []);
 
   const selectPlayer = useCallback((username: string) => {
     navigate({

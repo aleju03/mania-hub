@@ -138,7 +138,6 @@ describe("estimateDan LN calibration", () => {
     const officialEntries = manifest.filter((entry) => /\b\d{1,2}(?:st|nd|rd|th) Dan\b/i.test(entry.version));
 
     for (const entry of officialEntries) {
-      const target = targetForEntry(entry);
       const content = readFileSync(join(LN_MAPS_DIR, entry.file), "utf8");
       const map = parseManiaBeatmap(content);
       const breaks = breakRanges(content);

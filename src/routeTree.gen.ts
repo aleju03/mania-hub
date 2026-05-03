@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TrackerRouteImport } from './routes/tracker'
 import { Route as TopPlaysRouteImport } from './routes/top-plays'
 import { Route as SnipesRouteImport } from './routes/snipes'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ReplayRouteImport } from './routes/replay'
 import { Route as RankingsRouteImport } from './routes/rankings'
 import { Route as MapsRouteImport } from './routes/maps'
@@ -42,6 +43,11 @@ const TopPlaysRoute = TopPlaysRouteImport.update({
 const SnipesRoute = SnipesRouteImport.update({
   id: '/snipes',
   path: '/snipes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReplayRoute = ReplayRouteImport.update({
@@ -130,6 +136,7 @@ export interface FileRoutesByFullPath {
   '/maps': typeof MapsRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
+  '/settings': typeof SettingsRoute
   '/snipes': typeof SnipesRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
@@ -151,6 +158,7 @@ export interface FileRoutesByTo {
   '/maps': typeof MapsRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
+  '/settings': typeof SettingsRoute
   '/snipes': typeof SnipesRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
@@ -173,6 +181,7 @@ export interface FileRoutesById {
   '/maps': typeof MapsRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
+  '/settings': typeof SettingsRoute
   '/snipes': typeof SnipesRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
@@ -196,6 +205,7 @@ export interface FileRouteTypes {
     | '/maps'
     | '/rankings'
     | '/replay'
+    | '/settings'
     | '/snipes'
     | '/top-plays'
     | '/tracker'
@@ -217,6 +227,7 @@ export interface FileRouteTypes {
     | '/maps'
     | '/rankings'
     | '/replay'
+    | '/settings'
     | '/snipes'
     | '/top-plays'
     | '/tracker'
@@ -238,6 +249,7 @@ export interface FileRouteTypes {
     | '/maps'
     | '/rankings'
     | '/replay'
+    | '/settings'
     | '/snipes'
     | '/top-plays'
     | '/tracker'
@@ -260,6 +272,7 @@ export interface RootRouteChildren {
   MapsRoute: typeof MapsRoute
   RankingsRoute: typeof RankingsRoute
   ReplayRoute: typeof ReplayRoute
+  SettingsRoute: typeof SettingsRoute
   SnipesRoute: typeof SnipesRoute
   TopPlaysRoute: typeof TopPlaysRoute
   TrackerRoute: typeof TrackerRoute
@@ -298,6 +311,13 @@ declare module '@tanstack/react-router' {
       path: '/snipes'
       fullPath: '/snipes'
       preLoaderRoute: typeof SnipesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/replay': {
@@ -420,6 +440,7 @@ const rootRouteChildren: RootRouteChildren = {
   MapsRoute: MapsRoute,
   RankingsRoute: RankingsRoute,
   ReplayRoute: ReplayRoute,
+  SettingsRoute: SettingsRoute,
   SnipesRoute: SnipesRoute,
   TopPlaysRoute: TopPlaysRoute,
   TrackerRoute: TrackerRoute,

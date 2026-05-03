@@ -30,6 +30,7 @@ export function shouldRefreshTopPlays({
   now?: number;
 }): boolean {
   if (!hasTopPlaysCache(fetchedAt, cachedWindow)) return true;
+  if (fetchedAt == null || cachedWindow == null) return true;
   if (now - fetchedAt > cacheTtlMs) return true;
   return !windowCoversTopPlaysRange(cachedWindow, selectedRange);
 }

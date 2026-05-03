@@ -22,6 +22,7 @@ export interface ReplaySkinSettings {
   percy: boolean;
   upscroll: boolean;
   columnWidth: number;
+  columnSpacing: number;
   hitPosition: number;
   keymodeProfiles: Record<string, ReplaySkinKeymodeProfile>;
 }

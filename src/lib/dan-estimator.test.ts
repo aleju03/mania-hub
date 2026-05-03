@@ -723,32 +723,29 @@ describe("estimateDan", () => {
   });
 
   it("tracks the Road from Gamma to Delta jack practice pack targets", () => {
-    const packCases: Array<{
+    const packCases = ([
+      { file: "STRONGER-0.91x-Delta-Mid", starRating: 7.10832, totalLength: 201, displayName: "delta", family: "jack" },
+      { file: "Lockdown-Delta-Low", starRating: 7.08251, totalLength: 186, displayName: "delta-", family: "jack" },
+      { file: "EDM-Jumpers-Cut-1.1x-Gamma-High", starRating: 6.52607, totalLength: 132, displayName: "gamma++", family: "jack" },
+      { file: "Hatsuki-Yura-Onyx-Veil-0.95x-Delta-Lowmid", starRating: 7.37861, totalLength: 298, displayName: "delta", family: "chordjack" },
+      { file: "Hatsuki-Yura-Snow-Veil-0.9x-Gamma-High", starRating: 6.55346, totalLength: 257, displayName: "gamma+", family: "jack" },
+      { file: "Hiasobi-1.2x-Delta-Lowmid", starRating: 6.9271, totalLength: 133, displayName: "delta", family: "jack" },
+      { file: "Hot-But-A-Psycho-1-3x-Delta-Mid", starRating: 6.73083, totalLength: 104, displayName: "delta", family: "jack" },
+      { file: "Impossible-1.05x-Gamma-High", starRating: 7.38473, totalLength: 112, displayName: "gamma++", family: "jack" },
+      { file: "J.A.C.K.E.L.L.I.T.E.-Cut-Gamma-High", starRating: 6.78578, totalLength: 136, displayName: "gamma+", family: "jack" },
+      { file: "Jack-Digger-1.5x-Delta-Lowmid", starRating: 6.18453, totalLength: 143, displayName: "gamma+", family: "jack" },
+      { file: "Promise-0.95x-Gamma-High", starRating: 6.46791, totalLength: 231, displayName: "gamma++", family: "chordjack" },
+      { file: "Decoy-Omega-Ver.-0.85x-Delta-MidHigh", starRating: 7.35814, totalLength: 156, displayName: "delta++", family: "jack" },
+      { file: "Unique-Idol-Delta-Mid", starRating: 7.12569, totalLength: 210, displayName: "delta+", family: "jack" },
+    ] satisfies Array<{
       file: string;
       starRating: number;
       totalLength: number;
       displayName: string;
       family: "jack" | "chordjack";
-    }> = [
-      ["STRONGER-0.91x-Delta-Mid", 7.10832, 201, "delta", "jack"],
-      ["Lockdown-Delta-Low", 7.08251, 186, "delta-", "jack"],
-      ["EDM-Jumpers-Cut-1.1x-Gamma-High", 6.52607, 132, "gamma++", "jack"],
-      ["Hatsuki-Yura-Onyx-Veil-0.95x-Delta-Lowmid", 7.37861, 298, "delta", "chordjack"],
-      ["Hatsuki-Yura-Snow-Veil-0.9x-Gamma-High", 6.55346, 257, "gamma+", "jack"],
-      ["Hiasobi-1.2x-Delta-Lowmid", 6.9271, 133, "delta", "jack"],
-      ["Hot-But-A-Psycho-1-3x-Delta-Mid", 6.73083, 104, "delta", "jack"],
-      ["Impossible-1.05x-Gamma-High", 7.38473, 112, "gamma++", "jack"],
-      ["J.A.C.K.E.L.L.I.T.E.-Cut-Gamma-High", 6.78578, 136, "gamma+", "jack"],
-      ["Jack-Digger-1.5x-Delta-Lowmid", 6.18453, 143, "gamma+", "jack"],
-      ["Promise-0.95x-Gamma-High", 6.46791, 231, "gamma++", "chordjack"],
-      ["Decoy-Omega-Ver.-0.85x-Delta-MidHigh", 7.35814, 156, "delta++", "jack"],
-      ["Unique-Idol-Delta-Mid", 7.12569, 210, "delta+", "jack"],
-    ].map(([name, starRating, totalLength, displayName, family]) => ({
-      file: `gamma-delta-jack-pack/Various-Artists-Road-from-Gamma-to-Delta-practice-pack-Jack-PureDePapa-${name}-.osu`,
-      starRating,
-      totalLength,
-      displayName,
-      family,
+    }>).map((packCase) => ({
+      ...packCase,
+      file: `gamma-delta-jack-pack/Various-Artists-Road-from-Gamma-to-Delta-practice-pack-Jack-PureDePapa-${packCase.file}-.osu`,
     }));
 
     for (const packCase of packCases) {

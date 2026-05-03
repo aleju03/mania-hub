@@ -664,19 +664,42 @@ function buildMetrics(map: ManiaBeatmap, rate: number): DanEstimate["metrics"] {
     return sorted[clamp(Math.floor((sorted.length - 1) * q), 0, sorted.length - 1)];
   };
 
+  const peakNps5s = countInWindow(noteTimes, 5000) / 5;
+  const sustainedNps10s = countInWindow(noteTimes, 10000) / 10;
+  const jackPressure = quantile(jackValues, 0.92);
+  const streamPressure = quantile(streamValues, 0.9);
+
   return {
     keyCount: map.keyCount,
     noteCount: notes.length,
     holdRatio,
     chordRatio,
     peakNps1s: countInWindow(noteTimes, 1000),
-    peakNps5s: countInWindow(noteTimes, 5000) / 5,
-    sustainedNps10s: countInWindow(noteTimes, 10000) / 10,
-    jackPressure: quantile(jackValues, 0.92),
-    streamPressure: quantile(streamValues, 0.9),
-    chordjackPressure: quantile(jackValues, 0.92) * (0.28 + chordRatio * 1.35),
+    peakNps5s,
+    nps5sP50: peakNps5s,
+    nps5sP90: peakNps5s,
+    nps5sP95: peakNps5s,
+    sustainedNps10s,
+    jackPressure,
+    streamPressure,
+    chordjackPressure: jackPressure * (0.28 + chordRatio * 1.35),
     techPressure: 0,
-    staminaPressure: countInWindow(noteTimes, 10000) / 10,
+    rowBurstPressure: 0,
+    fastRowRatio: 0,
+    rowIntervalEntropy: 0,
+    patternVariety: 0,
+    strainSpikiness: 0,
+    sustainedPressureRatio: 0,
+    anchorPressure: 0,
+    lnReleasePressure: 0,
+    lnDensity: 0,
+    lnOverlapPressure: 0,
+    lnChordPressure: 0,
+    lnHoldDurationAvg: 0,
+    lnHoldDurationP90: 0,
+    chordSizeChangeRate: 0,
+    directionChangeRate: 0,
+    staminaPressure: sustainedNps10s,
   };
 }
 

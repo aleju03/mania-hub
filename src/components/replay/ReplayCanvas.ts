@@ -9,6 +9,11 @@ import type { ReplayHitCounts } from "../../lib/replay-validation";
 import { buildStableReplayComboEvents, resolveReplayJudgementEvents } from "../../lib/replay-validation";
 import { formatPixiRendererType } from "./renderer-debug";
 
+type ReplaySegment = {
+  start: number;
+  end: number;
+};
+
 const COLUMN_COLORS: Record<number, string[]> = {
   1: ["#fff"],
   2: ["#5a8fff", "#5a8fff"],
@@ -548,10 +553,6 @@ export class ManiaReplayRenderer {
     const index = this.findScrollVelocityIndex(time);
     return this.scrollVelocityCumulative[index]
       + (time - this.scrollVelocityTimes[index]) * this.scrollVelocityMultipliers[index];
-  }
-
-  private getVisualTimeDelta(targetTime: number): number {
-    return this.getScrollPosition(targetTime) - this.getScrollPosition(this.currentTime);
   }
 
   private measureCanvas() {
@@ -1547,8 +1548,8 @@ export class ManiaReplayRenderer {
     h: number,
     color: string,
     alpha: number,
-    fadeHeight: number,
-    minAlpha = 0,
+    _fadeHeight: number,
+    _minAlpha = 0,
   ) {
     if (w <= 0 || h <= 0 || alpha <= 0) return;
     const bottom = y + h;
@@ -1618,12 +1619,6 @@ export class ManiaReplayRenderer {
     if (radius <= 0 || alpha <= 0) return;
     const fadedAlpha = alpha * this.topFadeAlpha(Math.max(0, Math.min(y + radius, fadeHeight)), fadeHeight, minAlpha);
     this.strokeCircle(x, y, radius, color, fadedAlpha, width);
-  }
-
-  private rectWithTopFade(x: number, y: number, w: number, h: number, color: string, alpha: number, width: number, fadeHeight: number, minAlpha = 0) {
-    if (w <= 0 || h <= 0 || alpha <= 0) return;
-    const fadedAlpha = alpha * this.topFadeAlpha(Math.max(0, Math.min(y + h, fadeHeight)), fadeHeight, minAlpha);
-    this.rect(x, y, w, h, color, fadedAlpha, width);
   }
 
   private line(x1: number, y1: number, x2: number, y2: number, color: string, alpha: number, width: number) {

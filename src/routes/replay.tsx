@@ -26,18 +26,27 @@ import { unpackReplayFrames } from "../lib/replay-frames";
 import { parseReplayScoreInput } from "../lib/replay-score-input";
 import { getReplayScoreAvailability } from "../lib/replay-score-availability";
 import { DEFAULT_REPLAY_SCROLL_SPEED, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../lib/replay-scroll-speed";
+import {
+  normalizeReplayBackgroundDim,
+  normalizeReplayInputColor,
+  normalizeReplayVolume,
+  readReplayBackgroundDim,
+  readReplayInputColor,
+  readReplayInputOnly,
+  readReplayInputOverlay,
+  readReplayVolume,
+  writeReplayBackgroundDim,
+  writeReplayInputColor,
+  writeReplayInputOnly,
+  writeReplayInputOverlay,
+  writeReplayVolume,
+} from "../lib/replay-preferences";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import type { ReplaySkinSettings } from "../lib/replay-skin";
 import type { BeatmapScoreLookupStatus, OsuScore, OsuBeatmapset, OsuBeatmap } from "../lib/types";
 import type { ReplayRendererLike, ServerReplay } from "../lib/replay-types";
 import { getScoreExpectedCounts } from "../lib/replay-types";
 import { pageSeo } from "../lib/seo";
-
-const REPLAY_VOLUME_STORAGE_KEY = "mania-hub-replay-volume";
-const REPLAY_INPUT_OVERLAY_STORAGE_KEY = "mania-hub-replay-input-overlay";
-const REPLAY_INPUT_ONLY_STORAGE_KEY = "mania-hub-replay-input-only";
-const REPLAY_INPUT_COLOR_STORAGE_KEY = "mania-hub-replay-input-color";
-const REPLAY_BG_DIM_STORAGE_KEY = "mania-hub-replay-bg-dim";
 
 interface ReplaySearch {
   scoreId?: number;
@@ -601,35 +610,12 @@ function ReplayViewer({
   const modRate = getScoreRate(scoreInfo?.mods);
   const effectiveRate = speed * modRate;
   const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
-  const [bgDim, setBgDim] = useState(() => {
-    if (typeof window === "undefined") return 80;
-    const raw = window.localStorage.getItem(REPLAY_BG_DIM_STORAGE_KEY);
-    if (raw == null) return 80;
-    const stored = Number(raw);
-    return Number.isFinite(stored) ? Math.min(100, Math.max(0, stored)) : 80;
-  });
+  const [bgDim, setBgDim] = useState(readReplayBackgroundDim);
   const [audioEnabled, setAudioEnabled] = useState(true);
-  const [volume, setVolume] = useState(() => {
-    if (typeof window === "undefined") return 0.5;
-    const raw = window.localStorage.getItem(REPLAY_VOLUME_STORAGE_KEY);
-    if (raw == null) return 0.5;
-    const stored = Number(raw);
-    return Number.isFinite(stored) ? Math.min(1, Math.max(0, stored)) : 0.5;
-  });
-  const [showInputOverlay, setShowInputOverlay] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const stored = window.localStorage.getItem(REPLAY_INPUT_OVERLAY_STORAGE_KEY);
-    return stored == null ? false : stored === "true";
-  });
-  const [inputOverlayOnly, setInputOverlayOnly] = useState(() => {
-    if (typeof window === "undefined") return false;
-    const stored = window.localStorage.getItem(REPLAY_INPUT_ONLY_STORAGE_KEY);
-    return stored == null ? false : stored === "true";
-  });
-  const [inputOverlayColor, setInputOverlayColor] = useState(() => {
-    if (typeof window === "undefined") return "#a855f7";
-    return normalizeReplayInputColor(window.localStorage.getItem(REPLAY_INPUT_COLOR_STORAGE_KEY));
-  });
+  const [volume, setVolume] = useState(readReplayVolume);
+  const [showInputOverlay, setShowInputOverlay] = useState(readReplayInputOverlay);
+  const [inputOverlayOnly, setInputOverlayOnly] = useState(readReplayInputOnly);
+  const [inputOverlayColor, setInputOverlayColor] = useState(readReplayInputColor);
   const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
   const [skinSettingsOpen, setSkinSettingsOpen] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
@@ -885,27 +871,27 @@ function ReplayViewer({
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(REPLAY_VOLUME_STORAGE_KEY, String(volume));
+    writeReplayVolume(volume);
   }, [volume]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(REPLAY_INPUT_OVERLAY_STORAGE_KEY, String(showInputOverlay));
+    writeReplayInputOverlay(showInputOverlay);
   }, [showInputOverlay]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(REPLAY_INPUT_ONLY_STORAGE_KEY, String(inputOverlayOnly));
+    writeReplayInputOnly(inputOverlayOnly);
   }, [inputOverlayOnly]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(REPLAY_INPUT_COLOR_STORAGE_KEY, inputOverlayColor);
+    writeReplayInputColor(inputOverlayColor);
   }, [inputOverlayColor]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem(REPLAY_BG_DIM_STORAGE_KEY, String(bgDim));
+    writeReplayBackgroundDim(bgDim);
   }, [bgDim]);
 
   useEffect(() => {
@@ -1225,7 +1211,7 @@ function ReplayViewer({
         }}
         onToggleAudio={toggleAudio}
         onSetVolume={(nextVolume) => {
-          setVolume(nextVolume);
+          setVolume(normalizeReplayVolume(nextVolume));
           if (!audioEnabled && nextVolume > 0) setAudioEnabled(true);
           if (audioRef.current) audioRef.current.volume = nextVolume;
         }}
@@ -1238,8 +1224,9 @@ function ReplayViewer({
           rendererRef.current?.setScrollSpeed(nextSpeed);
         }}
         onSetBgDim={(nextDim) => {
-          setBgDim(nextDim);
-          rendererRef.current?.setBackgroundDim(nextDim);
+          const normalized = normalizeReplayBackgroundDim(nextDim);
+          setBgDim(normalized);
+          rendererRef.current?.setBackgroundDim(normalized);
         }}
         onPointerDown={handleProgressPointerDown}
         onPointerUp={handleProgressPointerUp}
@@ -1259,15 +1246,4 @@ function ReplayViewer({
       </AnimatePresence>
     </div>
   );
-}
-
-function normalizeEditableHex(value: string): string | null {
-  const trimmed = value.trim();
-  if (/^#[0-9a-f]{6}$/i.test(trimmed)) return trimmed.toLowerCase();
-  if (/^[0-9a-f]{6}$/i.test(trimmed)) return `#${trimmed.toLowerCase()}`;
-  return null;
-}
-
-function normalizeReplayInputColor(value: string | null): string {
-  return normalizeEditableHex(value ?? "") ?? "#a855f7";
 }

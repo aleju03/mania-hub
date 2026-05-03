@@ -48,6 +48,7 @@ import { detectManiaPatterns } from "./mania-patterns";
 import type {
   OsuUser,
   OsuScore,
+  OsuBeatmap,
   OsuBeatmapset,
   OsuGradeCounts,
   RankingsResponse,
@@ -77,7 +78,10 @@ import type {
   CountryTopPlay,
   TopPlaysRefreshStatus,
   TopPlaysResponse,
+  LeanDanEstimate,
 } from "./types";
+import { parseManiaBeatmap } from "./beatmap-parser";
+import { estimateDan } from "./dan-estimator";
 import { isSupportedCountryCode, normalizeCountryCode } from "./country";
 
 // Raw shape returned by the osu! API's /rankings endpoint. We never expose
@@ -159,7 +163,6 @@ const COUNTRY_BEATMAP_SCORES_CACHE_TTL = 2 * 60 * 1000;
 const COUNTRY_BEATMAP_USER_SCORE_CACHE_TTL = 10 * 60 * 1000;
 const BEATMAP_USER_SCORES_ALL_CACHE_TTL = 10 * 60 * 1000;
 const COUNTRY_BEATMAP_LOOKUP_CONCURRENCY = 15;
-const COUNTRY_BEATMAP_PLAYER_PAGE_LIMIT = 2; // Match the rest of the app's top-100 country player scope.
 const USER_PROFILE_INSIGHTS_CACHE_TTL = 6 * 60 * 60 * 1000;
 const USER_PROFILE_INSIGHTS_CACHE_VERSION = 6;
 const HOME_PAGE_CACHE_TTL = 60 * 1000;
@@ -3365,3 +3368,88 @@ export const getPartialSnipeEvents = createServerFn({ method: "GET" })
     const country = normalizeCountryCode(data.country);
     return (await getPersistentCached<SnipeEvent[]>(snipesPartialEventsKey(country))) ?? [];
   });
+
+// ── Dan Estimates ──────────────────────────────────────────────────────────────
+
+const DAN_ESTIMATE_CACHE_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
+const DAN_ESTIMATE_CONCURRENCY = 6;
+
+function danCacheKey(beatmapId: number, rate: number): string {
+  const r = Math.round(rate * 100);
+  return r === 100 ? `dan:v1:${beatmapId}` : `dan:v1:${beatmapId}:r${r}`;
+}
+
+interface DanEstimateRequest {
+  beatmapId: number;
+  starRating?: number;
+  rate?: number;
+}
+
+async function computeDanEstimate(
+  req: DanEstimateRequest,
+): Promise<LeanDanEstimate | null> {
+  const rate = req.rate ?? 1;
+  const key = danCacheKey(req.beatmapId, rate);
+  const cached = await getPersistentCached<LeanDanEstimate>(key);
+  if (cached) return cached;
+
+  try {
+    const osuFile = await fetchBeatmapFile(req.beatmapId);
+    const map = parseManiaBeatmap(osuFile);
+    if (map.keyCount !== 4) return null;
+
+    const estimate = estimateDan(map, {
+      starRating: req.starRating,
+      rate: rate !== 1 ? rate : undefined,
+    });
+
+    const lean: LeanDanEstimate = {
+      label: estimate.label,
+      variant: estimate.variant,
+      displayName: estimate.displayName,
+      rawDan: estimate.rawDan,
+      family: estimate.family,
+      confidence: estimate.confidence,
+    };
+
+    await setPersistentCache(key, lean, DAN_ESTIMATE_CACHE_TTL);
+    return lean;
+  } catch {
+    return null;
+  }
+}
+
+export const getDanEstimates = createServerFn({ method: "GET" })
+  .inputValidator(
+    (input: { items?: unknown[] }): { items: DanEstimateRequest[] } => {
+      const raw = asInputRecord(input);
+      const items = Array.isArray(raw.items) ? raw.items : [];
+      return {
+        items: items.map((item: any) => ({
+          beatmapId: Number(item.beatmapId),
+          starRating: item.starRating != null ? Number(item.starRating) : undefined,
+          rate: item.rate != null ? Number(item.rate) : undefined,
+        })),
+      };
+    },
+  )
+  .handler(
+    async ({
+      data,
+    }: {
+      data: { items: DanEstimateRequest[] };
+    }): Promise<Record<string, LeanDanEstimate | null>> => {
+      edgeCache(3600, 86400);
+
+      const results: Record<string, LeanDanEstimate | null> = {};
+      await mapWithConcurrency(data.items, DAN_ESTIMATE_CONCURRENCY, async (req) => {
+        const rate = req.rate ?? 1;
+        const key = rate === 1
+          ? String(req.beatmapId)
+          : `${req.beatmapId}:${Math.round(rate * 100)}`;
+        results[key] = await computeDanEstimate(req);
+      });
+
+      return results;
+    },
+  );

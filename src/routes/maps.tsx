@@ -598,11 +598,6 @@ function setAudioPreservesPitch(audio: HTMLAudioElement, preservesPitch: boolean
   pitchAudio.webkitPreservesPitch = preservesPitch;
 }
 
-function formatMegabytes(bytes: number | null): string | null {
-  if (bytes == null || !Number.isFinite(bytes) || bytes <= 0) return null;
-  return `${(bytes / (1024 * 1024)).toFixed(bytes >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
-}
-
 function matchesKeyFilter(kc: number | null, filter: KeyFilter): boolean {
   if (filter === "all") return true;
   if (filter === "4k") return kc === 4;
@@ -2832,7 +2827,8 @@ function RandomReplayPreview({
       void renderer.ready().then(() => {
         if (cancelled || rendererRef.current !== renderer) return;
         onReady();
-        if (isPlayingRef.current) renderer.play();
+        const activeRenderer = rendererRef.current;
+        if (isPlayingRef.current) activeRenderer?.play();
       });
     });
 
@@ -3027,7 +3023,6 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const replayPreviewStartSeconds = replayAudioMode === "set-preview"
     ? 0
     : Math.max(0, replayChartStartMs / 1000);
-  const replayAudioSizeLabel = formatMegabytes(replayAudioSizeBytes);
 
   // Some beatmapsets have no background image — the cover URL 404s. Track load
   // failure so we can swap in a deterministic gradient fallback.

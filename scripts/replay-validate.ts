@@ -302,7 +302,7 @@ async function validateScoreId(scoreId: number, options: CliOptions): Promise<Re
   const frames = decodeFrames(decoded);
   const mods = getModAcronyms(fixture.score.mods, false);
   const isLazer = isLazerScore(fixture.score);
-  const keyCount = beatmap.keyCount || Math.round(Number(fixture.score.beatmap?.cs)) || decoded.keyCount || 4;
+  const keyCount = beatmap.keyCount || Math.round(Number(fixture.score.beatmap?.cs)) || Number((decoded as { keyCount?: number }).keyCount) || 4;
   const result = validateReplaySimulation({
     expectedCounts: pickExpectedCounts(fixture.score, decoded.info),
     expectedMaxCombo: pickExpectedMaxCombo(fixture.score, decoded.info),

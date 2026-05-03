@@ -28,6 +28,7 @@ import {
 import { GradeImg } from "../../components/ui/GradeImg";
 import { ModBadge } from "../../components/ui/ModBadge";
 import { LazerBadge } from "../../components/ui/LazerBadge";
+import { DanBadge } from "../../components/ui/DanBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
 import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCardPanel } from "../../components/player/ManiaCard";
@@ -1123,7 +1124,9 @@ function PlayerPage() {
               <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 px-4 py-3 text-sm text-osu-f1">
                 {insightsError}
               </div>
-            ) : displayedProfileInsights && displayedProfileInsights.sampleSize > 0 ? (
+            ) : displayedProfileInsights && displayedProfileInsights.sampleSize > 0 ? (() => {
+              const profileInsights = displayedProfileInsights;
+              return (
               <div className="space-y-3">
                 {/* Row 1: Key Split + Most Used Mod + BPM + PP Range */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -1208,7 +1211,8 @@ function PlayerPage() {
                   <TopPlayCard label="Oldest Top Play" snapshot={displayedProfileInsights.oldestTopPlay} />
                 </div>
               </div>
-            ) : null}
+              );
+            })() : null}
           </div>
 
           {/* Grades */}
@@ -2198,6 +2202,7 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
               {keys}K
             </span>
           )}
+          <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
         </div>
         <span className="text-[10px] text-osu-f1">
           {score.beatmapset?.artist} &middot; {formatTimeAgo(getScoreTimestamp(score))}
@@ -2209,6 +2214,7 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
               <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
             ))}
           </div>
+          <DanBadge score={score} />
           <span className="text-xs text-osu-l2">{formatAccuracy(display.accuracy)}</span>
           <span className="text-xs text-osu-f1">{formatNumber(score.max_combo)}x</span>
           {hasPp && <span className="text-sm font-bold ml-auto">{formatPP(score.pp)}</span>}

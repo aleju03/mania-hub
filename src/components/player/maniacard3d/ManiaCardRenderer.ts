@@ -6,6 +6,7 @@ import {
   Scene,
   WebGLRenderer,
 } from "three";
+import type { Object3D } from "three";
 import { createCardBodyGeometry, createCardFaceGeometry, FACE_Z_OFFSET, OVERLAY_Z_OFFSET } from "./cardGeometry";
 import { createEdgeMaterial, createFaceMaterial, createOverlayMaterial } from "./cardMaterials";
 import { createCardTextures, type CardTextureSet } from "./cardTexture";
@@ -134,7 +135,7 @@ export class ManiaCardRenderer {
       this.orientationAttached = false;
     }
     this.textures?.dispose();
-    this.group.traverse((object) => {
+    this.group.traverse((object: Object3D) => {
       const mesh = object as Mesh;
       if (mesh.geometry) mesh.geometry.dispose();
       const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
@@ -172,7 +173,7 @@ export class ManiaCardRenderer {
     this.group.rotation.y = frontFacingOffset + (this.interaction.rotation.y * Math.PI) / 180;
 
     if (this.overlay?.material && "uniforms" in this.overlay.material) {
-      const uniforms = this.overlay.material.uniforms;
+      const uniforms = this.overlay.material.uniforms as any;
       uniforms.uTime.value = time;
       uniforms.uLight.value.set(this.interaction.light.x, this.interaction.light.y);
     }

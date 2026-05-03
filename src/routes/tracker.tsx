@@ -24,6 +24,7 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
+import { DanBadge } from "../components/ui/DanBadge";
 import { TrackerRowSkeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import { TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useSelectedCountry } from "../store";
@@ -733,6 +734,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                 {keys}K
               </span>
             )}
+            <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
           </div>
           {/* Row 3 (mobile): Mods left, stats right */}
           <div className="flex items-center justify-between gap-2 mt-1 sm:hidden">
@@ -740,6 +742,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               {getModDisplayList(score.mods).map((m) => (
                 <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
               ))}
+              <DanBadge score={score} />
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className={`text-xs ${accColorClass}`}>{formatAccuracy(getDisplayedAccuracy(score))}</span>

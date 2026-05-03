@@ -11,10 +11,11 @@ import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
+import { DanBadge } from "../components/ui/DanBadge";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import { Pagination } from "../components/ui/Pagination";
-import type { CountryTopPlay, OsuScore, RankingsResponse, TopPlaysRefreshStatus } from "../lib/types";
+import type { CountryTopPlay, RankingsResponse, TopPlaysRefreshStatus } from "../lib/types";
 import { useAppStore, useSelectedCountry, type CachedPopoff, type TopPlaysRange } from "../store";
 import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
@@ -794,6 +795,7 @@ function PopOffsPage() {
                           <span className="text-[10px] text-osu-f1 truncate">
                             [{p.score.beatmap?.version}]
                           </span>
+                          <span className="hidden sm:inline flex-shrink-0"><DanBadge score={p.score} /></span>
                         </div>
                         {/* Row 3 (mobile): Mods left, accuracy right */}
                         <div className="flex items-center justify-between gap-2 mt-1 sm:hidden">
@@ -801,6 +803,7 @@ function PopOffsPage() {
                             {getModDisplayList(p.score.mods).map((m) => (
                               <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
                             ))}
+                            <DanBadge score={p.score} />
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <span className={`text-xs ${accColorClass}`}>{formatAccuracy(getDisplayedAccuracy(p.score))}</span>

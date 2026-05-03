@@ -32,7 +32,7 @@ function score(starRating: number, pp: number): OsuScore {
       hp: 6,
       version: "Test",
     },
-  } as OsuScore;
+  } as unknown as OsuScore;
 }
 
 describe("buildManiaCardRenderData", () => {
