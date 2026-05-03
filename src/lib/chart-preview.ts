@@ -5,11 +5,49 @@ export const RANDOM_REPLAY_PREVIEW_MS = 10_000;
 export const RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS = 1_200;
 
 const RANDOM_REPLAY_TAP_HOLD_MS = 48;
+const DENSE_PREVIEW_LEAD_IN_MS = 1_000;
 
 export function pickPreviewStartTime(primaryTimeMs: number, fallbackTimeMs = 0): number {
   if (Number.isFinite(primaryTimeMs) && primaryTimeMs > 0) return primaryTimeMs;
   if (Number.isFinite(fallbackTimeMs) && fallbackTimeMs > 0) return fallbackTimeMs;
   return 0;
+}
+
+export function hasPreviewNotes(beatmap: ManiaBeatmap, startTimeMs = beatmap.previewTime, timeScale = 1): boolean {
+  return getPreviewNotes(beatmap, startTimeMs, timeScale).length > 0;
+}
+
+export function findDensestPreviewStartTime(beatmap: ManiaBeatmap, timeScale = 1): number {
+  if (!beatmap.notes.length) return 0;
+
+  const notes = [...beatmap.notes].sort((a, b) => a.time - b.time);
+  const scale = Math.max(0.1, timeScale);
+  const playbackWindowMs = RANDOM_REPLAY_PREVIEW_MS * scale;
+  let bestStart = Math.max(0, notes[0].time - DENSE_PREVIEW_LEAD_IN_MS);
+  let bestScore = -1;
+  let windowLeft = 0;
+  let right = 0;
+
+  for (let i = 0; i < notes.length; i++) {
+    const start = Math.max(0, notes[i].time - DENSE_PREVIEW_LEAD_IN_MS);
+    const end = start + playbackWindowMs;
+
+    while (windowLeft < notes.length && notes[windowLeft].time < start) {
+      windowLeft++;
+    }
+
+    while (right < notes.length && notes[right].time <= end) {
+      right++;
+    }
+
+    const score = right - windowLeft;
+    if (score > bestScore) {
+      bestScore = score;
+      bestStart = start;
+    }
+  }
+
+  return Math.max(0, Math.round(bestStart));
 }
 
 export function getPreviewNotes(beatmap: ManiaBeatmap, startTimeMs = beatmap.previewTime, timeScale = 1): ManiaNote[] {

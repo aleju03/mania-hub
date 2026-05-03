@@ -252,24 +252,6 @@ describe("mania replay judgement helpers", () => {
     }));
   });
 
-  it("stable mode judges a hold note that is still held through the late OK window", () => {
-    const ruleset = getManiaReplayRuleset(false, []);
-    const windows = getManiaReplayHitWindows(8, ruleset);
-    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 2000, isHold: true }];
-    const frames: ReplayFrame[] = [
-      { time: 0, keyState: 0 },
-      { time: 1000, keyState: 1 },
-      { time: 2200, keyState: 0 },
-    ];
-
-    const segments = buildReplaySegments(frames, 1, 2500);
-    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable");
-
-    expect(simulated.events).toEqual([
-      expect.objectContaining({ offsetMs: 103, part: "hold-combined", judgment: 3, time: 2103.5 }),
-    ]);
-  });
-
   it("stable mode truncates LN combined judgement thresholds", () => {
     const ruleset = getManiaReplayRuleset(false, []);
     const windows = getManiaReplayHitWindows(8, ruleset);

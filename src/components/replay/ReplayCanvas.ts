@@ -904,7 +904,7 @@ export class ManiaReplayRenderer {
 
         const bodyBottom = bottom;
         const bodyTop = Math.min(top + percyTrim, bodyBottom - noteHeight);
-        this.roundRectWithTopFade(x, bodyTop, barWidth, bodyBottom - bodyTop, 2, color, bodyAlpha, noteFadeHeight, 0.55);
+        this.barLnBodyWithTopFade(x, bodyTop, barWidth, bodyBottom - bodyTop, color, bodyAlpha, noteFadeHeight, 0.55);
       } else {
         if (note.time < this.currentTime - 10 && !headResolved) continue;
 
@@ -1393,6 +1393,40 @@ export class ManiaReplayRenderer {
     const bottom = y + h;
     if (bottom <= 0) return;
     this.roundRect(x, y, w, h, w / 2, color, alpha);
+  }
+
+  private barLnBodyWithTopFade(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    color: string,
+    alpha: number,
+    fadeHeight: number,
+    minAlpha = 0,
+  ) {
+    if (w <= 0 || h <= 0 || alpha <= 0) return;
+    if (fadeHeight <= 0 || y >= fadeHeight) {
+      this.fillRect(x, y, w, h, color, alpha);
+      return;
+    }
+
+    const bottom = y + h;
+    if (bottom <= 0) return;
+    const fadeBottom = Math.min(bottom, fadeHeight);
+    const start = Math.max(y, 0);
+    const sliceCount = 10;
+    const sliceHeight = (fadeBottom - start) / sliceCount;
+
+    for (let i = 0; i < sliceCount; i++) {
+      const sliceY = start + sliceHeight * i;
+      const sliceAlpha = alpha * this.topFadeAlpha(sliceY + sliceHeight, fadeHeight, minAlpha);
+      this.fillRect(x, sliceY, w, sliceHeight + 0.5, color, sliceAlpha);
+    }
+
+    if (bottom > fadeHeight) {
+      this.fillRect(x, fadeHeight, w, bottom - fadeHeight, color, alpha);
+    }
   }
 
   private circleWithTopFade(

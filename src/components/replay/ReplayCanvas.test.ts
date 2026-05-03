@@ -119,7 +119,7 @@ describe("ManiaReplayRenderer skin customization", () => {
   it("draws circle LN bodies rounded and at normal opacity near the top", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
     const circleBranch = /if \(this\.skinSettings\.style === "circles"\) \{([\s\S]*?)\n          continue;\n        \}/.exec(source);
-    const helper = /private circleLnBodyWithTopFade\(([\s\S]*?)\n  private circleWithTopFade/.exec(source);
+    const helper = /private circleLnBodyWithTopFade\(([\s\S]*?)\n  private barLnBodyWithTopFade/.exec(source);
 
     expect(circleBranch?.[1]).toBeTruthy();
     expect(circleBranch![1]).toContain("this.circleLnBodyWithTopFade(");
@@ -165,9 +165,19 @@ describe("ManiaReplayRenderer skin customization", () => {
 
     expect(source).toContain("const bodyBottom = bottom;");
     expect(source).toContain("const bodyTop = Math.min(top + percyTrim, bodyBottom - noteHeight);");
-    expect(source).toContain("this.roundRectWithTopFade(x, bodyTop, barWidth, bodyBottom - bodyTop, 2, color, bodyAlpha");
+    expect(source).toContain("this.barLnBodyWithTopFade(x, bodyTop, barWidth, bodyBottom - bodyTop, color, bodyAlpha");
     expect(source).not.toContain("bottom - noteHeight, barWidth, noteHeight");
     expect(source).not.toContain("noteHeight / 2, 2, color, headAlpha");
+  });
+
+  it("draws bar LN fade slices without rounded mini-note caps", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+    const helper = /private barLnBodyWithTopFade\(([\s\S]*?)\n  private circleWithTopFade/.exec(source);
+
+    expect(helper?.[1]).toBeTruthy();
+    expect(helper![1]).toContain("this.fillRect(x, sliceY, w, sliceHeight + 0.5, color, sliceAlpha);");
+    expect(helper![1]).toContain("this.fillRect(x, fadeHeight, w, bottom - fadeHeight, color, alpha);");
+    expect(helper![1]).not.toContain("this.roundRect(");
   });
 
   it("uses per-column skin colors for circle notes and LN heads", () => {

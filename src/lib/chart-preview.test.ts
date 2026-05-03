@@ -4,6 +4,8 @@ import {
   RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS,
   RANDOM_REPLAY_PREVIEW_MS,
   buildAutoplayFrames,
+  findDensestPreviewStartTime,
+  hasPreviewNotes,
   getPreviewNotes,
   getPreviewScrollVelocities,
   pickPreviewStartTime,
@@ -60,5 +62,23 @@ describe("chart preview helpers", () => {
     expect(pickPreviewStartTime(-1, 54_744)).toBe(54_744);
     expect(pickPreviewStartTime(0, 54_744)).toBe(54_744);
     expect(pickPreviewStartTime(59_716, 54_744)).toBe(59_716);
+  });
+
+  it("finds a dense chart preview start when the mapped preview is empty", () => {
+    const beatmap: ManiaBeatmap = {
+      ...baseBeatmap,
+      previewTime: 5_000,
+      notes: [
+        { column: 0, time: 28_000, endTime: 28_000, isHold: false },
+        { column: 1, time: 40_000, endTime: 40_000, isHold: false },
+        { column: 2, time: 40_250, endTime: 40_250, isHold: false },
+        { column: 3, time: 40_500, endTime: 40_500, isHold: false },
+        { column: 0, time: 40_750, endTime: 40_750, isHold: false },
+      ],
+    };
+
+    expect(hasPreviewNotes(beatmap, beatmap.previewTime)).toBe(false);
+    expect(findDensestPreviewStartTime(beatmap)).toBe(39_000);
+    expect(hasPreviewNotes(beatmap, findDensestPreviewStartTime(beatmap))).toBe(true);
   });
 });

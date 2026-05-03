@@ -42,9 +42,11 @@ import { parseCountrySearchParam, withSearchParams } from "../lib/country-search
 import {
   RANDOM_REPLAY_PREVIEW_MS,
   buildAutoplayFrames,
+  findDensestPreviewStartTime,
   getPreviewInitialCombo,
   getPreviewNotes,
   getPreviewScrollVelocities,
+  hasPreviewNotes,
   pickPreviewStartTime,
 } from "../lib/chart-preview";
 import { readReplayScrollSpeed } from "../lib/replay-scroll-speed";
@@ -635,6 +637,42 @@ function matchesSearch(title: string, artist: string, query: string): boolean {
   return (title ?? "").toLowerCase().includes(q) || (artist ?? "").toLowerCase().includes(q);
 }
 
+function normalizeRandomForceSearch(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function matchesRandomForceSearch(
+  pair: { player: MapsPlayerFavourites; beatmapset: MapsFavouriteBeatmapset },
+  query: string,
+): boolean {
+  const tokens = normalizeRandomForceSearch(query).split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) return false;
+
+  const beatmapset = pair.beatmapset;
+  const haystack = normalizeRandomForceSearch([
+    beatmapset.id,
+    beatmapset.title,
+    beatmapset.artist,
+    beatmapset.creator,
+    beatmapset.status,
+    pair.player.username,
+    ...(beatmapset.patterns ?? []),
+    ...(beatmapset.maniaKeys ?? []).map((key) => `${key}k`),
+    ...(beatmapset.maniaBeatmaps ?? []).flatMap((beatmap) => [
+      beatmap.id,
+      beatmap.version,
+      `${Math.round(beatmap.cs)}k`,
+      beatmap.difficultyRating.toFixed(2),
+    ]),
+  ].join(" "));
+
+  return tokens.every((token) => haystack.includes(token));
+}
+
 function getLatestFarmedPlayTime(entry: MapsFarmedEntry): number {
   return entry.players.reduce((latest, player) => {
     const time = new Date(player.playedAt ?? 0).getTime();
@@ -805,6 +843,7 @@ function MapsPage() {
   const rStarsMax = mapsSearch.rStarsMax;
   const rWeight = mapsSearch.rWeight;
   const rAvoidRepeats = mapsSearch.rAvoidRepeats;
+  const isDevMode = import.meta.env.VITE_DEV_MODE === "1";
   const randomStatus = useMemo(() => parseTriStateCsv(rStatusRaw, RANDOM_STATUS_OPTIONS), [rStatusRaw]);
   const randomKey = useMemo(() => parseTriStateCsv(rKeyRaw, RANDOM_KEY_OPTIONS), [rKeyRaw]);
   const randomPattern = useMemo(() => parseTriStateCsv(rPatternRaw, RANDOM_PATTERN_OPTIONS), [rPatternRaw]);
@@ -1129,7 +1168,10 @@ function MapsPage() {
   const recentRandomPlayerIdsRef = useRef<number[]>([]);
   const recentRandomBeatmapIdsRef = useRef<number[]>([]);
   const [rerollMenuOpen, setRerollMenuOpen] = useState(false);
+  const [devRandomForceQuery, setDevRandomForceQuery] = useState("");
+  const [devRandomForceOpen, setDevRandomForceOpen] = useState(false);
   const rerollMenuRef = useRef<HTMLDivElement | null>(null);
+  const devRandomForceRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!rerollMenuOpen) return;
     const onDown = (e: MouseEvent) => {
@@ -1140,6 +1182,23 @@ function MapsPage() {
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [rerollMenuOpen]);
+
+  useEffect(() => {
+    if (!devRandomForceOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (devRandomForceRef.current && !devRandomForceRef.current.contains(e.target as Node)) {
+        setDevRandomForceOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [devRandomForceOpen]);
+
+  useEffect(() => {
+    if (tab !== "random" || devRandomForceQuery.trim().length < 2) {
+      setDevRandomForceOpen(false);
+    }
+  }, [devRandomForceQuery, tab]);
 
   // ── Mobile collapsible filter panel (shared across tabs) ────────────────
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -1228,6 +1287,19 @@ function MapsPage() {
     }
     return [...byId.values()];
   }, [randomPool]);
+
+  const devRandomForceMatches = useMemo(() => {
+    if (!isDevMode || tab !== "random" || devRandomForceQuery.trim().length < 2) return [];
+    return randomPool
+      .filter((pair) => matchesRandomForceSearch(pair, devRandomForceQuery))
+      .slice(0, 12);
+  }, [devRandomForceQuery, isDevMode, randomPool, tab]);
+
+  const forceDevRandomPick = useCallback((pair: { player: MapsPlayerFavourites; beatmapset: MapsFavouriteBeatmapset }) => {
+    setRandomPlayer(pair.player);
+    setRandomBeatmapset(pair.beatmapset);
+    setDevRandomForceOpen(false);
+  }, []);
 
   const reshuffleRandom = useCallback(() => {
     if (randomPlayerGroups.length === 0) {
@@ -1333,8 +1405,6 @@ function MapsPage() {
       setRebuilding(false);
     }
   };
-
-  const isDevMode = import.meta.env.VITE_DEV_MODE === "1";
 
   return (
     <div className="flex-1">
@@ -1731,6 +1801,78 @@ function MapsPage() {
           {/* Random tab */}
           {tab === "random" && !error && !isLoading && mapsData && (
             <div className="max-w-[640px] mx-auto space-y-5">
+              {isDevMode ? (
+                <div ref={devRandomForceRef} className="relative z-30 rounded-lg border border-osu-yellow/25 bg-osu-yellow/10 p-2.5">
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const first = devRandomForceMatches[0];
+                      if (!first) return;
+                      forceDevRandomPick(first);
+                    }}
+                    className="flex flex-col gap-2"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="shrink-0 rounded bg-osu-yellow/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-osu-yellow">
+                        Dev
+                      </span>
+                      <input
+                        type="text"
+                        value={devRandomForceQuery}
+                        onChange={(e) => {
+                          setDevRandomForceQuery(e.target.value);
+                          setDevRandomForceOpen(e.target.value.trim().length >= 2);
+                        }}
+                        onFocus={() => setDevRandomForceOpen(devRandomForceQuery.trim().length >= 2)}
+                        placeholder="Force random pick..."
+                        className="min-w-0 flex-1 rounded-md border border-osu-yellow/25 bg-osu-b5/70 px-2 py-1.5 text-[11px] text-osu-l2 placeholder:text-osu-f1 focus:outline-none focus:border-osu-yellow/50"
+                      />
+                      <button
+                        type="submit"
+                        disabled={devRandomForceMatches.length === 0}
+                        className="rounded-md bg-osu-yellow/20 px-2.5 py-1.5 text-[11px] font-semibold text-osu-yellow transition-colors hover:bg-osu-yellow/30 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        Force
+                      </button>
+                    </div>
+                    {devRandomForceOpen && devRandomForceQuery.trim().length >= 2 ? (
+                      <div className="absolute left-2.5 right-2.5 top-[calc(100%-0.35rem)] max-h-[260px] overflow-y-auto rounded-md border border-osu-b3/40 bg-osu-b5/95 shadow-2xl backdrop-blur-sm">
+                        {devRandomForceMatches.length > 0 ? devRandomForceMatches.map(({ player, beatmapset }) => (
+                          <button
+                            key={`${player.id}-${beatmapset.id}`}
+                            type="button"
+                            onClick={() => forceDevRandomPick({ player, beatmapset })}
+                            className="flex w-full items-center gap-2 px-2 py-1.5 text-left transition-colors hover:bg-osu-b3/70"
+                          >
+                            <img
+                              src={beatmapset.covers.list ?? beatmapset.covers.card}
+                              alt=""
+                              className="h-8 w-12 shrink-0 rounded object-cover"
+                              loading="lazy"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate text-[11px] font-semibold text-osu-l2">
+                                {beatmapset.title}
+                              </div>
+                              <div className="truncate text-[10px] text-osu-f1">
+                                {beatmapset.artist}{" \u00b7 "}{beatmapset.creator}{" \u00b7 "}{player.username}
+                              </div>
+                            </div>
+                            <span className="shrink-0 text-[10px] font-semibold text-osu-yellow">
+                              {"\u2605"}{formatStars(beatmapset) ?? "?"}
+                            </span>
+                          </button>
+                        )) : (
+                          <div className="px-2 py-2 text-[10px] text-osu-f1">
+                            No matches in the current random pool.
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                  </form>
+                </div>
+              ) : null}
+
               {randomPlayer && randomBeatmapset ? (
                 <>
                   <div className="flex flex-row items-center justify-between gap-3">
@@ -2939,20 +3081,30 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         const selectedParsed = parseManiaBeatmap(selectedResult.content);
         const referenceParsed = referenceResult ? parseManiaBeatmap(referenceResult.content) : selectedParsed;
         const timedRateVariant = usesSetPreviewForReplayAudio && isLikelyTimedRateVariantSet(maniaBeatmaps);
-        const visualParsed = timedRateVariant ? referenceParsed : selectedParsed;
+        let visualParsed = timedRateVariant ? referenceParsed : selectedParsed;
         const referenceStartMs = pickPreviewStartTime(referenceParsed.previewTime, selectedParsed.previewTime);
         const shouldUseSelectedAudio = !usesSetPreviewForReplayAudio;
-        const chartStartMs = shouldUseSelectedAudio
+        let chartStartMs = shouldUseSelectedAudio
           ? pickPreviewStartTime(selectedParsed.previewTime)
           : timedRateVariant
           ? referenceStartMs
           : usesSetPreviewForReplayAudio
           ? pickPreviewStartTime(selectedParsed.previewTime, referenceStartMs)
           : pickPreviewStartTime(selectedParsed.previewTime);
+        let chartTimeScale = timedRateVariant ? selectedDifficultyRate : 1;
+        let audioMode: "set-preview" | "selected-file" = shouldUseSelectedAudio ? "selected-file" : "set-preview";
+
+        if (!hasPreviewNotes(visualParsed, chartStartMs, chartTimeScale)) {
+          visualParsed = selectedParsed;
+          chartStartMs = findDensestPreviewStartTime(selectedParsed);
+          chartTimeScale = 1;
+          audioMode = "selected-file";
+        }
+
         setPreviewBeatmap(visualParsed);
         setReplayChartStartMs(chartStartMs);
-        setReplayChartTimeScale(timedRateVariant ? selectedDifficultyRate : 1);
-        setReplayAudioMode(shouldUseSelectedAudio ? "selected-file" : "set-preview");
+        setReplayChartTimeScale(chartTimeScale);
+        setReplayAudioMode(audioMode);
       })
       .catch(() => {
         if (cancelled) return;
