@@ -112,6 +112,9 @@ export function ReplaySkinSettingsModal({
 }: ReplaySkinSettingsModalProps) {
   const modalRef = useRef<HTMLDivElement | null>(null);
   const oskInputRef = useRef<HTMLInputElement | null>(null);
+  const [windowRect, setWindowRect] = useState<WindowRect | null>(null);
+  const dragStateRef = useRef<{ pointerId: number; startX: number; startY: number; startRect: WindowRect } | null>(null);
+  const resizeStateRef = useRef<{ pointerId: number; dir: ResizeDirection; startX: number; startY: number; startRect: WindowRect } | null>(null);
   const [draft, setDraft] = useState(() => normalizeReplaySkinSettings(settings));
   const [presets, setPresets] = useState<ReplaySkinPreset[]>(() => readReplaySkinPresets());
   const [selectedPresetId, setSelectedPresetId] = useState("custom");
@@ -189,6 +192,124 @@ export function ReplaySkinSettingsModal({
     document.addEventListener("pointerdown", handler);
     return () => document.removeEventListener("pointerdown", handler);
   }, [selectedColumns.length]);
+
+  useEffect(() => {
+    if (windowRect != null) return;
+    if (typeof window === "undefined") return;
+    const stored = readStoredWindowRect();
+    const initial = stored ?? defaultWindowRect(window.innerWidth, window.innerHeight);
+    setWindowRect(clampWindowRect(initial, window.innerWidth, window.innerHeight));
+  }, [windowRect]);
+
+  useEffect(() => {
+    if (!windowRect) return;
+    writeStoredWindowRect(windowRect);
+  }, [windowRect]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handle = () => {
+      setWindowRect((current) => (current ? clampWindowRect(current, window.innerWidth, window.innerHeight) : current));
+    };
+    window.addEventListener("resize", handle);
+    return () => window.removeEventListener("resize", handle);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  const handleHeaderPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    if (!windowRect) return;
+    const target = event.target;
+    if (target instanceof Element && target.closest("[data-window-no-drag]")) return;
+    event.preventDefault();
+    dragStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startRect: windowRect,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleHeaderPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = dragStateRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+    const dx = event.clientX - state.startX;
+    const dy = event.clientY - state.startY;
+    setWindowRect(clampWindowRect(
+      { ...state.startRect, x: state.startRect.x + dx, y: state.startRect.y + dy },
+      window.innerWidth,
+      window.innerHeight,
+    ));
+  };
+
+  const handleHeaderPointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = dragStateRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+    dragStateRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const handleResizePointerDown = (dir: ResizeDirection) => (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    if (!windowRect) return;
+    event.preventDefault();
+    event.stopPropagation();
+    resizeStateRef.current = {
+      pointerId: event.pointerId,
+      dir,
+      startX: event.clientX,
+      startY: event.clientY,
+      startRect: windowRect,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleResizePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = resizeStateRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+    const dx = event.clientX - state.startX;
+    const dy = event.clientY - state.startY;
+    let { x, y, w, h } = state.startRect;
+    if (state.dir.includes("e")) {
+      w = state.startRect.w + dx;
+    }
+    if (state.dir.includes("s")) {
+      h = state.startRect.h + dy;
+    }
+    if (state.dir.includes("w")) {
+      const requested = state.startRect.w - dx;
+      const newW = Math.max(WINDOW_MIN_WIDTH, requested);
+      x = state.startRect.x + (state.startRect.w - newW);
+      w = newW;
+    }
+    if (state.dir.includes("n")) {
+      const requested = state.startRect.h - dy;
+      const newH = Math.max(WINDOW_MIN_HEIGHT, requested);
+      y = state.startRect.y + (state.startRect.h - newH);
+      h = newH;
+    }
+    setWindowRect(clampWindowRect({ x, y, w, h }, window.innerWidth, window.innerHeight));
+  };
+
+  const handleResizePointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = resizeStateRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+    resizeStateRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
 
   const update = (patch: Partial<ReplaySkinSettings>) => {
     setDraft((current) => normalizeReplaySkinSettings({ ...current, ...patch, version: 2 }));
@@ -548,21 +669,38 @@ export function ReplaySkinSettingsModal({
       />
       <motion.div
         ref={modalRef}
-        className="fixed inset-x-3 top-1/2 z-[111] mx-auto flex h-[min(640px,calc(100vh-2rem))] max-w-3xl flex-col overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
-        initial={{ opacity: 0, y: "-48%", scale: 0.98 }}
-        animate={{ opacity: 1, y: "-50%", scale: 1 }}
-        exit={{ opacity: 0, y: "-48%", scale: 0.98 }}
+        className={`fixed z-[111] flex flex-col overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl ${
+          windowRect ? "" : "pointer-events-none opacity-0"
+        }`}
+        style={{
+          left: windowRect?.x ?? -9999,
+          top: windowRect?.y ?? -9999,
+          width: windowRect?.w ?? WINDOW_DEFAULT_WIDTH,
+          height: windowRect?.h ?? WINDOW_DEFAULT_HEIGHT,
+        }}
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.98 }}
         transition={{ duration: 0.14 }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 border-b border-osu-b3/50 px-5 py-4">
+        <div
+          onPointerDown={handleHeaderPointerDown}
+          onPointerMove={handleHeaderPointerMove}
+          onPointerUp={handleHeaderPointerEnd}
+          onPointerCancel={handleHeaderPointerEnd}
+          className="flex cursor-grab select-none items-center gap-3 border-b border-osu-b3/50 px-5 py-4 active:cursor-grabbing"
+        >
+          <GripHorizontal className="h-4 w-4 shrink-0 text-osu-f1" />
           <div>
             <h3 className="text-base font-bold text-white">Replay settings</h3>
             <div className="text-[10px] uppercase tracking-wider text-osu-f1">{activeTab === "style" ? "Style" : "Layout"}</div>
           </div>
           <button
             onClick={onClose}
+            onPointerDown={(e) => e.stopPropagation()}
             aria-label="Close replay settings"
+            data-window-no-drag
             className="ml-auto flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg bg-osu-b3/50 text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
           >
             <X className="h-4 w-4" strokeWidth={2.4} />
@@ -871,6 +1009,18 @@ export function ReplaySkinSettingsModal({
             Apply
           </button>
         </div>
+
+        {RESIZE_HANDLES.map(({ dir, className, cursor }) => (
+          <div
+            key={dir}
+            onPointerDown={handleResizePointerDown(dir)}
+            onPointerMove={handleResizePointerMove}
+            onPointerUp={handleResizePointerEnd}
+            onPointerCancel={handleResizePointerEnd}
+            className={`absolute z-10 ${className}`}
+            style={{ cursor }}
+          />
+        ))}
       </motion.div>
 
       {activeColor ? (
@@ -1977,6 +2127,70 @@ function FancySelect({
 }
 
 const POPOVER_POSITION_STORAGE_PREFIX = "mania-hub-replay-popover-pos:";
+
+const WINDOW_RECT_STORAGE_KEY = "mania-hub-replay-settings-window-v1";
+const WINDOW_DEFAULT_WIDTH = 720;
+const WINDOW_DEFAULT_HEIGHT = 640;
+const WINDOW_MIN_WIDTH = 460;
+const WINDOW_MIN_HEIGHT = 380;
+const WINDOW_VIEWPORT_MARGIN = 8;
+
+type WindowRect = { x: number; y: number; w: number; h: number };
+type ResizeDirection = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+
+function readStoredWindowRect(): WindowRect | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(WINDOW_RECT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.x !== "number" || typeof parsed.y !== "number" || typeof parsed.w !== "number" || typeof parsed.h !== "number") {
+      return null;
+    }
+    return { x: parsed.x, y: parsed.y, w: parsed.w, h: parsed.h };
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredWindowRect(rect: WindowRect): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(WINDOW_RECT_STORAGE_KEY, JSON.stringify(rect));
+  } catch {
+    // ignore quota errors
+  }
+}
+
+function clampWindowRect(rect: WindowRect, viewportW: number, viewportH: number): WindowRect {
+  const margin = WINDOW_VIEWPORT_MARGIN;
+  const maxW = Math.max(WINDOW_MIN_WIDTH, viewportW - margin * 2);
+  const maxH = Math.max(WINDOW_MIN_HEIGHT, viewportH - margin * 2);
+  const w = Math.max(WINDOW_MIN_WIDTH, Math.min(rect.w, maxW));
+  const h = Math.max(WINDOW_MIN_HEIGHT, Math.min(rect.h, maxH));
+  const x = Math.max(margin, Math.min(rect.x, Math.max(margin, viewportW - w - margin)));
+  const y = Math.max(margin, Math.min(rect.y, Math.max(margin, viewportH - h - margin)));
+  return { x, y, w, h };
+}
+
+function defaultWindowRect(viewportW: number, viewportH: number): WindowRect {
+  const w = Math.min(WINDOW_DEFAULT_WIDTH, Math.max(WINDOW_MIN_WIDTH, viewportW - WINDOW_VIEWPORT_MARGIN * 2));
+  const h = Math.min(WINDOW_DEFAULT_HEIGHT, Math.max(WINDOW_MIN_HEIGHT, viewportH - WINDOW_VIEWPORT_MARGIN * 2));
+  const x = Math.max(WINDOW_VIEWPORT_MARGIN, Math.round((viewportW - w) / 2));
+  const y = Math.max(WINDOW_VIEWPORT_MARGIN, Math.round((viewportH - h) / 2));
+  return { x, y, w, h };
+}
+
+const RESIZE_HANDLES: ReadonlyArray<{ dir: ResizeDirection; className: string; cursor: string }> = [
+  { dir: "n",  className: "left-2 right-2 top-0 h-1.5",            cursor: "ns-resize" },
+  { dir: "s",  className: "left-2 right-2 bottom-0 h-1.5",         cursor: "ns-resize" },
+  { dir: "w",  className: "top-2 bottom-2 left-0 w-1.5",           cursor: "ew-resize" },
+  { dir: "e",  className: "top-2 bottom-2 right-0 w-1.5",          cursor: "ew-resize" },
+  { dir: "nw", className: "top-0 left-0 h-3 w-3",                  cursor: "nwse-resize" },
+  { dir: "ne", className: "top-0 right-0 h-3 w-3",                 cursor: "nesw-resize" },
+  { dir: "sw", className: "bottom-0 left-0 h-3 w-3",               cursor: "nesw-resize" },
+  { dir: "se", className: "bottom-0 right-0 h-3 w-3",              cursor: "nwse-resize" },
+];
 
 function readStoredPopoverPosition(storageKey: string | undefined): { x: number; y: number } | null {
   if (!storageKey || typeof window === "undefined") return null;
