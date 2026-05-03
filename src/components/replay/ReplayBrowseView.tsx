@@ -29,11 +29,11 @@ const PLAYER_BEATMAP_SEARCH_DEBOUNCE_MS = 650;
 function getJudgementCounts(score: OsuScore): { label: string; value: number; tone: string }[] {
   const stats = score.statistics ?? {};
   return [
-    { label: "MAX", value: stats.count_geki ?? stats.perfect ?? 0, tone: "text-osu-yellow" },
-    { label: "300", value: stats.count_300 ?? stats.great ?? 0, tone: "text-osu-blue" },
+    { label: "MAX", value: stats.count_geki ?? stats.perfect ?? 0, tone: "bg-[linear-gradient(180deg,#9b2cff_0%,#1d65ff_28%,#41d9ff_48%,#4fdc3a_64%,#ffe234_82%,#ff9a1f_100%)] bg-clip-text text-transparent" },
+    { label: "300", value: stats.count_300 ?? stats.great ?? 0, tone: "text-osu-yellow" },
     { label: "200", value: stats.count_katu ?? stats.good ?? 0, tone: "text-osu-green-light" },
-    { label: "100", value: stats.count_100 ?? stats.ok ?? 0, tone: "text-osu-green" },
-    { label: "50", value: stats.count_50 ?? stats.meh ?? 0, tone: "text-osu-orange" },
+    { label: "100", value: stats.count_100 ?? stats.ok ?? 0, tone: "text-osu-blue" },
+    { label: "50", value: stats.count_50 ?? stats.meh ?? 0, tone: "text-slate-400" },
     { label: "Miss", value: stats.count_miss ?? stats.miss ?? 0, tone: "text-osu-red-light" },
   ];
 }
