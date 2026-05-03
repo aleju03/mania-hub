@@ -185,14 +185,23 @@ describe("ManiaReplayRenderer skin customization", () => {
 
     expect(source).toContain("const circleTapColor = this.circleTapColors[col];");
     expect(source).toContain("const circleLnHeadColor = this.circleLnHeadColors[col];");
-    expect(source).toContain("const percyTrim = this.skinSettings.percy");
+    expect(source).toContain("const tailTrimDelta = this.skinSettings.percy");
   });
 
   it("applies the configured keymode column width to layout", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    expect(source).toContain("const configuredColumnWidth = this.skinProfile.columnWidth;");
-    expect(source).toContain("configuredColumnWidth * this.keyCount");
+    expect(source).toContain("const configuredColumnWidths = this.getConfiguredColumnWidths();");
+    expect(source).toContain("configuredColumnWidths.reduce((sum, width) => sum + width, 0)");
+  });
+
+  it("supports osu!mania skin.ini hud positions and imported sprites", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("this.getStagePositionY(this.skinSettings.scorePosition, layout)");
+    expect(source).toContain("this.getStagePositionY(this.skinSettings.comboPosition, layout)");
+    expect(source).toContain("private skinSpriteLayer = new Container();");
+    expect(source).toContain("private renderHoldSkinImages(");
   });
 
   it("uses the configured hit position for receptors without changing scroll density", () => {

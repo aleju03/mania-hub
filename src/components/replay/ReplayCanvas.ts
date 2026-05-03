@@ -4,7 +4,7 @@ import type { ManiaNote, ManiaScrollVelocity } from "../../lib/beatmap-parser";
 import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgementEvent, ReplayNoteState } from "../../lib/mania-replay-judgement";
 import { buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "../../lib/mania-replay-judgement";
 import { DEFAULT_REPLAY_SKIN_SETTINGS, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplaySkinProfile, normalizeReplaySkinSettings } from "../../lib/replay-skin";
-import type { ReplaySkinKeymodeProfile, ReplaySkinSettings } from "../../lib/replay-skin";
+import type { ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayHitCounts } from "../../lib/replay-validation";
 import { buildStableReplayComboEvents, resolveReplayJudgementEvents } from "../../lib/replay-validation";
 import { formatPixiRendererType } from "./renderer-debug";
@@ -46,6 +46,7 @@ const MANIA_MAX_TIME_RANGE = 11485;
 const MANIA_REFERENCE_HEIGHT = 768;
 const MANIA_DEFAULT_HIT_POSITION = (480 - 402) * 1.6;
 const MANIA_HIT_TARGET_POSITION = REPLAY_SKIN_DEFAULT_HIT_POSITION;
+const MANIA_BAR_NOTE_HEIGHT_RATIO = 0.22;
 
 type ArrowDirection = "left" | "right" | "up" | "down";
 
@@ -141,6 +142,7 @@ interface Layout {
   playfieldWidth: number;
   playfieldX: number;
   laneWidth: number;
+  layoutScale: number;
   judgmentY: number;
   noteHeight: number;
   receptorHeight: number;
@@ -157,6 +159,10 @@ export class ManiaReplayRenderer {
   private textLayer = new Container();
   private textPool: Text[] = [];
   private textPoolCursor = 0;
+  private skinSpriteLayer = new Container();
+  private skinSpritePool: Sprite[] = [];
+  private skinSpritePoolCursor = 0;
+  private skinTextureCache = new Map<string, Texture>();
   private backgroundLayer = new Container();
   private backgroundSprite: Sprite | null = null;
   private previousBackgroundSprite: Sprite | null = null;
@@ -362,6 +368,7 @@ export class ManiaReplayRenderer {
     this.app = app;
     app.stage.addChild(this.backgroundLayer);
     app.stage.addChild(this.graphics);
+    app.stage.addChild(this.skinSpriteLayer);
     app.stage.addChild(this.textLayer);
     this.rebuildBackgroundSprites();
     this.resize();
@@ -574,41 +581,65 @@ export class ManiaReplayRenderer {
 
     const w = this.cssWidth;
     const h = this.cssHeight;
+    const configuredColumnWidths = this.getConfiguredColumnWidths();
+    const configuredColumnSpacings = this.getConfiguredColumnSpacings();
+    const averageColumnWidth = configuredColumnWidths.reduce((sum, width) => sum + width, 0) / Math.max(1, configuredColumnWidths.length);
     const baseRatio = this.barePlayfield
       ? 0.4 + this.keyCount * 0.045
       : 0.25 + this.keyCount * 0.025;
-    const configuredColumnWidth = this.skinProfile.columnWidth;
-    const configuredColumnSpacing = this.skinProfile.columnSpacing;
-    const desiredPlayfieldWidth = configuredColumnWidth * this.keyCount + configuredColumnSpacing * Math.max(0, this.keyCount - 1);
+    const desiredPlayfieldWidth = configuredColumnWidths.reduce((sum, width) => sum + width, 0)
+      + configuredColumnSpacings.reduce((sum, width) => sum + width, 0);
     const maxPlayfieldWidth = Math.min(
-      w * Math.min(baseRatio * (configuredColumnWidth / 50), this.barePlayfield ? 0.82 : 0.72),
+      w * Math.min(baseRatio * (averageColumnWidth / 50), this.barePlayfield ? 0.82 : 0.72),
       desiredPlayfieldWidth,
     );
     const layoutScale = desiredPlayfieldWidth > 0 ? maxPlayfieldWidth / desiredPlayfieldWidth : 1;
     const playfieldWidth = desiredPlayfieldWidth * layoutScale;
-    const laneWidth = configuredColumnWidth * layoutScale;
-    const columnSpacing = configuredColumnSpacing * layoutScale;
+    const laneWidth = averageColumnWidth * layoutScale;
     const barePreviewBias = this.barePlayfield && this.keyCount >= 5 && w >= 380 ? 0.32 : 0.5;
     const playfieldX = (w - playfieldWidth) * barePreviewBias;
     const hitPosition = this.skinSettings.hitPosition ?? MANIA_HIT_TARGET_POSITION;
     const judgmentY = h * (this.skinSettings.upscroll ? hitPosition : MANIA_REFERENCE_HEIGHT - hitPosition) / MANIA_REFERENCE_HEIGHT;
-    const noteHeight = Math.max(10, h * 0.02);
+    const noteHeight = Math.max(6, this.skinProfile.noteHeightScale * layoutScale * MANIA_BAR_NOTE_HEIGHT_RATIO);
     const receptorHeight = Math.max(6, h * 0.012);
     const scrollTimeRange = (MANIA_MAX_TIME_RANGE / Math.max(1, Math.min(40, this.scrollSpeed))) * this.modRate;
     const scrollLength = h * (MANIA_REFERENCE_HEIGHT - MANIA_DEFAULT_HIT_POSITION) / MANIA_REFERENCE_HEIGHT;
     const pixelsPerMs = scrollLength / scrollTimeRange;
 
-    const layout: Layout = { w, h, playfieldWidth, playfieldX, laneWidth, judgmentY, noteHeight, receptorHeight, pixelsPerMs };
+    const layout: Layout = { w, h, playfieldWidth, playfieldX, laneWidth, layoutScale, judgmentY, noteHeight, receptorHeight, pixelsPerMs };
     this.cachedLayout = layout;
-    this.cachedColumns = Array.from({ length: this.keyCount }, (_, i) => ({
-      x: playfieldX + i * (laneWidth + columnSpacing),
-      width: laneWidth,
-    }));
+    let cursorX = playfieldX;
+    this.cachedColumns = Array.from({ length: this.keyCount }, (_, i) => {
+      const width = configuredColumnWidths[i] * layoutScale;
+      const column = { x: cursorX, width };
+      cursorX += width + (configuredColumnSpacings[i] ?? 0) * layoutScale;
+      return column;
+    });
     return layout;
   }
 
   private getColumnLayout(col: number, layout: Layout): { x: number; width: number } {
     return this.cachedColumns[col] ?? { x: layout.playfieldX + col * layout.laneWidth, width: layout.laneWidth };
+  }
+
+  private getConfiguredColumnWidths(): number[] {
+    const widths = this.skinProfile.columnWidths.length > 0
+      ? this.skinProfile.columnWidths
+      : [];
+    return Array.from(
+      { length: this.keyCount },
+      (_, index) => Math.max(1, widths[index] ?? this.skinProfile.columnWidth),
+    );
+  }
+
+  private getConfiguredColumnSpacings(): number[] {
+    const spacings = this.skinProfile.columnSpacings.length > 0
+      ? this.skinProfile.columnSpacings
+      : [];
+    return Array.from(
+      { length: Math.max(0, this.keyCount - 1) },
+      (_, index) => Math.max(0, spacings[index] ?? this.skinProfile.columnSpacing),
+    );
   }
 
   resize() {
@@ -790,17 +821,20 @@ export class ManiaReplayRenderer {
     const layout = this.getLayout();
     this.currentKeyState = this.getCurrentKeyState();
     this.graphics.clear();
+    this.beginSkinSpriteFrame();
     this.beginTextFrame();
 
     this.renderBackground(layout);
     this.renderPlayfield(layout);
     this.renderSegmentOverlays(layout);
+    if (this.skinSettings.keysUnderNotes) this.renderReceptors(layout);
     if (!this.inputOverlayOnly) this.renderNotes(layout);
     this.renderJudgmentLine(layout);
-    this.renderReceptors(layout);
+    if (!this.skinSettings.keysUnderNotes) this.renderReceptors(layout);
     if (this.showHealthBar) this.renderHealthBar(layout);
     if (!this.hideHud) this.renderHUD(layout);
     else if (this.showCombo) this.renderCombo(layout);
+    this.finishSkinSpriteFrame();
     this.finishTextFrame();
     this.app.render();
   }
@@ -914,6 +948,7 @@ export class ManiaReplayRenderer {
       const { x: colX, width: colWidth } = this.getColumnLayout(col, layout);
       const x = colX + 3;
       const barWidth = colWidth - 6;
+      const assets = this.skinProfile.assets.columns[col];
       const color = this.skinSettings.style === "bars" ? this.barTapColors[col] : this.colors[col];
       const circleTapColor = this.circleTapColors[col];
       const circleLnHeadColor = this.circleLnHeadColors[col];
@@ -957,6 +992,10 @@ export class ManiaReplayRenderer {
         const tailTrimDelta = this.skinSettings.percy
           ? Math.min(20, Math.max(noteHeight * 0.9, headTrimDelta * 1.1))
           : 0;
+        if (this.renderHoldSkinImages(layout, assets, colX, colWidth, top, bottom, headEndY, tailEndY, tailTrimDelta, bodyAlpha, headAlpha, noteFadeHeight)) {
+          continue;
+        }
+
         if (this.skinSettings.style === "circles") {
           const bodyWidth = Math.max(14, circleDiameter * 0.72);
           const bodyX = colX + colWidth / 2 - bodyWidth / 2;
@@ -1007,6 +1046,14 @@ export class ManiaReplayRenderer {
 
         const noteY = judgmentY + getVisualDelta(note.time) * pixelsPerMs * (this.skinSettings.upscroll ? 1 : -1);
         if (noteY > h + 20 || noteY < -20) continue;
+
+        if (assets?.tap) {
+          const assetHeight = this.getNoteAssetHeight(assets.tap, colWidth, layout, Math.max(noteHeight, circleDiameter, arrowSize));
+          const noteTop = this.skinSettings.upscroll ? noteY : noteY - assetHeight;
+          const alpha = this.topFadeAlpha(Math.max(0, Math.min(noteTop + assetHeight, noteFadeHeight)), noteFadeHeight, 0.55);
+          this.drawSkinImage(assets.tap, colX + colWidth / 2, noteTop, colWidth, assetHeight, 0.5, 0, alpha);
+          continue;
+        }
 
         if (this.skinSettings.style === "circles") {
           this.circleWithTopFade(colX + colWidth / 2, noteY, circleRadius, circleTapColor, 1, noteFadeHeight, 0.55);
@@ -1142,6 +1189,17 @@ export class ManiaReplayRenderer {
     for (let col = 0; col < this.keyCount; col++) {
       const { x, width: colWidth } = this.getColumnLayout(col, layout);
       const pressed = (currentState & (1 << col)) !== 0;
+      const assets = this.skinProfile.assets.columns[col];
+      const receptorAsset = pressed
+        ? assets?.receptorPressed ?? assets?.receptor
+        : assets?.receptor;
+      if (receptorAsset) {
+        if (pressed) this.receptorFlashTimestamps[col] = this.currentTime;
+        const receptorHeight = this.getAssetHeightForWidth(receptorAsset, colWidth, colWidth, layout.receptorHeight);
+        const receptorY = this.skinSettings.upscroll ? judgmentY - receptorHeight : judgmentY;
+        this.drawSkinImage(receptorAsset, x + colWidth / 2, receptorY, colWidth, receptorHeight, 0.5, 0, 1);
+        continue;
+      }
       const color = this.colors[col];
       if (pressed) this.receptorFlashTimestamps[col] = this.currentTime;
 
@@ -1168,6 +1226,17 @@ export class ManiaReplayRenderer {
       const cx = x + colWidth / 2;
       const direction = getColumnArrowDirection(col, this.keyCount);
       const pressed = (currentState & (1 << col)) !== 0;
+      const assets = this.skinProfile.assets.columns[col];
+      const receptorAsset = pressed
+        ? assets?.receptorPressed ?? assets?.receptor
+        : assets?.receptor;
+      if (receptorAsset) {
+        if (pressed) this.receptorFlashTimestamps[col] = this.currentTime;
+        const receptorHeight = this.getAssetHeightForWidth(receptorAsset, colWidth, colWidth, arrowSize);
+        const receptorY = this.skinSettings.upscroll ? judgmentY - receptorHeight : judgmentY;
+        this.drawSkinImage(receptorAsset, cx, receptorY, colWidth, receptorHeight, 0.5, 0, 1);
+        continue;
+      }
       const color = this.circleTapColors[col] ?? this.colors[col];
       if (pressed) this.receptorFlashTimestamps[col] = this.currentTime;
       const timeSinceFlash = this.currentTime - (this.receptorFlashTimestamps[col] || 0);
@@ -1190,6 +1259,16 @@ export class ManiaReplayRenderer {
     for (let col = 0; col < this.keyCount; col++) {
       const { x, width: colWidth } = this.getColumnLayout(col, layout);
       const pressed = (currentState & (1 << col)) !== 0;
+      const assets = this.skinProfile.assets.columns[col];
+      const receptorAsset = pressed
+        ? assets?.receptorPressed ?? assets?.receptor
+        : assets?.receptor;
+      if (receptorAsset) {
+        const receptorHeight = this.getAssetHeightForWidth(receptorAsset, colWidth, colWidth, radius * 2);
+        const receptorY = this.skinSettings.upscroll ? judgmentY - receptorHeight : judgmentY;
+        this.drawSkinImage(receptorAsset, x + colWidth / 2, receptorY, colWidth, receptorHeight, 0.5, 0, 1);
+        continue;
+      }
       this.circle(x + colWidth / 2, judgmentY, radius, "#ffffff", 0);
       this.strokeCircle(x + colWidth / 2, judgmentY, radius, "#ffffff", pressed ? 1 : 0.5, strokeWidth);
     }
@@ -1198,25 +1277,33 @@ export class ManiaReplayRenderer {
   private renderHUD(layout: Layout) {
     const { w, h, playfieldX, playfieldWidth, judgmentY } = layout;
     const playfieldCenterX = playfieldX + playfieldWidth / 2;
-    const playfieldMiddleY = judgmentY * 0.5;
+    const scoreY = this.getStagePositionY(this.skinSettings.scorePosition, layout);
 
     if (this.lastJudgment > 0) {
       const timeSince = this.currentTime - this.lastJudgmentTime;
       if (timeSince < 400) {
         const alpha = Math.max(0, 1 - timeSince / 400);
-        this.addText(
-          JUDGMENT_LABELS[this.lastJudgment],
-          playfieldCenterX,
-          playfieldMiddleY - timeSince * 0.03,
-          {
-            fontSize: Math.max(16, h * 0.035),
-            fill: JUDGMENT_COLORS[this.lastJudgment],
-            fontWeight: "700",
-            anchorX: 0.5,
-            anchorY: 0.5,
-            alpha,
-          },
-        );
+        const judgmentAsset = this.getJudgementAsset(this.lastJudgment);
+        const y = scoreY - timeSince * 0.03;
+        if (judgmentAsset) {
+          const targetHeight = this.getHudAssetHeight(judgmentAsset, h * 0.075, layout);
+          const targetWidth = this.getAssetWidthForHeight(judgmentAsset, targetHeight, targetHeight * 2);
+          this.drawSkinImage(judgmentAsset, playfieldCenterX, y, targetWidth, targetHeight, 0.5, 0.5, alpha);
+        } else {
+          this.addText(
+            JUDGMENT_LABELS[this.lastJudgment],
+            playfieldCenterX,
+            y,
+            {
+              fontSize: Math.max(16, h * 0.035),
+              fill: JUDGMENT_COLORS[this.lastJudgment],
+              fontWeight: "700",
+              anchorX: 0.5,
+              anchorY: 0.5,
+              alpha,
+            },
+          );
+        }
       }
     }
 
@@ -1345,10 +1432,11 @@ export class ManiaReplayRenderer {
   private renderCombo(layout: Layout) {
     if (this.combo <= 0) return;
 
-    const { h, playfieldX, playfieldWidth, judgmentY } = layout;
+    const { h, playfieldX, playfieldWidth } = layout;
     const playfieldCenterX = playfieldX + playfieldWidth / 2;
-    const playfieldMiddleY = judgmentY * 0.5;
-    this.addText(`${this.combo}x`, playfieldCenterX, playfieldMiddleY - h * 0.06, {
+    const comboY = this.getStagePositionY(this.skinSettings.comboPosition, layout);
+    if (this.renderComboImages(`${this.combo}x`, playfieldCenterX, comboY, layout)) return;
+    this.addText(`${this.combo}x`, playfieldCenterX, comboY, {
       fontSize: Math.max(22, h * 0.05),
       fill: "#ffffff",
       alpha: 0.85,
@@ -1445,6 +1533,145 @@ export class ManiaReplayRenderer {
       else hi = mid;
     }
     return lo;
+  }
+
+  private getStagePositionY(position: number, layout: Layout): number {
+    return layout.h * (this.skinSettings.upscroll ? position : MANIA_REFERENCE_HEIGHT - position) / MANIA_REFERENCE_HEIGHT;
+  }
+
+  private getJudgementAsset(judgment: Judgment): ReplaySkinImageAsset | undefined {
+    const assets = this.skinProfile.assets.judgements;
+    switch (judgment) {
+      case 1:
+        return assets.hit300g;
+      case 2:
+        return assets.hit300;
+      case 3:
+        return assets.hit200;
+      case 4:
+        return assets.hit100;
+      case 5:
+        return assets.hit50;
+      case 6:
+        return assets.hit0;
+      default:
+        return undefined;
+    }
+  }
+
+  private renderHoldSkinImages(
+    layout: Layout,
+    assets: ReplaySkinColumnAssets | undefined,
+    colX: number,
+    colWidth: number,
+    top: number,
+    bottom: number,
+    headEndY: number,
+    tailEndY: number,
+    tailTrimDelta: number,
+    bodyAlpha: number,
+    headAlpha: number,
+    fadeHeight: number,
+  ): boolean {
+    if (!assets?.lnHead && !assets?.lnBody && !assets?.lnTail) return false;
+
+    const bodyAsset = assets.lnBody;
+    const headAsset = assets.lnHead ?? assets.tap;
+    const tailAsset = assets.lnTail;
+    const headHeight = headAsset ? this.getNoteAssetHeight(headAsset, colWidth, layout, layout.noteHeight) : layout.noteHeight;
+    const tailHeight = tailAsset ? this.getNoteAssetHeight(tailAsset, colWidth, layout, layout.noteHeight) : layout.noteHeight;
+    const tailDelta = this.skinSettings.upscroll ? -tailTrimDelta : tailTrimDelta;
+    const bodyHeadY = headEndY;
+    const bodyTailY = tailEndY + tailDelta;
+    const bodyTop = Math.min(bodyHeadY, bodyTailY);
+    const bodyBottom = Math.max(bodyHeadY, bodyTailY);
+
+    if (bodyAsset && bodyBottom > bodyTop) {
+      const alpha = bodyAlpha * this.topFadeAlpha(Math.max(0, Math.min(bodyBottom, fadeHeight)), fadeHeight, 0.55);
+      this.drawSkinImage(bodyAsset, colX + colWidth / 2, bodyTop, colWidth, bodyBottom - bodyTop, 0.5, 0, alpha);
+    } else {
+      this.barLnBodyWithTopFade(colX + 3, bodyTop, colWidth - 6, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, bodyAlpha, fadeHeight, 0.55);
+    }
+
+    if (tailAsset) {
+      const tailTop = this.skinSettings.upscroll ? tailEndY - tailHeight : tailEndY;
+      const alpha = bodyAlpha * this.topFadeAlpha(Math.max(0, Math.min(tailTop + tailHeight, fadeHeight)), fadeHeight, 0.55);
+      this.drawSkinImage(tailAsset, colX + colWidth / 2, tailTop, colWidth, tailHeight, 0.5, 0, alpha);
+    }
+
+    if (headAsset) {
+      const headTop = this.skinSettings.upscroll ? headEndY : headEndY - headHeight;
+      const alpha = headAlpha * this.topFadeAlpha(Math.max(0, Math.min(headTop + headHeight, fadeHeight)), fadeHeight, 0.55);
+      this.drawSkinImage(headAsset, colX + colWidth / 2, headTop, colWidth, headHeight, 0.5, 0, alpha);
+    }
+
+    if (!bodyAsset && !headAsset && !tailAsset && bottom > top) return false;
+    return true;
+  }
+
+  private getNoteAssetHeight(asset: ReplaySkinImageAsset, columnWidth: number, layout: Layout, fallbackHeight: number): number {
+    const heightScaleWidth = Math.max(1, this.skinProfile.noteHeightScale * layout.layoutScale);
+    return this.getAssetHeightForWidth(asset, columnWidth, heightScaleWidth, fallbackHeight);
+  }
+
+  private getHudAssetHeight(asset: ReplaySkinImageAsset, fallbackHeight: number, layout: Layout): number {
+    const scale = asset.scale && asset.scale > 0 ? asset.scale : 1;
+    const assetHeight = asset.height && asset.height > 0 ? asset.height / scale : 0;
+    return assetHeight > 0 ? assetHeight * (layout.h / 480) : fallbackHeight;
+  }
+
+  private getAssetHeightForWidth(asset: ReplaySkinImageAsset, targetWidth: number, heightScaleWidth: number, fallbackHeight: number): number {
+    const scale = asset.scale && asset.scale > 0 ? asset.scale : 1;
+    const width = asset.width && asset.width > 0 ? asset.width / scale : this.getTexture(asset).width / scale;
+    const height = asset.height && asset.height > 0 ? asset.height / scale : this.getTexture(asset).height / scale;
+    if (width > 0 && height > 0) return Math.max(1, height * (heightScaleWidth / width));
+    return Math.max(1, fallbackHeight || targetWidth);
+  }
+
+  private getAssetWidthForHeight(asset: ReplaySkinImageAsset, targetHeight: number, fallbackWidth: number): number {
+    const scale = asset.scale && asset.scale > 0 ? asset.scale : 1;
+    const width = asset.width && asset.width > 0 ? asset.width / scale : this.getTexture(asset).width / scale;
+    const height = asset.height && asset.height > 0 ? asset.height / scale : this.getTexture(asset).height / scale;
+    if (width > 0 && height > 0) return Math.max(1, width * (targetHeight / height));
+    return Math.max(1, fallbackWidth);
+  }
+
+  private renderComboImages(text: string, centerX: number, centerY: number, layout: Layout): boolean {
+    const combo = this.skinProfile.assets.combo;
+    if (!combo) return false;
+
+    const glyphs = Array.from(text).map((char) => {
+      if (char >= "0" && char <= "9") return combo.digits[Number(char)] ?? null;
+      if (char.toLowerCase() === "x") return combo.x ?? null;
+      return null;
+    });
+    if (!glyphs.some(Boolean)) return false;
+
+    const fallbackHeight = Math.max(22, layout.h * 0.05);
+    const sizes = glyphs.map((asset) => {
+      if (!asset) return { width: fallbackHeight * 0.45, height: fallbackHeight };
+      const height = this.getHudAssetHeight(asset, fallbackHeight, layout);
+      return { width: this.getAssetWidthForHeight(asset, height, fallbackHeight * 0.7), height };
+    });
+    const overlap = combo.overlap * (layout.h / 480);
+    const totalWidth = sizes.reduce((sum, size, index) => sum + size.width - (index > 0 ? overlap : 0), 0);
+    let x = centerX - totalWidth / 2;
+    glyphs.forEach((asset, index) => {
+      const size = sizes[index];
+      if (asset) this.drawSkinImage(asset, x, centerY - size.height / 2, size.width, size.height, 0, 0, 0.9);
+      else {
+        this.addText(text[index], x + size.width / 2, centerY, {
+          fontSize: fallbackHeight,
+          fill: "#ffffff",
+          alpha: 0.85,
+          fontWeight: "700",
+          anchorX: 0.5,
+          anchorY: 0.5,
+        });
+      }
+      x += size.width - overlap;
+    });
+    return true;
   }
 
   private getCircleDiameter(layout: Layout): number {
@@ -1688,6 +1915,55 @@ export class ManiaReplayRenderer {
     label.anchor.set(options.anchorX ?? 0, options.anchorY ?? 0);
   }
 
+  private drawSkinImage(
+    asset: ReplaySkinImageAsset,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    anchorX: number,
+    anchorY: number,
+    alpha: number,
+  ) {
+    if (width <= 0 || height <= 0 || alpha <= 0) return;
+    const texture = this.getTexture(asset);
+    let sprite = this.skinSpritePool[this.skinSpritePoolCursor];
+    if (!sprite) {
+      sprite = new Sprite(texture);
+      this.skinSpritePool.push(sprite);
+      this.skinSpriteLayer.addChild(sprite);
+    }
+
+    this.skinSpritePoolCursor++;
+    sprite.visible = true;
+    sprite.texture = texture;
+    sprite.anchor.set(anchorX, anchorY);
+    sprite.x = x;
+    sprite.y = y;
+    sprite.width = width;
+    sprite.height = height;
+    sprite.alpha = alpha;
+    sprite.tint = 0xffffff;
+  }
+
+  private getTexture(asset: ReplaySkinImageAsset): Texture {
+    const cached = this.skinTextureCache.get(asset.src);
+    if (cached) return cached;
+    const texture = Texture.from(asset.src);
+    this.skinTextureCache.set(asset.src, texture);
+    return texture;
+  }
+
+  private beginSkinSpriteFrame() {
+    this.skinSpritePoolCursor = 0;
+  }
+
+  private finishSkinSpriteFrame() {
+    for (let i = this.skinSpritePoolCursor; i < this.skinSpritePool.length; i++) {
+      this.skinSpritePool[i].visible = false;
+    }
+  }
+
   private beginTextFrame() {
     this.textPoolCursor = 0;
   }
@@ -1701,6 +1977,14 @@ export class ManiaReplayRenderer {
   private clearTextLayer() {
     const children = this.textLayer.removeChildren();
     for (const child of children) child.destroy();
+  }
+
+  private clearSkinSprites() {
+    const children = this.skinSpriteLayer.removeChildren();
+    for (const child of children) child.destroy();
+    this.skinSpritePool = [];
+    this.skinSpritePoolCursor = 0;
+    this.skinTextureCache.clear();
   }
 
   private getReceptorBeamGradient(color: string): FillGradient {
@@ -1778,6 +2062,7 @@ export class ManiaReplayRenderer {
     const destroyApp = () => {
       if (!this.app) return;
       this.clearTextLayer();
+      this.clearSkinSprites();
       for (const gradient of this.receptorBeamGradients.values()) gradient.destroy();
       this.receptorBeamGradients.clear();
       this.app.destroy({ removeView: false }, { children: true });

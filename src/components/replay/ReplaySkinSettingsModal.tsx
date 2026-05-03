@@ -1,23 +1,35 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
-import { motion } from "framer-motion";
-import { ChevronDown, Copy, GripHorizontal, Settings, X } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ChevronDown, Copy, Download, FileArchive, GripHorizontal, Pencil, Save, Settings, Trash2, Upload, X } from "lucide-react";
 
 import {
   DEFAULT_REPLAY_SKIN_SETTINGS,
+  OSU_MANIA_DEFAULT_COMBO_POSITION,
+  OSU_MANIA_DEFAULT_SCORE_POSITION,
   getReplaySkinProfile,
   normalizeReplaySkinSettings,
   OSU_MANIA_MAX_HIT_POSITION,
   OSU_MANIA_MIN_HIT_POSITION,
   osuManiaHitPositionToReplayHitPosition,
+  osuManiaStagePositionToReplayPosition,
+  createReplaySkinPreset,
+  createReplaySkinShareKey,
+  parseReplaySkinShareKey,
+  readReplaySkinPresets,
   REPLAY_SKIN_MAX_COLUMN_WIDTH,
   REPLAY_SKIN_MAX_COLUMN_SPACING,
+  REPLAY_SKIN_MAX_NOTE_HEIGHT_SCALE,
   REPLAY_SKIN_MIN_COLUMN_WIDTH,
   REPLAY_SKIN_MIN_COLUMN_SPACING,
+  REPLAY_SKIN_MIN_NOTE_HEIGHT_SCALE,
   replayHitPositionToOsuManiaHitPosition,
+  replayStagePositionToOsuManiaPosition,
+  writeReplaySkinPresets,
 } from "#/lib/replay-skin";
-import type { ReplaySkinKeymodeProfile, ReplaySkinSettings, ReplaySkinStyle } from "#/lib/replay-skin";
+import { importReplaySkinFromOsk } from "#/lib/replay-skin-import";
+import type { ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinPreset, ReplaySkinSettings, ReplaySkinStyle } from "#/lib/replay-skin";
 
 const MANIA_ARROW_ICON_STYLE: CSSProperties = {
   WebkitMask: "url('/images/notes/mania-arrow-right.svg') center / contain no-repeat",
@@ -47,7 +59,36 @@ const REPLAY_SKIN_PALETTE = [
 
 type ColorTarget = "tap" | "lnHead" | "lnBody";
 type OverrideKind = "tap" | "lnHead";
+type PreviewMode = "tap" | "ln";
 type ArrowDirection = "left" | "right" | "up" | "down";
+
+type SelectionMode = "replace" | "toggle" | "range";
+
+function applySelection(current: number[], column: number, mode: SelectionMode): number[] {
+  if (mode === "toggle") {
+    if (current.includes(column)) {
+      const next = current.filter((c) => c !== column);
+      return next.length > 0 ? next : current;
+    }
+    return [...current, column].sort((a, b) => a - b);
+  }
+  if (mode === "range") {
+    const anchor = current[current.length - 1] ?? column;
+    const lo = Math.min(anchor, column);
+    const hi = Math.max(anchor, column);
+    const range: number[] = [];
+    for (let i = lo; i <= hi; i += 1) range.push(i);
+    return range;
+  }
+  return [column];
+}
+
+function arraysEqualUnordered(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort((x, y) => x - y);
+  const sb = [...b].sort((x, y) => x - y);
+  return sa.every((v, i) => v === sb[i]);
+}
 
 function getColumnArrowDirection(col: number, keyCount: number): ArrowDirection {
   if (keyCount <= 1) return "down";
@@ -70,17 +111,41 @@ export function ReplaySkinSettingsModal({
   onClose,
 }: ReplaySkinSettingsModalProps) {
   const modalRef = useRef<HTMLDivElement | null>(null);
+  const oskInputRef = useRef<HTMLInputElement | null>(null);
   const [draft, setDraft] = useState(() => normalizeReplaySkinSettings(settings));
+  const [presets, setPresets] = useState<ReplaySkinPreset[]>(() => readReplaySkinPresets());
+  const [selectedPresetId, setSelectedPresetId] = useState("custom");
+  const [toast, setToast] = useState<{ id: number; message: string; tone: "info" | "error" } | null>(null);
+  const toastIdRef = useRef(0);
+  const pushStatus = useCallback((message: string, tone: "info" | "error" = "info") => {
+    toastIdRef.current += 1;
+    setToast({ id: toastIdRef.current, message, tone });
+  }, []);
+  const [promptDialog, setPromptDialog] = useState<{
+    title: string;
+    label?: string;
+    initial: string;
+    placeholder?: string;
+    confirmLabel?: string;
+    multiline?: boolean;
+    onSubmit: (value: string) => void;
+  } | null>(null);
+  const [keyDialog, setKeyDialog] = useState<{ title: string; value: string } | null>(null);
+  const [importingOsk, setImportingOsk] = useState(false);
   const [selectedKeyCount, setSelectedKeyCount] = useState(() => Math.max(1, Math.min(10, keyCount)));
   const [activeColor, setActiveColor] = useState<ColorTarget | null>(null);
   const [activeTab, setActiveTab] = useState<"style" | "layout">("style");
   const [columnEditorOpen, setColumnEditorOpen] = useState(false);
   const [overrideKind, setOverrideKind] = useState<OverrideKind>("tap");
-  const [overrideColumn, setOverrideColumn] = useState(0);
+  const [selectedColumns, setSelectedColumns] = useState<number[]>([]);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>("tap");
   const profile = getReplaySkinProfile(draft, selectedKeyCount);
   const [columnWidthInput, setColumnWidthInput] = useState(() => String(profile.columnWidth));
   const [columnSpacingInput, setColumnSpacingInput] = useState(() => String(profile.columnSpacing));
+  const [noteHeightScaleInput, setNoteHeightScaleInput] = useState(() => String(profile.noteHeightScale));
   const [hitPositionInput, setHitPositionInput] = useState(() => String(replayHitPositionToOsuManiaHitPosition(draft.hitPosition)));
+  const [scorePositionInput, setScorePositionInput] = useState(() => String(replayStagePositionToOsuManiaPosition(draft.scorePosition)));
+  const [comboPositionInput, setComboPositionInput] = useState(() => String(replayStagePositionToOsuManiaPosition(draft.comboPosition)));
 
   useEffect(() => {
     setColumnWidthInput(String(profile.columnWidth));
@@ -91,15 +156,43 @@ export function ReplaySkinSettingsModal({
   }, [profile.columnSpacing]);
 
   useEffect(() => {
+    setNoteHeightScaleInput(String(profile.noteHeightScale));
+  }, [profile.noteHeightScale]);
+
+  useEffect(() => {
     setHitPositionInput(String(replayHitPositionToOsuManiaHitPosition(draft.hitPosition)));
   }, [draft.hitPosition]);
 
   useEffect(() => {
-    if (overrideColumn >= selectedKeyCount) setOverrideColumn(Math.max(0, selectedKeyCount - 1));
-  }, [selectedKeyCount, overrideColumn]);
+    setScorePositionInput(String(replayStagePositionToOsuManiaPosition(draft.scorePosition)));
+  }, [draft.scorePosition]);
+
+  useEffect(() => {
+    setComboPositionInput(String(replayStagePositionToOsuManiaPosition(draft.comboPosition)));
+  }, [draft.comboPosition]);
+
+  useEffect(() => {
+    setSelectedColumns((current) => {
+      const filtered = current.filter((col) => col < selectedKeyCount);
+      return filtered.length === current.length ? current : filtered;
+    });
+  }, [selectedKeyCount]);
+
+  useEffect(() => {
+    if (selectedColumns.length === 0) return;
+    const handler = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest("[data-replay-selectable-area]")) return;
+      setSelectedColumns([]);
+    };
+    document.addEventListener("pointerdown", handler);
+    return () => document.removeEventListener("pointerdown", handler);
+  }, [selectedColumns.length]);
 
   const update = (patch: Partial<ReplaySkinSettings>) => {
     setDraft((current) => normalizeReplaySkinSettings({ ...current, ...patch, version: 2 }));
+    setSelectedPresetId("custom");
   };
 
   const updateStyle = (style: ReplaySkinStyle) => update({ style });
@@ -119,6 +212,7 @@ export function ReplaySkinSettingsModal({
         version: 2,
       });
     });
+    setSelectedPresetId("custom");
   };
 
   const updateBaseColor = (kind: "tap" | "lnHead", value: string) => {
@@ -126,12 +220,15 @@ export function ReplaySkinSettingsModal({
     else updateProfile({ lnHeadColor: value });
   };
 
-  const updateOverrideColor = (kind: "tap" | "lnHead", column: number, value: string) => {
+  const updateOverrideColors = (kind: "tap" | "lnHead", targetColumns: number[], value: string) => {
+    if (targetColumns.length === 0) return;
     setDraft((current) => {
       const currentProfile = getReplaySkinProfile(current, selectedKeyCount);
       const key = kind === "tap" ? "tapColors" : "lnHeadColors";
       const colors = [...currentProfile[key]];
-      colors[column] = value;
+      for (const column of targetColumns) {
+        if (column >= 0 && column < selectedKeyCount) colors[column] = value;
+      }
       return normalizeReplaySkinSettings({
         ...current,
         keymodeProfiles: {
@@ -150,6 +247,156 @@ export function ReplaySkinSettingsModal({
     update({ lnBodyColor: value });
   };
 
+  const selectedPreset = presets.find((preset) => preset.id === selectedPresetId) ?? null;
+  const noteHeightDefault = Math.max(
+    REPLAY_SKIN_MIN_NOTE_HEIGHT_SCALE,
+    Math.min(
+      REPLAY_SKIN_MAX_NOTE_HEIGHT_SCALE,
+      profile.columnWidths.length > 0 ? Math.min(...profile.columnWidths) : profile.columnWidth,
+    ),
+  );
+  const hasNoteAssets = profile.assets.columns.some((col) => col?.tap || col?.lnHead || col?.lnBody || col?.lnTail);
+  const showNoteHeightScale = draft.style === "bars" || hasNoteAssets;
+
+  const persistPresets = (nextPresets: ReplaySkinPreset[]) => {
+    setPresets(nextPresets);
+    writeReplaySkinPresets(nextPresets);
+  };
+
+  const applyPreset = (presetId: string) => {
+    setSelectedPresetId(presetId);
+    if (presetId === "custom") return;
+    const preset = presets.find((candidate) => candidate.id === presetId);
+    if (!preset) return;
+    setDraft(preset.settings);
+    setActiveColor(null);
+    pushStatus(`Loaded ${preset.name}`);
+  };
+
+  const createPresetFromDraft = () => {
+    setPromptDialog({
+      title: "Create preset",
+      label: "Preset name",
+      initial: selectedPreset?.name ?? "My mania skin",
+      placeholder: "My mania skin",
+      confirmLabel: "Create",
+      onSubmit: (name) => {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        const preset = createReplaySkinPreset(trimmed, draft);
+        persistPresets([preset, ...presets].slice(0, 24));
+        setSelectedPresetId(preset.id);
+        pushStatus(`Created ${preset.name}`);
+      },
+    });
+  };
+
+  const overwriteSelectedPreset = () => {
+    if (!selectedPreset) return;
+    const nextPreset = {
+      ...selectedPreset,
+      settings: normalizeReplaySkinSettings(draft),
+      updatedAt: Date.now(),
+    };
+    persistPresets(presets.map((preset) => preset.id === selectedPreset.id ? nextPreset : preset));
+    pushStatus(`Saved ${selectedPreset.name}`);
+  };
+
+  const renameSelectedPreset = () => {
+    if (!selectedPreset) return;
+    const target = selectedPreset;
+    setPromptDialog({
+      title: "Rename preset",
+      label: "Preset name",
+      initial: target.name,
+      placeholder: target.name,
+      confirmLabel: "Rename",
+      onSubmit: (name) => {
+        const trimmed = name.trim();
+        if (!trimmed) return;
+        const nextPreset = {
+          ...target,
+          name: trimmed.slice(0, 80),
+          updatedAt: Date.now(),
+        };
+        persistPresets(presets.map((preset) => preset.id === target.id ? nextPreset : preset));
+        pushStatus(`Renamed to ${nextPreset.name}`);
+      },
+    });
+  };
+
+  const deleteSelectedPreset = () => {
+    if (!selectedPreset) return;
+    persistPresets(presets.filter((preset) => preset.id !== selectedPreset.id));
+    setSelectedPresetId("custom");
+    pushStatus(`Deleted ${selectedPreset.name}`);
+  };
+
+  const exportDraft = () => {
+    const key = createReplaySkinShareKey(selectedPreset?.name ?? "Replay settings", draft);
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(key).then(
+        () => pushStatus("Export key copied"),
+        () => setKeyDialog({ title: "Export key", value: key }),
+      );
+    } else {
+      setKeyDialog({ title: "Export key", value: key });
+    }
+  };
+
+  const importShareKey = () => {
+    setPromptDialog({
+      title: "Import export key",
+      label: "Paste export key",
+      initial: "",
+      placeholder: "mhreplay2.…",
+      confirmLabel: "Import",
+      multiline: true,
+      onSubmit: (key) => {
+        const trimmed = key.trim();
+        if (!trimmed) return;
+        const payload = parseReplaySkinShareKey(trimmed);
+        if (!payload) {
+          pushStatus("That export key could not be imported", "error");
+          return;
+        }
+        const preset = createReplaySkinPreset(payload.name, payload.settings);
+        persistPresets([preset, ...presets].slice(0, 24));
+        setDraft(payload.settings);
+        setSelectedPresetId(preset.id);
+        setActiveColor(null);
+        pushStatus(`Imported ${preset.name}`);
+      },
+    });
+  };
+
+  const importOsk = async (file: File) => {
+    setImportingOsk(true);
+    pushStatus(`Importing ${file.name}…`);
+    try {
+      const result = await importReplaySkinFromOsk(file, {
+        targetKeyCount: selectedKeyCount,
+        baseSettings: draft,
+      });
+      setDraft(result.settings);
+      setSelectedPresetId("custom");
+      setActiveColor(null);
+      const pieces = [
+        `${result.summary.selectedKeyCount ?? selectedKeyCount}K`,
+        `${result.summary.noteAssets} note`,
+        `${result.summary.receptorAssets} receptor`,
+        `${result.summary.judgementAssets} judgement`,
+        `${result.summary.comboDigits} combo`,
+      ];
+      pushStatus(`Imported ${result.summary.name} (${pieces.join(", ")})`);
+    } catch (error) {
+      pushStatus(error instanceof Error ? error.message : "Failed to import .osk", "error");
+    } finally {
+      setImportingOsk(false);
+      if (oskInputRef.current) oskInputRef.current.value = "";
+    }
+  };
+
   const save = () => {
     onSave(draft);
     onClose();
@@ -158,8 +405,11 @@ export function ReplaySkinSettingsModal({
   const columns = Array.from({ length: selectedKeyCount }, (_, index) => index);
   const overrideColors = overrideKind === "tap" ? profile.tapColors : profile.lnHeadColors;
   const overrideBaseColor = overrideKind === "tap" ? profile.tapColor : profile.lnHeadColor;
-  const hasOverride = !!overrideColors[overrideColumn];
-  const overrideValue = overrideColors[overrideColumn] || overrideBaseColor;
+  const primarySelected = selectedColumns[0] ?? 0;
+  const selectedValues = selectedColumns.map((col) => overrideColors[col] || overrideBaseColor);
+  const allSelectedSameValue = selectedValues.every((value) => value === selectedValues[0]);
+  const overrideValue = allSelectedSameValue ? selectedValues[0] ?? overrideBaseColor : overrideColors[primarySelected] || overrideBaseColor;
+  const anySelectedHasOverride = selectedColumns.some((col) => !!overrideColors[col]);
 
   const commitColumnWidthInput = () => {
     const parsed = Number(columnWidthInput);
@@ -169,7 +419,7 @@ export function ReplaySkinSettingsModal({
     }
     const next = Math.max(REPLAY_SKIN_MIN_COLUMN_WIDTH, Math.min(REPLAY_SKIN_MAX_COLUMN_WIDTH, Math.round(parsed)));
     setColumnWidthInput(String(next));
-    updateProfile({ columnWidth: next });
+    updateProfile({ columnWidth: next, columnWidths: [] });
   };
 
   const commitColumnSpacingInput = () => {
@@ -180,7 +430,18 @@ export function ReplaySkinSettingsModal({
     }
     const next = Math.max(REPLAY_SKIN_MIN_COLUMN_SPACING, Math.min(REPLAY_SKIN_MAX_COLUMN_SPACING, Math.round(parsed)));
     setColumnSpacingInput(String(next));
-    updateProfile({ columnSpacing: next });
+    updateProfile({ columnSpacing: next, columnSpacings: [] });
+  };
+
+  const commitNoteHeightScaleInput = () => {
+    const parsed = Number(noteHeightScaleInput);
+    if (!Number.isFinite(parsed)) {
+      setNoteHeightScaleInput(String(profile.noteHeightScale));
+      return;
+    }
+    const next = Math.max(REPLAY_SKIN_MIN_NOTE_HEIGHT_SCALE, Math.min(REPLAY_SKIN_MAX_NOTE_HEIGHT_SCALE, Math.round(parsed)));
+    setNoteHeightScaleInput(String(next));
+    updateProfile({ noteHeightScale: next });
   };
 
   const commitHitPositionInput = () => {
@@ -194,12 +455,34 @@ export function ReplaySkinSettingsModal({
     update({ hitPosition: osuManiaHitPositionToReplayHitPosition(next) });
   };
 
+  const commitScorePositionInput = () => {
+    const parsed = Number(scorePositionInput);
+    if (!Number.isFinite(parsed)) {
+      setScorePositionInput(String(replayStagePositionToOsuManiaPosition(draft.scorePosition)));
+      return;
+    }
+    const next = Math.max(OSU_MANIA_MIN_HIT_POSITION, Math.min(OSU_MANIA_MAX_HIT_POSITION, Math.round(parsed)));
+    setScorePositionInput(String(next));
+    update({ scorePosition: osuManiaStagePositionToReplayPosition(next) });
+  };
+
+  const commitComboPositionInput = () => {
+    const parsed = Number(comboPositionInput);
+    if (!Number.isFinite(parsed)) {
+      setComboPositionInput(String(replayStagePositionToOsuManiaPosition(draft.comboPosition)));
+      return;
+    }
+    const next = Math.max(OSU_MANIA_MIN_HIT_POSITION, Math.min(OSU_MANIA_MAX_HIT_POSITION, Math.round(parsed)));
+    setComboPositionInput(String(next));
+    update({ comboPosition: osuManiaStagePositionToReplayPosition(next) });
+  };
+
   const handleColumnWidthInputChange = (value: string) => {
     setColumnWidthInput(value);
     if (value.trim() === "") return;
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed < REPLAY_SKIN_MIN_COLUMN_WIDTH || parsed > REPLAY_SKIN_MAX_COLUMN_WIDTH) return;
-    updateProfile({ columnWidth: Math.round(parsed) });
+    updateProfile({ columnWidth: Math.round(parsed), columnWidths: [] });
   };
 
   const handleColumnSpacingInputChange = (value: string) => {
@@ -207,7 +490,15 @@ export function ReplaySkinSettingsModal({
     if (value.trim() === "") return;
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed < REPLAY_SKIN_MIN_COLUMN_SPACING || parsed > REPLAY_SKIN_MAX_COLUMN_SPACING) return;
-    updateProfile({ columnSpacing: Math.round(parsed) });
+    updateProfile({ columnSpacing: Math.round(parsed), columnSpacings: [] });
+  };
+
+  const handleNoteHeightScaleInputChange = (value: string) => {
+    setNoteHeightScaleInput(value);
+    if (value.trim() === "") return;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < REPLAY_SKIN_MIN_NOTE_HEIGHT_SCALE || parsed > REPLAY_SKIN_MAX_NOTE_HEIGHT_SCALE) return;
+    updateProfile({ noteHeightScale: Math.round(parsed) });
   };
 
   const handleHitPositionInputChange = (value: string) => {
@@ -216,6 +507,22 @@ export function ReplaySkinSettingsModal({
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed < OSU_MANIA_MIN_HIT_POSITION || parsed > OSU_MANIA_MAX_HIT_POSITION) return;
     update({ hitPosition: osuManiaHitPositionToReplayHitPosition(Math.round(parsed)) });
+  };
+
+  const handleScorePositionInputChange = (value: string) => {
+    setScorePositionInput(value);
+    if (value.trim() === "") return;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < OSU_MANIA_MIN_HIT_POSITION || parsed > OSU_MANIA_MAX_HIT_POSITION) return;
+    update({ scorePosition: osuManiaStagePositionToReplayPosition(Math.round(parsed)) });
+  };
+
+  const handleComboPositionInputChange = (value: string) => {
+    setComboPositionInput(value);
+    if (value.trim() === "") return;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < OSU_MANIA_MIN_HIT_POSITION || parsed > OSU_MANIA_MAX_HIT_POSITION) return;
+    update({ comboPosition: osuManiaStagePositionToReplayPosition(Math.round(parsed)) });
   };
 
   if (typeof document === "undefined") return null;
@@ -241,7 +548,7 @@ export function ReplaySkinSettingsModal({
       />
       <motion.div
         ref={modalRef}
-        className="fixed inset-x-3 top-1/2 z-[111] mx-auto flex max-h-[calc(100vh-2rem)] max-w-3xl flex-col overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
+        className="fixed inset-x-3 top-1/2 z-[111] mx-auto flex h-[min(640px,calc(100vh-2rem))] max-w-3xl flex-col overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
         initial={{ opacity: 0, y: "-48%", scale: 0.98 }}
         animate={{ opacity: 1, y: "-50%", scale: 1 }}
         exit={{ opacity: 0, y: "-48%", scale: 0.98 }}
@@ -262,15 +569,54 @@ export function ReplaySkinSettingsModal({
           </button>
         </div>
 
-        <div className="grid min-h-0 flex-1 overflow-y-auto md:grid-cols-[minmax(0,1fr)_300px]">
-          <div className="space-y-4 p-5">
-            <div className="grid grid-cols-[minmax(0,1fr)_110px] gap-3">
-              <FancySelect
-                label="Skin preset"
-                value="mania-dark"
-                onChange={() => {}}
-                options={[{ value: "mania-dark", label: "Mania Dark (Default)" }]}
-              />
+        <div className="grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="space-y-4 overflow-y-auto p-5">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_110px]">
+              <div className="min-w-0 space-y-2">
+                <FancySelect
+                  label="Skin preset"
+                  value={selectedPresetId}
+                  onChange={applyPreset}
+                  options={[
+                    { value: "custom", label: "Current draft" },
+                    ...presets.map((preset) => ({ value: preset.id, label: preset.name })),
+                  ]}
+                />
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <PresetIconButton label="Create preset" onClick={createPresetFromDraft}>
+                    <Save className="h-3.5 w-3.5" />
+                  </PresetIconButton>
+                  <PresetIconButton label="Overwrite preset" onClick={overwriteSelectedPreset} disabled={!selectedPreset}>
+                    <Download className="h-3.5 w-3.5" />
+                  </PresetIconButton>
+                  <PresetIconButton label="Rename preset" onClick={renameSelectedPreset} disabled={!selectedPreset}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </PresetIconButton>
+                  <PresetIconButton label="Delete preset" onClick={deleteSelectedPreset} disabled={!selectedPreset}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </PresetIconButton>
+                  <span className="h-5 w-px bg-osu-b3/50" />
+                  <PresetIconButton label="Copy export key" onClick={exportDraft}>
+                    <Copy className="h-3.5 w-3.5" />
+                  </PresetIconButton>
+                  <PresetIconButton label="Import export key" onClick={importShareKey}>
+                    <Upload className="h-3.5 w-3.5" />
+                  </PresetIconButton>
+                  <PresetIconButton label="Import .osk" onClick={() => oskInputRef.current?.click()} disabled={importingOsk}>
+                    <FileArchive className="h-3.5 w-3.5" />
+                  </PresetIconButton>
+                  <input
+                    ref={oskInputRef}
+                    type="file"
+                    accept=".osk,.zip,application/zip"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.currentTarget.files?.[0];
+                      if (file) void importOsk(file);
+                    }}
+                  />
+                </div>
+              </div>
               <FancySelect
                 label="Keymode"
                 value={String(selectedKeyCount)}
@@ -331,18 +677,21 @@ export function ReplaySkinSettingsModal({
                 <section className="space-y-2 pt-2">
                   <ReplaySkinColorRow
                     label="Note color"
+                    title="Base tap color used for any column without a per-column override."
                     value={profile.tapColor}
                     selected={activeColor === "tap"}
                     onOpen={() => setActiveColor((current) => (current === "tap" ? null : "tap"))}
                   />
                   <ReplaySkinColorRow
                     label="LN Head color"
+                    title="Base LN head color used for any column without a per-column override."
                     value={profile.lnHeadColor}
                     selected={activeColor === "lnHead"}
                     onOpen={() => setActiveColor((current) => (current === "lnHead" ? null : "lnHead"))}
                   />
                   <ReplaySkinColorRow
                     label="LN Body color"
+                    title="Color of the LN body. Always global (no per-column override)."
                     value={draft.lnBodyColor}
                     selected={activeColor === "lnBody"}
                     onOpen={() => setActiveColor((current) => (current === "lnBody" ? null : "lnBody"))}
@@ -372,6 +721,10 @@ export function ReplaySkinSettingsModal({
                     <span className="text-sm font-semibold text-osu-l1">Upscroll</span>
                     <ReplaySkinSwitch checked={draft.upscroll} onChange={(checked) => update({ upscroll: checked })} />
                   </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm font-semibold text-osu-l1">Keys under notes</span>
+                    <ReplaySkinSwitch checked={draft.keysUnderNotes} onChange={(checked) => update({ keysUnderNotes: checked })} />
+                  </div>
                 </section>
               </>
             ) : (
@@ -383,10 +736,10 @@ export function ReplaySkinSettingsModal({
                   min={REPLAY_SKIN_MIN_COLUMN_WIDTH}
                   max={REPLAY_SKIN_MAX_COLUMN_WIDTH}
                   defaultValue={30}
-                  onSliderChange={(value) => updateProfile({ columnWidth: value })}
+                  onSliderChange={(value) => updateProfile({ columnWidth: value, columnWidths: [] })}
                   onInputChange={handleColumnWidthInputChange}
                   onCommit={commitColumnWidthInput}
-                  onResetToDefault={() => updateProfile({ columnWidth: 30 })}
+                  onResetToDefault={() => updateProfile({ columnWidth: 30, columnWidths: [] })}
                 />
                 <LayoutNumberControl
                   label="Column spacing"
@@ -395,11 +748,26 @@ export function ReplaySkinSettingsModal({
                   min={REPLAY_SKIN_MIN_COLUMN_SPACING}
                   max={REPLAY_SKIN_MAX_COLUMN_SPACING}
                   defaultValue={0}
-                  onSliderChange={(value) => updateProfile({ columnSpacing: value })}
+                  onSliderChange={(value) => updateProfile({ columnSpacing: value, columnSpacings: [] })}
                   onInputChange={handleColumnSpacingInputChange}
                   onCommit={commitColumnSpacingInput}
-                  onResetToDefault={() => updateProfile({ columnSpacing: 0 })}
+                  onResetToDefault={() => updateProfile({ columnSpacing: 0, columnSpacings: [] })}
                 />
+                {showNoteHeightScale ? (
+                  <LayoutNumberControl
+                    label="Note height"
+                    inputValue={noteHeightScaleInput}
+                    numericValue={profile.noteHeightScale}
+                    min={REPLAY_SKIN_MIN_NOTE_HEIGHT_SCALE}
+                    max={REPLAY_SKIN_MAX_NOTE_HEIGHT_SCALE}
+                    defaultValue={noteHeightDefault}
+                    onSliderChange={(value) => updateProfile({ noteHeightScale: value })}
+                    onInputChange={handleNoteHeightScaleInputChange}
+                    onCommit={commitNoteHeightScaleInput}
+                    onResetToDefault={() => updateProfile({ noteHeightScale: noteHeightDefault })}
+                    hint={draft.style === "bars" ? "Bar note height." : "Imported note image height scaling."}
+                  />
+                ) : null}
                 <LayoutNumberControl
                   label="Hit position"
                   inputValue={hitPositionInput}
@@ -413,13 +781,68 @@ export function ReplaySkinSettingsModal({
                   onResetToDefault={() => update({ hitPosition: osuManiaHitPositionToReplayHitPosition(402) })}
                   hint="Higher values move receptors lower."
                 />
+                <LayoutNumberControl
+                  label="ScorePosition"
+                  inputValue={scorePositionInput}
+                  numericValue={replayStagePositionToOsuManiaPosition(draft.scorePosition)}
+                  min={OSU_MANIA_MIN_HIT_POSITION}
+                  max={OSU_MANIA_MAX_HIT_POSITION}
+                  defaultValue={OSU_MANIA_DEFAULT_SCORE_POSITION}
+                  onSliderChange={(value) => update({ scorePosition: osuManiaStagePositionToReplayPosition(value) })}
+                  onInputChange={handleScorePositionInputChange}
+                  onCommit={commitScorePositionInput}
+                  onResetToDefault={() => update({ scorePosition: osuManiaStagePositionToReplayPosition(OSU_MANIA_DEFAULT_SCORE_POSITION) })}
+                  hint="Hitburst and judgement height."
+                />
+                <LayoutNumberControl
+                  label="ComboPosition"
+                  inputValue={comboPositionInput}
+                  numericValue={replayStagePositionToOsuManiaPosition(draft.comboPosition)}
+                  min={OSU_MANIA_MIN_HIT_POSITION}
+                  max={OSU_MANIA_MAX_HIT_POSITION}
+                  defaultValue={OSU_MANIA_DEFAULT_COMBO_POSITION}
+                  onSliderChange={(value) => update({ comboPosition: osuManiaStagePositionToReplayPosition(value) })}
+                  onInputChange={handleComboPositionInputChange}
+                  onCommit={commitComboPositionInput}
+                  onResetToDefault={() => update({ comboPosition: osuManiaStagePositionToReplayPosition(OSU_MANIA_DEFAULT_COMBO_POSITION) })}
+                  hint="Combo counter height."
+                />
               </section>
             )}
           </div>
 
-          <div className="border-l border-osu-b3/50 p-5">
-            <div className="mb-2 text-sm font-semibold text-white">Live preview</div>
-            <ReplaySkinPreview settings={draft} profile={profile} keyCount={selectedKeyCount} />
+          <div className="border-l border-osu-b3/50 overflow-y-auto p-5">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-sm font-semibold text-white">Live preview</span>
+              <div className="grid grid-cols-2 rounded-md bg-osu-b5/70 p-0.5 text-[10px] font-bold uppercase tracking-wider">
+                {(["tap", "ln"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setPreviewMode(mode)}
+                    className={`cursor-pointer rounded px-2 py-1 transition-colors ${
+                      previewMode === mode ? "bg-osu-pink/20 text-white" : "text-osu-f1 hover:text-white"
+                    }`}
+                  >
+                    {mode === "tap" ? "Notes" : "LN"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <ReplaySkinPreview
+              settings={draft}
+              profile={profile}
+              keyCount={selectedKeyCount}
+              previewMode={previewMode}
+              selectedColumns={selectedColumns}
+              onSelectionChange={(next) => {
+                setSelectedColumns((current) => (arraysEqualUnordered(current, next) ? current : next));
+                if (next.length > 0) setColumnEditorOpen(true);
+              }}
+            />
+            <div className="mt-2 text-[10px] text-osu-f1">
+              Click a column to select. Drag a box for multi-select. Hold Shift for range, Ctrl/Cmd to toggle.
+            </div>
           </div>
         </div>
 
@@ -428,7 +851,8 @@ export function ReplaySkinSettingsModal({
             onClick={() => {
               setDraft(DEFAULT_REPLAY_SKIN_SETTINGS);
               setActiveColor(null);
-              setOverrideColumn(0);
+              setSelectedColumns([]);
+              setSelectedPresetId("custom");
             }}
             className="mr-auto cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
           >
@@ -454,6 +878,7 @@ export function ReplaySkinSettingsModal({
           key={`base-${activeColor}`}
           title={colorTargetLabel[activeColor]}
           anchorRef={modalRef}
+          storageKey={`base-color`}
           onClose={() => setActiveColor(null)}
         >
           <ReplaySkinColorPanel
@@ -473,23 +898,32 @@ export function ReplaySkinSettingsModal({
           title="Per-column colors"
           width={296}
           anchorRef={modalRef}
+          storageKey="per-column"
           onClose={() => setColumnEditorOpen(false)}
         >
           <div className="mb-3 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${Math.min(selectedKeyCount, 10)}, minmax(0, 1fr))` }}>
             {columns.map((column) => {
               const overridden = !!overrideColors[column];
               const swatch = overrideColors[column] || overrideBaseColor;
+              const isSelected = selectedColumns.includes(column);
               return (
                 <button
                   key={column}
                   type="button"
-                  onClick={() => setOverrideColumn(column)}
+                  onClick={(event) => {
+                    const mode: SelectionMode = event.shiftKey
+                      ? "range"
+                      : event.metaKey || event.ctrlKey
+                        ? "toggle"
+                        : "replace";
+                    setSelectedColumns((current) => applySelection(current, column, mode));
+                  }}
                   className={`relative flex h-9 cursor-pointer flex-col items-center justify-center rounded-md border text-[10px] font-bold transition-colors ${
-                    overrideColumn === column
+                    isSelected
                       ? "border-osu-pink text-white"
                       : "border-osu-b3/50 text-osu-f1 hover:border-osu-b2 hover:text-white"
                   }`}
-                  style={{ backgroundColor: overrideColumn === column ? "rgba(232, 60, 144, 0.1)" : "rgba(15, 15, 24, 0.5)" }}
+                  style={{ backgroundColor: isSelected ? "rgba(232, 60, 144, 0.1)" : "rgba(15, 15, 24, 0.5)" }}
                 >
                   <span>{column + 1}</span>
                   <span
@@ -503,12 +937,33 @@ export function ReplaySkinSettingsModal({
               );
             })}
           </div>
+          <div className="mb-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-osu-f1">
+            <span>
+              {selectedColumns.length === 0
+                ? "Select columns to edit"
+                : selectedColumns.length === 1
+                  ? `Column ${primarySelected + 1}`
+                  : `${selectedColumns.length} columns selected`}
+            </span>
+            {selectedColumns.length < selectedKeyCount ? (
+              <button
+                type="button"
+                onClick={() => setSelectedColumns(columns)}
+                className="cursor-pointer text-osu-f1 transition-colors hover:text-white"
+              >
+                Select all
+              </button>
+            ) : null}
+          </div>
           <div className="mb-3 grid grid-cols-2 rounded-lg bg-osu-b5/70 p-1">
             {(["tap", "lnHead"] as const).map((kind) => (
               <button
                 key={kind}
                 type="button"
-                onClick={() => setOverrideKind(kind)}
+                onClick={() => {
+                  setOverrideKind(kind);
+                  setPreviewMode(kind === "lnHead" ? "ln" : "tap");
+                }}
                 className={`cursor-pointer rounded-md px-3 py-1.5 text-xs font-bold transition-colors ${
                   overrideKind === kind ? "bg-osu-pink/20 text-white" : "text-osu-f1 hover:text-white"
                 }`}
@@ -519,30 +974,64 @@ export function ReplaySkinSettingsModal({
           </div>
           <ReplaySkinColorPanel
             value={overrideValue}
-            onChange={(value) => updateOverrideColor(overrideKind, overrideColumn, value)}
+            onChange={(value) => updateOverrideColors(overrideKind, selectedColumns, value)}
           />
-          <div className="mt-3 flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                for (const column of columns) updateOverrideColor(overrideKind, column, overrideValue);
-              }}
-              className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-osu-b3/60 bg-osu-b5/70 px-2.5 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white"
-            >
-              <Copy className="h-3.5 w-3.5" />
-              Copy to all
-            </button>
-            {hasOverride ? (
+          {anySelectedHasOverride ? (
+            <div className="mt-3 flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => updateOverrideColor(overrideKind, overrideColumn, "")}
+                onClick={() => updateOverrideColors(overrideKind, selectedColumns, "")}
                 className="cursor-pointer rounded-lg px-2.5 py-1.5 text-xs font-semibold text-osu-f1 transition-colors hover:text-white"
               >
                 Use base
               </button>
-            ) : null}
-          </div>
+            </div>
+          ) : null}
         </DraggableColorPopover>
+      ) : null}
+
+      <AnimatePresence>
+        {toast ? (
+          <ReplaySkinToast
+            key={toast.id}
+            message={toast.message}
+            tone={toast.tone}
+            onDismiss={() => setToast((current) => (current && current.id === toast.id ? null : current))}
+          />
+        ) : null}
+      </AnimatePresence>
+
+      {promptDialog ? (
+        <ReplaySkinPromptDialog
+          title={promptDialog.title}
+          label={promptDialog.label}
+          initial={promptDialog.initial}
+          placeholder={promptDialog.placeholder}
+          confirmLabel={promptDialog.confirmLabel}
+          multiline={promptDialog.multiline}
+          onCancel={() => setPromptDialog(null)}
+          onConfirm={(value) => {
+            const submit = promptDialog.onSubmit;
+            setPromptDialog(null);
+            submit(value);
+          }}
+        />
+      ) : null}
+
+      {keyDialog ? (
+        <ReplaySkinKeyDialog
+          title={keyDialog.title}
+          value={keyDialog.value}
+          onClose={() => setKeyDialog(null)}
+          onCopy={() => {
+            if (navigator.clipboard?.writeText) {
+              navigator.clipboard.writeText(keyDialog.value).then(
+                () => pushStatus("Export key copied"),
+                () => pushStatus("Could not copy to clipboard", "error"),
+              );
+            }
+          }}
+        />
       ) : null}
     </>,
     document.body,
@@ -570,227 +1059,498 @@ function normalizeEditableHex(value: string): string | null {
   return null;
 }
 
+const PREVIEW_TAP_Y_OFFSETS_DOWN: ReadonlyArray<number> = [60, 95, 130, 165, 200];
+const PREVIEW_LN_LENGTHS: ReadonlyArray<number> = [120, 95, 75];
+
+function getPreviewAssetHeight(asset: ReplaySkinImageAsset, targetWidth: number, heightScaleWidth: number, fallbackHeight: number): number {
+  const scale = asset.scale && asset.scale > 0 ? asset.scale : 1;
+  const width = asset.width && asset.width > 0 ? asset.width / scale : 0;
+  const height = asset.height && asset.height > 0 ? asset.height / scale : 0;
+  if (width > 0 && height > 0) return Math.max(1, height * (heightScaleWidth / width));
+  return Math.max(1, fallbackHeight || targetWidth);
+}
+
 function ReplaySkinPreview({
   settings,
   profile,
   keyCount,
+  previewMode,
+  selectedColumns,
+  onSelectionChange,
 }: {
   settings: ReplaySkinSettings;
   profile: ReplaySkinKeymodeProfile;
   keyCount: number;
+  previewMode: PreviewMode;
+  selectedColumns: number[];
+  onSelectionChange: (next: number[]) => void;
 }) {
   const width = 260;
   const height = 300;
-  const desiredPlayfieldWidth = keyCount * profile.columnWidth + Math.max(0, keyCount - 1) * profile.columnSpacing;
+  const columnWidths = Array.from({ length: keyCount }, (_, col) => profile.columnWidths[col] ?? profile.columnWidth);
+  const columnSpacings = Array.from({ length: Math.max(0, keyCount - 1) }, (_, col) => profile.columnSpacings[col] ?? profile.columnSpacing);
+  const desiredPlayfieldWidth = columnWidths.reduce((sum, value) => sum + value, 0) + columnSpacings.reduce((sum, value) => sum + value, 0);
   const playfieldWidth = Math.min(230, desiredPlayfieldWidth);
   const layoutScale = desiredPlayfieldWidth > 0 ? playfieldWidth / desiredPlayfieldWidth : 1;
-  const laneWidth = profile.columnWidth * layoutScale;
-  const columnSpacing = profile.columnSpacing * layoutScale;
+  const averageLaneWidth = columnWidths.reduce((sum, value) => sum + value, 0) / Math.max(1, columnWidths.length) * layoutScale;
   const playfieldX = (width - playfieldWidth) / 2;
   const receptorY = height * (settings.upscroll ? settings.hitPosition : 768 - settings.hitPosition) / 768;
+  const scoreY = height * (settings.upscroll ? settings.scorePosition : 768 - settings.scorePosition) / 768;
+  const comboY = height * (settings.upscroll ? settings.comboPosition : 768 - settings.comboPosition) / 768;
   const noteSize = settings.style === "circles" || settings.style === "arrows"
-    ? Math.max(18, Math.min(laneWidth - 4, Math.max(28, laneWidth * 0.78)))
-    : Math.max(8, Math.min(18, laneWidth - 6));
-  const lnCol = Math.min(keyCount - 1, Math.max(0, Math.floor(keyCount / 2)));
-  const tapCols = [0, Math.max(0, keyCount - 2)].filter(
-    (col, index, arr) => arr.indexOf(col) === index && col !== lnCol,
-  );
+    ? Math.max(18, Math.min(averageLaneWidth - 4, Math.max(28, averageLaneWidth * 0.78)))
+    : Math.max(8, Math.min(18, averageLaneWidth - 6));
   const colorFor = (colors: string[], fallback: string, col: number) => colors[col] || fallback;
 
-  const lnLength = settings.percy ? 80 : 110;
-  const lnHeadAtReceptor = receptorY;
-  const lnTailEnd = settings.upscroll ? lnHeadAtReceptor + lnLength : lnHeadAtReceptor - lnLength;
-  const lnTop = Math.min(lnHeadAtReceptor, lnTailEnd);
-  const lnBottom = Math.max(lnHeadAtReceptor, lnTailEnd);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const dragStateRef = useRef<{
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    startLocalX: number;
+    startLocalY: number;
+    initialSelection: number[];
+    additive: boolean;
+    moved: boolean;
+    pendingColumn: number | null;
+    pendingMode: SelectionMode;
+  } | null>(null);
+  const [marqueeRect, setMarqueeRect] = useState<{ left: number; top: number; width: number; height: number } | null>(null);
+
+  let cursorX = playfieldX;
+  const lanePositions = Array.from({ length: keyCount }, (_, col) => {
+    const laneWidth = columnWidths[col] * layoutScale;
+    const startX = cursorX;
+    cursorX += laneWidth + (columnSpacings[col] ?? 0) * layoutScale;
+    return { col, startX, endX: startX + laneWidth, cx: startX + laneWidth / 2, width: laneWidth };
+  });
+
+  const tapYForColumn = (col: number) => {
+    const offset = PREVIEW_TAP_Y_OFFSETS_DOWN[col % PREVIEW_TAP_Y_OFFSETS_DOWN.length];
+    const downscrollY = receptorY - offset;
+    if (settings.upscroll) return receptorY + offset - noteSize;
+    return downscrollY;
+  };
+
+  const lnLengthForColumn = (col: number) => {
+    const base = PREVIEW_LN_LENGTHS[col % PREVIEW_LN_LENGTHS.length];
+    return settings.percy ? Math.max(50, base - 30) : base;
+  };
+
+  const findColumnAtX = (localX: number): number | null => {
+    for (const lane of lanePositions) {
+      if (localX >= lane.startX && localX <= lane.endX) return lane.col;
+    }
+    if (lanePositions.length === 0) return null;
+    const first = lanePositions[0];
+    const last = lanePositions[lanePositions.length - 1];
+    const gapHalf = Math.max(2, profile.columnSpacing * layoutScale / 2 + 2);
+    for (const lane of lanePositions) {
+      if (localX >= lane.startX - gapHalf && localX <= lane.endX + gapHalf) return lane.col;
+    }
+    if (localX < first.startX - gapHalf || localX > last.endX + gapHalf) return null;
+    return null;
+  };
+
+  const columnsInRange = (loX: number, hiX: number): number[] => {
+    const cols: number[] = [];
+    for (const lane of lanePositions) {
+      if (lane.endX >= loX && lane.startX <= hiX) cols.push(lane.col);
+    }
+    return cols;
+  };
+
+  const mergeMarqueeSelection = (initial: number[], hit: number[], additive: boolean): number[] => {
+    if (additive) {
+      const merged = new Set(initial);
+      for (const col of hit) merged.add(col);
+      return Array.from(merged).sort((a, b) => a - b);
+    }
+    return hit.slice().sort((a, b) => a - b);
+  };
+
+  const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!containerRef.current) return;
+    if (event.button !== 0) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const localX = event.clientX - rect.left;
+    const localY = event.clientY - rect.top;
+    const additive = event.shiftKey || event.metaKey || event.ctrlKey;
+    const pendingColumn = findColumnAtX(localX);
+    const pendingMode: SelectionMode = event.shiftKey
+      ? "range"
+      : event.metaKey || event.ctrlKey
+        ? "toggle"
+        : "replace";
+    dragStateRef.current = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startLocalX: localX,
+      startLocalY: localY,
+      initialSelection: selectedColumns,
+      additive,
+      moved: false,
+      pendingColumn,
+      pendingMode,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = dragStateRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+    if (!containerRef.current) return;
+    const dx = event.clientX - state.startClientX;
+    const dy = event.clientY - state.startClientY;
+    if (!state.moved && Math.hypot(dx, dy) < 4) return;
+    state.moved = true;
+    const rect = containerRef.current.getBoundingClientRect();
+    const localX = event.clientX - rect.left;
+    const localY = event.clientY - rect.top;
+    const left = Math.max(0, Math.min(state.startLocalX, localX));
+    const right = Math.min(rect.width, Math.max(state.startLocalX, localX));
+    const top = Math.max(0, Math.min(state.startLocalY, localY));
+    const bottom = Math.min(rect.height, Math.max(state.startLocalY, localY));
+    setMarqueeRect({ left, top, width: right - left, height: bottom - top });
+    const hit = columnsInRange(left, right);
+    onSelectionChange(mergeMarqueeSelection(state.initialSelection, hit, state.additive));
+  };
+
+  const handlePointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const state = dragStateRef.current;
+    if (!state || state.pointerId !== event.pointerId) return;
+    dragStateRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    setMarqueeRect(null);
+    if (!state.moved && state.pendingColumn != null) {
+      onSelectionChange(applySelection(state.initialSelection, state.pendingColumn, state.pendingMode));
+    }
+  };
 
   return (
-    <div className="relative h-[300px] overflow-hidden rounded-lg border border-osu-b3/60 bg-[#07070c]">
+    <div
+      ref={containerRef}
+      data-replay-selectable-area="preview"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerEnd}
+      onPointerCancel={handlePointerEnd}
+      className="relative h-[300px] overflow-hidden rounded-lg border border-osu-b3/60 bg-[#07070c] select-none touch-none"
+    >
       {settings.style !== "circles" ? (
-        <div className="absolute inset-y-0" style={{ left: playfieldX, width: playfieldWidth }}>
-          {Array.from({ length: keyCount + 1 }, (_, index) => (
+        <div className="pointer-events-none absolute inset-y-0" style={{ left: playfieldX, width: playfieldWidth }}>
+          {[...lanePositions.map((lane) => lane.startX - playfieldX), playfieldWidth].map((left, index) => (
             <div
               key={index}
               className="absolute inset-y-0 w-px bg-white/10"
-              style={{ left: index < keyCount ? index * (laneWidth + columnSpacing) : playfieldWidth }}
+              style={{ left }}
             />
           ))}
         </div>
       ) : null}
+      {lanePositions.map(({ col, startX, width: laneWidth }) => {
+        const isSelected = selectedColumns.includes(col);
+        return (
+          <div
+            key={`lane-bg-${col}`}
+            className={`pointer-events-none absolute inset-y-0 transition-colors ${
+              isSelected ? "bg-osu-pink/15" : ""
+            }`}
+            style={{ left: startX, width: laneWidth }}
+          />
+        );
+      })}
       {settings.style !== "circles" ? (
-        <div className="absolute h-0.5 bg-white/70" style={{ left: playfieldX, width: playfieldWidth, top: receptorY }} />
+        <div className="pointer-events-none absolute h-0.5 bg-white/70" style={{ left: playfieldX, width: playfieldWidth, top: receptorY }} />
       ) : null}
-      {Array.from({ length: keyCount }, (_, col) => {
-        const cx = playfieldX + (laneWidth + columnSpacing) * col + laneWidth / 2;
-        const pressed = col === lnCol;
+      {lanePositions.map(({ col, cx, width: laneWidth }) => {
+        const isSelected = selectedColumns.includes(col);
+        const receptorAsset = profile.assets.columns[col]?.receptor;
+        if (receptorAsset) {
+          const receptorHeight = getPreviewAssetHeight(receptorAsset, laneWidth, laneWidth, noteSize);
+          return (
+            <img
+              key={`receptor-${col}`}
+              src={receptorAsset.src}
+              alt=""
+              draggable={false}
+              className="pointer-events-none absolute object-fill"
+              style={{
+                left: cx - laneWidth / 2,
+                top: settings.upscroll ? receptorY - receptorHeight : receptorY,
+                width: laneWidth,
+                height: receptorHeight,
+                opacity: isSelected ? 1 : 0.62,
+              }}
+            />
+          );
+        }
         if (settings.style === "circles") {
           return (
             <div
               key={`receptor-${col}`}
-              className="absolute rounded-full border-2 border-white"
+              className="pointer-events-none absolute rounded-full border-2"
               style={{
                 left: cx - noteSize / 2,
                 top: receptorY - noteSize / 2,
                 width: noteSize,
                 height: noteSize,
-                opacity: pressed ? 1 : 0.5,
+                borderColor: isSelected ? "#e83c90" : "#ffffff",
+                opacity: isSelected ? 1 : 0.5,
               }}
             />
           );
         }
         if (settings.style === "arrows") {
-          const direction = getColumnArrowDirection(col, keyCount);
-          const tapColor = colorFor(profile.tapColors, profile.tapColor, col);
           return (
             <ArrowShape
               key={`receptor-${col}`}
               cx={cx}
               cy={receptorY}
               size={noteSize}
-              direction={direction}
-              fill={pressed ? tapColor : "transparent"}
-              fillOpacity={pressed ? 0.5 : 0}
-              stroke="#ffffff"
-              strokeOpacity={pressed ? 1 : 0.5}
+              direction={getColumnArrowDirection(col, keyCount)}
+              fill="transparent"
+              fillOpacity={0}
+              stroke={isSelected ? "#e83c90" : "#ffffff"}
+              strokeOpacity={isSelected ? 1 : 0.5}
             />
           );
         }
         return (
           <div
             key={`receptor-${col}`}
-            className="absolute rounded-sm"
+            className="pointer-events-none absolute rounded-sm"
             style={{
               left: cx - noteSize / 2,
               top: settings.upscroll ? receptorY - 11 : receptorY + 4,
               width: noteSize,
               height: 7,
-              backgroundColor: pressed ? colorFor(profile.tapColors, profile.tapColor, col) : "#ffffff",
-              opacity: pressed ? 1 : 0.16,
+              backgroundColor: "#ffffff",
+              opacity: isSelected ? 0.45 : 0.16,
             }}
           />
         );
       })}
-      {tapCols.map((col, index) => {
-        const cx = playfieldX + (laneWidth + columnSpacing) * col + laneWidth / 2;
-        const y = settings.upscroll ? (index === 0 ? 204 : 154) : (index === 0 ? 54 : 104);
-        const color = colorFor(profile.tapColors, profile.tapColor, col);
-        if (settings.style === "circles") {
-          return (
-            <div
-              key={`tap-${col}`}
-              className="absolute rounded-full ring-2 ring-white/55"
-              style={{ left: cx - noteSize / 2, top: y, width: noteSize, height: noteSize, backgroundColor: color }}
-            />
-          );
-        }
-        if (settings.style === "arrows") {
-          const direction = getColumnArrowDirection(col, keyCount);
-          return (
-            <ArrowShape
-              key={`tap-${col}`}
-              cx={cx}
-              cy={y + noteSize / 2}
-              size={noteSize}
-              direction={direction}
-              fill={color}
-              fillOpacity={1}
-              stroke="#ffffff"
-              strokeOpacity={0.55}
-            />
-          );
-        }
-        return (
-          <div
-            key={`tap-${col}`}
-            className="absolute rounded"
-            style={{ left: cx - noteSize / 2, top: y, width: noteSize, height: 10, backgroundColor: color }}
-          />
-        );
-      })}
-      {(() => {
-        const cx = playfieldX + (laneWidth + columnSpacing) * lnCol + laneWidth / 2;
-        const headColor = colorFor(profile.lnHeadColors, profile.lnHeadColor, lnCol);
-        if (settings.style === "circles") {
-          const bodyWidth = Math.max(10, noteSize * 0.72);
-          return (
-            <>
+      {previewMode === "tap"
+        ? lanePositions.map(({ col, cx, width: laneWidth }) => {
+            const y = tapYForColumn(col);
+            const color = colorFor(profile.tapColors, profile.tapColor, col);
+            const tapAsset = profile.assets.columns[col]?.tap;
+            if (tapAsset) {
+              const assetHeight = getPreviewAssetHeight(tapAsset, laneWidth, profile.noteHeightScale * layoutScale, noteSize);
+              return (
+                <img
+                  key={`tap-${col}`}
+                  src={tapAsset.src}
+                  alt=""
+                  draggable={false}
+                  className="pointer-events-none absolute object-fill"
+                  style={{ left: cx - laneWidth / 2, top: settings.upscroll ? y : y + noteSize - assetHeight, width: laneWidth, height: assetHeight }}
+                />
+              );
+            }
+            if (settings.style === "circles") {
+              return (
+                <div
+                  key={`tap-${col}`}
+                  className="pointer-events-none absolute rounded-full ring-2 ring-white/55"
+                  style={{ left: cx - noteSize / 2, top: y, width: noteSize, height: noteSize, backgroundColor: color }}
+                />
+              );
+            }
+            if (settings.style === "arrows") {
+              return (
+                <ArrowShape
+                  key={`tap-${col}`}
+                  cx={cx}
+                  cy={y + noteSize / 2}
+                  size={noteSize}
+                  direction={getColumnArrowDirection(col, keyCount)}
+                  fill={color}
+                  fillOpacity={1}
+                  stroke="#ffffff"
+                  strokeOpacity={0.55}
+                />
+              );
+            }
+            return (
               <div
-                className="absolute"
-                style={{
-                  left: cx - bodyWidth / 2,
-                  top: lnTop,
-                  width: bodyWidth,
-                  height: lnBottom - lnTop,
-                  backgroundColor: settings.lnBodyColor,
-                  borderRadius: bodyWidth / 2,
-                }}
+                key={`tap-${col}`}
+                className="pointer-events-none absolute rounded"
+                style={{ left: cx - noteSize / 2, top: y, width: noteSize, height: 10, backgroundColor: color }}
               />
-              <div
-                className="absolute rounded-full ring-2 ring-white/55"
-                style={{
-                  left: cx - noteSize / 2,
-                  top: lnHeadAtReceptor - noteSize / 2,
-                  width: noteSize,
-                  height: noteSize,
-                  backgroundColor: headColor,
-                }}
-              />
-            </>
-          );
-        }
-        if (settings.style === "arrows") {
-          const direction = getColumnArrowDirection(lnCol, keyCount);
-          const bodyWidth = Math.max(10, noteSize * 0.5);
-          return (
-            <>
-              <div
-                className="absolute"
-                style={{
-                  left: cx - bodyWidth / 2,
-                  top: lnTop,
-                  width: bodyWidth,
-                  height: lnBottom - lnTop,
-                  backgroundColor: settings.lnBodyColor,
-                }}
-              />
-              <ArrowShape
-                cx={cx}
-                cy={lnHeadAtReceptor}
-                size={noteSize}
-                direction={direction}
-                fill={headColor}
-                fillOpacity={1}
-                stroke="#ffffff"
-                strokeOpacity={0.55}
-              />
-            </>
-          );
-        }
-        const bodyWidth = noteSize;
-        return (
-          <>
-            <div
-              className="absolute rounded-sm"
-              style={{
-                left: cx - bodyWidth / 2,
-                top: lnTop,
-                width: bodyWidth,
-                height: lnBottom - lnTop,
-                backgroundColor: settings.lnBodyColor,
-              }}
-            />
-            <div
-              className="absolute rounded"
-              style={{
-                left: cx - noteSize / 2,
-                top: lnHeadAtReceptor - 5,
-                width: noteSize,
-                height: 10,
-                backgroundColor: headColor,
-              }}
-            />
-          </>
-        );
-      })()}
+            );
+          })
+        : lanePositions.map(({ col, cx, width: laneWidth }) => {
+            const headColor = colorFor(profile.lnHeadColors, profile.lnHeadColor, col);
+            const length = lnLengthForColumn(col);
+            const lnHeadY = receptorY;
+            const lnTailEnd = settings.upscroll ? lnHeadY + length : lnHeadY - length;
+            const lnTop = Math.min(lnHeadY, lnTailEnd);
+            const lnBottom = Math.max(lnHeadY, lnTailEnd);
+            const columnAssets = profile.assets.columns[col];
+            if (columnAssets?.lnHead || columnAssets?.lnBody || columnAssets?.lnTail) {
+              const headAsset = columnAssets.lnHead ?? columnAssets.tap;
+              const bodyAsset = columnAssets.lnBody;
+              const tailAsset = columnAssets.lnTail;
+              const headHeight = headAsset ? getPreviewAssetHeight(headAsset, laneWidth, profile.noteHeightScale * layoutScale, noteSize) : noteSize;
+              const tailHeight = tailAsset ? getPreviewAssetHeight(tailAsset, laneWidth, profile.noteHeightScale * layoutScale, noteSize) : noteSize;
+              return (
+                <div key={`ln-${col}`} className="pointer-events-none">
+                  {bodyAsset ? (
+                    <img
+                      src={bodyAsset.src}
+                      alt=""
+                      draggable={false}
+                      className="absolute object-fill"
+                      style={{ left: cx - laneWidth / 2, top: lnTop, width: laneWidth, height: lnBottom - lnTop }}
+                    />
+                  ) : (
+                    <div
+                      className="absolute"
+                      style={{ left: cx - Math.max(10, noteSize * 0.5) / 2, top: lnTop, width: Math.max(10, noteSize * 0.5), height: lnBottom - lnTop, backgroundColor: settings.lnBodyColor }}
+                    />
+                  )}
+                  {tailAsset ? (
+                    <img
+                      src={tailAsset.src}
+                      alt=""
+                      draggable={false}
+                      className="absolute object-fill"
+                      style={{ left: cx - laneWidth / 2, top: settings.upscroll ? lnTailEnd - tailHeight : lnTailEnd, width: laneWidth, height: tailHeight }}
+                    />
+                  ) : null}
+                  {headAsset ? (
+                    <img
+                      src={headAsset.src}
+                      alt=""
+                      draggable={false}
+                      className="absolute object-fill"
+                      style={{ left: cx - laneWidth / 2, top: settings.upscroll ? lnHeadY : lnHeadY - headHeight, width: laneWidth, height: headHeight }}
+                    />
+                  ) : null}
+                </div>
+              );
+            }
+            if (settings.style === "circles") {
+              const bodyWidth = Math.max(10, noteSize * 0.72);
+              return (
+                <div key={`ln-${col}`} className="pointer-events-none">
+                  <div
+                    className="absolute"
+                    style={{
+                      left: cx - bodyWidth / 2,
+                      top: lnTop,
+                      width: bodyWidth,
+                      height: lnBottom - lnTop,
+                      backgroundColor: settings.lnBodyColor,
+                      borderRadius: bodyWidth / 2,
+                    }}
+                  />
+                  <div
+                    className="absolute rounded-full ring-2 ring-white/55"
+                    style={{
+                      left: cx - noteSize / 2,
+                      top: lnHeadY - noteSize / 2,
+                      width: noteSize,
+                      height: noteSize,
+                      backgroundColor: headColor,
+                    }}
+                  />
+                </div>
+              );
+            }
+            if (settings.style === "arrows") {
+              const bodyWidth = Math.max(10, noteSize * 0.5);
+              return (
+                <div key={`ln-${col}`} className="pointer-events-none">
+                  <div
+                    className="absolute"
+                    style={{
+                      left: cx - bodyWidth / 2,
+                      top: lnTop,
+                      width: bodyWidth,
+                      height: lnBottom - lnTop,
+                      backgroundColor: settings.lnBodyColor,
+                    }}
+                  />
+                  <ArrowShape
+                    cx={cx}
+                    cy={lnHeadY}
+                    size={noteSize}
+                    direction={getColumnArrowDirection(col, keyCount)}
+                    fill={headColor}
+                    fillOpacity={1}
+                    stroke="#ffffff"
+                    strokeOpacity={0.55}
+                  />
+                </div>
+              );
+            }
+            const bodyWidth = noteSize;
+            return (
+              <div key={`ln-${col}`} className="pointer-events-none">
+                <div
+                  className="absolute rounded-sm"
+                  style={{
+                    left: cx - bodyWidth / 2,
+                    top: lnTop,
+                    width: bodyWidth,
+                    height: lnBottom - lnTop,
+                    backgroundColor: settings.lnBodyColor,
+                  }}
+                />
+                <div
+                  className="absolute rounded"
+                  style={{
+                    left: cx - noteSize / 2,
+                    top: lnHeadY - 5,
+                    width: noteSize,
+                    height: 10,
+                    backgroundColor: headColor,
+                  }}
+                />
+              </div>
+            );
+          })}
+      <div
+        className="pointer-events-none absolute flex -translate-y-1/2 items-center justify-center text-[15px] font-bold leading-none"
+        style={{
+          left: playfieldX,
+          width: playfieldWidth,
+          top: comboY,
+          color: "rgba(255,255,255,0.85)",
+        }}
+      >
+        1234x
+      </div>
+      <div
+        className="pointer-events-none absolute flex -translate-y-1/2 items-center justify-center text-[11px] font-bold leading-none"
+        style={{
+          left: playfieldX,
+          width: playfieldWidth,
+          top: scoreY,
+          color: "#b3f5ff",
+        }}
+      >
+        MAX
+      </div>
+      {marqueeRect ? (
+        <div
+          className="pointer-events-none absolute"
+          style={{
+            left: marqueeRect.left,
+            top: marqueeRect.top,
+            width: marqueeRect.width,
+            height: marqueeRect.height,
+            border: "1px solid #4ea3ff",
+            backgroundColor: "rgba(78, 163, 255, 0.22)",
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -899,11 +1659,13 @@ function ReplaySkinShapeButton({
 
 function ReplaySkinColorRow({
   label,
+  title,
   value,
   selected,
   onOpen,
 }: {
   label: string;
+  title?: string;
   value: string;
   selected: boolean;
   onOpen: () => void;
@@ -912,6 +1674,7 @@ function ReplaySkinColorRow({
     <button
       type="button"
       onClick={onOpen}
+      title={title}
       className={`grid w-full cursor-pointer grid-cols-[1fr_auto] items-center gap-3 rounded-lg text-left transition-colors ${
         selected ? "text-white" : "text-osu-f1 hover:text-white"
       }`}
@@ -945,6 +1708,31 @@ function ReplaySkinSwitch({ checked, onChange }: { checked: boolean; onChange: (
           checked ? "translate-x-4" : "translate-x-0"
         }`}
       />
+    </button>
+  );
+}
+
+function PresetIconButton({
+  label,
+  disabled = false,
+  children,
+  onClick,
+}: {
+  label: string;
+  disabled?: boolean;
+  children: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="grid h-7 w-7 cursor-pointer place-items-center rounded-md border border-osu-b3/60 bg-osu-b5/70 text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-osu-b3/60 disabled:hover:text-osu-f1"
+    >
+      {children}
     </button>
   );
 }
@@ -1110,23 +1898,106 @@ function FancySelect({
   options: { value: string; label: string }[];
   onChange: (value: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const selected = options.find((option) => option.value === value) ?? options[0];
+
   return (
-    <label className="block">
+    <div className="block">
       <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-osu-f1">{label}</span>
-      <span className="relative block">
-        <select
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-10 w-full cursor-pointer appearance-none rounded-lg border border-osu-b3/60 bg-osu-b5/70 pl-3 pr-9 text-sm font-semibold text-white outline-none transition-colors focus:border-osu-pink/70"
+      <div ref={containerRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          className={`flex h-10 w-full cursor-pointer items-center justify-between gap-2 rounded-lg border px-3 text-sm font-semibold outline-none transition-all ${
+            open
+              ? "border-osu-pink/50 bg-osu-pink/10 text-white"
+              : "border-osu-b3/60 bg-osu-b5/70 text-white hover:border-osu-pink/40 hover:bg-osu-b4"
+          }`}
         >
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>{option.label}</option>
-          ))}
-        </select>
-        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-osu-f1" strokeWidth={2.4} />
-      </span>
-    </label>
+          <span className="truncate">{selected?.label ?? ""}</span>
+          <ChevronDown
+            className={`h-4 w-4 shrink-0 transition-transform duration-200 ${open ? "rotate-180 text-osu-pink-light" : "text-osu-f1"}`}
+            strokeWidth={2.4}
+          />
+        </button>
+        <div
+          className={`absolute left-0 right-0 top-full z-[115] mt-1.5 overflow-hidden rounded-lg border border-osu-pink/20 bg-osu-b4/95 shadow-xl shadow-black/40 backdrop-blur-md transition-all duration-150 origin-top ${
+            open ? "opacity-100 scale-y-100 translate-y-0 pointer-events-auto" : "opacity-0 scale-y-95 -translate-y-1 pointer-events-none"
+          }`}
+          role="listbox"
+        >
+          <div className="max-h-[240px] overflow-y-auto p-1">
+            {options.map((option) => {
+              const isSelected = option.value === value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                  }}
+                  className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs font-semibold transition-colors cursor-pointer ${
+                    isSelected
+                      ? "bg-osu-pink/15 text-osu-pink-light"
+                      : "text-osu-l2 hover:bg-osu-b3 hover:text-white"
+                  }`}
+                >
+                  <span className={`flex h-3 w-3 shrink-0 items-center justify-center transition-opacity ${isSelected ? "opacity-100" : "opacity-0"}`}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-3 w-3 text-osu-pink">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </span>
+                  <span className="truncate">{option.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
   );
+}
+
+const POPOVER_POSITION_STORAGE_PREFIX = "mania-hub-replay-popover-pos:";
+
+function readStoredPopoverPosition(storageKey: string | undefined): { x: number; y: number } | null {
+  if (!storageKey || typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(POPOVER_POSITION_STORAGE_PREFIX + storageKey);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.x !== "number" || typeof parsed.y !== "number") return null;
+    return { x: parsed.x, y: parsed.y };
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredPopoverPosition(storageKey: string | undefined, position: { x: number; y: number }): void {
+  if (!storageKey || typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(POPOVER_POSITION_STORAGE_PREFIX + storageKey, JSON.stringify(position));
+  } catch {
+    // ignore quota errors
+  }
 }
 
 function DraggableColorPopover({
@@ -1135,12 +2006,14 @@ function DraggableColorPopover({
   width = 264,
   anchorRef,
   onClose,
+  storageKey,
 }: {
   title: string;
   children: ReactNode;
   width?: number;
   anchorRef?: React.RefObject<HTMLElement | null>;
   onClose: () => void;
+  storageKey?: string;
 }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
@@ -1152,11 +2025,26 @@ function DraggableColorPopover({
     const margin = 12;
     const w = width;
     const h = ref.current?.offsetHeight ?? 360;
+    const stored = readStoredPopoverPosition(storageKey);
+    if (stored) {
+      const clampedX = Math.min(Math.max(margin, stored.x), Math.max(margin, window.innerWidth - w - margin));
+      const clampedY = Math.min(Math.max(margin, stored.y), Math.max(margin, window.innerHeight - h - margin));
+      setPosition({ x: clampedX, y: clampedY });
+      return;
+    }
     const anchor = anchorRef?.current?.getBoundingClientRect();
     let x: number;
     let y: number;
     if (anchor) {
-      x = Math.round(anchor.right - w - margin);
+      const rightRoom = window.innerWidth - anchor.right - margin;
+      const leftRoom = anchor.left - margin;
+      if (rightRoom >= w + margin) {
+        x = Math.round(anchor.right + margin);
+      } else if (leftRoom >= w + margin) {
+        x = Math.round(anchor.left - margin - w);
+      } else {
+        x = Math.round(anchor.left + margin);
+      }
       y = Math.round(anchor.top + 64);
       x = Math.min(Math.max(margin, x), Math.max(margin, window.innerWidth - w - margin));
       y = Math.min(Math.max(margin, y), Math.max(margin, window.innerHeight - h - margin));
@@ -1165,7 +2053,12 @@ function DraggableColorPopover({
       y = Math.max(margin, Math.round((window.innerHeight - h) / 2));
     }
     setPosition({ x, y });
-  }, [position, width, anchorRef]);
+  }, [position, width, anchorRef, storageKey]);
+
+  useEffect(() => {
+    if (!position) return;
+    writeStoredPopoverPosition(storageKey, position);
+  }, [position, storageKey]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1218,6 +2111,7 @@ function DraggableColorPopover({
   return (
     <div
       ref={ref}
+      data-replay-selectable-area="popover"
       className={`fixed z-[120] rounded-xl border border-osu-b2/70 bg-osu-b4/95 shadow-2xl backdrop-blur transition-opacity duration-100 ${
         position ? "opacity-100" : "opacity-0"
       }`}
@@ -1245,5 +2139,219 @@ function DraggableColorPopover({
       </div>
       <div className="p-3">{children}</div>
     </div>
+  );
+}
+
+function ReplaySkinToast({
+  message,
+  tone,
+  onDismiss,
+}: {
+  message: string;
+  tone: "info" | "error";
+  onDismiss: () => void;
+}) {
+  useEffect(() => {
+    const timer = window.setTimeout(onDismiss, 2400);
+    return () => window.clearTimeout(timer);
+  }, [onDismiss]);
+  const toneClasses = tone === "error"
+    ? "border-red-400/60 bg-red-500/15 text-red-100"
+    : "border-osu-pink/50 bg-osu-b4/95 text-white";
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      transition={{ duration: 0.16 }}
+      className={`fixed left-1/2 top-6 z-[140] -translate-x-1/2 rounded-lg border px-3.5 py-2 text-xs font-semibold shadow-lg backdrop-blur ${toneClasses}`}
+    >
+      {message}
+    </motion.div>
+  );
+}
+
+function ReplaySkinPromptDialog({
+  title,
+  label,
+  initial,
+  placeholder,
+  confirmLabel = "Confirm",
+  multiline = false,
+  onCancel,
+  onConfirm,
+}: {
+  title: string;
+  label?: string;
+  initial: string;
+  placeholder?: string;
+  confirmLabel?: string;
+  multiline?: boolean;
+  onCancel: () => void;
+  onConfirm: (value: string) => void;
+}) {
+  const [value, setValue] = useState(initial);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    const target = multiline ? textareaRef.current : inputRef.current;
+    if (!target) return;
+    target.focus();
+    if (target instanceof HTMLInputElement) target.select();
+  }, [multiline]);
+  const submit = () => {
+    if (!value.trim()) return;
+    onConfirm(value);
+  };
+  return (
+    <>
+      <motion.div
+        className="fixed inset-0 z-[130] bg-black/55 backdrop-blur-[2px]"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.1 }}
+        onClick={onCancel}
+      />
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        initial={{ opacity: 0, y: -12, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -8, scale: 0.98 }}
+        transition={{ duration: 0.14 }}
+        className="fixed left-1/2 top-1/2 z-[131] w-[min(420px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-osu-b3/50 px-5 py-3 text-sm font-bold text-white">{title}</div>
+        <div className="space-y-2 px-5 py-4">
+          {label ? <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">{label}</div> : null}
+          {multiline ? (
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              placeholder={placeholder}
+              rows={4}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                  event.preventDefault();
+                  submit();
+                }
+                if (event.key === "Escape") onCancel();
+              }}
+              className="w-full resize-none rounded-md border border-osu-b3/60 bg-osu-b5/70 px-3 py-2 font-mono text-xs text-white outline-none transition-colors focus:border-osu-pink/70"
+            />
+          ) : (
+            <input
+              ref={inputRef}
+              type="text"
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              placeholder={placeholder}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  submit();
+                }
+                if (event.key === "Escape") onCancel();
+              }}
+              className="h-10 w-full rounded-md border border-osu-b3/60 bg-osu-b5/70 px-3 text-sm font-semibold text-white outline-none transition-colors focus:border-osu-pink/70"
+            />
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-osu-b3/50 px-5 py-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={submit}
+            disabled={!value.trim()}
+            className="cursor-pointer rounded-lg bg-osu-pink px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-osu-pink-light disabled:cursor-not-allowed disabled:bg-osu-pink/40"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </motion.div>
+    </>
+  );
+}
+
+function ReplaySkinKeyDialog({
+  title,
+  value,
+  onClose,
+  onCopy,
+}: {
+  title: string;
+  value: string;
+  onClose: () => void;
+  onCopy: () => void;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    const target = textareaRef.current;
+    if (!target) return;
+    target.focus();
+    target.select();
+  }, []);
+  return (
+    <>
+      <motion.div
+        className="fixed inset-0 z-[130] bg-black/55 backdrop-blur-[2px]"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.1 }}
+        onClick={onClose}
+      />
+      <motion.div
+        role="dialog"
+        aria-modal="true"
+        initial={{ opacity: 0, y: -12, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: -8, scale: 0.98 }}
+        transition={{ duration: 0.14 }}
+        className="fixed left-1/2 top-1/2 z-[131] w-[min(480px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-osu-b3/50 px-5 py-3 text-sm font-bold text-white">{title}</div>
+        <div className="space-y-2 px-5 py-4">
+          <textarea
+            ref={textareaRef}
+            value={value}
+            readOnly
+            rows={5}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") onClose();
+            }}
+            className="w-full resize-none rounded-md border border-osu-b3/60 bg-osu-b5/70 px-3 py-2 font-mono text-[11px] text-osu-c1 outline-none focus:border-osu-pink/70"
+          />
+          <div className="text-[10px] text-osu-f1">Select all and copy, or use the button below.</div>
+        </div>
+        <div className="flex items-center justify-end gap-2 border-t border-osu-b3/50 px-5 py-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
+          >
+            Close
+          </button>
+          <button
+            type="button"
+            onClick={onCopy}
+            className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-osu-pink px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-osu-pink-light"
+          >
+            <Copy className="h-3.5 w-3.5" />
+            Copy
+          </button>
+        </div>
+      </motion.div>
+    </>
   );
 }
