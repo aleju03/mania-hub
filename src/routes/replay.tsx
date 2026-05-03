@@ -1,9 +1,9 @@
 import { createFileRoute, notFound, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Circle, Copy, MousePointer2, RectangleHorizontal, Settings, X } from "lucide-react";
+import { Copy, Settings, X } from "lucide-react";
 import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores } from "../lib/osu";
 import { parseManiaBeatmap } from "../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
@@ -50,6 +50,18 @@ const REPLAY_INPUT_OVERLAY_STORAGE_KEY = "mania-hub-replay-input-overlay";
 const REPLAY_INPUT_ONLY_STORAGE_KEY = "mania-hub-replay-input-only";
 const REPLAY_INPUT_COLOR_STORAGE_KEY = "mania-hub-replay-input-color";
 const REPLAY_BG_DIM_STORAGE_KEY = "mania-hub-replay-bg-dim";
+const MANIA_ARROW_ICON_STYLE: CSSProperties = {
+  WebkitMask: "url('/images/notes/mania-arrow-right.svg') center / contain no-repeat",
+  mask: "url('/images/notes/mania-arrow-right.svg') center / contain no-repeat",
+};
+const MANIA_BAR_ICON_STYLE: CSSProperties = {
+  WebkitMask: "url('/images/notes/mania-bar.svg') center / contain no-repeat",
+  mask: "url('/images/notes/mania-bar.svg') center / contain no-repeat",
+};
+const MANIA_CIRCLE_ICON_STYLE: CSSProperties = {
+  WebkitMask: "url('/images/notes/mania-circle.svg') center / contain no-repeat",
+  mask: "url('/images/notes/mania-circle.svg') center / contain no-repeat",
+};
 
 interface ReplaySearch {
   scoreId?: number;
@@ -2340,20 +2352,20 @@ function ReplaySkinSettingsModal({
                   <div className="grid grid-cols-3 gap-2">
                     <ReplaySkinShapeButton
                       active={draft.style === "circles"}
-                      icon={<Circle className="h-4 w-4" />}
+                      icon={<ReplaySkinShapeIcon style={MANIA_CIRCLE_ICON_STYLE} />}
                       label="Circles"
                       onClick={() => updateStyle("circles")}
                     />
                     <ReplaySkinShapeButton
                       active={draft.style === "bars"}
-                      icon={<RectangleHorizontal className="h-4 w-4" />}
+                      icon={<ReplaySkinShapeIcon style={MANIA_BAR_ICON_STYLE} />}
                       label="Bars"
                       onClick={() => updateStyle("bars")}
                     />
                     <ReplaySkinShapeButton
                       active={false}
                       disabled
-                      icon={<MousePointer2 className="h-4 w-4" />}
+                      icon={<ReplaySkinShapeIcon style={MANIA_ARROW_ICON_STYLE} />}
                       label="Arrows"
                       onClick={() => {}}
                     />
@@ -2762,6 +2774,10 @@ function ReplaySkinPreview({
       })()}
     </div>
   );
+}
+
+function ReplaySkinShapeIcon({ style }: { style: CSSProperties }) {
+  return <span aria-hidden="true" className="h-4 w-4 bg-current" style={style} />;
 }
 
 function ReplaySkinShapeButton({
