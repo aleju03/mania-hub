@@ -65,7 +65,10 @@ export class ManiaCardRenderer {
     });
     this.renderer = new WebGLRenderer({ antialias: this.quality.antialias, alpha: true });
     this.renderer.setPixelRatio(this.quality.pixelRatio);
-    this.renderer.setSize(this.host.clientWidth, this.host.clientHeight, false);
+    this.renderer.setSize(this.host.clientWidth, this.host.clientHeight);
+    this.renderer.domElement.style.display = "block";
+    this.renderer.domElement.style.width = "100%";
+    this.renderer.domElement.style.height = "100%";
     this.host.appendChild(this.renderer.domElement);
     this.camera.position.set(0, 0, 7);
     this.scene.add(new AmbientLight(0xffffff, 1.4));
@@ -111,7 +114,7 @@ export class ManiaCardRenderer {
   resize() {
     const width = Math.max(1, this.host.clientWidth);
     const height = Math.max(1, this.host.clientHeight);
-    this.renderer.setSize(width, height, false);
+    this.renderer.setSize(width, height);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.start();
