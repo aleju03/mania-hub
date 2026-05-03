@@ -1,6 +1,6 @@
 import type { ManiaNote } from "./beatmap-parser";
 import type { ReplayFrame } from "./types";
-import type { Judgment, ReplayAccuracyMode, ReplayJudgementEvent } from "./mania-replay-judgement.ts";
+import type { Judgment, ReplayAccuracyMode, ReplayJudgementEvent, ReplayNoteState } from "./mania-replay-judgement.ts";
 import {
   buildReplaySegments,
   calculateReplayAccuracy,
@@ -21,14 +21,17 @@ export interface ReplayHitCounts {
 export interface ReplayValidationResult {
   accuracyMode: ReplayAccuracyMode;
   accuracyDiff: number;
+  expectedMaxCombo: number | null;
   expectedAccuracy: number;
   expectedCounts: ReplayHitCounts;
   legacyReplayAmbiguityResolved: boolean;
-  legacyReplayResolution: "none" | "ambiguity" | "score-header";
+  legacyReplayResolution: "none" | "ambiguity" | "combo-header" | "score-header";
   matched: boolean;
+  maxComboDiff: number | null;
   rawSimulatedCounts: ReplayHitCounts;
   simulatedAccuracy: number;
   simulatedCounts: ReplayHitCounts;
+  simulatedMaxCombo: number;
   totalCountDiff: number;
   totalExpected: number;
   totalSimulated: number;
@@ -37,6 +40,7 @@ export interface ReplayValidationResult {
 
 export interface ReplayValidationInput {
   expectedCounts: ReplayHitCounts;
+  expectedMaxCombo?: number | null;
   frames: ReplayFrame[];
   isConvert?: boolean;
   isLazer?: boolean;
@@ -87,6 +91,96 @@ export function countReplayJudgements(events: ReplayJudgementEvent[]): ReplayHit
   return counts;
 }
 
+export function calculateReplayMaxCombo(
+  events: ReplayJudgementEvent[],
+  options: { initialCombo?: number } = {},
+): number {
+  const initialCombo = options.initialCombo ?? 0;
+  let combo = Math.max(0, Math.floor(initialCombo));
+  let maxCombo = combo;
+
+  for (const event of events) {
+    if (event.judgment == null || event.judgment === 6) {
+      combo = 0;
+    } else if (event.judgment >= 1 && event.judgment <= 5) {
+      combo++;
+      maxCombo = Math.max(maxCombo, combo);
+    }
+  }
+
+  return maxCombo;
+}
+
+type ReplayComboEvent = { kind: "break" | "hit"; time: number };
+
+function calculateReplayComboEventsMaxCombo(events: ReplayComboEvent[]): number {
+  let combo = 0;
+  let maxCombo = 0;
+
+  for (const event of events) {
+    if (event.kind === "break") {
+      combo = 0;
+    } else {
+      combo++;
+      maxCombo = Math.max(maxCombo, combo);
+    }
+  }
+
+  return maxCombo;
+}
+
+export function buildStableReplayComboEvents(notes: ManiaNote[], noteStates: ReplayNoteState[]): ReplayComboEvent[] {
+  const events: ReplayComboEvent[] = [];
+
+  for (let index = 0; index < notes.length; index++) {
+    const note = notes[index];
+    const state = noteStates[index];
+    if (!state) continue;
+
+    const isHold = note.isHold && note.endTime > note.time;
+    if (!isHold) {
+      events.push({
+        kind: state.headJudgment === 6 ? "break" : "hit",
+        time: state.headTime,
+      });
+      continue;
+    }
+
+    if (state.headJudgment === 6) {
+      events.push({ kind: "break", time: state.headTime });
+      continue;
+    }
+
+    if (state.bodyBreakTime != null) {
+      events.push({ kind: "break", time: state.bodyBreakTime });
+    }
+    if (state.tailJudgment === 6) {
+      events.push({ kind: "break", time: state.tailTime ?? note.endTime });
+    }
+
+    for (let time = note.time; time <= note.endTime + 1e-6; time += 100) {
+      if (time >= state.headTime - 1e-6) {
+        events.push({ kind: "hit", time });
+      }
+    }
+  }
+
+  return events.sort((a, b) => a.time - b.time || (a.kind === "break" ? -1 : 1));
+}
+
+export function calculateReplayMaxComboForMode(
+  accuracyMode: ReplayAccuracyMode,
+  judgementEvents: ReplayJudgementEvent[],
+  notes: ManiaNote[],
+  noteStates: ReplayNoteState[],
+): number {
+  if (accuracyMode === "stable") {
+    return calculateReplayComboEventsMaxCombo(buildStableReplayComboEvents(notes, noteStates));
+  }
+
+  return calculateReplayMaxCombo(judgementEvents);
+}
+
 export function replayHitCountsToArray(counts: ReplayHitCounts): number[] {
   return [
     0,
@@ -119,6 +213,12 @@ function uniqueCountedJudgments(judgments: Judgment[] | undefined): Exclude<Judg
   return [...new Set(judgments)]
     .filter((judgment): judgment is Exclude<Judgment, 0> => judgment >= 1 && judgment <= 6)
     .sort((a, b) => a - b);
+}
+
+function possibleCountedJudgmentsForEvent(event: ReplayJudgementEvent): Exclude<Judgment, 0>[] {
+  const possible = uniqueCountedJudgments(event.possibleJudgments);
+  if (possible.length > 0) return possible;
+  return isCountedJudgment(event.judgment) ? [event.judgment] : [];
 }
 
 function assignAmbiguousJudgments(
@@ -299,11 +399,232 @@ function reconcileEventsToExpectedCounts(
   return Object.values(diffs).every((diff) => diff === 0) ? resolvedEvents : null;
 }
 
+function getReplayJudgmentTargets(counts: ReplayHitCounts): number[] {
+  return replayHitCountsToArray(counts);
+}
+
+function getReplayBreakerCandidateData(events: ReplayJudgementEvent[]) {
+  const counted: Array<{
+    eventIndex: number;
+    canHit: boolean;
+    canMiss: boolean;
+    mustMiss: boolean;
+    possible: Exclude<Judgment, 0>[];
+  }> = [];
+  const forcedBreaks: number[] = [];
+
+  for (const [eventIndex, event] of events.entries()) {
+    if (event.judgment == null) {
+      forcedBreaks.push(counted.length);
+      continue;
+    }
+
+    const possible = possibleCountedJudgmentsForEvent(event);
+    if (possible.length === 0) continue;
+
+    counted.push({
+      eventIndex,
+      canHit: possible.some((judgment) => judgment >= 1 && judgment <= 5),
+      canMiss: possible.includes(6),
+      mustMiss: possible.every((judgment) => judgment === 6),
+      possible,
+    });
+  }
+
+  return { counted, forcedBreaks };
+}
+
+function hasForcedBreakInside(forcedBreaks: number[], start: number, end: number): boolean {
+  return forcedBreaks.some((breakIndex) => breakIndex > start && breakIndex <= end);
+}
+
+function calculateComboFromMissSet(
+  countedLength: number,
+  forcedBreaks: number[],
+  missIndexes: Set<number>,
+): number {
+  let combo = 0;
+  let maxCombo = 0;
+  let forcedCursor = 0;
+
+  for (let index = 0; index < countedLength; index++) {
+    while (forcedCursor < forcedBreaks.length && forcedBreaks[forcedCursor] <= index) {
+      combo = 0;
+      forcedCursor++;
+    }
+
+    if (missIndexes.has(index)) {
+      combo = 0;
+    } else {
+      combo++;
+      maxCombo = Math.max(maxCombo, combo);
+    }
+  }
+
+  return maxCombo;
+}
+
+function enforceMaxComboOutsideProtectedRun(
+  counted: ReturnType<typeof getReplayBreakerCandidateData>["counted"],
+  forcedBreaks: number[],
+  protectedStart: number,
+  protectedEnd: number,
+  targetMaxCombo: number,
+  missIndexes: Set<number>,
+): boolean {
+  let combo = 0;
+  let lastMissCandidate = -1;
+  let forcedCursor = 0;
+
+  for (let index = 0; index < counted.length; index++) {
+    while (forcedCursor < forcedBreaks.length && forcedBreaks[forcedCursor] <= index) {
+      combo = 0;
+      lastMissCandidate = -1;
+      forcedCursor++;
+    }
+
+    if (index >= protectedStart && index <= protectedEnd) {
+      combo++;
+      continue;
+    }
+
+    if (missIndexes.has(index) || counted[index].mustMiss) {
+      missIndexes.add(index);
+      combo = 0;
+      lastMissCandidate = -1;
+      continue;
+    }
+
+    if (counted[index].canMiss) lastMissCandidate = index;
+    combo++;
+
+    if (combo > targetMaxCombo) {
+      if (lastMissCandidate < 0 || lastMissCandidate >= protectedStart && lastMissCandidate <= protectedEnd) {
+        return false;
+      }
+      missIndexes.add(lastMissCandidate);
+      index = lastMissCandidate;
+      combo = 0;
+      lastMissCandidate = -1;
+    }
+  }
+
+  return true;
+}
+
+function chooseMissesForExpectedMaxCombo(
+  events: ReplayJudgementEvent[],
+  expectedCounts: ReplayHitCounts,
+  expectedMaxCombo: number,
+): Set<number> | null {
+  const targetMisses = expectedCounts.countMiss;
+  if (targetMisses < 0 || expectedMaxCombo <= 0) return null;
+
+  const { counted, forcedBreaks } = getReplayBreakerCandidateData(events);
+  if (counted.length === 0) return null;
+
+  const forcedBreakSet = new Set(forcedBreaks);
+  const runLength = Math.floor(expectedMaxCombo);
+
+  for (let start = 0; start + runLength <= counted.length; start++) {
+    const end = start + runLength - 1;
+    if (hasForcedBreakInside(forcedBreaks, start, end)) continue;
+
+    let protectedRunCanHit = true;
+    for (let index = start; index <= end; index++) {
+      if (!counted[index].canHit || counted[index].mustMiss) {
+        protectedRunCanHit = false;
+        break;
+      }
+    }
+    if (!protectedRunCanHit) continue;
+
+    const leftBreak = start - 1;
+    const rightBreak = end + 1;
+    const leftOk = start === 0 || forcedBreakSet.has(start) || counted[leftBreak]?.canMiss;
+    const rightOk = end === counted.length - 1 || forcedBreakSet.has(rightBreak) || counted[rightBreak]?.canMiss;
+    if (!leftOk || !rightOk) continue;
+
+    const missIndexes = new Set<number>();
+    if (leftBreak >= 0 && !forcedBreakSet.has(start)) missIndexes.add(leftBreak);
+    if (rightBreak < counted.length && !forcedBreakSet.has(rightBreak)) missIndexes.add(rightBreak);
+
+    for (let index = 0; index < counted.length; index++) {
+      if (index >= start && index <= end) continue;
+      if (counted[index].mustMiss) missIndexes.add(index);
+    }
+
+    if (!enforceMaxComboOutsideProtectedRun(counted, forcedBreaks, start, end, runLength, missIndexes)) {
+      continue;
+    }
+    if (missIndexes.size > targetMisses) continue;
+
+    for (let index = 0; index < counted.length && missIndexes.size < targetMisses; index++) {
+      if (index >= start && index <= end) continue;
+      if (missIndexes.has(index) || !counted[index].canMiss) continue;
+      missIndexes.add(index);
+    }
+
+    if (missIndexes.size !== targetMisses) continue;
+    if (calculateComboFromMissSet(counted.length, forcedBreaks, missIndexes) !== runLength) continue;
+
+    return missIndexes;
+  }
+
+  return null;
+}
+
+function resolveEventsToExpectedCombo(
+  events: ReplayJudgementEvent[],
+  expectedCounts: ReplayHitCounts,
+  expectedMaxCombo?: number | null,
+): ReplayJudgementEvent[] | null {
+  if (expectedMaxCombo == null || expectedMaxCombo <= 0) return null;
+
+  const { counted } = getReplayBreakerCandidateData(events);
+  const missIndexes = chooseMissesForExpectedMaxCombo(events, expectedCounts, expectedMaxCombo);
+  if (!missIndexes) return null;
+
+  const possibleJudgments: Exclude<Judgment, 0>[][] = [];
+  const eventIndexes: number[] = [];
+
+  for (let countedIndex = 0; countedIndex < counted.length; countedIndex++) {
+    const item = counted[countedIndex];
+    const possible = missIndexes.has(countedIndex)
+      ? item.possible.filter((judgment) => judgment === 6)
+      : item.possible.filter((judgment) => judgment >= 1 && judgment <= 5);
+
+    if (possible.length === 0) return null;
+    possibleJudgments.push(possible);
+    eventIndexes.push(item.eventIndex);
+  }
+
+  const assigned = assignAmbiguousJudgments(possibleJudgments, getReplayJudgmentTargets(expectedCounts));
+  if (!assigned) return null;
+
+  const resolvedEvents = events.map((event) => ({ ...event }));
+  for (let index = 0; index < eventIndexes.length; index++) {
+    resolvedEvents[eventIndexes[index]].judgment = assigned[index];
+  }
+
+  const counts = countReplayJudgements(resolvedEvents);
+  const diffs = diffReplayHitCounts(counts, expectedCounts);
+  if (!Object.values(diffs).every((diff) => diff === 0)) return null;
+  if (calculateReplayMaxCombo(resolvedEvents) !== Math.floor(expectedMaxCombo)) return null;
+
+  return resolvedEvents;
+}
+
 export function resolveReplayJudgementEvents(
   events: ReplayJudgementEvent[],
   expectedCounts: ReplayHitCounts,
-  options: { allowLegacyScoreReconciliation?: boolean } = {},
-): { events: ReplayJudgementEvent[]; mode: "none" | "ambiguity" | "score-header"; resolved: boolean } {
+  options: { allowLegacyScoreReconciliation?: boolean; expectedMaxCombo?: number | null } = {},
+): { events: ReplayJudgementEvent[]; mode: "none" | "ambiguity" | "combo-header" | "score-header"; resolved: boolean } {
+  const comboResolved = resolveEventsToExpectedCombo(events, expectedCounts, options.expectedMaxCombo);
+  if (comboResolved) {
+    return { events: comboResolved, mode: "combo-header", resolved: true };
+  }
+
   const fixedCounts = [0, 0, 0, 0, 0, 0, 0];
   const ambiguous: Exclude<Judgment, 0>[][] = [];
   const ambiguousEventIndexes: number[] = [];
@@ -408,12 +729,19 @@ export function validateReplaySimulation(input: ReplayValidationInput): ReplayVa
     input.legacyReplayFrameRounding
       ? resolveReplayJudgementEvents(simulated.events, input.expectedCounts, {
           allowLegacyScoreReconciliation: ruleset.accuracyMode === "stable",
+          expectedMaxCombo: input.expectedMaxCombo,
         })
       : null;
   const ambiguityResolvedCounts = resolvedEvents?.resolved
     ? countReplayJudgements(resolvedEvents.events)
     : null;
+  const finalEvents = resolvedEvents?.resolved ? resolvedEvents.events : simulated.events;
   const simulatedCounts = ambiguityResolvedCounts ?? rawSimulatedCounts;
+  const expectedMaxCombo = input.expectedMaxCombo != null && input.expectedMaxCombo > 0
+    ? input.expectedMaxCombo
+    : null;
+  const simulatedMaxCombo = calculateReplayMaxComboForMode(ruleset.accuracyMode, finalEvents, input.notes, simulated.noteStates);
+  const maxComboDiff = expectedMaxCombo == null ? null : simulatedMaxCombo - expectedMaxCombo;
   const diffs = diffReplayHitCounts(simulatedCounts, input.expectedCounts);
   const totalExpected = getReplayHitCountTotal(input.expectedCounts);
   const totalSimulated = getReplayHitCountTotal(simulatedCounts);
@@ -429,14 +757,17 @@ export function validateReplaySimulation(input: ReplayValidationInput): ReplayVa
   return {
     accuracyMode: ruleset.accuracyMode,
     accuracyDiff: simulatedAccuracy - expectedAccuracy,
+    expectedMaxCombo,
     expectedAccuracy,
     expectedCounts: input.expectedCounts,
     legacyReplayAmbiguityResolved: ambiguityResolvedCounts != null,
     legacyReplayResolution: resolvedEvents?.mode ?? "none",
     matched: totalCountDiff === 0,
+    maxComboDiff,
     rawSimulatedCounts,
     simulatedAccuracy,
     simulatedCounts,
+    simulatedMaxCombo,
     totalCountDiff,
     totalExpected,
     totalSimulated,

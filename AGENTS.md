@@ -13,6 +13,7 @@ Important routes include `index.tsx`, `rankings.tsx`, `tracker.tsx`, `top-plays.
 ## Build, Test, and Development Commands
 
 - `npm run dev` starts the Vite dev server on port `3000`.
+- Do not run `npm run test` or `npm run build` unless the user explicitly asks for either command.
 - `npm run build` creates a production build and checks routing/SSR-sensitive code.
 - `npm run preview` serves the production build locally.
 - `npm run test` runs Vitest once.
@@ -44,7 +45,7 @@ Styling uses Tailwind CSS v4 via `@tailwindcss/vite`, with global styles in `src
 
 Vitest is the test runner and uses the Vite config. Tests live beside source files as `*.test.ts` or `*.test.tsx`, including route helper tests, replay parsing/rendering tests, score normalization, profile shaping, beatmap search, cache behavior, and maniacard layout/rendering tests.
 
-Add focused tests for changes to parsing, replay behavior, score shaping, rankings, cache behavior, server data shaping, or route helper logic. Run `npm run test` before submitting logic changes; run `npm run build` when touching routes, SSR code, generated route boundaries, or TypeScript-heavy integration points.
+Add focused tests for changes to parsing, replay behavior, score shaping, rankings, cache behavior, server data shaping, or route helper logic. Do not run `npm run test` or `npm run build` unless the user explicitly asks for either command.
 
 ## Security & Configuration Tips
 

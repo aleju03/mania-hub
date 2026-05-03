@@ -1037,6 +1037,20 @@ async function getBeatmapUserScoresAll(beatmapId: number, userId: number): Promi
   });
 }
 
+export const getUserBeatmapScores = createServerFn({ method: "GET" })
+  .inputValidator((data: unknown) => {
+    const input = asInputRecord(data);
+    const beatmapId = Number(input.beatmapId);
+    const userId = Number(input.userId);
+    if (!Number.isFinite(beatmapId) || beatmapId <= 0) throw new Error("Invalid beatmap ID.");
+    if (!Number.isFinite(userId) || userId <= 0) throw new Error("Invalid user ID.");
+    return { beatmapId, userId };
+  })
+  .handler(async ({ data }: { data: { beatmapId: number; userId: number } }) => {
+    edgeCache(60, 300);
+    return getBeatmapUserScoresAll(data.beatmapId, data.userId);
+  });
+
 function getPreviousBeatmapBestScore(scores: OsuScore[], target: ScorePpGainLookup): OsuScore | null {
   const targetTimestampMs = new Date(target.timestamp).getTime();
   if (!Number.isFinite(targetTimestampMs) || targetTimestampMs <= 0) return null;

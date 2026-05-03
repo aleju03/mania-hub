@@ -6,7 +6,7 @@ import { buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows,
 import { DEFAULT_REPLAY_SKIN_SETTINGS, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplaySkinProfile, normalizeReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplaySkinKeymodeProfile, ReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayHitCounts } from "../../lib/replay-validation";
-import { resolveReplayJudgementEvents } from "../../lib/replay-validation";
+import { buildStableReplayComboEvents, resolveReplayJudgementEvents } from "../../lib/replay-validation";
 import { formatPixiRendererType } from "./renderer-debug";
 
 const COLUMN_COLORS: Record<number, string[]> = {
@@ -80,6 +80,7 @@ interface RendererOptions {
   hideHud?: boolean;
   showCombo?: boolean;
   initialCombo?: number;
+  maxCombo?: number;
   barePlayfield?: boolean;
   scrollVelocities?: ManiaScrollVelocity[];
   expectedCounts?: ReplayHitCounts;
@@ -101,6 +102,7 @@ interface Layout {
 }
 
 type Hand = "left" | "right" | "center";
+type ReplayComboEvent = { kind: "break" | "hit"; time: number };
 
 export class ManiaReplayRenderer {
   private canvas: HTMLCanvasElement;
@@ -171,10 +173,12 @@ export class ManiaReplayRenderer {
   private receptorFlashTimestamps: number[];
   private judgmentEvents: ReplayJudgementEvent[];
   private noteStates: ReplayNoteState[];
+  private comboEvents: ReplayComboEvent[];
 
   private combo = 0;
   private maxComboSoFar = 0;
   private statsScanIndex = 0;
+  private comboScanIndex = 0;
   private judgmentCounts: number[] = [0, 0, 0, 0, 0, 0, 0];
   private leftHandMisses = 0;
   private rightHandMisses = 0;
@@ -235,7 +239,7 @@ export class ManiaReplayRenderer {
     this.showCombo = options?.showCombo ?? false;
     this.initialCombo = Math.max(0, Math.floor(options?.initialCombo ?? 0));
     this.combo = this.initialCombo;
-    this.maxComboSoFar = this.initialCombo;
+    this.maxComboSoFar = this.combo;
     this.barePlayfield = options?.barePlayfield ?? false;
     this.showHealthBar = options?.showHealthBar ?? true;
     this.skinSettings = normalizeReplaySkinSettings(options?.skinSettings);
@@ -269,12 +273,19 @@ export class ManiaReplayRenderer {
     this.judgmentEvents = options?.expectedCounts
       ? resolveReplayJudgementEvents(simulated.events, options.expectedCounts, {
           allowLegacyScoreReconciliation: this.ruleset.accuracyMode === "stable",
+          expectedMaxCombo: options.maxCombo,
         }).events
       : simulated.events;
     if (this.lifeBarFrames.length === 0) {
       this.lifeBarFrames = this.buildFallbackLifeBarFrames(this.judgmentEvents);
     }
     this.noteStates = simulated.noteStates;
+    this.comboEvents = this.ruleset.accuracyMode === "stable"
+      ? buildStableReplayComboEvents(this.notes, this.noteStates)
+      : this.judgmentEvents.map((event) => ({
+          kind: event.judgment == null || event.judgment === 6 ? "break" : "hit",
+          time: event.time,
+        }));
     const lastJudgementTime = this.judgmentEvents.length > 0
       ? this.judgmentEvents[this.judgmentEvents.length - 1].time
       : 0;
@@ -317,8 +328,9 @@ export class ManiaReplayRenderer {
 
   private recomputeStatsUpTo(time: number) {
     this.statsScanIndex = 0;
+    this.comboScanIndex = 0;
     this.combo = this.initialCombo;
-    this.maxComboSoFar = this.initialCombo;
+    this.maxComboSoFar = this.combo;
     this.judgmentCounts = [0, 0, 0, 0, 0, 0, 0];
     this.leftHandMisses = 0;
     this.rightHandMisses = 0;
@@ -338,7 +350,6 @@ export class ManiaReplayRenderer {
       if (event.time > time) break;
 
       if (event.judgment == null) {
-        this.combo = 0;
         this.statsScanIndex++;
         continue;
       }
@@ -346,8 +357,6 @@ export class ManiaReplayRenderer {
       if (event.judgment > 0) this.judgmentCounts[event.judgment]++;
 
       if (event.judgment <= 5) {
-        this.combo++;
-        this.maxComboSoFar = Math.max(this.maxComboSoFar, this.combo);
         const offset = event.offsetMs;
         this.recentHitOffsets.push(offset);
         this.urSum += offset;
@@ -358,7 +367,6 @@ export class ManiaReplayRenderer {
           this.urSumSq -= removed * removed;
         }
       } else {
-        this.combo = 0;
         const hand = this.getHandForColumn(event.column);
         if (hand === "left") this.leftHandMisses++;
         if (hand === "right") this.rightHandMisses++;
@@ -367,6 +375,20 @@ export class ManiaReplayRenderer {
       this.lastJudgment = event.judgment;
       this.lastJudgmentTime = event.time;
       this.statsScanIndex++;
+    }
+
+    while (this.comboScanIndex < this.comboEvents.length) {
+      const event = this.comboEvents[this.comboScanIndex];
+      if (event.time > time) break;
+
+      if (event.kind === "break") {
+        this.combo = 0;
+      } else {
+        this.combo++;
+        this.maxComboSoFar = Math.max(this.maxComboSoFar, this.combo);
+      }
+
+      this.comboScanIndex++;
     }
   }
 
