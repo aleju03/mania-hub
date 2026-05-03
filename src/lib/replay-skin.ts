@@ -1,6 +1,6 @@
 export const REPLAY_SKIN_STORAGE_KEY = "mania-hub-replay-skin-v1";
 
-export type ReplaySkinStyle = "bars" | "circles";
+export type ReplaySkinStyle = "bars" | "circles" | "arrows";
 
 export interface ReplaySkinKeymodeProfile {
   tapColor: string;
@@ -178,7 +178,7 @@ export function normalizeReplaySkinSettings(value: unknown): ReplaySkinSettings 
   }, undefined, persistedVersion);
   return {
     version: 2,
-    style: raw.style === "circles" || raw.style === "bars"
+    style: raw.style === "circles" || raw.style === "bars" || raw.style === "arrows"
       ? raw.style
       : DEFAULT_REPLAY_SKIN_SETTINGS.style,
     tapColor: fallbackProfile.tapColor,

@@ -42,6 +42,48 @@ const MANIA_REFERENCE_HEIGHT = 768;
 const MANIA_DEFAULT_HIT_POSITION = (480 - 402) * 1.6;
 const MANIA_HIT_TARGET_POSITION = REPLAY_SKIN_DEFAULT_HIT_POSITION;
 
+type ArrowDirection = "left" | "right" | "up" | "down";
+
+const ARROW_BASE_POINTS: ReadonlyArray<readonly [number, number]> = [
+  [0.0, 0.32],
+  [0.5, 0.32],
+  [0.5, 0.05],
+  [1.0, 0.5],
+  [0.5, 0.95],
+  [0.5, 0.68],
+  [0.0, 0.68],
+];
+
+function rotateArrowPoint(px: number, py: number, direction: ArrowDirection): [number, number] {
+  switch (direction) {
+    case "right":
+      return [px, py];
+    case "left":
+      return [1 - px, 1 - py];
+    case "down":
+      return [1 - py, px];
+    case "up":
+      return [py, 1 - px];
+  }
+}
+
+function buildArrowPolygon(cx: number, cy: number, size: number, direction: ArrowDirection): number[] {
+  const half = size / 2;
+  const flat: number[] = [];
+  for (const [px, py] of ARROW_BASE_POINTS) {
+    const [rx, ry] = rotateArrowPoint(px, py, direction);
+    flat.push(cx - half + rx * size, cy - half + ry * size);
+  }
+  return flat;
+}
+
+export function getColumnArrowDirection(col: number, keyCount: number): ArrowDirection {
+  if (keyCount <= 1) return "down";
+  if (col === 0) return "left";
+  if (col === keyCount - 1) return "right";
+  return col % 2 === 1 ? "down" : "up";
+}
+
 const HEX_NUMBER_CACHE = new Map<string, number>();
 
 function hexToNumber(color: string): number {
@@ -796,27 +838,28 @@ export class ManiaReplayRenderer {
   private renderPlayfield(layout: Layout) {
     const { w, h, playfieldX, playfieldWidth } = layout;
     const isCircleSkin = this.skinSettings.style === "circles";
+    const showColumnDividers = !isCircleSkin;
 
     if (!this.barePlayfield) {
       this.fillRect(0, 0, playfieldX, h, "#000000", 0.24);
       this.fillRect(playfieldX + playfieldWidth, 0, w - playfieldX - playfieldWidth, h, "#000000", 0.24);
       this.fillRect(playfieldX, 0, playfieldWidth, h, "#000000", 0.12);
 
-      for (let col = 0; !isCircleSkin && col < this.keyCount; col++) {
+      for (let col = 0; showColumnDividers && col < this.keyCount; col++) {
         const { x, width } = this.getColumnLayout(col, layout);
         this.fillRect(x, 0, width, h, "#ffffff", col % 2 === 0 ? 0.02 : 0.04);
       }
     }
 
     const topFadeHeight = this.barePlayfield ? Math.min(56, h * 0.14) : 0;
-    if (!isCircleSkin) {
+    if (showColumnDividers) {
       for (let i = 0; i <= this.keyCount; i++) {
         const x = i < this.keyCount ? this.getColumnLayout(i, layout).x : playfieldX + playfieldWidth;
         this.lineWithTopFade(x, 0, x, h, "#ffffff", 0.08, 1, topFadeHeight);
       }
     }
     if (this.barePlayfield) {
-      if (!isCircleSkin) this.line(playfieldX, h - 1, playfieldX + playfieldWidth, h - 1, "#ffffff", 0.1, 2);
+      if (showColumnDividers) this.line(playfieldX, h - 1, playfieldX + playfieldWidth, h - 1, "#ffffff", 0.1, 2);
     } else {
       this.rect(playfieldX, 0, playfieldWidth, h, "#ffffff", 0.15, 2);
     }
@@ -875,6 +918,11 @@ export class ManiaReplayRenderer {
       const circleLnHeadColor = this.circleLnHeadColors[col];
       const circleDiameter = this.getCircleDiameter(layout);
       const circleRadius = circleDiameter / 2;
+      const isArrowSkin = this.skinSettings.style === "arrows";
+      const arrowSize = isArrowSkin ? this.getArrowSize(layout) : 0;
+      const arrowDirection = isArrowSkin ? getColumnArrowDirection(col, this.keyCount) : "right";
+      const arrowTapColor = this.circleTapColors[col];
+      const arrowLnHeadColor = this.circleLnHeadColors[col];
 
       if (note.isHold) {
         const direction = this.skinSettings.upscroll ? 1 : -1;
@@ -898,14 +946,23 @@ export class ManiaReplayRenderer {
 
         const bodyAlpha = releasedEarly ? 0.45 : 1;
         const headAlpha = releasedEarly ? 0.65 : 1;
-        const percyTrim = this.skinSettings.percy
-          ? Math.min(18, Math.max(noteHeight * 0.9, circleDiameter * 0.34))
+        const headEndY = this.skinSettings.upscroll ? top : bottom;
+        const tailEndY = this.skinSettings.upscroll ? bottom : top;
+        const headTrimDelta = isArrowSkin
+          ? arrowSize * 0.5
+          : this.skinSettings.style === "circles"
+            ? circleDiameter * 0.5
+            : noteHeight * 0.5;
+        const tailTrimDelta = this.skinSettings.percy
+          ? Math.min(20, Math.max(noteHeight * 0.9, headTrimDelta * 1.1))
           : 0;
         if (this.skinSettings.style === "circles") {
           const bodyWidth = Math.max(14, circleDiameter * 0.72);
           const bodyX = colX + colWidth / 2 - bodyWidth / 2;
-          const bodyTop = top + percyTrim;
-          const bodyBottom = Math.max(bodyTop, bottom - percyTrim);
+          const headInsetTop = this.skinSettings.upscroll ? 0 : tailTrimDelta;
+          const headInsetBottom = this.skinSettings.upscroll ? tailTrimDelta : 0;
+          const bodyTop = top + headInsetTop;
+          const bodyBottom = Math.max(bodyTop, bottom - headInsetBottom);
           this.circleLnBodyWithTopFade(
             bodyX,
             bodyTop,
@@ -916,15 +973,34 @@ export class ManiaReplayRenderer {
             noteFadeHeight,
             0.55,
           );
-          const headCenterY = this.skinSettings.upscroll ? top : bottom;
-          this.circleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, circleLnHeadColor, headAlpha, noteFadeHeight, 0.55);
-          this.strokeCircleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, "#ffffff", headAlpha * 0.55, 2, noteFadeHeight, 0.55);
+          this.circleWithTopFade(colX + colWidth / 2, headEndY, circleRadius, circleLnHeadColor, headAlpha, noteFadeHeight, 0.55);
+          this.strokeCircleWithTopFade(colX + colWidth / 2, headEndY, circleRadius, "#ffffff", headAlpha * 0.55, 2, noteFadeHeight, 0.55);
           continue;
         }
 
-        const bodyBottom = bottom;
-        const bodyTop = Math.min(top + percyTrim, bodyBottom - noteHeight);
-        this.barLnBodyWithTopFade(x, bodyTop, barWidth, bodyBottom - bodyTop, color, bodyAlpha, noteFadeHeight, 0.55);
+        if (isArrowSkin) {
+          const bodyWidth = Math.max(10, arrowSize * 0.5);
+          const bodyX = colX + colWidth / 2 - bodyWidth / 2;
+          const tailDelta = this.skinSettings.upscroll ? -tailTrimDelta : tailTrimDelta;
+          const bodyHeadY = headEndY;
+          const bodyTailY = tailEndY + tailDelta;
+          const bodyTop = Math.min(bodyHeadY, bodyTailY);
+          const bodyBottom = Math.max(bodyHeadY, bodyTailY);
+          this.barLnBodyWithTopFade(bodyX, bodyTop, bodyWidth, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, bodyAlpha, noteFadeHeight, 0.55);
+          this.arrowFillWithTopFade(colX + colWidth / 2, headEndY, arrowSize, arrowDirection, arrowLnHeadColor, headAlpha, noteFadeHeight, 0.55);
+          this.arrowStrokeWithTopFade(colX + colWidth / 2, headEndY, arrowSize, arrowDirection, "#ffffff", headAlpha * 0.55, 1.5, noteFadeHeight, 0.55);
+          continue;
+        }
+
+        const barPercyTrim = this.skinSettings.percy
+          ? Math.min(18, Math.max(noteHeight * 0.9, circleDiameter * 0.34))
+          : 0;
+        const tailDelta = this.skinSettings.upscroll ? -barPercyTrim : barPercyTrim;
+        const bodyHeadY = headEndY;
+        const bodyTailY = tailEndY + tailDelta;
+        const barBodyTop = Math.min(bodyHeadY, bodyTailY);
+        const barBodyBottom = Math.max(bodyHeadY, bodyTailY);
+        this.barLnBodyWithTopFade(x, barBodyTop, barWidth, barBodyBottom - barBodyTop, color, bodyAlpha, noteFadeHeight, 0.55);
       } else {
         if (note.time < this.currentTime - 10 && !headResolved) continue;
 
@@ -934,6 +1010,12 @@ export class ManiaReplayRenderer {
         if (this.skinSettings.style === "circles") {
           this.circleWithTopFade(colX + colWidth / 2, noteY, circleRadius, circleTapColor, 1, noteFadeHeight, 0.55);
           this.strokeCircleWithTopFade(colX + colWidth / 2, noteY, circleRadius, "#ffffff", 0.55, 2, noteFadeHeight, 0.55);
+          continue;
+        }
+
+        if (isArrowSkin) {
+          this.arrowFillWithTopFade(colX + colWidth / 2, noteY, arrowSize, arrowDirection, arrowTapColor, 1, noteFadeHeight, 0.55);
+          this.arrowStrokeWithTopFade(colX + colWidth / 2, noteY, arrowSize, arrowDirection, "#ffffff", 0.5, 1.5, noteFadeHeight, 0.55);
           continue;
         }
 
@@ -1048,6 +1130,10 @@ export class ManiaReplayRenderer {
       this.renderCircleReceptors(layout);
       return;
     }
+    if (this.skinSettings.style === "arrows") {
+      this.renderArrowReceptors(layout);
+      return;
+    }
 
     const { judgmentY, receptorHeight } = layout;
     const currentState = this.currentKeyState;
@@ -1068,6 +1154,29 @@ export class ManiaReplayRenderer {
       } else {
         this.roundRect(x + 3, receptorY, colWidth - 6, receptorHeight, 2, "#ffffff", 0.12);
       }
+    }
+  }
+
+  private renderArrowReceptors(layout: Layout) {
+    const { judgmentY } = layout;
+    const currentState = this.currentKeyState;
+    const arrowSize = this.getArrowSize(layout);
+
+    for (let col = 0; col < this.keyCount; col++) {
+      const { x, width: colWidth } = this.getColumnLayout(col, layout);
+      const cx = x + colWidth / 2;
+      const direction = getColumnArrowDirection(col, this.keyCount);
+      const pressed = (currentState & (1 << col)) !== 0;
+      const color = this.circleTapColors[col] ?? this.colors[col];
+      if (pressed) this.receptorFlashTimestamps[col] = this.currentTime;
+      const timeSinceFlash = this.currentTime - (this.receptorFlashTimestamps[col] || 0);
+      const flashIntensity = pressed ? 1 : Math.max(0, 1 - timeSinceFlash / 140);
+
+      if (flashIntensity > 0) {
+        this.receptorBeam(x, this.skinSettings.upscroll ? judgmentY - 15 : judgmentY - 80, colWidth, 95, color, flashIntensity * 0.85);
+        this.arrowFill(cx, judgmentY, arrowSize, direction, color, 0.18 + flashIntensity * 0.7);
+      }
+      this.arrowStroke(cx, judgmentY, arrowSize, direction, "#ffffff", pressed ? 0.95 : 0.4, 1.5);
     }
   }
 
@@ -1341,6 +1450,38 @@ export class ManiaReplayRenderer {
     const laneSizedDiameter = layout.laneWidth * 0.74;
     const minDiameter = this.barePlayfield ? 38 : 28;
     return Math.max(18, Math.min(layout.laneWidth - 4, Math.max(minDiameter, laneSizedDiameter)));
+  }
+
+  private getArrowSize(layout: Layout): number {
+    const laneSized = layout.laneWidth * 0.86;
+    const minSize = this.barePlayfield ? 36 : 26;
+    return Math.max(20, Math.min(layout.laneWidth - 2, Math.max(minSize, laneSized)));
+  }
+
+  private arrowFill(cx: number, cy: number, size: number, direction: ArrowDirection, color: string, alpha: number) {
+    if (size <= 0 || alpha <= 0) return;
+    const points = buildArrowPolygon(cx, cy, size, direction);
+    this.graphics.poly(points).fill({ color: hexToNumber(color), alpha });
+  }
+
+  private arrowStroke(cx: number, cy: number, size: number, direction: ArrowDirection, color: string, alpha: number, width: number) {
+    if (size <= 0 || alpha <= 0) return;
+    const points = buildArrowPolygon(cx, cy, size, direction);
+    this.graphics.poly(points).stroke({ color: hexToNumber(color), alpha, width });
+  }
+
+  private arrowFillWithTopFade(cx: number, cy: number, size: number, direction: ArrowDirection, color: string, alpha: number, fadeHeight: number, minAlpha = 0) {
+    if (size <= 0 || alpha <= 0) return;
+    const half = size / 2;
+    const fadedAlpha = alpha * this.topFadeAlpha(Math.max(0, Math.min(cy + half, fadeHeight)), fadeHeight, minAlpha);
+    this.arrowFill(cx, cy, size, direction, color, fadedAlpha);
+  }
+
+  private arrowStrokeWithTopFade(cx: number, cy: number, size: number, direction: ArrowDirection, color: string, alpha: number, width: number, fadeHeight: number, minAlpha = 0) {
+    if (size <= 0 || alpha <= 0) return;
+    const half = size / 2;
+    const fadedAlpha = alpha * this.topFadeAlpha(Math.max(0, Math.min(cy + half, fadeHeight)), fadeHeight, minAlpha);
+    this.arrowStroke(cx, cy, size, direction, color, fadedAlpha, width);
   }
 
   private fillRect(x: number, y: number, w: number, h: number, color: string, alpha: number) {

@@ -68,7 +68,7 @@ describe("replay skin settings", () => {
   it("falls back per field for invalid persisted values", () => {
     expect(normalizeReplaySkinSettings({
       version: 2,
-      style: "arrows",
+      style: "diamonds",
       tapColor: "green",
       tapColors: "blue",
       lnHeadColor: "#12345",
