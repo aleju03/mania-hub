@@ -344,14 +344,16 @@ export function Nav() {
                 }
                 preload="intent"
                 draggable={false}
-                className={`relative px-2.5 py-[19px] text-[12px] font-semibold capitalize transition-colors duration-[120ms] ${
+                className={`relative px-2.5 py-[19px] text-[12px] font-semibold capitalize whitespace-nowrap transition-colors duration-[120ms] ${
                   current?.id === l.id
                     ? "text-white"
                     : "text-osu-pink-light hover:text-white"
                 }`}
               >
-                {l.label}
-                {l.id === "snipes" && <img src="/images/icons/sniper.webp" alt="" draggable={false} className="inline w-4 h-4 ml-1 -mt-0.5" />}
+                <span className="inline-flex items-center gap-1">
+                  {l.label}
+                  {l.id === "snipes" && <img src="/images/icons/sniper.webp" alt="" draggable={false} className="w-3.5 h-3.5 -mt-0.5" />}
+                </span>
               </Link>
             ))}
             {barRect && (
@@ -366,14 +368,14 @@ export function Nav() {
         </div>
 
         {/* Desktop search + dev tools */}
-        <div className="hidden md:flex items-center gap-2">
+        <div className="hidden md:flex items-center gap-2 ml-3">
           {devMode && (
             <>
               <div ref={adminMenuRef} className="relative">
                 <button
                   type="button"
                   onClick={() => setAdminMenuOpen((open) => !open)}
-                  className="px-2 py-1 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
+                  className="px-2 py-1 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold whitespace-nowrap hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
                   title="Admin tools (dev only)"
                   aria-haspopup="menu"
                   aria-expanded={adminMenuOpen}
@@ -426,7 +428,7 @@ export function Nav() {
                   await clearAllDevCaches();
                   window.location.reload();
                 }}
-                className="px-2 py-1 rounded-lg bg-osu-red/20 text-[10px] text-osu-red font-semibold hover:bg-osu-red/30 transition-colors cursor-pointer border border-osu-red/30"
+                className="px-2 py-1 rounded-lg bg-osu-red/20 text-[10px] text-osu-red font-semibold whitespace-nowrap hover:bg-osu-red/30 transition-colors cursor-pointer border border-osu-red/30"
                 title="Clear dev caches, including Turso cache entries, and reload"
               >
                 Clear cache
@@ -440,20 +442,22 @@ export function Nav() {
             onSearch={handleSearch}
             onSelect={(u) => navigate({ to: "/player/$username", params: { username: u.username } })}
           />
-          <Link
-            to="/settings"
-            preload="intent"
-            draggable={false}
-            className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
-              settingsActive
-                ? "bg-osu-pink/20 text-white"
-                : "text-osu-pink-light hover:bg-osu-b3/50 hover:text-white"
-            }`}
-            title="Settings"
-            aria-label="Settings"
-          >
-            <Settings className="h-5 w-5" strokeWidth={2.1} />
-          </Link>
+          {devMode && (
+            <Link
+              to="/settings"
+              preload="intent"
+              draggable={false}
+              className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
+                settingsActive
+                  ? "bg-osu-pink/20 text-white"
+                  : "text-osu-pink-light hover:bg-osu-b3/50 hover:text-white"
+              }`}
+              title="Settings"
+              aria-label="Settings"
+            >
+              <Settings className="h-5 w-5" strokeWidth={2.1} />
+            </Link>
+          )}
           <ThemePicker />
         </div>
 
@@ -498,24 +502,6 @@ export function Nav() {
         aria-hidden={!menuOpen}
       >
               <div className="py-2">
-                <div className="px-4 pb-3 space-y-2">
-                  <CountrySelector className="w-full" selectedCountry={selectedCountry} onSelect={handleCountrySelect} />
-                  <ThemePicker variant="mobile" />
-                  <Link
-                    to="/settings"
-                    preload="intent"
-                    onClick={() => setMenuOpen(false)}
-                    draggable={false}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[12px] font-semibold capitalize transition-colors ${
-                      settingsActive
-                        ? "bg-osu-pink/15 text-white"
-                        : "bg-osu-b4/60 text-osu-pink-light hover:bg-osu-b4 hover:text-white"
-                    }`}
-                  >
-                    <Settings className="h-5 w-5" strokeWidth={2.1} />
-                    settings
-                  </Link>
-                </div>
                 {visibleLinks.map((l) => (
                   <Link
                     key={l.id}
@@ -558,6 +544,27 @@ export function Nav() {
                     navigate({ to: "/player/$username", params: { username: u.username } });
                   }}
                 />
+              </div>
+
+              <div className="border-t border-osu-b3/30 px-4 py-3 space-y-2">
+                <CountrySelector className="w-full" selectedCountry={selectedCountry} onSelect={handleCountrySelect} />
+                <ThemePicker variant="mobile" />
+                {devMode && (
+                  <Link
+                    to="/settings"
+                    preload="intent"
+                    onClick={() => setMenuOpen(false)}
+                    draggable={false}
+                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[12px] font-semibold capitalize transition-colors ${
+                      settingsActive
+                        ? "bg-osu-pink/15 text-white"
+                        : "bg-osu-b4/60 text-osu-pink-light hover:bg-osu-b4 hover:text-white"
+                    }`}
+                  >
+                    <Settings className="h-5 w-5" strokeWidth={2.1} />
+                    settings
+                  </Link>
+                )}
               </div>
 
               {devMode && (
