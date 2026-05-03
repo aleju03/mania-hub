@@ -44,6 +44,13 @@ export function addRotation(base: Rotation2D, delta: Rotation2D): Rotation2D {
   };
 }
 
+export function subtractRotation(rotation: Rotation2D, offset: Rotation2D): Rotation2D {
+  return {
+    x: Math.round(rotation.x - offset.x),
+    y: Math.round(rotation.y - offset.y),
+  };
+}
+
 export function orientationToRotation(input: { beta: number; gamma: number; restBeta: number }): Rotation2D {
   return {
     x: Math.round(clamp(-(input.beta - input.restBeta), -24, 24)),

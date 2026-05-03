@@ -15,6 +15,7 @@ import {
   orientationToRotation,
   pointerToLight,
   pointerToRotation,
+  subtractRotation,
   type InteractionState,
   type Rotation2D,
 } from "./interactions";
@@ -49,6 +50,8 @@ export class ManiaCardRenderer {
   private disposed = false;
   private dataRequestId = 0;
   private dragStart: { x: number; y: number; rotation: Rotation2D } | null = null;
+  private manualRotation: Rotation2D = { x: 0, y: 0 };
+  private orientationRotation: Rotation2D = { x: 0, y: 0 };
   private overlay: Mesh | null = null;
   private restBeta: number | null = null;
   private orientationAttached = false;
@@ -178,6 +181,15 @@ export class ManiaCardRenderer {
     return this.shouldKeepAnimating();
   }
 
+  private setRotation(rotation: Rotation2D) {
+    this.interaction.rotation = rotation;
+    this.interaction.light = pointerToLight(rotation);
+  }
+
+  private applyOrientationRotation() {
+    this.setRotation(addRotation(this.manualRotation, this.orientationRotation));
+  }
+
   private onPointerDown = (event: PointerEvent) => {
     event.preventDefault();
     void this.requestOrientationPermission();
@@ -211,6 +223,7 @@ export class ManiaCardRenderer {
     }
     this.dragStart = null;
     this.interaction.dragging = false;
+    this.manualRotation = subtractRotation(this.interaction.rotation, this.orientationRotation);
     this.interaction.lastInputAt = performance.now();
     this.start();
   };
@@ -220,13 +233,12 @@ export class ManiaCardRenderer {
     if (this.restBeta === null) this.restBeta = event.beta;
     if (this.interaction.dragging) return;
 
-    const rotation = orientationToRotation({
+    this.orientationRotation = orientationToRotation({
       beta: event.beta,
       gamma: event.gamma,
       restBeta: this.restBeta,
     });
-    this.interaction.rotation = rotation;
-    this.interaction.light = pointerToLight(rotation);
+    this.applyOrientationRotation();
     this.interaction.lastInputAt = performance.now();
     this.start();
   };
