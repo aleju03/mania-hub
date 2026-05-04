@@ -90,13 +90,13 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).toContain('if (this.skinSettings.style === "circles") return;');
   });
 
-  it("hides the bottom UR timing bar in circle mode", () => {
+  it("renders the bottom UR timing bar in both skin modes", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
     const hud = /private renderHUD\(layout: Layout\) \{([\s\S]*?)\n  private renderCombo/.exec(source);
 
     expect(hud?.[1]).toBeTruthy();
-    expect(hud![1]).toContain('if (this.skinSettings.style !== "circles") {');
     expect(hud![1]).toContain('this.fillRect(urBarX, urBarY, urBarWidth, 3, "#ffffff", 0.08);');
+    expect(hud![1]).not.toContain('if (this.skinSettings.style !== "circles") {');
   });
 
   it("draws circle receptors without the bar receptor beam or glow path", () => {

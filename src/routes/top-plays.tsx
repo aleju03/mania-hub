@@ -108,13 +108,18 @@ function PopOffsPage() {
   const [page, setPage] = useState(0);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [scanStartedAt, setScanStartedAt] = useState<number | null>(null);
-  const [elapsed, setElapsed] = useState(0);
   const [refreshStatus, setRefreshStatus] = useState<TopPlaysRefreshStatus | null>(null);
   const [partialPopoffs, setPartialPopoffs] = useState<PopOff[]>([]);
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<number[]>([]);
   const hasRestoredRememberedRangeRef = useRef(false);
   const sawRefreshActivityRef = useRef(false);
   const finalizingRefreshRef = useRef(false);
+  // Read inside fetchAll to skip a re-entry when setCachedPopoffs's store update
+  // makes the cache look fresh again mid-scan and would otherwise reset the spinner.
+  const refreshingRef = useRef(false);
+  useEffect(() => {
+    refreshingRef.current = refreshing;
+  }, [refreshing]);
   const countryName = getCountryName(selectedCountry);
 
   useEffect(() => {
@@ -125,7 +130,6 @@ function PopOffsPage() {
     setPage(0);
     setExpandedId(null);
     setScanStartedAt(null);
-    setElapsed(0);
     setRefreshStatus(null);
     setPartialPopoffs([]);
     setSelectedPlayerIds([]);
@@ -134,14 +138,6 @@ function PopOffsPage() {
     finalizingRefreshRef.current = false;
     hasRestoredRememberedRangeRef.current = false;
   }, [selectedCountry]);
-
-  useEffect(() => {
-    if (scanStartedAt == null) return;
-    const tick = () => setElapsed(Date.now() - scanStartedAt);
-    tick();
-    const id = window.setInterval(tick, 250);
-    return () => window.clearInterval(id);
-  }, [scanStartedAt]);
 
   useEffect(() => {
     if (hasRestoredRememberedRangeRef.current) return;
@@ -294,6 +290,8 @@ function PopOffsPage() {
   }, [mergePopoffs, players, scanStartedAt, selectedCountry, setCachedPopoffs]);
 
   const fetchAll = useCallback(async () => {
+    if (refreshingRef.current) return;
+
     if (players.length === 0 || fetchingRef.current) {
       if (players.length === 0) {
         setLoading(false);
@@ -324,7 +322,6 @@ function PopOffsPage() {
     setLoading(!hasCachedPopoffs);
     setRefreshing(true);
     setScanStartedAt(Date.now());
-    setElapsed(0);
     setPage(0);
     let keepPollingRefresh = false;
 
@@ -456,10 +453,10 @@ function PopOffsPage() {
     : hasCachedPopoffs
       ? "Refreshing..."
       : "Loading top plays...";
-  const elapsedSeconds = Math.max(0, Math.floor(elapsed / 1000));
-  const scanProgressLabel = refreshStatus
-    ? `${refreshStatus.current}/${refreshStatus.total} players · ${refreshStatus.found} found · ${elapsedSeconds}s`
-    : loadingLabel;
+  const scanProgressLabel =
+    refreshStatus && refreshStatus.total > 0
+      ? `Refreshing... ${Math.min(99, Math.round((refreshStatus.current / refreshStatus.total) * 100))}%`
+      : loadingLabel;
 
   const ranges: { id: TimeRange; label: string }[] = [
     { id: "24h", label: "24 hours" },
@@ -865,12 +862,12 @@ function PopOffsPage() {
                             <div className="relative grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
                               <StatCell label="Score" value={getDisplayedTotalScore(p.score) != null ? formatNumber(getDisplayedTotalScore(p.score)!) : "-"} />
                               <StatCell label="Combo" value={`${formatNumber(p.score.max_combo)}x`} />
-                              <StatCell label="MAX" value={formatNumber(p.score.statistics.count_geki ?? p.score.statistics.perfect ?? 0)} color="text-osu-blue" />
+                              <StatCell label="MAX" value={formatNumber(p.score.statistics.count_geki ?? p.score.statistics.perfect ?? 0)} color="inline-block leading-none bg-[linear-gradient(180deg,#9b2cff_30%,#1d65ff_42%,#41d9ff_54%,#4fdc3a_66%,#ffe234_78%,#ff9a1f_90%)] bg-clip-text text-transparent" />
                               <StatCell label="300" value={formatNumber(p.score.statistics.count_300 ?? p.score.statistics.great ?? 0)} color="text-osu-yellow" />
-                              <StatCell label="200" value={formatNumber(p.score.statistics.count_katu ?? p.score.statistics.good ?? 0)} color="text-osu-green" />
-                              <StatCell label="100" value={formatNumber(p.score.statistics.count_100 ?? p.score.statistics.ok ?? 0)} color="text-osu-purple" />
-                              <StatCell label="50" value={formatNumber(p.score.statistics.count_50 ?? p.score.statistics.meh ?? 0)} color="text-osu-orange" />
-                              <StatCell label="Miss" value={formatNumber(p.score.statistics.count_miss ?? p.score.statistics.miss ?? 0)} color="text-osu-red" />
+                              <StatCell label="200" value={formatNumber(p.score.statistics.count_katu ?? p.score.statistics.good ?? 0)} color="text-osu-green-light" />
+                              <StatCell label="100" value={formatNumber(p.score.statistics.count_100 ?? p.score.statistics.ok ?? 0)} color="text-osu-blue" />
+                              <StatCell label="50" value={formatNumber(p.score.statistics.count_50 ?? p.score.statistics.meh ?? 0)} color="text-slate-400" />
+                              <StatCell label="Miss" value={formatNumber(p.score.statistics.count_miss ?? p.score.statistics.miss ?? 0)} color="text-osu-red-light" />
                               <StatCell label="PP" value={`${Math.round(p.pp)}pp`} color="text-osu-pink" />
                               {p.score.beatmap?.difficulty_rating != null && (
                                 <StatCell label="Stars" value={p.score.beatmap.difficulty_rating.toFixed(2)} />

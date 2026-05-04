@@ -257,13 +257,6 @@ export class ManiaReplayRenderer {
   private hudCachedLeftMisses = "0";
   private hudCachedRightMisses = "0";
 
-  private audioStallCount = 0;
-  private lastAudioStallAt = 0;
-  private perfReportAt = 0;
-  private perfFrames = 0;
-  private perfSlowFrames = 0;
-  private perfMaxRenderMs = 0;
-  private perfSumRenderMs = 0;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -796,8 +789,6 @@ export class ManiaReplayRenderer {
           this.resetAudioClockSmoothing(audioTime, now);
         }
       } else {
-        if (now - this.lastAudioStallAt > 100) this.audioStallCount++;
-        this.lastAudioStallAt = now;
         this.resetAudioClockSmoothing();
       }
     } else {
@@ -866,8 +857,6 @@ export class ManiaReplayRenderer {
   private render() {
     if (!this.app) return;
 
-    const perfStart = import.meta.env.DEV ? performance.now() : 0;
-
     const layout = this.getLayout();
     this.currentKeyState = this.getCurrentKeyState();
     this.updateHudSnapshotIfNeeded();
@@ -894,38 +883,6 @@ export class ManiaReplayRenderer {
     this.finishSkinSpriteFrame();
     this.finishTextFrame();
     this.app.render();
-
-    if (import.meta.env.DEV) this.recordRenderPerf(performance.now() - perfStart);
-  }
-
-  private recordRenderPerf(durationMs: number) {
-    this.perfFrames++;
-    this.perfSumRenderMs += durationMs;
-    if (durationMs > this.perfMaxRenderMs) this.perfMaxRenderMs = durationMs;
-    if (durationMs > 4) this.perfSlowFrames++;
-
-    const now = performance.now();
-    if (this.perfReportAt === 0) this.perfReportAt = now;
-    if (now - this.perfReportAt < 5000) return;
-
-    if (this.perfSlowFrames > 0 || this.perfMaxRenderMs > 4) {
-      const avg = this.perfFrames > 0 ? this.perfSumRenderMs / this.perfFrames : 0;
-      console.debug("[replay perf]", {
-        frames: this.perfFrames,
-        avgMs: Number(avg.toFixed(2)),
-        maxMs: Number(this.perfMaxRenderMs.toFixed(2)),
-        slowFrames: this.perfSlowFrames,
-        audioStalls: this.audioStallCount,
-        skinSprites: this.skinSpritePool.length,
-        textObjects: this.textPool.length,
-      });
-    }
-
-    this.perfReportAt = now;
-    this.perfFrames = 0;
-    this.perfSumRenderMs = 0;
-    this.perfMaxRenderMs = 0;
-    this.perfSlowFrames = 0;
   }
 
   private renderBackground(_layout: Layout) {
@@ -1471,22 +1428,22 @@ export class ManiaReplayRenderer {
       });
     });
 
-    if (this.skinSettings.style !== "circles") {
-      const urBarWidth = Math.min(playfieldWidth * 0.68, 180);
-      const urBarX = playfieldCenterX - urBarWidth / 2;
-      const receptorBottom = judgmentY + layout.receptorHeight + 2;
-      const urBarY = Math.min(h - 10, receptorBottom > h - 40 ? receptorBottom + 12 : h - 26);
-      const urRange = this.hitWindows.meh;
+    const urBarWidth = Math.min(playfieldWidth * 0.68, 180);
+    const urBarX = playfieldCenterX - urBarWidth / 2;
+    const receptorBottom = this.skinSettings.style === "circles"
+      ? judgmentY + this.getCircleDiameter(layout) / 2
+      : judgmentY + layout.receptorHeight + 2;
+    const urBarY = Math.min(h - 10, receptorBottom > h - 40 ? receptorBottom + 12 : h - 26);
+    const urRange = this.hitWindows.meh;
 
-      this.fillRect(urBarX, urBarY, urBarWidth, 3, "#ffffff", 0.08);
-      this.fillRect(playfieldCenterX - 1, urBarY - 4, 2, 11, "#ffffff", 0.25);
-      this.recentHitOffsets.forEach((offset, index) => {
-        const normalized = Math.max(-1, Math.min(1, offset / urRange));
-        const x = playfieldCenterX + normalized * (urBarWidth / 2);
-        const alpha = 0.2 + ((index + 1) / this.recentHitOffsets.length) * 0.8;
-        this.fillRect(x - 1.5, urBarY - 3, 3, 9, "#b3f5ff", alpha);
-      });
-    }
+    this.fillRect(urBarX, urBarY, urBarWidth, 3, "#ffffff", 0.08);
+    this.fillRect(playfieldCenterX - 1, urBarY - 4, 2, 11, "#ffffff", 0.25);
+    this.recentHitOffsets.forEach((offset, index) => {
+      const normalized = Math.max(-1, Math.min(1, offset / urRange));
+      const x = playfieldCenterX + normalized * (urBarWidth / 2);
+      const alpha = 0.2 + ((index + 1) / this.recentHitOffsets.length) * 0.8;
+      this.fillRect(x - 1.5, urBarY - 3, 3, 9, "#b3f5ff", alpha);
+    });
     this.addText(this.hudCachedTime, 8, h - 8, { fontSize: 11, fill: "#ffffff", alpha: 0.4, anchorY: 1 });
     this.addText(`${this.playbackSpeed * this.modRate}x`, w - 8, h - 8, {
       fontSize: 11,

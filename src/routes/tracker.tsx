@@ -89,6 +89,10 @@ function ScoresPage() {
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<number[]>([]);
   const [initialLoaded, setInitialLoaded] = useState(feedScores.length > 0 || !!feedScoresFetchedAt);
   const [initialRefreshDone, setInitialRefreshDone] = useState(false);
+  const [initialFetching, setInitialFetching] = useState(false);
+  const [polling, setPolling] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0);
+  const refreshing = initialFetching || polling;
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const handleToggleExpand = useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key));
@@ -103,6 +107,9 @@ function ScoresPage() {
     setPlayersError(null);
     setInitialLoaded(feedScores.length > 0 || !!feedScoresFetchedAt);
     setInitialRefreshDone(false);
+    setInitialFetching(false);
+    setPolling(false);
+    setScanProgress(0);
     setExpandedKey(null);
     setSelectedPlayerIds([]);
     resetPollIndex(selectedCountry);
@@ -182,6 +189,9 @@ function ScoresPage() {
     let cancelled = false;
     const BATCH = 10;
 
+    setInitialFetching(true);
+    setScanProgress(0);
+
     (async () => {
       const totalBatches = Math.ceil(userIds.length / BATCH);
       for (let b = 0; b < totalBatches; b++) {
@@ -194,20 +204,29 @@ function ScoresPage() {
           if (result.scores.length > 0) addFeedScores(selectedCountry, result.scores);
           if (Object.keys(result.gains).length > 0) setTrackerPpGains(selectedCountry, result.gains);
           setInitialLoaded(true);
+          setScanProgress(((b + 1) / totalBatches) * 100);
         } catch { /* continue */ }
       }
       if (!cancelled) {
         markFeedScoresFetched(selectedCountry);
         setInitialRefreshDone(true);
+        setInitialFetching(false);
       }
     })();
 
-    return () => { cancelled = true; };
-  }, [userIds, initialRefreshDone, feedScores.length, feedScoresFetchedAt, addFeedScores, markFeedScoresFetched, selectedCountry]);
+    return () => {
+      cancelled = true;
+      setInitialFetching(false);
+    };
+  // feedScores.length intentionally omitted: addFeedScores fires inside the loop
+  // and would otherwise cancel-and-restart the batched fetch on every batch.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userIds, initialRefreshDone, feedScoresFetchedAt, addFeedScores, markFeedScoresFetched, selectedCountry]);
 
   const poll = useCallback(async () => {
     if (!isPolling || userIds.length === 0) return;
     if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+    setPolling(true);
     try {
       const result = await getCountryRecentScores({
         data: { userIds, batchSize: 10, batchIndex: pollIndex, recentLimit: 20 },
@@ -216,7 +235,9 @@ function ScoresPage() {
       if (Object.keys(result.gains).length > 0) setTrackerPpGains(selectedCountry, result.gains);
       else markFeedScoresFetched(selectedCountry);
       nextPollIndex(selectedCountry);
-    } catch { /* silently continue */ }
+    } catch { /* silently continue */ } finally {
+      setPolling(false);
+    }
   }, [isPolling, userIds, pollIndex, addFeedScores, markFeedScoresFetched, nextPollIndex, selectedCountry, setTrackerPpGains]);
 
   useEffect(() => {
@@ -333,12 +354,25 @@ function ScoresPage() {
         title={`${countryName} mania tracker`}
         right={
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${isPolling ? "bg-osu-green animate-pulse" : "bg-osu-f1"}`} />
-            <span className="text-[10px] text-osu-f1">
-              {loadingPlayers
-                ? "Loading tracked players..."
-                : `${isPolling ? "Live" : "Paused"} \u00b7 ${feedScores.length} scores`}
-            </span>
+            {loadingPlayers || refreshing ? (
+              <>
+                <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
+                <span className="text-[10px] text-osu-f1 tabular-nums">
+                  {loadingPlayers
+                    ? "Loading tracked players..."
+                    : !initialRefreshDone
+                      ? `Refreshing... ${Math.min(99, Math.floor(scanProgress))}%`
+                      : "Refreshing..."}
+                </span>
+              </>
+            ) : (
+              <>
+                <div className={`w-2 h-2 rounded-full ${isPolling ? "bg-osu-green animate-pulse" : "bg-osu-f1"}`} />
+                <span className="text-[10px] text-osu-f1">
+                  {isPolling ? "Live" : "Paused"} {"\u00b7"} {feedScores.length} scores
+                </span>
+              </>
+            )}
             <button
               onClick={() => setIsPolling(!isPolling)}
               className="px-2.5 py-1 rounded-lg bg-osu-b4 text-[10px] text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/30"
@@ -818,12 +852,12 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               <div className="relative grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
                 <StatCell label="Score" value={totalScore != null ? formatNumber(totalScore) : "-"} />
                 <StatCell label="Combo" value={`${formatNumber(score.max_combo)}x`} />
-                <StatCell label="MAX" value={formatNumber(countMax)} color="text-osu-blue" />
+                <StatCell label="MAX" value={formatNumber(countMax)} color="inline-block leading-none bg-[linear-gradient(180deg,#9b2cff_30%,#1d65ff_42%,#41d9ff_54%,#4fdc3a_66%,#ffe234_78%,#ff9a1f_90%)] bg-clip-text text-transparent" />
                 <StatCell label="300" value={formatNumber(count300)} color="text-osu-yellow" />
-                <StatCell label="200" value={formatNumber(count200)} color="text-osu-green" />
-                <StatCell label="100" value={formatNumber(count100)} color="text-osu-purple" />
-                <StatCell label="50" value={formatNumber(count50)} color="text-osu-orange" />
-                <StatCell label="Miss" value={formatNumber(countMiss)} color="text-osu-red" />
+                <StatCell label="200" value={formatNumber(count200)} color="text-osu-green-light" />
+                <StatCell label="100" value={formatNumber(count100)} color="text-osu-blue" />
+                <StatCell label="50" value={formatNumber(count50)} color="text-slate-400" />
+                <StatCell label="Miss" value={formatNumber(countMiss)} color="text-osu-red-light" />
                 {score.pp != null && score.pp > 0 && (
                   <StatCell label="PP" value={`${Math.round(score.pp)}pp`} color="text-osu-pink" />
                 )}
