@@ -76,7 +76,7 @@ describe("ManiaReplayRenderer skin customization", () => {
   it("accepts replay skin settings and exposes a live updater", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    expect(source).toContain('import type { ReplaySkinKeymodeProfile, ReplaySkinSettings } from "../../lib/replay-skin";');
+    expect(source).toMatch(/import type \{[^}]*ReplaySkinKeymodeProfile[^}]*ReplaySkinSettings[^}]*\} from "\.\.\/\.\.\/lib\/replay-skin";/);
     expect(source).toContain("skinSettings?: ReplaySkinSettings");
     expect(source).toContain("private skinSettings: ReplaySkinSettings");
     expect(source).toContain("private skinProfile: ReplaySkinKeymodeProfile");
@@ -142,15 +142,16 @@ describe("ManiaReplayRenderer skin customization", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
     expect(source).toContain('const isCircleSkin = this.skinSettings.style === "circles";');
-    expect(source).toContain("for (let col = 0; !isCircleSkin && col < this.keyCount; col++)");
-    expect(source).toContain("if (!isCircleSkin) {");
+    expect(source).toContain("const showColumnDividers = !isCircleSkin;");
+    expect(source).toContain("for (let col = 0; showColumnDividers && col < this.keyCount; col++)");
+    expect(source).toContain("if (showColumnDividers) {");
   });
 
   it("hides the bare playfield bottom guide for circle skins", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
     expect(source).toContain("if (this.barePlayfield) {");
-    expect(source).toContain('if (!isCircleSkin) this.line(playfieldX, h - 1, playfieldX + playfieldWidth, h - 1, "#ffffff", 0.1, 2);');
+    expect(source).toContain('if (showColumnDividers) this.lineInto(g, playfieldX, h - 1, playfieldX + playfieldWidth, h - 1, "#ffffff", 0.1, 2);');
   });
 
   it("biases 5k+ wide bare preview playfields left", () => {
@@ -162,10 +163,14 @@ describe("ManiaReplayRenderer skin customization", () => {
 
   it("draws bar LNs as one continuous body without separate caps", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+    const branch = /const barPercyTrim = this\.skinSettings\.percy([\s\S]*?)\n      \} else \{/.exec(source);
 
-    expect(source).toContain("const bodyBottom = bottom;");
-    expect(source).toContain("const bodyTop = Math.min(top + percyTrim, bodyBottom - noteHeight);");
-    expect(source).toContain("this.barLnBodyWithTopFade(x, bodyTop, barWidth, bodyBottom - bodyTop, color, bodyAlpha");
+    expect(branch?.[1]).toBeTruthy();
+    expect(branch![1]).toContain("const bodyHeadY = headEndY;");
+    expect(branch![1]).toContain("const bodyTailY = tailEndY + tailDelta;");
+    expect(branch![1]).toContain("const barBodyTop = Math.min(bodyHeadY, bodyTailY);");
+    expect(branch![1]).toContain("const barBodyBottom = Math.max(bodyHeadY, bodyTailY);");
+    expect(branch![1]).toContain("this.barLnBodyWithTopFade(x, barBodyTop, barWidth, barBodyBottom - barBodyTop, color, bodyAlpha");
     expect(source).not.toContain("bottom - noteHeight, barWidth, noteHeight");
     expect(source).not.toContain("noteHeight / 2, 2, color, headAlpha");
   });

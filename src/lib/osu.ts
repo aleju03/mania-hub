@@ -39,6 +39,7 @@ import {
   deletePersistentCacheEntries,
   getPersistentCacheEntry,
   getPersistentCacheEntryAllowStale,
+  getPersistentCacheEntries,
   getPersistentCached,
   setPersistentCache,
 } from "./api";
@@ -174,6 +175,9 @@ const COUNTRY_TOP_PLAYS_REFRESH_TTL = 3 * 60 * 1000;
 const COUNTRY_TOP_PLAYS_REFRESH_LOCK_TTL = 90 * 1000;
 const COUNTRY_TOP_PLAYS_RETENTION_MS = 31 * 24 * 60 * 60 * 1000;
 const COUNTRY_TOP_PLAYS_QUERY_LIMIT = 500;
+const SCORE_PP_GAIN_REUSE_MS = 14 * 24 * 60 * 60 * 1000;
+const SCORE_PP_GAIN_CACHE_TTL = SCORE_PP_GAIN_REUSE_MS;
+const SCORE_PP_GAIN_CACHE_VERSION = 1;
 export type PopoffWindow = "24h" | "3d" | "7d" | "30d";
 const POPOFF_WINDOW_MS: Record<PopoffWindow, number> = {
   "24h": 24 * 60 * 60 * 1000,
@@ -341,6 +345,15 @@ interface ScorePpGainLookup {
   scoreId: number;
   timestamp: string;
   userId: number;
+}
+
+interface CachedScorePpGain {
+  pp: number;
+  ppGain: number;
+}
+
+function scorePpGainCacheKey(scoreId: number, pp: number): string {
+  return `score-pp-gain:v${SCORE_PP_GAIN_CACHE_VERSION}:${scoreId}:${Math.round(pp * 100)}`;
 }
 
 const MAX_OSU_ID = 1_000_000_000;
@@ -1081,6 +1094,8 @@ async function calculateReplacementPpGainMapForTargets(
   bestScores: OsuScore[],
   targets: ScorePpGainLookup[],
 ): Promise<Record<number, number>> {
+  if (targets.length === 0) return {};
+
   const bestScoreById = new Map(
     bestScores
       .filter((score) => score.id > 0 && score.pp != null && score.pp > 0)
@@ -1090,8 +1105,41 @@ async function calculateReplacementPpGainMapForTargets(
   const relevantTargets = targets.filter((target) => bestScoreById.has(target.scoreId));
   if (relevantTargets.length === 0) return {};
 
+  const cacheKeyByScoreId = new Map<number, string>();
+  for (const target of relevantTargets) {
+    const currentScore = bestScoreById.get(target.scoreId);
+    if (!currentScore?.pp) continue;
+    cacheKeyByScoreId.set(target.scoreId, scorePpGainCacheKey(target.scoreId, currentScore.pp));
+  }
+
+  const cachedGains = await getPersistentCacheEntries<CachedScorePpGain>(
+    [...new Set(cacheKeyByScoreId.values())],
+  );
+  const gains: Record<number, number> = {};
+  const uncachedTargets: ScorePpGainLookup[] = [];
+
+  for (const target of relevantTargets) {
+    const currentScore = bestScoreById.get(target.scoreId);
+    const cacheKey = cacheKeyByScoreId.get(target.scoreId);
+    const cached = cacheKey ? cachedGains.get(cacheKey) : undefined;
+    if (
+      currentScore?.pp &&
+      cached &&
+      Number.isFinite(cached.pp) &&
+      Number.isFinite(cached.ppGain) &&
+      Math.abs(cached.pp - currentScore.pp) < 0.01
+    ) {
+      if (cached.ppGain > 0) gains[target.scoreId] = cached.ppGain;
+      continue;
+    }
+
+    uncachedTargets.push(target);
+  }
+
+  if (uncachedTargets.length === 0) return gains;
+
   const previousScores = await mapWithConcurrency(
-    relevantTargets,
+    uncachedTargets,
     APPROX_PP_GAINS_CONCURRENCY,
     async (target) => {
       try {
@@ -1110,8 +1158,7 @@ async function calculateReplacementPpGainMapForTargets(
     },
   );
 
-  const gains: Record<number, number> = {};
-  relevantTargets.forEach((target, index) => {
+  uncachedTargets.forEach((target, index) => {
     const currentScore = bestScoreById.get(target.scoreId);
     if (!currentScore) return;
 
@@ -1123,6 +1170,14 @@ async function calculateReplacementPpGainMapForTargets(
     }
 
     const gain = calculateReplacementPpGain(bestScores, target.scoreId, previousScore ?? null);
+    const cacheKey = cacheKeyByScoreId.get(target.scoreId);
+    if (cacheKey && currentScore.pp != null) {
+      void setPersistentCache(
+        cacheKey,
+        { pp: currentScore.pp, ppGain: gain } satisfies CachedScorePpGain,
+        SCORE_PP_GAIN_CACHE_TTL,
+      );
+    }
     if (gain > 0) gains[target.scoreId] = gain;
   });
 
@@ -1368,21 +1423,44 @@ function sortCountryPopoffs(popoffs: CountryPopoff[]): CountryPopoff[] {
 async function buildCountryPopoffsForPlayer(
   player: HomePreviewPlayer,
   windowMs: number,
+  options: { knownPpGainsByScoreId?: ReadonlyMap<number, CachedScorePpGain> } = {},
 ): Promise<CountryPopoff[]> {
   const scores = await fetchUserBestScoresWindow(player.id, 100);
   const relevantScores = scores.filter((score) => {
     const age = Date.now() - getTimestampMs(score);
     return age < windowMs && score.pp != null && score.pp > 0;
   });
-  const gainMap = await calculateReplacementPpGainMapForTargets(
-    scores,
-    relevantScores.map((score) => ({
+  const cachedGainMap: Record<number, number> = {};
+  const uncachedTargets: ScorePpGainLookup[] = [];
+
+  relevantScores.forEach((score) => {
+    const scoreId = score.id;
+    const known = options.knownPpGainsByScoreId?.get(scoreId);
+    const currentPp = score.pp ?? 0;
+    if (
+      scoreId > 0 &&
+      known &&
+      Number.isFinite(known.pp) &&
+      Number.isFinite(known.ppGain) &&
+      Math.abs(known.pp - currentPp) < 0.01
+    ) {
+      cachedGainMap[scoreId] = Math.max(0, known.ppGain);
+      return;
+    }
+
+    uncachedTargets.push({
       beatmapId: score.beatmap_id ?? score.beatmap?.id ?? 0,
-      scoreId: score.id,
+      scoreId,
       timestamp: getScoreTimestamp(score),
       userId: player.id,
-    })),
+    });
+  });
+
+  const gainMap = await calculateReplacementPpGainMapForTargets(
+    scores,
+    uncachedTargets,
   );
+  const mergedGainMap = { ...cachedGainMap, ...gainMap };
 
   return relevantScores
     .map((score) => ({
@@ -1390,7 +1468,7 @@ async function buildCountryPopoffsForPlayer(
       score,
       pp: score.pp ?? 0,
       weightedPP: score.weight?.pp ?? 0,
-      ppGain: gainMap[score.id] ?? 0,
+      ppGain: mergedGainMap[score.id] ?? 0,
       time: getScoreTimestamp(score),
     }));
 }
@@ -1398,7 +1476,10 @@ async function buildCountryPopoffsForPlayer(
 async function buildLiveCountryPopoffs(
   players: HomePreviewPlayer[],
   window: PopoffWindow,
-  options: { progressCountry?: string } = {},
+  options: {
+    progressCountry?: string;
+    knownPpGainsByScoreId?: ReadonlyMap<number, CachedScorePpGain>;
+  } = {},
 ): Promise<CountryPopoff[]> {
   const topPlayers = players.slice(0, 30);
   if (topPlayers.length === 0) return [];
@@ -1431,7 +1512,9 @@ async function buildLiveCountryPopoffs(
       async (player) => {
         let playerPopoffs: CountryPopoff[] = [];
         try {
-          playerPopoffs = await buildCountryPopoffsForPlayer(player, windowMs);
+          playerPopoffs = await buildCountryPopoffsForPlayer(player, windowMs, {
+            knownPpGainsByScoreId: options.knownPpGainsByScoreId,
+          });
           return playerPopoffs;
         } catch (error) {
           console.warn("[osu] failed to build country popoff scores for player", {
@@ -1583,7 +1666,25 @@ async function upsertStoredCountryTopPlays(country: string, popoffs: CountryPopo
 }
 
 async function refreshStoredCountryTopPlays(country: string, players: HomePreviewPlayer[]): Promise<number> {
-  const refreshed = await buildLiveCountryPopoffs(players, "30d", { progressCountry: country });
+  const knownPpGainsByScoreId = new Map<number, CachedScorePpGain>();
+  const reuseCutoff = Date.now() - SCORE_PP_GAIN_REUSE_MS;
+  const stored = await getStoredCountryTopPlays(country, "30d");
+  for (const popoff of stored) {
+    const scoreId = popoff.score.id;
+    const scoreTime = new Date(popoff.time).getTime();
+    if (scoreId <= 0) continue;
+    if (!Number.isFinite(scoreTime) || scoreTime < reuseCutoff) continue;
+    if (!Number.isFinite(popoff.pp) || !Number.isFinite(popoff.ppGain)) continue;
+    knownPpGainsByScoreId.set(scoreId, {
+      pp: popoff.pp,
+      ppGain: popoff.ppGain,
+    });
+  }
+
+  const refreshed = await buildLiveCountryPopoffs(players, "30d", {
+    progressCountry: country,
+    knownPpGainsByScoreId,
+  });
   await upsertStoredCountryTopPlays(country, refreshed);
   return Date.now();
 }

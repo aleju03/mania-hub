@@ -26,6 +26,7 @@ import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
 import { DanBadge } from "../components/ui/DanBadge";
 import { TrackerRowSkeleton } from "../components/ui/LoadingSkeleton";
+import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
 import { TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useSelectedCountry } from "../store";
 import type { OsuScore } from "../lib/types";
@@ -93,6 +94,9 @@ function ScoresPage() {
   const [polling, setPolling] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const refreshing = initialFetching || polling;
+  const initialFetchInFlightRef = useRef(false);
+  const pollInFlightRef = useRef(false);
+  const pollRequestIdRef = useRef(0);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const handleToggleExpand = useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key));
@@ -110,6 +114,9 @@ function ScoresPage() {
     setInitialFetching(false);
     setPolling(false);
     setScanProgress(0);
+    initialFetchInFlightRef.current = false;
+    pollInFlightRef.current = false;
+    pollRequestIdRef.current += 1;
     setExpandedKey(null);
     setSelectedPlayerIds([]);
     resetPollIndex(selectedCountry);
@@ -171,7 +178,7 @@ function ScoresPage() {
   }, [feedScores.length, initialLoaded]);
 
   useEffect(() => {
-    if (userIds.length === 0 || initialRefreshDone) return;
+    if (userIds.length === 0 || initialRefreshDone || initialFetchInFlightRef.current) return;
 
     const shouldRefresh =
       !feedScoresFetchedAt || isCacheStale(feedScoresFetchedAt, CLIENT_CACHE_TTL.scoresFeed);
@@ -188,44 +195,53 @@ function ScoresPage() {
 
     let cancelled = false;
     const BATCH = 10;
+    const requestedCountry = selectedCountry;
+    const requestedUserIds = userIds;
 
+    initialFetchInFlightRef.current = true;
     setInitialFetching(true);
     setScanProgress(0);
 
     (async () => {
-      const totalBatches = Math.ceil(userIds.length / BATCH);
+      const totalBatches = Math.ceil(requestedUserIds.length / BATCH);
       for (let b = 0; b < totalBatches; b++) {
         if (cancelled) return;
         try {
           const result = await getCountryRecentScores({
-            data: { userIds, batchSize: BATCH, batchIndex: b, recentLimit: 20 },
+            data: { userIds: requestedUserIds, batchSize: BATCH, batchIndex: b, recentLimit: 20 },
           });
           if (cancelled) return;
-          if (result.scores.length > 0) addFeedScores(selectedCountry, result.scores);
-          if (Object.keys(result.gains).length > 0) setTrackerPpGains(selectedCountry, result.gains);
+          if (result.scores.length > 0) addFeedScores(requestedCountry, result.scores);
+          if (Object.keys(result.gains).length > 0) setTrackerPpGains(requestedCountry, result.gains);
           setInitialLoaded(true);
           setScanProgress(((b + 1) / totalBatches) * 100);
         } catch { /* continue */ }
       }
       if (!cancelled) {
-        markFeedScoresFetched(selectedCountry);
+        markFeedScoresFetched(requestedCountry);
         setInitialRefreshDone(true);
+        initialFetchInFlightRef.current = false;
         setInitialFetching(false);
       }
     })();
 
     return () => {
       cancelled = true;
+      initialFetchInFlightRef.current = false;
       setInitialFetching(false);
     };
-  // feedScores.length intentionally omitted: addFeedScores fires inside the loop
-  // and would otherwise cancel-and-restart the batched fetch on every batch.
+  // feedScores.length and feedScoresFetchedAt intentionally omitted:
+  // addFeedScores writes both inside the loop, and those writes must not cancel
+  // the remaining batches of this initial refresh.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userIds, initialRefreshDone, feedScoresFetchedAt, addFeedScores, markFeedScoresFetched, selectedCountry]);
+  }, [userIds, initialRefreshDone, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains]);
 
   const poll = useCallback(async () => {
     if (!isPolling || userIds.length === 0) return;
     if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+    if (pollInFlightRef.current) return;
+    pollInFlightRef.current = true;
+    const requestId = ++pollRequestIdRef.current;
     setPolling(true);
     try {
       const result = await getCountryRecentScores({
@@ -236,7 +252,10 @@ function ScoresPage() {
       else markFeedScoresFetched(selectedCountry);
       nextPollIndex(selectedCountry);
     } catch { /* silently continue */ } finally {
-      setPolling(false);
+      if (pollRequestIdRef.current === requestId) {
+        pollInFlightRef.current = false;
+        setPolling(false);
+      }
     }
   }, [isPolling, userIds, pollIndex, addFeedScores, markFeedScoresFetched, nextPollIndex, selectedCountry, setTrackerPpGains]);
 
@@ -685,16 +704,10 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   useEffect(() => { if (expanded) setRendered(true); }, [expanded]);
 
   const keys = score.beatmap?.cs;
-  const stats = score.statistics;
   const totalScore = getDisplayedTotalScore(score);
   const beatmapUrl = getBeatmapUrl(score);
   const scoreUrl = getScoreUrl(score);
-  const countMax = stats?.count_geki ?? stats?.perfect ?? 0;
-  const count300 = stats?.count_300 ?? stats?.great ?? 0;
-  const count200 = stats?.count_katu ?? stats?.good ?? 0;
-  const count100 = stats?.count_100 ?? stats?.ok ?? 0;
-  const count50 = stats?.count_50 ?? stats?.meh ?? 0;
-  const countMiss = stats?.count_miss ?? stats?.miss ?? 0;
+  const judgementStats = getManiaJudgementStats(score);
   const lazer = isLazerScore(score);
   const accColorClass = lazer ? "text-osu-pink-light" : "text-osu-l2";
 
@@ -852,12 +865,9 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               <div className="relative grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
                 <StatCell label="Score" value={totalScore != null ? formatNumber(totalScore) : "-"} />
                 <StatCell label="Combo" value={`${formatNumber(score.max_combo)}x`} />
-                <StatCell label="MAX" value={formatNumber(countMax)} color="inline-block leading-none bg-[linear-gradient(180deg,#9b2cff_30%,#1d65ff_42%,#41d9ff_54%,#4fdc3a_66%,#ffe234_78%,#ff9a1f_90%)] bg-clip-text text-transparent" />
-                <StatCell label="300" value={formatNumber(count300)} color="text-osu-yellow" />
-                <StatCell label="200" value={formatNumber(count200)} color="text-osu-green-light" />
-                <StatCell label="100" value={formatNumber(count100)} color="text-osu-blue" />
-                <StatCell label="50" value={formatNumber(count50)} color="text-slate-400" />
-                <StatCell label="Miss" value={formatNumber(countMiss)} color="text-osu-red-light" />
+                {judgementStats.map((judgement) => (
+                  <StatCell key={judgement.label} label={judgement.label} value={formatNumber(judgement.value)} color={judgement.className} />
+                ))}
                 {score.pp != null && score.pp > 0 && (
                   <StatCell label="PP" value={`${Math.round(score.pp)}pp`} color="text-osu-pink" />
                 )}

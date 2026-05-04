@@ -7,6 +7,19 @@ export const RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS = 1_200;
 const RANDOM_REPLAY_TAP_HOLD_MS = 48;
 const DENSE_PREVIEW_LEAD_IN_MS = 1_000;
 
+type ChartPreviewAudioMode = "set-preview" | "selected-file";
+
+export type ChartPreviewPlaybackPlan = {
+  beatmap: ManiaBeatmap;
+  startTimeMs: number;
+  timeScale: number;
+  audioMode: ChartPreviewAudioMode;
+};
+
+export function hasMappedPreviewTime(previewTimeMs: number): boolean {
+  return Number.isFinite(previewTimeMs) && previewTimeMs > 0;
+}
+
 export function pickPreviewStartTime(primaryTimeMs: number, fallbackTimeMs = 0): number {
   if (Number.isFinite(primaryTimeMs) && primaryTimeMs > 0) return primaryTimeMs;
   if (Number.isFinite(fallbackTimeMs) && fallbackTimeMs > 0) return fallbackTimeMs;
@@ -48,6 +61,46 @@ export function findDensestPreviewStartTime(beatmap: ManiaBeatmap, timeScale = 1
   }
 
   return Math.max(0, Math.round(bestStart));
+}
+
+export function getChartPreviewPlaybackPlan({
+  selectedBeatmap,
+  referenceBeatmap = selectedBeatmap,
+  usesSetPreviewForAudio,
+  timedRateVariant,
+  selectedDifficultyRate,
+}: {
+  selectedBeatmap: ManiaBeatmap;
+  referenceBeatmap?: ManiaBeatmap;
+  usesSetPreviewForAudio: boolean;
+  timedRateVariant: boolean;
+  selectedDifficultyRate: number;
+}): ChartPreviewPlaybackPlan {
+  let beatmap = timedRateVariant ? referenceBeatmap : selectedBeatmap;
+  const referenceStartMs = pickPreviewStartTime(referenceBeatmap.previewTime, selectedBeatmap.previewTime);
+  const shouldUseSelectedAudio = !usesSetPreviewForAudio;
+  let startTimeMs = shouldUseSelectedAudio
+    ? pickPreviewStartTime(selectedBeatmap.previewTime)
+    : timedRateVariant
+    ? referenceStartMs
+    : usesSetPreviewForAudio
+    ? pickPreviewStartTime(selectedBeatmap.previewTime, referenceStartMs)
+    : pickPreviewStartTime(selectedBeatmap.previewTime);
+  let timeScale = timedRateVariant ? selectedDifficultyRate : 1;
+  let audioMode: ChartPreviewAudioMode = shouldUseSelectedAudio ? "selected-file" : "set-preview";
+  const hasMappedPreview = hasMappedPreviewTime(selectedBeatmap.previewTime) || (
+    usesSetPreviewForAudio && hasMappedPreviewTime(referenceBeatmap.previewTime)
+  );
+  const canUseUnmappedSetPreview = usesSetPreviewForAudio && timedRateVariant;
+
+  if ((!hasMappedPreview && !canUseUnmappedSetPreview) || !hasPreviewNotes(beatmap, startTimeMs, timeScale)) {
+    beatmap = selectedBeatmap;
+    startTimeMs = findDensestPreviewStartTime(selectedBeatmap);
+    timeScale = 1;
+    audioMode = "selected-file";
+  }
+
+  return { beatmap, startTimeMs, timeScale, audioMode };
 }
 
 export function getPreviewNotes(beatmap: ManiaBeatmap, startTimeMs = beatmap.previewTime, timeScale = 1): ManiaNote[] {

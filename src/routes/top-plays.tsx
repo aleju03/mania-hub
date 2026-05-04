@@ -13,6 +13,7 @@ import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
 import { DanBadge } from "../components/ui/DanBadge";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
+import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
 import { Pagination } from "../components/ui/Pagination";
 import type { CountryTopPlay, RankingsResponse, TopPlaysRefreshStatus } from "../lib/types";
@@ -711,6 +712,7 @@ function PopOffsPage() {
                 {paginated.map((p: PopOff) => {
                   const lazer = isLazerScore(p.score);
                   const accColorClass = lazer ? "text-osu-pink-light" : "text-osu-l2";
+                  const judgementStats = getManiaJudgementStats(p.score);
                   return (
                   <motion.div
                     key={`${p.user.id}-${p.score.id}`}
@@ -862,12 +864,9 @@ function PopOffsPage() {
                             <div className="relative grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
                               <StatCell label="Score" value={getDisplayedTotalScore(p.score) != null ? formatNumber(getDisplayedTotalScore(p.score)!) : "-"} />
                               <StatCell label="Combo" value={`${formatNumber(p.score.max_combo)}x`} />
-                              <StatCell label="MAX" value={formatNumber(p.score.statistics.count_geki ?? p.score.statistics.perfect ?? 0)} color="inline-block leading-none bg-[linear-gradient(180deg,#9b2cff_30%,#1d65ff_42%,#41d9ff_54%,#4fdc3a_66%,#ffe234_78%,#ff9a1f_90%)] bg-clip-text text-transparent" />
-                              <StatCell label="300" value={formatNumber(p.score.statistics.count_300 ?? p.score.statistics.great ?? 0)} color="text-osu-yellow" />
-                              <StatCell label="200" value={formatNumber(p.score.statistics.count_katu ?? p.score.statistics.good ?? 0)} color="text-osu-green-light" />
-                              <StatCell label="100" value={formatNumber(p.score.statistics.count_100 ?? p.score.statistics.ok ?? 0)} color="text-osu-blue" />
-                              <StatCell label="50" value={formatNumber(p.score.statistics.count_50 ?? p.score.statistics.meh ?? 0)} color="text-slate-400" />
-                              <StatCell label="Miss" value={formatNumber(p.score.statistics.count_miss ?? p.score.statistics.miss ?? 0)} color="text-osu-red-light" />
+                              {judgementStats.map((judgement) => (
+                                <StatCell key={judgement.label} label={judgement.label} value={formatNumber(judgement.value)} color={judgement.className} />
+                              ))}
                               <StatCell label="PP" value={`${Math.round(p.pp)}pp`} color="text-osu-pink" />
                               {p.score.beatmap?.difficulty_rating != null && (
                                 <StatCell label="Stars" value={p.score.beatmap.difficulty_rating.toFixed(2)} />

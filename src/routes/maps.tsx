@@ -42,12 +42,10 @@ import { parseCountrySearchParam, withSearchParams } from "../lib/country-search
 import {
   RANDOM_REPLAY_PREVIEW_MS,
   buildAutoplayFrames,
-  findDensestPreviewStartTime,
+  getChartPreviewPlaybackPlan,
   getPreviewInitialCombo,
   getPreviewNotes,
   getPreviewScrollVelocities,
-  hasPreviewNotes,
-  pickPreviewStartTime,
 } from "../lib/chart-preview";
 import { readReplayScrollSpeed } from "../lib/replay-scroll-speed";
 import { readReplaySkinSettings } from "../lib/replay-skin";
@@ -3076,30 +3074,18 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         const selectedParsed = parseManiaBeatmap(selectedResult.content);
         const referenceParsed = referenceResult ? parseManiaBeatmap(referenceResult.content) : selectedParsed;
         const timedRateVariant = usesSetPreviewForReplayAudio && isLikelyTimedRateVariantSet(maniaBeatmaps);
-        let visualParsed = timedRateVariant ? referenceParsed : selectedParsed;
-        const referenceStartMs = pickPreviewStartTime(referenceParsed.previewTime, selectedParsed.previewTime);
-        const shouldUseSelectedAudio = !usesSetPreviewForReplayAudio;
-        let chartStartMs = shouldUseSelectedAudio
-          ? pickPreviewStartTime(selectedParsed.previewTime)
-          : timedRateVariant
-          ? referenceStartMs
-          : usesSetPreviewForReplayAudio
-          ? pickPreviewStartTime(selectedParsed.previewTime, referenceStartMs)
-          : pickPreviewStartTime(selectedParsed.previewTime);
-        let chartTimeScale = timedRateVariant ? selectedDifficultyRate : 1;
-        let audioMode: "set-preview" | "selected-file" = shouldUseSelectedAudio ? "selected-file" : "set-preview";
+        const previewPlan = getChartPreviewPlaybackPlan({
+          selectedBeatmap: selectedParsed,
+          referenceBeatmap: referenceParsed,
+          usesSetPreviewForAudio: usesSetPreviewForReplayAudio,
+          timedRateVariant,
+          selectedDifficultyRate,
+        });
 
-        if (!hasPreviewNotes(visualParsed, chartStartMs, chartTimeScale)) {
-          visualParsed = selectedParsed;
-          chartStartMs = findDensestPreviewStartTime(selectedParsed);
-          chartTimeScale = 1;
-          audioMode = "selected-file";
-        }
-
-        setPreviewBeatmap(visualParsed);
-        setReplayChartStartMs(chartStartMs);
-        setReplayChartTimeScale(chartTimeScale);
-        setReplayAudioMode(audioMode);
+        setPreviewBeatmap(previewPlan.beatmap);
+        setReplayChartStartMs(previewPlan.startTimeMs);
+        setReplayChartTimeScale(previewPlan.timeScale);
+        setReplayAudioMode(previewPlan.audioMode);
       })
       .catch(() => {
         if (cancelled) return;

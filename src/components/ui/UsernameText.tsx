@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { getAvatarAccentStoreKey } from "../../lib/avatar-accent";
+import { AVATAR_ACCENT_VERSION, getAvatarAccentStoreKey } from "../../lib/avatar-accent";
 import { getAvatarAccents } from "../../lib/avatar";
 import { AVATAR_ACCENT_CLIENT_TTL, useAppStore } from "../../store";
 
@@ -14,7 +14,7 @@ function flushAvatarAccentQueue() {
   pendingUrls.clear();
   flushTimer = null;
 
-  getAvatarAccents({ data: { urls } })
+  getAvatarAccents({ data: { urls, version: AVATAR_ACCENT_VERSION } })
     .then((accents) => {
       useAppStore.getState().setAvatarAccents(accents);
     })
@@ -65,11 +65,13 @@ export function UsernameText({
       existing.value === null &&
       Date.now() - existing.fetchedAt < AVATAR_ACCENT_FAILURE_RETRY_TTL
     ) {
-      return;
+      const retryDelay = AVATAR_ACCENT_FAILURE_RETRY_TTL - (Date.now() - existing.fetchedAt);
+      const retryTimer = setTimeout(() => queueAvatarAccent(avatarUrl), retryDelay);
+      return () => clearTimeout(retryTimer);
     }
 
     queueAvatarAccent(avatarUrl);
-  }, [avatarUrl]);
+  }, [avatarUrl, accentEntry?.fetchedAt, accentEntry?.value]);
 
   return (
     <span

@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { GradeImg } from "#/components/ui/GradeImg";
+import { getManiaJudgementStats } from "#/components/ui/ManiaJudgementStats";
 import { ModBadge } from "#/components/ui/ModBadge";
 import { SearchInput } from "#/components/ui/SearchInput";
 import { getCountryName } from "#/lib/country";
@@ -25,18 +26,6 @@ const PLAYER_REPLAY_SECTIONS: { key: PlayerReplaySectionKey; label: string }[] =
 ];
 const PLAYER_BEATMAP_SEARCH_MIN_LENGTH = 3;
 const PLAYER_BEATMAP_SEARCH_DEBOUNCE_MS = 650;
-
-function getJudgementCounts(score: OsuScore): { label: string; value: number; tone: string }[] {
-  const stats = score.statistics ?? {};
-  return [
-    { label: "MAX", value: stats.count_geki ?? stats.perfect ?? 0, tone: "bg-[linear-gradient(180deg,#9b2cff_0%,#1d65ff_28%,#41d9ff_48%,#4fdc3a_64%,#ffe234_82%,#ff9a1f_100%)] bg-clip-text text-transparent" },
-    { label: "300", value: stats.count_300 ?? stats.great ?? 0, tone: "text-osu-yellow" },
-    { label: "200", value: stats.count_katu ?? stats.good ?? 0, tone: "text-osu-green-light" },
-    { label: "100", value: stats.count_100 ?? stats.ok ?? 0, tone: "text-osu-blue" },
-    { label: "50", value: stats.count_50 ?? stats.meh ?? 0, tone: "text-slate-400" },
-    { label: "Miss", value: stats.count_miss ?? stats.miss ?? 0, tone: "text-osu-red-light" },
-  ];
-}
 
 interface ReplayBrowseViewProps {
   mode: ReplayBrowseMode;
@@ -686,7 +675,7 @@ function PlayerBeatmapLookup({
 
 function PlayerBeatmapScoreRow({ score, onOpen }: { score: OsuScore; onOpen: () => void }) {
   const timestamp = getScoreTimestamp(score);
-  const judgements = getJudgementCounts(score);
+  const judgements = getManiaJudgementStats(score);
   const totalScore = score.total_score ?? score.classic_total_score ?? score.legacy_total_score ?? score.score;
 
   return (
@@ -710,7 +699,7 @@ function PlayerBeatmapScoreRow({ score, onOpen }: { score: OsuScore; onOpen: () 
         <div className="hidden min-w-0 flex-1 items-center gap-1.5 lg:flex">
           {judgements.map((judgement) => (
             <span key={judgement.label} className="whitespace-nowrap text-[10px] font-semibold text-osu-f1">
-              <span className={judgement.tone}>{formatNumber(judgement.value)}</span>{" "}
+              <span className={judgement.className}>{formatNumber(judgement.value)}</span>{" "}
               <span>{judgement.label}</span>
             </span>
           ))}

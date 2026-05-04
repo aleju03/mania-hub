@@ -40,9 +40,13 @@ describe("replay skin settings", () => {
       lnBodyColor: "#8b8b93",
       percy: false,
       upscroll: false,
+      keysUnderNotes: false,
       columnWidth: 50,
       columnSpacing: 0,
+      noteHeightScale: 50,
       hitPosition: 110,
+      scorePosition: 438,
+      comboPosition: 485,
       keymodeProfiles: {},
     });
   });
@@ -163,9 +167,13 @@ describe("replay skin settings", () => {
       lnBodyColor: "#8b8b93",
       percy: true,
       upscroll: false,
+      keysUnderNotes: false,
       columnWidth: 50,
       columnSpacing: 0,
+      noteHeightScale: 50,
       hitPosition: 110,
+      scorePosition: 438,
+      comboPosition: 485,
       keymodeProfiles: {},
     });
     expect(readReplaySkinSettings()).toEqual({
@@ -178,9 +186,13 @@ describe("replay skin settings", () => {
       lnBodyColor: "#8b8b93",
       percy: true,
       upscroll: false,
+      keysUnderNotes: false,
       columnWidth: 50,
       columnSpacing: 0,
+      noteHeightScale: 50,
       hitPosition: 110,
+      scorePosition: 438,
+      comboPosition: 485,
       keymodeProfiles: {},
     });
   });

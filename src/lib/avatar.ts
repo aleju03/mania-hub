@@ -12,6 +12,10 @@ function edgeCache(sMaxage: number, swr?: number): void {
   );
 }
 
+function noStore(): void {
+  setResponseHeader("Cache-Control", "no-store");
+}
+
 interface RgbColor {
   r: number;
   g: number;
@@ -341,9 +345,11 @@ export const getAvatarAccent = createServerFn({ method: "GET" })
   });
 
 export const getAvatarAccents = createServerFn({ method: "GET" })
-  .inputValidator((data: { urls: string[] }) => data)
-  .handler(async ({ data }: { data: { urls: string[] } }) => {
-    edgeCache(86400, 604800);
+  .inputValidator((data: { urls: string[]; version?: number }) => data)
+  .handler(async ({ data }: { data: { urls: string[]; version?: number } }) => {
+    // Individual avatar accents are cached below. The batch response can include
+    // transient nulls, so shared HTTP caches must not keep the whole batch.
+    noStore();
     if (!Array.isArray(data.urls) || data.urls.length > AVATAR_ACCENT_MAX_URLS) {
       throw new Error(`Avatar accent requests are limited to ${AVATAR_ACCENT_MAX_URLS} URLs.`);
     }

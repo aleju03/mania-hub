@@ -5,6 +5,7 @@ import {
   RANDOM_REPLAY_PREVIEW_MS,
   buildAutoplayFrames,
   findDensestPreviewStartTime,
+  getChartPreviewPlaybackPlan,
   hasPreviewNotes,
   getPreviewNotes,
   getPreviewScrollVelocities,
@@ -80,5 +81,92 @@ describe("chart preview helpers", () => {
     expect(hasPreviewNotes(beatmap, beatmap.previewTime)).toBe(false);
     expect(findDensestPreviewStartTime(beatmap)).toBe(39_000);
     expect(hasPreviewNotes(beatmap, findDensestPreviewStartTime(beatmap))).toBe(true);
+  });
+
+  it("uses a dense selected-file preview when the mapped preview time is missing", () => {
+    const beatmap: ManiaBeatmap = {
+      ...baseBeatmap,
+      previewTime: -1,
+      notes: [
+        { column: 0, time: 1_000, endTime: 1_000, isHold: false },
+        { column: 1, time: 1_500, endTime: 1_500, isHold: false },
+        { column: 0, time: 40_000, endTime: 40_000, isHold: false },
+        { column: 1, time: 40_250, endTime: 40_250, isHold: false },
+        { column: 2, time: 40_500, endTime: 40_500, isHold: false },
+        { column: 3, time: 40_750, endTime: 40_750, isHold: false },
+      ],
+    };
+
+    expect(hasPreviewNotes(beatmap, pickPreviewStartTime(beatmap.previewTime))).toBe(true);
+
+    const plan = getChartPreviewPlaybackPlan({
+      selectedBeatmap: beatmap,
+      usesSetPreviewForAudio: true,
+      timedRateVariant: false,
+      selectedDifficultyRate: 1,
+    });
+
+    expect(plan.beatmap).toBe(beatmap);
+    expect(plan.startTimeMs).toBe(39_000);
+    expect(plan.timeScale).toBe(1);
+    expect(plan.audioMode).toBe("selected-file");
+  });
+
+  it("can use a mapped reference preview for timed rate variants", () => {
+    const selectedBeatmap: ManiaBeatmap = {
+      ...baseBeatmap,
+      previewTime: -1,
+      notes: [
+        { column: 0, time: 60_000, endTime: 60_000, isHold: false },
+        { column: 1, time: 60_500, endTime: 60_500, isHold: false },
+      ],
+    };
+    const referenceBeatmap: ManiaBeatmap = {
+      ...baseBeatmap,
+      previewTime: 60_000,
+      notes: selectedBeatmap.notes,
+    };
+
+    const plan = getChartPreviewPlaybackPlan({
+      selectedBeatmap,
+      referenceBeatmap,
+      usesSetPreviewForAudio: true,
+      timedRateVariant: true,
+      selectedDifficultyRate: 1.5,
+    });
+
+    expect(plan.beatmap).toBe(referenceBeatmap);
+    expect(plan.startTimeMs).toBe(60_000);
+    expect(plan.timeScale).toBe(1.5);
+    expect(plan.audioMode).toBe("set-preview");
+  });
+
+  it("keeps set preview audio for timed rate variants with no mapped preview when notes are visible", () => {
+    const selectedBeatmap: ManiaBeatmap = {
+      ...baseBeatmap,
+      previewTime: -1,
+      notes: [
+        { column: 0, time: 1_000, endTime: 1_000, isHold: false },
+        { column: 1, time: 1_500, endTime: 1_500, isHold: false },
+      ],
+    };
+    const referenceBeatmap: ManiaBeatmap = {
+      ...baseBeatmap,
+      previewTime: -1,
+      notes: selectedBeatmap.notes,
+    };
+
+    const plan = getChartPreviewPlaybackPlan({
+      selectedBeatmap,
+      referenceBeatmap,
+      usesSetPreviewForAudio: true,
+      timedRateVariant: true,
+      selectedDifficultyRate: 1.4,
+    });
+
+    expect(plan.beatmap).toBe(referenceBeatmap);
+    expect(plan.startTimeMs).toBe(0);
+    expect(plan.timeScale).toBe(1.4);
+    expect(plan.audioMode).toBe("set-preview");
   });
 });
