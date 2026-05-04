@@ -12,7 +12,7 @@ import { db, ensureCacheSchema } from "./db";
 const REPLAY_CACHE_BUCKET = "mania-hub-replay-cache";
 const REPLAY_CACHE_PREFIX = "replay-cache/";
 const SIGNED_URL_EXPIRES_SECONDS = 6 * 60 * 60;
-const DEFAULT_MAX_CACHE_BYTES = 2 * 1024 * 1024 * 1024;
+const DEFAULT_MAX_CACHE_BYTES = 2.5 * 1024 * 1024 * 1024;
 
 export type BeatmapAssetKind = "audio" | "background";
 
