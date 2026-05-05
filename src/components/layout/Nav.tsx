@@ -97,7 +97,9 @@ export function Nav() {
   const selectedCountry = routeCountry ?? fallbackCountry;
   const devMode = auth.canUseDevFeatures;
   const adminMode = auth.canUseAdminFeatures;
-  const devToolsLabel = adminMode ? "Admin" : "🥷";
+  const devToolsLabel = adminMode ? "Admin" : (
+    <img src="/images/icons/ninja.svg" alt="Ninja" draggable={false} className="h-4 w-4" />
+  );
   const devToolsTitle = adminMode ? "Admin tools" : "Dev tools";
   const returnTo = `${location.pathname}${location.searchStr}`;
   const loginHref = `/api/auth/osu?next=${encodeURIComponent(returnTo)}`;
