@@ -23,6 +23,16 @@ const scope = countries.length === 0 ? "all countries" : countries.join(", ");
 
 const db = createClient({ url, authToken });
 
+async function hasColumn(table, column) {
+  const result = await db.execute(`PRAGMA table_info("${table.replaceAll('"', '""')}")`);
+  return result.rows.some((row) => row.name === column);
+}
+
+function cachePrefix(prefix) {
+  const separatorIndex = prefix.indexOf(":");
+  return separatorIndex >= 0 ? prefix.slice(0, separatorIndex) : prefix;
+}
+
 // (table, column, keyPrefix) triples. The response cache + snipe log are
 // country-scoped; the snapshot is stored with the current schema version in
 // its key, so we wildcard across all versions to catch older shapes too.
@@ -44,12 +54,16 @@ function buildPatterns(prefix) {
   ]);
 }
 
+const cacheEntriesHasPrefix = await hasColumn("cache_entries", "cache_prefix");
 let total = 0;
 for (const { table, column, prefix } of targets) {
   for (const pattern of buildPatterns(prefix)) {
+    const canUseCachePrefix = table === "cache_entries" && cacheEntriesHasPrefix;
     const result = await db.execute({
-      sql: `DELETE FROM ${table} WHERE ${column} LIKE ?`,
-      args: [pattern],
+      sql: canUseCachePrefix
+        ? `DELETE FROM ${table} WHERE cache_prefix = ? AND ${column} LIKE ?`
+        : `DELETE FROM ${table} WHERE ${column} LIKE ?`,
+      args: canUseCachePrefix ? [cachePrefix(prefix), pattern] : [pattern],
     });
     const n = result.rowsAffected ?? 0;
     if (n > 0) {

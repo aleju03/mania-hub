@@ -24,15 +24,37 @@ export async function ensureCacheSchema(): Promise<void> {
     await db.execute(`
       CREATE TABLE IF NOT EXISTS cache_entries (
         cache_key TEXT PRIMARY KEY,
+        cache_prefix TEXT NOT NULL DEFAULT '',
         cache_value TEXT NOT NULL,
         expires_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       )
     `);
 
+    try {
+      await db.execute("ALTER TABLE cache_entries ADD COLUMN cache_prefix TEXT NOT NULL DEFAULT ''");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/duplicate column|already exists/i.test(message)) throw error;
+    }
+
+    await db.execute(`
+      UPDATE cache_entries
+      SET cache_prefix = CASE
+        WHEN instr(cache_key, ':') > 0 THEN substr(cache_key, 1, instr(cache_key, ':') - 1)
+        ELSE cache_key
+      END
+      WHERE cache_prefix = ''
+    `);
+
     await db.execute(`
       CREATE INDEX IF NOT EXISTS idx_cache_entries_expires_at
       ON cache_entries (expires_at)
+    `);
+
+    await db.execute(`
+      CREATE INDEX IF NOT EXISTS idx_cache_entries_prefix_expires
+      ON cache_entries (cache_prefix, expires_at)
     `);
 
     await db.execute(`
@@ -49,6 +71,11 @@ export async function ensureCacheSchema(): Promise<void> {
       const message = error instanceof Error ? error.message : String(error);
       if (!/duplicate column|already exists/i.test(message)) throw error;
     }
+
+    await db.execute(`
+      CREATE INDEX IF NOT EXISTS idx_cache_locks_expires_at
+      ON cache_locks (expires_at)
+    `);
 
     await db.execute(`
       CREATE TABLE IF NOT EXISTS country_top_plays (
@@ -79,6 +106,11 @@ export async function ensureCacheSchema(): Promise<void> {
     `);
 
     await db.execute(`
+      CREATE INDEX IF NOT EXISTS idx_country_top_plays_country_pp_time
+      ON country_top_plays (country, pp DESC, score_time DESC)
+    `);
+
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS beatmap_asset_cache (
         storage_key TEXT PRIMARY KEY,
         beatmapset_id TEXT NOT NULL,
@@ -100,6 +132,26 @@ export async function ensureCacheSchema(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_beatmap_asset_cache_set_kind
       ON beatmap_asset_cache (beatmapset_id, kind)
     `);
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS beatmap_asset_cache_stats (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        total_size_bytes INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL
+      )
+    `);
+
+    await db.execute({
+      sql: `
+        INSERT INTO beatmap_asset_cache_stats (id, total_size_bytes, updated_at)
+        SELECT 1, COALESCE(SUM(size_bytes), 0), ?
+        FROM beatmap_asset_cache
+        WHERE NOT EXISTS (
+          SELECT 1 FROM beatmap_asset_cache_stats WHERE id = 1
+        )
+      `,
+      args: [Date.now()],
+    });
   })().catch((error) => {
     cacheSchemaReady = null;
     throw error;

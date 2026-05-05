@@ -1552,7 +1552,7 @@ async function getStoredCountryTopPlays(country: string, window: PopoffWindow): 
     const result = await db.execute({
       sql: `
         SELECT user_id, username, avatar_url, score_json, pp, weighted_pp, pp_gain, score_time
-        FROM country_top_plays
+        FROM country_top_plays INDEXED BY idx_country_top_plays_country_pp_time
         WHERE country = ?
           AND score_time >= ?
         ORDER BY pp DESC, score_time DESC

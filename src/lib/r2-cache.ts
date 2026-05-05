@@ -13,6 +13,7 @@ const REPLAY_CACHE_BUCKET = "mania-hub-replay-cache";
 const REPLAY_CACHE_PREFIX = "replay-cache/";
 const SIGNED_URL_EXPIRES_SECONDS = 6 * 60 * 60;
 const DEFAULT_MAX_CACHE_BYTES = 2.5 * 1024 * 1024 * 1024;
+const BEATMAP_ASSET_CACHE_STATS_ID = 1;
 
 export type BeatmapAssetKind = "audio" | "background";
 
@@ -104,6 +105,49 @@ async function touchAssetRow(storageKey: string, now: number): Promise<void> {
   });
 }
 
+async function adjustBeatmapAssetCacheTotal(deltaBytes: number, now: number): Promise<void> {
+  if (!db || !Number.isFinite(deltaBytes)) return;
+  await db.execute({
+    sql: `
+      INSERT INTO beatmap_asset_cache_stats (id, total_size_bytes, updated_at)
+      VALUES (?, MAX(0, ?), ?)
+      ON CONFLICT(id) DO UPDATE SET
+        total_size_bytes = MAX(0, total_size_bytes + ?),
+        updated_at = excluded.updated_at
+    `,
+    args: [BEATMAP_ASSET_CACHE_STATS_ID, deltaBytes, now, deltaBytes],
+  });
+}
+
+async function rebuildBeatmapAssetCacheTotal(now: number): Promise<number> {
+  if (!db) return 0;
+  const totalResult = await db.execute("SELECT COALESCE(SUM(size_bytes), 0) AS total_bytes FROM beatmap_asset_cache");
+  const totalBytes = Number(totalResult.rows[0]?.total_bytes ?? 0);
+  const safeTotalBytes = Number.isFinite(totalBytes) ? Math.max(0, totalBytes) : 0;
+  await db.execute({
+    sql: `
+      INSERT INTO beatmap_asset_cache_stats (id, total_size_bytes, updated_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        total_size_bytes = excluded.total_size_bytes,
+        updated_at = excluded.updated_at
+    `,
+    args: [BEATMAP_ASSET_CACHE_STATS_ID, safeTotalBytes, now],
+  });
+  return safeTotalBytes;
+}
+
+async function readBeatmapAssetCacheTotal(now: number): Promise<number> {
+  if (!db) return 0;
+  const totalResult = await db.execute({
+    sql: "SELECT total_size_bytes FROM beatmap_asset_cache_stats WHERE id = ? LIMIT 1",
+    args: [BEATMAP_ASSET_CACHE_STATS_ID],
+  });
+  const totalBytes = Number(totalResult.rows[0]?.total_size_bytes);
+  if (Number.isFinite(totalBytes)) return Math.max(0, totalBytes);
+  return rebuildBeatmapAssetCacheTotal(now);
+}
+
 export async function getCachedBeatmapAssetUrl(
   kind: BeatmapAssetKind,
   beatmapsetId: string,
@@ -159,19 +203,38 @@ export async function putBeatmapAssetAndGetUrl(
   const now = Date.now();
   if (db) {
     await ensureCacheSchema();
-    await db.execute({
-      sql: `
-        INSERT INTO beatmap_asset_cache (
-          storage_key, beatmapset_id, filename, kind, mime_type, size_bytes, last_accessed_at, created_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(storage_key) DO UPDATE SET
-          mime_type = excluded.mime_type,
-          size_bytes = excluded.size_bytes,
-          last_accessed_at = excluded.last_accessed_at
-      `,
-      args: [storageKey, beatmapsetId, filename, kind, mimeType, buffer.length, now, now],
+    const existing = await db.execute({
+      sql: "SELECT size_bytes FROM beatmap_asset_cache WHERE storage_key = ? LIMIT 1",
+      args: [storageKey],
     });
+    const previousSizeBytes = Number(existing.rows[0]?.size_bytes ?? 0);
+    const deltaBytes = buffer.length - (Number.isFinite(previousSizeBytes) ? previousSizeBytes : 0);
+
+    await db.batch([
+      {
+        sql: `
+          INSERT INTO beatmap_asset_cache (
+            storage_key, beatmapset_id, filename, kind, mime_type, size_bytes, last_accessed_at, created_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(storage_key) DO UPDATE SET
+            mime_type = excluded.mime_type,
+            size_bytes = excluded.size_bytes,
+            last_accessed_at = excluded.last_accessed_at
+        `,
+        args: [storageKey, beatmapsetId, filename, kind, mimeType, buffer.length, now, now],
+      },
+      {
+        sql: `
+          INSERT INTO beatmap_asset_cache_stats (id, total_size_bytes, updated_at)
+          VALUES (?, MAX(0, ?), ?)
+          ON CONFLICT(id) DO UPDATE SET
+            total_size_bytes = MAX(0, total_size_bytes + ?),
+            updated_at = excluded.updated_at
+        `,
+        args: [BEATMAP_ASSET_CACHE_STATS_ID, deltaBytes, now, deltaBytes],
+      },
+    ]);
 
     void runReplayCacheCleanup();
   }
@@ -197,8 +260,7 @@ async function cleanupReplayCacheByLru(): Promise<void> {
   if (!r2 || !db) return;
 
   await ensureCacheSchema();
-  const totalResult = await db.execute("SELECT COALESCE(SUM(size_bytes), 0) AS total_bytes FROM beatmap_asset_cache");
-  const totalBytes = Number(totalResult.rows[0]?.total_bytes ?? 0);
+  const totalBytes = await readBeatmapAssetCacheTotal(Date.now());
   const maxBytes = getMaxCacheBytes();
   if (!Number.isFinite(totalBytes) || totalBytes <= maxBytes) return;
 
@@ -223,10 +285,13 @@ async function cleanupReplayCacheByLru(): Promise<void> {
       Bucket: REPLAY_CACHE_BUCKET,
       Key: storageKey,
     }));
-    await db.execute({
+    const deleteResult = await db.execute({
       sql: "DELETE FROM beatmap_asset_cache WHERE storage_key = ?",
       args: [storageKey],
     });
+    if ((deleteResult.rowsAffected ?? 0) > 0) {
+      await adjustBeatmapAssetCacheTotal(-sizeBytes, Date.now());
+    }
     bytesToRemove -= Number.isFinite(sizeBytes) ? sizeBytes : 0;
   }
 }

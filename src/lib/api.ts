@@ -74,6 +74,11 @@ function warnCacheIssue(action: string, key: string, error: unknown): void {
   console.warn(`[cache] ${action} failed for "${key}": ${message}`);
 }
 
+function getCacheKeyPrefix(key: string): string {
+  const separatorIndex = key.indexOf(":");
+  return separatorIndex >= 0 ? key.slice(0, separatorIndex) : key;
+}
+
 function makeLockOwner(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
@@ -360,14 +365,15 @@ export async function setPersistentCache(key: string, data: unknown, ttlMs = CAC
     const encoded = await encodeCacheValue(data);
     await db.execute({
       sql: `
-        INSERT INTO cache_entries (cache_key, cache_value, expires_at, updated_at)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO cache_entries (cache_key, cache_prefix, cache_value, expires_at, updated_at)
+        VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(cache_key) DO UPDATE SET
+          cache_prefix = excluded.cache_prefix,
           cache_value = excluded.cache_value,
           expires_at = excluded.expires_at,
           updated_at = excluded.updated_at
       `,
-      args: [key, encoded, expiresAt, Date.now()],
+      args: [key, getCacheKeyPrefix(key), encoded, expiresAt, Date.now()],
     });
     scheduleOpportunisticPurge();
   } catch (error) {
@@ -380,12 +386,33 @@ export async function setPersistentCache(key: string, data: unknown, ttlMs = CAC
 const LOCK_WAIT_MS = 300;
 const LOCK_WAIT_RETRIES = 5;
 const DEFAULT_LOCK_TTL = 15_000;
+const LOCK_PURGE_BATCH_SIZE = 250;
+
+async function purgeExpiredCacheLocks(now: number): Promise<void> {
+  if (!hasDb() || !db) return;
+  try {
+    await db.execute({
+      sql: `
+        DELETE FROM cache_locks
+        WHERE lock_key IN (
+          SELECT lock_key FROM cache_locks
+          WHERE expires_at <= ?
+          LIMIT ?
+        )
+      `,
+      args: [now, LOCK_PURGE_BATCH_SIZE],
+    });
+  } catch (error) {
+    warnCacheIssue("purge expired locks", "cache_locks", error);
+  }
+}
 
 async function acquireCacheLock(key: string, lockTtlMs: number): Promise<string | null> {
   if (!hasDb() || !db) return makeLockOwner();
   try {
     await ensureCacheSchema();
     const now = Date.now();
+    await purgeExpiredCacheLocks(now);
     const owner = makeLockOwner();
     const results = await db.batch([
       {
@@ -588,8 +615,8 @@ export async function deleteExpiredCacheEntriesByPrefix(
     await ensureCacheSchema();
     const threshold = Date.now() - olderThanMs;
     await db.execute({
-      sql: "DELETE FROM cache_entries WHERE cache_key LIKE ? AND expires_at < ?",
-      args: [`${prefix}%`, threshold],
+      sql: "DELETE FROM cache_entries WHERE cache_prefix = ? AND expires_at < ?",
+      args: [getCacheKeyPrefix(prefix), threshold],
     });
   } catch (error) {
     warnCacheIssue("cleanup expired entries", prefix, error);
