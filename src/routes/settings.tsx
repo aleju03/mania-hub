@@ -76,12 +76,11 @@ const STYLE_LABELS: Record<ReplaySkinStyle, string> = {
   arrows: "Arrows",
 };
 
-type TabId = "skin" | "viewer" | "overlay" | "audio";
+type TabId = "skin" | "viewer" | "overlay";
 const TABS: { id: TabId; label: string }[] = [
   { id: "skin", label: "skin & layout" },
-  { id: "viewer", label: "viewer" },
+  { id: "viewer", label: "viewer defaults" },
   { id: "overlay", label: "input overlay" },
-  { id: "audio", label: "audio" },
 ];
 
 function SettingsPage() {
@@ -165,6 +164,12 @@ function SettingsPage() {
                 setBgDim(normalized);
                 writeReplayBackgroundDim(normalized);
               }}
+              volume={volume}
+              onVolumeChange={(value) => {
+                const normalized = normalizeReplayVolume(value / 100);
+                setVolume(normalized);
+                writeReplayVolume(normalized);
+              }}
             />
           ) : null}
           {activeTab === "overlay" ? (
@@ -184,16 +189,6 @@ function SettingsPage() {
                 const normalized = normalizeReplayInputColor(value);
                 setInputOverlayColor(normalized);
                 writeReplayInputColor(normalized);
-              }}
-            />
-          ) : null}
-          {activeTab === "audio" ? (
-            <AudioPanel
-              volume={volume}
-              onChange={(value) => {
-                const normalized = normalizeReplayVolume(value / 100);
-                setVolume(normalized);
-                writeReplayVolume(normalized);
               }}
             />
           ) : null}
@@ -317,12 +312,18 @@ function ViewerPanel({
   onScrollSpeedChange,
   bgDim,
   onBgDimChange,
+  volume,
+  onVolumeChange,
 }: {
   scrollSpeed: number;
   onScrollSpeedChange: (value: number) => void;
   bgDim: number;
   onBgDimChange: (value: number) => void;
+  volume: number;
+  onVolumeChange: (value: number) => void;
 }) {
+  const volumePercent = Math.round(volume * 100);
+
   return (
     <div className="space-y-6">
       <PanelGroup label="Scroll speed">
@@ -344,6 +345,22 @@ function ViewerPanel({
           onChange={onBgDimChange}
           hint="Darkens the beatmap background so notes stay readable."
         />
+      </PanelGroup>
+      <PanelGroup label="Default volume">
+        <div className="flex items-center gap-3">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-osu-b3/40 bg-osu-b5/55 text-osu-pink-light">
+            <VolumeIcon volume={volume} className="h-4 w-4" />
+          </span>
+          <PercentSlider
+            value={volumePercent}
+            min={0}
+            max={100}
+            step={5}
+            onChange={onVolumeChange}
+            hint="Used when a replay or map preview opens."
+            className="flex-1"
+          />
+        </div>
       </PanelGroup>
     </div>
   );
@@ -407,32 +424,6 @@ function OverlayPanel({
               aria-label="Input overlay color"
             />
           </label>
-        </div>
-      </PanelGroup>
-    </div>
-  );
-}
-
-function AudioPanel({ volume, onChange }: { volume: number; onChange: (value: number) => void }) {
-  const percent = Math.round(volume * 100);
-  return (
-    <div className="space-y-6">
-      <PanelGroup label="Default volume">
-        <div className="space-y-3">
-          <div className="flex items-center gap-3">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-osu-b3/40 bg-osu-b5/55 text-osu-pink-light">
-              <VolumeIcon volume={volume} className="h-4 w-4" />
-            </span>
-            <PercentSlider
-              value={percent}
-              min={0}
-              max={100}
-              step={5}
-              onChange={onChange}
-              hint="Used when a replay or map preview opens."
-              className="flex-1"
-            />
-          </div>
         </div>
       </PanelGroup>
     </div>

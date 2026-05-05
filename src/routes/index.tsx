@@ -31,6 +31,7 @@ export const Route = createFileRoute("/")({
       path: withSearchParams("/", { country }),
       origin: match.context.origin,
       imageCountry: country,
+      social: Boolean(country),
     });
   },
   component: HomePage,
