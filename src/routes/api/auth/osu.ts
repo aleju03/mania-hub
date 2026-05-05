@@ -1,9 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import {
-  createOAuthStateCookieHeader,
-  getAuthRedirectUri,
-  normalizeAuthNext,
-} from "#/lib/auth";
 
 function appendCookies(response: Response, cookies: string[]): Response {
   for (const cookie of cookies) response.headers.append("Set-Cookie", cookie);
@@ -21,6 +16,11 @@ export const Route = createFileRoute("/api/auth/osu")({
   server: {
     handlers: {
       GET: async ({ request }) => {
+        const {
+          createOAuthStateCookieHeader,
+          getAuthRedirectUri,
+          normalizeAuthNext,
+        } = await import("#/lib/auth-server");
         const clientId = process.env.OSU_CLIENT_ID;
         const clientSecret = process.env.OSU_CLIENT_SECRET;
         if (!clientId || !clientSecret) {

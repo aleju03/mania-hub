@@ -1,11 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import {
-  clearOAuthStateCookieHeader,
-  createAuthCookieHeader,
-  exchangeOsuCodeForViewer,
-  normalizeAuthNext,
-  readOAuthStateCookie,
-} from "#/lib/auth";
 import { AUTH_STATE_COOKIE_NAME } from "#/lib/auth-shared";
 
 function getCookieFromHeader(cookieHeader: string | null, name: string): string | undefined {
@@ -33,6 +26,13 @@ export const Route = createFileRoute("/api/auth/osu/callback")({
   server: {
     handlers: {
       GET: async ({ request }) => {
+        const {
+          clearOAuthStateCookieHeader,
+          createAuthCookieHeader,
+          exchangeOsuCodeForViewer,
+          normalizeAuthNext,
+          readOAuthStateCookie,
+        } = await import("#/lib/auth-server");
         const url = new URL(request.url);
         const clearState = clearOAuthStateCookieHeader(request);
         const fallbackNext = normalizeAuthNext(url.searchParams.get("next"), request);
