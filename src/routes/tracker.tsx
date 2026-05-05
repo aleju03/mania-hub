@@ -92,7 +92,6 @@ function ScoresPage() {
   const [initialRefreshDone, setInitialRefreshDone] = useState(false);
   const [initialFetching, setInitialFetching] = useState(false);
   const [polling, setPolling] = useState(false);
-  const [scanProgress, setScanProgress] = useState(0);
   const refreshing = initialFetching || polling;
   const initialFetchInFlightRef = useRef(false);
   const pollInFlightRef = useRef(false);
@@ -113,7 +112,6 @@ function ScoresPage() {
     setInitialRefreshDone(false);
     setInitialFetching(false);
     setPolling(false);
-    setScanProgress(0);
     initialFetchInFlightRef.current = false;
     pollInFlightRef.current = false;
     pollRequestIdRef.current += 1;
@@ -200,7 +198,6 @@ function ScoresPage() {
 
     initialFetchInFlightRef.current = true;
     setInitialFetching(true);
-    setScanProgress(0);
 
     (async () => {
       const totalBatches = Math.ceil(requestedUserIds.length / BATCH);
@@ -214,7 +211,6 @@ function ScoresPage() {
           if (result.scores.length > 0) addFeedScores(requestedCountry, result.scores);
           if (Object.keys(result.gains).length > 0) setTrackerPpGains(requestedCountry, result.gains);
           setInitialLoaded(true);
-          setScanProgress(((b + 1) / totalBatches) * 100);
         } catch { /* continue */ }
       }
       if (!cancelled) {
@@ -379,9 +375,7 @@ function ScoresPage() {
                 <span className="text-[10px] text-osu-f1 tabular-nums">
                   {loadingPlayers
                     ? "Loading tracked players..."
-                    : !initialRefreshDone
-                      ? `Refreshing... ${Math.min(99, Math.floor(scanProgress))}%`
-                      : "Refreshing..."}
+                    : "Refreshing..."}
                 </span>
               </>
             ) : (

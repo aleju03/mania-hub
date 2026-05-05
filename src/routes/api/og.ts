@@ -1,10 +1,10 @@
 import { ImageResponse } from "@vercel/og";
 import { createFileRoute } from "@tanstack/react-router";
 import { createElement as h } from "react";
-import { getCachedUser, getCachedUserScores, getRankings, getCountryMapsFarmed, getCountrySnipes, getScore } from "../../lib/osu";
+import { getCachedUser, getCachedUserScores, getRankings, getCountryMapsFarmed, getCountryMapsFavourites, getCountrySnipes, getScore } from "../../lib/osu";
 import { getCountryName, isSupportedCountryCode } from "../../lib/country";
 import { getAssetOrigin } from "../../lib/origin";
-import type { MapsFarmedEntry, OsuScore } from "../../lib/types";
+import type { OsuCovers, OsuScore } from "../../lib/types";
 
 const WIDTH = 1200;
 const HEIGHT = 630;
@@ -416,18 +416,67 @@ async function renderTopPlaysOg(request: Request, country: string): Promise<Resp
   return response;
 }
 
-/* Maps: 3 beatmap covers tiled horizontally, representing what the country
-   top player is currently farming. Different from top-plays (one big score)
-   because here the focus is on the *maps*, not a single popoff. */
+/* Maps: full-bleed mosaic of beatmapset covers pulled from the country's
+   favourites pool. The pool is country-seeded so the same OG renders
+   stable across requests until the underlying cache rebuilds. If we
+   have no maps data for the country, fall through to the country
+   scoreboard layout. */
+const MAPS_MOSAIC_COLS = 6;
+const MAPS_MOSAIC_ROWS = 3;
+const MAPS_MOSAIC_COUNT = MAPS_MOSAIC_COLS * MAPS_MOSAIC_ROWS;
+
+// Deterministic small-state PRNG. Seeded by country code so mosaics are
+// stable per-country until the source data rebuilds.
+function mulberry32(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function hashString(input: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function shuffle<T>(arr: T[], rng: () => number): T[] {
+  const out = arr.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 async function renderMapsOg(request: Request, country: string): Promise<Response> {
-  const [regularFont, heavyFont, users] = await Promise.all([
-    getFont(request, "Torus-Regular.otf"),
-    getFont(request, "Torus-Heavy.otf"),
-    fetchCountryMapUsers(country),
-  ]);
-  const farmedSection = await getCountryMapsFarmed({ data: { users } });
-  const farmedMaps = farmedSection.value.farmed.slice(0, 3);
-  if (farmedMaps.length === 0) throw new Error("no maps to show");
+  const users = await fetchCountryMapUsers(country);
+  // Pull the favourites section: the beatmapsetsPool gives us a wide variety
+  // of sets the country actually plays. Warm-cache hit = no osu! API calls.
+  const favSection = await getCountryMapsFavourites({ data: { users } });
+  const pool = favSection.value.beatmapsetsPool;
+  const sets = pool ? Object.values(pool) : [];
+  if (sets.length === 0) {
+    // No maps data for this country: fall through to the scoreboard layout.
+    return renderCountryOg(request, country, `${getCountryName(country) || country} maps`);
+  }
+
+  const rng = mulberry32(hashString(country));
+  const picked = shuffle(sets, rng).slice(0, MAPS_MOSAIC_COUNT);
+  // If the pool is smaller than the grid, repeat (still shuffled) so we
+  // always fill the canvas instead of leaving blank cells.
+  while (picked.length < MAPS_MOSAIC_COUNT && sets.length > 0) {
+    picked.push(...shuffle(sets, rng).slice(0, MAPS_MOSAIC_COUNT - picked.length));
+  }
+
+  const [regularFont, heavyFont] = await loadOgFonts(request);
 
   const countryName = getCountryName(country) || country;
   const flagUrl = `https://osu.ppy.sh/images/flags/${country}.png`;
@@ -443,92 +492,153 @@ async function renderMapsOg(request: Request, country: string): Promise<Response
           flexDirection: "column",
           position: "relative",
           overflow: "hidden",
-          background: "linear-gradient(135deg, #140f12 0%, #2a1a26 100%)",
+          background: "#0b070a",
           fontFamily: '"Torus OG"',
           color: "#ffffff",
-          padding: "56px 60px",
         },
       },
       [
-        h("div", {
-          key: "glow",
-          style: {
-            position: "absolute",
-            inset: "0",
-            background: "radial-gradient(circle at 50% 20%, rgba(255,102,170,0.14) 0%, rgba(255,102,170,0) 55%)",
-          },
-        }),
-
-        // Header
-        h(
-          "div",
-          {
-            key: "header",
-            style: {
-              position: "relative",
-              display: "flex",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: "16px",
-              marginBottom: "28px",
-            },
-          },
-          [
-            h("img", {
-              key: "flag",
-              src: flagUrl,
-              style: { width: "52px", height: "35px", borderRadius: "4px", objectFit: "cover" },
-            }),
-            h(
-              "div",
-              {
-                key: "title",
-                style: { fontSize: "40px", fontWeight: 900 },
-              },
-              `${countryName}'s farmed maps`,
-            ),
-          ],
-        ),
-
-        // Grid of 3 map cards.
+        // Mosaic grid: explicit pixel dims so Satori's flex impl
+        // doesn't collapse the rows/cells.
         h(
           "div",
           {
             key: "grid",
             style: {
-              position: "relative",
+              position: "absolute",
+              inset: "0",
               display: "flex",
-              flexDirection: "row",
-              flex: "1",
-              gap: "18px",
+              flexDirection: "column",
+              width: `${WIDTH}px`,
+              height: `${HEIGHT}px`,
             },
           },
-          farmedMaps.map((map, i) => farmedMapCard(map, i)),
+          Array.from({ length: MAPS_MOSAIC_ROWS }, (_, r) =>
+            h(
+              "div",
+              {
+                key: `row-${r}`,
+                style: {
+                  display: "flex",
+                  flexDirection: "row",
+                  width: `${WIDTH}px`,
+                  height: `${HEIGHT / MAPS_MOSAIC_ROWS}px`,
+                },
+              },
+              Array.from({ length: MAPS_MOSAIC_COLS }, (_, c) => {
+                const set = picked[r * MAPS_MOSAIC_COLS + c];
+                const cover = set ? pickCover(set.covers) : null;
+                return h(
+                  "div",
+                  {
+                    key: `cell-${r}-${c}`,
+                    style: {
+                      display: "flex",
+                      width: `${WIDTH / MAPS_MOSAIC_COLS}px`,
+                      height: `${HEIGHT / MAPS_MOSAIC_ROWS}px`,
+                      overflow: "hidden",
+                      background: "#1a1317",
+                    },
+                  },
+                  cover
+                    ? h("img", {
+                        src: cover,
+                        style: {
+                          width: `${WIDTH / MAPS_MOSAIC_COLS}px`,
+                          height: `${HEIGHT / MAPS_MOSAIC_ROWS}px`,
+                          objectFit: "cover",
+                        },
+                      })
+                    : null,
+                );
+              }),
+            ),
+          ),
         ),
 
+        // Bottom gradient overlay carrying the title, flag, and brand.
         h(
           "div",
           {
-            key: "footer",
+            key: "overlay",
             style: {
-              position: "relative",
+              position: "absolute",
+              left: "0",
+              right: "0",
+              bottom: "0",
               display: "flex",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: "12px",
-              marginTop: "20px",
-              fontSize: "20px",
-              color: "#7a6b74",
+              flexDirection: "column",
+              padding: "120px 60px 40px",
+              background:
+                "linear-gradient(180deg, rgba(11,7,10,0) 0%, rgba(11,7,10,0.65) 50%, rgba(11,7,10,0.95) 100%)",
             },
           },
           [
             h(
               "div",
-              { key: "by" },
-              `${users.length} top players`,
+              {
+                key: "title-row",
+                style: {
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: "18px",
+                },
+              },
+              [
+                h("img", {
+                  key: "flag",
+                  src: flagUrl,
+                  style: {
+                    width: "56px",
+                    height: "38px",
+                    borderRadius: "4px",
+                    objectFit: "cover",
+                    border: "1px solid rgba(255,255,255,0.15)",
+                  },
+                }),
+                h(
+                  "div",
+                  {
+                    key: "title",
+                    style: {
+                      fontSize: "54px",
+                      fontWeight: 900,
+                      lineHeight: "1.0",
+                    },
+                  },
+                  `${countryName}'s mania maps`,
+                ),
+              ],
             ),
-            h("div", { key: "dot", style: { color: "#5a4a52" } }, "/"),
-            h("div", { key: "mark" }, "o!mania tracker"),
+            h(
+              "div",
+              {
+                key: "sub",
+                style: {
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: "12px",
+                  marginTop: "10px",
+                  fontSize: "20px",
+                  color: "#c7b8c1",
+                },
+              },
+              [
+                h(
+                  "div",
+                  { key: "pool" },
+                  `${sets.length} maps in rotation across ${users.length} top players`,
+                ),
+                h("div", { key: "dot", style: { color: "#5a4a52" } }, "/"),
+                h(
+                  "div",
+                  { key: "brand", style: { color: "#7a6b74", letterSpacing: "0.06em" } },
+                  "o!mania tracker",
+                ),
+              ],
+            ),
           ],
         ),
       ],
@@ -539,85 +649,8 @@ async function renderMapsOg(request: Request, country: string): Promise<Response
   return response;
 }
 
-function farmedMapCard(map: MapsFarmedEntry, idx: number) {
-  const cover = map.covers["cover@2x"] || map.covers.cover || map.covers["card@2x"] || map.covers.card || null;
-  return h(
-    "div",
-    {
-      key: `m-${idx}`,
-      style: {
-        flex: "1",
-        display: "flex",
-        flexDirection: "column",
-        borderRadius: "14px",
-        overflow: "hidden",
-        background: "#1a1317",
-        border: "1px solid rgba(255,255,255,0.06)",
-      },
-    },
-    [
-      h(
-        "div",
-        {
-          key: "art",
-          style: {
-            width: "100%",
-            flex: "1",
-            display: "flex",
-            position: "relative",
-            overflow: "hidden",
-            background: "#0b070a",
-          },
-        },
-        cover
-          ? h("img", {
-              src: cover,
-              style: { width: "100%", height: "100%", objectFit: "cover" },
-            })
-          : null,
-      ),
-      h(
-        "div",
-        {
-          key: "body",
-          style: {
-            display: "flex",
-            flexDirection: "column",
-            padding: "14px 16px",
-            gap: "4px",
-          },
-        },
-        [
-          h(
-            "div",
-            {
-              key: "t",
-              style: {
-                fontSize: "18px",
-                fontWeight: 900,
-                color: "#ffffff",
-                lineHeight: "1.15",
-                overflow: "hidden",
-              },
-            },
-            map.title,
-          ),
-          h(
-            "div",
-            {
-              key: "d",
-              style: {
-                fontSize: "14px",
-                color: "#c7b8c1",
-                lineHeight: "1.2",
-              },
-            },
-            `${map.playerCount} players / ${formatOgInt(map.avgPp)} avg pp / ${map.difficultyRating.toFixed(2)} stars`,
-          ),
-        ],
-      ),
-    ],
-  );
+function pickCover(covers: OsuCovers): string | null {
+  return covers["cover@2x"] || covers.cover || covers["card@2x"] || covers.card || null;
 }
 
 /* Tracker: a recent-activity feed of the country's top 3 players with
