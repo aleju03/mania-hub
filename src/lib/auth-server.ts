@@ -97,14 +97,19 @@ function isLoginSuggestedHost(hostname: string): boolean {
   );
 }
 
+function allowsOsuDevAccess(hostname: string): boolean {
+  return hostname === "ninja.mania-tracker.com";
+}
+
 function buildAuthState(viewer: AuthViewer | null, request = getRequest()): AuthState {
   const devUserIds = getDevUserIds();
   const adminUserIds = getAdminUserIds();
   const isLocalDev = isLocalDevRequest();
-  const isAdmin = !!viewer && adminUserIds.has(viewer.id);
-  const isAllowedDevUser = !!viewer && (devUserIds.has(viewer.id) || isAdmin);
   const loginAvailable = Boolean(process.env.OSU_CLIENT_ID && process.env.OSU_CLIENT_SECRET);
   const hostname = requestHostname(request);
+  const canHonorOsuAccess = isLocalDev || allowsOsuDevAccess(hostname);
+  const isAdmin = canHonorOsuAccess && !!viewer && adminUserIds.has(viewer.id);
+  const isAllowedDevUser = canHonorOsuAccess && !!viewer && (devUserIds.has(viewer.id) || isAdmin);
 
   return {
     viewer,
