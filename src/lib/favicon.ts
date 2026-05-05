@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { normalizeCountryCode } from "./country";
 
-function setFaviconHref(href: string): void {
+function setFaviconHref(href: string, type = "image/png"): void {
   if (typeof document === "undefined") return;
   // Mutate the existing <link rel="icon"> in place. TanStack Router's
   // HeadContent renders the initial icon link, which React 19 tracks as a
@@ -11,11 +11,12 @@ function setFaviconHref(href: string): void {
   const existing = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
   if (existing) {
     if (existing.getAttribute("href") !== href) existing.setAttribute("href", href);
+    if (existing.getAttribute("type") !== type) existing.setAttribute("type", type);
     return;
   }
   const link = document.createElement("link");
   link.rel = "icon";
-  link.type = "image/png";
+  link.type = type;
   link.href = href;
   document.head.appendChild(link);
 }

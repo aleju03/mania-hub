@@ -147,7 +147,7 @@ const PRECACHE_URLS = [
   "/images/headers/news-show-default.jpg",
   "/images/headers/rankings.jpg",
   // Favicons
-  "/favicon.webp",
+  "/favicon.svg",
   "/favicon.ico",
 ];
 

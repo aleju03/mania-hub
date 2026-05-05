@@ -78,7 +78,7 @@ export const Route = createRootRoute({
     ]);
     return { initialCountry, origin, auth };
   },
-  head: ({ match }) => ({
+  head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
@@ -88,7 +88,7 @@ export const Route = createRootRoute({
       { name: "theme-color", content: "#1a1517" },
     ],
     links: [
-      { rel: "icon", type: "image/png", href: `/api/favicon?code=${match.context.initialCountry}&v=2` },
+      { rel: "icon", type: "image/svg+xml", sizes: "any", href: "/favicon.svg" },
       { rel: "manifest", href: "/manifest.json" },
       { rel: "stylesheet", href: appCss },
       {

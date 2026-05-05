@@ -3,9 +3,9 @@
   "name": "o!mania tracker",
   "icons": [
     {
-      "src": "favicon.webp",
-      "sizes": "64x64",
-      "type": "image/webp"
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
     },
     {
       "src": "logo192.png",
