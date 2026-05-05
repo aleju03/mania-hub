@@ -88,13 +88,7 @@ function requestHostname(request = getRequest()): string {
 }
 
 function isLoginSuggestedHost(hostname: string): boolean {
-  return (
-    hostname === "localhost" ||
-    hostname === "127.0.0.1" ||
-    hostname === "::1" ||
-    hostname === "ninja.mania-tracker.com" ||
-    hostname.endsWith(".mania-tracker.com")
-  );
+  return hostname === "ninja.mania-tracker.com";
 }
 
 function allowsOsuDevAccess(hostname: string): boolean {
@@ -116,7 +110,7 @@ function buildAuthState(viewer: AuthViewer | null, request = getRequest()): Auth
     canUseDevFeatures: isLocalDev || isAllowedDevUser,
     canUseAdminFeatures: isLocalDev || isAdmin,
     loginAvailable,
-    loginSuggested: loginAvailable && (Boolean(viewer) || isLocalDev || process.env.VITE_DEV_MODE === "1" || isLoginSuggestedHost(hostname)),
+    loginSuggested: loginAvailable && (Boolean(viewer) || isLoginSuggestedHost(hostname)),
   };
 }
 
