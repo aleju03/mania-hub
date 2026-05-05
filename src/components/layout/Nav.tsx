@@ -1,10 +1,11 @@
 import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { Settings } from "lucide-react";
+import { LogIn, LogOut, Settings } from "lucide-react";
 import { SearchInput } from "../ui/SearchInput";
 import { CountrySelector } from "./CountrySelector";
 import { ThemePicker } from "./ThemePicker";
+import { useAuth } from "../../lib/auth-context";
 import { clearDevServerCaches } from "../../lib/api";
 import { searchUsers } from "../../lib/osu";
 import { TOP_PLAYS_RANGE_STORAGE_KEY, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
@@ -87,13 +88,18 @@ async function clearAllDevCaches(): Promise<void> {
 export function Nav() {
   const location = useLocation();
   const navigate = useNavigate();
+  const auth = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const fallbackCountry = useSelectedCountry();
   const setSelectedCountry = useAppStore((state) => state.setSelectedCountry);
   const routeCountry = readCountryFromSearchStr(location.searchStr);
   const selectedCountry = routeCountry ?? fallbackCountry;
-  const devMode = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === "1";
+  const devMode = auth.canUseDevFeatures;
+  const adminMode = auth.canUseAdminFeatures;
+  const returnTo = `${location.pathname}${location.searchStr}`;
+  const loginHref = `/api/auth/osu?next=${encodeURIComponent(returnTo)}`;
+  const logoutHref = `/api/auth/logout?next=${encodeURIComponent(returnTo)}`;
   const visibleLinks = useMemo(
     () => links.filter((link) => devMode || link.id !== "replay"),
     [devMode],
@@ -387,19 +393,21 @@ export function Nav() {
                     className="absolute right-0 top-full mt-2 w-36 rounded-lg bg-osu-b5 border border-osu-b3/50 shadow-xl overflow-hidden z-[80]"
                     role="menu"
                   >
-                    <Link
-                      to="/admin/monitor"
-                      onClick={() => setAdminMenuOpen(false)}
-                      className="block px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
-                      role="menuitem"
-                    >
-                      Monitor
-                    </Link>
+                    {adminMode && (
+                      <Link
+                        to="/admin/monitor"
+                        onClick={() => setAdminMenuOpen(false)}
+                        className="block px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
+                        role="menuitem"
+                      >
+                        Monitor
+                      </Link>
+                    )}
                     <Link
                       to="/admin/maniacard"
                       search={{ player: "Anthony2308" }}
                       onClick={() => setAdminMenuOpen(false)}
-                      className="block px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors border-t border-osu-b3/30"
+                      className={`block px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors ${adminMode ? "border-t border-osu-b3/30" : ""}`}
                       role="menuitem"
                     >
                       Maniacard
@@ -423,18 +431,39 @@ export function Nav() {
                   </div>
                 )}
               </div>
-              <button
-                onClick={async () => {
-                  await clearAllDevCaches();
-                  window.location.reload();
-                }}
-                className="px-2 py-1 rounded-lg bg-osu-red/20 text-[10px] text-osu-red font-semibold whitespace-nowrap hover:bg-osu-red/30 transition-colors cursor-pointer border border-osu-red/30"
-                title="Clear dev caches, including Turso cache entries, and reload"
-              >
-                Clear cache
-              </button>
+              {adminMode && (
+                <button
+                  onClick={async () => {
+                    await clearAllDevCaches();
+                    window.location.reload();
+                  }}
+                  className="px-2 py-1 rounded-lg bg-osu-red/20 text-[10px] text-osu-red font-semibold whitespace-nowrap hover:bg-osu-red/30 transition-colors cursor-pointer border border-osu-red/30"
+                  title="Clear dev caches, including Turso cache entries, and reload"
+                >
+                  Clear cache
+                </button>
+              )}
             </>
           )}
+          {auth.viewer ? (
+            <a
+              href={logoutHref}
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-osu-b3/40 bg-osu-b4/50 px-2 text-[10px] font-semibold text-osu-l2 transition-colors hover:border-osu-pink/40 hover:bg-osu-b4 hover:text-white"
+              title={`Signed in as ${auth.viewer.username}. Log out`}
+            >
+              <span className="max-w-20 truncate">{auth.viewer.username}</span>
+              <LogOut className="h-3.5 w-3.5" />
+            </a>
+          ) : auth.loginSuggested ? (
+            <a
+              href={loginHref}
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-osu-pink/30 bg-osu-pink/10 px-2 text-[10px] font-semibold text-osu-pink-light transition-colors hover:border-osu-pink/50 hover:bg-osu-pink/20 hover:text-white"
+              title="Sign in with osu!"
+            >
+              <LogIn className="h-3.5 w-3.5" />
+              osu!
+            </a>
+          ) : null}
           <CountrySelector className="w-52" selectedCountry={selectedCountry} onSelect={handleCountrySelect} />
           <SearchInput
             className="w-52"
@@ -549,6 +578,23 @@ export function Nav() {
               <div className="border-t border-osu-b3/30 px-4 py-3 space-y-2">
                 <CountrySelector className="w-full" selectedCountry={selectedCountry} onSelect={handleCountrySelect} />
                 <ThemePicker variant="mobile" />
+                {auth.viewer ? (
+                  <a
+                    href={logoutHref}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-osu-b3/40 bg-osu-b4/60 px-3 py-2 text-[12px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b4 hover:text-white"
+                  >
+                    <span className="truncate">{auth.viewer.username}</span>
+                    <LogOut className="h-4 w-4" />
+                  </a>
+                ) : auth.loginSuggested ? (
+                  <a
+                    href={loginHref}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-osu-pink/30 bg-osu-pink/10 px-3 py-2 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/20 hover:text-white"
+                  >
+                    <LogIn className="h-4 w-4" />
+                    osu! login
+                  </a>
+                ) : null}
                 {devMode && (
                   <Link
                     to="/settings"
@@ -572,13 +618,15 @@ export function Nav() {
                   <div className="text-[10px] uppercase tracking-wide text-osu-f1 font-semibold px-1">
                     Admin
                   </div>
-                  <Link
-                    to="/admin/monitor"
-                    onClick={() => setMenuOpen(false)}
-                    className="block w-full text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
-                  >
-                    Monitor
-                  </Link>
+                  {adminMode && (
+                    <Link
+                      to="/admin/monitor"
+                      onClick={() => setMenuOpen(false)}
+                      className="block w-full text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
+                    >
+                      Monitor
+                    </Link>
+                  )}
                   <Link
                     to="/admin/maniacard"
                     search={{ player: "Anthony2308" }}
@@ -601,16 +649,18 @@ export function Nav() {
                   >
                     OG preview
                   </Link>
-                  <button
-                    onClick={async () => {
-                      await clearAllDevCaches();
-                      window.location.reload();
-                    }}
-                    className="w-full px-3 py-2 rounded-lg bg-osu-red/20 text-[10px] text-osu-red font-semibold hover:bg-osu-red/30 transition-colors cursor-pointer border border-osu-red/30"
-                    title="Clear dev caches"
-                  >
-                    Clear cache
-                  </button>
+                  {adminMode && (
+                    <button
+                      onClick={async () => {
+                        await clearAllDevCaches();
+                        window.location.reload();
+                      }}
+                      className="w-full px-3 py-2 rounded-lg bg-osu-red/20 text-[10px] text-osu-red font-semibold hover:bg-osu-red/30 transition-colors cursor-pointer border border-osu-red/30"
+                      title="Clear dev caches"
+                    >
+                      Clear cache
+                    </button>
+                  )}
                 </div>
               )}
       </div>

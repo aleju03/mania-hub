@@ -47,6 +47,7 @@ import type { ReplaySkinSettings } from "../lib/replay-skin";
 import type { BeatmapScoreLookupStatus, OsuScore, OsuBeatmapset, OsuBeatmap } from "../lib/types";
 import type { ReplayRendererLike, ServerReplay } from "../lib/replay-types";
 import { getScoreExpectedCounts } from "../lib/replay-types";
+import { canUseDevFeatures } from "../lib/auth-shared";
 import { pageSeo } from "../lib/seo";
 
 interface ReplaySearch {
@@ -67,15 +68,11 @@ export const Route = createFileRoute("/replay")({
       social: false,
       noindex: true,
     }),
-  beforeLoad: () => {
-    if (typeof window !== "undefined") {
-      const host = window.location.hostname;
-      const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1";
-      const isDevMode = import.meta.env.VITE_DEV_MODE === "1";
-      if (!isLocal && !isDevMode) throw notFound();
-    } else if (process.env.VITE_DEV_MODE !== "1" && process.env.NODE_ENV === "production") {
+  beforeLoad: ({ context }) => {
+    if (!canUseDevFeatures(context.auth)) {
       throw notFound();
     }
+    return undefined as never;
   },
   component: ReplayPage,
   validateSearch: (s: Record<string, unknown>): ReplaySearch => ({

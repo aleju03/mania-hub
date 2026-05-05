@@ -35,6 +35,7 @@ import { ManiaCardPanel } from "../../components/player/ManiaCard";
 import type { OsuScore, OsuUser, UserProfileInsights, InsightScoreSnapshot } from "../../lib/types";
 import { pageSeo, playerOgImagePath } from "../../lib/seo";
 import { getRankTierClass } from "../../lib/rankings";
+import { useAuth } from "../../lib/auth-context";
 
 const userRequestCache = new Map<string, Promise<OsuUser>>();
 const userRecentRequestCache = new Map<number, Promise<OsuScore[]>>();
@@ -51,7 +52,6 @@ const USER_PROFILE_INSIGHTS_CLIENT_CACHE_TTL = 10 * 60 * 1000;
 const INITIAL_SCORE_BATCH_SIZE = 5;
 const SHOW_MORE_BATCH_SIZE = 50;
 const BEST_SCORES_WINDOW_SIZE = 200;
-const DEV_MODE = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === "1";
 const TUNG_TUNG_SAHUR_AUDIO_SRC = "/audio/tung-tung-sahur-keycap.mp3";
 const TUNG_TUNG_SAHUR_GLOW_COLORS = ["#38d9ff", "#ff3f57", "#8bff3f", "#b45cff", "#ffd53d", "#ff7a2f"];
 const TUNG_TUNG_SAHUR_BASE_REST = { y: 0, scaleY: 1 };
@@ -388,6 +388,8 @@ function loadUserProfileInsightsCached(userId: number): Promise<UserProfileInsig
 
 function PlayerPage() {
   const { username } = Route.useParams();
+  const auth = useAuth();
+  const devMode = auth.canUseDevFeatures;
   const [user, setUser] = useState<OsuUser | null>(null);
   const [best, setBest] = useState<OsuScore[]>([]);
   const [recent, setRecent] = useState<OsuScore[]>([]);
@@ -541,8 +543,8 @@ function PlayerPage() {
   // Safety: if we're on the About tab but the user has no page content, fall back to Best
   useEffect(() => {
     if (tab === "about" && !user?.page?.html) setTab("best");
-    if (tab === "card" && !DEV_MODE) setTab("best");
-  }, [tab, user]);
+    if (tab === "card" && !devMode) setTab("best");
+  }, [devMode, tab, user]);
 
   const fetchMoreRecent = useCallback(async () => {
     if (!user || loadingMoreRecent) return;
@@ -1245,7 +1247,7 @@ function PlayerPage() {
           {/* Player tabs */}
           <div className="mt-5 pt-1 border-t border-osu-b3/30 flex flex-wrap items-center justify-between gap-3">
             <div className="flex">
-              {((["best", "recent", ...(user.page?.html ? ["about"] : []), ...(DEV_MODE ? ["card"] : [])]) as PlayerTab[]).map((t) => (
+              {((["best", "recent", ...(user.page?.html ? ["about"] : []), ...(devMode ? ["card"] : [])]) as PlayerTab[]).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -1304,7 +1306,7 @@ function PlayerPage() {
               >
                 <PlayerAboutCard html={user.page.html} />
               </motion.div>
-            ) : tab === "card" && DEV_MODE ? (
+            ) : tab === "card" && devMode ? (
               <motion.div
                 key="card"
                 initial={{ opacity: 0, y: 6 }}
@@ -2179,9 +2181,10 @@ function ScoreThumbnail({ score }: { score: OsuScore }) {
 }
 
 function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
+  const auth = useAuth();
   const keys = score.beatmap?.cs;
   const linkUrl = getScoreUrl(score) ?? getBeatmapUrl(score);
-  const canReplay = DEV_MODE && scoreHasReplay(score);
+  const canReplay = auth.canUseDevFeatures && scoreHasReplay(score);
   const display = getScoreDisplayValues(score);
   const hasPp = score.pp != null;
 

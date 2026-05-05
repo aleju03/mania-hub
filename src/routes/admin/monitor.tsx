@@ -1,6 +1,8 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { canUseAdminFeatures } from "../../lib/auth-shared";
+import { requireAdminAccess } from "../../lib/auth";
 import { getCountryFlagUrl, getCountryName } from "../../lib/country";
 import { formatNumber } from "../../lib/format";
 
@@ -114,10 +116,7 @@ const getMonitorData = createServerFn({ method: "GET" })
     range: isRange(data?.range) ? data.range : ("24h" as Range),
   }))
   .handler(async ({ data }: { data: { range: Range } }): Promise<MonitorData> => {
-    const isDevMode = process.env.VITE_DEV_MODE === "1" || process.env.NODE_ENV !== "production";
-    if (!isDevMode) {
-      throw new Error("Situation monitor is dev-only.");
-    }
+    await requireAdminAccess("Situation monitor");
 
     const apiKey = process.env.POSTHOG_PERSONAL_API_KEY;
     const projectId = process.env.POSTHOG_PROJECT_ID;
@@ -272,15 +271,11 @@ const getMonitorData = createServerFn({ method: "GET" })
   });
 
 export const Route = createFileRoute("/admin/monitor")({
-  beforeLoad: () => {
-    if (typeof window !== "undefined") {
-      const host = window.location.hostname;
-      const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1";
-      const isDevMode = import.meta.env.VITE_DEV_MODE === "1";
-      if (!isLocal && !isDevMode) throw notFound();
-    } else if (process.env.VITE_DEV_MODE !== "1" && process.env.NODE_ENV === "production") {
+  beforeLoad: ({ context }) => {
+    if (!canUseAdminFeatures(context.auth)) {
       throw notFound();
     }
+    return undefined as never;
   },
   component: MonitorPage,
 });

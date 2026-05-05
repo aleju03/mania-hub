@@ -50,6 +50,7 @@ import {
 import { readReplayScrollSpeed } from "../lib/replay-scroll-speed";
 import { readReplaySkinSettings } from "../lib/replay-skin";
 import type { ReplaySkinSettings } from "../lib/replay-skin";
+import { useAuth } from "../lib/auth-context";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -791,6 +792,7 @@ export const Route = createFileRoute("/maps")({
 function MapsPage() {
   const navigate = useNavigate();
   const mapsSearch = Route.useSearch();
+  const auth = useAuth();
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = mapsSearch.country ?? fallbackCountry;
   const rankings = useAppStore((s) => s.rankingsByCountry[selectedCountry] ?? null);
@@ -836,7 +838,8 @@ function MapsPage() {
   const rStarsMax = mapsSearch.rStarsMax;
   const rWeight = mapsSearch.rWeight;
   const rAvoidRepeats = mapsSearch.rAvoidRepeats;
-  const isDevMode = import.meta.env.VITE_DEV_MODE === "1";
+  const isDevMode = auth.canUseDevFeatures;
+  const canUseAdminFeatures = auth.canUseAdminFeatures;
   const randomStatus = useMemo(() => parseTriStateCsv(rStatusRaw, RANDOM_STATUS_OPTIONS), [rStatusRaw]);
   const randomKey = useMemo(() => parseTriStateCsv(rKeyRaw, RANDOM_KEY_OPTIONS), [rKeyRaw]);
   const randomPattern = useMemo(() => parseTriStateCsv(rPatternRaw, RANDOM_PATTERN_OPTIONS), [rPatternRaw]);
@@ -1421,7 +1424,7 @@ function MapsPage() {
                 {tab === "random" ? randomPool.length : currentList.length} maps &middot; updated {formatTimeAgo(tab === "farmed" ? mapsData.farmedGeneratedAt : mapsData.favouritesGeneratedAt)}
               </span>
             )}
-            {isDevMode && !isLoading && !error && mapsData && (
+            {canUseAdminFeatures && !isLoading && !error && mapsData && (
               <div ref={rebuildMenuRef} className="relative">
                 <div className="flex items-stretch rounded-lg bg-osu-red/20 border border-osu-red/30 overflow-hidden">
                   <button

@@ -1,6 +1,7 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { COUNTRY_OPTIONS } from "../../lib/country";
+import { canUseDevFeatures } from "../../lib/auth-shared";
 
 type PresetKind =
   | "default"
@@ -88,15 +89,11 @@ export const Route = createFileRoute("/admin/og-preview")({
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
-  beforeLoad: () => {
-    if (typeof window !== "undefined") {
-      const host = window.location.hostname;
-      const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1";
-      const isDevMode = import.meta.env.VITE_DEV_MODE === "1";
-      if (!isLocal && !isDevMode) throw notFound();
-    } else if (process.env.VITE_DEV_MODE !== "1" && process.env.NODE_ENV === "production") {
+  beforeLoad: ({ context }) => {
+    if (!canUseDevFeatures(context.auth)) {
       throw notFound();
     }
+    return undefined as never;
   },
   component: OgPreviewPage,
 });

@@ -22,8 +22,7 @@ import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { hasTopPlaysCache, shouldRefreshTopPlays } from "../lib/top-plays-cache";
 import { getReplaySearch } from "../lib/replay-navigation";
-
-const DEV_MODE = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === "1";
+import { useAuth } from "../lib/auth-context";
 
 type PopOff = CountryTopPlay;
 
@@ -87,6 +86,8 @@ function PopOffsPage() {
   const { range, country } = Route.useSearch();
   const location = useLocation();
   const navigate = useNavigate();
+  const auth = useAuth();
+  const devMode = auth.canUseDevFeatures;
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = country ?? fallbackCountry;
   const currentCountryRef = useRef(selectedCountry);
@@ -806,7 +807,7 @@ function PopOffsPage() {
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <span className={`text-xs ${accColorClass}`}>{formatAccuracy(getDisplayedAccuracy(p.score))}</span>
-                            {DEV_MODE && scoreHasReplay(p.score) && (
+                            {devMode && scoreHasReplay(p.score) && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -836,7 +837,7 @@ function PopOffsPage() {
                         <span className="text-xs text-osu-f1">
                           {formatNumber(p.score.max_combo)}x
                         </span>
-                        {DEV_MODE && scoreHasReplay(p.score) && (
+                        {devMode && scoreHasReplay(p.score) && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();

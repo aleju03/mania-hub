@@ -33,8 +33,7 @@ import type { OsuScore } from "../lib/types";
 import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
-
-const DEV_MODE = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === "1";
+import { useAuth } from "../lib/auth-context";
 
 export const Route = createFileRoute("/tracker")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -694,6 +693,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   onToggle: (key: string) => void;
 }) {
   const navigate = useNavigate();
+  const auth = useAuth();
   const [rendered, setRendered] = useState(expanded);
   useEffect(() => { if (expanded) setRendered(true); }, [expanded]);
 
@@ -704,6 +704,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   const judgementStats = getManiaJudgementStats(score);
   const lazer = isLazerScore(score);
   const accColorClass = lazer ? "text-osu-pink-light" : "text-osu-l2";
+  const canReplay = auth.canUseDevFeatures && scoreHasReplay(score);
 
   return (
     <div className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
@@ -791,7 +792,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               {approxPpGain != null && (
                 <span className="text-[10px] font-semibold text-osu-green">+{formatNumber(Math.round(approxPpGain))}</span>
               )}
-              {DEV_MODE && scoreHasReplay(score) && (
+              {canReplay && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -826,7 +827,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               </span>
             )}
           </span>
-          {DEV_MODE && scoreHasReplay(score) && (
+          {canReplay && (
             <button
               onClick={(e) => {
                 e.stopPropagation();

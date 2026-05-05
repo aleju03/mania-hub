@@ -4,6 +4,8 @@ import { getCookie, getRequest, setCookie } from "@tanstack/react-start/server";
 import { Nav } from "../components/layout/Nav";
 import { DevRateLimitBadge } from "../components/layout/DevRateLimitBadge";
 import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
+import { AuthContext } from "../lib/auth-context";
+import { getCurrentAuth } from "../lib/auth";
 import { InitialCountryContext } from "../lib/country-context";
 import {
   COUNTRY_AUTO_COOKIE_NAME,
@@ -65,15 +67,16 @@ const getInitialCountry = createServerFn({ method: "GET" }).handler(() => {
 export const Route = createRootRoute({
   beforeLoad: async () => {
     const onClient = typeof document !== "undefined";
-    const [initialCountry, origin] = await Promise.all([
+    const [initialCountry, origin, auth] = await Promise.all([
       onClient
         ? Promise.resolve(resolveInitialCountry(readCountryCookieClient()))
         : getInitialCountry(),
       onClient
         ? Promise.resolve(window.location.origin)
         : getRequestOrigin(),
+      getCurrentAuth(),
     ]);
-    return { initialCountry, origin };
+    return { initialCountry, origin, auth };
   },
   head: ({ match }) => ({
     meta: [
@@ -126,31 +129,33 @@ function NotFoundPage() {
 }
 
 function RootLayout() {
-  const { initialCountry } = Route.useRouteContext();
+  const { auth, initialCountry } = Route.useRouteContext();
   return (
     <InitialCountryContext.Provider value={initialCountry}>
-      <PostHogProvider>
-        <Nav />
-        <RouteLoadingBar />
-        <main className="flex-1 pt-[60px]">
-          <Outlet />
-        </main>
-        <footer className="px-4 py-2 text-center text-[10px] text-osu-pink-light/30">
-          <span title="Unofficial fanmade website for the osu! community. Not affiliated with or endorsed by osu! or ppy Pty Ltd. All game data is fetched via the public osu! API.">
-            fanmade · unofficial · not affiliated with ppy
-          </span>
-          {" · made by "}
-          <a
-            href="https://osu.ppy.sh/users/7095193"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-osu-pink-light/60 transition-colors"
-          >
-            aleju03
-          </a>
-        </footer>
-        {import.meta.env.VITE_DEV_MODE === "1" ? <DevRateLimitBadge /> : null}
-      </PostHogProvider>
+      <AuthContext.Provider value={auth}>
+        <PostHogProvider>
+          <Nav />
+          <RouteLoadingBar />
+          <main className="flex-1 pt-[60px]">
+            <Outlet />
+          </main>
+          <footer className="px-4 py-2 text-center text-[10px] text-osu-pink-light/30">
+            <span title="Unofficial fanmade website for the osu! community. Not affiliated with or endorsed by osu! or ppy Pty Ltd. All game data is fetched via the public osu! API.">
+              fanmade · unofficial · not affiliated with ppy
+            </span>
+            {" · made by "}
+            <a
+              href="https://osu.ppy.sh/users/7095193"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-osu-pink-light/60 transition-colors"
+            >
+              aleju03
+            </a>
+          </footer>
+          {auth.canUseDevFeatures ? <DevRateLimitBadge /> : null}
+        </PostHogProvider>
+      </AuthContext.Provider>
     </InitialCountryContext.Provider>
   );
 }

@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
+import { requireAdminAccess } from "./auth";
 import { sanitizeProfilePageHtml } from "./profile-page";
 import {
   beatmapScoreLookupPartialKey,
@@ -661,11 +662,8 @@ function normalizeScorePayload(data: unknown): { scoreId: number; mode?: string 
   return { scoreId: parseOsuScoreId(input.scoreId, "score id"), mode };
 }
 
-function assertDevMutationAllowed(action: string): void {
-  const isDevMode = process.env.VITE_DEV_MODE === "1" || process.env.NODE_ENV !== "production";
-  if (!isDevMode) {
-    throw new Error(`${action} is only available in dev mode.`);
-  }
+async function assertDevMutationAllowed(action: string): Promise<void> {
+  await requireAdminAccess(action);
 }
 
 interface CountryRecentScoresResponse {
@@ -2540,7 +2538,7 @@ export const getCountryMapsData = createServerFn({ method: "GET" })
 export const rebuildCountryMapsData = createServerFn({ method: "POST" })
   .inputValidator(normalizeMapsUserPayload)
   .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
-    assertDevMutationAllowed("Country maps rebuild");
+    await assertDevMutationAllowed("Country maps rebuild");
     const farmedKey = computeMapsFarmedCacheKey(data.users);
     const favKey = computeMapsFavouritesCacheKey(data.users);
     const [farmedRebuild, favRebuild] = await Promise.all([
@@ -2613,7 +2611,7 @@ export const getCountryMapsFavourites = createServerFn({ method: "GET" })
 export const rebuildCountryMapsFarmed = createServerFn({ method: "POST" })
   .inputValidator(normalizeMapsUserPayload)
   .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
-    assertDevMutationAllowed("Country maps farmed rebuild");
+    await assertDevMutationAllowed("Country maps farmed rebuild");
     return runCacheRebuild<CountryMapsFarmedSection>(
       computeMapsFarmedCacheKey(data.users),
       MAPS_FARMED_CACHE_TTL,
@@ -2632,7 +2630,7 @@ export const rebuildCountryMapsFarmed = createServerFn({ method: "POST" })
 export const rebuildCountryMapsFavourites = createServerFn({ method: "POST" })
   .inputValidator(normalizeMapsUserPayload)
   .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
-    assertDevMutationAllowed("Country maps favourites rebuild");
+    await assertDevMutationAllowed("Country maps favourites rebuild");
     return runCacheRebuild<CountryMapsFavouritesSection>(
       computeMapsFavouritesCacheKey(data.users),
       MAPS_FAVOURITES_CACHE_TTL,
@@ -2656,7 +2654,7 @@ export const rebuildCountryMapsFavourites = createServerFn({ method: "POST" })
 export const rebuildCountryMapsForUser = createServerFn({ method: "POST" })
   .inputValidator(normalizeMapsUserRebuildPayload)
   .handler(async ({ data }: { data: { users: MapsUser[]; userId: number } }) => {
-    assertDevMutationAllowed("Country maps user rebuild");
+    await assertDevMutationAllowed("Country maps user rebuild");
     await deletePersistentCacheEntries([
       `user-favourites-all:${data.userId}`,
       `user-most-played:${data.userId}`,

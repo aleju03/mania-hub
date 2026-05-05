@@ -16,8 +16,7 @@ import { useAppStore, useSelectedCountry } from "../store";
 import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
-
-const DEV_MODE = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === "1";
+import { useAuth } from "../lib/auth-context";
 
 type KeyFilter = "all" | "4k" | "7k";
 type RangeFilter = "24h" | "7d" | "30d" | "all";
@@ -634,6 +633,7 @@ function SnipeRow({
   onToggle: (key: string) => void;
 }) {
   const navigate = useNavigate();
+  const auth = useAuth();
   const [rendered, setRendered] = useState(expanded);
   useEffect(() => {
     if (expanded) setRendered(true);
@@ -643,7 +643,7 @@ function SnipeRow({
   const sniperHref = `/player/${encodeURIComponent(event.sniper.username)}`;
   const previousHref = `/player/${encodeURIComponent(event.victim.username)}`;
   const beatmapHref = event.beatmap.url;
-  const replaySearch = DEV_MODE && event.hasReplay
+  const replaySearch = auth.canUseDevFeatures && event.hasReplay
     ? getReplaySearch(event.score_id, event.beatmapset_id)
     : null;
 
