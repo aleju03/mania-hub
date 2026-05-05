@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { LogIn, LogOut, Settings } from "lucide-react";
 import { SearchInput } from "../ui/SearchInput";
+import { Avatar } from "../ui/Avatar";
 import { CountrySelector } from "./CountrySelector";
 import { ThemePicker } from "./ThemePicker";
 import { useAuth } from "../../lib/auth-context";
@@ -452,11 +453,14 @@ export function Nav() {
           {auth.viewer ? (
             <a
               href={logoutHref}
-              className="flex h-8 items-center gap-1.5 rounded-lg border border-osu-b3/40 bg-osu-b4/50 px-2 text-[10px] font-semibold text-osu-l2 transition-colors hover:border-osu-pink/40 hover:bg-osu-b4 hover:text-white"
+              className="group relative flex h-8 items-center gap-1.5 rounded-lg border border-osu-b3/40 bg-osu-b4/50 py-0.5 pl-0.5 pr-2 text-[10px] font-semibold text-osu-l2 transition-colors hover:border-osu-pink/40 hover:bg-osu-b4 hover:text-white"
               title={`Signed in as ${auth.viewer.username}. Log out`}
             >
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60 transition group-hover:ring-osu-pink/60">
+                <Avatar url={auth.viewer.avatarUrl} userId={auth.viewer.id} size={28} />
+              </span>
               <span className="max-w-20 truncate">{auth.viewer.username}</span>
-              <LogOut className="h-3.5 w-3.5" />
+              <LogOut className="h-3.5 w-3.5 opacity-60 transition-opacity group-hover:opacity-100" />
             </a>
           ) : auth.loginSuggested ? (
             <a
@@ -465,7 +469,7 @@ export function Nav() {
               title="Sign in with osu!"
             >
               <LogIn className="h-3.5 w-3.5" />
-              osu!
+              <span>Login</span>
             </a>
           ) : null}
           <CountrySelector className="w-52" selectedCountry={selectedCountry} onSelect={handleCountrySelect} />
@@ -585,10 +589,16 @@ export function Nav() {
                 {auth.viewer ? (
                   <a
                     href={logoutHref}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-osu-b3/40 bg-osu-b4/60 px-3 py-2 text-[12px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b4 hover:text-white"
+                    className="flex w-full items-center gap-3 rounded-lg border border-osu-b3/40 bg-osu-b4/60 py-1.5 pl-1.5 pr-3 text-[12px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b4 hover:text-white"
                   >
-                    <span className="truncate">{auth.viewer.username}</span>
-                    <LogOut className="h-4 w-4" />
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60">
+                      <Avatar url={auth.viewer.avatarUrl} userId={auth.viewer.id} size={36} />
+                    </span>
+                    <span className="flex flex-col items-start leading-tight">
+                      <span className="truncate text-white">{auth.viewer.username}</span>
+                      <span className="text-[10px] font-normal text-osu-l3">Sign out</span>
+                    </span>
+                    <LogOut className="ml-auto h-4 w-4 opacity-70" />
                   </a>
                 ) : auth.loginSuggested ? (
                   <a
@@ -596,7 +606,7 @@ export function Nav() {
                     className="flex w-full items-center justify-center gap-2 rounded-lg border border-osu-pink/30 bg-osu-pink/10 px-3 py-2 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/20 hover:text-white"
                   >
                     <LogIn className="h-4 w-4" />
-                    osu! login
+                    Login
                   </a>
                 ) : null}
                 {devMode && (
