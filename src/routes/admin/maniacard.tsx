@@ -4,6 +4,7 @@ import { CssManiaCardPanel, ManiaCardPanel } from "../../components/player/Mania
 import { SearchInput } from "../../components/ui/SearchInput";
 import { getUser, getUserScoresBestWindow, searchUsers } from "../../lib/osu";
 import type { OsuScore, OsuUser } from "../../lib/types";
+import { canUseDevFeatures } from "../../lib/auth-shared";
 
 const DEFAULT_PLAYER = "Anthony2308";
 const BEST_SCORES_WINDOW_SIZE = 200;
@@ -24,15 +25,11 @@ export const Route = createFileRoute("/admin/maniacard")({
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
-  beforeLoad: () => {
-    if (typeof window !== "undefined") {
-      const host = window.location.hostname;
-      const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1";
-      const isDevMode = import.meta.env.VITE_DEV_MODE === "1";
-      if (!isLocal && !isDevMode) throw notFound();
-    } else if (process.env.VITE_DEV_MODE !== "1" && process.env.NODE_ENV === "production") {
+  beforeLoad: ({ context }) => {
+    if (!canUseDevFeatures(context.auth)) {
       throw notFound();
     }
+    return undefined as never;
   },
   component: ManiacardAdminPage,
 });
@@ -77,7 +74,15 @@ function ManiacardAdminPage() {
     };
   }, [player]);
 
-  const handleSearch = useCallback((query: string) => searchUsers({ data: { q: query } }), []);
+  const handleSearch = useCallback(async (query: string) => {
+    const res = await searchUsers({ data: { query } });
+    return (res.user?.data ?? []).slice(0, 6).map((u: { id: number; username: string; avatar_url: string; country_code: string }) => ({
+      id: u.id,
+      username: u.username,
+      avatar_url: u.avatar_url,
+      country_code: u.country_code,
+    }));
+  }, []);
 
   const selectPlayer = useCallback((username: string) => {
     navigate({

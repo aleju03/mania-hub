@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TrackerRouteImport } from './routes/tracker'
 import { Route as TopPlaysRouteImport } from './routes/top-plays'
 import { Route as SnipesRouteImport } from './routes/snipes'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ReplayRouteImport } from './routes/replay'
 import { Route as RankingsRouteImport } from './routes/rankings'
 import { Route as MapsRouteImport } from './routes/maps'
@@ -28,6 +29,9 @@ import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
 import { Route as AdminMonitorRouteImport } from './routes/admin/monitor'
 import { Route as AdminManiacardRouteImport } from './routes/admin/maniacard'
 import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
+import { Route as ApiAuthOsuRouteImport } from './routes/api/auth/osu'
+import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
+import { Route as ApiAuthOsuCallbackRouteImport } from './routes/api/auth/osu/callback'
 
 const TrackerRoute = TrackerRouteImport.update({
   id: '/tracker',
@@ -42,6 +46,11 @@ const TopPlaysRoute = TopPlaysRouteImport.update({
 const SnipesRoute = SnipesRouteImport.update({
   id: '/snipes',
   path: '/snipes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReplayRoute = ReplayRouteImport.update({
@@ -124,12 +133,28 @@ const AdminDanClassifierRoute = AdminDanClassifierRouteImport.update({
   path: '/admin/dan-classifier',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthOsuRoute = ApiAuthOsuRouteImport.update({
+  id: '/api/auth/osu',
+  path: '/api/auth/osu',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthLogoutRoute = ApiAuthLogoutRouteImport.update({
+  id: '/api/auth/logout',
+  path: '/api/auth/logout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthOsuCallbackRoute = ApiAuthOsuCallbackRouteImport.update({
+  id: '/callback',
+  path: '/callback',
+  getParentRoute: () => ApiAuthOsuRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/maps': typeof MapsRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
+  '/settings': typeof SettingsRoute
   '/snipes': typeof SnipesRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
@@ -145,12 +170,16 @@ export interface FileRoutesByFullPath {
   '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
   '/player/$username': typeof PlayerUsernameRoute
+  '/api/auth/logout': typeof ApiAuthLogoutRoute
+  '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
+  '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/maps': typeof MapsRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
+  '/settings': typeof SettingsRoute
   '/snipes': typeof SnipesRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
@@ -166,6 +195,9 @@ export interface FileRoutesByTo {
   '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
   '/player/$username': typeof PlayerUsernameRoute
+  '/api/auth/logout': typeof ApiAuthLogoutRoute
+  '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
+  '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -173,6 +205,7 @@ export interface FileRoutesById {
   '/maps': typeof MapsRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
+  '/settings': typeof SettingsRoute
   '/snipes': typeof SnipesRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
@@ -188,6 +221,9 @@ export interface FileRoutesById {
   '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
   '/player/$username': typeof PlayerUsernameRoute
+  '/api/auth/logout': typeof ApiAuthLogoutRoute
+  '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
+  '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -196,6 +232,7 @@ export interface FileRouteTypes {
     | '/maps'
     | '/rankings'
     | '/replay'
+    | '/settings'
     | '/snipes'
     | '/top-plays'
     | '/tracker'
@@ -211,12 +248,16 @@ export interface FileRouteTypes {
     | '/api/sitemap'
     | '/api/sync'
     | '/player/$username'
+    | '/api/auth/logout'
+    | '/api/auth/osu'
+    | '/api/auth/osu/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/maps'
     | '/rankings'
     | '/replay'
+    | '/settings'
     | '/snipes'
     | '/top-plays'
     | '/tracker'
@@ -232,12 +273,16 @@ export interface FileRouteTypes {
     | '/api/sitemap'
     | '/api/sync'
     | '/player/$username'
+    | '/api/auth/logout'
+    | '/api/auth/osu'
+    | '/api/auth/osu/callback'
   id:
     | '__root__'
     | '/'
     | '/maps'
     | '/rankings'
     | '/replay'
+    | '/settings'
     | '/snipes'
     | '/top-plays'
     | '/tracker'
@@ -253,6 +298,9 @@ export interface FileRouteTypes {
     | '/api/sitemap'
     | '/api/sync'
     | '/player/$username'
+    | '/api/auth/logout'
+    | '/api/auth/osu'
+    | '/api/auth/osu/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -260,6 +308,7 @@ export interface RootRouteChildren {
   MapsRoute: typeof MapsRoute
   RankingsRoute: typeof RankingsRoute
   ReplayRoute: typeof ReplayRoute
+  SettingsRoute: typeof SettingsRoute
   SnipesRoute: typeof SnipesRoute
   TopPlaysRoute: typeof TopPlaysRoute
   TrackerRoute: typeof TrackerRoute
@@ -275,6 +324,8 @@ export interface RootRouteChildren {
   ApiSitemapRoute: typeof ApiSitemapRoute
   ApiSyncRoute: typeof ApiSyncRoute
   PlayerUsernameRoute: typeof PlayerUsernameRoute
+  ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
+  ApiAuthOsuRoute: typeof ApiAuthOsuRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -298,6 +349,13 @@ declare module '@tanstack/react-router' {
       path: '/snipes'
       fullPath: '/snipes'
       preLoaderRoute: typeof SnipesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/replay': {
@@ -412,14 +470,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDanClassifierRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/osu': {
+      id: '/api/auth/osu'
+      path: '/api/auth/osu'
+      fullPath: '/api/auth/osu'
+      preLoaderRoute: typeof ApiAuthOsuRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/logout': {
+      id: '/api/auth/logout'
+      path: '/api/auth/logout'
+      fullPath: '/api/auth/logout'
+      preLoaderRoute: typeof ApiAuthLogoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/osu/callback': {
+      id: '/api/auth/osu/callback'
+      path: '/callback'
+      fullPath: '/api/auth/osu/callback'
+      preLoaderRoute: typeof ApiAuthOsuCallbackRouteImport
+      parentRoute: typeof ApiAuthOsuRoute
+    }
   }
 }
+
+interface ApiAuthOsuRouteChildren {
+  ApiAuthOsuCallbackRoute: typeof ApiAuthOsuCallbackRoute
+}
+
+const ApiAuthOsuRouteChildren: ApiAuthOsuRouteChildren = {
+  ApiAuthOsuCallbackRoute: ApiAuthOsuCallbackRoute,
+}
+
+const ApiAuthOsuRouteWithChildren = ApiAuthOsuRoute._addFileChildren(
+  ApiAuthOsuRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   MapsRoute: MapsRoute,
   RankingsRoute: RankingsRoute,
   ReplayRoute: ReplayRoute,
+  SettingsRoute: SettingsRoute,
   SnipesRoute: SnipesRoute,
   TopPlaysRoute: TopPlaysRoute,
   TrackerRoute: TrackerRoute,
@@ -435,6 +527,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSitemapRoute: ApiSitemapRoute,
   ApiSyncRoute: ApiSyncRoute,
   PlayerUsernameRoute: PlayerUsernameRoute,
+  ApiAuthLogoutRoute: ApiAuthLogoutRoute,
+  ApiAuthOsuRoute: ApiAuthOsuRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

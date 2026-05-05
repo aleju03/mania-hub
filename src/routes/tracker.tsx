@@ -24,15 +24,16 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
+import { DanBadge } from "../components/ui/DanBadge";
 import { TrackerRowSkeleton } from "../components/ui/LoadingSkeleton";
+import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
 import { TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useSelectedCountry } from "../store";
 import type { OsuScore } from "../lib/types";
 import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
-
-const DEV_MODE = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === "1";
+import { useAuth } from "../lib/auth-context";
 
 export const Route = createFileRoute("/tracker")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -88,6 +89,12 @@ function ScoresPage() {
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<number[]>([]);
   const [initialLoaded, setInitialLoaded] = useState(feedScores.length > 0 || !!feedScoresFetchedAt);
   const [initialRefreshDone, setInitialRefreshDone] = useState(false);
+  const [initialFetching, setInitialFetching] = useState(false);
+  const [polling, setPolling] = useState(false);
+  const refreshing = initialFetching || polling;
+  const initialFetchInFlightRef = useRef(false);
+  const pollInFlightRef = useRef(false);
+  const pollRequestIdRef = useRef(0);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const handleToggleExpand = useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key));
@@ -102,6 +109,11 @@ function ScoresPage() {
     setPlayersError(null);
     setInitialLoaded(feedScores.length > 0 || !!feedScoresFetchedAt);
     setInitialRefreshDone(false);
+    setInitialFetching(false);
+    setPolling(false);
+    initialFetchInFlightRef.current = false;
+    pollInFlightRef.current = false;
+    pollRequestIdRef.current += 1;
     setExpandedKey(null);
     setSelectedPlayerIds([]);
     resetPollIndex(selectedCountry);
@@ -163,7 +175,7 @@ function ScoresPage() {
   }, [feedScores.length, initialLoaded]);
 
   useEffect(() => {
-    if (userIds.length === 0 || initialRefreshDone) return;
+    if (userIds.length === 0 || initialRefreshDone || initialFetchInFlightRef.current) return;
 
     const shouldRefresh =
       !feedScoresFetchedAt || isCacheStale(feedScoresFetchedAt, CLIENT_CACHE_TTL.scoresFeed);
@@ -180,33 +192,52 @@ function ScoresPage() {
 
     let cancelled = false;
     const BATCH = 10;
+    const requestedCountry = selectedCountry;
+    const requestedUserIds = userIds;
+
+    initialFetchInFlightRef.current = true;
+    setInitialFetching(true);
 
     (async () => {
-      const totalBatches = Math.ceil(userIds.length / BATCH);
+      const totalBatches = Math.ceil(requestedUserIds.length / BATCH);
       for (let b = 0; b < totalBatches; b++) {
         if (cancelled) return;
         try {
           const result = await getCountryRecentScores({
-            data: { userIds, batchSize: BATCH, batchIndex: b, recentLimit: 20 },
+            data: { userIds: requestedUserIds, batchSize: BATCH, batchIndex: b, recentLimit: 20 },
           });
           if (cancelled) return;
-          if (result.scores.length > 0) addFeedScores(selectedCountry, result.scores);
-          if (Object.keys(result.gains).length > 0) setTrackerPpGains(selectedCountry, result.gains);
+          if (result.scores.length > 0) addFeedScores(requestedCountry, result.scores);
+          if (Object.keys(result.gains).length > 0) setTrackerPpGains(requestedCountry, result.gains);
           setInitialLoaded(true);
         } catch { /* continue */ }
       }
       if (!cancelled) {
-        markFeedScoresFetched(selectedCountry);
+        markFeedScoresFetched(requestedCountry);
         setInitialRefreshDone(true);
+        initialFetchInFlightRef.current = false;
+        setInitialFetching(false);
       }
     })();
 
-    return () => { cancelled = true; };
-  }, [userIds, initialRefreshDone, feedScores.length, feedScoresFetchedAt, addFeedScores, markFeedScoresFetched, selectedCountry]);
+    return () => {
+      cancelled = true;
+      initialFetchInFlightRef.current = false;
+      setInitialFetching(false);
+    };
+  // feedScores.length and feedScoresFetchedAt intentionally omitted:
+  // addFeedScores writes both inside the loop, and those writes must not cancel
+  // the remaining batches of this initial refresh.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userIds, initialRefreshDone, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains]);
 
   const poll = useCallback(async () => {
     if (!isPolling || userIds.length === 0) return;
     if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+    if (pollInFlightRef.current) return;
+    pollInFlightRef.current = true;
+    const requestId = ++pollRequestIdRef.current;
+    setPolling(true);
     try {
       const result = await getCountryRecentScores({
         data: { userIds, batchSize: 10, batchIndex: pollIndex, recentLimit: 20 },
@@ -215,7 +246,12 @@ function ScoresPage() {
       if (Object.keys(result.gains).length > 0) setTrackerPpGains(selectedCountry, result.gains);
       else markFeedScoresFetched(selectedCountry);
       nextPollIndex(selectedCountry);
-    } catch { /* silently continue */ }
+    } catch { /* silently continue */ } finally {
+      if (pollRequestIdRef.current === requestId) {
+        pollInFlightRef.current = false;
+        setPolling(false);
+      }
+    }
   }, [isPolling, userIds, pollIndex, addFeedScores, markFeedScoresFetched, nextPollIndex, selectedCountry, setTrackerPpGains]);
 
   useEffect(() => {
@@ -332,12 +368,23 @@ function ScoresPage() {
         title={`${countryName} mania tracker`}
         right={
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${isPolling ? "bg-osu-green animate-pulse" : "bg-osu-f1"}`} />
-            <span className="text-[10px] text-osu-f1">
-              {loadingPlayers
-                ? "Loading tracked players..."
-                : `${isPolling ? "Live" : "Paused"} \u00b7 ${feedScores.length} scores`}
-            </span>
+            {loadingPlayers || refreshing ? (
+              <>
+                <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
+                <span className="text-[10px] text-osu-f1 tabular-nums">
+                  {loadingPlayers
+                    ? "Loading tracked players..."
+                    : "Refreshing..."}
+                </span>
+              </>
+            ) : (
+              <>
+                <div className={`w-2 h-2 rounded-full ${isPolling ? "bg-osu-green animate-pulse" : "bg-osu-f1"}`} />
+                <span className="text-[10px] text-osu-f1">
+                  {isPolling ? "Live" : "Paused"} {"\u00b7"} {feedScores.length} scores
+                </span>
+              </>
+            )}
             <button
               onClick={() => setIsPolling(!isPolling)}
               className="px-2.5 py-1 rounded-lg bg-osu-b4 text-[10px] text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/30"
@@ -646,22 +693,18 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   onToggle: (key: string) => void;
 }) {
   const navigate = useNavigate();
+  const auth = useAuth();
   const [rendered, setRendered] = useState(expanded);
   useEffect(() => { if (expanded) setRendered(true); }, [expanded]);
 
   const keys = score.beatmap?.cs;
-  const stats = score.statistics;
   const totalScore = getDisplayedTotalScore(score);
   const beatmapUrl = getBeatmapUrl(score);
   const scoreUrl = getScoreUrl(score);
-  const countMax = stats?.count_geki ?? stats?.perfect ?? 0;
-  const count300 = stats?.count_300 ?? stats?.great ?? 0;
-  const count200 = stats?.count_katu ?? stats?.good ?? 0;
-  const count100 = stats?.count_100 ?? stats?.ok ?? 0;
-  const count50 = stats?.count_50 ?? stats?.meh ?? 0;
-  const countMiss = stats?.count_miss ?? stats?.miss ?? 0;
+  const judgementStats = getManiaJudgementStats(score);
   const lazer = isLazerScore(score);
   const accColorClass = lazer ? "text-osu-pink-light" : "text-osu-l2";
+  const canReplay = auth.canUseDevFeatures && scoreHasReplay(score);
 
   return (
     <div className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
@@ -733,6 +776,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                 {keys}K
               </span>
             )}
+            <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>
           </div>
           {/* Row 3 (mobile): Mods left, stats right */}
           <div className="flex items-center justify-between gap-2 mt-1 sm:hidden">
@@ -740,6 +784,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               {getModDisplayList(score.mods).map((m) => (
                 <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
               ))}
+              <DanBadge score={score} />
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className={`text-xs ${accColorClass}`}>{formatAccuracy(getDisplayedAccuracy(score))}</span>
@@ -747,7 +792,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               {approxPpGain != null && (
                 <span className="text-[10px] font-semibold text-osu-green">+{formatNumber(Math.round(approxPpGain))}</span>
               )}
-              {DEV_MODE && scoreHasReplay(score) && (
+              {canReplay && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -782,7 +827,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               </span>
             )}
           </span>
-          {DEV_MODE && scoreHasReplay(score) && (
+          {canReplay && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -815,12 +860,9 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               <div className="relative grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
                 <StatCell label="Score" value={totalScore != null ? formatNumber(totalScore) : "-"} />
                 <StatCell label="Combo" value={`${formatNumber(score.max_combo)}x`} />
-                <StatCell label="MAX" value={formatNumber(countMax)} color="text-osu-blue" />
-                <StatCell label="300" value={formatNumber(count300)} color="text-osu-yellow" />
-                <StatCell label="200" value={formatNumber(count200)} color="text-osu-green" />
-                <StatCell label="100" value={formatNumber(count100)} color="text-osu-purple" />
-                <StatCell label="50" value={formatNumber(count50)} color="text-osu-orange" />
-                <StatCell label="Miss" value={formatNumber(countMiss)} color="text-osu-red" />
+                {judgementStats.map((judgement) => (
+                  <StatCell key={judgement.label} label={judgement.label} value={formatNumber(judgement.value)} color={judgement.className} />
+                ))}
                 {score.pp != null && score.pp > 0 && (
                   <StatCell label="PP" value={`${Math.round(score.pp)}pp`} color="text-osu-pink" />
                 )}

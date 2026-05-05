@@ -7,6 +7,7 @@ import { estimateDanielDan } from "../../lib/daniel-estimator";
 import { getBeatmapFile, getBeatmapset, getBeatmapsetForBeatmap, searchBeatmaps, searchBeatmapsByMappers } from "../../lib/osu";
 import type { DanEstimate } from "../../lib/dan-estimator";
 import type { OsuBeatmap, OsuBeatmapset } from "../../lib/types";
+import { canUseDevFeatures } from "../../lib/auth-shared";
 
 type DanClassifierId = "aleju" | "daniel";
 
@@ -104,15 +105,11 @@ export const Route = createFileRoute("/admin/dan-classifier")({
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
-  beforeLoad: () => {
-    if (typeof window !== "undefined") {
-      const host = window.location.hostname;
-      const isLocal = host === "localhost" || host === "127.0.0.1" || host === "::1";
-      const isDevMode = import.meta.env.VITE_DEV_MODE === "1";
-      if (!isLocal && !isDevMode) throw notFound();
-    } else if (process.env.VITE_DEV_MODE !== "1" && process.env.NODE_ENV === "production") {
+  beforeLoad: ({ context }) => {
+    if (!canUseDevFeatures(context.auth)) {
       throw notFound();
     }
+    return undefined as never;
   },
   component: DanClassifierPage,
 });

@@ -11,17 +11,18 @@ import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
+import { DanBadge } from "../components/ui/DanBadge";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
+import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
 import { Pagination } from "../components/ui/Pagination";
-import type { CountryTopPlay, OsuScore, RankingsResponse, TopPlaysRefreshStatus } from "../lib/types";
+import type { CountryTopPlay, RankingsResponse, TopPlaysRefreshStatus } from "../lib/types";
 import { useAppStore, useSelectedCountry, type CachedPopoff, type TopPlaysRange } from "../store";
 import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { hasTopPlaysCache, shouldRefreshTopPlays } from "../lib/top-plays-cache";
 import { getReplaySearch } from "../lib/replay-navigation";
-
-const DEV_MODE = import.meta.env.DEV || import.meta.env.VITE_DEV_MODE === "1";
+import { useAuth } from "../lib/auth-context";
 
 type PopOff = CountryTopPlay;
 
@@ -85,6 +86,8 @@ function PopOffsPage() {
   const { range, country } = Route.useSearch();
   const location = useLocation();
   const navigate = useNavigate();
+  const auth = useAuth();
+  const devMode = auth.canUseDevFeatures;
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = country ?? fallbackCountry;
   const currentCountryRef = useRef(selectedCountry);
@@ -107,13 +110,18 @@ function PopOffsPage() {
   const [page, setPage] = useState(0);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [scanStartedAt, setScanStartedAt] = useState<number | null>(null);
-  const [elapsed, setElapsed] = useState(0);
   const [refreshStatus, setRefreshStatus] = useState<TopPlaysRefreshStatus | null>(null);
   const [partialPopoffs, setPartialPopoffs] = useState<PopOff[]>([]);
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<number[]>([]);
   const hasRestoredRememberedRangeRef = useRef(false);
   const sawRefreshActivityRef = useRef(false);
   const finalizingRefreshRef = useRef(false);
+  // Read inside fetchAll to skip a re-entry when setCachedPopoffs's store update
+  // makes the cache look fresh again mid-scan and would otherwise reset the spinner.
+  const refreshingRef = useRef(false);
+  useEffect(() => {
+    refreshingRef.current = refreshing;
+  }, [refreshing]);
   const countryName = getCountryName(selectedCountry);
 
   useEffect(() => {
@@ -124,7 +132,6 @@ function PopOffsPage() {
     setPage(0);
     setExpandedId(null);
     setScanStartedAt(null);
-    setElapsed(0);
     setRefreshStatus(null);
     setPartialPopoffs([]);
     setSelectedPlayerIds([]);
@@ -133,14 +140,6 @@ function PopOffsPage() {
     finalizingRefreshRef.current = false;
     hasRestoredRememberedRangeRef.current = false;
   }, [selectedCountry]);
-
-  useEffect(() => {
-    if (scanStartedAt == null) return;
-    const tick = () => setElapsed(Date.now() - scanStartedAt);
-    tick();
-    const id = window.setInterval(tick, 250);
-    return () => window.clearInterval(id);
-  }, [scanStartedAt]);
 
   useEffect(() => {
     if (hasRestoredRememberedRangeRef.current) return;
@@ -293,6 +292,8 @@ function PopOffsPage() {
   }, [mergePopoffs, players, scanStartedAt, selectedCountry, setCachedPopoffs]);
 
   const fetchAll = useCallback(async () => {
+    if (refreshingRef.current) return;
+
     if (players.length === 0 || fetchingRef.current) {
       if (players.length === 0) {
         setLoading(false);
@@ -323,7 +324,6 @@ function PopOffsPage() {
     setLoading(!hasCachedPopoffs);
     setRefreshing(true);
     setScanStartedAt(Date.now());
-    setElapsed(0);
     setPage(0);
     let keepPollingRefresh = false;
 
@@ -455,10 +455,10 @@ function PopOffsPage() {
     : hasCachedPopoffs
       ? "Refreshing..."
       : "Loading top plays...";
-  const elapsedSeconds = Math.max(0, Math.floor(elapsed / 1000));
-  const scanProgressLabel = refreshStatus
-    ? `${refreshStatus.current}/${refreshStatus.total} players · ${refreshStatus.found} found · ${elapsedSeconds}s`
-    : loadingLabel;
+  const scanProgressLabel =
+    refreshStatus && refreshStatus.total > 0
+      ? `Refreshing... ${Math.min(99, Math.round((refreshStatus.current / refreshStatus.total) * 100))}%`
+      : loadingLabel;
 
   const ranges: { id: TimeRange; label: string }[] = [
     { id: "24h", label: "24 hours" },
@@ -713,6 +713,7 @@ function PopOffsPage() {
                 {paginated.map((p: PopOff) => {
                   const lazer = isLazerScore(p.score);
                   const accColorClass = lazer ? "text-osu-pink-light" : "text-osu-l2";
+                  const judgementStats = getManiaJudgementStats(p.score);
                   return (
                   <motion.div
                     key={`${p.user.id}-${p.score.id}`}
@@ -794,6 +795,7 @@ function PopOffsPage() {
                           <span className="text-[10px] text-osu-f1 truncate">
                             [{p.score.beatmap?.version}]
                           </span>
+                          <span className="hidden sm:inline flex-shrink-0"><DanBadge score={p.score} /></span>
                         </div>
                         {/* Row 3 (mobile): Mods left, accuracy right */}
                         <div className="flex items-center justify-between gap-2 mt-1 sm:hidden">
@@ -801,10 +803,11 @@ function PopOffsPage() {
                             {getModDisplayList(p.score.mods).map((m) => (
                               <ModBadge key={m.acronym} mod={m.acronym} rate={m.rate} />
                             ))}
+                            <DanBadge score={p.score} />
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <span className={`text-xs ${accColorClass}`}>{formatAccuracy(getDisplayedAccuracy(p.score))}</span>
-                            {DEV_MODE && scoreHasReplay(p.score) && (
+                            {devMode && scoreHasReplay(p.score) && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -834,7 +837,7 @@ function PopOffsPage() {
                         <span className="text-xs text-osu-f1">
                           {formatNumber(p.score.max_combo)}x
                         </span>
-                        {DEV_MODE && scoreHasReplay(p.score) && (
+                        {devMode && scoreHasReplay(p.score) && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -862,12 +865,9 @@ function PopOffsPage() {
                             <div className="relative grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
                               <StatCell label="Score" value={getDisplayedTotalScore(p.score) != null ? formatNumber(getDisplayedTotalScore(p.score)!) : "-"} />
                               <StatCell label="Combo" value={`${formatNumber(p.score.max_combo)}x`} />
-                              <StatCell label="MAX" value={formatNumber(p.score.statistics.count_geki ?? p.score.statistics.perfect ?? 0)} color="text-osu-blue" />
-                              <StatCell label="300" value={formatNumber(p.score.statistics.count_300 ?? p.score.statistics.great ?? 0)} color="text-osu-yellow" />
-                              <StatCell label="200" value={formatNumber(p.score.statistics.count_katu ?? p.score.statistics.good ?? 0)} color="text-osu-green" />
-                              <StatCell label="100" value={formatNumber(p.score.statistics.count_100 ?? p.score.statistics.ok ?? 0)} color="text-osu-purple" />
-                              <StatCell label="50" value={formatNumber(p.score.statistics.count_50 ?? p.score.statistics.meh ?? 0)} color="text-osu-orange" />
-                              <StatCell label="Miss" value={formatNumber(p.score.statistics.count_miss ?? p.score.statistics.miss ?? 0)} color="text-osu-red" />
+                              {judgementStats.map((judgement) => (
+                                <StatCell key={judgement.label} label={judgement.label} value={formatNumber(judgement.value)} color={judgement.className} />
+                              ))}
                               <StatCell label="PP" value={`${Math.round(p.pp)}pp`} color="text-osu-pink" />
                               {p.score.beatmap?.difficulty_rating != null && (
                                 <StatCell label="Stars" value={p.score.beatmap.difficulty_rating.toFixed(2)} />

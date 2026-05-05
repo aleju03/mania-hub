@@ -14,7 +14,7 @@ function parseAvatarUserId(url: string | undefined): number | null {
 
 export function avatarImageSrc(url: string | undefined, userId?: number | string | null): string | undefined {
   const parsedUserId = userId == null || userId === "" ? null : Number(userId);
-  const id = Number.isSafeInteger(parsedUserId) && parsedUserId > 0
+  const id = parsedUserId !== null && Number.isSafeInteger(parsedUserId) && parsedUserId > 0
     ? parsedUserId
     : parseAvatarUserId(url);
   return id ? `/api/avatar?u=${id}` : url;

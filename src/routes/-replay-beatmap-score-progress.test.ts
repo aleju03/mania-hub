@@ -4,17 +4,18 @@ import { describe, expect, it } from "vitest";
 
 describe("replay beatmap score progress UI", () => {
   it("polls partial beatmap scores while the full country lookup is loading", () => {
-    const source = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+    const routeSource = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+    const browseSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplayBrowseView.tsx"), "utf8");
 
-    expect(source).toContain("getBeatmapScoreLookupStatus");
-    expect(source).toContain("getPartialBeatmapScores");
-    expect(source).toContain("partialBeatmapScores");
-    expect(source).toContain("beatmapScoreLookupStatus");
-    expect(source).toContain("setInterval(poll, 750)");
-    expect(source).toContain("players checked");
-    expect(source).toContain("replays found");
-    expect(source).toContain("beatmapScorePage");
-    expect(source).toContain("Load more");
-    expect(source).toContain("page: nextPage");
+    expect(routeSource).toContain("getBeatmapScoreLookupStatus");
+    expect(routeSource).toContain("getPartialBeatmapScores");
+    expect(routeSource).toContain("partialBeatmapScores");
+    expect(routeSource).toContain("beatmapScoreLookupStatus");
+    expect(routeSource).toContain("setInterval(poll, 750)");
+    expect(browseSource).toContain("players checked");
+    expect(browseSource).toContain("replays found");
+    expect(routeSource).toContain("beatmapScorePage");
+    expect(browseSource).toContain("Load more");
+    expect(routeSource).toContain("page: nextPage");
   });
 });

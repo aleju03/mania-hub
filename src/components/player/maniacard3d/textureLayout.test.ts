@@ -6,7 +6,7 @@ const measure: MeasureText = (text, size) => text.length * size * 0.55;
 
 const data = {
   status: "ready",
-  user: { id: 1, username: "LongLongLongLongLongName", country_code: "US", statistics: { global_rank: 10 } },
+  user: { id: 1, username: "LongLongLongLongLongName", avatar_url: "", country_code: "US", statistics: { global_rank: 10 } },
   avatarUrl: "/api/avatar?u=1",
   tier: "ultraRare",
   tierStyle: {
@@ -48,7 +48,7 @@ const data = {
     { label: "Speed", value: 744 },
     { label: "Precision", value: 901 },
   ],
-} as ManiaCardReadyData;
+} as unknown as ManiaCardReadyData;
 
 describe("buildFaceLayout", () => {
   test("builds front commands with fitted username and avatar mask metadata", () => {

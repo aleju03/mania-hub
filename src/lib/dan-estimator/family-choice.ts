@@ -174,7 +174,7 @@ const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
       && metrics.peakNps5s >= 22
       && metrics.chordSizeChangeRate >= 0.45
       && metrics.directionChangeRate >= 0.55
-      && skillScores.handstream >= topScore - 0.65,
+      && skillScores.handstream >= topScore - 0.5,
   },
   {
     id: "sustained-mid-chord-handstream-speed",

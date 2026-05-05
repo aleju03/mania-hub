@@ -276,6 +276,14 @@ function pickExpectedCounts(score: OsuScore, decodedInfo: any): ReplayHitCounts 
   return countFromDecodedReplayInfo(decodedInfo);
 }
 
+function pickExpectedMaxCombo(score: OsuScore, decodedInfo: any): number | null {
+  const apiMaxCombo = Number(score.max_combo);
+  if (Number.isFinite(apiMaxCombo) && apiMaxCombo > 0) return apiMaxCombo;
+
+  const replayMaxCombo = Number(decodedInfo?.maxCombo);
+  return Number.isFinite(replayMaxCombo) && replayMaxCombo > 0 ? replayMaxCombo : null;
+}
+
 function decodeFrames(decodedScore: any): ReplayFrame[] {
   const rawFrames = (decodedScore.replay?.frames ?? []) as any[];
   return rawFrames
@@ -294,9 +302,10 @@ async function validateScoreId(scoreId: number, options: CliOptions): Promise<Re
   const frames = decodeFrames(decoded);
   const mods = getModAcronyms(fixture.score.mods, false);
   const isLazer = isLazerScore(fixture.score);
-  const keyCount = beatmap.keyCount || Math.round(Number(fixture.score.beatmap?.cs)) || decoded.keyCount || 4;
+  const keyCount = beatmap.keyCount || Math.round(Number(fixture.score.beatmap?.cs)) || Number((decoded as { keyCount?: number }).keyCount) || 4;
   const result = validateReplaySimulation({
     expectedCounts: pickExpectedCounts(fixture.score, decoded.info),
+    expectedMaxCombo: pickExpectedMaxCombo(fixture.score, decoded.info),
     frames,
     isConvert: fixture.score.beatmap?.convert ?? false,
     isLazer,
@@ -327,7 +336,9 @@ function formatSigned(value: number): string {
 }
 
 function printResult(result: ReplayValidationResult & { scoreId: number; title: string; version: string; player: string; mods: string[]; keyCount: number }, tolerance: number): void {
-  const status = result.totalCountDiff <= tolerance ? "PASS" : "FAIL";
+  const countMatched = result.totalCountDiff <= tolerance;
+  const comboMatched = result.maxComboDiff == null || result.maxComboDiff === 0;
+  const status = countMatched ? comboMatched ? "PASS" : "PASS/WARN" : "FAIL";
   const mods = result.mods.length > 0 ? ` +${result.mods.join("")}` : "";
 
   console.log(`\n[${status}] ${result.scoreId} ${result.accuracyMode} ${result.keyCount}K${mods}`);
@@ -339,6 +350,10 @@ function printResult(result: ReplayValidationResult & { scoreId: number; title: 
     console.log("Resolved via legacy .osr frame timing ambiguity.");
   }
   console.log(`Hits expected ${result.totalExpected} simulated ${result.totalSimulated} (total abs diff ${result.totalCountDiff})`);
+  console.log(`Max combo expected ${result.expectedMaxCombo ?? "unknown"} simulated ${result.simulatedMaxCombo}${result.maxComboDiff == null ? "" : ` (${formatSigned(result.maxComboDiff)})`}`);
+  if (!comboMatched) {
+    console.log("Max combo reconstruction is approximate for stable sampled replay frames; header combo was not used to cap, reset, freeze, or mutate the live combo path.");
+  }
   console.log("       expected  simulated  diff");
 
   const rows: Array<[string, keyof ReplayHitCounts]> = [

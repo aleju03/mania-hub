@@ -3,13 +3,20 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("replay skin settings UI", () => {
-  it("loads persisted settings, exposes a gear button, and renders the skin modal controls", () => {
-    const source = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+  it("loads persisted settings and exposes a gear button for the skin modal", () => {
+    const routeSource = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+    const controlsSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplayControls.tsx"), "utf8");
 
-    expect(source).toContain("readReplaySkinSettings");
-    expect(source).toContain("writeReplaySkinSettings");
-    expect(source).toContain("rendererRef.current?.setSkinSettings");
-    expect(source).toContain('aria-label="Replay settings"');
+    expect(routeSource).toContain("readReplaySkinSettings");
+    expect(routeSource).toContain("writeReplaySkinSettings");
+    expect(routeSource).toContain("rendererRef.current?.setSkinSettings");
+    expect(routeSource).toContain("ReplaySkinSettingsModal");
+    expect(controlsSource).toContain('aria-label="Replay settings"');
+  });
+
+  it("renders the skin modal controls in the replay component folder", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplaySkinSettingsModal.tsx"), "utf8");
+
     expect(source).toContain("Replay settings");
     expect(source).toContain("Style");
     expect(source).toContain("Layout");
@@ -19,6 +26,11 @@ describe("replay skin settings UI", () => {
     expect(source).toContain("Cut LN tail");
     expect(source).toContain("Keymode");
     expect(source).toContain("Skin preset");
+    expect(source).toContain("Import .osk");
+    expect(source).toContain("Note height");
+    expect(source).toContain("ScorePosition");
+    expect(source).toContain("ComboPosition");
+    expect(source).toContain("Keys under notes");
     expect(source).toContain("Note shape");
     expect(source).toContain("Per-column colors");
     expect(source).toContain("Column width");
@@ -31,18 +43,19 @@ describe("replay skin settings UI", () => {
   });
 
   it("exposes input overlay-only and color controls", () => {
-    const source = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+    const routeSource = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+    const controlsSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplayControls.tsx"), "utf8");
 
-    expect(source).toContain("setInputOverlayOptions");
-    expect(source).toContain("Input overlay color");
-    expect(source).toContain("inputOverlayOnly");
+    expect(routeSource).toContain("setInputOverlayOptions");
+    expect(controlsSource).toContain("Input overlay color");
+    expect(controlsSource).toContain("inputOverlayOnly");
   });
 
   it("only highlights the gear button while the skin modal is open", () => {
-    const source = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+    const controlsSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplayControls.tsx"), "utf8");
 
-    expect(source).toMatch(/skinSettingsOpen\s*\?\s*"bg-osu-pink text-white"/);
-    expect(source).not.toContain('skinSettingsOpen || skinSettings.style === "circles"');
+    expect(controlsSource).toMatch(/skinSettingsOpen\s*\?\s*"bg-osu-pink text-white"/);
+    expect(controlsSource).not.toContain('skinSettingsOpen || skinSettings.style === "circles"');
   });
 
   it("does not resume an ended replay when the tab becomes visible again", () => {

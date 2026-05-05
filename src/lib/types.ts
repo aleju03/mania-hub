@@ -258,6 +258,15 @@ export interface BeatmapScoresResponse {
   scores: OsuScore[];
 }
 
+export interface LeanDanEstimate {
+  label: string;
+  variant: string | null;
+  displayName: string;
+  rawDan: number;
+  family: string;
+  confidence: number;
+}
+
 export interface UserSearchResponse {
   user: {
     data: Array<{

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateReplacementPpGain, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getScoreDisplayValues, isLazerScore } from "./score";
+import { calculateReplacementPpGain, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getManiaJudgementCounts, getScoreDisplayValues, isLazerScore } from "./score";
 import type { OsuScore } from "./types";
 
 function createScore(overrides: Partial<OsuScore>): OsuScore {
@@ -113,6 +113,42 @@ describe("getDisplayedRank", () => {
     }));
 
     expect(rank).toBe("S");
+  });
+});
+
+describe("getManiaJudgementCounts", () => {
+  it("normalizes stable and lazer judgement keys in display order", () => {
+    expect(getManiaJudgementCounts({
+      count_geki: 1,
+      count_300: 2,
+      count_katu: 3,
+      count_100: 4,
+      count_50: 5,
+      count_miss: 6,
+    })).toEqual([
+      { label: "MAX", value: 1 },
+      { label: "300", value: 2 },
+      { label: "200", value: 3 },
+      { label: "100", value: 4 },
+      { label: "50", value: 5 },
+      { label: "Miss", value: 6 },
+    ]);
+
+    expect(getManiaJudgementCounts({
+      perfect: 7,
+      great: 8,
+      good: 9,
+      ok: 10,
+      meh: 11,
+      miss: 12,
+    })).toEqual([
+      { label: "MAX", value: 7 },
+      { label: "300", value: 8 },
+      { label: "200", value: 9 },
+      { label: "100", value: 10 },
+      { label: "50", value: 11 },
+      { label: "Miss", value: 12 },
+    ]);
   });
 });
 

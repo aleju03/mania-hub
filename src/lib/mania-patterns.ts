@@ -65,10 +65,10 @@ export function detectManiaPatterns(
   // tags + version names (often contain diff labels like "[Jacks]" or "[LN]").
   const pack = isPackTitle(title);
   const sources: Array<{ kind: PatternSource; text: string }> = [
-    { kind: "tags", text: tagsText },
+    { kind: "tags" as const, text: tagsText },
     ...(pack
-      ? [{ kind: "title" as const, text: title }]
-      : versionNames.map((version) => ({ kind: "version" as const, text: version }))),
+      ? [{ kind: "title", text: title } satisfies { kind: PatternSource; text: string }]
+      : versionNames.map((version): { kind: PatternSource; text: string } => ({ kind: "version", text: version }))),
   ].filter((source) => source.text.trim());
   if (sources.length === 0) return [];
 

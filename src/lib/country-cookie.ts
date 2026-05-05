@@ -60,7 +60,7 @@ export function writeCountryCookieClient(country: string, options?: { auto?: boo
 
 export function resolveDetectedCountry(country: string | null | undefined): string | null {
   const normalized = country?.trim().toUpperCase();
-  return isSupportedCountryCode(normalized) ? normalized : null;
+  return normalized && isSupportedCountryCode(normalized) ? normalized : null;
 }
 
 export function resolveInitialCountry(cookieValue: string | null, detectedCountry?: string | null): string {

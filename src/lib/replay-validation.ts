@@ -1,6 +1,6 @@
 import type { ManiaNote } from "./beatmap-parser";
 import type { ReplayFrame } from "./types";
-import type { Judgment, ReplayAccuracyMode, ReplayJudgementEvent } from "./mania-replay-judgement.ts";
+import type { Judgment, ReplayAccuracyMode, ReplayJudgementEvent, ReplayNoteState } from "./mania-replay-judgement.ts";
 import {
   buildReplaySegments,
   calculateReplayAccuracy,
@@ -21,14 +21,20 @@ export interface ReplayHitCounts {
 export interface ReplayValidationResult {
   accuracyMode: ReplayAccuracyMode;
   accuracyDiff: number;
+  expectedMaxCombo: number | null;
   expectedAccuracy: number;
   expectedCounts: ReplayHitCounts;
   legacyReplayAmbiguityResolved: boolean;
   legacyReplayResolution: "none" | "ambiguity" | "score-header";
   matched: boolean;
+  maxComboDiff: number | null;
+  maxComboHeaderApplied: boolean;
+  maxComboSource: "judgement-events" | "replay-frame-reconstruction";
   rawSimulatedCounts: ReplayHitCounts;
   simulatedAccuracy: number;
   simulatedCounts: ReplayHitCounts;
+  simulatedMaxCombo: number;
+  stableComboReconstruction: "approximate" | "visible-frame-match" | null;
   totalCountDiff: number;
   totalExpected: number;
   totalSimulated: number;
@@ -37,6 +43,7 @@ export interface ReplayValidationResult {
 
 export interface ReplayValidationInput {
   expectedCounts: ReplayHitCounts;
+  expectedMaxCombo?: number | null;
   frames: ReplayFrame[];
   isConvert?: boolean;
   isLazer?: boolean;
@@ -85,6 +92,104 @@ export function countReplayJudgements(events: ReplayJudgementEvent[]): ReplayHit
   }
 
   return counts;
+}
+
+export function calculateReplayMaxCombo(
+  events: ReplayJudgementEvent[],
+  options: { initialCombo?: number } = {},
+): number {
+  const initialCombo = options.initialCombo ?? 0;
+  let combo = Math.max(0, Math.floor(initialCombo));
+  let maxCombo = combo;
+
+  for (const event of events) {
+    if (event.judgment == null || event.judgment === 6) {
+      combo = 0;
+    } else if (event.judgment >= 1 && event.judgment <= 5) {
+      combo++;
+      maxCombo = Math.max(maxCombo, combo);
+    }
+  }
+
+  return maxCombo;
+}
+
+type ReplayComboEvent = { kind: "break" | "hit"; time: number };
+
+function segmentCoversTime(segment: { start: number; end: number }, time: number): boolean {
+  const epsilon = 1e-6;
+  return segment.start <= time + epsilon && time < segment.end - epsilon;
+}
+
+function calculateReplayComboEventsMaxCombo(events: ReplayComboEvent[]): number {
+  let combo = 0;
+  let maxCombo = 0;
+
+  for (const event of events) {
+    if (event.kind === "break") {
+      combo = 0;
+    } else {
+      combo++;
+      maxCombo = Math.max(maxCombo, combo);
+    }
+  }
+
+  return maxCombo;
+}
+
+export function buildStableReplayComboEvents(notes: ManiaNote[], noteStates: ReplayNoteState[]): ReplayComboEvent[] {
+  const events: ReplayComboEvent[] = [];
+
+  for (let index = 0; index < notes.length; index++) {
+    const note = notes[index];
+    const state = noteStates[index];
+    if (!state) continue;
+
+    const isHold = note.isHold && note.endTime > note.time;
+    if (!isHold) {
+      events.push({
+        kind: state.headJudgment === 6 ? "break" : "hit",
+        time: state.headTime,
+      });
+      continue;
+    }
+
+    if (state.headJudgment === 6) {
+      events.push({ kind: "break", time: state.headTime });
+      continue;
+    }
+
+    events.push({ kind: "hit", time: state.headTime });
+
+    for (const breakTime of state.bodyBreakTimes ?? (state.bodyBreakTime == null ? [] : [state.bodyBreakTime])) {
+      events.push({ kind: "break", time: breakTime });
+    }
+    if (state.tailJudgment === 6) {
+      events.push({ kind: "break", time: state.tailTime ?? note.endTime });
+    }
+
+    const heldSegments = state.heldSegments ?? [];
+    for (let time = note.time + 100; time <= note.endTime + 1e-6; time += 100) {
+      if (time >= state.headTime - 1e-6 && heldSegments.some((segment) => segmentCoversTime(segment, time))) {
+        events.push({ kind: "hit", time });
+      }
+    }
+  }
+
+  return events.sort((a, b) => a.time - b.time || (a.kind === "break" ? -1 : 1));
+}
+
+export function calculateReplayMaxComboForMode(
+  accuracyMode: ReplayAccuracyMode,
+  judgementEvents: ReplayJudgementEvent[],
+  notes: ManiaNote[],
+  noteStates: ReplayNoteState[],
+): number {
+  if (accuracyMode === "stable") {
+    return calculateReplayComboEventsMaxCombo(buildStableReplayComboEvents(notes, noteStates));
+  }
+
+  return calculateReplayMaxCombo(judgementEvents);
 }
 
 export function replayHitCountsToArray(counts: ReplayHitCounts): number[] {
@@ -413,7 +518,16 @@ export function validateReplaySimulation(input: ReplayValidationInput): ReplayVa
   const ambiguityResolvedCounts = resolvedEvents?.resolved
     ? countReplayJudgements(resolvedEvents.events)
     : null;
+  const finalEvents = resolvedEvents?.resolved ? resolvedEvents.events : simulated.events;
   const simulatedCounts = ambiguityResolvedCounts ?? rawSimulatedCounts;
+  const expectedMaxCombo = input.expectedMaxCombo != null && input.expectedMaxCombo > 0
+    ? input.expectedMaxCombo
+    : null;
+  const simulatedMaxCombo = calculateReplayMaxComboForMode(ruleset.accuracyMode, finalEvents, input.notes, simulated.noteStates);
+  const maxComboDiff = expectedMaxCombo == null ? null : simulatedMaxCombo - expectedMaxCombo;
+  const stableComboReconstruction = ruleset.accuracyMode === "stable"
+    ? maxComboDiff === 0 ? "visible-frame-match" : "approximate"
+    : null;
   const diffs = diffReplayHitCounts(simulatedCounts, input.expectedCounts);
   const totalExpected = getReplayHitCountTotal(input.expectedCounts);
   const totalSimulated = getReplayHitCountTotal(simulatedCounts);
@@ -429,14 +543,20 @@ export function validateReplaySimulation(input: ReplayValidationInput): ReplayVa
   return {
     accuracyMode: ruleset.accuracyMode,
     accuracyDiff: simulatedAccuracy - expectedAccuracy,
+    expectedMaxCombo,
     expectedAccuracy,
     expectedCounts: input.expectedCounts,
     legacyReplayAmbiguityResolved: ambiguityResolvedCounts != null,
     legacyReplayResolution: resolvedEvents?.mode ?? "none",
     matched: totalCountDiff === 0,
+    maxComboDiff,
+    maxComboHeaderApplied: false,
+    maxComboSource: ruleset.accuracyMode === "stable" ? "replay-frame-reconstruction" : "judgement-events",
     rawSimulatedCounts,
     simulatedAccuracy,
     simulatedCounts,
+    simulatedMaxCombo,
+    stableComboReconstruction,
     totalCountDiff,
     totalExpected,
     totalSimulated,

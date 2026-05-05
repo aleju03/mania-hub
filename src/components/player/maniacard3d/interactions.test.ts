@@ -6,6 +6,7 @@ import {
   pointerToLight,
   pointerToRotation,
   settleRotation,
+  subtractRotation,
 } from "./interactions";
 
 describe("pointerToRotation", () => {
@@ -36,6 +37,15 @@ describe("addRotation", () => {
     expect(addRotation({ x: 0, y: 720 }, { x: 0, y: 95 })).toEqual({
       x: 0,
       y: 815,
+    });
+  });
+});
+
+describe("subtractRotation", () => {
+  test("keeps a manually posed card stable when removing gyro offset", () => {
+    expect(subtractRotation({ x: 12, y: 84 }, { x: -3, y: 10 })).toEqual({
+      x: 15,
+      y: 74,
     });
   });
 });

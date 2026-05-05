@@ -134,14 +134,49 @@ export function isLazerScore(score: OsuScore): boolean {
   return !isLegacySubmittedScore(score);
 }
 
+export type ManiaJudgementLabel = "MAX" | "300" | "200" | "100" | "50" | "Miss";
+
+interface ManiaHitCounts {
+  countMax: number;
+  count300: number;
+  count200: number;
+  count100: number;
+  count50: number;
+  countMiss: number;
+}
+
+export interface ManiaJudgementCount {
+  label: ManiaJudgementLabel;
+  value: number;
+}
+
+function getManiaHitCounts(stats: OsuScoreStatistics | null | undefined): ManiaHitCounts {
+  const safeStats = stats ?? {};
+  return {
+    countMax: safeStats.count_geki ?? safeStats.perfect ?? 0,
+    count300: safeStats.count_300 ?? safeStats.great ?? 0,
+    count200: safeStats.count_katu ?? safeStats.good ?? 0,
+    count100: safeStats.count_100 ?? safeStats.ok ?? 0,
+    count50: safeStats.count_50 ?? safeStats.meh ?? 0,
+    countMiss: safeStats.count_miss ?? safeStats.miss ?? 0,
+  };
+}
+
+export function getManiaJudgementCounts(stats: OsuScoreStatistics | null | undefined): ManiaJudgementCount[] {
+  const counts = getManiaHitCounts(stats);
+  return [
+    { label: "MAX", value: counts.countMax },
+    { label: "300", value: counts.count300 },
+    { label: "200", value: counts.count200 },
+    { label: "100", value: counts.count100 },
+    { label: "50", value: counts.count50 },
+    { label: "Miss", value: counts.countMiss },
+  ];
+}
+
 /** Lazer mania score accuracy follows the score processor base values: MAX=305, 300=300, 200=200, 100=100, 50=50. */
 function calculateLazerAccuracy(stats: OsuScoreStatistics): number {
-  const countMax = stats.count_geki ?? stats.perfect ?? 0;
-  const count300 = stats.count_300 ?? stats.great ?? 0;
-  const count200 = stats.count_katu ?? stats.good ?? 0;
-  const count100 = stats.count_100 ?? stats.ok ?? 0;
-  const count50 = stats.count_50 ?? stats.meh ?? 0;
-  const countMiss = stats.count_miss ?? stats.miss ?? 0;
+  const { countMax, count300, count200, count100, count50, countMiss } = getManiaHitCounts(stats);
   const total = countMax + count300 + count200 + count100 + count50 + countMiss;
   if (total === 0) return 0;
   return (countMax * 305 + count300 * 300 + count200 * 200 + count100 * 100 + count50 * 50) / (total * 305);
@@ -149,12 +184,7 @@ function calculateLazerAccuracy(stats: OsuScoreStatistics): number {
 
 /** Stable mania accuracy: MAX=300=300, 200=200, 100=100, 50=50, miss=0 */
 function calculateStableAccuracy(stats: OsuScoreStatistics): number {
-  const countMax = stats.count_geki ?? stats.perfect ?? 0;
-  const count300 = stats.count_300 ?? stats.great ?? 0;
-  const count200 = stats.count_katu ?? stats.good ?? 0;
-  const count100 = stats.count_100 ?? stats.ok ?? 0;
-  const count50 = stats.count_50 ?? stats.meh ?? 0;
-  const countMiss = stats.count_miss ?? stats.miss ?? 0;
+  const { countMax, count300, count200, count100, count50, countMiss } = getManiaHitCounts(stats);
   const total = countMax + count300 + count200 + count100 + count50 + countMiss;
   if (total === 0) return 0;
   return (countMax * 300 + count300 * 300 + count200 * 200 + count100 * 100 + count50 * 50) / (total * 300);

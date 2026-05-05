@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 describe("replay player suggestion banners", () => {
   it("uses ranking user cover urls as dim card backgrounds", () => {
     const routeSource = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+    const browseSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplayBrowseView.tsx"), "utf8");
     const osuSource = fs.readFileSync(path.resolve(__dirname, "../lib/osu.ts"), "utf8");
     const typesSource = fs.readFileSync(path.resolve(__dirname, "../lib/types.ts"), "utf8");
 
@@ -12,7 +13,7 @@ describe("replay player suggestion banners", () => {
     expect(osuSource).toContain('cover_url: raw.user.cover?.url ?? raw.user.cover_url ?? ""');
     expect(osuSource).toContain("rankings:v4");
     expect(routeSource).toContain("cover_url: entry.user.cover_url");
-    expect(routeSource).toContain("backgroundImage: `url(${p.cover_url})`");
-    expect(routeSource).toContain("bg-osu-b4/80");
+    expect(browseSource).toContain("backgroundImage: `url(${player.cover_url})`");
+    expect(browseSource).toContain("via-osu-b4/80");
   });
 });

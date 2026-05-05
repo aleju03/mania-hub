@@ -6,6 +6,7 @@ import {
   Scene,
   WebGLRenderer,
 } from "three";
+import type { Object3D } from "three";
 import { createCardBodyGeometry, createCardFaceGeometry, FACE_Z_OFFSET, OVERLAY_Z_OFFSET } from "./cardGeometry";
 import { createEdgeMaterial, createFaceMaterial, createOverlayMaterial } from "./cardMaterials";
 import { createCardTextures, type CardTextureSet } from "./cardTexture";
@@ -15,6 +16,7 @@ import {
   orientationToRotation,
   pointerToLight,
   pointerToRotation,
+  subtractRotation,
   type InteractionState,
   type Rotation2D,
 } from "./interactions";
@@ -49,6 +51,8 @@ export class ManiaCardRenderer {
   private disposed = false;
   private dataRequestId = 0;
   private dragStart: { x: number; y: number; rotation: Rotation2D } | null = null;
+  private manualRotation: Rotation2D = { x: 0, y: 0 };
+  private orientationRotation: Rotation2D = { x: 0, y: 0 };
   private overlay: Mesh | null = null;
   private restBeta: number | null = null;
   private orientationAttached = false;
@@ -65,7 +69,10 @@ export class ManiaCardRenderer {
     });
     this.renderer = new WebGLRenderer({ antialias: this.quality.antialias, alpha: true });
     this.renderer.setPixelRatio(this.quality.pixelRatio);
-    this.renderer.setSize(this.host.clientWidth, this.host.clientHeight, false);
+    this.renderer.setSize(this.host.clientWidth, this.host.clientHeight);
+    this.renderer.domElement.style.display = "block";
+    this.renderer.domElement.style.width = "100%";
+    this.renderer.domElement.style.height = "100%";
     this.host.appendChild(this.renderer.domElement);
     this.camera.position.set(0, 0, 7);
     this.scene.add(new AmbientLight(0xffffff, 1.4));
@@ -111,7 +118,7 @@ export class ManiaCardRenderer {
   resize() {
     const width = Math.max(1, this.host.clientWidth);
     const height = Math.max(1, this.host.clientHeight);
-    this.renderer.setSize(width, height, false);
+    this.renderer.setSize(width, height);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.start();
@@ -128,7 +135,7 @@ export class ManiaCardRenderer {
       this.orientationAttached = false;
     }
     this.textures?.dispose();
-    this.group.traverse((object) => {
+    this.group.traverse((object: Object3D) => {
       const mesh = object as Mesh;
       if (mesh.geometry) mesh.geometry.dispose();
       const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
@@ -166,13 +173,22 @@ export class ManiaCardRenderer {
     this.group.rotation.y = frontFacingOffset + (this.interaction.rotation.y * Math.PI) / 180;
 
     if (this.overlay?.material && "uniforms" in this.overlay.material) {
-      const uniforms = this.overlay.material.uniforms;
+      const uniforms = this.overlay.material.uniforms as any;
       uniforms.uTime.value = time;
       uniforms.uLight.value.set(this.interaction.light.x, this.interaction.light.y);
     }
 
     this.renderer.render(this.scene, this.camera);
     return this.shouldKeepAnimating();
+  }
+
+  private setRotation(rotation: Rotation2D) {
+    this.interaction.rotation = rotation;
+    this.interaction.light = pointerToLight(rotation);
+  }
+
+  private applyOrientationRotation() {
+    this.setRotation(addRotation(this.manualRotation, this.orientationRotation));
   }
 
   private onPointerDown = (event: PointerEvent) => {
@@ -208,6 +224,7 @@ export class ManiaCardRenderer {
     }
     this.dragStart = null;
     this.interaction.dragging = false;
+    this.manualRotation = subtractRotation(this.interaction.rotation, this.orientationRotation);
     this.interaction.lastInputAt = performance.now();
     this.start();
   };
@@ -217,13 +234,12 @@ export class ManiaCardRenderer {
     if (this.restBeta === null) this.restBeta = event.beta;
     if (this.interaction.dragging) return;
 
-    const rotation = orientationToRotation({
+    this.orientationRotation = orientationToRotation({
       beta: event.beta,
       gamma: event.gamma,
       restBeta: this.restBeta,
     });
-    this.interaction.rotation = rotation;
-    this.interaction.light = pointerToLight(rotation);
+    this.applyOrientationRotation();
     this.interaction.lastInputAt = performance.now();
     this.start();
   };

@@ -1,3 +1,5 @@
+const PRIMARY_SITE_ORIGIN = "https://mania-tracker.com";
+const PRIMARY_SITE_HOSTS = ["mania-tracker.com", "www.mania-tracker.com"];
 const DEFAULT_ALLOWED_HOST_SUFFIXES = [".vercel.app", ".loca.lt"];
 
 function readEnv(name: string): string | undefined {
@@ -42,7 +44,7 @@ function getAllowedHosts(): string[] {
     ?.split(",")
     .map((host) => host.trim().toLowerCase())
     .filter(Boolean) ?? [];
-  return configured;
+  return [...PRIMARY_SITE_HOSTS, ...configured];
 }
 
 function isAllowedHost(host: string): boolean {
@@ -61,12 +63,27 @@ function requestOrigin(request: Request): string {
   }
 }
 
-function getConfiguredOrigin(): string | null {
+function getExplicitConfiguredOrigin(): string | null {
   return (
     normalizeOrigin(readEnv("SITE_URL")) ??
-    normalizeOrigin(readEnv("VITE_SITE_URL")) ??
-    normalizeOrigin(readEnv("VERCEL_PROJECT_PRODUCTION_URL"))
+    normalizeOrigin(readEnv("VITE_SITE_URL"))
   );
+}
+
+function getVercelProductionOrigin(): string | null {
+  return normalizeOrigin(readEnv("VERCEL_PROJECT_PRODUCTION_URL"));
+}
+
+function originHost(origin: string): string | null {
+  try {
+    return new URL(origin).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function isPrimarySiteHost(host: string): boolean {
+  return PRIMARY_SITE_HOSTS.includes(host);
 }
 
 function getAllowedRequestOrigin(request: Request): string | null {
@@ -85,11 +102,23 @@ function getAllowedRequestOrigin(request: Request): string | null {
 }
 
 export function getCanonicalOrigin(request: Request): string {
-  const configured = getConfiguredOrigin();
-  if (configured) return configured;
-  return getAllowedRequestOrigin(request) ?? requestOrigin(request);
+  const explicit = getExplicitConfiguredOrigin();
+  if (explicit) return explicit;
+
+  const allowedRequestOrigin = getAllowedRequestOrigin(request);
+  const allowedRequestHost = allowedRequestOrigin ? originHost(allowedRequestOrigin) : null;
+  if (allowedRequestHost && isPrimarySiteHost(allowedRequestHost)) {
+    return PRIMARY_SITE_ORIGIN;
+  }
+
+  return getVercelProductionOrigin() ?? allowedRequestOrigin ?? requestOrigin(request);
 }
 
 export function getAssetOrigin(request: Request): string {
-  return getAllowedRequestOrigin(request) ?? getConfiguredOrigin() ?? requestOrigin(request);
+  return (
+    getAllowedRequestOrigin(request) ??
+    getExplicitConfiguredOrigin() ??
+    getVercelProductionOrigin() ??
+    requestOrigin(request)
+  );
 }

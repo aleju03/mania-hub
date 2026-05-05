@@ -1,5 +1,6 @@
 // Server-only: OAuth token management + fetch wrapper for osu! API v2
 import { createServerFn } from "@tanstack/react-start";
+import { requireAdminAccess, requireDevFeatureAccess } from "./auth";
 import { db, ensureCacheSchema, hasDb } from "./db";
 import { trackServerEvent } from "./server-track";
 
@@ -628,12 +629,7 @@ async function clearServerCachesInternal(): Promise<void> {
 
 export const clearDevServerCaches = createServerFn({ method: "POST" })
   .handler(async () => {
-    const isDevMode = process.env.VITE_DEV_MODE === "1" || process.env.NODE_ENV !== "production";
-
-    if (!isDevMode) {
-      throw new Error("Server cache clearing is only enabled in dev mode.");
-    }
-
+    await requireAdminAccess("Server cache clearing");
     await clearServerCachesInternal();
     return { ok: true };
   });
@@ -689,11 +685,8 @@ function recordOsuCall(res: Response, path: string, caller: string): void {
   }
 }
 
-export const getOsuRateStats = createServerFn({ method: "GET" }).handler(() => {
-  const isDevMode = process.env.VITE_DEV_MODE === "1" || process.env.NODE_ENV !== "production";
-  if (!isDevMode) {
-    throw new Error("osu! rate stats only available in dev mode.");
-  }
+export const getOsuRateStats = createServerFn({ method: "GET" }).handler(async () => {
+  await requireDevFeatureAccess("osu! rate stats");
   const state = getOsuRateState();
   const now = Date.now();
   const windowCutoff = now - RATE_WINDOW_MS;

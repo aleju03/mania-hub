@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { estimateDan } from "./dan-estimator";
+import { chooseSkillFamily } from "./dan-estimator/family-choice";
 import { estimateFamilyScores } from "./dan-estimator/scoring";
 import { parseManiaBeatmap, type ManiaBeatmap, type ManiaNote } from "./beatmap-parser";
-import type { DanFeatureMetrics } from "./dan-estimator/types";
+import type { DanFeatureMetrics, DanSkillFamily } from "./dan-estimator/types";
 
 function makeMap(notes: ManiaNote[], keyCount = 4): ManiaBeatmap {
   return {
@@ -722,32 +723,29 @@ describe("estimateDan", () => {
   });
 
   it("tracks the Road from Gamma to Delta jack practice pack targets", () => {
-    const packCases: Array<{
+    const packCases = ([
+      { file: "STRONGER-0.91x-Delta-Mid", starRating: 7.10832, totalLength: 201, displayName: "delta", family: "jack" },
+      { file: "Lockdown-Delta-Low", starRating: 7.08251, totalLength: 186, displayName: "delta-", family: "jack" },
+      { file: "EDM-Jumpers-Cut-1.1x-Gamma-High", starRating: 6.52607, totalLength: 132, displayName: "gamma++", family: "jack" },
+      { file: "Hatsuki-Yura-Onyx-Veil-0.95x-Delta-Lowmid", starRating: 7.37861, totalLength: 298, displayName: "delta", family: "chordjack" },
+      { file: "Hatsuki-Yura-Snow-Veil-0.9x-Gamma-High", starRating: 6.55346, totalLength: 257, displayName: "gamma+", family: "jack" },
+      { file: "Hiasobi-1.2x-Delta-Lowmid", starRating: 6.9271, totalLength: 133, displayName: "delta", family: "jack" },
+      { file: "Hot-But-A-Psycho-1-3x-Delta-Mid", starRating: 6.73083, totalLength: 104, displayName: "delta", family: "jack" },
+      { file: "Impossible-1.05x-Gamma-High", starRating: 7.38473, totalLength: 112, displayName: "gamma++", family: "jack" },
+      { file: "J.A.C.K.E.L.L.I.T.E.-Cut-Gamma-High", starRating: 6.78578, totalLength: 136, displayName: "gamma+", family: "jack" },
+      { file: "Jack-Digger-1.5x-Delta-Lowmid", starRating: 6.18453, totalLength: 143, displayName: "gamma+", family: "jack" },
+      { file: "Promise-0.95x-Gamma-High", starRating: 6.46791, totalLength: 231, displayName: "gamma++", family: "chordjack" },
+      { file: "Decoy-Omega-Ver.-0.85x-Delta-MidHigh", starRating: 7.35814, totalLength: 156, displayName: "delta++", family: "jack" },
+      { file: "Unique-Idol-Delta-Mid", starRating: 7.12569, totalLength: 210, displayName: "delta+", family: "jack" },
+    ] satisfies Array<{
       file: string;
       starRating: number;
       totalLength: number;
       displayName: string;
       family: "jack" | "chordjack";
-    }> = [
-      ["STRONGER-0.91x-Delta-Mid", 7.10832, 201, "delta", "jack"],
-      ["Lockdown-Delta-Low", 7.08251, 186, "delta-", "jack"],
-      ["EDM-Jumpers-Cut-1.1x-Gamma-High", 6.52607, 132, "gamma++", "jack"],
-      ["Hatsuki-Yura-Onyx-Veil-0.95x-Delta-Lowmid", 7.37861, 298, "delta", "chordjack"],
-      ["Hatsuki-Yura-Snow-Veil-0.9x-Gamma-High", 6.55346, 257, "gamma+", "jack"],
-      ["Hiasobi-1.2x-Delta-Lowmid", 6.9271, 133, "delta", "jack"],
-      ["Hot-But-A-Psycho-1-3x-Delta-Mid", 6.73083, 104, "delta", "jack"],
-      ["Impossible-1.05x-Gamma-High", 7.38473, 112, "gamma++", "jack"],
-      ["J.A.C.K.E.L.L.I.T.E.-Cut-Gamma-High", 6.78578, 136, "gamma+", "jack"],
-      ["Jack-Digger-1.5x-Delta-Lowmid", 6.18453, 143, "gamma+", "jack"],
-      ["Promise-0.95x-Gamma-High", 6.46791, 231, "gamma++", "chordjack"],
-      ["Decoy-Omega-Ver.-0.85x-Delta-MidHigh", 7.35814, 156, "delta++", "jack"],
-      ["Unique-Idol-Delta-Mid", 7.12569, 210, "delta+", "jack"],
-    ].map(([name, starRating, totalLength, displayName, family]) => ({
-      file: `gamma-delta-jack-pack/Various-Artists-Road-from-Gamma-to-Delta-practice-pack-Jack-PureDePapa-${name}-.osu`,
-      starRating,
-      totalLength,
-      displayName,
-      family,
+    }>).map((packCase) => ({
+      ...packCase,
+      file: `gamma-delta-jack-pack/Various-Artists-Road-from-Gamma-to-Delta-practice-pack-Jack-PureDePapa-${packCase.file}-.osu`,
     }));
 
     for (const packCase of packCases) {
@@ -1460,6 +1458,128 @@ describe("estimateDan", () => {
     expect(estimate.family).toBe("stream");
     expect(estimate.skillScores.stream).toBeGreaterThan(estimate.skillScores.chordjack);
     expect(estimate.skillScores.stream).toBeGreaterThan(estimate.skillScores.tech);
+  });
+
+  it("rewards compact technical marathons without leaking into slower chord-flow files", () => {
+    const compactTechMetrics: DanFeatureMetrics = {
+      keyCount: 4,
+      noteCount: 1460,
+      holdRatio: 0,
+      chordRatio: 0.2991,
+      peakNps1s: 28,
+      peakNps5s: 23.2,
+      nps5sP50: 0,
+      nps5sP90: 22,
+      nps5sP95: 0,
+      sustainedNps10s: 22.1,
+      jackPressure: 131.5789,
+      streamPressure: 6.1429,
+      chordjackPressure: 95.2513,
+      techPressure: 5.7472,
+      rowBurstPressure: 22.2222,
+      fastRowRatio: 0.7811,
+      rowIntervalEntropy: 2.9326,
+      patternVariety: 3.1149,
+      strainSpikiness: 2.4892,
+      sustainedPressureRatio: 0.7893,
+      anchorPressure: 0.0635,
+      lnReleasePressure: 0,
+      lnDensity: 0,
+      lnOverlapPressure: 0,
+      lnChordPressure: 0,
+      lnHoldDurationAvg: 0,
+      lnHoldDurationP90: 0,
+      chordSizeChangeRate: 0.2464,
+      directionChangeRate: 0.7014,
+      staminaPressure: 22.1,
+    };
+    const slowerChordFlowMetrics: DanFeatureMetrics = {
+      ...compactTechMetrics,
+      noteCount: 1722,
+      holdRatio: 0.0314,
+      chordRatio: 0.4301,
+      peakNps1s: 25,
+      peakNps5s: 20.2,
+      nps5sP90: 16.2,
+      sustainedNps10s: 16.6,
+      jackPressure: 112.782,
+      streamPressure: 5.5143,
+      chordjackPressure: 102.88,
+      techPressure: 7.5665,
+      rowBurstPressure: 15.1515,
+      fastRowRatio: 0.1794,
+      rowIntervalEntropy: 2.0081,
+      patternVariety: 3.5188,
+      strainSpikiness: 3.0854,
+      sustainedPressureRatio: 0.664,
+      anchorPressure: 0.0363,
+      lnReleasePressure: 3.3,
+      lnDensity: 0.0273,
+      lnOverlapPressure: 0.81,
+      lnChordPressure: 0.4815,
+      lnHoldDurationAvg: 281.6,
+      lnHoldDurationP90: 677.3,
+      chordSizeChangeRate: 0.6005,
+      directionChangeRate: 0.6818,
+      staminaPressure: 16.6,
+    };
+
+    const compact = estimateFamilyScores(compactTechMetrics, 5.232, 92900);
+    const slower = estimateFamilyScores(slowerChordFlowMetrics, 4.475, 139300);
+
+    expect(compact.debug.terms.compactTechnicalMarathonBonus).toBeGreaterThan(0.25);
+    expect(compact.skillScores.tech).toBeGreaterThan(6.1);
+    expect(slower.debug.terms.compactTechnicalMarathonBonus).toBe(0);
+  });
+
+  it("keeps high-tech compact mid-chord marathons in the tech family", () => {
+    const skillScores: Record<DanSkillFamily, number> = {
+      jack: 6.331,
+      stream: 6.359,
+      handstream: 6.472,
+      stamina: 6.168,
+      chordjack: 6.561,
+      tech: 7.025,
+      ln: 0,
+      dan: 0,
+    };
+    const metrics: DanFeatureMetrics = {
+      keyCount: 4,
+      noteCount: 2308,
+      holdRatio: 0,
+      chordRatio: 0.5073,
+      peakNps1s: 30,
+      peakNps5s: 26.8,
+      nps5sP50: 0,
+      nps5sP90: 24.8,
+      nps5sP95: 0,
+      sustainedNps10s: 25.9,
+      jackPressure: 147.0588,
+      streamPressure: 5.9714,
+      chordjackPressure: 153.8321,
+      techPressure: 7.8207,
+      rowBurstPressure: 19.6078,
+      fastRowRatio: 0.5476,
+      rowIntervalEntropy: 1.3573,
+      patternVariety: 2.6389,
+      strainSpikiness: 1.5139,
+      sustainedPressureRatio: 0.8633,
+      anchorPressure: 0.1378,
+      lnReleasePressure: 0,
+      lnDensity: 0,
+      lnOverlapPressure: 0,
+      lnChordPressure: 0,
+      lnHoldDurationAvg: 0,
+      lnHoldDurationP90: 0,
+      chordSizeChangeRate: 0.5846,
+      directionChangeRate: 0.6742,
+      staminaPressure: 25.9,
+    };
+
+    const choice = chooseSkillFamily(skillScores, metrics);
+
+    expect(choice.family).toBe("tech");
+    expect(choice.debug.reason).toBe("top-score");
   });
 
   it("treats long steady mid-chord streams as stream, not tech or chordjack", () => {

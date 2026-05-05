@@ -583,6 +583,7 @@ export function CssManiaCardPanel({ user, scores, loading }: ManiaCardPanelProps
 
     card.style.setProperty("--mc-rotate-x", `${rotateX.toFixed(2)}deg`);
     card.style.setProperty("--mc-rotate-y", `${rotateY.toFixed(2)}deg`);
+    card.style.setProperty("--mc-glare-opacity", glareOpacity.toFixed(3));
     card.style.setProperty("--mc-glare-x", `${lightX.toFixed(1)}%`);
     card.style.setProperty("--mc-glare-y", `${lightY.toFixed(1)}%`);
     card.style.setProperty("--mc-background-x", `${backgroundX.toFixed(1)}%`);

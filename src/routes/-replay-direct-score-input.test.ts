@@ -4,17 +4,18 @@ import { describe, expect, it } from "vitest";
 
 describe("replay direct score input", () => {
   it("integrates score ids into the player search box", () => {
-    const source = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+    const routeSource = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
+    const browseSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplayBrowseView.tsx"), "utf8");
 
-    expect(source).toContain('placeholder="Search player... or score ID"');
-    expect(source).toContain("onSubmit={handlePlayerSearchSubmit}");
-    expect(source).toContain("onQueryChange={setPlayerSearchQuery}");
-    expect(source).toContain("<ScoreInputPreview");
-    expect(source).toContain("Looking up score #");
-    expect(source).toContain("getReplayScoreAvailability(score)");
-    expect(source).toContain("Unavailable");
-    expect(source).toContain('setPlayerSearchQuery("");');
-    expect(source).toContain("setScorePreview(null);");
-    expect(source).toContain("parseReplayScoreInput(query)");
+    expect(browseSource).toContain('placeholder="Search player... or score ID"');
+    expect(routeSource).toContain("onPlayerSearchSubmit={handlePlayerSearchSubmit}");
+    expect(routeSource).toContain("onPlayerQueryChange={setPlayerSearchQuery}");
+    expect(browseSource).toContain("<ScoreInputPreview");
+    expect(browseSource).toContain("Looking up score #");
+    expect(browseSource).toContain("getReplayScoreAvailability(score)");
+    expect(browseSource).toContain("Unavailable");
+    expect(routeSource).toContain('setPlayerSearchQuery("");');
+    expect(routeSource).toContain("setScorePreview(null);");
+    expect(routeSource).toContain("parseReplayScoreInput(query)");
   });
 });

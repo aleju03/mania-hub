@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
+import { requireAdminAccess } from "./auth";
 import { sanitizeProfilePageHtml } from "./profile-page";
 import {
   beatmapScoreLookupPartialKey,
@@ -39,6 +40,7 @@ import {
   deletePersistentCacheEntries,
   getPersistentCacheEntry,
   getPersistentCacheEntryAllowStale,
+  getPersistentCacheEntries,
   getPersistentCached,
   setPersistentCache,
 } from "./api";
@@ -48,6 +50,7 @@ import { detectManiaPatterns } from "./mania-patterns";
 import type {
   OsuUser,
   OsuScore,
+  OsuBeatmap,
   OsuBeatmapset,
   OsuGradeCounts,
   RankingsResponse,
@@ -77,7 +80,10 @@ import type {
   CountryTopPlay,
   TopPlaysRefreshStatus,
   TopPlaysResponse,
+  LeanDanEstimate,
 } from "./types";
+import { parseManiaBeatmap } from "./beatmap-parser";
+import { estimateDan } from "./dan-estimator";
 import { isSupportedCountryCode, normalizeCountryCode } from "./country";
 
 // Raw shape returned by the osu! API's /rankings endpoint. We never expose
@@ -159,18 +165,20 @@ const COUNTRY_BEATMAP_SCORES_CACHE_TTL = 2 * 60 * 1000;
 const COUNTRY_BEATMAP_USER_SCORE_CACHE_TTL = 10 * 60 * 1000;
 const BEATMAP_USER_SCORES_ALL_CACHE_TTL = 10 * 60 * 1000;
 const COUNTRY_BEATMAP_LOOKUP_CONCURRENCY = 15;
-const COUNTRY_BEATMAP_PLAYER_PAGE_LIMIT = 2; // Match the rest of the app's top-100 country player scope.
 const USER_PROFILE_INSIGHTS_CACHE_TTL = 6 * 60 * 60 * 1000;
 const USER_PROFILE_INSIGHTS_CACHE_VERSION = 6;
 const HOME_PAGE_CACHE_TTL = 60 * 1000;
 const HOME_RECENT_SCORES_CACHE_TTL = 5 * 60 * 1000;
 const HOME_POPOFFS_CACHE_TTL = 10 * 60 * 1000;
-const COUNTRY_POPOFFS_CACHE_TTL = 10 * 60 * 1000;
+const COUNTRY_POPOFFS_CACHE_TTL = 90 * 1000;
 const COUNTRY_POPOFFS_CACHE_VERSION = 4;
-const COUNTRY_TOP_PLAYS_REFRESH_TTL = 15 * 60 * 1000;
+const COUNTRY_TOP_PLAYS_REFRESH_TTL = 3 * 60 * 1000;
 const COUNTRY_TOP_PLAYS_REFRESH_LOCK_TTL = 90 * 1000;
 const COUNTRY_TOP_PLAYS_RETENTION_MS = 31 * 24 * 60 * 60 * 1000;
 const COUNTRY_TOP_PLAYS_QUERY_LIMIT = 500;
+const SCORE_PP_GAIN_REUSE_MS = 14 * 24 * 60 * 60 * 1000;
+const SCORE_PP_GAIN_CACHE_TTL = SCORE_PP_GAIN_REUSE_MS;
+const SCORE_PP_GAIN_CACHE_VERSION = 1;
 export type PopoffWindow = "24h" | "3d" | "7d" | "30d";
 const POPOFF_WINDOW_MS: Record<PopoffWindow, number> = {
   "24h": 24 * 60 * 60 * 1000,
@@ -338,6 +346,15 @@ interface ScorePpGainLookup {
   scoreId: number;
   timestamp: string;
   userId: number;
+}
+
+interface CachedScorePpGain {
+  pp: number;
+  ppGain: number;
+}
+
+function scorePpGainCacheKey(scoreId: number, pp: number): string {
+  return `score-pp-gain:v${SCORE_PP_GAIN_CACHE_VERSION}:${scoreId}:${Math.round(pp * 100)}`;
 }
 
 const MAX_OSU_ID = 1_000_000_000;
@@ -645,11 +662,8 @@ function normalizeScorePayload(data: unknown): { scoreId: number; mode?: string 
   return { scoreId: parseOsuScoreId(input.scoreId, "score id"), mode };
 }
 
-function assertDevMutationAllowed(action: string): void {
-  const isDevMode = process.env.VITE_DEV_MODE === "1" || process.env.NODE_ENV !== "production";
-  if (!isDevMode) {
-    throw new Error(`${action} is only available in dev mode.`);
-  }
+async function assertDevMutationAllowed(action: string): Promise<void> {
+  await requireAdminAccess(action);
 }
 
 interface CountryRecentScoresResponse {
@@ -1037,6 +1051,20 @@ async function getBeatmapUserScoresAll(beatmapId: number, userId: number): Promi
   });
 }
 
+export const getUserBeatmapScores = createServerFn({ method: "GET" })
+  .inputValidator((data: unknown) => {
+    const input = asInputRecord(data);
+    const beatmapId = Number(input.beatmapId);
+    const userId = Number(input.userId);
+    if (!Number.isFinite(beatmapId) || beatmapId <= 0) throw new Error("Invalid beatmap ID.");
+    if (!Number.isFinite(userId) || userId <= 0) throw new Error("Invalid user ID.");
+    return { beatmapId, userId };
+  })
+  .handler(async ({ data }: { data: { beatmapId: number; userId: number } }) => {
+    edgeCache(60, 300);
+    return getBeatmapUserScoresAll(data.beatmapId, data.userId);
+  });
+
 function getPreviousBeatmapBestScore(scores: OsuScore[], target: ScorePpGainLookup): OsuScore | null {
   const targetTimestampMs = new Date(target.timestamp).getTime();
   if (!Number.isFinite(targetTimestampMs) || targetTimestampMs <= 0) return null;
@@ -1064,6 +1092,8 @@ async function calculateReplacementPpGainMapForTargets(
   bestScores: OsuScore[],
   targets: ScorePpGainLookup[],
 ): Promise<Record<number, number>> {
+  if (targets.length === 0) return {};
+
   const bestScoreById = new Map(
     bestScores
       .filter((score) => score.id > 0 && score.pp != null && score.pp > 0)
@@ -1073,8 +1103,41 @@ async function calculateReplacementPpGainMapForTargets(
   const relevantTargets = targets.filter((target) => bestScoreById.has(target.scoreId));
   if (relevantTargets.length === 0) return {};
 
+  const cacheKeyByScoreId = new Map<number, string>();
+  for (const target of relevantTargets) {
+    const currentScore = bestScoreById.get(target.scoreId);
+    if (!currentScore?.pp) continue;
+    cacheKeyByScoreId.set(target.scoreId, scorePpGainCacheKey(target.scoreId, currentScore.pp));
+  }
+
+  const cachedGains = await getPersistentCacheEntries<CachedScorePpGain>(
+    [...new Set(cacheKeyByScoreId.values())],
+  );
+  const gains: Record<number, number> = {};
+  const uncachedTargets: ScorePpGainLookup[] = [];
+
+  for (const target of relevantTargets) {
+    const currentScore = bestScoreById.get(target.scoreId);
+    const cacheKey = cacheKeyByScoreId.get(target.scoreId);
+    const cached = cacheKey ? cachedGains.get(cacheKey) : undefined;
+    if (
+      currentScore?.pp &&
+      cached &&
+      Number.isFinite(cached.pp) &&
+      Number.isFinite(cached.ppGain) &&
+      Math.abs(cached.pp - currentScore.pp) < 0.01
+    ) {
+      if (cached.ppGain > 0) gains[target.scoreId] = cached.ppGain;
+      continue;
+    }
+
+    uncachedTargets.push(target);
+  }
+
+  if (uncachedTargets.length === 0) return gains;
+
   const previousScores = await mapWithConcurrency(
-    relevantTargets,
+    uncachedTargets,
     APPROX_PP_GAINS_CONCURRENCY,
     async (target) => {
       try {
@@ -1093,8 +1156,7 @@ async function calculateReplacementPpGainMapForTargets(
     },
   );
 
-  const gains: Record<number, number> = {};
-  relevantTargets.forEach((target, index) => {
+  uncachedTargets.forEach((target, index) => {
     const currentScore = bestScoreById.get(target.scoreId);
     if (!currentScore) return;
 
@@ -1106,6 +1168,14 @@ async function calculateReplacementPpGainMapForTargets(
     }
 
     const gain = calculateReplacementPpGain(bestScores, target.scoreId, previousScore ?? null);
+    const cacheKey = cacheKeyByScoreId.get(target.scoreId);
+    if (cacheKey && currentScore.pp != null) {
+      void setPersistentCache(
+        cacheKey,
+        { pp: currentScore.pp, ppGain: gain } satisfies CachedScorePpGain,
+        SCORE_PP_GAIN_CACHE_TTL,
+      );
+    }
     if (gain > 0) gains[target.scoreId] = gain;
   });
 
@@ -1351,21 +1421,44 @@ function sortCountryPopoffs(popoffs: CountryPopoff[]): CountryPopoff[] {
 async function buildCountryPopoffsForPlayer(
   player: HomePreviewPlayer,
   windowMs: number,
+  options: { knownPpGainsByScoreId?: ReadonlyMap<number, CachedScorePpGain> } = {},
 ): Promise<CountryPopoff[]> {
   const scores = await fetchUserBestScoresWindow(player.id, 100);
   const relevantScores = scores.filter((score) => {
     const age = Date.now() - getTimestampMs(score);
     return age < windowMs && score.pp != null && score.pp > 0;
   });
-  const gainMap = await calculateReplacementPpGainMapForTargets(
-    scores,
-    relevantScores.map((score) => ({
+  const cachedGainMap: Record<number, number> = {};
+  const uncachedTargets: ScorePpGainLookup[] = [];
+
+  relevantScores.forEach((score) => {
+    const scoreId = score.id;
+    const known = options.knownPpGainsByScoreId?.get(scoreId);
+    const currentPp = score.pp ?? 0;
+    if (
+      scoreId > 0 &&
+      known &&
+      Number.isFinite(known.pp) &&
+      Number.isFinite(known.ppGain) &&
+      Math.abs(known.pp - currentPp) < 0.01
+    ) {
+      cachedGainMap[scoreId] = Math.max(0, known.ppGain);
+      return;
+    }
+
+    uncachedTargets.push({
       beatmapId: score.beatmap_id ?? score.beatmap?.id ?? 0,
-      scoreId: score.id,
+      scoreId,
       timestamp: getScoreTimestamp(score),
       userId: player.id,
-    })),
+    });
+  });
+
+  const gainMap = await calculateReplacementPpGainMapForTargets(
+    scores,
+    uncachedTargets,
   );
+  const mergedGainMap = { ...cachedGainMap, ...gainMap };
 
   return relevantScores
     .map((score) => ({
@@ -1373,7 +1466,7 @@ async function buildCountryPopoffsForPlayer(
       score,
       pp: score.pp ?? 0,
       weightedPP: score.weight?.pp ?? 0,
-      ppGain: gainMap[score.id] ?? 0,
+      ppGain: mergedGainMap[score.id] ?? 0,
       time: getScoreTimestamp(score),
     }));
 }
@@ -1381,7 +1474,10 @@ async function buildCountryPopoffsForPlayer(
 async function buildLiveCountryPopoffs(
   players: HomePreviewPlayer[],
   window: PopoffWindow,
-  options: { progressCountry?: string } = {},
+  options: {
+    progressCountry?: string;
+    knownPpGainsByScoreId?: ReadonlyMap<number, CachedScorePpGain>;
+  } = {},
 ): Promise<CountryPopoff[]> {
   const topPlayers = players.slice(0, 30);
   if (topPlayers.length === 0) return [];
@@ -1414,7 +1510,9 @@ async function buildLiveCountryPopoffs(
       async (player) => {
         let playerPopoffs: CountryPopoff[] = [];
         try {
-          playerPopoffs = await buildCountryPopoffsForPlayer(player, windowMs);
+          playerPopoffs = await buildCountryPopoffsForPlayer(player, windowMs, {
+            knownPpGainsByScoreId: options.knownPpGainsByScoreId,
+          });
           return playerPopoffs;
         } catch (error) {
           console.warn("[osu] failed to build country popoff scores for player", {
@@ -1566,7 +1664,25 @@ async function upsertStoredCountryTopPlays(country: string, popoffs: CountryPopo
 }
 
 async function refreshStoredCountryTopPlays(country: string, players: HomePreviewPlayer[]): Promise<number> {
-  const refreshed = await buildLiveCountryPopoffs(players, "30d", { progressCountry: country });
+  const knownPpGainsByScoreId = new Map<number, CachedScorePpGain>();
+  const reuseCutoff = Date.now() - SCORE_PP_GAIN_REUSE_MS;
+  const stored = await getStoredCountryTopPlays(country, "30d");
+  for (const popoff of stored) {
+    const scoreId = popoff.score.id;
+    const scoreTime = new Date(popoff.time).getTime();
+    if (scoreId <= 0) continue;
+    if (!Number.isFinite(scoreTime) || scoreTime < reuseCutoff) continue;
+    if (!Number.isFinite(popoff.pp) || !Number.isFinite(popoff.ppGain)) continue;
+    knownPpGainsByScoreId.set(scoreId, {
+      pp: popoff.pp,
+      ppGain: popoff.ppGain,
+    });
+  }
+
+  const refreshed = await buildLiveCountryPopoffs(players, "30d", {
+    progressCountry: country,
+    knownPpGainsByScoreId,
+  });
   await upsertStoredCountryTopPlays(country, refreshed);
   return Date.now();
 }
@@ -2422,7 +2538,7 @@ export const getCountryMapsData = createServerFn({ method: "GET" })
 export const rebuildCountryMapsData = createServerFn({ method: "POST" })
   .inputValidator(normalizeMapsUserPayload)
   .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
-    assertDevMutationAllowed("Country maps rebuild");
+    await assertDevMutationAllowed("Country maps rebuild");
     const farmedKey = computeMapsFarmedCacheKey(data.users);
     const favKey = computeMapsFavouritesCacheKey(data.users);
     const [farmedRebuild, favRebuild] = await Promise.all([
@@ -2495,7 +2611,7 @@ export const getCountryMapsFavourites = createServerFn({ method: "GET" })
 export const rebuildCountryMapsFarmed = createServerFn({ method: "POST" })
   .inputValidator(normalizeMapsUserPayload)
   .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
-    assertDevMutationAllowed("Country maps farmed rebuild");
+    await assertDevMutationAllowed("Country maps farmed rebuild");
     return runCacheRebuild<CountryMapsFarmedSection>(
       computeMapsFarmedCacheKey(data.users),
       MAPS_FARMED_CACHE_TTL,
@@ -2514,7 +2630,7 @@ export const rebuildCountryMapsFarmed = createServerFn({ method: "POST" })
 export const rebuildCountryMapsFavourites = createServerFn({ method: "POST" })
   .inputValidator(normalizeMapsUserPayload)
   .handler(async ({ data }: { data: { users: MapsUser[] } }) => {
-    assertDevMutationAllowed("Country maps favourites rebuild");
+    await assertDevMutationAllowed("Country maps favourites rebuild");
     return runCacheRebuild<CountryMapsFavouritesSection>(
       computeMapsFavouritesCacheKey(data.users),
       MAPS_FAVOURITES_CACHE_TTL,
@@ -2538,7 +2654,7 @@ export const rebuildCountryMapsFavourites = createServerFn({ method: "POST" })
 export const rebuildCountryMapsForUser = createServerFn({ method: "POST" })
   .inputValidator(normalizeMapsUserRebuildPayload)
   .handler(async ({ data }: { data: { users: MapsUser[]; userId: number } }) => {
-    assertDevMutationAllowed("Country maps user rebuild");
+    await assertDevMutationAllowed("Country maps user rebuild");
     await deletePersistentCacheEntries([
       `user-favourites-all:${data.userId}`,
       `user-most-played:${data.userId}`,
@@ -3351,3 +3467,88 @@ export const getPartialSnipeEvents = createServerFn({ method: "GET" })
     const country = normalizeCountryCode(data.country);
     return (await getPersistentCached<SnipeEvent[]>(snipesPartialEventsKey(country))) ?? [];
   });
+
+// ── Dan Estimates ──────────────────────────────────────────────────────────────
+
+const DAN_ESTIMATE_CACHE_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
+const DAN_ESTIMATE_CONCURRENCY = 6;
+
+function danCacheKey(beatmapId: number, rate: number): string {
+  const r = Math.round(rate * 100);
+  return r === 100 ? `dan:v1:${beatmapId}` : `dan:v1:${beatmapId}:r${r}`;
+}
+
+interface DanEstimateRequest {
+  beatmapId: number;
+  starRating?: number;
+  rate?: number;
+}
+
+async function computeDanEstimate(
+  req: DanEstimateRequest,
+): Promise<LeanDanEstimate | null> {
+  const rate = req.rate ?? 1;
+  const key = danCacheKey(req.beatmapId, rate);
+  const cached = await getPersistentCached<LeanDanEstimate>(key);
+  if (cached) return cached;
+
+  try {
+    const osuFile = await fetchBeatmapFile(req.beatmapId);
+    const map = parseManiaBeatmap(osuFile);
+    if (map.keyCount !== 4) return null;
+
+    const estimate = estimateDan(map, {
+      starRating: req.starRating,
+      rate: rate !== 1 ? rate : undefined,
+    });
+
+    const lean: LeanDanEstimate = {
+      label: estimate.label,
+      variant: estimate.variant,
+      displayName: estimate.displayName,
+      rawDan: estimate.rawDan,
+      family: estimate.family,
+      confidence: estimate.confidence,
+    };
+
+    await setPersistentCache(key, lean, DAN_ESTIMATE_CACHE_TTL);
+    return lean;
+  } catch {
+    return null;
+  }
+}
+
+export const getDanEstimates = createServerFn({ method: "GET" })
+  .inputValidator(
+    (input: { items?: unknown[] }): { items: DanEstimateRequest[] } => {
+      const raw = asInputRecord(input);
+      const items = Array.isArray(raw.items) ? raw.items : [];
+      return {
+        items: items.map((item: any) => ({
+          beatmapId: Number(item.beatmapId),
+          starRating: item.starRating != null ? Number(item.starRating) : undefined,
+          rate: item.rate != null ? Number(item.rate) : undefined,
+        })),
+      };
+    },
+  )
+  .handler(
+    async ({
+      data,
+    }: {
+      data: { items: DanEstimateRequest[] };
+    }): Promise<Record<string, LeanDanEstimate | null>> => {
+      edgeCache(3600, 86400);
+
+      const results: Record<string, LeanDanEstimate | null> = {};
+      await mapWithConcurrency(data.items, DAN_ESTIMATE_CONCURRENCY, async (req) => {
+        const rate = req.rate ?? 1;
+        const key = rate === 1
+          ? String(req.beatmapId)
+          : `${req.beatmapId}:${Math.round(rate * 100)}`;
+        results[key] = await computeDanEstimate(req);
+      });
+
+      return results;
+    },
+  );

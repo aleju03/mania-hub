@@ -76,7 +76,7 @@ describe("ManiaReplayRenderer skin customization", () => {
   it("accepts replay skin settings and exposes a live updater", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    expect(source).toContain('import type { ReplaySkinKeymodeProfile, ReplaySkinSettings } from "../../lib/replay-skin";');
+    expect(source).toMatch(/import type \{[^}]*ReplaySkinKeymodeProfile[^}]*ReplaySkinSettings[^}]*\} from "\.\.\/\.\.\/lib\/replay-skin";/);
     expect(source).toContain("skinSettings?: ReplaySkinSettings");
     expect(source).toContain("private skinSettings: ReplaySkinSettings");
     expect(source).toContain("private skinProfile: ReplaySkinKeymodeProfile");
@@ -90,13 +90,13 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).toContain('if (this.skinSettings.style === "circles") return;');
   });
 
-  it("hides the bottom UR timing bar in circle mode", () => {
+  it("renders the bottom UR timing bar in both skin modes", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
     const hud = /private renderHUD\(layout: Layout\) \{([\s\S]*?)\n  private renderCombo/.exec(source);
 
     expect(hud?.[1]).toBeTruthy();
-    expect(hud![1]).toContain('if (this.skinSettings.style !== "circles") {');
     expect(hud![1]).toContain('this.fillRect(urBarX, urBarY, urBarWidth, 3, "#ffffff", 0.08);');
+    expect(hud![1]).not.toContain('if (this.skinSettings.style !== "circles") {');
   });
 
   it("draws circle receptors without the bar receptor beam or glow path", () => {
@@ -119,7 +119,7 @@ describe("ManiaReplayRenderer skin customization", () => {
   it("draws circle LN bodies rounded and at normal opacity near the top", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
     const circleBranch = /if \(this\.skinSettings\.style === "circles"\) \{([\s\S]*?)\n          continue;\n        \}/.exec(source);
-    const helper = /private circleLnBodyWithTopFade\(([\s\S]*?)\n  private circleWithTopFade/.exec(source);
+    const helper = /private circleLnBodyWithTopFade\(([\s\S]*?)\n  private barLnBodyWithTopFade/.exec(source);
 
     expect(circleBranch?.[1]).toBeTruthy();
     expect(circleBranch![1]).toContain("this.circleLnBodyWithTopFade(");
@@ -142,15 +142,16 @@ describe("ManiaReplayRenderer skin customization", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
     expect(source).toContain('const isCircleSkin = this.skinSettings.style === "circles";');
-    expect(source).toContain("for (let col = 0; !isCircleSkin && col < this.keyCount; col++)");
-    expect(source).toContain("if (!isCircleSkin) {");
+    expect(source).toContain("const showColumnDividers = !isCircleSkin;");
+    expect(source).toContain("for (let col = 0; showColumnDividers && col < this.keyCount; col++)");
+    expect(source).toContain("if (showColumnDividers) {");
   });
 
   it("hides the bare playfield bottom guide for circle skins", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
     expect(source).toContain("if (this.barePlayfield) {");
-    expect(source).toContain('if (!isCircleSkin) this.line(playfieldX, h - 1, playfieldX + playfieldWidth, h - 1, "#ffffff", 0.1, 2);');
+    expect(source).toContain('if (showColumnDividers) this.lineInto(g, playfieldX, h - 1, playfieldX + playfieldWidth, h - 1, "#ffffff", 0.1, 2);');
   });
 
   it("biases 5k+ wide bare preview playfields left", () => {
@@ -162,12 +163,26 @@ describe("ManiaReplayRenderer skin customization", () => {
 
   it("draws bar LNs as one continuous body without separate caps", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+    const branch = /const barPercyTrim = this\.skinSettings\.percy([\s\S]*?)\n      \} else \{/.exec(source);
 
-    expect(source).toContain("const bodyBottom = bottom;");
-    expect(source).toContain("const bodyTop = Math.min(top + percyTrim, bodyBottom - noteHeight);");
-    expect(source).toContain("this.roundRectWithTopFade(x, bodyTop, barWidth, bodyBottom - bodyTop, 2, color, bodyAlpha");
+    expect(branch?.[1]).toBeTruthy();
+    expect(branch![1]).toContain("const bodyHeadY = headEndY;");
+    expect(branch![1]).toContain("const bodyTailY = tailEndY + tailDelta;");
+    expect(branch![1]).toContain("const barBodyTop = Math.min(bodyHeadY, bodyTailY);");
+    expect(branch![1]).toContain("const barBodyBottom = Math.max(bodyHeadY, bodyTailY);");
+    expect(branch![1]).toContain("this.barLnBodyWithTopFade(x, barBodyTop, barWidth, barBodyBottom - barBodyTop, color, bodyAlpha");
     expect(source).not.toContain("bottom - noteHeight, barWidth, noteHeight");
     expect(source).not.toContain("noteHeight / 2, 2, color, headAlpha");
+  });
+
+  it("draws bar LN fade slices without rounded mini-note caps", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+    const helper = /private barLnBodyWithTopFade\(([\s\S]*?)\n  private circleWithTopFade/.exec(source);
+
+    expect(helper?.[1]).toBeTruthy();
+    expect(helper![1]).toContain("this.fillRect(x, sliceY, w, sliceHeight + 0.5, color, sliceAlpha);");
+    expect(helper![1]).toContain("this.fillRect(x, fadeHeight, w, bottom - fadeHeight, color, alpha);");
+    expect(helper![1]).not.toContain("this.roundRect(");
   });
 
   it("uses per-column skin colors for circle notes and LN heads", () => {
@@ -175,14 +190,23 @@ describe("ManiaReplayRenderer skin customization", () => {
 
     expect(source).toContain("const circleTapColor = this.circleTapColors[col];");
     expect(source).toContain("const circleLnHeadColor = this.circleLnHeadColors[col];");
-    expect(source).toContain("const percyTrim = this.skinSettings.percy");
+    expect(source).toContain("const tailTrimDelta = this.skinSettings.percy");
   });
 
   it("applies the configured keymode column width to layout", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    expect(source).toContain("const configuredColumnWidth = this.skinProfile.columnWidth;");
-    expect(source).toContain("configuredColumnWidth * this.keyCount");
+    expect(source).toContain("const configuredColumnWidths = this.getConfiguredColumnWidths();");
+    expect(source).toContain("configuredColumnWidths.reduce((sum, width) => sum + width, 0)");
+  });
+
+  it("supports osu!mania skin.ini hud positions and imported sprites", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("this.getStagePositionY(this.skinSettings.scorePosition, layout)");
+    expect(source).toContain("this.getStagePositionY(this.skinSettings.comboPosition, layout)");
+    expect(source).toContain("private skinSpriteLayer = new Container();");
+    expect(source).toContain("private renderHoldSkinImages(");
   });
 
   it("uses the configured hit position for receptors without changing scroll density", () => {
