@@ -92,6 +92,7 @@ export function Nav() {
   const auth = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const fallbackCountry = useSelectedCountry();
   const setSelectedCountry = useAppStore((state) => state.setSelectedCountry);
   const routeCountry = readCountryFromSearchStr(location.searchStr);
@@ -122,6 +123,7 @@ export function Nav() {
   // remount happened mid-spring.
   const linksContainerRef = useRef<HTMLDivElement>(null);
   const adminMenuRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const linkRefs = useRef<Map<string, HTMLAnchorElement>>(new Map());
   const [barRect, setBarRect] = useState<{ left: number; width: number } | null>(null);
 
@@ -175,6 +177,7 @@ export function Nav() {
   useEffect(() => {
     setMenuOpen(false);
     setAdminMenuOpen(false);
+    setUserMenuOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -189,6 +192,19 @@ export function Nav() {
     document.addEventListener("pointerdown", handlePointerDown);
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [adminMenuOpen]);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && userMenuRef.current?.contains(target)) return;
+      setUserMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [userMenuOpen]);
 
   // Prevent body scroll when drawer is open. Defer the layout-invalidating
   // style write by two rAFs so the drawer's transform transition gets a clean
@@ -451,17 +467,37 @@ export function Nav() {
             </>
           )}
           {auth.viewer ? (
-            <a
-              href={logoutHref}
-              className="group relative flex h-8 items-center gap-1.5 rounded-lg border border-osu-b3/40 bg-osu-b4/50 py-0.5 pl-0.5 pr-2 text-[10px] font-semibold text-osu-l2 transition-colors hover:border-osu-pink/40 hover:bg-osu-b4 hover:text-white"
-              title={`Signed in as ${auth.viewer.username}. Log out`}
-            >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60 transition group-hover:ring-osu-pink/60">
-                <Avatar url={auth.viewer.avatarUrl} userId={auth.viewer.id} size={28} />
-              </span>
-              <span className="max-w-20 truncate">{auth.viewer.username}</span>
-              <LogOut className="h-3.5 w-3.5 opacity-60 transition-opacity group-hover:opacity-100" />
-            </a>
+            <div ref={userMenuRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setUserMenuOpen((open) => !open)}
+                className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60 transition hover:ring-osu-pink/60 cursor-pointer"
+                title={`Signed in as ${auth.viewer.username}`}
+                aria-haspopup="menu"
+                aria-expanded={userMenuOpen}
+              >
+                <Avatar url={auth.viewer.avatarUrl} userId={auth.viewer.id} size={32} />
+              </button>
+              {userMenuOpen && (
+                <div
+                  className="absolute right-0 top-full mt-2 w-44 rounded-lg bg-osu-b5 border border-osu-b3/50 shadow-xl overflow-hidden z-[80]"
+                  role="menu"
+                >
+                  <div className="px-3 py-2 border-b border-osu-b3/30">
+                    <div className="text-[10px] font-medium text-osu-l3 leading-tight">Signed in as</div>
+                    <div className="text-[12px] font-semibold text-white truncate">{auth.viewer.username}</div>
+                  </div>
+                  <a
+                    href={logoutHref}
+                    className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
+                    role="menuitem"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                    Logout
+                  </a>
+                </div>
+              )}
+            </div>
           ) : auth.loginSuggested ? (
             <a
               href={loginHref}
