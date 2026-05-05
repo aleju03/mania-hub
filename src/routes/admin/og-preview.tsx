@@ -5,7 +5,8 @@ import { COUNTRY_OPTIONS } from "../../lib/country";
 type PresetKind =
   | "default"
   | "player"
-  | "maps";
+  | "maps"
+  | "replay";
 
 type Preset = {
   key: string;
@@ -15,6 +16,7 @@ type Preset = {
   subtitle: string;
   path: string;
   username?: string;
+  scoreId?: number;
   /* When true, the preset mirrors a route that bakes `?country=XX` into
      its og:image URL. The preview then attaches the currently selected
      country so the endpoint renders the country scoreboard instead of
@@ -62,6 +64,16 @@ const PRESETS: Preset[] = [
     username: "peppy",
     noindex: true,
   },
+  {
+    key: "replay",
+    label: "Replay",
+    kind: "replay",
+    title: "Replay",
+    subtitle: "",
+    path: "/replay",
+    scoreId: 6642167715,
+    noindex: true,
+  },
 ];
 
 // Mirror the endpoint's limits so the counter warns before truncation kicks in.
@@ -95,6 +107,7 @@ function OgPreviewPage() {
   const [title, setTitle] = useState(PRESETS[0].title);
   const [subtitle, setSubtitle] = useState(PRESETS[0].subtitle);
   const [username, setUsername] = useState("peppy");
+  const [scoreId, setScoreId] = useState("6642167715");
   const [country, setCountry] = useState("CR");
   const [cacheBuster, setCacheBuster] = useState(() => Date.now());
   const [origin, setOrigin] = useState("");
@@ -119,6 +132,14 @@ function OgPreviewPage() {
       });
       return `/api/og?${params.toString()}`;
     }
+    if (kind === "replay") {
+      const params = new URLSearchParams({
+        kind: "replay",
+        scoreId,
+        t: String(cacheBuster),
+      });
+      return `/api/og?${params.toString()}`;
+    }
     if (kind === "maps") {
       const params = new URLSearchParams({
         kind,
@@ -135,17 +156,21 @@ function OgPreviewPage() {
     if (subtitle) params.set("subtitle", subtitle);
     if (countryAware) params.set("country", country);
     return `/api/og?${params.toString()}`;
-  }, [kind, username, title, subtitle, countryAware, country, cacheBuster]);
+  }, [kind, username, scoreId, title, subtitle, countryAware, country, cacheBuster]);
 
   const absoluteImage = origin ? `${origin}${ogPath}` : ogPath;
   const mockTitle = kind === "player"
     ? `${username} - ${SITE_NAME}`
-    : title === SITE_NAME
-      ? title
-      : `${title} - ${SITE_NAME}`;
+    : kind === "replay"
+      ? `Replay #${scoreId} - ${SITE_NAME}`
+      : title === SITE_NAME
+        ? title
+        : `${title} - ${SITE_NAME}`;
   const mockSubtitle = kind === "player"
     ? `${username}'s osu!mania stats.`
-    : subtitle;
+    : kind === "replay"
+      ? ""
+      : subtitle;
   const domain = origin ? new URL(origin).host : "localhost:3000";
 
   const applyPreset = (p: Preset) => {
@@ -154,6 +179,7 @@ function OgPreviewPage() {
     setTitle(p.title);
     setSubtitle(p.subtitle);
     if (p.username) setUsername(p.username);
+    if (p.scoreId != null) setScoreId(String(p.scoreId));
   };
 
   const refresh = () => setCacheBuster(Date.now());
@@ -187,6 +213,19 @@ function OgPreviewPage() {
               Player layout ignores title/subtitle. Avatar, flag, rank, PP and acc are pulled from the osu! API using this username.
             </div>
           </div>
+        ) : kind === "replay" ? (
+          <div className="grid gap-3 md:grid-cols-2">
+            <TextField
+              label="Score ID"
+              hint="osu! score id — endpoint fetches the score live"
+              value={scoreId}
+              max={32}
+              onChange={setScoreId}
+            />
+            <div className="flex items-end text-[11px] text-osu-f1/80 leading-relaxed">
+              Replay layout ignores title/subtitle/country. Cover, grade, pp, acc and mods come from the score itself.
+            </div>
+          </div>
         ) : kind === "maps" ? (
           <div className="flex items-center gap-3">
             <label className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">
@@ -204,7 +243,7 @@ function OgPreviewPage() {
               ))}
             </select>
             <span className="text-[10px] text-osu-f1/70">
-              shows 3 unique beatmaps the #1 country player is farming
+              mosaic of cover art from the country's favourites pool
             </span>
           </div>
         ) : (

@@ -41,20 +41,8 @@ function kindOgImagePath(kind: string, extra: Record<string, string | undefined>
   return `/api/og?${params.toString()}`;
 }
 
-export function topPlaysOgImagePath(country: string): string {
-  return kindOgImagePath("top-plays", { country });
-}
-
 export function mapsOgImagePath(country: string): string {
   return kindOgImagePath("maps", { country });
-}
-
-export function trackerOgImagePath(country: string): string {
-  return kindOgImagePath("tracker", { country });
-}
-
-export function snipesOgImagePath(country: string): string {
-  return kindOgImagePath("snipes", { country });
 }
 
 export function replayOgImagePath(scoreId: number): string {

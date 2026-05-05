@@ -1,9 +1,10 @@
 import { ImageResponse } from "@vercel/og";
 import { createFileRoute } from "@tanstack/react-router";
 import { createElement as h } from "react";
-import { getCachedUser, getCachedUserScores, getRankings, getCountryMapsFarmed, getCountryMapsFavourites, getCountrySnipes, getScore } from "../../lib/osu";
+import { getCachedUser, getRankings, getCountryMapsFavourites, getScore } from "../../lib/osu";
 import { getCountryName, isSupportedCountryCode } from "../../lib/country";
 import { getAssetOrigin } from "../../lib/origin";
+import { getDisplayedRank, getManiaJudgementCounts } from "../../lib/score";
 import type { OsuCovers, OsuScore } from "../../lib/types";
 
 const WIDTH = 1200;
@@ -74,44 +75,38 @@ function formatOgAcc(accuracy: number | null | undefined): string {
   return `${pct.toFixed(2)}%`;
 }
 
-// Grade pill colors match the in-app GradeImg / rankings palette so the
-// OG and the live site feel like the same product.
-const GRADE_COLORS: Record<string, { fg: string; bg: string }> = {
-  XH: { fg: "#ffffff", bg: "#a8a8a8" },
-  X: { fg: "#111111", bg: "#ffd24a" },
-  SH: { fg: "#ffffff", bg: "#a8a8a8" },
-  S: { fg: "#111111", bg: "#ffd24a" },
-  A: { fg: "#111111", bg: "#86d460" },
-  B: { fg: "#ffffff", bg: "#4aaaff" },
-  C: { fg: "#ffffff", bg: "#c273ff" },
-  D: { fg: "#ffffff", bg: "#ff6b6b" },
-  F: { fg: "#ffffff", bg: "#555555" },
+// Mirrors src/components/ui/GradeImg.tsx so the OG and the in-app pages
+// show identical grade artwork. Returns an absolute URL because Satori
+// fetches assets via fetch() and won't resolve relative paths.
+const GRADE_FILE: Record<string, string> = {
+  XH: "GradeSmall-SS-Silver",
+  X: "GradeSmall-SS",
+  SH: "GradeSmall-S-Silver",
+  S: "GradeSmall-S",
+  A: "GradeSmall-A",
+  B: "GradeSmall-B",
+  C: "GradeSmall-C",
+  D: "GradeSmall-D",
+  SS: "GradeSmall-SS",
+  SSH: "GradeSmall-SS-Silver",
+  F: "GradeSmall-F",
 };
 
-function gradePill(rank: string, size: "sm" | "md" | "lg" = "md") {
-  const key = rank === "X" ? "X" : rank === "XH" ? "X" : rank === "SH" ? "S" : rank;
-  const color = GRADE_COLORS[key] ?? GRADE_COLORS.F;
-  const pad = size === "lg" ? "10px 22px" : size === "md" ? "6px 14px" : "4px 10px";
-  const font = size === "lg" ? "42px" : size === "md" ? "26px" : "18px";
-  return h(
-    "div",
-    {
-      style: {
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: pad,
-        borderRadius: "8px",
-        background: color.bg,
-        color: color.fg,
-        fontWeight: 900,
-        fontSize: font,
-        letterSpacing: "0.04em",
-      },
-    },
-    key === "X" && rank === "XH" ? "SS" : key === "X" ? "SS" : key === "SH" ? "S" : key,
-  );
+function gradeImgUrl(request: Request, rank: string): string {
+  const file = GRADE_FILE[rank] ?? `GradeSmall-${rank}`;
+  return new URL(`/images/badges/score-ranks-v2019/${file}.svg`, getAssetOrigin(request)).toString();
 }
+
+// Judgement palette mirrors styles.css osu-* tokens. Used for the
+// MAX/300/200/100/50/Miss chips on the replay OG.
+const JUDGEMENT_COLORS: Record<string, string> = {
+  MAX: "#ffcc22",
+  "300": "#66ccff",
+  "200": "#b3d944",
+  "100": "#88b300",
+  "50": "#ff8e5d",
+  Miss: "#ed7887",
+};
 
 function pickBeatmapsetCover(score: OsuScore): string | null {
   const covers = score.beatmapset?.covers;
@@ -123,13 +118,6 @@ function beatmapDisplayTitle(score: OsuScore): string {
   const set = score.beatmapset;
   if (!set) return "Unknown beatmap";
   return `${set.artist} - ${set.title}`;
-}
-
-async function fetchCountryTopPlayer(country: string) {
-  const rankings = await getRankings({ data: { type: "performance", page: 1, country } });
-  const topPlayer = rankings.ranking.find((e) => e.user.is_active !== false) ?? rankings.ranking[0];
-  if (!topPlayer) throw new Error(`no ranked players for ${country}`);
-  return { rankings, topPlayer };
 }
 
 async function fetchCountryMapUsers(country: string) {
@@ -144,276 +132,6 @@ async function fetchCountryMapUsers(country: string) {
     }));
   if (users.length === 0) throw new Error(`no ranked players for ${country}`);
   return users;
-}
-
-/* Top plays: a single hero card. The #1 country player's #1 best play is
-   the focal point — cover art fills the canvas, pp number dominates, rest
-   is metadata. Shows "the current hottest play" at a glance. */
-async function renderTopPlaysOg(request: Request, country: string): Promise<Response> {
-  const [regularFont, heavyFont, data] = await Promise.all([
-    getFont(request, "Torus-Regular.otf"),
-    getFont(request, "Torus-Heavy.otf"),
-    fetchCountryTopPlayer(country),
-  ]);
-  const scores = await getCachedUserScores("best", data.topPlayer.user.id, { limit: 1, offset: 0 });
-  if (scores.length === 0) throw new Error("no best scores for top player");
-  const score = scores[0];
-  const cover = pickBeatmapsetCover(score);
-  const countryName = getCountryName(country) || country;
-  const flagUrl = `https://osu.ppy.sh/images/flags/${country}.png`;
-  const modsLabel = score.mods.map((m) => m.acronym).filter(Boolean).join(" · ");
-
-  const response = new ImageResponse(
-    h(
-      "div",
-      {
-        style: {
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          position: "relative",
-          overflow: "hidden",
-          background: "linear-gradient(135deg, #140f12 0%, #2a1a26 100%)",
-          fontFamily: '"Torus OG"',
-          color: "#ffffff",
-          padding: "56px 64px",
-        },
-      },
-      [
-        cover
-          ? h("img", {
-              key: "cover",
-              src: cover,
-              style: {
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                opacity: 0.28,
-              },
-            })
-          : null,
-        h("div", {
-          key: "dim",
-          style: {
-            position: "absolute",
-            inset: "0",
-            background: "linear-gradient(180deg, rgba(15,10,13,0.55) 0%, rgba(15,10,13,0.92) 100%)",
-          },
-        }),
-
-        // Top eyebrow with flag + country label.
-        h(
-          "div",
-          {
-            key: "eyebrow",
-            style: {
-              position: "relative",
-              display: "flex",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: "14px",
-              color: "#ff99cc",
-              fontSize: "24px",
-              letterSpacing: "0.04em",
-            },
-          },
-          [
-            h("img", {
-              key: "flag",
-              src: flagUrl,
-              style: { width: "38px", height: "26px", borderRadius: "3px", objectFit: "cover" },
-            }),
-            h("div", { key: "lbl" }, `${countryName} - top mania play`),
-          ],
-        ),
-
-        // Center hero: big pp value.
-        h(
-          "div",
-          {
-            key: "hero",
-            style: {
-              position: "relative",
-              display: "flex",
-              flexDirection: "column",
-              flex: "1",
-              justifyContent: "center",
-              marginTop: "20px",
-            },
-          },
-          [
-            h(
-              "div",
-              {
-                key: "pp",
-                style: {
-                  fontSize: "160px",
-                  fontWeight: 900,
-                  color: "#ff66aa",
-                  lineHeight: "0.9",
-                  textShadow: "0 8px 40px rgba(255,102,170,0.35)",
-                },
-              },
-              `${formatOgInt(score.pp)}pp`,
-            ),
-            h(
-              "div",
-              {
-                key: "meta",
-                style: {
-                  display: "flex",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: "20px",
-                  marginTop: "24px",
-                  fontSize: "26px",
-                  color: "#e8e3ec",
-                },
-              },
-              [
-                gradePill(score.rank, "md"),
-                h(
-                  "div",
-                  {
-                    key: "acc",
-                    style: { color: "#c7b8c1" },
-                  },
-                  formatOgAcc(score.accuracy),
-                ),
-                modsLabel
-                  ? h(
-                      "div",
-                      {
-                        key: "mods",
-                        style: {
-                          color: "#ff99cc",
-                          fontWeight: 900,
-                          letterSpacing: "0.08em",
-                        },
-                      },
-                      `+ ${modsLabel}`,
-                    )
-                  : null,
-              ],
-            ),
-          ],
-        ),
-
-        // Bottom: beatmap + player line.
-        h(
-          "div",
-          {
-            key: "bottom",
-            style: {
-              position: "relative",
-              display: "flex",
-              flexDirection: "column",
-              gap: "10px",
-            },
-          },
-          [
-            h(
-              "div",
-              {
-                key: "song",
-                style: {
-                  fontSize: "34px",
-                  fontWeight: 900,
-                  lineHeight: "1.1",
-                  maxWidth: "1050px",
-                  overflow: "hidden",
-                },
-              },
-              beatmapDisplayTitle(score),
-            ),
-            h(
-              "div",
-              {
-                key: "diff",
-                style: {
-                  fontSize: "22px",
-                  color: "#c7b8c1",
-                },
-              },
-              `[${score.beatmap?.version ?? "?"}]  ${score.beatmap?.cs ? `${Math.round(score.beatmap.cs)}K` : ""}`,
-            ),
-            h(
-              "div",
-              {
-                key: "player",
-                style: {
-                  display: "flex",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: "14px",
-                  marginTop: "8px",
-                },
-              },
-              [
-                h(
-                  "div",
-                  {
-                    key: "ava-wrap",
-                    style: {
-                      width: "44px",
-                      height: "44px",
-                      borderRadius: "10px",
-                      overflow: "hidden",
-                      display: "flex",
-                      border: "1px solid rgba(255,255,255,0.15)",
-                    },
-                  },
-                  h("img", {
-                    src: score.user.avatar_url,
-                    style: { width: "100%", height: "100%", objectFit: "cover" },
-                  }),
-                ),
-                h(
-                  "div",
-                  {
-                    key: "name",
-                    style: {
-                      fontSize: "24px",
-                      fontWeight: 900,
-                    },
-                  },
-                  score.user.username,
-                ),
-                h(
-                  "div",
-                  {
-                    key: "sep",
-                    style: { color: "#5a4a52", fontSize: "22px" },
-                  },
-                  "on",
-                ),
-                h(
-                  "div",
-                  {
-                    key: "site",
-                    style: {
-                      fontSize: "20px",
-                      color: "#7a6b74",
-                      letterSpacing: "0.06em",
-                      marginLeft: "auto",
-                    },
-                  },
-                  "o!mania tracker",
-                ),
-              ],
-            ),
-          ],
-        ),
-      ],
-    ),
-    { width: WIDTH, height: HEIGHT, fonts: ogFontList(regularFont, heavyFont) },
-  );
-  response.headers.set("Cache-Control", OG_CACHE_HEADER);
-  return response;
 }
 
 /* Maps: full-bleed mosaic of beatmapset covers pulled from the country's
@@ -629,7 +347,7 @@ async function renderMapsOg(request: Request, country: string): Promise<Response
                 h(
                   "div",
                   { key: "pool" },
-                  `${sets.length} maps in rotation across ${users.length} top players`,
+                  `${sets.length} community-picked mania maps`,
                 ),
                 h("div", { key: "dot", style: { color: "#5a4a52" } }, "/"),
                 h(
@@ -653,544 +371,119 @@ function pickCover(covers: OsuCovers): string | null {
   return covers["cover@2x"] || covers.cover || covers["card@2x"] || covers.card || null;
 }
 
-/* Tracker: a recent-activity feed of the country's top 3 players with
-   their #1 best score each. Frames the page as "what's hot right now." */
-async function renderTrackerOg(request: Request, country: string): Promise<Response> {
-  const [regularFont, heavyFont, data] = await Promise.all([
-    getFont(request, "Torus-Regular.otf"),
-    getFont(request, "Torus-Heavy.otf"),
-    fetchCountryTopPlayer(country),
-  ]);
+// Single thin bar split into proportional colored segments — one per
+// judgement bucket. Wide MAX = clean play; a sliver of red = a miss.
+// Tiny labels under each segment carry the actual count. Skipped when
+// total = 0 (e.g. unsupported score statistics).
+function judgementCompositionBar(judgements: Array<{ label: string; value: number }>) {
+  const total = judgements.reduce((s, j) => s + j.value, 0);
+  if (total === 0) return null;
+  const visible = judgements.filter((j) => j.value > 0);
 
-  const topN = data.rankings.ranking
-    .filter((e) => e.user.is_active !== false)
-    .slice(0, 3);
-  // Sequential rather than parallel. osu! API + dev-server loopback combined
-  // with Satori's remote image fetches was producing "socket hang up" on
-  // parallel fan-out. These are tiny, cached fetches so the added latency
-  // is small on warm calls and worth the reliability.
-  const bestPerPlayer: Array<{ entry: typeof topN[number]; score: OsuScore } | null> = [];
-  for (const entry of topN) {
-    try {
-      const arr = await getCachedUserScores("best", entry.user.id, { limit: 1, offset: 0 });
-      bestPerPlayer.push(arr.length > 0 ? { entry, score: arr[0] } : null);
-    } catch {
-      bestPerPlayer.push(null);
-    }
-  }
-  const rows = bestPerPlayer.filter((x): x is NonNullable<typeof x> => x != null);
-  if (rows.length === 0) throw new Error("no scores for tracker OG");
-
-  const countryName = getCountryName(country) || country;
-  const flagUrl = `https://osu.ppy.sh/images/flags/${country}.png`;
-
-  const response = new ImageResponse(
-    h(
-      "div",
-      {
-        style: {
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          position: "relative",
-          overflow: "hidden",
-          background: "linear-gradient(135deg, #140f12 0%, #2a1a26 100%)",
-          fontFamily: '"Torus OG"',
-          color: "#ffffff",
-          padding: "56px 60px",
-        },
-      },
-      [
-        h("div", {
-          key: "glow",
-          style: {
-            position: "absolute",
-            inset: "0",
-            background: "radial-gradient(circle at 16% 40%, rgba(255,102,170,0.18) 0%, rgba(255,102,170,0) 55%)",
-          },
-        }),
-
-        h(
-          "div",
-          {
-            key: "header",
-            style: {
-              position: "relative",
-              display: "flex",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: "18px",
-              marginBottom: "28px",
-            },
-          },
-          [
-            h("img", {
-              key: "flag",
-              src: flagUrl,
-              style: { width: "54px", height: "36px", borderRadius: "4px", objectFit: "cover" },
-            }),
-            h(
-              "div",
-              { key: "title", style: { fontSize: "40px", fontWeight: 900 } },
-              `live scores - ${countryName}`,
-            ),
-          ],
-        ),
-
-        h(
-          "div",
-          {
-            key: "list",
-            style: {
-              position: "relative",
-              display: "flex",
-              flexDirection: "column",
-              gap: "12px",
-              flex: "1",
-              justifyContent: "center",
-            },
-          },
-          rows.map((r, i) => trackerRow(r.entry.user, r.score, i)),
-        ),
-      ],
-    ),
-    { width: WIDTH, height: HEIGHT, fonts: ogFontList(regularFont, heavyFont) },
-  );
-  response.headers.set("Cache-Control", OG_CACHE_HEADER);
-  return response;
-}
-
-function trackerRow(user: { avatar_url: string; username: string }, score: OsuScore, idx: number) {
-  // Intentionally no beatmap cover bg here. We tried that and Satori choked
-  // on the extra remote image fetches (avatar + cover × 3 rows = too many
-  // concurrent loopbacks). Keep tracker lean: flag + avatars only.
   return h(
     "div",
     {
-      key: `tr-${idx}`,
+      key: "comp",
       style: {
         display: "flex",
-        flexDirection: "row",
-        alignItems: "center",
-        gap: "18px",
-        padding: "16px 18px",
-        borderRadius: "14px",
-        background: "rgba(255,255,255,0.04)",
-        border: "1px solid rgba(255,255,255,0.06)",
+        flexDirection: "column",
+        marginTop: "10px",
       },
     },
     [
-      gradePill(score.rank, "md"),
       h(
         "div",
         {
-          key: "ava-wrap",
+          key: "bar",
           style: {
-            width: "52px",
-            height: "52px",
-            borderRadius: "10px",
-            overflow: "hidden",
             display: "flex",
-            border: "1px solid rgba(255,255,255,0.15)",
-            flexShrink: 0,
+            flexDirection: "row",
+            width: "100%",
+            height: "14px",
+            borderRadius: "7px",
+            overflow: "hidden",
+            background: "rgba(0,0,0,0.4)",
           },
         },
-        h("img", {
-          src: user.avatar_url,
-          style: { width: "100%", height: "100%", objectFit: "cover" },
-        }),
+        visible.map((j, i) =>
+          h("div", {
+            key: `seg-${j.label}`,
+            style: {
+              display: "flex",
+              flexGrow: j.value,
+              flexShrink: 0,
+              flexBasis: "0",
+              background: JUDGEMENT_COLORS[j.label] ?? "#c7b8c1",
+              // Keep a hairline gap between segments so colors don't bleed
+              // into each other when adjacent values differ wildly.
+              marginLeft: i === 0 ? "0" : "1px",
+            },
+          }),
+        ),
       ),
       h(
         "div",
         {
-          key: "text",
+          key: "labels",
           style: {
             display: "flex",
-            flexDirection: "column",
-            flex: "1",
-            minWidth: "0",
+            flexDirection: "row",
+            marginTop: "8px",
+            fontSize: "15px",
+            color: "#c7b8c1",
+            gap: "18px",
           },
         },
-        [
+        judgements.map((j) =>
           h(
             "div",
             {
-              key: "line1",
+              key: `lbl-${j.label}`,
               style: {
                 display: "flex",
                 flexDirection: "row",
                 alignItems: "baseline",
-                gap: "10px",
-                fontSize: "22px",
-                lineHeight: "1.2",
-                color: "#e8e3ec",
-                overflow: "hidden",
+                gap: "6px",
               },
             },
             [
               h(
                 "div",
-                { key: "u", style: { fontWeight: 900, color: "#ffffff" } },
-                user.username,
+                {
+                  key: "v",
+                  style: {
+                    fontWeight: 900,
+                    color: JUDGEMENT_COLORS[j.label] ?? "#ffffff",
+                  },
+                },
+                formatOgInt(j.value),
               ),
               h(
                 "div",
-                { key: "on", style: { color: "#8a7a82", fontSize: "18px" } },
-                "on",
-              ),
-              h(
-                "div",
-                { key: "t", style: { overflow: "hidden" } },
-                score.beatmapset?.title ?? "Unknown",
+                {
+                  key: "l",
+                  style: {
+                    color: "#7a6b74",
+                    letterSpacing: "0.08em",
+                    fontSize: "12px",
+                  },
+                },
+                j.label,
               ),
             ],
           ),
-          h(
-            "div",
-            {
-              key: "line2",
-              style: {
-                fontSize: "16px",
-                color: "#8a7a82",
-                marginTop: "2px",
-              },
-            },
-            `[${score.beatmap?.version ?? "?"}] · ${formatOgAcc(score.accuracy)}`,
-          ),
-        ],
-      ),
-      h(
-        "div",
-        {
-          key: "pp",
-          style: {
-            fontSize: "30px",
-            fontWeight: 900,
-            color: "#ff66aa",
-          },
-        },
-        `${formatOgInt(score.pp)}pp`,
+        ),
       ),
     ],
   );
 }
 
-/* Snipes: "X sniped Y on {map}" card. Shows the most recent #1 takeover
-   in the country. Tightly scoped to the page purpose. */
-async function renderSnipesOg(request: Request, country: string): Promise<Response> {
-  const [regularFont, heavyFont, snipes] = await Promise.all([
-    getFont(request, "Torus-Regular.otf"),
-    getFont(request, "Torus-Heavy.otf"),
-    getCountrySnipes({ data: { country } }),
-  ]);
-
-  const event = snipes.events?.[0];
-  if (!event) throw new Error("no snipe events");
-
-  const cover = event.beatmapset?.cover_url || null;
-  const countryName = getCountryName(country) || country;
-  const flagUrl = `https://osu.ppy.sh/images/flags/${country}.png`;
-
-  const response = new ImageResponse(
-    h(
-      "div",
-      {
-        style: {
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          position: "relative",
-          overflow: "hidden",
-          background: "linear-gradient(135deg, #140f12 0%, #2a1a26 100%)",
-          fontFamily: '"Torus OG"',
-          color: "#ffffff",
-          padding: "56px 64px",
-        },
-      },
-      [
-        cover
-          ? h("img", {
-              key: "cover",
-              src: cover,
-              style: {
-                position: "absolute",
-                inset: "0",
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-                opacity: 0.2,
-              },
-            })
-          : null,
-        h("div", {
-          key: "dim",
-          style: {
-            position: "absolute",
-            inset: "0",
-            background: "linear-gradient(90deg, rgba(15,10,13,0.88) 0%, rgba(15,10,13,0.55) 100%)",
-          },
-        }),
-
-        // Eyebrow
-        h(
-          "div",
-          {
-            key: "eyebrow",
-            style: {
-              position: "relative",
-              display: "flex",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: "12px",
-              color: "#ff99cc",
-              fontSize: "22px",
-              letterSpacing: "0.06em",
-            },
-          },
-          [
-            h("img", {
-              key: "f",
-              src: flagUrl,
-              style: { width: "32px", height: "22px", borderRadius: "3px", objectFit: "cover" },
-            }),
-            h("div", { key: "l" }, `${countryName} - latest snipe`),
-          ],
-        ),
-
-        // Main: sniper vs victim on a map.
-        h(
-          "div",
-          {
-            key: "body",
-            style: {
-              position: "relative",
-              display: "flex",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: "40px",
-              flex: "1",
-              marginTop: "18px",
-            },
-          },
-          [
-            h(
-              "div",
-              {
-                key: "sniper",
-                style: {
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "14px",
-                  flexShrink: 0,
-                },
-              },
-              [
-                h(
-                  "div",
-                  {
-                    key: "ava-s",
-                    style: {
-                      width: "200px",
-                      height: "200px",
-                      borderRadius: "24px",
-                      overflow: "hidden",
-                      display: "flex",
-                      border: "4px solid #ff66aa",
-                      background: "#1a1317",
-                      boxShadow: "0 0 36px rgba(255,102,170,0.45)",
-                    },
-                  },
-                  h("img", {
-                    src: event.sniper.avatar_url,
-                    style: { width: "100%", height: "100%", objectFit: "cover" },
-                  }),
-                ),
-                h(
-                  "div",
-                  {
-                    key: "name-s",
-                    style: { fontSize: "26px", fontWeight: 900 },
-                  },
-                  event.sniper.username,
-                ),
-                h(
-                  "div",
-                  { key: "tag-s", style: { fontSize: "15px", color: "#ff99cc", letterSpacing: "0.1em" } },
-                  "SNIPER",
-                ),
-              ],
-            ),
-
-            // Arrow + verb.
-            h(
-              "div",
-              {
-                key: "vs",
-                style: {
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "4px",
-                },
-              },
-              [
-                h(
-                  "div",
-                  {
-                    key: "arr",
-                    style: { fontSize: "54px", color: "#ff66aa", lineHeight: "1" },
-                  },
-                  "→",
-                ),
-                h(
-                  "div",
-                  {
-                    key: "verb",
-                    style: {
-                      fontSize: "20px",
-                      color: "#c7b8c1",
-                      letterSpacing: "0.14em",
-                    },
-                  },
-                  "SNIPED",
-                ),
-              ],
-            ),
-
-            h(
-              "div",
-              {
-                key: "victim",
-                style: {
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "14px",
-                  flexShrink: 0,
-                },
-              },
-              [
-                h(
-                  "div",
-                  {
-                    key: "ava-v",
-                    style: {
-                      width: "160px",
-                      height: "160px",
-                      borderRadius: "20px",
-                      overflow: "hidden",
-                      display: "flex",
-                      border: "3px solid rgba(255,255,255,0.25)",
-                      background: "#1a1317",
-                      filter: "grayscale(0.6)",
-                    },
-                  },
-                  h("img", {
-                    src: event.victim.avatar_url,
-                    style: { width: "100%", height: "100%", objectFit: "cover" },
-                  }),
-                ),
-                h(
-                  "div",
-                  {
-                    key: "name-v",
-                    style: { fontSize: "22px", fontWeight: 900, color: "#c7b8c1" },
-                  },
-                  event.victim.username,
-                ),
-                h(
-                  "div",
-                  { key: "tag-v", style: { fontSize: "14px", color: "#8a7a82", letterSpacing: "0.1em" } },
-                  "VICTIM",
-                ),
-              ],
-            ),
-
-            // Right column: beatmap info.
-            h(
-              "div",
-              {
-                key: "map",
-                style: {
-                  display: "flex",
-                  flexDirection: "column",
-                  flex: "1",
-                  minWidth: "0",
-                  marginLeft: "14px",
-                },
-              },
-              [
-                h(
-                  "div",
-                  {
-                    key: "t",
-                    style: {
-                      fontSize: "28px",
-                      fontWeight: 900,
-                      lineHeight: "1.1",
-                      marginBottom: "6px",
-                      overflow: "hidden",
-                    },
-                  },
-                  `${event.beatmapset.artist} - ${event.beatmapset.title}`,
-                ),
-                h(
-                  "div",
-                  {
-                    key: "d",
-                    style: { fontSize: "20px", color: "#c7b8c1" },
-                  },
-                  `[${event.beatmap.version}]  ${Math.round(event.beatmap.cs)}K`,
-                ),
-                event.pp != null
-                  ? h(
-                      "div",
-                      {
-                        key: "pp",
-                        style: {
-                          fontSize: "32px",
-                          fontWeight: 900,
-                          color: "#ff66aa",
-                          marginTop: "14px",
-                        },
-                      },
-                      `${formatOgInt(event.pp)}pp`,
-                    )
-                  : null,
-              ],
-            ),
-          ],
-        ),
-
-        h(
-          "div",
-          {
-            key: "brand",
-            style: {
-              position: "relative",
-              fontSize: "18px",
-              color: "#7a6b74",
-              letterSpacing: "0.06em",
-              marginTop: "auto",
-            },
-          },
-          "o!mania tracker",
-        ),
-      ],
-    ),
-    { width: WIDTH, height: HEIGHT, fonts: ogFontList(regularFont, heavyFont) },
-  );
-  response.headers.set("Cache-Control", OG_CACHE_HEADER);
-  return response;
-}
-
-/* Replay: specific score card. URL carries scoreId. Render: beatmap cover
-   as ambient bg, then player avatar + grade + pp + acc + mods, like a
-   stylized score result screen. */
+/* Replay: score result card. Layout split into vertical bands so
+   Satori can't get confused by mixing position:absolute children with
+   flex layout (a previous version had an offset bug from that). Top:
+   big REPLAY eyebrow + brand. Middle: grade SVG + username + beatmap
+   title + diff. Then a thin segmented composition bar visualising the
+   judgement distribution, then pp / acc / mods / combo. */
 async function renderReplayOg(request: Request, scoreId: number): Promise<Response> {
   const [regularFont, heavyFont, score] = await Promise.all([
     getFont(request, "Torus-Regular.otf"),
@@ -1200,22 +493,28 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
 
   const cover = pickBeatmapsetCover(score);
   const modsLabel = score.mods.map((m) => m.acronym).filter(Boolean).join(" · ");
+  const displayedRank = getDisplayedRank(score);
+  const judgements = getManiaJudgementCounts(score.statistics);
+  const keys = score.beatmap?.cs ? `${Math.round(score.beatmap.cs)}K` : "";
+  const versionLine = `[${score.beatmap?.version ?? "?"}]${keys ? `  ${keys}` : ""}`;
+  const maxCombo = score.max_combo ?? score.beatmap?.max_combo ?? null;
 
   const response = new ImageResponse(
     h(
       "div",
       {
+        // Outer canvas: plain block, no flex, no padding. Background art and
+        // content stack via absolute positioning so layout glitches like
+        // "content offset by parent flex" can't happen.
         style: {
-          width: "100%",
-          height: "100%",
+          width: `${WIDTH}px`,
+          height: `${HEIGHT}px`,
           display: "flex",
-          flexDirection: "column",
           position: "relative",
           overflow: "hidden",
           background: "linear-gradient(135deg, #140f12 0%, #2a1a26 100%)",
           fontFamily: '"Torus OG"',
           color: "#ffffff",
-          padding: "56px 64px",
         },
       },
       [
@@ -1225,11 +524,12 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
               src: cover,
               style: {
                 position: "absolute",
-                inset: "0",
-                width: "100%",
-                height: "100%",
+                top: 0,
+                left: 0,
+                width: `${WIDTH}px`,
+                height: `${HEIGHT}px`,
                 objectFit: "cover",
-                opacity: 0.3,
+                opacity: 0.32,
               },
             })
           : null,
@@ -1237,152 +537,218 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
           key: "dim",
           style: {
             position: "absolute",
-            inset: "0",
-            background: "linear-gradient(180deg, rgba(15,10,13,0.55) 0%, rgba(15,10,13,0.92) 100%)",
+            top: 0,
+            left: 0,
+            width: `${WIDTH}px`,
+            height: `${HEIGHT}px`,
+            background:
+              "linear-gradient(180deg, rgba(15,10,13,0.55) 0%, rgba(15,10,13,0.78) 60%, rgba(15,10,13,0.95) 100%)",
           },
         }),
 
+        // Content layer: a single absolutely-positioned flex column that
+        // owns its own padding. Decoupled from the bg layer entirely.
         h(
           "div",
           {
-            key: "eyebrow",
+            key: "content",
             style: {
-              position: "relative",
-              fontSize: "22px",
-              color: "#ff99cc",
-              letterSpacing: "0.1em",
-              marginBottom: "16px",
-            },
-          },
-          "REPLAY",
-        ),
-
-        h(
-          "div",
-          {
-            key: "hero",
-            style: {
-              position: "relative",
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: `${WIDTH}px`,
+              height: `${HEIGHT}px`,
               display: "flex",
-              flexDirection: "row",
-              alignItems: "center",
-              gap: "32px",
-              flex: "1",
+              flexDirection: "column",
+              padding: "52px 64px",
             },
           },
           [
-            gradePill(score.rank, "lg"),
+            // Top band: REPLAY eyebrow on left, brand mark on right.
             h(
               "div",
               {
-                key: "info",
+                key: "top",
                 style: {
                   display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
-                  flex: "1",
-                  minWidth: "0",
+                  flexDirection: "row",
+                  alignItems: "center",
                 },
               },
               [
                 h(
                   "div",
                   {
-                    key: "name",
+                    key: "eyebrow",
                     style: {
-                      fontSize: "54px",
+                      fontSize: "44px",
+                      color: "#ff99cc",
+                      letterSpacing: "0.16em",
                       fontWeight: 900,
                       lineHeight: "1.0",
                     },
                   },
-                  score.user.username,
+                  "REPLAY",
                 ),
                 h(
                   "div",
                   {
-                    key: "song",
+                    key: "brand",
                     style: {
-                      fontSize: "26px",
-                      color: "#e8e3ec",
-                      lineHeight: "1.2",
-                      overflow: "hidden",
+                      marginLeft: "auto",
+                      fontSize: "18px",
+                      color: "#7a6b74",
+                      letterSpacing: "0.06em",
                     },
                   },
-                  beatmapDisplayTitle(score),
-                ),
-                h(
-                  "div",
-                  {
-                    key: "diff",
-                    style: {
-                      fontSize: "20px",
-                      color: "#c7b8c1",
-                    },
-                  },
-                  `[${score.beatmap?.version ?? "?"}]  ${score.beatmap?.cs ? `${Math.round(score.beatmap.cs)}K` : ""}`,
+                  "o!mania tracker",
                 ),
               ],
             ),
-          ],
-        ),
 
-        h(
-          "div",
-          {
-            key: "stats",
-            style: {
-              position: "relative",
-              display: "flex",
-              flexDirection: "row",
-              alignItems: "baseline",
-              gap: "34px",
-              marginTop: "auto",
-            },
-          },
-          [
+            // Middle band: real grade SVG + player + beatmap.
             h(
               "div",
               {
-                key: "pp",
-                style: { fontSize: "72px", fontWeight: 900, color: "#ff66aa", lineHeight: "1" },
-              },
-              `${formatOgInt(score.pp)}pp`,
-            ),
-            h(
-              "div",
-              {
-                key: "acc",
-                style: { fontSize: "28px", color: "#c7b8c1" },
-              },
-              formatOgAcc(score.accuracy),
-            ),
-            modsLabel
-              ? h(
-                  "div",
-                  {
-                    key: "mods",
-                    style: {
-                      fontSize: "24px",
-                      color: "#ff99cc",
-                      fontWeight: 900,
-                      letterSpacing: "0.08em",
-                    },
-                  },
-                  `+ ${modsLabel}`,
-                )
-              : null,
-            h(
-              "div",
-              {
-                key: "brand",
+                key: "hero",
                 style: {
-                  fontSize: "18px",
-                  color: "#7a6b74",
-                  letterSpacing: "0.06em",
-                  marginLeft: "auto",
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: "36px",
+                  flex: "1",
+                  marginTop: "20px",
                 },
               },
-              "o!mania tracker",
+              [
+                h("img", {
+                  key: "grade",
+                  src: gradeImgUrl(request, displayedRank),
+                  // The SVG has a 32x16 aspect ratio. Render it at 2x scale
+                  // so the result feels weighty next to the 56px username.
+                  style: {
+                    width: "200px",
+                    height: "100px",
+                    flexShrink: 0,
+                  },
+                }),
+                h(
+                  "div",
+                  {
+                    key: "info",
+                    style: {
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "10px",
+                      flex: "1",
+                      minWidth: "0",
+                    },
+                  },
+                  [
+                    h(
+                      "div",
+                      {
+                        key: "name",
+                        style: {
+                          fontSize: "56px",
+                          fontWeight: 900,
+                          lineHeight: "1.0",
+                        },
+                      },
+                      score.user.username,
+                    ),
+                    h(
+                      "div",
+                      {
+                        key: "song",
+                        style: {
+                          fontSize: "26px",
+                          color: "#e8e3ec",
+                          lineHeight: "1.2",
+                          overflow: "hidden",
+                        },
+                      },
+                      clamp(beatmapDisplayTitle(score), 60),
+                    ),
+                    h(
+                      "div",
+                      {
+                        key: "diff",
+                        style: {
+                          fontSize: "20px",
+                          color: "#c7b8c1",
+                        },
+                      },
+                      versionLine,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+
+            // Score-composition bar: thin segmented strip where each
+            // segment's width is proportional to its judgement count.
+            // Reads as a visual fingerprint of the score: a wide MAX
+            // segment = clean play, visible miss segment = heartbreak.
+            judgementCompositionBar(judgements),
+
+            // Bottom band: pp / acc / mods / combo.
+            h(
+              "div",
+              {
+                key: "stats",
+                style: {
+                  display: "flex",
+                  flexDirection: "row",
+                  alignItems: "baseline",
+                  gap: "30px",
+                  marginTop: "22px",
+                },
+              },
+              [
+                h(
+                  "div",
+                  {
+                    key: "pp",
+                    style: { fontSize: "68px", fontWeight: 900, color: "#ff66aa", lineHeight: "1" },
+                  },
+                  `${formatOgInt(score.pp)}pp`,
+                ),
+                h(
+                  "div",
+                  {
+                    key: "acc",
+                    style: { fontSize: "26px", color: "#e8e3ec" },
+                  },
+                  formatOgAcc(score.accuracy),
+                ),
+                maxCombo != null
+                  ? h(
+                      "div",
+                      {
+                        key: "combo",
+                        style: { fontSize: "22px", color: "#c7b8c1" },
+                      },
+                      `${formatOgInt(maxCombo)}x`,
+                    )
+                  : null,
+                modsLabel
+                  ? h(
+                      "div",
+                      {
+                        key: "mods",
+                        style: {
+                          fontSize: "22px",
+                          color: "#ff99cc",
+                          fontWeight: 900,
+                          letterSpacing: "0.08em",
+                          marginLeft: "auto",
+                        },
+                      },
+                      `+ ${modsLabel}`,
+                    )
+                  : null,
+              ],
             ),
           ],
         ),
@@ -2081,35 +1447,14 @@ export const Route = createFileRoute("/api/og")({
           }
         }
 
-        // Country-specific kinds: each page has its own layout; the
-        // country param is required.
+        // Country-specific custom layouts. Pages without a custom image fall
+        // through to the country scoreboard fallback below.
         if (countryValid) {
-          if (kind === "top-plays") {
-            try {
-              return await renderTopPlaysOg(request, country);
-            } catch (err) {
-              console.warn("[og] top-plays render failed, falling back", err);
-            }
-          }
           if (kind === "maps") {
             try {
               return await renderMapsOg(request, country);
             } catch (err) {
               console.warn("[og] maps render failed, falling back", err);
-            }
-          }
-          if (kind === "tracker") {
-            try {
-              return await renderTrackerOg(request, country);
-            } catch (err) {
-              console.warn("[og] tracker render failed, falling back", err);
-            }
-          }
-          if (kind === "snipes") {
-            try {
-              return await renderSnipesOg(request, country);
-            } catch (err) {
-              console.warn("[og] snipes render failed, falling back", err);
             }
           }
 
