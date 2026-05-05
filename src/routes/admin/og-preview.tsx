@@ -333,12 +333,6 @@ function OgPreviewPage() {
             </div>
           </SectionCard>
 
-          <SectionCard title="Facebook / LinkedIn">
-            <div className="p-5 bg-[#18191a] flex items-center justify-center">
-              <FacebookMockup imageUrl={ogPath} title={mockTitle} subtitle={mockSubtitle} domain={domain} />
-            </div>
-          </SectionCard>
-
           <SectionCard title="iMessage / WhatsApp">
             <div className="p-5 bg-[#0b141a] flex items-center justify-center">
               <IMessageMockup imageUrl={ogPath} title={mockTitle} subtitle={mockSubtitle} domain={domain} />
@@ -538,37 +532,6 @@ function DiscordMockup({
           <div className="aspect-[1.91/1] bg-black">
             <img src={imageUrl} alt="" className="w-full h-full object-cover" />
           </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FacebookMockup({
-  imageUrl,
-  title,
-  subtitle,
-  domain,
-}: {
-  imageUrl: string;
-  title: string;
-  subtitle: string;
-  domain: string;
-}) {
-  return (
-    <div className="w-full max-w-[524px] bg-[#242526] border border-[#3a3b3c] rounded-lg overflow-hidden text-white">
-      <div className="aspect-[1.91/1] bg-black">
-        <img src={imageUrl} alt="" className="w-full h-full object-cover" />
-      </div>
-      <div className="px-4 py-3 bg-[#3a3b3c]/40 border-t border-[#3a3b3c]">
-        <div className="text-[12px] text-[#b0b3b8] uppercase leading-tight tracking-wide">
-          {domain}
-        </div>
-        <div className="text-[17px] font-semibold leading-snug mt-1 text-[#e4e6eb] line-clamp-2">
-          {title}
-        </div>
-        <div className="text-[15px] text-[#b0b3b8] leading-snug mt-1 line-clamp-2">
-          {subtitle}
         </div>
       </div>
     </div>
