@@ -6,10 +6,8 @@ Disallow: /api/
 Disallow: /admin/
 Disallow: /tracker
 Disallow: /replay
-Disallow: /player/
 Disallow: /snipes
 Allow: /
 Crawl-delay: 10
 
-# Replace the domain below with your production URL if it changes.
-Sitemap: https://mania-hub.vercel.app/api/sitemap
+Sitemap: https://mania-tracker.com/sitemap.xml

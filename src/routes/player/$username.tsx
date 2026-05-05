@@ -68,7 +68,6 @@ export const Route = createFileRoute("/player/$username")({
       origin: match.context.origin,
       image: playerOgImagePath(params.username),
       type: "profile",
-      noindex: true,
     }),
   component: PlayerPage,
 });
