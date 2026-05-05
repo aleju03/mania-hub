@@ -144,11 +144,12 @@ export async function ensureCacheSchema(): Promise<void> {
     await db.execute({
       sql: `
         INSERT INTO beatmap_asset_cache_stats (id, total_size_bytes, updated_at)
-        SELECT 1, COALESCE(SUM(size_bytes), 0), ?
-        FROM beatmap_asset_cache
-        WHERE NOT EXISTS (
-          SELECT 1 FROM beatmap_asset_cache_stats WHERE id = 1
+        VALUES (
+          1,
+          (SELECT COALESCE(SUM(size_bytes), 0) FROM beatmap_asset_cache),
+          ?
         )
+        ON CONFLICT(id) DO NOTHING
       `,
       args: [Date.now()],
     });
