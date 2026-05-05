@@ -97,6 +97,8 @@ export function Nav() {
   const selectedCountry = routeCountry ?? fallbackCountry;
   const devMode = auth.canUseDevFeatures;
   const adminMode = auth.canUseAdminFeatures;
+  const devToolsLabel = adminMode ? "Admin" : "🥷";
+  const devToolsTitle = adminMode ? "Admin tools" : "Dev tools";
   const returnTo = `${location.pathname}${location.searchStr}`;
   const loginHref = `/api/auth/osu?next=${encodeURIComponent(returnTo)}`;
   const logoutHref = `/api/auth/logout?next=${encodeURIComponent(returnTo)}`;
@@ -382,11 +384,11 @@ export function Nav() {
                   type="button"
                   onClick={() => setAdminMenuOpen((open) => !open)}
                   className="px-2 py-1 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold whitespace-nowrap hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
-                  title="Admin tools (dev only)"
+                  title={devToolsTitle}
                   aria-haspopup="menu"
                   aria-expanded={adminMenuOpen}
                 >
-                  Admin
+                  {devToolsLabel}
                 </button>
                 {adminMenuOpen && (
                   <div
@@ -616,7 +618,7 @@ export function Nav() {
               {devMode && (
                 <div className="border-t border-osu-b3/30 px-4 py-3 space-y-2">
                   <div className="text-[10px] uppercase tracking-wide text-osu-f1 font-semibold px-1">
-                    Admin
+                    {devToolsLabel}
                   </div>
                   {adminMode && (
                     <Link
