@@ -1460,7 +1460,7 @@ function ReplaySkinPreview({
           />
         );
       })}
-      {settings.style !== "circles" ? (
+      {settings.style === "bars" ? (
         <div className="pointer-events-none absolute h-0.5 bg-white/70" style={{ left: playfieldX, width: playfieldWidth, top: receptorY }} />
       ) : null}
       {lanePositions.map(({ col, cx, width: laneWidth }) => {
@@ -1762,29 +1762,6 @@ function ReplaySkinPreview({
   );
 }
 
-const ARROW_BASE_POINTS: ReadonlyArray<readonly [number, number]> = [
-  [0.0, 0.32],
-  [0.5, 0.32],
-  [0.5, 0.05],
-  [1.0, 0.5],
-  [0.5, 0.95],
-  [0.5, 0.68],
-  [0.0, 0.68],
-];
-
-function rotateArrowPoint(px: number, py: number, direction: ArrowDirection): [number, number] {
-  switch (direction) {
-    case "right":
-      return [px, py];
-    case "left":
-      return [1 - px, 1 - py];
-    case "down":
-      return [1 - py, px];
-    case "up":
-      return [py, 1 - px];
-  }
-}
-
 function ArrowShape({
   cx,
   cy,
@@ -1804,29 +1781,44 @@ function ArrowShape({
   stroke: string;
   strokeOpacity: number;
 }) {
-  const half = size / 2;
-  const points = ARROW_BASE_POINTS.map(([x, y]) => {
-    const [rx, ry] = rotateArrowPoint(x, y, direction);
-    return `${cx - half + rx * size},${cy - half + ry * size}`;
-  }).join(" ");
+  const arrowMaskStyle: CSSProperties = {
+    WebkitMask: `url('/images/notes/mania-arrow-${direction}.svg') center / contain no-repeat`,
+    mask: `url('/images/notes/mania-arrow-${direction}.svg') center / contain no-repeat`,
+  };
+  const innerSize = fillOpacity > 0 ? size * 0.82 : size * 0.76;
+  const outerOpacity = fillOpacity > 0 ? strokeOpacity : Math.max(strokeOpacity, 0.35);
+  const innerColor = fillOpacity > 0 ? fill : "#07070c";
   return (
-    <svg
-      className="pointer-events-none absolute inset-0"
-      width="100%"
-      height="100%"
-      viewBox="0 0 260 300"
-      preserveAspectRatio="none"
+    <span
+      className="pointer-events-none absolute"
+      style={{
+        left: cx - size / 2,
+        top: cy - size / 2,
+        width: size,
+        height: size,
+      }}
     >
-      <polygon
-        points={points}
-        fill={fill}
-        fillOpacity={fillOpacity}
-        stroke={stroke}
-        strokeOpacity={strokeOpacity}
-        strokeWidth={1.5}
-        strokeLinejoin="round"
+      <span
+        className="absolute inset-0"
+        style={{
+          ...arrowMaskStyle,
+          backgroundColor: stroke,
+          opacity: outerOpacity,
+        }}
       />
-    </svg>
+      <span
+        className="absolute"
+        style={{
+          ...arrowMaskStyle,
+          left: (size - innerSize) / 2,
+          top: (size - innerSize) / 2,
+          width: innerSize,
+          height: innerSize,
+          backgroundColor: innerColor,
+          opacity: fillOpacity > 0 ? fillOpacity : 1,
+        }}
+      />
+    </span>
   );
 }
 
