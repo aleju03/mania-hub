@@ -2591,11 +2591,11 @@ function MapDetailsModal({
           transition={{ duration: 0.12 }}
         >
           <div
-            className="absolute inset-0 bg-black/70"
+            className="absolute inset-0 bg-black/85"
             onClick={onClose}
           />
           <motion.div
-            className="relative z-10 w-full max-w-[640px] max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-3rem)] overflow-hidden rounded-2xl bg-osu-b4 border border-osu-b3/40 shadow-2xl flex flex-col"
+            className="relative z-10 w-full max-w-[640px] max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-3rem)] overflow-hidden rounded-2xl bg-osu-b5 ring-1 ring-white/10 shadow-2xl flex flex-col"
             initial={{ opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: 4 }}
@@ -2843,7 +2843,7 @@ function StatItem({
 
 function StatRow({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-xl bg-black/30 ring-1 ring-white/10 flex items-stretch divide-x divide-white/10">
+    <div className="rounded-xl bg-white/5 ring-1 ring-white/10 flex items-stretch divide-x divide-white/10">
       {children}
     </div>
   );
@@ -2901,7 +2901,7 @@ function FarmedDetails({ entry }: { entry: MapsFarmedEntry }) {
 
       <div>
         <SectionHeader title="Farmed by" count={sortedPlayers.length} />
-        <div className="rounded-xl bg-black/30 ring-1 ring-white/10 p-1 max-h-[280px] overflow-y-auto">
+        <div className="rounded-xl bg-white/5 ring-1 ring-white/10 p-1 max-h-[280px] overflow-y-auto">
           {sortedPlayers.map((p, i) => (
             <PlayerRow
               key={p.id}
@@ -2954,7 +2954,7 @@ function PopularDetails({ entry }: { entry: MapsAggregatedBeatmap }) {
 
       <div>
         <SectionHeader title="Most played by" count={sortedPlayers.length} />
-        <div className="rounded-xl bg-black/30 ring-1 ring-white/10 p-1 max-h-[280px] overflow-y-auto">
+        <div className="rounded-xl bg-white/5 ring-1 ring-white/10 p-1 max-h-[280px] overflow-y-auto">
           {sortedPlayers.map((p, i) => (
             <PlayerRow
               key={p.id}
@@ -2988,7 +2988,7 @@ function FavouriteDetails({ entry, country }: { entry: MapsAggregatedFavourite; 
 
       <div>
         <SectionHeader title="Favourited by" count={entry.players.length} />
-        <div className="rounded-xl bg-black/30 ring-1 ring-white/10 p-1 max-h-[280px] overflow-y-auto">
+        <div className="rounded-xl bg-white/5 ring-1 ring-white/10 p-1 max-h-[280px] overflow-y-auto">
           {entry.players.map((p) => (
             <PlayerRow
               key={p.id}
