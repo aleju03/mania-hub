@@ -64,6 +64,9 @@ export interface ReplaySkinSettings {
   lnHeadColor: string;
   lnHeadColors: string[];
   lnBodyColor: string;
+  outlineEnabled: boolean;
+  outlineColor: string;
+  outlineWidth: number;
   percy: boolean;
   upscroll: boolean;
   keysUnderNotes: boolean;
@@ -100,6 +103,9 @@ export const REPLAY_SKIN_MAX_COLUMN_SPACING = 40;
 export const REPLAY_SKIN_DEFAULT_COLUMN_SPACING = 0;
 export const REPLAY_SKIN_MIN_NOTE_HEIGHT_SCALE = 10;
 export const REPLAY_SKIN_MAX_NOTE_HEIGHT_SCALE = 200;
+export const REPLAY_SKIN_MIN_OUTLINE_WIDTH = 1;
+export const REPLAY_SKIN_MAX_OUTLINE_WIDTH = 8;
+export const REPLAY_SKIN_DEFAULT_OUTLINE_WIDTH = 2;
 export const REPLAY_SKIN_DEFAULT_HIT_POSITION = 110;
 export const OSU_MANIA_DEFAULT_SCORE_POSITION = 206;
 export const OSU_MANIA_DEFAULT_COMBO_POSITION = 177;
@@ -134,6 +140,9 @@ export const DEFAULT_REPLAY_SKIN_SETTINGS: ReplaySkinSettings = {
   lnHeadColor: DEFAULT_REPLAY_SKIN_PROFILE.lnHeadColor,
   lnHeadColors: [],
   lnBodyColor: "#8b8b93",
+  outlineEnabled: true,
+  outlineColor: "#ffffff",
+  outlineWidth: REPLAY_SKIN_DEFAULT_OUTLINE_WIDTH,
   percy: false,
   upscroll: false,
   keysUnderNotes: false,
@@ -191,6 +200,12 @@ function normalizeNoteHeightScale(value: unknown, fallback = DEFAULT_REPLAY_SKIN
   const parsed = typeof value === "number" ? value : Number(value);
   const source = Number.isFinite(parsed) ? parsed : fallback;
   return Math.max(REPLAY_SKIN_MIN_NOTE_HEIGHT_SCALE, Math.min(REPLAY_SKIN_MAX_NOTE_HEIGHT_SCALE, Math.round(source)));
+}
+
+function normalizeOutlineWidth(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  const source = Number.isFinite(parsed) ? parsed : REPLAY_SKIN_DEFAULT_OUTLINE_WIDTH;
+  return Math.max(REPLAY_SKIN_MIN_OUTLINE_WIDTH, Math.min(REPLAY_SKIN_MAX_OUTLINE_WIDTH, Math.round(source)));
 }
 
 function normalizeHitPosition(value: unknown): number {
@@ -374,6 +389,9 @@ export function normalizeReplaySkinSettings(value: unknown): ReplaySkinSettings 
     lnHeadColor: fallbackProfile.lnHeadColor,
     lnHeadColors: fallbackProfile.lnHeadColors,
     lnBodyColor: normalizeHexColor(raw.lnBodyColor) ?? DEFAULT_REPLAY_SKIN_SETTINGS.lnBodyColor,
+    outlineEnabled: typeof raw.outlineEnabled === "boolean" ? raw.outlineEnabled : DEFAULT_REPLAY_SKIN_SETTINGS.outlineEnabled,
+    outlineColor: normalizeHexColor(raw.outlineColor) ?? DEFAULT_REPLAY_SKIN_SETTINGS.outlineColor,
+    outlineWidth: normalizeOutlineWidth(raw.outlineWidth),
     percy: typeof raw.percy === "boolean" ? raw.percy : DEFAULT_REPLAY_SKIN_SETTINGS.percy,
     upscroll: typeof raw.upscroll === "boolean" ? raw.upscroll : DEFAULT_REPLAY_SKIN_SETTINGS.upscroll,
     keysUnderNotes: typeof raw.keysUnderNotes === "boolean" ? raw.keysUnderNotes : DEFAULT_REPLAY_SKIN_SETTINGS.keysUnderNotes,
@@ -502,6 +520,9 @@ function compactReplaySkinSettings(settings: ReplaySkinSettings): Record<string,
   if (settings.lnHeadColor !== def.lnHeadColor) out.lnHeadColor = settings.lnHeadColor;
   if (settings.lnHeadColors.some((color) => color)) out.lnHeadColors = settings.lnHeadColors;
   if (settings.lnBodyColor !== def.lnBodyColor) out.lnBodyColor = settings.lnBodyColor;
+  if (settings.outlineEnabled !== def.outlineEnabled) out.outlineEnabled = settings.outlineEnabled;
+  if (settings.outlineColor !== def.outlineColor) out.outlineColor = settings.outlineColor;
+  if (settings.outlineWidth !== def.outlineWidth) out.outlineWidth = settings.outlineWidth;
   if (settings.percy !== def.percy) out.percy = settings.percy;
   if (settings.upscroll !== def.upscroll) out.upscroll = settings.upscroll;
   if (settings.keysUnderNotes !== def.keysUnderNotes) out.keysUnderNotes = settings.keysUnderNotes;

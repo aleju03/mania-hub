@@ -23,6 +23,8 @@ describe("replay skin settings UI", () => {
     expect(source).toContain("Note color");
     expect(source).toContain("LN Head color");
     expect(source).toContain("LN Body color");
+    expect(source).toContain("Outline color");
+    expect(source).toContain("Outline width");
     expect(source).toContain("Cut LN tail");
     expect(source).toContain("Keymode");
     expect(source).toContain("Skin preset");

@@ -19,6 +19,7 @@ interface ReplayControlsProps {
   volume: number;
   showInputOverlay: boolean;
   inputOverlayOnly: boolean;
+  inputOverlayKeyHistory: boolean;
   inputOverlayColor: string;
   skinSettingsOpen: boolean;
   scrollSpeed: number;
@@ -29,6 +30,7 @@ interface ReplayControlsProps {
   onSetVolume: (volume: number) => void;
   onToggleInputOverlay: () => void;
   onToggleInputOverlayOnly: () => void;
+  onToggleInputOverlayKeyHistory: () => void;
   onSetInputOverlayColor: (color: string) => void;
   onOpenSkinSettings: () => void;
   onSetScrollSpeed: (speed: number) => void;
@@ -53,6 +55,7 @@ export function ReplayControls({
   volume,
   showInputOverlay,
   inputOverlayOnly,
+  inputOverlayKeyHistory,
   inputOverlayColor,
   skinSettingsOpen,
   scrollSpeed,
@@ -63,6 +66,7 @@ export function ReplayControls({
   onSetVolume,
   onToggleInputOverlay,
   onToggleInputOverlayOnly,
+  onToggleInputOverlayKeyHistory,
   onSetInputOverlayColor,
   onOpenSkinSettings,
   onSetScrollSpeed,
@@ -189,6 +193,14 @@ export function ReplayControls({
               }`}
             >
               Only
+            </button>
+            <button
+              onClick={onToggleInputOverlayKeyHistory}
+              className={`px-2.5 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
+                inputOverlayKeyHistory ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
+              }`}
+            >
+              Keys
             </button>
             <label className="relative h-6 w-6 cursor-pointer overflow-hidden rounded border border-osu-b3/60 bg-osu-b3/50" title="Input overlay color">
               <span className="absolute inset-1 rounded" style={{ backgroundColor: inputOverlayColor }} />
@@ -325,7 +337,7 @@ function ShareTimestampTooltip({
   );
 }
 
-function ReplayProgressBar({
+export function ReplayProgressBar({
   rendererRef,
   heatmap,
   sliderClass,

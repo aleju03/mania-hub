@@ -134,6 +134,23 @@ export async function ensureCacheSchema(): Promise<void> {
     `);
 
     await db.execute(`
+      CREATE TABLE IF NOT EXISTS replay_cache (
+        score_id INTEGER PRIMARY KEY,
+        storage_key TEXT NOT NULL,
+        endpoint_kind TEXT NOT NULL,
+        mime_type TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        last_accessed_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+      )
+    `);
+
+    await db.execute(`
+      CREATE INDEX IF NOT EXISTS idx_replay_cache_accessed
+      ON replay_cache (last_accessed_at)
+    `);
+
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS beatmap_asset_cache_stats (
         id INTEGER PRIMARY KEY CHECK (id = 1),
         total_size_bytes INTEGER NOT NULL DEFAULT 0,
@@ -146,7 +163,10 @@ export async function ensureCacheSchema(): Promise<void> {
         INSERT INTO beatmap_asset_cache_stats (id, total_size_bytes, updated_at)
         VALUES (
           1,
-          (SELECT COALESCE(SUM(size_bytes), 0) FROM beatmap_asset_cache),
+          (
+            (SELECT COALESCE(SUM(size_bytes), 0) FROM beatmap_asset_cache)
+            + (SELECT COALESCE(SUM(size_bytes), 0) FROM replay_cache)
+          ),
           ?
         )
         ON CONFLICT(id) DO NOTHING

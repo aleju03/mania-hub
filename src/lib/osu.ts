@@ -31,10 +31,13 @@ function getErrorMessage(error: unknown): string {
 import {
   osuFetch,
   osuFetchBinary,
+  acquireCacheLock,
   fetchBeatmapFile,
   fetchWithCacheLock,
   fetchWithStaleAllowed,
   runCacheRebuild,
+  releaseCacheLock,
+  runWithCacheLockRenewal,
   deleteExpiredCacheEntriesByPrefix,
   deletePersistentCacheEntries,
   getPersistentCacheEntry,
@@ -43,6 +46,7 @@ import {
   getPersistentCached,
   setPersistentCache,
 } from "./api";
+import type { ReplayEndpointKind } from "./r2-cache";
 import { db, ensureCacheSchema, hasDb } from "./db";
 import { calculateApproxPpGainMap, calculateReplacementPpGain, getBoardLaneKey, getModAcronyms, getModDisplayList, getScoreDisplayValues, getScoreRate, getScoreTimestamp, getScoreUrl } from "./score";
 import { detectManiaPatterns } from "./mania-patterns";
@@ -2695,25 +2699,115 @@ export const rebuildCountryMapsForUser = createServerFn({ method: "POST" })
 
 // ── Replay (parsed server-side via osu-parsers) ────────────────────────────
 
+const REPLAY_CACHE_LOCK_TTL_MS = 30_000;
+const REPLAY_CACHE_LOCK_WAIT_MS = 500;
+const REPLAY_CACHE_LOCK_WAIT_RETRIES = 8;
+
+type ReplayDownload = {
+  buffer: Buffer;
+  endpointKind: ReplayEndpointKind;
+};
+
+type ReplayCacheModule = typeof import("./r2-cache");
+
+function getReplayCacheModule(): Promise<ReplayCacheModule> {
+  return import("./r2-cache");
+}
+
+function replayCacheLockKey(scoreId: number): string {
+  return `replay-osr:v1:${scoreId}`;
+}
+
+function replayEndpointPath(endpointKind: ReplayEndpointKind, mode: string, scoreId: number): string {
+  return endpointKind === "legacy"
+    ? `/scores/${mode}/${scoreId}/download`
+    : `/scores/${scoreId}/download`;
+}
+
+function replaySleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function downloadReplay(
+  data: { scoreId: number; mode: string },
+  preferredEndpointKind: ReplayEndpointKind | null,
+): Promise<ReplayDownload> {
+  const endpointKinds: ReplayEndpointKind[] = preferredEndpointKind
+    ? [preferredEndpointKind, preferredEndpointKind === "legacy" ? "modern" : "legacy"]
+    : ["legacy", "modern"];
+  let firstError: unknown = null;
+  let lastError: unknown = null;
+
+  for (const endpointKind of endpointKinds) {
+    try {
+      const buffer = await osuFetchBinary(replayEndpointPath(endpointKind, data.mode, data.scoreId), {
+        caller: `getReplayParsed:${endpointKind}`,
+      });
+      return {
+        buffer: Buffer.from(buffer),
+        endpointKind,
+      };
+    } catch (error) {
+      firstError ??= error;
+      lastError = error;
+    }
+  }
+
+  throw (preferredEndpointKind ? firstError : lastError) ?? new Error("Failed to download replay");
+}
+
+async function getReplayBuffer(data: { scoreId: number; mode: string }): Promise<Buffer> {
+  const {
+    getCachedReplay,
+    getCachedReplayEndpointKind,
+    isR2ReplayCacheConfigured,
+    putCachedReplay,
+  } = await getReplayCacheModule();
+  const cached = await getCachedReplay(data.scoreId);
+  if (cached) return cached.buffer;
+
+  const preferredEndpointKind = await getCachedReplayEndpointKind(data.scoreId);
+  if (!isR2ReplayCacheConfigured()) {
+    return (await downloadReplay(data, preferredEndpointKind)).buffer;
+  }
+
+  const lockKey = replayCacheLockKey(data.scoreId);
+  const lockOwner = await acquireCacheLock(lockKey, REPLAY_CACHE_LOCK_TTL_MS);
+
+  if (lockOwner) {
+    try {
+      return await runWithCacheLockRenewal(lockKey, lockOwner, REPLAY_CACHE_LOCK_TTL_MS, async () => {
+        const rechecked = await getCachedReplay(data.scoreId);
+        if (rechecked) return rechecked.buffer;
+
+        const download = await downloadReplay(data, preferredEndpointKind);
+        const stored = await putCachedReplay(data.scoreId, download.endpointKind, download.buffer);
+        return stored?.buffer ?? download.buffer;
+      });
+    } finally {
+      await releaseCacheLock(lockKey, lockOwner);
+    }
+  }
+
+  for (let i = 0; i < REPLAY_CACHE_LOCK_WAIT_RETRIES; i++) {
+    await replaySleep(REPLAY_CACHE_LOCK_WAIT_MS);
+    const polled = await getCachedReplay(data.scoreId);
+    if (polled) return polled.buffer;
+  }
+
+  const download = await downloadReplay(data, preferredEndpointKind);
+  await putCachedReplay(data.scoreId, download.endpointKind, download.buffer).catch(() => null);
+  return download.buffer;
+}
+
 export const getReplayParsed = createServerFn({ method: "GET" })
   .inputValidator(normalizeReplayParsedPayload)
   .handler(async ({ data }: { data: { scoreId: number; mode: string; keyCount?: number } }) => {
     edgeCache(86400, 604800);
     const { ScoreDecoder } = await import("osu-parsers");
-    let buffer: ArrayBuffer;
-    try {
-      // Try legacy (mode-prefixed) endpoint first — the scoreId from player pages
-      // is a legacy ID, and the modern endpoint may resolve to a different score.
-      buffer = await osuFetchBinary(`/scores/${data.mode}/${data.scoreId}/download`, {
-        caller: "getReplayParsed:legacy",
-      });
-    } catch {
-      buffer = await osuFetchBinary(`/scores/${data.scoreId}/download`, {
-        caller: "getReplayParsed:modern",
-      });
-    }
+    const buffer = await getReplayBuffer(data);
     const decoder = new ScoreDecoder();
-    const score = await decoder.decodeFromBuffer(Buffer.from(buffer));
+    const score = await decoder.decodeFromBuffer(buffer);
 
     const info = score.info;
     const rawFrames = (score.replay?.frames ?? []) as any[];

@@ -356,7 +356,7 @@ function ScoresPage() {
   ];
   const failedOptions: { id: FailedFilter; label: string }[] = [
     { id: "hide", label: "Hide failed" },
-    { id: "show", label: "Show failed" },
+    { id: "show", label: "Include failed" },
     { id: "only", label: "Only failed" },
   ];
   const listKey = `${filter}:${gradeFilter}:${failedFilter}`;

@@ -1,6 +1,7 @@
 export const REPLAY_VOLUME_STORAGE_KEY = "mania-hub-replay-volume";
 export const REPLAY_INPUT_OVERLAY_STORAGE_KEY = "mania-hub-replay-input-overlay";
 export const REPLAY_INPUT_ONLY_STORAGE_KEY = "mania-hub-replay-input-only";
+export const REPLAY_INPUT_KEY_HISTORY_STORAGE_KEY = "mania-hub-replay-input-key-history";
 export const REPLAY_INPUT_COLOR_STORAGE_KEY = "mania-hub-replay-input-color";
 export const REPLAY_BG_DIM_STORAGE_KEY = "mania-hub-replay-bg-dim";
 export const DEFAULT_REPLAY_VOLUME = 0.5;
@@ -74,6 +75,17 @@ export function readReplayInputOnly(): boolean {
 export function writeReplayInputOnly(enabled: boolean): void {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(REPLAY_INPUT_ONLY_STORAGE_KEY, String(enabled));
+}
+
+export function readReplayInputKeyHistory(): boolean {
+  if (typeof window === "undefined") return false;
+  const stored = window.localStorage.getItem(REPLAY_INPUT_KEY_HISTORY_STORAGE_KEY);
+  return stored == null ? false : stored === "true";
+}
+
+export function writeReplayInputKeyHistory(enabled: boolean): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(REPLAY_INPUT_KEY_HISTORY_STORAGE_KEY, String(enabled));
 }
 
 export function readReplayInputColor(): string {

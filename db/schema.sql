@@ -63,6 +63,19 @@ ON beatmap_asset_cache (last_accessed_at);
 CREATE INDEX IF NOT EXISTS idx_beatmap_asset_cache_set_kind
 ON beatmap_asset_cache (beatmapset_id, kind);
 
+CREATE TABLE IF NOT EXISTS replay_cache (
+  score_id INTEGER PRIMARY KEY,
+  storage_key TEXT NOT NULL,
+  endpoint_kind TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  size_bytes INTEGER NOT NULL,
+  last_accessed_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_replay_cache_accessed
+ON replay_cache (last_accessed_at);
+
 CREATE TABLE IF NOT EXISTS beatmap_asset_cache_stats (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   total_size_bytes INTEGER NOT NULL DEFAULT 0,

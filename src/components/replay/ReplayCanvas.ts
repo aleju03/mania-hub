@@ -1,4 +1,4 @@
-import { Application, Container, FillGradient, Graphics, Sprite, Text, Texture } from "pixi.js";
+import { Application, Container, FillGradient, Graphics, GraphicsPath, Matrix, Sprite, Text, Texture } from "pixi.js";
 import type { ReplayFrame, ReplayLifeBarFrame } from "../../lib/types";
 import type { ManiaNote, ManiaScrollVelocity } from "../../lib/beatmap-parser";
 import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgementEvent, ReplayNoteState } from "../../lib/mania-replay-judgement";
@@ -42,6 +42,7 @@ const JUDGMENT_LABELS: Record<number, string> = {
 
 const HOLD_VISUAL_GRACE_MS = 60;
 const BACKGROUND_FADE_DURATION_MS = 180;
+const KEY_KPS_WINDOW_MS = 1000;
 const MANIA_MAX_TIME_RANGE = 11485;
 const MANIA_REFERENCE_HEIGHT = 768;
 const MANIA_DEFAULT_HIT_POSITION = (480 - 402) * 1.6;
@@ -50,44 +51,35 @@ const MANIA_BAR_NOTE_HEIGHT_RATIO = 0.22;
 
 type ArrowDirection = "left" | "right" | "up" | "down";
 
-const ARROW_BASE_POINTS: ReadonlyArray<readonly [number, number]> = [
-  [0.0, 0.32],
-  [0.5, 0.32],
-  [0.5, 0.05],
-  [1.0, 0.5],
-  [0.5, 0.95],
-  [0.5, 0.68],
-  [0.0, 0.68],
-];
+const ARROW_PATH = new GraphicsPath(
+  "M5.8 17.5H20l-2.6-2.6c-2.6-2.6-2.6-6.8 0-9.4l2.4-2.4c2.4-2.4 6.2-2.4 8.6 0l16.9 16.9c2.2 2.2 2.2 5.8 0 8L28.4 44.9c-2.4 2.4-6.2 2.4-8.6 0l-2.4-2.4c-2.6-2.6-2.6-6.8 0-9.4l2.6-2.6H5.8C2.6 30.5 0 27.6 0 24s2.6-6.5 5.8-6.5Z",
+);
 
-function rotateArrowPoint(px: number, py: number, direction: ArrowDirection): [number, number] {
+function arrowTransform(cx: number, cy: number, size: number, direction: ArrowDirection): Matrix {
+  const scale = size / 48;
+  const x = cx - size / 2;
+  const y = cy - size / 2;
   switch (direction) {
-    case "right":
-      return [px, py];
     case "left":
-      return [1 - px, 1 - py];
-    case "down":
-      return [1 - py, px];
+      return new Matrix(-scale, 0, 0, scale, x + size, y);
     case "up":
-      return [py, 1 - px];
+      return new Matrix(0, -scale, scale, 0, x, y + size);
+    case "down":
+      return new Matrix(0, scale, -scale, 0, x + size, y);
+    case "right":
+      return new Matrix(scale, 0, 0, scale, x, y);
   }
 }
 
-function buildArrowPolygon(cx: number, cy: number, size: number, direction: ArrowDirection): number[] {
-  const half = size / 2;
-  const flat: number[] = [];
-  for (const [px, py] of ARROW_BASE_POINTS) {
-    const [rx, ry] = rotateArrowPoint(px, py, direction);
-    flat.push(cx - half + rx * size, cy - half + ry * size);
-  }
-  return flat;
+function buildArrowPath(cx: number, cy: number, size: number, direction: ArrowDirection): GraphicsPath {
+  return new GraphicsPath().addPath(ARROW_PATH, arrowTransform(cx, cy, size, direction));
 }
 
 export function getColumnArrowDirection(col: number, keyCount: number): ArrowDirection {
   if (keyCount <= 1) return "down";
   if (col === 0) return "left";
   if (col === keyCount - 1) return "right";
-  return col % 2 === 1 ? "down" : "up";
+  return col % 2 === 1 ? "up" : "down";
 }
 
 const HEX_NUMBER_CACHE = new Map<string, number>();
@@ -122,6 +114,7 @@ interface RendererOptions {
   showInputOverlay?: boolean;
   inputOverlayOnly?: boolean;
   inputOverlayColor?: string;
+  inputOverlayKeyHistory?: boolean;
   mods?: string[];
   speedMultiplier?: number;
   transparentBackground?: boolean;
@@ -167,12 +160,14 @@ export class ManiaReplayRenderer {
   private backgroundSprite: Sprite | null = null;
   private previousBackgroundSprite: Sprite | null = null;
   private receptorBeamGradients = new Map<string, FillGradient>();
+  private inputHistoryTopFadeGradient: FillGradient | null = null;
   private initPromise: Promise<void>;
   private destroyed = false;
 
   private frames: ReplayFrame[];
   private notes: ManiaNote[];
   private lifeBarFrames: ReplayLifeBarFrame[];
+  private keypressTimesByColumn: number[][];
   private keyCount: number;
   private currentTime = 0;
   private playbackSpeed = 1;
@@ -206,6 +201,7 @@ export class ManiaReplayRenderer {
   private showInputOverlay = false;
   private inputOverlayOnly = false;
   private inputOverlayColor = "#a855f7";
+  private inputOverlayKeyHistory = false;
   private transparentBackground = false;
   private hideHud = false;
   private showCombo = false;
@@ -220,6 +216,7 @@ export class ManiaReplayRenderer {
   private cssWidth = 0;
   private cssHeight = 0;
   private dpr = 1;
+  private fullscreenLayout = false;
 
   private externalClock: (() => { time: number; stalled: boolean } | null) | null = null;
   private receptorFlashTimestamps: number[];
@@ -256,6 +253,7 @@ export class ManiaReplayRenderer {
   private hudCachedJudgmentCounts: string[] = ["0", "0", "0", "0", "0", "0", "0"];
   private hudCachedLeftMisses = "0";
   private hudCachedRightMisses = "0";
+  private hudCachedKeyKps: string[] = [];
 
 
   constructor(
@@ -275,6 +273,8 @@ export class ManiaReplayRenderer {
       .filter((frame) => Number.isFinite(frame.time) && Number.isFinite(frame.health))
       .sort((a, b) => a.time - b.time);
     this.keyCount = keyCount;
+    this.keypressTimesByColumn = this.buildKeypressTimesByColumn();
+    this.hudCachedKeyKps = new Array(keyCount).fill("0");
     this.colors = COLUMN_COLORS[keyCount] || this.generateColors(keyCount);
     for (const c of this.colors) hexToNumber(c);
 
@@ -299,6 +299,7 @@ export class ManiaReplayRenderer {
     this.showInputOverlay = options?.showInputOverlay ?? false;
     this.inputOverlayOnly = options?.inputOverlayOnly ?? false;
     this.inputOverlayColor = options?.inputOverlayColor ?? "#a855f7";
+    this.inputOverlayKeyHistory = options?.inputOverlayKeyHistory ?? false;
     this.transparentBackground = options?.transparentBackground ?? false;
     this.hideHud = options?.hideHud ?? false;
     this.showCombo = options?.showCombo ?? false;
@@ -396,6 +397,21 @@ export class ManiaReplayRenderer {
     this.resize();
   }
 
+  private buildKeypressTimesByColumn(): number[][] {
+    const out = Array.from({ length: this.keyCount }, () => [] as number[]);
+    let previousState = 0;
+    for (const frame of this.frames) {
+      const rising = frame.keyState & ~previousState;
+      if (rising !== 0) {
+        for (let col = 0; col < this.keyCount; col++) {
+          if ((rising & (1 << col)) !== 0) out[col].push(frame.time);
+        }
+      }
+      previousState = frame.keyState;
+    }
+    return out;
+  }
+
   private generateColors(n: number): string[] {
     return Array.from({ length: n }, (_, i) => `#${Math.floor(0xffffff * (0.45 + 0.55 * Math.sin((i / n) * Math.PI))).toString(16).padStart(6, "0")}`);
   }
@@ -488,6 +504,10 @@ export class ManiaReplayRenderer {
     }
     this.hudCachedLeftMisses = String(this.leftHandMisses);
     this.hudCachedRightMisses = String(this.rightHandMisses);
+    for (let col = 0; col < this.keyCount; col++) {
+      const v = this.formatKeyKps(this.getKeyKps(col, this.currentTime));
+      if (this.hudCachedKeyKps[col] !== v) this.hudCachedKeyKps[col] = v;
+    }
   }
 
   private updateSkinCache() {
@@ -521,6 +541,19 @@ export class ManiaReplayRenderer {
     const mean = this.urSum / n;
     const variance = Math.max(0, this.urSumSq / n - mean * mean);
     return Math.sqrt(variance) * 10;
+  }
+
+  private getKeyKps(column: number, time: number): number {
+    const presses = this.keypressTimesByColumn[column];
+    if (!presses?.length) return 0;
+    const windowStart = Math.max(0, time - KEY_KPS_WINDOW_MS);
+    const start = this.lowerBound(presses, windowStart);
+    const end = this.upperBound(presses, time);
+    return Math.max(0, end - start) * (1000 / KEY_KPS_WINDOW_MS);
+  }
+
+  private formatKeyKps(kps: number): string {
+    return String(Math.round(kps));
   }
 
   private prepareScrollVelocities() {
@@ -605,12 +638,25 @@ export class ManiaReplayRenderer {
   }
 
   private measureCanvas() {
+    const fullscreenParent = this.canvas.parentElement?.dataset.replayFullscreen === "true"
+      ? this.canvas.parentElement
+      : null;
+    this.fullscreenLayout = fullscreenParent != null;
+    if (!fullscreenParent) {
+      this.canvas.style.width = "";
+      this.canvas.style.height = "";
+    }
     const rect = this.canvas.getBoundingClientRect();
+    const parentRect = fullscreenParent?.getBoundingClientRect();
     const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
     const dprCap = coarsePointer ? 1.5 : 2;
     this.dpr = Math.min(window.devicePixelRatio || 1, dprCap);
-    this.cssWidth = rect.width;
-    this.cssHeight = rect.height;
+    this.cssWidth = Math.max(1, parentRect?.width ?? rect.width);
+    this.cssHeight = Math.max(1, parentRect?.height ?? rect.height);
+    if (fullscreenParent) {
+      this.canvas.style.width = `${this.cssWidth}px`;
+      this.canvas.style.height = `${this.cssHeight}px`;
+    }
   }
 
   private invalidateLayoutCache() {
@@ -632,9 +678,12 @@ export class ManiaReplayRenderer {
       : 0.25 + this.keyCount * 0.025;
     const desiredPlayfieldWidth = configuredColumnWidths.reduce((sum, width) => sum + width, 0)
       + configuredColumnSpacings.reduce((sum, width) => sum + width, 0);
+    const fullscreenPlayfieldScale = this.fullscreenLayout
+      ? Math.min(1.7, Math.max(1, h / 640))
+      : 1;
     const maxPlayfieldWidth = Math.min(
       w * Math.min(baseRatio * (averageColumnWidth / 50), this.barePlayfield ? 0.82 : 0.72),
-      desiredPlayfieldWidth,
+      desiredPlayfieldWidth * fullscreenPlayfieldScale,
     );
     const layoutScale = desiredPlayfieldWidth > 0 ? maxPlayfieldWidth / desiredPlayfieldWidth : 1;
     const playfieldWidth = desiredPlayfieldWidth * layoutScale;
@@ -755,9 +804,10 @@ export class ManiaReplayRenderer {
     if (!this._isPlaying) this.render();
   }
 
-  setInputOverlayOptions(options: { only?: boolean; color?: string }) {
+  setInputOverlayOptions(options: { only?: boolean; color?: string; keyHistory?: boolean }) {
     if (typeof options.only === "boolean") this.inputOverlayOnly = options.only;
     if (options.color) this.inputOverlayColor = options.color;
+    if (typeof options.keyHistory === "boolean") this.inputOverlayKeyHistory = options.keyHistory;
     if (!this._isPlaying) this.render();
   }
 
@@ -1004,7 +1054,7 @@ export class ManiaReplayRenderer {
       const { x: colX, width: colWidth } = this.getColumnLayout(col, layout);
       const x = colX + 3;
       const barWidth = colWidth - 6;
-      const assets = this.skinProfile.assets.columns[col];
+      const assets = this.skinSettings.style === "bars" ? this.skinProfile.assets.columns[col] : undefined;
       const color = this.skinSettings.style === "bars" ? this.barTapColors[col] : this.colors[col];
       const circleTapColor = this.circleTapColors[col];
       const circleLnHeadColor = this.circleLnHeadColors[col];
@@ -1070,21 +1120,34 @@ export class ManiaReplayRenderer {
             0.55,
           );
           this.circleWithTopFade(colX + colWidth / 2, headEndY, circleRadius, circleLnHeadColor, headAlpha, noteFadeHeight, 0.55);
-          this.strokeCircleWithTopFade(colX + colWidth / 2, headEndY, circleRadius, "#ffffff", headAlpha * 0.55, 2, noteFadeHeight, 0.55);
+          if (this.skinSettings.outlineEnabled) {
+            this.strokeCircleWithTopFade(colX + colWidth / 2, headEndY, circleRadius, this.skinSettings.outlineColor, headAlpha, this.skinSettings.outlineWidth, noteFadeHeight, 0.55);
+          }
           continue;
         }
 
         if (isArrowSkin) {
-          const bodyWidth = Math.max(10, arrowSize * 0.5);
+          const bodyWidth = Math.max(14, arrowSize * 0.68);
           const bodyX = colX + colWidth / 2 - bodyWidth / 2;
           const tailDelta = this.skinSettings.upscroll ? -tailTrimDelta : tailTrimDelta;
           const bodyHeadY = headEndY;
           const bodyTailY = tailEndY + tailDelta;
           const bodyTop = Math.min(bodyHeadY, bodyTailY);
           const bodyBottom = Math.max(bodyHeadY, bodyTailY);
-          this.barLnBodyWithTopFade(bodyX, bodyTop, bodyWidth, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, bodyAlpha, noteFadeHeight, 0.55);
-          this.arrowFillWithTopFade(colX + colWidth / 2, headEndY, arrowSize, arrowDirection, arrowLnHeadColor, headAlpha, noteFadeHeight, 0.55);
-          this.arrowStrokeWithTopFade(colX + colWidth / 2, headEndY, arrowSize, arrowDirection, "#ffffff", headAlpha * 0.55, 1.5, noteFadeHeight, 0.55);
+          this.circleLnBodyWithTopFade(bodyX, bodyTop, bodyWidth, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, bodyAlpha, noteFadeHeight, 0.55);
+          this.arrowShapeWithTopFade(
+            colX + colWidth / 2,
+            headEndY,
+            arrowSize,
+            arrowDirection,
+            arrowLnHeadColor,
+            headAlpha,
+            this.skinSettings.outlineEnabled ? this.skinSettings.outlineColor : null,
+            headAlpha,
+            this.skinSettings.outlineWidth,
+            noteFadeHeight,
+            0.55,
+          );
           continue;
         }
 
@@ -1113,13 +1176,26 @@ export class ManiaReplayRenderer {
 
         if (this.skinSettings.style === "circles") {
           this.circleWithTopFade(colX + colWidth / 2, noteY, circleRadius, circleTapColor, 1, noteFadeHeight, 0.55);
-          this.strokeCircleWithTopFade(colX + colWidth / 2, noteY, circleRadius, "#ffffff", 0.55, 2, noteFadeHeight, 0.55);
+          if (this.skinSettings.outlineEnabled) {
+            this.strokeCircleWithTopFade(colX + colWidth / 2, noteY, circleRadius, this.skinSettings.outlineColor, 1, this.skinSettings.outlineWidth, noteFadeHeight, 0.55);
+          }
           continue;
         }
 
         if (isArrowSkin) {
-          this.arrowFillWithTopFade(colX + colWidth / 2, noteY, arrowSize, arrowDirection, arrowTapColor, 1, noteFadeHeight, 0.55);
-          this.arrowStrokeWithTopFade(colX + colWidth / 2, noteY, arrowSize, arrowDirection, "#ffffff", 0.5, 1.5, noteFadeHeight, 0.55);
+          this.arrowShapeWithTopFade(
+            colX + colWidth / 2,
+            noteY,
+            arrowSize,
+            arrowDirection,
+            arrowTapColor,
+            1,
+            this.skinSettings.outlineEnabled ? this.skinSettings.outlineColor : null,
+            1,
+            this.skinSettings.outlineWidth,
+            noteFadeHeight,
+            0.55,
+          );
           continue;
         }
 
@@ -1133,7 +1209,7 @@ export class ManiaReplayRenderer {
 
   private renderSegmentOverlays(layout: Layout) {
     const { judgmentY, pixelsPerMs, h } = layout;
-    if (this.frames.length === 0 || !this.showInputOverlay) return;
+    if (this.frames.length === 0 || !this.showInputOverlay || this.inputOverlayKeyHistory) return;
 
     const currentScrollPosition = this.getScrollPosition(this.currentTime);
     const getVisualDelta = (targetTime: number) => this.getScrollPosition(targetTime) - currentScrollPosition;
@@ -1223,8 +1299,79 @@ export class ManiaReplayRenderer {
     }
   }
 
+  private renderKeyInputHistory(
+    layout: Layout,
+    keyRowX: number,
+    keyRowY: number,
+    keyBoxWidth: number,
+    _keyBoxHeight: number,
+    keyGap: number,
+  ) {
+    if (!this.showInputOverlay || !this.inputOverlayKeyHistory || this.frames.length === 0) return;
+
+    const hudScale = this.getHudScale(layout);
+    const bottom = keyRowY - 7 * hudScale;
+    const requestedHeight = Math.min(240 * hudScale, Math.max(120 * hudScale, layout.h * 0.32));
+    const top = Math.max(8, bottom - requestedHeight);
+    const height = bottom - top;
+    if (height < 32) return;
+
+    const currentTime = this.currentTime;
+    const currentScrollPosition = this.getScrollPosition(currentTime);
+    const getVisualDelta = (targetTime: number) => this.getScrollPosition(targetTime) - currentScrollPosition;
+    const historySpeedScale = 0.5;
+    const historyPixelsPerMs = layout.pixelsPerMs * historySpeedScale;
+    const maxTime = currentTime + height / Math.max(historyPixelsPerMs * this.scrollVelocityMinMultiplier, 0.001);
+    const laneInset = (keyBoxWidth <= 32 * hudScale ? 3 : 4) * hudScale;
+    const laneWidth = Math.max(8, keyBoxWidth - laneInset * 2);
+    const minBlockHeight = (keyBoxWidth <= 32 * hudScale ? 8 : 10) * hudScale;
+    const fadeHeight = Math.min(48 * hudScale, Math.max(28 * hudScale, height * 0.32));
+
+    for (let col = 0; col < this.keyCount; col++) {
+      const laneX = keyRowX + col * (keyBoxWidth + keyGap) + laneInset;
+      this.fillRect(laneX, top, laneWidth, height, "#05050a", 0.34);
+
+      const segments = this.segments[col];
+      const startIndex = this.binarySearchSegmentEndIndex(segments, currentTime);
+      for (let i = startIndex; i < segments.length; i++) {
+        const seg = segments[i];
+        if (seg.start > maxTime) break;
+        if (seg.end < currentTime) continue;
+
+        const start = Math.max(seg.start, currentTime);
+        const end = Math.min(seg.end, maxTime);
+        const yStart = bottom - getVisualDelta(start) * historyPixelsPerMs;
+        const yEnd = bottom - getVisualDelta(end) * historyPixelsPerMs;
+        const rawTop = Math.min(yStart, yEnd);
+        const rawBottom = Math.max(yStart, yEnd);
+        if (rawBottom <= top || rawTop >= bottom) continue;
+
+        let pieceTop = Math.max(top, rawTop);
+        const pieceBottom = Math.min(bottom, rawBottom);
+        if (pieceBottom - pieceTop < minBlockHeight) {
+          pieceTop = Math.max(top, pieceBottom - minBlockHeight);
+        }
+
+        this.roundRect(
+          laneX,
+          pieceTop,
+          laneWidth,
+          Math.max(2, pieceBottom - pieceTop),
+          2,
+          this.inputOverlayColor,
+          seg.start <= currentTime && seg.end >= currentTime ? 0.72 : 0.46,
+        );
+      }
+
+      this.graphics.rect(laneX, top, laneWidth, fadeHeight).fill({
+        fill: this.getInputHistoryTopFadeGradient(),
+        alpha: 1,
+      });
+    }
+  }
+
   private renderJudgmentLine(layout: Layout) {
-    if (this.skinSettings.style === "circles") return;
+    if (this.skinSettings.style !== "bars") return;
     const { playfieldX, playfieldWidth, judgmentY } = layout;
     this.line(playfieldX, judgmentY, playfieldX + playfieldWidth, judgmentY, "#ffffff", 0.82, 2);
   }
@@ -1282,27 +1429,11 @@ export class ManiaReplayRenderer {
       const cx = x + colWidth / 2;
       const direction = getColumnArrowDirection(col, this.keyCount);
       const pressed = (currentState & (1 << col)) !== 0;
-      const assets = this.skinProfile.assets.columns[col];
-      const receptorAsset = pressed
-        ? assets?.receptorPressed ?? assets?.receptor
-        : assets?.receptor;
-      if (receptorAsset) {
-        if (pressed) this.receptorFlashTimestamps[col] = this.currentTime;
-        const receptorHeight = this.getAssetHeightForWidth(receptorAsset, colWidth, colWidth, arrowSize);
-        const receptorY = this.skinSettings.upscroll ? judgmentY - receptorHeight : judgmentY;
-        this.drawSkinImage(receptorAsset, cx, receptorY, colWidth, receptorHeight, 0.5, 0, 1);
-        continue;
-      }
-      const color = this.circleTapColors[col] ?? this.colors[col];
       if (pressed) this.receptorFlashTimestamps[col] = this.currentTime;
       const timeSinceFlash = this.currentTime - (this.receptorFlashTimestamps[col] || 0);
       const flashIntensity = pressed ? 1 : Math.max(0, 1 - timeSinceFlash / 140);
 
-      if (flashIntensity > 0) {
-        this.receptorBeam(x, this.skinSettings.upscroll ? judgmentY - 15 : judgmentY - 80, colWidth, 95, color, flashIntensity * 0.85);
-        this.arrowFill(cx, judgmentY, arrowSize, direction, color, 0.18 + flashIntensity * 0.7);
-      }
-      this.arrowStroke(cx, judgmentY, arrowSize, direction, "#ffffff", pressed ? 0.95 : 0.4, 1.5);
+      this.arrowStroke(cx, judgmentY, arrowSize, direction, "#ffffff", Math.max(pressed ? 0.95 : 0.4, flashIntensity * 0.65), 1.5);
     }
   }
 
@@ -1315,16 +1446,6 @@ export class ManiaReplayRenderer {
     for (let col = 0; col < this.keyCount; col++) {
       const { x, width: colWidth } = this.getColumnLayout(col, layout);
       const pressed = (currentState & (1 << col)) !== 0;
-      const assets = this.skinProfile.assets.columns[col];
-      const receptorAsset = pressed
-        ? assets?.receptorPressed ?? assets?.receptor
-        : assets?.receptor;
-      if (receptorAsset) {
-        const receptorHeight = this.getAssetHeightForWidth(receptorAsset, colWidth, colWidth, radius * 2);
-        const receptorY = this.skinSettings.upscroll ? judgmentY - receptorHeight : judgmentY;
-        this.drawSkinImage(receptorAsset, x + colWidth / 2, receptorY, colWidth, receptorHeight, 0.5, 0, 1);
-        continue;
-      }
       this.circle(x + colWidth / 2, judgmentY, radius, "#ffffff", 0);
       this.strokeCircle(x + colWidth / 2, judgmentY, radius, "#ffffff", pressed ? 1 : 0.5, strokeWidth);
     }
@@ -1334,6 +1455,7 @@ export class ManiaReplayRenderer {
     const { w, h, playfieldX, playfieldWidth, judgmentY } = layout;
     const playfieldCenterX = playfieldX + playfieldWidth / 2;
     const scoreY = this.getStagePositionY(this.skinSettings.scorePosition, layout);
+    const hudScale = this.getHudScale(layout);
 
     if (this.lastJudgment > 0) {
       const timeSince = this.currentTime - this.lastJudgmentTime;
@@ -1375,25 +1497,49 @@ export class ManiaReplayRenderer {
     });
 
     const currentState = this.currentKeyState;
-    const keyBoxSize = 32;
-    const keyGap = 6;
-    const keyRowWidth = this.keyCount * keyBoxSize + Math.max(0, this.keyCount - 1) * keyGap;
-    const keyRowX = Math.max(12, playfieldX - keyRowWidth - 18);
-    const keyRowY = judgmentY - 36;
+    const keyGap = Math.round((this.keyCount >= 8 ? 4 : 6) * hudScale);
+    const desiredKeyBoxWidth = Math.round((this.keyCount >= 8 ? 36 : 40) * hudScale);
+    const availableKeyRowWidth = Math.max(0, playfieldX - 30 * hudScale);
+    const fittedKeyBoxWidth = Math.floor(
+      (availableKeyRowWidth - Math.max(0, this.keyCount - 1) * keyGap) / Math.max(1, this.keyCount),
+    );
+    const keyBoxWidth = Math.max(
+      Math.round(30 * hudScale),
+      Math.min(desiredKeyBoxWidth, Number.isFinite(fittedKeyBoxWidth) ? fittedKeyBoxWidth : desiredKeyBoxWidth),
+    );
+    const keyBoxHeight = Math.round(38 * hudScale);
+    const keyRowWidth = this.keyCount * keyBoxWidth + Math.max(0, this.keyCount - 1) * keyGap;
+    const keyRowX = Math.max(12 * hudScale, playfieldX - keyRowWidth - 18 * hudScale);
+    const keyRowY = judgmentY - 42 * hudScale;
 
     if (!compactHud) {
+      this.renderKeyInputHistory(layout, keyRowX, keyRowY, keyBoxWidth, keyBoxHeight, keyGap);
+
       for (let col = 0; col < this.keyCount; col++) {
-        const x = keyRowX + col * (keyBoxSize + keyGap);
+        const x = keyRowX + col * (keyBoxWidth + keyGap);
         const pressed = (currentState & (1 << col)) !== 0;
         const color = this.colors[col];
-
-        this.fillRect(x, keyRowY, keyBoxSize, keyBoxSize, "#0a0a12", 0.82);
-        this.rect(x, keyRowY, keyBoxSize, keyBoxSize, "#ffffff", 0.12, 1);
-        this.fillRect(x + 1, keyRowY + 1, keyBoxSize - 2, keyBoxSize - 2, color, pressed ? 0.95 : 0.18);
-        this.addText(String(col + 1), x + keyBoxSize / 2, keyRowY + keyBoxSize / 2 + 0.5, {
-          fontSize: 14,
-          fill: pressed ? "#0a0a12" : "#ffffff",
-          alpha: pressed ? 0.9 : 0.75,
+        const keyFill = pressed ? "#0a0a12" : "#ffffff";
+        const kpsFill = pressed ? "#0a0a12" : color;
+        const keyAlpha = pressed ? 0.92 : 0.78;
+        const kpsAlpha = pressed ? 0.76 : 0.9;
+        const keyFontSize = (keyBoxWidth <= 32 * hudScale ? 12 : 13) * hudScale;
+        const kpsFontSize = (keyBoxWidth <= 36 * hudScale ? 8 : 9) * hudScale;
+        this.fillRect(x, keyRowY, keyBoxWidth, keyBoxHeight, "#0a0a12", 0.82);
+        this.rect(x, keyRowY, keyBoxWidth, keyBoxHeight, "#ffffff", 0.12, 1);
+        this.fillRect(x + 1, keyRowY + 1, keyBoxWidth - 2, keyBoxHeight - 2, color, pressed ? 0.95 : 0.18);
+        this.addText(String(col + 1), x + keyBoxWidth / 2, keyRowY + 12 * hudScale, {
+          fontSize: keyFontSize,
+          fill: keyFill,
+          alpha: keyAlpha,
+          fontWeight: "700",
+          anchorX: 0.5,
+          anchorY: 0.5,
+        });
+        this.addText(this.hudCachedKeyKps[col], x + keyBoxWidth / 2, keyRowY + 28 * hudScale, {
+          fontSize: kpsFontSize,
+          fill: kpsFill,
+          alpha: kpsAlpha,
           fontWeight: "700",
           anchorX: 0.5,
           anchorY: 0.5,
@@ -1404,17 +1550,17 @@ export class ManiaReplayRenderer {
         { label: "L MISS", value: this.hudCachedLeftMisses, color: "#5a8fff" },
         { label: "R MISS", value: this.hudCachedRightMisses, color: "#de31ae" },
       ].forEach((item, index) => {
-        const x = keyRowX + index * 68;
-        const y = keyRowY + keyBoxSize + 10;
-        this.fillRect(x, y, 60, 36, "#0a0a12", 0.78);
-        this.fillRect(x, y, 3, 36, item.color, 1);
-        this.addText(item.label, x + 9, y + 5, { fontSize: 9, fill: "#ffffff", alpha: 0.58, fontWeight: "700" });
-        this.addText(item.value, x + 9, y + 28, { fontSize: 16, fill: "#ffffff", alpha: 0.95, fontWeight: "700", anchorY: 1 });
+        const x = keyRowX + index * 68 * hudScale;
+        const y = keyRowY + keyBoxHeight + 10 * hudScale;
+        this.fillRect(x, y, 60 * hudScale, 36 * hudScale, "#0a0a12", 0.78);
+        this.fillRect(x, y, 3 * hudScale, 36 * hudScale, item.color, 1);
+        this.addText(item.label, x + 9 * hudScale, y + 5 * hudScale, { fontSize: 9 * hudScale, fill: "#ffffff", alpha: 0.58, fontWeight: "700" });
+        this.addText(item.value, x + 9 * hudScale, y + 28 * hudScale, { fontSize: 16 * hudScale, fill: "#ffffff", alpha: 0.95, fontWeight: "700", anchorY: 1 });
       });
     }
 
     const judgmentCounterX = playfieldX + playfieldWidth + 16;
-    const judgmentCounterY = 52;
+    const judgmentCounterY = 52 * hudScale;
     [
       { label: "MAX", value: this.hudCachedJudgmentCounts[1], color: JUDGMENT_COLORS[1] },
       { label: "300", value: this.hudCachedJudgmentCounts[2], color: JUDGMENT_COLORS[2] },
@@ -1424,10 +1570,10 @@ export class ManiaReplayRenderer {
       { label: "MISS", value: this.hudCachedJudgmentCounts[6], color: JUDGMENT_COLORS[6] },
       { label: "UR", value: this.hudCachedUr, color: "#b3f5ff" },
     ].forEach((item, index) => {
-      const y = judgmentCounterY + index * 18;
-      this.addText(item.label, judgmentCounterX, y, { fontSize: 10, fill: item.color, fontWeight: "700" });
-      this.addText(item.value, judgmentCounterX + 52, y, {
-        fontSize: 10,
+      const y = judgmentCounterY + index * 18 * hudScale;
+      this.addText(item.label, judgmentCounterX, y, { fontSize: 10 * hudScale, fill: item.color, fontWeight: "700" });
+      this.addText(item.value, judgmentCounterX + 52 * hudScale, y, {
+        fontSize: 10 * hudScale,
         fill: "#ffffff",
         alpha: 0.88,
         fontWeight: "700",
@@ -1588,8 +1734,35 @@ export class ManiaReplayRenderer {
     return lo;
   }
 
+  private lowerBound(values: number[], target: number): number {
+    let lo = 0;
+    let hi = values.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (values[mid] < target) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+
+  private upperBound(values: number[], target: number): number {
+    let lo = 0;
+    let hi = values.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (values[mid] <= target) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+
   private getStagePositionY(position: number, layout: Layout): number {
     return layout.h * (this.skinSettings.upscroll ? position : MANIA_REFERENCE_HEIGHT - position) / MANIA_REFERENCE_HEIGHT;
+  }
+
+  private getHudScale(layout: Layout): number {
+    if (!this.fullscreenLayout) return 1;
+    return Math.min(1.45, Math.max(1, layout.layoutScale * 0.85));
   }
 
   private getJudgementAsset(judgment: Judgment): ReplaySkinImageAsset | undefined {
@@ -1739,30 +1912,59 @@ export class ManiaReplayRenderer {
     return Math.max(20, Math.min(layout.laneWidth - 2, Math.max(minSize, laneSized)));
   }
 
-  private arrowFill(cx: number, cy: number, size: number, direction: ArrowDirection, color: string, alpha: number) {
-    if (size <= 0 || alpha <= 0) return;
-    const points = buildArrowPolygon(cx, cy, size, direction);
-    this.graphics.poly(points).fill({ color: hexToNumber(color), alpha });
-  }
-
   private arrowStroke(cx: number, cy: number, size: number, direction: ArrowDirection, color: string, alpha: number, width: number) {
     if (size <= 0 || alpha <= 0) return;
-    const points = buildArrowPolygon(cx, cy, size, direction);
-    this.graphics.poly(points).stroke({ color: hexToNumber(color), alpha, width });
+    this.graphics.path(buildArrowPath(cx, cy, size, direction)).stroke({
+      color: hexToNumber(color),
+      alpha,
+      width,
+      cap: "round",
+      join: "round",
+    });
   }
 
-  private arrowFillWithTopFade(cx: number, cy: number, size: number, direction: ArrowDirection, color: string, alpha: number, fadeHeight: number, minAlpha = 0) {
-    if (size <= 0 || alpha <= 0) return;
-    const half = size / 2;
-    const fadedAlpha = alpha * this.topFadeAlpha(Math.max(0, Math.min(cy + half, fadeHeight)), fadeHeight, minAlpha);
-    this.arrowFill(cx, cy, size, direction, color, fadedAlpha);
+  private arrowShape(
+    cx: number,
+    cy: number,
+    size: number,
+    direction: ArrowDirection,
+    fillColor: string,
+    fillAlpha: number,
+    outlineColor: string | null,
+    outlineAlpha: number,
+    outlineWidth: number,
+  ) {
+    if (size <= 0 || fillAlpha <= 0) return;
+    const path = buildArrowPath(cx, cy, size, direction);
+    if (outlineColor && outlineAlpha > 0 && outlineWidth > 0) {
+      this.graphics.path(path).stroke({
+        color: hexToNumber(outlineColor),
+        alpha: outlineAlpha,
+        width: outlineWidth,
+        cap: "round",
+        join: "round",
+      });
+    }
+    this.graphics.path(path).fill({ color: hexToNumber(fillColor), alpha: fillAlpha });
   }
 
-  private arrowStrokeWithTopFade(cx: number, cy: number, size: number, direction: ArrowDirection, color: string, alpha: number, width: number, fadeHeight: number, minAlpha = 0) {
-    if (size <= 0 || alpha <= 0) return;
+  private arrowShapeWithTopFade(
+    cx: number,
+    cy: number,
+    size: number,
+    direction: ArrowDirection,
+    fillColor: string,
+    fillAlpha: number,
+    outlineColor: string | null,
+    outlineAlpha: number,
+    outlineWidth: number,
+    fadeHeight: number,
+    minAlpha = 0,
+  ) {
+    if (size <= 0 || fillAlpha <= 0) return;
     const half = size / 2;
-    const fadedAlpha = alpha * this.topFadeAlpha(Math.max(0, Math.min(cy + half, fadeHeight)), fadeHeight, minAlpha);
-    this.arrowStroke(cx, cy, size, direction, color, fadedAlpha, width);
+    const faded = this.topFadeAlpha(Math.max(0, Math.min(cy + half, fadeHeight)), fadeHeight, minAlpha);
+    this.arrowShape(cx, cy, size, direction, fillColor, fillAlpha * faded, outlineColor, outlineAlpha * faded, outlineWidth);
   }
 
   private fillRect(x: number, y: number, w: number, h: number, color: string, alpha: number) {
@@ -2118,6 +2320,24 @@ export class ManiaReplayRenderer {
     });
     this.receptorBeamGradients.set(color, gradient);
     return gradient;
+  }
+
+  private getInputHistoryTopFadeGradient(): FillGradient {
+    if (this.inputHistoryTopFadeGradient) return this.inputHistoryTopFadeGradient;
+
+    this.inputHistoryTopFadeGradient = new FillGradient({
+      type: "linear",
+      start: { x: 0, y: 0 },
+      end: { x: 0, y: 1 },
+      textureSpace: "local",
+      textureSize: 128,
+      colorStops: [
+        { offset: 0, color: colorWithAlpha("#000000", 0.94) },
+        { offset: 0.45, color: colorWithAlpha("#000000", 0.52) },
+        { offset: 1, color: colorWithAlpha("#000000", 0) },
+      ],
+    });
+    return this.inputHistoryTopFadeGradient;
   }
 
   private rebuildBackgroundSprites() {

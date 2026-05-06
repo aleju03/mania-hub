@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -21,9 +21,12 @@ import {
   REPLAY_SKIN_MAX_COLUMN_WIDTH,
   REPLAY_SKIN_MAX_COLUMN_SPACING,
   REPLAY_SKIN_MAX_NOTE_HEIGHT_SCALE,
+  REPLAY_SKIN_MAX_OUTLINE_WIDTH,
   REPLAY_SKIN_MIN_COLUMN_WIDTH,
   REPLAY_SKIN_MIN_COLUMN_SPACING,
   REPLAY_SKIN_MIN_NOTE_HEIGHT_SCALE,
+  REPLAY_SKIN_MIN_OUTLINE_WIDTH,
+  REPLAY_SKIN_DEFAULT_OUTLINE_WIDTH,
   replayHitPositionToOsuManiaHitPosition,
   replayStagePositionToOsuManiaPosition,
   writeReplaySkinPresets,
@@ -72,7 +75,7 @@ const PREVIEW_BAR_COLUMN_COLORS: Record<number, string[]> = {
   10: ["#5a8fff", "#de31ae", "#fff", "#ffcc22", "#88da20", "#88da20", "#ffcc22", "#fff", "#de31ae", "#5a8fff"],
 };
 
-type ColorTarget = "tap" | "lnHead" | "lnBody";
+type ColorTarget = "tap" | "lnHead" | "lnBody" | "outline";
 type OverrideKind = "tap" | "lnHead";
 type PreviewMode = "tap" | "ln";
 type ArrowDirection = "left" | "right" | "up" | "down";
@@ -118,7 +121,7 @@ function getColumnArrowDirection(col: number, keyCount: number): ArrowDirection 
   if (keyCount <= 1) return "down";
   if (col === 0) return "left";
   if (col === keyCount - 1) return "right";
-  return col % 2 === 1 ? "down" : "up";
+  return col % 2 === 1 ? "up" : "down";
 }
 
 interface ReplaySkinSettingsModalProps {
@@ -174,6 +177,7 @@ export function ReplaySkinSettingsModal({
   const [columnWidthInput, setColumnWidthInput] = useState(() => String(profile.columnWidth));
   const [columnSpacingInput, setColumnSpacingInput] = useState(() => String(profile.columnSpacing));
   const [noteHeightScaleInput, setNoteHeightScaleInput] = useState(() => String(profile.noteHeightScale));
+  const [outlineWidthInput, setOutlineWidthInput] = useState(() => String(draft.outlineWidth));
   const [hitPositionInput, setHitPositionInput] = useState(() => String(replayHitPositionToOsuManiaHitPosition(draft.hitPosition)));
   const [scorePositionInput, setScorePositionInput] = useState(() => String(replayStagePositionToOsuManiaPosition(draft.scorePosition)));
   const [comboPositionInput, setComboPositionInput] = useState(() => String(replayStagePositionToOsuManiaPosition(draft.comboPosition)));
@@ -189,6 +193,10 @@ export function ReplaySkinSettingsModal({
   useEffect(() => {
     setNoteHeightScaleInput(String(profile.noteHeightScale));
   }, [profile.noteHeightScale]);
+
+  useEffect(() => {
+    setOutlineWidthInput(String(draft.outlineWidth));
+  }, [draft.outlineWidth]);
 
   useEffect(() => {
     setHitPositionInput(String(replayHitPositionToOsuManiaHitPosition(draft.hitPosition)));
@@ -591,6 +599,7 @@ export function ReplaySkinSettingsModal({
   const columns = Array.from({ length: selectedKeyCount }, (_, index) => index);
   const showBaseColorControls = draft.style !== "bars";
   const showLnHeadColorControls = draft.style !== "bars";
+  const showOutlineControls = draft.style === "circles" || draft.style === "arrows";
   const columnColorKinds: OverrideKind[] = showLnHeadColorControls ? ["tap", "lnHead"] : ["tap"];
   const hasBarColorOverrides = draft.style === "bars" && profile.tapColors.some((color) => color);
   const barColorSwitchChecked = draft.style === "bars" ? hasBarColorOverrides || columnEditorOpen : columnEditorOpen;
@@ -641,6 +650,17 @@ export function ReplaySkinSettingsModal({
     const next = Math.max(REPLAY_SKIN_MIN_NOTE_HEIGHT_SCALE, Math.min(REPLAY_SKIN_MAX_NOTE_HEIGHT_SCALE, Math.round(parsed)));
     setNoteHeightScaleInput(String(next));
     updateProfile({ noteHeightScale: next });
+  };
+
+  const commitOutlineWidthInput = () => {
+    const parsed = Number(outlineWidthInput);
+    if (!Number.isFinite(parsed)) {
+      setOutlineWidthInput(String(draft.outlineWidth));
+      return;
+    }
+    const next = Math.max(REPLAY_SKIN_MIN_OUTLINE_WIDTH, Math.min(REPLAY_SKIN_MAX_OUTLINE_WIDTH, Math.round(parsed)));
+    setOutlineWidthInput(String(next));
+    update({ outlineWidth: next });
   };
 
   const commitHitPositionInput = () => {
@@ -700,6 +720,14 @@ export function ReplaySkinSettingsModal({
     updateProfile({ noteHeightScale: Math.round(parsed) });
   };
 
+  const handleOutlineWidthInputChange = (value: string) => {
+    setOutlineWidthInput(value);
+    if (value.trim() === "") return;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < REPLAY_SKIN_MIN_OUTLINE_WIDTH || parsed > REPLAY_SKIN_MAX_OUTLINE_WIDTH) return;
+    update({ outlineWidth: Math.round(parsed) });
+  };
+
   const handleHitPositionInputChange = (value: string) => {
     setHitPositionInput(value);
     if (value.trim() === "") return;
@@ -727,12 +755,19 @@ export function ReplaySkinSettingsModal({
   if (typeof document === "undefined") return null;
 
   const colorTargetValue = (target: ColorTarget) =>
-    target === "tap" ? profile.tapColor : target === "lnHead" ? profile.lnHeadColor : draft.lnBodyColor;
+    target === "tap"
+      ? profile.tapColor
+      : target === "lnHead"
+        ? profile.lnHeadColor
+        : target === "outline"
+          ? draft.outlineColor
+          : draft.lnBodyColor;
 
   const colorTargetLabel: Record<ColorTarget, string> = {
     tap: "Note color",
     lnHead: "LN head color",
     lnBody: "LN body color",
+    outline: "Outline color",
   };
 
   return createPortal(
@@ -912,6 +947,38 @@ export function ReplaySkinSettingsModal({
                       selected={activeColor === "lnBody"}
                       onOpen={() => setActiveColor((current) => (current === "lnBody" ? null : "lnBody"))}
                     />
+                  </section>
+                ) : null}
+
+                {showOutlineControls ? (
+                  <section className="space-y-3 pt-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-semibold text-osu-l1">Outline</span>
+                      <ReplaySkinSwitch checked={draft.outlineEnabled} onChange={(checked) => update({ outlineEnabled: checked })} />
+                    </div>
+                    {draft.outlineEnabled ? (
+                      <>
+                        <ReplaySkinColorRow
+                          label="Outline color"
+                          title="Stroke color for circle and arrow notes."
+                          value={draft.outlineColor}
+                          selected={activeColor === "outline"}
+                          onOpen={() => setActiveColor((current) => (current === "outline" ? null : "outline"))}
+                        />
+                        <LayoutNumberControl
+                          label="Outline width"
+                          inputValue={outlineWidthInput}
+                          numericValue={draft.outlineWidth}
+                          min={REPLAY_SKIN_MIN_OUTLINE_WIDTH}
+                          max={REPLAY_SKIN_MAX_OUTLINE_WIDTH}
+                          defaultValue={REPLAY_SKIN_DEFAULT_OUTLINE_WIDTH}
+                          onSliderChange={(value) => update({ outlineWidth: value })}
+                          onInputChange={handleOutlineWidthInputChange}
+                          onCommit={commitOutlineWidthInput}
+                          onResetToDefault={() => update({ outlineWidth: REPLAY_SKIN_DEFAULT_OUTLINE_WIDTH })}
+                        />
+                      </>
+                    ) : null}
                   </section>
                 ) : null}
 
@@ -1129,6 +1196,7 @@ export function ReplaySkinSettingsModal({
             onChange={(value) => {
               if (activeColor === "tap") updateBaseColor("tap", value);
               else if (activeColor === "lnHead") updateBaseColor("lnHead", value);
+              else if (activeColor === "outline") update({ outlineColor: value });
               else updateLnBodyColor(value);
             }}
           />
@@ -1304,6 +1372,7 @@ function normalizeEditableHex(value: string): string | null {
 
 const PREVIEW_TAP_Y_OFFSETS_DOWN: ReadonlyArray<number> = [60, 95, 130, 165, 200];
 const PREVIEW_LN_LENGTHS: ReadonlyArray<number> = [120, 95, 75];
+const PREVIEW_ARROW_PATH = "M5.8 17.5H20l-2.6-2.6c-2.6-2.6-2.6-6.8 0-9.4l2.4-2.4c2.4-2.4 6.2-2.4 8.6 0l16.9 16.9c2.2 2.2 2.2 5.8 0 8L28.4 44.9c-2.4 2.4-6.2 2.4-8.6 0l-2.4-2.4c-2.6-2.6-2.6-6.8 0-9.4l2.6-2.6H5.8C2.6 30.5 0 27.6 0 24s2.6-6.5 5.8-6.5Z";
 
 function getPreviewAssetHeight(asset: ReplaySkinImageAsset, targetWidth: number, heightScaleWidth: number, fallbackHeight: number): number {
   const scale = asset.scale && asset.scale > 0 ? asset.scale : 1;
@@ -1328,7 +1397,24 @@ function ReplaySkinPreview({
   selectedColumns: number[];
   onSelectionChange: (next: number[]) => void;
 }) {
-  const width = 260;
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [previewWidth, setPreviewWidth] = useState(260);
+  useEffect(() => {
+    const measure = () => {
+      const nextWidth = Math.max(180, Math.round(containerRef.current?.clientWidth ?? 260));
+      setPreviewWidth((current) => (current === nextWidth ? current : nextWidth));
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined" || !containerRef.current) {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  const width = previewWidth;
   const height = 300;
   const columnWidths = Array.from({ length: keyCount }, (_, col) => profile.columnWidths[col] ?? profile.columnWidth);
   const columnSpacings = Array.from({ length: Math.max(0, keyCount - 1) }, (_, col) => profile.columnSpacings[col] ?? profile.columnSpacing);
@@ -1349,7 +1435,6 @@ function ReplaySkinPreview({
   const barNoteHeight = Math.max(6, profile.noteHeightScale * layoutScale * PREVIEW_BAR_NOTE_HEIGHT_RATIO);
   const barInsetFor = (laneWidth: number) => Math.min(3, Math.max(1, laneWidth * 0.14));
 
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<{
     pointerId: number;
     startClientX: number;
@@ -1515,7 +1600,7 @@ function ReplaySkinPreview({
       ) : null}
       {lanePositions.map(({ col, cx, width: laneWidth }) => {
         const isSelected = selectedColumns.includes(col);
-        const receptorAsset = profile.assets.columns[col]?.receptor;
+        const receptorAsset = settings.style === "bars" ? profile.assets.columns[col]?.receptor : undefined;
         if (receptorAsset) {
           const receptorHeight = getPreviewAssetHeight(receptorAsset, laneWidth, laneWidth, noteSize);
           return (
@@ -1546,6 +1631,7 @@ function ReplaySkinPreview({
                 width: noteSize,
                 height: noteSize,
                 borderColor: isSelected ? "#e83c90" : "#ffffff",
+                borderWidth: 2,
                 opacity: isSelected ? 1 : 0.5,
               }}
             />
@@ -1563,6 +1649,7 @@ function ReplaySkinPreview({
               fillOpacity={0}
               stroke={isSelected ? "#e83c90" : "#ffffff"}
               strokeOpacity={isSelected ? 1 : 0.5}
+              strokeWidth={2}
             />
           );
         }
@@ -1585,7 +1672,7 @@ function ReplaySkinPreview({
         ? lanePositions.map(({ col, startX, cx, width: laneWidth }) => {
             const y = tapYForColumn(col);
             const color = settings.style === "bars" ? barColorFor(col) : colorFor(profile.tapColors, profile.tapColor, col);
-            const tapAsset = profile.assets.columns[col]?.tap;
+            const tapAsset = settings.style === "bars" ? profile.assets.columns[col]?.tap : undefined;
             if (tapAsset) {
               const assetHeight = getPreviewAssetHeight(tapAsset, laneWidth, profile.noteHeightScale * layoutScale, noteSize);
               return (
@@ -1603,8 +1690,15 @@ function ReplaySkinPreview({
               return (
                 <div
                   key={`tap-${col}`}
-                  className="pointer-events-none absolute rounded-full ring-2 ring-white/55"
-                  style={{ left: cx - noteSize / 2, top: y, width: noteSize, height: noteSize, backgroundColor: color }}
+                  className="pointer-events-none absolute rounded-full"
+                  style={{
+                    left: cx - noteSize / 2,
+                    top: y,
+                    width: noteSize,
+                    height: noteSize,
+                    backgroundColor: color,
+                    border: settings.outlineEnabled ? `${settings.outlineWidth}px solid ${settings.outlineColor}` : undefined,
+                  }}
                 />
               );
             }
@@ -1618,8 +1712,9 @@ function ReplaySkinPreview({
                   direction={getColumnArrowDirection(col, keyCount)}
                   fill={color}
                   fillOpacity={1}
-                  stroke="#ffffff"
-                  strokeOpacity={0.55}
+                  stroke={settings.outlineColor}
+                  strokeOpacity={settings.outlineEnabled ? 1 : 0}
+                  strokeWidth={settings.outlineWidth}
                 />
               );
             }
@@ -1645,7 +1740,7 @@ function ReplaySkinPreview({
             const lnTailEnd = settings.upscroll ? lnHeadY + length : lnHeadY - length;
             const lnTop = Math.min(lnHeadY, lnTailEnd);
             const lnBottom = Math.max(lnHeadY, lnTailEnd);
-            const columnAssets = profile.assets.columns[col];
+            const columnAssets = settings.style === "bars" ? profile.assets.columns[col] : undefined;
             if (columnAssets?.lnHead || columnAssets?.lnBody || columnAssets?.lnTail) {
               const headAsset = columnAssets.lnHead ?? columnAssets.tap;
               const bodyAsset = columnAssets.lnBody;
@@ -1705,20 +1800,21 @@ function ReplaySkinPreview({
                     }}
                   />
                   <div
-                    className="absolute rounded-full ring-2 ring-white/55"
+                    className="absolute rounded-full"
                     style={{
                       left: cx - noteSize / 2,
                       top: lnHeadY - noteSize / 2,
                       width: noteSize,
                       height: noteSize,
                       backgroundColor: headColor,
+                      border: settings.outlineEnabled ? `${settings.outlineWidth}px solid ${settings.outlineColor}` : undefined,
                     }}
                   />
                 </div>
               );
             }
             if (settings.style === "arrows") {
-              const bodyWidth = Math.max(10, noteSize * 0.5);
+              const bodyWidth = Math.max(14, noteSize * 0.68);
               return (
                 <div key={`ln-${col}`} className="pointer-events-none">
                   <div
@@ -1729,6 +1825,7 @@ function ReplaySkinPreview({
                       width: bodyWidth,
                       height: lnBottom - lnTop,
                       backgroundColor: settings.lnBodyColor,
+                      borderRadius: bodyWidth / 2,
                     }}
                   />
                   <ArrowShape
@@ -1738,8 +1835,9 @@ function ReplaySkinPreview({
                     direction={getColumnArrowDirection(col, keyCount)}
                     fill={headColor}
                     fillOpacity={1}
-                    stroke="#ffffff"
-                    strokeOpacity={0.55}
+                    stroke={settings.outlineColor}
+                    strokeOpacity={settings.outlineEnabled ? 1 : 0}
+                    strokeWidth={settings.outlineWidth}
                   />
                 </div>
               );
@@ -1821,6 +1919,7 @@ function ArrowShape({
   fillOpacity,
   stroke,
   strokeOpacity,
+  strokeWidth,
 }: {
   cx: number;
   cy: number;
@@ -1830,45 +1929,76 @@ function ArrowShape({
   fillOpacity: number;
   stroke: string;
   strokeOpacity: number;
+  strokeWidth: number;
 }) {
-  const arrowMaskStyle: CSSProperties = {
-    WebkitMask: `url('/images/notes/mania-arrow-${direction}.svg') center / contain no-repeat`,
-    mask: `url('/images/notes/mania-arrow-${direction}.svg') center / contain no-repeat`,
+  const rawFilterId = useId();
+  const filterId = `arrow-outline-${rawFilterId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const transform = {
+    right: undefined,
+    left: "translate(48 0) scale(-1 1)",
+    up: "rotate(-90 24 24)",
+    down: "rotate(90 24 24)",
+  }[direction];
+  const fillColor = fillOpacity > 0 ? fill : "#07070c";
+  const visibleFillOpacity = fillOpacity > 0 ? fillOpacity : 1;
+  const outlineRadius = Math.max(0, strokeWidth * (48 / Math.max(1, size)));
+  const pad = Math.max(4, outlineRadius * 2 + 2);
+  const viewBoxSize = 48 + pad * 2;
+  const outerSize = size * (viewBoxSize / 48);
+  const showOutline = strokeOpacity > 0 && strokeWidth > 0;
+  const showFilledOutline = showOutline && fillOpacity > 0;
+  const showHollowOutline = showOutline && fillOpacity <= 0;
+  if (fillOpacity <= 0 && !showOutline) return null;
+  const strokeProps = {
+    fill: "none",
+    stroke,
+    strokeOpacity,
+    strokeWidth: outlineRadius * 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
   };
-  const innerSize = fillOpacity > 0 ? size * 0.82 : size * 0.76;
-  const outerOpacity = fillOpacity > 0 ? strokeOpacity : Math.max(strokeOpacity, 0.35);
-  const innerColor = fillOpacity > 0 ? fill : "#07070c";
   return (
-    <span
+    <svg
       className="pointer-events-none absolute"
+      viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`}
+      aria-hidden="true"
       style={{
-        left: cx - size / 2,
-        top: cy - size / 2,
-        width: size,
-        height: size,
+        left: cx - outerSize / 2,
+        top: cy - outerSize / 2,
+        width: outerSize,
+        height: outerSize,
+        overflow: "visible",
       }}
     >
-      <span
-        className="absolute inset-0"
-        style={{
-          ...arrowMaskStyle,
-          backgroundColor: stroke,
-          opacity: outerOpacity,
-        }}
-      />
-      <span
-        className="absolute"
-        style={{
-          ...arrowMaskStyle,
-          left: (size - innerSize) / 2,
-          top: (size - innerSize) / 2,
-          width: innerSize,
-          height: innerSize,
-          backgroundColor: innerColor,
-          opacity: fillOpacity > 0 ? fillOpacity : 1,
-        }}
-      />
-    </span>
+      {showHollowOutline ? (
+        <defs>
+          <filter id={filterId} x="-35%" y="-35%" width="170%" height="170%" colorInterpolationFilters="sRGB">
+            <feMorphology in="SourceAlpha" operator="dilate" radius={outlineRadius} result="dilated" />
+            <feFlood floodColor={stroke} floodOpacity={strokeOpacity} result="outlineColor" />
+            <feComposite in="outlineColor" in2="dilated" operator="in" />
+          </filter>
+        </defs>
+      ) : null}
+      {showHollowOutline ? (
+        <g transform={`translate(${pad} ${pad})`} filter={`url(#${filterId})`}>
+          <g transform={transform}>
+            <path d={PREVIEW_ARROW_PATH} fill="#000000" />
+          </g>
+        </g>
+      ) : null}
+      {showFilledOutline ? (
+        <g transform={`translate(${pad} ${pad})`}>
+          <g transform={transform}>
+            <path d={PREVIEW_ARROW_PATH} {...strokeProps} />
+          </g>
+        </g>
+      ) : null}
+      <g transform={`translate(${pad} ${pad})`} opacity={visibleFillOpacity}>
+        <g transform={transform}>
+          <path d={PREVIEW_ARROW_PATH} fill={fillColor} />
+        </g>
+      </g>
+    </svg>
   );
 }
 

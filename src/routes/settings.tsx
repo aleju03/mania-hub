@@ -20,11 +20,13 @@ import {
   normalizeReplayVolume,
   readReplayBackgroundDim,
   readReplayInputColor,
+  readReplayInputKeyHistory,
   readReplayInputOnly,
   readReplayInputOverlay,
   readReplayVolume,
   writeReplayBackgroundDim,
   writeReplayInputColor,
+  writeReplayInputKeyHistory,
   writeReplayInputOnly,
   writeReplayInputOverlay,
   writeReplayVolume,
@@ -89,6 +91,7 @@ function SettingsPage() {
   const [volume, setVolume] = useState(readReplayVolume);
   const [showInputOverlay, setShowInputOverlay] = useState(readReplayInputOverlay);
   const [inputOverlayOnly, setInputOverlayOnly] = useState(readReplayInputOnly);
+  const [inputOverlayKeyHistory, setInputOverlayKeyHistory] = useState(readReplayInputKeyHistory);
   const [inputOverlayColor, setInputOverlayColor] = useState(readReplayInputColor);
   const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
   const [skinSettingsOpen, setSkinSettingsOpen] = useState(false);
@@ -117,6 +120,8 @@ function SettingsPage() {
     writeReplayInputOverlay(false);
     setInputOverlayOnly(false);
     writeReplayInputOnly(false);
+    setInputOverlayKeyHistory(false);
+    writeReplayInputKeyHistory(false);
     setInputOverlayColor("#a855f7");
     writeReplayInputColor("#a855f7");
     setSkinSettings(DEFAULT_REPLAY_SKIN_SETTINGS);
@@ -176,6 +181,7 @@ function SettingsPage() {
             <OverlayPanel
               showInputOverlay={showInputOverlay}
               inputOverlayOnly={inputOverlayOnly}
+              inputOverlayKeyHistory={inputOverlayKeyHistory}
               inputOverlayColor={inputOverlayColor}
               onShowOverlayChange={(checked) => {
                 setShowInputOverlay(checked);
@@ -184,6 +190,10 @@ function SettingsPage() {
               onInputOnlyChange={(checked) => {
                 setInputOverlayOnly(checked);
                 writeReplayInputOnly(checked);
+              }}
+              onInputKeyHistoryChange={(checked) => {
+                setInputOverlayKeyHistory(checked);
+                writeReplayInputKeyHistory(checked);
               }}
               onColorChange={(value) => {
                 const normalized = normalizeReplayInputColor(value);
@@ -369,16 +379,20 @@ function ViewerPanel({
 function OverlayPanel({
   showInputOverlay,
   inputOverlayOnly,
+  inputOverlayKeyHistory,
   inputOverlayColor,
   onShowOverlayChange,
   onInputOnlyChange,
+  onInputKeyHistoryChange,
   onColorChange,
 }: {
   showInputOverlay: boolean;
   inputOverlayOnly: boolean;
+  inputOverlayKeyHistory: boolean;
   inputOverlayColor: string;
   onShowOverlayChange: (checked: boolean) => void;
   onInputOnlyChange: (checked: boolean) => void;
+  onInputKeyHistoryChange: (checked: boolean) => void;
   onColorChange: (value: string) => void;
 }) {
   return (
@@ -396,6 +410,13 @@ function OverlayPanel({
           checked={inputOverlayOnly}
           disabled={!showInputOverlay}
           onChange={onInputOnlyChange}
+        />
+        <ToggleRow
+          label="Key overlay input stream"
+          description="Show incoming replay inputs above the key labels"
+          checked={inputOverlayKeyHistory}
+          disabled={!showInputOverlay}
+          onChange={onInputKeyHistoryChange}
         />
       </PanelGroup>
       <PanelGroup label="Appearance">

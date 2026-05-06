@@ -1,6 +1,7 @@
 import { createFileRoute, notFound, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, type PointerEvent as ReactPointerEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Maximize2, Minimize2 } from "lucide-react";
 import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores } from "../lib/osu";
 import { parseManiaBeatmap } from "../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
@@ -10,7 +11,7 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { ReplayBrowseView } from "../components/replay/ReplayBrowseView";
 import type { ReplayBrowseMode } from "../components/replay/ReplayBrowseView";
-import { ReplayControls } from "../components/replay/ReplayControls";
+import { ReplayControls, ReplayProgressBar } from "../components/replay/ReplayControls";
 import { ReplayInfo } from "../components/replay/ReplayInfo";
 import { ReplaySkinSettingsModal } from "../components/replay/ReplaySkinSettingsModal";
 import { track } from "../lib/posthog";
@@ -33,11 +34,13 @@ import {
   normalizeReplayVolume,
   readReplayBackgroundDim,
   readReplayInputColor,
+  readReplayInputKeyHistory,
   readReplayInputOnly,
   readReplayInputOverlay,
   readReplayVolume,
   writeReplayBackgroundDim,
   writeReplayInputColor,
+  writeReplayInputKeyHistory,
   writeReplayInputOnly,
   writeReplayInputOverlay,
   writeReplayVolume,
@@ -56,6 +59,44 @@ interface ReplaySearch {
   t?: number; // timestamp in seconds to seek to on load
   tab?: "player" | "beatmap";
   player?: string; // selected player username (for URL state)
+}
+
+type FullscreenDocument = Document & {
+  webkitFullscreenElement?: Element | null;
+  webkitExitFullscreen?: () => Promise<void> | void;
+};
+
+type FullscreenTarget = HTMLElement & {
+  webkitRequestFullscreen?: () => Promise<void> | void;
+};
+
+function getNativeFullscreenElement() {
+  if (typeof document === "undefined") return null;
+  const doc = document as FullscreenDocument;
+  return document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+}
+
+async function requestNativeFullscreen(element: HTMLElement) {
+  const target = element as FullscreenTarget;
+  if (target.requestFullscreen) {
+    await target.requestFullscreen({ navigationUI: "hide" } as FullscreenOptions);
+    return true;
+  }
+  if (target.webkitRequestFullscreen) {
+    await target.webkitRequestFullscreen();
+    return true;
+  }
+  return false;
+}
+
+async function exitNativeFullscreen() {
+  if (typeof document === "undefined") return;
+  const doc = document as FullscreenDocument;
+  if (document.exitFullscreen) {
+    await document.exitFullscreen();
+  } else if (doc.webkitExitFullscreen) {
+    await doc.webkitExitFullscreen();
+  }
 }
 
 export const Route = createFileRoute("/replay")({
@@ -592,10 +633,14 @@ function ReplayViewer({
   fallbackBeatmapsetId?: number;
   initialTime?: number;
 }) {
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<ReplayRendererLike | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);
+  const [isPseudoFullscreen, setIsPseudoFullscreen] = useState(false);
+  const [showFullscreenChrome, setShowFullscreenChrome] = useState(false);
   const [speed, setSpeed] = useState(1);
   const modAcronyms = useMemo(
     () => (scoreInfo?.mods ?? []).map((m: any) => (typeof m === "string" ? m : m.acronym ?? "").toUpperCase()),
@@ -619,6 +664,7 @@ function ReplayViewer({
   const [volume, setVolume] = useState(readReplayVolume);
   const [showInputOverlay, setShowInputOverlay] = useState(readReplayInputOverlay);
   const [inputOverlayOnly, setInputOverlayOnly] = useState(readReplayInputOnly);
+  const [inputOverlayKeyHistory, setInputOverlayKeyHistory] = useState(readReplayInputKeyHistory);
   const [inputOverlayColor, setInputOverlayColor] = useState(readReplayInputColor);
   const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
   const [skinSettingsOpen, setSkinSettingsOpen] = useState(false);
@@ -630,6 +676,7 @@ function ReplayViewer({
   const [bgSrc, setBgSrc] = useState<string | null>(null);
   const scrubbingRef = useRef(false);
   const scrubResumeOnReleaseRef = useRef(false);
+  const fullscreenChromeTimeoutRef = useRef<number | null>(null);
   // Refs mirror state for the renderer's external clock callback so it always
   // reads the latest values without needing to be re-registered on every
   // React re-render.
@@ -637,10 +684,12 @@ function ReplayViewer({
   const audioUrlActiveRef = useRef(false);
   const showInputOverlayRef = useRef(false);
   const inputOverlayOnlyRef = useRef(false);
+  const inputOverlayKeyHistoryRef = useRef(false);
   const inputOverlayColorRef = useRef("#a855f7");
   const scrollSpeedRef = useRef(DEFAULT_REPLAY_SCROLL_SPEED);
   const skinSettingsRef = useRef<ReplaySkinSettings>(skinSettings);
   const shouldResumeAudioRef = useRef(false);
+  const isCanvasFullscreen = isNativeFullscreen || isPseudoFullscreen;
   const applyScrollSpeed = useCallback((next: number, persist = false) => {
     const normalized = normalizeReplayScrollSpeed(next);
     setScrollSpeed(normalized);
@@ -654,6 +703,67 @@ function ReplayViewer({
     rendererRef.current?.setSkinSettings(normalized);
     writeReplaySkinSettings(normalized);
   }, []);
+
+  const resizeReplayRenderer = useCallback(() => {
+    requestAnimationFrame(() => rendererRef.current?.resize());
+    window.setTimeout(() => rendererRef.current?.resize(), 180);
+  }, []);
+
+  const clearFullscreenChromeTimeout = useCallback(() => {
+    if (fullscreenChromeTimeoutRef.current == null) return;
+    window.clearTimeout(fullscreenChromeTimeoutRef.current);
+    fullscreenChromeTimeoutRef.current = null;
+  }, []);
+
+  const showFullscreenChromeTemporarily = useCallback((autoHide = true) => {
+    setShowFullscreenChrome(true);
+    clearFullscreenChromeTimeout();
+    if (!autoHide) return;
+    fullscreenChromeTimeoutRef.current = window.setTimeout(() => {
+      fullscreenChromeTimeoutRef.current = null;
+      if (!scrubbingRef.current) setShowFullscreenChrome(false);
+    }, 1800);
+  }, [clearFullscreenChromeTimeout]);
+
+  const toggleReplayFullscreen = () => {
+    void (async () => {
+      const container = canvasContainerRef.current;
+      if (!container) return;
+
+      if (isCanvasFullscreen) {
+        setIsPseudoFullscreen(false);
+        if (isNativeFullscreen || getNativeFullscreenElement() === container) {
+          await exitNativeFullscreen().catch(() => {});
+        }
+        return;
+      }
+
+      setIsPseudoFullscreen(true);
+      resizeReplayRenderer();
+
+      try {
+        const entered = await requestNativeFullscreen(container);
+        if (!entered) resizeReplayRenderer();
+      } catch {
+        setIsPseudoFullscreen(true);
+      }
+    })();
+  };
+
+  const handleReplayCanvasPointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!isCanvasFullscreen) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const bottomDistance = rect.bottom - event.clientY;
+    if (bottomDistance <= 190 || showFullscreenChrome) {
+      showFullscreenChromeTemporarily();
+    }
+  }, [isCanvasFullscreen, showFullscreenChrome, showFullscreenChromeTemporarily]);
+
+  const handleReplayCanvasPointerLeave = useCallback(() => {
+    if (!isCanvasFullscreen || scrubbingRef.current) return;
+    clearFullscreenChromeTimeout();
+    setShowFullscreenChrome(false);
+  }, [clearFullscreenChromeTimeout, isCanvasFullscreen]);
 
   // Build full audio URL from Sayobot CDN using beatmapset ID + audio filename from .osu
   const effectiveBeatmapsetId = scoreInfo?.beatmapset?.id ?? fallbackBeatmapsetId;
@@ -700,6 +810,76 @@ function ReplayViewer({
   }, [beatmapBackgroundUrl, coverUrl]);
 
   useEffect(() => {
+    if (typeof document === "undefined") return;
+    const updateFullscreenState = () => {
+      const active = getNativeFullscreenElement() === canvasContainerRef.current;
+      setIsNativeFullscreen(active);
+      if (!getNativeFullscreenElement()) setIsPseudoFullscreen(false);
+      resizeReplayRenderer();
+    };
+
+    updateFullscreenState();
+    document.addEventListener("fullscreenchange", updateFullscreenState);
+    document.addEventListener("webkitfullscreenchange", updateFullscreenState);
+    return () => {
+      document.removeEventListener("fullscreenchange", updateFullscreenState);
+      document.removeEventListener("webkitfullscreenchange", updateFullscreenState);
+    };
+  }, [resizeReplayRenderer]);
+
+  useEffect(() => {
+    if (!isCanvasFullscreen) {
+      clearFullscreenChromeTimeout();
+      setShowFullscreenChrome(false);
+      return;
+    }
+    showFullscreenChromeTemporarily();
+  }, [clearFullscreenChromeTimeout, isCanvasFullscreen, showFullscreenChromeTemporarily]);
+
+  useEffect(() => () => clearFullscreenChromeTimeout(), [clearFullscreenChromeTimeout]);
+
+  useEffect(() => {
+    const container = canvasContainerRef.current;
+    if (!container || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(resizeReplayRenderer);
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [resizeReplayRenderer]);
+
+  useEffect(() => {
+    if (!isPseudoFullscreen || typeof document === "undefined") return;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousOverscroll = document.documentElement.style.overscrollBehavior;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overscrollBehavior = "none";
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overscrollBehavior = previousOverscroll;
+    };
+  }, [isPseudoFullscreen]);
+
+  useEffect(() => {
+    if (!isPseudoFullscreen || typeof window === "undefined") return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsPseudoFullscreen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isPseudoFullscreen]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    resizeReplayRenderer();
+    const orientation = window.screen.orientation;
+    window.addEventListener("orientationchange", resizeReplayRenderer);
+    orientation?.addEventListener("change", resizeReplayRenderer);
+    return () => {
+      window.removeEventListener("orientationchange", resizeReplayRenderer);
+      orientation?.removeEventListener("change", resizeReplayRenderer);
+    };
+  }, [isCanvasFullscreen, resizeReplayRenderer]);
+
+  useEffect(() => {
     setAudioError(null);
     setAudioReady(false);
     setBuffering(false);
@@ -720,9 +900,14 @@ function ReplayViewer({
 
   useEffect(() => {
     inputOverlayOnlyRef.current = inputOverlayOnly;
+    inputOverlayKeyHistoryRef.current = inputOverlayKeyHistory;
     inputOverlayColorRef.current = inputOverlayColor;
-    rendererRef.current?.setInputOverlayOptions({ only: inputOverlayOnly, color: inputOverlayColor });
-  }, [inputOverlayOnly, inputOverlayColor]);
+    rendererRef.current?.setInputOverlayOptions({
+      only: inputOverlayOnly,
+      color: inputOverlayColor,
+      keyHistory: inputOverlayKeyHistory,
+    });
+  }, [inputOverlayOnly, inputOverlayKeyHistory, inputOverlayColor]);
 
   useEffect(() => {
     scrollSpeedRef.current = scrollSpeed;
@@ -775,6 +960,7 @@ function ReplayViewer({
             skinSettings: skinSettingsRef.current,
             inputOverlayOnly: inputOverlayOnlyRef.current,
             inputOverlayColor: inputOverlayColorRef.current,
+            inputOverlayKeyHistory: inputOverlayKeyHistoryRef.current,
           },
         ) as ReplayRendererLike;
 
@@ -791,7 +977,11 @@ function ReplayViewer({
 
         renderer.setScrollSpeed(scrollSpeedRef.current);
         renderer.setShowInputOverlay(showInputOverlayRef.current);
-        renderer.setInputOverlayOptions({ only: inputOverlayOnlyRef.current, color: inputOverlayColorRef.current });
+        renderer.setInputOverlayOptions({
+          only: inputOverlayOnlyRef.current,
+          color: inputOverlayColorRef.current,
+          keyHistory: inputOverlayKeyHistoryRef.current,
+        });
         renderer.setSkinSettings(skinSettingsRef.current);
         rendererRef.current = renderer;
 
@@ -887,6 +1077,11 @@ function ReplayViewer({
     if (typeof window === "undefined") return;
     writeReplayInputOnly(inputOverlayOnly);
   }, [inputOverlayOnly]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    writeReplayInputKeyHistory(inputOverlayKeyHistory);
+  }, [inputOverlayKeyHistory]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1094,6 +1289,7 @@ function ReplayViewer({
   const handleProgressPointerDown = () => {
     const r = rendererRef.current;
     if (!r) return;
+    if (isCanvasFullscreen) showFullscreenChromeTemporarily(false);
     scrubbingRef.current = true;
     scrubResumeOnReleaseRef.current = r.isPlaying;
     if (r.isPlaying) {
@@ -1110,9 +1306,11 @@ function ReplayViewer({
     if (!r) {
       scrubbingRef.current = false;
       scrubResumeOnReleaseRef.current = false;
+      if (isCanvasFullscreen) showFullscreenChromeTemporarily();
       return;
     }
     scrubbingRef.current = false;
+    if (isCanvasFullscreen) showFullscreenChromeTemporarily();
     if (audioRef.current && audioEnabled) {
       audioRef.current.currentTime = r.time / 1000;
       audioRef.current.playbackRate = effectiveRate;
@@ -1143,11 +1341,23 @@ function ReplayViewer({
     }
   };
 
+  const fullscreenChromeVisible = isCanvasFullscreen && showFullscreenChrome;
 
   return (
     <div className="space-y-3">
       {/* Canvas */}
-      <div className="relative rounded-xl overflow-hidden border border-osu-b3/20 bg-[#0a0a18]">
+      <div
+        ref={canvasContainerRef}
+        data-replay-fullscreen={isCanvasFullscreen ? "true" : undefined}
+        onPointerMove={handleReplayCanvasPointerMove}
+        onPointerLeave={handleReplayCanvasPointerLeave}
+        className={`group/replay-canvas relative overflow-hidden bg-[#0a0a18] ${
+          isCanvasFullscreen
+            ? `${isPseudoFullscreen ? "fixed inset-0 z-[100]" : ""} h-[100dvh] w-screen max-w-none rounded-none border-0`
+            : "rounded-xl border border-osu-b3/20"
+        }`}
+        style={isCanvasFullscreen ? { width: "100vw", height: "100dvh", maxWidth: "none" } : undefined}
+      >
         <div
           className="absolute inset-0 pointer-events-none"
           style={{ background: "linear-gradient(180deg, #0a0a18 0%, #1a1016 50%, #0c0c14 100%)" }}
@@ -1170,7 +1380,61 @@ function ReplayViewer({
           className="absolute inset-0 pointer-events-none bg-black transition-opacity"
           style={{ opacity: bgDim / 100 }}
         />
-        <canvas ref={canvasRef} className="relative z-10 h-[calc(100dvh-315px)] min-h-[390px] max-h-[560px] w-full sm:h-[min(70vh,600px)] sm:min-h-0 sm:max-h-none" />
+        <canvas
+          ref={canvasRef}
+          className={`relative z-10 w-full ${
+            isCanvasFullscreen
+              ? "h-[100dvh] min-h-0 max-h-none"
+              : "h-[calc(100dvh-315px)] min-h-[390px] max-h-[560px] sm:h-[min(70vh,600px)] sm:min-h-0 sm:max-h-none"
+          }`}
+        />
+        <button
+          type="button"
+          onClick={toggleReplayFullscreen}
+          aria-label={isCanvasFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+          title={isCanvasFullscreen ? "Exit fullscreen" : "Fullscreen"}
+          className={`absolute bottom-3 right-3 z-30 flex h-8 w-8 cursor-pointer items-center justify-center rounded-sm text-white/70 drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] transition hover:bg-white/10 hover:text-white hover:opacity-100 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-white/50 active:scale-95 sm:h-9 sm:w-9 ${
+            isCanvasFullscreen
+              ? fullscreenChromeVisible ? "opacity-90" : "opacity-0"
+              : "opacity-0 group-hover/replay-canvas:opacity-90"
+          }`}
+          style={isCanvasFullscreen ? {
+            bottom: "max(0.75rem, env(safe-area-inset-bottom))",
+            right: "max(0.75rem, env(safe-area-inset-right))",
+          } : undefined}
+        >
+          {isCanvasFullscreen ? <Minimize2 className="h-[18px] w-[18px]" /> : <Maximize2 className="h-[18px] w-[18px]" />}
+        </button>
+        {isCanvasFullscreen && (
+          <div
+            className={`absolute inset-x-0 bottom-0 z-20 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-2 pb-3 pt-14 transition-opacity duration-150 ${
+              fullscreenChromeVisible
+                ? "pointer-events-auto opacity-100"
+                : "pointer-events-none opacity-0"
+            }`}
+            style={{
+              paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))",
+              paddingLeft: "max(0.5rem, env(safe-area-inset-left))",
+              paddingRight: "max(0.5rem, env(safe-area-inset-right))",
+            }}
+            onPointerEnter={() => showFullscreenChromeTemporarily(false)}
+            onPointerLeave={() => {
+              if (!scrubbingRef.current) showFullscreenChromeTemporarily();
+            }}
+            onFocusCapture={() => showFullscreenChromeTemporarily(false)}
+            onBlurCapture={() => showFullscreenChromeTemporarily()}
+          >
+            <ReplayProgressBar
+              rendererRef={rendererRef}
+              heatmap={keypressHeatmap}
+              sliderClass="!h-1 !bg-white/30 [&::-webkit-slider-thumb]:!h-3 [&::-webkit-slider-thumb]:!w-3 [&::-webkit-slider-thumb]:!bg-white"
+              onPointerDown={handleProgressPointerDown}
+              onPointerUp={handleProgressPointerUp}
+              onSeek={handleProgressSeek}
+              onContextMenu={() => {}}
+            />
+          </div>
+        )}
         {rendererError && (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/55 px-6 text-center">
             <div className="max-w-md rounded-lg border border-red-400/30 bg-red-950/70 px-4 py-3 text-sm font-semibold text-red-100">
@@ -1204,6 +1468,7 @@ function ReplayViewer({
         volume={volume}
         showInputOverlay={showInputOverlay}
         inputOverlayOnly={inputOverlayOnly}
+        inputOverlayKeyHistory={inputOverlayKeyHistory}
         inputOverlayColor={inputOverlayColor}
         skinSettingsOpen={skinSettingsOpen}
         scrollSpeed={scrollSpeed}
@@ -1222,6 +1487,7 @@ function ReplayViewer({
         }}
         onToggleInputOverlay={() => setShowInputOverlay((value) => !value)}
         onToggleInputOverlayOnly={() => setInputOverlayOnly((value) => !value)}
+        onToggleInputOverlayKeyHistory={() => setInputOverlayKeyHistory((value) => !value)}
         onSetInputOverlayColor={(color) => setInputOverlayColor(normalizeReplayInputColor(color))}
         onOpenSkinSettings={() => setSkinSettingsOpen(true)}
         onSetScrollSpeed={(nextSpeed) => {

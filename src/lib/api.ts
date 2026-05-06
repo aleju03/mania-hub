@@ -40,6 +40,7 @@ const OSU_FETCH_RETRIES = 2;
 const OAUTH_FETCH_TIMEOUT_MS = 10_000;
 const OSU_FETCH_TIMEOUT_MS = 15_000;
 const BEATMAP_FILE_FETCH_TIMEOUT_MS = 15_000;
+const BEATMAP_FILE_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
 
 // Simple response cache (5 min TTL)
 const responseCache = new Map<string, { value: unknown; expires: number }>();
@@ -407,7 +408,7 @@ async function purgeExpiredCacheLocks(now: number): Promise<void> {
   }
 }
 
-async function acquireCacheLock(key: string, lockTtlMs: number): Promise<string | null> {
+export async function acquireCacheLock(key: string, lockTtlMs: number): Promise<string | null> {
   if (!hasDb() || !db) return makeLockOwner();
   try {
     await ensureCacheSchema();
@@ -431,7 +432,7 @@ async function acquireCacheLock(key: string, lockTtlMs: number): Promise<string 
   }
 }
 
-async function releaseCacheLock(key: string, owner: string | null): Promise<void> {
+export async function releaseCacheLock(key: string, owner: string | null): Promise<void> {
   if (!hasDb() || !db) return;
   if (!owner) return;
   try {
@@ -457,7 +458,7 @@ async function renewCacheLock(key: string, owner: string | null, lockTtlMs: numb
   }
 }
 
-async function runWithCacheLockRenewal<T>(
+export async function runWithCacheLockRenewal<T>(
   key: string,
   owner: string,
   lockTtlMs: number,
@@ -777,6 +778,13 @@ async function getToken(): Promise<string> {
 
 export type OsuFetchOptions = { caller?: string };
 
+type BeatmapFileSource = "osu" | "catboy";
+type BeatmapFileCacheValue = {
+  content: string;
+  source: BeatmapFileSource;
+  cachedAt: number;
+};
+
 // Truncate API error response bodies before they hit logs / analytics. osu!
 // errors are usually compact JSON, but rate-limit HTML pages or stack traces
 // can be huge — cap them so the dashboard stays readable.
@@ -897,13 +905,60 @@ export async function osuFetchBinary(
 }
 
 export async function fetchBeatmapFile(beatmapId: number): Promise<string> {
-  const res = await fetchWithTimeout(
-    `https://osu.ppy.sh/osu/${beatmapId}`,
-    undefined,
-    BEATMAP_FILE_FETCH_TIMEOUT_MS,
-  );
-  if (!res.ok) {
-    throw new Error(`Failed to fetch .osu file for beatmap ${beatmapId}`);
+  const cacheKey = `beatmap-file:v1:${beatmapId}`;
+  const cached = await getPersistentCached<BeatmapFileCacheValue>(cacheKey);
+  if (cached?.content?.trim()) return cached.content;
+
+  let osuError: unknown;
+  try {
+    const osuFile = await fetchBeatmapFileFromSource(
+      "osu",
+      `https://osu.ppy.sh/osu/${beatmapId}`,
+    );
+    await setPersistentCache(cacheKey, {
+      content: osuFile,
+      source: "osu",
+      cachedAt: Date.now(),
+    } satisfies BeatmapFileCacheValue, BEATMAP_FILE_CACHE_TTL);
+    return osuFile;
+  } catch (error) {
+    osuError = error;
   }
-  return res.text();
+
+  try {
+    const catboyFile = await fetchBeatmapFileFromSource(
+      "catboy",
+      `https://catboy.best/osu/${beatmapId}`,
+    );
+    await setPersistentCache(cacheKey, {
+      content: catboyFile,
+      source: "catboy",
+      cachedAt: Date.now(),
+    } satisfies BeatmapFileCacheValue, BEATMAP_FILE_CACHE_TTL);
+    return catboyFile;
+  } catch (catboyError) {
+    const osuMessage = osuError instanceof Error ? osuError.message : String(osuError);
+    const catboyMessage = catboyError instanceof Error ? catboyError.message : String(catboyError);
+    throw new Error(`Failed to fetch .osu file for beatmap ${beatmapId}: osu (${osuMessage}); catboy (${catboyMessage})`);
+  }
+}
+
+function isLikelyBeatmapFile(content: string): boolean {
+  const trimmed = content.trimStart();
+  return trimmed.startsWith("osu file format") && content.includes("[HitObjects]");
+}
+
+async function fetchBeatmapFileFromSource(
+  source: BeatmapFileSource,
+  url: string,
+): Promise<string> {
+  const res = await fetchWithTimeout(url, undefined, BEATMAP_FILE_FETCH_TIMEOUT_MS);
+  if (!res.ok) {
+    throw new Error(`${source} returned ${res.status}`);
+  }
+  const text = await res.text();
+  if (!isLikelyBeatmapFile(text)) {
+    throw new Error(`${source} returned an invalid .osu file`);
+  }
+  return text;
 }
