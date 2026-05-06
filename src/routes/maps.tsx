@@ -579,6 +579,60 @@ function waitForAudioMetadata(audio: HTMLAudioElement): Promise<void> {
   });
 }
 
+const AUDIO_SEEK_TOLERANCE_SECONDS = 0.25;
+const AUDIO_SEEK_SETTLE_TIMEOUT_MS = 1200;
+
+function waitForAudioSeekSettle(audio: HTMLAudioElement, targetSeconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    let rafId: number | null = null;
+    let timeoutId: number | null = null;
+    let settledFrames = 0;
+    const isCloseToTarget = () => Math.abs(audio.currentTime - targetSeconds) <= AUDIO_SEEK_TOLERANCE_SECONDS;
+
+    const cleanup = () => {
+      if (rafId != null) window.cancelAnimationFrame(rafId);
+      if (timeoutId != null) window.clearTimeout(timeoutId);
+      audio.removeEventListener("seeked", scheduleCheck);
+      audio.removeEventListener("canplay", scheduleCheck);
+      audio.removeEventListener("loadeddata", scheduleCheck);
+      audio.removeEventListener("timeupdate", scheduleCheck);
+      audio.removeEventListener("error", done);
+    };
+    const done = () => {
+      cleanup();
+      resolve();
+    };
+    const check = () => {
+      rafId = null;
+      if (audio.error) {
+        done();
+        return;
+      }
+      if (!audio.seeking && isCloseToTarget()) {
+        settledFrames += 1;
+        if (settledFrames >= 2) {
+          done();
+          return;
+        }
+      } else {
+        settledFrames = 0;
+      }
+      scheduleCheck();
+    };
+    function scheduleCheck() {
+      if (rafId == null) rafId = window.requestAnimationFrame(check);
+    }
+
+    audio.addEventListener("seeked", scheduleCheck);
+    audio.addEventListener("canplay", scheduleCheck);
+    audio.addEventListener("loadeddata", scheduleCheck);
+    audio.addEventListener("timeupdate", scheduleCheck);
+    audio.addEventListener("error", done);
+    timeoutId = window.setTimeout(done, AUDIO_SEEK_SETTLE_TIMEOUT_MS);
+    scheduleCheck();
+  });
+}
+
 async function seekAudioElement(audio: HTMLAudioElement, seconds: number): Promise<void> {
   const targetSeconds = Math.max(0, seconds);
   await waitForAudioMetadata(audio);
@@ -587,23 +641,7 @@ async function seekAudioElement(audio: HTMLAudioElement, seconds: number): Promi
   } catch {
     return;
   }
-  if (Math.abs(audio.currentTime - targetSeconds) <= 0.25) return;
-  await new Promise<void>((resolve) => {
-    let timeoutId: number | null = null;
-    const done = () => {
-      if (timeoutId) window.clearTimeout(timeoutId);
-      audio.removeEventListener("seeked", done);
-      audio.removeEventListener("canplay", done);
-      audio.removeEventListener("timeupdate", done);
-      audio.removeEventListener("error", done);
-      resolve();
-    };
-    audio.addEventListener("seeked", done);
-    audio.addEventListener("canplay", done);
-    audio.addEventListener("timeupdate", done);
-    audio.addEventListener("error", done);
-    timeoutId = window.setTimeout(done, 1000);
-  });
+  await waitForAudioSeekSettle(audio, targetSeconds);
 }
 
 function matchesKeyFilter(kc: number | null, filter: KeyFilter): boolean {
@@ -3394,14 +3432,14 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       if (replayPreviewStartSeconds > 0.25 && Math.abs(audio.currentTime - replayPreviewStartSeconds) > 1) {
         throw new Error("Chart preview audio seek failed");
       }
-      resetReplayAudioClockSample(replayAudioClockSampleRef, audio.currentTime);
-      replayAudioReadyRef.current = true;
-      setIsReplayPreviewPlaying(true);
       await audio.play();
       if (!isCurrentRequest()) {
         resetAudioElement(audio);
         return;
       }
+      resetReplayAudioClockSample(replayAudioClockSampleRef, audio.currentTime);
+      replayAudioReadyRef.current = true;
+      setIsReplayPreviewPlaying(true);
       setReplayAudioLoading(false);
     } catch {
       if (isCurrentRequest()) {
