@@ -3037,6 +3037,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const replayAudioRef = useRef<HTMLAudioElement | null>(null);
   const replayAudioStartSecondsRef = useRef(0);
   const replayAudioStartPendingRef = useRef(false);
+  const replayAudioReadyRef = useRef(false);
   const previewPlaybackTokenRef = useRef(0);
   const replayPlaybackTokenRef = useRef(0);
   const isRandomCardMountedRef = useRef(true);
@@ -3116,6 +3117,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     setReplayChartTimeScale(1);
     setReplayAudioMode("set-preview");
     replayAudioStartPendingRef.current = false;
+    replayAudioReadyRef.current = false;
     replayAudioStartSecondsRef.current = 0;
     requestedAudioModeRef.current = null;
   }, [bm.id, maniaBeatmaps]);
@@ -3127,6 +3129,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       setReplayChartTimeScale(1);
       setReplayAudioMode("set-preview");
       setIsReplayPreviewReady(false);
+      replayAudioReadyRef.current = false;
       return;
     }
 
@@ -3233,6 +3236,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       previewPlaybackTokenRef.current += 1;
       replayPlaybackTokenRef.current += 1;
       replayAudioStartPendingRef.current = false;
+      replayAudioReadyRef.current = false;
       requestedAudioModeRef.current = null;
       clearReplayPreviewEndTimer();
       resetAudioElement(audioRef.current, true);
@@ -3245,6 +3249,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     const audio = replayAudioRef.current;
     replayPlaybackTokenRef.current += 1;
     replayAudioStartPendingRef.current = false;
+    replayAudioReadyRef.current = false;
     replayAudioStartSecondsRef.current = 0;
     requestedAudioModeRef.current = null;
     setIsPreviewPlaying(false);
@@ -3267,6 +3272,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     clearReplayPreviewEndTimer();
     replayPlaybackTokenRef.current += 1;
     replayAudioStartPendingRef.current = false;
+    replayAudioReadyRef.current = false;
     replayAudioStartSecondsRef.current = 0;
     setReplayPreviewRequested(false);
     setIsReplayPreviewPlaying(false);
@@ -3346,6 +3352,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     if (!replayAudioUrl) {
       if (replayPlaybackTokenRef.current === token) {
         replayAudioStartPendingRef.current = false;
+        replayAudioReadyRef.current = false;
         setReplayAudioLoading(false);
         setReplayPreviewError("Couldn't find chart preview audio");
       }
@@ -3354,6 +3361,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     if (!audio) return;
     requestedAudioModeRef.current = "replay";
     replayAudioStartPendingRef.current = false;
+    replayAudioReadyRef.current = false;
     pausePreviewAudio(false);
     setPreviewError(null);
     replayAudioStartSecondsRef.current = replayPreviewStartSeconds;
@@ -3399,10 +3407,12 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         resetAudioElement(audio);
         return;
       }
+      replayAudioReadyRef.current = true;
       setIsReplayPreviewPlaying(true);
       setReplayAudioLoading(false);
     } catch {
       if (isCurrentRequest()) {
+        replayAudioReadyRef.current = false;
         setReplayAudioLoading(false);
         setPreviewError("Couldn't play preview audio");
         setIsReplayPreviewPlaying(false);
@@ -3415,11 +3425,14 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     if (!audio || requestedAudioModeRef.current !== "replay") {
       return { time: 0, stalled: true };
     }
+    if (!replayAudioReadyRef.current || audio.paused || audio.seeking) {
+      return { time: 0, stalled: true };
+    }
     const rate = Math.max(0.1, replayClockRateDivisor);
     const elapsedSeconds = Math.max(0, audio.currentTime - replayAudioStartSecondsRef.current);
     return {
       time: Math.min(RANDOM_REPLAY_PREVIEW_MS, (elapsedSeconds * 1000) / rate),
-      stalled: audio.paused || audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA,
+      stalled: audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA,
     };
   }, [replayClockRateDivisor]);
 
@@ -3433,6 +3446,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     const token = replayPlaybackTokenRef.current + 1;
     replayPlaybackTokenRef.current = token;
     requestedAudioModeRef.current = "replay";
+    replayAudioReadyRef.current = false;
     setIsReplayPreviewPlaying(false);
     setIsReplayPreviewEnding(false);
     pausePreviewAudio(false);
@@ -3481,6 +3495,12 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
 
   const displayDuration = duration > 0 ? Math.min(duration, RANDOM_REPLAY_PREVIEW_MS / 1000) : 0;
   const progressRatio = displayDuration > 0 ? Math.min(1, currentTime / displayDuration) : 0;
+  const isReplayPreviewPreparing = replayPreviewRequested
+    && !isReplayPreviewEnding
+    && !isReplayPreviewPlaying
+    && !replayAudioLoading
+    && !previewError
+    && !replayPreviewError;
 
   return (
     <div className="relative w-[640px] max-w-full">
@@ -3726,6 +3746,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
                   setPreviewError("Couldn't load chart preview audio");
                   setIsReplayPreviewPlaying(false);
                   replayAudioStartPendingRef.current = false;
+                  replayAudioReadyRef.current = false;
                 }}
               />
             ) : null}
@@ -3766,6 +3787,13 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
           <div className="absolute inset-0 z-30 grid place-items-center bg-osu-b5/45 backdrop-blur-[1px]">
             <div className="grid h-8 w-8 place-items-center rounded-md border border-osu-b3/50 bg-osu-b5/85 shadow-lg">
               <div className="h-4 w-4 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
+            </div>
+          </div>
+        ) : null}
+        {isReplayPreviewPreparing ? (
+          <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center">
+            <div className="grid h-7 w-7 place-items-center rounded-md border border-osu-b3/40 bg-osu-b5/65 shadow-lg shadow-black/20 backdrop-blur-[1px]">
+              <div className="h-3.5 w-3.5 rounded-full border-2 border-osu-f1/25 border-t-osu-pink/90 animate-spin" />
             </div>
           </div>
         ) : null}

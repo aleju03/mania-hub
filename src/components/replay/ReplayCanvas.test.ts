@@ -84,10 +84,10 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).toContain("setSkinSettings(settings: ReplaySkinSettings)");
   });
 
-  it("hides the horizontal judgment line in circle mode", () => {
+  it("draws the horizontal judgment line only in bar mode", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    expect(source).toContain('if (this.skinSettings.style === "circles") return;');
+    expect(source).toContain('if (this.skinSettings.style !== "bars") return;');
   });
 
   it("renders the bottom UR timing bar in both skin modes", () => {
