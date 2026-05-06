@@ -255,6 +255,7 @@ export class ManiaReplayRenderer {
   private hudCachedLeftMisses = "0";
   private hudCachedRightMisses = "0";
   private hudCachedKeyKps: string[] = [];
+  private hudCachedTotalKps = "0";
 
 
   constructor(
@@ -505,10 +506,14 @@ export class ManiaReplayRenderer {
     }
     this.hudCachedLeftMisses = String(this.leftHandMisses);
     this.hudCachedRightMisses = String(this.rightHandMisses);
+    let totalKps = 0;
     for (let col = 0; col < this.keyCount; col++) {
-      const v = this.formatKeyKps(this.getKeyKps(col, this.currentTime));
+      const keyKps = this.getKeyKps(col, this.currentTime);
+      totalKps += keyKps;
+      const v = this.formatKeyKps(keyKps);
       if (this.hudCachedKeyKps[col] !== v) this.hudCachedKeyKps[col] = v;
     }
+    this.hudCachedTotalKps = this.formatKeyKps(totalKps);
   }
 
   private updateSkinCache() {
@@ -1500,21 +1505,50 @@ export class ManiaReplayRenderer {
     const currentState = this.currentKeyState;
     const keyGap = Math.round((this.keyCount >= 8 ? 4 : 6) * hudScale);
     const desiredKeyBoxWidth = Math.round((this.keyCount >= 8 ? 36 : 40) * hudScale);
-    const availableKeyRowWidth = Math.max(0, playfieldX - 30 * hudScale);
+    const hudLeftPadding = 12 * hudScale;
+    const hudRightPadding = 18 * hudScale;
+    const totalKpsWidth = Math.round(54 * hudScale);
+    const totalKpsGap = Math.round(6 * hudScale);
+    const availableKeyRowWidth = Math.max(
+      0,
+      playfieldX - hudLeftPadding - hudRightPadding - totalKpsWidth - totalKpsGap,
+    );
     const fittedKeyBoxWidth = Math.floor(
       (availableKeyRowWidth - Math.max(0, this.keyCount - 1) * keyGap) / Math.max(1, this.keyCount),
     );
     const keyBoxWidth = Math.max(
-      Math.round(30 * hudScale),
+      Math.round((this.keyCount >= 7 ? 24 : 30) * hudScale),
       Math.min(desiredKeyBoxWidth, Number.isFinite(fittedKeyBoxWidth) ? fittedKeyBoxWidth : desiredKeyBoxWidth),
     );
     const keyBoxHeight = Math.round(38 * hudScale);
     const keyRowWidth = this.keyCount * keyBoxWidth + Math.max(0, this.keyCount - 1) * keyGap;
-    const keyRowX = Math.max(12 * hudScale, playfieldX - keyRowWidth - 18 * hudScale);
+    const totalKpsHeight = keyBoxHeight;
+    const keyOverlayWidth = totalKpsWidth + totalKpsGap + keyRowWidth;
+    const totalKpsX = Math.max(hudLeftPadding, playfieldX - keyOverlayWidth - hudRightPadding);
+    const keyRowX = totalKpsX + totalKpsWidth + totalKpsGap;
     const keyRowY = judgmentY - 42 * hudScale;
 
     if (!compactHud) {
       this.renderKeyInputHistory(layout, keyRowX, keyRowY, keyBoxWidth, keyBoxHeight, keyGap);
+
+      this.fillRect(totalKpsX, keyRowY, totalKpsWidth, totalKpsHeight, "#0a0a12", 0.82);
+      this.rect(totalKpsX, keyRowY, totalKpsWidth, totalKpsHeight, "#ffffff", 0.12, 1);
+      this.fillRect(totalKpsX + 1, keyRowY + 1, 3 * hudScale, totalKpsHeight - 2, this.inputOverlayColor, 0.95);
+      this.addText("KPS", totalKpsX + totalKpsWidth / 2, keyRowY + 5 * hudScale, {
+        fontSize: 7 * hudScale,
+        fill: "#ffffff",
+        alpha: 0.52,
+        fontWeight: "700",
+        anchorX: 0.5,
+      });
+      this.addText(this.hudCachedTotalKps, totalKpsX + totalKpsWidth / 2, keyRowY + 34 * hudScale, {
+        fontSize: 17 * hudScale,
+        fill: "#ffffff",
+        alpha: 0.95,
+        fontWeight: "700",
+        anchorX: 0.5,
+        anchorY: 1,
+      });
 
       for (let col = 0; col < this.keyCount; col++) {
         const x = keyRowX + col * (keyBoxWidth + keyGap);
