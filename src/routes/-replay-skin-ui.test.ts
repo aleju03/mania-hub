@@ -26,7 +26,11 @@ describe("replay skin settings UI", () => {
     expect(source).toContain("Cut LN tail");
     expect(source).toContain("Keymode");
     expect(source).toContain("Skin preset");
+    expect(source).toContain("New preset");
+    expect(source).toContain("Share code");
     expect(source).toContain("Import .osk");
+    expect(source).not.toContain("Overwrite preset");
+    expect(source).not.toContain("Current draft");
     expect(source).toContain("Note height");
     expect(source).toContain("ScorePosition");
     expect(source).toContain("ComboPosition");

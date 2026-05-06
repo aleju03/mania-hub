@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Copy, Download, FileArchive, GripHorizontal, Pencil, Save, Settings, Trash2, Upload, X } from "lucide-react";
+import { ChevronDown, Copy, FileArchive, GripHorizontal, Pencil, Plus, Settings, Trash2, Upload, X } from "lucide-react";
 
 import {
   DEFAULT_REPLAY_SKIN_SETTINGS,
@@ -56,6 +56,21 @@ const REPLAY_SKIN_PALETTE = [
   "#ffffff",
   "#20222b",
 ];
+const DRAFT_PRESET_ID = "custom";
+const DEFAULT_DRAFT_PRESET_NAME = "New preset";
+const PREVIEW_BAR_NOTE_HEIGHT_RATIO = 0.22;
+const PREVIEW_BAR_COLUMN_COLORS: Record<number, string[]> = {
+  1: ["#fff"],
+  2: ["#5a8fff", "#5a8fff"],
+  3: ["#5a8fff", "#fff", "#5a8fff"],
+  4: ["#fff", "#5a8fff", "#5a8fff", "#fff"],
+  5: ["#5a8fff", "#de31ae", "#fff", "#de31ae", "#5a8fff"],
+  6: ["#5a8fff", "#de31ae", "#fff", "#fff", "#de31ae", "#5a8fff"],
+  7: ["#fff", "#5a8fff", "#fff", "#ffcc22", "#fff", "#5a8fff", "#fff"],
+  8: ["#5a8fff", "#de31ae", "#fff", "#ffcc22", "#ffcc22", "#fff", "#de31ae", "#5a8fff"],
+  9: ["#5a8fff", "#de31ae", "#fff", "#ffcc22", "#88da20", "#ffcc22", "#fff", "#de31ae", "#5a8fff"],
+  10: ["#5a8fff", "#de31ae", "#fff", "#ffcc22", "#88da20", "#88da20", "#ffcc22", "#fff", "#de31ae", "#5a8fff"],
+};
 
 type ColorTarget = "tap" | "lnHead" | "lnBody";
 type OverrideKind = "tap" | "lnHead";
@@ -90,6 +105,15 @@ function arraysEqualUnordered(a: number[], b: number[]): boolean {
   return sa.every((v, i) => v === sb[i]);
 }
 
+function replaySkinSettingsEqual(a: ReplaySkinSettings, b: ReplaySkinSettings): boolean {
+  return JSON.stringify(normalizeReplaySkinSettings(a)) === JSON.stringify(normalizeReplaySkinSettings(b));
+}
+
+function fallbackPreviewBarColors(keyCount: number): string[] {
+  return PREVIEW_BAR_COLUMN_COLORS[keyCount]
+    ?? Array.from({ length: keyCount }, (_, i) => `#${Math.floor(0xffffff * (0.45 + 0.55 * Math.sin((i / keyCount) * Math.PI))).toString(16).padStart(6, "0")}`);
+}
+
 function getColumnArrowDirection(col: number, keyCount: number): ArrowDirection {
   if (keyCount <= 1) return "down";
   if (col === 0) return "left";
@@ -112,12 +136,14 @@ export function ReplaySkinSettingsModal({
 }: ReplaySkinSettingsModalProps) {
   const modalRef = useRef<HTMLDivElement | null>(null);
   const oskInputRef = useRef<HTMLInputElement | null>(null);
+  const matchedInitialPresetRef = useRef(false);
   const [windowRect, setWindowRect] = useState<WindowRect | null>(null);
   const dragStateRef = useRef<{ pointerId: number; startX: number; startY: number; startRect: WindowRect } | null>(null);
   const resizeStateRef = useRef<{ pointerId: number; dir: ResizeDirection; startX: number; startY: number; startRect: WindowRect } | null>(null);
   const [draft, setDraft] = useState(() => normalizeReplaySkinSettings(settings));
   const [presets, setPresets] = useState<ReplaySkinPreset[]>(() => readReplaySkinPresets());
-  const [selectedPresetId, setSelectedPresetId] = useState("custom");
+  const [selectedPresetId, setSelectedPresetId] = useState(DRAFT_PRESET_ID);
+  const [draftPresetName, setDraftPresetName] = useState(DEFAULT_DRAFT_PRESET_NAME);
   const [toast, setToast] = useState<{ id: number; message: string; tone: "info" | "error" } | null>(null);
   const toastIdRef = useRef(0);
   const pushStatus = useCallback((message: string, tone: "info" | "error" = "info") => {
@@ -225,6 +251,13 @@ export function ReplaySkinSettingsModal({
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
+  useEffect(() => {
+    if (matchedInitialPresetRef.current) return;
+    matchedInitialPresetRef.current = true;
+    const match = presets.find((preset) => replaySkinSettingsEqual(preset.settings, draft));
+    if (match) setSelectedPresetId(match.id);
+  }, [draft, presets]);
+
   const handleHeaderPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
     if (!windowRect) return;
@@ -314,7 +347,6 @@ export function ReplaySkinSettingsModal({
 
   const update = (patch: Partial<ReplaySkinSettings>) => {
     setDraft((current) => normalizeReplaySkinSettings({ ...current, ...patch, version: 2 }));
-    setSelectedPresetId("custom");
   };
 
   const updateStyle = (style: ReplaySkinStyle) => update({ style });
@@ -334,7 +366,6 @@ export function ReplaySkinSettingsModal({
         version: 2,
       });
     });
-    setSelectedPresetId("custom");
   };
 
   const updateBaseColor = (kind: "tap" | "lnHead", value: string) => {
@@ -387,19 +418,22 @@ export function ReplaySkinSettingsModal({
 
   const applyPreset = (presetId: string) => {
     setSelectedPresetId(presetId);
-    if (presetId === "custom") return;
+    if (presetId === DRAFT_PRESET_ID) return;
     const preset = presets.find((candidate) => candidate.id === presetId);
     if (!preset) return;
     setDraft(preset.settings);
+    setDraftPresetName(DEFAULT_DRAFT_PRESET_NAME);
     setActiveColor(null);
     pushStatus(`Loaded ${preset.name}`);
   };
 
   const createPresetFromDraft = () => {
     setPromptDialog({
-      title: "Create preset",
+      title: "New preset",
       label: "Preset name",
-      initial: selectedPreset?.name ?? "My mania skin",
+      initial: selectedPreset?.name
+        ? `${selectedPreset.name} copy`
+        : draftPresetName === DEFAULT_DRAFT_PRESET_NAME ? "My mania skin" : draftPresetName,
       placeholder: "My mania skin",
       confirmLabel: "Create",
       onSubmit: (name) => {
@@ -408,34 +442,28 @@ export function ReplaySkinSettingsModal({
         const preset = createReplaySkinPreset(trimmed, draft);
         persistPresets([preset, ...presets].slice(0, 24));
         setSelectedPresetId(preset.id);
+        setDraftPresetName(DEFAULT_DRAFT_PRESET_NAME);
         pushStatus(`Created ${preset.name}`);
       },
     });
   };
 
-  const overwriteSelectedPreset = () => {
-    if (!selectedPreset) return;
-    const nextPreset = {
-      ...selectedPreset,
-      settings: normalizeReplaySkinSettings(draft),
-      updatedAt: Date.now(),
-    };
-    persistPresets(presets.map((preset) => preset.id === selectedPreset.id ? nextPreset : preset));
-    pushStatus(`Saved ${selectedPreset.name}`);
-  };
-
   const renameSelectedPreset = () => {
-    if (!selectedPreset) return;
     const target = selectedPreset;
     setPromptDialog({
-      title: "Rename preset",
+      title: target ? "Rename preset" : "Name preset",
       label: "Preset name",
-      initial: target.name,
-      placeholder: target.name,
+      initial: target?.name ?? draftPresetName,
+      placeholder: target?.name ?? "My mania skin",
       confirmLabel: "Rename",
       onSubmit: (name) => {
         const trimmed = name.trim();
         if (!trimmed) return;
+        if (!target) {
+          setDraftPresetName(trimmed.slice(0, 80));
+          pushStatus(`Named ${trimmed.slice(0, 80)}`);
+          return;
+        }
         const nextPreset = {
           ...target,
           name: trimmed.slice(0, 80),
@@ -450,26 +478,27 @@ export function ReplaySkinSettingsModal({
   const deleteSelectedPreset = () => {
     if (!selectedPreset) return;
     persistPresets(presets.filter((preset) => preset.id !== selectedPreset.id));
-    setSelectedPresetId("custom");
+    setSelectedPresetId(DRAFT_PRESET_ID);
+    setDraftPresetName(DEFAULT_DRAFT_PRESET_NAME);
     pushStatus(`Deleted ${selectedPreset.name}`);
   };
 
   const exportDraft = () => {
-    const key = createReplaySkinShareKey(selectedPreset?.name ?? "Replay settings", draft);
+    const key = createReplaySkinShareKey(selectedPreset?.name ?? draftPresetName, draft);
     if (navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(key).then(
-        () => pushStatus("Export key copied"),
-        () => setKeyDialog({ title: "Export key", value: key }),
+        () => pushStatus("Share code copied"),
+        () => setKeyDialog({ title: "Share code", value: key }),
       );
     } else {
-      setKeyDialog({ title: "Export key", value: key });
+      setKeyDialog({ title: "Share code", value: key });
     }
   };
 
   const importShareKey = () => {
     setPromptDialog({
-      title: "Import export key",
-      label: "Paste export key",
+      title: "Import share code",
+      label: "Paste share code",
       initial: "",
       placeholder: "mhreplay2.…",
       confirmLabel: "Import",
@@ -479,7 +508,7 @@ export function ReplaySkinSettingsModal({
         if (!trimmed) return;
         const payload = parseReplaySkinShareKey(trimmed);
         if (!payload) {
-          pushStatus("That export key could not be imported", "error");
+          pushStatus("That share code could not be imported", "error");
           return;
         }
         const preset = createReplaySkinPreset(payload.name, payload.settings);
@@ -501,7 +530,8 @@ export function ReplaySkinSettingsModal({
         baseSettings: draft,
       });
       setDraft(result.settings);
-      setSelectedPresetId("custom");
+      setSelectedPresetId(DRAFT_PRESET_ID);
+      setDraftPresetName(result.summary.name);
       setActiveColor(null);
       const pieces = [
         `${result.summary.selectedKeyCount ?? selectedKeyCount}K`,
@@ -520,7 +550,19 @@ export function ReplaySkinSettingsModal({
   };
 
   const save = () => {
-    onSave(draft);
+    const normalized = normalizeReplaySkinSettings(draft);
+    const namedDraft = draftPresetName.trim();
+    if (selectedPreset) {
+      const nextPreset = {
+        ...selectedPreset,
+        settings: normalized,
+        updatedAt: Date.now(),
+      };
+      persistPresets(presets.map((preset) => preset.id === selectedPreset.id ? nextPreset : preset));
+    } else if (namedDraft && namedDraft !== DEFAULT_DRAFT_PRESET_NAME) {
+      persistPresets([createReplaySkinPreset(namedDraft, normalized), ...presets].slice(0, 24));
+    }
+    onSave(normalized);
     onClose();
   };
 
@@ -717,33 +759,32 @@ export function ReplaySkinSettingsModal({
                   value={selectedPresetId}
                   onChange={applyPreset}
                   options={[
-                    { value: "custom", label: "Current draft" },
+                    { value: DRAFT_PRESET_ID, label: draftPresetName },
                     ...presets.map((preset) => ({ value: preset.id, label: preset.name })),
                   ]}
                 />
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <PresetIconButton label="Create preset" onClick={createPresetFromDraft}>
-                    <Save className="h-3.5 w-3.5" />
-                  </PresetIconButton>
-                  <PresetIconButton label="Overwrite preset" onClick={overwriteSelectedPreset} disabled={!selectedPreset}>
-                    <Download className="h-3.5 w-3.5" />
-                  </PresetIconButton>
-                  <PresetIconButton label="Rename preset" onClick={renameSelectedPreset} disabled={!selectedPreset}>
+                  <PresetTextButton label="New preset" onClick={createPresetFromDraft}>
+                    <Plus className="h-3.5 w-3.5" />
+                    New
+                  </PresetTextButton>
+                  <PresetIconButton label="Rename preset" onClick={renameSelectedPreset}>
                     <Pencil className="h-3.5 w-3.5" />
                   </PresetIconButton>
                   <PresetIconButton label="Delete preset" onClick={deleteSelectedPreset} disabled={!selectedPreset}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </PresetIconButton>
                   <span className="h-5 w-px bg-osu-b3/50" />
-                  <PresetIconButton label="Copy export key" onClick={exportDraft}>
+                  <PresetIconButton label="Copy share code" onClick={exportDraft}>
                     <Copy className="h-3.5 w-3.5" />
                   </PresetIconButton>
-                  <PresetIconButton label="Import export key" onClick={importShareKey}>
+                  <PresetIconButton label="Import share code" onClick={importShareKey}>
                     <Upload className="h-3.5 w-3.5" />
                   </PresetIconButton>
-                  <PresetIconButton label="Import .osk" onClick={() => oskInputRef.current?.click()} disabled={importingOsk}>
+                  <PresetTextButton label="Import .osk skin" onClick={() => oskInputRef.current?.click()} disabled={importingOsk}>
                     <FileArchive className="h-3.5 w-3.5" />
-                  </PresetIconButton>
+                    Skin
+                  </PresetTextButton>
                   <input
                     ref={oskInputRef}
                     type="file"
@@ -991,7 +1032,8 @@ export function ReplaySkinSettingsModal({
               setDraft(DEFAULT_REPLAY_SKIN_SETTINGS);
               setActiveColor(null);
               setSelectedColumns([]);
-              setSelectedPresetId("custom");
+              setSelectedPresetId(DRAFT_PRESET_ID);
+              setDraftPresetName(DEFAULT_DRAFT_PRESET_NAME);
             }}
             className="mr-auto cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
           >
@@ -1177,7 +1219,7 @@ export function ReplaySkinSettingsModal({
           onCopy={() => {
             if (navigator.clipboard?.writeText) {
               navigator.clipboard.writeText(keyDialog.value).then(
-                () => pushStatus("Export key copied"),
+                () => pushStatus("Share code copied"),
                 () => pushStatus("Could not copy to clipboard", "error"),
               );
             }
@@ -1252,6 +1294,10 @@ function ReplaySkinPreview({
     ? Math.max(18, Math.min(averageLaneWidth - 4, Math.max(28, averageLaneWidth * 0.78)))
     : Math.max(8, Math.min(18, averageLaneWidth - 6));
   const colorFor = (colors: string[], fallback: string, col: number) => colors[col] || fallback;
+  const previewBarColors = fallbackPreviewBarColors(keyCount);
+  const barColorFor = (col: number) => profile.tapColors[col] || previewBarColors[col] || profile.tapColor;
+  const barNoteHeight = Math.max(6, profile.noteHeightScale * layoutScale * PREVIEW_BAR_NOTE_HEIGHT_RATIO);
+  const barInsetFor = (laneWidth: number) => Math.min(3, Math.max(1, laneWidth * 0.14));
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<{
@@ -1486,9 +1532,9 @@ function ReplaySkinPreview({
         );
       })}
       {previewMode === "tap"
-        ? lanePositions.map(({ col, cx, width: laneWidth }) => {
+        ? lanePositions.map(({ col, startX, cx, width: laneWidth }) => {
             const y = tapYForColumn(col);
-            const color = colorFor(profile.tapColors, profile.tapColor, col);
+            const color = settings.style === "bars" ? barColorFor(col) : colorFor(profile.tapColors, profile.tapColor, col);
             const tapAsset = profile.assets.columns[col]?.tap;
             if (tapAsset) {
               const assetHeight = getPreviewAssetHeight(tapAsset, laneWidth, profile.noteHeightScale * layoutScale, noteSize);
@@ -1531,12 +1577,19 @@ function ReplaySkinPreview({
               <div
                 key={`tap-${col}`}
                 className="pointer-events-none absolute rounded"
-                style={{ left: cx - noteSize / 2, top: y, width: noteSize, height: 10, backgroundColor: color }}
+                style={{
+                  left: startX + barInsetFor(laneWidth),
+                  top: y,
+                  width: Math.max(2, laneWidth - barInsetFor(laneWidth) * 2),
+                  height: barNoteHeight,
+                  backgroundColor: color,
+                  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.2)",
+                }}
               />
             );
           })
-        : lanePositions.map(({ col, cx, width: laneWidth }) => {
-            const headColor = colorFor(profile.lnHeadColors, profile.lnHeadColor, col);
+        : lanePositions.map(({ col, startX, cx, width: laneWidth }) => {
+            const headColor = settings.style === "bars" ? barColorFor(col) : colorFor(profile.lnHeadColors, profile.lnHeadColor, col);
             const length = lnLengthForColumn(col);
             const lnHeadY = receptorY;
             const lnTailEnd = settings.upscroll ? lnHeadY + length : lnHeadY - length;
@@ -1641,27 +1694,30 @@ function ReplaySkinPreview({
                 </div>
               );
             }
-            const bodyWidth = noteSize;
+            const barInset = barInsetFor(laneWidth);
+            const barWidth = Math.max(2, laneWidth - barInset * 2);
+            const headTop = settings.upscroll ? lnHeadY : lnHeadY - barNoteHeight;
             return (
               <div key={`ln-${col}`} className="pointer-events-none">
                 <div
-                  className="absolute rounded-sm"
+                  className="absolute"
                   style={{
-                    left: cx - bodyWidth / 2,
+                    left: startX + barInset,
                     top: lnTop,
-                    width: bodyWidth,
+                    width: barWidth,
                     height: lnBottom - lnTop,
-                    backgroundColor: settings.lnBodyColor,
+                    backgroundColor: headColor,
                   }}
                 />
                 <div
                   className="absolute rounded"
                   style={{
-                    left: cx - noteSize / 2,
-                    top: lnHeadY - 5,
-                    width: noteSize,
-                    height: 10,
+                    left: startX + barInset,
+                    top: headTop,
+                    width: barWidth,
+                    height: barNoteHeight,
                     backgroundColor: headColor,
+                    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.2)",
                   }}
                 />
               </div>
@@ -1882,6 +1938,31 @@ function PresetIconButton({
       disabled={disabled}
       onClick={onClick}
       className="grid h-7 w-7 cursor-pointer place-items-center rounded-md border border-osu-b3/60 bg-osu-b5/70 text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-osu-b3/60 disabled:hover:text-osu-f1"
+    >
+      {children}
+    </button>
+  );
+}
+
+function PresetTextButton({
+  label,
+  disabled = false,
+  children,
+  onClick,
+}: {
+  label: string;
+  disabled?: boolean;
+  children: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md border border-osu-b3/60 bg-osu-b5/70 px-2 text-[11px] font-bold text-osu-f1 transition-colors hover:border-osu-b2 hover:text-white disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-osu-b3/60 disabled:hover:text-osu-f1"
     >
       {children}
     </button>
