@@ -126,6 +126,7 @@ export function Nav() {
   const linksContainerRef = useRef<HTMLDivElement>(null);
   const adminMenuRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const restoreMenuAfterSettingsCloseRef = useRef(false);
   const linkRefs = useRef<Map<string, HTMLAnchorElement>>(new Map());
   const [barRect, setBarRect] = useState<{ left: number; width: number } | null>(null);
 
@@ -177,6 +178,7 @@ export function Nav() {
 
   // Close drawer on route change
   useEffect(() => {
+    restoreMenuAfterSettingsCloseRef.current = false;
     setMenuOpen(false);
     setAdminMenuOpen(false);
     setUserMenuOpen(false);
@@ -273,6 +275,20 @@ export function Nav() {
     if (location.pathname === "/maps") {
       navigate({ to: "/maps", search: preserveSearchWithCountryOnFirstPage(country), replace: true });
     }
+  };
+
+  const handleSettingsClose = () => {
+    setSettingsOpen(false);
+    if (restoreMenuAfterSettingsCloseRef.current) {
+      restoreMenuAfterSettingsCloseRef.current = false;
+      setMenuOpen(true);
+    }
+  };
+
+  const handleSettingsBackdropClose = () => {
+    restoreMenuAfterSettingsCloseRef.current = false;
+    setSettingsOpen(false);
+    setMenuOpen(false);
   };
 
   return (
@@ -521,7 +537,10 @@ export function Nav() {
           {devMode && (
             <button
               type="button"
-              onClick={() => setSettingsOpen((open) => !open)}
+              onClick={() => {
+                restoreMenuAfterSettingsCloseRef.current = false;
+                setSettingsOpen((open) => !open);
+              }}
               className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg transition-colors ${
                 settingsOpen || settingsActive
                   ? "bg-osu-pink/20 text-white"
@@ -540,7 +559,10 @@ export function Nav() {
         {/* Mobile hamburger button */}
         <button
           className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg hover:bg-osu-b3/50 transition-colors cursor-pointer"
-          onClick={() => setMenuOpen(!menuOpen)}
+          onClick={() => {
+            restoreMenuAfterSettingsCloseRef.current = false;
+            setMenuOpen(!menuOpen);
+          }}
           aria-label="Toggle menu"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-5 h-5 text-osu-pink-light">
@@ -652,6 +674,7 @@ export function Nav() {
                   <button
                     type="button"
                     onClick={() => {
+                      restoreMenuAfterSettingsCloseRef.current = true;
                       setMenuOpen(false);
                       setSettingsOpen(true);
                     }}
@@ -719,7 +742,13 @@ export function Nav() {
               )}
       </div>
 
-      {devMode && <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
+      {devMode && (
+        <SettingsDrawer
+          open={settingsOpen}
+          onClose={handleSettingsClose}
+          onBackdropClose={handleSettingsBackdropClose}
+        />
+      )}
     </header>
   );
 }

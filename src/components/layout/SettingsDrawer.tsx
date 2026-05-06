@@ -4,9 +4,10 @@ import { SettingsPanel } from "../settings/SettingsPanel";
 interface SettingsDrawerProps {
   open: boolean;
   onClose: () => void;
+  onBackdropClose?: () => void;
 }
 
-export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
+export function SettingsDrawer({ open, onClose, onBackdropClose }: SettingsDrawerProps) {
   // Body scroll lock matches the mobile nav drawer pattern: defer the
   // layout-invalidating overflow write by two rAFs so the slide transition
   // gets a clean compositor frame before triggering a full-document restyle.
@@ -43,7 +44,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
         className={`fixed inset-0 z-[55] bg-black/60 transition-opacity duration-200 ease-out ${
           open ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
-        onClick={onClose}
+        onClick={onBackdropClose ?? onClose}
         style={{ top: 60 }}
         aria-hidden={!open}
       />
