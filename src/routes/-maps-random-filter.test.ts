@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cycleTriStateCsv, reverseCycleTriStateCsv } from "./maps";
+import { cycleTriStateCsv, reverseCycleTriStateCsv } from "../lib/maps-random-filter";
 
 describe("maps random filter cycling", () => {
   it("cycles forward from neutral to include to exclude and back to neutral", () => {
