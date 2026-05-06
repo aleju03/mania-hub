@@ -65,7 +65,7 @@ const STYLE_LABELS: Record<ReplaySkinStyle, string> = {
 type TabId = "skin" | "viewer" | "overlay";
 const TABS: { id: TabId; label: string }[] = [
   { id: "skin", label: "skin & layout" },
-  { id: "viewer", label: "viewer defaults" },
+  { id: "viewer", label: "playback" },
   { id: "overlay", label: "input overlay" },
 ];
 
