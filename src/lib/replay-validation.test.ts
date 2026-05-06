@@ -26,6 +26,53 @@ describe("replay validation", () => {
     });
   });
 
+  it("uses stable life-bar timing to choose which ambiguous misses to keep", () => {
+    const events: ReplayJudgementEvent[] = [
+      { column: 0, judgment: 6, noteIndex: 0, offsetMs: 168.5, part: "note", possibleJudgments: [1, 6], time: 1000 },
+      { column: 1, judgment: 6, noteIndex: 1, offsetMs: 168.5, part: "note", possibleJudgments: [1, 6], time: 2000 },
+    ];
+
+    const resolved = resolveReplayJudgementEvents(events, {
+      countGeki: 1,
+      count300: 0,
+      countKatu: 0,
+      count100: 0,
+      count50: 0,
+      countMiss: 1,
+    }, {
+      lifeBarFrames: [
+        { time: 900, health: 0.8 },
+        { time: 1010, health: 0.55 },
+        { time: 1900, health: 0.6 },
+        { time: 2010, health: 0.62 },
+      ],
+    });
+
+    expect(resolved.resolved).toBe(true);
+    expect(resolved.events.map((event) => event.judgment)).toEqual([6, 1]);
+  });
+
+  it("uses stable combo-break timing when life-bar frames are unavailable", () => {
+    const events: ReplayJudgementEvent[] = [
+      { column: 0, judgment: 6, noteIndex: 0, offsetMs: 168.5, part: "note", possibleJudgments: [1, 6], time: 1000 },
+      { column: 1, judgment: 6, noteIndex: 1, offsetMs: 168.5, part: "note", possibleJudgments: [1, 6], time: 2000 },
+    ];
+
+    const resolved = resolveReplayJudgementEvents(events, {
+      countGeki: 1,
+      count300: 0,
+      countKatu: 0,
+      count100: 0,
+      count50: 0,
+      countMiss: 1,
+    }, {
+      comboBreakTimes: [1005],
+    });
+
+    expect(resolved.resolved).toBe(true);
+    expect(resolved.events.map((event) => event.judgment)).toEqual([6, 1]);
+  });
+
   it("validates simulated replay counts against expected stable counts", () => {
     const notes: ManiaNote[] = [
       { column: 0, time: 1000, endTime: 1000, isHold: false },

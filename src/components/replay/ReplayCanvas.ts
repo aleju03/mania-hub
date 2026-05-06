@@ -335,9 +335,16 @@ export class ManiaReplayRenderer {
         legacyReplayFrameRounding: options?.expectedCounts != null,
       },
     );
+    const rawStableComboEvents = this.ruleset.accuracyMode === "stable"
+      ? buildStableReplayComboEvents(this.notes, simulated.noteStates)
+      : null;
     this.judgmentEvents = options?.expectedCounts
       ? resolveReplayJudgementEvents(simulated.events, options.expectedCounts, {
           allowLegacyScoreReconciliation: this.ruleset.accuracyMode === "stable",
+          comboBreakTimes: rawStableComboEvents
+            ?.filter((event) => event.kind === "break")
+            .map((event) => event.time),
+          lifeBarFrames: this.lifeBarFrames,
         }).events
       : simulated.events;
     if (this.lifeBarFrames.length === 0) {
@@ -345,7 +352,7 @@ export class ManiaReplayRenderer {
     }
     this.noteStates = simulated.noteStates;
     this.comboEvents = this.ruleset.accuracyMode === "stable"
-      ? buildStableReplayComboEvents(this.notes, this.noteStates)
+      ? rawStableComboEvents ?? buildStableReplayComboEvents(this.notes, this.noteStates)
       : this.judgmentEvents.map((event) => ({
           kind: event.judgment == null || event.judgment === 6 ? "break" : "hit",
           time: event.time,

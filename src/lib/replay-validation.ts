@@ -1,5 +1,5 @@
 import type { ManiaNote } from "./beatmap-parser";
-import type { ReplayFrame } from "./types";
+import type { ReplayFrame, ReplayLifeBarFrame } from "./types";
 import type { Judgment, ReplayAccuracyMode, ReplayJudgementEvent, ReplayNoteState } from "./mania-replay-judgement.ts";
 import {
   buildReplaySegments,
@@ -44,11 +44,13 @@ export interface ReplayValidationResult {
 export interface ReplayValidationInput {
   expectedCounts: ReplayHitCounts;
   expectedMaxCombo?: number | null;
+  comboBreakTimes?: number[];
   frames: ReplayFrame[];
   isConvert?: boolean;
   isLazer?: boolean;
   keyCount: number;
   legacyReplayFrameRounding?: boolean;
+  lifeBarFrames?: ReplayLifeBarFrame[];
   mods?: string[];
   notes: ManiaNote[];
   od: number;
@@ -344,9 +346,133 @@ function assignAmbiguousJudgments(
   return assigned;
 }
 
+function getLifeBarDropScore(lifeBarFrames: ReplayLifeBarFrame[] | undefined, time: number): number {
+  if (!lifeBarFrames || lifeBarFrames.length < 2) return 0;
+
+  const beforeMs = 250;
+  const afterMs = 650;
+  const maxDistance = Math.max(beforeMs, afterMs);
+  let bestDrop = 0;
+
+  for (let index = 1; index < lifeBarFrames.length; index++) {
+    const frame = lifeBarFrames[index];
+    if (frame.time < time - beforeMs) continue;
+    if (frame.time > time + afterMs) break;
+
+    const previous = lifeBarFrames[index - 1];
+    const drop = previous.health - frame.health;
+    if (drop <= 0.005) continue;
+
+    const distance = Math.abs(frame.time - time);
+    const proximity = Math.max(0, 1 - distance / maxDistance);
+    bestDrop = Math.max(bestDrop, drop * proximity);
+  }
+
+  return bestDrop;
+}
+
+function getNearbyComboBreakScore(comboBreakTimes: number[] | undefined, time: number): number {
+  if (!comboBreakTimes || comboBreakTimes.length === 0) return 0;
+
+  const windowMs = 140;
+  let bestScore = 0;
+  for (const breakTime of comboBreakTimes) {
+    if (breakTime < time - windowMs) continue;
+    if (breakTime > time + windowMs) break;
+
+    const proximity = 1 - Math.abs(breakTime - time) / windowMs;
+    bestScore = Math.max(bestScore, proximity);
+  }
+
+  return bestScore;
+}
+
+function getJudgmentAssignmentCost(
+  event: ReplayJudgementEvent,
+  targetJudgment: Exclude<Judgment, 0>,
+  lifeBarFrames: ReplayLifeBarFrame[] | undefined,
+  comboBreakTimes: number[] | undefined,
+): number {
+  const currentJudgment = isCountedJudgment(event.judgment) ? event.judgment : targetJudgment;
+  const possible = uniqueCountedJudgments(event.possibleJudgments);
+  const explicitlyPossible = possible.length === 0 || possible.includes(targetJudgment);
+  const timingEvidence = Math.max(
+    getLifeBarDropScore(lifeBarFrames, event.time) * 4,
+    getNearbyComboBreakScore(comboBreakTimes, event.time),
+  );
+  let cost = Math.abs(targetJudgment - currentJudgment) * 10 + (explicitlyPossible ? 0 : 500);
+
+  if (targetJudgment === currentJudgment) cost -= 20;
+
+  if (targetJudgment === 6) {
+    cost += timingEvidence > 0 ? -1000 - timingEvidence * 1000 : 300;
+  } else if (currentJudgment === 6) {
+    cost += timingEvidence > 0 ? 400 : -200;
+  }
+
+  return cost;
+}
+
+function assignTimelineAwareAmbiguousJudgments(
+  events: ReplayJudgementEvent[],
+  ambiguousEventIndexes: number[],
+  possibleJudgments: Exclude<Judgment, 0>[][],
+  remainingTarget: number[],
+  lifeBarFrames: ReplayLifeBarFrame[] | undefined,
+  comboBreakTimes: number[] | undefined,
+): Exclude<Judgment, 0>[] | null {
+  if ((!lifeBarFrames || lifeBarFrames.length < 2) && (!comboBreakTimes || comboBreakTimes.length === 0)) return null;
+
+  const assigned = new Array<Exclude<Judgment, 0> | null>(possibleJudgments.length).fill(null);
+  const remaining = [...remainingTarget];
+  let neededMisses = remaining[6];
+
+  if (neededMisses > 0) {
+    const missCandidates = possibleJudgments
+      .map((possible, ambiguousIndex) => ({ possible, ambiguousIndex }))
+      .filter(({ possible }) => possible.includes(6))
+      .map(({ ambiguousIndex }) => {
+        const event = events[ambiguousEventIndexes[ambiguousIndex]];
+        return {
+          ambiguousIndex,
+          cost: getJudgmentAssignmentCost(event, 6, lifeBarFrames, comboBreakTimes),
+        };
+      })
+      .sort((a, b) => a.cost - b.cost || ambiguousEventIndexes[a.ambiguousIndex] - ambiguousEventIndexes[b.ambiguousIndex]);
+
+    for (const candidate of missCandidates) {
+      if (neededMisses <= 0) break;
+      assigned[candidate.ambiguousIndex] = 6;
+      neededMisses--;
+    }
+
+    if (neededMisses > 0) return null;
+    remaining[6] = 0;
+  }
+
+  const unassignedIndexes = assigned
+    .map((judgment, ambiguousIndex) => judgment == null ? ambiguousIndex : -1)
+    .filter((ambiguousIndex) => ambiguousIndex >= 0);
+  const remainingAssignments = assignAmbiguousJudgments(
+    unassignedIndexes.map((ambiguousIndex) => possibleJudgments[ambiguousIndex].filter((judgment) => judgment !== 6)),
+    remaining,
+  );
+  if (!remainingAssignments) return null;
+
+  for (let index = 0; index < unassignedIndexes.length; index++) {
+    assigned[unassignedIndexes[index]] = remainingAssignments[index];
+  }
+
+  return assigned.every((judgment): judgment is Exclude<Judgment, 0> => judgment != null)
+    ? assigned
+    : null;
+}
+
 function reconcileEventsToExpectedCounts(
   events: ReplayJudgementEvent[],
   expectedCounts: ReplayHitCounts,
+  lifeBarFrames?: ReplayLifeBarFrame[],
+  comboBreakTimes?: number[],
 ): ReplayJudgementEvent[] | null {
   const current = replayHitCountsToArray(countReplayJudgements(events));
   const target = replayHitCountsToArray(expectedCounts);
@@ -371,7 +497,8 @@ function reconcileEventsToExpectedCounts(
       if (targetJudgment === judgment || deficits[targetJudgment] <= 0) continue;
 
       const isExplicitlyPossible = possible.includes(targetJudgment as Exclude<Judgment, 0>);
-      const cost = (isExplicitlyPossible ? 0 : 100) + Math.abs(targetJudgment - judgment);
+      const cost = (isExplicitlyPossible ? 0 : 100)
+        + getJudgmentAssignmentCost(events[index], targetJudgment as Exclude<Judgment, 0>, lifeBarFrames, comboBreakTimes);
       candidatesByJudgment[targetJudgment] ??= [];
       candidatesByJudgment[targetJudgment].push({ cost, index });
     }
@@ -407,7 +534,7 @@ function reconcileEventsToExpectedCounts(
 export function resolveReplayJudgementEvents(
   events: ReplayJudgementEvent[],
   expectedCounts: ReplayHitCounts,
-  options: { allowLegacyScoreReconciliation?: boolean } = {},
+  options: { allowLegacyScoreReconciliation?: boolean; comboBreakTimes?: number[]; lifeBarFrames?: ReplayLifeBarFrame[] } = {},
 ): { events: ReplayJudgementEvent[]; mode: "none" | "ambiguity" | "score-header"; resolved: boolean } {
   const fixedCounts = [0, 0, 0, 0, 0, 0, 0];
   const ambiguous: Exclude<Judgment, 0>[][] = [];
@@ -428,7 +555,7 @@ export function resolveReplayJudgementEvents(
 
   if (ambiguous.length === 0) {
     const reconciled = options.allowLegacyScoreReconciliation
-      ? reconcileEventsToExpectedCounts(events, expectedCounts)
+      ? reconcileEventsToExpectedCounts(events, expectedCounts, options.lifeBarFrames, options.comboBreakTimes)
       : null;
     return reconciled
       ? { events: reconciled, mode: "score-header", resolved: true }
@@ -440,7 +567,7 @@ export function resolveReplayJudgementEvents(
 
   if (remainingTarget.slice(1).some((count) => count < 0)) {
     const reconciled = options.allowLegacyScoreReconciliation
-      ? reconcileEventsToExpectedCounts(events, expectedCounts)
+      ? reconcileEventsToExpectedCounts(events, expectedCounts, options.lifeBarFrames, options.comboBreakTimes)
       : null;
     return reconciled
       ? { events: reconciled, mode: "score-header", resolved: true }
@@ -448,17 +575,24 @@ export function resolveReplayJudgementEvents(
   }
   if (remainingTarget.slice(1).reduce((sum, count) => sum + count, 0) !== ambiguous.length) {
     const reconciled = options.allowLegacyScoreReconciliation
-      ? reconcileEventsToExpectedCounts(events, expectedCounts)
+      ? reconcileEventsToExpectedCounts(events, expectedCounts, options.lifeBarFrames, options.comboBreakTimes)
       : null;
     return reconciled
       ? { events: reconciled, mode: "score-header", resolved: true }
       : { events, mode: "none", resolved: false };
   }
 
-  const assigned = assignAmbiguousJudgments(ambiguous, remainingTarget);
+  const assigned = assignTimelineAwareAmbiguousJudgments(
+    events,
+    ambiguousEventIndexes,
+    ambiguous,
+    remainingTarget,
+    options.lifeBarFrames,
+    options.comboBreakTimes,
+  ) ?? assignAmbiguousJudgments(ambiguous, remainingTarget);
   if (!assigned) {
     const reconciled = options.allowLegacyScoreReconciliation
-      ? reconcileEventsToExpectedCounts(events, expectedCounts)
+      ? reconcileEventsToExpectedCounts(events, expectedCounts, options.lifeBarFrames, options.comboBreakTimes)
       : null;
     return reconciled
       ? { events: reconciled, mode: "score-header", resolved: true }
@@ -509,10 +643,18 @@ export function validateReplaySimulation(input: ReplayValidationInput): ReplayVa
     },
   );
   const rawSimulatedCounts = countReplayJudgements(simulated.events);
+  const comboBreakTimes = input.comboBreakTimes
+    ?? (ruleset.accuracyMode === "stable"
+      ? buildStableReplayComboEvents(input.notes, simulated.noteStates)
+          .filter((event) => event.kind === "break")
+          .map((event) => event.time)
+      : undefined);
   const resolvedEvents =
     input.legacyReplayFrameRounding
       ? resolveReplayJudgementEvents(simulated.events, input.expectedCounts, {
           allowLegacyScoreReconciliation: ruleset.accuracyMode === "stable",
+          comboBreakTimes,
+          lifeBarFrames: input.lifeBarFrames,
         })
       : null;
   const ambiguityResolvedCounts = resolvedEvents?.resolved

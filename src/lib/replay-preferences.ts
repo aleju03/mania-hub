@@ -3,15 +3,24 @@ export const REPLAY_INPUT_OVERLAY_STORAGE_KEY = "mania-hub-replay-input-overlay"
 export const REPLAY_INPUT_ONLY_STORAGE_KEY = "mania-hub-replay-input-only";
 export const REPLAY_INPUT_COLOR_STORAGE_KEY = "mania-hub-replay-input-color";
 export const REPLAY_BG_DIM_STORAGE_KEY = "mania-hub-replay-bg-dim";
+export const DEFAULT_REPLAY_VOLUME = 0.5;
+export const DEFAULT_REPLAY_BG_DIM = 80;
+
+function parseStoredNumber(value: unknown, fallback: number): number {
+  if (value == null) return fallback;
+  if (typeof value === "string" && value.trim() === "") return fallback;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
 
 export function normalizeReplayVolume(value: unknown): number {
-  const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : 0.5;
+  const parsed = parseStoredNumber(value, DEFAULT_REPLAY_VOLUME);
+  return Math.min(1, Math.max(0, parsed));
 }
 
 export function normalizeReplayBackgroundDim(value: unknown): number {
-  const parsed = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(parsed) ? Math.min(100, Math.max(0, Math.round(parsed))) : 80;
+  const parsed = parseStoredNumber(value, DEFAULT_REPLAY_BG_DIM);
+  return Math.min(100, Math.max(0, Math.round(parsed)));
 }
 
 export function normalizeEditableHex(value: string): string | null {
@@ -26,7 +35,7 @@ export function normalizeReplayInputColor(value: string | null): string {
 }
 
 export function readReplayVolume(): number {
-  if (typeof window === "undefined") return 0.5;
+  if (typeof window === "undefined") return DEFAULT_REPLAY_VOLUME;
   return normalizeReplayVolume(window.localStorage.getItem(REPLAY_VOLUME_STORAGE_KEY));
 }
 
@@ -36,7 +45,7 @@ export function writeReplayVolume(volume: number): void {
 }
 
 export function readReplayBackgroundDim(): number {
-  if (typeof window === "undefined") return 80;
+  if (typeof window === "undefined") return DEFAULT_REPLAY_BG_DIM;
   return normalizeReplayBackgroundDim(window.localStorage.getItem(REPLAY_BG_DIM_STORAGE_KEY));
 }
 
