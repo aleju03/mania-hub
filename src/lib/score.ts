@@ -1,6 +1,7 @@
-import type { OsuMod, OsuScore, OsuScoreStatistics } from "./types";
+import type { LeanTrackerScore, OsuMod, OsuScore, OsuScoreStatistics } from "./types";
 
 const PP_WEIGHT_DECAY = 0.95;
+export type ScoreLike = OsuScore | LeanTrackerScore;
 
 export interface ScoreDisplayValues {
   accuracy: number;
@@ -10,11 +11,11 @@ export interface ScoreDisplayValues {
   totalScore: number | null;
 }
 
-export function getScoreTimestamp(score: OsuScore): string {
+export function getScoreTimestamp(score: ScoreLike): string {
   return score.ended_at ?? score.created_at ?? "";
 }
 
-export function getScoreTimeMs(score: OsuScore): number {
+export function getScoreTimeMs(score: ScoreLike): number {
   const timestamp = getScoreTimestamp(score);
   return timestamp ? new Date(timestamp).getTime() : 0;
 }
@@ -95,7 +96,7 @@ export function getBoardLaneKey(mods: string[], isLazer: boolean): string {
   return `${getScoreSpeedBucket(mods)}:${isLazer ? "lazer" : "stable"}`;
 }
 
-export function getScoreIdentity(score: OsuScore): string {
+export function getScoreIdentity(score: ScoreLike): string {
   if (score.id > 0) {
     return `id:${score.id}`;
   }
@@ -118,11 +119,11 @@ export function getScoreIdentity(score: OsuScore): string {
   ].join(":");
 }
 
-export function getDisplayedTotalScore(score: OsuScore): number | null {
+export function getDisplayedTotalScore(score: ScoreLike): number | null {
   return getScoreDisplayValues(score).totalScore;
 }
 
-function isLegacySubmittedScore(score: OsuScore): boolean {
+function isLegacySubmittedScore(score: ScoreLike): boolean {
   if (score.type != null && score.type !== "solo_score") {
     return true;
   }
@@ -130,7 +131,7 @@ function isLegacySubmittedScore(score: OsuScore): boolean {
   return score.legacy_score_id != null || !!(score.legacy_total_score && score.legacy_total_score > 0);
 }
 
-export function isLazerScore(score: OsuScore): boolean {
+export function isLazerScore(score: ScoreLike): boolean {
   return !isLegacySubmittedScore(score);
 }
 
@@ -190,7 +191,7 @@ function calculateStableAccuracy(stats: OsuScoreStatistics): number {
   return (countMax * 300 + count300 * 300 + count200 * 200 + count100 * 100 + count50 * 50) / (total * 300);
 }
 
-function getPreferredTotalScore(score: OsuScore, isLazer: boolean): number | null {
+function getPreferredTotalScore(score: ScoreLike, isLazer: boolean): number | null {
   const candidates = isLazer
     ? [score.classic_total_score, score.total_score, score.legacy_total_score, score.score]
     : [score.legacy_total_score, score.classic_total_score, score.total_score, score.score];
@@ -204,7 +205,7 @@ function getPreferredTotalScore(score: OsuScore, isLazer: boolean): number | nul
   return null;
 }
 
-function getPreferredAccuracy(score: OsuScore, isLazer: boolean): number {
+function getPreferredAccuracy(score: ScoreLike, isLazer: boolean): number {
   if (isLazer) {
     if (Number.isFinite(score.accuracy) && score.accuracy > 0) {
       return score.accuracy;
@@ -221,7 +222,7 @@ function getPreferredAccuracy(score: OsuScore, isLazer: boolean): number {
   return score.accuracy;
 }
 
-function deriveStableManiaRank(score: OsuScore): string | null {
+function deriveStableManiaRank(score: ScoreLike): string | null {
   const mode = score.beatmap?.mode ?? "mania";
   if (mode !== "mania") {
     return null;
@@ -255,7 +256,7 @@ function deriveStableManiaRank(score: OsuScore): string | null {
   return "D";
 }
 
-function getPreferredRank(score: OsuScore, isLazer: boolean): string {
+function getPreferredRank(score: ScoreLike, isLazer: boolean): string {
   if (!isLazer) {
     const stableRank = deriveStableManiaRank(score);
     if (stableRank) {
@@ -266,7 +267,7 @@ function getPreferredRank(score: OsuScore, isLazer: boolean): string {
   return score.passed ? score.rank : "F";
 }
 
-export function getScoreDisplayValues(score: OsuScore): ScoreDisplayValues {
+export function getScoreDisplayValues(score: ScoreLike): ScoreDisplayValues {
   const lazer = isLazerScore(score);
   const rank = getPreferredRank(score, lazer);
 
@@ -279,23 +280,23 @@ export function getScoreDisplayValues(score: OsuScore): ScoreDisplayValues {
   };
 }
 
-export function getDisplayedAccuracy(score: OsuScore): number {
+export function getDisplayedAccuracy(score: ScoreLike): number {
   return getScoreDisplayValues(score).accuracy;
 }
 
-export function getDisplayedRank(score: OsuScore): string {
+export function getDisplayedRank(score: ScoreLike): string {
   return getScoreDisplayValues(score).rank;
 }
 
-export function isDisplayedPassed(score: OsuScore): boolean {
+export function isDisplayedPassed(score: ScoreLike): boolean {
   return getScoreDisplayValues(score).passed;
 }
 
-export function scoreHasReplay(score: OsuScore): boolean {
+export function scoreHasReplay(score: ScoreLike): boolean {
   return score.has_replay ?? score.replay ?? false;
 }
 
-export function getBeatmapUrl(score: OsuScore): string | null {
+export function getBeatmapUrl(score: ScoreLike): string | null {
   return score.beatmap?.url ?? (
     score.beatmap?.id != null
       ? `https://osu.ppy.sh/beatmaps/${score.beatmap.id}`
@@ -303,7 +304,7 @@ export function getBeatmapUrl(score: OsuScore): string | null {
   );
 }
 
-export function getScoreUrl(score: OsuScore): string | null {
+export function getScoreUrl(score: ScoreLike): string | null {
   if (score.id <= 0) return null;
 
   // Lazer score — universal URL without ruleset prefix

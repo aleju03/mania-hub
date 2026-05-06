@@ -12,6 +12,7 @@ import type {
   CountryMapsData,
   LeanHomeScore,
   LeanHomePopoff,
+  LeanTrackerScore,
   SnipeEvent,
 } from "./lib/types";
 
@@ -209,7 +210,7 @@ interface AppState {
   popoffsWindowByCountry: CountryRecord<TopPlaysRange>;
   mapsDataByCountry: CountryRecord<CountryMapsData>;
   mapsDataFetchedAtByCountry: CountryRecord<number>;
-  feedScoresByCountry: CountryRecord<OsuScore[]>;
+  feedScoresByCountry: CountryRecord<LeanTrackerScore[]>;
   feedScoresFetchedAtByCountry: CountryRecord<number>;
   trackerPpGainsByCountry: CountryRecord<Record<number, CachedScoreGain>>;
   snipesByCountry: CountryRecord<SnipeEvent[]>;
@@ -230,7 +231,7 @@ interface AppState {
   setPopoffs: (country: string, popoffs: CachedPopoff[], window: TopPlaysRange) => void;
   setMapsData: (country: string, data: CountryMapsData) => void;
   setSnipes: (country: string, events: SnipeEvent[], scannedAt: number) => void;
-  addFeedScores: (country: string, scores: OsuScore[]) => void;
+  addFeedScores: (country: string, scores: LeanTrackerScore[]) => void;
   markFeedScoresFetched: (country: string) => void;
   setTrackerPpGains: (country: string, gains: Record<number, number>, fetchedAt?: number) => void;
   setTrackedUserIds: (country: string, ids: number[]) => void;

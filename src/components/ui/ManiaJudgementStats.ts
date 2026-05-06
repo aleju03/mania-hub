@@ -1,5 +1,5 @@
 import { getManiaJudgementCounts, type ManiaJudgementCount, type ManiaJudgementLabel } from "#/lib/score";
-import type { OsuScore, OsuScoreStatistics } from "#/lib/types";
+import type { LeanTrackerScore, OsuScore, OsuScoreStatistics } from "#/lib/types";
 
 export const MAX_JUDGEMENT_TEXT_CLASS =
   "inline-block leading-none bg-[linear-gradient(180deg,#9b2cff_20%,#1d65ff_35%,#41d9ff_54%,#4fdc3a_66%,#ffe234_78%,#ff9a1f_90%)] bg-clip-text text-transparent";
@@ -17,11 +17,13 @@ export interface ManiaJudgementStat extends ManiaJudgementCount {
   className: string;
 }
 
-function resolveScoreStatistics(source: OsuScore | OsuScoreStatistics | null | undefined): OsuScoreStatistics | null | undefined {
+type JudgementStatsSource = OsuScore | LeanTrackerScore | OsuScoreStatistics | null | undefined;
+
+function resolveScoreStatistics(source: JudgementStatsSource): OsuScoreStatistics | null | undefined {
   return source && "statistics" in source ? source.statistics : source;
 }
 
-export function getManiaJudgementStats(source: OsuScore | OsuScoreStatistics | null | undefined): ManiaJudgementStat[] {
+export function getManiaJudgementStats(source: JudgementStatsSource): ManiaJudgementStat[] {
   return getManiaJudgementCounts(resolveScoreStatistics(source)).map((judgement) => ({
     ...judgement,
     className: JUDGEMENT_TEXT_CLASS_BY_LABEL[judgement.label],

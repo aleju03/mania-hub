@@ -29,7 +29,7 @@ import { TrackerRowSkeleton } from "../components/ui/LoadingSkeleton";
 import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
 import { TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useSelectedCountry } from "../store";
-import type { OsuScore } from "../lib/types";
+import type { LeanTrackerScore } from "../lib/types";
 import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
@@ -60,7 +60,7 @@ type ScoreFilter = "all" | "ranked" | "passed";
 type GradeFilter = "all" | "SS" | "S" | "A" | "B";
 type FailedFilter = "hide" | "show" | "only";
 const EMPTY_IDS: number[] = [];
-const EMPTY_SCORES: OsuScore[] = [];
+const EMPTY_SCORES: LeanTrackerScore[] = [];
 const EMPTY_SCORE_GAINS: Record<number, { fetchedAt: number; value: number }> = {};
 
 function ScoresPage() {
@@ -76,8 +76,6 @@ function ScoresPage() {
   const markFeedScoresFetched = useAppStore((state) => state.markFeedScoresFetched);
   const setRankings = useAppStore((state) => state.setRankings);
   const setTrackedUserIds = useAppStore((state) => state.setTrackedUserIds);
-  const pollIndex = useAppStore((state) => state.pollIndexByCountry[selectedCountry] ?? 0);
-  const nextPollIndex = useAppStore((state) => state.nextPollIndex);
   const resetPollIndex = useAppStore((state) => state.resetPollIndex);
   const [userIds, setUserIds] = useState<number[]>(trackedUserIds);
   const [loadingPlayers, setLoadingPlayers] = useState<boolean>(trackedUserIds.length === 0 && !rankings);
@@ -239,20 +237,22 @@ function ScoresPage() {
     const requestId = ++pollRequestIdRef.current;
     setPolling(true);
     try {
+      const batchSize = 10;
+      const totalBatches = Math.max(1, Math.ceil(userIds.length / batchSize));
+      const batchIndex = Math.floor(Date.now() / 60_000) % totalBatches;
       const result = await getCountryRecentScores({
-        data: { userIds, batchSize: 10, batchIndex: pollIndex, recentLimit: 20 },
+        data: { userIds, batchSize, batchIndex, recentLimit: 20 },
       });
       if (result.scores.length > 0) addFeedScores(selectedCountry, result.scores);
       if (Object.keys(result.gains).length > 0) setTrackerPpGains(selectedCountry, result.gains);
       else markFeedScoresFetched(selectedCountry);
-      nextPollIndex(selectedCountry);
     } catch { /* silently continue */ } finally {
       if (pollRequestIdRef.current === requestId) {
         pollInFlightRef.current = false;
         setPolling(false);
       }
     }
-  }, [isPolling, userIds, pollIndex, addFeedScores, markFeedScoresFetched, nextPollIndex, selectedCountry, setTrackerPpGains]);
+  }, [isPolling, userIds, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains]);
 
   useEffect(() => {
     if (!isPolling) return;
@@ -296,10 +296,10 @@ function ScoresPage() {
 
   const filtered = useMemo(() => {
     const playerFiltered = selectedPlayerIds.length > 0
-      ? feedScores.filter((score: OsuScore) => selectedPlayerIdSet.has(score.user_id))
+      ? feedScores.filter((score: LeanTrackerScore) => selectedPlayerIdSet.has(score.user_id))
       : feedScores;
 
-    return playerFiltered.filter((score: OsuScore) => {
+    return playerFiltered.filter((score: LeanTrackerScore) => {
       const passed = isDisplayedPassed(score);
       if (failedFilter === "hide" && !passed) return false;
       if (failedFilter === "only" && passed) return false;
@@ -618,7 +618,7 @@ function VirtualScoreList({
   ppGainByScoreId,
 }: {
   listKey: string;
-  scores: OsuScore[];
+  scores: LeanTrackerScore[];
   expandedKey: string | null;
   onToggle: (key: string) => void;
   ppGainByScoreId: Record<number, number>;
@@ -686,7 +686,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   expanded,
   onToggle,
 }: {
-  score: OsuScore;
+  score: LeanTrackerScore;
   scoreKey: string;
   approxPpGain: number | null;
   expanded: boolean;

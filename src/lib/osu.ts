@@ -60,6 +60,7 @@ import type {
   LeanRankingEntry,
   LeanHomeScore,
   LeanHomePopoff,
+  LeanTrackerScore,
   BeatmapsetSearchResponse,
   BeatmapScoresResponse,
   BeatmapScoreLookupStatus,
@@ -183,6 +184,8 @@ const HOME_RECENT_SCORES_CACHE_TTL = 5 * 60 * 1000;
 const HOME_POPOFFS_CACHE_TTL = 10 * 60 * 1000;
 const COUNTRY_POPOFFS_CACHE_TTL = 90 * 1000;
 const COUNTRY_POPOFFS_CACHE_VERSION = 4;
+const TRACKER_RECENT_SCORES_CACHE_TTL = 45 * 1000;
+const TRACKER_RECENT_SCORES_CACHE_VERSION = 2;
 const COUNTRY_TOP_PLAYS_REFRESH_TTL = 3 * 60 * 1000;
 const COUNTRY_TOP_PLAYS_REFRESH_LOCK_TTL = 90 * 1000;
 const COUNTRY_TOP_PLAYS_RETENTION_MS = 31 * 24 * 60 * 60 * 1000;
@@ -679,7 +682,7 @@ async function assertDevMutationAllowed(action: string): Promise<void> {
 
 interface CountryRecentScoresResponse {
   gains: Record<number, number>;
-  scores: OsuScore[];
+  scores: LeanTrackerScore[];
 }
 
 function getScoreRequestParams(
@@ -1242,9 +1245,7 @@ async function fetchCountryRecentScores(
   userIds: number[],
   options?: { batchSize?: number; batchIndex?: number; recentLimit?: number },
 ): Promise<OsuScore[]> {
-  const size = options?.batchSize ?? 5;
-  const start = ((options?.batchIndex ?? 0) * size) % userIds.length;
-  const batch = userIds.slice(start, start + size);
+  const batch = getCountryRecentScoresBatchUserIds(userIds, options);
   const recentLimit = options?.recentLimit ?? 20;
 
   const results = await mapWithConcurrency(
@@ -1264,6 +1265,77 @@ async function fetchCountryRecentScores(
   );
 
   return results.flatMap((scores) => scores);
+}
+
+function getCountryRecentScoresBatchUserIds(
+  userIds: number[],
+  options?: { batchSize?: number; batchIndex?: number },
+): number[] {
+  if (userIds.length === 0) return [];
+  const size = options?.batchSize ?? 5;
+  const start = ((options?.batchIndex ?? 0) * size) % userIds.length;
+  return userIds.slice(start, start + size);
+}
+
+function getTrackerRecentScoresCacheKey(
+  userIds: number[],
+  options?: { batchSize?: number; batchIndex?: number; recentLimit?: number },
+): string {
+  const batchUserIds = getCountryRecentScoresBatchUserIds(userIds, options);
+  return [
+    `tracker-recent-scores:v${TRACKER_RECENT_SCORES_CACHE_VERSION}`,
+    options?.recentLimit ?? 20,
+    batchUserIds.join(","),
+  ].join(":");
+}
+
+function toLeanTrackerScore(score: OsuScore): LeanTrackerScore {
+  return {
+    id: score.id,
+    legacy_score_id: score.legacy_score_id,
+    user_id: score.user_id,
+    accuracy: score.accuracy,
+    beatmap_id: score.beatmap_id,
+    mods: score.mods,
+    score: score.score,
+    total_score: score.total_score,
+    classic_total_score: score.classic_total_score,
+    legacy_total_score: score.legacy_total_score,
+    max_combo: score.max_combo,
+    passed: score.passed,
+    rank: score.rank,
+    statistics: score.statistics,
+    pp: score.pp,
+    beatmap: {
+      id: score.beatmap.id,
+      beatmapset_id: score.beatmap.beatmapset_id,
+      difficulty_rating: score.beatmap.difficulty_rating,
+      mode: score.beatmap.mode,
+      cs: score.beatmap.cs,
+      bpm: score.beatmap.bpm,
+      max_combo: score.beatmap.max_combo,
+      version: score.beatmap.version,
+      url: score.beatmap.url,
+    },
+    beatmapset: {
+      id: score.beatmapset.id,
+      title: score.beatmapset.title,
+      artist: score.beatmapset.artist,
+      covers: score.beatmapset.covers,
+    },
+    user: {
+      id: score.user.id,
+      username: score.user.username,
+      avatar_url: score.user.avatar_url,
+      country_code: score.user.country_code,
+    },
+    created_at: score.created_at,
+    started_at: score.started_at,
+    ended_at: score.ended_at,
+    replay: score.replay,
+    has_replay: score.has_replay,
+    type: score.type,
+  };
 }
 
 async function fetchCountryRecentScoresWithGains(
@@ -1288,7 +1360,7 @@ async function fetchCountryRecentScoresWithGains(
   );
 
   if (rankedTargets.length === 0) {
-    return { scores, gains: {} };
+    return { scores: scores.map(toLeanTrackerScore), gains: {} };
   }
 
   const targetsByUserId = new Map<number, ScorePpGainLookup[]>();
@@ -1314,7 +1386,7 @@ async function fetchCountryRecentScoresWithGains(
 
   const gains: Record<number, number> = {};
   groupedGains.forEach((group) => Object.assign(gains, group));
-  return { scores, gains };
+  return { scores: scores.map(toLeanTrackerScore), gains };
 }
 
 function buildRecentScoresPreview(scores: OsuScore[], limit = 5): OsuScore[] {
@@ -2125,7 +2197,10 @@ export const getCountryRecentScores = createServerFn({ method: "GET" })
   .inputValidator(normalizeCountryRecentScoresPayload)
   .handler(async ({ data }: { data: { userIds: number[]; batchSize?: number; batchIndex?: number; recentLimit?: number } }) => {
     edgeCache(30, 120);
-    return fetchCountryRecentScoresWithGains(data.userIds, data);
+    const cacheKey = getTrackerRecentScoresCacheKey(data.userIds, data);
+    return fetchWithCacheLock(cacheKey, TRACKER_RECENT_SCORES_CACHE_TTL, () =>
+      fetchCountryRecentScoresWithGains(data.userIds, data),
+    );
   });
 
 // ── Maps (aggregated most-played + favourites across CR players) ───────────

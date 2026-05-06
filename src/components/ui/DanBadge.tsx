@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { OsuScore, LeanDanEstimate } from "#/lib/types";
+import type { LeanDanEstimate, LeanTrackerScore, OsuScore } from "#/lib/types";
 import { getDanEstimates } from "#/lib/osu";
 import { getScoreRate } from "#/lib/score";
 
@@ -148,7 +148,7 @@ function DanBadgeInner({ estimate }: { estimate: LeanDanEstimate }) {
   );
 }
 
-export function DanBadge({ score }: { score: OsuScore }) {
+export function DanBadge({ score }: { score: OsuScore | LeanTrackerScore }) {
   const beatmapId = score.beatmap?.id;
   const keyCount = score.beatmap?.cs;
   const starRating = score.beatmap?.difficulty_rating;

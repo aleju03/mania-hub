@@ -247,6 +247,41 @@ export interface LeanHomePopoff {
   score: LeanHomeScore;
 }
 
+export interface LeanTrackerScore {
+  id: number;
+  legacy_score_id?: number | null;
+  user_id: number;
+  accuracy: number;
+  beatmap_id?: number;
+  mods: OsuMod[];
+  score: number;
+  total_score?: number;
+  classic_total_score?: number;
+  legacy_total_score?: number;
+  max_combo: number;
+  passed: boolean;
+  rank: string;
+  statistics: OsuScoreStatistics;
+  pp: number | null;
+  beatmap: Pick<
+    OsuBeatmap,
+    "id" | "beatmapset_id" | "difficulty_rating" | "mode" | "cs" | "bpm" | "max_combo" | "version" | "url"
+  >;
+  beatmapset: Pick<OsuBeatmapset, "id" | "title" | "artist" | "covers">;
+  user: {
+    id: number;
+    username: string;
+    avatar_url: string;
+    country_code: string;
+  };
+  created_at?: string;
+  started_at?: string | null;
+  ended_at?: string;
+  replay?: boolean;
+  has_replay?: boolean;
+  type?: string;
+}
+
 export interface BeatmapsetSearchResponse {
   beatmapsets: OsuBeatmapset[];
   cursor_string: string | null;
