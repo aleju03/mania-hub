@@ -5,6 +5,7 @@ import { LogIn, LogOut, Settings } from "lucide-react";
 import { SearchInput } from "../ui/SearchInput";
 import { Avatar } from "../ui/Avatar";
 import { CountrySelector } from "./CountrySelector";
+import { SettingsDrawer } from "./SettingsDrawer";
 import { ThemePicker } from "./ThemePicker";
 import { useAuth } from "../../lib/auth-context";
 import { clearDevServerCaches } from "../../lib/api";
@@ -93,6 +94,7 @@ export function Nav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const fallbackCountry = useSelectedCountry();
   const setSelectedCountry = useAppStore((state) => state.setSelectedCountry);
   const routeCountry = readCountryFromSearchStr(location.searchStr);
@@ -178,6 +180,7 @@ export function Nav() {
     setMenuOpen(false);
     setAdminMenuOpen(false);
     setUserMenuOpen(false);
+    setSettingsOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -516,20 +519,20 @@ export function Nav() {
             onSelect={(u) => navigate({ to: "/player/$username", params: { username: u.username } })}
           />
           {devMode && (
-            <Link
-              to="/settings"
-              preload="intent"
-              draggable={false}
-              className={`flex h-9 w-9 items-center justify-center rounded-lg transition-colors ${
-                settingsActive
+            <button
+              type="button"
+              onClick={() => setSettingsOpen((open) => !open)}
+              className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg transition-colors ${
+                settingsOpen || settingsActive
                   ? "bg-osu-pink/20 text-white"
                   : "text-osu-pink-light hover:bg-osu-b3/50 hover:text-white"
               }`}
               title="Settings"
               aria-label="Settings"
+              aria-expanded={settingsOpen}
             >
               <Settings className="h-5 w-5" strokeWidth={2.1} />
-            </Link>
+            </button>
           )}
           <ThemePicker />
         </div>
@@ -646,20 +649,21 @@ export function Nav() {
                   </a>
                 ) : null}
                 {devMode && (
-                  <Link
-                    to="/settings"
-                    preload="intent"
-                    onClick={() => setMenuOpen(false)}
-                    draggable={false}
-                    className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-[12px] font-semibold capitalize transition-colors ${
-                      settingsActive
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setSettingsOpen(true);
+                    }}
+                    className={`flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-[12px] font-semibold capitalize transition-colors ${
+                      settingsOpen || settingsActive
                         ? "bg-osu-pink/15 text-white"
                         : "bg-osu-b4/60 text-osu-pink-light hover:bg-osu-b4 hover:text-white"
                     }`}
                   >
                     <Settings className="h-5 w-5" strokeWidth={2.1} />
                     settings
-                  </Link>
+                  </button>
                 )}
               </div>
 
@@ -714,6 +718,8 @@ export function Nav() {
                 </div>
               )}
       </div>
+
+      {devMode && <SettingsDrawer open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
     </header>
   );
 }

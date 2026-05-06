@@ -17,6 +17,7 @@ import { ReplaySkinSettingsModal } from "../components/replay/ReplaySkinSettings
 import { track } from "../lib/posthog";
 import { withTimeout } from "../lib/promise-timeout";
 import {
+  REPLAY_SKIN_SETTINGS_CHANGE_EVENT,
   normalizeReplaySkinSettings,
   readReplaySkinSettings,
   writeReplaySkinSettings,
@@ -27,7 +28,7 @@ import { unpackReplayFrames } from "../lib/replay-frames";
 import { buildKeypressHeatmap } from "../lib/replay-keypress-heatmap";
 import { parseReplayScoreInput } from "../lib/replay-score-input";
 import { getReplayScoreAvailability } from "../lib/replay-score-availability";
-import { DEFAULT_REPLAY_SCROLL_SPEED, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../lib/replay-scroll-speed";
+import { DEFAULT_REPLAY_SCROLL_SPEED, REPLAY_SCROLL_SPEED_CHANGE_EVENT, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../lib/replay-scroll-speed";
 import {
   normalizeReplayBackgroundDim,
   normalizeReplayInputColor,
@@ -703,6 +704,23 @@ function ReplayViewer({
     rendererRef.current?.setSkinSettings(normalized);
     writeReplaySkinSettings(normalized);
   }, []);
+
+  useEffect(() => {
+    const refreshSharedReplaySettings = () => {
+      applyScrollSpeed(readReplayScrollSpeed());
+      setSkinSettings(readReplaySkinSettings());
+    };
+    window.addEventListener("storage", refreshSharedReplaySettings);
+    window.addEventListener(REPLAY_SCROLL_SPEED_CHANGE_EVENT, refreshSharedReplaySettings);
+    window.addEventListener(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
+    window.addEventListener("focus", refreshSharedReplaySettings);
+    return () => {
+      window.removeEventListener("storage", refreshSharedReplaySettings);
+      window.removeEventListener(REPLAY_SCROLL_SPEED_CHANGE_EVENT, refreshSharedReplaySettings);
+      window.removeEventListener(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
+      window.removeEventListener("focus", refreshSharedReplaySettings);
+    };
+  }, [applyScrollSpeed]);
 
   const resizeReplayRenderer = useCallback(() => {
     requestAnimationFrame(() => rendererRef.current?.resize());

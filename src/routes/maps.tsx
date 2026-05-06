@@ -47,8 +47,8 @@ import {
   getPreviewNotes,
   getPreviewScrollVelocities,
 } from "../lib/chart-preview";
-import { readReplayScrollSpeed } from "../lib/replay-scroll-speed";
-import { readReplaySkinSettings } from "../lib/replay-skin";
+import { REPLAY_SCROLL_SPEED_CHANGE_EVENT, readReplayScrollSpeed } from "../lib/replay-scroll-speed";
+import { REPLAY_SKIN_SETTINGS_CHANGE_EVENT, readReplaySkinSettings } from "../lib/replay-skin";
 import type { ReplaySkinSettings } from "../lib/replay-skin";
 import { useAuth } from "../lib/auth-context";
 
@@ -2839,9 +2839,13 @@ function RandomReplayPreview({
       setSkinSettings(readReplaySkinSettings());
     };
     window.addEventListener("storage", refreshSharedReplaySettings);
+    window.addEventListener(REPLAY_SCROLL_SPEED_CHANGE_EVENT, refreshSharedReplaySettings);
+    window.addEventListener(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
     window.addEventListener("focus", refreshSharedReplaySettings);
     return () => {
       window.removeEventListener("storage", refreshSharedReplaySettings);
+      window.removeEventListener(REPLAY_SCROLL_SPEED_CHANGE_EVENT, refreshSharedReplaySettings);
+      window.removeEventListener(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
       window.removeEventListener("focus", refreshSharedReplaySettings);
     };
   }, []);

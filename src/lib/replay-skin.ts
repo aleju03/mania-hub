@@ -418,14 +418,20 @@ export function readReplaySkinSettings(): ReplaySkinSettings {
   }
 }
 
+export const REPLAY_SKIN_SETTINGS_CHANGE_EVENT = "mania-hub:replay-skin-settings-change";
+
 export function writeReplaySkinSettings(settings: ReplaySkinSettings): void {
   if (typeof window === "undefined") return;
 
   try {
+    const normalized = normalizeReplaySkinSettings(settings);
     window.localStorage.setItem(
       REPLAY_SKIN_STORAGE_KEY,
-      JSON.stringify(normalizeReplaySkinSettings(settings)),
+      JSON.stringify(normalized),
     );
+    if (typeof window.dispatchEvent === "function") {
+      window.dispatchEvent(new CustomEvent(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, { detail: normalized }));
+    }
   } catch (error) {
     console.warn("[replay] failed to write replay skin settings", error);
   }
