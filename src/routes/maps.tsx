@@ -1,6 +1,8 @@
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import type { CSSProperties } from "react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   getRankings,
   getCountryMapsFarmed,
@@ -868,6 +870,7 @@ function MapsPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, [rebuildMenuOpen]);
   const [error, setError] = useState<string | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState<MapDetails | null>(null);
   const fetchingMapsRef = useRef(false);
   const tab = mapsSearch.tab;
   const page = mapsSearch.page;
@@ -1815,6 +1818,7 @@ function MapsPage() {
                         key={map.beatmapId}
                         map={map}
                         onPlayerClick={(u) => navigate({ to: "/player/$username", params: { username: u } })}
+                        onOpenDetails={() => setDetailsOpen({ kind: "farmed", map })}
                       />
                     ))
                   : tab === "popular"
@@ -1823,6 +1827,7 @@ function MapsPage() {
                           key={map.beatmapId}
                           map={map}
                           onPlayerClick={(u) => navigate({ to: "/player/$username", params: { username: u } })}
+                          onOpenDetails={() => setDetailsOpen({ kind: "popular", map })}
                         />
                       ))
                     : (paginated as MapsAggregatedFavourite[]).map((fav) => (
@@ -1830,6 +1835,7 @@ function MapsPage() {
                           key={fav.beatmapsetId}
                           fav={fav}
                           onPlayerClick={(u) => navigate({ to: "/player/$username", params: { username: u } })}
+                          onOpenDetails={() => setDetailsOpen({ kind: "favourite", fav })}
                         />
                       ))}
             </div>
@@ -2050,6 +2056,16 @@ function MapsPage() {
           )}
         </div>
       </div>
+
+      <MapDetailsModal
+        details={detailsOpen}
+        country={selectedCountry}
+        onClose={() => setDetailsOpen(null)}
+        onPlayerClick={(u) => {
+          setDetailsOpen(null);
+          navigate({ to: "/player/$username", params: { username: u } });
+        }}
+      />
     </div>
   );
 }
@@ -2535,17 +2551,518 @@ function PlayerAvatars({
   );
 }
 
+// ── Map details modal ──────────────────────────────────────────────────────
+
+type MapDetails =
+  | { kind: "farmed"; map: MapsFarmedEntry }
+  | { kind: "popular"; map: MapsAggregatedBeatmap }
+  | { kind: "favourite"; fav: MapsAggregatedFavourite };
+
+function MapDetailsModal({
+  details,
+  country,
+  onClose,
+  onPlayerClick,
+}: {
+  details: MapDetails | null;
+  country: string;
+  onClose: () => void;
+  onPlayerClick: (username: string) => void;
+}) {
+  useEffect(() => {
+    if (!details) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [details, onClose]);
+
+  if (typeof document === "undefined") return null;
+
+  return createPortal(
+    <AnimatePresence>
+      {details && (
+        <motion.div
+          key="map-details"
+          className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-6"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.12 }}
+        >
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={onClose}
+          />
+          <motion.div
+            className="relative z-10 w-full max-w-[640px] max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-3rem)] overflow-hidden rounded-2xl bg-osu-b4 border border-osu-b3/40 shadow-2xl flex flex-col"
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.97, y: 4 }}
+            transition={{ duration: 0.16, ease: "easeOut" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MapDetailsContent details={details} country={country} onPlayerClick={onPlayerClick} onClose={onClose} />
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
+    document.body,
+  );
+}
+
+const OSU_DIRECT_SVG_PATHS = (
+  <>
+    <path d="m75.1 181.4c-4.7 0-8.8-0.8-12.3-2.3s-6.4-3.7-8.6-6.4c-2.3-2.7-4-5.9-5.2-9.6s-1.7-7.6-1.7-11.9 0.6-8.3 1.7-12c1.2-3.7 2.9-7 5.2-9.7s5.2-4.9 8.6-6.5 7.6-2.4 12.3-2.4 8.8 0.8 12.3 2.4 6.4 3.7 8.8 6.5c2.3 2.7 4 6 5.2 9.7 1.1 3.7 1.7 7.7 1.7 12s-0.6 8.2-1.7 11.9-2.8 6.9-5.2 9.6c-2.3 2.7-5.2 4.9-8.8 6.4-3.4 1.6-7.6 2.3-12.3 2.3zm0-12.1c4.2 0 7.2-1.6 9-4.7s2.7-7.6 2.7-13.4-0.9-10.3-2.7-13.4-4.8-4.7-9-4.7c-4.1 0-7.1 1.6-8.9 4.7s-2.7 7.6-2.7 13.4 0.9 10.3 2.7 13.4c1.8 3.2 4.8 4.7 8.9 4.7zm51.8-14.5c-4.2-1.2-7.5-3-9.8-5.3-2.4-2.4-3.5-5.9-3.5-10.6 0-5.7 2-10.1 6.1-13.4 4.1-3.2 9.6-4.8 16.7-4.8 2.9 0 5.8 0.3 8.6 0.8s5.7 1.3 8.6 2.4c-0.2 1.9-0.5 4-1.1 6.1s-1.3 3.9-2.1 5.5c-1.8-0.7-3.8-1.4-5.9-2-2.2-0.6-4.5-0.8-6.8-0.8-2.5 0-4.5 0.4-5.9 1.2s-2.1 2-2.1 3.8c0 1.6 0.5 2.8 1.5 3.5s2.4 1.3 4.3 1.9l6.4 1.9c2.1 0.6 4 1.3 5.7 2.2s3.1 1.9 4.3 3.2 2.1 2.8 2.8 4.7 1 4.2 1 6.8c0 2.8-0.6 5.3-1.7 7.7-1.2 2.4-2.8 4.5-5 6.2-2.2 1.8-4.9 3.1-8 4.2-3.1 1-6.7 1.5-10.7 1.5-1.8 0-3.4-0.1-4.9-0.2s-2.9-0.3-4.3-0.6-2.7-0.6-4.1-1c-1.3-0.4-2.8-0.9-4.4-1.5 0.1-2 0.5-4.1 1.1-6.1 0.6-2.1 1.3-4.1 2.2-6 2.5 1 4.8 1.7 7 2.2s4.5 0.7 6.9 0.7c1 0 2.2-0.1 3.4-0.3s2.4-0.5 3.4-1 1.9-1.1 2.6-1.9 1.1-1.8 1.1-3.1c0-1.8-0.5-3.1-1.6-3.9s-2.6-1.5-4.5-2.1zm39.3-32.7c2.7-0.4 5.3-0.7 8-0.7 2.6 0 5.3 0.2 8 0.7v30.7c0 3.1 0.2 5.6 0.7 7.6s1.2 3.6 2.2 4.7c1 1.2 2.3 2 3.8 2.5s3.3 0.7 5.3 0.7c2.8 0 5.1-0.3 7-0.8v-45.4c2.7-0.4 5.3-0.7 7.9-0.7s5.3 0.2 8 0.7v55.8c-2.4 0.8-5.6 1.6-9.5 2.4s-8 1.2-12.3 1.2c-3.8 0-7.5-0.3-11-0.9s-6.6-1.9-9.3-3.8-4.8-4.8-6.3-8.5c-1.6-3.7-2.4-8.7-2.4-14.9v-31.3zm65.9 58c-0.4-2.8-0.7-5.5-0.7-8.2s0.2-5.5 0.7-8.3c2.8-0.4 5.5-0.7 8.2-0.7s5.5 0.2 8.3 0.7c0.4 2.8 0.7 5.6 0.7 8.2 0 2.8-0.2 5.5-0.7 8.3-2.8 0.4-5.6 0.7-8.2 0.7-2.8-0.1-5.5-0.3-8.3-0.7zm-0.4-80.7c2.9-0.4 5.8-0.7 8.6-0.7 2.9 0 5.8 0.2 8.8 0.7l-1.1 54.9c-2.6 0.4-5.1 0.7-7.5 0.7-2.5 0-5.1-0.2-7.6-0.7z" />
+    <path d="m150 0c-82.8 0-150 67.2-150 150s67.2 150 150 150 150-67.2 150-150-67.2-150-150-150zm0 285c-74.6 0-135-60.4-135-135s60.4-135 135-135 135 60.4 135 135-60.4 135-135 135z" />
+  </>
+);
+
+function MapDetailsContent({
+  details,
+  country,
+  onPlayerClick,
+  onClose,
+}: {
+  details: MapDetails;
+  country: string;
+  onPlayerClick: (username: string) => void;
+  onClose: () => void;
+}) {
+  const setId =
+    details.kind === "favourite" ? details.fav.beatmapsetId : details.map.beatmapsetId;
+  const cover =
+    details.kind === "favourite" ? details.fav.covers.cover : details.map.covers.cover;
+  const title = details.kind === "favourite" ? details.fav.title : details.map.title;
+  const artist = details.kind === "favourite" ? details.fav.artist : details.map.artist;
+  const creator = details.kind === "favourite" ? details.fav.creator : details.map.creator;
+  const status = details.kind === "favourite" ? details.fav.status : details.map.status;
+  const beatmapsetUrl =
+    details.kind === "favourite"
+      ? `https://osu.ppy.sh/beatmapsets/${setId}`
+      : `https://osu.ppy.sh/beatmapsets/${setId}#mania/${details.map.beatmapId}`;
+  const osuDirectUrl = `osu://dl/${setId}`;
+
+  const dominantMod =
+    details.kind === "farmed" ? getDominantSpeedMod(details.map.players) : null;
+  const dominantModFile =
+    dominantMod === "DT" ? "double-time" : dominantMod === "HT" ? "half-time" : null;
+  const dominantModColor = dominantMod === "DT" ? "#ff6666" : "#b3d944";
+
+  const statusAccent =
+    status === "ranked" || status === "approved"
+      ? { dot: "bg-osu-green", text: "text-osu-green" }
+      : status === "loved"
+        ? { dot: "bg-osu-pink", text: "text-osu-pink" }
+        : { dot: "bg-osu-f1", text: "text-osu-f1" };
+
+  const keyCount =
+    details.kind === "farmed"
+      ? details.map.cs
+      : details.kind === "popular"
+        ? parseKeyCount(details.map.version)
+        : null;
+  const stars = details.kind !== "favourite" ? details.map.difficultyRating : null;
+
+  const adjustedLength =
+    details.kind === "farmed"
+      ? Math.round(
+          dominantMod === "DT"
+            ? details.map.totalLength / 1.5
+            : dominantMod === "HT"
+              ? details.map.totalLength / 0.75
+              : details.map.totalLength,
+        )
+      : details.kind === "popular"
+        ? details.map.totalLength
+        : null;
+  const bpm = details.kind === "farmed" ? details.map.bpm : null;
+
+  const [coverLoaded, setCoverLoaded] = useState(false);
+
+  return (
+    <>
+      <div className="relative shrink-0 overflow-hidden">
+        <div className="relative h-[200px] sm:h-[240px] overflow-hidden bg-osu-b6">
+          <img
+            src={cover}
+            alt=""
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-out ${coverLoaded ? "opacity-100" : "opacity-0"}`}
+            onLoad={() => setCoverLoaded(true)}
+            onError={() => setCoverLoaded(true)}
+          />
+          {/* Saturation/contrast lift on top, body fade on bottom */}
+          <div className="absolute inset-0 bg-gradient-to-t from-osu-b4 via-osu-b4/30 via-50% to-black/15" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/35 via-transparent to-black/20" />
+
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/55 hover:bg-black/80 text-white/90 hover:text-white flex items-center justify-center transition-colors cursor-pointer backdrop-blur-md ring-1 ring-white/10"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+
+          {/* Status pill, top-left */}
+          <div className="absolute top-3 left-4 inline-flex items-center gap-1.5 rounded-full bg-black/55 backdrop-blur-md ring-1 ring-white/10 pl-2 pr-2.5 py-1">
+            <span className={`w-1.5 h-1.5 rounded-full ${statusAccent.dot}`} />
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${statusAccent.text}`}>{status}</span>
+          </div>
+
+          {/* Dominant speed mod watermark */}
+          {dominantModFile && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="relative w-[140px] h-[96px] opacity-25">
+                <img src="/images/badges/mods/mod-icon.svg" alt="" className="absolute inset-0 w-full h-full" style={{ filter: "brightness(0) saturate(100%)" }} />
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    backgroundColor: dominantModColor,
+                    maskImage: "url(/images/badges/mods/mod-icon.svg)",
+                    WebkitMaskImage: "url(/images/badges/mods/mod-icon.svg)",
+                    maskSize: "100%", WebkitMaskSize: "100%",
+                    maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
+                  }}
+                />
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    backgroundColor: `color-mix(in srgb-linear, black, ${dominantModColor} 10%)`,
+                    maskImage: `url(/images/badges/mods/mod-${dominantModFile}.svg)`,
+                    WebkitMaskImage: `url(/images/badges/mods/mod-${dominantModFile}.svg)`,
+                    maskSize: "110%", WebkitMaskSize: "110%",
+                    maskPosition: "center", WebkitMaskPosition: "center",
+                    maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Title block, anchored to bottom */}
+          <div className="absolute bottom-0 left-0 right-0 px-5 pb-4">
+            <div className="text-[11px] text-white/65 truncate" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>
+              {artist}
+            </div>
+            <div className="text-[22px] sm:text-[24px] font-bold text-white leading-[1.15] truncate" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.6)" }}>
+              {title}
+            </div>
+            <div className="mt-1.5 flex items-center gap-2 text-[11px] text-white/70" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>
+              <span>by <span className="text-white/90 font-medium">{creator}</span></span>
+              {details.kind !== "favourite" && (
+                <>
+                  <span className="w-1 h-1 rounded-full bg-white/30" />
+                  <span className="text-white/85 truncate">[{details.map.version}]</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Meta strip — chips floating on the gradient */}
+        <div className="px-5 -mt-1 pb-3 flex flex-wrap items-center gap-1.5 relative z-10">
+          {keyCount && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-osu-b3/70 ring-1 ring-osu-b2/60 text-[10px] font-bold text-white">
+              {keyCount}K
+            </span>
+          )}
+          {stars !== null && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-osu-b3/70 ring-1 ring-osu-b2/60 text-[10px] font-bold text-osu-yellow">
+              <span>★</span>{stars.toFixed(2)}
+            </span>
+          )}
+          {adjustedLength !== null && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-osu-b3/70 ring-1 ring-osu-b2/60 text-[10px] font-medium text-osu-l2">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5 text-osu-f1">
+                <circle cx="12" cy="12" r="9" />
+                <polyline points="12 7 12 12 15 14" />
+              </svg>
+              {formatDuration(adjustedLength)}
+            </span>
+          )}
+          {bpm && bpm > 0 && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-osu-b3/70 ring-1 ring-osu-b2/60 text-[10px] font-medium text-osu-l2">
+              <span className="text-osu-f1">♪</span>
+              {Math.round(dominantMod === "DT" ? bpm * 1.5 : dominantMod === "HT" ? bpm * 0.75 : bpm)}
+              <span className="text-osu-f1 lowercase">bpm</span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="overflow-y-auto flex-1 min-h-0 px-5 pb-4 space-y-4">
+        {details.kind === "farmed" && (
+          <FarmedDetails entry={details.map} onPlayerClick={onPlayerClick} />
+        )}
+        {details.kind === "popular" && (
+          <PopularDetails entry={details.map} onPlayerClick={onPlayerClick} />
+        )}
+        {details.kind === "favourite" && (
+          <FavouriteDetails entry={details.fav} country={country} onPlayerClick={onPlayerClick} />
+        )}
+      </div>
+
+      <div className="shrink-0 border-t border-osu-b3/40 px-4 py-3 flex items-center gap-2 bg-osu-b5/50 backdrop-blur-sm">
+        <a
+          href={osuDirectUrl}
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-osu-pink hover:bg-osu-pink-light text-white text-[12px] font-bold transition-colors cursor-pointer"
+          title="Open in osu! client"
+        >
+          <svg viewBox="0 0 300 300" className="h-[14px] w-[14px]" fill="currentColor" aria-hidden>
+            {OSU_DIRECT_SVG_PATHS}
+          </svg>
+          <span>Open in osu!</span>
+        </a>
+        <a
+          href={beatmapsetUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-osu-b3/40 hover:bg-osu-b3/80 text-osu-l2 hover:text-white text-[12px] font-semibold transition-colors cursor-pointer"
+          title="Open beatmap page on osu!"
+        >
+          <span>Beatmap page</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-3 h-3" aria-hidden>
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            <polyline points="15 3 21 3 21 9" />
+            <line x1="10" y1="14" x2="21" y2="3" />
+          </svg>
+        </a>
+      </div>
+    </>
+  );
+}
+
+function StatItem({
+  label,
+  value,
+  accent = "neutral",
+}: {
+  label: string;
+  value: string;
+  accent?: "pink" | "blue" | "yellow" | "neutral";
+}) {
+  const valueColor =
+    accent === "pink"
+      ? "text-osu-pink"
+      : accent === "blue"
+        ? "text-osu-blue"
+        : accent === "yellow"
+          ? "text-osu-yellow"
+          : "text-white";
+  return (
+    <div className="flex-1 px-3 py-2">
+      <div className={`text-[17px] font-bold leading-none tabular-nums ${valueColor}`} style={{ fontFamily: "Torus" }}>
+        {value}
+      </div>
+      <div className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1 font-semibold">{label}</div>
+    </div>
+  );
+}
+
+function StatRow({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl bg-osu-b5/40 ring-1 ring-osu-b3/30 flex items-stretch divide-x divide-osu-b3/30">
+      {children}
+    </div>
+  );
+}
+
+function SectionHeader({ title, count }: { title: string; count: number }) {
+  return (
+    <div className="flex items-baseline gap-2 mb-1.5 px-1">
+      <h3 className="text-[10px] uppercase tracking-wider font-bold text-osu-f1">{title}</h3>
+      <span className="text-[10px] text-osu-f1/70 tabular-nums">{count}</span>
+    </div>
+  );
+}
+
+function PlayerRow({
+  rank,
+  player,
+  meta,
+  onClick,
+}: {
+  rank: number;
+  player: { id: number; username: string; avatarUrl: string };
+  meta?: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded-lg hover:bg-osu-b3/40 transition-colors cursor-pointer text-left"
+    >
+      <span className="w-5 text-center text-[10px] text-osu-f1 tabular-nums">{rank}</span>
+      <Avatar url={player.avatarUrl} size={26} />
+      <div className="text-[12px] text-osu-l2 group-hover:text-white truncate flex-1 transition-colors">{player.username}</div>
+      {meta}
+    </button>
+  );
+}
+
+function FarmedDetails({
+  entry,
+  onPlayerClick,
+}: {
+  entry: MapsFarmedEntry;
+  onPlayerClick: (u: string) => void;
+}) {
+  const sortedPlayers = useMemo(
+    () => [...entry.players].sort((a, b) => b.pp - a.pp),
+    [entry.players],
+  );
+
+  return (
+    <>
+      <StatRow>
+        <StatItem label="players" value={String(entry.playerCount)} accent="blue" />
+        <StatItem label="avg pp" value={`~${Math.round(entry.avgPp)}`} accent="pink" />
+        <StatItem label="max pp" value={Math.round(entry.maxPp).toString()} accent="pink" />
+      </StatRow>
+
+      <div>
+        <SectionHeader title="Farmed by" count={sortedPlayers.length} />
+        <div className="rounded-xl bg-osu-b5/30 ring-1 ring-osu-b3/30 p-1 max-h-[280px] overflow-y-auto">
+          {sortedPlayers.map((p, i) => (
+            <PlayerRow
+              key={p.id}
+              rank={i + 1}
+              player={p}
+              onClick={() => {
+                if (p.scoreUrl) {
+                  window.open(p.scoreUrl, "_blank", "noopener,noreferrer");
+                  return;
+                }
+                onPlayerClick(p.username);
+              }}
+              meta={
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {p.mods?.length ? (
+                    <div className="flex items-center gap-0.5">
+                      {p.mods.map((mod) => (
+                        <span key={mod} className="inline-flex origin-center scale-[0.42] -mx-1.5">
+                          <ModBadge mod={mod} />
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                  {p.pp ? (
+                    <span className="inline-flex items-baseline gap-0.5 text-osu-pink tabular-nums" style={{ fontFamily: "Torus" }}>
+                      <span className="text-[12px] font-bold">{Math.round(p.pp)}</span>
+                      <span className="text-[8px] text-osu-pink/70 font-bold uppercase">pp</span>
+                    </span>
+                  ) : null}
+                </div>
+              }
+            />
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function PopularDetails({ entry, onPlayerClick }: { entry: MapsAggregatedBeatmap; onPlayerClick: (u: string) => void }) {
+  const sortedPlayers = useMemo(
+    () => [...entry.players].sort((a, b) => b.count - a.count),
+    [entry.players],
+  );
+
+  return (
+    <>
+      <StatRow>
+        <StatItem label="total plays" value={formatNumber(entry.totalPlays)} accent="pink" />
+        <StatItem label="players" value={String(entry.playerCount)} accent="blue" />
+        <StatItem label="global plays" value={formatNumber(entry.globalPlayCount)} />
+      </StatRow>
+
+      <div>
+        <SectionHeader title="Most played by" count={sortedPlayers.length} />
+        <div className="rounded-xl bg-osu-b5/30 ring-1 ring-osu-b3/30 p-1 max-h-[280px] overflow-y-auto">
+          {sortedPlayers.map((p, i) => (
+            <PlayerRow
+              key={p.id}
+              rank={i + 1}
+              player={p}
+              onClick={() => onPlayerClick(p.username)}
+              meta={
+                p.count ? (
+                  <span className="inline-flex items-baseline gap-0.5 text-osu-pink tabular-nums" style={{ fontFamily: "Torus" }}>
+                    <span className="text-[12px] font-bold">{formatNumber(p.count)}</span>
+                    <span className="text-[8px] text-osu-pink/70 font-bold lowercase">x</span>
+                  </span>
+                ) : null
+              }
+            />
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function FavouriteDetails({
+  entry,
+  country,
+  onPlayerClick,
+}: {
+  entry: MapsAggregatedFavourite;
+  country: string;
+  onPlayerClick: (u: string) => void;
+}) {
+  return (
+    <>
+      <StatRow>
+        <StatItem label={`${country.toLowerCase()} favs`} value={String(entry.playerCount)} accent="pink" />
+        <StatItem label="global favs" value={formatNumber(entry.globalFavouriteCount)} />
+        <StatItem label="global plays" value={formatNumber(entry.globalPlayCount)} />
+      </StatRow>
+
+      <div>
+        <SectionHeader title="Favourited by" count={entry.players.length} />
+        <div className="rounded-xl bg-osu-b5/30 ring-1 ring-osu-b3/30 p-1 max-h-[280px] overflow-y-auto">
+          {entry.players.map((p, i) => (
+            <PlayerRow key={p.id} rank={i + 1} player={p} onClick={() => onPlayerClick(p.username)} />
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── Farmed card (from best scores) ─────────────────────────────────────────
 
-function FarmedCard({ map, onPlayerClick }: { map: MapsFarmedEntry; onPlayerClick: (u: string) => void }) {
-  const url = `https://osu.ppy.sh/beatmapsets/${map.beatmapsetId}#mania/${map.beatmapId}`;
+function FarmedCard({
+  map,
+  onPlayerClick,
+  onOpenDetails,
+}: {
+  map: MapsFarmedEntry;
+  onPlayerClick: (u: string) => void;
+  onOpenDetails: () => void;
+}) {
   const dominantMod = getDominantSpeedMod(map.players);
   const dominantModFile = dominantMod === "DT" ? "double-time" : dominantMod === "HT" ? "half-time" : null;
   const dominantModColor = dominantMod === "DT" ? "#ff6666" : "#b3d944";
 
   return (
     <div className="rounded-xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/30 transition-colors">
-      <a href={url} target="_blank" rel="noreferrer" className="block relative rounded-t-xl overflow-hidden">
+      <button
+        type="button"
+        onClick={onOpenDetails}
+        className="block w-full text-left relative rounded-t-xl overflow-hidden cursor-pointer focus:outline-none focus-visible:outline-none"
+      >
         <img src={map.covers.card} alt="" className="w-full h-[90px] object-cover" loading="lazy" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
         {dominantModFile && (
@@ -2588,7 +3105,7 @@ function FarmedCard({ map, onPlayerClick }: { map: MapsFarmedEntry; onPlayerClic
           <div className="text-[12px] font-semibold text-white truncate leading-tight drop-shadow-lg">{map.title}</div>
           <div className="text-[10px] text-white/70 truncate leading-tight drop-shadow-lg">{map.artist}</div>
         </div>
-      </a>
+      </button>
 
       <div className="px-2.5 py-2">
         <div className="flex items-center gap-1.5">
@@ -2638,13 +3155,24 @@ function FarmedCard({ map, onPlayerClick }: { map: MapsFarmedEntry; onPlayerClic
 
 // ── Most Played card (from most_played endpoint) ───────────────────────────
 
-function MostPlayedCard({ map, onPlayerClick }: { map: MapsAggregatedBeatmap; onPlayerClick: (u: string) => void }) {
+function MostPlayedCard({
+  map,
+  onPlayerClick,
+  onOpenDetails,
+}: {
+  map: MapsAggregatedBeatmap;
+  onPlayerClick: (u: string) => void;
+  onOpenDetails: () => void;
+}) {
   const kc = parseKeyCount(map.version);
-  const url = `https://osu.ppy.sh/beatmapsets/${map.beatmapsetId}#mania/${map.beatmapId}`;
 
   return (
     <div className="rounded-xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/30 transition-colors">
-      <a href={url} target="_blank" rel="noreferrer" className="block relative rounded-t-xl overflow-hidden">
+      <button
+        type="button"
+        onClick={onOpenDetails}
+        className="block w-full text-left relative rounded-t-xl overflow-hidden cursor-pointer focus:outline-none focus-visible:outline-none"
+      >
         <img src={map.covers.card} alt="" className="w-full h-[90px] object-cover" loading="lazy" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
         {kc && (
@@ -2657,7 +3185,7 @@ function MostPlayedCard({ map, onPlayerClick }: { map: MapsAggregatedBeatmap; on
           <div className="text-[12px] font-semibold text-white truncate leading-tight drop-shadow-lg">{map.title}</div>
           <div className="text-[10px] text-white/70 truncate leading-tight drop-shadow-lg">{map.artist}</div>
         </div>
-      </a>
+      </button>
 
       <div className="px-2.5 py-2">
         <div className="flex items-center gap-1.5">
@@ -2692,13 +3220,24 @@ function MostPlayedCard({ map, onPlayerClick }: { map: MapsAggregatedBeatmap; on
 
 // ── Favourite card ─────────────────────────────────────────────────────────
 
-function FavouriteCard({ fav, onPlayerClick }: { fav: MapsAggregatedFavourite; onPlayerClick: (u: string) => void }) {
+function FavouriteCard({
+  fav,
+  onPlayerClick,
+  onOpenDetails,
+}: {
+  fav: MapsAggregatedFavourite;
+  onPlayerClick: (u: string) => void;
+  onOpenDetails: () => void;
+}) {
   const selectedCountry = useSelectedCountry();
-  const url = `https://osu.ppy.sh/beatmapsets/${fav.beatmapsetId}`;
 
   return (
     <div className="rounded-xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/30 transition-colors">
-      <a href={url} target="_blank" rel="noreferrer" className="block relative rounded-t-xl overflow-hidden">
+      <button
+        type="button"
+        onClick={onOpenDetails}
+        className="block w-full text-left relative rounded-t-xl overflow-hidden cursor-pointer focus:outline-none focus-visible:outline-none"
+      >
         <img src={fav.covers.card} alt="" className="w-full h-[90px] object-cover" loading="lazy" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
         <span
@@ -2716,7 +3255,7 @@ function FavouriteCard({ fav, onPlayerClick }: { fav: MapsAggregatedFavourite; o
           <div className="text-[12px] font-semibold text-white truncate leading-tight drop-shadow-lg">{fav.title}</div>
           <div className="text-[10px] text-white/70 truncate leading-tight drop-shadow-lg">{fav.artist}</div>
         </div>
-      </a>
+      </button>
 
       <div className="px-2.5 py-2">
         <div className="text-[10px] text-osu-f1 truncate">mapped by {fav.creator}</div>
