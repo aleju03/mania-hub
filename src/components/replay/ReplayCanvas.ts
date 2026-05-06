@@ -48,6 +48,7 @@ const MANIA_REFERENCE_HEIGHT = 768;
 const MANIA_DEFAULT_HIT_POSITION = (480 - 402) * 1.6;
 const MANIA_HIT_TARGET_POSITION = REPLAY_SKIN_DEFAULT_HIT_POSITION;
 const MANIA_BAR_NOTE_HEIGHT_RATIO = 0.22;
+const BACKGROUND_OVERSCAN_SCALE = 1.02;
 
 type ArrowDirection = "left" | "right" | "up" | "down";
 
@@ -2374,14 +2375,14 @@ export class ManiaReplayRenderer {
       const imgAspect = sprite.texture.width / sprite.texture.height;
       const canvasAspect = layout.w / layout.h;
       if (imgAspect > canvasAspect) {
-        sprite.height = layout.h;
-        sprite.width = layout.h * imgAspect;
+        sprite.height = layout.h * BACKGROUND_OVERSCAN_SCALE;
+        sprite.width = layout.h * imgAspect * BACKGROUND_OVERSCAN_SCALE;
         sprite.x = (layout.w - sprite.width) / 2;
-        sprite.y = 0;
+        sprite.y = (layout.h - sprite.height) / 2;
       } else {
-        sprite.width = layout.w;
-        sprite.height = layout.w / imgAspect;
-        sprite.x = 0;
+        sprite.width = layout.w * BACKGROUND_OVERSCAN_SCALE;
+        sprite.height = (layout.w / imgAspect) * BACKGROUND_OVERSCAN_SCALE;
+        sprite.x = (layout.w - sprite.width) / 2;
         sprite.y = (layout.h - sprite.height) / 2;
       }
     }

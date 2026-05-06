@@ -1386,7 +1386,7 @@ function ReplayViewer({
               key={bgSrc}
               src={bgSrc}
               alt=""
-              className="absolute inset-0 h-full w-full object-cover pointer-events-none select-none"
+              className="absolute inset-0 h-full w-full scale-[1.02] object-cover pointer-events-none select-none"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
