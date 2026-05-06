@@ -143,6 +143,7 @@ export function ReplaySkinSettingsModal({
   const [selectedColumns, setSelectedColumns] = useState<number[]>([]);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("tap");
   const profile = getReplaySkinProfile(draft, selectedKeyCount);
+  const isCompactWindow = (windowRect?.w ?? WINDOW_DEFAULT_WIDTH) < WINDOW_COMPACT_WIDTH;
   const [columnWidthInput, setColumnWidthInput] = useState(() => String(profile.columnWidth));
   const [columnSpacingInput, setColumnSpacingInput] = useState(() => String(profile.columnSpacing));
   const [noteHeightScaleInput, setNoteHeightScaleInput] = useState(() => String(profile.noteHeightScale));
@@ -707,8 +708,8 @@ export function ReplaySkinSettingsModal({
           </button>
         </div>
 
-        <div className="grid min-h-0 flex-1 md:grid-cols-[minmax(0,1fr)_300px]">
-          <div className="space-y-4 overflow-y-auto p-5">
+        <div className={`grid min-h-0 flex-1 ${isCompactWindow ? "grid-cols-1 overflow-y-auto" : "grid-cols-[minmax(0,1fr)_300px]"}`}>
+          <div className={`space-y-4 ${isCompactWindow ? "overflow-visible p-4 sm:p-5" : "overflow-y-auto p-5"}`}>
             <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_110px]">
               <div className="min-w-0 space-y-2">
                 <FancySelect
@@ -949,7 +950,7 @@ export function ReplaySkinSettingsModal({
             )}
           </div>
 
-          <div className="border-l border-osu-b3/50 overflow-y-auto p-5">
+          <div className={isCompactWindow ? "border-t border-osu-b3/50 p-4 sm:p-5" : "overflow-y-auto border-l border-osu-b3/50 p-5"}>
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="text-sm font-semibold text-white">Live preview</span>
               <div className="grid grid-cols-2 rounded-md bg-osu-b5/70 p-0.5 text-[10px] font-bold uppercase tracking-wider">
@@ -2131,9 +2132,10 @@ const POPOVER_POSITION_STORAGE_PREFIX = "mania-hub-replay-popover-pos:";
 const WINDOW_RECT_STORAGE_KEY = "mania-hub-replay-settings-window-v1";
 const WINDOW_DEFAULT_WIDTH = 720;
 const WINDOW_DEFAULT_HEIGHT = 640;
-const WINDOW_MIN_WIDTH = 460;
+const WINDOW_MIN_WIDTH = 320;
 const WINDOW_MIN_HEIGHT = 380;
 const WINDOW_VIEWPORT_MARGIN = 8;
+const WINDOW_COMPACT_WIDTH = 640;
 
 type WindowRect = { x: number; y: number; w: number; h: number };
 type ResizeDirection = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
@@ -2164,18 +2166,22 @@ function writeStoredWindowRect(rect: WindowRect): void {
 
 function clampWindowRect(rect: WindowRect, viewportW: number, viewportH: number): WindowRect {
   const margin = WINDOW_VIEWPORT_MARGIN;
-  const maxW = Math.max(WINDOW_MIN_WIDTH, viewportW - margin * 2);
-  const maxH = Math.max(WINDOW_MIN_HEIGHT, viewportH - margin * 2);
-  const w = Math.max(WINDOW_MIN_WIDTH, Math.min(rect.w, maxW));
-  const h = Math.max(WINDOW_MIN_HEIGHT, Math.min(rect.h, maxH));
+  const maxW = Math.max(1, viewportW - margin * 2);
+  const maxH = Math.max(1, viewportH - margin * 2);
+  const minW = Math.min(WINDOW_MIN_WIDTH, maxW);
+  const minH = Math.min(WINDOW_MIN_HEIGHT, maxH);
+  const w = Math.max(minW, Math.min(rect.w, maxW));
+  const h = Math.max(minH, Math.min(rect.h, maxH));
   const x = Math.max(margin, Math.min(rect.x, Math.max(margin, viewportW - w - margin)));
   const y = Math.max(margin, Math.min(rect.y, Math.max(margin, viewportH - h - margin)));
   return { x, y, w, h };
 }
 
 function defaultWindowRect(viewportW: number, viewportH: number): WindowRect {
-  const w = Math.min(WINDOW_DEFAULT_WIDTH, Math.max(WINDOW_MIN_WIDTH, viewportW - WINDOW_VIEWPORT_MARGIN * 2));
-  const h = Math.min(WINDOW_DEFAULT_HEIGHT, Math.max(WINDOW_MIN_HEIGHT, viewportH - WINDOW_VIEWPORT_MARGIN * 2));
+  const maxW = Math.max(1, viewportW - WINDOW_VIEWPORT_MARGIN * 2);
+  const maxH = Math.max(1, viewportH - WINDOW_VIEWPORT_MARGIN * 2);
+  const w = Math.min(WINDOW_DEFAULT_WIDTH, maxW);
+  const h = Math.min(WINDOW_DEFAULT_HEIGHT, maxH);
   const x = Math.max(WINDOW_VIEWPORT_MARGIN, Math.round((viewportW - w) / 2));
   const y = Math.max(WINDOW_VIEWPORT_MARGIN, Math.round((viewportH - h) / 2));
   return { x, y, w, h };
