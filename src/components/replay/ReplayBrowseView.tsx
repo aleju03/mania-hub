@@ -351,7 +351,7 @@ function PlayerScoreSections({
           </span>
         </div>
 
-        <div className={`replay-score-scroll overflow-x-hidden transition-[max-height] duration-150 ease-out ${isExpanded ? `${listClassName} overflow-y-auto overscroll-contain` : "max-h-[276px] [overflow-y:clip]"}`}>
+        <div className={`replay-score-scroll overflow-x-hidden transition-[max-height] duration-150 ease-out ${isExpanded ? `${listClassName} overflow-y-auto overscroll-contain` : hasMore ? "max-h-[276px] [overflow-y:clip]" : "max-h-none overflow-y-visible"}`}>
           {section.scores.map((score) => (
             <button
               key={score.id}
