@@ -597,6 +597,69 @@ function setAudioPreservesPitch(audio: HTMLAudioElement, preservesPitch: boolean
   pitchAudio.webkitPreservesPitch = preservesPitch;
 }
 
+function resetAudioElement(audio: HTMLAudioElement | null, unload = false): void {
+  if (!audio) return;
+  audio.pause();
+  audio.playbackRate = 1;
+  setAudioPreservesPitch(audio, true);
+  try {
+    audio.currentTime = 0;
+  } catch {
+    // Some mobile browsers reject seeks while the element is still choosing a source.
+  }
+  if (unload) {
+    audio.removeAttribute("src");
+    try {
+      audio.load();
+    } catch {
+      // Best-effort cleanup; pausing above is the important part.
+    }
+  }
+}
+
+function waitForAudioMetadata(audio: HTMLAudioElement): Promise<void> {
+  if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) return Promise.resolve();
+  return new Promise((resolve) => {
+    let timeoutId: number | null = null;
+    const done = () => {
+      if (timeoutId) window.clearTimeout(timeoutId);
+      audio.removeEventListener("loadedmetadata", done);
+      audio.removeEventListener("error", done);
+      resolve();
+    };
+    audio.addEventListener("loadedmetadata", done);
+    audio.addEventListener("error", done);
+    timeoutId = window.setTimeout(done, 1500);
+  });
+}
+
+async function seekAudioElement(audio: HTMLAudioElement, seconds: number): Promise<void> {
+  const targetSeconds = Math.max(0, seconds);
+  await waitForAudioMetadata(audio);
+  try {
+    audio.currentTime = targetSeconds;
+  } catch {
+    return;
+  }
+  if (Math.abs(audio.currentTime - targetSeconds) <= 0.25) return;
+  await new Promise<void>((resolve) => {
+    let timeoutId: number | null = null;
+    const done = () => {
+      if (timeoutId) window.clearTimeout(timeoutId);
+      audio.removeEventListener("seeked", done);
+      audio.removeEventListener("canplay", done);
+      audio.removeEventListener("timeupdate", done);
+      audio.removeEventListener("error", done);
+      resolve();
+    };
+    audio.addEventListener("seeked", done);
+    audio.addEventListener("canplay", done);
+    audio.addEventListener("timeupdate", done);
+    audio.addEventListener("error", done);
+    timeoutId = window.setTimeout(done, 1000);
+  });
+}
+
 function matchesKeyFilter(kc: number | null, filter: KeyFilter): boolean {
   if (filter === "all") return true;
   if (filter === "4k") return kc === 4;
@@ -2974,6 +3037,9 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const replayAudioRef = useRef<HTMLAudioElement | null>(null);
   const replayAudioStartSecondsRef = useRef(0);
   const replayAudioStartPendingRef = useRef(false);
+  const previewPlaybackTokenRef = useRef(0);
+  const replayPlaybackTokenRef = useRef(0);
+  const isRandomCardMountedRef = useRef(true);
   const replayPreviewEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestedAudioModeRef = useRef<"audio" | "replay" | null>(null);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
@@ -3030,6 +3096,10 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const [coverBroken, setCoverBroken] = useState(false);
   const [coverLoaded, setCoverLoaded] = useState(false);
   useEffect(() => {
+    previewPlaybackTokenRef.current += 1;
+    replayPlaybackTokenRef.current += 1;
+    resetAudioElement(audioRef.current);
+    resetAudioElement(replayAudioRef.current);
     setCoverBroken(false);
     setCoverLoaded(false);
     setSelectedBeatmapId(getDefaultRandomBeatmapId(maniaBeatmaps));
@@ -3039,6 +3109,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     setIsReplayPreviewReady(false);
     setReplayAudioLoading(false);
     setReplayAudioSizeBytes(null);
+    setIsPreviewPlaying(false);
     setCurrentTime(0);
     setPreviewBeatmap(null);
     setReplayChartStartMs(0);
@@ -3123,6 +3194,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   }, [isPreviewPlaying]);
 
   const pausePreviewAudio = useCallback((reset = false) => {
+    previewPlaybackTokenRef.current += 1;
     const audio = audioRef.current;
     if (audio) {
       const pausedAt = audio.currentTime;
@@ -3130,7 +3202,11 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       audio.playbackRate = 1;
       setAudioPreservesPitch(audio, true);
       if (reset) {
-        audio.currentTime = 0;
+        try {
+          audio.currentTime = 0;
+        } catch {
+          // Ignore seek failures while the source is changing.
+        }
         setCurrentTime(0);
       } else {
         setCurrentTime(pausedAt);
@@ -3150,11 +3226,24 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     }
   }, []);
 
-  useEffect(() => () => clearReplayPreviewEndTimer(), [clearReplayPreviewEndTimer]);
+  useEffect(() => {
+    isRandomCardMountedRef.current = true;
+    return () => {
+      isRandomCardMountedRef.current = false;
+      previewPlaybackTokenRef.current += 1;
+      replayPlaybackTokenRef.current += 1;
+      replayAudioStartPendingRef.current = false;
+      requestedAudioModeRef.current = null;
+      clearReplayPreviewEndTimer();
+      resetAudioElement(audioRef.current, true);
+      resetAudioElement(replayAudioRef.current, true);
+    };
+  }, [clearReplayPreviewEndTimer]);
 
   const finishReplayPreview = useCallback(() => {
     if (replayPreviewEndTimerRef.current) return;
     const audio = replayAudioRef.current;
+    replayPlaybackTokenRef.current += 1;
     replayAudioStartPendingRef.current = false;
     replayAudioStartSecondsRef.current = 0;
     requestedAudioModeRef.current = null;
@@ -3162,10 +3251,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     setReplayAudioLoading(false);
     setIsReplayPreviewEnding(true);
     if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
-      audio.playbackRate = 1;
-      setAudioPreservesPitch(audio, true);
+      resetAudioElement(audio);
     }
     replayPreviewEndTimerRef.current = setTimeout(() => {
       replayPreviewEndTimerRef.current = null;
@@ -3179,6 +3265,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
 
   const resetReplayPreview = useCallback(() => {
     clearReplayPreviewEndTimer();
+    replayPlaybackTokenRef.current += 1;
     replayAudioStartPendingRef.current = false;
     replayAudioStartSecondsRef.current = 0;
     setReplayPreviewRequested(false);
@@ -3192,15 +3279,9 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     setReplayChartTimeScale(1);
     setReplayAudioMode("set-preview");
     setReplayPreviewError(null);
+    resetAudioElement(replayAudioRef.current);
     if (requestedAudioModeRef.current === "replay") {
-      const audio = replayAudioRef.current;
       requestedAudioModeRef.current = null;
-      if (audio) {
-        audio.pause();
-        audio.currentTime = 0;
-        audio.playbackRate = 1;
-        setAudioPreservesPitch(audio, true);
-      }
     }
   }, [clearReplayPreviewEndTimer]);
 
@@ -3210,35 +3291,64 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     if (!audio) return;
 
     if (isPreviewPlaying) {
+      previewPlaybackTokenRef.current += 1;
       setCurrentTime(audio.currentTime);
       audio.pause();
       return;
     }
 
     resetReplayPreview();
+    const token = previewPlaybackTokenRef.current + 1;
+    previewPlaybackTokenRef.current = token;
     requestedAudioModeRef.current = "audio";
     setPreviewError(null);
     try {
       const resumeTime = currentTime > 0 && (!duration || currentTime < Math.min(duration, RANDOM_REPLAY_PREVIEW_MS / 1000))
         ? currentTime
         : 0;
-      audio.currentTime = resumeTime;
+      try {
+        audio.currentTime = resumeTime;
+      } catch {
+        // Let the browser start from its current buffered position if seeking is not ready.
+      }
       setCurrentTime(resumeTime);
       audio.playbackRate = 1;
       setAudioPreservesPitch(audio, true);
       await audio.play();
+      if (
+        !isRandomCardMountedRef.current ||
+        previewPlaybackTokenRef.current !== token ||
+        requestedAudioModeRef.current !== "audio" ||
+        audioRef.current !== audio
+      ) {
+        resetAudioElement(audio);
+      }
     } catch {
-      setPreviewError("Couldn't play preview");
-      setIsPreviewPlaying(false);
+      if (
+        isRandomCardMountedRef.current &&
+        previewPlaybackTokenRef.current === token &&
+        requestedAudioModeRef.current === "audio" &&
+        audioRef.current === audio
+      ) {
+        setPreviewError("Couldn't play preview");
+        setIsPreviewPlaying(false);
+      }
     }
   }, [currentTime, duration, isPreviewPlaying, previewUrl, resetReplayPreview]);
 
-  const startReplayPreviewAudio = useCallback(async () => {
+  const startReplayPreviewAudio = useCallback(async (token: number) => {
     const audio = replayAudioRef.current;
+    const isCurrentRequest = () =>
+      isRandomCardMountedRef.current &&
+      replayPlaybackTokenRef.current === token &&
+      requestedAudioModeRef.current === "replay" &&
+      replayAudioRef.current === audio;
     if (!replayAudioUrl) {
-      replayAudioStartPendingRef.current = false;
-      setReplayAudioLoading(false);
-      setReplayPreviewError("Couldn't find chart preview audio");
+      if (replayPlaybackTokenRef.current === token) {
+        replayAudioStartPendingRef.current = false;
+        setReplayAudioLoading(false);
+        setReplayPreviewError("Couldn't find chart preview audio");
+      }
       return;
     }
     if (!audio) return;
@@ -3248,7 +3358,11 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     setPreviewError(null);
     replayAudioStartSecondsRef.current = replayPreviewStartSeconds;
     audio.pause();
-    audio.currentTime = replayPreviewStartSeconds;
+    try {
+      audio.currentTime = replayPreviewStartSeconds;
+    } catch {
+      // The metadata may not be ready yet on mobile; playback will still be clipped.
+    }
     audio.volume = volume;
     audio.playbackRate = replayAudioPlaybackRate;
     setAudioPreservesPitch(audio, replayAudioMode !== "set-preview");
@@ -3257,6 +3371,10 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       if (replayAudioMode === "selected-file" && replayAudioSizeBytes == null) {
         try {
           const sizeResponse = await fetch(replayAudioUrl, { method: "HEAD" });
+          if (!isCurrentRequest()) {
+            resetAudioElement(audio);
+            return;
+          }
           const sizeRaw = sizeResponse.headers.get("x-audio-size-bytes") ?? sizeResponse.headers.get("content-length");
           const size = sizeRaw ? Number(sizeRaw) : NaN;
           if (Number.isFinite(size) && size > 0) setReplayAudioSizeBytes(size);
@@ -3264,11 +3382,31 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
           // Keep showing the generic loading label if size probing fails.
         }
       }
+      if (!isCurrentRequest()) {
+        resetAudioElement(audio);
+        return;
+      }
+      await seekAudioElement(audio, replayPreviewStartSeconds);
+      if (!isCurrentRequest()) {
+        resetAudioElement(audio);
+        return;
+      }
+      if (replayPreviewStartSeconds > 0.25 && Math.abs(audio.currentTime - replayPreviewStartSeconds) > 1) {
+        throw new Error("Chart preview audio seek failed");
+      }
       await audio.play();
+      if (!isCurrentRequest()) {
+        resetAudioElement(audio);
+        return;
+      }
+      setIsReplayPreviewPlaying(true);
       setReplayAudioLoading(false);
     } catch {
-      setReplayAudioLoading(false);
-      setPreviewError("Couldn't play preview audio");
+      if (isCurrentRequest()) {
+        setReplayAudioLoading(false);
+        setPreviewError("Couldn't play preview audio");
+        setIsReplayPreviewPlaying(false);
+      }
     }
   }, [pausePreviewAudio, replayAudioMode, replayAudioPlaybackRate, replayAudioSizeBytes, replayAudioUrl, replayPreviewStartSeconds, volume]);
 
@@ -3292,12 +3430,19 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const startReplayPreview = useCallback(() => {
     const audio = replayAudioRef.current;
     clearReplayPreviewEndTimer();
+    const token = replayPlaybackTokenRef.current + 1;
+    replayPlaybackTokenRef.current = token;
     requestedAudioModeRef.current = "replay";
+    setIsReplayPreviewPlaying(false);
     setIsReplayPreviewEnding(false);
     pausePreviewAudio(false);
     if (audio) {
       audio.pause();
-      audio.currentTime = replayPreviewStartSeconds;
+      try {
+        audio.currentTime = replayPreviewStartSeconds;
+      } catch {
+        // The audio element may still be resolving its source on mobile.
+      }
       audio.playbackRate = replayAudioPlaybackRate;
       setAudioPreservesPitch(audio, replayAudioMode !== "set-preview");
     }
@@ -3305,15 +3450,13 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     setReplayPreviewRequested(true);
     replayAudioStartPendingRef.current = true;
     if (previewBeatmap && isReplayPreviewReady) {
-      setIsReplayPreviewPlaying(true);
-      void startReplayPreviewAudio();
+      void startReplayPreviewAudio(token);
     }
   }, [clearReplayPreviewEndTimer, isReplayPreviewReady, pausePreviewAudio, previewBeatmap, replayAudioMode, replayAudioPlaybackRate, replayPreviewStartSeconds, startReplayPreviewAudio]);
 
   useEffect(() => {
     if (replayPreviewRequested && previewBeatmap && isReplayPreviewReady && !replayPreviewLoading && replayAudioStartPendingRef.current) {
-      setIsReplayPreviewPlaying(true);
-      void startReplayPreviewAudio();
+      void startReplayPreviewAudio(replayPlaybackTokenRef.current);
     }
   }, [isReplayPreviewReady, previewBeatmap, replayPreviewLoading, replayPreviewRequested, startReplayPreviewAudio]);
 
@@ -3482,7 +3625,11 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
                   if (!audio || !displayDuration || requestedAudioModeRef.current !== "audio") return;
                   const rect = e.currentTarget.getBoundingClientRect();
                   const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-                  audio.currentTime = ratio * displayDuration;
+                  try {
+                    audio.currentTime = ratio * displayDuration;
+                  } catch {
+                    return;
+                  }
                   setCurrentTime(audio.currentTime);
                 }}
                 className="flex-1 h-1 bg-osu-b3/60 rounded-full cursor-pointer relative group"
@@ -3543,7 +3690,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
                 if (requestedAudioModeRef.current !== "audio") return;
                 const maxSeconds = RANDOM_REPLAY_PREVIEW_MS / 1000;
                 setCurrentTime(Math.min(audio.currentTime, maxSeconds));
-                if (audio.currentTime >= maxSeconds && audio.duration > maxSeconds + 0.5) {
+                if (audio.currentTime >= maxSeconds) {
                   stopPreview();
                 }
               }}
@@ -3569,7 +3716,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
                 onTimeUpdate={(e) => {
                   const audio = e.currentTarget;
                   const maxSeconds = replayAudioStartSecondsRef.current + ((RANDOM_REPLAY_PREVIEW_MS / 1000) * replayAudioPlaybackRate);
-                  if (audio.currentTime >= maxSeconds && audio.duration > maxSeconds + 0.5) {
+                  if (audio.currentTime >= maxSeconds) {
                     finishReplayPreview();
                   }
                 }}
