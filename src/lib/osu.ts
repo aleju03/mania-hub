@@ -1,7 +1,6 @@
-import { createServerFn } from "@tanstack/react-start";
+import { createServerFn, createServerOnlyFn } from "@tanstack/react-start";
 import { setResponseHeader } from "@tanstack/react-start/server";
 import { requireAdminAccess } from "./auth";
-import { sanitizeProfilePageHtml } from "./profile-page";
 import {
   beatmapScoreLookupPartialKey,
   beatmapScoreLookupStatusKey,
@@ -85,6 +84,14 @@ import type {
 import { parseManiaBeatmap } from "./beatmap-parser";
 import { estimateDan } from "./dan-estimator";
 import { isSupportedCountryCode, normalizeCountryCode } from "./country";
+
+const sanitizeServerProfilePageHtml = createServerOnlyFn(
+  async (html: string | null | undefined): Promise<string | null> => {
+    if (!html) return null;
+    const { sanitizeProfilePageHtml } = await import("./profile-page");
+    return sanitizeProfilePageHtml(html);
+  },
+);
 
 // Raw shape returned by the osu! API's /rankings endpoint. We never expose
 // this off of the server — `getRankings` trims each user down to
@@ -715,7 +722,7 @@ export async function getCachedUser(key: string): Promise<OsuUser> {
       caller: "getUser",
     });
     if (user.page) {
-      user.page.html = sanitizeProfilePageHtml(user.page.html);
+      user.page.html = await sanitizeServerProfilePageHtml(user.page.html);
     }
     void Promise.allSettled([
       setPersistentCache(getUserCacheKey(user.username), user, USER_CACHE_TTL),
