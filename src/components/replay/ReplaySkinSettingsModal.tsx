@@ -166,6 +166,7 @@ export function ReplaySkinSettingsModal({
   const [activeTab, setActiveTab] = useState<"style" | "layout">("style");
   const [columnEditorOpen, setColumnEditorOpen] = useState(false);
   const [overrideKind, setOverrideKind] = useState<OverrideKind>("tap");
+  const [barColorOverrideBackup, setBarColorOverrideBackup] = useState<string[]>([]);
   const [selectedColumns, setSelectedColumns] = useState<number[]>([]);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("tap");
   const profile = getReplaySkinProfile(draft, selectedKeyCount);
@@ -257,6 +258,12 @@ export function ReplaySkinSettingsModal({
     const match = presets.find((preset) => replaySkinSettingsEqual(preset.settings, draft));
     if (match) setSelectedPresetId(match.id);
   }, [draft, presets]);
+
+  useEffect(() => {
+    if (draft.style !== "bars") return;
+    setActiveColor(null);
+    setOverrideKind((current) => (current === "lnHead" ? "tap" : current));
+  }, [draft.style]);
 
   const handleHeaderPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) return;
@@ -394,6 +401,21 @@ export function ReplaySkinSettingsModal({
         version: 2,
       });
     });
+  };
+
+  const disableBarColorOverrides = () => {
+    setBarColorOverrideBackup(profile.tapColors);
+    updateProfile({ tapColors: [] });
+    setColumnEditorOpen(false);
+  };
+
+  const enableBarColorOverrides = () => {
+    if (barColorOverrideBackup.some((color) => color)) {
+      updateProfile({ tapColors: barColorOverrideBackup });
+    }
+    setOverrideKind("tap");
+    setPreviewMode("tap");
+    setColumnEditorOpen(true);
   };
 
   const updateLnBodyColor = (value: string) => {
@@ -567,12 +589,25 @@ export function ReplaySkinSettingsModal({
   };
 
   const columns = Array.from({ length: selectedKeyCount }, (_, index) => index);
+  const showBaseColorControls = draft.style !== "bars";
+  const showLnHeadColorControls = draft.style !== "bars";
+  const columnColorKinds: OverrideKind[] = showLnHeadColorControls ? ["tap", "lnHead"] : ["tap"];
+  const hasBarColorOverrides = draft.style === "bars" && profile.tapColors.some((color) => color);
+  const barColorSwitchChecked = draft.style === "bars" ? hasBarColorOverrides || columnEditorOpen : columnEditorOpen;
   const overrideColors = overrideKind === "tap" ? profile.tapColors : profile.lnHeadColors;
   const overrideBaseColor = overrideKind === "tap" ? profile.tapColor : profile.lnHeadColor;
+  const defaultBarColors = fallbackPreviewBarColors(selectedKeyCount);
+  const overrideBaseColorForColumn = (col: number) => (
+    draft.style === "bars" && overrideKind === "tap"
+      ? defaultBarColors[col] ?? profile.tapColor
+      : overrideBaseColor
+  );
   const primarySelected = selectedColumns[0] ?? 0;
-  const selectedValues = selectedColumns.map((col) => overrideColors[col] || overrideBaseColor);
+  const selectedValues = selectedColumns.map((col) => overrideColors[col] || overrideBaseColorForColumn(col));
   const allSelectedSameValue = selectedValues.every((value) => value === selectedValues[0]);
-  const overrideValue = allSelectedSameValue ? selectedValues[0] ?? overrideBaseColor : overrideColors[primarySelected] || overrideBaseColor;
+  const overrideValue = allSelectedSameValue
+    ? selectedValues[0] ?? overrideBaseColorForColumn(primarySelected)
+    : overrideColors[primarySelected] || overrideBaseColorForColumn(primarySelected);
   const anySelectedHasOverride = selectedColumns.some((col) => !!overrideColors[col]);
 
   const commitColumnWidthInput = () => {
@@ -854,35 +889,50 @@ export function ReplaySkinSettingsModal({
                   </div>
                 </section>
 
-                <section className="space-y-2 pt-2">
-                  <ReplaySkinColorRow
-                    label="Note color"
-                    title="Base tap color used for any column without a per-column override."
-                    value={profile.tapColor}
-                    selected={activeColor === "tap"}
-                    onOpen={() => setActiveColor((current) => (current === "tap" ? null : "tap"))}
-                  />
-                  <ReplaySkinColorRow
-                    label="LN Head color"
-                    title="Base LN head color used for any column without a per-column override."
-                    value={profile.lnHeadColor}
-                    selected={activeColor === "lnHead"}
-                    onOpen={() => setActiveColor((current) => (current === "lnHead" ? null : "lnHead"))}
-                  />
-                  <ReplaySkinColorRow
-                    label="LN Body color"
-                    title="Color of the LN body. Always global (no per-column override)."
-                    value={draft.lnBodyColor}
-                    selected={activeColor === "lnBody"}
-                    onOpen={() => setActiveColor((current) => (current === "lnBody" ? null : "lnBody"))}
-                  />
-                </section>
+                {showBaseColorControls ? (
+                  <section className="space-y-2 pt-2">
+                    <ReplaySkinColorRow
+                      label="Note color"
+                      title="Base tap color used for any column without a per-column override."
+                      value={profile.tapColor}
+                      selected={activeColor === "tap"}
+                      onOpen={() => setActiveColor((current) => (current === "tap" ? null : "tap"))}
+                    />
+                    <ReplaySkinColorRow
+                      label="LN Head color"
+                      title="Base LN head color used for any column without a per-column override."
+                      value={profile.lnHeadColor}
+                      selected={activeColor === "lnHead"}
+                      onOpen={() => setActiveColor((current) => (current === "lnHead" ? null : "lnHead"))}
+                    />
+                    <ReplaySkinColorRow
+                      label="LN Body color"
+                      title="Color of the LN body. Always global (no per-column override)."
+                      value={draft.lnBodyColor}
+                      selected={activeColor === "lnBody"}
+                      onOpen={() => setActiveColor((current) => (current === "lnBody" ? null : "lnBody"))}
+                    />
+                  </section>
+                ) : null}
 
                 <section className="space-y-3 pt-1">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold text-osu-l1">Per-column colors</span>
+                    <span className="text-sm font-semibold text-osu-l1">{draft.style === "bars" ? "Bar colors" : "Per-column colors"}</span>
                     <span className="flex items-center gap-2">
-                      <ReplaySkinSwitch checked={columnEditorOpen} onChange={setColumnEditorOpen} />
+                      <ReplaySkinSwitch
+                        checked={barColorSwitchChecked}
+                        onChange={(checked) => {
+                          if (draft.style !== "bars") {
+                            setColumnEditorOpen(checked);
+                            return;
+                          }
+                          if (checked) {
+                            enableBarColorOverrides();
+                          } else {
+                            disableBarColorOverrides();
+                          }
+                        }}
+                      />
                       <button
                         type="button"
                         onClick={() => setColumnEditorOpen((value) => !value)}
@@ -1088,7 +1138,7 @@ export function ReplaySkinSettingsModal({
       {columnEditorOpen ? (
         <DraggableColorPopover
           key="per-column"
-          title="Per-column colors"
+          title={draft.style === "bars" ? "Bar colors" : "Per-column colors"}
           width={296}
           anchorRef={modalRef}
           storageKey="per-column"
@@ -1097,7 +1147,7 @@ export function ReplaySkinSettingsModal({
           <div className="mb-3 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${Math.min(selectedKeyCount, 10)}, minmax(0, 1fr))` }}>
             {columns.map((column) => {
               const overridden = !!overrideColors[column];
-              const swatch = overrideColors[column] || overrideBaseColor;
+              const swatch = overrideColors[column] || overrideBaseColorForColumn(column);
               const isSelected = selectedColumns.includes(column);
               return (
                 <button
@@ -1148,8 +1198,8 @@ export function ReplaySkinSettingsModal({
               </button>
             ) : null}
           </div>
-          <div className="mb-3 grid grid-cols-2 rounded-lg bg-osu-b5/70 p-1">
-            {(["tap", "lnHead"] as const).map((kind) => (
+          <div className={`mb-3 grid rounded-lg bg-osu-b5/70 p-1 ${columnColorKinds.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+            {columnColorKinds.map((kind) => (
               <button
                 key={kind}
                 type="button"
