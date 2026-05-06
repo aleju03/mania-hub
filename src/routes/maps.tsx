@@ -2704,6 +2704,37 @@ function FavouriteCard({ fav, onPlayerClick }: { fav: MapsAggregatedFavourite; o
 
 const PREVIEW_VOLUME_STORAGE_KEY = "mania-hub-preview-volume-v1";
 const DEFAULT_PREVIEW_VOLUME = 0.3;
+// Mobile browsers can briefly report a low readyState while currentTime is
+// already moving; trust recent media-clock progress to avoid startup snaps.
+const REPLAY_AUDIO_CLOCK_PROGRESS_EPSILON_SECONDS = 0.003;
+const REPLAY_AUDIO_CLOCK_PROGRESS_GRACE_MS = 550;
+
+type ReplayAudioClockSample = {
+  seconds: number;
+  advancingUntil: number;
+};
+
+function resetReplayAudioClockSample(sampleRef: { current: ReplayAudioClockSample | null }, seconds: number): void {
+  sampleRef.current = {
+    seconds,
+    advancingUntil: 0,
+  };
+}
+
+function hasRecentReplayAudioClockProgress(sampleRef: { current: ReplayAudioClockSample | null }, seconds: number): boolean {
+  const now = performance.now();
+  const previous = sampleRef.current;
+  if (!previous || seconds < previous.seconds - 0.05) {
+    sampleRef.current = { seconds, advancingUntil: 0 };
+    return false;
+  }
+
+  const advancingUntil = seconds > previous.seconds + REPLAY_AUDIO_CLOCK_PROGRESS_EPSILON_SECONDS
+    ? now + REPLAY_AUDIO_CLOCK_PROGRESS_GRACE_MS
+    : previous.advancingUntil;
+  sampleRef.current = { seconds, advancingUntil };
+  return now <= advancingUntil;
+}
 
 function readStoredPreviewVolume(): number {
   if (typeof window === "undefined") return DEFAULT_PREVIEW_VOLUME;
@@ -2988,6 +3019,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const replayAudioStartSecondsRef = useRef(0);
   const replayAudioStartPendingRef = useRef(false);
   const replayAudioReadyRef = useRef(false);
+  const replayAudioClockSampleRef = useRef<ReplayAudioClockSample | null>(null);
   const previewPlaybackTokenRef = useRef(0);
   const replayPlaybackTokenRef = useRef(0);
   const isRandomCardMountedRef = useRef(true);
@@ -3068,6 +3100,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     setReplayAudioMode("set-preview");
     replayAudioStartPendingRef.current = false;
     replayAudioReadyRef.current = false;
+    replayAudioClockSampleRef.current = null;
     replayAudioStartSecondsRef.current = 0;
     requestedAudioModeRef.current = null;
   }, [bm.id, maniaBeatmaps]);
@@ -3080,6 +3113,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       setReplayAudioMode("set-preview");
       setIsReplayPreviewReady(false);
       replayAudioReadyRef.current = false;
+      replayAudioClockSampleRef.current = null;
       return;
     }
 
@@ -3087,6 +3121,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     setReplayPreviewLoading(true);
     setIsReplayPreviewPlaying(false);
     setIsReplayPreviewReady(false);
+    replayAudioClockSampleRef.current = null;
     setReplayAudioLoading(false);
     setReplayAudioSizeBytes(null);
     setReplayPreviewError(null);
@@ -3189,6 +3224,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       replayPlaybackTokenRef.current += 1;
       replayAudioStartPendingRef.current = false;
       replayAudioReadyRef.current = false;
+      replayAudioClockSampleRef.current = null;
       requestedAudioModeRef.current = null;
       clearReplayPreviewEndTimer();
       resetAudioElement(audioRef.current, true);
@@ -3202,6 +3238,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     replayPlaybackTokenRef.current += 1;
     replayAudioStartPendingRef.current = false;
     replayAudioReadyRef.current = false;
+    replayAudioClockSampleRef.current = null;
     replayAudioStartSecondsRef.current = 0;
     requestedAudioModeRef.current = null;
     setIsPreviewPlaying(false);
@@ -3225,6 +3262,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     replayPlaybackTokenRef.current += 1;
     replayAudioStartPendingRef.current = false;
     replayAudioReadyRef.current = false;
+    replayAudioClockSampleRef.current = null;
     replayAudioStartSecondsRef.current = 0;
     setReplayPreviewRequested(false);
     setIsReplayPreviewPlaying(false);
@@ -3305,6 +3343,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       if (replayPlaybackTokenRef.current === token) {
         replayAudioStartPendingRef.current = false;
         replayAudioReadyRef.current = false;
+        replayAudioClockSampleRef.current = null;
         setReplayAudioLoading(false);
         setReplayPreviewError("Couldn't find chart preview audio");
       }
@@ -3314,6 +3353,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     requestedAudioModeRef.current = "replay";
     replayAudioStartPendingRef.current = false;
     replayAudioReadyRef.current = false;
+    resetReplayAudioClockSample(replayAudioClockSampleRef, replayPreviewStartSeconds);
     pausePreviewAudio(false);
     setPreviewError(null);
     replayAudioStartSecondsRef.current = replayPreviewStartSeconds;
@@ -3354,17 +3394,19 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       if (replayPreviewStartSeconds > 0.25 && Math.abs(audio.currentTime - replayPreviewStartSeconds) > 1) {
         throw new Error("Chart preview audio seek failed");
       }
+      resetReplayAudioClockSample(replayAudioClockSampleRef, audio.currentTime);
+      replayAudioReadyRef.current = true;
+      setIsReplayPreviewPlaying(true);
       await audio.play();
       if (!isCurrentRequest()) {
         resetAudioElement(audio);
         return;
       }
-      replayAudioReadyRef.current = true;
-      setIsReplayPreviewPlaying(true);
       setReplayAudioLoading(false);
     } catch {
       if (isCurrentRequest()) {
         replayAudioReadyRef.current = false;
+        replayAudioClockSampleRef.current = null;
         setReplayAudioLoading(false);
         setPreviewError("Couldn't play preview audio");
         setIsReplayPreviewPlaying(false);
@@ -3381,10 +3423,13 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       return { time: 0, stalled: true };
     }
     const rate = Math.max(0.1, replayClockRateDivisor);
-    const elapsedSeconds = Math.max(0, audio.currentTime - replayAudioStartSecondsRef.current);
+    const mediaSeconds = audio.currentTime;
+    const elapsedSeconds = Math.max(0, mediaSeconds - replayAudioStartSecondsRef.current);
+    const lowReadyState = audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA;
+    const audioClockIsMoving = hasRecentReplayAudioClockProgress(replayAudioClockSampleRef, mediaSeconds);
     return {
       time: Math.min(RANDOM_REPLAY_PREVIEW_MS, (elapsedSeconds * 1000) / rate),
-      stalled: audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA,
+      stalled: lowReadyState && !audioClockIsMoving,
     };
   }, [replayClockRateDivisor]);
 
@@ -3399,6 +3444,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     replayPlaybackTokenRef.current = token;
     requestedAudioModeRef.current = "replay";
     replayAudioReadyRef.current = false;
+    resetReplayAudioClockSample(replayAudioClockSampleRef, replayPreviewStartSeconds);
     setIsReplayPreviewPlaying(false);
     setIsReplayPreviewEnding(false);
     pausePreviewAudio(false);
@@ -3699,6 +3745,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
                   setIsReplayPreviewPlaying(false);
                   replayAudioStartPendingRef.current = false;
                   replayAudioReadyRef.current = false;
+                  replayAudioClockSampleRef.current = null;
                 }}
               />
             ) : null}
