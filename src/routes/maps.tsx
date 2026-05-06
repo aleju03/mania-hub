@@ -2061,10 +2061,6 @@ function MapsPage() {
         details={detailsOpen}
         country={selectedCountry}
         onClose={() => setDetailsOpen(null)}
-        onPlayerClick={(u) => {
-          setDetailsOpen(null);
-          navigate({ to: "/player/$username", params: { username: u } });
-        }}
       />
     </div>
   );
@@ -2562,12 +2558,10 @@ function MapDetailsModal({
   details,
   country,
   onClose,
-  onPlayerClick,
 }: {
   details: MapDetails | null;
   country: string;
   onClose: () => void;
-  onPlayerClick: (username: string) => void;
 }) {
   useEffect(() => {
     if (!details) return;
@@ -2597,7 +2591,7 @@ function MapDetailsModal({
           transition={{ duration: 0.12 }}
         >
           <div
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/70"
             onClick={onClose}
           />
           <motion.div
@@ -2608,7 +2602,7 @@ function MapDetailsModal({
             transition={{ duration: 0.16, ease: "easeOut" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <MapDetailsContent details={details} country={country} onPlayerClick={onPlayerClick} onClose={onClose} />
+            <MapDetailsContent details={details} country={country} onClose={onClose} />
           </motion.div>
         </motion.div>
       )}
@@ -2627,22 +2621,21 @@ const OSU_DIRECT_SVG_PATHS = (
 function MapDetailsContent({
   details,
   country,
-  onPlayerClick,
   onClose,
 }: {
   details: MapDetails;
   country: string;
-  onPlayerClick: (username: string) => void;
   onClose: () => void;
 }) {
   const setId =
     details.kind === "favourite" ? details.fav.beatmapsetId : details.map.beatmapsetId;
-  const cover =
-    details.kind === "favourite" ? details.fav.covers.cover : details.map.covers.cover;
+  const covers = details.kind === "favourite" ? details.fav.covers : details.map.covers;
+  // Prefer the square `list@2x` variant — it's pre-focal-cropped by osu!, so
+  // it fills the modal without the heavy zoom you get on the wide `cover`.
+  const cover = covers["list@2x"] ?? covers.list ?? covers.cover;
   const title = details.kind === "favourite" ? details.fav.title : details.map.title;
   const artist = details.kind === "favourite" ? details.fav.artist : details.map.artist;
   const creator = details.kind === "favourite" ? details.fav.creator : details.map.creator;
-  const status = details.kind === "favourite" ? details.fav.status : details.map.status;
   const beatmapsetUrl =
     details.kind === "favourite"
       ? `https://osu.ppy.sh/beatmapsets/${setId}`
@@ -2654,13 +2647,6 @@ function MapDetailsContent({
   const dominantModFile =
     dominantMod === "DT" ? "double-time" : dominantMod === "HT" ? "half-time" : null;
   const dominantModColor = dominantMod === "DT" ? "#ff6666" : "#b3d944";
-
-  const statusAccent =
-    status === "ranked" || status === "approved"
-      ? { dot: "bg-osu-green", text: "text-osu-green" }
-      : status === "loved"
-        ? { dot: "bg-osu-pink", text: "text-osu-pink" }
-        : { dot: "bg-osu-f1", text: "text-osu-f1" };
 
   const keyCount =
     details.kind === "farmed"
@@ -2688,102 +2674,92 @@ function MapDetailsContent({
 
   return (
     <>
-      <div className="relative shrink-0 overflow-hidden">
-        <div className="relative h-[200px] sm:h-[240px] overflow-hidden bg-osu-b6">
-          <img
-            src={cover}
-            alt=""
-            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-out ${coverLoaded ? "opacity-100" : "opacity-0"}`}
-            onLoad={() => setCoverLoaded(true)}
-            onError={() => setCoverLoaded(true)}
-          />
-          {/* Saturation/contrast lift on top, body fade on bottom */}
-          <div className="absolute inset-0 bg-gradient-to-t from-osu-b4 via-osu-b4/30 via-50% to-black/15" />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/35 via-transparent to-black/20" />
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close"
+        className="absolute top-3 right-3 z-30 w-8 h-8 rounded-full bg-black/55 hover:bg-black/85 text-white/90 hover:text-white flex items-center justify-center transition-colors cursor-pointer ring-1 ring-white/10"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
 
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="absolute top-3 right-3 w-8 h-8 rounded-full bg-black/55 hover:bg-black/80 text-white/90 hover:text-white flex items-center justify-center transition-colors cursor-pointer backdrop-blur-md ring-1 ring-white/10"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+      {/* Cover backdrop — sits on the modal's solid bg at low opacity */}
+      <div aria-hidden className="absolute inset-0 z-0 overflow-hidden">
+        <img
+          src={cover}
+          alt=""
+          className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-500 ease-out ${coverLoaded ? "opacity-5" : "opacity-0"}`}
+          onLoad={() => setCoverLoaded(true)}
+          onError={() => setCoverLoaded(true)}
+        />
+      </div>
 
-          {/* Status pill, top-left */}
-          <div className="absolute top-3 left-4 inline-flex items-center gap-1.5 rounded-full bg-black/55 backdrop-blur-md ring-1 ring-white/10 pl-2 pr-2.5 py-1">
-            <span className={`w-1.5 h-1.5 rounded-full ${statusAccent.dot}`} />
-            <span className={`text-[10px] font-bold uppercase tracking-wider ${statusAccent.text}`}>{status}</span>
-          </div>
-
-          {/* Dominant speed mod watermark */}
-          {dominantModFile && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="relative w-[140px] h-[96px] opacity-25">
-                <img src="/images/badges/mods/mod-icon.svg" alt="" className="absolute inset-0 w-full h-full" style={{ filter: "brightness(0) saturate(100%)" }} />
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    backgroundColor: dominantModColor,
-                    maskImage: "url(/images/badges/mods/mod-icon.svg)",
-                    WebkitMaskImage: "url(/images/badges/mods/mod-icon.svg)",
-                    maskSize: "100%", WebkitMaskSize: "100%",
-                    maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
-                  }}
-                />
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    backgroundColor: `color-mix(in srgb-linear, black, ${dominantModColor} 10%)`,
-                    maskImage: `url(/images/badges/mods/mod-${dominantModFile}.svg)`,
-                    WebkitMaskImage: `url(/images/badges/mods/mod-${dominantModFile}.svg)`,
-                    maskSize: "110%", WebkitMaskSize: "110%",
-                    maskPosition: "center", WebkitMaskPosition: "center",
-                    maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Title block, anchored to bottom */}
-          <div className="absolute bottom-0 left-0 right-0 px-5 pb-4">
-            <div className="text-[11px] text-white/65 truncate" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>
-              {artist}
-            </div>
-            <div className="text-[22px] sm:text-[24px] font-bold text-white leading-[1.15] truncate" style={{ textShadow: "0 2px 8px rgba(0,0,0,0.6)" }}>
-              {title}
-            </div>
-            <div className="mt-1.5 flex items-center gap-2 text-[11px] text-white/70" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.5)" }}>
-              <span>by <span className="text-white/90 font-medium">{creator}</span></span>
-              {details.kind !== "favourite" && (
-                <>
-                  <span className="w-1 h-1 rounded-full bg-white/30" />
-                  <span className="text-white/85 truncate">[{details.map.version}]</span>
-                </>
-              )}
-            </div>
+      {/* Mod watermark hovering over the backdrop */}
+      {dominantModFile && (
+        <div className="absolute inset-x-0 top-3 sm:top-5 z-0 flex items-center justify-center pointer-events-none">
+          <div className="relative w-[150px] h-[100px] opacity-15">
+            <img src="/images/badges/mods/mod-icon.svg" alt="" className="absolute inset-0 w-full h-full" style={{ filter: "brightness(0) saturate(100%)" }} />
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundColor: dominantModColor,
+                maskImage: "url(/images/badges/mods/mod-icon.svg)",
+                WebkitMaskImage: "url(/images/badges/mods/mod-icon.svg)",
+                maskSize: "100%", WebkitMaskSize: "100%",
+                maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
+              }}
+            />
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundColor: `color-mix(in srgb-linear, black, ${dominantModColor} 10%)`,
+                maskImage: `url(/images/badges/mods/mod-${dominantModFile}.svg)`,
+                WebkitMaskImage: `url(/images/badges/mods/mod-${dominantModFile}.svg)`,
+                maskSize: "110%", WebkitMaskSize: "110%",
+                maskPosition: "center", WebkitMaskPosition: "center",
+                maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
+              }}
+            />
           </div>
         </div>
+      )}
 
-        {/* Meta strip — chips floating on the gradient */}
-        <div className="px-5 -mt-1 pb-3 flex flex-wrap items-center gap-1.5 relative z-10">
+      {/* Title block — sits on the backdrop, no panel */}
+      <div className="relative z-10 shrink-0 px-5 sm:px-6 pt-6 pb-4">
+        <div className="text-[11px] text-white/65 truncate uppercase tracking-wide" style={{ textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}>
+          {artist}
+        </div>
+        <div className="text-[22px] sm:text-[24px] font-bold text-white leading-[1.15] line-clamp-2 break-words pr-10" style={{ textShadow: "0 2px 10px rgba(0,0,0,0.7)" }}>
+          {title}
+        </div>
+        <div className="mt-1.5 text-[11px] text-white/75 truncate" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.6)" }}>
+          by <span className="text-white/95 font-medium">{creator}</span>
+          {details.kind !== "favourite" && (
+            <>
+              <span className="mx-1.5 text-white/40">·</span>
+              <span className="text-white/85">[{details.map.version}]</span>
+            </>
+          )}
+        </div>
+
+        {/* Chip strip: keys / stars / length / BPM */}
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
           {keyCount && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-osu-b3/70 ring-1 ring-osu-b2/60 text-[10px] font-bold text-white">
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-black/45 ring-1 ring-white/10 text-[10px] font-bold text-white">
               {keyCount}K
             </span>
           )}
           {stars !== null && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-osu-b3/70 ring-1 ring-osu-b2/60 text-[10px] font-bold text-osu-yellow">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/45 ring-1 ring-white/10 text-[10px] font-bold text-osu-yellow">
               <span>★</span>{stars.toFixed(2)}
             </span>
           )}
           {adjustedLength !== null && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-osu-b3/70 ring-1 ring-osu-b2/60 text-[10px] font-medium text-osu-l2">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5 text-osu-f1">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/45 ring-1 ring-white/10 text-[10px] font-medium text-white/90">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="w-2.5 h-2.5 text-white/70">
                 <circle cx="12" cy="12" r="9" />
                 <polyline points="12 7 12 12 15 14" />
               </svg>
@@ -2791,43 +2767,29 @@ function MapDetailsContent({
             </span>
           )}
           {bpm && bpm > 0 && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-osu-b3/70 ring-1 ring-osu-b2/60 text-[10px] font-medium text-osu-l2">
-              <span className="text-osu-f1">♪</span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-black/45 ring-1 ring-white/10 text-[10px] font-medium text-white/90">
+              <span className="text-white/70">♪</span>
               {Math.round(dominantMod === "DT" ? bpm * 1.5 : dominantMod === "HT" ? bpm * 0.75 : bpm)}
-              <span className="text-osu-f1 lowercase">bpm</span>
+              <span className="text-white/60 lowercase">bpm</span>
             </span>
           )}
         </div>
       </div>
 
-      <div className="overflow-y-auto flex-1 min-h-0 px-5 pb-4 space-y-4">
-        {details.kind === "farmed" && (
-          <FarmedDetails entry={details.map} onPlayerClick={onPlayerClick} />
-        )}
-        {details.kind === "popular" && (
-          <PopularDetails entry={details.map} onPlayerClick={onPlayerClick} />
-        )}
-        {details.kind === "favourite" && (
-          <FavouriteDetails entry={details.fav} country={country} onPlayerClick={onPlayerClick} />
-        )}
+      {/* Scrollable content body — frosted panel over the backdrop */}
+      <div className="relative z-10 overflow-y-auto flex-1 min-h-0 px-5 sm:px-6 pb-4 space-y-4">
+        {details.kind === "farmed" && <FarmedDetails entry={details.map} />}
+        {details.kind === "popular" && <PopularDetails entry={details.map} />}
+        {details.kind === "favourite" && <FavouriteDetails entry={details.fav} country={country} />}
       </div>
 
-      <div className="shrink-0 border-t border-osu-b3/40 px-4 py-3 flex items-center gap-2 bg-osu-b5/50 backdrop-blur-sm">
-        <a
-          href={osuDirectUrl}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-osu-pink hover:bg-osu-pink-light text-white text-[12px] font-bold transition-colors cursor-pointer"
-          title="Open in osu! client"
-        >
-          <svg viewBox="0 0 300 300" className="h-[14px] w-[14px]" fill="currentColor" aria-hidden>
-            {OSU_DIRECT_SVG_PATHS}
-          </svg>
-          <span>Open in osu!</span>
-        </a>
+      {/* Footer */}
+      <div className="relative z-10 shrink-0 border-t border-white/10 px-4 py-3 flex items-center gap-2 bg-black/35">
         <a
           href={beatmapsetUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-osu-b3/40 hover:bg-osu-b3/80 text-osu-l2 hover:text-white text-[12px] font-semibold transition-colors cursor-pointer"
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/85 hover:text-white text-[12px] font-semibold transition-colors cursor-pointer"
           title="Open beatmap page on osu!"
         >
           <span>Beatmap page</span>
@@ -2836,6 +2798,16 @@ function MapDetailsContent({
             <polyline points="15 3 21 3 21 9" />
             <line x1="10" y1="14" x2="21" y2="3" />
           </svg>
+        </a>
+        <a
+          href={osuDirectUrl}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/85 hover:text-white text-[12px] font-semibold transition-colors cursor-pointer"
+          title="Open in osu! client"
+        >
+          <svg viewBox="0 0 300 300" className="h-[14px] w-[14px]" fill="currentColor" aria-hidden>
+            {OSU_DIRECT_SVG_PATHS}
+          </svg>
+          <span>Open in osu!</span>
         </a>
       </div>
     </>
@@ -2864,14 +2836,14 @@ function StatItem({
       <div className={`text-[17px] font-bold leading-none tabular-nums ${valueColor}`} style={{ fontFamily: "Torus" }}>
         {value}
       </div>
-      <div className="mt-1 text-[9px] uppercase tracking-wide text-osu-f1 font-semibold">{label}</div>
+      <div className="mt-1 text-[9px] uppercase tracking-wide text-white/55 font-semibold">{label}</div>
     </div>
   );
 }
 
 function StatRow({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-xl bg-osu-b5/40 ring-1 ring-osu-b3/30 flex items-stretch divide-x divide-osu-b3/30">
+    <div className="rounded-xl bg-black/30 ring-1 ring-white/10 flex items-stretch divide-x divide-white/10">
       {children}
     </div>
   );
@@ -2880,8 +2852,8 @@ function StatRow({ children }: { children: React.ReactNode }) {
 function SectionHeader({ title, count }: { title: string; count: number }) {
   return (
     <div className="flex items-baseline gap-2 mb-1.5 px-1">
-      <h3 className="text-[10px] uppercase tracking-wider font-bold text-osu-f1">{title}</h3>
-      <span className="text-[10px] text-osu-f1/70 tabular-nums">{count}</span>
+      <h3 className="text-[10px] uppercase tracking-wider font-bold text-white/55">{title}</h3>
+      <span className="text-[10px] text-white/40 tabular-nums">{count}</span>
     </div>
   );
 }
@@ -2892,7 +2864,7 @@ function PlayerRow({
   meta,
   onClick,
 }: {
-  rank: number;
+  rank?: number;
   player: { id: number; username: string; avatarUrl: string };
   meta?: React.ReactNode;
   onClick: () => void;
@@ -2901,23 +2873,19 @@ function PlayerRow({
     <button
       type="button"
       onClick={onClick}
-      className="group flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded-lg hover:bg-osu-b3/40 transition-colors cursor-pointer text-left"
+      className="group flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded-lg hover:bg-white/10 transition-colors cursor-pointer text-left"
     >
-      <span className="w-5 text-center text-[10px] text-osu-f1 tabular-nums">{rank}</span>
+      {rank !== undefined && (
+        <span className="w-5 text-center text-[10px] text-white/45 tabular-nums">{rank}</span>
+      )}
       <Avatar url={player.avatarUrl} size={26} />
-      <div className="text-[12px] text-osu-l2 group-hover:text-white truncate flex-1 transition-colors">{player.username}</div>
+      <div className="text-[12px] text-white/85 group-hover:text-white truncate flex-1 transition-colors">{player.username}</div>
       {meta}
     </button>
   );
 }
 
-function FarmedDetails({
-  entry,
-  onPlayerClick,
-}: {
-  entry: MapsFarmedEntry;
-  onPlayerClick: (u: string) => void;
-}) {
+function FarmedDetails({ entry }: { entry: MapsFarmedEntry }) {
   const sortedPlayers = useMemo(
     () => [...entry.players].sort((a, b) => b.pp - a.pp),
     [entry.players],
@@ -2933,18 +2901,15 @@ function FarmedDetails({
 
       <div>
         <SectionHeader title="Farmed by" count={sortedPlayers.length} />
-        <div className="rounded-xl bg-osu-b5/30 ring-1 ring-osu-b3/30 p-1 max-h-[280px] overflow-y-auto">
+        <div className="rounded-xl bg-black/30 ring-1 ring-white/10 p-1 max-h-[280px] overflow-y-auto">
           {sortedPlayers.map((p, i) => (
             <PlayerRow
               key={p.id}
               rank={i + 1}
               player={p}
               onClick={() => {
-                if (p.scoreUrl) {
-                  window.open(p.scoreUrl, "_blank", "noopener,noreferrer");
-                  return;
-                }
-                onPlayerClick(p.username);
+                const url = p.scoreUrl || `https://osu.ppy.sh/users/${p.id}/mania`;
+                window.open(url, "_blank", "noopener,noreferrer");
               }}
               meta={
                 <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -2973,7 +2938,7 @@ function FarmedDetails({
   );
 }
 
-function PopularDetails({ entry, onPlayerClick }: { entry: MapsAggregatedBeatmap; onPlayerClick: (u: string) => void }) {
+function PopularDetails({ entry }: { entry: MapsAggregatedBeatmap }) {
   const sortedPlayers = useMemo(
     () => [...entry.players].sort((a, b) => b.count - a.count),
     [entry.players],
@@ -2989,13 +2954,13 @@ function PopularDetails({ entry, onPlayerClick }: { entry: MapsAggregatedBeatmap
 
       <div>
         <SectionHeader title="Most played by" count={sortedPlayers.length} />
-        <div className="rounded-xl bg-osu-b5/30 ring-1 ring-osu-b3/30 p-1 max-h-[280px] overflow-y-auto">
+        <div className="rounded-xl bg-black/30 ring-1 ring-white/10 p-1 max-h-[280px] overflow-y-auto">
           {sortedPlayers.map((p, i) => (
             <PlayerRow
               key={p.id}
               rank={i + 1}
               player={p}
-              onClick={() => onPlayerClick(p.username)}
+              onClick={() => window.open(`https://osu.ppy.sh/users/${p.id}/mania`, "_blank", "noopener,noreferrer")}
               meta={
                 p.count ? (
                   <span className="inline-flex items-baseline gap-0.5 text-osu-pink tabular-nums" style={{ fontFamily: "Torus" }}>
@@ -3012,15 +2977,7 @@ function PopularDetails({ entry, onPlayerClick }: { entry: MapsAggregatedBeatmap
   );
 }
 
-function FavouriteDetails({
-  entry,
-  country,
-  onPlayerClick,
-}: {
-  entry: MapsAggregatedFavourite;
-  country: string;
-  onPlayerClick: (u: string) => void;
-}) {
+function FavouriteDetails({ entry, country }: { entry: MapsAggregatedFavourite; country: string }) {
   return (
     <>
       <StatRow>
@@ -3031,9 +2988,13 @@ function FavouriteDetails({
 
       <div>
         <SectionHeader title="Favourited by" count={entry.players.length} />
-        <div className="rounded-xl bg-osu-b5/30 ring-1 ring-osu-b3/30 p-1 max-h-[280px] overflow-y-auto">
-          {entry.players.map((p, i) => (
-            <PlayerRow key={p.id} rank={i + 1} player={p} onClick={() => onPlayerClick(p.username)} />
+        <div className="rounded-xl bg-black/30 ring-1 ring-white/10 p-1 max-h-[280px] overflow-y-auto">
+          {entry.players.map((p) => (
+            <PlayerRow
+              key={p.id}
+              player={p}
+              onClick={() => window.open(`https://osu.ppy.sh/users/${p.id}/mania`, "_blank", "noopener,noreferrer")}
+            />
           ))}
         </div>
       </div>
