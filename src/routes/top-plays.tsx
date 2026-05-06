@@ -23,6 +23,7 @@ import { parseCountrySearchParam, withSearchParams } from "../lib/country-search
 import { hasTopPlaysCache, shouldRefreshTopPlays } from "../lib/top-plays-cache";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { useAuth } from "../lib/auth-context";
+import { startProgressPoll } from "../lib/progress-poll";
 
 type PopOff = CountryTopPlay;
 
@@ -283,11 +284,10 @@ function PopOffsPage() {
       }
     };
 
-    poll();
-    const id = window.setInterval(poll, 750);
+    const stopPolling = startProgressPoll(poll);
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      stopPolling();
     };
   }, [mergePopoffs, players, scanStartedAt, selectedCountry, setCachedPopoffs]);
 

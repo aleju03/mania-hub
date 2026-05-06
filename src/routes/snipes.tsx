@@ -17,6 +17,7 @@ import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { useAuth } from "../lib/auth-context";
+import { startProgressPoll } from "../lib/progress-poll";
 
 type KeyFilter = "all" | "4k" | "7k";
 type RangeFilter = "24h" | "7d" | "30d" | "all";
@@ -184,11 +185,10 @@ function SnipesPage() {
         finalizingRefreshRef.current = false;
       }
     };
-    poll();
-    const id = window.setInterval(poll, 750);
+    const stopPolling = startProgressPoll(poll);
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      stopPolling();
     };
   }, [scanStartedAt, selectedCountry, setSnipes]);
 

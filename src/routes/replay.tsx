@@ -3,7 +3,6 @@ import { useState, useRef, useEffect, useCallback, useMemo, type PointerEvent as
 import { motion, AnimatePresence } from "framer-motion";
 import { Maximize2, Minimize2 } from "lucide-react";
 import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores } from "../lib/osu";
-import { parseManiaBeatmap } from "../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
 import { getScoreDisplayValues, getScoreRate, scoreHasReplay } from "../lib/score";
 import { useAppStore, useSelectedCountry } from "../store";
@@ -29,6 +28,8 @@ import { buildKeypressHeatmap } from "../lib/replay-keypress-heatmap";
 import { parseReplayScoreInput } from "../lib/replay-score-input";
 import { getReplayScoreAvailability } from "../lib/replay-score-availability";
 import { DEFAULT_REPLAY_SCROLL_SPEED, REPLAY_SCROLL_SPEED_CHANGE_EVENT, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../lib/replay-scroll-speed";
+import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
+import { startProgressPoll } from "../lib/progress-poll";
 import {
   normalizeReplayBackgroundDim,
   normalizeReplayInputColor,
@@ -235,7 +236,7 @@ function ReplayPage() {
         keyCount: parsed.keyCount,
       });
       if (bmResult) {
-        setBeatmap(parseManiaBeatmap(bmResult.content));
+        setBeatmap(parseCachedManiaBeatmap(score?.beatmap?.id ?? 0, bmResult.content));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load replay");
@@ -515,11 +516,10 @@ function ReplayPage() {
       }
     };
 
-    poll();
-    const id = window.setInterval(poll, 750);
+    const stopPolling = startProgressPoll(poll);
     return () => {
       cancelled = true;
-      window.clearInterval(id);
+      stopPolling();
     };
   }, [beatmapScorePage, loadingBeatmapScores, selectedDiffId, selectedCountry]);
 

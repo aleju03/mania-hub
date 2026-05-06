@@ -11,7 +11,7 @@ describe("replay beatmap score progress UI", () => {
     expect(routeSource).toContain("getPartialBeatmapScores");
     expect(routeSource).toContain("partialBeatmapScores");
     expect(routeSource).toContain("beatmapScoreLookupStatus");
-    expect(routeSource).toContain("setInterval(poll, 750)");
+    expect(routeSource).toContain("startProgressPoll(poll)");
     expect(browseSource).toContain("players checked");
     expect(browseSource).toContain("replays found");
     expect(routeSource).toContain("beatmapScorePage");

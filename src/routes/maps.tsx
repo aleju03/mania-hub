@@ -17,7 +17,6 @@ import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { formatNumber, formatDuration, formatTimeAgo } from "../lib/format";
 import { MANIA_PATTERN_LABELS } from "../lib/mania-patterns";
-import { parseManiaBeatmap } from "../lib/beatmap-parser";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
@@ -51,6 +50,7 @@ import { REPLAY_SCROLL_SPEED_CHANGE_EVENT, readReplayScrollSpeed } from "../lib/
 import { REPLAY_SKIN_SETTINGS_CHANGE_EVENT, readReplaySkinSettings } from "../lib/replay-skin";
 import type { ReplaySkinSettings } from "../lib/replay-skin";
 import { useAuth } from "../lib/auth-context";
+import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -3152,8 +3152,10 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     ])
       .then(([selectedResult, referenceResult]) => {
         if (cancelled) return;
-        const selectedParsed = parseManiaBeatmap(selectedResult.content);
-        const referenceParsed = referenceResult ? parseManiaBeatmap(referenceResult.content) : selectedParsed;
+        const selectedParsed = parseCachedManiaBeatmap(selectedBeatmap.id, selectedResult.content);
+        const referenceParsed = referenceResult && referenceBeatmapId
+          ? parseCachedManiaBeatmap(referenceBeatmapId, referenceResult.content)
+          : selectedParsed;
         const timedRateVariant = usesSetPreviewForReplayAudio && isLikelyTimedRateVariantSet(maniaBeatmaps);
         const previewPlan = getChartPreviewPlaybackPlan({
           selectedBeatmap: selectedParsed,

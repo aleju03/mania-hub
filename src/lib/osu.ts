@@ -2777,10 +2777,31 @@ export const rebuildCountryMapsForUser = createServerFn({ method: "POST" })
 const REPLAY_CACHE_LOCK_TTL_MS = 30_000;
 const REPLAY_CACHE_LOCK_WAIT_MS = 500;
 const REPLAY_CACHE_LOCK_WAIT_RETRIES = 8;
+const REPLAY_PARSED_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
+const REPLAY_PARSED_CACHE_VERSION = 1;
 
 type ReplayDownload = {
   buffer: Buffer;
   endpointKind: ReplayEndpointKind;
+};
+
+type ParsedReplayResponse = {
+  header: {
+    playerName: string;
+    gameMode: number;
+    totalScore: number;
+    maxCombo: number;
+    count300: number;
+    count100: number;
+    count50: number;
+    countGeki: number;
+    countKatu: number;
+    countMiss: number;
+    isPerfect: boolean;
+  };
+  lifeBarFrames: Array<{ time: number; health: number }>;
+  framesPacked: { count: number; times: string; keys: string };
+  keyCount: number;
 };
 
 type ReplayCacheModule = typeof import("./r2-cache");
@@ -2879,65 +2900,74 @@ export const getReplayParsed = createServerFn({ method: "GET" })
   .inputValidator(normalizeReplayParsedPayload)
   .handler(async ({ data }: { data: { scoreId: number; mode: string; keyCount?: number } }) => {
     edgeCache(86400, 604800);
-    const { ScoreDecoder } = await import("osu-parsers");
-    const buffer = await getReplayBuffer(data);
-    const decoder = new ScoreDecoder();
-    const score = await decoder.decodeFromBuffer(buffer);
+    const cacheKey = [
+      `replay-parsed:v${REPLAY_PARSED_CACHE_VERSION}`,
+      data.scoreId,
+      data.mode,
+      data.keyCount ?? 0,
+    ].join(":");
 
-    const info = score.info;
-    const rawFrames = (score.replay?.frames ?? []) as any[];
-    const lifeBarFrames = (score.replay?.lifeBar ?? [])
-      .map((frame: any) => ({
-        time: Math.round(Number(frame.startTime ?? frame.time ?? 0)),
-        health: Math.max(0, Math.min(1, Number(frame.health ?? 0))),
-      }))
-      .filter((frame) => Number.isFinite(frame.time) && Number.isFinite(frame.health))
-      .sort((a, b) => a.time - b.time);
+    return fetchWithCacheLock<ParsedReplayResponse>(cacheKey, REPLAY_PARSED_CACHE_TTL, async () => {
+      const { ScoreDecoder } = await import("osu-parsers");
+      const buffer = await getReplayBuffer(data);
+      const decoder = new ScoreDecoder();
+      const score = await decoder.decodeFromBuffer(buffer);
 
-    // Pack frames into typed arrays to shrink the wire payload ~20x vs JSON.
-    // Little-endian host is assumed (every x86/ARM server and client is LE).
-    // For mania, column bitmask is in mouseX (position.x), NOT buttonState.
-    const frameCount = rawFrames.length;
-    const times = new Int32Array(frameCount);
-    const keys = new Uint16Array(frameCount);
-    for (let i = 0; i < frameCount; i++) {
-      const f = rawFrames[i];
-      times[i] = f.startTime | 0;
-      keys[i] = Math.round(f.mouseX ?? f.position?.x ?? f.buttonState ?? 0) & 0xffff;
-    }
+      const info = score.info;
+      const rawFrames = (score.replay?.frames ?? []) as any[];
+      const lifeBarFrames = (score.replay?.lifeBar ?? [])
+        .map((frame: any) => ({
+          time: Math.round(Number(frame.startTime ?? frame.time ?? 0)),
+          health: Math.max(0, Math.min(1, Number(frame.health ?? 0))),
+        }))
+        .filter((frame) => Number.isFinite(frame.time) && Number.isFinite(frame.health))
+        .sort((a, b) => a.time - b.time);
 
-    // Detect key count: prefer beatmap CS from score API, fall back to OR of all frames
-    let keyCount = data.keyCount ?? 0;
-    if (!keyCount) {
-      let allBits = 0;
-      for (let i = 0; i < frameCount; i++) allBits |= keys[i];
-      let maxBit = 0;
-      let tmp = allBits;
-      while (tmp > 0) { maxBit++; tmp >>= 1; }
-      keyCount = Math.max(maxBit, 4);
-    }
+      // Pack frames into typed arrays to shrink the wire payload ~20x vs JSON.
+      // Little-endian host is assumed (every x86/ARM server and client is LE).
+      // For mania, column bitmask is in mouseX (position.x), NOT buttonState.
+      const frameCount = rawFrames.length;
+      const times = new Int32Array(frameCount);
+      const keys = new Uint16Array(frameCount);
+      for (let i = 0; i < frameCount; i++) {
+        const f = rawFrames[i];
+        times[i] = f.startTime | 0;
+        keys[i] = Math.round(f.mouseX ?? f.position?.x ?? f.buttonState ?? 0) & 0xffff;
+      }
 
-    const timesB64 = Buffer.from(times.buffer, times.byteOffset, times.byteLength).toString("base64");
-    const keysB64 = Buffer.from(keys.buffer, keys.byteOffset, keys.byteLength).toString("base64");
+      // Detect key count: prefer beatmap CS from score API, fall back to OR of all frames
+      let keyCount = data.keyCount ?? 0;
+      if (!keyCount) {
+        let allBits = 0;
+        for (let i = 0; i < frameCount; i++) allBits |= keys[i];
+        let maxBit = 0;
+        let tmp = allBits;
+        while (tmp > 0) { maxBit++; tmp >>= 1; }
+        keyCount = Math.max(maxBit, 4);
+      }
 
-    return {
-      header: {
-        playerName: info?.username ?? "Unknown",
-        gameMode: info?.rulesetId ?? 3,
-        totalScore: info?.totalScore ?? 0,
-        maxCombo: info?.maxCombo ?? 0,
-        count300: info?.count300 ?? 0,
-        count100: info?.count100 ?? 0,
-        count50: info?.count50 ?? 0,
-        countGeki: info?.countGeki ?? 0,
-        countKatu: info?.countKatu ?? 0,
-        countMiss: info?.countMiss ?? 0,
-        isPerfect: info?.perfect ?? false,
-      },
-      lifeBarFrames,
-      framesPacked: { count: frameCount, times: timesB64, keys: keysB64 },
-      keyCount,
-    };
+      const timesB64 = Buffer.from(times.buffer, times.byteOffset, times.byteLength).toString("base64");
+      const keysB64 = Buffer.from(keys.buffer, keys.byteOffset, keys.byteLength).toString("base64");
+
+      return {
+        header: {
+          playerName: info?.username ?? "Unknown",
+          gameMode: info?.rulesetId ?? 3,
+          totalScore: info?.totalScore ?? 0,
+          maxCombo: info?.maxCombo ?? 0,
+          count300: info?.count300 ?? 0,
+          count100: info?.count100 ?? 0,
+          count50: info?.count50 ?? 0,
+          countGeki: info?.countGeki ?? 0,
+          countKatu: info?.countKatu ?? 0,
+          countMiss: info?.countMiss ?? 0,
+          isPerfect: info?.perfect ?? false,
+        },
+        lifeBarFrames,
+        framesPacked: { count: frameCount, times: timesB64, keys: keysB64 },
+        keyCount,
+      };
+    }, REPLAY_CACHE_LOCK_TTL_MS);
   });
 
 export const getBeatmapFile = createServerFn({ method: "GET" })

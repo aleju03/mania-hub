@@ -6,6 +6,7 @@ export const RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS = 1_200;
 
 const RANDOM_REPLAY_TAP_HOLD_MS = 48;
 const DENSE_PREVIEW_LEAD_IN_MS = 1_000;
+const MAX_PREVIEW_CACHE_ENTRIES_PER_MAP = 20;
 
 type ChartPreviewAudioMode = "set-preview" | "selected-file";
 
@@ -15,6 +16,34 @@ export type ChartPreviewPlaybackPlan = {
   timeScale: number;
   audioMode: ChartPreviewAudioMode;
 };
+
+const previewNotesCache = new WeakMap<ManiaBeatmap, Map<string, ManiaNote[]>>();
+const previewComboCache = new WeakMap<ManiaBeatmap, Map<number, number>>();
+const previewScrollVelocityCache = new WeakMap<ManiaBeatmap, Map<string, ManiaBeatmap["scrollVelocities"]>>();
+
+function getPreviewCacheKey(startTimeMs: number, timeScale = 1): string {
+  return `${Math.round(startTimeMs || 0)}:${Math.round(Math.max(0.1, timeScale) * 1000)}`;
+}
+
+function getBoundedPreviewMap<T, K>(cache: WeakMap<ManiaBeatmap, Map<K, T>>, beatmap: ManiaBeatmap): Map<K, T> {
+  let map = cache.get(beatmap);
+  if (!map) {
+    map = new Map<K, T>();
+    cache.set(beatmap, map);
+  }
+  return map;
+}
+
+function setBoundedPreviewCache<K, T>(map: Map<K, T>, key: K, value: T): T {
+  map.delete(key);
+  map.set(key, value);
+  while (map.size > MAX_PREVIEW_CACHE_ENTRIES_PER_MAP) {
+    const oldestKey = map.keys().next().value;
+    if (oldestKey === undefined) break;
+    map.delete(oldestKey);
+  }
+  return value;
+}
 
 export function hasMappedPreviewTime(previewTimeMs: number): boolean {
   return Number.isFinite(previewTimeMs) && previewTimeMs > 0;
@@ -104,12 +133,21 @@ export function getChartPreviewPlaybackPlan({
 }
 
 export function getPreviewNotes(beatmap: ManiaBeatmap, startTimeMs = beatmap.previewTime, timeScale = 1): ManiaNote[] {
+  const cache = getBoundedPreviewMap(previewNotesCache, beatmap);
+  const cacheKey = getPreviewCacheKey(startTimeMs, timeScale);
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    cache.delete(cacheKey);
+    cache.set(cacheKey, cached);
+    return cached;
+  }
+
   const start = Math.max(0, startTimeMs || 0);
   const scale = Math.max(0.1, timeScale);
   const visualEnd = start + ((RANDOM_REPLAY_PREVIEW_MS + RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS) * scale);
   const playbackEnd = RANDOM_REPLAY_PREVIEW_MS + RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS;
 
-  return beatmap.notes
+  const notes = beatmap.notes
     .filter((note) => note.endTime >= start && note.time <= visualEnd)
     .map((note) => ({
       ...note,
@@ -117,31 +155,52 @@ export function getPreviewNotes(beatmap: ManiaBeatmap, startTimeMs = beatmap.pre
       endTime: Math.min(playbackEnd, Math.max(0, (note.endTime - start) / scale)),
     }))
     .filter((note) => note.endTime >= 0 && note.time <= playbackEnd);
+  return setBoundedPreviewCache(cache, cacheKey, notes);
 }
 
 export function getPreviewInitialCombo(beatmap: ManiaBeatmap, startTimeMs = beatmap.previewTime): number {
+  const cache = getBoundedPreviewMap(previewComboCache, beatmap);
+  const cacheKey = Math.round(startTimeMs || 0);
+  const cached = cache.get(cacheKey);
+  if (cached != null) {
+    cache.delete(cacheKey);
+    cache.set(cacheKey, cached);
+    return cached;
+  }
+
   const start = Math.max(0, startTimeMs || 0);
-  return beatmap.notes.reduce((combo, note) => combo + (note.time < start ? 1 : 0), 0);
+  const combo = beatmap.notes.reduce((total, note) => total + (note.time < start ? 1 : 0), 0);
+  return setBoundedPreviewCache(cache, cacheKey, combo);
 }
 
 export function getPreviewScrollVelocities(beatmap: ManiaBeatmap, startTimeMs = beatmap.previewTime, timeScale = 1): ManiaBeatmap["scrollVelocities"] {
+  const cache = getBoundedPreviewMap(previewScrollVelocityCache, beatmap);
+  const cacheKey = getPreviewCacheKey(startTimeMs, timeScale);
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    cache.delete(cacheKey);
+    cache.set(cacheKey, cached);
+    return cached;
+  }
+
   const start = Math.max(0, startTimeMs || 0);
   const scale = Math.max(0.1, timeScale);
   const visualEnd = start + ((RANDOM_REPLAY_PREVIEW_MS + RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS) * scale);
-  const velocities = beatmap.scrollVelocities ?? [];
+  const sourceVelocities = beatmap.scrollVelocities ?? [];
   let initialMultiplier = 1;
 
-  for (const point of velocities) {
+  for (const point of sourceVelocities) {
     if (point.time > start) break;
     initialMultiplier = point.multiplier;
   }
 
-  return [
+  const previewVelocities = [
     { time: 0, multiplier: initialMultiplier },
-    ...velocities
+    ...sourceVelocities
       .filter((point) => point.time > start && point.time <= visualEnd)
       .map((point) => ({ ...point, time: (point.time - start) / scale })),
   ];
+  return setBoundedPreviewCache(cache, cacheKey, previewVelocities);
 }
 
 export function buildAutoplayFrames(notes: ManiaNote[], keyCount: number): ReplayFrame[] {
