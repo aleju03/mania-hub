@@ -983,8 +983,7 @@ export class ManiaReplayRenderer {
   private renderStaticPlayfield(layout: Layout) {
     this.renderStaticBackgroundBands(layout);
     const { w, h, playfieldX, playfieldWidth } = layout;
-    const isCircleSkin = this.skinSettings.style === "circles";
-    const showColumnDividers = !isCircleSkin;
+    const showColumnDividers = this.skinSettings.style === "bars";
     const g = this.staticGraphics;
 
     if (!this.barePlayfield) {

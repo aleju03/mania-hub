@@ -1572,7 +1572,7 @@ function ReplaySkinPreview({
       onPointerCancel={handlePointerEnd}
       className="relative h-[300px] overflow-hidden rounded-lg border border-osu-b3/60 bg-[#07070c] select-none touch-none"
     >
-      {settings.style !== "circles" ? (
+      {settings.style === "bars" ? (
         <div className="pointer-events-none absolute inset-y-0" style={{ left: playfieldX, width: playfieldWidth }}>
           {[...lanePositions.map((lane) => lane.startX - playfieldX), playfieldWidth].map((left, index) => (
             <div

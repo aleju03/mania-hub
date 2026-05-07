@@ -138,11 +138,10 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(source).toContain("Math.min(layout.laneWidth - 4, Math.max(minDiameter, laneSizedDiameter))");
   });
 
-  it("hides playfield lane dividers and lane tint for circle skins", () => {
+  it("shows playfield lane dividers and lane tint only for bar skins", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    expect(source).toContain('const isCircleSkin = this.skinSettings.style === "circles";');
-    expect(source).toContain("const showColumnDividers = !isCircleSkin;");
+    expect(source).toContain('const showColumnDividers = this.skinSettings.style === "bars";');
     expect(source).toContain("for (let col = 0; showColumnDividers && col < this.keyCount; col++)");
     expect(source).toContain("if (showColumnDividers) {");
   });
