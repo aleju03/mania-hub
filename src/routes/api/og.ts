@@ -4,7 +4,7 @@ import { createElement as h } from "react";
 import { getCachedUser, getRankings, getCountryMapsFavourites, getScore } from "../../lib/osu";
 import { getCountryName, isSupportedCountryCode } from "../../lib/country";
 import { getAssetOrigin } from "../../lib/origin";
-import { getDisplayedRank, getManiaJudgementCounts } from "../../lib/score";
+import { getDisplayedRank, getManiaJudgementCounts, getModAcronyms } from "../../lib/score";
 import type { OsuCovers, OsuScore } from "../../lib/types";
 
 const WIDTH = 1200;
@@ -118,6 +118,14 @@ function beatmapDisplayTitle(score: OsuScore): string {
   const set = score.beatmapset;
   if (!set) return "Unknown beatmap";
   return `${set.artist} - ${set.title}`;
+}
+
+function scoreAwardsRankedPp(score: OsuScore): boolean {
+  if (score.pp == null || !Number.isFinite(score.pp)) return false;
+  if (score.ranked === false) return false;
+
+  const status = score.beatmapset?.status?.toLowerCase();
+  return !status || status === "ranked" || status === "approved";
 }
 
 async function fetchCountryMapUsers(country: string) {
@@ -492,12 +500,13 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
   ]);
 
   const cover = pickBeatmapsetCover(score);
-  const modsLabel = score.mods.map((m) => m.acronym).filter(Boolean).join(" · ");
+  const modsLabel = getModAcronyms(score.mods).join(" · ");
   const displayedRank = getDisplayedRank(score);
   const judgements = getManiaJudgementCounts(score.statistics);
   const keys = score.beatmap?.cs ? `${Math.round(score.beatmap.cs)}K` : "";
   const versionLine = `[${score.beatmap?.version ?? "?"}]${keys ? `  ${keys}` : ""}`;
   const maxCombo = score.max_combo ?? score.beatmap?.max_combo ?? null;
+  const showPp = scoreAwardsRankedPp(score);
 
   const response = new ImageResponse(
     h(
@@ -529,7 +538,8 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
                 width: `${WIDTH}px`,
                 height: `${HEIGHT}px`,
                 objectFit: "cover",
-                opacity: 0.32,
+                objectPosition: "center center",
+                opacity: 0.44,
               },
             })
           : null,
@@ -542,7 +552,19 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
             width: `${WIDTH}px`,
             height: `${HEIGHT}px`,
             background:
-              "linear-gradient(180deg, rgba(15,10,13,0.55) 0%, rgba(15,10,13,0.78) 60%, rgba(15,10,13,0.95) 100%)",
+              "linear-gradient(180deg, rgba(15,10,13,0.36) 0%, rgba(15,10,13,0.68) 58%, rgba(15,10,13,0.94) 100%)",
+          },
+        }),
+        h("div", {
+          key: "side-vignette",
+          style: {
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: `${WIDTH}px`,
+            height: `${HEIGHT}px`,
+            background:
+              "linear-gradient(90deg, rgba(9,5,8,0.82) 0%, rgba(9,5,8,0.36) 34%, rgba(9,5,8,0.30) 66%, rgba(9,5,8,0.78) 100%)",
           },
         }),
 
@@ -560,7 +582,7 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
               height: `${HEIGHT}px`,
               display: "flex",
               flexDirection: "column",
-              padding: "52px 64px",
+              padding: "42px 64px 52px",
             },
           },
           [
@@ -617,7 +639,7 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
                   alignItems: "center",
                   gap: "36px",
                   flex: "1",
-                  marginTop: "20px",
+                  marginTop: "6px",
                 },
               },
               [
@@ -706,14 +728,16 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
                 },
               },
               [
-                h(
-                  "div",
-                  {
-                    key: "pp",
-                    style: { fontSize: "68px", fontWeight: 900, color: "#ff66aa", lineHeight: "1" },
-                  },
-                  `${formatOgInt(score.pp)}pp`,
-                ),
+                showPp
+                  ? h(
+                      "div",
+                      {
+                        key: "pp",
+                        style: { fontSize: "68px", fontWeight: 900, color: "#ff66aa", lineHeight: "1" },
+                      },
+                      `${formatOgInt(score.pp)}pp`,
+                    )
+                  : null,
                 h(
                   "div",
                   {
