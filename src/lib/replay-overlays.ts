@@ -20,11 +20,13 @@ export const REPLAY_OVERLAY_MAX_SCALE = 2.5;
 export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
   keypresses: { enabled: false, x: 0.035, y: 0.68, scale: 0.75 },
   kps: { enabled: false, x: 0.035, y: 0.77, scale: 0.75 },
-  misses: { enabled: true, x: 0.085, y: 0.77, scale: 0.75 },
+  misses: { enabled: true, x: 0.085, y: 0.77, scale: 1 },
   accuracy: { enabled: true, x: 0.74, y: 0.02, scale: 1 },
   judgements: { enabled: true, x: 0.74, y: 0.07, scale: 1 },
   progress: { enabled: true, x: 0.03, y: 0.03, scale: 1 },
 };
+
+const COMPACT_MISS_OVERLAY_DEFAULT: ReplayOverlayPlacement = { enabled: true, x: 0.085, y: 0.77, scale: 0.75 };
 
 const OVERLAPPING_LEFT_CLUSTER_DEFAULTS: ReplayOverlaySettings = {
   keypresses: { enabled: true, x: 0.05, y: 0.68, scale: 0.82 },
@@ -77,6 +79,7 @@ export function normalizeReplayOverlaySettings(value: unknown): ReplayOverlaySet
     const placement = normalizePlacement(raw[id], DEFAULT_REPLAY_OVERLAY_SETTINGS[id]);
     settings[id] = placementMatches(placement, LEGACY_PLAYFIELD_OVERLAY_DEFAULTS[id])
       || placementMatches(placement, OVERLAPPING_LEFT_CLUSTER_DEFAULTS[id])
+      || (id === "misses" && placementMatches(placement, COMPACT_MISS_OVERLAY_DEFAULT))
       ? DEFAULT_REPLAY_OVERLAY_SETTINGS[id]
       : placement;
     return settings;
