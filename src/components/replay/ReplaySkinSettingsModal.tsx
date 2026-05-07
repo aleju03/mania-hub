@@ -17,6 +17,7 @@ import {
   REPLAY_COMBO_FONT_SETS,
   REPLAY_JUDGEMENT_SETS,
   getReplayComboFontStyle,
+  getReplayJudgementScale,
   getReplayJudgementSetAssets,
   getReplaySkinProfile,
   normalizeReplaySkinSettings,
@@ -30,12 +31,15 @@ import {
   readReplaySkinPresets,
   REPLAY_SKIN_MAX_COLUMN_WIDTH,
   REPLAY_SKIN_MAX_COLUMN_SPACING,
+  REPLAY_SKIN_MAX_JUDGEMENT_SCALE,
   REPLAY_SKIN_MAX_NOTE_HEIGHT_SCALE,
   REPLAY_SKIN_MAX_OUTLINE_WIDTH,
   REPLAY_SKIN_MIN_COLUMN_WIDTH,
   REPLAY_SKIN_MIN_COLUMN_SPACING,
+  REPLAY_SKIN_MIN_JUDGEMENT_SCALE,
   REPLAY_SKIN_MIN_NOTE_HEIGHT_SCALE,
   REPLAY_SKIN_MIN_OUTLINE_WIDTH,
+  REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE,
   REPLAY_SKIN_DEFAULT_OUTLINE_WIDTH,
   replayHitPositionToOsuManiaHitPosition,
   replayStagePositionToOsuManiaPosition,
@@ -73,6 +77,7 @@ const DRAFT_PRESET_ID = "custom";
 const DEFAULT_DRAFT_PRESET_NAME = "New preset";
 const PREVIEW_BAR_NOTE_HEIGHT_RATIO = 0.22;
 const PREVIEW_MANIA_SKIN_STAGE_HEIGHT = 480;
+const REPLAY_JUDGEMENT_REFERENCE_ASPECT = 256 / 72;
 const PREVIEW_BAR_COLUMN_COLORS: Record<number, string[]> = {
   1: ["#fff"],
   2: ["#5a8fff", "#5a8fff"],
@@ -89,6 +94,7 @@ const PREVIEW_BAR_COLUMN_COLORS: Record<number, string[]> = {
 type ColorTarget = "tap" | "lnHead" | "lnBody" | "outline";
 type OverrideKind = "tap" | "lnHead";
 type PreviewMode = "tap" | "ln";
+type ReplaySkinSettingsTab = "style" | "layout" | "hud" | "overlays";
 type ArrowDirection = "left" | "right" | "up" | "down";
 
 type SelectionMode = "replace" | "toggle" | "range";
@@ -200,7 +206,7 @@ export function ReplaySkinSettingsModal({
   const [importingOsk, setImportingOsk] = useState(false);
   const [selectedKeyCount, setSelectedKeyCount] = useState(() => Math.max(1, Math.min(10, keyCount)));
   const [activeColor, setActiveColor] = useState<ColorTarget | null>(null);
-  const [activeTab, setActiveTab] = useState<"style" | "layout" | "hud" | "overlays">("style");
+  const [activeTab, setActiveTab] = useState<ReplaySkinSettingsTab>(() => readWindowTab());
   const [columnEditorOpen, setColumnEditorOpen] = useState(false);
   const [overrideKind, setOverrideKind] = useState<OverrideKind>("tap");
   const [barColorOverrideBackup, setBarColorOverrideBackup] = useState<string[]>([]);
@@ -215,6 +221,8 @@ export function ReplaySkinSettingsModal({
   const [hitPositionInput, setHitPositionInput] = useState(() => String(replayHitPositionToOsuManiaHitPosition(draft.hitPosition)));
   const [scorePositionInput, setScorePositionInput] = useState(() => String(replayStagePositionToOsuManiaPosition(draft.scorePosition)));
   const [comboPositionInput, setComboPositionInput] = useState(() => String(replayStagePositionToOsuManiaPosition(draft.comboPosition)));
+  const currentJudgementScale = getReplayJudgementScale(draft);
+  const [judgementScaleInput, setJudgementScaleInput] = useState(() => String(currentJudgementScale));
 
   useEffect(() => {
     setColumnWidthInput(String(profile.columnWidth));
@@ -243,6 +251,14 @@ export function ReplaySkinSettingsModal({
   useEffect(() => {
     setComboPositionInput(String(replayStagePositionToOsuManiaPosition(draft.comboPosition)));
   }, [draft.comboPosition]);
+
+  useEffect(() => {
+    setJudgementScaleInput(String(currentJudgementScale));
+  }, [currentJudgementScale]);
+
+  useEffect(() => {
+    writeWindowTab(activeTab);
+  }, [activeTab]);
 
   useEffect(() => {
     setSelectedColumns((current) => {
@@ -396,6 +412,24 @@ export function ReplaySkinSettingsModal({
 
   const update = (patch: Partial<ReplaySkinSettings>) => {
     setDraft((current) => normalizeReplaySkinSettings({ ...current, ...patch, version: 2 }));
+  };
+
+  const updateJudgementScale = (scale: number) => {
+    setDraft((current) => {
+      const normalizedScale = Math.max(REPLAY_SKIN_MIN_JUDGEMENT_SCALE, Math.min(REPLAY_SKIN_MAX_JUDGEMENT_SCALE, Math.round(scale)));
+      const judgementScales = { ...current.judgementScales };
+      if (normalizedScale === REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE) {
+        delete judgementScales[current.judgementSet];
+      } else {
+        judgementScales[current.judgementSet] = normalizedScale;
+      }
+      return normalizeReplaySkinSettings({
+        ...current,
+        judgementScale: normalizedScale,
+        judgementScales,
+        version: 2,
+      });
+    });
   };
 
   const updateOverlay = (id: ReplayOverlayId, patch: Partial<ReplayOverlaySettings[ReplayOverlayId]>) => {
@@ -742,6 +776,17 @@ export function ReplaySkinSettingsModal({
     update({ comboPosition: osuManiaStagePositionToReplayPosition(next) });
   };
 
+  const commitJudgementScaleInput = () => {
+    const parsed = Number(judgementScaleInput);
+    if (!Number.isFinite(parsed)) {
+      setJudgementScaleInput(String(currentJudgementScale));
+      return;
+    }
+    const next = Math.max(REPLAY_SKIN_MIN_JUDGEMENT_SCALE, Math.min(REPLAY_SKIN_MAX_JUDGEMENT_SCALE, Math.round(parsed)));
+    setJudgementScaleInput(String(next));
+    updateJudgementScale(next);
+  };
+
   const handleColumnWidthInputChange = (value: string) => {
     setColumnWidthInput(value);
     if (value.trim() === "") return;
@@ -796,6 +841,14 @@ export function ReplaySkinSettingsModal({
     const parsed = Number(value);
     if (!Number.isFinite(parsed) || parsed < OSU_MANIA_MIN_HIT_POSITION || parsed > OSU_MANIA_MAX_HIT_POSITION) return;
     update({ comboPosition: osuManiaStagePositionToReplayPosition(Math.round(parsed)) });
+  };
+
+  const handleJudgementScaleInputChange = (value: string) => {
+    setJudgementScaleInput(value);
+    if (value.trim() === "") return;
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < REPLAY_SKIN_MIN_JUDGEMENT_SCALE || parsed > REPLAY_SKIN_MAX_JUDGEMENT_SCALE) return;
+    updateJudgementScale(parsed);
   };
 
   if (typeof document === "undefined") return null;
@@ -1192,6 +1245,12 @@ export function ReplaySkinSettingsModal({
                   <JudgementSetGallery
                     value={draft.judgementSet}
                     onChange={(value) => update({ judgementSet: value })}
+                    scaleInputValue={judgementScaleInput}
+                    numericScale={currentJudgementScale}
+                    onScaleSliderChange={updateJudgementScale}
+                    onScaleInputChange={handleJudgementScaleInputChange}
+                    onScaleCommit={commitJudgementScaleInput}
+                    onScaleReset={() => updateJudgementScale(REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE)}
                   />
                 </div>
               </section>
@@ -1499,12 +1558,18 @@ function getPreviewAssetHeight(asset: ReplaySkinImageAsset, targetWidth: number,
   return Math.max(1, fallbackHeight || targetWidth);
 }
 
-function getJudgementPreviewHeight(asset: ReplaySkinImageAsset, previewHeight: number): number {
+function getJudgementPreviewHeight(asset: ReplaySkinImageAsset, previewHeight: number, scalePercent: number): number {
   const scale = asset.scale && asset.scale > 0 ? asset.scale : 1;
+  const width = asset.width && asset.width > 0 ? asset.width / scale : 0;
   const intrinsic = asset.height && asset.height > 0 ? asset.height / scale : 0;
   const fallback = previewHeight * 0.055;
   const canvasEquivalent = intrinsic > 0 ? intrinsic * (previewHeight / 480) : fallback;
-  return Math.min(previewHeight * 0.085, Math.max(previewHeight * 0.04, canvasEquivalent));
+  const clamped = Math.min(previewHeight * 0.085, Math.max(previewHeight * 0.04, canvasEquivalent));
+  const aspect = width > 0 && intrinsic > 0 ? width / intrinsic : 1;
+  const aspectScale = aspect > REPLAY_JUDGEMENT_REFERENCE_ASPECT
+    ? REPLAY_JUDGEMENT_REFERENCE_ASPECT / aspect
+    : 1;
+  return clamped * aspectScale * (scalePercent / 100);
 }
 
 const JUDGEMENT_PREVIEW_ITEMS: Array<{ assetKey: keyof ReplaySkinJudgementAssets; label: string; color: string }> = [
@@ -1521,9 +1586,21 @@ const JUDGEMENT_TILE_PREVIEW_KEYS: Array<keyof ReplaySkinJudgementAssets> = ["hi
 function JudgementSetGallery({
   value,
   onChange,
+  scaleInputValue,
+  numericScale,
+  onScaleSliderChange,
+  onScaleInputChange,
+  onScaleCommit,
+  onScaleReset,
 }: {
   value: ReplaySkinSettings["judgementSet"];
   onChange: (next: ReplaySkinSettings["judgementSet"]) => void;
+  scaleInputValue: string;
+  numericScale: number;
+  onScaleSliderChange: (next: number) => void;
+  onScaleInputChange: (next: string) => void;
+  onScaleCommit: () => void;
+  onScaleReset: () => void;
 }) {
   const tiles: Array<ReplaySkinSettings["judgementSet"]> = ["skin", ...REPLAY_JUDGEMENT_SETS];
   return (
@@ -1532,50 +1609,71 @@ function JudgementSetGallery({
         const isSelected = set === value;
         const assets = getReplayJudgementSetAssets(set);
         return (
-          <button
+          <div
             key={set}
-            type="button"
-            onClick={() => onChange(set)}
-            aria-pressed={isSelected}
-            className={`flex cursor-pointer flex-col items-stretch gap-2 rounded-lg border p-2.5 text-left transition-colors ${
+            className={`rounded-lg border p-2.5 transition-colors ${
               isSelected
                 ? "border-osu-pink/60 bg-osu-pink/10"
                 : "border-osu-b3/50 bg-black/20 hover:border-osu-pink/30 hover:bg-osu-b4/60"
             }`}
           >
-            <span className={`text-[11px] font-bold uppercase tracking-wider ${isSelected ? "text-osu-pink-light" : "text-osu-f1"}`}>
-              {getJudgementSetLabel(set)}
-            </span>
-            <div className="flex h-16 items-center justify-around gap-2 overflow-hidden rounded-md bg-black/30 px-2">
-              {JUDGEMENT_TILE_PREVIEW_KEYS.map((assetKey) => {
-                const item = JUDGEMENT_PREVIEW_ITEMS.find((entry) => entry.assetKey === assetKey)!;
-                const asset = assets?.[assetKey];
-                if (asset) {
-                  return (
-                    <img
-                      key={assetKey}
-                      src={asset.src}
-                      alt=""
-                      draggable={false}
-                      className="min-w-0 flex-1 max-h-12 object-contain"
-                    />
-                  );
-                }
-                if (set === "skin") {
-                  return (
-                    <span
-                      key={assetKey}
-                      className="text-xs font-bold leading-none"
-                      style={{ color: item.color }}
-                    >
-                      {item.label}
-                    </span>
-                  );
-                }
-                return <span key={assetKey} aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-white/10" />;
-              })}
-            </div>
-          </button>
+            <button
+              type="button"
+              onClick={() => onChange(set)}
+              aria-pressed={isSelected}
+              className="flex w-full cursor-pointer flex-col items-stretch gap-2 text-left"
+            >
+              <span className={`text-[11px] font-bold uppercase tracking-wider ${isSelected ? "text-osu-pink-light" : "text-osu-f1"}`}>
+                {getJudgementSetLabel(set)}
+              </span>
+              <div className="flex h-16 items-center justify-around gap-2 overflow-hidden rounded-md bg-black/30 px-2">
+                {JUDGEMENT_TILE_PREVIEW_KEYS.map((assetKey) => {
+                  const item = JUDGEMENT_PREVIEW_ITEMS.find((entry) => entry.assetKey === assetKey)!;
+                  const asset = assets?.[assetKey];
+                  if (asset) {
+                    return (
+                      <img
+                        key={assetKey}
+                        src={asset.src}
+                        alt=""
+                        draggable={false}
+                        className="min-w-0 flex-1 max-h-12 object-contain"
+                      />
+                    );
+                  }
+                  if (set === "skin") {
+                    return (
+                      <span
+                        key={assetKey}
+                        className="text-xs font-bold leading-none"
+                        style={{ color: item.color }}
+                      >
+                        {item.label}
+                      </span>
+                    );
+                  }
+                  return <span key={assetKey} aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-white/10" />;
+                })}
+              </div>
+            </button>
+            {isSelected ? (
+              <div className="mt-3 border-t border-osu-b3/40 pt-3">
+                <LayoutNumberControl
+                  label="Judgement size"
+                  inputValue={scaleInputValue}
+                  numericValue={numericScale}
+                  min={REPLAY_SKIN_MIN_JUDGEMENT_SCALE}
+                  max={REPLAY_SKIN_MAX_JUDGEMENT_SCALE}
+                  defaultValue={REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE}
+                  onSliderChange={onScaleSliderChange}
+                  onInputChange={onScaleInputChange}
+                  onCommit={onScaleCommit}
+                  onResetToDefault={onScaleReset}
+                  hint="Saved for this set."
+                />
+              </div>
+            ) : null}
+          </div>
         );
       })}
     </div>
@@ -1628,6 +1726,7 @@ function ReplaySkinPreview({
   const scoreY = height * (settings.upscroll ? settings.scorePosition : 768 - settings.scorePosition) / 768;
   const comboY = height * (settings.upscroll ? settings.comboPosition : 768 - settings.comboPosition) / 768;
   const previewJudgementAsset = getJudgementPreviewAsset(settings);
+  const judgementScale = getReplayJudgementScale(settings);
   const noteSize = settings.style === "circles" || settings.style === "arrows"
     ? Math.max(18, Math.min(averageLaneWidth - 4, Math.max(28, averageLaneWidth * 0.9)))
     : Math.max(8, Math.min(18, averageLaneWidth - 6));
@@ -2100,8 +2199,8 @@ function ReplaySkinPreview({
           style={{
             left: playfieldX + playfieldWidth / 2,
             top: scoreY,
-            height: getJudgementPreviewHeight(previewJudgementAsset, height),
-            maxWidth: playfieldWidth * 0.7,
+            height: getJudgementPreviewHeight(previewJudgementAsset, height, judgementScale),
+            maxWidth: "none",
           }}
         />
       ) : settings.judgementSet === "skin" ? (
@@ -2112,6 +2211,7 @@ function ReplaySkinPreview({
             width: playfieldWidth,
             top: scoreY,
             color: "#b3f5ff",
+            fontSize: 11 * (judgementScale / 100),
           }}
         >
           MAX
@@ -2685,6 +2785,7 @@ function FancySelect({
 const POPOVER_POSITION_STORAGE_PREFIX = "mania-hub-replay-popover-pos:";
 
 const WINDOW_RECT_STORAGE_KEY = "mania-hub-replay-settings-window-v1";
+const WINDOW_TAB_STORAGE_KEY = "mania-hub-replay-settings-tab-v1";
 const WINDOW_DEFAULT_WIDTH = 720;
 const WINDOW_DEFAULT_HEIGHT = 640;
 const WINDOW_MIN_WIDTH = 320;
@@ -2694,6 +2795,29 @@ const WINDOW_COMPACT_WIDTH = 640;
 
 type WindowRect = { x: number; y: number; w: number; h: number };
 type ResizeDirection = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+
+function isReplaySkinSettingsTab(value: unknown): value is ReplaySkinSettingsTab {
+  return value === "style" || value === "layout" || value === "hud" || value === "overlays";
+}
+
+function readWindowTab(): ReplaySkinSettingsTab {
+  if (typeof window === "undefined") return "style";
+  try {
+    const value = window.localStorage.getItem(WINDOW_TAB_STORAGE_KEY);
+    return isReplaySkinSettingsTab(value) ? value : "style";
+  } catch {
+    return "style";
+  }
+}
+
+function writeWindowTab(tab: ReplaySkinSettingsTab): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(WINDOW_TAB_STORAGE_KEY, tab);
+  } catch {
+    // ignore quota errors
+  }
+}
 
 function readStoredWindowRect(): WindowRect | null {
   if (typeof window === "undefined") return null;

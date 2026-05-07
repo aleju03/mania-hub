@@ -134,6 +134,8 @@ export interface ReplaySkinSettings {
   comboPosition: number;
   comboFontSet: ReplayComboFontSet;
   judgementSet: ReplayJudgementSet;
+  judgementScale: number;
+  judgementScales: Partial<Record<ReplayJudgementSet, number>>;
   keymodeProfiles: Record<string, ReplaySkinKeymodeProfile>;
 }
 
@@ -167,6 +169,9 @@ export const REPLAY_SKIN_DEFAULT_OUTLINE_WIDTH = 2;
 export const REPLAY_SKIN_DEFAULT_HIT_POSITION = 110;
 export const OSU_MANIA_DEFAULT_SCORE_POSITION = 206;
 export const OSU_MANIA_DEFAULT_COMBO_POSITION = 177;
+export const REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE = 100;
+export const REPLAY_SKIN_MIN_JUDGEMENT_SCALE = 50;
+export const REPLAY_SKIN_MAX_JUDGEMENT_SCALE = 250;
 export const OSU_MANIA_MIN_HIT_POSITION = 0;
 export const OSU_MANIA_MAX_HIT_POSITION = 480;
 const OSU_MANIA_COORDINATE_SCALE = 768 / 480;
@@ -315,6 +320,8 @@ export const DEFAULT_REPLAY_SKIN_SETTINGS: ReplaySkinSettings = {
   comboPosition: osuManiaStagePositionToReplayPosition(OSU_MANIA_DEFAULT_COMBO_POSITION),
   comboFontSet: DEFAULT_REPLAY_COMBO_FONT_SET,
   judgementSet: DEFAULT_REPLAY_JUDGEMENT_SET,
+  judgementScale: REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE,
+  judgementScales: {},
   keymodeProfiles: {},
 };
 
@@ -379,6 +386,26 @@ function normalizeOutlineWidth(value: unknown): number {
   const parsed = typeof value === "number" ? value : Number(value);
   const source = Number.isFinite(parsed) ? parsed : REPLAY_SKIN_DEFAULT_OUTLINE_WIDTH;
   return Math.max(REPLAY_SKIN_MIN_OUTLINE_WIDTH, Math.min(REPLAY_SKIN_MAX_OUTLINE_WIDTH, Math.round(source)));
+}
+
+function normalizeJudgementScale(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  const source = Number.isFinite(parsed) ? parsed : REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE;
+  return Math.max(REPLAY_SKIN_MIN_JUDGEMENT_SCALE, Math.min(REPLAY_SKIN_MAX_JUDGEMENT_SCALE, Math.round(source)));
+}
+
+function normalizeJudgementScales(value: unknown): Partial<Record<ReplayJudgementSet, number>> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const out: Partial<Record<ReplayJudgementSet, number>> = {};
+  for (const [set, scale] of Object.entries(value)) {
+    const normalizedSet = normalizeReplayJudgementSet(set);
+    if (normalizedSet !== set) continue;
+    const normalizedScale = normalizeJudgementScale(scale);
+    if (normalizedScale !== REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE) {
+      out[normalizedSet] = normalizedScale;
+    }
+  }
+  return out;
 }
 
 function normalizeHitPosition(value: unknown): number {
@@ -573,6 +600,15 @@ export function normalizeReplaySkinSettings(value: unknown): ReplaySkinSettings 
     columnSpacing: raw.columnSpacing,
     noteHeightScale: raw.noteHeightScale,
   }, undefined, persistedVersion);
+  const judgementSet = normalizeReplayJudgementSet(raw.judgementSet);
+  const judgementScale = normalizeJudgementScale(raw.judgementScale);
+  const judgementScales = normalizeJudgementScales(raw.judgementScales);
+  if (
+    judgementScale !== REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE &&
+    judgementScales[judgementSet] == null
+  ) {
+    judgementScales[judgementSet] = judgementScale;
+  }
   return {
     version: 2,
     style: raw.style === "circles" || raw.style === "bars" || raw.style === "arrows"
@@ -596,9 +632,18 @@ export function normalizeReplaySkinSettings(value: unknown): ReplaySkinSettings 
     scorePosition: normalizeHitPosition(raw.scorePosition ?? DEFAULT_REPLAY_SKIN_SETTINGS.scorePosition),
     comboPosition: normalizeHitPosition(raw.comboPosition ?? DEFAULT_REPLAY_SKIN_SETTINGS.comboPosition),
     comboFontSet: normalizeReplayComboFontSet(raw.comboFontSet),
-    judgementSet: normalizeReplayJudgementSet(raw.judgementSet),
+    judgementSet,
+    judgementScale: getReplayJudgementScale({ judgementSet, judgementScales } as ReplaySkinSettings),
+    judgementScales,
     keymodeProfiles: normalizeKeymodeProfiles(raw.keymodeProfiles, fallbackProfile, persistedVersion),
   };
+}
+
+export function getReplayJudgementScale(
+  settings: Pick<ReplaySkinSettings, "judgementSet" | "judgementScales">,
+  set: ReplayJudgementSet = settings.judgementSet,
+): number {
+  return settings.judgementScales[set] ?? REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE;
 }
 
 export function readReplaySkinSettings(): ReplaySkinSettings {
@@ -799,6 +844,7 @@ function compactReplaySkinSettingsV3(settings: ReplaySkinSettings): Record<strin
   if (settings.comboPosition !== def.comboPosition) out.p = settings.comboPosition;
   if (settings.comboFontSet !== def.comboFontSet) out.t = settings.comboFontSet;
   if (settings.judgementSet !== def.judgementSet) out.u = settings.judgementSet;
+  if (Object.keys(settings.judgementScales).length > 0) out.w = settings.judgementScales;
   const profiles: Record<string, unknown> = {};
   for (const [key, profile] of Object.entries(settings.keymodeProfiles)) {
     const compact = compactKeymodeProfileV3(profile);
@@ -840,6 +886,8 @@ function expandReplaySkinSettingsV3(value: unknown): Record<string, unknown> {
     comboPosition: raw.p,
     comboFontSet: raw.t,
     judgementSet: raw.u,
+    judgementScale: raw.v,
+    judgementScales: raw.w,
     keymodeProfiles: profiles,
   };
 }

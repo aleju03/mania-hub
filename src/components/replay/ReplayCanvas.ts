@@ -5,7 +5,7 @@ import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgeme
 import { buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "../../lib/mania-replay-judgement";
 import { DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
 import type { ReplayOverlayId, ReplayOverlaySettings } from "../../lib/replay-overlays";
-import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementSetAssets, getReplaySkinProfile, normalizeReplaySkinSettings } from "../../lib/replay-skin";
+import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementScale, getReplayJudgementSetAssets, getReplaySkinProfile, normalizeReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayComboFontStyle, ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayHitCounts } from "../../lib/replay-validation";
 import { buildStableReplayComboEvents, resolveReplayJudgementEvents } from "../../lib/replay-validation";
@@ -2480,13 +2480,14 @@ export class ManiaReplayRenderer {
         const alpha = 1 - fadeProgress;
         const popProgress = Math.max(0, Math.min(1, timeSince / REPLAY_JUDGEMENT_POP_DURATION_MS));
         const animationScale = 0.8 + 0.2 * easeOutElastic(popProgress);
+        const judgementScale = getReplayJudgementScale(this.skinSettings) / 100;
         const judgmentAsset = this.getJudgementAsset(this.lastJudgment);
         const y = scoreY;
         if (judgmentAsset) {
           const rawHeight = this.getHudAssetHeight(judgmentAsset, h * REPLAY_JUDGEMENT_ASSET_HEIGHT_RATIO, layout);
           const clampedHeight = Math.min(h * 0.085, Math.max(h * 0.04, rawHeight));
           const aspectScale = this.getJudgementAspectScale(judgmentAsset);
-          const targetHeight = clampedHeight * animationScale * aspectScale;
+          const targetHeight = clampedHeight * judgementScale * animationScale * aspectScale;
           const targetWidth = this.getAssetWidthForHeight(judgmentAsset, targetHeight, targetHeight * 2);
           this.drawSkinImage(judgmentAsset, playfieldCenterX, y, targetWidth, targetHeight, 0.5, 0.5, alpha);
         } else if (this.skinSettings.judgementSet === DEFAULT_REPLAY_JUDGEMENT_SET) {
@@ -2495,7 +2496,7 @@ export class ManiaReplayRenderer {
             playfieldCenterX,
             y,
             {
-              fontSize: Math.max(16, h * 0.035) * animationScale,
+              fontSize: Math.max(16, h * 0.035) * judgementScale * animationScale,
               fill: JUDGMENT_COLORS[this.lastJudgment],
               fontWeight: "700",
               anchorX: 0.5,
