@@ -28,6 +28,12 @@ import { buildKeypressHeatmap } from "../lib/replay-keypress-heatmap";
 import { parseReplayScoreInput } from "../lib/replay-score-input";
 import { getReplayScoreAvailability } from "../lib/replay-score-availability";
 import { DEFAULT_REPLAY_SCROLL_SPEED, REPLAY_SCROLL_SPEED_CHANGE_EVENT, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../lib/replay-scroll-speed";
+import {
+  REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT,
+  normalizeReplayOverlaySettings,
+  readReplayOverlaySettings,
+  writeReplayOverlaySettings,
+} from "../lib/replay-overlays";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
 import { startProgressPoll } from "../lib/progress-poll";
 import {
@@ -49,6 +55,7 @@ import {
 } from "../lib/replay-preferences";
 import type { ManiaBeatmap } from "../lib/beatmap-parser";
 import type { ReplaySkinSettings } from "../lib/replay-skin";
+import type { ReplayOverlaySettings } from "../lib/replay-overlays";
 import type { BeatmapScoreLookupStatus, OsuScore, OsuBeatmapset, OsuBeatmap } from "../lib/types";
 import type { ReplayRendererLike, ServerReplay } from "../lib/replay-types";
 import { getScoreExpectedCounts } from "../lib/replay-types";
@@ -668,6 +675,7 @@ function ReplayViewer({
   const [inputOverlayKeyHistory, setInputOverlayKeyHistory] = useState(readReplayInputKeyHistory);
   const [inputOverlayColor, setInputOverlayColor] = useState(readReplayInputColor);
   const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
+  const [overlaySettings, setOverlaySettings] = useState(readReplayOverlaySettings);
   const [skinSettingsOpen, setSkinSettingsOpen] = useState(false);
   const [audioError, setAudioError] = useState<string | null>(null);
   const [rendererError, setRendererError] = useState<string | null>(null);
@@ -689,6 +697,7 @@ function ReplayViewer({
   const inputOverlayColorRef = useRef("#a855f7");
   const scrollSpeedRef = useRef(DEFAULT_REPLAY_SCROLL_SPEED);
   const skinSettingsRef = useRef<ReplaySkinSettings>(skinSettings);
+  const overlaySettingsRef = useRef<ReplayOverlaySettings>(overlaySettings);
   const shouldResumeAudioRef = useRef(false);
   const isCanvasFullscreen = isNativeFullscreen || isPseudoFullscreen;
   const applyScrollSpeed = useCallback((next: number, persist = false) => {
@@ -705,19 +714,30 @@ function ReplayViewer({
     writeReplaySkinSettings(normalized);
   }, []);
 
+  const applyOverlaySettings = useCallback((next: ReplayOverlaySettings) => {
+    const normalized = normalizeReplayOverlaySettings(next);
+    overlaySettingsRef.current = normalized;
+    setOverlaySettings(normalized);
+    rendererRef.current?.setOverlaySettings(normalized);
+    writeReplayOverlaySettings(normalized);
+  }, []);
+
   useEffect(() => {
     const refreshSharedReplaySettings = () => {
       applyScrollSpeed(readReplayScrollSpeed());
       setSkinSettings(readReplaySkinSettings());
+      setOverlaySettings(readReplayOverlaySettings());
     };
     window.addEventListener("storage", refreshSharedReplaySettings);
     window.addEventListener(REPLAY_SCROLL_SPEED_CHANGE_EVENT, refreshSharedReplaySettings);
     window.addEventListener(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
+    window.addEventListener(REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
     window.addEventListener("focus", refreshSharedReplaySettings);
     return () => {
       window.removeEventListener("storage", refreshSharedReplaySettings);
       window.removeEventListener(REPLAY_SCROLL_SPEED_CHANGE_EVENT, refreshSharedReplaySettings);
       window.removeEventListener(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
+      window.removeEventListener(REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
       window.removeEventListener("focus", refreshSharedReplaySettings);
     };
   }, [applyScrollSpeed]);
@@ -941,6 +961,11 @@ function ReplayViewer({
     }
   }, [skinSettings]);
 
+  useEffect(() => {
+    overlaySettingsRef.current = overlaySettings;
+    rendererRef.current?.setOverlaySettings(overlaySettings);
+  }, [overlaySettings]);
+
   // Create renderer
   useEffect(() => {
     if (!canvasRef.current || replay.frames.length === 0) return;
@@ -976,6 +1001,8 @@ function ReplayViewer({
             expectedCounts: getScoreExpectedCounts(scoreInfo, replay),
             lifeBarFrames: replay.lifeBarFrames,
             skinSettings: skinSettingsRef.current,
+            overlaySettings: overlaySettingsRef.current,
+            onOverlaySettingsChange: applyOverlaySettings,
             inputOverlayOnly: inputOverlayOnlyRef.current,
             inputOverlayColor: inputOverlayColorRef.current,
             inputOverlayKeyHistory: inputOverlayKeyHistoryRef.current,
@@ -1001,6 +1028,7 @@ function ReplayViewer({
           keyHistory: inputOverlayKeyHistoryRef.current,
         });
         renderer.setSkinSettings(skinSettingsRef.current);
+        renderer.setOverlaySettings(overlaySettingsRef.current);
         rendererRef.current = renderer;
 
         // Install the audio-driven clock. When audio is enabled and actually
@@ -1049,7 +1077,7 @@ function ReplayViewer({
         rendererRef.current = null;
       }
     };
-  }, [replay, beatmap, initialTime, modRate, modAcronyms, displayScoreValues, scoreInfo?.beatmap?.convert]);
+  }, [replay, beatmap, initialTime, modRate, modAcronyms, displayScoreValues, scoreInfo?.beatmap?.convert, applyOverlaySettings]);
 
   // Detect when the renderer reaches the end on its own (no more frames) and
   // flip isPlaying back. ReplayProgressBar polls the renderer independently
@@ -1547,8 +1575,10 @@ function ReplayViewer({
         {skinSettingsOpen && (
           <ReplaySkinSettingsModal
             settings={skinSettings}
+            overlaySettings={overlaySettings}
             keyCount={replay.keyCount}
             onSave={applySkinSettings}
+            onSaveOverlays={applyOverlaySettings}
             onClose={() => setSkinSettingsOpen(false)}
           />
         )}

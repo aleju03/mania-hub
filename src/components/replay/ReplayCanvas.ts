@@ -3,6 +3,8 @@ import type { ReplayFrame, ReplayLifeBarFrame } from "../../lib/types";
 import type { ManiaNote, ManiaScrollVelocity } from "../../lib/beatmap-parser";
 import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgementEvent, ReplayNoteState } from "../../lib/mania-replay-judgement";
 import { buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "../../lib/mania-replay-judgement";
+import { DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
+import type { ReplayOverlayId, ReplayOverlaySettings } from "../../lib/replay-overlays";
 import { DEFAULT_REPLAY_SKIN_SETTINGS, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplaySkinProfile, normalizeReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayHitCounts } from "../../lib/replay-validation";
@@ -129,6 +131,8 @@ interface RendererOptions {
   lifeBarFrames?: ReplayLifeBarFrame[];
   showHealthBar?: boolean;
   skinSettings?: ReplaySkinSettings;
+  overlaySettings?: ReplayOverlaySettings;
+  onOverlaySettingsChange?: (settings: ReplayOverlaySettings) => void;
 }
 
 interface Layout {
@@ -146,6 +150,7 @@ interface Layout {
 
 type Hand = "left" | "right" | "center";
 type ReplayComboEvent = { kind: "break" | "hit"; time: number };
+type ReplayOverlayHitbox = { id: ReplayOverlayId; x: number; y: number; width: number; height: number };
 
 export class ManiaReplayRenderer {
   private canvas: HTMLCanvasElement;
@@ -211,6 +216,38 @@ export class ManiaReplayRenderer {
   private barePlayfield = false;
   private showHealthBar = true;
   private skinSettings: ReplaySkinSettings = DEFAULT_REPLAY_SKIN_SETTINGS;
+  private overlaySettings: ReplayOverlaySettings = DEFAULT_REPLAY_OVERLAY_SETTINGS;
+  private onOverlaySettingsChange: ((settings: ReplayOverlaySettings) => void) | null = null;
+  private overlayHitboxes: ReplayOverlayHitbox[] = [];
+  private activeOverlayPointers = new Map<number, { id: ReplayOverlayId; x: number; y: number }>();
+  private previousCanvasTouchAction = "";
+  private draggingOverlay: {
+    id: ReplayOverlayId;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startPlacementX: number;
+    startPlacementY: number;
+    width: number;
+    height: number;
+  } | null = null;
+  private resizingOverlay: {
+    id: ReplayOverlayId;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startScale: number;
+    startWidth: number;
+    startHeight: number;
+  } | null = null;
+  private pinchingOverlay: {
+    id: ReplayOverlayId;
+    pointerIds: [number, number];
+    startDistance: number;
+    startScale: number;
+    startWidth: number;
+    startHeight: number;
+  } | null = null;
   private skinProfile: ReplaySkinKeymodeProfile = getReplaySkinProfile(DEFAULT_REPLAY_SKIN_SETTINGS, 4);
   private barTapColors: string[] = [];
   private circleTapColors: string[] = [];
@@ -312,6 +349,8 @@ export class ManiaReplayRenderer {
     this.barePlayfield = options?.barePlayfield ?? false;
     this.showHealthBar = options?.showHealthBar ?? true;
     this.skinSettings = normalizeReplaySkinSettings(options?.skinSettings);
+    this.overlaySettings = normalizeReplayOverlaySettings(options?.overlaySettings);
+    this.onOverlaySettingsChange = options?.onOverlaySettingsChange ?? null;
     this.updateSkinCache();
     this.scrollVelocities = options?.scrollVelocities ?? [];
     this.prepareScrollVelocities();
@@ -368,6 +407,7 @@ export class ManiaReplayRenderer {
 
     this.measureCanvas();
     this.initPromise = this.initPixi();
+    this.installOverlayPointerHandlers();
   }
 
   private async initPixi() {
@@ -813,6 +853,11 @@ export class ManiaReplayRenderer {
     if (!this._isPlaying) this.render();
   }
 
+  setOverlaySettings(settings: ReplayOverlaySettings) {
+    this.overlaySettings = normalizeReplayOverlaySettings(settings);
+    if (!this._isPlaying) this.render();
+  }
+
   setSkinSettings(settings: ReplaySkinSettings) {
     this.skinSettings = normalizeReplaySkinSettings(settings);
     this.updateSkinCache();
@@ -830,6 +875,243 @@ export class ManiaReplayRenderer {
   get time() { return this.currentTime; }
   get duration() { return this.totalDuration; }
   get displayDuration() { return this.totalDuration / this.modRate; }
+
+  private installOverlayPointerHandlers() {
+    this.previousCanvasTouchAction = this.canvas.style.touchAction;
+    this.canvas.style.touchAction = "none";
+    this.canvas.addEventListener("pointerdown", this.handleOverlayPointerDown);
+    this.canvas.addEventListener("pointermove", this.handleOverlayPointerMove);
+    this.canvas.addEventListener("pointerup", this.handleOverlayPointerEnd);
+    this.canvas.addEventListener("pointercancel", this.handleOverlayPointerEnd);
+    this.canvas.addEventListener("pointerleave", this.handleOverlayPointerLeave);
+  }
+
+  private removeOverlayPointerHandlers() {
+    this.canvas.style.touchAction = this.previousCanvasTouchAction;
+    this.canvas.removeEventListener("pointerdown", this.handleOverlayPointerDown);
+    this.canvas.removeEventListener("pointermove", this.handleOverlayPointerMove);
+    this.canvas.removeEventListener("pointerup", this.handleOverlayPointerEnd);
+    this.canvas.removeEventListener("pointercancel", this.handleOverlayPointerEnd);
+    this.canvas.removeEventListener("pointerleave", this.handleOverlayPointerLeave);
+  }
+
+  private getCanvasPointerPoint(event: PointerEvent): { x: number; y: number } {
+    const rect = this.canvas.getBoundingClientRect();
+    const scaleX = rect.width > 0 ? this.cssWidth / rect.width : 1;
+    const scaleY = rect.height > 0 ? this.cssHeight / rect.height : 1;
+    return {
+      x: (event.clientX - rect.left) * scaleX,
+      y: (event.clientY - rect.top) * scaleY,
+    };
+  }
+
+  private getOverlayAtPoint(x: number, y: number): ReplayOverlayHitbox | null {
+    for (let index = this.overlayHitboxes.length - 1; index >= 0; index -= 1) {
+      const box = this.overlayHitboxes[index];
+      if (x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height) {
+        return box;
+      }
+    }
+    return null;
+  }
+
+  private getOverlayResizeZoneSize(box: ReplayOverlayHitbox): number {
+    return Math.max(14, Math.min(28, Math.min(box.width, box.height) * 0.45));
+  }
+
+  private isOverlayResizeHandle(box: ReplayOverlayHitbox, x: number, y: number): boolean {
+    const size = this.getOverlayResizeZoneSize(box);
+    return x >= box.x + box.width - size
+      && x <= box.x + box.width
+      && y >= box.y + box.height - size
+      && y <= box.y + box.height;
+  }
+
+  private getOverlayPointerCursor(x: number, y: number): string {
+    const hitbox = this.getOverlayAtPoint(x, y);
+    if (!hitbox) return "";
+    return this.isOverlayResizeHandle(hitbox, x, y) ? "nwse-resize" : "grab";
+  }
+
+  private getPointerDistance(a: { x: number; y: number }, b: { x: number; y: number }): number {
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
+  private clampOverlayScale(scale: number): number {
+    if (!Number.isFinite(scale)) return 1;
+    return Math.max(REPLAY_OVERLAY_MIN_SCALE, Math.min(REPLAY_OVERLAY_MAX_SCALE, scale));
+  }
+
+  private clampOverlayPosition(x: number, y: number, width: number, height: number, layout: Layout): { x: number; y: number } {
+    const maxX = Math.max(0, 1 - width / Math.max(1, layout.w));
+    const maxY = Math.max(0, 1 - height / Math.max(1, layout.h));
+    return {
+      x: Math.max(0, Math.min(maxX, x)),
+      y: Math.max(0, Math.min(maxY, y)),
+    };
+  }
+
+  private handleOverlayPointerDown = (event: PointerEvent) => {
+    if (event.button !== 0 || this.hideHud) return;
+    const point = this.getCanvasPointerPoint(event);
+    const hitbox = this.getOverlayAtPoint(point.x, point.y);
+    if (!hitbox) return;
+
+    this.activeOverlayPointers.set(event.pointerId, { id: hitbox.id, ...point });
+    this.canvas.setPointerCapture(event.pointerId);
+    const placement = this.overlaySettings[hitbox.id];
+    const otherPointer = Array.from(this.activeOverlayPointers.entries())
+      .find(([pointerId, pointer]) => pointerId !== event.pointerId && pointer.id === hitbox.id);
+
+    if (otherPointer) {
+      this.draggingOverlay = null;
+      this.resizingOverlay = null;
+      this.pinchingOverlay = {
+        id: hitbox.id,
+        pointerIds: [otherPointer[0], event.pointerId],
+        startDistance: Math.max(1, this.getPointerDistance(otherPointer[1], point)),
+        startScale: placement.scale,
+        startWidth: hitbox.width,
+        startHeight: hitbox.height,
+      };
+      this.canvas.style.cursor = "nwse-resize";
+      event.preventDefault();
+      return;
+    }
+
+    if (this.isOverlayResizeHandle(hitbox, point.x, point.y)) {
+      this.resizingOverlay = {
+        id: hitbox.id,
+        pointerId: event.pointerId,
+        startX: point.x,
+        startY: point.y,
+        startScale: placement.scale,
+        startWidth: hitbox.width,
+        startHeight: hitbox.height,
+      };
+      this.canvas.style.cursor = "nwse-resize";
+      event.preventDefault();
+      return;
+    }
+
+    this.draggingOverlay = {
+      id: hitbox.id,
+      pointerId: event.pointerId,
+      startX: point.x,
+      startY: point.y,
+      startPlacementX: placement.x,
+      startPlacementY: placement.y,
+      width: hitbox.width,
+      height: hitbox.height,
+    };
+    this.canvas.style.cursor = "grabbing";
+    event.preventDefault();
+  };
+
+  private handleOverlayPointerMove = (event: PointerEvent) => {
+    const layout = this.cachedLayout ?? this.getLayout();
+    const point = this.getCanvasPointerPoint(event);
+    const activePointer = this.activeOverlayPointers.get(event.pointerId);
+    if (activePointer) {
+      this.activeOverlayPointers.set(event.pointerId, { ...activePointer, ...point });
+    }
+
+    if (this.pinchingOverlay && this.pinchingOverlay.pointerIds.includes(event.pointerId)) {
+      const [firstId, secondId] = this.pinchingOverlay.pointerIds;
+      const first = this.activeOverlayPointers.get(firstId);
+      const second = this.activeOverlayPointers.get(secondId);
+      if (!first || !second) return;
+      const nextScale = this.clampOverlayScale(
+        this.pinchingOverlay.startScale * (this.getPointerDistance(first, second) / this.pinchingOverlay.startDistance),
+      );
+      const scaleRatio = nextScale / Math.max(0.001, this.pinchingOverlay.startScale);
+      const placement = this.overlaySettings[this.pinchingOverlay.id];
+      const nextPosition = this.clampOverlayPosition(
+        placement.x,
+        placement.y,
+        this.pinchingOverlay.startWidth * scaleRatio,
+        this.pinchingOverlay.startHeight * scaleRatio,
+        layout,
+      );
+      this.updateOverlayPlacement(this.pinchingOverlay.id, { ...nextPosition, scale: nextScale });
+      event.preventDefault();
+      return;
+    }
+
+    if (this.resizingOverlay) {
+      if (event.pointerId !== this.resizingOverlay.pointerId) return;
+      const resize = this.resizingOverlay;
+      const dx = point.x - resize.startX;
+      const dy = point.y - resize.startY;
+      const widthRatio = (resize.startWidth + dx) / Math.max(1, resize.startWidth);
+      const heightRatio = (resize.startHeight + dy) / Math.max(1, resize.startHeight);
+      const nextScale = this.clampOverlayScale(resize.startScale * Math.max(widthRatio, heightRatio));
+      const scaleRatio = nextScale / Math.max(0.001, resize.startScale);
+      const placement = this.overlaySettings[resize.id];
+      const nextPosition = this.clampOverlayPosition(
+        placement.x,
+        placement.y,
+        resize.startWidth * scaleRatio,
+        resize.startHeight * scaleRatio,
+        layout,
+      );
+      this.updateOverlayPlacement(resize.id, { ...nextPosition, scale: nextScale });
+      event.preventDefault();
+      return;
+    }
+
+    if (this.draggingOverlay) {
+      if (event.pointerId !== this.draggingOverlay.pointerId) return;
+      const drag = this.draggingOverlay;
+      const dx = (point.x - drag.startX) / Math.max(1, layout.w);
+      const dy = (point.y - drag.startY) / Math.max(1, layout.h);
+      const next = this.clampOverlayPosition(
+        drag.startPlacementX + dx,
+        drag.startPlacementY + dy,
+        drag.width,
+        drag.height,
+        layout,
+      );
+      this.updateOverlayPlacement(drag.id, next);
+      event.preventDefault();
+      return;
+    }
+
+    this.canvas.style.cursor = this.getOverlayPointerCursor(point.x, point.y);
+  };
+
+  private handleOverlayPointerEnd = (event: PointerEvent) => {
+    this.activeOverlayPointers.delete(event.pointerId);
+    if (this.pinchingOverlay?.pointerIds.includes(event.pointerId)) {
+      this.pinchingOverlay = null;
+    }
+    if (this.resizingOverlay?.pointerId === event.pointerId) {
+      this.resizingOverlay = null;
+    }
+    if (this.draggingOverlay?.pointerId === event.pointerId) {
+      this.draggingOverlay = null;
+    }
+    if (this.canvas.hasPointerCapture(event.pointerId)) this.canvas.releasePointerCapture(event.pointerId);
+    const point = this.getCanvasPointerPoint(event);
+    this.canvas.style.cursor = this.getOverlayPointerCursor(point.x, point.y);
+  };
+
+  private handleOverlayPointerLeave = () => {
+    if (!this.draggingOverlay && !this.resizingOverlay && !this.pinchingOverlay) this.canvas.style.cursor = "";
+  };
+
+  private updateOverlayPlacement(id: ReplayOverlayId, placement: Partial<ReplayOverlaySettings[ReplayOverlayId]>) {
+    const nextSettings = normalizeReplayOverlaySettings({
+      ...this.overlaySettings,
+      [id]: {
+        ...this.overlaySettings[id],
+        ...placement,
+      },
+    });
+    this.overlaySettings = nextSettings;
+    this.onOverlaySettingsChange?.(nextSettings);
+    if (!this._isPlaying) this.render();
+  }
 
   private tick() {
     if (!this._isPlaying) return;
@@ -1636,11 +1918,162 @@ export class ManiaReplayRenderer {
     }
   }
 
+  private getOverlayScale(layout: Layout, id: ReplayOverlayId): number {
+    return this.getHudScale(layout) * this.overlaySettings[id].scale;
+  }
+
+  private getOverlayFrame(
+    layout: Layout,
+    id: ReplayOverlayId,
+    width: number,
+    height: number,
+  ): { x: number; y: number; width: number; height: number } | null {
+    const placement = this.overlaySettings[id];
+    if (!placement.enabled) return null;
+    const x = Math.max(0, Math.min(Math.max(0, layout.w - width), placement.x * layout.w));
+    const y = Math.max(0, Math.min(Math.max(0, layout.h - height), placement.y * layout.h));
+    const frame = { x, y, width, height };
+    this.overlayHitboxes.push({ id, ...frame });
+    return frame;
+  }
+
+  private renderAccuracyOverlay(layout: Layout) {
+    const scale = this.getOverlayScale(layout, "accuracy");
+    const width = 94 * scale;
+    const height = 26 * scale;
+    const frame = this.getOverlayFrame(layout, "accuracy", width, height);
+    if (!frame) return;
+    this.addText(this.hudCachedAccuracy, frame.x, frame.y, {
+      fontSize: 18 * scale,
+      fill: "#ffffff",
+      alpha: 0.85,
+      fontWeight: "700",
+    });
+  }
+
+  private renderKpsOverlay(layout: Layout) {
+    const scale = this.getOverlayScale(layout, "kps");
+    const width = 54 * scale;
+    const height = 38 * scale;
+    const frame = this.getOverlayFrame(layout, "kps", width, height);
+    if (!frame) return;
+
+    this.fillRect(frame.x, frame.y, width, height, "#0a0a12", 0.82);
+    this.rect(frame.x, frame.y, width, height, "#ffffff", 0.12, 1);
+    this.fillRect(frame.x + 1, frame.y + 1, 3 * scale, height - 2, this.inputOverlayColor, 0.95);
+    this.addText("KPS", frame.x + width / 2, frame.y + 5 * scale, {
+      fontSize: 7 * scale,
+      fill: "#ffffff",
+      alpha: 0.52,
+      fontWeight: "700",
+      anchorX: 0.5,
+    });
+    this.addText(this.hudCachedTotalKps, frame.x + width / 2, frame.y + 34 * scale, {
+      fontSize: 17 * scale,
+      fill: "#ffffff",
+      alpha: 0.95,
+      fontWeight: "700",
+      anchorX: 0.5,
+      anchorY: 1,
+    });
+  }
+
+  private renderKeypressOverlay(layout: Layout) {
+    const scale = this.getOverlayScale(layout, "keypresses");
+    const keyGap = Math.round((this.keyCount >= 8 ? 4 : 6) * scale);
+    const keyBoxWidth = Math.round((this.keyCount >= 8 ? 36 : 40) * scale);
+    const keyBoxHeight = Math.round(38 * scale);
+    const width = this.keyCount * keyBoxWidth + Math.max(0, this.keyCount - 1) * keyGap;
+    const height = keyBoxHeight;
+    const frame = this.getOverlayFrame(layout, "keypresses", width, height);
+    if (!frame) return;
+
+    const currentState = this.currentKeyState;
+    this.renderKeyInputHistory(layout, frame.x, frame.y, keyBoxWidth, keyBoxHeight, keyGap);
+
+    for (let col = 0; col < this.keyCount; col++) {
+      const x = frame.x + col * (keyBoxWidth + keyGap);
+      const pressed = (currentState & (1 << col)) !== 0;
+      const color = this.colors[col];
+      const keyFill = pressed ? "#0a0a12" : "#ffffff";
+      const kpsFill = pressed ? "#0a0a12" : color;
+      const keyAlpha = pressed ? 0.92 : 0.78;
+      const kpsAlpha = pressed ? 0.76 : 0.9;
+      const keyFontSize = (keyBoxWidth <= 32 * scale ? 12 : 13) * scale;
+      const kpsFontSize = (keyBoxWidth <= 36 * scale ? 8 : 9) * scale;
+      this.fillRect(x, frame.y, keyBoxWidth, keyBoxHeight, "#0a0a12", 0.82);
+      this.rect(x, frame.y, keyBoxWidth, keyBoxHeight, "#ffffff", 0.12, 1);
+      this.fillRect(x + 1, frame.y + 1, keyBoxWidth - 2, keyBoxHeight - 2, color, pressed ? 0.95 : 0.18);
+      this.addText(String(col + 1), x + keyBoxWidth / 2, frame.y + 12 * scale, {
+        fontSize: keyFontSize,
+        fill: keyFill,
+        alpha: keyAlpha,
+        fontWeight: "700",
+        anchorX: 0.5,
+        anchorY: 0.5,
+      });
+      this.addText(this.hudCachedKeyKps[col], x + keyBoxWidth / 2, frame.y + 28 * scale, {
+        fontSize: kpsFontSize,
+        fill: kpsFill,
+        alpha: kpsAlpha,
+        fontWeight: "700",
+        anchorX: 0.5,
+        anchorY: 0.5,
+      });
+    }
+  }
+
+  private renderMissOverlay(layout: Layout) {
+    const scale = this.getOverlayScale(layout, "misses");
+    const width = 128 * scale;
+    const height = 36 * scale;
+    const frame = this.getOverlayFrame(layout, "misses", width, height);
+    if (!frame) return;
+
+    [
+      { label: "L MISS", value: this.hudCachedLeftMisses, color: "#5a8fff" },
+      { label: "R MISS", value: this.hudCachedRightMisses, color: "#de31ae" },
+    ].forEach((item, index) => {
+      const x = frame.x + index * 68 * scale;
+      this.fillRect(x, frame.y, 60 * scale, height, "#0a0a12", 0.78);
+      this.fillRect(x, frame.y, 3 * scale, height, item.color, 1);
+      this.addText(item.label, x + 9 * scale, frame.y + 5 * scale, { fontSize: 9 * scale, fill: "#ffffff", alpha: 0.58, fontWeight: "700" });
+      this.addText(item.value, x + 9 * scale, frame.y + 28 * scale, { fontSize: 16 * scale, fill: "#ffffff", alpha: 0.95, fontWeight: "700", anchorY: 1 });
+    });
+  }
+
+  private renderJudgementOverlay(layout: Layout) {
+    const scale = this.getOverlayScale(layout, "judgements");
+    const width = 58 * scale;
+    const height = 126 * scale;
+    const frame = this.getOverlayFrame(layout, "judgements", width, height);
+    if (!frame) return;
+
+    [
+      { label: "MAX", value: this.hudCachedJudgmentCounts[1], color: JUDGMENT_COLORS[1] },
+      { label: "300", value: this.hudCachedJudgmentCounts[2], color: JUDGMENT_COLORS[2] },
+      { label: "200", value: this.hudCachedJudgmentCounts[3], color: JUDGMENT_COLORS[3] },
+      { label: "100", value: this.hudCachedJudgmentCounts[4], color: JUDGMENT_COLORS[4] },
+      { label: "50", value: this.hudCachedJudgmentCounts[5], color: JUDGMENT_COLORS[5] },
+      { label: "MISS", value: this.hudCachedJudgmentCounts[6], color: JUDGMENT_COLORS[6] },
+      { label: "UR", value: this.hudCachedUr, color: "#b3f5ff" },
+    ].forEach((item, index) => {
+      const y = frame.y + index * 18 * scale;
+      this.addText(item.label, frame.x, y, { fontSize: 10 * scale, fill: item.color, fontWeight: "700" });
+      this.addText(item.value, frame.x + 52 * scale, y, {
+        fontSize: 10 * scale,
+        fill: "#ffffff",
+        alpha: 0.88,
+        fontWeight: "700",
+        anchorX: 1,
+      });
+    });
+  }
+
   private renderHUD(layout: Layout) {
     const { w, h, playfieldX, playfieldWidth, judgmentY } = layout;
     const playfieldCenterX = playfieldX + playfieldWidth / 2;
     const scoreY = this.getStagePositionY(this.skinSettings.scorePosition, layout);
-    const hudScale = this.getHudScale(layout);
 
     if (this.lastJudgment > 0) {
       const timeSince = this.currentTime - this.lastJudgmentTime;
@@ -1671,129 +2104,12 @@ export class ManiaReplayRenderer {
     }
 
     this.renderCombo(layout);
-
-    const compactHud = w < 520;
-
-    this.addText(this.hudCachedAccuracy, playfieldX + playfieldWidth + 16, 16, {
-      fontSize: Math.max(16, h * 0.032),
-      fill: "#ffffff",
-      alpha: 0.85,
-      fontWeight: "700",
-    });
-
-    const currentState = this.currentKeyState;
-    const keyGap = Math.round((this.keyCount >= 8 ? 4 : 6) * hudScale);
-    const desiredKeyBoxWidth = Math.round((this.keyCount >= 8 ? 36 : 40) * hudScale);
-    const hudLeftPadding = 12 * hudScale;
-    const hudRightPadding = 18 * hudScale;
-    const totalKpsWidth = Math.round(54 * hudScale);
-    const totalKpsGap = Math.round(6 * hudScale);
-    const availableKeyRowWidth = Math.max(
-      0,
-      playfieldX - hudLeftPadding - hudRightPadding - totalKpsWidth - totalKpsGap,
-    );
-    const fittedKeyBoxWidth = Math.floor(
-      (availableKeyRowWidth - Math.max(0, this.keyCount - 1) * keyGap) / Math.max(1, this.keyCount),
-    );
-    const keyBoxWidth = Math.max(
-      Math.round((this.keyCount >= 7 ? 24 : 30) * hudScale),
-      Math.min(desiredKeyBoxWidth, Number.isFinite(fittedKeyBoxWidth) ? fittedKeyBoxWidth : desiredKeyBoxWidth),
-    );
-    const keyBoxHeight = Math.round(38 * hudScale);
-    const keyRowWidth = this.keyCount * keyBoxWidth + Math.max(0, this.keyCount - 1) * keyGap;
-    const totalKpsHeight = keyBoxHeight;
-    const keyOverlayWidth = totalKpsWidth + totalKpsGap + keyRowWidth;
-    const totalKpsX = Math.max(hudLeftPadding, playfieldX - keyOverlayWidth - hudRightPadding);
-    const keyRowX = totalKpsX + totalKpsWidth + totalKpsGap;
-    const keyRowY = judgmentY - 42 * hudScale;
-
-    if (!compactHud) {
-      this.renderKeyInputHistory(layout, keyRowX, keyRowY, keyBoxWidth, keyBoxHeight, keyGap);
-
-      this.fillRect(totalKpsX, keyRowY, totalKpsWidth, totalKpsHeight, "#0a0a12", 0.82);
-      this.rect(totalKpsX, keyRowY, totalKpsWidth, totalKpsHeight, "#ffffff", 0.12, 1);
-      this.fillRect(totalKpsX + 1, keyRowY + 1, 3 * hudScale, totalKpsHeight - 2, this.inputOverlayColor, 0.95);
-      this.addText("KPS", totalKpsX + totalKpsWidth / 2, keyRowY + 5 * hudScale, {
-        fontSize: 7 * hudScale,
-        fill: "#ffffff",
-        alpha: 0.52,
-        fontWeight: "700",
-        anchorX: 0.5,
-      });
-      this.addText(this.hudCachedTotalKps, totalKpsX + totalKpsWidth / 2, keyRowY + 34 * hudScale, {
-        fontSize: 17 * hudScale,
-        fill: "#ffffff",
-        alpha: 0.95,
-        fontWeight: "700",
-        anchorX: 0.5,
-        anchorY: 1,
-      });
-
-      for (let col = 0; col < this.keyCount; col++) {
-        const x = keyRowX + col * (keyBoxWidth + keyGap);
-        const pressed = (currentState & (1 << col)) !== 0;
-        const color = this.colors[col];
-        const keyFill = pressed ? "#0a0a12" : "#ffffff";
-        const kpsFill = pressed ? "#0a0a12" : color;
-        const keyAlpha = pressed ? 0.92 : 0.78;
-        const kpsAlpha = pressed ? 0.76 : 0.9;
-        const keyFontSize = (keyBoxWidth <= 32 * hudScale ? 12 : 13) * hudScale;
-        const kpsFontSize = (keyBoxWidth <= 36 * hudScale ? 8 : 9) * hudScale;
-        this.fillRect(x, keyRowY, keyBoxWidth, keyBoxHeight, "#0a0a12", 0.82);
-        this.rect(x, keyRowY, keyBoxWidth, keyBoxHeight, "#ffffff", 0.12, 1);
-        this.fillRect(x + 1, keyRowY + 1, keyBoxWidth - 2, keyBoxHeight - 2, color, pressed ? 0.95 : 0.18);
-        this.addText(String(col + 1), x + keyBoxWidth / 2, keyRowY + 12 * hudScale, {
-          fontSize: keyFontSize,
-          fill: keyFill,
-          alpha: keyAlpha,
-          fontWeight: "700",
-          anchorX: 0.5,
-          anchorY: 0.5,
-        });
-        this.addText(this.hudCachedKeyKps[col], x + keyBoxWidth / 2, keyRowY + 28 * hudScale, {
-          fontSize: kpsFontSize,
-          fill: kpsFill,
-          alpha: kpsAlpha,
-          fontWeight: "700",
-          anchorX: 0.5,
-          anchorY: 0.5,
-        });
-      }
-
-      [
-        { label: "L MISS", value: this.hudCachedLeftMisses, color: "#5a8fff" },
-        { label: "R MISS", value: this.hudCachedRightMisses, color: "#de31ae" },
-      ].forEach((item, index) => {
-        const x = keyRowX + index * 68 * hudScale;
-        const y = keyRowY + keyBoxHeight + 10 * hudScale;
-        this.fillRect(x, y, 60 * hudScale, 36 * hudScale, "#0a0a12", 0.78);
-        this.fillRect(x, y, 3 * hudScale, 36 * hudScale, item.color, 1);
-        this.addText(item.label, x + 9 * hudScale, y + 5 * hudScale, { fontSize: 9 * hudScale, fill: "#ffffff", alpha: 0.58, fontWeight: "700" });
-        this.addText(item.value, x + 9 * hudScale, y + 28 * hudScale, { fontSize: 16 * hudScale, fill: "#ffffff", alpha: 0.95, fontWeight: "700", anchorY: 1 });
-      });
-    }
-
-    const judgmentCounterX = playfieldX + playfieldWidth + 16;
-    const judgmentCounterY = 52 * hudScale;
-    [
-      { label: "MAX", value: this.hudCachedJudgmentCounts[1], color: JUDGMENT_COLORS[1] },
-      { label: "300", value: this.hudCachedJudgmentCounts[2], color: JUDGMENT_COLORS[2] },
-      { label: "200", value: this.hudCachedJudgmentCounts[3], color: JUDGMENT_COLORS[3] },
-      { label: "100", value: this.hudCachedJudgmentCounts[4], color: JUDGMENT_COLORS[4] },
-      { label: "50", value: this.hudCachedJudgmentCounts[5], color: JUDGMENT_COLORS[5] },
-      { label: "MISS", value: this.hudCachedJudgmentCounts[6], color: JUDGMENT_COLORS[6] },
-      { label: "UR", value: this.hudCachedUr, color: "#b3f5ff" },
-    ].forEach((item, index) => {
-      const y = judgmentCounterY + index * 18 * hudScale;
-      this.addText(item.label, judgmentCounterX, y, { fontSize: 10 * hudScale, fill: item.color, fontWeight: "700" });
-      this.addText(item.value, judgmentCounterX + 52 * hudScale, y, {
-        fontSize: 10 * hudScale,
-        fill: "#ffffff",
-        alpha: 0.88,
-        fontWeight: "700",
-        anchorX: 1,
-      });
-    });
+    this.overlayHitboxes = [];
+    this.renderKeypressOverlay(layout);
+    this.renderKpsOverlay(layout);
+    this.renderMissOverlay(layout);
+    this.renderAccuracyOverlay(layout);
+    this.renderJudgementOverlay(layout);
 
     const urBarWidth = Math.min(playfieldWidth * 0.68, 180);
     const urBarX = playfieldCenterX - urBarWidth / 2;
@@ -2633,6 +2949,7 @@ export class ManiaReplayRenderer {
   destroy() {
     this.pause();
     this.destroyed = true;
+    this.removeOverlayPointerHandlers();
     this.previousBackgroundImage = null;
     this.backgroundTransitionStartedAt = 0;
     const destroyApp = () => {

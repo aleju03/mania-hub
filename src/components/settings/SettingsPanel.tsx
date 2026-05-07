@@ -26,7 +26,14 @@ import {
   writeReplayBackgroundDim,
   writeReplayVolume,
 } from "../../lib/replay-preferences";
+import {
+  DEFAULT_REPLAY_OVERLAY_SETTINGS,
+  normalizeReplayOverlaySettings,
+  readReplayOverlaySettings,
+  writeReplayOverlaySettings,
+} from "../../lib/replay-overlays";
 import type { ReplaySkinSettings, ReplaySkinStyle } from "../../lib/replay-skin";
+import type { ReplayOverlaySettings } from "../../lib/replay-overlays";
 import { useAppStore } from "../../store";
 
 const MANIA_ARROW_ICON_STYLE: CSSProperties = {
@@ -73,6 +80,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   const [bgDim, setBgDim] = useState(readReplayBackgroundDim);
   const [volume, setVolume] = useState(readReplayVolume);
   const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
+  const [overlaySettings, setOverlaySettings] = useState(readReplayOverlaySettings);
   const [skinSettingsOpen, setSkinSettingsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("skin");
   const showDanEstimates = useAppStore((state) => state.showDanEstimates);
@@ -82,6 +90,12 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
     const normalized = normalizeReplaySkinSettings(settings);
     setSkinSettings(normalized);
     writeReplaySkinSettings(normalized);
+  };
+
+  const saveOverlaySettings = (settings: ReplayOverlaySettings) => {
+    const normalized = normalizeReplayOverlaySettings(settings);
+    setOverlaySettings(normalized);
+    writeReplayOverlaySettings(normalized);
   };
 
   const updateSkin = (patch: Partial<ReplaySkinSettings>) => {
@@ -99,6 +113,8 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
     writeReplayVolume(0.5);
     setSkinSettings(DEFAULT_REPLAY_SKIN_SETTINGS);
     writeReplaySkinSettings(DEFAULT_REPLAY_SKIN_SETTINGS);
+    setOverlaySettings(DEFAULT_REPLAY_OVERLAY_SETTINGS);
+    writeReplayOverlaySettings(DEFAULT_REPLAY_OVERLAY_SETTINGS);
     setShowDanEstimates(true);
   };
 
@@ -158,8 +174,10 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
       {skinSettingsOpen ? (
         <ReplaySkinSettingsModal
           settings={skinSettings}
+          overlaySettings={overlaySettings}
           keyCount={4}
           onSave={saveSkinSettings}
+          onSaveOverlays={saveOverlaySettings}
           onClose={() => setSkinSettingsOpen(false)}
         />
       ) : null}

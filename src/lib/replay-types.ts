@@ -1,4 +1,5 @@
 import type { ReplayHitCounts } from "./replay-validation";
+import type { ReplayOverlaySettings } from "./replay-overlays";
 import type { ReplaySkinSettings } from "./replay-skin";
 import type { ReplayFrame, ReplayLifeBarFrame, OsuScore } from "./types";
 
@@ -37,6 +38,7 @@ export interface ReplayRendererLike {
   setScrollSpeed: (value: number) => void;
   setShowInputOverlay: (value: boolean) => void;
   setInputOverlayOptions: (options: { only?: boolean; color?: string; keyHistory?: boolean }) => void;
+  setOverlaySettings: (settings: ReplayOverlaySettings) => void;
   setSkinSettings: (settings: ReplaySkinSettings) => void;
   setSpeed: (value: number) => void;
   ready: () => Promise<void>;

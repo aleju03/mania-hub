@@ -5,6 +5,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Copy, FileArchive, GripHorizontal, Pencil, Plus, Settings, Trash2, Upload, X } from "lucide-react";
 
 import {
+  REPLAY_OVERLAY_IDS,
+  normalizeReplayOverlaySettings,
+} from "#/lib/replay-overlays";
+import type { ReplayOverlayId, ReplayOverlaySettings } from "#/lib/replay-overlays";
+import {
   DEFAULT_REPLAY_SKIN_SETTINGS,
   OSU_MANIA_DEFAULT_COMBO_POSITION,
   OSU_MANIA_DEFAULT_SCORE_POSITION,
@@ -127,15 +132,19 @@ function getColumnArrowDirection(col: number, keyCount: number): ArrowDirection 
 
 interface ReplaySkinSettingsModalProps {
   settings: ReplaySkinSettings;
+  overlaySettings: ReplayOverlaySettings;
   keyCount: number;
   onSave: (settings: ReplaySkinSettings) => void;
+  onSaveOverlays: (settings: ReplayOverlaySettings) => void;
   onClose: () => void;
 }
 
 export function ReplaySkinSettingsModal({
   settings,
+  overlaySettings,
   keyCount,
   onSave,
+  onSaveOverlays,
   onClose,
 }: ReplaySkinSettingsModalProps) {
   const modalRef = useRef<HTMLDivElement | null>(null);
@@ -145,6 +154,7 @@ export function ReplaySkinSettingsModal({
   const dragStateRef = useRef<{ pointerId: number; startX: number; startY: number; startRect: WindowRect } | null>(null);
   const resizeStateRef = useRef<{ pointerId: number; dir: ResizeDirection; startX: number; startY: number; startRect: WindowRect } | null>(null);
   const [draft, setDraft] = useState(() => normalizeReplaySkinSettings(settings));
+  const [overlayDraft, setOverlayDraft] = useState(() => normalizeReplayOverlaySettings(overlaySettings));
   const [presets, setPresets] = useState<ReplaySkinPreset[]>(() => readReplaySkinPresets());
   const [selectedPresetId, setSelectedPresetId] = useState(DRAFT_PRESET_ID);
   const [draftPresetName, setDraftPresetName] = useState(DEFAULT_DRAFT_PRESET_NAME);
@@ -167,7 +177,7 @@ export function ReplaySkinSettingsModal({
   const [importingOsk, setImportingOsk] = useState(false);
   const [selectedKeyCount, setSelectedKeyCount] = useState(() => Math.max(1, Math.min(10, keyCount)));
   const [activeColor, setActiveColor] = useState<ColorTarget | null>(null);
-  const [activeTab, setActiveTab] = useState<"style" | "layout">("style");
+  const [activeTab, setActiveTab] = useState<"style" | "layout" | "overlays">("style");
   const [columnEditorOpen, setColumnEditorOpen] = useState(false);
   const [overrideKind, setOverrideKind] = useState<OverrideKind>("tap");
   const [barColorOverrideBackup, setBarColorOverrideBackup] = useState<string[]>([]);
@@ -363,6 +373,16 @@ export function ReplaySkinSettingsModal({
 
   const update = (patch: Partial<ReplaySkinSettings>) => {
     setDraft((current) => normalizeReplaySkinSettings({ ...current, ...patch, version: 2 }));
+  };
+
+  const updateOverlay = (id: ReplayOverlayId, patch: Partial<ReplayOverlaySettings[ReplayOverlayId]>) => {
+    setOverlayDraft((current) => normalizeReplayOverlaySettings({
+      ...current,
+      [id]: {
+        ...current[id],
+        ...patch,
+      },
+    }));
   };
 
   const updateStyle = (style: ReplaySkinStyle) => update({ style });
@@ -582,6 +602,7 @@ export function ReplaySkinSettingsModal({
 
   const save = () => {
     const normalized = normalizeReplaySkinSettings(draft);
+    const normalizedOverlays = normalizeReplayOverlaySettings(overlayDraft);
     const namedDraft = draftPresetName.trim();
     if (selectedPreset) {
       const nextPreset = {
@@ -594,6 +615,7 @@ export function ReplaySkinSettingsModal({
       persistPresets([createReplaySkinPreset(namedDraft, normalized), ...presets].slice(0, 24));
     }
     onSave(normalized);
+    onSaveOverlays(normalizedOverlays);
     onClose();
   };
 
@@ -770,6 +792,7 @@ export function ReplaySkinSettingsModal({
     lnBody: "LN body color",
     outline: "Outline color",
   };
+  const activeTabLabel = activeTab === "style" ? "Style" : activeTab === "layout" ? "Layout" : "Overlays";
 
   return createPortal(
     <>
@@ -808,7 +831,7 @@ export function ReplaySkinSettingsModal({
           <GripHorizontal className="h-4 w-4 shrink-0 text-osu-f1" />
           <div>
             <h3 className="text-base font-bold text-white">Replay settings</h3>
-            <div className="text-[10px] uppercase tracking-wider text-osu-f1">{activeTab === "style" ? "Style" : "Layout"}</div>
+            <div className="text-[10px] uppercase tracking-wider text-osu-f1">{activeTabLabel}</div>
           </div>
           <button
             onClick={onClose}
@@ -879,10 +902,11 @@ export function ReplaySkinSettingsModal({
               />
             </div>
 
-            <div className="grid grid-cols-2 rounded-lg bg-osu-b5/55 p-1">
+            <div className="grid grid-cols-3 rounded-lg bg-osu-b5/55 p-1">
               {([
                 ["style", "Style"],
                 ["layout", "Layout"],
+                ["overlays", "Overlays"],
               ] as const).map(([tab, label]) => (
                 <button
                   key={tab}
@@ -1025,7 +1049,7 @@ export function ReplaySkinSettingsModal({
                   </div>
                 </section>
               </>
-            ) : (
+            ) : activeTab === "layout" ? (
               <section className="space-y-5">
                 <LayoutNumberControl
                   label="Column width"
@@ -1106,6 +1130,17 @@ export function ReplaySkinSettingsModal({
                   hint="Combo counter height."
                 />
               </section>
+            ) : (
+              <section className="space-y-3">
+                {REPLAY_OVERLAY_IDS.map((id) => (
+                  <ReplayOverlaySettingsRow
+                    key={id}
+                    id={id}
+                    placement={overlayDraft[id]}
+                    onChange={(patch) => updateOverlay(id, patch)}
+                  />
+                ))}
+              </section>
             )}
           </div>
 
@@ -1148,18 +1183,22 @@ export function ReplaySkinSettingsModal({
         </div>
 
         <div className="flex shrink-0 items-center gap-2 border-t border-osu-b3/50 px-5 py-4">
-          <button
-            onClick={() => {
-              setDraft(DEFAULT_REPLAY_SKIN_SETTINGS);
-              setActiveColor(null);
-              setSelectedColumns([]);
-              setSelectedPresetId(DRAFT_PRESET_ID);
-              setDraftPresetName(DEFAULT_DRAFT_PRESET_NAME);
-            }}
-            className="mr-auto cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
-          >
-            Reset
-          </button>
+          {activeTab !== "overlays" ? (
+            <button
+              onClick={() => {
+                setDraft(DEFAULT_REPLAY_SKIN_SETTINGS);
+                setActiveColor(null);
+                setSelectedColumns([]);
+                setSelectedPresetId(DRAFT_PRESET_ID);
+                setDraftPresetName(DEFAULT_DRAFT_PRESET_NAME);
+              }}
+              className="mr-auto cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
+            >
+              Reset
+            </button>
+          ) : (
+            <div className="mr-auto" />
+          )}
           <button
             onClick={onClose}
             className="cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
@@ -2211,6 +2250,33 @@ function ReplaySkinRgbSlider({
       />
       <span className="text-right font-mono text-osu-c1">{value}</span>
     </label>
+  );
+}
+
+const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, string> = {
+  keypresses: "Keypresses",
+  kps: "KPS counter",
+  misses: "L/R miss counter",
+  accuracy: "Accuracy",
+  judgements: "Judgements",
+};
+
+function ReplayOverlaySettingsRow({
+  id,
+  placement,
+  onChange,
+}: {
+  id: ReplayOverlayId;
+  placement: ReplayOverlaySettings[ReplayOverlayId];
+  onChange: (patch: Partial<ReplayOverlaySettings[ReplayOverlayId]>) => void;
+}) {
+  return (
+    <div className="rounded-lg border border-osu-b3/60 bg-osu-b5/45 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-semibold text-white">{REPLAY_OVERLAY_LABELS[id]}</span>
+        <ReplaySkinSwitch checked={placement.enabled} onChange={(enabled) => onChange({ enabled })} />
+      </div>
+    </div>
   );
 }
 
