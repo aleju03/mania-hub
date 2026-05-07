@@ -59,7 +59,8 @@ import type { ReplayOverlaySettings } from "../lib/replay-overlays";
 import type { BeatmapScoreLookupStatus, OsuScore, OsuBeatmapset, OsuBeatmap } from "../lib/types";
 import type { ReplayRendererLike, ServerReplay } from "../lib/replay-types";
 import { getScoreExpectedCounts } from "../lib/replay-types";
-import { pageSeo } from "../lib/seo";
+import { pageSeo, replayOgImagePath } from "../lib/seo";
+import { withSearchParams } from "../lib/country-search";
 
 interface ReplaySearch {
   scoreId?: number;
@@ -77,6 +78,10 @@ type FullscreenDocument = Document & {
 type FullscreenTarget = HTMLElement & {
   webkitRequestFullscreen?: () => Promise<void> | void;
 };
+
+const MOBILE_FULLSCREEN_BUTTON_HIDE_MS = 2000;
+const FULLSCREEN_POINTER_CHROME_HIDE_MS = 1800;
+const FULLSCREEN_TAP_CHROME_HIDE_MS = 3000;
 
 function getNativeFullscreenElement() {
   if (typeof document === "undefined") return null;
@@ -107,16 +112,41 @@ async function exitNativeFullscreen() {
   }
 }
 
+function isMobileReplayPointer(event: ReactPointerEvent<HTMLElement>) {
+  if (event.pointerType === "touch") return true;
+  if (event.pointerType === "mouse" || event.pointerType === "pen") return false;
+  return typeof window !== "undefined"
+    && typeof window.matchMedia === "function"
+    && window.matchMedia("(pointer: coarse)").matches;
+}
+
 export const Route = createFileRoute("/replay")({
-  head: ({ match }) =>
-    pageSeo({
-      title: "Replay viewer",
-      description: "Watch osu!mania .osr replays in your browser.",
-      path: "/replay",
+  head: ({ match }) => {
+    const { scoreId, beatmapsetId, player } = match.search;
+    const hasSharedScore = typeof scoreId === "number";
+    const playerName = typeof player === "string" ? player.trim() : "";
+    const title = hasSharedScore
+      ? playerName
+        ? `${playerName}'s replay`
+        : `Score #${scoreId} replay`
+      : "Replay viewer";
+
+    return pageSeo({
+      title,
+      description: hasSharedScore
+        ? "Watch this osu!mania replay in your browser."
+        : "Watch osu!mania .osr replays in your browser.",
+      path: withSearchParams("/replay", {
+        scoreId,
+        beatmapsetId,
+        player: playerName || undefined,
+      }),
       origin: match.context.origin,
-      social: false,
+      image: hasSharedScore ? replayOgImagePath(scoreId) : undefined,
+      social: hasSharedScore,
       noindex: true,
-    }),
+    });
+  },
   component: ReplayPage,
   validateSearch: (s: Record<string, unknown>): ReplaySearch => ({
     scoreId: Number(s.scoreId) || undefined,
@@ -766,14 +796,14 @@ function ReplayViewer({
     fullscreenChromeTimeoutRef.current = null;
   }, []);
 
-  const showFullscreenChromeTemporarily = useCallback((autoHide = true) => {
+  const showFullscreenChromeTemporarily = useCallback((autoHide = true, durationMs = FULLSCREEN_POINTER_CHROME_HIDE_MS) => {
     setShowFullscreenChrome(true);
     clearFullscreenChromeTimeout();
     if (!autoHide) return;
     fullscreenChromeTimeoutRef.current = window.setTimeout(() => {
       fullscreenChromeTimeoutRef.current = null;
       if (!scrubbingRef.current) setShowFullscreenChrome(false);
-    }, 1800);
+    }, durationMs);
   }, [clearFullscreenChromeTimeout]);
 
   const toggleReplayFullscreen = () => {
@@ -809,6 +839,14 @@ function ReplayViewer({
       showFullscreenChromeTemporarily();
     }
   }, [isCanvasFullscreen, showFullscreenChrome, showFullscreenChromeTemporarily]);
+
+  const handleReplayCanvasPointerDown = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!isMobileReplayPointer(event)) return;
+    showFullscreenChromeTemporarily(
+      true,
+      isCanvasFullscreen ? FULLSCREEN_TAP_CHROME_HIDE_MS : MOBILE_FULLSCREEN_BUTTON_HIDE_MS,
+    );
+  }, [isCanvasFullscreen, showFullscreenChromeTemporarily]);
 
   const handleReplayCanvasPointerLeave = useCallback(() => {
     if (!isCanvasFullscreen || scrubbingRef.current) return;
@@ -1401,6 +1439,7 @@ function ReplayViewer({
   };
 
   const fullscreenChromeVisible = isCanvasFullscreen && showFullscreenChrome;
+  const mobileFullscreenButtonVisible = !isCanvasFullscreen && showFullscreenChrome;
 
   return (
     <div className="space-y-3">
@@ -1441,6 +1480,7 @@ function ReplayViewer({
         />
         <canvas
           ref={canvasRef}
+          onPointerDown={handleReplayCanvasPointerDown}
           className={`relative z-10 w-full ${
             isCanvasFullscreen
               ? "h-[100dvh] min-h-0 max-h-none"
@@ -1455,7 +1495,7 @@ function ReplayViewer({
           className={`absolute bottom-3 right-3 z-30 flex h-8 w-8 cursor-pointer items-center justify-center rounded-sm text-white/70 drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] transition hover:bg-white/10 hover:text-white hover:opacity-100 focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-white/50 active:scale-95 sm:h-9 sm:w-9 ${
             isCanvasFullscreen
               ? fullscreenChromeVisible ? "opacity-90" : "opacity-0"
-              : "opacity-0 group-hover/replay-canvas:opacity-90"
+              : mobileFullscreenButtonVisible ? "opacity-90" : "opacity-0 group-hover/replay-canvas:opacity-90"
           }`}
           style={isCanvasFullscreen ? {
             bottom: "max(0.75rem, env(safe-area-inset-bottom))",
