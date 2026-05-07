@@ -822,14 +822,6 @@ export function ReplaySkinSettingsModal({
     label: `Set ${index + 1}`,
     style: getComboFontPreviewStyle(set),
   }));
-  const judgementSetOptions = [
-    { value: "skin", label: "Skin" },
-    ...REPLAY_JUDGEMENT_SETS.map((set) => ({
-      value: set,
-      label: getJudgementSetLabel(set),
-    })),
-  ];
-
   return createPortal(
     <>
       <motion.div
@@ -1196,13 +1188,11 @@ export function ReplaySkinSettingsModal({
                   </div>
                 </div>
                 <div className="rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
-                  <FancySelect
-                    label="Judgement set"
+                  <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-osu-f1">Judgement set</span>
+                  <JudgementSetGallery
                     value={draft.judgementSet}
-                    onChange={(value) => update({ judgementSet: value as ReplaySkinSettings["judgementSet"] })}
-                    options={judgementSetOptions}
+                    onChange={(value) => update({ judgementSet: value })}
                   />
-                  <JudgementSetPreview settings={draft} />
                 </div>
               </section>
             ) : (
@@ -1526,30 +1516,66 @@ const JUDGEMENT_PREVIEW_ITEMS: Array<{ assetKey: keyof ReplaySkinJudgementAssets
   { assetKey: "hit0", label: "MISS", color: "#ff4444" },
 ];
 
-function JudgementSetPreview({ settings }: { settings: ReplaySkinSettings }) {
-  const assets = getReplayJudgementSetAssets(settings.judgementSet);
+const JUDGEMENT_TILE_PREVIEW_KEYS: Array<keyof ReplaySkinJudgementAssets> = ["hit300g", "hit300", "hit100", "hit0"];
+
+function JudgementSetGallery({
+  value,
+  onChange,
+}: {
+  value: ReplaySkinSettings["judgementSet"];
+  onChange: (next: ReplaySkinSettings["judgementSet"]) => void;
+}) {
+  const tiles: Array<ReplaySkinSettings["judgementSet"]> = ["skin", ...REPLAY_JUDGEMENT_SETS];
   return (
-    <div className="mt-3 grid grid-cols-3 gap-2">
-      {JUDGEMENT_PREVIEW_ITEMS.map((item) => {
-        const asset = assets?.[item.assetKey];
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      {tiles.map((set) => {
+        const isSelected = set === value;
+        const assets = getReplayJudgementSetAssets(set);
         return (
-          <div
-            key={item.assetKey}
-            className="flex h-14 items-center justify-center overflow-hidden rounded-lg border border-osu-b3/40 bg-black/20 px-2"
+          <button
+            key={set}
+            type="button"
+            onClick={() => onChange(set)}
+            aria-pressed={isSelected}
+            className={`flex cursor-pointer flex-col items-stretch gap-2 rounded-lg border p-2.5 text-left transition-colors ${
+              isSelected
+                ? "border-osu-pink/60 bg-osu-pink/10"
+                : "border-osu-b3/50 bg-black/20 hover:border-osu-pink/30 hover:bg-osu-b4/60"
+            }`}
           >
-            {asset ? (
-              <img
-                src={asset.src}
-                alt=""
-                draggable={false}
-                className="max-h-9 max-w-full object-contain"
-              />
-            ) : settings.judgementSet !== "skin" ? (
-              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-white/10" />
-            ) : (
-              <span className="text-sm font-bold" style={{ color: item.color }}>{item.label}</span>
-            )}
-          </div>
+            <span className={`text-[11px] font-bold uppercase tracking-wider ${isSelected ? "text-osu-pink-light" : "text-osu-f1"}`}>
+              {getJudgementSetLabel(set)}
+            </span>
+            <div className="flex h-16 items-center justify-around gap-2 overflow-hidden rounded-md bg-black/30 px-2">
+              {JUDGEMENT_TILE_PREVIEW_KEYS.map((assetKey) => {
+                const item = JUDGEMENT_PREVIEW_ITEMS.find((entry) => entry.assetKey === assetKey)!;
+                const asset = assets?.[assetKey];
+                if (asset) {
+                  return (
+                    <img
+                      key={assetKey}
+                      src={asset.src}
+                      alt=""
+                      draggable={false}
+                      className="min-w-0 flex-1 max-h-12 object-contain"
+                    />
+                  );
+                }
+                if (set === "skin") {
+                  return (
+                    <span
+                      key={assetKey}
+                      className="text-xs font-bold leading-none"
+                      style={{ color: item.color }}
+                    >
+                      {item.label}
+                    </span>
+                  );
+                }
+                return <span key={assetKey} aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-white/10" />;
+              })}
+            </div>
+          </button>
         );
       })}
     </div>
