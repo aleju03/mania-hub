@@ -184,6 +184,7 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
         if (beatLength > 0 && uninherited) {
           timingPoints.push({ time, beatLength });
           controlPoints.push({ kind: "timing", order: controlPointOrder++, time, beatLength });
+          controlPoints.push({ kind: "effect", order: controlPointOrder++, time, scrollSpeed: 1 });
         } else if (beatLength < 0 && !uninherited) {
           controlPoints.push({
             kind: "effect",

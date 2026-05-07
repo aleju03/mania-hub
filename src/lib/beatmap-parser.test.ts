@@ -93,6 +93,34 @@ OverallDifficulty:8
     expect(beatmap.scrollVelocities).toEqual([]);
   });
 
+  it("resets inherited scroll speed on BPM-only timing changes", () => {
+    const beatmap = parseManiaBeatmap(`
+osu file format v14
+
+[Metadata]
+Title:Test
+Artist:Tester
+Creator:Mapper
+Version:BPM reset
+
+[Difficulty]
+CircleSize:4
+OverallDifficulty:8
+
+[TimingPoints]
+0,500,4,1,0,100,1,0
+1000,1000,4,1,0,100,1,0
+1000,-50,4,1,0,100,0,0
+2000,500,4,1,0,100,1,0
+
+[HitObjects]
+64,192,500,1,0,0:0:0:0:
+64,192,2500,1,0,0:0:0:0:
+`);
+
+    expect(beatmap.scrollVelocities).toEqual([]);
+  });
+
   it("parses explicit break periods from events", () => {
     const beatmap = parseManiaBeatmap(`
 osu file format v14
