@@ -1612,7 +1612,7 @@ export class ManiaReplayRenderer {
       const timeSinceFlash = this.currentTime - (this.receptorFlashTimestamps[col] || 0);
       const flashIntensity = pressed ? 1 : Math.max(0, 1 - timeSinceFlash / 140);
 
-      this.arrowStroke(cx, judgmentY, arrowSize, direction, "#ffffff", Math.max(pressed ? 0.95 : 0.4, flashIntensity * 0.65), 1.5);
+      this.arrowStroke(cx, judgmentY, arrowSize, direction, "#ffffff", Math.max(pressed ? 0.95 : 0.4, flashIntensity * 0.65), 2.25);
     }
   }
 

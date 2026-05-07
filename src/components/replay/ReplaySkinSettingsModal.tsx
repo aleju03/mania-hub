@@ -1649,7 +1649,7 @@ function ReplaySkinPreview({
               fillOpacity={0}
               stroke={isSelected ? "#e83c90" : "#ffffff"}
               strokeOpacity={isSelected ? 1 : 0.5}
-              strokeWidth={2}
+              strokeWidth={2.75}
             />
           );
         }
