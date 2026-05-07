@@ -1,7 +1,7 @@
 import { createFileRoute, notFound, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback, useMemo, type PointerEvent as ReactPointerEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { LoaderCircle, Maximize2, Minimize2, Pause, Play } from "lucide-react";
+import { Info, LoaderCircle, Maximize2, Minimize2, Pause, Play } from "lucide-react";
 import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores } from "../lib/osu";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
 import { getScoreDisplayValues, getScoreRate, scoreHasReplay } from "../lib/score";
@@ -547,7 +547,20 @@ function ReplayPage() {
   return (
     <div className="flex-1">
       <div className={replay ? "hidden sm:block" : ""}>
-        <PageHeader iconSrc="/images/icons/home.svg" title="mania replay viewer" />
+        <PageHeader
+          iconSrc="/images/icons/home.svg"
+          title={
+            <span className="inline-flex min-w-0 items-center gap-2">
+              <span className="truncate">mania replay viewer</span>
+              <button type="button" className="group relative inline-flex shrink-0 items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-osu-pink/70">
+                <Info className="h-3.5 w-3.5 text-osu-f1/80 transition-colors group-hover:text-osu-pink-light" aria-hidden="true" />
+                <span className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-64 -translate-x-1/2 rounded-md border border-osu-b3/70 bg-osu-d5 px-3 py-2 text-[11px] font-medium leading-snug text-osu-c1 opacity-0 shadow-xl shadow-black/30 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                  Replay playback reconstructs old stable .osr input as closely as possible, but some stable scores can differ slightly from osu!'s original scoring.
+                </span>
+              </button>
+            </span>
+          }
+        />
       </div>
 
       <div className="bg-osu-b5 min-h-[80vh]">

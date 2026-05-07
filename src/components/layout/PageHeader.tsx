@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 interface PageHeaderProps {
   iconSrc: string;
-  title: string;
+  title: ReactNode;
   right?: ReactNode;
 }
 
