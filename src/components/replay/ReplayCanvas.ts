@@ -151,6 +151,7 @@ interface Layout {
 type Hand = "left" | "right" | "center";
 type ReplayComboEvent = { kind: "break" | "hit"; time: number };
 type ReplayOverlayHitbox = { id: ReplayOverlayId; x: number; y: number; width: number; height: number };
+type ReplayOverlayResizeDirection = "n" | "e" | "s" | "w" | "ne" | "nw" | "se" | "sw";
 
 export class ManiaReplayRenderer {
   private canvas: HTMLCanvasElement;
@@ -233,9 +234,12 @@ export class ManiaReplayRenderer {
   } | null = null;
   private resizingOverlay: {
     id: ReplayOverlayId;
+    direction: ReplayOverlayResizeDirection;
     pointerId: number;
     startX: number;
     startY: number;
+    startPlacementX: number;
+    startPlacementY: number;
     startScale: number;
     startWidth: number;
     startHeight: number;
@@ -916,21 +920,46 @@ export class ManiaReplayRenderer {
   }
 
   private getOverlayResizeZoneSize(box: ReplayOverlayHitbox): number {
-    return Math.max(14, Math.min(28, Math.min(box.width, box.height) * 0.45));
+    return Math.max(6, Math.min(12, Math.min(box.width, box.height) * 0.25));
   }
 
-  private isOverlayResizeHandle(box: ReplayOverlayHitbox, x: number, y: number): boolean {
+  private getOverlayResizeDirection(box: ReplayOverlayHitbox, x: number, y: number): ReplayOverlayResizeDirection | null {
     const size = this.getOverlayResizeZoneSize(box);
-    return x >= box.x + box.width - size
-      && x <= box.x + box.width
-      && y >= box.y + box.height - size
-      && y <= box.y + box.height;
+    const nearTop = y >= box.y && y <= box.y + size;
+    const nearRight = x >= box.x + box.width - size && x <= box.x + box.width;
+    const nearBottom = y >= box.y + box.height - size && y <= box.y + box.height;
+    const nearLeft = x >= box.x && x <= box.x + size;
+    if (nearTop && nearRight) return "ne";
+    if (nearTop && nearLeft) return "nw";
+    if (nearBottom && nearRight) return "se";
+    if (nearBottom && nearLeft) return "sw";
+    if (nearTop) return "n";
+    if (nearRight) return "e";
+    if (nearBottom) return "s";
+    if (nearLeft) return "w";
+    return null;
   }
 
   private getOverlayPointerCursor(x: number, y: number): string {
     const hitbox = this.getOverlayAtPoint(x, y);
     if (!hitbox) return "";
-    return this.isOverlayResizeHandle(hitbox, x, y) ? "nwse-resize" : "grab";
+    const direction = this.getOverlayResizeDirection(hitbox, x, y);
+    switch (direction) {
+      case "n":
+      case "s":
+        return "ns-resize";
+      case "e":
+      case "w":
+        return "ew-resize";
+      case "ne":
+      case "sw":
+        return "nesw-resize";
+      case "nw":
+      case "se":
+        return "nwse-resize";
+      default:
+        return "grab";
+    }
   }
 
   private getPointerDistance(a: { x: number; y: number }, b: { x: number; y: number }): number {
@@ -979,17 +1008,21 @@ export class ManiaReplayRenderer {
       return;
     }
 
-    if (this.isOverlayResizeHandle(hitbox, point.x, point.y)) {
+    const resizeDirection = this.getOverlayResizeDirection(hitbox, point.x, point.y);
+    if (resizeDirection) {
       this.resizingOverlay = {
         id: hitbox.id,
+        direction: resizeDirection,
         pointerId: event.pointerId,
         startX: point.x,
         startY: point.y,
+        startPlacementX: placement.x,
+        startPlacementY: placement.y,
         startScale: placement.scale,
         startWidth: hitbox.width,
         startHeight: hitbox.height,
       };
-      this.canvas.style.cursor = "nwse-resize";
+      this.canvas.style.cursor = this.getOverlayPointerCursor(point.x, point.y);
       event.preventDefault();
       return;
     }
@@ -1043,16 +1076,25 @@ export class ManiaReplayRenderer {
       const resize = this.resizingOverlay;
       const dx = point.x - resize.startX;
       const dy = point.y - resize.startY;
-      const widthRatio = (resize.startWidth + dx) / Math.max(1, resize.startWidth);
-      const heightRatio = (resize.startHeight + dy) / Math.max(1, resize.startHeight);
-      const nextScale = this.clampOverlayScale(resize.startScale * Math.max(widthRatio, heightRatio));
+      const deltas = [
+        resize.direction.includes("e") ? dx / Math.max(1, resize.startWidth) : null,
+        resize.direction.includes("w") ? -dx / Math.max(1, resize.startWidth) : null,
+        resize.direction.includes("s") ? dy / Math.max(1, resize.startHeight) : null,
+        resize.direction.includes("n") ? -dy / Math.max(1, resize.startHeight) : null,
+      ].filter((value): value is number => value != null);
+      const dominantDelta = deltas.reduce(
+        (selected, value) => Math.abs(value) > Math.abs(selected) ? value : selected,
+        0,
+      );
+      const nextScale = this.clampOverlayScale(resize.startScale * Math.max(0.1, 1 + dominantDelta));
       const scaleRatio = nextScale / Math.max(0.001, resize.startScale);
-      const placement = this.overlaySettings[resize.id];
+      const nextWidth = resize.startWidth * scaleRatio;
+      const nextHeight = resize.startHeight * scaleRatio;
       const nextPosition = this.clampOverlayPosition(
-        placement.x,
-        placement.y,
-        resize.startWidth * scaleRatio,
-        resize.startHeight * scaleRatio,
+        resize.startPlacementX + (resize.direction.includes("w") ? (resize.startWidth - nextWidth) / Math.max(1, layout.w) : 0),
+        resize.startPlacementY + (resize.direction.includes("n") ? (resize.startHeight - nextHeight) / Math.max(1, layout.h) : 0),
+        nextWidth,
+        nextHeight,
         layout,
       );
       this.updateOverlayPlacement(resize.id, { ...nextPosition, scale: nextScale });
@@ -1223,6 +1265,7 @@ export class ManiaReplayRenderer {
     this.renderJudgmentLine(layout);
     if (!this.skinSettings.keysUnderNotes) this.renderReceptors(layout);
     if (this.showHealthBar) this.renderHealthBar(layout);
+    this.overlayHitboxes = [];
     if (!this.hideHud) this.renderHUD(layout);
     else if (this.showCombo) this.renderCombo(layout);
     this.finishSkinSpriteFrame();
@@ -2076,6 +2119,10 @@ export class ManiaReplayRenderer {
     });
   }
 
+  private shouldRenderCustomOverlays(layout: Layout): boolean {
+    return this.fullscreenLayout || layout.w >= 640;
+  }
+
   private renderHUD(layout: Layout) {
     const { w, h, playfieldX, playfieldWidth, judgmentY } = layout;
     const playfieldCenterX = playfieldX + playfieldWidth / 2;
@@ -2110,12 +2157,13 @@ export class ManiaReplayRenderer {
     }
 
     this.renderCombo(layout);
-    this.overlayHitboxes = [];
-    this.renderKeypressOverlay(layout);
-    this.renderKpsOverlay(layout);
-    this.renderMissOverlay(layout);
-    this.renderAccuracyOverlay(layout);
-    this.renderJudgementOverlay(layout);
+    if (this.shouldRenderCustomOverlays(layout)) {
+      this.renderKeypressOverlay(layout);
+      this.renderKpsOverlay(layout);
+      this.renderMissOverlay(layout);
+      this.renderAccuracyOverlay(layout);
+      this.renderJudgementOverlay(layout);
+    }
 
     const urBarWidth = Math.min(playfieldWidth * 0.68, 180);
     const urBarX = playfieldCenterX - urBarWidth / 2;
