@@ -499,65 +499,176 @@ export function createReplaySkinPreset(name: string, settings: ReplaySkinSetting
   };
 }
 
-function compactKeymodeProfile(profile: ReplaySkinKeymodeProfile): Record<string, unknown> | null {
+function compactColor(value: string): string {
+  return value.startsWith("#") ? value.slice(1) : value;
+}
+
+function expandColor(value: unknown): unknown {
+  if (typeof value === "string" && /^[0-9a-f]{6}$/i.test(value)) return `#${value}`;
+  return value;
+}
+
+function compactColorList(colors: string[]): unknown {
+  const compacted = colors.map((color) => color ? compactColor(color) : "");
+  return compacted.every(Boolean) ? compacted.join("") : compacted;
+}
+
+function expandColorList(value: unknown): unknown {
+  if (typeof value === "string" && value.length > 0 && value.length % 6 === 0 && /^[0-9a-f]+$/i.test(value)) {
+    const colors: string[] = [];
+    for (let i = 0; i < value.length; i += 6) colors.push(`#${value.slice(i, i + 6)}`);
+    return colors;
+  }
+  if (Array.isArray(value)) return value.map((entry) => entry === "" ? "" : expandColor(entry));
+  return value;
+}
+
+function compactBoolean(value: boolean): number {
+  return value ? 1 : 0;
+}
+
+function expandBoolean(value: unknown): unknown {
+  if (value === 1) return true;
+  if (value === 0) return false;
+  return value;
+}
+
+function compactReplaySkinStyle(style: ReplaySkinStyle): number | ReplaySkinStyle {
+  if (style === "bars") return 0;
+  if (style === "circles") return 1;
+  if (style === "arrows") return 2;
+  return style;
+}
+
+function expandReplaySkinStyle(value: unknown): unknown {
+  if (value === 0) return "bars";
+  if (value === 1) return "circles";
+  if (value === 2) return "arrows";
+  return value;
+}
+
+function compactKeymodeProfileV3(profile: ReplaySkinKeymodeProfile): Record<string, unknown> | null {
   const out: Record<string, unknown> = {};
-  if (profile.tapColor !== DEFAULT_REPLAY_SKIN_PROFILE.tapColor) out.tapColor = profile.tapColor;
-  if (profile.tapColors.some((color) => color)) out.tapColors = profile.tapColors;
-  if (profile.lnHeadColor !== DEFAULT_REPLAY_SKIN_PROFILE.lnHeadColor) out.lnHeadColor = profile.lnHeadColor;
-  if (profile.lnHeadColors.some((color) => color)) out.lnHeadColors = profile.lnHeadColors;
-  if (profile.columnWidth !== DEFAULT_REPLAY_SKIN_PROFILE.columnWidth) out.columnWidth = profile.columnWidth;
-  if (profile.columnSpacing !== DEFAULT_REPLAY_SKIN_PROFILE.columnSpacing) out.columnSpacing = profile.columnSpacing;
-  if (profile.columnWidths.length > 0) out.columnWidths = profile.columnWidths;
-  if (profile.columnSpacings.length > 0) out.columnSpacings = profile.columnSpacings;
-  if (profile.noteHeightScale !== DEFAULT_REPLAY_SKIN_PROFILE.noteHeightScale) out.noteHeightScale = profile.noteHeightScale;
+  if (profile.tapColor !== DEFAULT_REPLAY_SKIN_PROFILE.tapColor) out.b = compactColor(profile.tapColor);
+  if (profile.tapColors.some((color) => color)) out.c = compactColorList(profile.tapColors);
+  if (profile.lnHeadColor !== DEFAULT_REPLAY_SKIN_PROFILE.lnHeadColor) out.d = compactColor(profile.lnHeadColor);
+  if (profile.lnHeadColors.some((color) => color)) out.e = compactColorList(profile.lnHeadColors);
+  if (profile.columnWidth !== DEFAULT_REPLAY_SKIN_PROFILE.columnWidth) out.h = profile.columnWidth;
+  if (profile.columnSpacing !== DEFAULT_REPLAY_SKIN_PROFILE.columnSpacing) out.i = profile.columnSpacing;
+  if (profile.columnWidths.length > 0) out.j = profile.columnWidths;
+  if (profile.columnSpacings.length > 0) out.k = profile.columnSpacings;
+  if (profile.noteHeightScale !== DEFAULT_REPLAY_SKIN_PROFILE.noteHeightScale) out.l = profile.noteHeightScale;
   const hasAssets = profile.assets.columns.length > 0
     || profile.assets.combo !== null
     || Object.keys(profile.assets.judgements).length > 0;
-  if (hasAssets) out.assets = profile.assets;
+  if (hasAssets) out.m = profile.assets;
   return Object.keys(out).length > 0 ? out : null;
 }
 
-function compactReplaySkinSettings(settings: ReplaySkinSettings): Record<string, unknown> {
+function expandKeymodeProfileV3(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const raw = value as Record<string, unknown>;
+  return {
+    tapColor: expandColor(raw.b),
+    tapColors: expandColorList(raw.c),
+    lnHeadColor: expandColor(raw.d),
+    lnHeadColors: expandColorList(raw.e),
+    columnWidth: raw.h,
+    columnSpacing: raw.i,
+    columnWidths: raw.j,
+    columnSpacings: raw.k,
+    noteHeightScale: raw.l,
+    assets: raw.m,
+  };
+}
+
+function compactReplaySkinSettingsV3(settings: ReplaySkinSettings): Record<string, unknown> {
   const def = DEFAULT_REPLAY_SKIN_SETTINGS;
   const out: Record<string, unknown> = {};
-  if (settings.style !== def.style) out.style = settings.style;
-  if (settings.tapColor !== def.tapColor) out.tapColor = settings.tapColor;
-  if (settings.tapColors.some((color) => color)) out.tapColors = settings.tapColors;
-  if (settings.lnHeadColor !== def.lnHeadColor) out.lnHeadColor = settings.lnHeadColor;
-  if (settings.lnHeadColors.some((color) => color)) out.lnHeadColors = settings.lnHeadColors;
-  if (settings.lnBodyColor !== def.lnBodyColor) out.lnBodyColor = settings.lnBodyColor;
-  if (settings.outlineEnabled !== def.outlineEnabled) out.outlineEnabled = settings.outlineEnabled;
-  if (settings.outlineColor !== def.outlineColor) out.outlineColor = settings.outlineColor;
-  if (settings.outlineWidth !== def.outlineWidth) out.outlineWidth = settings.outlineWidth;
-  if (settings.percy !== def.percy) out.percy = settings.percy;
-  if (settings.upscroll !== def.upscroll) out.upscroll = settings.upscroll;
-  if (settings.keysUnderNotes !== def.keysUnderNotes) out.keysUnderNotes = settings.keysUnderNotes;
-  if (settings.columnWidth !== def.columnWidth) out.columnWidth = settings.columnWidth;
-  if (settings.columnSpacing !== def.columnSpacing) out.columnSpacing = settings.columnSpacing;
-  if (settings.noteHeightScale !== def.noteHeightScale) out.noteHeightScale = settings.noteHeightScale;
-  if (settings.hitPosition !== def.hitPosition) out.hitPosition = settings.hitPosition;
-  if (settings.scorePosition !== def.scorePosition) out.scorePosition = settings.scorePosition;
-  if (settings.comboPosition !== def.comboPosition) out.comboPosition = settings.comboPosition;
+  if (settings.style !== def.style) out.a = compactReplaySkinStyle(settings.style);
+  if (settings.tapColor !== def.tapColor) out.b = compactColor(settings.tapColor);
+  if (settings.tapColors.some((color) => color)) out.c = compactColorList(settings.tapColors);
+  if (settings.lnHeadColor !== def.lnHeadColor) out.d = compactColor(settings.lnHeadColor);
+  if (settings.lnHeadColors.some((color) => color)) out.e = compactColorList(settings.lnHeadColors);
+  if (settings.lnBodyColor !== def.lnBodyColor) out.f = compactColor(settings.lnBodyColor);
+  if (settings.outlineEnabled !== def.outlineEnabled) out.g = compactBoolean(settings.outlineEnabled);
+  if (settings.outlineColor !== def.outlineColor) out.h = compactColor(settings.outlineColor);
+  if (settings.outlineWidth !== def.outlineWidth) out.i = settings.outlineWidth;
+  if (settings.percy !== def.percy) out.j = compactBoolean(settings.percy);
+  if (settings.upscroll !== def.upscroll) out.k = compactBoolean(settings.upscroll);
+  if (settings.keysUnderNotes !== def.keysUnderNotes) out.l = compactBoolean(settings.keysUnderNotes);
+  if (settings.columnWidth !== def.columnWidth) out.m = settings.columnWidth;
+  if (settings.hitPosition !== def.hitPosition) out.n = settings.hitPosition;
+  if (settings.scorePosition !== def.scorePosition) out.o = settings.scorePosition;
+  if (settings.comboPosition !== def.comboPosition) out.p = settings.comboPosition;
   const profiles: Record<string, unknown> = {};
   for (const [key, profile] of Object.entries(settings.keymodeProfiles)) {
-    const compact = compactKeymodeProfile(profile);
+    const compact = compactKeymodeProfileV3(profile);
     if (compact) profiles[key] = compact;
   }
-  if (Object.keys(profiles).length > 0) out.keymodeProfiles = profiles;
+  if (Object.keys(profiles).length > 0) out.q = profiles;
+  if (settings.columnSpacing !== def.columnSpacing) out.r = settings.columnSpacing;
+  if (settings.noteHeightScale !== def.noteHeightScale) out.s = settings.noteHeightScale;
   return out;
+}
+
+function expandReplaySkinSettingsV3(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const raw = value as Record<string, unknown>;
+  const profiles: Record<string, unknown> = {};
+  if (raw.q && typeof raw.q === "object" && !Array.isArray(raw.q)) {
+    for (const [key, profile] of Object.entries(raw.q)) {
+      profiles[key] = expandKeymodeProfileV3(profile);
+    }
+  }
+  return {
+    style: expandReplaySkinStyle(raw.a),
+    tapColor: expandColor(raw.b),
+    tapColors: expandColorList(raw.c),
+    lnHeadColor: expandColor(raw.d),
+    lnHeadColors: expandColorList(raw.e),
+    lnBodyColor: expandColor(raw.f),
+    outlineEnabled: expandBoolean(raw.g),
+    outlineColor: expandColor(raw.h),
+    outlineWidth: raw.i,
+    percy: expandBoolean(raw.j),
+    upscroll: expandBoolean(raw.k),
+    keysUnderNotes: expandBoolean(raw.l),
+    columnWidth: raw.m,
+    columnSpacing: raw.r,
+    noteHeightScale: raw.s,
+    hitPosition: raw.n,
+    scorePosition: raw.o,
+    comboPosition: raw.p,
+    keymodeProfiles: profiles,
+  };
 }
 
 export function createReplaySkinShareKey(name: string, settings: ReplaySkinSettings): string {
   const normalized = normalizeReplaySkinSettings(settings);
-  const payload = {
-    n: normalizePresetName(name),
-    s: compactReplaySkinSettings(normalized),
-  };
-  return `mhreplay2.${encodeBase64Url(JSON.stringify(payload))}`;
+  const payload = [
+    normalizePresetName(name),
+    compactReplaySkinSettingsV3(normalized),
+  ];
+  return `mhreplay3.${encodeBase64Url(JSON.stringify(payload))}`;
 }
 
 export function parseReplaySkinShareKey(key: string): ReplaySkinSharePayload | null {
   const trimmed = key.trim();
+  if (trimmed.startsWith("mhreplay3.")) {
+    try {
+      const parsed = JSON.parse(decodeBase64Url(trimmed.slice("mhreplay3.".length)));
+      if (!Array.isArray(parsed)) return null;
+      return {
+        type: "mania-hub-replay-settings",
+        version: 1,
+        name: normalizePresetName(parsed[0]),
+        settings: normalizeReplaySkinSettings(expandReplaySkinSettingsV3(parsed[1])),
+      };
+    } catch {
+      return null;
+    }
+  }
   if (trimmed.startsWith("mhreplay2.")) {
     try {
       const parsed = JSON.parse(decodeBase64Url(trimmed.slice("mhreplay2.".length)));

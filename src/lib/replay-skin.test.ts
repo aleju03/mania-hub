@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_REPLAY_SKIN_SETTINGS,
   REPLAY_SKIN_STORAGE_KEY,
+  createReplaySkinShareKey,
   getReplaySkinColumnColor,
   getReplaySkinProfile,
   normalizeReplaySkinSettings,
   osuManiaHitPositionToReplayHitPosition,
+  parseReplaySkinShareKey,
   readReplaySkinSettings,
   replayHitPositionToOsuManiaHitPosition,
   writeReplaySkinSettings,
@@ -147,6 +149,52 @@ describe("replay skin settings", () => {
     expect(getReplaySkinProfile(settings, 7).columnSpacing).toBe(2);
     expect(getReplaySkinColumnColor(settings, "tap", 3, 7)).toBe("#ffcc22");
     expect(settings.hitPosition).toBe(84);
+  });
+
+  it("creates compact v3 share codes and parses them losslessly", () => {
+    const settings = normalizeReplaySkinSettings({
+      style: "arrows",
+      outlineEnabled: false,
+      hitPosition: 48,
+      scorePosition: 416,
+      comboPosition: 528,
+      keymodeProfiles: {
+        4: {
+          lnHeadColors: ["#e3a5de", "#e3a5de", "#e3a5de", "#e3a5de"],
+          columnWidth: 91,
+          columnSpacing: 2,
+        },
+      },
+    });
+
+    const code = createReplaySkinShareKey("insano", settings);
+    const payload = parseReplaySkinShareKey(code);
+
+    expect(code.startsWith("mhreplay3.")).toBe(true);
+    expect(code.length).toBeLessThan(180);
+    expect(payload?.name).toBe("insano");
+    expect(payload?.settings).toEqual(settings);
+  });
+
+  it("continues to parse existing v2 share codes", () => {
+    const code = "mhreplay2.eyJuIjoiaW5zYW5vIiwicyI6eyJzdHlsZSI6ImFycm93cyIsIm91dGxpbmVFbmFibGVkIjpmYWxzZSwiaGl0UG9zaXRpb24iOjQ4LCJzY29yZVBvc2l0aW9uIjo0MTYsImNvbWJvUG9zaXRpb24iOjUyOCwia2V5bW9kZVByb2ZpbGVzIjp7IjQiOnsibG5IZWFkQ29sb3JzIjpbIiNlM2E1ZGUiLCIjZTNhNWRlIiwiI2UzYTVkZSIsIiNlM2E1ZGUiXSwiY29sdW1uV2lkdGgiOjkxLCJjb2x1bW5TcGFjaW5nIjoyfX19fQ";
+    const payload = parseReplaySkinShareKey(code);
+
+    expect(payload?.name).toBe("insano");
+    expect(payload?.settings).toEqual(normalizeReplaySkinSettings({
+      style: "arrows",
+      outlineEnabled: false,
+      hitPosition: 48,
+      scorePosition: 416,
+      comboPosition: 528,
+      keymodeProfiles: {
+        4: {
+          lnHeadColors: ["#e3a5de", "#e3a5de", "#e3a5de", "#e3a5de"],
+          columnWidth: 91,
+          columnSpacing: 2,
+        },
+      },
+    }));
   });
 
   it("reads and writes settings through localStorage", () => {
