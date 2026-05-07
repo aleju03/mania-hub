@@ -1,4 +1,5 @@
-import { getDisplayedAccuracy } from "#/lib/score";
+import { formatDate } from "#/lib/format";
+import { getDisplayedAccuracy, getScoreTimestamp, isLazerScore } from "#/lib/score";
 import type { ManiaBeatmap } from "#/lib/beatmap-parser";
 import type { ServerReplay } from "#/lib/replay-types";
 import type { OsuScore } from "#/lib/types";
@@ -21,6 +22,9 @@ export function ReplayInfo({ replay, score, beatmap, onClear }: ReplayInfoProps)
   const beatmapsetId = score?.beatmapset?.id;
   const beatmapId = score?.beatmap?.id;
   const mapUrl = beatmapsetId ? `https://osu.ppy.sh/beatmapsets/${beatmapsetId}${beatmapId ? `#mania/${beatmapId}` : ""}` : null;
+  const clientLabel = score ? (isLazerScore(score) ? "Lazer" : "Stable") : null;
+  const playedAt = score ? getScoreTimestamp(score) : "";
+  const playedDate = playedAt ? formatDate(playedAt) : null;
 
   return (
     <>
@@ -58,6 +62,12 @@ export function ReplayInfo({ replay, score, beatmap, onClear }: ReplayInfoProps)
           <MobileReplayStat label="Score" value={h.totalScore.toLocaleString()} compact />
           <MobileReplayStat label="Combo" value={`${h.maxCombo}x`} compact />
         </div>
+        {(clientLabel || playedDate) && (
+          <div className="mt-1.5 grid grid-cols-2 gap-1.5">
+            {clientLabel && <MobileReplayStat label="Client" value={clientLabel} valueClassName={clientLabel === "Stable" ? "text-osu-pink-light" : "text-osu-l2"} compact />}
+            {playedDate && <MobileReplayStat label="Played" value={playedDate} compact />}
+          </div>
+        )}
         <div className="mt-2 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-osu-b5/55 px-3 py-2.5">
           <div className="min-w-0">
             <div className="mb-1 text-[8px] uppercase tracking-wider text-osu-f1">Judgments</div>
@@ -99,6 +109,8 @@ export function ReplayInfo({ replay, score, beatmap, onClear }: ReplayInfoProps)
             <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Accuracy</div><div className="text-sm font-bold text-white">{accuracy.toFixed(2)}%</div></div>
             <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Score</div><div className="text-sm font-bold text-white">{h.totalScore.toLocaleString()}</div></div>
             <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Combo</div><div className="text-sm font-bold text-white">{h.maxCombo}x</div></div>
+            {clientLabel && <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Client</div><div className={`text-sm font-bold ${clientLabel === "Stable" ? "text-osu-pink-light" : "text-osu-l2"}`}>{clientLabel}</div></div>}
+            {playedDate && <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Played</div><div className="text-sm font-bold text-white">{playedDate}</div></div>}
             <div>
               <div className="text-[9px] uppercase tracking-wider text-osu-f1">Judgments</div>
               <div className="text-xs text-osu-f1">
