@@ -12,45 +12,44 @@ function parseAvatarUserId(url: string | undefined): number | null {
   }
 }
 
-export function avatarImageSrc(url: string | undefined, userId?: number | string | null): string | undefined {
+// Default goes direct to a.ppy.sh so rankings/feeds don't burst N same-origin
+// requests (which trips Vercel's DDoS heuristics). The osu CDN doesn't set
+// CORS headers, so canvas/Three.js callers must opt in to the proxy.
+export function avatarImageSrc(
+  url: string | undefined,
+  userId?: number | string | null,
+  options?: { proxy?: boolean },
+): string | undefined {
   const parsedUserId = userId == null || userId === "" ? null : Number(userId);
   const id = parsedUserId !== null && Number.isSafeInteger(parsedUserId) && parsedUserId > 0
     ? parsedUserId
     : parseAvatarUserId(url);
-  return id ? `/api/avatar?u=${id}` : url;
-}
-
-export function getAvatarFallbackSrc(currentSrc: string | undefined, originalUrl: string | undefined): string | null {
-  if (!currentSrc || !originalUrl || currentSrc === originalUrl) return null;
-  return originalUrl;
+  if (options?.proxy) return id ? `/api/avatar?u=${id}` : url;
+  if (id) return `https://a.ppy.sh/${id}`;
+  return url;
 }
 
 export function Avatar({
   url,
   userId,
-  seed,
   size = 40,
   shape = "circle",
   online = false,
 }: {
   url?: string;
   userId?: number | string | null;
-  seed?: number;
   size?: number;
   shape?: "circle" | "square";
   online?: boolean;
 }) {
-  const [useOriginalUrl, setUseOriginalUrl] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const shapeClass = shape === "square" ? "rounded-none" : "rounded-full";
   const onlineClass = online
     ? "ring-2 ring-osu-green-light shadow-[0_0_8px_rgba(179,217,68,0.45)]"
     : "";
-  const proxiedUrl = avatarImageSrc(url, userId);
-  const imageUrl = useOriginalUrl && url ? url : proxiedUrl;
+  const imageUrl = avatarImageSrc(url, userId);
 
   useEffect(() => {
-    setUseOriginalUrl(false);
     setImageFailed(false);
   }, [url, userId]);
 
@@ -64,26 +63,14 @@ export function Avatar({
         className={`${shapeClass} ${onlineClass} flex-shrink-0 object-cover`}
         style={{ width: size, height: size }}
         loading="lazy"
-        onError={() => {
-          const fallbackUrl = getAvatarFallbackSrc(imageUrl, url);
-          if (!useOriginalUrl && fallbackUrl) {
-            setUseOriginalUrl(true);
-            return;
-          }
-          setImageFailed(true);
-        }}
+        onError={() => setImageFailed(true)}
       />
     );
   }
-  const h = ((seed ?? 0) * 137) % 360;
   return (
     <div
-      className={`${shapeClass} ${onlineClass} flex-shrink-0`}
-      style={{
-        width: size,
-        height: size,
-        background: `linear-gradient(135deg, hsl(${h},60%,40%), hsl(${(h + 60) % 360},50%,30%))`,
-      }}
+      className={`${shapeClass} ${onlineClass} flex-shrink-0 bg-osu-b6`}
+      style={{ width: size, height: size }}
     />
   );
 }
