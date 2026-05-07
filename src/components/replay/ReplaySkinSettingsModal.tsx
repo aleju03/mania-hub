@@ -2268,6 +2268,7 @@ const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, string> = {
   misses: "L/R miss counter",
   accuracy: "Accuracy",
   judgements: "Judgements",
+  progress: "Progress pie",
 };
 
 function ReplayOverlaySettingsRow({

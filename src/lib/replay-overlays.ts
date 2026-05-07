@@ -1,7 +1,7 @@
 export const REPLAY_OVERLAY_SETTINGS_STORAGE_KEY = "mania-hub-replay-overlays";
 export const REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT = "mania-hub:replay-overlay-settings-change";
 
-export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "judgements"] as const;
+export const REPLAY_OVERLAY_IDS = ["keypresses", "kps", "misses", "accuracy", "judgements", "progress"] as const;
 
 export type ReplayOverlayId = typeof REPLAY_OVERLAY_IDS[number];
 
@@ -23,6 +23,7 @@ export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
   misses: { enabled: true, x: 0.085, y: 0.77, scale: 0.75 },
   accuracy: { enabled: true, x: 0.74, y: 0.02, scale: 1 },
   judgements: { enabled: true, x: 0.74, y: 0.07, scale: 1 },
+  progress: { enabled: true, x: 0.03, y: 0.03, scale: 1 },
 };
 
 const OVERLAPPING_LEFT_CLUSTER_DEFAULTS: ReplayOverlaySettings = {
@@ -31,6 +32,7 @@ const OVERLAPPING_LEFT_CLUSTER_DEFAULTS: ReplayOverlaySettings = {
   misses: { enabled: true, x: 0.05, y: 0.77, scale: 0.82 },
   accuracy: { enabled: true, x: 0.74, y: 0.02, scale: 1 },
   judgements: { enabled: true, x: 0.74, y: 0.07, scale: 1 },
+  progress: { enabled: true, x: 0.03, y: 0.03, scale: 1 },
 };
 
 const LEGACY_PLAYFIELD_OVERLAY_DEFAULTS: ReplayOverlaySettings = {
@@ -39,6 +41,7 @@ const LEGACY_PLAYFIELD_OVERLAY_DEFAULTS: ReplayOverlaySettings = {
   misses: { enabled: true, x: 0.22, y: 0.84, scale: 1 },
   accuracy: { enabled: true, x: 0.68, y: 0.02, scale: 1 },
   judgements: { enabled: true, x: 0.68, y: 0.07, scale: 1 },
+  progress: { enabled: true, x: 0.03, y: 0.03, scale: 1 },
 };
 
 function normalizeNumber(value: unknown, fallback: number, min: number, max: number): number {

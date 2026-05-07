@@ -2118,6 +2118,26 @@ export class ManiaReplayRenderer {
     });
   }
 
+  private renderProgressOverlay(layout: Layout) {
+    const scale = this.getOverlayScale(layout, "progress");
+    const size = 32 * scale;
+    const frame = this.getOverlayFrame(layout, "progress", size, size);
+    if (!frame) return;
+
+    const progress = this.totalDuration > 0
+      ? Math.max(0, Math.min(1, this.currentTime / this.totalDuration))
+      : 0;
+    const cx = frame.x + size / 2;
+    const cy = frame.y + size / 2;
+    const radius = size / 2 - 2.5 * scale;
+    const strokeWidth = Math.max(1.4, 2 * scale);
+
+    this.circle(cx, cy, radius, "#000000", 0.28);
+    this.pieWedge(cx, cy, radius, progress, "#f0f0f0", 0.64);
+    this.strokeCircle(cx, cy, radius, "#f0f0f0", 0.92, strokeWidth);
+    this.circle(cx, cy, Math.max(0.9, 1.25 * scale), "#f0f0f0", 0.92);
+  }
+
   private shouldRenderCustomOverlays(layout: Layout): boolean {
     return this.fullscreenLayout || layout.w >= 640;
   }
@@ -2162,6 +2182,7 @@ export class ManiaReplayRenderer {
       this.renderMissOverlay(layout);
       this.renderAccuracyOverlay(layout);
       this.renderJudgementOverlay(layout);
+      this.renderProgressOverlay(layout);
     }
 
     const urBarWidth = Math.min(playfieldWidth * 0.68, 180);
@@ -2606,6 +2627,26 @@ export class ManiaReplayRenderer {
   private circle(x: number, y: number, radius: number, color: string, alpha: number) {
     if (radius <= 0 || alpha <= 0) return;
     this.graphics.circle(x, y, radius).fill({ color: hexToNumber(color), alpha });
+  }
+
+  private pieWedge(x: number, y: number, radius: number, progress: number, color: string, alpha: number) {
+    if (radius <= 0 || progress <= 0 || alpha <= 0) return;
+    if (progress >= 0.999) {
+      this.circle(x, y, radius, color, alpha);
+      return;
+    }
+
+    const startAngle = -Math.PI / 2;
+    const endAngle = startAngle + progress * Math.PI * 2;
+    const steps = Math.max(4, Math.ceil(progress * 32));
+    const path = new GraphicsPath().moveTo(x, y);
+    for (let i = 0; i <= steps; i += 1) {
+      const ratio = i / steps;
+      const angle = startAngle + (endAngle - startAngle) * ratio;
+      path.lineTo(x + Math.cos(angle) * radius, y + Math.sin(angle) * radius);
+    }
+    path.closePath();
+    this.graphics.path(path).fill({ color: hexToNumber(color), alpha });
   }
 
   private topFadeAlpha(y: number, fadeHeight: number, minAlpha = 0) {
