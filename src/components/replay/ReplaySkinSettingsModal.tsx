@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -73,10 +73,14 @@ const REPLAY_SKIN_PALETTE = [
   "#ffffff",
   "#20222b",
 ];
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 const DRAFT_PRESET_ID = "custom";
 const DEFAULT_DRAFT_PRESET_NAME = "New preset";
 const PREVIEW_BAR_NOTE_HEIGHT_RATIO = 0.22;
 const PREVIEW_MANIA_SKIN_STAGE_HEIGHT = 480;
+const PREVIEW_MIN_HEIGHT = 300;
+const PREVIEW_MAX_HEIGHT = 430;
+const PREVIEW_HEIGHT_RATIO = 0.9;
 const REPLAY_JUDGEMENT_REFERENCE_ASPECT = 256 / 72;
 const PREVIEW_BAR_COLUMN_COLORS: Record<number, string[]> = {
   1: ["#fff"],
@@ -179,7 +183,12 @@ export function ReplaySkinSettingsModal({
   const modalRef = useRef<HTMLDivElement | null>(null);
   const oskInputRef = useRef<HTMLInputElement | null>(null);
   const matchedInitialPresetRef = useRef(false);
-  const [windowRect, setWindowRect] = useState<WindowRect | null>(null);
+  const [windowRect, setWindowRect] = useState<WindowRect | null>(() => {
+    if (typeof window === "undefined") return null;
+    const stored = readStoredWindowRect();
+    const initial = stored ?? defaultWindowRect(window.innerWidth, window.innerHeight);
+    return clampWindowRect(initial, window.innerWidth, window.innerHeight);
+  });
   const dragStateRef = useRef<{ pointerId: number; startX: number; startY: number; startRect: WindowRect } | null>(null);
   const resizeStateRef = useRef<{ pointerId: number; dir: ResizeDirection; startX: number; startY: number; startRect: WindowRect } | null>(null);
   const [draft, setDraft] = useState(() => normalizeReplaySkinSettings(settings));
@@ -214,6 +223,11 @@ export function ReplaySkinSettingsModal({
   const [previewMode, setPreviewMode] = useState<PreviewMode>("tap");
   const profile = getReplaySkinProfile(draft, selectedKeyCount);
   const isCompactWindow = (windowRect?.w ?? WINDOW_DEFAULT_WIDTH) < WINDOW_COMPACT_WIDTH;
+  const previewPaneWidth = Math.round(Math.max(WINDOW_PREVIEW_MIN_WIDTH, Math.min(WINDOW_PREVIEW_MAX_WIDTH, (windowRect?.w ?? WINDOW_DEFAULT_WIDTH) * WINDOW_PREVIEW_WIDTH_RATIO)));
+  const previewContentWidth = isCompactWindow || activeTab === "overlays" ? undefined : previewPaneWidth - WINDOW_PREVIEW_HORIZONTAL_PADDING;
+  const contentGridStyle: CSSProperties | undefined = !isCompactWindow && activeTab !== "overlays"
+    ? { gridTemplateColumns: `minmax(0, 1fr) ${previewPaneWidth}px` }
+    : undefined;
   const [columnWidthInput, setColumnWidthInput] = useState(() => String(profile.columnWidth));
   const [columnSpacingInput, setColumnSpacingInput] = useState(() => String(profile.columnSpacing));
   const [noteHeightScaleInput, setNoteHeightScaleInput] = useState(() => String(profile.noteHeightScale));
@@ -953,7 +967,10 @@ export function ReplaySkinSettingsModal({
           </div>
         </div>
 
-        <div className={`grid min-h-0 flex-1 ${isCompactWindow || activeTab === "overlays" ? "grid-cols-1 overflow-y-auto" : "grid-cols-[minmax(0,1fr)_300px]"}`}>
+        <div
+          className={`grid min-h-0 flex-1 ${isCompactWindow || activeTab === "overlays" ? "grid-cols-1 overflow-y-auto" : ""}`}
+          style={contentGridStyle}
+        >
           <div className={`space-y-4 ${isCompactWindow ? "overflow-visible p-4 sm:p-5" : "overflow-y-auto p-5"}`}>
             <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_110px]">
               <div className="min-w-0 space-y-2">
@@ -1294,6 +1311,7 @@ export function ReplaySkinSettingsModal({
               keyCount={selectedKeyCount}
               previewMode={previewMode}
               selectedColumns={selectedColumns}
+              expectedWidth={previewContentWidth}
               onSelectionChange={(next) => {
                 setSelectedColumns((current) => (arraysEqualUnordered(current, next) ? current : next));
                 if (next.length > 0) {
@@ -1621,12 +1639,29 @@ function JudgementSetGallery({
               type="button"
               onClick={() => onChange(set)}
               aria-pressed={isSelected}
-              className="flex w-full cursor-pointer flex-col items-stretch gap-2 text-left"
+              className="mb-2 flex w-full cursor-pointer items-center gap-2 text-left"
             >
-              <span className={`text-[11px] font-bold uppercase tracking-wider ${isSelected ? "text-osu-pink-light" : "text-osu-f1"}`}>
+              <span className={`shrink-0 text-[11px] font-bold uppercase tracking-wider ${isSelected ? "text-osu-pink-light" : "text-osu-f1"}`}>
                 {getJudgementSetLabel(set)}
               </span>
-              <div className="flex h-16 items-center justify-around gap-2 overflow-hidden rounded-md bg-black/30 px-2">
+            </button>
+            {isSelected ? (
+              <JudgementScaleTileControl
+                inputValue={scaleInputValue}
+                numericValue={numericScale}
+                onSliderChange={onScaleSliderChange}
+                onInputChange={onScaleInputChange}
+                onCommit={onScaleCommit}
+                onResetToDefault={onScaleReset}
+              />
+            ) : null}
+            <div className="relative h-16 overflow-hidden rounded-md bg-black/30">
+              <button
+                type="button"
+                onClick={() => onChange(set)}
+                aria-label={`Select ${getJudgementSetLabel(set)} judgement set`}
+                className="flex h-full w-full cursor-pointer items-center justify-around gap-2 px-2"
+              >
                 {JUDGEMENT_TILE_PREVIEW_KEYS.map((assetKey) => {
                   const item = JUDGEMENT_PREVIEW_ITEMS.find((entry) => entry.assetKey === assetKey)!;
                   const asset = assets?.[assetKey];
@@ -1654,25 +1689,8 @@ function JudgementSetGallery({
                   }
                   return <span key={assetKey} aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-white/10" />;
                 })}
-              </div>
-            </button>
-            {isSelected ? (
-              <div className="mt-3 border-t border-osu-b3/40 pt-3">
-                <LayoutNumberControl
-                  label="Judgement size"
-                  inputValue={scaleInputValue}
-                  numericValue={numericScale}
-                  min={REPLAY_SKIN_MIN_JUDGEMENT_SCALE}
-                  max={REPLAY_SKIN_MAX_JUDGEMENT_SCALE}
-                  defaultValue={REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE}
-                  onSliderChange={onScaleSliderChange}
-                  onInputChange={onScaleInputChange}
-                  onCommit={onScaleCommit}
-                  onResetToDefault={onScaleReset}
-                  hint="Saved for this set."
-                />
-              </div>
-            ) : null}
+              </button>
+            </div>
           </div>
         );
       })}
@@ -1680,12 +1698,69 @@ function JudgementSetGallery({
   );
 }
 
+function JudgementScaleTileControl({
+  inputValue,
+  numericValue,
+  onSliderChange,
+  onInputChange,
+  onCommit,
+  onResetToDefault,
+}: {
+  inputValue: string;
+  numericValue: number;
+  onSliderChange: (value: number) => void;
+  onInputChange: (value: string) => void;
+  onCommit: () => void;
+  onResetToDefault: () => void;
+}) {
+  const safeValue = Math.max(REPLAY_SKIN_MIN_JUDGEMENT_SCALE, Math.min(REPLAY_SKIN_MAX_JUDGEMENT_SCALE, Number.isFinite(numericValue) ? numericValue : REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE));
+  const fillRatio = (safeValue - REPLAY_SKIN_MIN_JUDGEMENT_SCALE) / (REPLAY_SKIN_MAX_JUDGEMENT_SCALE - REPLAY_SKIN_MIN_JUDGEMENT_SCALE);
+  const isDefault = safeValue === REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE;
+  return (
+    <div className="mb-2 grid grid-cols-[auto_minmax(0,1fr)_44px] items-center gap-2 rounded-md border border-osu-b3/50 bg-osu-b5/80 px-2 py-1.5">
+      <button
+        type="button"
+        onClick={onResetToDefault}
+        disabled={isDefault}
+        className="cursor-pointer text-[9px] font-bold uppercase tracking-wide text-osu-f1 transition-colors hover:text-white disabled:cursor-default disabled:opacity-45 disabled:hover:text-osu-f1"
+      >
+        Size
+      </button>
+      <input
+        type="range"
+        min={REPLAY_SKIN_MIN_JUDGEMENT_SCALE}
+        max={REPLAY_SKIN_MAX_JUDGEMENT_SCALE}
+        step={1}
+        value={safeValue}
+        onChange={(event) => onSliderChange(Number(event.target.value))}
+        className="h-1.5 min-w-0 cursor-pointer appearance-none rounded-full accent-osu-pink"
+        style={{
+          background: `linear-gradient(90deg, var(--color-osu-pink, #e83c90) 0%, var(--color-osu-pink, #e83c90) ${fillRatio * 100}%, rgba(38, 38, 51, 0.9) ${fillRatio * 100}%, rgba(38, 38, 51, 0.9) 100%)`,
+        }}
+      />
+      <input
+        type="number"
+        min={REPLAY_SKIN_MIN_JUDGEMENT_SCALE}
+        max={REPLAY_SKIN_MAX_JUDGEMENT_SCALE}
+        step={1}
+        value={inputValue}
+        onChange={(event) => onInputChange(event.target.value)}
+        onBlur={onCommit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+        }}
+        className="h-7 w-11 rounded-md border border-osu-b3/60 bg-osu-b5 px-1 text-center text-xs font-bold text-white outline-none transition-colors focus:border-osu-pink/70 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
+    </div>
+  );
+}
 function ReplaySkinPreview({
   settings,
   profile,
   keyCount,
   previewMode,
   selectedColumns,
+  expectedWidth,
   onSelectionChange,
 }: {
   settings: ReplaySkinSettings;
@@ -1693,13 +1768,15 @@ function ReplaySkinPreview({
   keyCount: number;
   previewMode: PreviewMode;
   selectedColumns: number[];
+  expectedWidth?: number;
   onSelectionChange: (next: number[]) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [previewWidth, setPreviewWidth] = useState(260);
-  useEffect(() => {
+  const [previewWidth, setPreviewWidth] = useState(() => expectedWidth ?? 260);
+  useIsomorphicLayoutEffect(() => {
     const measure = () => {
-      const nextWidth = Math.max(180, Math.round(containerRef.current?.clientWidth ?? 260));
+      const measured = expectedWidth ?? containerRef.current?.clientWidth ?? 260;
+      const nextWidth = Math.max(180, Math.round(measured));
       setPreviewWidth((current) => (current === nextWidth ? current : nextWidth));
     };
     measure();
@@ -1710,10 +1787,10 @@ function ReplaySkinPreview({
     const observer = new ResizeObserver(measure);
     observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, []);
+  }, [expectedWidth]);
 
   const width = previewWidth;
-  const height = 300;
+  const height = Math.round(Math.max(PREVIEW_MIN_HEIGHT, Math.min(PREVIEW_MAX_HEIGHT, width * PREVIEW_HEIGHT_RATIO)));
   const columnWidths = Array.from({ length: keyCount }, (_, col) => profile.columnWidths[col] ?? profile.columnWidth);
   const columnSpacings = Array.from({ length: Math.max(0, keyCount - 1) }, (_, col) => profile.columnSpacings[col] ?? profile.columnSpacing);
   const desiredPlayfieldWidth = columnWidths.reduce((sum, value) => sum + value, 0) + columnSpacings.reduce((sum, value) => sum + value, 0);
@@ -1873,7 +1950,8 @@ function ReplaySkinPreview({
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerEnd}
       onPointerCancel={handlePointerEnd}
-      className="relative h-[300px] overflow-hidden rounded-lg border border-osu-b3/60 bg-[#07070c] select-none touch-none"
+      className="relative overflow-hidden rounded-lg border border-osu-b3/60 bg-[#07070c] select-none touch-none"
+      style={{ height }}
     >
       {settings.style === "bars" ? (
         <div className="pointer-events-none absolute inset-y-0" style={{ left: playfieldX, width: playfieldWidth }}>
@@ -2792,6 +2870,10 @@ const WINDOW_MIN_WIDTH = 320;
 const WINDOW_MIN_HEIGHT = 380;
 const WINDOW_VIEWPORT_MARGIN = 8;
 const WINDOW_COMPACT_WIDTH = 640;
+const WINDOW_PREVIEW_MIN_WIDTH = 300;
+const WINDOW_PREVIEW_MAX_WIDTH = 520;
+const WINDOW_PREVIEW_WIDTH_RATIO = 0.38;
+const WINDOW_PREVIEW_HORIZONTAL_PADDING = 40;
 
 type WindowRect = { x: number; y: number; w: number; h: number };
 type ResizeDirection = "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
