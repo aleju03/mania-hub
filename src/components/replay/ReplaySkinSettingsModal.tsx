@@ -793,7 +793,6 @@ export function ReplaySkinSettingsModal({
     lnBody: "LN body color",
     outline: "Outline color",
   };
-  const activeTabLabel = activeTab === "style" ? "Style" : activeTab === "layout" ? "Layout" : "Overlays";
   const showDevOverlayReset = activeTab === "overlays" && import.meta.env.DEV;
 
   return createPortal(
@@ -823,27 +822,54 @@ export function ReplaySkinSettingsModal({
         transition={{ duration: 0.14 }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div
-          onPointerDown={handleHeaderPointerDown}
-          onPointerMove={handleHeaderPointerMove}
-          onPointerUp={handleHeaderPointerEnd}
-          onPointerCancel={handleHeaderPointerEnd}
-          className="flex cursor-grab select-none items-center gap-3 border-b border-osu-b3/50 px-5 py-4 active:cursor-grabbing"
-        >
-          <GripHorizontal className="h-4 w-4 shrink-0 text-osu-f1" />
-          <div>
-            <h3 className="text-base font-bold text-white">Replay settings</h3>
-            <div className="text-[10px] uppercase tracking-wider text-osu-f1">{activeTabLabel}</div>
-          </div>
-          <button
-            onClick={onClose}
-            onPointerDown={(e) => e.stopPropagation()}
-            aria-label="Close replay settings"
-            data-window-no-drag
-            className="ml-auto flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg bg-osu-b3/50 text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
+        <div className="select-none border-b border-osu-b3/50 bg-osu-b4">
+          <div
+            onPointerDown={handleHeaderPointerDown}
+            onPointerMove={handleHeaderPointerMove}
+            onPointerUp={handleHeaderPointerEnd}
+            onPointerCancel={handleHeaderPointerEnd}
+            className="flex cursor-grab items-center gap-3 px-5 pb-2.5 pt-4 active:cursor-grabbing"
           >
-            <X className="h-4 w-4" strokeWidth={2.4} />
-          </button>
+            <GripHorizontal className="h-4 w-4 shrink-0 text-osu-f1" />
+            <h3 className="text-base font-bold text-white">Replay settings</h3>
+            <button
+              onClick={onClose}
+              onPointerDown={(e) => e.stopPropagation()}
+              aria-label="Close replay settings"
+              data-window-no-drag
+              className="ml-auto flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg bg-osu-b3/50 text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
+            >
+              <X className="h-4 w-4" strokeWidth={2.4} />
+            </button>
+          </div>
+          <div
+            className="flex overflow-x-auto px-5 scrollbar-hide"
+            data-window-no-drag
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {([
+              ["style", "Style"],
+              ["layout", "Layout"],
+              ["overlays", "Overlays"],
+            ] as const).map(([tab, label]) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`relative cursor-pointer px-4 py-2.5 text-[12px] font-semibold transition-colors duration-[120ms] ${
+                  activeTab === tab ? "text-osu-c1" : "text-osu-f1 hover:text-osu-l2"
+                }`}
+              >
+                {label}
+                {activeTab === tab ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full bg-osu-h1"
+                  />
+                ) : null}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className={`grid min-h-0 flex-1 ${isCompactWindow || activeTab === "overlays" ? "grid-cols-1 overflow-y-auto" : "grid-cols-[minmax(0,1fr)_300px]"}`}>
@@ -902,27 +928,6 @@ export function ReplaySkinSettingsModal({
                   label: `${index + 1}K`,
                 }))}
               />
-            </div>
-
-            <div className="grid grid-cols-3 rounded-lg bg-osu-b5/55 p-1">
-              {([
-                ["style", "Style"],
-                ["layout", "Layout"],
-                ["overlays", "Overlays"],
-              ] as const).map(([tab, label]) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setActiveTab(tab)}
-                  className={`h-8 cursor-pointer rounded-md text-xs font-bold transition-colors ${
-                    activeTab === tab
-                      ? "bg-osu-pink/20 text-white"
-                      : "text-osu-f1 hover:text-white hover:bg-osu-b3/40"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
             </div>
 
             {activeTab === "style" ? (
