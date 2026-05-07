@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -1931,8 +1931,6 @@ function ArrowShape({
   strokeOpacity: number;
   strokeWidth: number;
 }) {
-  const rawFilterId = useId();
-  const filterId = `arrow-outline-${rawFilterId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const transform = {
     right: undefined,
     left: "translate(48 0) scale(-1 1)",
@@ -1971,18 +1969,9 @@ function ArrowShape({
       }}
     >
       {showHollowOutline ? (
-        <defs>
-          <filter id={filterId} x="-35%" y="-35%" width="170%" height="170%" colorInterpolationFilters="sRGB">
-            <feMorphology in="SourceAlpha" operator="dilate" radius={outlineRadius} result="dilated" />
-            <feFlood floodColor={stroke} floodOpacity={strokeOpacity} result="outlineColor" />
-            <feComposite in="outlineColor" in2="dilated" operator="in" />
-          </filter>
-        </defs>
-      ) : null}
-      {showHollowOutline ? (
-        <g transform={`translate(${pad} ${pad})`} filter={`url(#${filterId})`}>
+        <g transform={`translate(${pad} ${pad})`}>
           <g transform={transform}>
-            <path d={PREVIEW_ARROW_PATH} fill="#000000" />
+            <path d={PREVIEW_ARROW_PATH} {...strokeProps} />
           </g>
         </g>
       ) : null}
