@@ -2452,7 +2452,13 @@ export class ManiaReplayRenderer {
     this.rect(marquee.x, marquee.y, marquee.width, marquee.height, "#5a8fff", 0.95, Math.max(1, layout.w * 0.0016));
   }
 
+  private isMobilePortraitLayout(layout: Layout): boolean {
+    const coarsePointer = typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+    return coarsePointer && layout.h > layout.w;
+  }
+
   private shouldRenderCustomOverlays(layout: Layout): boolean {
+    if (this.isMobilePortraitLayout(layout)) return false;
     return this.fullscreenLayout || layout.w >= 640;
   }
 

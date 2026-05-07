@@ -71,6 +71,16 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("private buildFallbackLifeBarFrames(events: ReplayJudgementEvent[])");
   });
 
+  it("hides custom replay overlays on mobile portrait layouts", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("private isMobilePortraitLayout(layout: Layout): boolean");
+    expect(source).toContain('window.matchMedia("(pointer: coarse)").matches');
+    expect(source).toContain("return coarsePointer && layout.h > layout.w;");
+    expect(source).toContain("if (this.isMobilePortraitLayout(layout)) return false;");
+    expect(source).toContain("return this.fullscreenLayout || layout.w >= 640;");
+  });
+
   it("does not replace stable replay scoring with sampled intervals or final score headers", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
