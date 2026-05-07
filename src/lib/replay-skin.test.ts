@@ -54,6 +54,8 @@ describe("replay skin settings", () => {
       comboPosition: 485,
       comboFontSet: "set1",
       judgementSet: "skin",
+      judgementScale: 100,
+      judgementScales: {},
       keymodeProfiles: {},
     });
   });
@@ -232,6 +234,8 @@ describe("replay skin settings", () => {
       comboPosition: 485,
       comboFontSet: "set1",
       judgementSet: "skin",
+      judgementScale: 100,
+      judgementScales: {},
       keymodeProfiles: {},
     });
     expect(readReplaySkinSettings()).toEqual({
@@ -256,6 +260,8 @@ describe("replay skin settings", () => {
       comboPosition: 485,
       comboFontSet: "set1",
       judgementSet: "skin",
+      judgementScale: 100,
+      judgementScales: {},
       keymodeProfiles: {},
     });
   });

@@ -1,4 +1,4 @@
-import { createFileRoute, notFound, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
+import { createFileRoute, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback, useMemo, type PointerEvent as ReactPointerEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Info, LoaderCircle, Maximize2, Minimize2, Pause, Play } from "lucide-react";
@@ -59,7 +59,6 @@ import type { ReplayOverlaySettings } from "../lib/replay-overlays";
 import type { BeatmapScoreLookupStatus, OsuScore, OsuBeatmapset, OsuBeatmap } from "../lib/types";
 import type { ReplayRendererLike, ServerReplay } from "../lib/replay-types";
 import { getScoreExpectedCounts } from "../lib/replay-types";
-import { canUseDevFeatures } from "../lib/auth-shared";
 import { pageSeo } from "../lib/seo";
 
 interface ReplaySearch {
@@ -118,12 +117,6 @@ export const Route = createFileRoute("/replay")({
       social: false,
       noindex: true,
     }),
-  beforeLoad: ({ context }) => {
-    if (!canUseDevFeatures(context.auth)) {
-      throw notFound();
-    }
-    return undefined as never;
-  },
   component: ReplayPage,
   validateSearch: (s: Record<string, unknown>): ReplaySearch => ({
     scoreId: Number(s.scoreId) || undefined,

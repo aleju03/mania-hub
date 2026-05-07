@@ -2180,10 +2180,9 @@ function ScoreThumbnail({ score }: { score: OsuScore }) {
 }
 
 function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
-  const auth = useAuth();
   const keys = score.beatmap?.cs;
   const linkUrl = getScoreUrl(score) ?? getBeatmapUrl(score);
-  const canReplay = auth.canUseDevFeatures && scoreHasReplay(score);
+  const canReplay = scoreHasReplay(score);
   const display = getScoreDisplayValues(score);
   const hasPp = score.pp != null;
 

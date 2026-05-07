@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { LogIn, LogOut, Settings } from "lucide-react";
@@ -108,10 +108,7 @@ export function Nav() {
   const returnTo = `${location.pathname}${location.searchStr}`;
   const loginHref = `/api/auth/osu?next=${encodeURIComponent(returnTo)}`;
   const logoutHref = `/api/auth/logout?next=${encodeURIComponent(returnTo)}`;
-  const visibleLinks = useMemo(
-    () => links.filter((link) => devMode || link.id !== "replay"),
-    [devMode],
-  );
+  const visibleLinks = links;
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
   const hydrated = useHasHydrated();
   const topPlaysRangeForLink = hydrated && topPlaysRange !== "7d" ? topPlaysRange : "7d";
