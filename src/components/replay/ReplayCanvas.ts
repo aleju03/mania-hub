@@ -152,6 +152,14 @@ type Hand = "left" | "right" | "center";
 type ReplayComboEvent = { kind: "break" | "hit"; time: number };
 type ReplayOverlayHitbox = { id: ReplayOverlayId; x: number; y: number; width: number; height: number };
 type ReplayOverlayResizeDirection = "n" | "e" | "s" | "w" | "ne" | "nw" | "se" | "sw";
+type ReplayOverlayPlacementSnapshot = {
+  id: ReplayOverlayId;
+  x: number;
+  y: number;
+  scale: number;
+  width: number;
+  height: number;
+};
 
 export class ManiaReplayRenderer {
   private canvas: HTMLCanvasElement;
@@ -220,6 +228,7 @@ export class ManiaReplayRenderer {
   private overlaySettings: ReplayOverlaySettings = DEFAULT_REPLAY_OVERLAY_SETTINGS;
   private onOverlaySettingsChange: ((settings: ReplayOverlaySettings) => void) | null = null;
   private overlayHitboxes: ReplayOverlayHitbox[] = [];
+  private selectedOverlayIds = new Set<ReplayOverlayId>();
   private activeOverlayPointers = new Map<number, { id: ReplayOverlayId; x: number; y: number }>();
   private previousCanvasTouchAction = "";
   private draggingOverlay: {
@@ -231,6 +240,7 @@ export class ManiaReplayRenderer {
     startPlacementY: number;
     width: number;
     height: number;
+    selected: ReplayOverlayPlacementSnapshot[];
   } | null = null;
   private resizingOverlay: {
     id: ReplayOverlayId;
@@ -243,6 +253,7 @@ export class ManiaReplayRenderer {
     startScale: number;
     startWidth: number;
     startHeight: number;
+    selected: ReplayOverlayPlacementSnapshot[];
   } | null = null;
   private pinchingOverlay: {
     id: ReplayOverlayId;
@@ -251,6 +262,15 @@ export class ManiaReplayRenderer {
     startScale: number;
     startWidth: number;
     startHeight: number;
+  } | null = null;
+  private selectingOverlays: {
+    pointerId: number;
+    startX: number;
+    startY: number;
+    currentX: number;
+    currentY: number;
+    initialSelection: ReplayOverlayId[];
+    additive: boolean;
   } | null = null;
   private skinProfile: ReplaySkinKeymodeProfile = getReplaySkinProfile(DEFAULT_REPLAY_SKIN_SETTINGS, 4);
   private barTapColors: string[] = [];
@@ -859,6 +879,7 @@ export class ManiaReplayRenderer {
 
   setOverlaySettings(settings: ReplayOverlaySettings) {
     this.overlaySettings = normalizeReplayOverlaySettings(settings);
+    this.pruneSelectedOverlays();
     if (!this._isPlaying) this.render();
   }
 
@@ -912,11 +933,98 @@ export class ManiaReplayRenderer {
   private getOverlayAtPoint(x: number, y: number): ReplayOverlayHitbox | null {
     for (let index = this.overlayHitboxes.length - 1; index >= 0; index -= 1) {
       const box = this.overlayHitboxes[index];
-      if (x >= box.x && x <= box.x + box.width && y >= box.y && y <= box.y + box.height) {
+      const frame = this.getOverlayInteractionFrame(box);
+      if (x >= frame.x && x <= frame.x + frame.width && y >= frame.y && y <= frame.y + frame.height) {
         return box;
       }
     }
     return null;
+  }
+
+  private getOverlaySelectionPad(): number {
+    return Math.max(2, Math.min(5, this.cssWidth * 0.004));
+  }
+
+  private getOverlayInteractionFrame(box: ReplayOverlayHitbox): ReplayOverlayHitbox {
+    if (!this.selectedOverlayIds.has(box.id)) return box;
+    const pad = this.getOverlaySelectionPad();
+    return {
+      id: box.id,
+      x: box.x - pad,
+      y: box.y - pad,
+      width: box.width + pad * 2,
+      height: box.height + pad * 2,
+    };
+  }
+
+  private canUseDesktopOverlaySelection(event?: PointerEvent): boolean {
+    const layout = this.cachedLayout ?? this.getLayout();
+    return !this.hideHud && this.shouldRenderCustomOverlays(layout) && (!event || event.pointerType === "mouse");
+  }
+
+  private getSelectedOverlaySnapshots(fallbackId: ReplayOverlayId): ReplayOverlayPlacementSnapshot[] {
+    const ids = this.selectedOverlayIds.has(fallbackId)
+      ? Array.from(this.selectedOverlayIds)
+      : [fallbackId];
+    return ids
+      .map((id) => {
+        const box = this.overlayHitboxes.find((hitbox) => hitbox.id === id);
+        if (!box) return null;
+        const placement = this.overlaySettings[id];
+        return {
+          id,
+          x: placement.x,
+          y: placement.y,
+          scale: placement.scale,
+          width: box.width,
+          height: box.height,
+        };
+      })
+      .filter((value): value is ReplayOverlayPlacementSnapshot => value != null);
+  }
+
+  private pruneSelectedOverlays() {
+    const visibleIds = new Set(this.overlayHitboxes.map((hitbox) => hitbox.id));
+    for (const id of this.selectedOverlayIds) {
+      if (!this.overlaySettings[id]?.enabled || (visibleIds.size > 0 && !visibleIds.has(id))) {
+        this.selectedOverlayIds.delete(id);
+      }
+    }
+  }
+
+  private getSelectionRect() {
+    if (!this.selectingOverlays) return null;
+    const left = Math.max(0, Math.min(this.selectingOverlays.startX, this.selectingOverlays.currentX));
+    const top = Math.max(0, Math.min(this.selectingOverlays.startY, this.selectingOverlays.currentY));
+    const right = Math.min(this.cssWidth, Math.max(this.selectingOverlays.startX, this.selectingOverlays.currentX));
+    const bottom = Math.min(this.cssHeight, Math.max(this.selectingOverlays.startY, this.selectingOverlays.currentY));
+    return { x: left, y: top, width: Math.max(0, right - left), height: Math.max(0, bottom - top) };
+  }
+
+  private getOverlaysInRect(rect: { x: number; y: number; width: number; height: number }): ReplayOverlayId[] {
+    const right = rect.x + rect.width;
+    const bottom = rect.y + rect.height;
+    return this.overlayHitboxes
+      .filter((box) => box.x + box.width >= rect.x && box.x <= right && box.y + box.height >= rect.y && box.y <= bottom)
+      .map((box) => box.id);
+  }
+
+  private applyOverlaySelection(ids: ReplayOverlayId[], additive: boolean) {
+    const next = additive ? new Set(this.selectedOverlayIds) : new Set<ReplayOverlayId>();
+    for (const id of ids) {
+      if (this.overlaySettings[id]?.enabled) next.add(id);
+    }
+    this.selectedOverlayIds = next;
+    if (!this._isPlaying) this.render();
+  }
+
+  private toggleOverlaySelection(id: ReplayOverlayId) {
+    if (this.selectedOverlayIds.has(id)) {
+      this.selectedOverlayIds.delete(id);
+    } else if (this.overlaySettings[id]?.enabled) {
+      this.selectedOverlayIds.add(id);
+    }
+    if (!this._isPlaying) this.render();
   }
 
   private getOverlayResizeZoneSize(box: ReplayOverlayHitbox): number {
@@ -924,11 +1032,12 @@ export class ManiaReplayRenderer {
   }
 
   private getOverlayResizeDirection(box: ReplayOverlayHitbox, x: number, y: number): ReplayOverlayResizeDirection | null {
-    const size = this.getOverlayResizeZoneSize(box);
-    const nearTop = y >= box.y && y <= box.y + size;
-    const nearRight = x >= box.x + box.width - size && x <= box.x + box.width;
-    const nearBottom = y >= box.y + box.height - size && y <= box.y + box.height;
-    const nearLeft = x >= box.x && x <= box.x + size;
+    const frame = this.getOverlayInteractionFrame(box);
+    const size = this.getOverlayResizeZoneSize(frame);
+    const nearTop = y >= frame.y && y <= frame.y + size;
+    const nearRight = x >= frame.x + frame.width - size && x <= frame.x + frame.width;
+    const nearBottom = y >= frame.y + frame.height - size && y <= frame.y + frame.height;
+    const nearLeft = x >= frame.x && x <= frame.x + size;
     if (nearTop && nearRight) return "ne";
     if (nearTop && nearLeft) return "nw";
     if (nearBottom && nearRight) return "se";
@@ -984,7 +1093,30 @@ export class ManiaReplayRenderer {
     if (event.button !== 0 || this.hideHud) return;
     const point = this.getCanvasPointerPoint(event);
     const hitbox = this.getOverlayAtPoint(point.x, point.y);
-    if (!hitbox) return;
+    const desktopSelection = this.canUseDesktopOverlaySelection(event);
+    if (!hitbox) {
+      if (!desktopSelection) return;
+      this.selectingOverlays = {
+        pointerId: event.pointerId,
+        startX: point.x,
+        startY: point.y,
+        currentX: point.x,
+        currentY: point.y,
+        initialSelection: Array.from(this.selectedOverlayIds),
+        additive: event.shiftKey || event.metaKey || event.ctrlKey,
+      };
+      this.canvas.setPointerCapture(event.pointerId);
+      event.preventDefault();
+      return;
+    }
+
+    if (desktopSelection) {
+      if (event.shiftKey || event.metaKey || event.ctrlKey) {
+        this.toggleOverlaySelection(hitbox.id);
+      } else if (!this.selectedOverlayIds.has(hitbox.id)) {
+        this.applyOverlaySelection([hitbox.id], false);
+      }
+    }
 
     this.activeOverlayPointers.set(event.pointerId, { id: hitbox.id, ...point });
     this.canvas.setPointerCapture(event.pointerId);
@@ -1021,6 +1153,7 @@ export class ManiaReplayRenderer {
         startScale: placement.scale,
         startWidth: hitbox.width,
         startHeight: hitbox.height,
+        selected: this.getSelectedOverlaySnapshots(hitbox.id),
       };
       this.canvas.style.cursor = this.getOverlayPointerCursor(point.x, point.y);
       event.preventDefault();
@@ -1036,6 +1169,7 @@ export class ManiaReplayRenderer {
       startPlacementY: placement.y,
       width: hitbox.width,
       height: hitbox.height,
+      selected: this.getSelectedOverlaySnapshots(hitbox.id),
     };
     this.canvas.style.cursor = "grabbing";
     event.preventDefault();
@@ -1047,6 +1181,22 @@ export class ManiaReplayRenderer {
     const activePointer = this.activeOverlayPointers.get(event.pointerId);
     if (activePointer) {
       this.activeOverlayPointers.set(event.pointerId, { ...activePointer, ...point });
+    }
+
+    if (this.selectingOverlays) {
+      if (event.pointerId !== this.selectingOverlays.pointerId) return;
+      this.selectingOverlays.currentX = point.x;
+      this.selectingOverlays.currentY = point.y;
+      const rect = this.getSelectionRect();
+      if (rect) {
+        const selectedIds = this.selectingOverlays.additive
+          ? Array.from(new Set([...this.selectingOverlays.initialSelection, ...this.getOverlaysInRect(rect)]))
+          : this.getOverlaysInRect(rect);
+        this.selectedOverlayIds = new Set(selectedIds);
+      }
+      if (!this._isPlaying) this.render();
+      event.preventDefault();
+      return;
     }
 
     if (this.pinchingOverlay && this.pinchingOverlay.pointerIds.includes(event.pointerId)) {
@@ -1097,7 +1247,23 @@ export class ManiaReplayRenderer {
         nextHeight,
         layout,
       );
-      this.updateOverlayPlacement(resize.id, { ...nextPosition, scale: nextScale });
+      if (resize.selected.length > 1) {
+        const nextPlacements = resize.selected.map((item) => {
+          const itemScale = this.clampOverlayScale(item.scale * scaleRatio);
+          const itemRatio = itemScale / Math.max(0.001, item.scale);
+          const itemPosition = this.clampOverlayPosition(
+            item.x + (resize.direction.includes("w") ? (item.width - item.width * itemRatio) / Math.max(1, layout.w) : 0),
+            item.y + (resize.direction.includes("n") ? (item.height - item.height * itemRatio) / Math.max(1, layout.h) : 0),
+            item.width * itemRatio,
+            item.height * itemRatio,
+            layout,
+          );
+          return [item.id, { ...itemPosition, scale: itemScale }] as const;
+        });
+        this.updateOverlayPlacements(nextPlacements);
+      } else {
+        this.updateOverlayPlacement(resize.id, { ...nextPosition, scale: nextScale });
+      }
       event.preventDefault();
       return;
     }
@@ -1114,7 +1280,14 @@ export class ManiaReplayRenderer {
         drag.height,
         layout,
       );
-      this.updateOverlayPlacement(drag.id, next);
+      if (drag.selected.length > 1) {
+        this.updateOverlayPlacements(drag.selected.map((item) => [
+          item.id,
+          this.clampOverlayPosition(item.x + dx, item.y + dy, item.width, item.height, layout),
+        ] as const));
+      } else {
+        this.updateOverlayPlacement(drag.id, next);
+      }
       event.preventDefault();
       return;
     }
@@ -1124,6 +1297,14 @@ export class ManiaReplayRenderer {
 
   private handleOverlayPointerEnd = (event: PointerEvent) => {
     this.activeOverlayPointers.delete(event.pointerId);
+    if (this.selectingOverlays?.pointerId === event.pointerId) {
+      const marquee = this.getSelectionRect();
+      if (marquee && marquee.width < 4 && marquee.height < 4 && !this.selectingOverlays.additive) {
+        this.selectedOverlayIds.clear();
+      }
+      this.selectingOverlays = null;
+      if (!this._isPlaying) this.render();
+    }
     if (this.pinchingOverlay?.pointerIds.includes(event.pointerId)) {
       this.pinchingOverlay = null;
     }
@@ -1139,7 +1320,7 @@ export class ManiaReplayRenderer {
   };
 
   private handleOverlayPointerLeave = () => {
-    if (!this.draggingOverlay && !this.resizingOverlay && !this.pinchingOverlay) this.canvas.style.cursor = "";
+    if (!this.draggingOverlay && !this.resizingOverlay && !this.pinchingOverlay && !this.selectingOverlays) this.canvas.style.cursor = "";
   };
 
   private updateOverlayPlacement(id: ReplayOverlayId, placement: Partial<ReplayOverlaySettings[ReplayOverlayId]>) {
@@ -1150,6 +1331,20 @@ export class ManiaReplayRenderer {
         ...placement,
       },
     });
+    this.overlaySettings = nextSettings;
+    this.onOverlaySettingsChange?.(nextSettings);
+    if (!this._isPlaying) this.render();
+  }
+
+  private updateOverlayPlacements(placements: Array<readonly [ReplayOverlayId, Partial<ReplayOverlaySettings[ReplayOverlayId]>]>) {
+    const draft: ReplayOverlaySettings = { ...this.overlaySettings };
+    for (const [id, placement] of placements) {
+      draft[id] = {
+        ...draft[id],
+        ...placement,
+      };
+    }
+    const nextSettings = normalizeReplayOverlaySettings(draft);
     this.overlaySettings = nextSettings;
     this.onOverlaySettingsChange?.(nextSettings);
     if (!this._isPlaying) this.render();
@@ -1268,6 +1463,7 @@ export class ManiaReplayRenderer {
     this.overlayHitboxes = [];
     if (!this.hideHud) this.renderHUD(layout);
     else if (this.showCombo) this.renderCombo(layout);
+    this.renderOverlaySelectionAffordances(layout);
     this.finishSkinSpriteFrame();
     this.finishTextFrame();
     this.app.render();
@@ -2136,6 +2332,23 @@ export class ManiaReplayRenderer {
     this.pieWedge(cx, cy, radius, progress, "#f0f0f0", 0.64);
     this.strokeCircle(cx, cy, radius, "#f0f0f0", 0.92, strokeWidth);
     this.circle(cx, cy, Math.max(1.8, 2.6 * scale), "#f0f0f0", 0.92);
+  }
+
+  private renderOverlaySelectionAffordances(layout: Layout) {
+    if (!this.shouldRenderCustomOverlays(layout) || this.hideHud) return;
+    this.pruneSelectedOverlays();
+
+    for (const box of this.overlayHitboxes) {
+      if (!this.selectedOverlayIds.has(box.id)) continue;
+      const pad = this.getOverlaySelectionPad();
+      this.fillRect(box.x - pad, box.y - pad, box.width + pad * 2, box.height + pad * 2, "#5a8fff", 0.08);
+      this.rect(box.x - pad, box.y - pad, box.width + pad * 2, box.height + pad * 2, "#5a8fff", 0.9, Math.max(1, layout.w * 0.0016));
+    }
+
+    const marquee = this.getSelectionRect();
+    if (!marquee || marquee.width < 1 || marquee.height < 1) return;
+    this.fillRect(marquee.x, marquee.y, marquee.width, marquee.height, "#5a8fff", 0.14);
+    this.rect(marquee.x, marquee.y, marquee.width, marquee.height, "#5a8fff", 0.95, Math.max(1, layout.w * 0.0016));
   }
 
   private shouldRenderCustomOverlays(layout: Layout): boolean {
