@@ -1794,6 +1794,7 @@ export class ManiaReplayRenderer {
 
     for (let col = 0; col < this.keyCount; col++) {
       const laneX = keyRowX + col * (keyBoxWidth + keyGap) + laneInset;
+      const color = this.getSkinTapColor(col);
       this.fillRect(laneX, top, laneWidth, height, "#05050a", 0.34);
 
       const segments = this.segments[col];
@@ -1823,7 +1824,7 @@ export class ManiaReplayRenderer {
           laneWidth,
           Math.max(2, pieceBottom - pieceTop),
           2,
-          this.inputOverlayColor,
+          color,
           seg.start <= currentTime && seg.end >= currentTime ? 0.72 : 0.46,
         );
       }
@@ -1922,6 +1923,11 @@ export class ManiaReplayRenderer {
     return this.getHudScale(layout) * this.overlaySettings[id].scale;
   }
 
+  private getSkinTapColor(col: number): string {
+    if (this.skinSettings.style === "bars") return this.barTapColors[col] || this.colors[col];
+    return this.skinProfile.tapColors[col] || this.skinProfile.tapColor || this.colors[col];
+  }
+
   private getOverlayFrame(
     layout: Layout,
     id: ReplayOverlayId,
@@ -1994,7 +2000,7 @@ export class ManiaReplayRenderer {
     for (let col = 0; col < this.keyCount; col++) {
       const x = frame.x + col * (keyBoxWidth + keyGap);
       const pressed = (currentState & (1 << col)) !== 0;
-      const color = this.colors[col];
+      const color = this.getSkinTapColor(col);
       const keyFill = pressed ? "#0a0a12" : "#ffffff";
       const kpsFill = pressed ? "#0a0a12" : color;
       const keyAlpha = pressed ? 0.92 : 0.78;
