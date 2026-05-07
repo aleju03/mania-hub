@@ -1509,6 +1509,14 @@ function getPreviewAssetHeight(asset: ReplaySkinImageAsset, targetWidth: number,
   return Math.max(1, fallbackHeight || targetWidth);
 }
 
+function getJudgementPreviewHeight(asset: ReplaySkinImageAsset, previewHeight: number): number {
+  const scale = asset.scale && asset.scale > 0 ? asset.scale : 1;
+  const intrinsic = asset.height && asset.height > 0 ? asset.height / scale : 0;
+  const fallback = previewHeight * 0.055;
+  const canvasEquivalent = intrinsic > 0 ? intrinsic * (previewHeight / 480) : fallback;
+  return Math.min(previewHeight * 0.085, Math.max(previewHeight * 0.04, canvasEquivalent));
+}
+
 const JUDGEMENT_PREVIEW_ITEMS: Array<{ assetKey: keyof ReplaySkinJudgementAssets; label: string; color: string }> = [
   { assetKey: "hit300g", label: "MAX", color: "#b3f5ff" },
   { assetKey: "hit300", label: "300", color: "#ffcc22" },
@@ -2062,8 +2070,13 @@ function ReplaySkinPreview({
           src={previewJudgementAsset.src}
           alt=""
           draggable={false}
-          className="pointer-events-none absolute max-h-8 -translate-x-1/2 -translate-y-1/2 object-contain"
-          style={{ left: playfieldX + playfieldWidth / 2, top: scoreY, maxWidth: playfieldWidth }}
+          className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 object-contain"
+          style={{
+            left: playfieldX + playfieldWidth / 2,
+            top: scoreY,
+            height: getJudgementPreviewHeight(previewJudgementAsset, height),
+            maxWidth: playfieldWidth * 0.7,
+          }}
         />
       ) : settings.judgementSet === "skin" ? (
         <div

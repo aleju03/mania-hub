@@ -2388,8 +2388,8 @@ export class ManiaReplayRenderer {
 
   private renderJudgementOverlay(layout: Layout) {
     const scale = this.getOverlayScale(layout, "judgements");
-    const width = 58 * scale;
-    const height = 126 * scale;
+    const width = 50 * scale;
+    const height = 108 * scale;
     const frame = this.getOverlayFrame(layout, "judgements", width, height);
     if (!frame) return;
 
@@ -2402,10 +2402,10 @@ export class ManiaReplayRenderer {
       { label: "MISS", value: this.hudCachedJudgmentCounts[6], color: JUDGMENT_COLORS[6] },
       { label: "UR", value: this.hudCachedUr, color: "#b3f5ff" },
     ].forEach((item, index) => {
-      const y = frame.y + index * 18 * scale;
-      this.addText(item.label, frame.x, y, { fontSize: 10 * scale, fill: item.color, fontWeight: "700" });
-      this.addText(item.value, frame.x + 52 * scale, y, {
-        fontSize: 10 * scale,
+      const y = frame.y + index * 15.5 * scale;
+      this.addText(item.label, frame.x, y, { fontSize: 8.5 * scale, fill: item.color, fontWeight: "700" });
+      this.addText(item.value, frame.x + 44 * scale, y, {
+        fontSize: 8.5 * scale,
         fill: "#ffffff",
         alpha: 0.88,
         fontWeight: "700",
@@ -2476,7 +2476,9 @@ export class ManiaReplayRenderer {
         const judgmentAsset = this.getJudgementAsset(this.lastJudgment);
         const y = scoreY;
         if (judgmentAsset) {
-          const targetHeight = this.getHudAssetHeight(judgmentAsset, h * REPLAY_JUDGEMENT_ASSET_HEIGHT_RATIO, layout) * animationScale;
+          const rawHeight = this.getHudAssetHeight(judgmentAsset, h * REPLAY_JUDGEMENT_ASSET_HEIGHT_RATIO, layout);
+          const clampedHeight = Math.min(h * 0.085, Math.max(h * 0.04, rawHeight));
+          const targetHeight = clampedHeight * animationScale;
           const targetWidth = this.getAssetWidthForHeight(judgmentAsset, targetHeight, targetHeight * 2);
           this.drawSkinImage(judgmentAsset, playfieldCenterX, y, targetWidth, targetHeight, 0.5, 0.5, alpha);
         } else if (this.skinSettings.judgementSet === DEFAULT_REPLAY_JUDGEMENT_SET) {
