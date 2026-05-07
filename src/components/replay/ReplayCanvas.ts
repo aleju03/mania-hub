@@ -152,6 +152,15 @@ type Hand = "left" | "right" | "center";
 type ReplayComboEvent = { kind: "break" | "hit"; time: number };
 type ReplayOverlayHitbox = { id: ReplayOverlayId; x: number; y: number; width: number; height: number };
 type ReplayOverlayResizeDirection = "n" | "e" | "s" | "w" | "ne" | "nw" | "se" | "sw";
+type ReplayOverlayFrame = { x: number; y: number; width: number; height: number };
+type KeypressOverlayMetrics = {
+  scale: number;
+  keyGap: number;
+  keyBoxWidth: number;
+  keyBoxHeight: number;
+  width: number;
+  height: number;
+};
 type ReplayOverlayPlacementSnapshot = {
   id: ReplayOverlayId;
   x: number;
@@ -2171,14 +2180,95 @@ export class ManiaReplayRenderer {
     id: ReplayOverlayId,
     width: number,
     height: number,
-  ): { x: number; y: number; width: number; height: number } | null {
+  ): ReplayOverlayFrame | null {
+    const frame = this.getRawOverlayFrame(layout, id, width, height);
+    if (!frame) return null;
+    this.overlayHitboxes.push({ id, ...frame });
+    return frame;
+  }
+
+  private getRawOverlayFrame(
+    layout: Layout,
+    id: ReplayOverlayId,
+    width: number,
+    height: number,
+  ): ReplayOverlayFrame | null {
     const placement = this.overlaySettings[id];
     if (!placement.enabled) return null;
     const x = Math.max(0, Math.min(Math.max(0, layout.w - width), placement.x * layout.w));
     const y = Math.max(0, Math.min(Math.max(0, layout.h - height), placement.y * layout.h));
-    const frame = { x, y, width, height };
-    this.overlayHitboxes.push({ id, ...frame });
-    return frame;
+    return { x, y, width, height };
+  }
+
+  private getKeypressOverlayMetrics(scale: number): KeypressOverlayMetrics {
+    const keyGap = Math.round((this.keyCount >= 8 ? 4 : 6) * scale);
+    const keyBoxWidth = Math.round((this.keyCount >= 8 ? 36 : 40) * scale);
+    const keyBoxHeight = Math.round(38 * scale);
+    const width = this.keyCount * keyBoxWidth + Math.max(0, this.keyCount - 1) * keyGap;
+    return { scale, keyGap, keyBoxWidth, keyBoxHeight, width, height: keyBoxHeight };
+  }
+
+  private keypressOverlayOverlapsPlayfield(layout: Layout, frame: ReplayOverlayFrame, margin: number): boolean {
+    const playfieldLeft = layout.playfieldX;
+    const playfieldRight = layout.playfieldX + layout.playfieldWidth;
+    return frame.x < playfieldRight + margin && frame.x + frame.width > playfieldLeft - margin;
+  }
+
+  private getLargestKeypressScaleForWidth(preferredScale: number, minScale: number, maxWidth: number): number {
+    if (maxWidth <= 0 || this.getKeypressOverlayMetrics(minScale).width > maxWidth) return minScale;
+
+    let low = minScale;
+    let high = preferredScale;
+    for (let i = 0; i < 12; i++) {
+      const mid = (low + high) / 2;
+      if (this.getKeypressOverlayMetrics(mid).width <= maxWidth) low = mid;
+      else high = mid;
+    }
+    return low;
+  }
+
+  private getSmartKeypressOverlayFrame(layout: Layout, preferredScale: number): { frame: ReplayOverlayFrame; metrics: KeypressOverlayMetrics } | null {
+    let metrics = this.getKeypressOverlayMetrics(preferredScale);
+    const rawFrame = this.getRawOverlayFrame(layout, "keypresses", metrics.width, metrics.height);
+    if (!rawFrame) return null;
+
+    const margin = Math.max(8, Math.min(22, layout.w * 0.012));
+    if (!this.keypressOverlayOverlapsPlayfield(layout, rawFrame, margin)) {
+      return { frame: rawFrame, metrics };
+    }
+
+    const playfieldLeft = layout.playfieldX;
+    const playfieldRight = layout.playfieldX + layout.playfieldWidth;
+    const playfieldCenter = playfieldLeft + layout.playfieldWidth / 2;
+    const rawCenter = rawFrame.x + rawFrame.width / 2;
+    const leftSpace = Math.max(0, playfieldLeft - margin);
+    const rightSpace = Math.max(0, layout.w - playfieldRight - margin);
+    const minScale = Math.min(preferredScale, this.getHudScale(layout) * REPLAY_OVERLAY_MIN_SCALE);
+    const minWidth = this.getKeypressOverlayMetrics(minScale).width;
+
+    let side: "left" | "right" = rawCenter <= playfieldCenter ? "left" : "right";
+    const preferredSpace = side === "left" ? leftSpace : rightSpace;
+    const fallbackSpace = side === "left" ? rightSpace : leftSpace;
+    if (preferredSpace < minWidth && fallbackSpace > preferredSpace) {
+      side = side === "left" ? "right" : "left";
+    }
+
+    const availableWidth = side === "left" ? leftSpace : rightSpace;
+    const smartScale = metrics.width > availableWidth
+      ? this.getLargestKeypressScaleForWidth(preferredScale, minScale, availableWidth)
+      : preferredScale;
+    metrics = this.getKeypressOverlayMetrics(smartScale);
+
+    const targetX = side === "left"
+      ? playfieldLeft - margin - metrics.width
+      : playfieldRight + margin;
+    const frame = {
+      x: Math.max(0, Math.min(Math.max(0, layout.w - metrics.width), targetX)),
+      y: Math.max(0, Math.min(Math.max(0, layout.h - metrics.height), rawFrame.y)),
+      width: metrics.width,
+      height: metrics.height,
+    };
+    return { frame, metrics };
   }
 
   private renderAccuracyOverlay(layout: Layout) {
@@ -2223,14 +2313,11 @@ export class ManiaReplayRenderer {
   }
 
   private renderKeypressOverlay(layout: Layout) {
-    const scale = this.getOverlayScale(layout, "keypresses");
-    const keyGap = Math.round((this.keyCount >= 8 ? 4 : 6) * scale);
-    const keyBoxWidth = Math.round((this.keyCount >= 8 ? 36 : 40) * scale);
-    const keyBoxHeight = Math.round(38 * scale);
-    const width = this.keyCount * keyBoxWidth + Math.max(0, this.keyCount - 1) * keyGap;
-    const height = keyBoxHeight;
-    const frame = this.getOverlayFrame(layout, "keypresses", width, height);
-    if (!frame) return;
+    const result = this.getSmartKeypressOverlayFrame(layout, this.getOverlayScale(layout, "keypresses"));
+    if (!result) return;
+    const { frame, metrics } = result;
+    const { scale, keyGap, keyBoxWidth, keyBoxHeight } = metrics;
+    this.overlayHitboxes.push({ id: "keypresses", ...frame });
 
     const currentState = this.currentKeyState;
     this.renderKeyInputHistory(layout, frame.x, frame.y, keyBoxWidth, keyBoxHeight, keyGap);
