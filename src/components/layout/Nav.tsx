@@ -531,25 +531,23 @@ export function Nav() {
             onSearch={handleSearch}
             onSelect={(u) => navigate({ to: "/player/$username", params: { username: u.username } })}
           />
-          {devMode && (
-            <button
-              type="button"
-              onClick={() => {
-                restoreMenuAfterSettingsCloseRef.current = false;
-                setSettingsOpen((open) => !open);
-              }}
-              className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg transition-colors ${
-                settingsOpen || settingsActive
-                  ? "bg-osu-pink/20 text-white"
-                  : "text-osu-pink-light hover:bg-osu-b3/50 hover:text-white"
-              }`}
-              title="Settings"
-              aria-label="Settings"
-              aria-expanded={settingsOpen}
-            >
-              <Settings className="h-5 w-5" strokeWidth={2.1} />
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              restoreMenuAfterSettingsCloseRef.current = false;
+              setSettingsOpen((open) => !open);
+            }}
+            className={`flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg transition-colors ${
+              settingsOpen || settingsActive
+                ? "bg-osu-pink/20 text-white"
+                : "text-osu-pink-light hover:bg-osu-b3/50 hover:text-white"
+            }`}
+            title="Settings"
+            aria-label="Settings"
+            aria-expanded={settingsOpen}
+          >
+            <Settings className="h-5 w-5" strokeWidth={2.1} />
+          </button>
           <ThemePicker />
         </div>
 
@@ -667,24 +665,22 @@ export function Nav() {
                     Login
                   </a>
                 ) : null}
-                {devMode && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      restoreMenuAfterSettingsCloseRef.current = true;
-                      setMenuOpen(false);
-                      setSettingsOpen(true);
-                    }}
-                    className={`flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-[12px] font-semibold capitalize transition-colors ${
-                      settingsOpen || settingsActive
-                        ? "bg-osu-pink/15 text-white"
-                        : "bg-osu-b4/60 text-osu-pink-light hover:bg-osu-b4 hover:text-white"
-                    }`}
-                  >
-                    <Settings className="h-5 w-5" strokeWidth={2.1} />
-                    settings
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    restoreMenuAfterSettingsCloseRef.current = true;
+                    setMenuOpen(false);
+                    setSettingsOpen(true);
+                  }}
+                  className={`flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-[12px] font-semibold capitalize transition-colors ${
+                    settingsOpen || settingsActive
+                      ? "bg-osu-pink/15 text-white"
+                      : "bg-osu-b4/60 text-osu-pink-light hover:bg-osu-b4 hover:text-white"
+                  }`}
+                >
+                  <Settings className="h-5 w-5" strokeWidth={2.1} />
+                  settings
+                </button>
               </div>
 
               {devMode && (
@@ -739,13 +735,11 @@ export function Nav() {
               )}
       </div>
 
-      {devMode && (
-        <SettingsDrawer
-          open={settingsOpen}
-          onClose={handleSettingsClose}
-          onBackdropClose={handleSettingsBackdropClose}
-        />
-      )}
+      <SettingsDrawer
+        open={settingsOpen}
+        onClose={handleSettingsClose}
+        onBackdropClose={handleSettingsBackdropClose}
+      />
     </header>
   );
 }

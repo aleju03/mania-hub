@@ -378,7 +378,7 @@ export const useAppStore = create<AppState>()(
       selectedCountry: initialClientCountry ?? DEFAULT_COUNTRY_CODE,
       themeHue: initialClientThemeHue ?? DEFAULT_THEME_HUE,
       themeSaturation: initialClientThemeSat ?? DEFAULT_THEME_SAT,
-      showDanEstimates: true,
+      showDanEstimates: false,
       avatarAccents: initialClientAvatarAccents,
       rankingsByCountry: {},
       rankingsFetchedAtByCountry: {},
