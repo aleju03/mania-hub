@@ -42,6 +42,19 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("const rightStart = leftCount;");
   });
 
+  it("renders replay input notes through the active note skin while overlay-only input is enabled", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("this.renderInputOverlayNotes(layout);");
+    expect(source).toContain("private renderInputOverlayNoteSkin(");
+    expect(source).toContain("this.arrowShapeWithTopFade(");
+    expect(source).toContain("const rawStartY = judgmentY + getVisualDelta(seg.start) * pixelsPerMs * direction;");
+    expect(source).toContain("const startY = seg.start <= this.currentTime && seg.end > this.currentTime");
+    expect(source).toContain("const endY = rawEndY;");
+    expect(source).toContain("Math.min(Math.max(startY, endY), judgmentY)");
+    expect(source).toContain("if (this.frames.length === 0 || !this.showInputOverlay || this.inputOverlayOnly || this.inputOverlayKeyHistory) return;");
+  });
+
   it("renders the recorded replay life bar beside the playfield", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 

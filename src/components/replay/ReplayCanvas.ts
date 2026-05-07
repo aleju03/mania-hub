@@ -937,7 +937,11 @@ export class ManiaReplayRenderer {
     this.renderBackground(layout);
     this.renderSegmentOverlays(layout);
     if (this.skinSettings.keysUnderNotes) this.renderReceptors(layout);
-    if (!this.inputOverlayOnly) this.renderNotes(layout);
+    if (this.showInputOverlay && this.inputOverlayOnly && !this.inputOverlayKeyHistory) {
+      this.renderInputOverlayNotes(layout);
+    } else {
+      this.renderNotes(layout);
+    }
     this.renderJudgmentLine(layout);
     if (!this.skinSettings.keysUnderNotes) this.renderReceptors(layout);
     if (this.showHealthBar) this.renderHealthBar(layout);
@@ -1214,7 +1218,7 @@ export class ManiaReplayRenderer {
 
   private renderSegmentOverlays(layout: Layout) {
     const { judgmentY, pixelsPerMs, h } = layout;
-    if (this.frames.length === 0 || !this.showInputOverlay || this.inputOverlayKeyHistory) return;
+    if (this.frames.length === 0 || !this.showInputOverlay || this.inputOverlayOnly || this.inputOverlayKeyHistory) return;
 
     const currentScrollPosition = this.getScrollPosition(this.currentTime);
     const getVisualDelta = (targetTime: number) => this.getScrollPosition(targetTime) - currentScrollPosition;
@@ -1302,6 +1306,176 @@ export class ManiaReplayRenderer {
         if (cursor < bottom) drawOverlayPiece(cursor, bottom);
       }
     }
+  }
+
+  private renderInputOverlayNotes(layout: Layout) {
+    const { judgmentY, noteHeight, pixelsPerMs, h } = layout;
+    if (this.frames.length === 0) return;
+
+    const currentScrollPosition = this.getScrollPosition(this.currentTime);
+    const getVisualDelta = (targetTime: number) => this.getScrollPosition(targetTime) - currentScrollPosition;
+    const noteFadeHeight = this.barePlayfield ? Math.min(46, h * 0.11) : 0;
+    const timeWindow = (this.skinSettings.upscroll ? h - judgmentY : judgmentY) / pixelsPerMs;
+    const velocityWindow = timeWindow / this.scrollVelocityMinMultiplier;
+    const visibleMinTime = this.currentTime - velocityWindow * 0.2;
+    const visibleMaxTime = this.currentTime + velocityWindow * 1.1;
+    const direction = this.skinSettings.upscroll ? 1 : -1;
+
+    for (let col = 0; col < this.keyCount; col++) {
+      const segments = this.segments[col];
+      const startSegmentIndex = this.binarySearchSegmentEndIndex(segments, visibleMinTime);
+
+      for (let i = startSegmentIndex; i < segments.length; i++) {
+        const seg = segments[i];
+        if (seg.start > visibleMaxTime) break;
+
+        const rawStartY = judgmentY + getVisualDelta(seg.start) * pixelsPerMs * direction;
+        const rawEndY = judgmentY + getVisualDelta(seg.end) * pixelsPerMs * direction;
+        const startY = seg.start <= this.currentTime && seg.end > this.currentTime
+          ? judgmentY
+          : rawStartY;
+        const endY = rawEndY;
+        if (startY < -20 && endY < -20) continue;
+        if (startY > h + 20 && endY > h + 20) continue;
+
+        const top = Math.min(startY, endY);
+        const bottom = this.skinSettings.upscroll
+          ? Math.max(Math.max(startY, endY), judgmentY)
+          : Math.min(Math.max(startY, endY), judgmentY);
+        if (bottom - top <= 0) continue;
+        const headEndY = this.skinSettings.upscroll ? top : bottom;
+        const tailEndY = this.skinSettings.upscroll ? bottom : top;
+        const isHold = seg.end - seg.start > HOLD_VISUAL_GRACE_MS && bottom - top > noteHeight * 0.65;
+        this.renderInputOverlayNoteSkin(layout, col, top, bottom, headEndY, tailEndY, isHold, noteFadeHeight);
+      }
+    }
+  }
+
+  private renderInputOverlayNoteSkin(
+    layout: Layout,
+    col: number,
+    top: number,
+    bottom: number,
+    headEndY: number,
+    tailEndY: number,
+    isHold: boolean,
+    noteFadeHeight: number,
+  ) {
+    const { noteHeight } = layout;
+    const { x: colX, width: colWidth } = this.getColumnLayout(col, layout);
+    const x = colX + 3;
+    const barWidth = colWidth - 6;
+    const assets = this.skinSettings.style === "bars" ? this.skinProfile.assets.columns[col] : undefined;
+    const color = this.skinSettings.style === "bars" ? this.barTapColors[col] : this.colors[col];
+    const circleTapColor = this.circleTapColors[col];
+    const circleLnHeadColor = this.circleLnHeadColors[col];
+    const circleDiameter = this.getCircleDiameter(layout);
+    const circleRadius = circleDiameter / 2;
+    const isArrowSkin = this.skinSettings.style === "arrows";
+    const arrowSize = isArrowSkin ? this.getArrowSize(layout) : 0;
+    const arrowDirection = isArrowSkin ? getColumnArrowDirection(col, this.keyCount) : "right";
+    const arrowTapColor = this.circleTapColors[col];
+    const arrowLnHeadColor = this.circleLnHeadColors[col];
+
+    if (isHold) {
+      const headTrimDelta = isArrowSkin
+        ? arrowSize * 0.5
+        : this.skinSettings.style === "circles"
+          ? circleDiameter * 0.5
+          : noteHeight * 0.5;
+      const tailTrimDelta = this.skinSettings.percy
+        ? Math.min(20, Math.max(noteHeight * 0.9, headTrimDelta * 1.1))
+        : 0;
+
+      if (this.renderHoldSkinImages(layout, assets, colX, colWidth, top, bottom, headEndY, tailEndY, tailTrimDelta, 0.92, 0.96, noteFadeHeight)) {
+        return;
+      }
+
+      if (this.skinSettings.style === "circles") {
+        const bodyWidth = Math.max(14, circleDiameter * 0.72);
+        const bodyX = colX + colWidth / 2 - bodyWidth / 2;
+        const headInsetTop = this.skinSettings.upscroll ? 0 : tailTrimDelta;
+        const headInsetBottom = this.skinSettings.upscroll ? tailTrimDelta : 0;
+        const bodyTop = top + headInsetTop;
+        const bodyBottom = Math.max(bodyTop, bottom - headInsetBottom);
+        this.circleLnBodyWithTopFade(bodyX, bodyTop, bodyWidth, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, 0.92, noteFadeHeight, 0.55);
+        this.circleWithTopFade(colX + colWidth / 2, headEndY, circleRadius, circleLnHeadColor, 0.96, noteFadeHeight, 0.55);
+        if (this.skinSettings.outlineEnabled) {
+          this.strokeCircleWithTopFade(colX + colWidth / 2, headEndY, circleRadius, this.skinSettings.outlineColor, 0.96, this.skinSettings.outlineWidth, noteFadeHeight, 0.55);
+        }
+        return;
+      }
+
+      if (isArrowSkin) {
+        const bodyWidth = Math.max(14, arrowSize * 0.68);
+        const bodyX = colX + colWidth / 2 - bodyWidth / 2;
+        const tailDelta = this.skinSettings.upscroll ? -tailTrimDelta : tailTrimDelta;
+        const bodyTop = Math.min(headEndY, tailEndY + tailDelta);
+        const bodyBottom = Math.max(headEndY, tailEndY + tailDelta);
+        this.circleLnBodyWithTopFade(bodyX, bodyTop, bodyWidth, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, 0.92, noteFadeHeight, 0.55);
+        this.arrowShapeWithTopFade(
+          colX + colWidth / 2,
+          headEndY,
+          arrowSize,
+          arrowDirection,
+          arrowLnHeadColor,
+          0.96,
+          this.skinSettings.outlineEnabled ? this.skinSettings.outlineColor : null,
+          0.96,
+          this.skinSettings.outlineWidth,
+          noteFadeHeight,
+          0.55,
+        );
+        return;
+      }
+
+      const barPercyTrim = this.skinSettings.percy
+        ? Math.min(18, Math.max(noteHeight * 0.9, circleDiameter * 0.34))
+        : 0;
+      const tailDelta = this.skinSettings.upscroll ? -barPercyTrim : barPercyTrim;
+      const barBodyTop = Math.min(headEndY, tailEndY + tailDelta);
+      const barBodyBottom = Math.max(headEndY, tailEndY + tailDelta);
+      this.barLnBodyWithTopFade(x, barBodyTop, barWidth, barBodyBottom - barBodyTop, color, 0.92, noteFadeHeight, 0.55);
+      return;
+    }
+
+    if (assets?.tap) {
+      const assetHeight = this.getNoteAssetHeight(assets.tap, colWidth, layout, Math.max(noteHeight, circleDiameter, arrowSize));
+      const noteTop = this.skinSettings.upscroll ? headEndY : headEndY - assetHeight;
+      const alpha = this.topFadeAlpha(Math.max(0, Math.min(noteTop + assetHeight, noteFadeHeight)), noteFadeHeight, 0.55);
+      this.drawSkinImage(assets.tap, colX + colWidth / 2, noteTop, colWidth, assetHeight, 0.5, 0, alpha * 0.96);
+      return;
+    }
+
+    if (this.skinSettings.style === "circles") {
+      this.circleWithTopFade(colX + colWidth / 2, headEndY, circleRadius, circleTapColor, 0.96, noteFadeHeight, 0.55);
+      if (this.skinSettings.outlineEnabled) {
+        this.strokeCircleWithTopFade(colX + colWidth / 2, headEndY, circleRadius, this.skinSettings.outlineColor, 0.96, this.skinSettings.outlineWidth, noteFadeHeight, 0.55);
+      }
+      return;
+    }
+
+    if (isArrowSkin) {
+      this.arrowShapeWithTopFade(
+        colX + colWidth / 2,
+        headEndY,
+        arrowSize,
+        arrowDirection,
+        arrowTapColor,
+        0.96,
+        this.skinSettings.outlineEnabled ? this.skinSettings.outlineColor : null,
+        0.96,
+        this.skinSettings.outlineWidth,
+        noteFadeHeight,
+        0.55,
+      );
+      return;
+    }
+
+    const noteTop = this.skinSettings.upscroll ? headEndY : headEndY - noteHeight;
+    this.roundRectWithTopFade(x, noteTop, barWidth, noteHeight, 4, color, 0.96, noteFadeHeight, 0.55);
+    this.roundRectWithTopFade(x + 1, noteTop, barWidth - 2, noteHeight, 4, color, 0.3, noteFadeHeight, 0.55);
+    this.roundRectWithTopFade(x + 2, noteTop + 1, barWidth - 4, noteHeight / 3, 2, "#ffffff", 0.18, noteFadeHeight, 0.55);
   }
 
   private renderKeyInputHistory(
