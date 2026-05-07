@@ -18,8 +18,8 @@ export const REPLAY_OVERLAY_MIN_SCALE = 0.5;
 export const REPLAY_OVERLAY_MAX_SCALE = 2.5;
 
 export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
-  keypresses: { enabled: true, x: 0.035, y: 0.68, scale: 0.75 },
-  kps: { enabled: true, x: 0.035, y: 0.77, scale: 0.75 },
+  keypresses: { enabled: false, x: 0.035, y: 0.68, scale: 0.75 },
+  kps: { enabled: false, x: 0.035, y: 0.77, scale: 0.75 },
   misses: { enabled: true, x: 0.085, y: 0.77, scale: 0.75 },
   accuracy: { enabled: true, x: 0.74, y: 0.02, scale: 1 },
   judgements: { enabled: true, x: 0.74, y: 0.07, scale: 1 },

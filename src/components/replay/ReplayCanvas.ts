@@ -1838,7 +1838,6 @@ export class ManiaReplayRenderer {
     for (let col = 0; col < this.keyCount; col++) {
       const laneX = keyRowX + col * (keyBoxWidth + keyGap) + laneInset;
       const color = this.getSkinTapColor(col);
-      this.fillRect(laneX, top, laneWidth, height, "#05050a", 0.34);
 
       const segments = this.segments[col];
       const startIndex = this.binarySearchSegmentEndIndex(segments, currentTime);
