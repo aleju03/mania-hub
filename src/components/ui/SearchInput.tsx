@@ -30,23 +30,41 @@ export function SearchInput({
   const [loading, setLoading] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const onSearchRef = useRef(onSearch);
+
+  useEffect(() => {
+    onSearchRef.current = onSearch;
+  }, [onSearch]);
 
   useEffect(() => {
     if (query.length < 2) {
       setResults([]);
       setOpen(false);
+      setLoading(false);
       return;
     }
     setLoading(true);
     clearTimeout(timerRef.current);
+    let cancelled = false;
     timerRef.current = setTimeout(async () => {
-      const r = await onSearch(query);
-      setResults(r);
-      setOpen(r.length > 0);
-      setLoading(false);
+      try {
+        const r = await onSearchRef.current(query);
+        if (cancelled) return;
+        setResults(r);
+        setOpen(r.length > 0);
+      } catch {
+        if (cancelled) return;
+        setResults([]);
+        setOpen(false);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }, 350);
-    return () => clearTimeout(timerRef.current);
-  }, [query, onSearch]);
+    return () => {
+      cancelled = true;
+      clearTimeout(timerRef.current);
+    };
+  }, [query]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
