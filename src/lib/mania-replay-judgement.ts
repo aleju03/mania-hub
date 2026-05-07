@@ -366,6 +366,15 @@ function judgeStableLongNoteCombined(
   return result;
 }
 
+// Stable downloaded replays sample the key state once per game frame (typically
+// ~16-17ms at 60fps). Two consecutive pressed samples spaced one frame apart do
+// NOT plausibly hide a release/re-press: the user would have had to drop and
+// recover the key inside a single frame. We only treat a hidden body break as
+// possible when the gap between adjacent observed events is substantially
+// longer than normal sampling cadence, indicating that at least one full
+// frame's worth of input state was actually skipped.
+const HIDDEN_BODY_BREAK_GAP_THRESHOLD = 25;
+
 function stableSegmentCanHideBodyBreak(
   segment: ReplaySegment,
   startTime: number,
@@ -382,18 +391,23 @@ function stableSegmentCanHideBodyBreak(
 
     if (sample > endTime) break;
 
-    if (previousPressedSample != null && sample > Math.max(previousPressedSample, startTime)) {
-      return true;
+    if (previousPressedSample != null) {
+      const lowerBound = Math.max(previousPressedSample, startTime);
+      if (sample - lowerBound > HIDDEN_BODY_BREAK_GAP_THRESHOLD) {
+        return true;
+      }
     }
 
     previousPressedSample = sample;
   }
 
-  // Stable downloaded replays are sampled key states. Even an observed key-up
-  // edge can hide a release/re-press/release sequence after the previous
-  // pressed sample, which would body-break an LN during live scoring.
+  // The release edge itself can hide a release/re-press/release sequence in
+  // the gap between the last observed pressed sample and the end-of-segment
+  // sample. Same threshold rule: only flag it when the gap is wide enough to
+  // contain a real release, not when it's just one frame of normal sampling.
   if (segment.end <= endTime && segment.endPrevious != null) {
-    return segment.end > Math.max(segment.endPrevious, startTime);
+    const lowerBound = Math.max(segment.endPrevious, startTime);
+    return segment.end - lowerBound > HIDDEN_BODY_BREAK_GAP_THRESHOLD;
   }
 
   return false;

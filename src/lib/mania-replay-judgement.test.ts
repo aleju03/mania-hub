@@ -291,6 +291,45 @@ describe("mania replay judgement helpers", () => {
     expect(simulated.noteStates[0].headJudgment).toBe(1);
   });
 
+  it("does not flag a hidden body break for LNs held with normal sample cadence", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 2000, isHold: true }];
+    const frames: ReplayFrame[] = [];
+    for (let time = 950; time < 1000; time += 17) frames.push({ time, keyState: 0 });
+    for (let time = 1000; time <= 2000; time += 17) frames.push({ time, keyState: 1 });
+    frames.push({ time: 2003, keyState: 0 });
+
+    const segments = buildReplaySegments(frames, 1, 2500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+    const combined = simulated.events.find((event) => event.part === "hold-combined");
+
+    expect(combined?.judgment).toBe(1);
+    expect(combined?.possibleJudgments ?? []).not.toContain(5);
+  });
+
+  it("flags a hidden body break when the gap between pressed samples is anomalous", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 2000, isHold: true }];
+    const frames: ReplayFrame[] = [];
+    for (let time = 950; time < 1000; time += 17) frames.push({ time, keyState: 0 });
+    frames.push({ time: 1000, keyState: 1 });
+    frames.push({ time: 1500, keyState: 1 });
+    frames.push({ time: 2000, keyState: 0 });
+
+    const segments = buildReplaySegments(frames, 1, 2500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+    const combined = simulated.events.find((event) => event.part === "hold-combined");
+
+    expect(combined?.judgment).toBe(1);
+    expect(combined?.possibleJudgments ?? []).toContain(5);
+  });
+
   it("applies note lock so earlier notes do not steal later presses", () => {
     const ruleset = getManiaReplayRuleset(false, []);
     const windows = getManiaReplayHitWindows(8, ruleset);
