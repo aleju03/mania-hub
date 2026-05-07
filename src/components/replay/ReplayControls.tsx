@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MutableRefObject, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Settings } from "lucide-react";
+import { ChevronDown, Settings } from "lucide-react";
 
 import type { ReplayRendererLike } from "#/lib/replay-types";
 
@@ -176,44 +176,16 @@ export function ReplayControls({
 
         <div className="w-px h-5 bg-osu-b3/40 hidden sm:block" />
 
-        <button
-          onClick={onToggleInputOverlay}
-          className={`px-2.5 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
-            showInputOverlay ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
-          }`}
-        >
-          Input
-        </button>
-        {showInputOverlay ? (
-          <>
-            <button
-              onClick={onToggleInputOverlayOnly}
-              className={`px-2.5 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
-                inputOverlayOnly ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
-              }`}
-            >
-              Only
-            </button>
-            <button
-              onClick={onToggleInputOverlayKeyHistory}
-              className={`px-2.5 py-1 rounded text-[10px] font-semibold cursor-pointer transition-colors ${
-                inputOverlayKeyHistory ? "bg-osu-pink text-white" : "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
-              }`}
-            >
-              Keys
-            </button>
-            <label className="relative h-6 w-6 cursor-pointer overflow-hidden rounded border border-osu-b3/60 bg-osu-b3/50" title="Input overlay color">
-              <span className="absolute inset-1 rounded" style={{ backgroundColor: inputOverlayColor }} />
-              <input
-                type="color"
-                value={inputOverlayColor}
-                onChange={(e) => onSetInputOverlayColor(e.target.value)}
-                className="absolute inset-0 cursor-pointer opacity-0"
-                aria-label="Input overlay color"
-              />
-            </label>
-          </>
-        ) : null}
+        <InputOverlayMenu
+          showInputOverlay={showInputOverlay}
+          inputOverlayOnly={inputOverlayOnly}
+          inputOverlayKeyHistory={inputOverlayKeyHistory}
+          inputOverlayColor={inputOverlayColor}
+          onToggleInputOverlay={onToggleInputOverlay}
+          onToggleInputOverlayOnly={onToggleInputOverlayOnly}
+          onToggleInputOverlayKeyHistory={onToggleInputOverlayKeyHistory}
+          onSetInputOverlayColor={onSetInputOverlayColor}
+        />
 
         <button
           onClick={onOpenSkinSettings}
@@ -280,6 +252,143 @@ function VolumeIcon({ muted, low }: { muted: boolean; low: boolean }) {
       <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
       {!low && <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />}
     </svg>
+  );
+}
+
+function InputOverlayMenu({
+  showInputOverlay,
+  inputOverlayOnly,
+  inputOverlayKeyHistory,
+  inputOverlayColor,
+  onToggleInputOverlay,
+  onToggleInputOverlayOnly,
+  onToggleInputOverlayKeyHistory,
+  onSetInputOverlayColor,
+}: {
+  showInputOverlay: boolean;
+  inputOverlayOnly: boolean;
+  inputOverlayKeyHistory: boolean;
+  inputOverlayColor: string;
+  onToggleInputOverlay: () => void;
+  onToggleInputOverlayOnly: () => void;
+  onToggleInputOverlayKeyHistory: () => void;
+  onSetInputOverlayColor: (color: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocPointer = (e: PointerEvent) => {
+      const el = containerRef.current;
+      if (el && !el.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", onDocPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDocPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const activeBtn = "bg-osu-pink text-white";
+  const inactiveBtn = "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3";
+
+  return (
+    <div ref={containerRef} className="relative inline-flex items-stretch">
+      <button
+        onClick={onToggleInputOverlay}
+        className={`pl-2.5 pr-2 py-1 rounded-l text-[10px] font-semibold cursor-pointer transition-colors ${
+          showInputOverlay ? activeBtn : inactiveBtn
+        }`}
+      >
+        Input
+      </button>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Input overlay options"
+        aria-expanded={open}
+        title="Input overlay options"
+        className={`px-1 py-1 rounded-r border-l border-osu-b4/40 cursor-pointer transition-colors ${
+          showInputOverlay ? activeBtn : inactiveBtn
+        }`}
+      >
+        <ChevronDown className={`h-3 w-3 transition-transform ${open ? "" : "rotate-180"}`} strokeWidth={2.5} />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 4 }}
+            transition={{ duration: 0.1 }}
+            className="absolute left-0 bottom-full z-50 mb-1.5 w-44 rounded-lg border border-osu-b2 bg-osu-b3 shadow-2xl p-1.5"
+          >
+            <button
+              onClick={onToggleInputOverlay}
+              className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 hover:bg-osu-b4 cursor-pointer"
+            >
+              <span>Show overlay</span>
+              <CheckMark on={showInputOverlay} />
+            </button>
+            <button
+              onClick={onToggleInputOverlayOnly}
+              disabled={!showInputOverlay}
+              className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 hover:bg-osu-b4 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            >
+              <span>Notes only</span>
+              <CheckMark on={inputOverlayOnly} />
+            </button>
+            <button
+              onClick={onToggleInputOverlayKeyHistory}
+              disabled={!showInputOverlay}
+              className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 hover:bg-osu-b4 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            >
+              <span>Key history</span>
+              <CheckMark on={inputOverlayKeyHistory} />
+            </button>
+            <div className="my-1 h-px bg-osu-b2" />
+            <label className={`flex items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 ${showInputOverlay ? "cursor-pointer hover:bg-osu-b4" : "opacity-40 cursor-not-allowed"}`}>
+              <span>Color</span>
+              <span className="relative inline-flex items-center gap-1.5">
+                <span className="text-[10px] tabular-nums text-osu-f1">{inputOverlayColor.toUpperCase()}</span>
+                <span
+                  className="h-4 w-4 rounded border border-osu-b2"
+                  style={{ backgroundColor: inputOverlayColor }}
+                />
+                <input
+                  type="color"
+                  value={inputOverlayColor}
+                  disabled={!showInputOverlay}
+                  onChange={(e) => onSetInputOverlayColor(e.target.value)}
+                  className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
+                  aria-label="Input overlay color"
+                />
+              </span>
+            </label>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function CheckMark({ on }: { on: boolean }) {
+  return (
+    <span
+      className={`inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm border ${
+        on ? "border-osu-pink bg-osu-pink text-white" : "border-osu-b2 bg-osu-b4"
+      }`}
+    >
+      {on && (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-2.5 w-2.5">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      )}
+    </span>
   );
 }
 
