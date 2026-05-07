@@ -14,6 +14,8 @@ import {
   DEFAULT_REPLAY_SKIN_SETTINGS,
   OSU_MANIA_DEFAULT_COMBO_POSITION,
   OSU_MANIA_DEFAULT_SCORE_POSITION,
+  REPLAY_COMBO_FONT_SETS,
+  getReplayComboFontStyle,
   getReplaySkinProfile,
   normalizeReplaySkinSettings,
   OSU_MANIA_MAX_HIT_POSITION,
@@ -88,6 +90,15 @@ type PreviewMode = "tap" | "ln";
 type ArrowDirection = "left" | "right" | "up" | "down";
 
 type SelectionMode = "replace" | "toggle" | "range";
+
+function getComboFontPreviewStyle(value: ReplaySkinSettings["comboFontSet"]): CSSProperties {
+  const font = getReplayComboFontStyle(value);
+  return {
+    fontFamily: font.family,
+    fontWeight: font.weight,
+    fontStyle: font.style ?? "normal",
+  };
+}
 
 function applySelection(current: number[], column: number, mode: SelectionMode): number[] {
   if (mode === "toggle") {
@@ -178,7 +189,7 @@ export function ReplaySkinSettingsModal({
   const [importingOsk, setImportingOsk] = useState(false);
   const [selectedKeyCount, setSelectedKeyCount] = useState(() => Math.max(1, Math.min(10, keyCount)));
   const [activeColor, setActiveColor] = useState<ColorTarget | null>(null);
-  const [activeTab, setActiveTab] = useState<"style" | "layout" | "overlays">("style");
+  const [activeTab, setActiveTab] = useState<"style" | "layout" | "hud" | "overlays">("style");
   const [columnEditorOpen, setColumnEditorOpen] = useState(false);
   const [overrideKind, setOverrideKind] = useState<OverrideKind>("tap");
   const [barColorOverrideBackup, setBarColorOverrideBackup] = useState<string[]>([]);
@@ -794,6 +805,11 @@ export function ReplaySkinSettingsModal({
     outline: "Outline color",
   };
   const showDevOverlayReset = activeTab === "overlays" && import.meta.env.DEV;
+  const comboFontOptions = REPLAY_COMBO_FONT_SETS.map((set, index) => ({
+    value: set,
+    label: `Set ${index + 1}`,
+    style: getComboFontPreviewStyle(set),
+  }));
 
   return createPortal(
     <>
@@ -850,6 +866,7 @@ export function ReplaySkinSettingsModal({
             {([
               ["style", "Style"],
               ["layout", "Layout"],
+              ["hud", "HUD"],
               ["overlays", "Overlays"],
             ] as const).map(([tab, label]) => (
               <button
@@ -1136,6 +1153,25 @@ export function ReplaySkinSettingsModal({
                   onResetToDefault={() => update({ comboPosition: osuManiaStagePositionToReplayPosition(OSU_MANIA_DEFAULT_COMBO_POSITION) })}
                   hint="Combo counter height."
                 />
+              </section>
+            ) : activeTab === "hud" ? (
+              <section className="space-y-4">
+                <div className="rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
+                  <FancySelect
+                    label="Combo font"
+                    value={draft.comboFontSet}
+                    onChange={(value) => update({ comboFontSet: value as ReplaySkinSettings["comboFontSet"] })}
+                    options={comboFontOptions}
+                  />
+                  <div className="mt-3 flex h-20 items-center justify-center rounded-lg border border-osu-b3/40 bg-black/20">
+                    <span
+                      className="text-4xl text-white"
+                      style={getComboFontPreviewStyle(draft.comboFontSet)}
+                    >
+                      123x
+                    </span>
+                  </div>
+                </div>
               </section>
             ) : (
               <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1944,6 +1980,7 @@ function ReplaySkinPreview({
           width: playfieldWidth,
           top: comboY,
           color: "rgba(255,255,255,0.85)",
+          ...getComboFontPreviewStyle(settings.comboFontSet),
         }}
       >
         1234x
@@ -2443,7 +2480,7 @@ function FancySelect({
 }: {
   label: string;
   value: string;
-  options: { value: string; label: string }[];
+  options: { value: string; label: string; style?: CSSProperties }[];
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -2477,7 +2514,7 @@ function FancySelect({
               : "border-osu-b3/60 bg-osu-b5/70 text-white hover:border-osu-pink/40 hover:bg-osu-b4"
           }`}
         >
-          <span className="truncate">{selected?.label ?? ""}</span>
+          <span className="truncate" style={selected?.style}>{selected?.label ?? ""}</span>
           <ChevronDown
             className={`h-4 w-4 shrink-0 transition-transform duration-200 ${open ? "rotate-180 text-osu-pink-light" : "text-osu-f1"}`}
             strokeWidth={2.4}
@@ -2513,7 +2550,7 @@ function FancySelect({
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   </span>
-                  <span className="truncate">{option.label}</span>
+                  <span className="truncate" style={option.style}>{option.label}</span>
                 </button>
               );
             })}

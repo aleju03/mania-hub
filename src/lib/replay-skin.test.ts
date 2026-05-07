@@ -52,6 +52,7 @@ describe("replay skin settings", () => {
       hitPosition: 110,
       scorePosition: 438,
       comboPosition: 485,
+      comboFontSet: "set1",
       keymodeProfiles: {},
     });
   });
@@ -228,6 +229,7 @@ describe("replay skin settings", () => {
       hitPosition: 110,
       scorePosition: 438,
       comboPosition: 485,
+      comboFontSet: "set1",
       keymodeProfiles: {},
     });
     expect(readReplaySkinSettings()).toEqual({
@@ -250,8 +252,17 @@ describe("replay skin settings", () => {
       hitPosition: 110,
       scorePosition: 438,
       comboPosition: 485,
+      comboFontSet: "set1",
       keymodeProfiles: {},
     });
+  });
+
+  it("normalizes and shares combo font sets", () => {
+    const settings = normalizeReplaySkinSettings({ comboFontSet: "set17" });
+
+    expect(settings.comboFontSet).toBe("set17");
+    expect(normalizeReplaySkinSettings({ comboFontSet: "set99" }).comboFontSet).toBe("set1");
+    expect(parseReplaySkinShareKey(createReplaySkinShareKey("combo", settings))?.settings.comboFontSet).toBe("set17");
   });
 
   it("returns defaults when storage cannot be parsed", () => {

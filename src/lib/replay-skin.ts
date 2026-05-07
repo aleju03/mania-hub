@@ -2,6 +2,36 @@ export const REPLAY_SKIN_STORAGE_KEY = "mania-hub-replay-skin-v1";
 export const REPLAY_SKIN_PRESETS_STORAGE_KEY = "mania-hub-replay-skin-presets-v1";
 
 export type ReplaySkinStyle = "bars" | "circles" | "arrows";
+export type ReplayComboFontSet =
+  | "set1"
+  | "set2"
+  | "set3"
+  | "set4"
+  | "set5"
+  | "set6"
+  | "set7"
+  | "set8"
+  | "set9"
+  | "set10"
+  | "set11"
+  | "set12"
+  | "set13"
+  | "set14"
+  | "set15"
+  | "set16"
+  | "set17"
+  | "set18"
+  | "set19"
+  | "set20"
+  | "set21"
+  | "set22"
+  | "set23";
+
+export interface ReplayComboFontStyle {
+  family: string;
+  weight: "300" | "400" | "500" | "600" | "700" | "800" | "900";
+  style?: "normal" | "italic";
+}
 
 export interface ReplaySkinImageAsset {
   name: string;
@@ -76,6 +106,7 @@ export interface ReplaySkinSettings {
   hitPosition: number;
   scorePosition: number;
   comboPosition: number;
+  comboFontSet: ReplayComboFontSet;
   keymodeProfiles: Record<string, ReplaySkinKeymodeProfile>;
 }
 
@@ -112,6 +143,54 @@ export const OSU_MANIA_DEFAULT_COMBO_POSITION = 177;
 export const OSU_MANIA_MIN_HIT_POSITION = 0;
 export const OSU_MANIA_MAX_HIT_POSITION = 480;
 const OSU_MANIA_COORDINATE_SCALE = 768 / 480;
+
+export const REPLAY_COMBO_FONT_SETS: ReplayComboFontSet[] = [
+  "set1",
+  "set2",
+  "set3",
+  "set4",
+  "set6",
+  "set7",
+  "set8",
+  "set9",
+  "set10",
+  "set11",
+  "set13",
+  "set14",
+  "set15",
+  "set16",
+  "set17",
+  "set18",
+  "set22",
+];
+
+export const DEFAULT_REPLAY_COMBO_FONT_SET: ReplayComboFontSet = "set1";
+
+const REPLAY_COMBO_FONT_STYLES: Record<ReplayComboFontSet, ReplayComboFontStyle> = {
+  set1: { family: "Torus, sans-serif", weight: "700" },
+  set2: { family: "\"Fredoka One\", Fredoka, \"Baloo 2\", \"Arial Rounded MT Bold\", sans-serif", weight: "800" },
+  set3: { family: "Roboto, Arial, sans-serif", weight: "700" },
+  set4: { family: "Knewave, \"Comic Sans MS\", cursive", weight: "700" },
+  set5: { family: "Torus, sans-serif", weight: "700" },
+  set6: { family: "\"DSEG7 Classic\", \"Digital-7\", \"Courier New\", monospace", weight: "700" },
+  set7: { family: "\"PT Sans\", \"Source Sans 3\", sans-serif", weight: "400" },
+  set8: { family: "\"Courier New\", monospace", weight: "700" },
+  set9: { family: "Lato, sans-serif", weight: "600" },
+  set10: { family: "\"Nimbus Sans Narrow\", \"Arial Narrow\", Arial, sans-serif", weight: "700" },
+  set11: { family: "Nunito, \"Fredoka One\", Fredoka, \"Arial Rounded MT Bold\", sans-serif", weight: "800" },
+  set12: { family: "Torus, sans-serif", weight: "700" },
+  set13: { family: "\"Roboto Condensed\", Roboto, Arial, sans-serif", weight: "300" },
+  set14: { family: "GeosansLight, \"Century Gothic\", sans-serif", weight: "400" },
+  set15: { family: "\"Open Sans\", \"Noto Sans\", sans-serif", weight: "800", style: "italic" },
+  set16: { family: "Lato, \"DejaVu Sans Condensed\", sans-serif", weight: "700" },
+  set17: { family: "\"Comic Sans MS\", \"Comic Neue\", cursive", weight: "700", style: "italic" },
+  set18: { family: "Roboto, \"Helvetica Neue\", Arial, sans-serif", weight: "300" },
+  set19: { family: "\"Fredoka One\", Fredoka, \"Arial Rounded MT Bold\", sans-serif", weight: "700" },
+  set20: { family: "Roboto, \"Helvetica Neue\", Arial, sans-serif", weight: "300" },
+  set21: { family: "\"PT Sans\", sans-serif", weight: "400" },
+  set22: { family: "\"Noto Sans\", Lato, sans-serif", weight: "600" },
+  set23: { family: "\"Noto Sans\", \"Open Sans\", sans-serif", weight: "600" },
+};
 
 export const EMPTY_REPLAY_SKIN_ASSETS: ReplaySkinKeymodeAssets = {
   columns: [],
@@ -152,6 +231,7 @@ export const DEFAULT_REPLAY_SKIN_SETTINGS: ReplaySkinSettings = {
   hitPosition: REPLAY_SKIN_DEFAULT_HIT_POSITION,
   scorePosition: osuManiaStagePositionToReplayPosition(OSU_MANIA_DEFAULT_SCORE_POSITION),
   comboPosition: osuManiaStagePositionToReplayPosition(OSU_MANIA_DEFAULT_COMBO_POSITION),
+  comboFontSet: DEFAULT_REPLAY_COMBO_FONT_SET,
   keymodeProfiles: {},
 };
 
@@ -212,6 +292,16 @@ function normalizeHitPosition(value: unknown): number {
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(parsed)) return REPLAY_SKIN_DEFAULT_HIT_POSITION;
   return Math.max(0, Math.min(768, Math.round(parsed)));
+}
+
+function normalizeReplayComboFontSet(value: unknown): ReplayComboFontSet {
+  return typeof value === "string" && REPLAY_COMBO_FONT_SETS.includes(value as ReplayComboFontSet)
+    ? value as ReplayComboFontSet
+    : DEFAULT_REPLAY_COMBO_FONT_SET;
+}
+
+export function getReplayComboFontStyle(value: unknown): ReplayComboFontStyle {
+  return REPLAY_COMBO_FONT_STYLES[normalizeReplayComboFontSet(value)];
 }
 
 export function osuManiaStagePositionToReplayPosition(position: number): number {
@@ -401,6 +491,7 @@ export function normalizeReplaySkinSettings(value: unknown): ReplaySkinSettings 
     hitPosition: normalizeHitPosition(raw.hitPosition),
     scorePosition: normalizeHitPosition(raw.scorePosition ?? DEFAULT_REPLAY_SKIN_SETTINGS.scorePosition),
     comboPosition: normalizeHitPosition(raw.comboPosition ?? DEFAULT_REPLAY_SKIN_SETTINGS.comboPosition),
+    comboFontSet: normalizeReplayComboFontSet(raw.comboFontSet),
     keymodeProfiles: normalizeKeymodeProfiles(raw.keymodeProfiles, fallbackProfile, persistedVersion),
   };
 }
@@ -601,6 +692,7 @@ function compactReplaySkinSettingsV3(settings: ReplaySkinSettings): Record<strin
   if (settings.hitPosition !== def.hitPosition) out.n = settings.hitPosition;
   if (settings.scorePosition !== def.scorePosition) out.o = settings.scorePosition;
   if (settings.comboPosition !== def.comboPosition) out.p = settings.comboPosition;
+  if (settings.comboFontSet !== def.comboFontSet) out.t = settings.comboFontSet;
   const profiles: Record<string, unknown> = {};
   for (const [key, profile] of Object.entries(settings.keymodeProfiles)) {
     const compact = compactKeymodeProfileV3(profile);
@@ -640,6 +732,7 @@ function expandReplaySkinSettingsV3(value: unknown): Record<string, unknown> {
     hitPosition: raw.n,
     scorePosition: raw.o,
     comboPosition: raw.p,
+    comboFontSet: raw.t,
     keymodeProfiles: profiles,
   };
 }

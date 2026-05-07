@@ -90,6 +90,12 @@ export const Route = createRootRoute({
     links: [
       { rel: "icon", type: "image/svg+xml", sizes: "any", href: "/favicon.svg" },
       { rel: "manifest", href: "/manifest.json" },
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=Baloo+2:wght@800&family=Comic+Neue:ital,wght@1,700&family=Fredoka:wght@700&family=Knewave&family=Lato:wght@600;700&family=Noto+Sans:ital,wght@0,600;1,800&family=Nunito:wght@800&family=Open+Sans:ital,wght@1,800&family=PT+Sans:wght@400&family=Roboto+Condensed:wght@300&family=Roboto:wght@300;700&family=Source+Sans+3:wght@400&display=swap",
+      },
       { rel: "stylesheet", href: appCss },
       {
         rel: "preload",

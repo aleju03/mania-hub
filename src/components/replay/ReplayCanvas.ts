@@ -5,8 +5,8 @@ import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgeme
 import { buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "../../lib/mania-replay-judgement";
 import { DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
 import type { ReplayOverlayId, ReplayOverlaySettings } from "../../lib/replay-overlays";
-import { DEFAULT_REPLAY_SKIN_SETTINGS, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplaySkinProfile, normalizeReplaySkinSettings } from "../../lib/replay-skin";
-import type { ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings } from "../../lib/replay-skin";
+import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplaySkinProfile, normalizeReplaySkinSettings } from "../../lib/replay-skin";
+import type { ReplayComboFontStyle, ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayHitCounts } from "../../lib/replay-validation";
 import { buildStableReplayComboEvents, resolveReplayJudgementEvents } from "../../lib/replay-validation";
 import { formatPixiRendererType } from "./renderer-debug";
@@ -2238,12 +2238,15 @@ export class ManiaReplayRenderer {
     const { h, playfieldX, playfieldWidth } = layout;
     const playfieldCenterX = playfieldX + playfieldWidth / 2;
     const comboY = this.getStagePositionY(this.skinSettings.comboPosition, layout);
-    if (this.renderComboImages(`${this.combo}x`, playfieldCenterX, comboY, layout)) return;
+    if (this.skinSettings.comboFontSet === DEFAULT_REPLAY_COMBO_FONT_SET && this.renderComboImages(`${this.combo}x`, playfieldCenterX, comboY, layout)) return;
+    const comboFont = getReplayComboFontStyle(this.skinSettings.comboFontSet);
     this.addText(`${this.combo}x`, playfieldCenterX, comboY, {
       fontSize: Math.max(22, h * 0.05),
       fill: "#ffffff",
       alpha: 0.85,
-      fontWeight: "700",
+      fontFamily: comboFont.family,
+      fontWeight: comboFont.weight,
+      fontStyle: comboFont.style,
       anchorX: 0.5,
       anchorY: 0.5,
     });
@@ -2482,6 +2485,7 @@ export class ManiaReplayRenderer {
     if (!glyphs.some(Boolean)) return false;
 
     const fallbackHeight = Math.max(22, layout.h * 0.05);
+    const comboFont = getReplayComboFontStyle(this.skinSettings.comboFontSet);
     const sizes = glyphs.map((asset) => {
       if (!asset) return { width: fallbackHeight * 0.45, height: fallbackHeight };
       const height = this.getHudAssetHeight(asset, fallbackHeight, layout);
@@ -2498,7 +2502,9 @@ export class ManiaReplayRenderer {
           fontSize: fallbackHeight,
           fill: "#ffffff",
           alpha: 0.85,
-          fontWeight: "700",
+          fontFamily: comboFont.family,
+          fontWeight: comboFont.weight,
+          fontStyle: comboFont.style,
           anchorX: 0.5,
           anchorY: 0.5,
         });
@@ -2815,7 +2821,9 @@ export class ManiaReplayRenderer {
       fontSize: number;
       fill: string;
       alpha?: number;
-      fontWeight?: "400" | "700";
+      fontFamily?: string;
+      fontWeight?: ReplayComboFontStyle["weight"] | "400" | "700";
+      fontStyle?: "normal" | "italic";
       anchorX?: number;
       anchorY?: number;
     },
@@ -2838,11 +2846,15 @@ export class ManiaReplayRenderer {
     if (!label.visible) label.visible = true;
     if (label.text !== text) label.text = text;
 
+    const fontFamily = options.fontFamily ?? "Torus, sans-serif";
     const fontWeight = options.fontWeight ?? "400";
-    const sig = `${options.fontSize}|${fontWeight}|${options.fill}`;
+    const fontStyle = options.fontStyle ?? "normal";
+    const sig = `${options.fontSize}|${fontFamily}|${fontWeight}|${fontStyle}|${options.fill}`;
     if (label.__sig !== sig) {
+      label.style.fontFamily = fontFamily;
       label.style.fontSize = options.fontSize;
       label.style.fontWeight = fontWeight;
+      label.style.fontStyle = fontStyle;
       label.style.fill = options.fill;
       label.__sig = sig;
     }
