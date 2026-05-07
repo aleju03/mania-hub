@@ -166,14 +166,29 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(helper![1]).not.toContain("topFadeAlpha");
   });
 
-  it("draws arrow LN bodies with only the leading end rounded", () => {
+  it("draws arrow LN bodies with the tail end rounded for either scroll direction", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
     const helper = /private arrowLnBodyWithTopFade\(([\s\S]*?)\n  private barLnBodyWithTopFade/.exec(source);
 
     expect(helper?.[1]).toBeTruthy();
+    expect(source).toContain('this.skinSettings.upscroll ? "bottom" : "top"');
     expect(helper![1]).toContain(".quadraticCurveTo(x, y, x + radius, y)");
+    expect(helper![1]).toContain(".quadraticCurveTo(x, bottom, x + radius, bottom)");
     expect(helper![1]).toContain(".lineTo(x + w, bottom)");
+    expect(helper![1]).toContain(".lineTo(x + w, y)");
     expect(helper![1]).not.toContain("roundRect");
+  });
+
+  it("stops circle and arrow LN bodies before the release tail passes under the head cap", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("private getHoldBodyRange(headCutoffY: number, tailEndY: number, tailTrimDelta: number)");
+    expect(source).toContain("return tailY > headCutoffY ? { top: headCutoffY, bottom: tailY } : null;");
+    expect(source).toContain("return tailY < headCutoffY ? { top: tailY, bottom: headCutoffY } : null;");
+    expect(source).toContain("const circleBodyRange = this.getHoldBodyRange(headCenterY, tailEndY, tailTrimDelta);");
+    expect(source).toContain("const arrowBodyRange = this.getHoldBodyRange(headCenterY, tailEndY, tailTrimDelta);");
+    expect(source).toContain("const inputCircleBodyRange = this.getHoldBodyRange(headCenterY, tailEndY, tailTrimDelta);");
+    expect(source).toContain("const inputArrowBodyRange = this.getHoldBodyRange(headCenterY, tailEndY, tailTrimDelta);");
   });
 
   it("scales circle notes and receptors with the lane width", () => {

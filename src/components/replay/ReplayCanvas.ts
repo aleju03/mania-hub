@@ -1654,21 +1654,20 @@ export class ManiaReplayRenderer {
         if (this.skinSettings.style === "circles") {
           const bodyWidth = Math.max(14, circleDiameter * 0.72);
           const bodyX = colX + colWidth / 2 - bodyWidth / 2;
-          const headInsetTop = this.skinSettings.upscroll ? 0 : tailTrimDelta;
-          const headInsetBottom = this.skinSettings.upscroll ? tailTrimDelta : 0;
-          const bodyTop = top + headInsetTop;
-          const bodyBottom = Math.max(bodyTop, bottom - headInsetBottom);
           const headCenterY = this.getVisualCenterY(headEndY, circleRadius);
-          this.circleLnBodyWithTopFade(
-            bodyX,
-            bodyTop,
-            bodyWidth,
-            bodyBottom - bodyTop,
-            this.skinSettings.lnBodyColor,
-            bodyAlpha,
-            noteFadeHeight,
-            0.55,
-          );
+          const circleBodyRange = this.getHoldBodyRange(headCenterY, tailEndY, tailTrimDelta);
+          if (circleBodyRange) {
+            this.circleLnBodyWithTopFade(
+              bodyX,
+              circleBodyRange.top,
+              bodyWidth,
+              circleBodyRange.bottom - circleBodyRange.top,
+              this.skinSettings.lnBodyColor,
+              bodyAlpha,
+              noteFadeHeight,
+              0.55,
+            );
+          }
           this.circleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, circleLnHeadColor, headAlpha, noteFadeHeight, 0.55);
           if (this.skinSettings.outlineEnabled) {
             this.strokeCircleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, this.skinSettings.outlineColor, headAlpha, this.skinSettings.outlineWidth, noteFadeHeight, 0.55);
@@ -1679,13 +1678,21 @@ export class ManiaReplayRenderer {
         if (isArrowSkin) {
           const bodyWidth = Math.max(14, arrowSize * 0.68);
           const bodyX = colX + colWidth / 2 - bodyWidth / 2;
-          const tailDelta = this.skinSettings.upscroll ? -tailTrimDelta : tailTrimDelta;
           const headCenterY = this.getVisualCenterY(headEndY, arrowSize / 2);
-          const bodyHeadY = headCenterY;
-          const bodyTailY = tailEndY + tailDelta;
-          const bodyTop = Math.min(bodyHeadY, bodyTailY);
-          const bodyBottom = Math.max(bodyHeadY, bodyTailY);
-          this.arrowLnBodyWithTopFade(bodyX, bodyTop, bodyWidth, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, bodyAlpha, noteFadeHeight, 0.55);
+          const arrowBodyRange = this.getHoldBodyRange(headCenterY, tailEndY, tailTrimDelta);
+          if (arrowBodyRange) {
+            this.arrowLnBodyWithTopFade(
+              bodyX,
+              arrowBodyRange.top,
+              bodyWidth,
+              arrowBodyRange.bottom - arrowBodyRange.top,
+              this.skinSettings.lnBodyColor,
+              bodyAlpha,
+              noteFadeHeight,
+              0.55,
+              this.skinSettings.upscroll ? "bottom" : "top",
+            );
+          }
           this.arrowShapeWithTopFade(
             colX + colWidth / 2,
             headCenterY,
@@ -1938,12 +1945,11 @@ export class ManiaReplayRenderer {
       if (this.skinSettings.style === "circles") {
         const bodyWidth = Math.max(14, circleDiameter * 0.72);
         const bodyX = colX + colWidth / 2 - bodyWidth / 2;
-        const headInsetTop = this.skinSettings.upscroll ? 0 : tailTrimDelta;
-        const headInsetBottom = this.skinSettings.upscroll ? tailTrimDelta : 0;
-        const bodyTop = top + headInsetTop;
-        const bodyBottom = Math.max(bodyTop, bottom - headInsetBottom);
         const headCenterY = this.getVisualCenterY(headEndY, circleRadius);
-        this.circleLnBodyWithTopFade(bodyX, bodyTop, bodyWidth, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, 0.92, noteFadeHeight, 0.55);
+        const inputCircleBodyRange = this.getHoldBodyRange(headCenterY, tailEndY, tailTrimDelta);
+        if (inputCircleBodyRange) {
+          this.circleLnBodyWithTopFade(bodyX, inputCircleBodyRange.top, bodyWidth, inputCircleBodyRange.bottom - inputCircleBodyRange.top, this.skinSettings.lnBodyColor, 0.92, noteFadeHeight, 0.55);
+        }
         this.circleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, circleLnHeadColor, 0.96, noteFadeHeight, 0.55);
         if (this.skinSettings.outlineEnabled) {
           this.strokeCircleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, this.skinSettings.outlineColor, 0.96, this.skinSettings.outlineWidth, noteFadeHeight, 0.55);
@@ -1954,11 +1960,21 @@ export class ManiaReplayRenderer {
       if (isArrowSkin) {
         const bodyWidth = Math.max(14, arrowSize * 0.68);
         const bodyX = colX + colWidth / 2 - bodyWidth / 2;
-        const tailDelta = this.skinSettings.upscroll ? -tailTrimDelta : tailTrimDelta;
         const headCenterY = this.getVisualCenterY(headEndY, arrowSize / 2);
-        const bodyTop = Math.min(headCenterY, tailEndY + tailDelta);
-        const bodyBottom = Math.max(headCenterY, tailEndY + tailDelta);
-        this.arrowLnBodyWithTopFade(bodyX, bodyTop, bodyWidth, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, 0.92, noteFadeHeight, 0.55);
+        const inputArrowBodyRange = this.getHoldBodyRange(headCenterY, tailEndY, tailTrimDelta);
+        if (inputArrowBodyRange) {
+          this.arrowLnBodyWithTopFade(
+            bodyX,
+            inputArrowBodyRange.top,
+            bodyWidth,
+            inputArrowBodyRange.bottom - inputArrowBodyRange.top,
+            this.skinSettings.lnBodyColor,
+            0.92,
+            noteFadeHeight,
+            0.55,
+            this.skinSettings.upscroll ? "bottom" : "top",
+          );
+        }
         this.arrowShapeWithTopFade(
           colX + colWidth / 2,
           headCenterY,
@@ -2704,6 +2720,14 @@ export class ManiaReplayRenderer {
     return this.skinSettings.upscroll ? anchorY + halfSize : anchorY - halfSize;
   }
 
+  private getHoldBodyRange(headCutoffY: number, tailEndY: number, tailTrimDelta: number): { top: number; bottom: number } | null {
+    const tailY = tailEndY + (this.skinSettings.upscroll ? -tailTrimDelta : tailTrimDelta);
+    if (this.skinSettings.upscroll) {
+      return tailY > headCutoffY ? { top: headCutoffY, bottom: tailY } : null;
+    }
+    return tailY < headCutoffY ? { top: tailY, bottom: headCutoffY } : null;
+  }
+
   private getHudScale(layout: Layout): number {
     if (!this.fullscreenLayout) return 1;
     return Math.min(1.45, Math.max(1, layout.layoutScale * 0.85));
@@ -3067,11 +3091,25 @@ export class ManiaReplayRenderer {
     alpha: number,
     _fadeHeight: number,
     _minAlpha = 0,
+    roundedEnd: "top" | "bottom" = "top",
   ) {
     if (w <= 0 || h <= 0 || alpha <= 0) return;
     const bottom = y + h;
     if (bottom <= 0) return;
     const radius = Math.min(w / 2, h);
+    if (roundedEnd === "bottom") {
+      const path = new GraphicsPath()
+        .moveTo(x, y)
+        .lineTo(x, bottom - radius)
+        .quadraticCurveTo(x, bottom, x + radius, bottom)
+        .lineTo(x + w - radius, bottom)
+        .quadraticCurveTo(x + w, bottom, x + w, bottom - radius)
+        .lineTo(x + w, y)
+        .closePath();
+      this.graphics.path(path).fill({ color: hexToNumber(color), alpha });
+      return;
+    }
+
     const path = new GraphicsPath()
       .moveTo(x, bottom)
       .lineTo(x, y + radius)
