@@ -848,8 +848,14 @@ function ReplayViewer({
     );
   }, [isCanvasFullscreen, showFullscreenChromeTemporarily]);
 
-  const handleReplayCanvasPointerLeave = useCallback(() => {
+  const handleReplayCanvasPointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!isCanvasFullscreen || !isMobileReplayPointer(event)) return;
+    showFullscreenChromeTemporarily(true, FULLSCREEN_TAP_CHROME_HIDE_MS);
+  }, [isCanvasFullscreen, showFullscreenChromeTemporarily]);
+
+  const handleReplayCanvasPointerLeave = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!isCanvasFullscreen || scrubbingRef.current) return;
+    if (isMobileReplayPointer(event)) return;
     clearFullscreenChromeTimeout();
     setShowFullscreenChrome(false);
   }, [clearFullscreenChromeTimeout, isCanvasFullscreen]);
@@ -1448,6 +1454,7 @@ function ReplayViewer({
         ref={canvasContainerRef}
         data-replay-fullscreen={isCanvasFullscreen ? "true" : undefined}
         onPointerMove={handleReplayCanvasPointerMove}
+        onPointerUp={handleReplayCanvasPointerUp}
         onPointerLeave={handleReplayCanvasPointerLeave}
         className={`group/replay-canvas relative overflow-hidden bg-[#0a0a18] ${
           isCanvasFullscreen
