@@ -195,6 +195,7 @@ interface AppState {
   selectedCountry: string;
   themeHue: number;
   themeSaturation: number;
+  showDanEstimates: boolean;
   avatarAccents: Record<string, CachedAvatarAccent>;
   rankingsByCountry: CountryRecord<RankingsResponse>;
   rankingsFetchedAtByCountry: CountryRecord<number>;
@@ -221,6 +222,7 @@ interface AppState {
   setSelectedCountry: (country: string) => void;
   setThemeHue: (hue: number) => void;
   setThemeSaturation: (sat: number) => void;
+  setShowDanEstimates: (show: boolean) => void;
   resetThemeHue: () => void;
   setAvatarAccents: (accents: Record<string, string | null>, fetchedAt?: number) => void;
   setRankings: (country: string, rankings: RankingsResponse) => void;
@@ -376,6 +378,7 @@ export const useAppStore = create<AppState>()(
       selectedCountry: initialClientCountry ?? DEFAULT_COUNTRY_CODE,
       themeHue: initialClientThemeHue ?? DEFAULT_THEME_HUE,
       themeSaturation: initialClientThemeSat ?? DEFAULT_THEME_SAT,
+      showDanEstimates: true,
       avatarAccents: initialClientAvatarAccents,
       rankingsByCountry: {},
       rankingsFetchedAtByCountry: {},
@@ -416,6 +419,7 @@ export const useAppStore = create<AppState>()(
         writeThemeSatToStorage(clamped);
         set({ themeSaturation: clamped });
       },
+      setShowDanEstimates: (show) => set({ showDanEstimates: show }),
       resetThemeHue: () => {
         applyThemeHueToDom(DEFAULT_THEME_HUE);
         removeThemeHueFromStorage();
@@ -798,6 +802,9 @@ export const useAppStore = create<AppState>()(
           // haven't picked a color since this migration landed.
           themeHue: readThemeHueFromStorage()
             ?? clampThemeHue(nextState.themeHue ?? currentState.themeHue),
+          showDanEstimates: typeof nextState.showDanEstimates === "boolean"
+            ? nextState.showDanEstimates
+            : currentState.showDanEstimates,
           // Dedicated key wins. The legacy blob fallback only matters for
           // returning users whose accents still live in `mania-hub-cache-v5`
           // and haven't been re-fetched since this migration landed; those
@@ -850,6 +857,7 @@ export const useAppStore = create<AppState>()(
       },
       partialize: (state) => ({
         selectedCountry: state.selectedCountry,
+        showDanEstimates: state.showDanEstimates,
         // themeHue is persisted separately via THEME_HUE_STORAGE_KEY so a
         // QuotaExceededError on this big blob (common on mobile Safari) can't
         // drop a theme change on the floor.

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useAppStore } from "#/store";
 import type { LeanDanEstimate, LeanTrackerScore, OsuScore } from "#/lib/types";
 import { getDanEstimates } from "#/lib/osu";
 import { getScoreRate } from "#/lib/score";
@@ -149,18 +150,19 @@ function DanBadgeInner({ estimate }: { estimate: LeanDanEstimate }) {
 }
 
 export function DanBadge({ score }: { score: OsuScore | LeanTrackerScore }) {
+  const showDanEstimates = useAppStore((state) => state.showDanEstimates);
   const beatmapId = score.beatmap?.id;
   const keyCount = score.beatmap?.cs;
   const starRating = score.beatmap?.difficulty_rating;
   const rate = getScoreRate(score.mods);
 
   const estimate = useDanEstimate(
-    keyCount === 4 ? beatmapId : undefined,
+    showDanEstimates && keyCount === 4 ? beatmapId : undefined,
     starRating,
     rate,
   );
 
-  if (!estimate) return null;
+  if (!showDanEstimates || !estimate) return null;
 
   return <DanBadgeInner estimate={estimate} />;
 }

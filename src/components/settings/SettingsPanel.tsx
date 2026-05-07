@@ -20,22 +20,14 @@ import {
 } from "../../lib/replay-scroll-speed";
 import {
   normalizeReplayBackgroundDim,
-  normalizeReplayInputColor,
   normalizeReplayVolume,
   readReplayBackgroundDim,
-  readReplayInputColor,
-  readReplayInputKeyHistory,
-  readReplayInputOnly,
-  readReplayInputOverlay,
   readReplayVolume,
   writeReplayBackgroundDim,
-  writeReplayInputColor,
-  writeReplayInputKeyHistory,
-  writeReplayInputOnly,
-  writeReplayInputOverlay,
   writeReplayVolume,
 } from "../../lib/replay-preferences";
 import type { ReplaySkinSettings, ReplaySkinStyle } from "../../lib/replay-skin";
+import { useAppStore } from "../../store";
 
 const MANIA_ARROW_ICON_STYLE: CSSProperties = {
   WebkitMask: "url('/images/notes/mania-arrow-right.svg') center / contain no-repeat",
@@ -62,11 +54,11 @@ const STYLE_LABELS: Record<ReplaySkinStyle, string> = {
   arrows: "Arrows",
 };
 
-type TabId = "skin" | "viewer" | "overlay";
+type TabId = "skin" | "viewer" | "dans";
 const TABS: { id: TabId; label: string }[] = [
   { id: "skin", label: "skin & layout" },
   { id: "viewer", label: "playback" },
-  { id: "overlay", label: "input overlay" },
+  { id: "dans", label: "dans" },
 ];
 
 type Variant = "page" | "drawer";
@@ -80,13 +72,11 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
   const [bgDim, setBgDim] = useState(readReplayBackgroundDim);
   const [volume, setVolume] = useState(readReplayVolume);
-  const [showInputOverlay, setShowInputOverlay] = useState(readReplayInputOverlay);
-  const [inputOverlayOnly, setInputOverlayOnly] = useState(readReplayInputOnly);
-  const [inputOverlayKeyHistory, setInputOverlayKeyHistory] = useState(readReplayInputKeyHistory);
-  const [inputOverlayColor, setInputOverlayColor] = useState(readReplayInputColor);
   const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
   const [skinSettingsOpen, setSkinSettingsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("skin");
+  const showDanEstimates = useAppStore((state) => state.showDanEstimates);
+  const setShowDanEstimates = useAppStore((state) => state.setShowDanEstimates);
 
   const saveSkinSettings = (settings: ReplaySkinSettings) => {
     const normalized = normalizeReplaySkinSettings(settings);
@@ -107,16 +97,9 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
     writeReplayBackgroundDim(80);
     setVolume(0.5);
     writeReplayVolume(0.5);
-    setShowInputOverlay(false);
-    writeReplayInputOverlay(false);
-    setInputOverlayOnly(false);
-    writeReplayInputOnly(false);
-    setInputOverlayKeyHistory(false);
-    writeReplayInputKeyHistory(false);
-    setInputOverlayColor("#a855f7");
-    writeReplayInputColor("#a855f7");
     setSkinSettings(DEFAULT_REPLAY_SKIN_SETTINGS);
     writeReplaySkinSettings(DEFAULT_REPLAY_SKIN_SETTINGS);
+    setShowDanEstimates(true);
   };
 
   const resetButton = (
@@ -161,29 +144,10 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
           }}
         />
       ) : null}
-      {activeTab === "overlay" ? (
-        <OverlayPanel
-          showInputOverlay={showInputOverlay}
-          inputOverlayOnly={inputOverlayOnly}
-          inputOverlayKeyHistory={inputOverlayKeyHistory}
-          inputOverlayColor={inputOverlayColor}
-          onShowOverlayChange={(checked) => {
-            setShowInputOverlay(checked);
-            writeReplayInputOverlay(checked);
-          }}
-          onInputOnlyChange={(checked) => {
-            setInputOverlayOnly(checked);
-            writeReplayInputOnly(checked);
-          }}
-          onInputKeyHistoryChange={(checked) => {
-            setInputOverlayKeyHistory(checked);
-            writeReplayInputKeyHistory(checked);
-          }}
-          onColorChange={(value) => {
-            const normalized = normalizeReplayInputColor(value);
-            setInputOverlayColor(normalized);
-            writeReplayInputColor(normalized);
-          }}
+      {activeTab === "dans" ? (
+        <DansPanel
+          showDanEstimates={showDanEstimates}
+          onShowDanEstimatesChange={setShowDanEstimates}
         />
       ) : null}
     </>
@@ -396,76 +360,22 @@ function ViewerPanel({
   );
 }
 
-function OverlayPanel({
-  showInputOverlay,
-  inputOverlayOnly,
-  inputOverlayKeyHistory,
-  inputOverlayColor,
-  onShowOverlayChange,
-  onInputOnlyChange,
-  onInputKeyHistoryChange,
-  onColorChange,
+function DansPanel({
+  showDanEstimates,
+  onShowDanEstimatesChange,
 }: {
-  showInputOverlay: boolean;
-  inputOverlayOnly: boolean;
-  inputOverlayKeyHistory: boolean;
-  inputOverlayColor: string;
-  onShowOverlayChange: (checked: boolean) => void;
-  onInputOnlyChange: (checked: boolean) => void;
-  onInputKeyHistoryChange: (checked: boolean) => void;
-  onColorChange: (value: string) => void;
+  showDanEstimates: boolean;
+  onShowDanEstimatesChange: (checked: boolean) => void;
 }) {
   return (
     <div className="space-y-6">
-      <PanelGroup label="Visibility">
+      <PanelGroup label="Score cards">
         <ToggleRow
-          label="Show input overlay"
-          description="Reveal column key presses synced to the replay"
-          checked={showInputOverlay}
-          onChange={onShowOverlayChange}
+          label="Show dan estimates"
+          description="Display estimated dan badges on score cards"
+          checked={showDanEstimates}
+          onChange={onShowDanEstimatesChange}
         />
-        <ToggleRow
-          label="Input only"
-          description="Hide the playfield and only display the key flashes"
-          checked={inputOverlayOnly}
-          disabled={!showInputOverlay}
-          onChange={onInputOnlyChange}
-        />
-        <ToggleRow
-          label="Key overlay input stream"
-          description="Show incoming replay inputs above the key labels"
-          checked={inputOverlayKeyHistory}
-          disabled={!showInputOverlay}
-          onChange={onInputKeyHistoryChange}
-        />
-      </PanelGroup>
-      <PanelGroup label="Appearance">
-        <div
-          className={`flex items-center justify-between gap-3 rounded-lg border border-osu-b3/40 bg-osu-b5/40 px-4 py-3 transition-opacity ${
-            showInputOverlay ? "" : "opacity-50"
-          }`}
-        >
-          <div className="min-w-0">
-            <div className="text-sm font-semibold text-osu-l1">Overlay color</div>
-            <div className="mt-0.5 text-[11px] text-osu-f1">Tint applied to flashing column hits</div>
-          </div>
-          <label className="group relative h-9 w-16 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-osu-b3/60 bg-osu-b5/70 transition-colors hover:border-osu-b2">
-            <span
-              className="absolute inset-1.5 rounded-md ring-1 ring-white/15 transition-transform group-hover:scale-95"
-              style={{
-                backgroundColor: inputOverlayColor,
-                boxShadow: `0 0 12px ${inputOverlayColor}55`,
-              }}
-            />
-            <input
-              type="color"
-              value={inputOverlayColor}
-              onChange={(event) => onColorChange(event.target.value)}
-              className="absolute inset-0 cursor-pointer opacity-0"
-              aria-label="Input overlay color"
-            />
-          </label>
-        </div>
       </PanelGroup>
     </div>
   );
