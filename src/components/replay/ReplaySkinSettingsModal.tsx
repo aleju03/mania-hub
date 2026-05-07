@@ -816,6 +816,7 @@ export function ReplaySkinSettingsModal({
     outline: "Outline color",
   };
   const showDevOverlayReset = activeTab === "overlays" && import.meta.env.DEV;
+  const showDevOskImport = import.meta.env.DEV;
   const comboFontOptions = REPLAY_COMBO_FONT_SETS.map((set, index) => ({
     value: set,
     label: `Set ${index + 1}`,
@@ -938,20 +939,24 @@ export function ReplaySkinSettingsModal({
                   <PresetIconButton label="Import share code" onClick={importShareKey}>
                     <Upload className="h-3.5 w-3.5" />
                   </PresetIconButton>
-                  <PresetTextButton label="Import .osk skin" onClick={() => oskInputRef.current?.click()} disabled={importingOsk}>
-                    <FileArchive className="h-3.5 w-3.5" />
-                    Skin
-                  </PresetTextButton>
-                  <input
-                    ref={oskInputRef}
-                    type="file"
-                    accept=".osk,.zip,application/zip"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.currentTarget.files?.[0];
-                      if (file) void importOsk(file);
-                    }}
-                  />
+                  {showDevOskImport ? (
+                    <>
+                      <PresetTextButton label="Import .osk skin" onClick={() => oskInputRef.current?.click()} disabled={importingOsk}>
+                        <FileArchive className="h-3.5 w-3.5" />
+                        Skin
+                      </PresetTextButton>
+                      <input
+                        ref={oskInputRef}
+                        type="file"
+                        accept=".osk,.zip,application/zip"
+                        className="hidden"
+                        onChange={(event) => {
+                          const file = event.currentTarget.files?.[0];
+                          if (file) void importOsk(file);
+                        }}
+                      />
+                    </>
+                  ) : null}
                 </div>
               </div>
               <FancySelect
