@@ -103,6 +103,32 @@ const RECENT_PLAYER_HISTORY = 2;
 const RECENT_BEATMAP_HISTORY = 5;
 const RANDOM_PICK_SETTINGS_STORAGE_KEY = "mania-hub-maps-random-pick-settings-v1";
 
+function beatmapStatusBadgeClass(status: string): string {
+  const normalized = status.toLowerCase();
+  const colorClass =
+    normalized === "ranked" || normalized === "approved"
+      ? "bg-[#6cf27f]"
+      : normalized === "loved"
+        ? "bg-[#f26fa6]"
+        : normalized === "graveyard"
+          ? "bg-[#b3b3b3]"
+          : "bg-[#ffd36b]";
+
+  return [
+    "inline-flex shrink-0 items-center justify-center rounded-full",
+    "px-2.5 py-1 text-[10px] font-extrabold uppercase leading-none text-black",
+    colorClass,
+  ].join(" ");
+}
+
+function BeatmapStatusBadge({ status, className = "" }: { status: string; className?: string }) {
+  return (
+    <span className={`${beatmapStatusBadgeClass(status)} ${className}`}>
+      {status}
+    </span>
+  );
+}
+
 function weightedPick<T>(items: T[], weight: (item: T) => number): T {
   let total = 0;
   for (const item of items) total += weight(item);
@@ -3201,17 +3227,7 @@ function FavouriteCard({
       >
         <img src={fav.covers.card} alt="" className="w-full h-[90px] object-cover" loading="lazy" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-        <span
-          className={`absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-            fav.status === "ranked"
-              ? "bg-osu-green/80 text-white"
-              : fav.status === "loved"
-                ? "bg-osu-pink/80 text-white"
-                : "bg-black/60 text-white/80"
-          }`}
-        >
-          {fav.status}
-        </span>
+        <BeatmapStatusBadge status={fav.status} className="absolute top-1.5 left-1.5" />
         <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-1.5">
           <div className="text-[12px] font-semibold text-white truncate leading-tight drop-shadow-lg">{fav.title}</div>
           <div className="text-[10px] text-white/70 truncate leading-tight drop-shadow-lg">{fav.artist}</div>
@@ -4100,17 +4116,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
           )}
         </div>
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
-        <span
-          className={`absolute top-3 left-3 px-2 py-1 rounded text-[10px] font-bold uppercase ${
-            bm.status === "ranked" || bm.status === "approved"
-              ? "bg-osu-green/80 text-white"
-              : bm.status === "loved"
-                ? "bg-osu-pink/80 text-white"
-                : "bg-black/60 text-white/80"
-          }`}
-        >
-          {bm.status}
-        </span>
+        <BeatmapStatusBadge status={bm.status} className="absolute top-3 left-3" />
         <div className="absolute top-3 right-3 flex max-w-[calc(100%-5.5rem)] flex-wrap items-center justify-end gap-1">
           {keys.map((k) => (
             <span key={k} className="px-1.5 py-0.5 rounded bg-black/60 text-[10px] font-bold text-white">
