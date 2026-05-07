@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Copy, FileArchive, GripHorizontal, Pencil, Plus, Settings, Trash2, Upload, X } from "lucide-react";
 
 import {
+  DEFAULT_REPLAY_OVERLAY_SETTINGS,
   REPLAY_OVERLAY_IDS,
   normalizeReplayOverlaySettings,
 } from "#/lib/replay-overlays";
@@ -793,6 +794,7 @@ export function ReplaySkinSettingsModal({
     outline: "Outline color",
   };
   const activeTabLabel = activeTab === "style" ? "Style" : activeTab === "layout" ? "Layout" : "Overlays";
+  const showDevOverlayReset = activeTab === "overlays" && import.meta.env.DEV;
 
   return createPortal(
     <>
@@ -1146,7 +1148,7 @@ export function ReplaySkinSettingsModal({
 
           <div className={isCompactWindow ? "border-t border-osu-b3/50 p-4 sm:p-5" : "overflow-y-auto border-l border-osu-b3/50 p-5"}>
             <div className="mb-2 flex items-center justify-between gap-2">
-              <span className="text-sm font-semibold text-white">Live preview</span>
+              <span className="text-sm font-semibold text-white">Preview</span>
               <div className="grid grid-cols-2 rounded-md bg-osu-b5/70 p-0.5 text-[10px] font-bold uppercase tracking-wider">
                 {(["tap", "ln"] as const).map((mode) => (
                   <button
@@ -1195,6 +1197,13 @@ export function ReplaySkinSettingsModal({
               className="mr-auto cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
             >
               Reset
+            </button>
+          ) : showDevOverlayReset ? (
+            <button
+              onClick={() => setOverlayDraft(DEFAULT_REPLAY_OVERLAY_SETTINGS)}
+              className="mr-auto cursor-pointer rounded-lg bg-osu-b3/50 px-4 py-2 text-xs font-semibold text-osu-f1 transition-colors hover:bg-osu-b3 hover:text-white"
+            >
+              Reset defaults
             </button>
           ) : (
             <div className="mr-auto" />

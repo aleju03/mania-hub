@@ -18,6 +18,22 @@ export const REPLAY_OVERLAY_MIN_SCALE = 0.5;
 export const REPLAY_OVERLAY_MAX_SCALE = 2.5;
 
 export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
+  keypresses: { enabled: true, x: 0.035, y: 0.68, scale: 0.75 },
+  kps: { enabled: true, x: 0.035, y: 0.77, scale: 0.75 },
+  misses: { enabled: true, x: 0.085, y: 0.77, scale: 0.75 },
+  accuracy: { enabled: true, x: 0.74, y: 0.02, scale: 1 },
+  judgements: { enabled: true, x: 0.74, y: 0.07, scale: 1 },
+};
+
+const OVERLAPPING_LEFT_CLUSTER_DEFAULTS: ReplayOverlaySettings = {
+  keypresses: { enabled: true, x: 0.05, y: 0.68, scale: 0.82 },
+  kps: { enabled: true, x: 0.03, y: 0.68, scale: 0.82 },
+  misses: { enabled: true, x: 0.05, y: 0.77, scale: 0.82 },
+  accuracy: { enabled: true, x: 0.74, y: 0.02, scale: 1 },
+  judgements: { enabled: true, x: 0.74, y: 0.07, scale: 1 },
+};
+
+const LEGACY_PLAYFIELD_OVERLAY_DEFAULTS: ReplayOverlaySettings = {
   keypresses: { enabled: true, x: 0.22, y: 0.74, scale: 1 },
   kps: { enabled: true, x: 0.14, y: 0.74, scale: 1 },
   misses: { enabled: true, x: 0.22, y: 0.84, scale: 1 },
@@ -43,12 +59,23 @@ function normalizePlacement(value: unknown, fallback: ReplayOverlayPlacement): R
   };
 }
 
+function placementMatches(a: ReplayOverlayPlacement, b: ReplayOverlayPlacement): boolean {
+  return a.enabled === b.enabled
+    && Math.abs(a.x - b.x) < 0.0001
+    && Math.abs(a.y - b.y) < 0.0001
+    && Math.abs(a.scale - b.scale) < 0.0001;
+}
+
 export function normalizeReplayOverlaySettings(value: unknown): ReplayOverlaySettings {
   const raw = value && typeof value === "object" && !Array.isArray(value)
     ? value as Partial<Record<ReplayOverlayId, unknown>>
     : {};
   return REPLAY_OVERLAY_IDS.reduce((settings, id) => {
-    settings[id] = normalizePlacement(raw[id], DEFAULT_REPLAY_OVERLAY_SETTINGS[id]);
+    const placement = normalizePlacement(raw[id], DEFAULT_REPLAY_OVERLAY_SETTINGS[id]);
+    settings[id] = placementMatches(placement, LEGACY_PLAYFIELD_OVERLAY_DEFAULTS[id])
+      || placementMatches(placement, OVERLAPPING_LEFT_CLUSTER_DEFAULTS[id])
+      ? DEFAULT_REPLAY_OVERLAY_SETTINGS[id]
+      : placement;
     return settings;
   }, {} as ReplayOverlaySettings);
 }
