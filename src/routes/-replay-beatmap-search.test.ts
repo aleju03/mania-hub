@@ -35,5 +35,10 @@ describe("replay beatmap search", () => {
     expect(browseSource).toContain("getUserBeatmapScores({ data: { beatmapId, userId } })");
     expect(osuSource).toContain("/beatmaps/${beatmapId}/scores/users/${userId}/all");
     expect(osuSource).toContain('ruleset: "mania"');
+    expect(osuSource).toContain("beatmap-user-scores-all:v2");
+
+    const helperSource = osuSource.match(/async function getBeatmapUserScoresAll[\s\S]*?^}/m)?.[0] ?? "";
+    expect(helperSource).not.toContain("getScoreRequestParams");
+    expect(helperSource).not.toContain("legacy_only");
   });
 });

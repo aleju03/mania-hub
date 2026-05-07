@@ -1052,13 +1052,11 @@ async function fetchUserBestScoresWindow(userId: number, totalLimit = 200): Prom
 }
 
 async function getBeatmapUserScoresAll(beatmapId: number, userId: number): Promise<OsuScore[]> {
-  const cacheKey = `beatmap-user-scores-all:${beatmapId}:${userId}`;
+  const cacheKey = `beatmap-user-scores-all:v2:${beatmapId}:${userId}`;
   return fetchWithCacheLock(cacheKey, BEATMAP_USER_SCORES_ALL_CACHE_TTL, async () => {
     const response = await osuFetch<BeatmapUserScoresResponse>(
       `/beatmaps/${beatmapId}/scores/users/${userId}/all`,
-      getScoreRequestParams(userId, {
-        ruleset: "mania",
-      }),
+      { ruleset: "mania" },
       { caller: "getBeatmapUserScoresAll" },
     );
     return response.scores ?? [];
