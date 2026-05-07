@@ -144,11 +144,29 @@ describe("ManiaReplayRenderer skin customization", () => {
     expect(helper![1]).not.toContain("topFadeAlpha");
   });
 
+  it("draws arrow LN bodies with only the leading end rounded", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+    const helper = /private arrowLnBodyWithTopFade\(([\s\S]*?)\n  private barLnBodyWithTopFade/.exec(source);
+
+    expect(helper?.[1]).toBeTruthy();
+    expect(helper![1]).toContain(".quadraticCurveTo(x, y, x + radius, y)");
+    expect(helper![1]).toContain(".lineTo(x + w, bottom)");
+    expect(helper![1]).not.toContain("roundRect");
+  });
+
   it("scales circle notes and receptors with the lane width", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    expect(source).toContain("const laneSizedDiameter = layout.laneWidth * 0.74;");
+    expect(source).toContain("const laneSizedDiameter = layout.laneWidth * 0.9;");
     expect(source).toContain("Math.min(layout.laneWidth - 4, Math.max(minDiameter, laneSizedDiameter))");
+  });
+
+  it("scales skin.ini column measurements from the osu!mania stage height", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("const MANIA_SKIN_STAGE_HEIGHT = 480;");
+    expect(source).toContain("const targetLayoutScale = h / MANIA_SKIN_STAGE_HEIGHT;");
+    expect(source).toContain("desiredPlayfieldWidth * targetLayoutScale");
   });
 
   it("shows playfield lane dividers and lane tint only for bar skins", () => {

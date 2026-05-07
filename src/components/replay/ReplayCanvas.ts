@@ -45,6 +45,7 @@ const BACKGROUND_FADE_DURATION_MS = 180;
 const KEY_KPS_WINDOW_MS = 1000;
 const MANIA_MAX_TIME_RANGE = 11485;
 const MANIA_REFERENCE_HEIGHT = 768;
+const MANIA_SKIN_STAGE_HEIGHT = 480;
 const MANIA_DEFAULT_HIT_POSITION = (480 - 402) * 1.6;
 const MANIA_HIT_TARGET_POSITION = REPLAY_SKIN_DEFAULT_HIT_POSITION;
 const MANIA_BAR_NOTE_HEIGHT_RATIO = 0.22;
@@ -678,21 +679,16 @@ export class ManiaReplayRenderer {
     const h = this.cssHeight;
     const configuredColumnWidths = this.getConfiguredColumnWidths();
     const configuredColumnSpacings = this.getConfiguredColumnSpacings();
-    const averageColumnWidth = configuredColumnWidths.reduce((sum, width) => sum + width, 0) / Math.max(1, configuredColumnWidths.length);
-    const baseRatio = this.barePlayfield
-      ? 0.4 + this.keyCount * 0.045
-      : 0.25 + this.keyCount * 0.025;
     const desiredPlayfieldWidth = configuredColumnWidths.reduce((sum, width) => sum + width, 0)
       + configuredColumnSpacings.reduce((sum, width) => sum + width, 0);
-    const fullscreenPlayfieldScale = this.fullscreenLayout
-      ? Math.min(1.7, Math.max(1, h / 640))
-      : 1;
+    const targetLayoutScale = h / MANIA_SKIN_STAGE_HEIGHT;
     const maxPlayfieldWidth = Math.min(
-      w * Math.min(baseRatio * (averageColumnWidth / 50), this.barePlayfield ? 0.82 : 0.72),
-      desiredPlayfieldWidth * fullscreenPlayfieldScale,
+      w * (this.barePlayfield ? 0.82 : 0.72),
+      desiredPlayfieldWidth * targetLayoutScale,
     );
     const layoutScale = desiredPlayfieldWidth > 0 ? maxPlayfieldWidth / desiredPlayfieldWidth : 1;
     const playfieldWidth = desiredPlayfieldWidth * layoutScale;
+    const averageColumnWidth = configuredColumnWidths.reduce((sum, width) => sum + width, 0) / Math.max(1, configuredColumnWidths.length);
     const laneWidth = averageColumnWidth * layoutScale;
     const barePreviewBias = this.barePlayfield && this.keyCount >= 5 && w >= 380 ? 0.32 : 0.5;
     const playfieldX = (w - playfieldWidth) * barePreviewBias;
@@ -1118,6 +1114,7 @@ export class ManiaReplayRenderer {
           const headInsetBottom = this.skinSettings.upscroll ? tailTrimDelta : 0;
           const bodyTop = top + headInsetTop;
           const bodyBottom = Math.max(bodyTop, bottom - headInsetBottom);
+          const headCenterY = this.getVisualCenterY(headEndY, circleRadius);
           this.circleLnBodyWithTopFade(
             bodyX,
             bodyTop,
@@ -1128,9 +1125,9 @@ export class ManiaReplayRenderer {
             noteFadeHeight,
             0.55,
           );
-          this.circleWithTopFade(colX + colWidth / 2, headEndY, circleRadius, circleLnHeadColor, headAlpha, noteFadeHeight, 0.55);
+          this.circleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, circleLnHeadColor, headAlpha, noteFadeHeight, 0.55);
           if (this.skinSettings.outlineEnabled) {
-            this.strokeCircleWithTopFade(colX + colWidth / 2, headEndY, circleRadius, this.skinSettings.outlineColor, headAlpha, this.skinSettings.outlineWidth, noteFadeHeight, 0.55);
+            this.strokeCircleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, this.skinSettings.outlineColor, headAlpha, this.skinSettings.outlineWidth, noteFadeHeight, 0.55);
           }
           continue;
         }
@@ -1139,14 +1136,15 @@ export class ManiaReplayRenderer {
           const bodyWidth = Math.max(14, arrowSize * 0.68);
           const bodyX = colX + colWidth / 2 - bodyWidth / 2;
           const tailDelta = this.skinSettings.upscroll ? -tailTrimDelta : tailTrimDelta;
-          const bodyHeadY = headEndY;
+          const headCenterY = this.getVisualCenterY(headEndY, arrowSize / 2);
+          const bodyHeadY = headCenterY;
           const bodyTailY = tailEndY + tailDelta;
           const bodyTop = Math.min(bodyHeadY, bodyTailY);
           const bodyBottom = Math.max(bodyHeadY, bodyTailY);
-          this.circleLnBodyWithTopFade(bodyX, bodyTop, bodyWidth, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, bodyAlpha, noteFadeHeight, 0.55);
+          this.arrowLnBodyWithTopFade(bodyX, bodyTop, bodyWidth, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, bodyAlpha, noteFadeHeight, 0.55);
           this.arrowShapeWithTopFade(
             colX + colWidth / 2,
-            headEndY,
+            headCenterY,
             arrowSize,
             arrowDirection,
             arrowLnHeadColor,
@@ -1184,17 +1182,19 @@ export class ManiaReplayRenderer {
         }
 
         if (this.skinSettings.style === "circles") {
-          this.circleWithTopFade(colX + colWidth / 2, noteY, circleRadius, circleTapColor, 1, noteFadeHeight, 0.55);
+          const noteCenterY = this.getVisualCenterY(noteY, circleRadius);
+          this.circleWithTopFade(colX + colWidth / 2, noteCenterY, circleRadius, circleTapColor, 1, noteFadeHeight, 0.55);
           if (this.skinSettings.outlineEnabled) {
-            this.strokeCircleWithTopFade(colX + colWidth / 2, noteY, circleRadius, this.skinSettings.outlineColor, 1, this.skinSettings.outlineWidth, noteFadeHeight, 0.55);
+            this.strokeCircleWithTopFade(colX + colWidth / 2, noteCenterY, circleRadius, this.skinSettings.outlineColor, 1, this.skinSettings.outlineWidth, noteFadeHeight, 0.55);
           }
           continue;
         }
 
         if (isArrowSkin) {
+          const noteCenterY = this.getVisualCenterY(noteY, arrowSize / 2);
           this.arrowShapeWithTopFade(
             colX + colWidth / 2,
-            noteY,
+            noteCenterY,
             arrowSize,
             arrowDirection,
             arrowTapColor,
@@ -1398,10 +1398,11 @@ export class ManiaReplayRenderer {
         const headInsetBottom = this.skinSettings.upscroll ? tailTrimDelta : 0;
         const bodyTop = top + headInsetTop;
         const bodyBottom = Math.max(bodyTop, bottom - headInsetBottom);
+        const headCenterY = this.getVisualCenterY(headEndY, circleRadius);
         this.circleLnBodyWithTopFade(bodyX, bodyTop, bodyWidth, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, 0.92, noteFadeHeight, 0.55);
-        this.circleWithTopFade(colX + colWidth / 2, headEndY, circleRadius, circleLnHeadColor, 0.96, noteFadeHeight, 0.55);
+        this.circleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, circleLnHeadColor, 0.96, noteFadeHeight, 0.55);
         if (this.skinSettings.outlineEnabled) {
-          this.strokeCircleWithTopFade(colX + colWidth / 2, headEndY, circleRadius, this.skinSettings.outlineColor, 0.96, this.skinSettings.outlineWidth, noteFadeHeight, 0.55);
+          this.strokeCircleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, this.skinSettings.outlineColor, 0.96, this.skinSettings.outlineWidth, noteFadeHeight, 0.55);
         }
         return;
       }
@@ -1410,12 +1411,13 @@ export class ManiaReplayRenderer {
         const bodyWidth = Math.max(14, arrowSize * 0.68);
         const bodyX = colX + colWidth / 2 - bodyWidth / 2;
         const tailDelta = this.skinSettings.upscroll ? -tailTrimDelta : tailTrimDelta;
-        const bodyTop = Math.min(headEndY, tailEndY + tailDelta);
-        const bodyBottom = Math.max(headEndY, tailEndY + tailDelta);
-        this.circleLnBodyWithTopFade(bodyX, bodyTop, bodyWidth, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, 0.92, noteFadeHeight, 0.55);
+        const headCenterY = this.getVisualCenterY(headEndY, arrowSize / 2);
+        const bodyTop = Math.min(headCenterY, tailEndY + tailDelta);
+        const bodyBottom = Math.max(headCenterY, tailEndY + tailDelta);
+        this.arrowLnBodyWithTopFade(bodyX, bodyTop, bodyWidth, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, 0.92, noteFadeHeight, 0.55);
         this.arrowShapeWithTopFade(
           colX + colWidth / 2,
-          headEndY,
+          headCenterY,
           arrowSize,
           arrowDirection,
           arrowLnHeadColor,
@@ -1448,17 +1450,19 @@ export class ManiaReplayRenderer {
     }
 
     if (this.skinSettings.style === "circles") {
-      this.circleWithTopFade(colX + colWidth / 2, headEndY, circleRadius, circleTapColor, 0.96, noteFadeHeight, 0.55);
+      const headCenterY = this.getVisualCenterY(headEndY, circleRadius);
+      this.circleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, circleTapColor, 0.96, noteFadeHeight, 0.55);
       if (this.skinSettings.outlineEnabled) {
-        this.strokeCircleWithTopFade(colX + colWidth / 2, headEndY, circleRadius, this.skinSettings.outlineColor, 0.96, this.skinSettings.outlineWidth, noteFadeHeight, 0.55);
+        this.strokeCircleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, this.skinSettings.outlineColor, 0.96, this.skinSettings.outlineWidth, noteFadeHeight, 0.55);
       }
       return;
     }
 
     if (isArrowSkin) {
+      const headCenterY = this.getVisualCenterY(headEndY, arrowSize / 2);
       this.arrowShapeWithTopFade(
         colX + colWidth / 2,
-        headEndY,
+        headCenterY,
         arrowSize,
         arrowDirection,
         arrowTapColor,
@@ -1602,6 +1606,7 @@ export class ManiaReplayRenderer {
     const { judgmentY } = layout;
     const currentState = this.currentKeyState;
     const arrowSize = this.getArrowSize(layout);
+    const receptorCenterY = this.getVisualCenterY(judgmentY, arrowSize / 2);
 
     for (let col = 0; col < this.keyCount; col++) {
       const { x, width: colWidth } = this.getColumnLayout(col, layout);
@@ -1612,7 +1617,7 @@ export class ManiaReplayRenderer {
       const timeSinceFlash = this.currentTime - (this.receptorFlashTimestamps[col] || 0);
       const flashIntensity = pressed ? 1 : Math.max(0, 1 - timeSinceFlash / 140);
 
-      this.arrowStroke(cx, judgmentY, arrowSize, direction, "#ffffff", Math.max(pressed ? 0.95 : 0.4, flashIntensity * 0.65), 2.25);
+      this.arrowStroke(cx, receptorCenterY, arrowSize, direction, "#ffffff", Math.max(pressed ? 0.95 : 0.4, flashIntensity * 0.65), 2.25);
     }
   }
 
@@ -1620,13 +1625,14 @@ export class ManiaReplayRenderer {
     const { judgmentY } = layout;
     const currentState = this.currentKeyState;
     const radius = this.getCircleDiameter(layout) / 2;
+    const receptorCenterY = this.getVisualCenterY(judgmentY, radius);
     const strokeWidth = Math.max(2, Math.min(3, radius * 0.12));
 
     for (let col = 0; col < this.keyCount; col++) {
       const { x, width: colWidth } = this.getColumnLayout(col, layout);
       const pressed = (currentState & (1 << col)) !== 0;
-      this.circle(x + colWidth / 2, judgmentY, radius, "#ffffff", 0);
-      this.strokeCircle(x + colWidth / 2, judgmentY, radius, "#ffffff", pressed ? 1 : 0.5, strokeWidth);
+      this.circle(x + colWidth / 2, receptorCenterY, radius, "#ffffff", 0);
+      this.strokeCircle(x + colWidth / 2, receptorCenterY, radius, "#ffffff", pressed ? 1 : 0.5, strokeWidth);
     }
   }
 
@@ -1791,8 +1797,8 @@ export class ManiaReplayRenderer {
 
     const urBarWidth = Math.min(playfieldWidth * 0.68, 180);
     const urBarX = playfieldCenterX - urBarWidth / 2;
-    const receptorBottom = this.skinSettings.style === "circles"
-      ? judgmentY + this.getCircleDiameter(layout) / 2
+    const receptorBottom = this.skinSettings.style === "circles" || this.skinSettings.style === "arrows"
+      ? judgmentY
       : judgmentY + layout.receptorHeight + 2;
     const urBarY = Math.min(h - 10, receptorBottom > h - 40 ? receptorBottom + 12 : h - 26);
     const urRange = this.hitWindows.meh;
@@ -1968,6 +1974,10 @@ export class ManiaReplayRenderer {
     return layout.h * (this.skinSettings.upscroll ? position : MANIA_REFERENCE_HEIGHT - position) / MANIA_REFERENCE_HEIGHT;
   }
 
+  private getVisualCenterY(anchorY: number, halfSize: number): number {
+    return this.skinSettings.upscroll ? anchorY + halfSize : anchorY - halfSize;
+  }
+
   private getHudScale(layout: Layout): number {
     if (!this.fullscreenLayout) return 1;
     return Math.min(1.45, Math.max(1, layout.layoutScale * 0.85));
@@ -2109,13 +2119,13 @@ export class ManiaReplayRenderer {
   }
 
   private getCircleDiameter(layout: Layout): number {
-    const laneSizedDiameter = layout.laneWidth * 0.74;
+    const laneSizedDiameter = layout.laneWidth * 0.9;
     const minDiameter = this.barePlayfield ? 38 : 28;
     return Math.max(18, Math.min(layout.laneWidth - 4, Math.max(minDiameter, laneSizedDiameter)));
   }
 
   private getArrowSize(layout: Layout): number {
-    const laneSized = layout.laneWidth * 0.86;
+    const laneSized = layout.laneWidth * 0.92;
     const minSize = this.barePlayfield ? 36 : 26;
     return Math.max(20, Math.min(layout.laneWidth - 2, Math.max(minSize, laneSized)));
   }
@@ -2284,6 +2294,31 @@ export class ManiaReplayRenderer {
     const bottom = y + h;
     if (bottom <= 0) return;
     this.roundRect(x, y, w, h, w / 2, color, alpha);
+  }
+
+  private arrowLnBodyWithTopFade(
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    color: string,
+    alpha: number,
+    _fadeHeight: number,
+    _minAlpha = 0,
+  ) {
+    if (w <= 0 || h <= 0 || alpha <= 0) return;
+    const bottom = y + h;
+    if (bottom <= 0) return;
+    const radius = Math.min(w / 2, h);
+    const path = new GraphicsPath()
+      .moveTo(x, bottom)
+      .lineTo(x, y + radius)
+      .quadraticCurveTo(x, y, x + radius, y)
+      .lineTo(x + w - radius, y)
+      .quadraticCurveTo(x + w, y, x + w, y + radius)
+      .lineTo(x + w, bottom)
+      .closePath();
+    this.graphics.path(path).fill({ color: hexToNumber(color), alpha });
   }
 
   private barLnBodyWithTopFade(

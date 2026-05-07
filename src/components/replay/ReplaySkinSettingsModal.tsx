@@ -62,6 +62,7 @@ const REPLAY_SKIN_PALETTE = [
 const DRAFT_PRESET_ID = "custom";
 const DEFAULT_DRAFT_PRESET_NAME = "New preset";
 const PREVIEW_BAR_NOTE_HEIGHT_RATIO = 0.22;
+const PREVIEW_MANIA_SKIN_STAGE_HEIGHT = 480;
 const PREVIEW_BAR_COLUMN_COLORS: Record<number, string[]> = {
   1: ["#fff"],
   2: ["#5a8fff", "#5a8fff"],
@@ -1422,7 +1423,8 @@ function ReplaySkinPreview({
   const columnWidths = Array.from({ length: keyCount }, (_, col) => profile.columnWidths[col] ?? profile.columnWidth);
   const columnSpacings = Array.from({ length: Math.max(0, keyCount - 1) }, (_, col) => profile.columnSpacings[col] ?? profile.columnSpacing);
   const desiredPlayfieldWidth = columnWidths.reduce((sum, value) => sum + value, 0) + columnSpacings.reduce((sum, value) => sum + value, 0);
-  const playfieldWidth = Math.min(230, desiredPlayfieldWidth);
+  const targetLayoutScale = height / PREVIEW_MANIA_SKIN_STAGE_HEIGHT;
+  const playfieldWidth = Math.min(width * 0.82, desiredPlayfieldWidth * targetLayoutScale);
   const layoutScale = desiredPlayfieldWidth > 0 ? playfieldWidth / desiredPlayfieldWidth : 1;
   const averageLaneWidth = columnWidths.reduce((sum, value) => sum + value, 0) / Math.max(1, columnWidths.length) * layoutScale;
   const playfieldX = (width - playfieldWidth) / 2;
@@ -1430,8 +1432,10 @@ function ReplaySkinPreview({
   const scoreY = height * (settings.upscroll ? settings.scorePosition : 768 - settings.scorePosition) / 768;
   const comboY = height * (settings.upscroll ? settings.comboPosition : 768 - settings.comboPosition) / 768;
   const noteSize = settings.style === "circles" || settings.style === "arrows"
-    ? Math.max(18, Math.min(averageLaneWidth - 4, Math.max(28, averageLaneWidth * 0.78)))
+    ? Math.max(18, Math.min(averageLaneWidth - 4, Math.max(28, averageLaneWidth * 0.9)))
     : Math.max(8, Math.min(18, averageLaneWidth - 6));
+  const visualCenterY = (anchorY: number, halfSize: number) => settings.upscroll ? anchorY + halfSize : anchorY - halfSize;
+  const noteTopFromAnchor = (anchorY: number, size: number) => settings.upscroll ? anchorY : anchorY - size;
   const colorFor = (colors: string[], fallback: string, col: number) => colors[col] || fallback;
   const previewBarColors = fallbackPreviewBarColors(keyCount);
   const barColorFor = (col: number) => profile.tapColors[col] || previewBarColors[col] || profile.tapColor;
@@ -1463,7 +1467,7 @@ function ReplaySkinPreview({
   const tapYForColumn = (col: number) => {
     const offset = PREVIEW_TAP_Y_OFFSETS_DOWN[col % PREVIEW_TAP_Y_OFFSETS_DOWN.length];
     const downscrollY = receptorY - offset;
-    if (settings.upscroll) return receptorY + offset - noteSize;
+    if (settings.upscroll) return receptorY + offset;
     return downscrollY;
   };
 
@@ -1624,13 +1628,14 @@ function ReplaySkinPreview({
           );
         }
         if (settings.style === "circles") {
+          const receptorCenterY = visualCenterY(receptorY, noteSize / 2);
           return (
             <div
               key={`receptor-${col}`}
               className="pointer-events-none absolute rounded-full border-2"
               style={{
                 left: cx - noteSize / 2,
-                top: receptorY - noteSize / 2,
+                top: receptorCenterY - noteSize / 2,
                 width: noteSize,
                 height: noteSize,
                 borderColor: isSelected ? "#e83c90" : "#ffffff",
@@ -1645,7 +1650,7 @@ function ReplaySkinPreview({
             <ArrowShape
               key={`receptor-${col}`}
               cx={cx}
-              cy={receptorY}
+              cy={visualCenterY(receptorY, noteSize / 2)}
               size={noteSize}
               direction={getColumnArrowDirection(col, keyCount)}
               fill="transparent"
@@ -1696,7 +1701,7 @@ function ReplaySkinPreview({
                   className="pointer-events-none absolute rounded-full"
                   style={{
                     left: cx - noteSize / 2,
-                    top: y,
+                    top: noteTopFromAnchor(y, noteSize),
                     width: noteSize,
                     height: noteSize,
                     backgroundColor: color,
@@ -1710,7 +1715,7 @@ function ReplaySkinPreview({
                 <ArrowShape
                   key={`tap-${col}`}
                   cx={cx}
-                  cy={y + noteSize / 2}
+                  cy={visualCenterY(y, noteSize / 2)}
                   size={noteSize}
                   direction={getColumnArrowDirection(col, keyCount)}
                   fill={color}
@@ -1743,6 +1748,7 @@ function ReplaySkinPreview({
             const lnTailEnd = settings.upscroll ? lnHeadY + length : lnHeadY - length;
             const lnTop = Math.min(lnHeadY, lnTailEnd);
             const lnBottom = Math.max(lnHeadY, lnTailEnd);
+            const lnHeadCenterY = visualCenterY(lnHeadY, noteSize / 2);
             const columnAssets = settings.style === "bars" ? profile.assets.columns[col] : undefined;
             if (columnAssets?.lnHead || columnAssets?.lnBody || columnAssets?.lnTail) {
               const headAsset = columnAssets.lnHead ?? columnAssets.tap;
@@ -1806,7 +1812,7 @@ function ReplaySkinPreview({
                     className="absolute rounded-full"
                     style={{
                       left: cx - noteSize / 2,
-                      top: lnHeadY - noteSize / 2,
+                      top: lnHeadCenterY - noteSize / 2,
                       width: noteSize,
                       height: noteSize,
                       backgroundColor: headColor,
@@ -1818,22 +1824,24 @@ function ReplaySkinPreview({
             }
             if (settings.style === "arrows") {
               const bodyWidth = Math.max(14, noteSize * 0.68);
+              const bodyTop = Math.min(lnHeadCenterY, lnTailEnd);
+              const bodyBottom = Math.max(lnHeadCenterY, lnTailEnd);
               return (
                 <div key={`ln-${col}`} className="pointer-events-none">
                   <div
                     className="absolute"
                     style={{
                       left: cx - bodyWidth / 2,
-                      top: lnTop,
+                      top: bodyTop,
                       width: bodyWidth,
-                      height: lnBottom - lnTop,
+                      height: bodyBottom - bodyTop,
                       backgroundColor: settings.lnBodyColor,
-                      borderRadius: bodyWidth / 2,
+                      borderRadius: `${bodyWidth / 2}px ${bodyWidth / 2}px 0 0`,
                     }}
                   />
                   <ArrowShape
                     cx={cx}
-                    cy={lnHeadY}
+                    cy={lnHeadCenterY}
                     size={noteSize}
                     direction={getColumnArrowDirection(col, keyCount)}
                     fill={headColor}
