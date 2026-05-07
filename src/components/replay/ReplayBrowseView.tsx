@@ -526,6 +526,36 @@ function PlayerBeatmapLookup({
   }, [userId]);
 
   const replayableScores = useMemo(() => playerScores.filter((s) => scoreHasReplay(s)), [playerScores]);
+  const renderSelectedScores = () => (
+    <div className="relative border-t border-osu-b3/25 bg-osu-b4">
+      {loadingScores ? (
+        <div className="flex items-center justify-center gap-2 py-4">
+          <div className="w-4 h-4 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
+          <span className="text-xs text-osu-f1">Checking scores...</span>
+        </div>
+      ) : scoresLoaded && replayableScores.length > 0 ? (
+        <div>
+          <div className="px-4 py-2 bg-osu-b5/30 border-b border-osu-b3/15">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-osu-f1">
+              {replayableScores.length} replay{replayableScores.length !== 1 ? "s" : ""} available
+            </span>
+          </div>
+          {replayableScores.map((score) => (
+            <PlayerBeatmapScoreRow key={score.id} score={score} onOpen={() => onOpenScore(score)} />
+          ))}
+          {playerScores.length > replayableScores.length && (
+            <div className="px-4 py-2 text-[10px] text-osu-f1/80 bg-osu-b5/10 border-t border-osu-b3/10">
+              {playerScores.length - replayableScores.length} other score{playerScores.length - replayableScores.length !== 1 ? "s" : ""} found, but no replay is available
+            </div>
+          )}
+        </div>
+      ) : scoresLoaded ? (
+        <div className="text-center py-4 text-osu-f1 text-xs">
+          No scores on this difficulty
+        </div>
+      ) : null}
+    </div>
+  );
 
   return (
     <motion.div
@@ -620,41 +650,10 @@ function PlayerBeatmapLookup({
                     <div className="text-[10px] text-osu-f1">No mania difficulties</div>
                   )}
                 </div>
+                {isActive && selectedDiffId && renderSelectedScores()}
               </div>
             );
           })}
-        </div>
-      )}
-
-      {/* Player scores on selected difficulty */}
-      {selectedDiffId && (
-        <div className="border-t border-osu-b3/25">
-          {loadingScores ? (
-            <div className="flex items-center justify-center gap-2 py-4">
-              <div className="w-4 h-4 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
-              <span className="text-xs text-osu-f1">Checking scores...</span>
-            </div>
-          ) : scoresLoaded && replayableScores.length > 0 ? (
-            <div>
-              <div className="px-4 py-2 bg-osu-b5/30 border-b border-osu-b3/15">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-osu-f1">
-                  {replayableScores.length} replay{replayableScores.length !== 1 ? "s" : ""} available
-                </span>
-              </div>
-              {replayableScores.map((score) => (
-                <PlayerBeatmapScoreRow key={score.id} score={score} onOpen={() => onOpenScore(score)} />
-              ))}
-              {playerScores.length > replayableScores.length && (
-                <div className="px-4 py-2 text-[10px] text-osu-f1/80 bg-osu-b5/10 border-t border-osu-b3/10">
-                  {playerScores.length - replayableScores.length} other score{playerScores.length - replayableScores.length !== 1 ? "s" : ""} found, but no replay is available
-                </div>
-              )}
-            </div>
-          ) : scoresLoaded ? (
-            <div className="text-center py-4 text-osu-f1 text-xs">
-              No scores on this difficulty
-            </div>
-          ) : null}
         </div>
       )}
 
