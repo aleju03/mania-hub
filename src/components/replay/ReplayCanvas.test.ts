@@ -71,6 +71,17 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("private buildFallbackLifeBarFrames(events: ReplayJudgementEvent[])");
   });
 
+  it("does not replace stable replay scoring with sampled intervals or final score headers", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).not.toContain("buildStableReplayScoringSegments");
+    expect(source).not.toContain("expectedFinalJudgmentCounts");
+    expect(source).not.toContain("getDisplayJudgmentCounts");
+    expect(source).toContain("allowLegacyScoreReconciliation: false");
+    expect(source).not.toContain("allowLegacyScoreReconciliation: this.ruleset.accuracyMode === \"stable\"");
+    expect(source).toContain("return calculateReplayAccuracy(this.judgmentCounts, this.ruleset.accuracyMode);");
+  });
+
   it("can hide the replay life bar for chart previews", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "../../routes/maps.tsx"), "utf8");
 

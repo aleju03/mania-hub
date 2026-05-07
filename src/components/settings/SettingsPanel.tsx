@@ -387,14 +387,12 @@ function DansPanel({
 }) {
   return (
     <div className="space-y-6">
-      <PanelGroup label="Score cards">
-        <ToggleRow
-          label="Show dan estimates"
-          description="Display estimated dan badges on score cards"
-          checked={showDanEstimates}
-          onChange={onShowDanEstimatesChange}
-        />
-      </PanelGroup>
+      <ToggleRow
+        label="Show dan estimates"
+        description="If you care about Dans"
+        checked={showDanEstimates}
+        onChange={onShowDanEstimatesChange}
+      />
     </div>
   );
 }

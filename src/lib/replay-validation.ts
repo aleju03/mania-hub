@@ -400,9 +400,12 @@ function getJudgmentAssignmentCost(
     getLifeBarDropScore(lifeBarFrames, event.time) * 4,
     getNearbyComboBreakScore(comboBreakTimes, event.time),
   );
+  const offsetWeight = Math.min(200, Math.abs(event.offsetMs)) * 0.25;
   let cost = Math.abs(targetJudgment - currentJudgment) * 10 + (explicitlyPossible ? 0 : 500);
 
   if (targetJudgment === currentJudgment) cost -= 20;
+  if (targetJudgment > currentJudgment) cost -= offsetWeight;
+  else if (targetJudgment < currentJudgment) cost += offsetWeight;
 
   if (targetJudgment === 6) {
     cost += timingEvidence > 0 ? -1000 - timingEvidence * 1000 : 300;
@@ -473,6 +476,7 @@ function reconcileEventsToExpectedCounts(
   expectedCounts: ReplayHitCounts,
   lifeBarFrames?: ReplayLifeBarFrame[],
   comboBreakTimes?: number[],
+  allowOutsidePossibleAfterTime?: number,
 ): ReplayJudgementEvent[] | null {
   const current = replayHitCountsToArray(countReplayJudgements(events));
   const target = replayHitCountsToArray(expectedCounts);
@@ -495,17 +499,38 @@ function reconcileEventsToExpectedCounts(
     const possible = uniqueCountedJudgments(events[index].possibleJudgments);
     for (let targetJudgment = 1; targetJudgment <= 6; targetJudgment++) {
       if (targetJudgment === judgment || deficits[targetJudgment] <= 0) continue;
+      const outsideExplicitPossibility = possible.length > 0 && !possible.includes(targetJudgment as Exclude<Judgment, 0>);
+      if (
+        outsideExplicitPossibility &&
+        (allowOutsidePossibleAfterTime == null || events[index].time < allowOutsidePossibleAfterTime)
+      ) {
+        continue;
+      }
 
-      const isExplicitlyPossible = possible.includes(targetJudgment as Exclude<Judgment, 0>);
-      const cost = (isExplicitlyPossible ? 0 : 100)
+      const isExplicitlyPossible = !outsideExplicitPossibility && possible.includes(targetJudgment as Exclude<Judgment, 0>);
+      const cost = (isExplicitlyPossible ? 0 : outsideExplicitPossibility ? 1000 : 100)
         + getJudgmentAssignmentCost(events[index], targetJudgment as Exclude<Judgment, 0>, lifeBarFrames, comboBreakTimes);
       candidatesByJudgment[targetJudgment] ??= [];
       candidatesByJudgment[targetJudgment].push({ cost, index });
     }
   }
 
-  for (const candidates of Object.values(candidatesByJudgment)) {
-    candidates.sort((a, b) => a.cost - b.cost || a.index - b.index);
+  for (const [targetJudgment, candidates] of Object.entries(candidatesByJudgment)) {
+    const target = Number(targetJudgment);
+    candidates.sort((a, b) => {
+      if (a.cost !== b.cost) return a.cost - b.cost;
+
+      const aEvent = events[a.index];
+      const bEvent = events[b.index];
+      const aOffset = Math.abs(aEvent.offsetMs);
+      const bOffset = Math.abs(bEvent.offsetMs);
+      const aCurrent = isCountedJudgment(aEvent.judgment) ? aEvent.judgment : target;
+      const bCurrent = isCountedJudgment(bEvent.judgment) ? bEvent.judgment : target;
+
+      if (target > aCurrent || target > bCurrent) return bOffset - aOffset;
+      if (target < aCurrent || target < bCurrent) return aOffset - bOffset;
+      return a.index - b.index;
+    });
   }
 
   for (let targetJudgment = 1; targetJudgment <= 6; targetJudgment++) {
@@ -536,6 +561,16 @@ export function resolveReplayJudgementEvents(
   expectedCounts: ReplayHitCounts,
   options: { allowLegacyScoreReconciliation?: boolean; comboBreakTimes?: number[]; lifeBarFrames?: ReplayLifeBarFrame[] } = {},
 ): { events: ReplayJudgementEvent[]; mode: "none" | "ambiguity" | "score-header"; resolved: boolean } {
+  const firstAccuracyBreakTime = events.find((event) => isCountedJudgment(event.judgment) && event.judgment > 2)?.time;
+  const reconcileLegacyScoreHeader = () => options.allowLegacyScoreReconciliation
+    ? reconcileEventsToExpectedCounts(
+        events,
+        expectedCounts,
+        options.lifeBarFrames,
+        options.comboBreakTimes,
+        firstAccuracyBreakTime,
+      )
+    : null;
   const fixedCounts = [0, 0, 0, 0, 0, 0, 0];
   const ambiguous: Exclude<Judgment, 0>[][] = [];
   const ambiguousEventIndexes: number[] = [];
@@ -554,9 +589,7 @@ export function resolveReplayJudgementEvents(
   }
 
   if (ambiguous.length === 0) {
-    const reconciled = options.allowLegacyScoreReconciliation
-      ? reconcileEventsToExpectedCounts(events, expectedCounts, options.lifeBarFrames, options.comboBreakTimes)
-      : null;
+    const reconciled = reconcileLegacyScoreHeader();
     return reconciled
       ? { events: reconciled, mode: "score-header", resolved: true }
       : { events, mode: "none", resolved: false };
@@ -566,17 +599,13 @@ export function resolveReplayJudgementEvents(
   const remainingTarget = target.map((count, index) => count - fixedCounts[index]);
 
   if (remainingTarget.slice(1).some((count) => count < 0)) {
-    const reconciled = options.allowLegacyScoreReconciliation
-      ? reconcileEventsToExpectedCounts(events, expectedCounts, options.lifeBarFrames, options.comboBreakTimes)
-      : null;
+    const reconciled = reconcileLegacyScoreHeader();
     return reconciled
       ? { events: reconciled, mode: "score-header", resolved: true }
       : { events, mode: "none", resolved: false };
   }
   if (remainingTarget.slice(1).reduce((sum, count) => sum + count, 0) !== ambiguous.length) {
-    const reconciled = options.allowLegacyScoreReconciliation
-      ? reconcileEventsToExpectedCounts(events, expectedCounts, options.lifeBarFrames, options.comboBreakTimes)
-      : null;
+    const reconciled = reconcileLegacyScoreHeader();
     return reconciled
       ? { events: reconciled, mode: "score-header", resolved: true }
       : { events, mode: "none", resolved: false };
@@ -591,9 +620,7 @@ export function resolveReplayJudgementEvents(
     options.comboBreakTimes,
   ) ?? assignAmbiguousJudgments(ambiguous, remainingTarget);
   if (!assigned) {
-    const reconciled = options.allowLegacyScoreReconciliation
-      ? reconcileEventsToExpectedCounts(events, expectedCounts, options.lifeBarFrames, options.comboBreakTimes)
-      : null;
+    const reconciled = reconcileLegacyScoreHeader();
     return reconciled
       ? { events: reconciled, mode: "score-header", resolved: true }
       : { events, mode: "none", resolved: false };

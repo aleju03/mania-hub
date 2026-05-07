@@ -658,6 +658,13 @@ function ReplayViewer({
     () => (scoreInfo ? getScoreDisplayValues(scoreInfo) : null),
     [scoreInfo],
   );
+  const replayUsesLazerScoring = useMemo(() => {
+    if (!scoreInfo) return false;
+    if (scoreInfo.legacy_score_id != null || (scoreInfo.legacy_total_score != null && scoreInfo.legacy_total_score > 0)) {
+      return false;
+    }
+    return displayScoreValues?.isLazer ?? false;
+  }, [displayScoreValues?.isLazer, scoreInfo]);
   const keypressHeatmap = useMemo(() => {
     const frames = replay.frames;
     if (frames.length < 2) return [];
@@ -991,7 +998,7 @@ function ReplayViewer({
           beatmap?.notes ?? [],
           {
             isConvert: scoreInfo?.beatmap?.convert ?? false,
-            isLazer: displayScoreValues?.isLazer ?? false,
+            isLazer: replayUsesLazerScoring,
             od: beatmap?.od,
             showInputOverlay: showInputOverlayRef.current,
             mods: modAcronyms,
@@ -1077,7 +1084,7 @@ function ReplayViewer({
         rendererRef.current = null;
       }
     };
-  }, [replay, beatmap, initialTime, modRate, modAcronyms, displayScoreValues, scoreInfo?.beatmap?.convert, applyOverlaySettings]);
+  }, [replay, beatmap, initialTime, modRate, modAcronyms, replayUsesLazerScoring, scoreInfo?.beatmap?.convert, applyOverlaySettings]);
 
   // Detect when the renderer reaches the end on its own (no more frames) and
   // flip isPlaying back. ReplayProgressBar polls the renderer independently

@@ -1,4 +1,4 @@
-import { Application, Container, FillGradient, Graphics, GraphicsPath, Matrix, Sprite, Text, Texture } from "pixi.js";
+import { Application, Assets, Container, FillGradient, Graphics, GraphicsPath, Matrix, Sprite, Text, Texture } from "pixi.js";
 import type { ReplayFrame, ReplayLifeBarFrame } from "../../lib/types";
 import type { ManiaNote, ManiaScrollVelocity } from "../../lib/beatmap-parser";
 import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgementEvent, ReplayNoteState } from "../../lib/mania-replay-judgement";
@@ -45,6 +45,10 @@ const JUDGMENT_LABELS: Record<number, string> = {
 const HOLD_VISUAL_GRACE_MS = 60;
 const BACKGROUND_FADE_DURATION_MS = 180;
 const KEY_KPS_WINDOW_MS = 1000;
+const REPLAY_JUDGEMENT_ASSET_HEIGHT_RATIO = 0.055;
+const REPLAY_JUDGEMENT_POP_DURATION_MS = 280;
+const REPLAY_JUDGEMENT_HOLD_DURATION_MS = 80;
+const REPLAY_JUDGEMENT_FADE_DURATION_MS = 80;
 const MANIA_MAX_TIME_RANGE = 11485;
 const MANIA_REFERENCE_HEIGHT = 768;
 const MANIA_SKIN_STAGE_HEIGHT = 480;
@@ -107,6 +111,13 @@ function colorWithAlpha(color: string, alpha: number): string {
   const g = (value >> 8) & 255;
   const b = value & 255;
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function easeOutElastic(t: number): number {
+  const clamped = Math.max(0, Math.min(1, t));
+  if (clamped === 0 || clamped === 1) return clamped;
+  const c4 = (2 * Math.PI) / 3;
+  return Math.pow(2, -10 * clamped) * Math.sin((clamped * 10 - 0.75) * c4) + 1;
 }
 
 interface RendererOptions {
@@ -181,6 +192,8 @@ export class ManiaReplayRenderer {
   private skinSpritePool: Sprite[] = [];
   private skinSpritePoolCursor = 0;
   private skinTextureCache = new Map<string, Texture>();
+  private skinTextureLoadPromises = new Map<string, Promise<Texture | null>>();
+  private skinTextureFailedSources = new Set<string>();
   private backgroundLayer = new Container();
   private backgroundSprite: Sprite | null = null;
   private previousBackgroundSprite: Sprite | null = null;
@@ -416,7 +429,7 @@ export class ManiaReplayRenderer {
       : null;
     this.judgmentEvents = options?.expectedCounts
       ? resolveReplayJudgementEvents(simulated.events, options.expectedCounts, {
-          allowLegacyScoreReconciliation: this.ruleset.accuracyMode === "stable",
+          allowLegacyScoreReconciliation: false,
           comboBreakTimes: rawStableComboEvents
             ?.filter((event) => event.kind === "break")
             .map((event) => event.time),
@@ -2449,12 +2462,21 @@ export class ManiaReplayRenderer {
 
     if (this.lastJudgment > 0) {
       const timeSince = this.currentTime - this.lastJudgmentTime;
-      if (timeSince < 400) {
-        const alpha = Math.max(0, 1 - timeSince / 400);
+      const judgementDuration = REPLAY_JUDGEMENT_POP_DURATION_MS
+        + REPLAY_JUDGEMENT_HOLD_DURATION_MS
+        + REPLAY_JUDGEMENT_FADE_DURATION_MS;
+      if (timeSince < judgementDuration) {
+        const fadeStart = REPLAY_JUDGEMENT_POP_DURATION_MS + REPLAY_JUDGEMENT_HOLD_DURATION_MS;
+        const fadeProgress = timeSince <= fadeStart
+          ? 0
+          : Math.max(0, Math.min(1, (timeSince - fadeStart) / REPLAY_JUDGEMENT_FADE_DURATION_MS));
+        const alpha = 1 - fadeProgress;
+        const popProgress = Math.max(0, Math.min(1, timeSince / REPLAY_JUDGEMENT_POP_DURATION_MS));
+        const animationScale = 0.8 + 0.2 * easeOutElastic(popProgress);
         const judgmentAsset = this.getJudgementAsset(this.lastJudgment);
-        const y = scoreY - timeSince * 0.03;
+        const y = scoreY;
         if (judgmentAsset) {
-          const targetHeight = this.getHudAssetHeight(judgmentAsset, h * 0.075, layout);
+          const targetHeight = this.getHudAssetHeight(judgmentAsset, h * REPLAY_JUDGEMENT_ASSET_HEIGHT_RATIO, layout) * animationScale;
           const targetWidth = this.getAssetWidthForHeight(judgmentAsset, targetHeight, targetHeight * 2);
           this.drawSkinImage(judgmentAsset, playfieldCenterX, y, targetWidth, targetHeight, 0.5, 0.5, alpha);
         } else if (this.skinSettings.judgementSet === DEFAULT_REPLAY_JUDGEMENT_SET) {
@@ -2463,7 +2485,7 @@ export class ManiaReplayRenderer {
             playfieldCenterX,
             y,
             {
-              fontSize: Math.max(16, h * 0.035),
+              fontSize: Math.max(16, h * 0.035) * animationScale,
               fill: JUDGMENT_COLORS[this.lastJudgment],
               fontWeight: "700",
               anchorX: 0.5,
@@ -3185,6 +3207,8 @@ export class ManiaReplayRenderer {
   ) {
     if (width <= 0 || height <= 0 || alpha <= 0) return;
     const texture = this.getTexture(asset);
+    if (texture === Texture.EMPTY) return;
+
     let sprite = this.skinSpritePool[this.skinSpritePoolCursor];
     if (!sprite) {
       sprite = new Sprite(texture);
@@ -3207,9 +3231,36 @@ export class ManiaReplayRenderer {
   private getTexture(asset: ReplaySkinImageAsset): Texture {
     const cached = this.skinTextureCache.get(asset.src);
     if (cached) return cached;
-    const texture = Texture.from(asset.src);
-    this.skinTextureCache.set(asset.src, texture);
-    return texture;
+
+    if (Assets.cache.has(asset.src)) {
+      const texture = Assets.get<Texture>(asset.src);
+      this.skinTextureCache.set(asset.src, texture);
+      return texture;
+    }
+
+    this.loadSkinTexture(asset.src);
+    return Texture.EMPTY;
+  }
+
+  private loadSkinTexture(src: string) {
+    if (this.skinTextureFailedSources.has(src) || this.skinTextureLoadPromises.has(src)) return;
+
+    const promise = Assets.load<Texture>(src)
+      .then((texture) => {
+        if (!texture) return null;
+        this.skinTextureCache.set(src, texture);
+        return texture;
+      })
+      .catch(() => {
+        this.skinTextureFailedSources.add(src);
+        return null;
+      })
+      .finally(() => {
+        this.skinTextureLoadPromises.delete(src);
+        if (!this.destroyed) this.render();
+      });
+
+    this.skinTextureLoadPromises.set(src, promise);
   }
 
   private prewarmSkinTextures() {

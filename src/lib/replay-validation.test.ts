@@ -403,4 +403,47 @@ describe("replay validation", () => {
       countMiss: 1,
     });
   });
+
+  it("does not front-load stable score-header reconciliation onto clean early hits", () => {
+    const events: ReplayJudgementEvent[] = [
+      { column: 0, judgment: 1, noteIndex: 0, offsetMs: 0, part: "note", possibleJudgments: [1, 2], time: 1000 },
+      { column: 1, judgment: 1, noteIndex: 1, offsetMs: 92, part: "note", possibleJudgments: [1, 2], time: 1100 },
+      { column: 2, judgment: 6, noteIndex: 2, offsetMs: 171, part: "note", time: 38000 },
+      { column: 3, judgment: 1, noteIndex: 3, offsetMs: 16, part: "note", possibleJudgments: [1, 2], time: 39000 },
+      { column: 0, judgment: 1, noteIndex: 4, offsetMs: 18, part: "note", possibleJudgments: [1, 2], time: 40000 },
+    ];
+
+    const resolved = resolveReplayJudgementEvents(events, {
+      countGeki: 2,
+      count300: 0,
+      countKatu: 1,
+      count100: 1,
+      count50: 0,
+      countMiss: 1,
+    }, { allowLegacyScoreReconciliation: true });
+
+    expect(resolved.resolved).toBe(true);
+    expect(resolved.mode).toBe("score-header");
+    expect(resolved.events.map((event) => event.judgment)).toEqual([1, 1, 6, 4, 3]);
+  });
+
+  it("does not force stable score-header reconciliation outside explicit replay ambiguity", () => {
+    const events: ReplayJudgementEvent[] = [
+      { column: 0, judgment: 1, noteIndex: 0, offsetMs: 0, part: "note", possibleJudgments: [1, 2], time: 1000 },
+      { column: 1, judgment: 1, noteIndex: 1, offsetMs: -2, part: "note", possibleJudgments: [1, 2], time: 1100 },
+      { column: 2, judgment: 1, noteIndex: 2, offsetMs: -16, part: "note", possibleJudgments: [1, 2], time: 1200 },
+    ];
+
+    const resolved = resolveReplayJudgementEvents(events, {
+      countGeki: 2,
+      count300: 0,
+      countKatu: 1,
+      count100: 0,
+      count50: 0,
+      countMiss: 0,
+    }, { allowLegacyScoreReconciliation: true });
+
+    expect(resolved.resolved).toBe(false);
+    expect(resolved.events.map((event) => event.judgment)).toEqual([1, 1, 1]);
+  });
 });
