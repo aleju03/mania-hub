@@ -63,6 +63,21 @@ const EMPTY_IDS: number[] = [];
 const EMPTY_SCORES: LeanTrackerScore[] = [];
 const EMPTY_SCORE_GAINS: Record<number, { fetchedAt: number; value: number }> = {};
 
+function getTrackerUserBatch(
+  userIds: number[],
+  users: Array<{ id: number; username: string; avatar_url: string; country_code: string }>,
+  batchSize: number,
+  batchIndex: number,
+) {
+  const start = (batchIndex * batchSize) % Math.max(1, userIds.length);
+  const batchUserIds = userIds.slice(start, start + batchSize);
+  const batchUserIdSet = new Set(batchUserIds);
+  return {
+    userIds: batchUserIds,
+    users: users.filter((user) => batchUserIdSet.has(user.id)),
+  };
+}
+
 function ScoresPage() {
   const { country } = Route.useSearch();
   const fallbackCountry = useSelectedCountry();
@@ -100,6 +115,17 @@ function ScoresPage() {
   const trackerPpGainEntries = useAppStore((state) => state.trackerPpGainsByCountry[selectedCountry] ?? EMPTY_SCORE_GAINS);
   const setTrackerPpGains = useAppStore((state) => state.setTrackerPpGains);
   const countryName = getCountryName(selectedCountry);
+  const trackerUsers = useMemo(
+    () => rankings?.ranking
+      .filter((entry: { user: { is_active?: boolean } }) => entry.user.is_active !== false)
+      .map((entry) => ({
+        id: entry.user.id,
+        username: entry.user.username,
+        avatar_url: entry.user.avatar_url,
+        country_code: entry.user.country_code,
+      })) ?? [],
+    [rankings],
+  );
 
   useEffect(() => {
     setUserIds(trackedUserIds);
@@ -176,6 +202,7 @@ function ScoresPage() {
     if (userIds.length === 0 || initialRefreshDone || initialFetchInFlightRef.current) return;
 
     const shouldRefresh =
+      feedScores.length === 0 ||
       !feedScoresFetchedAt || isCacheStale(feedScoresFetchedAt, CLIENT_CACHE_TTL.scoresFeed);
 
     if (!shouldRefresh) {
@@ -192,6 +219,7 @@ function ScoresPage() {
     const BATCH = 10;
     const requestedCountry = selectedCountry;
     const requestedUserIds = userIds;
+    const requestedUsers = trackerUsers;
 
     initialFetchInFlightRef.current = true;
     setInitialFetching(true);
@@ -201,8 +229,9 @@ function ScoresPage() {
       for (let b = 0; b < totalBatches; b++) {
         if (cancelled) return;
         try {
+          const batch = getTrackerUserBatch(requestedUserIds, requestedUsers, BATCH, b);
           const result = await getCountryRecentScores({
-            data: { userIds: requestedUserIds, batchSize: BATCH, batchIndex: b, recentLimit: 20 },
+            data: { userIds: batch.userIds, users: batch.users, batchSize: BATCH, batchIndex: 0, recentLimit: 20, source: "backfill" },
           });
           if (cancelled) return;
           if (result.scores.length > 0) addFeedScores(requestedCountry, result.scores);
@@ -227,7 +256,7 @@ function ScoresPage() {
   // addFeedScores writes both inside the loop, and those writes must not cancel
   // the remaining batches of this initial refresh.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userIds, initialRefreshDone, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains]);
+  }, [userIds, trackerUsers, initialRefreshDone, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains]);
 
   const poll = useCallback(async () => {
     if (!isPolling || userIds.length === 0) return;
@@ -240,8 +269,9 @@ function ScoresPage() {
       const batchSize = 10;
       const totalBatches = Math.max(1, Math.ceil(userIds.length / batchSize));
       const batchIndex = Math.floor(Date.now() / 60_000) % totalBatches;
+      const batch = getTrackerUserBatch(userIds, trackerUsers, batchSize, batchIndex);
       const result = await getCountryRecentScores({
-        data: { userIds, batchSize, batchIndex, recentLimit: 20 },
+        data: { userIds: batch.userIds, users: batch.users, batchSize, batchIndex: 0, recentLimit: 20, source: "live" },
       });
       if (result.scores.length > 0) addFeedScores(selectedCountry, result.scores);
       if (Object.keys(result.gains).length > 0) setTrackerPpGains(selectedCountry, result.gains);
@@ -252,7 +282,7 @@ function ScoresPage() {
         setPolling(false);
       }
     }
-  }, [isPolling, userIds, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains]);
+  }, [isPolling, userIds, trackerUsers, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains]);
 
   useEffect(() => {
     if (!isPolling) return;

@@ -185,7 +185,13 @@ const HOME_POPOFFS_CACHE_TTL = 10 * 60 * 1000;
 const COUNTRY_POPOFFS_CACHE_TTL = 90 * 1000;
 const COUNTRY_POPOFFS_CACHE_VERSION = 4;
 const TRACKER_RECENT_SCORES_CACHE_TTL = 45 * 1000;
-const TRACKER_RECENT_SCORES_CACHE_VERSION = 2;
+const TRACKER_RECENT_SCORES_CACHE_VERSION = 3;
+const OSC_RECENT_SCORES_CACHE_TTL = 15 * 1000;
+const OSC_RECENT_SCORES_LIMIT = 1000;
+const OSC_RECENT_SCORES_PAGES = 3;
+const OSC_FETCH_TIMEOUT_MS = 8_000;
+const OSC_BEATMAP_METADATA_CACHE_TTL = 14 * 24 * 60 * 60 * 1000;
+const OSC_BEATMAP_METADATA_CONCURRENCY = 6;
 const COUNTRY_TOP_PLAYS_REFRESH_TTL = 3 * 60 * 1000;
 const COUNTRY_TOP_PLAYS_REFRESH_LOCK_TTL = 90 * 1000;
 const COUNTRY_TOP_PLAYS_RETENTION_MS = 31 * 24 * 60 * 60 * 1000;
@@ -340,6 +346,7 @@ const userPromiseCache = new Map<string, Promise<OsuUser>>();
 const userScoresListPromiseCache = new Map<string, Promise<OsuScore[]>>();
 const rankHistoryPromiseCache = new Map<number, Promise<number[] | null>>();
 const bestScoresWindowPromiseCache = new Map<string, Promise<OsuScore[]>>();
+const oscRecentScoresPromiseCache = new Map<string, Promise<OscScore[]>>();
 const MIXED_SCORE_USER_IDS = new Set<number>([
   23341349, // happy amke sure
   25914429, // jaimito
@@ -365,6 +372,55 @@ interface ScorePpGainLookup {
 interface CachedScorePpGain {
   pp: number;
   ppGain: number;
+}
+
+interface TrackerUserSummary {
+  id: number;
+  username: string;
+  avatar_url: string;
+  country_code: string;
+}
+
+interface OscScore {
+  id: number;
+  legacy_score_id?: number | null;
+  user_id: number;
+  accuracy: number;
+  beatmap_id: number;
+  build_id?: number | null;
+  mods?: OsuScore["mods"];
+  score?: number;
+  total_score?: number;
+  classic_total_score?: number;
+  legacy_total_score?: number;
+  max_combo: number;
+  passed: boolean;
+  ranked?: boolean;
+  rank: string;
+  statistics?: OsuScore["statistics"];
+  pp?: number | null;
+  ruleset_id?: number;
+  created_at?: string;
+  started_at?: string | null;
+  ended_at?: string;
+  replay?: boolean;
+  has_replay?: boolean;
+  is_perfect_combo?: boolean;
+  legacy_perfect?: boolean;
+  processed?: boolean;
+  type?: string;
+}
+
+interface OscScoresResponse {
+  success?: boolean;
+  meta?: {
+    count?: number;
+    cursors?: {
+      newer?: string | null;
+      older?: string | null;
+    } | null;
+  };
+  scores?: OscScore[];
 }
 
 function scorePpGainCacheKey(scoreId: number, pp: number): string {
@@ -501,6 +557,28 @@ function parseHomePlayers(value: unknown, max = MAX_HOME_USERS): HomePreviewPlay
     });
   }
   return players;
+}
+
+function parseTrackerUsers(value: unknown, max = MAX_BATCH_USERS): TrackerUserSummary[] {
+  if (value == null) return [];
+  if (!Array.isArray(value)) throw new Error("Invalid users payload.");
+  if (value.length > max) throw new Error(`User list is limited to ${max} users.`);
+
+  const seen = new Set<number>();
+  const users: TrackerUserSummary[] = [];
+  for (const raw of value) {
+    const input = asInputRecord(raw);
+    const id = parseOsuId(input.id, "user id");
+    if (seen.has(id)) continue;
+    seen.add(id);
+    users.push({
+      id,
+      username: parseString(input.username, "username", 64, "Unknown"),
+      avatar_url: String(input.avatar_url ?? "").slice(0, 512),
+      country_code: String(input.country_code ?? "").trim().toUpperCase().slice(0, 2),
+    });
+  }
+  return users;
 }
 
 function normalizeUserKeyPayload(data: unknown): { key: string } {
@@ -642,16 +720,24 @@ function normalizeSearchUsersPayload(data: unknown): { query: string } {
 
 function normalizeCountryRecentScoresPayload(data: unknown): {
   userIds: number[];
+  users: TrackerUserSummary[];
   batchSize?: number;
   batchIndex?: number;
   recentLimit?: number;
+  source?: "backfill" | "live";
 } {
   const input = asInputRecord(data);
+  const source = input.source == null || input.source === "" ? undefined : String(input.source);
+  if (source != null && source !== "backfill" && source !== "live") {
+    throw new Error("Invalid tracker score source.");
+  }
   return {
     userIds: parseUserIds(input.userIds, MAX_BATCH_USERS),
+    users: parseTrackerUsers(input.users, MAX_BATCH_USERS),
     batchSize: parseBoundedInt(input.batchSize, "batchSize", { min: 1, max: 50, fallback: 5 }),
     batchIndex: parseBoundedInt(input.batchIndex, "batchIndex", { min: 0, max: 500, fallback: 0 }),
     recentLimit: parseBoundedInt(input.recentLimit, "recentLimit", { min: 1, max: 100, fallback: 20 }),
+    source: source as "backfill" | "live" | undefined,
   };
 }
 
@@ -1239,6 +1325,229 @@ export const getRankings = createServerFn({ method: "GET" })
     });
   });
 
+function getOscBaseUrl(): string | null {
+  if (process.env.OSC_TRACKER_ENABLED === "0" || process.env.OSC_TRACKER_DISABLED === "1") {
+    return null;
+  }
+  const baseUrl = (process.env.OSC_BASE_URL ?? "https://osc.kaysting.dev").trim().replace(/\/+$/, "");
+  return baseUrl || null;
+}
+
+async function fetchPublicJsonWithTimeout<T>(url: string, timeoutMs: number): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    return await response.json() as T;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function getOscScoreTimeMs(score: OscScore): number {
+  const timestamp = score.ended_at ?? score.created_at ?? "";
+  return timestamp ? new Date(timestamp).getTime() : 0;
+}
+
+async function fetchOscRecentScoresPage(before?: string | null): Promise<OscScoresResponse> {
+  const baseUrl = getOscBaseUrl();
+  if (!baseUrl) throw new Error("oSC tracker feed is disabled.");
+
+  const params = new URLSearchParams({ limit: String(OSC_RECENT_SCORES_LIMIT) });
+  if (before) params.set("before", before);
+  return fetchPublicJsonWithTimeout<OscScoresResponse>(
+    `${baseUrl}/api/scores/mania?${params.toString()}`,
+    OSC_FETCH_TIMEOUT_MS,
+  );
+}
+
+async function fetchOscRecentScores(): Promise<OscScore[]> {
+  const cacheKey = `osc-recent-scores:mania:v1:${OSC_RECENT_SCORES_LIMIT}:${OSC_RECENT_SCORES_PAGES}`;
+  const pending = oscRecentScoresPromiseCache.get(cacheKey);
+  if (pending) return pending;
+
+  const request = fetchWithCacheLock(cacheKey, OSC_RECENT_SCORES_CACHE_TTL, async () => {
+    const scores: OscScore[] = [];
+    const seen = new Set<number>();
+    let before: string | null | undefined;
+
+    for (let page = 0; page < OSC_RECENT_SCORES_PAGES; page++) {
+      const response = await fetchOscRecentScoresPage(before);
+      if (response.success === false) {
+        throw new Error("oSC returned an unsuccessful response.");
+      }
+      const pageScores = response.scores ?? [];
+      for (const score of pageScores) {
+        if (!score || (score.ruleset_id != null && score.ruleset_id !== 3)) continue;
+        if (!Number.isFinite(score.id) || seen.has(score.id)) continue;
+        seen.add(score.id);
+        scores.push(score);
+      }
+
+      const older = response.meta?.cursors?.older;
+      if (!older || pageScores.length === 0) break;
+      before = older;
+    }
+
+    return scores.sort((a, b) => {
+      const timeDelta = getOscScoreTimeMs(b) - getOscScoreTimeMs(a);
+      return timeDelta !== 0 ? timeDelta : b.id - a.id;
+    });
+  }).finally(() => {
+    oscRecentScoresPromiseCache.delete(cacheKey);
+  });
+
+  oscRecentScoresPromiseCache.set(cacheKey, request);
+  return request;
+}
+
+async function getCachedBeatmapMetadataForTracker(
+  beatmapId: number,
+): Promise<{ beatmap: OsuBeatmap; beatmapset: OsuBeatmapset } | null> {
+  const cacheKey = `tracker-beatmap-metadata:v1:${beatmapId}`;
+  return fetchWithCacheLock(cacheKey, OSC_BEATMAP_METADATA_CACHE_TTL, async () => {
+    const beatmap = await osuFetch<OsuBeatmap>(
+      `/beatmaps/${beatmapId}`,
+      undefined,
+      { caller: "trackerBeatmapMetadata:beatmap" },
+    );
+    const beatmapset = await osuFetch<OsuBeatmapset>(
+      `/beatmapsets/${beatmap.beatmapset_id}`,
+      undefined,
+      { caller: "trackerBeatmapMetadata:beatmapset" },
+    );
+    return { beatmap, beatmapset };
+  }).catch((error) => {
+    console.warn("[osu] failed to hydrate oSC beatmap metadata", {
+      beatmapId,
+      error: getErrorMessage(error),
+    });
+    return null;
+  });
+}
+
+async function getTrackerUserSummary(
+  userId: number,
+  usersById: ReadonlyMap<number, TrackerUserSummary>,
+): Promise<TrackerUserSummary | null> {
+  const known = usersById.get(userId);
+  if (known) return known;
+
+  try {
+    const user = await getCachedUser(String(userId));
+    return {
+      id: user.id,
+      username: user.username,
+      avatar_url: user.avatar_url,
+      country_code: user.country_code,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function scoreNumberFromOsc(score: OscScore): number {
+  return score.score
+    ?? score.legacy_total_score
+    ?? score.classic_total_score
+    ?? score.total_score
+    ?? 0;
+}
+
+function hydrateOscScore(
+  score: OscScore,
+  user: TrackerUserSummary,
+  metadata: { beatmap: OsuBeatmap; beatmapset: OsuBeatmapset },
+): OsuScore {
+  return {
+    id: score.id,
+    legacy_score_id: score.legacy_score_id,
+    user_id: score.user_id,
+    accuracy: score.accuracy,
+    beatmap_id: score.beatmap_id,
+    build_id: score.build_id,
+    mods: score.mods ?? [],
+    score: scoreNumberFromOsc(score),
+    total_score: score.total_score,
+    classic_total_score: score.classic_total_score,
+    legacy_total_score: score.legacy_total_score,
+    max_combo: score.max_combo,
+    passed: score.passed,
+    ranked: score.ranked,
+    rank: score.rank,
+    statistics: score.statistics ?? {},
+    pp: score.pp ?? null,
+    beatmap: metadata.beatmap,
+    beatmapset: metadata.beatmapset,
+    user,
+    created_at: score.created_at,
+    started_at: score.started_at,
+    ended_at: score.ended_at,
+    replay: score.replay,
+    has_replay: score.has_replay,
+    is_perfect_combo: score.is_perfect_combo,
+    legacy_perfect: score.legacy_perfect,
+    processed: score.processed,
+    type: score.type,
+  };
+}
+
+async function fetchOscCountryRecentScores(
+  userIds: number[],
+  options?: { batchSize?: number; batchIndex?: number; recentLimit?: number; users?: TrackerUserSummary[] },
+): Promise<OsuScore[] | null> {
+  if (!getOscBaseUrl()) return null;
+
+  const batch = getCountryRecentScoresBatchUserIds(userIds, options);
+  if (batch.length === 0) return [];
+
+  const batchUserIds = new Set(batch);
+  const usersById = new Map((options?.users ?? []).map((user) => [user.id, user]));
+  const maxScores = Math.max(1, batch.length * (options?.recentLimit ?? 20));
+  const rawScores = await fetchOscRecentScores();
+  const matched = rawScores
+    .filter((score) => batchUserIds.has(score.user_id))
+    .filter((score) => Number.isFinite(score.beatmap_id) && score.beatmap_id > 0)
+    .slice(0, maxScores);
+
+  if (matched.length === 0) return [];
+
+  const uniqueBeatmapIds = [...new Set(matched.map((score) => score.beatmap_id))];
+  const metadataEntries = await mapWithConcurrency(
+    uniqueBeatmapIds,
+    OSC_BEATMAP_METADATA_CONCURRENCY,
+    async (beatmapId) => [beatmapId, await getCachedBeatmapMetadataForTracker(beatmapId)] as const,
+  );
+  const metadataByBeatmapId = new Map(metadataEntries.filter((entry): entry is readonly [number, {
+    beatmap: OsuBeatmap;
+    beatmapset: OsuBeatmapset;
+  }] => entry[1] !== null));
+
+  const userEntries = await mapWithConcurrency(
+    [...new Set(matched.map((score) => score.user_id))],
+    OSC_BEATMAP_METADATA_CONCURRENCY,
+    async (userId) => [userId, await getTrackerUserSummary(userId, usersById)] as const,
+  );
+  const hydratedUsersById = new Map(userEntries.filter((entry): entry is readonly [number, TrackerUserSummary] => entry[1] !== null));
+
+  const scores: OsuScore[] = [];
+  for (const score of matched) {
+    const user = hydratedUsersById.get(score.user_id);
+    const metadata = metadataByBeatmapId.get(score.beatmap_id);
+    if (!user || !metadata) continue;
+    scores.push(hydrateOscScore(score, user, metadata));
+  }
+
+  if (scores.length === 0) return null;
+  return scores;
+}
+
 async function fetchCountryRecentScores(
   userIds: number[],
   options?: { batchSize?: number; batchIndex?: number; recentLimit?: number },
@@ -1277,11 +1586,12 @@ function getCountryRecentScoresBatchUserIds(
 
 function getTrackerRecentScoresCacheKey(
   userIds: number[],
-  options?: { batchSize?: number; batchIndex?: number; recentLimit?: number },
+  options?: { batchSize?: number; batchIndex?: number; recentLimit?: number; source?: "backfill" | "live" },
 ): string {
   const batchUserIds = getCountryRecentScoresBatchUserIds(userIds, options);
   return [
     `tracker-recent-scores:v${TRACKER_RECENT_SCORES_CACHE_VERSION}`,
+    options?.source ?? "live",
     options?.recentLimit ?? 20,
     batchUserIds.join(","),
   ].join(":");
@@ -1338,9 +1648,21 @@ function toLeanTrackerScore(score: OsuScore): LeanTrackerScore {
 
 async function fetchCountryRecentScoresWithGains(
   userIds: number[],
-  options?: { batchSize?: number; batchIndex?: number; recentLimit?: number },
+  options?: { batchSize?: number; batchIndex?: number; recentLimit?: number; users?: TrackerUserSummary[]; source?: "backfill" | "live" },
 ): Promise<CountryRecentScoresResponse> {
-  const scores = await fetchCountryRecentScores(userIds, options);
+  let scores: OsuScore[];
+  if (options?.source === "backfill") {
+    scores = await fetchCountryRecentScores(userIds, options);
+  } else {
+    try {
+      scores = await fetchOscCountryRecentScores(userIds, options) ?? await fetchCountryRecentScores(userIds, options);
+    } catch (error) {
+      console.warn("[osu] oSC tracker feed failed; falling back to osu! recent scores", {
+        error: getErrorMessage(error),
+      });
+      scores = await fetchCountryRecentScores(userIds, options);
+    }
+  }
   const rankedTargets = Array.from(
     new Map(
       scores
@@ -2193,7 +2515,7 @@ export const searchUsers = createServerFn({ method: "GET" })
 
 export const getCountryRecentScores = createServerFn({ method: "GET" })
   .inputValidator(normalizeCountryRecentScoresPayload)
-  .handler(async ({ data }: { data: { userIds: number[]; batchSize?: number; batchIndex?: number; recentLimit?: number } }) => {
+  .handler(async ({ data }: { data: { userIds: number[]; users?: TrackerUserSummary[]; batchSize?: number; batchIndex?: number; recentLimit?: number; source?: "backfill" | "live" } }) => {
     edgeCache(30, 120);
     const cacheKey = getTrackerRecentScoresCacheKey(data.userIds, data);
     return fetchWithCacheLock(cacheKey, TRACKER_RECENT_SCORES_CACHE_TTL, () =>
