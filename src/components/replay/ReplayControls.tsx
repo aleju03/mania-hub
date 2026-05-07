@@ -296,11 +296,13 @@ function InputOverlayMenu({
 
   const activeBtn = "bg-osu-pink text-white";
   const inactiveBtn = "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3";
+  const anyInputVisualization = showInputOverlay || inputOverlayKeyHistory;
 
   return (
     <div ref={containerRef} className="relative inline-flex items-stretch">
       <button
         onClick={onToggleInputOverlay}
+        title="Toggle field input overlay"
         className={`pl-2.5 pr-2 py-1 rounded-l text-[10px] font-semibold cursor-pointer transition-colors ${
           showInputOverlay ? activeBtn : inactiveBtn
         }`}
@@ -313,7 +315,7 @@ function InputOverlayMenu({
         aria-expanded={open}
         title="Input overlay options"
         className={`px-1 py-1 rounded-r border-l border-osu-b4/40 cursor-pointer transition-colors ${
-          showInputOverlay ? activeBtn : inactiveBtn
+          anyInputVisualization ? activeBtn : inactiveBtn
         }`}
       >
         <ChevronDown className={`h-3 w-3 transition-transform ${open ? "" : "rotate-180"}`} strokeWidth={2.5} />
@@ -331,7 +333,7 @@ function InputOverlayMenu({
               onClick={onToggleInputOverlay}
               className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 hover:bg-osu-b4 cursor-pointer"
             >
-              <span>Show overlay</span>
+              <span>Field overlay</span>
               <CheckMark on={showInputOverlay} />
             </button>
             <button
@@ -344,14 +346,13 @@ function InputOverlayMenu({
             </button>
             <button
               onClick={onToggleInputOverlayKeyHistory}
-              disabled={!showInputOverlay}
-              className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 hover:bg-osu-b4 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 hover:bg-osu-b4 cursor-pointer"
             >
               <span>Key history</span>
               <CheckMark on={inputOverlayKeyHistory} />
             </button>
             <div className="my-1 h-px bg-osu-b2" />
-            <label className={`flex items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 ${showInputOverlay ? "cursor-pointer hover:bg-osu-b4" : "opacity-40 cursor-not-allowed"}`}>
+            <label className={`flex items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 ${anyInputVisualization ? "cursor-pointer hover:bg-osu-b4" : "opacity-40 cursor-not-allowed"}`}>
               <span>Color</span>
               <span className="relative inline-flex items-center gap-1.5">
                 <span className="text-[10px] tabular-nums text-osu-f1">{inputOverlayColor.toUpperCase()}</span>
@@ -362,7 +363,7 @@ function InputOverlayMenu({
                 <input
                   type="color"
                   value={inputOverlayColor}
-                  disabled={!showInputOverlay}
+                  disabled={!anyInputVisualization}
                   onChange={(e) => onSetInputOverlayColor(e.target.value)}
                   className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
                   aria-label="Input overlay color"

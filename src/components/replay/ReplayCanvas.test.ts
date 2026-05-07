@@ -52,7 +52,8 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("const startY = seg.start <= this.currentTime && seg.end > this.currentTime");
     expect(source).toContain("const endY = rawEndY;");
     expect(source).toContain("Math.min(Math.max(startY, endY), judgmentY)");
-    expect(source).toContain("if (this.frames.length === 0 || !this.showInputOverlay || this.inputOverlayOnly || this.inputOverlayKeyHistory) return;");
+    expect(source).toContain("if (this.frames.length === 0 || !this.showInputOverlay || this.inputOverlayOnly) return;");
+    expect(source).toContain("if (!this.inputOverlayKeyHistory || this.frames.length === 0) return;");
   });
 
   it("renders the recorded replay life bar beside the playfield", () => {

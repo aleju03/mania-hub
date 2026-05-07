@@ -933,7 +933,7 @@ export class ManiaReplayRenderer {
     this.renderBackground(layout);
     this.renderSegmentOverlays(layout);
     if (this.skinSettings.keysUnderNotes) this.renderReceptors(layout);
-    if (this.showInputOverlay && this.inputOverlayOnly && !this.inputOverlayKeyHistory) {
+    if (this.showInputOverlay && this.inputOverlayOnly) {
       this.renderInputOverlayNotes(layout);
     } else {
       this.renderNotes(layout);
@@ -1218,7 +1218,7 @@ export class ManiaReplayRenderer {
 
   private renderSegmentOverlays(layout: Layout) {
     const { judgmentY, pixelsPerMs, h } = layout;
-    if (this.frames.length === 0 || !this.showInputOverlay || this.inputOverlayOnly || this.inputOverlayKeyHistory) return;
+    if (this.frames.length === 0 || !this.showInputOverlay || this.inputOverlayOnly) return;
 
     const currentScrollPosition = this.getScrollPosition(this.currentTime);
     const getVisualDelta = (targetTime: number) => this.getScrollPosition(targetTime) - currentScrollPosition;
@@ -1490,7 +1490,7 @@ export class ManiaReplayRenderer {
     _keyBoxHeight: number,
     keyGap: number,
   ) {
-    if (!this.showInputOverlay || !this.inputOverlayKeyHistory || this.frames.length === 0) return;
+    if (!this.inputOverlayKeyHistory || this.frames.length === 0) return;
 
     const hudScale = this.getHudScale(layout);
     const bottom = keyRowY - 7 * hudScale;
