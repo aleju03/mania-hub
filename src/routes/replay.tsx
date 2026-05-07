@@ -1536,6 +1536,7 @@ function ReplayViewer({
         inputOverlayOnly={inputOverlayOnly}
         inputOverlayKeyHistory={inputOverlayKeyHistory}
         inputOverlayColor={inputOverlayColor}
+        keypressOverlayEnabled={overlaySettings.keypresses.enabled}
         skinSettingsOpen={skinSettingsOpen}
         scrollSpeed={scrollSpeed}
         bgDim={bgDim}

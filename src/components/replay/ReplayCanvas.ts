@@ -5,7 +5,7 @@ import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgeme
 import { buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "../../lib/mania-replay-judgement";
 import { DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
 import type { ReplayOverlayId, ReplayOverlaySettings } from "../../lib/replay-overlays";
-import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplaySkinProfile, normalizeReplaySkinSettings } from "../../lib/replay-skin";
+import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_REPLAY_SKIN_SETTINGS, REPLAY_SKIN_DEFAULT_HIT_POSITION, getReplayComboFontStyle, getReplayJudgementSetAssets, getReplaySkinProfile, normalizeReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayComboFontStyle, ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayHitCounts } from "../../lib/replay-validation";
 import { buildStableReplayComboEvents, resolveReplayJudgementEvents } from "../../lib/replay-validation";
@@ -2370,7 +2370,7 @@ export class ManiaReplayRenderer {
           const targetHeight = this.getHudAssetHeight(judgmentAsset, h * 0.075, layout);
           const targetWidth = this.getAssetWidthForHeight(judgmentAsset, targetHeight, targetHeight * 2);
           this.drawSkinImage(judgmentAsset, playfieldCenterX, y, targetWidth, targetHeight, 0.5, 0.5, alpha);
-        } else {
+        } else if (this.skinSettings.judgementSet === DEFAULT_REPLAY_JUDGEMENT_SET) {
           this.addText(
             JUDGMENT_LABELS[this.lastJudgment],
             playfieldCenterX,
@@ -2590,7 +2590,7 @@ export class ManiaReplayRenderer {
   }
 
   private getJudgementAsset(judgment: Judgment): ReplaySkinImageAsset | undefined {
-    const assets = this.skinProfile.assets.judgements;
+    const assets = getReplayJudgementSetAssets(this.skinSettings.judgementSet) ?? this.skinProfile.assets.judgements;
     switch (judgment) {
       case 1:
         return assets.hit300g;
@@ -3138,6 +3138,12 @@ export class ManiaReplayRenderer {
     }
     for (const judgement of Object.values(assets.judgements)) {
       if (judgement) this.getTexture(judgement);
+    }
+    const judgementSetAssets = getReplayJudgementSetAssets(this.skinSettings.judgementSet);
+    if (judgementSetAssets) {
+      for (const judgement of Object.values(judgementSetAssets)) {
+        if (judgement) this.getTexture(judgement);
+      }
     }
     if (assets.combo) {
       for (const digit of assets.combo.digits) {

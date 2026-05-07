@@ -21,6 +21,7 @@ interface ReplayControlsProps {
   inputOverlayOnly: boolean;
   inputOverlayKeyHistory: boolean;
   inputOverlayColor: string;
+  keypressOverlayEnabled: boolean;
   skinSettingsOpen: boolean;
   scrollSpeed: number;
   bgDim: number;
@@ -57,6 +58,7 @@ export function ReplayControls({
   inputOverlayOnly,
   inputOverlayKeyHistory,
   inputOverlayColor,
+  keypressOverlayEnabled,
   skinSettingsOpen,
   scrollSpeed,
   bgDim,
@@ -181,6 +183,7 @@ export function ReplayControls({
           inputOverlayOnly={inputOverlayOnly}
           inputOverlayKeyHistory={inputOverlayKeyHistory}
           inputOverlayColor={inputOverlayColor}
+          keypressOverlayEnabled={keypressOverlayEnabled}
           onToggleInputOverlay={onToggleInputOverlay}
           onToggleInputOverlayOnly={onToggleInputOverlayOnly}
           onToggleInputOverlayKeyHistory={onToggleInputOverlayKeyHistory}
@@ -260,6 +263,7 @@ function InputOverlayMenu({
   inputOverlayOnly,
   inputOverlayKeyHistory,
   inputOverlayColor,
+  keypressOverlayEnabled,
   onToggleInputOverlay,
   onToggleInputOverlayOnly,
   onToggleInputOverlayKeyHistory,
@@ -269,6 +273,7 @@ function InputOverlayMenu({
   inputOverlayOnly: boolean;
   inputOverlayKeyHistory: boolean;
   inputOverlayColor: string;
+  keypressOverlayEnabled: boolean;
   onToggleInputOverlay: () => void;
   onToggleInputOverlayOnly: () => void;
   onToggleInputOverlayKeyHistory: () => void;
@@ -296,7 +301,8 @@ function InputOverlayMenu({
 
   const activeBtn = "bg-osu-pink text-white";
   const inactiveBtn = "bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3";
-  const anyInputVisualization = showInputOverlay || inputOverlayKeyHistory;
+  const keyHistoryVisible = keypressOverlayEnabled && inputOverlayKeyHistory;
+  const anyInputVisualization = showInputOverlay || keyHistoryVisible;
 
   return (
     <div ref={containerRef} className="relative inline-flex items-stretch">
@@ -344,13 +350,15 @@ function InputOverlayMenu({
               <span>Notes only</span>
               <CheckMark on={inputOverlayOnly} />
             </button>
-            <button
-              onClick={onToggleInputOverlayKeyHistory}
-              className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 hover:bg-osu-b4 cursor-pointer"
-            >
-              <span>Key history</span>
-              <CheckMark on={inputOverlayKeyHistory} />
-            </button>
+            {keypressOverlayEnabled && (
+              <button
+                onClick={onToggleInputOverlayKeyHistory}
+                className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 hover:bg-osu-b4 cursor-pointer"
+              >
+                <span>Key history</span>
+                <CheckMark on={inputOverlayKeyHistory} />
+              </button>
+            )}
             <div className="my-1 h-px bg-osu-b2" />
             <label className={`flex items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 ${anyInputVisualization ? "cursor-pointer hover:bg-osu-b4" : "opacity-40 cursor-not-allowed"}`}>
               <span>Color</span>

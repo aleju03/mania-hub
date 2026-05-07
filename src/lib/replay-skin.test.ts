@@ -53,6 +53,7 @@ describe("replay skin settings", () => {
       scorePosition: 438,
       comboPosition: 485,
       comboFontSet: "set1",
+      judgementSet: "skin",
       keymodeProfiles: {},
     });
   });
@@ -230,6 +231,7 @@ describe("replay skin settings", () => {
       scorePosition: 438,
       comboPosition: 485,
       comboFontSet: "set1",
+      judgementSet: "skin",
       keymodeProfiles: {},
     });
     expect(readReplaySkinSettings()).toEqual({
@@ -253,16 +255,19 @@ describe("replay skin settings", () => {
       scorePosition: 438,
       comboPosition: 485,
       comboFontSet: "set1",
+      judgementSet: "skin",
       keymodeProfiles: {},
     });
   });
 
   it("normalizes and shares combo font sets", () => {
-    const settings = normalizeReplaySkinSettings({ comboFontSet: "set17" });
+    const settings = normalizeReplaySkinSettings({ comboFontSet: "set17", judgementSet: "set18" });
 
     expect(settings.comboFontSet).toBe("set17");
+    expect(settings.judgementSet).toBe("set18");
     expect(normalizeReplaySkinSettings({ comboFontSet: "set99" }).comboFontSet).toBe("set1");
-    expect(parseReplaySkinShareKey(createReplaySkinShareKey("combo", settings))?.settings.comboFontSet).toBe("set17");
+    expect(normalizeReplaySkinSettings({ judgementSet: "set99" }).judgementSet).toBe("skin");
+    expect(parseReplaySkinShareKey(createReplaySkinShareKey("combo", settings))?.settings).toEqual(settings);
   });
 
   it("returns defaults when storage cannot be parsed", () => {

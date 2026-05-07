@@ -2,6 +2,32 @@ export const REPLAY_SKIN_STORAGE_KEY = "mania-hub-replay-skin-v1";
 export const REPLAY_SKIN_PRESETS_STORAGE_KEY = "mania-hub-replay-skin-presets-v1";
 
 export type ReplaySkinStyle = "bars" | "circles" | "arrows";
+export type ReplayJudgementSet =
+  | "skin"
+  | "set01"
+  | "set02"
+  | "set03"
+  | "set06"
+  | "set07"
+  | "set08"
+  | "set09"
+  | "set10"
+  | "set12"
+  | "set14"
+  | "set18"
+  | "set19"
+  | "set20"
+  | "set23"
+  | "set24"
+  | "set25"
+  | "set26"
+  | "set27"
+  | "set28"
+  | "set29"
+  | "set30"
+  | "set31"
+  | "set32"
+  | "set34";
 export type ReplayComboFontSet =
   | "set1"
   | "set2"
@@ -107,6 +133,7 @@ export interface ReplaySkinSettings {
   scorePosition: number;
   comboPosition: number;
   comboFontSet: ReplayComboFontSet;
+  judgementSet: ReplayJudgementSet;
   keymodeProfiles: Record<string, ReplaySkinKeymodeProfile>;
 }
 
@@ -165,6 +192,7 @@ export const REPLAY_COMBO_FONT_SETS: ReplayComboFontSet[] = [
 ];
 
 export const DEFAULT_REPLAY_COMBO_FONT_SET: ReplayComboFontSet = "set1";
+export const DEFAULT_REPLAY_JUDGEMENT_SET: ReplayJudgementSet = "skin";
 
 const REPLAY_COMBO_FONT_STYLES: Record<ReplayComboFontSet, ReplayComboFontStyle> = {
   set1: { family: "Torus, sans-serif", weight: "700" },
@@ -190,6 +218,60 @@ const REPLAY_COMBO_FONT_STYLES: Record<ReplayComboFontSet, ReplayComboFontStyle>
   set21: { family: "\"PT Sans\", sans-serif", weight: "400" },
   set22: { family: "\"Noto Sans\", Lato, sans-serif", weight: "600" },
   set23: { family: "\"Noto Sans\", \"Open Sans\", sans-serif", weight: "600" },
+};
+
+export const REPLAY_JUDGEMENT_SETS: ReplayJudgementSet[] = [
+  "set01",
+  "set02",
+  "set03",
+  "set06",
+  "set07",
+  "set08",
+  "set09",
+  "set10",
+  "set12",
+  "set14",
+  "set18",
+  "set19",
+  "set20",
+  "set23",
+  "set24",
+  "set25",
+  "set26",
+  "set27",
+  "set28",
+  "set29",
+  "set30",
+  "set31",
+  "set32",
+  "set34",
+];
+
+const REPLAY_JUDGEMENT_SET_ASSETS: Record<Exclude<ReplayJudgementSet, "skin">, ReplaySkinJudgementAssets> = {
+  set01: judgementSetAssets("01", ["hit0", "hit100", "hit200", "hit300", "hit50"]),
+  set02: judgementSetAssets("02", ["hit0", "hit100", "hit200", "hit300", "hit50"]),
+  set03: judgementSetAssets("03", ["hit0", "hit100", "hit200", "hit300", "hit300g", "hit50"]),
+  set06: judgementSetAssets("06", ["hit0", "hit100", "hit200", "hit300", "hit50"]),
+  set07: judgementSetAssets("07", ["hit0", "hit100", "hit200", "hit300", "hit50"]),
+  set08: judgementSetAssets("08", ["hit0", "hit100", "hit200", "hit300", "hit300g", "hit50"]),
+  set09: judgementSetAssets("09", ["hit0", "hit100", "hit200", "hit300", "hit300g", "hit50"]),
+  set10: judgementSetAssets("10", ["hit0", "hit100", "hit200", "hit300", "hit300g", "hit50"]),
+  set12: judgementSetAssets("12", ["hit0", "hit100", "hit200", "hit300", "hit50"]),
+  set14: judgementSetAssets("14", ["hit0", "hit100", "hit200", "hit300", "hit300g", "hit50"]),
+  set18: judgementSetAssets("18", ["hit0", "hit100", "hit200", "hit300", "hit300g", "hit50"]),
+  set19: judgementSetAssets("19", ["hit0", "hit100", "hit200", "hit300", "hit50"]),
+  set20: judgementSetAssets("20", ["hit0", "hit100", "hit200", "hit300", "hit300g", "hit50"]),
+  set23: judgementSetAssets("23", ["hit0", "hit100", "hit200", "hit300", "hit300g", "hit50"]),
+  set24: judgementSetAssets("24", ["hit0", "hit100", "hit200", "hit300", "hit300g", "hit50"]),
+  set25: judgementSetAssets("25", ["hit0", "hit100", "hit200", "hit300", "hit300g", "hit50"]),
+  set26: judgementSetAssets("26", ["hit0", "hit100", "hit200", "hit300", "hit300g", "hit50"]),
+  set27: judgementSetAssets("27", ["hit0", "hit100", "hit200", "hit300", "hit50"]),
+  set28: judgementSetAssets("28", ["hit0", "hit100", "hit200", "hit300", "hit50"]),
+  set29: judgementSetAssets("29", ["hit0", "hit100", "hit200", "hit300", "hit300g", "hit50"]),
+  set30: judgementSetAssets("30", ["hit0", "hit100", "hit200", "hit300", "hit300g", "hit50"]),
+  set31: judgementSetAssets("31", ["hit0", "hit100", "hit200", "hit300", "hit300g", "hit50"]),
+  set32: judgementSetAssets("32", ["hit0", "hit100", "hit200", "hit300", "hit300g", "hit50"]),
+  set34: judgementSetAssets("34", ["hit0", "hit100", "hit200", "hit300", "hit300g", "hit50"]),
 };
 
 export const EMPTY_REPLAY_SKIN_ASSETS: ReplaySkinKeymodeAssets = {
@@ -232,8 +314,19 @@ export const DEFAULT_REPLAY_SKIN_SETTINGS: ReplaySkinSettings = {
   scorePosition: osuManiaStagePositionToReplayPosition(OSU_MANIA_DEFAULT_SCORE_POSITION),
   comboPosition: osuManiaStagePositionToReplayPosition(OSU_MANIA_DEFAULT_COMBO_POSITION),
   comboFontSet: DEFAULT_REPLAY_COMBO_FONT_SET,
+  judgementSet: DEFAULT_REPLAY_JUDGEMENT_SET,
   keymodeProfiles: {},
 };
+
+function judgementSetAssets(set: string, keys: Array<keyof ReplaySkinJudgementAssets>): ReplaySkinJudgementAssets {
+  return keys.reduce<ReplaySkinJudgementAssets>((assets, key) => {
+    assets[key] = {
+      name: key,
+      src: `/images/replay-judgements/set-${set}/${key}.webp`,
+    };
+    return assets;
+  }, {});
+}
 
 function normalizeHexColor(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -300,8 +393,19 @@ function normalizeReplayComboFontSet(value: unknown): ReplayComboFontSet {
     : DEFAULT_REPLAY_COMBO_FONT_SET;
 }
 
+function normalizeReplayJudgementSet(value: unknown): ReplayJudgementSet {
+  return typeof value === "string" && (value === "skin" || REPLAY_JUDGEMENT_SETS.includes(value as ReplayJudgementSet))
+    ? value as ReplayJudgementSet
+    : DEFAULT_REPLAY_JUDGEMENT_SET;
+}
+
 export function getReplayComboFontStyle(value: unknown): ReplayComboFontStyle {
   return REPLAY_COMBO_FONT_STYLES[normalizeReplayComboFontSet(value)];
+}
+
+export function getReplayJudgementSetAssets(value: unknown): ReplaySkinJudgementAssets | null {
+  const set = normalizeReplayJudgementSet(value);
+  return set === "skin" ? null : REPLAY_JUDGEMENT_SET_ASSETS[set];
 }
 
 export function osuManiaStagePositionToReplayPosition(position: number): number {
@@ -492,6 +596,7 @@ export function normalizeReplaySkinSettings(value: unknown): ReplaySkinSettings 
     scorePosition: normalizeHitPosition(raw.scorePosition ?? DEFAULT_REPLAY_SKIN_SETTINGS.scorePosition),
     comboPosition: normalizeHitPosition(raw.comboPosition ?? DEFAULT_REPLAY_SKIN_SETTINGS.comboPosition),
     comboFontSet: normalizeReplayComboFontSet(raw.comboFontSet),
+    judgementSet: normalizeReplayJudgementSet(raw.judgementSet),
     keymodeProfiles: normalizeKeymodeProfiles(raw.keymodeProfiles, fallbackProfile, persistedVersion),
   };
 }
@@ -693,6 +798,7 @@ function compactReplaySkinSettingsV3(settings: ReplaySkinSettings): Record<strin
   if (settings.scorePosition !== def.scorePosition) out.o = settings.scorePosition;
   if (settings.comboPosition !== def.comboPosition) out.p = settings.comboPosition;
   if (settings.comboFontSet !== def.comboFontSet) out.t = settings.comboFontSet;
+  if (settings.judgementSet !== def.judgementSet) out.u = settings.judgementSet;
   const profiles: Record<string, unknown> = {};
   for (const [key, profile] of Object.entries(settings.keymodeProfiles)) {
     const compact = compactKeymodeProfileV3(profile);
@@ -733,6 +839,7 @@ function expandReplaySkinSettingsV3(value: unknown): Record<string, unknown> {
     scorePosition: raw.o,
     comboPosition: raw.p,
     comboFontSet: raw.t,
+    judgementSet: raw.u,
     keymodeProfiles: profiles,
   };
 }

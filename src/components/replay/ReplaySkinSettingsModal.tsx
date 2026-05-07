@@ -15,7 +15,9 @@ import {
   OSU_MANIA_DEFAULT_COMBO_POSITION,
   OSU_MANIA_DEFAULT_SCORE_POSITION,
   REPLAY_COMBO_FONT_SETS,
+  REPLAY_JUDGEMENT_SETS,
   getReplayComboFontStyle,
+  getReplayJudgementSetAssets,
   getReplaySkinProfile,
   normalizeReplaySkinSettings,
   OSU_MANIA_MAX_HIT_POSITION,
@@ -40,7 +42,7 @@ import {
   writeReplaySkinPresets,
 } from "#/lib/replay-skin";
 import { importReplaySkinFromOsk } from "#/lib/replay-skin-import";
-import type { ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinPreset, ReplaySkinSettings, ReplaySkinStyle } from "#/lib/replay-skin";
+import type { ReplaySkinImageAsset, ReplaySkinJudgementAssets, ReplaySkinKeymodeProfile, ReplaySkinPreset, ReplaySkinSettings, ReplaySkinStyle } from "#/lib/replay-skin";
 
 const MANIA_ARROW_ICON_STYLE: CSSProperties = {
   WebkitMask: "url('/images/notes/mania-arrow-right.svg') center / contain no-repeat",
@@ -98,6 +100,15 @@ function getComboFontPreviewStyle(value: ReplaySkinSettings["comboFontSet"]): CS
     fontWeight: font.weight,
     fontStyle: font.style ?? "normal",
   };
+}
+
+function getJudgementSetLabel(set: ReplaySkinSettings["judgementSet"]): string {
+  if (set === "skin") return "Skin";
+  return `Set ${Number(set.slice(3))}`;
+}
+
+function getJudgementPreviewAsset(settings: ReplaySkinSettings): ReplaySkinImageAsset | undefined {
+  return getReplayJudgementSetAssets(settings.judgementSet)?.hit300g;
 }
 
 function applySelection(current: number[], column: number, mode: SelectionMode): number[] {
@@ -810,6 +821,13 @@ export function ReplaySkinSettingsModal({
     label: `Set ${index + 1}`,
     style: getComboFontPreviewStyle(set),
   }));
+  const judgementSetOptions = [
+    { value: "skin", label: "Skin" },
+    ...REPLAY_JUDGEMENT_SETS.map((set) => ({
+      value: set,
+      label: getJudgementSetLabel(set),
+    })),
+  ];
 
   return createPortal(
     <>
@@ -1172,6 +1190,15 @@ export function ReplaySkinSettingsModal({
                     </span>
                   </div>
                 </div>
+                <div className="rounded-lg border border-osu-b3/50 bg-osu-b5/35 p-3">
+                  <FancySelect
+                    label="Judgement set"
+                    value={draft.judgementSet}
+                    onChange={(value) => update({ judgementSet: value as ReplaySkinSettings["judgementSet"] })}
+                    options={judgementSetOptions}
+                  />
+                  <JudgementSetPreview settings={draft} />
+                </div>
               </section>
             ) : (
               <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1477,6 +1504,45 @@ function getPreviewAssetHeight(asset: ReplaySkinImageAsset, targetWidth: number,
   return Math.max(1, fallbackHeight || targetWidth);
 }
 
+const JUDGEMENT_PREVIEW_ITEMS: Array<{ assetKey: keyof ReplaySkinJudgementAssets; label: string; color: string }> = [
+  { assetKey: "hit300g", label: "MAX", color: "#b3f5ff" },
+  { assetKey: "hit300", label: "300", color: "#ffcc22" },
+  { assetKey: "hit200", label: "200", color: "#88da20" },
+  { assetKey: "hit100", label: "100", color: "#5a8fff" },
+  { assetKey: "hit50", label: "50", color: "#cc8800" },
+  { assetKey: "hit0", label: "MISS", color: "#ff4444" },
+];
+
+function JudgementSetPreview({ settings }: { settings: ReplaySkinSettings }) {
+  const assets = getReplayJudgementSetAssets(settings.judgementSet);
+  return (
+    <div className="mt-3 grid grid-cols-3 gap-2">
+      {JUDGEMENT_PREVIEW_ITEMS.map((item) => {
+        const asset = assets?.[item.assetKey];
+        return (
+          <div
+            key={item.assetKey}
+            className="flex h-14 items-center justify-center overflow-hidden rounded-lg border border-osu-b3/40 bg-black/20 px-2"
+          >
+            {asset ? (
+              <img
+                src={asset.src}
+                alt=""
+                draggable={false}
+                className="max-h-9 max-w-full object-contain"
+              />
+            ) : settings.judgementSet !== "skin" ? (
+              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-white/10" />
+            ) : (
+              <span className="text-sm font-bold" style={{ color: item.color }}>{item.label}</span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function ReplaySkinPreview({
   settings,
   profile,
@@ -1522,6 +1588,7 @@ function ReplaySkinPreview({
   const receptorY = height * (settings.upscroll ? settings.hitPosition : 768 - settings.hitPosition) / 768;
   const scoreY = height * (settings.upscroll ? settings.scorePosition : 768 - settings.scorePosition) / 768;
   const comboY = height * (settings.upscroll ? settings.comboPosition : 768 - settings.comboPosition) / 768;
+  const previewJudgementAsset = getJudgementPreviewAsset(settings);
   const noteSize = settings.style === "circles" || settings.style === "arrows"
     ? Math.max(18, Math.min(averageLaneWidth - 4, Math.max(28, averageLaneWidth * 0.9)))
     : Math.max(8, Math.min(18, averageLaneWidth - 6));
@@ -1985,17 +2052,27 @@ function ReplaySkinPreview({
       >
         1234x
       </div>
-      <div
-        className="pointer-events-none absolute flex -translate-y-1/2 items-center justify-center text-[11px] font-bold leading-none"
-        style={{
-          left: playfieldX,
-          width: playfieldWidth,
-          top: scoreY,
-          color: "#b3f5ff",
-        }}
-      >
-        MAX
-      </div>
+      {previewJudgementAsset ? (
+        <img
+          src={previewJudgementAsset.src}
+          alt=""
+          draggable={false}
+          className="pointer-events-none absolute max-h-8 -translate-x-1/2 -translate-y-1/2 object-contain"
+          style={{ left: playfieldX + playfieldWidth / 2, top: scoreY, maxWidth: playfieldWidth }}
+        />
+      ) : settings.judgementSet === "skin" ? (
+        <div
+          className="pointer-events-none absolute flex -translate-y-1/2 items-center justify-center text-[11px] font-bold leading-none"
+          style={{
+            left: playfieldX,
+            width: playfieldWidth,
+            top: scoreY,
+            color: "#b3f5ff",
+          }}
+        >
+          MAX
+        </div>
+      ) : null}
       {marqueeRect ? (
         <div
           className="pointer-events-none absolute"
