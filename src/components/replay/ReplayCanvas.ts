@@ -49,6 +49,7 @@ const REPLAY_JUDGEMENT_ASSET_HEIGHT_RATIO = 0.055;
 const REPLAY_JUDGEMENT_POP_DURATION_MS = 280;
 const REPLAY_JUDGEMENT_HOLD_DURATION_MS = 80;
 const REPLAY_JUDGEMENT_FADE_DURATION_MS = 80;
+const REPLAY_JUDGEMENT_REFERENCE_ASPECT = 256 / 72;
 const MANIA_MAX_TIME_RANGE = 11485;
 const MANIA_REFERENCE_HEIGHT = 768;
 const MANIA_SKIN_STAGE_HEIGHT = 480;
@@ -2478,7 +2479,8 @@ export class ManiaReplayRenderer {
         if (judgmentAsset) {
           const rawHeight = this.getHudAssetHeight(judgmentAsset, h * REPLAY_JUDGEMENT_ASSET_HEIGHT_RATIO, layout);
           const clampedHeight = Math.min(h * 0.085, Math.max(h * 0.04, rawHeight));
-          const targetHeight = clampedHeight * animationScale;
+          const aspectScale = this.getJudgementAspectScale(judgmentAsset);
+          const targetHeight = clampedHeight * animationScale * aspectScale;
           const targetWidth = this.getAssetWidthForHeight(judgmentAsset, targetHeight, targetHeight * 2);
           this.drawSkinImage(judgmentAsset, playfieldCenterX, y, targetWidth, targetHeight, 0.5, 0.5, alpha);
         } else if (this.skinSettings.judgementSet === DEFAULT_REPLAY_JUDGEMENT_SET) {
@@ -2698,6 +2700,19 @@ export class ManiaReplayRenderer {
   private getHudScale(layout: Layout): number {
     if (!this.fullscreenLayout) return 1;
     return Math.min(1.45, Math.max(1, layout.layoutScale * 0.85));
+  }
+
+  private getJudgementAspectScale(asset: ReplaySkinImageAsset): number {
+    const scale = asset.scale && asset.scale > 0 ? asset.scale : 1;
+    const declaredWidth = asset.width && asset.width > 0 ? asset.width / scale : 0;
+    const declaredHeight = asset.height && asset.height > 0 ? asset.height / scale : 0;
+    const texture = this.getTexture(asset);
+    const width = declaredWidth > 0 ? declaredWidth : texture.width / scale;
+    const height = declaredHeight > 0 ? declaredHeight : texture.height / scale;
+    if (!(width > 0) || !(height > 0)) return 1;
+    const aspect = width / height;
+    if (aspect <= REPLAY_JUDGEMENT_REFERENCE_ASPECT) return 1;
+    return REPLAY_JUDGEMENT_REFERENCE_ASPECT / aspect;
   }
 
   private getJudgementAsset(judgment: Judgment): ReplaySkinImageAsset | undefined {
