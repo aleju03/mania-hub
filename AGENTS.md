@@ -13,6 +13,7 @@ Important routes include `index.tsx`, `rankings.tsx`, `tracker.tsx`, `top-plays.
 ## Build, Test, and Development Commands
 
 - `npm run dev` starts the Vite dev server on port `3000`.
+- Do not run `npm run dev` or otherwise start a dev server during normal work; the user keeps it running already.
 - Do not run `npm run test` or `npm run build` unless the user explicitly asks for either command.
 - `npm run build` creates a production build and checks routing/SSR-sensitive code.
 - `npm run preview` serves the production build locally.
