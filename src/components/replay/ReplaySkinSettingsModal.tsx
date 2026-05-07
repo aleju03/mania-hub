@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Copy, FileArchive, GripHorizontal, Pencil, Plus, Settings, Trash2, Upload, X } from "lucide-react";
+import { Check, ChevronDown, Copy, FileArchive, GripHorizontal, Pencil, Plus, Settings, Trash2, Upload, X } from "lucide-react";
 
 import {
   DEFAULT_REPLAY_OVERLAY_SETTINGS,
@@ -846,7 +846,7 @@ export function ReplaySkinSettingsModal({
           </button>
         </div>
 
-        <div className={`grid min-h-0 flex-1 ${isCompactWindow ? "grid-cols-1 overflow-y-auto" : "grid-cols-[minmax(0,1fr)_300px]"}`}>
+        <div className={`grid min-h-0 flex-1 ${isCompactWindow || activeTab === "overlays" ? "grid-cols-1 overflow-y-auto" : "grid-cols-[minmax(0,1fr)_300px]"}`}>
           <div className={`space-y-4 ${isCompactWindow ? "overflow-visible p-4 sm:p-5" : "overflow-y-auto p-5"}`}>
             <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_110px]">
               <div className="min-w-0 space-y-2">
@@ -1133,7 +1133,7 @@ export function ReplaySkinSettingsModal({
                 />
               </section>
             ) : (
-              <section className="space-y-3">
+              <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {REPLAY_OVERLAY_IDS.map((id) => (
                   <ReplayOverlaySettingsRow
                     key={id}
@@ -1146,7 +1146,9 @@ export function ReplaySkinSettingsModal({
             )}
           </div>
 
-          <div className={isCompactWindow ? "border-t border-osu-b3/50 p-4 sm:p-5" : "overflow-y-auto border-l border-osu-b3/50 p-5"}>
+          <div
+            className={`${isCompactWindow ? "border-t border-osu-b3/50 p-4 sm:p-5" : "overflow-y-auto border-l border-osu-b3/50 p-5"} ${activeTab === "overlays" ? "hidden" : ""}`}
+          >
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="text-sm font-semibold text-white">Preview</span>
               <div className="grid grid-cols-2 rounded-md bg-osu-b5/70 p-0.5 text-[10px] font-bold uppercase tracking-wider">
@@ -2271,6 +2273,24 @@ const REPLAY_OVERLAY_LABELS: Record<ReplayOverlayId, string> = {
   progress: "Progress pie",
 };
 
+const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayOverlayId, string> = {
+  keypresses: "Per-column press count.",
+  kps: "Keys pressed per second.",
+  misses: "Left vs right hand miss totals.",
+  accuracy: "Current accuracy percentage.",
+  judgements: "Hit counts and unstable rate.",
+  progress: "Map completion percentage.",
+};
+
+const REPLAY_OVERLAY_PREVIEWS: Record<ReplayOverlayId, string> = {
+  keypresses: "/images/replay-overlays/keypresses.webp",
+  kps: "/images/replay-overlays/kps.webp",
+  misses: "/images/replay-overlays/misses.webp",
+  accuracy: "/images/replay-overlays/accuracy.webp",
+  judgements: "/images/replay-overlays/judgements.webp",
+  progress: "/images/replay-overlays/progress.webp",
+};
+
 function ReplayOverlaySettingsRow({
   id,
   placement,
@@ -2280,11 +2300,54 @@ function ReplayOverlaySettingsRow({
   placement: ReplayOverlaySettings[ReplayOverlayId];
   onChange: (patch: Partial<ReplayOverlaySettings[ReplayOverlayId]>) => void;
 }) {
+  const enabled = placement.enabled;
+  const toggle = () => onChange({ enabled: !enabled });
   return (
-    <div className="rounded-lg border border-osu-b3/60 bg-osu-b5/45 p-3">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-semibold text-white">{REPLAY_OVERLAY_LABELS[id]}</span>
-        <ReplaySkinSwitch checked={placement.enabled} onChange={(enabled) => onChange({ enabled })} />
+    <div
+      role="button"
+      aria-pressed={enabled}
+      tabIndex={0}
+      onClick={toggle}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          toggle();
+        }
+      }}
+      className={`group relative flex w-full cursor-pointer flex-col overflow-hidden rounded-lg border text-left transition-all ${
+        enabled
+          ? "border-osu-pink/70 bg-osu-b5/55 shadow-[0_0_0_1px_rgba(232,60,144,0.18)]"
+          : "border-osu-b3/50 bg-osu-b5/25 hover:border-osu-b2 hover:bg-osu-b5/45"
+      }`}
+    >
+      <div className="relative aspect-[16/9] w-full overflow-hidden bg-black" style={{ backgroundColor: "#000" }}>
+        <div className="absolute inset-0 bg-black" aria-hidden="true" />
+        <img
+          src={REPLAY_OVERLAY_PREVIEWS[id]}
+          alt=""
+          loading="lazy"
+          draggable={false}
+          className="relative h-full w-full object-contain"
+          style={{ backgroundColor: "#000" }}
+        />
+        <div
+          className={`absolute right-2 top-2 grid h-5 w-5 place-items-center rounded-full transition-colors ${
+            enabled
+              ? "bg-osu-pink text-white"
+              : "border border-osu-b3/70 bg-osu-b5/70 text-transparent group-hover:border-osu-b2"
+          }`}
+          aria-hidden="true"
+        >
+          <Check className="h-3 w-3" strokeWidth={3} />
+        </div>
+      </div>
+      <div className="border-t border-osu-b3/40 px-3 py-2">
+        <div className={`text-sm font-semibold ${enabled ? "text-white" : "text-osu-l1"}`}>
+          {REPLAY_OVERLAY_LABELS[id]}
+        </div>
+        <div className="mt-0.5 text-[11px] leading-snug text-osu-f1">
+          {REPLAY_OVERLAY_DESCRIPTIONS[id]}
+        </div>
       </div>
     </div>
   );

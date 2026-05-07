@@ -2135,7 +2135,7 @@ export class ManiaReplayRenderer {
     this.circle(cx, cy, radius, "#000000", 0.28);
     this.pieWedge(cx, cy, radius, progress, "#f0f0f0", 0.64);
     this.strokeCircle(cx, cy, radius, "#f0f0f0", 0.92, strokeWidth);
-    this.circle(cx, cy, Math.max(0.9, 1.25 * scale), "#f0f0f0", 0.92);
+    this.circle(cx, cy, Math.max(1.8, 2.6 * scale), "#f0f0f0", 0.92);
   }
 
   private shouldRenderCustomOverlays(layout: Layout): boolean {

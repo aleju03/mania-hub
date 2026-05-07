@@ -1442,7 +1442,7 @@ function TungTungSahurKeycap() {
     >
       <span className="absolute inset-x-5 bottom-0 h-3 rounded-full bg-black/35 blur-md transition-opacity duration-200 group-hover:opacity-90" />
       <motion.img
-        src="/images/easter-eggs/tung-tung-sahur-keycap-base.png"
+        src="/images/easter-eggs/tung-tung-sahur-keycap-base.webp"
         alt=""
         draggable={false}
         className="absolute inset-x-0 bottom-0 z-10 mx-auto w-[61%] object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.38)]"
@@ -1471,7 +1471,7 @@ function TungTungSahurKeycap() {
         transition={{ duration: actuated ? 0.04 : 0.2, ease: "easeOut" }}
       />
       <motion.img
-        src="/images/easter-eggs/tung-tung-sahur-keycap-top.png"
+        src="/images/easter-eggs/tung-tung-sahur-keycap-top.webp"
         alt=""
         draggable={false}
         className="absolute inset-x-0 bottom-[35%] z-20 mx-auto w-[78%] object-contain drop-shadow-[0_8px_14px_rgba(0,0,0,0.42)]"
@@ -1485,7 +1485,7 @@ function TungTungSahurKeycap() {
         transition={{ type: "spring", stiffness: 640, damping: 31, mass: 0.55 }}
       />
       <motion.img
-        src="/images/easter-eggs/tung-tung-sahur-keycap-base.png"
+        src="/images/easter-eggs/tung-tung-sahur-keycap-base.webp"
         alt=""
         draggable={false}
         className="absolute inset-x-0 bottom-0 z-30 mx-auto w-[61%] object-contain"
@@ -1495,7 +1495,7 @@ function TungTungSahurKeycap() {
         transition={{ type: "spring", stiffness: 520, damping: 34, mass: 0.65 }}
       />
       <motion.img
-        src="/images/easter-eggs/tung-tung-sahur-keycap-top.png"
+        src="/images/easter-eggs/tung-tung-sahur-keycap-top.webp"
         alt=""
         draggable={false}
         className="absolute inset-x-0 bottom-[35%] z-40 mx-auto w-[78%] object-contain"
@@ -1510,7 +1510,7 @@ function TungTungSahurKeycap() {
         transition={{ type: "spring", stiffness: 640, damping: 31, mass: 0.55 }}
       />
       <motion.img
-        src="/images/easter-eggs/tung-tung-sahur-keycap-top.png"
+        src="/images/easter-eggs/tung-tung-sahur-keycap-top.webp"
         alt=""
         draggable={false}
         className="absolute inset-x-0 bottom-[35%] z-40 mx-auto w-[78%] object-contain"

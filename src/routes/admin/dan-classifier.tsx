@@ -16,7 +16,7 @@ const DAN_CLASSIFIERS: Array<{ id: DanClassifierId; label: string }> = [
   { id: "daniel", label: "Daniel" },
 ];
 
-const DAN_IMAGE_EXTENSIONS: Record<string, "png" | "svg"> = {
+const DAN_IMAGE_EXTENSIONS: Record<string, "webp" | "svg"> = {
   "1": "svg",
   "2": "svg",
   "3": "svg",
@@ -27,13 +27,13 @@ const DAN_IMAGE_EXTENSIONS: Record<string, "png" | "svg"> = {
   "8": "svg",
   "9": "svg",
   "10": "svg",
-  alpha: "png",
-  beta: "png",
-  gamma: "png",
-  delta: "png",
-  epsilon: "png",
-  zeta: "png",
-  eta: "png",
+  alpha: "webp",
+  beta: "webp",
+  gamma: "webp",
+  delta: "webp",
+  epsilon: "webp",
+  zeta: "webp",
+  eta: "webp",
 };
 const NON_MAPPER_SEARCH_TOKENS = new Set([
   "4k",

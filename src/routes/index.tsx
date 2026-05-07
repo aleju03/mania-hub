@@ -243,7 +243,7 @@ function HomePage() {
     <div className="flex-1 relative overflow-hidden min-h-[calc(100vh-60px)]">
       <div className="absolute inset-0 pointer-events-none">
         <img
-          src="/images/layout/nav2-background-hue0.png"
+          src="/images/layout/nav2-background-hue0.webp"
           alt=""
           className="absolute inset-0 w-full h-full object-cover opacity-15"
           style={{ filter: "hue-rotate(calc(var(--theme-hue) * 1deg)) saturate(calc(0.6 * var(--theme-sat)))", transform: "scale(2.5)", transformOrigin: "center" }}

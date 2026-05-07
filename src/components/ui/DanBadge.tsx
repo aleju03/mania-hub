@@ -93,11 +93,11 @@ function useDanEstimate(
 
 // ── Dan image resolution ───────────────────────────────────────────────────────
 
-const DAN_IMAGE_EXTENSIONS: Record<string, "png" | "svg"> = {
+const DAN_IMAGE_EXTENSIONS: Record<string, "webp" | "svg"> = {
   "1": "svg", "2": "svg", "3": "svg", "4": "svg", "5": "svg",
   "6": "svg", "7": "svg", "8": "svg", "9": "svg", "10": "svg",
-  alpha: "png", beta: "png", gamma: "png", delta: "png",
-  epsilon: "png", zeta: "png", eta: "png",
+  alpha: "webp", beta: "webp", gamma: "webp", delta: "webp",
+  epsilon: "webp", zeta: "webp", eta: "webp",
 };
 
 function getDanImageSrc(label: string, family: string): string | null {

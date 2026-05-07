@@ -312,7 +312,7 @@ function SkinPanel({
         }
       >
         <p className="text-[12px] leading-relaxed text-osu-f1">
-          Fine-tune per-column colors, column width and spacing, hit position, and LN body color in the dedicated skin editor.
+          Customize the look and feel of replays.
         </p>
       </PanelGroup>
     </div>

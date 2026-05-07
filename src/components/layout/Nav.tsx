@@ -295,7 +295,7 @@ export function Nav() {
     <header className="fixed top-0 left-0 right-0 z-50">
       <div className="absolute inset-0 bg-osu-b6">
         <img
-          src="/images/layout/nav2-background-hue0.png"
+          src="/images/layout/nav2-background-hue0.webp"
           alt=""
           draggable={false}
           className="absolute inset-0 w-full h-full object-cover opacity-50"

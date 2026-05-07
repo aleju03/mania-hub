@@ -13,7 +13,7 @@ const PRECACHE_URLS = [
   "/fonts/extra.woff",
   "/fonts/extra.ttf",
   // Layout
-  "/images/layout/nav2-background-hue0.png",
+  "/images/layout/nav2-background-hue0.webp",
   // Grade badges
   "/images/badges/score-ranks-v2019/GradeSmall-SS-Silver.svg",
   "/images/badges/score-ranks-v2019/GradeSmall-SS.svg",
