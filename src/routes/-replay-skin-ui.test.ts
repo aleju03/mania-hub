@@ -43,6 +43,7 @@ describe("replay skin settings UI", () => {
     expect(source).toContain("Hit position");
     expect(source).toContain("ReplaySkinPreview");
     expect(source).toContain("ReplaySkinColorPanel");
+    expect(source).toContain('setOverrideKind(previewMode === "ln" && showLnHeadColorControls ? "lnHead" : "tap")');
     expect(source).toContain("Apply");
     expect(source).toContain("Cancel");
     expect(source).toContain("Reset");

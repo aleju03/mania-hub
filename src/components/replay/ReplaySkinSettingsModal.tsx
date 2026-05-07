@@ -1134,7 +1134,10 @@ export function ReplaySkinSettingsModal({
               selectedColumns={selectedColumns}
               onSelectionChange={(next) => {
                 setSelectedColumns((current) => (arraysEqualUnordered(current, next) ? current : next));
-                if (next.length > 0) setColumnEditorOpen(true);
+                if (next.length > 0) {
+                  setOverrideKind(previewMode === "ln" && showLnHeadColorControls ? "lnHead" : "tap");
+                  setColumnEditorOpen(true);
+                }
               }}
             />
             <div className="mt-2 text-[10px] text-osu-f1">
