@@ -450,6 +450,7 @@ export function ReplayProgressBar({
   rendererRef,
   heatmap,
   sliderClass,
+  className = "",
   onPointerDown,
   onPointerUp,
   onSeek,
@@ -459,6 +460,7 @@ export function ReplayProgressBar({
   rendererRef: MutableRefObject<ReplayRendererLike | null>;
   heatmap: number[];
   sliderClass: string;
+  className?: string;
   onPointerDown: () => void;
   onPointerUp: () => void;
   onSeek: (timeMs: number) => void;
@@ -484,7 +486,7 @@ export function ReplayProgressBar({
 
   return (
     <div
-      className="group relative flex items-center gap-3 px-4 pt-3 pb-1"
+      className={`group relative flex items-center gap-3 px-4 pt-3 pb-1 ${className}`}
       onContextMenu={(e) => {
         e.preventDefault();
         const r = rendererRef.current;

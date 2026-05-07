@@ -1,7 +1,7 @@
 import { createFileRoute, notFound, useCanGoBack, useNavigate, useRouter } from "@tanstack/react-router";
 import { useState, useRef, useEffect, useCallback, useMemo, type PointerEvent as ReactPointerEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { LoaderCircle, Maximize2, Minimize2, Pause, Play } from "lucide-react";
 import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores } from "../lib/osu";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
 import { getScoreDisplayValues, getScoreRate, scoreHasReplay } from "../lib/score";
@@ -1442,15 +1442,35 @@ function ReplayViewer({
             onFocusCapture={() => showFullscreenChromeTemporarily(false)}
             onBlurCapture={() => showFullscreenChromeTemporarily()}
           >
-            <ReplayProgressBar
-              rendererRef={rendererRef}
-              heatmap={keypressHeatmap}
-              sliderClass="!h-1 !bg-white/30 [&::-webkit-slider-thumb]:!h-3 [&::-webkit-slider-thumb]:!w-3 [&::-webkit-slider-thumb]:!bg-white"
-              onPointerDown={handleProgressPointerDown}
-              onPointerUp={handleProgressPointerUp}
-              onSeek={handleProgressSeek}
-              onContextMenu={() => {}}
-            />
+            <div className="flex items-center gap-2 px-2 pr-10 sm:gap-3">
+              <button
+                type="button"
+                onClick={togglePlay}
+                aria-label={isPlaying ? "Pause replay" : "Play replay"}
+                title={pendingPlay ? "Waiting for audio to load..." : isPlaying && buffering ? "Buffering..." : isPlaying ? "Pause" : "Play"}
+                className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full bg-osu-pink text-white shadow-lg shadow-black/30 transition hover:bg-osu-pink-light focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 active:scale-95"
+              >
+                {pendingPlay || (isPlaying && buffering) ? (
+                  <LoaderCircle className="h-4 w-4 animate-spin" strokeWidth={2.4} />
+                ) : isPlaying ? (
+                  <Pause className="h-4 w-4" fill="currentColor" strokeWidth={2.4} />
+                ) : (
+                  <Play className="ml-0.5 h-4 w-4" fill="currentColor" strokeWidth={2.4} />
+                )}
+              </button>
+              <div className="min-w-0 flex-1">
+                <ReplayProgressBar
+                  rendererRef={rendererRef}
+                  heatmap={keypressHeatmap}
+                  sliderClass="!h-1 !bg-white/30 [&::-webkit-slider-thumb]:!h-3 [&::-webkit-slider-thumb]:!w-3 [&::-webkit-slider-thumb]:!bg-white"
+                  className="!px-0 !pb-0 !pt-0"
+                  onPointerDown={handleProgressPointerDown}
+                  onPointerUp={handleProgressPointerUp}
+                  onSeek={handleProgressSeek}
+                  onContextMenu={() => {}}
+                />
+              </div>
+            </div>
           </div>
         )}
         {rendererError && (
