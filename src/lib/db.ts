@@ -1,12 +1,48 @@
-import { createClient } from "@libsql/client";
+import { createClient, type Client } from "@libsql/client";
 
 const url = process.env.TURSO_DATABASE_URL;
 const authToken = process.env.TURSO_AUTH_TOKEN;
 
-export const db = url && authToken
+function fetchWithoutKeepAlive(request: Request): Promise<Response> {
+  const headers = new Headers(request.headers);
+  headers.set("connection", "close");
+  return fetch(new Request(request, { headers }));
+}
+
+const rawClient = url && authToken
   ? createClient({
       url,
       authToken,
+      fetch: fetchWithoutKeepAlive,
+    })
+  : null;
+
+// Turso/libSQL's HTTP transport can trip over stale pooled sockets after idle
+// periods. The custom fetch above prevents reuse; this retry is a narrow fallback
+// for the same class of transient transport failures.
+function isTransientSocketError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /socket hang up|ECONNRESET|ETIMEDOUT|EPIPE|other side closed|fetch failed|terminated/i.test(message);
+}
+
+async function withRetry<T>(op: () => Promise<T>): Promise<T> {
+  try {
+    return await op();
+  } catch (error) {
+    if (!isTransientSocketError(error)) throw error;
+    return await op();
+  }
+}
+
+export const db: Client | null = rawClient
+  ? new Proxy(rawClient, {
+      get(target, prop, receiver) {
+        if (prop === "execute" || prop === "batch") {
+          const original = Reflect.get(target, prop, receiver) as (...args: unknown[]) => Promise<unknown>;
+          return (...args: unknown[]) => withRetry(() => original.apply(target, args));
+        }
+        return Reflect.get(target, prop, receiver);
+      },
     })
   : null;
 

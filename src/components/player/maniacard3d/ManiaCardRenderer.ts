@@ -22,6 +22,14 @@ import {
 } from "./interactions";
 import { resolveQualityProfile, type QualityProfile } from "./layout";
 import type { ManiaCardReadyData } from "./types";
+import { CARD_WORLD_HEIGHT } from "./cardGeometry";
+
+// The canvas extends past the host on every side by this factor so the card can
+// rotate past the host's bounds without getting clipped. The renderer pushes
+// the camera back to compensate, so the card keeps the same apparent size as
+// at overscan = 1.0.
+const CANVAS_OVERSCAN = 1.28;
+const CAMERA_FOV_DEG = 35;
 
 type DeviceOrientationEventWithPermission = typeof DeviceOrientationEvent & {
   requestPermission?: () => Promise<PermissionState>;
@@ -42,7 +50,7 @@ export class ManiaCardRenderer {
   private readonly mobile: boolean;
   private readonly onError?: (error: unknown) => void;
   private readonly scene = new Scene();
-  private readonly camera = new PerspectiveCamera(35, 5 / 7, 0.1, 100);
+  private readonly camera = new PerspectiveCamera(CAMERA_FOV_DEG, 5 / 7, 0.1, 100);
   private readonly group = new Group();
   private readonly quality: QualityProfile;
   private readonly interaction: InteractionState = createInteractionState();
@@ -69,12 +77,29 @@ export class ManiaCardRenderer {
     });
     this.renderer = new WebGLRenderer({ antialias: this.quality.antialias, alpha: true });
     this.renderer.setPixelRatio(this.quality.pixelRatio);
-    this.renderer.setSize(this.host.clientWidth, this.host.clientHeight);
-    this.renderer.domElement.style.display = "block";
-    this.renderer.domElement.style.width = "100%";
-    this.renderer.domElement.style.height = "100%";
-    this.host.appendChild(this.renderer.domElement);
-    this.camera.position.set(0, 0, 7);
+    this.renderer.setSize(
+      Math.max(1, Math.round(this.host.clientWidth * CANVAS_OVERSCAN)),
+      Math.max(1, Math.round(this.host.clientHeight * CANVAS_OVERSCAN)),
+    );
+    // The canvas is larger than the host so the card can rotate past the host's
+    // bounds without getting clipped (mirrors how the CSS card overflows its
+    // container when tilted). We keep the host's size for layout and position
+    // the canvas absolutely, centered, larger by CANVAS_OVERSCAN on each axis.
+    const canvas = this.renderer.domElement;
+    canvas.style.display = "block";
+    canvas.style.position = "absolute";
+    canvas.style.left = "50%";
+    canvas.style.top = "50%";
+    canvas.style.transform = "translate(-50%, -50%)";
+    canvas.style.pointerEvents = "auto";
+    this.host.appendChild(canvas);
+    // Distance derived from FOV + overscan so the card fills the host's height
+    // (not the oversized canvas). Without this the card would appear larger
+    // because the canvas covers more world space than the host. The 1.05
+    // factor preserves the small breathing-room margin the card had before.
+    const fovRad = (CAMERA_FOV_DEG * Math.PI) / 180;
+    const cameraDistance = (CARD_WORLD_HEIGHT * CANVAS_OVERSCAN * 1.05) / (2 * Math.tan(fovRad / 2));
+    this.camera.position.set(0, 0, cameraDistance);
     this.scene.add(new AmbientLight(0xffffff, 1.4));
     this.scene.add(this.group);
     this.attachPointerEvents();
@@ -116,10 +141,13 @@ export class ManiaCardRenderer {
   }
 
   resize() {
-    const width = Math.max(1, this.host.clientWidth);
-    const height = Math.max(1, this.host.clientHeight);
-    this.renderer.setSize(width, height);
-    this.camera.aspect = width / height;
+    const hostWidth = Math.max(1, this.host.clientWidth);
+    const hostHeight = Math.max(1, this.host.clientHeight);
+    const overscan = CANVAS_OVERSCAN;
+    const canvasWidth = Math.round(hostWidth * overscan);
+    const canvasHeight = Math.round(hostHeight * overscan);
+    this.renderer.setSize(canvasWidth, canvasHeight);
+    this.camera.aspect = canvasWidth / canvasHeight;
     this.camera.updateProjectionMatrix();
     this.start();
   }
