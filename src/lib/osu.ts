@@ -46,6 +46,7 @@ import {
   getPersistentCached,
   setPersistentCache,
 } from "./api";
+import type { OsuFetchContextValue } from "./api";
 import type { ReplayEndpointKind } from "./r2-cache";
 import { db, ensureCacheSchema, hasDb } from "./db";
 import { calculateApproxPpGainMap, calculateReplacementPpGain, getBoardLaneKey, getModAcronyms, getModDisplayList, getScoreDisplayValues, getScoreRate, getScoreTimestamp, getScoreUrl } from "./score";
@@ -851,7 +852,16 @@ export async function getCachedUserScores(
         offset: options.offset,
         include_fails: type === "recent" && options.includeFails ? 1 : 0,
       }),
-      { caller: `getUserScores:${type}` },
+      {
+        caller: `getUserScores:${type}`,
+        context: {
+          source: "user-score-list",
+          userId,
+          limit: options.limit,
+          offset: options.offset,
+          includeFails: type === "recent" && !!options.includeFails,
+        },
+      },
     ),
   ).finally(() => {
     userScoresListPromiseCache.delete(cacheKey);
@@ -1094,7 +1104,11 @@ function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfileInsigh
   };
 }
 
-async function fetchUserBestScoresWindow(userId: number, totalLimit = 200): Promise<OsuScore[]> {
+async function fetchUserBestScoresWindow(
+  userId: number,
+  totalLimit = 200,
+  context?: Record<string, OsuFetchContextValue>,
+): Promise<OsuScore[]> {
   const cacheKey = `user-best-scores-window:${userId}:${totalLimit}`;
   const cached = await getPersistentCached<OsuScore[]>(cacheKey);
   if (cached) return cached;
@@ -1110,7 +1124,16 @@ async function fetchUserBestScoresWindow(userId: number, totalLimit = 200): Prom
         limit: Math.min(totalLimit, 100),
         offset: 0,
       }),
-      { caller: "fetchUserBestScoresWindow:p1" },
+      {
+        caller: "fetchUserBestScoresWindow:p1",
+        context: {
+          source: "best-scores-window",
+          userId,
+          totalLimit,
+          page: 1,
+          ...context,
+        },
+      },
     );
 
     let scores = firstPage;
@@ -1123,7 +1146,16 @@ async function fetchUserBestScoresWindow(userId: number, totalLimit = 200): Prom
           limit: Math.min(totalLimit - 100, 100),
           offset: 100,
         }),
-        { caller: "fetchUserBestScoresWindow:p2" },
+        {
+          caller: "fetchUserBestScoresWindow:p2",
+          context: {
+            source: "best-scores-window",
+            userId,
+            totalLimit,
+            page: 2,
+            ...context,
+          },
+        },
       );
       scores = [...firstPage, ...secondPage];
     }
@@ -1137,13 +1169,25 @@ async function fetchUserBestScoresWindow(userId: number, totalLimit = 200): Prom
   return request;
 }
 
-async function getBeatmapUserScoresAll(beatmapId: number, userId: number): Promise<OsuScore[]> {
+async function getBeatmapUserScoresAll(
+  beatmapId: number,
+  userId: number,
+  context?: Record<string, OsuFetchContextValue>,
+): Promise<OsuScore[]> {
   const cacheKey = `beatmap-user-scores-all:v2:${beatmapId}:${userId}`;
   return fetchWithCacheLock(cacheKey, BEATMAP_USER_SCORES_ALL_CACHE_TTL, async () => {
     const response = await osuFetch<BeatmapUserScoresResponse>(
       `/beatmaps/${beatmapId}/scores/users/${userId}/all`,
       { ruleset: "mania" },
-      { caller: "getBeatmapUserScoresAll" },
+      {
+        caller: "getBeatmapUserScoresAll",
+        context: {
+          source: "beatmap-user-scores-all",
+          beatmapId,
+          userId,
+          ...context,
+        },
+      },
     );
     return response.scores ?? [];
   });
@@ -1160,7 +1204,10 @@ export const getUserBeatmapScores = createServerFn({ method: "GET" })
   })
   .handler(async ({ data }: { data: { beatmapId: number; userId: number } }) => {
     edgeCache(60, 300);
-    return getBeatmapUserScoresAll(data.beatmapId, data.userId);
+    return getBeatmapUserScoresAll(data.beatmapId, data.userId, {
+      feature: "user-beatmap-scores",
+      source: "getUserBeatmapScores",
+    });
   });
 
 function getPreviousBeatmapBestScore(scores: OsuScore[], target: ScorePpGainLookup): OsuScore | null {
@@ -1239,7 +1286,12 @@ async function calculateReplacementPpGainMapForTargets(
     APPROX_PP_GAINS_CONCURRENCY,
     async (target) => {
       try {
-        const history = await getBeatmapUserScoresAll(target.beatmapId, target.userId);
+        const history = await getBeatmapUserScoresAll(target.beatmapId, target.userId, {
+          feature: "pp-gain-fallback",
+          batchSize: uncachedTargets.length,
+          concurrency: APPROX_PP_GAINS_CONCURRENCY,
+          scoreId: target.scoreId,
+        });
         return getPreviousBeatmapBestScore(history, target);
       } catch (error) {
         console.warn("[osu] failed to fetch beatmap score history for pp gain fallback", {
@@ -1284,7 +1336,10 @@ export const getUserScoresBestWindow = createServerFn({ method: "GET" })
   .inputValidator(normalizeBestWindowPayload)
   .handler(async ({ data }: { data: { userId: number; totalLimit?: number } }) => {
     edgeCache(120, 600);
-    return fetchUserBestScoresWindow(data.userId, data.totalLimit ?? 200);
+    return fetchUserBestScoresWindow(data.userId, data.totalLimit ?? 200, {
+      feature: "user-best-window",
+      source: "getUserScoresBestWindow",
+    });
   });
 
 export const getUserProfileInsights = createServerFn({ method: "GET" })
@@ -1293,7 +1348,9 @@ export const getUserProfileInsights = createServerFn({ method: "GET" })
     edgeCache(1800, 21600);
     const cacheKey = `user-profile-insights:v${USER_PROFILE_INSIGHTS_CACHE_VERSION}:${data.userId}`;
     return fetchWithCacheLock(cacheKey, USER_PROFILE_INSIGHTS_CACHE_TTL, async () =>
-      calculateUserProfileInsights(await fetchUserBestScoresWindow(data.userId, 200)),
+      calculateUserProfileInsights(await fetchUserBestScoresWindow(data.userId, 200, {
+        feature: "profile-insights",
+      })),
     );
   });
 
@@ -1696,7 +1753,12 @@ async function fetchCountryRecentScoresWithGains(
     APPROX_PP_GAINS_CONCURRENCY,
     async ([userId, targets]) => {
       try {
-        const bestScores = await fetchUserBestScoresWindow(userId, 200);
+        const bestScores = await fetchUserBestScoresWindow(userId, 200, {
+          feature: "tracker-pp-gains",
+          groupedUsers: groupedTargets.length,
+          targetCount: targets.length,
+          concurrency: APPROX_PP_GAINS_CONCURRENCY,
+        });
         return await calculateReplacementPpGainMapForTargets(bestScores, targets);
       } catch {
         return {} as Record<number, number>;
@@ -1761,7 +1823,11 @@ async function buildHomePopoffs(players: HomePreviewPlayer[]): Promise<LeanHomeP
       APPROX_PP_GAINS_CONCURRENCY,
       async (player): Promise<FatPopoff[]> => {
         try {
-          const scores = await fetchUserBestScoresWindow(player.id, 100);
+          const scores = await fetchUserBestScoresWindow(player.id, 100, {
+            feature: "home-popoffs",
+            playerCount: topPlayersForPopoffs.length,
+            concurrency: APPROX_PP_GAINS_CONCURRENCY,
+          });
           return scores
             .filter((score) => {
               const age = Date.now() - getTimestampMs(score);
@@ -1826,7 +1892,9 @@ async function buildCountryPopoffsForPlayer(
   windowMs: number,
   options: { knownPpGainsByScoreId?: ReadonlyMap<number, CachedScorePpGain> } = {},
 ): Promise<CountryPopoff[]> {
-  const scores = await fetchUserBestScoresWindow(player.id, 100);
+  const scores = await fetchUserBestScoresWindow(player.id, 100, {
+    feature: "home-profile-preview",
+  });
   const relevantScores = scores.filter((score) => {
     const age = Date.now() - getTimestampMs(score);
     return age < windowMs && score.pp != null && score.pp > 0;
@@ -2647,7 +2715,9 @@ async function buildCountryFarmed(users: MapsUser[]): Promise<CountryMapsFarmedS
         users,
         MAPS_FETCH_CONCURRENCY,
         async (user) => {
-          const bestScores = await fetchUserBestScoresWindow(user.id, 200).catch(() => [] as OsuScore[]);
+          const bestScores = await fetchUserBestScoresWindow(user.id, 200, {
+            feature: "country-top-plays-refresh",
+          }).catch(() => [] as OsuScore[]);
           return { user, bestScores };
         },
       );
@@ -3463,7 +3533,12 @@ async function probeCountryBoardLanes(
     SNIPES_PROBE_CONCURRENCY,
     async (player) => {
       try {
-        const scores = await getBeatmapUserScoresAll(beatmapId, player.id);
+        const scores = await getBeatmapUserScoresAll(beatmapId, player.id, {
+          feature: "snipes-probe-country-board",
+          rosterSize: roster.length,
+          concurrency: SNIPES_PROBE_CONCURRENCY,
+          beatmapsetId: meta.beatmapset.id,
+        });
         return { player, scores };
       } catch {
         return { player, scores: [] as OsuScore[] };

@@ -776,7 +776,11 @@ async function getToken(): Promise<string> {
   return tokenCache.access_token;
 }
 
-export type OsuFetchOptions = { caller?: string };
+export type OsuFetchContextValue = string | number | boolean | null | undefined;
+export type OsuFetchOptions = {
+  caller?: string;
+  context?: Record<string, OsuFetchContextValue>;
+};
 
 type BeatmapFileSource = "osu" | "catboy";
 type BeatmapFileCacheValue = {
@@ -794,12 +798,45 @@ function truncateErrorBody(text: string, max = 240): string {
   return `${trimmed.slice(0, max)}…`;
 }
 
+function getOsuRateSnapshot(): {
+  perMin: number;
+  remaining: number | null;
+  limit: number | null;
+  updatedAgoMs: number | null;
+} {
+  const state = getOsuRateState();
+  const now = Date.now();
+  const windowCutoff = now - RATE_WINDOW_MS;
+  let perMin = 0;
+  for (const c of state.recentCalls) {
+    if (c.ts >= windowCutoff) perMin += 1;
+  }
+  return {
+    perMin,
+    remaining: state.lastRateLimit?.remaining ?? null,
+    limit: state.lastRateLimit?.limit ?? null,
+    updatedAgoMs: state.lastRateLimit ? now - state.lastRateLimit.at : null,
+  };
+}
+
+function cleanOsuFetchContext(
+  context: Record<string, OsuFetchContextValue> | undefined,
+): Record<string, string | number | boolean | null> | undefined {
+  if (!context) return undefined;
+  const entries = Object.entries(context)
+    .filter(([, value]) => value !== undefined)
+    .slice(0, 16)
+    .map(([key, value]) => [key, value ?? null] as const);
+  return entries.length ? Object.fromEntries(entries) : undefined;
+}
+
 export async function osuFetch<T = unknown>(
   path: string,
   params?: Record<string, string | number | undefined>,
   options?: OsuFetchOptions,
 ): Promise<T> {
   const caller = options?.caller ?? "unknown";
+  const context = cleanOsuFetchContext(options?.context);
   const token = await getToken();
 
   const url = new URL(`https://osu.ppy.sh/api/v2${path}`);
@@ -836,13 +873,20 @@ export async function osuFetch<T = unknown>(
 
     const text = await res.text().catch(() => "");
     const bodyPreview = truncateErrorBody(text);
+    const rate = getOsuRateSnapshot();
     trackServerEvent("osu_api_error", {
       caller,
-      path,
+      path: url.pathname.replace(/^\/api\/v2/, "") + url.search,
       status: res.status,
       attempts: attempt + 1,
       kind: "json",
       body_preview: bodyPreview,
+      context,
+      rate_per_min: rate.perMin,
+      rate_remaining: rate.remaining,
+      rate_limit: rate.limit,
+      rate_updated_ago_ms: rate.updatedAgoMs,
+      retry_after: res.headers.get("retry-after"),
     });
     throw new Error(
       `[osuFetch:${caller}] ${res.status} ${path} — ${bodyPreview || "<empty body>"}`,
@@ -859,6 +903,7 @@ export async function osuFetchBinary(
   options?: OsuFetchOptions,
 ): Promise<ArrayBuffer> {
   const caller = options?.caller ?? "unknown";
+  const context = cleanOsuFetchContext(options?.context);
   const token = await getToken();
 
   for (let attempt = 0; attempt <= OSU_FETCH_RETRIES; attempt++) {
@@ -888,6 +933,7 @@ export async function osuFetchBinary(
     // download failed instead of just "binary error 404".
     const text = await res.text().catch(() => "");
     const bodyPreview = truncateErrorBody(text);
+    const rate = getOsuRateSnapshot();
     trackServerEvent("osu_api_error", {
       caller,
       path,
@@ -895,6 +941,12 @@ export async function osuFetchBinary(
       attempts: attempt + 1,
       kind: "binary",
       body_preview: bodyPreview,
+      context,
+      rate_per_min: rate.perMin,
+      rate_remaining: rate.remaining,
+      rate_limit: rate.limit,
+      rate_updated_ago_ms: rate.updatedAgoMs,
+      retry_after: res.headers.get("retry-after"),
     });
     throw new Error(
       `[osuFetchBinary:${caller}] ${res.status} ${path} — ${bodyPreview || "<empty body>"}`,

@@ -63,6 +63,11 @@ interface RecentServerErrorRow {
   bodyPreview: string | null;
   attempts: number | null;
   kind: string | null;
+  context: string | null;
+  ratePerMin: number | null;
+  rateRemaining: number | null;
+  rateLimit: number | null;
+  retryAfter: string | null;
 }
 
 interface BounceStats {
@@ -90,6 +95,19 @@ const POSTHOG_QUERY_TIMEOUT_MS = 15_000;
 
 function isRange(value: unknown): value is Range {
   return typeof value === "string" && (RANGES as readonly string[]).includes(value);
+}
+
+function formatServerErrorContext(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  if (typeof value !== "object") return String(value);
+
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, entryValue]) => entryValue !== undefined && entryValue !== null && entryValue !== "")
+    .slice(0, 10)
+    .map(([key, entryValue]) => `${key}=${String(entryValue)}`);
+
+  return entries.length ? entries.join(" ") : null;
 }
 
 interface MonitorData {
@@ -173,7 +191,7 @@ const getMonitorData = createServerFn({ method: "GET" })
         `SELECT properties.$pathname AS p, count() AS c FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$pathname IS NOT NULL AND properties.$pathname != '/' AND properties.$pathname NOT LIKE '/admin/%' GROUP BY p ORDER BY c DESC LIMIT 10`,
       ),
       runQuery(
-        `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username FROM events WHERE distinct_id != 'server' AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') ORDER BY timestamp DESC LIMIT 30`,
+        `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username FROM events WHERE distinct_id != 'server' AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT 30`,
       ),
       runQuery(
         `SELECT properties.$geoip_country_code AS c, count(DISTINCT distinct_id) AS n FROM events WHERE timestamp > ${since} AND properties.$geoip_country_code IS NOT NULL GROUP BY c ORDER BY n DESC LIMIT 10`,
@@ -194,7 +212,7 @@ const getMonitorData = createServerFn({ method: "GET" })
         `SELECT properties.caller AS c, properties.path AS p, properties.status AS s, count() AS n FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} AND properties.caller IS NOT NULL GROUP BY c, p, s ORDER BY n DESC LIMIT 10`,
       ),
       runQuery(
-        `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), properties.caller, properties.path, properties.status, properties.body_preview, properties.attempts, properties.kind FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} AND properties.caller IS NOT NULL ORDER BY timestamp DESC LIMIT 15`,
+        `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), properties.caller, properties.path, properties.status, properties.body_preview, properties.attempts, properties.kind, properties.context, properties.rate_per_min, properties.rate_remaining, properties.rate_limit, properties.retry_after FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} AND properties.caller IS NOT NULL ORDER BY timestamp DESC LIMIT 15`,
       ),
       runQuery(
         `SELECT countIf(pv_count = 1) AS bounced, count() AS landers FROM (SELECT distinct_id, count() AS pv_count FROM events WHERE event = '$pageview' AND timestamp > ${since} GROUP BY distinct_id HAVING countIf(properties.$pathname = '/') > 0)`,
@@ -265,6 +283,11 @@ const getMonitorData = createServerFn({ method: "GET" })
         bodyPreview: row[4] ? String(row[4]) : null,
         attempts: row[5] == null ? null : Number(row[5]),
         kind: row[6] ? String(row[6]) : null,
+        context: row[7] ? formatServerErrorContext(row[7]) : null,
+        ratePerMin: row[8] == null ? null : Number(row[8]),
+        rateRemaining: row[9] == null ? null : Number(row[9]),
+        rateLimit: row[10] == null ? null : Number(row[10]),
+        retryAfter: row[11] ? String(row[11]) : null,
       })),
       fetchedAt: Date.now(),
     };
@@ -962,6 +985,23 @@ function statusColorClass(status: number | null): string {
   return "text-osu-c2";
 }
 
+function formatRateLimitContext(row: RecentServerErrorRow): string | null {
+  const parts: string[] = [];
+  if (row.ratePerMin != null && Number.isFinite(row.ratePerMin)) {
+    parts.push(`${formatNumber(row.ratePerMin)}/min`);
+  }
+  if (
+    row.rateRemaining != null &&
+    Number.isFinite(row.rateRemaining) &&
+    row.rateLimit != null &&
+    Number.isFinite(row.rateLimit)
+  ) {
+    parts.push(`${formatNumber(row.rateRemaining)}/${formatNumber(row.rateLimit)} left`);
+  }
+  if (row.retryAfter) parts.push(`retry-after ${row.retryAfter}s`);
+  return parts.length ? parts.join(" · ") : null;
+}
+
 function ServerErrorsCard({
   rows,
   recent,
@@ -1046,6 +1086,7 @@ function ServerErrorsCard({
                   const when = row.timestamp || "—";
                   const statusLabel =
                     row.status == null ? "no-resp" : String(row.status);
+                  const rateContext = formatRateLimitContext(row);
                   return (
                     <div
                       key={`${row.timestamp}-${i}`}
@@ -1075,6 +1116,19 @@ function ServerErrorsCard({
                       {row.bodyPreview ? (
                         <div className="px-2.5 pb-1.5 -mt-0.5 text-[10px] font-mono text-osu-l2/70 break-all">
                           {row.bodyPreview}
+                        </div>
+                      ) : null}
+                      {row.context || rateContext ? (
+                        <div className="px-2.5 pb-1.5 -mt-0.5 text-[10px] font-mono text-osu-f1 break-all">
+                          {row.context ? (
+                            <span className="text-osu-c2">{row.context}</span>
+                          ) : null}
+                          {row.context && rateContext ? (
+                            <span className="text-osu-l2/50"> · </span>
+                          ) : null}
+                          {rateContext ? (
+                            <span className="text-osu-yellow/90">{rateContext}</span>
+                          ) : null}
                         </div>
                       ) : null}
                     </div>
