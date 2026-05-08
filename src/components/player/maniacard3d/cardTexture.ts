@@ -27,10 +27,13 @@ export async function createCardTextures(data: ManiaCardReadyData): Promise<Card
     return front.measureText(text).width;
   };
   const layout = buildFaceLayout(data, measure);
-  const avatar = await loadImage(data.avatarUrl).catch(() => null);
+  const [avatar, laurel] = await Promise.all([
+    loadImage(data.avatarUrl).catch(() => null),
+    loadImage("/images/maniacard/laurel-wreath.svg").catch(() => null),
+  ]);
 
   drawFront(front, data, layout, avatar);
-  drawBack(back, data, layout);
+  drawBack(back, data, layout, laurel);
 
   const frontTexture = toTexture(frontCanvas);
   const backTexture = toTexture(backCanvas);
@@ -98,13 +101,25 @@ function drawFront(
   context.restore();
 }
 
-function drawBack(context: CanvasRenderingContext2D, data: ManiaCardReadyData, layout: FaceLayout) {
+function drawBack(
+  context: CanvasRenderingContext2D,
+  data: ManiaCardReadyData,
+  layout: FaceLayout,
+  laurel: HTMLImageElement | null,
+) {
   context.save();
   clipCard(context);
   drawTierBackground(context, data);
+  drawBackMicroTrianglePattern(context);
   drawTrianglePattern(context, 0.16);
+  drawBackRadialOverlays(context);
   drawBackFrame(context, data);
+  drawBackTopPlate(context);
+  drawBackBottomPlate(context);
+  drawBackSideNotches(context);
   drawBackEmblem(context, data, layout);
+  drawBackSparkles(context);
+  drawBackLaurelAndLabel(context, data, layout, laurel);
   context.restore();
 }
 
@@ -113,34 +128,239 @@ function clipCard(context: CanvasRenderingContext2D) {
   context.clip();
 }
 
-function drawBackFrame(context: CanvasRenderingContext2D, data: ManiaCardReadyData) {
+// Tiled micro-triangle texture covering the whole back (mirrors the CSS
+// mc-back-micro-tris pattern: 48x42 tile, ×2 for our texture = 96x84).
+function drawBackMicroTrianglePattern(context: CanvasRenderingContext2D) {
+  const tileWidth = 96;
+  const tileHeight = 84;
+  const cols = Math.ceil(CARD_TEXTURE_WIDTH / tileWidth) + 1;
+  const rows = Math.ceil(CARD_TEXTURE_HEIGHT / tileHeight) + 1;
+
   context.save();
-  context.strokeStyle = `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.72)`;
-  context.shadowColor = `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.55)`;
-  context.shadowBlur = 22;
-  context.lineWidth = 7;
-  roundedRect(context, 92, 88, 816, 1224, 42);
-  context.stroke();
+  context.globalAlpha = 0.84;
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      const ox = col * tileWidth;
+      const oy = row * tileHeight;
+      // 24,3 45,39 3,39 -> ×2: 48,6 90,78 6,78
+      polygon(context, [
+        [ox + 48, oy + 6],
+        [ox + 90, oy + 78],
+        [ox + 6, oy + 78],
+      ], "rgba(255,255,255,0.052)");
+      // 3,18 15,39 -9,39 -> ×2: 6,36 30,78 -18,78
+      polygon(context, [
+        [ox + 6, oy + 36],
+        [ox + 30, oy + 78],
+        [ox - 18, oy + 78],
+      ], "rgba(0,0,0,0.055)");
+      // 45,18 57,39 33,39 -> ×2: 90,36 114,78 66,78
+      polygon(context, [
+        [ox + 90, oy + 36],
+        [ox + 114, oy + 78],
+        [ox + 66, oy + 78],
+      ], "rgba(255,255,255,0.035)");
+    }
+  }
+  context.restore();
+}
 
-  context.shadowBlur = 0;
-  context.strokeStyle = "rgba(255,255,255,0.52)";
-  context.lineWidth = 3;
-  roundedRect(context, 116, 118, 768, 1164, 28);
-  context.stroke();
+// CSS coords use a 500x700 viewBox, our texture is 1000x1400 - everything * 2.
+function drawBackRadialOverlays(context: CanvasRenderingContext2D) {
+  context.save();
+  const tl = context.createRadialGradient(280, 252, 0, 280, 252, 720);
+  tl.addColorStop(0, "rgba(255,255,255,0.23)");
+  tl.addColorStop(0.34, "rgba(255,255,255,0)");
+  context.fillStyle = tl;
+  context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
 
-  context.fillStyle = "rgba(255,255,255,0.18)";
-  trapezoid(context, 360, 92, 640, 92, 604, 142, 396, 142);
+  const br = context.createRadialGradient(720, 952, 0, 720, 952, 1100);
+  br.addColorStop(0, "rgba(8,20,70,0.42)");
+  br.addColorStop(0.52, "rgba(8,20,70,0)");
+  context.fillStyle = br;
+  context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
+
+  const sheen = context.createLinearGradient(0, 0, CARD_TEXTURE_WIDTH * 0.91, CARD_TEXTURE_HEIGHT * 0.42);
+  sheen.addColorStop(0, "rgba(255,255,255,0.20)");
+  sheen.addColorStop(0.24, "rgba(255,255,255,0)");
+  sheen.addColorStop(0.72, "rgba(0,0,0,0.22)");
+  context.fillStyle = sheen;
+  context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
+  context.restore();
+}
+
+function drawBackFrame(context: CanvasRenderingContext2D, data: ManiaCardReadyData) {
+  // Outer notched frame: rounded corners + inset notches at the vertical mid-sides
+  // CSS path (scaled 2x): M86 96 Q86 60 122 60 H878 Q914 60 914 96 V340 Q882 356 882 388 V1012 Q882 1044 914 1060 V1304 Q914 1340 878 1340 H122 Q86 1340 86 1304 V1060 Q118 1044 118 1012 V388 Q118 356 86 340 Z
+  const outer = (context: CanvasRenderingContext2D) => {
+    context.beginPath();
+    context.moveTo(86, 96);
+    context.quadraticCurveTo(86, 60, 122, 60);
+    context.lineTo(878, 60);
+    context.quadraticCurveTo(914, 60, 914, 96);
+    context.lineTo(914, 340);
+    context.quadraticCurveTo(882, 356, 882, 388);
+    context.lineTo(882, 1012);
+    context.quadraticCurveTo(882, 1044, 914, 1060);
+    context.lineTo(914, 1304);
+    context.quadraticCurveTo(914, 1340, 878, 1340);
+    context.lineTo(122, 1340);
+    context.quadraticCurveTo(86, 1340, 86, 1304);
+    context.lineTo(86, 1060);
+    context.quadraticCurveTo(118, 1044, 118, 1012);
+    context.lineTo(118, 388);
+    context.quadraticCurveTo(118, 356, 86, 340);
+    context.closePath();
+  };
+
+  context.save();
+  outer(context);
+  const grad = context.createLinearGradient(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
+  grad.addColorStop(0, "rgba(255,255,255,0.9)");
+  grad.addColorStop(0.34, "rgba(255,255,255,0.34)");
+  grad.addColorStop(0.62, `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.92)`);
+  grad.addColorStop(1, "rgba(255,255,255,0.5)");
+  context.strokeStyle = grad;
+  context.lineWidth = 8;
+  context.shadowColor = `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.45)`;
+  context.shadowBlur = 18;
+  context.globalAlpha = 0.9;
+  context.stroke();
+  context.restore();
+
+  // Inner notched frame
+  context.save();
+  context.beginPath();
+  context.moveTo(106, 108);
+  context.quadraticCurveTo(106, 80, 134, 80);
+  context.lineTo(866, 80);
+  context.quadraticCurveTo(894, 80, 894, 108);
+  context.lineTo(894, 332);
+  context.quadraticCurveTo(862, 352, 862, 388);
+  context.lineTo(862, 1012);
+  context.quadraticCurveTo(862, 1048, 894, 1068);
+  context.lineTo(894, 1292);
+  context.quadraticCurveTo(894, 1320, 866, 1320);
+  context.lineTo(134, 1320);
+  context.quadraticCurveTo(106, 1320, 106, 1292);
+  context.lineTo(106, 1068);
+  context.quadraticCurveTo(138, 1048, 138, 1012);
+  context.lineTo(138, 388);
+  context.quadraticCurveTo(138, 352, 106, 332);
+  context.closePath();
+  context.fillStyle = "rgba(255,255,255,0.03)";
   context.fill();
+  context.strokeStyle = "rgba(255,255,255,0.46)";
+  context.lineWidth = 2.8;
+  context.stroke();
+  context.restore();
+}
+
+function drawBackTopPlate(context: CanvasRenderingContext2D) {
+  // Top trapezoidal plate: M332 60 H668 L636 116 Q628 132 608 132 H392 Q372 132 364 116 Z
+  context.save();
+  context.beginPath();
+  context.moveTo(332, 60);
+  context.lineTo(668, 60);
+  context.lineTo(636, 116);
+  context.quadraticCurveTo(628, 132, 608, 132);
+  context.lineTo(392, 132);
+  context.quadraticCurveTo(372, 132, 364, 116);
+  context.closePath();
+  context.fillStyle = "rgba(32,8,70,0.28)";
+  context.fill();
+  context.strokeStyle = "rgba(255,255,255,0.28)";
+  context.lineWidth = 2.8;
+  context.stroke();
+
+  // Two horizontal accent lines
+  context.strokeStyle = "rgba(255,255,255,0.42)";
+  context.lineWidth = 2.4;
+  context.lineCap = "round";
+  context.beginPath();
+  context.moveTo(352, 78);
+  context.lineTo(648, 78);
+  context.moveTo(380, 108);
+  context.lineTo(620, 108);
+  context.stroke();
+
+  // Five tiny stars
   context.font = `900 24px ${FONT}`;
   context.textAlign = "center";
-  context.fillStyle = "rgba(255,255,255,0.48)";
-  context.fillText("✦ ✦ ✦ ✦ ✦", 500, 126);
+  context.fillStyle = "rgba(255,255,255,0.58)";
+  for (const x of [420, 460, 500, 540, 580]) {
+    context.fillText("★", x, 84);
+  }
+  context.restore();
+}
+
+function drawBackBottomPlate(context: CanvasRenderingContext2D) {
+  // Bottom trapezoid: M344 1340 H656 L624 1312 Q614 1304 598 1304 H402 Q386 1304 376 1312 Z
+  context.save();
   context.beginPath();
-  context.moveTo(276, 1188);
-  context.lineTo(724, 1188);
-  context.strokeStyle = "rgba(255,255,255,0.26)";
-  context.lineWidth = 2;
+  context.moveTo(344, 1340);
+  context.lineTo(656, 1340);
+  context.lineTo(624, 1312);
+  context.quadraticCurveTo(614, 1304, 598, 1304);
+  context.lineTo(402, 1304);
+  context.quadraticCurveTo(386, 1304, 376, 1312);
+  context.closePath();
+  context.fillStyle = "rgba(24,8,64,0.3)";
+  context.fill();
+  context.strokeStyle = "rgba(255,255,255,0.24)";
+  context.lineWidth = 2.8;
   context.stroke();
+
+  context.lineCap = "round";
+  context.strokeStyle = "rgba(255,255,255,0.42)";
+  context.lineWidth = 2.8;
+  context.beginPath();
+  context.moveTo(392, 1326);
+  context.lineTo(476, 1326);
+  context.moveTo(524, 1326);
+  context.lineTo(608, 1326);
+  context.stroke();
+
+  // Center diamond marker
+  context.beginPath();
+  context.moveTo(500, 1312);
+  context.lineTo(512, 1326);
+  context.lineTo(500, 1340);
+  context.lineTo(488, 1326);
+  context.closePath();
+  context.strokeStyle = "rgba(255,255,255,0.58)";
+  context.lineWidth = 3.5;
+  context.stroke();
+  context.restore();
+}
+
+function drawBackSideNotches(context: CanvasRenderingContext2D) {
+  context.save();
+  context.lineCap = "round";
+  context.strokeStyle = "rgba(255,255,255,0.4)";
+  context.lineWidth = 2.6;
+  context.beginPath();
+  // Left side
+  context.moveTo(70, 440);
+  context.lineTo(70, 620);
+  context.moveTo(70, 752);
+  context.lineTo(70, 932);
+  // Right side
+  context.moveTo(930, 440);
+  context.lineTo(930, 620);
+  context.moveTo(930, 752);
+  context.lineTo(930, 932);
+  context.stroke();
+
+  context.fillStyle = "rgba(255,255,255,0.54)";
+  for (const y of [410, 452, 494, 972, 1018, 1064]) {
+    context.beginPath();
+    context.arc(70, y, 3.2, 0, Math.PI * 2);
+    context.fill();
+    context.beginPath();
+    context.arc(930, y, 3.2, 0, Math.PI * 2);
+    context.fill();
+  }
   context.restore();
 }
 
@@ -149,59 +369,252 @@ function drawBackEmblem(context: CanvasRenderingContext2D, data: ManiaCardReadyD
   context.save();
   context.translate(x, y);
 
-  context.strokeStyle = "rgba(255,255,255,0.22)";
-  context.lineWidth = 2;
-  for (const radius of [310, 280, 236]) {
-    context.beginPath();
-    context.arc(0, 0, radius, 0, Math.PI * 2);
-    context.stroke();
-  }
+  // Outer ring (thick, semi-transparent)
+  context.strokeStyle = "rgba(255,255,255,0.34)";
+  context.lineWidth = 4.8;
+  context.beginPath();
+  context.arc(0, 0, 362, 0, Math.PI * 2);
+  context.stroke();
 
+  // Mid ring (dashed)
+  context.strokeStyle = "rgba(255,255,255,0.46)";
+  context.lineWidth = 2.4;
+  context.setLineDash([4, 12]);
+  context.beginPath();
+  context.arc(0, 0, 336, 0, Math.PI * 2);
+  context.stroke();
+  context.setLineDash([]);
+
+  // Inner ring
+  context.strokeStyle = "rgba(255,255,255,0.26)";
+  context.lineWidth = 3;
+  context.beginPath();
+  context.arc(0, 0, 300, 0, Math.PI * 2);
+  context.stroke();
+
+  // 36 ring ticks (every 10°), 6 prominent
   for (let index = 0; index < 36; index += 1) {
-    const angle = (index / 36) * Math.PI * 2;
-    const inner = index % 6 === 0 ? 246 : 260;
-    const outer = 278;
+    const angle = (index * Math.PI) / 18 - Math.PI / 2;
+    const prominent = index % 6 === 0;
+    const inner = prominent ? 336 : 316;
+    const outer = 364;
     context.beginPath();
     context.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
     context.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
-    context.strokeStyle = index % 6 === 0 ? "rgba(255,255,255,0.46)" : "rgba(255,255,255,0.24)";
-    context.lineWidth = index % 6 === 0 ? 4 : 2;
+    context.strokeStyle = prominent ? "rgba(255,255,255,0.62)" : "rgba(255,255,255,0.36)";
+    context.lineWidth = prominent ? 3.2 : 2;
+    context.lineCap = "round";
     context.stroke();
   }
 
-  context.font = `900 34px ${FONT}`;
-  context.textAlign = "center";
-  context.fillStyle = "rgba(255,255,255,0.72)";
-  for (let index = 0; index < 8; index += 1) {
-    const angle = (index / 8) * Math.PI * 2 - Math.PI / 2;
-    context.fillText("★", Math.cos(angle) * 292, Math.sin(angle) * 292 + 12);
+  // 8 orbit stars (compass positions)
+  const starPositions: Array<[number, number, number, number]> = [
+    [0, -346, 40, 0],
+    [210, -270, 36, 18],
+    [294, 0, 38, -10],
+    [210, 270, 36, 12],
+    [0, 346, 40, 0],
+    [-210, 270, 36, -16],
+    [-294, 0, 38, 8],
+    [-210, -270, 36, -12],
+  ];
+  context.fillStyle = "rgba(255,255,255,0.78)";
+  for (const [sx, sy, size, rot] of starPositions) {
+    drawStarShape(context, sx, sy, size, rot);
   }
 
-  const disc = context.createRadialGradient(-60, -70, 20, 0, 0, 205);
-  disc.addColorStop(0, "rgba(255,255,255,0.54)");
-  disc.addColorStop(0.42, `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.78)`);
-  disc.addColorStop(1, "rgba(20,20,60,0.78)");
+  // Disc shadow
   context.beginPath();
-  context.arc(0, 0, 198, 0, Math.PI * 2);
+  context.arc(0, 0, 258, 0, Math.PI * 2);
   context.fillStyle = "rgba(0,0,0,0.22)";
   context.fill();
+
+  // Disc gradient (matches CSS mc-back-disc)
+  const disc = context.createLinearGradient(-242, -242, 242, 242);
+  disc.addColorStop(0, "rgba(255,255,255,0.72)");
+  disc.addColorStop(0.24, `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.88)`);
+  disc.addColorStop(0.55, `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.82)`);
+  disc.addColorStop(1, "rgba(9,16,58,0.82)");
   context.beginPath();
-  context.arc(0, 0, 176, 0, Math.PI * 2);
+  context.arc(0, 0, 242, 0, Math.PI * 2);
   context.fillStyle = disc;
   context.fill();
-  context.strokeStyle = "rgba(255,255,255,0.58)";
-  context.lineWidth = 6;
+  context.strokeStyle = "rgba(255,255,255,0.56)";
+  context.lineWidth = 5.6;
   context.stroke();
 
-  drawManiaGlyph(context, -96, -96, 192, "rgba(255,255,255,0.96)");
+  // Accent bed (inner colored disc behind glyph)
+  context.beginPath();
+  context.arc(0, 0, 194, 0, Math.PI * 2);
+  context.fillStyle = `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.54)`;
+  context.fill();
+  context.strokeStyle = "rgba(255,255,255,0.18)";
+  context.lineWidth = 2.4;
+  context.stroke();
 
-  context.font = `900 44px ${FONT}`;
-  context.textAlign = "center";
-  context.fillStyle = "rgba(255,255,255,0.50)";
-  context.shadowColor = `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.58)`;
-  context.shadowBlur = 16;
-  context.fillText(layout.back.rarityLabel, 0, 436);
+  // White ring around the glyph. Drawn at the same radius as the glyph's outer
+  // circle so the two overlap into a single thick solid ring rather than two
+  // visible stroke edges with empty space between them.
+  context.beginPath();
+  context.arc(0, 0, 152, 0, Math.PI * 2);
+  context.strokeStyle = "rgba(255,255,255,0.98)";
+  context.lineWidth = 32;
+  context.stroke();
+
+  // Mania glyph at scale 0.304 - its outer circle sits on top of the white
+  // ring stroke (both at radius 152), reinforcing the ring's thickness.
+  drawManiaGlyph(context, -152, -152, 304, "rgba(255,255,255,0.98)");
+
   context.restore();
+}
+
+function drawStarShape(
+  context: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  size: number,
+  rotateDeg: number,
+) {
+  const r1 = size / 2;
+  const r2 = r1 * 0.42;
+  context.save();
+  context.translate(cx, cy);
+  context.rotate((rotateDeg * Math.PI) / 180);
+  context.beginPath();
+  for (let i = 0; i < 10; i += 1) {
+    const angle = (i * Math.PI) / 5 - Math.PI / 2;
+    const r = i % 2 === 0 ? r1 : r2;
+    const px = Math.cos(angle) * r;
+    const py = Math.sin(angle) * r;
+    if (i === 0) context.moveTo(px, py);
+    else context.lineTo(px, py);
+  }
+  context.closePath();
+  context.fill();
+  context.restore();
+}
+
+function drawBackSparkles(context: CanvasRenderingContext2D) {
+  context.save();
+  context.fillStyle = "white";
+  const sparkles: Array<[number, number, number, number]> = [
+    [210, 360, 34, 0.82],
+    [810, 410, 18, 0.48],
+    [824, 1030, 28, 0.62],
+    [192, 1050, 20, 0.54],
+    [298, 346, 8, 0.5],
+    [712, 1054, 8, 0.48],
+  ];
+  for (const [sx, sy, size, opacity] of sparkles) {
+    drawSparkle(context, sx, sy, size, opacity);
+  }
+  context.restore();
+}
+
+function drawSparkle(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  opacity: number,
+) {
+  context.save();
+  context.globalAlpha = opacity;
+  context.beginPath();
+  context.moveTo(x, y - size);
+  context.lineTo(x + size * 0.22, y - size * 0.22);
+  context.lineTo(x + size, y);
+  context.lineTo(x + size * 0.22, y + size * 0.22);
+  context.lineTo(x, y + size);
+  context.lineTo(x - size * 0.22, y + size * 0.22);
+  context.lineTo(x - size, y);
+  context.lineTo(x - size * 0.22, y - size * 0.22);
+  context.closePath();
+  context.fill();
+  context.restore();
+}
+
+function drawBackLaurelAndLabel(
+  context: CanvasRenderingContext2D,
+  data: ManiaCardReadyData,
+  layout: FaceLayout,
+  laurel: HTMLImageElement | null,
+) {
+  const cx = 500;
+  const cy = 1162;
+  // Preserve the SVG's natural aspect (~1.145) so the leaves don't squash.
+  const laurelHeight = 150;
+  const laurelWidth = laurelHeight * 1.145;
+
+  context.save();
+  if (laurel) {
+    const off = document.createElement("canvas");
+    off.width = laurelWidth;
+    off.height = laurelHeight;
+    const offCtx = off.getContext("2d");
+    if (offCtx) {
+      offCtx.drawImage(laurel, 0, 0, laurelWidth, laurelHeight);
+      offCtx.globalCompositeOperation = "source-in";
+      offCtx.fillStyle = "rgba(255,255,255,0.7)";
+      offCtx.fillRect(0, 0, laurelWidth, laurelHeight);
+      context.shadowColor = `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.7)`;
+      context.shadowBlur = 18;
+      context.drawImage(off, cx - laurelWidth / 2, cy - laurelHeight / 2);
+    }
+  } else {
+    context.translate(cx, cy);
+    context.shadowColor = `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.65)`;
+    context.shadowBlur = 18;
+    context.fillStyle = "rgba(255,255,255,0.42)";
+    drawLaurelHalf(context, -1);
+    drawLaurelHalf(context, 1);
+    context.translate(-cx, -cy);
+  }
+
+  context.shadowColor = `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.7)`;
+  context.shadowBlur = 14;
+  context.fillStyle = "rgba(255,255,255,0.78)";
+  drawStarShape(context, cx, cy, 56, 0);
+  context.restore();
+
+  // Rarity label
+  context.save();
+  context.font = `900 46px ${FONT}`;
+  context.textAlign = "center";
+  context.fillStyle = "rgba(255,255,255,0.46)";
+  context.shadowColor = `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.6)`;
+  context.shadowBlur = 16;
+  const spaced = layout.back.rarityLabel
+    .toUpperCase()
+    .split("")
+    .join("   ");
+  context.fillText(spaced, 500, 1284);
+  context.restore();
+}
+
+function drawLaurelHalf(context: CanvasRenderingContext2D, side: 1 | -1) {
+  // 7 leaves curving from the bottom up and out, mirroring across the y-axis.
+  const leaves: Array<{ angle: number; distance: number; length: number; width: number; tilt: number }> = [
+    { angle: 78, distance: 70, length: 38, width: 14, tilt: 28 },
+    { angle: 64, distance: 84, length: 40, width: 14, tilt: 18 },
+    { angle: 48, distance: 96, length: 42, width: 15, tilt: 8 },
+    { angle: 30, distance: 104, length: 40, width: 14, tilt: -2 },
+    { angle: 14, distance: 108, length: 38, width: 13, tilt: -10 },
+    { angle: -2, distance: 108, length: 36, width: 12, tilt: -16 },
+    { angle: -16, distance: 104, length: 32, width: 11, tilt: -22 },
+  ];
+  for (const leaf of leaves) {
+    const angleRad = (leaf.angle * Math.PI) / 180;
+    const lx = Math.cos(angleRad) * leaf.distance * side;
+    const ly = -Math.sin(angleRad) * leaf.distance;
+    context.save();
+    context.translate(lx, ly);
+    context.rotate(((leaf.angle - 90) * Math.PI) / 180 * side + (leaf.tilt * Math.PI) / 180);
+    context.beginPath();
+    context.ellipse(0, 0, leaf.width, leaf.length, 0, 0, Math.PI * 2);
+    context.fill();
+    context.restore();
+  }
 }
 
 function drawTierBackground(context: CanvasRenderingContext2D, data: ManiaCardReadyData) {
@@ -247,21 +660,78 @@ function drawTrianglePattern(context: CanvasRenderingContext2D, opacity: number)
 }
 
 function drawModeBadge(context: CanvasRenderingContext2D, data: ManiaCardReadyData) {
-  const gradient = context.createLinearGradient(44, 44, 170, 170);
-  for (const stop of data.badgeGradientStops) gradient.addColorStop(stop.offset, stop.color);
+  const boxX = 38;
+  const boxY = 38;
+  const boxSize = 132;
+  const boxRadius = 30;
+
+  // Halo (radial bloom behind the badge)
   context.save();
-  roundedRect(context, 38, 38, 132, 132, 30);
-  context.fillStyle = data.badgeGradientStops.length ? gradient : "rgba(255,255,255,0.22)";
-  context.fill();
-  context.save();
-  roundedRect(context, 38, 38, 132, 132, 30);
-  context.clip();
-  drawBadgeTrianglePattern(context);
+  const halo = context.createRadialGradient(
+    boxX + boxSize / 2,
+    boxY + boxSize / 2,
+    boxSize * 0.1,
+    boxX + boxSize / 2,
+    boxY + boxSize / 2,
+    boxSize * 0.85,
+  );
+  halo.addColorStop(0, `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.55)`);
+  halo.addColorStop(1, `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0)`);
+  context.fillStyle = halo;
+  context.fillRect(boxX - 18, boxY - 18, boxSize + 36, boxSize + 36);
   context.restore();
+
+  // Base gradient fill
+  context.save();
+  roundedRect(context, boxX, boxY, boxSize, boxSize, boxRadius);
+  context.clip();
+  const gradient = context.createLinearGradient(boxX, boxY, boxX + boxSize, boxY + boxSize);
+  if (data.badgeGradientStops.length > 0) {
+    for (const stop of data.badgeGradientStops) gradient.addColorStop(stop.offset, stop.color);
+    context.fillStyle = gradient;
+  } else {
+    context.fillStyle = "rgba(255,255,255,0.22)";
+  }
+  context.fillRect(boxX, boxY, boxSize, boxSize);
+
+  // Repeating triangle pattern (mirrors CSS: 30x26 tile, soft white/black triangles)
+  drawBadgeTrianglePattern(context, boxX, boxY, boxSize);
+
+  // Top highlight (white to transparent over top half)
+  const top = context.createLinearGradient(0, boxY, 0, boxY + boxSize / 2);
+  top.addColorStop(0, "rgba(255,255,255,0.22)");
+  top.addColorStop(1, "rgba(255,255,255,0)");
+  context.fillStyle = top;
+  context.fillRect(boxX, boxY, boxSize, boxSize / 2);
+
+  // Bottom darken (black to transparent over bottom 2/5)
+  const bottomStart = boxY + boxSize * 0.6;
+  const bot = context.createLinearGradient(0, boxSize + boxY, 0, bottomStart);
+  bot.addColorStop(0, "rgba(0,0,0,0.25)");
+  bot.addColorStop(1, "rgba(0,0,0,0)");
+  context.fillStyle = bot;
+  context.fillRect(boxX, bottomStart, boxSize, boxSize - boxSize * 0.6);
+
+  // Mania glyph (72% of box, centered)
+  const glyphSize = boxSize * 0.72;
+  const glyphX = boxX + (boxSize - glyphSize) / 2;
+  const glyphY = boxY + (boxSize - glyphSize) / 2;
+  context.shadowColor = "rgba(0,0,0,0.45)";
+  context.shadowBlur = 4;
+  context.shadowOffsetY = 2;
+  drawManiaGlyph(context, glyphX, glyphY, glyphSize, "#ffffff");
+  context.restore();
+
+  // Outer white ring + inner black ring (matches CSS ring-1 ring-white/35 + ring-1 ring-black/20)
+  context.save();
+  roundedRect(context, boxX, boxY, boxSize, boxSize, boxRadius);
   context.strokeStyle = "rgba(255,255,255,0.35)";
-  context.lineWidth = 4;
+  context.lineWidth = 3;
   context.stroke();
-  drawManiaGlyph(context, 64, 64, 80, "rgba(255,255,255,0.92)");
+  roundedRect(context, boxX + 4, boxY + 4, boxSize - 8, boxSize - 8, boxRadius - 4);
+  context.strokeStyle = "rgba(0,0,0,0.22)";
+  context.lineWidth = 2;
+  context.stroke();
   context.restore();
 }
 
@@ -404,19 +874,65 @@ function drawTriangle(
   context.restore();
 }
 
-function drawBadgeTrianglePattern(context: CanvasRenderingContext2D) {
+function drawBadgeTrianglePattern(
+  context: CanvasRenderingContext2D,
+  boxX: number,
+  boxY: number,
+  boxSize: number,
+) {
+  // Mirrors the CSS pattern: a 30x26 tile with 3 small triangles (white 0.14,
+  // black 0.12, white 0.08), tiled across the badge.
+  const tileWidth = 30;
+  const tileHeight = 26;
+  const cols = Math.ceil(boxSize / tileWidth) + 1;
+  const rows = Math.ceil(boxSize / tileHeight) + 1;
+
   context.save();
-  context.globalAlpha = 0.28;
-  const triangles = [
-    [62, 64, 24, 21, "rgba(0,0,0,0.12)", -0.1],
-    [124, 60, 27, 24, "rgba(255,255,255,0.045)", 0.14],
-    [76, 108, 26, 23, "rgba(0,0,0,0.10)", 0.08],
-    [136, 108, 24, 21, "rgba(255,255,255,0.035)", -0.12],
-  ] as const;
-  for (const [x, y, width, height, fill, rotation] of triangles) {
-    drawTriangle(context, x, y, width, height, fill, rotation);
+  context.globalAlpha = 0.8;
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      const ox = boxX + col * tileWidth;
+      const oy = boxY + row * tileHeight;
+
+      // Up-pointing triangle: points 15,3 28,22 2,22 -> white 0.14
+      polygon(context, [
+        [ox + 15, oy + 3],
+        [ox + 28, oy + 22],
+        [ox + 2, oy + 22],
+      ], "rgba(255,255,255,0.14)");
+
+      // Left wedge: 3,12 11,23 -5,23 -> black 0.12
+      polygon(context, [
+        [ox + 3, oy + 12],
+        [ox + 11, oy + 23],
+        [ox - 5, oy + 23],
+      ], "rgba(0,0,0,0.12)");
+
+      // Right wedge: 27,12 35,23 19,23 -> white 0.08
+      polygon(context, [
+        [ox + 27, oy + 12],
+        [ox + 35, oy + 23],
+        [ox + 19, oy + 23],
+      ], "rgba(255,255,255,0.08)");
+    }
   }
   context.restore();
+}
+
+function polygon(
+  context: CanvasRenderingContext2D,
+  points: Array<[number, number]>,
+  fillStyle: string,
+) {
+  context.beginPath();
+  for (let i = 0; i < points.length; i += 1) {
+    const [px, py] = points[i];
+    if (i === 0) context.moveTo(px, py);
+    else context.lineTo(px, py);
+  }
+  context.closePath();
+  context.fillStyle = fillStyle;
+  context.fill();
 }
 
 function random01(value: number) {
@@ -441,25 +957,6 @@ function drawUsernamePixelTrail(context: CanvasRenderingContext2D, x: number, y:
     context.fillStyle = fill;
     context.fillRect(x + left, y + top, width, height);
   }
-}
-
-function trapezoid(
-  context: CanvasRenderingContext2D,
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number,
-  x3: number,
-  y3: number,
-  x4: number,
-  y4: number,
-) {
-  context.beginPath();
-  context.moveTo(x1, y1);
-  context.lineTo(x2, y2);
-  context.lineTo(x3, y3);
-  context.lineTo(x4, y4);
-  context.closePath();
 }
 
 function drawManiaGlyph(
