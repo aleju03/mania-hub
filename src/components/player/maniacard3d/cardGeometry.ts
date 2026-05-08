@@ -2,7 +2,7 @@ import { ExtrudeGeometry, PlaneGeometry, Shape } from "three";
 import { CARD_ASPECT } from "./layout";
 
 export const CARD_WORLD_HEIGHT = 4.2;
-export const CARD_WORLD_THICKNESS = 0.08;
+export const CARD_WORLD_THICKNESS = 0.04;
 export const FACE_Z_OFFSET = CARD_WORLD_THICKNESS / 2 + 0.003;
 export const OVERLAY_Z_OFFSET = CARD_WORLD_THICKNESS / 2 + 0.009;
 

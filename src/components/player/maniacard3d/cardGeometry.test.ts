@@ -19,7 +19,7 @@ describe("card geometry", () => {
     if (!box) throw new Error("expected bounding box");
     expect(box.max.x - box.min.x).toBeCloseTo(3.5 * CARD_ASPECT, 3);
     expect(box.max.y - box.min.y).toBeCloseTo(3.5, 3);
-    expect(box.max.z - box.min.z).toBeCloseTo(0.08, 3);
+    expect(box.max.z - box.min.z).toBeCloseTo(CARD_WORLD_THICKNESS, 3);
   });
 
   test("creates face planes just above the card body", () => {

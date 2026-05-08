@@ -48,7 +48,7 @@ export function buildFaceLayout(data: ManiaCardReadyData, measure: MeasureText):
   return {
     front: {
       username: { text: username, x: 310, y: 158, maxWidth: usernameMaxWidth, fontSize: usernameFontSize },
-      tierLabel: { text: data.tierStyle.label, x: 930, y: 224, fontSize: 48 },
+      tierLabel: { text: data.tierStyle.label, x: 930, y: 232, fontSize: 56 },
       avatar,
       stats: data.stats.map((stat, index) => ({
         label: stat.label,

@@ -630,6 +630,37 @@ function drawTierBackground(context: CanvasRenderingContext2D, data: ManiaCardRe
 function drawTrianglePattern(context: CanvasRenderingContext2D, opacity: number) {
   context.save();
   context.globalAlpha = opacity;
+
+  const fitsInsideCard = (x: number, y: number, size: number) => {
+    // Triangle bounding box, with extra slack for the corner radius. The card
+    // is clipped to a 58px-radius rounded rect, so anything whose bbox crosses
+    // the corner arcs would render half-cut.
+    const halfW = size * 0.5;
+    const halfH = (size * TRIANGLE_HEIGHT_RATIO) * 0.5;
+    const margin = 12;
+    if (x - halfW < margin || x + halfW > CARD_TEXTURE_WIDTH - margin) return false;
+    if (y - halfH < margin || y + halfH > CARD_TEXTURE_HEIGHT - margin) return false;
+
+    const r = CARD_CORNER_RADIUS + 6;
+    const corners: Array<[number, number]> = [
+      [r, r],
+      [CARD_TEXTURE_WIDTH - r, r],
+      [r, CARD_TEXTURE_HEIGHT - r],
+      [CARD_TEXTURE_WIDTH - r, CARD_TEXTURE_HEIGHT - r],
+    ];
+    for (const [cx, cy] of corners) {
+      const insideCornerBox =
+        (cx === r ? x < r : x > CARD_TEXTURE_WIDTH - r) &&
+        (cy === r ? y < r : y > CARD_TEXTURE_HEIGHT - r);
+      if (!insideCornerBox) continue;
+      const dx = x - cx;
+      const dy = y - cy;
+      const reach = Math.max(halfW, halfH);
+      if (Math.hypot(dx, dy) > r - reach) return false;
+    }
+    return true;
+  };
+
   for (let row = 0; row < 17; row += 1) {
     for (let col = 0; col < 11; col += 1) {
       const index = row * 17 + col;
@@ -637,8 +668,8 @@ function drawTrianglePattern(context: CanvasRenderingContext2D, opacity: number)
       if (seed < 0.26) continue;
       const x = 58 + col * 88 + (random01(index * 43.91 + 8.5) - 0.5) * 62;
       const y = 54 + row * 78 + (random01(index * 29.37 + 12.4) - 0.5) * 72;
-      if (x < 34 || x > CARD_TEXTURE_WIDTH - 34 || y < 34 || y > CARD_TEXTURE_HEIGHT - 34) continue;
       const size = 30 + random01(index * 13.81 + 2.7) * 34;
+      if (!fitsInsideCard(x, y, size)) continue;
       const alpha = 0.035 + random01(index * 5.21 + 1.3) * 0.055;
       const tone = random01(index * 3.11 + 6.9) > 0.54 ? "255,255,255" : "0,0,0";
       const rotation = (random01(index * 31.7 + 11.2) - 0.5) * 0.42;
@@ -651,6 +682,7 @@ function drawTrianglePattern(context: CanvasRenderingContext2D, opacity: number)
     const x = 80 + random01(index * 37.13 + 4.8) * (CARD_TEXTURE_WIDTH - 160);
     const y = 80 + random01(index * 61.27 + 2.2) * (CARD_TEXTURE_HEIGHT - 160);
     const size = 24 + random01(index * 11.33 + 1.7) * 20;
+    if (!fitsInsideCard(x, y, size)) continue;
     const alpha = 0.025 + random01(index * 3.7 + 5.4) * 0.03;
     const tone = random01(index * 8.19 + 1.1) > 0.5 ? "255,255,255" : "0,0,0";
     const rotation = (random01(index * 17.7 + 10.1) - 0.5) * 0.56;
@@ -764,10 +796,18 @@ function drawTierLabel(
   context.save();
   context.font = `italic 900 ${label.fontSize}px ${FONT}`;
   context.textAlign = "right";
+
+  // First pass: dark drop shadow for legibility against any background.
   context.fillStyle = "rgba(255,255,255,0.95)";
-  context.shadowColor = `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.58)`;
-  context.shadowBlur = 18;
-  context.shadowOffsetY = 4;
+  context.shadowColor = "rgba(0,0,0,0.65)";
+  context.shadowBlur = 8;
+  context.shadowOffsetY = 5;
+  context.fillText(label.text, label.x, label.y);
+
+  // Second pass: tier-tinted glow on top to keep the colored bloom.
+  context.shadowColor = `rgba(${data.glowColor.r}, ${data.glowColor.g}, ${data.glowColor.b}, 0.6)`;
+  context.shadowBlur = 22;
+  context.shadowOffsetY = 0;
   context.fillText(label.text, label.x, label.y);
   context.restore();
 }
