@@ -91,7 +91,7 @@ function drawFront(
   context.save();
   clipCard(context);
   drawTierBackground(context, data);
-  drawTrianglePattern(context, 0.28);
+  drawTrianglePattern(context, 0.18);
   drawModeBadge(context, data);
   drawUsername(context, layout);
   drawTierLabel(context, data, layout);
@@ -129,12 +129,21 @@ function clipCard(context: CanvasRenderingContext2D) {
 }
 
 // Tiled micro-triangle texture covering the whole back (mirrors the CSS
-// mc-back-micro-tris pattern: 48x42 tile, ×2 for our texture = 96x84).
+// mc-back-micro-tris pattern: 48x42 tile, ×2 for our texture = 96x84). We
+// filter out triangles whose vertices land outside the rounded card body so
+// none get half-cut by the rounded corner clip.
 function drawBackMicroTrianglePattern(context: CanvasRenderingContext2D) {
   const tileWidth = 96;
   const tileHeight = 84;
   const cols = Math.ceil(CARD_TEXTURE_WIDTH / tileWidth) + 1;
   const rows = Math.ceil(CARD_TEXTURE_HEIGHT / tileHeight) + 1;
+
+  const maybeDrawTri = (points: Array<[number, number]>, fill: string) => {
+    for (const [px, py] of points) {
+      if (!isInsideRoundedCard(px, py, 6)) return;
+    }
+    polygon(context, points, fill);
+  };
 
   context.save();
   context.globalAlpha = 0.84;
@@ -143,19 +152,19 @@ function drawBackMicroTrianglePattern(context: CanvasRenderingContext2D) {
       const ox = col * tileWidth;
       const oy = row * tileHeight;
       // 24,3 45,39 3,39 -> ×2: 48,6 90,78 6,78
-      polygon(context, [
+      maybeDrawTri([
         [ox + 48, oy + 6],
         [ox + 90, oy + 78],
         [ox + 6, oy + 78],
       ], "rgba(255,255,255,0.052)");
       // 3,18 15,39 -9,39 -> ×2: 6,36 30,78 -18,78
-      polygon(context, [
+      maybeDrawTri([
         [ox + 6, oy + 36],
         [ox + 30, oy + 78],
         [ox - 18, oy + 78],
       ], "rgba(0,0,0,0.055)");
       // 45,18 57,39 33,39 -> ×2: 90,36 114,78 66,78
-      polygon(context, [
+      maybeDrawTri([
         [ox + 90, oy + 36],
         [ox + 114, oy + 78],
         [ox + 66, oy + 78],
@@ -163,6 +172,22 @@ function drawBackMicroTrianglePattern(context: CanvasRenderingContext2D) {
     }
   }
   context.restore();
+}
+
+// Returns true iff (x, y) is at least `margin` px inside the rounded card path
+// (a CARD_TEXTURE_WIDTH x CARD_TEXTURE_HEIGHT rect with CARD_CORNER_RADIUS).
+function isInsideRoundedCard(x: number, y: number, margin: number) {
+  const r = CARD_CORNER_RADIUS;
+  if (x < margin || x > CARD_TEXTURE_WIDTH - margin) return false;
+  if (y < margin || y > CARD_TEXTURE_HEIGHT - margin) return false;
+  // If we're within the corner-quadrant box, check the arc.
+  const cornerX = x < r ? r : x > CARD_TEXTURE_WIDTH - r ? CARD_TEXTURE_WIDTH - r : null;
+  const cornerY = y < r ? r : y > CARD_TEXTURE_HEIGHT - r ? CARD_TEXTURE_HEIGHT - r : null;
+  if (cornerX !== null && cornerY !== null) {
+    const dist = Math.hypot(x - cornerX, y - cornerY);
+    if (dist > r - margin) return false;
+  }
+  return true;
 }
 
 // CSS coords use a 500x700 viewBox, our texture is 1000x1400 - everything * 2.
@@ -631,62 +656,57 @@ function drawTrianglePattern(context: CanvasRenderingContext2D, opacity: number)
   context.save();
   context.globalAlpha = opacity;
 
-  const fitsInsideCard = (x: number, y: number, size: number) => {
-    // Triangle bounding box, with extra slack for the corner radius. The card
-    // is clipped to a 58px-radius rounded rect, so anything whose bbox crosses
-    // the corner arcs would render half-cut.
+  const fitsInsideCard = (x: number, y: number, size: number, rotation: number) => {
+    // Test the 3 actual triangle vertices (rotated) against the rounded card
+    // path. This catches both axis-aligned overshoot and corner-arc clipping.
     const halfW = size * 0.5;
     const halfH = (size * TRIANGLE_HEIGHT_RATIO) * 0.5;
-    const margin = 12;
-    if (x - halfW < margin || x + halfW > CARD_TEXTURE_WIDTH - margin) return false;
-    if (y - halfH < margin || y + halfH > CARD_TEXTURE_HEIGHT - margin) return false;
-
-    const r = CARD_CORNER_RADIUS + 6;
-    const corners: Array<[number, number]> = [
-      [r, r],
-      [CARD_TEXTURE_WIDTH - r, r],
-      [r, CARD_TEXTURE_HEIGHT - r],
-      [CARD_TEXTURE_WIDTH - r, CARD_TEXTURE_HEIGHT - r],
+    const cos = Math.cos(rotation);
+    const sin = Math.sin(rotation);
+    const verts: Array<[number, number]> = [
+      [0, -halfH * 0.96],
+      [halfW * 1.0, halfH * 0.96],
+      [-halfW * 1.0, halfH * 0.96],
     ];
-    for (const [cx, cy] of corners) {
-      const insideCornerBox =
-        (cx === r ? x < r : x > CARD_TEXTURE_WIDTH - r) &&
-        (cy === r ? y < r : y > CARD_TEXTURE_HEIGHT - r);
-      if (!insideCornerBox) continue;
-      const dx = x - cx;
-      const dy = y - cy;
-      const reach = Math.max(halfW, halfH);
-      if (Math.hypot(dx, dy) > r - reach) return false;
+    for (const [vx, vy] of verts) {
+      const wx = x + vx * cos - vy * sin;
+      const wy = y + vx * sin + vy * cos;
+      if (!isInsideRoundedCard(wx, wy, 10)) return false;
     }
     return true;
   };
 
-  for (let row = 0; row < 17; row += 1) {
-    for (let col = 0; col < 11; col += 1) {
+  // Subtle, mostly-white flecks - mirrors the CSS pattern which is faint
+  // white polygons over the tier gradient. Dark triangles only show up rarely
+  // and at very low opacity so they read as soft shadows, not gashes.
+  for (let row = 0; row < 14; row += 1) {
+    for (let col = 0; col < 9; col += 1) {
       const index = row * 17 + col;
       const seed = random01(index * 19.17 + 4.2);
-      if (seed < 0.26) continue;
-      const x = 58 + col * 88 + (random01(index * 43.91 + 8.5) - 0.5) * 62;
-      const y = 54 + row * 78 + (random01(index * 29.37 + 12.4) - 0.5) * 72;
-      const size = 30 + random01(index * 13.81 + 2.7) * 34;
-      if (!fitsInsideCard(x, y, size)) continue;
-      const alpha = 0.035 + random01(index * 5.21 + 1.3) * 0.055;
-      const tone = random01(index * 3.11 + 6.9) > 0.54 ? "255,255,255" : "0,0,0";
+      if (seed < 0.55) continue;
+      const x = 70 + col * 110 + (random01(index * 43.91 + 8.5) - 0.5) * 70;
+      const y = 70 + row * 96 + (random01(index * 29.37 + 12.4) - 0.5) * 80;
+      const size = 18 + random01(index * 13.81 + 2.7) * 22;
       const rotation = (random01(index * 31.7 + 11.2) - 0.5) * 0.42;
+      if (!fitsInsideCard(x, y, size, rotation)) continue;
+      const isDark = random01(index * 3.11 + 6.9) > 0.82;
+      const alpha = isDark
+        ? 0.018 + random01(index * 5.21 + 1.3) * 0.020
+        : 0.030 + random01(index * 5.21 + 1.3) * 0.040;
+      const tone = isDark ? "0,0,0" : "255,255,255";
       drawTriangle(context, x, y, size, size * TRIANGLE_HEIGHT_RATIO, `rgba(${tone},${alpha.toFixed(3)})`, rotation);
     }
   }
-  for (let index = 0; index < 20; index += 1) {
+  for (let index = 0; index < 12; index += 1) {
     const seed = random01(index * 23.41 + 17.6);
-    if (seed < 0.14) continue;
-    const x = 80 + random01(index * 37.13 + 4.8) * (CARD_TEXTURE_WIDTH - 160);
-    const y = 80 + random01(index * 61.27 + 2.2) * (CARD_TEXTURE_HEIGHT - 160);
-    const size = 24 + random01(index * 11.33 + 1.7) * 20;
-    if (!fitsInsideCard(x, y, size)) continue;
-    const alpha = 0.025 + random01(index * 3.7 + 5.4) * 0.03;
-    const tone = random01(index * 8.19 + 1.1) > 0.5 ? "255,255,255" : "0,0,0";
+    if (seed < 0.32) continue;
+    const x = 100 + random01(index * 37.13 + 4.8) * (CARD_TEXTURE_WIDTH - 200);
+    const y = 100 + random01(index * 61.27 + 2.2) * (CARD_TEXTURE_HEIGHT - 200);
+    const size = 14 + random01(index * 11.33 + 1.7) * 14;
     const rotation = (random01(index * 17.7 + 10.1) - 0.5) * 0.56;
-    drawTriangle(context, x, y, size, size * TRIANGLE_HEIGHT_RATIO, `rgba(${tone},${alpha.toFixed(3)})`, rotation);
+    if (!fitsInsideCard(x, y, size, rotation)) continue;
+    const alpha = 0.018 + random01(index * 3.7 + 5.4) * 0.022;
+    drawTriangle(context, x, y, size, size * TRIANGLE_HEIGHT_RATIO, `rgba(255,255,255,${alpha.toFixed(3)})`, rotation);
   }
   context.restore();
 }
