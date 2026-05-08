@@ -798,6 +798,9 @@ function drawStats(context: CanvasRenderingContext2D, layout: FaceLayout) {
   roundedRect(context, 205, 942, 590, 250, 32);
   context.fillStyle = "rgba(0,0,0,0.30)";
   context.fill();
+  context.shadowColor = "rgba(0,0,0,0.6)";
+  context.shadowBlur = 6;
+  context.shadowOffsetY = 4;
   context.font = `800 40px ${FONT}`;
   context.fillStyle = "rgba(255,255,255,0.84)";
   for (const stat of layout.front.stats) {
@@ -814,25 +817,80 @@ function drawStats(context: CanvasRenderingContext2D, layout: FaceLayout) {
 }
 
 function drawStars(context: CanvasRenderingContext2D, layout: FaceLayout) {
-  const starSpacing = 56;
+  const starSize = 64;
+  const starSpacing = 70;
+  const starY = 1252;
   const startX = 500 - ((layout.front.stars.length - 1) * starSpacing) / 2;
+  const fullColor = "#fcd34d";
+
+  context.save();
+  context.shadowColor = "rgba(0,0,0,0.5)";
+  context.shadowBlur = 4;
+  context.shadowOffsetY = 4;
+  context.lineWidth = 1.6;
+  context.strokeStyle = "rgba(0,0,0,0.32)";
+
+  for (const [index, star] of layout.front.stars.entries()) {
+    const x = startX + index * starSpacing;
+    if (star === "full") {
+      context.fillStyle = fullColor;
+      drawFivePointStar(context, x, starY, starSize, true);
+    } else if (star === "half") {
+      // Left half full, right half faded - mirrors the CSS half-star gradient.
+      context.save();
+      context.beginPath();
+      context.rect(x - starSize, starY - starSize, starSize, starSize * 2);
+      context.clip();
+      context.fillStyle = fullColor;
+      drawFivePointStar(context, x, starY, starSize, true);
+      context.restore();
+
+      context.save();
+      context.beginPath();
+      context.rect(x, starY - starSize, starSize, starSize * 2);
+      context.clip();
+      context.fillStyle = "rgba(252,211,77,0.22)";
+      drawFivePointStar(context, x, starY, starSize, true);
+      context.restore();
+    } else {
+      context.fillStyle = "rgba(252,211,77,0.22)";
+      drawFivePointStar(context, x, starY, starSize, true);
+    }
+  }
+  context.restore();
 
   context.save();
   context.textAlign = "center";
-  context.font = `900 52px ${FONT}`;
-  for (const [index, star] of layout.front.stars.entries()) {
-    const x = startX + index * starSpacing;
-    context.fillStyle = star === "full"
-      ? "#fcd34d"
-      : star === "half"
-        ? "rgba(252,211,77,0.58)"
-        : "rgba(252,211,77,0.30)";
-    context.fillText(star === "empty" ? "☆" : "★", x, 1260);
-  }
-  context.font = `800 28px ${FONT}`;
-  context.fillStyle = "rgba(255,255,255,0.72)";
-  context.fillText(layout.front.starAverage, 500, 1306);
+  context.font = `800 36px ${FONT}`;
+  context.fillStyle = "rgba(255,255,255,0.78)";
+  context.shadowColor = "rgba(0,0,0,0.45)";
+  context.shadowBlur = 4;
+  context.shadowOffsetY = 2;
+  context.fillText(layout.front.starAverage, 500, 1320);
   context.restore();
+}
+
+function drawFivePointStar(
+  context: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  size: number,
+  stroke: boolean,
+) {
+  const r1 = size / 2;
+  const r2 = r1 * 0.42;
+  context.beginPath();
+  for (let i = 0; i < 10; i += 1) {
+    const angle = (i * Math.PI) / 5 - Math.PI / 2;
+    const r = i % 2 === 0 ? r1 : r2;
+    const px = cx + Math.cos(angle) * r;
+    const py = cy + Math.sin(angle) * r;
+    if (i === 0) context.moveTo(px, py);
+    else context.lineTo(px, py);
+  }
+  context.closePath();
+  context.fill();
+  if (stroke) context.stroke();
 }
 
 function roundedRect(
