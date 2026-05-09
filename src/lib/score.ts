@@ -35,6 +35,7 @@ const MOD_RATE_DEFAULTS: Record<string, number> = {
   HT: 0.75,
   DC: 0.75,
 };
+const RATE_EPSILON = 0.0001;
 
 export interface ModDisplay {
   acronym: string;
@@ -54,6 +55,26 @@ export function getScoreRate(mods: OsuMod[] | undefined): number {
     return Number.isFinite(rateSetting) && rateSetting > 0 ? rateSetting : defaultRate;
   }
   return 1;
+}
+
+/** osu!lazer allows custom speed_change values for rate mods, but those
+ *  scores are not ranked. Detect them so ranked-only surfaces can skip them. */
+export function hasCustomRateMod(mods: OsuMod[] | undefined): boolean {
+  for (const m of mods ?? []) {
+    const acronym = typeof m === "string" ? m : (m as any)?.acronym ?? "";
+    const defaultRate = MOD_RATE_DEFAULTS[acronym];
+    if (defaultRate === undefined || typeof m !== "object") continue;
+
+    const rateSetting = Number((m as any)?.settings?.speed_change);
+    if (
+      Number.isFinite(rateSetting) &&
+      rateSetting > 0 &&
+      Math.abs(rateSetting - defaultRate) > RATE_EPSILON
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** Like `getModAcronyms`, but preserves lazer custom rate settings so the UI

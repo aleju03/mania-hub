@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateReplacementPpGain, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getManiaJudgementCounts, getScoreDisplayValues, isLazerScore } from "./score";
+import { calculateReplacementPpGain, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getManiaJudgementCounts, getScoreDisplayValues, hasCustomRateMod, isLazerScore } from "./score";
 import type { OsuScore } from "./types";
 
 function createScore(overrides: Partial<OsuScore>): OsuScore {
@@ -256,6 +256,20 @@ describe("getScoreDisplayValues", () => {
       expect(getDisplayedTotalScore(score)).toBe(expectedTotalScore);
       expect(isLazerScore(score)).toBe(expectedIsLazer);
     });
+  });
+});
+
+describe("hasCustomRateMod", () => {
+  it("detects lazer custom rate settings on rate-changing mods", () => {
+    expect(hasCustomRateMod([{ acronym: "NC", settings: { speed_change: 1.4 } }])).toBe(true);
+    expect(hasCustomRateMod([{ acronym: "DT", settings: { speed_change: 1.25 } }])).toBe(true);
+    expect(hasCustomRateMod([{ acronym: "HT", settings: { speed_change: 0.9 } }])).toBe(true);
+  });
+
+  it("allows default rate mods and unrelated settings", () => {
+    expect(hasCustomRateMod([{ acronym: "NC" }])).toBe(false);
+    expect(hasCustomRateMod([{ acronym: "NC", settings: { speed_change: 1.5 } }])).toBe(false);
+    expect(hasCustomRateMod([{ acronym: "HD", settings: { speed_change: 1.4 } }])).toBe(false);
   });
 });
 

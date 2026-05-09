@@ -49,7 +49,7 @@ import {
 import type { OsuFetchContextValue } from "./api";
 import type { ReplayEndpointKind } from "./r2-cache";
 import { db, ensureCacheSchema, hasDb } from "./db";
-import { calculateApproxPpGainMap, calculateReplacementPpGain, getBoardLaneKey, getModAcronyms, getModDisplayList, getScoreDisplayValues, getScoreRate, getScoreTimestamp, getScoreUrl } from "./score";
+import { calculateApproxPpGainMap, calculateReplacementPpGain, getBoardLaneKey, getModAcronyms, getModDisplayList, getScoreDisplayValues, getScoreRate, getScoreTimestamp, getScoreUrl, hasCustomRateMod } from "./score";
 import { detectManiaPatterns } from "./mania-patterns";
 import type {
   OsuUser,
@@ -262,7 +262,7 @@ function clearSnipesScanStatus(country: string): void {
 }
 
 function snipesPartialEventsKey(country: string): string {
-  return `snipes-partial-events:${country}`;
+  return `snipes-partial-events:v2:${country}`;
 }
 
 function writePartialSnipeEvents(country: string, events: SnipeEvent[]): void {
@@ -3422,6 +3422,11 @@ async function fetchUserRecentPlays(userId: number): Promise<OsuScore[]> {
   return request;
 }
 
+function isSnipesRankedScore(score: OsuScore): boolean {
+  if (score.ranked === false) return false;
+  return !hasCustomRateMod(score.mods);
+}
+
 function boardScoreFromScore(score: OsuScore): CountryBoardScore | null {
   if (!score.user) return null;
   const display = getScoreDisplayValues(score);
@@ -3556,6 +3561,7 @@ async function probeCountryBoardLanes(
     const byLane = new Map<string, { score: OsuScore; totalScore: number; endedAtMs: number }[]>();
     for (const score of scores) {
       if (!score) continue;
+      if (!isSnipesRankedScore(score)) continue;
       const display = getScoreDisplayValues(score);
       const totalScore = display.totalScore ?? score.total_score ?? score.score ?? 0;
       if (totalScore <= 0) continue;
@@ -3731,6 +3737,7 @@ async function runSnipesScan(
         if (!score.beatmap || !score.beatmapset || !score.user) continue;
         if (score.beatmap.mode !== "mania") continue;
         if (!SNIPES_RANKED_STATUSES.has(score.beatmapset.status)) continue;
+        if (!isSnipesRankedScore(score)) continue;
         candidates.push(score);
       }
     }
@@ -4002,9 +4009,9 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
   .handler(async ({ data }: { data: { country?: string } }): Promise<SnipesResponse> => {
     edgeCache(60, 600);
     const country = normalizeCountryCode(data.country);
-    const cacheKey = `country-snipes-response:v3:${country}`;
-    const snapshotKey = `country-board-snapshot:v3:${country}`;
-    const logKey = `country-snipes-log:v1:${country}`;
+    const cacheKey = `country-snipes-response:v4:${country}`;
+    const snapshotKey = `country-board-snapshot:v4:${country}`;
+    const logKey = `country-snipes-log:v2:${country}`;
 
     // Stale-while-revalidate: return expired data immediately so the client
     // never blocks on the ~55s scan. A background scan refreshes the cache
