@@ -2,6 +2,8 @@ import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { COUNTRY_OPTIONS } from "../../lib/country";
 import { canUseDevFeatures } from "../../lib/auth-shared";
+import { getScore } from "../../lib/osu";
+import { buildReplaySeoTitle } from "../../lib/replay-seo";
 
 type PresetKind =
   | "default"
@@ -69,7 +71,7 @@ const PRESETS: Preset[] = [
     key: "replay",
     label: "Replay",
     kind: "replay",
-    title: "Replay",
+    title: "Score replay",
     subtitle: "",
     path: "/replay",
     scoreId: 6642167715,
@@ -109,6 +111,7 @@ function OgPreviewPage() {
   const [cacheBuster, setCacheBuster] = useState(() => Date.now());
   const [origin, setOrigin] = useState("");
   const [copied, setCopied] = useState(false);
+  const [replayMockTitle, setReplayMockTitle] = useState("");
 
   const currentPreset = useMemo(
     () => PRESETS.find((p) => p.key === presetKey) ?? PRESETS[0],
@@ -119,6 +122,35 @@ function OgPreviewPage() {
   useEffect(() => {
     setOrigin(window.location.origin);
   }, []);
+
+  useEffect(() => {
+    if (kind !== "replay") return;
+
+    const numericScoreId = Number(scoreId);
+    if (!Number.isSafeInteger(numericScoreId) || numericScoreId <= 0) {
+      setReplayMockTitle("");
+      return;
+    }
+
+    let cancelled = false;
+    setReplayMockTitle(buildReplaySeoTitle(numericScoreId));
+    getScore({ data: { scoreId: numericScoreId } })
+      .then((score) => {
+        if (cancelled) return;
+        setReplayMockTitle(buildReplaySeoTitle(numericScoreId, {
+          username: score.user?.username ?? "",
+          title: score.beatmapset?.title ?? "",
+          version: score.beatmap?.version ?? "",
+        }));
+      })
+      .catch(() => {
+        if (!cancelled) setReplayMockTitle(buildReplaySeoTitle(numericScoreId));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [kind, scoreId]);
 
   const ogPath = useMemo(() => {
     if (kind === "player") {
@@ -156,10 +188,14 @@ function OgPreviewPage() {
   }, [kind, username, scoreId, title, subtitle, countryAware, country, cacheBuster]);
 
   const absoluteImage = origin ? `${origin}${ogPath}` : ogPath;
+  const numericMockScoreId = Number(scoreId);
+  const fallbackReplayTitle = Number.isSafeInteger(numericMockScoreId) && numericMockScoreId > 0
+    ? buildReplaySeoTitle(numericMockScoreId)
+    : "Score replay";
   const mockTitle = kind === "player"
     ? `${username} - ${SITE_NAME}`
     : kind === "replay"
-      ? `Replay #${scoreId} - ${SITE_NAME}`
+      ? replayMockTitle || fallbackReplayTitle
       : title === SITE_NAME
         ? title
         : `${title} - ${SITE_NAME}`;

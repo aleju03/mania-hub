@@ -57,6 +57,18 @@ export function getScoreRate(mods: OsuMod[] | undefined): number {
   return 1;
 }
 
+/** Whether the active rate-changing mod also shifts pitch with speed. NC/DC
+ *  scale audio sample rate (so pitch follows tempo); DT/HT keep pitch
+ *  constant via time-stretching. Replay audio mirrors this so NC sounds
+ *  like nightcore, not just sped-up DT. */
+export function modShiftsPitchWithRate(mods: OsuMod[] | undefined): boolean {
+  for (const m of mods ?? []) {
+    const acronym = typeof m === "string" ? m : (m as any)?.acronym ?? "";
+    if (acronym === "NC" || acronym === "DC") return true;
+  }
+  return false;
+}
+
 /** osu!lazer allows custom speed_change values for rate mods, but those
  *  scores are not ranked. Detect them so ranked-only surfaces can skip them. */
 export function hasCustomRateMod(mods: OsuMod[] | undefined): boolean {

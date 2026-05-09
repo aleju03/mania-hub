@@ -75,6 +75,7 @@ export interface PageSeoInput {
   type?: "website" | "article" | "profile";
   social?: boolean;
   noindex?: boolean;
+  appendSiteName?: boolean;
 }
 
 export interface PageSeo {
@@ -92,8 +93,9 @@ export function pageSeo({
   type = "website",
   social = true,
   noindex = false,
+  appendSiteName = true,
 }: PageSeoInput): PageSeo {
-  const fullTitle = title === SITE_NAME ? SITE_NAME : `${title} - ${SITE_NAME}`;
+  const fullTitle = title === SITE_NAME || !appendSiteName ? title : `${title} - ${SITE_NAME}`;
   const url = absoluteUrl(path, origin);
   const imageUrl = absoluteUrl(image ?? ogImagePath(title, { country: imageCountry }), origin);
 

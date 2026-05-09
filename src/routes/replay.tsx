@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Info, LoaderCircle, Maximize2, Minimize2, Pause, Play } from "lucide-react";
 import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores } from "../lib/osu";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
-import { getScoreDisplayValues, getScoreRate, scoreHasReplay } from "../lib/score";
+import { getScoreDisplayValues, getScoreRate, modShiftsPitchWithRate, scoreHasReplay } from "../lib/score";
 import { useAppStore, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
@@ -27,6 +27,7 @@ import { unpackReplayFrames } from "../lib/replay-frames";
 import { buildKeypressHeatmap } from "../lib/replay-keypress-heatmap";
 import { parseReplayScoreInput } from "../lib/replay-score-input";
 import { getReplayScoreAvailability } from "../lib/replay-score-availability";
+import { buildReplaySeoTitle, type ReplaySeoScore } from "../lib/replay-seo";
 import { DEFAULT_REPLAY_SCROLL_SPEED, REPLAY_SCROLL_SPEED_CHANGE_EVENT, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../lib/replay-scroll-speed";
 import {
   REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT,
@@ -120,21 +121,47 @@ function isMobileReplayPointer(event: ReactPointerEvent<HTMLElement>) {
     && window.matchMedia("(pointer: coarse)").matches;
 }
 
+// Browsers default `preservesPitch` to true (the DT/HT behavior). NC/DC need
+// it off so pitch tracks playbackRate. Vendor prefixes cover Safari/Firefox.
+function setAudioPreservesPitch(audio: HTMLAudioElement, preservesPitch: boolean): void {
+  const pitchAudio = audio as HTMLAudioElement & {
+    mozPreservesPitch?: boolean;
+    preservesPitch?: boolean;
+    webkitPreservesPitch?: boolean;
+  };
+  pitchAudio.preservesPitch = preservesPitch;
+  pitchAudio.mozPreservesPitch = preservesPitch;
+  pitchAudio.webkitPreservesPitch = preservesPitch;
+}
+
 export const Route = createFileRoute("/replay")({
-  head: ({ match }) => {
+  loaderDeps: ({ search }) => ({ scoreId: search.scoreId }),
+  loader: async ({ deps }): Promise<{ seoScore: ReplaySeoScore | null }> => {
+    if (typeof deps.scoreId !== "number") return { seoScore: null };
+
+    try {
+      const score = await getScore({ data: { scoreId: deps.scoreId } });
+      return {
+        seoScore: {
+          username: score.user?.username ?? "",
+          title: score.beatmapset?.title ?? "",
+          version: score.beatmap?.version ?? "",
+        },
+      };
+    } catch {
+      return { seoScore: null };
+    }
+  },
+  head: ({ match, loaderData }) => {
     const { scoreId, beatmapsetId, player } = match.search;
     const hasSharedScore = typeof scoreId === "number";
     const playerName = typeof player === "string" ? player.trim() : "";
-    const title = hasSharedScore
-      ? playerName
-        ? `${playerName}'s replay`
-        : `Score #${scoreId} replay`
-      : "Replay viewer";
+    const title = hasSharedScore ? buildReplaySeoTitle(scoreId, loaderData?.seoScore, playerName) : "Replay viewer";
 
     return pageSeo({
       title,
       description: hasSharedScore
-        ? "Watch this osu!mania replay in your browser."
+        ? ""
         : "Watch osu!mania .osr replays in your browser.",
       path: withSearchParams("/replay", {
         scoreId,
@@ -145,6 +172,7 @@ export const Route = createFileRoute("/replay")({
       image: hasSharedScore ? replayOgImagePath(scoreId) : undefined,
       social: hasSharedScore,
       noindex: true,
+      appendSiteName: !hasSharedScore,
     });
   },
   component: ReplayPage,
@@ -709,6 +737,7 @@ function ReplayViewer({
   }, [replay.frames]);
   const modRate = getScoreRate(scoreInfo?.mods);
   const effectiveRate = speed * modRate;
+  const audioPreservesPitch = !modShiftsPitchWithRate(scoreInfo?.mods);
   const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
   const [bgDim, setBgDim] = useState(readReplayBackgroundDim);
   const [audioEnabled, setAudioEnabled] = useState(true);
@@ -1155,6 +1184,7 @@ function ReplayViewer({
     audioRef.current.volume = volume;
     if (isPlaying) {
       audioRef.current.playbackRate = effectiveRate;
+      setAudioPreservesPitch(audioRef.current, audioPreservesPitch);
       if (audioRef.current.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
         audioRef.current.play().catch(() => {});
       } else {
@@ -1214,6 +1244,7 @@ function ReplayViewer({
       if (audio.readyState < HTMLMediaElement.HAVE_FUTURE_DATA) return;
       shouldResumeAudioRef.current = false;
       audio.playbackRate = effectiveRate;
+      setAudioPreservesPitch(audio, audioPreservesPitch);
       audio.volume = volume;
       audio.play().catch(() => {
         shouldResumeAudioRef.current = true;
@@ -1326,12 +1357,13 @@ function ReplayViewer({
     if (audioRef.current && audioEnabled) {
       audioRef.current.currentTime = r.time / 1000;
       audioRef.current.playbackRate = effectiveRate;
+      setAudioPreservesPitch(audioRef.current, audioPreservesPitch);
       audioRef.current.volume = volume;
       audioRef.current.play().catch(() => {
         shouldResumeAudioRef.current = true;
       });
     }
-  }, [audioEnabled, effectiveRate, volume]);
+  }, [audioEnabled, audioPreservesPitch, effectiveRate, volume]);
 
   const togglePlay = () => {
     const r = rendererRef.current;
@@ -1374,6 +1406,7 @@ function ReplayViewer({
       const r = rendererRef.current;
       if (r) audioRef.current.currentTime = r.time / 1000;
       audioRef.current.playbackRate = effectiveRate;
+      setAudioPreservesPitch(audioRef.current, audioPreservesPitch);
       shouldResumeAudioRef.current = isPlaying;
       if (isPlaying && audioRef.current.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
         shouldResumeAudioRef.current = false;
@@ -1417,6 +1450,7 @@ function ReplayViewer({
     if (audioRef.current && audioEnabled) {
       audioRef.current.currentTime = r.time / 1000;
       audioRef.current.playbackRate = effectiveRate;
+      setAudioPreservesPitch(audioRef.current, audioPreservesPitch);
       audioRef.current.volume = volume;
     }
     if (scrubResumeOnReleaseRef.current) {
@@ -1604,7 +1638,10 @@ function ReplayViewer({
         onSetSpeed={(nextSpeed) => {
           setSpeed(nextSpeed);
           rendererRef.current?.setSpeed(nextSpeed);
-          if (audioRef.current) audioRef.current.playbackRate = nextSpeed * modRate;
+          if (audioRef.current) {
+            audioRef.current.playbackRate = nextSpeed * modRate;
+            setAudioPreservesPitch(audioRef.current, audioPreservesPitch);
+          }
         }}
         onToggleAudio={toggleAudio}
         onSetVolume={(nextVolume) => {
