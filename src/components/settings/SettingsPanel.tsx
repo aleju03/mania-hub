@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { AnimatePresence } from "framer-motion";
-import { ArrowDown, ArrowUp, Pencil, RotateCcw, Volume1, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Lock, Pencil, RotateCcw, Volume1, Volume2, VolumeX, X } from "lucide-react";
 
 import { PageHeader } from "../layout/PageHeader";
 import { PageTabs } from "../layout/PageTabs";
@@ -35,6 +35,7 @@ import {
 import type { ReplaySkinSettings, ReplaySkinStyle } from "../../lib/replay-skin";
 import type { ReplayOverlaySettings } from "../../lib/replay-overlays";
 import { useAppStore } from "../../store";
+import { DAN_ESTIMATES_ENABLED } from "../../lib/feature-flags";
 
 const MANIA_ARROW_ICON_STYLE: CSSProperties = {
   WebkitMask: "url('/images/notes/mania-arrow-right.svg') center / contain no-repeat",
@@ -115,7 +116,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
     writeReplaySkinSettings(DEFAULT_REPLAY_SKIN_SETTINGS);
     setOverlaySettings(DEFAULT_REPLAY_OVERLAY_SETTINGS);
     writeReplayOverlaySettings(DEFAULT_REPLAY_OVERLAY_SETTINGS);
-    setShowDanEstimates(true);
+    setShowDanEstimates(false);
   };
 
   const resetButton = (
@@ -390,7 +391,9 @@ function DansPanel({
       <ToggleRow
         label="Show dan estimates"
         description="If you care about Dans"
-        checked={showDanEstimates}
+        checked={DAN_ESTIMATES_ENABLED && showDanEstimates}
+        disabled={!DAN_ESTIMATES_ENABLED}
+        lockWhenDisabled
         onChange={onShowDanEstimatesChange}
       />
     </div>
@@ -581,12 +584,14 @@ function ToggleRow({
   description,
   checked,
   disabled = false,
+  lockWhenDisabled = false,
   onChange,
 }: {
   label: string;
   description?: string;
   checked: boolean;
   disabled?: boolean;
+  lockWhenDisabled?: boolean;
   onChange: (checked: boolean) => void;
 }) {
   return (
@@ -605,22 +610,28 @@ function ToggleRow({
           <div className="mt-0.5 text-[11px] text-osu-f1">{description}</div>
         ) : null}
       </div>
-      <button
-        type="button"
-        disabled={disabled}
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border p-0.5 transition-colors disabled:cursor-default ${
-          checked ? "border-osu-pink bg-osu-pink" : "border-osu-b3/60 bg-osu-b5/80"
-        }`}
-      >
-        <span
-          className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
-            checked ? "translate-x-4" : "translate-x-0"
+      <div className="flex shrink-0 items-center gap-2">
+        {disabled && lockWhenDisabled ? (
+          <Lock className="h-3.5 w-3.5 text-osu-f1" aria-hidden="true" />
+        ) : null}
+        <button
+          type="button"
+          disabled={disabled}
+          role="switch"
+          aria-checked={checked}
+          aria-disabled={disabled}
+          onClick={() => onChange(!checked)}
+          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border p-0.5 transition-colors disabled:cursor-default ${
+            checked ? "border-osu-pink bg-osu-pink" : "border-osu-b3/60 bg-osu-b5/80"
           }`}
-        />
-      </button>
+        >
+          <span
+            className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+              checked ? "translate-x-4" : "translate-x-0"
+            }`}
+          />
+        </button>
+      </div>
     </div>
   );
 }

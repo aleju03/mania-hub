@@ -89,6 +89,7 @@ import type {
 } from "./types";
 import { parseManiaBeatmap } from "./beatmap-parser";
 import { estimateDan } from "./dan-estimator";
+import { DAN_ESTIMATES_ENABLED } from "./feature-flags";
 import { isSupportedCountryCode, normalizeCountryCode } from "./country";
 
 const sanitizeServerProfilePageHtml = createServerOnlyFn(
@@ -4314,6 +4315,17 @@ export const getDanEstimates = createServerFn({ method: "GET" })
       edgeCache(3600, 86400);
 
       const results: Record<string, LeanDanEstimate | null> = {};
+      if (!DAN_ESTIMATES_ENABLED) {
+        for (const req of data.items) {
+          const rate = req.rate ?? 1;
+          const key = rate === 1
+            ? String(req.beatmapId)
+            : `${req.beatmapId}:${Math.round(rate * 100)}`;
+          results[key] = null;
+        }
+        return results;
+      }
+
       await mapWithConcurrency(data.items, DAN_ESTIMATE_CONCURRENCY, async (req) => {
         const rate = req.rate ?? 1;
         const key = rate === 1
