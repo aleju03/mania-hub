@@ -872,9 +872,6 @@ function PopOffsPage() {
                               {p.score.beatmap?.bpm != null && (
                                 <StatCell label="BPM" value={String(Math.round(p.score.beatmap.bpm))} />
                               )}
-                              {p.score.max_combo > 0 && p.score.beatmap?.max_combo && p.score.beatmap.max_combo > 0 && (
-                                <StatCell label="Combo %" value={`${Math.round((p.score.max_combo / p.score.beatmap.max_combo) * 100)}%`} />
-                              )}
                             </div>
                             <div className="relative mt-2 flex items-center justify-between gap-2">
                               <span className="text-[10px] text-osu-f1">

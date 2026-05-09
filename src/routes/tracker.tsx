@@ -900,9 +900,6 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                 {score.beatmap?.bpm != null && (
                   <StatCell label="BPM" value={String(Math.round(score.beatmap.bpm))} />
                 )}
-                {score.max_combo > 0 && score.beatmap?.max_combo && score.beatmap.max_combo > 0 && (
-                  <StatCell label="Combo %" value={`${Math.round((score.max_combo / score.beatmap.max_combo) * 100)}%`} />
-                )}
               </div>
               <div className="relative mt-2 flex items-center justify-between gap-2">
                 <span className="text-[10px] text-osu-f1">
