@@ -53,8 +53,8 @@ export function subtractRotation(rotation: Rotation2D, offset: Rotation2D): Rota
 
 export function orientationToRotation(input: { beta: number; gamma: number; restBeta: number }): Rotation2D {
   return {
-    x: Math.round(clamp(-(input.beta - input.restBeta), -24, 24)),
-    y: Math.round(clamp(-input.gamma, -24, 24)),
+    x: Math.round(clamp(input.beta - input.restBeta, -24, 24)),
+    y: Math.round(clamp(input.gamma, -24, 24)),
   };
 }
 

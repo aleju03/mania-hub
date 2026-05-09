@@ -69,8 +69,8 @@ describe("pointerToLight", () => {
 describe("orientationToRotation", () => {
   test("maps device orientation into bounded card rotation", () => {
     expect(orientationToRotation({ beta: 55, gamma: 8, restBeta: 45 })).toEqual({
-      x: -10,
-      y: -8,
+      x: 10,
+      y: 8,
     });
   });
 });
