@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, Film, Settings } from "lucide-react";
 
 import type { ReplayRendererLike } from "#/lib/replay-types";
+import { ReplaySkinColorPanel } from "./ReplaySkinColorPanel";
 
 interface ReplayControlsProps {
   rendererRef: MutableRefObject<ReplayRendererLike | null>;
@@ -608,10 +609,14 @@ function InputOverlayMenu({
   onSetInputOverlayColor: (color: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [colorOpen, setColorOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setColorOpen(false);
+      return;
+    }
     const onDocPointer = (e: PointerEvent) => {
       const el = containerRef.current;
       if (el && !el.contains(e.target as Node)) setOpen(false);
@@ -661,13 +666,13 @@ function InputOverlayMenu({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 4 }}
             transition={{ duration: 0.1 }}
-            className="absolute left-0 bottom-full z-50 mb-1.5 w-44 rounded-lg border border-osu-b2 bg-osu-b3 shadow-2xl p-1.5"
+            className={`absolute left-0 bottom-full z-50 mb-1.5 rounded-lg border border-osu-b2 bg-osu-b3 shadow-2xl p-1.5 ${colorOpen ? "w-56" : "w-44"}`}
           >
             <button
               onClick={onToggleInputOverlay}
               className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 hover:bg-osu-b4 cursor-pointer"
             >
-              <span>Field overlay</span>
+              <span>Column presses</span>
               <CheckMark on={showInputOverlay} />
             </button>
             <button
@@ -688,24 +693,30 @@ function InputOverlayMenu({
               </button>
             )}
             <div className="my-1 h-px bg-osu-b2" />
-            <label className={`flex items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 ${anyInputVisualization ? "cursor-pointer hover:bg-osu-b4" : "opacity-40 cursor-not-allowed"}`}>
+            <button
+              type="button"
+              onClick={() => {
+                if (anyInputVisualization) setColorOpen((v) => !v);
+              }}
+              disabled={!anyInputVisualization}
+              aria-expanded={colorOpen}
+              className={`flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-[11px] font-medium text-osu-f0 ${anyInputVisualization ? "cursor-pointer hover:bg-osu-b4" : "opacity-40 cursor-not-allowed"}`}
+            >
               <span>Color</span>
-              <span className="relative inline-flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1.5">
                 <span className="text-[10px] tabular-nums text-osu-f1">{inputOverlayColor.toUpperCase()}</span>
                 <span
                   className="h-4 w-4 rounded border border-osu-b2"
                   style={{ backgroundColor: inputOverlayColor }}
                 />
-                <input
-                  type="color"
-                  value={inputOverlayColor}
-                  disabled={!anyInputVisualization}
-                  onChange={(e) => onSetInputOverlayColor(e.target.value)}
-                  className="absolute inset-0 cursor-pointer opacity-0 disabled:cursor-not-allowed"
-                  aria-label="Input overlay color"
-                />
+                <ChevronDown className={`h-3 w-3 text-osu-f1 transition-transform ${colorOpen ? "rotate-180" : ""}`} strokeWidth={2.5} />
               </span>
-            </label>
+            </button>
+            {colorOpen && anyInputVisualization && (
+              <div className="mt-1 rounded border border-osu-b2/60 bg-osu-b4/40 p-2">
+                <ReplaySkinColorPanel value={inputOverlayColor} onChange={onSetInputOverlayColor} />
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
