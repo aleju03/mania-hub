@@ -1,5 +1,6 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
-import { Check, Copy, Search, UserRound } from "lucide-react";
+import JSZip from "jszip";
+import { Check, ClipboardList, Copy, FileSpreadsheet, Search, UserRound } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseManiaBeatmap } from "../../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../../lib/beatmap-search";
@@ -152,6 +153,302 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
+type BenchmarkExportAction = "excel" | "markdown";
+type BenchmarkExportStatus = "idle" | "working" | "done" | "error";
+
+interface BenchmarkExportState {
+  action: BenchmarkExportAction | null;
+  status: BenchmarkExportStatus;
+}
+
+interface BenchmarkExportRow {
+  family: DanBenchmarkFamily;
+  beatmapsetId: number;
+  beatmapId: number;
+  artist: string;
+  title: string;
+  creator: string;
+  version: string;
+  sr: number;
+  expectedDan: string | null;
+  detectedDan: string | null;
+  detectedFamily: string | null;
+  match: boolean | null;
+  osuUrl: string;
+}
+
+type BenchmarkExportDataset = Record<DanBenchmarkFamily, BenchmarkExportRow[]>;
+
+type BenchmarkExportColumnKey = Exclude<keyof BenchmarkExportRow, "family">;
+
+interface BenchmarkExportColumn {
+  key: BenchmarkExportColumnKey;
+  label: string;
+  width: number;
+  type?: "number";
+}
+
+const BENCHMARK_EXPORT_FAMILIES: DanBenchmarkFamily[] = ["normal", "ln"];
+
+const BENCHMARK_EXPORT_COLUMNS: BenchmarkExportColumn[] = [
+  { key: "beatmapsetId", label: "Beatmapset ID", width: 90, type: "number" },
+  { key: "beatmapId", label: "Beatmap ID", width: 85, type: "number" },
+  { key: "artist", label: "Artist", width: 160 },
+  { key: "title", label: "Title", width: 190 },
+  { key: "creator", label: "Creator", width: 120 },
+  { key: "version", label: "Difficulty", width: 220 },
+  { key: "sr", label: "SR", width: 55, type: "number" },
+  { key: "expectedDan", label: "Expected Dan", width: 95 },
+  { key: "detectedDan", label: "Detected Dan", width: 95 },
+  { key: "detectedFamily", label: "Detected Family", width: 105 },
+  { key: "match", label: "Match", width: 65 },
+  { key: "osuUrl", label: "osu! URL", width: 250 },
+];
+
+const XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+function formatBenchmarkFamily(family: DanBenchmarkFamily): string {
+  return family === "ln" ? "LN" : "Normal";
+}
+
+function getBenchmarkExportCellValue(row: BenchmarkExportRow, key: BenchmarkExportColumnKey): string | number {
+  if (key === "match") {
+    return row.match == null ? "" : row.match ? "yes" : "no";
+  }
+  if (key === "sr") {
+    return Number(row.sr.toFixed(2));
+  }
+  return row[key] ?? "";
+}
+
+function escapeMarkdownCell(value: string | number): string {
+  return String(value)
+    .replace(/\\/g, "\\\\")
+    .replace(/\|/g, "\\|")
+    .replace(/\r?\n/g, " ")
+    .trim();
+}
+
+function buildBenchmarkDatasetMarkdown(dataset: BenchmarkExportDataset): string {
+  const lines = ["# Dan Classifier Benchmark Dataset", ""];
+
+  for (const family of BENCHMARK_EXPORT_FAMILIES) {
+    const rows = dataset[family];
+    lines.push(`## ${formatBenchmarkFamily(family)}`, "");
+    lines.push(`| ${BENCHMARK_EXPORT_COLUMNS.map((column) => column.label).join(" | ")} |`);
+    lines.push(`| ${BENCHMARK_EXPORT_COLUMNS.map(() => "---").join(" | ")} |`);
+
+    if (rows.length === 0) {
+      lines.push(`| ${BENCHMARK_EXPORT_COLUMNS.map(() => "").join(" | ")} |`);
+    } else {
+      for (const row of rows) {
+        lines.push(`| ${BENCHMARK_EXPORT_COLUMNS.map((column) => (
+          escapeMarkdownCell(getBenchmarkExportCellValue(row, column.key))
+        )).join(" | ")} |`);
+      }
+    }
+    lines.push("");
+  }
+
+  return lines.join("\n").trimEnd() + "\n";
+}
+
+function escapeXml(value: string): string {
+  return value
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function getXlsxCellStyle(row: BenchmarkExportRow | null, key: BenchmarkExportColumnKey | null): number {
+  if (!row || !key) return 1;
+  if (key === "sr") return 3;
+  if (key === "beatmapsetId" || key === "beatmapId") return 2;
+  if (key === "match" && row.match === true) return 4;
+  if (key === "match" && row.match === false) return 5;
+  return 0;
+}
+
+function getXlsxColumnName(index: number): string {
+  let cursor = index + 1;
+  let name = "";
+  while (cursor > 0) {
+    const remainder = (cursor - 1) % 26;
+    name = String.fromCharCode(65 + remainder) + name;
+    cursor = Math.floor((cursor - remainder - 1) / 26);
+  }
+  return name;
+}
+
+function xlsxCell(ref: string, value: string | number, styleIndex: number, isNumber: boolean): string {
+  if (value === "") return `<c r="${ref}" s="${styleIndex}"/>`;
+  if (isNumber) return `<c r="${ref}" s="${styleIndex}"><v>${value}</v></c>`;
+  return `<c r="${ref}" s="${styleIndex}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(String(value))}</t></is></c>`;
+}
+
+function buildXlsxRow(rowIndex: number, values: Array<{
+  value: string | number;
+  styleIndex: number;
+  isNumber: boolean;
+}>): string {
+  return `<row r="${rowIndex}">${values.map((cell, columnIndex) => (
+    xlsxCell(`${getXlsxColumnName(columnIndex)}${rowIndex}`, cell.value, cell.styleIndex, cell.isNumber)
+  )).join("")}</row>`;
+}
+
+function buildXlsxWorksheet(rows: BenchmarkExportRow[]): string {
+  const rowCount = rows.length + 1;
+  const lastColumn = getXlsxColumnName(BENCHMARK_EXPORT_COLUMNS.length - 1);
+  const columns = BENCHMARK_EXPORT_COLUMNS.map((column, index) => {
+    const width = Math.max(8, Math.round((column.width / 7) * 10) / 10);
+    return `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`;
+  }).join("");
+  const header = buildXlsxRow(1, BENCHMARK_EXPORT_COLUMNS.map((column) => ({
+    value: column.label,
+    styleIndex: 1,
+    isNumber: false,
+  })));
+  const body = rows.map((row, index) => buildXlsxRow(index + 2, BENCHMARK_EXPORT_COLUMNS.map((column) => ({
+    value: getBenchmarkExportCellValue(row, column.key),
+    styleIndex: getXlsxCellStyle(row, column.key),
+    isNumber: column.type === "number",
+  })))).join("");
+
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+    '<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>',
+    `<cols>${columns}</cols>`,
+    `<sheetData>${header}${body}</sheetData>`,
+    `<autoFilter ref="A1:${lastColumn}${rowCount}"/>`,
+    "</worksheet>",
+  ].join("");
+}
+
+function buildXlsxStyles(): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">',
+    '<fonts count="4">',
+    '<font><sz val="10"/><name val="Aptos"/></font>',
+    '<font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Aptos"/></font>',
+    '<font><b/><sz val="10"/><color rgb="FF047857"/><name val="Aptos"/></font>',
+    '<font><b/><sz val="10"/><color rgb="FFB91C1C"/><name val="Aptos"/></font>',
+    "</fonts>",
+    '<fills count="5">',
+    '<fill><patternFill patternType="none"/></fill>',
+    '<fill><patternFill patternType="gray125"/></fill>',
+    '<fill><patternFill patternType="solid"><fgColor rgb="FFE6579A"/><bgColor indexed="64"/></patternFill></fill>',
+    '<fill><patternFill patternType="solid"><fgColor rgb="FFDDFCEB"/><bgColor indexed="64"/></patternFill></fill>',
+    '<fill><patternFill patternType="solid"><fgColor rgb="FFFFE2E2"/><bgColor indexed="64"/></patternFill></fill>',
+    "</fills>",
+    '<borders count="2">',
+    "<border/>",
+    '<border><bottom style="thin"><color rgb="FFE8D8E3"/></bottom></border>',
+    "</borders>",
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>',
+    '<cellXfs count="6">',
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"><alignment vertical="center" wrapText="1"/></xf>',
+    '<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>',
+    '<xf numFmtId="1" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"><alignment vertical="center"/></xf>',
+    '<xf numFmtId="2" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"><alignment vertical="center"/></xf>',
+    '<xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="center" vertical="center"/></xf>',
+    '<xf numFmtId="0" fontId="3" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"><alignment horizontal="center" vertical="center"/></xf>',
+    "</cellXfs>",
+    '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>',
+    "</styleSheet>",
+  ].join("");
+}
+
+function buildXlsxContentTypes(): string {
+  return [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">',
+    '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>',
+    '<Default Extension="xml" ContentType="application/xml"/>',
+    '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>',
+    '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>',
+    '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>',
+    '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>',
+    BENCHMARK_EXPORT_FAMILIES.map((_, index) => (
+      `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`
+    )).join(""),
+    "</Types>",
+  ].join("");
+}
+
+async function buildBenchmarkDatasetWorkbook(dataset: BenchmarkExportDataset): Promise<Blob> {
+  const zip = new JSZip();
+  const createdAt = new Date().toISOString();
+
+  zip.file("[Content_Types].xml", buildXlsxContentTypes());
+  zip.file("_rels/.rels", [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+    '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>',
+    '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>',
+    '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>',
+    "</Relationships>",
+  ].join(""));
+  zip.file("docProps/app.xml", [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">',
+    "<Application>mania-hub</Application>",
+    "</Properties>",
+  ].join(""));
+  zip.file("docProps/core.xml", [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">',
+    "<dc:title>Dan Classifier Benchmark Dataset</dc:title>",
+    "<dc:creator>mania-hub</dc:creator>",
+    `<dcterms:created xsi:type="dcterms:W3CDTF">${createdAt}</dcterms:created>`,
+    `<dcterms:modified xsi:type="dcterms:W3CDTF">${createdAt}</dcterms:modified>`,
+    "</cp:coreProperties>",
+  ].join(""));
+  zip.file("xl/workbook.xml", [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+    "<sheets>",
+    BENCHMARK_EXPORT_FAMILIES.map((family, index) => (
+      `<sheet name="${formatBenchmarkFamily(family)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`
+    )).join(""),
+    "</sheets>",
+    "</workbook>",
+  ].join(""));
+  zip.file("xl/_rels/workbook.xml.rels", [
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">',
+    BENCHMARK_EXPORT_FAMILIES.map((_, index) => (
+      `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`
+    )).join(""),
+    `<Relationship Id="rId${BENCHMARK_EXPORT_FAMILIES.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`,
+    "</Relationships>",
+  ].join(""));
+  zip.file("xl/styles.xml", buildXlsxStyles());
+
+  BENCHMARK_EXPORT_FAMILIES.forEach((family, index) => {
+    zip.file(`xl/worksheets/sheet${index + 1}.xml`, buildXlsxWorksheet(dataset[family]));
+  });
+
+  return zip.generateAsync({ type: "blob", mimeType: XLSX_CONTENT_TYPE });
+}
+
+function downloadBlobFile(filename: string, blob: Blob): void {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadTextFile(filename: string, contents: string, type: string): void {
+  downloadBlobFile(filename, new Blob([contents], { type }));
+}
+
 async function runEstimate(
   beatmapset: OsuBeatmapset,
   beatmap: OsuBeatmap,
@@ -173,6 +470,19 @@ async function runEstimate(
   return classifierId === "daniel"
     ? estimateDanielDan(parsed, estimateInput)
     : estimateDan(parsed, estimateInput);
+}
+
+type DanVariant = "--" | "-" | "" | "+" | "++";
+const DAN_VARIANT_OPTIONS: DanVariant[] = ["--", "-", "", "+", "++"];
+
+function splitExpectedLabel(label: string): { base: string; variant: DanVariant } {
+  const match = label.match(/^(.+?)(\+\+|--|\+|-)?$/);
+  if (!match) return { base: label, variant: "" };
+  return { base: match[1], variant: (match[2] ?? "") as DanVariant };
+}
+
+function joinExpectedLabel(base: string, variant: DanVariant): string {
+  return `${base}${variant}`;
 }
 
 async function mapWithConcurrencyClient<T, R>(
@@ -776,7 +1086,7 @@ function BenchmarkView({
     ln: new Map(),
   });
   const [labelsLoaded, setLabelsLoaded] = useState(false);
-  const [exportState, setExportState] = useState<"idle" | "working" | "done" | "error">("idle");
+  const [exportState, setExportState] = useState<BenchmarkExportState>({ action: null, status: "idle" });
   const exportTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const expectedLabels = expectedLabelsByFamily[family];
@@ -954,84 +1264,103 @@ function BenchmarkView({
     }
   }
 
-  async function handleExportDataset() {
-    setExportState("working");
-    try {
-      const familiesToFetch: DanBenchmarkFamily[] = ["normal", "ln"];
-      const datasets = await Promise.all(familiesToFetch.map(async (fam) => {
-        const cached = cacheRef.current.get(fam);
-        if (cached) return { family: fam, sets: cached };
-        const ids = getBenchmarkBeatmapsetIds(fam);
-        const fetched = await mapWithConcurrencyClient(ids, 4, async (id) => {
-          try {
-            const beatmapset = await getBeatmapset({ data: { beatmapsetId: id } });
-            return { id, beatmapset, error: null as string | null };
-          } catch (err) {
-            return { id, beatmapset: null as OsuBeatmapset | null, error: err instanceof Error ? err.message : "Failed" };
-          }
-        });
-        const setsState: BenchmarkSetState[] = fetched.map(({ id, beatmapset, error }) => ({
-          beatmapsetId: id,
-          beatmapset,
-          status: beatmapset ? "ready" : "error",
-          error,
-          rows: beatmapset
-            ? (beatmapset.beatmaps ?? [])
-                .filter((bm) => bm.mode === "mania" && bm.cs === 4)
-                .sort((a, b) => a.difficulty_rating - b.difficulty_rating)
-                .map((bm) => ({
-                  beatmapsetId: id,
-                  beatmapset,
-                  beatmap: bm,
-                  estimate: null,
-                  status: "pending" as const,
-                  error: null,
-                }))
-            : [],
-        }));
-        return { family: fam, sets: setsState };
+  async function buildExportDataset(): Promise<BenchmarkExportDataset> {
+    const datasets = await Promise.all(BENCHMARK_EXPORT_FAMILIES.map(async (fam) => {
+      const cached = cacheRef.current.get(fam);
+      if (cached) return { family: fam, sets: cached };
+
+      const ids = getBenchmarkBeatmapsetIds(fam);
+      const fetched = await mapWithConcurrencyClient(ids, 4, async (id) => {
+        try {
+          const beatmapset = await getBeatmapset({ data: { beatmapsetId: id } });
+          return { id, beatmapset, error: null as string | null };
+        } catch (err) {
+          return { id, beatmapset: null as OsuBeatmapset | null, error: err instanceof Error ? err.message : "Failed" };
+        }
+      });
+      const setsState: BenchmarkSetState[] = fetched.map(({ id, beatmapset, error }) => ({
+        beatmapsetId: id,
+        beatmapset,
+        status: beatmapset ? "ready" : "error",
+        error,
+        rows: beatmapset
+          ? (beatmapset.beatmaps ?? [])
+              .filter((bm) => bm.mode === "mania" && bm.cs === 4)
+              .sort((a, b) => a.difficulty_rating - b.difficulty_rating)
+              .map((bm) => ({
+                beatmapsetId: id,
+                beatmapset,
+                beatmap: bm,
+                estimate: null,
+                status: "pending" as const,
+                error: null,
+              }))
+          : [],
       }));
+      cacheRef.current.set(fam, setsState);
+      return { family: fam, sets: setsState };
+    }));
 
-      const payload: Record<string, Array<{
-        beatmapsetId: number;
-        beatmapId: number;
-        title: string;
-        artist: string;
-        creator: string;
-        version: string;
-        sr: number;
-        expectedDan: string | null;
-        detectedFamily: string | null;
-      }>> = { normal: [], ln: [] };
+    const dataset: BenchmarkExportDataset = { normal: [], ln: [] };
 
-      for (const { family: fam, sets: famSets } of datasets) {
-        for (const set of famSets) {
-          if (!set.beatmapset) continue;
-          for (const row of set.rows) {
-            if (!row.beatmap) continue;
-            payload[fam].push({
-              beatmapsetId: set.beatmapset.id,
-              beatmapId: row.beatmap.id,
-              title: set.beatmapset.title,
-              artist: set.beatmapset.artist,
-              creator: set.beatmapset.creator,
-              version: row.beatmap.version,
-              sr: row.beatmap.difficulty_rating,
-              expectedDan: expectedLabelsByFamily[fam].get(row.beatmap.id) ?? null,
-              detectedFamily: row.estimate?.family ?? null,
-            });
-          }
+    for (const { family: fam, sets: famSets } of datasets) {
+      for (const set of famSets) {
+        if (!set.beatmapset) continue;
+        for (const row of set.rows) {
+          if (!row.beatmap) continue;
+          const expectedDan = expectedLabelsByFamily[fam].get(row.beatmap.id) ?? null;
+          const detectedDan = row.estimate?.displayName ?? row.estimate?.label ?? null;
+          const detectedBase = row.estimate?.label ?? null;
+          const expectedBase = expectedDan ? splitExpectedLabel(expectedDan).base : null;
+          dataset[fam].push({
+            family: fam,
+            beatmapsetId: set.beatmapset.id,
+            beatmapId: row.beatmap.id,
+            title: set.beatmapset.title,
+            artist: set.beatmapset.artist,
+            creator: set.beatmapset.creator,
+            version: row.beatmap.version,
+            sr: row.beatmap.difficulty_rating,
+            expectedDan,
+            detectedDan,
+            detectedFamily: row.estimate?.family ?? null,
+            match: expectedBase && detectedBase ? expectedBase === detectedBase : null,
+            osuUrl: `https://osu.ppy.sh/beatmapsets/${set.beatmapset.id}#mania/${row.beatmap.id}`,
+          });
+        }
+      }
+    }
+
+    return dataset;
+  }
+
+  async function handleExportDataset(action: BenchmarkExportAction) {
+    setExportState({ action, status: "working" });
+    try {
+      const dataset = await buildExportDataset();
+      const date = new Date().toISOString().slice(0, 10);
+
+      if (action === "excel") {
+        const workbook = await buildBenchmarkDatasetWorkbook(dataset);
+        downloadBlobFile(`dan-benchmark-dataset-${date}.xlsx`, workbook);
+      } else {
+        const markdown = buildBenchmarkDatasetMarkdown(dataset);
+        const copied = await copyTextToClipboard(markdown);
+        if (!copied) {
+          downloadTextFile(
+            `dan-benchmark-dataset-${date}.md`,
+            markdown,
+            "text/markdown;charset=utf-8",
+          );
         }
       }
 
-      const json = JSON.stringify(payload, null, 2);
-      const ok = await copyTextToClipboard(json);
-      setExportState(ok ? "done" : "error");
+      setExportState({ action, status: "done" });
     } catch {
-      setExportState("error");
+      setExportState({ action, status: "error" });
     } finally {
       clearTimeout(exportTimerRef.current);
-      exportTimerRef.current = setTimeout(() => setExportState("idle"), 2000);
+      exportTimerRef.current = setTimeout(() => setExportState({ action: null, status: "idle" }), 2000);
     }
   }
 
@@ -1040,12 +1369,36 @@ function BenchmarkView({
     (sum, set) => sum + set.rows.filter((row) => row.status === "ready").length,
     0,
   );
-  const matchCount = sets.reduce((sum, set) => sum + set.rows.filter((row) => {
+  const exactMatchCount = sets.reduce((sum, set) => sum + set.rows.filter((row) => {
     if (row.status !== "ready" || !row.estimate || !row.beatmap) return false;
     const expected = expectedLabels.get(row.beatmap.id);
-    return expected ? expected === row.estimate.label : false;
+    return expected ? expected === row.estimate.displayName : false;
+  }).length, 0);
+  const baseMatchCount = sets.reduce((sum, set) => sum + set.rows.filter((row) => {
+    if (row.status !== "ready" || !row.estimate || !row.beatmap) return false;
+    const expected = expectedLabels.get(row.beatmap.id);
+    if (!expected) return false;
+    if (expected === row.estimate.displayName) return false;
+    return splitExpectedLabel(expected).base === row.estimate.label;
   }).length, 0);
   const labeledCount = sets.reduce((sum, set) => sum + set.rows.filter((row) => row.beatmap && expectedLabels.has(row.beatmap.id)).length, 0);
+  const exportBusy = exportState.status === "working";
+  const getExportButtonStatus = (action: BenchmarkExportAction): BenchmarkExportStatus => (
+    exportState.action === action ? exportState.status : "idle"
+  );
+  const getExportButtonClass = (action: BenchmarkExportAction): string => {
+    const status = getExportButtonStatus(action);
+    if (status === "done") return "border-emerald-400/50 bg-emerald-500/20 text-emerald-300";
+    if (status === "error") return "border-osu-red/50 bg-osu-red/20 text-osu-red";
+    return "border-osu-b3/50 bg-osu-b5 text-osu-c1 hover:border-osu-b3 hover:text-white";
+  };
+  const getExportButtonText = (action: BenchmarkExportAction): string => {
+    const status = getExportButtonStatus(action);
+    if (status === "working") return "...";
+    if (status === "done") return "done";
+    if (status === "error") return "failed";
+    return action === "excel" ? "excel" : "markdown";
+  };
 
   return (
     <section className="min-w-0">
@@ -1054,7 +1407,7 @@ function BenchmarkView({
           <SubTab active={family === "normal"} onClick={() => onFamilyChange("normal")}>Normal</SubTab>
           <SubTab active={family === "ln"} onClick={() => onFamilyChange("ln")}>LN</SubTab>
         </div>
-        <div className="flex items-center gap-3 text-[11px] text-osu-f1">
+        <div className="flex flex-wrap items-center justify-end gap-2 text-[11px] text-osu-f1 sm:gap-3">
           <label className="flex items-center gap-1.5">
             <span className="uppercase tracking-wide font-bold">Classifier</span>
             <select
@@ -1086,25 +1439,34 @@ function BenchmarkView({
             <span className="font-bold text-osu-c1">{readyCount}</span>/{totalDiffs}
           </div>
           {labeledCount > 0 && labelsLoaded ? (
-            <div>
-              <span className="font-bold text-emerald-300">{matchCount}</span>/{labeledCount}
+            <div title={`${exactMatchCount} exact, ${baseMatchCount} base-only, ${labeledCount - exactMatchCount - baseMatchCount} wrong`}>
+              <span className="font-bold text-emerald-300">{exactMatchCount}</span>
+              {baseMatchCount > 0 ? <span className="text-osu-yellow">+{baseMatchCount}</span> : null}
+              /{labeledCount}
             </div>
           ) : null}
-          <button
-            type="button"
-            onClick={() => void handleExportDataset()}
-            disabled={exportState === "working"}
-            className={`rounded border px-2 py-0.5 font-bold uppercase tracking-wide transition-colors cursor-pointer disabled:cursor-not-allowed ${
-              exportState === "done"
-                ? "border-emerald-400/50 bg-emerald-500/20 text-emerald-300"
-                : exportState === "error"
-                  ? "border-osu-red/50 bg-osu-red/20 text-osu-red"
-                  : "border-osu-b3/50 bg-osu-b5 text-osu-c1 hover:border-osu-b3 hover:text-white"
-            }`}
-            title="Copy dataset (both families) as JSON to clipboard"
-          >
-            {exportState === "working" ? "..." : exportState === "done" ? "copied" : exportState === "error" ? "failed" : "export"}
-          </button>
+          <div className="flex flex-wrap items-center justify-end gap-1">
+            <button
+              type="button"
+              onClick={() => void handleExportDataset("excel")}
+              disabled={exportBusy}
+              className={`inline-flex items-center gap-1 whitespace-nowrap rounded border px-2 py-0.5 font-bold uppercase tracking-wide transition-colors cursor-pointer disabled:cursor-not-allowed ${getExportButtonClass("excel")}`}
+              title="Download dataset (both families) as a styled Excel workbook"
+            >
+              <FileSpreadsheet className="h-3 w-3" />
+              {getExportButtonText("excel")}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleExportDataset("markdown")}
+              disabled={exportBusy}
+              className={`inline-flex items-center gap-1 whitespace-nowrap rounded border px-2 py-0.5 font-bold uppercase tracking-wide transition-colors cursor-pointer disabled:cursor-not-allowed ${getExportButtonClass("markdown")}`}
+              title="Copy dataset (both families) as Markdown tables"
+            >
+              <ClipboardList className="h-3 w-3" />
+              {getExportButtonText("markdown")}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1264,21 +1626,28 @@ function BenchmarkDiffRow({ row, coverUrl, labelOptions, expected, onExpectedCha
   const beatmapset = row.beatmapset;
 
   const estimateLabel = row.estimate?.label ?? null;
+  const estimateDisplay = row.estimate?.displayName ?? estimateLabel;
   const estimateFamily = row.estimate?.family ?? null;
   const estimateImage = estimateLabel ? getDanImageSrc(estimateLabel, estimateFamily ?? undefined) : null;
 
-  let matchState: "match" | "mismatch" | "unset" = "unset";
+  const expectedSplit = expected ? splitExpectedLabel(expected) : { base: "", variant: "" as DanVariant };
+
+  let matchState: "exact" | "base" | "wrong" | "unset" = "unset";
   if (expected && estimateLabel) {
-    matchState = expected === estimateLabel ? "match" : "mismatch";
+    if (expected === estimateDisplay) matchState = "exact";
+    else if (expectedSplit.base === estimateLabel) matchState = "base";
+    else matchState = "wrong";
   }
 
   const tileBorder = isSelected
     ? "border-osu-pink ring-1 ring-osu-pink/40"
-    : matchState === "mismatch"
+    : matchState === "wrong"
       ? "border-osu-red/50 hover:border-osu-red/70"
-      : matchState === "match"
-        ? "border-emerald-400/40 hover:border-emerald-400/60"
-        : "border-osu-b3/40 hover:border-osu-b3/70";
+      : matchState === "base"
+        ? "border-osu-yellow/40 hover:border-osu-yellow/60"
+        : matchState === "exact"
+          ? "border-emerald-400/40 hover:border-emerald-400/60"
+          : "border-osu-b3/40 hover:border-osu-b3/70";
 
   return (
     <div className={`group relative flex min-w-0 flex-col overflow-hidden rounded-md border bg-osu-b5 ${tileBorder} transition-colors`}>
@@ -1321,30 +1690,63 @@ function BenchmarkDiffRow({ row, coverUrl, labelOptions, expected, onExpectedCha
         </div>
       </button>
 
-      <div className="relative flex items-center gap-1.5 px-2.5 pb-2">
+      <div className="relative flex items-center gap-1 px-2.5 pb-2">
         <select
-          value={expected}
-          onChange={(event) => onExpectedChange(beatmap.id, event.target.value)}
+          value={expectedSplit.base}
+          onChange={(event) => {
+            const nextBase = event.target.value;
+            if (!nextBase) {
+              onExpectedChange(beatmap.id, "");
+              return;
+            }
+            onExpectedChange(beatmap.id, joinExpectedLabel(nextBase, expectedSplit.variant));
+          }}
           onClick={(event) => event.stopPropagation()}
           className="flex-1 min-w-0 rounded border border-osu-b3/50 bg-osu-b5/80 backdrop-blur-sm px-1.5 py-0.5 text-[11px] text-osu-c1 focus:border-osu-h1/40 focus:outline-none cursor-pointer"
-          title="Expected dan"
+          title="Expected dan (base)"
         >
           <option value="">expected --</option>
           {labelOptions.map((option) => (
             <option key={option} value={option}>{option}</option>
           ))}
         </select>
+        <select
+          value={expectedSplit.variant}
+          onChange={(event) => {
+            const nextVariant = event.target.value as DanVariant;
+            if (!expectedSplit.base) return;
+            onExpectedChange(beatmap.id, joinExpectedLabel(expectedSplit.base, nextVariant));
+          }}
+          onClick={(event) => event.stopPropagation()}
+          disabled={!expectedSplit.base}
+          className="w-12 shrink-0 rounded border border-osu-b3/50 bg-osu-b5/80 backdrop-blur-sm px-1 py-0.5 text-[11px] text-osu-c1 focus:border-osu-h1/40 focus:outline-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed text-center"
+          title="Expected dan (variant)"
+        >
+          {DAN_VARIANT_OPTIONS.map((option) => (
+            <option key={option} value={option}>{option === "" ? "·" : option}</option>
+          ))}
+        </select>
         <span
           className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
-            matchState === "match"
+            matchState === "exact"
               ? "bg-emerald-500/35 text-emerald-300"
-              : matchState === "mismatch"
-                ? "bg-osu-red/35 text-osu-red"
-                : "text-osu-f1/30"
+              : matchState === "base"
+                ? "bg-osu-yellow/30 text-osu-yellow"
+                : matchState === "wrong"
+                  ? "bg-osu-red/35 text-osu-red"
+                  : "text-osu-f1/30"
           }`}
-          title={matchState === "match" ? "Matches expected" : matchState === "mismatch" ? `Expected ${expected}, got ${estimateLabel}` : "No expected dan set"}
+          title={
+            matchState === "exact"
+              ? `Exact match: ${expected}`
+              : matchState === "base"
+                ? `Base match: expected ${expected}, got ${estimateDisplay}`
+                : matchState === "wrong"
+                  ? `Wrong base: expected ${expected}, got ${estimateDisplay}`
+                  : "No expected dan set"
+          }
         >
-          {matchState === "match" ? <Check className="h-3 w-3" strokeWidth={3} /> : matchState === "mismatch" ? "!" : ""}
+          {matchState === "exact" ? <Check className="h-3 w-3" strokeWidth={3} /> : matchState === "base" ? "~" : matchState === "wrong" ? "!" : ""}
         </span>
       </div>
     </div>
