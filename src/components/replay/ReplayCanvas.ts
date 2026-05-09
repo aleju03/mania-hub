@@ -191,6 +191,7 @@ export class ManiaReplayRenderer {
   private textLayer = new Container();
   private textPool: Text[] = [];
   private textPoolCursor = 0;
+  private textMeasureContext: CanvasRenderingContext2D | null = null;
   private skinSpriteLayer = new Container();
   private skinSpritePool: Sprite[] = [];
   private skinSpritePoolCursor = 0;
@@ -2238,6 +2239,35 @@ export class ManiaReplayRenderer {
     return this.getHudScale(layout) * this.overlaySettings[id].scale;
   }
 
+  private getTextMeasureContext(): CanvasRenderingContext2D | null {
+    if (this.textMeasureContext) return this.textMeasureContext;
+    if (typeof document === "undefined") return null;
+    this.textMeasureContext = document.createElement("canvas").getContext("2d");
+    return this.textMeasureContext;
+  }
+
+  private measureTextWidth(
+    text: string,
+    fontSize: number,
+    fontWeight: ReplayComboFontStyle["weight"] | "400" | "700" = "400",
+    fontStyle: "normal" | "italic" = "normal",
+    fontFamily = "Torus, sans-serif",
+  ): number {
+    const context = this.getTextMeasureContext();
+    if (!context) return text.length * fontSize * 0.58;
+    context.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
+    return context.measureText(text).width;
+  }
+
+  private getTextOverlayWidth(
+    text: string,
+    fontSize: number,
+    scale: number,
+    fontWeight: ReplayComboFontStyle["weight"] | "400" | "700" = "400",
+  ): number {
+    return Math.ceil(this.measureTextWidth(text, fontSize, fontWeight) + 4 * scale);
+  }
+
   private getSkinTapColor(col: number): string {
     if (this.skinSettings.style === "bars") return this.barTapColors[col] || this.colors[col];
     return this.skinProfile.tapColors[col] || this.skinProfile.tapColor || this.colors[col];
@@ -2341,7 +2371,7 @@ export class ManiaReplayRenderer {
 
   private renderAccuracyOverlay(layout: Layout) {
     const scale = this.getOverlayScale(layout, "accuracy");
-    const width = 94 * scale;
+    const width = this.getTextOverlayWidth(this.hudCachedAccuracy, 18 * scale, scale, "700");
     const height = 26 * scale;
     const frame = this.getOverlayFrame(layout, "accuracy", width, height);
     if (!frame) return;
@@ -2355,16 +2385,18 @@ export class ManiaReplayRenderer {
 
   private renderKpsOverlay(layout: Layout) {
     const scale = this.getOverlayScale(layout, "kps");
-    const width = 78 * scale;
     const height = 20 * scale;
-    const frame = this.getOverlayFrame(layout, "kps", width, height);
-    if (!frame) return;
 
     const isIdle = this.hudCachedTotalKpsValue <= 0;
     const value = isIdle ? this.hudCachedMaxKps : this.hudCachedTotalKps;
     const suffix = isIdle ? "Max" : "Kps";
     const colorValue = isIdle ? this.hudCachedMaxKpsValue : this.hudCachedTotalKpsValue;
-    this.addText(`${value} ${suffix}`, frame.x, frame.y + height / 2, {
+    const label = `${value} ${suffix}`;
+    const width = this.getTextOverlayWidth(label, 15 * scale, scale, "700");
+    const frame = this.getOverlayFrame(layout, "kps", width, height);
+    if (!frame) return;
+
+    this.addText(label, frame.x, frame.y + height / 2, {
       fontSize: 15 * scale,
       fill: this.getKpsOverlayColor(colorValue),
       alpha: 0.98,
