@@ -2625,7 +2625,7 @@ const REPLAY_OVERLAY_DESCRIPTIONS: Record<ReplayOverlayId, string> = {
 
 const REPLAY_OVERLAY_PREVIEWS: Record<ReplayOverlayId, string> = {
   keypresses: "/images/replay-overlays/keypresses.webp",
-  kps: "/images/replay-overlays/kps.webp",
+  kps: "/images/replay-overlays/kps-v2.webp",
   misses: "/images/replay-overlays/misses.webp",
   accuracy: "/images/replay-overlays/accuracy.webp",
   judgements: "/images/replay-overlays/judgements.webp",

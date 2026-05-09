@@ -207,6 +207,7 @@ export class ManiaReplayRenderer {
   private notes: ManiaNote[];
   private lifeBarFrames: ReplayLifeBarFrame[];
   private keypressTimesByColumn: number[][];
+  private keypressTimes: number[] = [];
   private keyCount: number;
   private currentTime = 0;
   private playbackSpeed = 1;
@@ -341,6 +342,9 @@ export class ManiaReplayRenderer {
   private hudCachedRightMisses = "0";
   private hudCachedKeyKps: string[] = [];
   private hudCachedTotalKps = "0";
+  private hudCachedTotalKpsValue = 0;
+  private hudCachedMaxKps = "0";
+  private hudCachedMaxKpsValue = 0;
 
 
   constructor(
@@ -361,6 +365,7 @@ export class ManiaReplayRenderer {
       .sort((a, b) => a.time - b.time);
     this.keyCount = keyCount;
     this.keypressTimesByColumn = this.buildKeypressTimesByColumn();
+    this.keypressTimes = this.keypressTimesByColumn.flat().sort((a, b) => a - b);
     this.hudCachedKeyKps = new Array(keyCount).fill("0");
     this.colors = COLUMN_COLORS[keyCount] || this.generateColors(keyCount);
     for (const c of this.colors) hexToNumber(c);
@@ -601,7 +606,10 @@ export class ManiaReplayRenderer {
       const v = this.formatKeyKps(keyKps);
       if (this.hudCachedKeyKps[col] !== v) this.hudCachedKeyKps[col] = v;
     }
+    this.hudCachedTotalKpsValue = Math.round(totalKps);
     this.hudCachedTotalKps = this.formatKeyKps(totalKps);
+    this.hudCachedMaxKpsValue = Math.round(this.getMaxKpsUpTo(this.currentTime));
+    this.hudCachedMaxKps = this.formatKeyKps(this.hudCachedMaxKpsValue);
   }
 
   private updateSkinCache() {
@@ -640,14 +648,40 @@ export class ManiaReplayRenderer {
   private getKeyKps(column: number, time: number): number {
     const presses = this.keypressTimesByColumn[column];
     if (!presses?.length) return 0;
-    const windowStart = Math.max(0, time - KEY_KPS_WINDOW_MS);
+    const windowStart = Math.max(0, time - this.getKpsWindowGameMs());
     const start = this.lowerBound(presses, windowStart);
     const end = this.upperBound(presses, time);
     return Math.max(0, end - start) * (1000 / KEY_KPS_WINDOW_MS);
   }
 
+  private getMaxKpsUpTo(time: number): number {
+    if (this.keypressTimes.length === 0) return 0;
+    const windowMs = this.getKpsWindowGameMs();
+    const endLimit = this.upperBound(this.keypressTimes, time);
+    let max = 0;
+    let start = 0;
+    for (let end = 0; end < endLimit; end++) {
+      const windowStart = Math.max(0, this.keypressTimes[end] - windowMs);
+      while (this.keypressTimes[start] < windowStart) start++;
+      max = Math.max(max, end - start + 1);
+    }
+    return max * (1000 / KEY_KPS_WINDOW_MS);
+  }
+
+  private getKpsWindowGameMs(): number {
+    return KEY_KPS_WINDOW_MS * this.modRate;
+  }
+
   private formatKeyKps(kps: number): string {
     return String(Math.round(kps));
+  }
+
+  private getKpsOverlayColor(kps: number): string {
+    if (kps >= 20) return "#ff2f3e";
+    if (kps >= 15) return "#ff8a22";
+    if (kps >= 10) return "#ffd43b";
+    if (kps >= 8) return "#40c8ff";
+    return "#ffffff";
   }
 
   private prepareScrollVelocities() {
@@ -2317,28 +2351,21 @@ export class ManiaReplayRenderer {
 
   private renderKpsOverlay(layout: Layout) {
     const scale = this.getOverlayScale(layout, "kps");
-    const width = 54 * scale;
-    const height = 38 * scale;
+    const width = 78 * scale;
+    const height = 20 * scale;
     const frame = this.getOverlayFrame(layout, "kps", width, height);
     if (!frame) return;
 
-    this.fillRect(frame.x, frame.y, width, height, "#0a0a12", 0.82);
-    this.rect(frame.x, frame.y, width, height, "#ffffff", 0.12, 1);
-    this.fillRect(frame.x + 1, frame.y + 1, 3 * scale, height - 2, this.inputOverlayColor, 0.95);
-    this.addText("KPS", frame.x + width / 2, frame.y + 5 * scale, {
-      fontSize: 7 * scale,
-      fill: "#ffffff",
-      alpha: 0.52,
+    const isIdle = this.hudCachedTotalKpsValue <= 0;
+    const value = isIdle ? this.hudCachedMaxKps : this.hudCachedTotalKps;
+    const suffix = isIdle ? "Max" : "Kps";
+    const colorValue = isIdle ? this.hudCachedMaxKpsValue : this.hudCachedTotalKpsValue;
+    this.addText(`${value} ${suffix}`, frame.x, frame.y + height / 2, {
+      fontSize: 15 * scale,
+      fill: this.getKpsOverlayColor(colorValue),
+      alpha: 0.98,
       fontWeight: "700",
-      anchorX: 0.5,
-    });
-    this.addText(this.hudCachedTotalKps, frame.x + width / 2, frame.y + 34 * scale, {
-      fontSize: 17 * scale,
-      fill: "#ffffff",
-      alpha: 0.95,
-      fontWeight: "700",
-      anchorX: 0.5,
-      anchorY: 1,
+      anchorY: 0.5,
     });
   }
 
