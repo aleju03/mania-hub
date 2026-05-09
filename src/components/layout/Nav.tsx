@@ -385,7 +385,7 @@ export function Nav() {
                             ? preserveSearchWithCountry(selectedCountry)
                             : undefined
                 }
-                preload="intent"
+                preload={l.id === "tracker" ? false : "intent"}
                 draggable={false}
                 className={`relative px-2.5 py-[19px] text-[12px] font-semibold capitalize whitespace-nowrap transition-colors duration-[120ms] ${
                   current?.id === l.id
@@ -623,7 +623,7 @@ export function Nav() {
                                 ? preserveSearchWithCountry(selectedCountry)
                                 : undefined
                     }
-                    preload="intent"
+                    preload={l.id === "tracker" ? false : "intent"}
                     onClick={() => setMenuOpen(false)}
                     draggable={false}
                     className={`flex items-center gap-3 px-5 py-3 text-sm font-medium capitalize transition-colors duration-[120ms] ${

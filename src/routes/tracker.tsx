@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { getRankings, getCountryRecentScores } from "../lib/osu";
+import { getRankings, getCountryRecentScores, getTrackerLiveSnapshot, getTrackerSnapshot } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { formatAccuracy, formatTimeAgo, formatPP, formatNumber } from "../lib/format";
@@ -34,10 +34,35 @@ import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
 
+const TRACKER_SNAPSHOT_LOADER_TIMEOUT_MS = 2500;
+
+async function withSnapshotLoaderBudget<T>(snapshotPromise: Promise<T>): Promise<T | null> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<null>((resolve) => {
+    timeoutId = setTimeout(() => resolve(null), TRACKER_SNAPSHOT_LOADER_TIMEOUT_MS);
+  });
+  return Promise.race([
+    snapshotPromise.finally(() => {
+      if (timeoutId) clearTimeout(timeoutId);
+    }),
+    timeoutPromise,
+  ]);
+}
+
 export const Route = createFileRoute("/tracker")({
   validateSearch: (search: Record<string, unknown>) => ({
     country: parseCountrySearchParam(search.country),
   }),
+  loaderDeps: ({ search }) => ({
+    country: search.country,
+  }),
+  loader: async ({ deps }) => {
+    try {
+      return await withSnapshotLoaderBudget(getTrackerSnapshot({ data: { country: deps.country } }));
+    } catch {
+      return null;
+    }
+  },
   head: ({ match }) => {
     const country = match.search.country;
     const countryName = country ? getCountryName(country) : null;
@@ -81,11 +106,16 @@ function ScoresPage() {
   const { country } = Route.useSearch();
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = country ?? fallbackCountry;
-  const rankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
+  const loaderData = Route.useLoaderData();
+  const snapshot = loaderData?.country === selectedCountry ? loaderData : null;
+  const cachedRankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
+  const rankings = cachedRankings ?? snapshot?.rankings ?? null;
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
-  const feedScores = useAppStore((state) => state.feedScoresByCountry[selectedCountry]) ?? EMPTY_SCORES;
+  const cachedFeedScores = useAppStore((state) => state.feedScoresByCountry[selectedCountry]) ?? EMPTY_SCORES;
+  const feedScores = cachedFeedScores.length > 0 ? cachedFeedScores : snapshot?.scores ?? EMPTY_SCORES;
   const feedScoresFetchedAt = useAppStore((state) => state.feedScoresFetchedAtByCountry[selectedCountry]) ?? null;
-  const trackedUserIds = useAppStore((state) => state.trackedUserIdsByCountry[selectedCountry]) ?? EMPTY_IDS;
+  const cachedTrackedUserIds = useAppStore((state) => state.trackedUserIdsByCountry[selectedCountry]) ?? EMPTY_IDS;
+  const trackedUserIds = cachedTrackedUserIds.length > 0 ? cachedTrackedUserIds : snapshot?.userIds ?? EMPTY_IDS;
   const addFeedScores = useAppStore((state) => state.addFeedScores);
   const markFeedScoresFetched = useAppStore((state) => state.markFeedScoresFetched);
   const setRankings = useAppStore((state) => state.setRankings);
@@ -99,7 +129,7 @@ function ScoresPage() {
   const [gradeFilter, setGradeFilter] = useState<GradeFilter>("all");
   const [failedFilter, setFailedFilter] = useState<FailedFilter>("hide");
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<number[]>([]);
-  const [initialLoaded, setInitialLoaded] = useState(feedScores.length > 0 || !!feedScoresFetchedAt);
+  const [initialLoaded, setInitialLoaded] = useState(feedScores.length > 0 || !!feedScoresFetchedAt || !!snapshot);
   const [initialRefreshDone, setInitialRefreshDone] = useState(false);
   const [initialFetching, setInitialFetching] = useState(false);
   const [polling, setPolling] = useState(false);
@@ -107,6 +137,7 @@ function ScoresPage() {
   const initialFetchInFlightRef = useRef(false);
   const pollInFlightRef = useRef(false);
   const pollRequestIdRef = useRef(0);
+  const appliedSnapshotKeyRef = useRef<string | null>(null);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const handleToggleExpand = useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key));
@@ -125,6 +156,24 @@ function ScoresPage() {
       })) ?? [],
     [rankings],
   );
+
+  useEffect(() => {
+    if (!snapshot) return;
+    const snapshotKey = `${snapshot.country}:${snapshot.fetchedAt}`;
+    if (appliedSnapshotKeyRef.current === snapshotKey) return;
+    appliedSnapshotKeyRef.current = snapshotKey;
+
+    setRankings(selectedCountry, snapshot.rankings);
+    setTrackedUserIds(selectedCountry, snapshot.userIds);
+    setUserIds(snapshot.userIds);
+    setLoadingPlayers(false);
+    setPlayersError(null);
+    setInitialLoaded(true);
+    if (snapshot.scores.length > 0) addFeedScores(selectedCountry, snapshot.scores);
+    if (Object.keys(snapshot.gains).length > 0) {
+      setTrackerPpGains(selectedCountry, snapshot.gains, snapshot.fetchedAt);
+    }
+  }, [snapshot, selectedCountry, setRankings, setTrackedUserIds, addFeedScores, setTrackerPpGains]);
 
   useEffect(() => {
     setUserIds(trackedUserIds);
@@ -225,10 +274,13 @@ function ScoresPage() {
 
     (async () => {
       const totalBatches = Math.ceil(requestedUserIds.length / BATCH);
-      for (let b = 0; b < totalBatches; b++) {
+      const skipBatchZero = snapshot?.country === requestedCountry;
+      const firstBatchIndex = skipBatchZero ? Math.min(snapshot.seedBatchCount, totalBatches) : 0;
+      const parallelBatchEnd = Math.min(totalBatches, 3);
+      const fetchBatch = async (batchIndex: number) => {
         if (cancelled) return;
         try {
-          const batch = getTrackerUserBatch(requestedUserIds, requestedUsers, BATCH, b);
+          const batch = getTrackerUserBatch(requestedUserIds, requestedUsers, BATCH, batchIndex);
           const result = await getCountryRecentScores({
             data: { userIds: batch.userIds, users: batch.users, batchSize: BATCH, batchIndex: 0, recentLimit: 20, source: "backfill" },
           });
@@ -237,6 +289,17 @@ function ScoresPage() {
           if (Object.keys(result.gains).length > 0) setTrackerPpGains(requestedCountry, result.gains);
           setInitialLoaded(true);
         } catch { /* continue */ }
+      };
+
+      await Promise.allSettled(
+        Array.from(
+          { length: Math.max(0, parallelBatchEnd - firstBatchIndex) },
+          (_, offset) => fetchBatch(firstBatchIndex + offset),
+        ),
+      );
+
+      for (let b = Math.max(firstBatchIndex, parallelBatchEnd); b < totalBatches; b++) {
+        await fetchBatch(b);
       }
       if (!cancelled) {
         markFeedScoresFetched(requestedCountry);
@@ -255,23 +318,18 @@ function ScoresPage() {
   // addFeedScores writes both inside the loop, and those writes must not cancel
   // the remaining batches of this initial refresh.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userIds, trackerUsers, initialRefreshDone, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains]);
+  }, [userIds, trackerUsers, initialRefreshDone, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains, snapshot]);
 
   const poll = useCallback(async () => {
-    if (!isPolling || userIds.length === 0) return;
+    if (!isPolling) return;
     if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
     if (pollInFlightRef.current) return;
     pollInFlightRef.current = true;
     const requestId = ++pollRequestIdRef.current;
     setPolling(true);
     try {
-      const batchSize = 10;
-      const totalBatches = Math.max(1, Math.ceil(userIds.length / batchSize));
-      const batchIndex = Math.floor(Date.now() / 60_000) % totalBatches;
-      const batch = getTrackerUserBatch(userIds, trackerUsers, batchSize, batchIndex);
-      const result = await getCountryRecentScores({
-        data: { userIds: batch.userIds, users: batch.users, batchSize, batchIndex: 0, recentLimit: 20, source: "live" },
-      });
+      const result = await getTrackerLiveSnapshot({ data: { country: selectedCountry } });
+      if (result.userIds.length > 0) setTrackedUserIds(selectedCountry, result.userIds);
       if (result.scores.length > 0) addFeedScores(selectedCountry, result.scores);
       if (Object.keys(result.gains).length > 0) setTrackerPpGains(selectedCountry, result.gains);
       else markFeedScoresFetched(selectedCountry);
@@ -281,7 +339,7 @@ function ScoresPage() {
         setPolling(false);
       }
     }
-  }, [isPolling, userIds, trackerUsers, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains]);
+  }, [isPolling, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains, setTrackedUserIds]);
 
   useEffect(() => {
     if (!isPolling) return;

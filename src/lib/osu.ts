@@ -772,6 +772,43 @@ interface CountryRecentScoresResponse {
   scores: LeanTrackerScore[];
 }
 
+interface TrackerSnapshotResponse extends CountryRecentScoresResponse {
+  country: string;
+  fetchedAt: number;
+  rankings: RankingsResponse;
+  seedBatchCount: number;
+  userIds: number[];
+  users: TrackerUserSummary[];
+}
+
+interface TrackerLiveSnapshotResponse extends CountryRecentScoresResponse {
+  batchIndex: number;
+  country: string;
+  fetchedAt: number;
+  totalBatches: number;
+  userIds: number[];
+  users: TrackerUserSummary[];
+}
+
+const TRACKER_LIVE_SNAPSHOT_CACHE_TTL = 90 * 1000;
+const TRACKER_LIVE_SNAPSHOT_CACHE_VERSION = 1;
+const TRACKER_SNAPSHOT_BATCH_TIMEOUT_MS = 1500;
+
+async function withTrackerSnapshotBatchBudget(
+  feedPromise: Promise<CountryRecentScoresResponse>,
+): Promise<CountryRecentScoresResponse | null> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<null>((resolve) => {
+    timeoutId = setTimeout(() => resolve(null), TRACKER_SNAPSHOT_BATCH_TIMEOUT_MS);
+  });
+  return Promise.race([
+    feedPromise.finally(() => {
+      if (timeoutId) clearTimeout(timeoutId);
+    }),
+    timeoutPromise,
+  ]);
+}
+
 function getScoreRequestParams(
   userId: number,
   params: Record<string, string | number | undefined>,
@@ -1361,26 +1398,30 @@ export const getRankings = createServerFn({ method: "GET" })
   .handler(async ({ data }: { data: { type?: string; page?: number; country?: string } }): Promise<RankingsResponse> => {
     edgeCache(60, 300);
     const type = data.type ?? "performance";
-    // v4: lean ranking users read cover_url from user.cover.url for replay
-    // suggestion banners. Bumped so broken v3 entries with undefined banners
-    // are refetched.
-    const cacheKey = `rankings:v4:${type}:${data.page ?? 1}:${data.country ?? ""}`;
-    return fetchWithCacheLock(cacheKey, RANKINGS_CACHE_TTL, async () => {
-      const raw = await osuFetch<RawRankingsResponse>(
-        `/rankings/mania/${type}`,
-        {
-          "cursor[page]": data.page ?? 1,
-          country: data.country,
-        },
-        { caller: "getRankings" },
-      );
-      return {
-        cursor: raw.cursor,
-        ranking: raw.ranking.map(toLeanRankingEntry),
-        total: raw.total,
-      };
-    });
+    return fetchRankingsPage(type, data.page ?? 1, data.country);
   });
+
+async function fetchRankingsPage(type: string, page: number, country?: string): Promise<RankingsResponse> {
+  // v4: lean ranking users read cover_url from user.cover.url for replay
+  // suggestion banners. Bumped so broken v3 entries with undefined banners
+  // are refetched.
+  const cacheKey = `rankings:v4:${type}:${page}:${country ?? ""}`;
+  return fetchWithCacheLock(cacheKey, RANKINGS_CACHE_TTL, async () => {
+    const raw = await osuFetch<RawRankingsResponse>(
+      `/rankings/mania/${type}`,
+      {
+        "cursor[page]": page,
+        country,
+      },
+      { caller: "getRankings" },
+    );
+    return {
+      cursor: raw.cursor,
+      ranking: raw.ranking.map(toLeanRankingEntry),
+      total: raw.total,
+    };
+  });
+}
 
 function getOscBaseUrl(): string | null {
   if (process.env.OSC_TRACKER_ENABLED === "0" || process.env.OSC_TRACKER_DISABLED === "1") {
@@ -1652,6 +1693,43 @@ function getTrackerRecentScoresCacheKey(
     options?.recentLimit ?? 20,
     batchUserIds.join(","),
   ].join(":");
+}
+
+function toTrackerUserSummaries(rankings: RankingsResponse): TrackerUserSummary[] {
+  return rankings.ranking
+    .filter((entry) => entry.user.is_active !== false)
+    .map((entry) => ({
+      id: entry.user.id,
+      username: entry.user.username,
+      avatar_url: entry.user.avatar_url,
+      country_code: entry.user.country_code,
+    }));
+}
+
+function getTrackerScoreKey(score: LeanTrackerScore): string {
+  return score.id > 0
+    ? String(score.id)
+    : `${score.user_id}:${score.beatmap_id ?? ""}:${score.created_at ?? ""}:${score.ended_at ?? ""}`;
+}
+
+function getLeanTrackerScoreTimeMs(score: LeanTrackerScore): number {
+  return new Date(score.ended_at ?? score.created_at ?? score.started_at ?? "").getTime() || 0;
+}
+
+async function fetchTrackerRecentScoresCached(
+  userIds: number[],
+  options: {
+    batchIndex?: number;
+    batchSize?: number;
+    recentLimit?: number;
+    source?: "backfill" | "live";
+    users?: TrackerUserSummary[];
+  },
+): Promise<CountryRecentScoresResponse> {
+  const cacheKey = getTrackerRecentScoresCacheKey(userIds, options);
+  return fetchWithCacheLock(cacheKey, TRACKER_RECENT_SCORES_CACHE_TTL, () =>
+    fetchCountryRecentScoresWithGains(userIds, options),
+  );
 }
 
 function toLeanTrackerScore(score: OsuScore): LeanTrackerScore {
@@ -2585,10 +2663,97 @@ export const getCountryRecentScores = createServerFn({ method: "GET" })
   .inputValidator(normalizeCountryRecentScoresPayload)
   .handler(async ({ data }: { data: { userIds: number[]; users?: TrackerUserSummary[]; batchSize?: number; batchIndex?: number; recentLimit?: number; source?: "backfill" | "live" } }) => {
     edgeCache(30, 120);
-    const cacheKey = getTrackerRecentScoresCacheKey(data.userIds, data);
-    return fetchWithCacheLock(cacheKey, TRACKER_RECENT_SCORES_CACHE_TTL, () =>
-      fetchCountryRecentScoresWithGains(data.userIds, data),
+    return fetchTrackerRecentScoresCached(data.userIds, data);
+  });
+
+export const getTrackerSnapshot = createServerFn({ method: "GET" })
+  .inputValidator(normalizeCountryPayload)
+  .handler(async ({ data }: { data: { country?: string } }): Promise<TrackerSnapshotResponse> => {
+    edgeCache(30, 120);
+    const country = normalizeCountryCode(data.country);
+    const rankings = await fetchRankingsPage("performance", 1, country);
+    const users = toTrackerUserSummaries(rankings);
+    const userIds = users.map((user) => user.id);
+    const seedBatchCount = Math.min(3, Math.ceil(userIds.length / 10));
+    const feedResults = await Promise.allSettled(
+      Array.from({ length: seedBatchCount }, async (_, batchIndex) => {
+        const batchUsers = users.slice(batchIndex * 10, batchIndex * 10 + 10);
+        const batchUserIds = batchUsers.map((user) => user.id);
+        const feedOptions = {
+          userIds: batchUserIds,
+          users: batchUsers,
+          batchSize: 10,
+          batchIndex: 0,
+          recentLimit: 10,
+          source: "live" as const,
+        };
+        return withTrackerSnapshotBatchBudget(
+          fetchTrackerRecentScoresCached(batchUserIds, feedOptions),
+        );
+      }),
     );
+    const mergedScores = new Map<string, LeanTrackerScore>();
+    const gains: Record<number, number> = {};
+    for (const result of feedResults) {
+      if (result.status !== "fulfilled" || !result.value) continue;
+      Object.assign(gains, result.value.gains);
+      for (const score of result.value.scores) {
+        const key = getTrackerScoreKey(score);
+        if (!mergedScores.has(key)) mergedScores.set(key, score);
+      }
+    }
+    const scores = [...mergedScores.values()]
+      .sort((a, b) => getLeanTrackerScoreTimeMs(b) - getLeanTrackerScoreTimeMs(a))
+      .slice(0, 100);
+
+    return {
+      country,
+      rankings,
+      seedBatchCount,
+      userIds,
+      users,
+      scores,
+      gains,
+      fetchedAt: Date.now(),
+    };
+  });
+
+export const getTrackerLiveSnapshot = createServerFn({ method: "GET" })
+  .inputValidator(normalizeCountryPayload)
+  .handler(async ({ data }: { data: { country?: string } }): Promise<TrackerLiveSnapshotResponse> => {
+    edgeCache(30, 120);
+    const country = normalizeCountryCode(data.country);
+    const minuteBucket = Math.floor(Date.now() / 60_000);
+    const cacheKey = `tracker-live-snapshot:v${TRACKER_LIVE_SNAPSHOT_CACHE_VERSION}:${country}:${minuteBucket}`;
+
+    return fetchWithCacheLock(cacheKey, TRACKER_LIVE_SNAPSHOT_CACHE_TTL, async () => {
+      const rankings = await fetchRankingsPage("performance", 1, country);
+      const users = toTrackerUserSummaries(rankings);
+      const userIds = users.map((user) => user.id);
+      const batchSize = 10;
+      const totalBatches = Math.max(1, Math.ceil(userIds.length / batchSize));
+      const batchIndex = minuteBucket % totalBatches;
+      const batchUsers = users.slice(batchIndex * batchSize, batchIndex * batchSize + batchSize);
+      const batchUserIds = batchUsers.map((user) => user.id);
+      const feed = await fetchTrackerRecentScoresCached(batchUserIds, {
+        users: batchUsers,
+        batchSize,
+        batchIndex: 0,
+        recentLimit: 20,
+        source: "live",
+      });
+
+      return {
+        batchIndex,
+        country,
+        fetchedAt: Date.now(),
+        gains: feed.gains,
+        scores: feed.scores,
+        totalBatches,
+        userIds,
+        users,
+      };
+    });
   });
 
 // ── Maps (aggregated most-played + favourites across CR players) ───────────
