@@ -102,6 +102,12 @@ type ReplayVideoExportState = {
   signed: boolean;
 };
 
+function isLocalReplayVideoExportHost(): boolean {
+  if (!import.meta.env.DEV || typeof window === "undefined") return false;
+  const hostname = window.location.hostname.toLowerCase();
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
+}
+
 function getNativeFullscreenElement() {
   if (typeof document === "undefined") return null;
   const doc = document as FullscreenDocument;
@@ -851,6 +857,7 @@ function ReplayViewer({
   const [pendingPlay, setPendingPlay] = useState(false);
   const [buffering, setBuffering] = useState(false);
   const [bgSrc, setBgSrc] = useState<string | null>(null);
+  const [localReplayVideoExportAvailable, setLocalReplayVideoExportAvailable] = useState(false);
   const [videoExport, setVideoExport] = useState<ReplayVideoExportState>({
     exporting: false,
     progress: 0,
@@ -878,7 +885,7 @@ function ReplayViewer({
   const replayEndAudioFadeActiveRef = useRef(false);
   const replayEndAudioFadeFrameRef = useRef<number | null>(null);
   const isCanvasFullscreen = isNativeFullscreen || isPseudoFullscreen;
-  const replayVideoExportAvailable = auth.canUseAdminFeatures;
+  const replayVideoExportAvailable = auth.isAdmin && localReplayVideoExportAvailable;
 
   const cancelReplayEndAudioFade = useCallback((restoreVolume = true) => {
     replayEndAudioFadeActiveRef.current = false;
@@ -929,6 +936,10 @@ function ReplayViewer({
     replayEndAudioFadeFrameRef.current = window.requestAnimationFrame(step);
     return true;
   }, [audioEnabled, cancelReplayEndAudioFade]);
+
+  useEffect(() => {
+    setLocalReplayVideoExportAvailable(isLocalReplayVideoExportHost());
+  }, []);
 
   const applyScrollSpeed = useCallback((next: number, persist = false) => {
     const normalized = normalizeReplayScrollSpeed(next);
