@@ -209,7 +209,6 @@ function R2AdminPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
-  const [confirmText, setConfirmText] = useState("");
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
@@ -225,8 +224,7 @@ function R2AdminPage() {
 
   const prefix = search.prefix || ROOT_PREFIX;
   const crumbs = useMemo(() => pathCrumbs(prefix), [prefix]);
-  const folderDeleteConfirmed = pendingDelete?.kind !== "prefix" || (
-    confirmText === pendingDelete.prefix &&
+  const deleteReady = pendingDelete?.kind !== "prefix" || (
     !!prefixSummary &&
     !prefixSummaryLoading &&
     !prefixSummaryError
@@ -321,7 +319,7 @@ function R2AdminPage() {
   }, []);
 
   const confirmDelete = useCallback(async () => {
-    if (!pendingDelete || !folderDeleteConfirmed) return;
+    if (!pendingDelete || !deleteReady) return;
     setDeleteBusy(true);
     setError(null);
     try {
@@ -331,7 +329,6 @@ function R2AdminPage() {
         await deleteR2Prefix({ data: { prefix: pendingDelete.prefix } });
       }
       setPendingDelete(null);
-      setConfirmText("");
       setPrefixSummary(null);
       await load(null, false);
     } catch (err) {
@@ -339,7 +336,7 @@ function R2AdminPage() {
     } finally {
       setDeleteBusy(false);
     }
-  }, [folderDeleteConfirmed, load, pendingDelete]);
+  }, [deleteReady, load, pendingDelete]);
 
   const sortedFolders = useMemo(() => {
     const direction = sortDirection === "asc" ? 1 : -1;
@@ -462,13 +459,10 @@ function R2AdminPage() {
           summary={prefixSummary}
           summaryLoading={prefixSummaryLoading}
           summaryError={prefixSummaryError}
-          confirmText={confirmText}
-          onConfirmTextChange={setConfirmText}
-          confirmed={folderDeleteConfirmed}
+          confirmed={deleteReady}
           busy={deleteBusy}
           onCancel={() => {
             setPendingDelete(null);
-            setConfirmText("");
             setPrefixSummary(null);
             setPrefixSummaryError(null);
           }}
@@ -988,8 +982,6 @@ function DeleteDialog({
   summary,
   summaryLoading,
   summaryError,
-  confirmText,
-  onConfirmTextChange,
   confirmed,
   busy,
   onCancel,
@@ -999,13 +991,13 @@ function DeleteDialog({
   summary: R2AdminPrefixSummary | null;
   summaryLoading: boolean;
   summaryError: string | null;
-  confirmText: string;
-  onConfirmTextChange: (next: string) => void;
   confirmed: boolean;
   busy: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const [confirming, setConfirming] = useState(false);
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/65 px-4">
       <div className="w-full max-w-[480px] rounded-lg border border-osu-b3/40 bg-osu-b5 shadow-2xl overflow-hidden">
@@ -1050,20 +1042,15 @@ function DeleteDialog({
                   )}
                 </div>
               </div>
-
-              <label className="block">
-                <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">
-                  Type the prefix to confirm
-                </span>
-                <input
-                  value={confirmText}
-                  onChange={(event) => onConfirmTextChange(event.target.value)}
-                  className="mt-1 w-full rounded-md bg-osu-b4/60 border border-osu-b3/30 px-2.5 py-1.5 text-[11px] font-mono text-white outline-none transition-colors duration-[120ms] focus:border-osu-pink/40 cursor-text"
-                  placeholder={pending.prefix}
-                  autoFocus
-                />
-              </label>
             </>
+          ) : null}
+
+          {confirming ? (
+            <div className="rounded-md border border-osu-red/25 bg-osu-red/10 px-2.5 py-2 text-[11px] text-osu-c2">
+              {pending.kind === "prefix"
+                ? "Are you sure you want to delete this folder and every file shown in the preview?"
+                : "Are you sure you want to delete this file?"}
+            </div>
           ) : null}
         </div>
 
@@ -1074,15 +1061,15 @@ function DeleteDialog({
             disabled={busy}
             className="px-3 py-1.5 rounded-md bg-osu-b4/60 border border-osu-b3/30 text-[11px] text-osu-l2 hover:bg-osu-b3/60 hover:text-white transition-colors duration-[120ms] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
           >
-            Cancel
+            {confirming ? "No, keep it" : "Cancel"}
           </button>
           <button
             type="button"
-            onClick={onConfirm}
+            onClick={confirming ? onConfirm : () => setConfirming(true)}
             disabled={busy || !confirmed}
             className="px-3 py-1.5 rounded-md bg-osu-red/20 border border-osu-red/30 text-[11px] font-medium text-osu-red-light hover:bg-osu-red/30 transition-colors duration-[120ms] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
           >
-            {busy ? "Deleting..." : "Delete"}
+            {busy ? "Deleting..." : confirming ? "Yes, delete" : "Delete"}
           </button>
         </div>
       </div>
