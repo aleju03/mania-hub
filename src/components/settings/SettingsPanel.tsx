@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { AnimatePresence } from "framer-motion";
-import { ArrowDown, ArrowUp, Lock, Pencil, RotateCcw, Volume1, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Pencil, RotateCcw, Volume1, Volume2, VolumeX, X } from "lucide-react";
 
 import { PageHeader } from "../layout/PageHeader";
 import { PageTabs } from "../layout/PageTabs";
@@ -393,7 +393,7 @@ function DansPanel({
         description="If you care about Dans"
         checked={DAN_ESTIMATES_ENABLED && showDanEstimates}
         disabled={!DAN_ESTIMATES_ENABLED}
-        lockWhenDisabled
+        wipWhenDisabled
         onChange={onShowDanEstimatesChange}
       />
     </div>
@@ -584,14 +584,14 @@ function ToggleRow({
   description,
   checked,
   disabled = false,
-  lockWhenDisabled = false,
+  wipWhenDisabled = false,
   onChange,
 }: {
   label: string;
   description?: string;
   checked: boolean;
   disabled?: boolean;
-  lockWhenDisabled?: boolean;
+  wipWhenDisabled?: boolean;
   onChange: (checked: boolean) => void;
 }) {
   return (
@@ -611,8 +611,10 @@ function ToggleRow({
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        {disabled && lockWhenDisabled ? (
-          <Lock className="h-3.5 w-3.5 text-osu-f1" aria-hidden="true" />
+        {disabled && wipWhenDisabled ? (
+          <span className="rounded-sm border border-osu-b3/60 bg-osu-b5/60 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-osu-f1">
+            WIP
+          </span>
         ) : null}
         <button
           type="button"
