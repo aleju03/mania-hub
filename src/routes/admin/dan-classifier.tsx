@@ -1,6 +1,6 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import { Check, Copy, Search, UserRound } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseManiaBeatmap } from "../../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../../lib/beatmap-search";
 import { estimateDan } from "../../lib/dan-estimator";
@@ -9,6 +9,12 @@ import { getBeatmapFile, getBeatmapset, getBeatmapsetForBeatmap, getUser, getUse
 import type { DanEstimate } from "../../lib/dan-estimator";
 import type { OsuBeatmap, OsuBeatmapset, OsuScore } from "../../lib/types";
 import { canUseDevFeatures } from "../../lib/auth-shared";
+import {
+  type DanBenchmarkFamily,
+  getBenchmarkBeatmapsetIds,
+  getBenchmarkLabelOptions,
+} from "../../lib/dan-benchmark-sets";
+import { getDanBenchmarkLabels, setDanBenchmarkLabel } from "../../lib/dan-benchmark";
 
 type DanClassifierId = "aleju" | "daniel";
 
@@ -146,6 +152,47 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
+async function runEstimate(
+  beatmapset: OsuBeatmapset,
+  beatmap: OsuBeatmap,
+  classifierId: DanClassifierId,
+  rate: number,
+): Promise<DanEstimate> {
+  const file = await getBeatmapFile({ data: { beatmapId: beatmap.id } });
+  const parsed = parseManiaBeatmap(file.content);
+  if (parsed.keyCount !== 4) {
+    throw new Error("Dan estimates are currently only supported for 4K beatmaps.");
+  }
+  const estimateInput = {
+    starRating: beatmap.difficulty_rating,
+    totalLength: beatmap.total_length,
+    title: beatmapset.title,
+    version: beatmap.version,
+    rate,
+  };
+  return classifierId === "daniel"
+    ? estimateDanielDan(parsed, estimateInput)
+    : estimateDan(parsed, estimateInput);
+}
+
+async function mapWithConcurrencyClient<T, R>(
+  items: readonly T[],
+  concurrency: number,
+  worker: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (true) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      results[i] = await worker(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 export const Route = createFileRoute("/admin/dan-classifier")({
   head: () => ({
     meta: [
@@ -163,6 +210,8 @@ export const Route = createFileRoute("/admin/dan-classifier")({
 });
 
 function DanClassifierPage() {
+  const [view, setView] = useState<"search" | "benchmark">("search");
+  const [benchmarkFamily, setBenchmarkFamily] = useState<DanBenchmarkFamily>("normal");
   const [query, setQuery] = useState("");
   const [playerQuery, setPlayerQuery] = useState("");
   const [rate, setRate] = useState(1);
@@ -248,7 +297,7 @@ function DanClassifierPage() {
     return `${selectedSet.artist} - ${selectedSet.title} [${selectedBeatmap.version}]`;
   }, [selectedBeatmap, selectedSet]);
 
-  async function analyzeBeatmap(beatmapset: OsuBeatmapset, beatmap: OsuBeatmap, classifierId = classifier) {
+  const analyzeBeatmap = useCallback(async (beatmapset: OsuBeatmapset, beatmap: OsuBeatmap, classifierId: DanClassifierId = classifier) => {
     setSelectedSet(beatmapset);
     setSelectedBeatmap(beatmap);
     setEstimate(null);
@@ -256,29 +305,14 @@ function DanClassifierPage() {
     setAnalysisLoading(true);
 
     try {
-      const file = await getBeatmapFile({ data: { beatmapId: beatmap.id } });
-      const parsed = parseManiaBeatmap(file.content);
-      if (parsed.keyCount !== 4) {
-        setError("Dan estimates are currently only supported for 4K beatmaps.");
-        return;
-      }
-
-      const estimateInput = {
-        starRating: beatmap.difficulty_rating,
-        totalLength: beatmap.total_length,
-        title: beatmapset.title,
-        version: beatmap.version,
-        rate,
-      };
-      setEstimate(classifierId === "daniel"
-        ? estimateDanielDan(parsed, estimateInput)
-        : estimateDan(parsed, estimateInput));
+      const result = await runEstimate(beatmapset, beatmap, classifierId, rate);
+      setEstimate(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not analyze this beatmap.");
     } finally {
       setAnalysisLoading(false);
     }
-  }
+  }, [classifier, rate]);
 
   async function loadPlayerTopPlayMaps() {
     const key = playerQuery.trim();
@@ -332,7 +366,19 @@ function DanClassifierPage() {
           </div>
         </div>
 
-        <div className="mt-6 grid min-w-0 lg:grid-cols-[minmax(0,1fr)_360px] gap-6 items-start">
+        <div className="mt-5 flex items-center gap-1 border-b border-osu-b3/30">
+          <ViewTab active={view === "search"} onClick={() => setView("search")}>Search</ViewTab>
+          <ViewTab active={view === "benchmark"} onClick={() => setView("benchmark")}>Benchmark</ViewTab>
+        </div>
+
+        <div
+          className={`mt-6 grid min-w-0 gap-6 items-start ${
+            view === "benchmark" && !selectedBeatmap
+              ? "lg:grid-cols-1"
+              : "lg:grid-cols-[minmax(0,1fr)_360px]"
+          }`}
+        >
+          {view === "search" ? (
           <section className="min-w-0 rounded-lg border border-osu-b3/30 bg-osu-b4/35 p-4 sm:p-5">
             <div className="relative">
               <input
@@ -522,11 +568,44 @@ function DanClassifierPage() {
               )}
             </div>
           </section>
+          ) : (
+            <BenchmarkView
+              family={benchmarkFamily}
+              onFamilyChange={setBenchmarkFamily}
+              classifier={classifier}
+              onClassifierChange={setClassifier}
+              rate={rate}
+              onRateChange={setRate}
+              selectedBeatmapId={selectedBeatmap?.id ?? null}
+              onAnalyze={analyzeBeatmap}
+              onCopyId={copyBeatmapId}
+              copiedBeatmapId={copiedBeatmapId}
+            />
+          )}
 
+          {!(view === "benchmark" && !selectedBeatmap) && (
           <aside className="min-w-0 rounded-lg border border-osu-b3/30 bg-osu-b4/35 p-4 sm:p-5 lg:sticky lg:top-24">
-            <div className="text-[11px] uppercase tracking-[0.14em] text-osu-f1 font-bold">Estimate</div>
-            <div className="mt-1 text-[11px] font-bold text-osu-yellow">
-              {DAN_CLASSIFIERS.find((option) => option.id === classifier)?.label}
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <div className="text-[11px] uppercase tracking-[0.14em] text-osu-f1 font-bold">Estimate</div>
+                <div className="mt-1 text-[11px] font-bold text-osu-yellow">
+                  {DAN_CLASSIFIERS.find((option) => option.id === classifier)?.label}
+                </div>
+              </div>
+              {view === "benchmark" && selectedBeatmap ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedSet(null);
+                    setSelectedBeatmap(null);
+                    setEstimate(null);
+                  }}
+                  className="cursor-pointer rounded-md border border-osu-b3/40 bg-osu-b5/60 px-2 py-1 text-[10px] text-osu-f1 hover:text-white hover:border-osu-b3 transition-colors"
+                  title="Close detail"
+                >
+                  Close
+                </button>
+              ) : null}
             </div>
             {analysisLoading ? (
               <div className="mt-8 flex flex-col items-center gap-3 py-10">
@@ -614,6 +693,7 @@ function DanClassifierPage() {
               </div>
             )}
           </aside>
+          )}
         </div>
       </div>
     </main>
@@ -625,6 +705,648 @@ function Metric({ label, value }: { label: string; value: string }) {
     <div className="min-w-0 rounded-lg bg-osu-b5 border border-osu-b3/30 px-3 py-2">
       <div className="text-[10px] uppercase tracking-wide text-osu-f1 font-bold">{label}</div>
       <div className="mt-1 truncate text-sm font-black text-white">{value}</div>
+    </div>
+  );
+}
+
+function ViewTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative px-4 py-2 text-[11px] uppercase tracking-[0.14em] font-bold cursor-pointer transition-colors ${
+        active ? "text-white" : "text-osu-f1 hover:text-osu-c1"
+      }`}
+    >
+      {children}
+      {active ? (
+        <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-osu-pink" />
+      ) : null}
+    </button>
+  );
+}
+
+interface BenchmarkRow {
+  beatmapsetId: number;
+  beatmapset: OsuBeatmapset | null;
+  beatmap: OsuBeatmap | null;
+  estimate: DanEstimate | null;
+  status: "pending" | "loading" | "ready" | "error";
+  error: string | null;
+}
+
+interface BenchmarkSetState {
+  beatmapsetId: number;
+  beatmapset: OsuBeatmapset | null;
+  status: "pending" | "loading" | "ready" | "error";
+  error: string | null;
+  rows: BenchmarkRow[];
+}
+
+interface BenchmarkViewProps {
+  family: DanBenchmarkFamily;
+  onFamilyChange: (family: DanBenchmarkFamily) => void;
+  classifier: DanClassifierId;
+  onClassifierChange: (classifier: DanClassifierId) => void;
+  rate: number;
+  onRateChange: (rate: number) => void;
+  selectedBeatmapId: number | null;
+  onAnalyze: (set: OsuBeatmapset, beatmap: OsuBeatmap) => void;
+  onCopyId: (id: number) => void;
+  copiedBeatmapId: number | null;
+}
+
+function BenchmarkView({
+  family,
+  onFamilyChange,
+  classifier,
+  onClassifierChange,
+  rate,
+  onRateChange,
+  selectedBeatmapId,
+  onAnalyze,
+  onCopyId,
+  copiedBeatmapId,
+}: BenchmarkViewProps) {
+  // family-keyed cache so switching tabs doesn't re-fetch
+  const cacheRef = useRef<Map<DanBenchmarkFamily, BenchmarkSetState[]>>(new Map());
+  const [sets, setSets] = useState<BenchmarkSetState[]>([]);
+  const [expectedLabelsByFamily, setExpectedLabelsByFamily] = useState<Record<DanBenchmarkFamily, Map<number, string>>>({
+    normal: new Map(),
+    ln: new Map(),
+  });
+  const [labelsLoaded, setLabelsLoaded] = useState(false);
+  const [exportState, setExportState] = useState<"idle" | "working" | "done" | "error">("idle");
+  const exportTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const expectedLabels = expectedLabelsByFamily[family];
+  const labelOptions = useMemo(() => getBenchmarkLabelOptions(family), [family]);
+
+  // load expected labels for both families once
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [normalRows, lnRows] = await Promise.all([
+          getDanBenchmarkLabels({ data: { family: "normal" } }),
+          getDanBenchmarkLabels({ data: { family: "ln" } }),
+        ]);
+        if (cancelled) return;
+        const normalMap = new Map<number, string>();
+        for (const row of normalRows) normalMap.set(row.beatmapId, row.expectedLabel);
+        const lnMap = new Map<number, string>();
+        for (const row of lnRows) lnMap.set(row.beatmapId, row.expectedLabel);
+        setExpectedLabelsByFamily({ normal: normalMap, ln: lnMap });
+        setLabelsLoaded(true);
+      } catch {
+        if (!cancelled) setLabelsLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => () => clearTimeout(exportTimerRef.current), []);
+
+  // run estimates whenever family/classifier/rate changes
+  useEffect(() => {
+    let cancelled = false;
+    const cached = cacheRef.current.get(family);
+
+    if (cached) {
+      setSets(cached);
+      // re-estimate when classifier/rate change
+      void runEstimatesForSets(cached);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const ids = getBenchmarkBeatmapsetIds(family);
+    const initial: BenchmarkSetState[] = ids.map((id) => ({
+      beatmapsetId: id,
+      beatmapset: null,
+      status: "pending",
+      error: null,
+      rows: [],
+    }));
+    setSets(initial);
+
+    void (async () => {
+      const fetched = await mapWithConcurrencyClient(ids, 4, async (id) => {
+        try {
+          const beatmapset = await getBeatmapset({ data: { beatmapsetId: id } });
+          return { id, beatmapset, error: null as string | null };
+        } catch (err) {
+          return { id, beatmapset: null as OsuBeatmapset | null, error: err instanceof Error ? err.message : "Failed to fetch beatmapset." };
+        }
+      });
+      if (cancelled) return;
+
+      const next: BenchmarkSetState[] = fetched.map(({ id, beatmapset, error }) => {
+        if (!beatmapset) {
+          return {
+            beatmapsetId: id,
+            beatmapset: null,
+            status: "error" as const,
+            error: error ?? "Failed to fetch beatmapset.",
+            rows: [],
+          };
+        }
+        const maniaDiffs = (beatmapset.beatmaps ?? [])
+          .filter((bm) => bm.mode === "mania" && bm.cs === 4)
+          .sort((a, b) => a.difficulty_rating - b.difficulty_rating);
+        return {
+          beatmapsetId: id,
+          beatmapset,
+          status: "ready" as const,
+          error: null,
+          rows: maniaDiffs.map((bm) => ({
+            beatmapsetId: id,
+            beatmapset,
+            beatmap: bm,
+            estimate: null,
+            status: "pending" as const,
+            error: null,
+          })),
+        };
+      });
+
+      cacheRef.current.set(family, next);
+      setSets(next);
+      await runEstimatesForSets(next);
+    })();
+
+    async function runEstimatesForSets(target: BenchmarkSetState[]) {
+      const allRows: Array<{ setIndex: number; rowIndex: number; row: BenchmarkRow }> = [];
+      target.forEach((set, setIndex) => {
+        set.rows.forEach((row, rowIndex) => {
+          allRows.push({ setIndex, rowIndex, row });
+        });
+      });
+
+      // mark all loading at once
+      if (!cancelled) {
+        setSets((prev) => prev.map((set) => ({
+          ...set,
+          rows: set.rows.map((row) => ({ ...row, status: "loading", estimate: null, error: null })),
+        })));
+      }
+
+      await mapWithConcurrencyClient(allRows, 4, async ({ row }) => {
+        if (!row.beatmapset || !row.beatmap) return;
+        try {
+          const estimate = await runEstimate(row.beatmapset, row.beatmap, classifier, rate);
+          if (cancelled) return;
+          setSets((prev) => updateRow(prev, row.beatmapsetId, row.beatmap!.id, {
+            estimate,
+            status: "ready",
+            error: null,
+          }));
+          // also update cache
+          const cachedFamily = cacheRef.current.get(family);
+          if (cachedFamily) {
+            cacheRef.current.set(family, updateRow(cachedFamily, row.beatmapsetId, row.beatmap.id, {
+              estimate,
+              status: "ready",
+              error: null,
+            }));
+          }
+        } catch (err) {
+          if (cancelled) return;
+          const message = err instanceof Error ? err.message : "Could not estimate.";
+          setSets((prev) => updateRow(prev, row.beatmapsetId, row.beatmap!.id, {
+            estimate: null,
+            status: "error",
+            error: message,
+          }));
+        }
+      });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [family, classifier, rate]);
+
+  async function handleExpectedChange(beatmapId: number, value: string) {
+    setExpectedLabelsByFamily((prev) => {
+      const next = new Map(prev[family]);
+      if (value === "") {
+        next.delete(beatmapId);
+      } else {
+        next.set(beatmapId, value);
+      }
+      return { ...prev, [family]: next };
+    });
+    try {
+      await setDanBenchmarkLabel({
+        data: {
+          beatmapId,
+          family,
+          expectedLabel: value === "" ? null : value,
+        },
+      });
+    } catch {
+      // ignore: the optimistic update remains until the next reload
+    }
+  }
+
+  async function handleExportDataset() {
+    setExportState("working");
+    try {
+      const familiesToFetch: DanBenchmarkFamily[] = ["normal", "ln"];
+      const datasets = await Promise.all(familiesToFetch.map(async (fam) => {
+        const cached = cacheRef.current.get(fam);
+        if (cached) return { family: fam, sets: cached };
+        const ids = getBenchmarkBeatmapsetIds(fam);
+        const fetched = await mapWithConcurrencyClient(ids, 4, async (id) => {
+          try {
+            const beatmapset = await getBeatmapset({ data: { beatmapsetId: id } });
+            return { id, beatmapset, error: null as string | null };
+          } catch (err) {
+            return { id, beatmapset: null as OsuBeatmapset | null, error: err instanceof Error ? err.message : "Failed" };
+          }
+        });
+        const setsState: BenchmarkSetState[] = fetched.map(({ id, beatmapset, error }) => ({
+          beatmapsetId: id,
+          beatmapset,
+          status: beatmapset ? "ready" : "error",
+          error,
+          rows: beatmapset
+            ? (beatmapset.beatmaps ?? [])
+                .filter((bm) => bm.mode === "mania" && bm.cs === 4)
+                .sort((a, b) => a.difficulty_rating - b.difficulty_rating)
+                .map((bm) => ({
+                  beatmapsetId: id,
+                  beatmapset,
+                  beatmap: bm,
+                  estimate: null,
+                  status: "pending" as const,
+                  error: null,
+                }))
+            : [],
+        }));
+        return { family: fam, sets: setsState };
+      }));
+
+      const payload: Record<string, Array<{
+        beatmapsetId: number;
+        beatmapId: number;
+        title: string;
+        artist: string;
+        creator: string;
+        version: string;
+        sr: number;
+        expectedDan: string | null;
+        detectedFamily: string | null;
+      }>> = { normal: [], ln: [] };
+
+      for (const { family: fam, sets: famSets } of datasets) {
+        for (const set of famSets) {
+          if (!set.beatmapset) continue;
+          for (const row of set.rows) {
+            if (!row.beatmap) continue;
+            payload[fam].push({
+              beatmapsetId: set.beatmapset.id,
+              beatmapId: row.beatmap.id,
+              title: set.beatmapset.title,
+              artist: set.beatmapset.artist,
+              creator: set.beatmapset.creator,
+              version: row.beatmap.version,
+              sr: row.beatmap.difficulty_rating,
+              expectedDan: expectedLabelsByFamily[fam].get(row.beatmap.id) ?? null,
+              detectedFamily: row.estimate?.family ?? null,
+            });
+          }
+        }
+      }
+
+      const json = JSON.stringify(payload, null, 2);
+      const ok = await copyTextToClipboard(json);
+      setExportState(ok ? "done" : "error");
+    } catch {
+      setExportState("error");
+    } finally {
+      clearTimeout(exportTimerRef.current);
+      exportTimerRef.current = setTimeout(() => setExportState("idle"), 2000);
+    }
+  }
+
+  const totalDiffs = sets.reduce((sum, set) => sum + set.rows.length, 0);
+  const readyCount = sets.reduce(
+    (sum, set) => sum + set.rows.filter((row) => row.status === "ready").length,
+    0,
+  );
+  const matchCount = sets.reduce((sum, set) => sum + set.rows.filter((row) => {
+    if (row.status !== "ready" || !row.estimate || !row.beatmap) return false;
+    const expected = expectedLabels.get(row.beatmap.id);
+    return expected ? expected === row.estimate.label : false;
+  }).length, 0);
+  const labeledCount = sets.reduce((sum, set) => sum + set.rows.filter((row) => row.beatmap && expectedLabels.has(row.beatmap.id)).length, 0);
+
+  return (
+    <section className="min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-2">
+        <div className="flex items-center gap-1 rounded-md border border-osu-b3/40 bg-osu-b5/60 p-0.5">
+          <SubTab active={family === "normal"} onClick={() => onFamilyChange("normal")}>Normal</SubTab>
+          <SubTab active={family === "ln"} onClick={() => onFamilyChange("ln")}>LN</SubTab>
+        </div>
+        <div className="flex items-center gap-3 text-[11px] text-osu-f1">
+          <label className="flex items-center gap-1.5">
+            <span className="uppercase tracking-wide font-bold">Classifier</span>
+            <select
+              value={classifier}
+              onChange={(event) => onClassifierChange(event.target.value as DanClassifierId)}
+              className="rounded border border-osu-b3/50 bg-osu-b5 px-1.5 py-0.5 text-osu-c1 focus:border-osu-h1/40 focus:outline-none cursor-pointer"
+            >
+              {DAN_CLASSIFIERS.map((option) => (
+                <option key={option.id} value={option.id}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-1.5">
+            <span className="uppercase tracking-wide font-bold">Rate</span>
+            <input
+              type="number"
+              min="0.5"
+              max="2"
+              step="0.05"
+              value={rate}
+              onChange={(event) => {
+                const next = Number(event.target.value);
+                if (Number.isFinite(next)) onRateChange(Math.max(0.5, Math.min(2, next)));
+              }}
+              className="w-16 rounded border border-osu-b3/50 bg-osu-b5 px-1.5 py-0.5 text-osu-c1 focus:border-osu-h1/40 focus:outline-none"
+            />
+          </label>
+          <div>
+            <span className="font-bold text-osu-c1">{readyCount}</span>/{totalDiffs}
+          </div>
+          {labeledCount > 0 && labelsLoaded ? (
+            <div>
+              <span className="font-bold text-emerald-300">{matchCount}</span>/{labeledCount}
+            </div>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void handleExportDataset()}
+            disabled={exportState === "working"}
+            className={`rounded border px-2 py-0.5 font-bold uppercase tracking-wide transition-colors cursor-pointer disabled:cursor-not-allowed ${
+              exportState === "done"
+                ? "border-emerald-400/50 bg-emerald-500/20 text-emerald-300"
+                : exportState === "error"
+                  ? "border-osu-red/50 bg-osu-red/20 text-osu-red"
+                  : "border-osu-b3/50 bg-osu-b5 text-osu-c1 hover:border-osu-b3 hover:text-white"
+            }`}
+            title="Copy dataset (both families) as JSON to clipboard"
+          >
+            {exportState === "working" ? "..." : exportState === "done" ? "copied" : exportState === "error" ? "failed" : "export"}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        {sets.map((set) => (
+          <BenchmarkSetBlock
+            key={set.beatmapsetId}
+            set={set}
+            labelOptions={labelOptions}
+            expectedLabels={expectedLabels}
+            onExpectedChange={handleExpectedChange}
+            onAnalyze={onAnalyze}
+            onCopyId={onCopyId}
+            copiedBeatmapId={copiedBeatmapId}
+            selectedBeatmapId={selectedBeatmapId}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SubTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-3 py-1 rounded text-[10px] uppercase tracking-[0.12em] font-bold cursor-pointer transition-colors ${
+        active ? "bg-osu-pink/30 text-white" : "text-osu-f1 hover:text-osu-c1"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function updateRow(
+  sets: BenchmarkSetState[],
+  beatmapsetId: number,
+  beatmapId: number,
+  patch: Partial<BenchmarkRow>,
+): BenchmarkSetState[] {
+  return sets.map((set) => {
+    if (set.beatmapsetId !== beatmapsetId) return set;
+    return {
+      ...set,
+      rows: set.rows.map((row) => (row.beatmap?.id === beatmapId ? { ...row, ...patch } : row)),
+    };
+  });
+}
+
+interface BenchmarkSetBlockProps {
+  set: BenchmarkSetState;
+  labelOptions: string[];
+  expectedLabels: Map<number, string>;
+  onExpectedChange: (beatmapId: number, value: string) => void;
+  onAnalyze: (set: OsuBeatmapset, beatmap: OsuBeatmap) => void;
+  onCopyId: (id: number) => void;
+  copiedBeatmapId: number | null;
+  selectedBeatmapId: number | null;
+}
+
+function BenchmarkSetBlock({
+  set,
+  labelOptions,
+  expectedLabels,
+  onExpectedChange,
+  onAnalyze,
+  onCopyId,
+  copiedBeatmapId,
+  selectedBeatmapId,
+}: BenchmarkSetBlockProps) {
+  if (set.status === "error") {
+    return (
+      <div className="rounded-md border border-osu-red/30 bg-osu-red/10 px-3 py-2 text-[11px] text-osu-red">
+        Set #{set.beatmapsetId}: {set.error ?? "Failed to load."}
+      </div>
+    );
+  }
+
+  if (set.status === "pending" || !set.beatmapset) {
+    return (
+      <div className="rounded-md border border-osu-b3/30 bg-osu-b5/40 px-3 py-2 text-[11px] text-osu-f1">
+        Loading set #{set.beatmapsetId}...
+      </div>
+    );
+  }
+
+  const beatmapset = set.beatmapset;
+  const coverUrl = beatmapset.covers?.["cover@2x"] || beatmapset.covers?.cover || null;
+
+  return (
+    <div className="min-w-0 rounded-md border border-osu-b3/30 bg-osu-b5/40 overflow-hidden">
+      <div className="flex min-w-0 items-center gap-2 px-2.5 py-1.5 text-[11px] border-b border-osu-b3/20 bg-osu-b5/60">
+        <span className="min-w-0 truncate text-white font-bold">{beatmapset.title}</span>
+        <span className="shrink-0 text-osu-f1 truncate">// {beatmapset.creator}</span>
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => onCopyId(beatmapset.id)}
+            className="inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded text-osu-l2 hover:text-white transition-colors"
+            title={`Copy beatmapset ID ${beatmapset.id}`}
+            aria-label={`Copy beatmapset ID ${beatmapset.id}`}
+          >
+            {copiedBeatmapId === beatmapset.id ? (
+              <Check className="h-3 w-3" strokeWidth={3} />
+            ) : (
+              <Copy className="h-3 w-3" />
+            )}
+          </button>
+          <a
+            href={`https://osu.ppy.sh/beatmapsets/${beatmapset.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-osu-l2 hover:text-white transition-colors"
+          >
+            osu!
+          </a>
+        </div>
+      </div>
+
+      {set.rows.length === 0 ? (
+        <div className="px-2.5 py-2 text-[11px] text-osu-f1">No 4K mania diffs.</div>
+      ) : (
+        <div className={`grid gap-1.5 p-1.5 ${set.rows.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+          {set.rows.map((row) => (
+            <BenchmarkDiffRow
+              key={row.beatmap?.id ?? Math.random()}
+              row={row}
+              coverUrl={coverUrl}
+              labelOptions={labelOptions}
+              expected={row.beatmap ? expectedLabels.get(row.beatmap.id) ?? "" : ""}
+              onExpectedChange={onExpectedChange}
+              onAnalyze={onAnalyze}
+              isSelected={row.beatmap?.id === selectedBeatmapId}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface BenchmarkDiffRowProps {
+  row: BenchmarkRow;
+  coverUrl: string | null;
+  labelOptions: string[];
+  expected: string;
+  onExpectedChange: (beatmapId: number, value: string) => void;
+  onAnalyze: (set: OsuBeatmapset, beatmap: OsuBeatmap) => void;
+  isSelected: boolean;
+}
+
+function BenchmarkDiffRow({ row, coverUrl, labelOptions, expected, onExpectedChange, onAnalyze, isSelected }: BenchmarkDiffRowProps) {
+  if (!row.beatmap || !row.beatmapset) return null;
+  const beatmap = row.beatmap;
+  const beatmapset = row.beatmapset;
+
+  const estimateLabel = row.estimate?.label ?? null;
+  const estimateFamily = row.estimate?.family ?? null;
+  const estimateImage = estimateLabel ? getDanImageSrc(estimateLabel, estimateFamily ?? undefined) : null;
+
+  let matchState: "match" | "mismatch" | "unset" = "unset";
+  if (expected && estimateLabel) {
+    matchState = expected === estimateLabel ? "match" : "mismatch";
+  }
+
+  const tileBorder = isSelected
+    ? "border-osu-pink ring-1 ring-osu-pink/40"
+    : matchState === "mismatch"
+      ? "border-osu-red/50 hover:border-osu-red/70"
+      : matchState === "match"
+        ? "border-emerald-400/40 hover:border-emerald-400/60"
+        : "border-osu-b3/40 hover:border-osu-b3/70";
+
+  return (
+    <div className={`group relative flex min-w-0 flex-col overflow-hidden rounded-md border bg-osu-b5 ${tileBorder} transition-colors`}>
+      {coverUrl ? (
+        <img src={coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-30 transition-opacity group-hover:opacity-40" loading="lazy" />
+      ) : null}
+      <div className="absolute inset-0 bg-gradient-to-r from-osu-b5/95 via-osu-b5/75 to-osu-b5/40" />
+
+      <button
+        type="button"
+        onClick={() => onAnalyze(beatmapset, beatmap)}
+        className="relative flex min-w-0 cursor-pointer items-center gap-3 px-2.5 pt-2.5 pb-2 text-left"
+      >
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center">
+          {row.status === "loading" ? (
+            <span className="inline-block h-5 w-5 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
+          ) : row.status === "error" ? (
+            <span className="text-[10px] font-bold text-osu-red" title={row.error ?? "Error"}>ERR</span>
+          ) : estimateImage ? (
+            <img src={estimateImage} alt="" className="h-12 w-12 object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.55)]" />
+          ) : estimateLabel ? (
+            <span className="text-base font-black text-white">{estimateLabel}</span>
+          ) : (
+            <span className="text-osu-f1 text-[10px]">--</span>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-1.5 min-w-0">
+            <span className="text-sm font-black text-white truncate">
+              {row.estimate?.displayName ?? estimateLabel ?? "--"}
+            </span>
+            {estimateFamily ? (
+              <span className="text-[9px] uppercase tracking-wide text-osu-yellow font-bold">{estimateFamily}</span>
+            ) : null}
+          </div>
+          <div className="mt-0.5 flex items-start gap-1.5 text-[10px] text-osu-f1">
+            <span className="shrink-0 tabular-nums text-osu-l2 leading-tight">&#9733;{beatmap.difficulty_rating.toFixed(2)}</span>
+            <span className="min-w-0 leading-tight line-clamp-2 break-words">{beatmap.version.replace(/\s*\[\d+[Kk]\]\s*/g, " ").trim()}</span>
+          </div>
+        </div>
+      </button>
+
+      <div className="relative flex items-center gap-1.5 px-2.5 pb-2">
+        <select
+          value={expected}
+          onChange={(event) => onExpectedChange(beatmap.id, event.target.value)}
+          onClick={(event) => event.stopPropagation()}
+          className="flex-1 min-w-0 rounded border border-osu-b3/50 bg-osu-b5/80 backdrop-blur-sm px-1.5 py-0.5 text-[11px] text-osu-c1 focus:border-osu-h1/40 focus:outline-none cursor-pointer"
+          title="Expected dan"
+        >
+          <option value="">expected --</option>
+          {labelOptions.map((option) => (
+            <option key={option} value={option}>{option}</option>
+          ))}
+        </select>
+        <span
+          className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ${
+            matchState === "match"
+              ? "bg-emerald-500/35 text-emerald-300"
+              : matchState === "mismatch"
+                ? "bg-osu-red/35 text-osu-red"
+                : "text-osu-f1/30"
+          }`}
+          title={matchState === "match" ? "Matches expected" : matchState === "mismatch" ? `Expected ${expected}, got ${estimateLabel}` : "No expected dan set"}
+        >
+          {matchState === "match" ? <Check className="h-3 w-3" strokeWidth={3} /> : matchState === "mismatch" ? "!" : ""}
+        </span>
+      </div>
     </div>
   );
 }

@@ -209,6 +209,20 @@ export async function ensureCacheSchema(): Promise<void> {
       `,
       args: [Date.now()],
     });
+
+    await db.execute(`
+      CREATE TABLE IF NOT EXISTS dan_benchmark_labels (
+        beatmap_id INTEGER PRIMARY KEY,
+        expected_label TEXT NOT NULL,
+        family TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      )
+    `);
+
+    await db.execute(`
+      CREATE INDEX IF NOT EXISTS idx_dan_benchmark_labels_family
+      ON dan_benchmark_labels (family)
+    `);
   })().catch((error) => {
     cacheSchemaReady = null;
     throw error;

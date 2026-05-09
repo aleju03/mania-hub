@@ -81,3 +81,13 @@ CREATE TABLE IF NOT EXISTS beatmap_asset_cache_stats (
   total_size_bytes INTEGER NOT NULL DEFAULT 0,
   updated_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS dan_benchmark_labels (
+  beatmap_id INTEGER PRIMARY KEY,
+  expected_label TEXT NOT NULL,
+  family TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_dan_benchmark_labels_family
+ON dan_benchmark_labels (family);
