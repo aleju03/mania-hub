@@ -146,8 +146,8 @@ function RootLayout() {
             <Outlet />
           </main>
           <footer className="px-4 py-2 text-center text-[10px] text-osu-pink-light/30">
-            <span title="Unofficial fanmade website for the osu! community. Not affiliated with or endorsed by osu! or ppy Pty Ltd. All game data is fetched via the public osu! API.">
-              fanmade · unofficial · not affiliated with ppy
+            <span title="Not affiliated with or endorsed by osu! or ppy Pty Ltd. All game data is fetched via the public osu! API.">
+              not affiliated with ppy
             </span>
             {" · made by "}
             <a
