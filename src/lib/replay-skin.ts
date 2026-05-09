@@ -300,29 +300,46 @@ export const DEFAULT_REPLAY_SKIN_PROFILE: ReplaySkinKeymodeProfile = {
 
 export const DEFAULT_REPLAY_SKIN_SETTINGS: ReplaySkinSettings = {
   version: 2,
-  style: "bars",
+  style: "circles",
   tapColor: DEFAULT_REPLAY_SKIN_PROFILE.tapColor,
   tapColors: [],
   lnHeadColor: DEFAULT_REPLAY_SKIN_PROFILE.lnHeadColor,
   lnHeadColors: [],
   lnBodyColor: "#8b8b93",
-  outlineEnabled: true,
+  outlineEnabled: false,
   outlineColor: "#ffffff",
   outlineWidth: REPLAY_SKIN_DEFAULT_OUTLINE_WIDTH,
-  percy: false,
+  percy: true,
   upscroll: false,
   keysUnderNotes: false,
   columnWidth: DEFAULT_REPLAY_SKIN_PROFILE.columnWidth,
   columnSpacing: DEFAULT_REPLAY_SKIN_PROFILE.columnSpacing,
   noteHeightScale: DEFAULT_REPLAY_SKIN_PROFILE.noteHeightScale,
-  hitPosition: REPLAY_SKIN_DEFAULT_HIT_POSITION,
+  hitPosition: 48,
   scorePosition: osuManiaStagePositionToReplayPosition(OSU_MANIA_DEFAULT_SCORE_POSITION),
   comboPosition: osuManiaStagePositionToReplayPosition(OSU_MANIA_DEFAULT_COMBO_POSITION),
-  comboFontSet: DEFAULT_REPLAY_COMBO_FONT_SET,
-  judgementSet: DEFAULT_REPLAY_JUDGEMENT_SET,
-  judgementScale: REPLAY_SKIN_DEFAULT_JUDGEMENT_SCALE,
-  judgementScales: {},
-  keymodeProfiles: {},
+  comboFontSet: "set11",
+  judgementSet: "set18",
+  judgementScale: 102,
+  judgementScales: {
+    set09: 102,
+    set10: 102,
+    set08: 181,
+    set12: 102,
+    set06: 102,
+    set18: 102,
+    set02: 102,
+    set26: 199,
+    set30: 199,
+  },
+  keymodeProfiles: {
+    4: {
+      ...DEFAULT_REPLAY_SKIN_PROFILE,
+      lnHeadColors: ["#e3a5de", "#e3a5de", "#e3a5de", "#e3a5de", "#e3a5de"],
+      columnWidth: 75,
+      columnSpacing: 2,
+    },
+  },
 };
 
 function judgementSetAssets(set: string, keys: Array<keyof ReplaySkinJudgementAssets>): ReplaySkinJudgementAssets {
@@ -600,7 +617,7 @@ export function normalizeReplaySkinSettings(value: unknown): ReplaySkinSettings 
     columnSpacing: raw.columnSpacing,
     noteHeightScale: raw.noteHeightScale,
   }, undefined, persistedVersion);
-  const judgementSet = normalizeReplayJudgementSet(raw.judgementSet);
+  const judgementSet = normalizeReplayJudgementSet(raw.judgementSet ?? DEFAULT_REPLAY_SKIN_SETTINGS.judgementSet);
   const judgementScale = normalizeJudgementScale(raw.judgementScale);
   const judgementScales = normalizeJudgementScales(raw.judgementScales);
   if (
@@ -628,10 +645,10 @@ export function normalizeReplaySkinSettings(value: unknown): ReplaySkinSettings 
     columnWidth: fallbackProfile.columnWidth,
     columnSpacing: fallbackProfile.columnSpacing,
     noteHeightScale: fallbackProfile.noteHeightScale,
-    hitPosition: normalizeHitPosition(raw.hitPosition),
+    hitPosition: normalizeHitPosition(raw.hitPosition ?? DEFAULT_REPLAY_SKIN_SETTINGS.hitPosition),
     scorePosition: normalizeHitPosition(raw.scorePosition ?? DEFAULT_REPLAY_SKIN_SETTINGS.scorePosition),
     comboPosition: normalizeHitPosition(raw.comboPosition ?? DEFAULT_REPLAY_SKIN_SETTINGS.comboPosition),
-    comboFontSet: normalizeReplayComboFontSet(raw.comboFontSet),
+    comboFontSet: normalizeReplayComboFontSet(raw.comboFontSet ?? DEFAULT_REPLAY_SKIN_SETTINGS.comboFontSet),
     judgementSet,
     judgementScale: getReplayJudgementScale({ judgementSet, judgementScales } as ReplaySkinSettings),
     judgementScales,

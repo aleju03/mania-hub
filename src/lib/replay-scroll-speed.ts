@@ -1,4 +1,4 @@
-export const DEFAULT_REPLAY_SCROLL_SPEED = 20;
+export const DEFAULT_REPLAY_SCROLL_SPEED = 27;
 export const REPLAY_SCROLL_SPEED_CHANGE_EVENT = "mania-hub:replay-scroll-speed-change";
 
 const REPLAY_SCROLL_SPEED_STORAGE_KEY = "mania-hub-replay-scroll-speed";

@@ -31,33 +31,68 @@ describe("replay skin settings", () => {
     vi.restoreAllMocks();
   });
 
-  it("uses bar defaults that preserve the existing replay skin", () => {
+  it("uses the shared default replay skin preset", () => {
     expect(DEFAULT_REPLAY_SKIN_SETTINGS).toEqual({
       version: 2,
-      style: "bars",
+      style: "circles",
       tapColor: "#9cf2ae",
       tapColors: [],
       lnHeadColor: "#dfffe6",
       lnHeadColors: [],
       lnBodyColor: "#8b8b93",
-      outlineEnabled: true,
+      outlineEnabled: false,
       outlineColor: "#ffffff",
       outlineWidth: 2,
-      percy: false,
+      percy: true,
       upscroll: false,
       keysUnderNotes: false,
       columnWidth: 50,
       columnSpacing: 0,
       noteHeightScale: 50,
-      hitPosition: 110,
+      hitPosition: 48,
       scorePosition: 438,
       comboPosition: 485,
-      comboFontSet: "set1",
-      judgementSet: "skin",
-      judgementScale: 100,
-      judgementScales: {},
-      keymodeProfiles: {},
+      comboFontSet: "set11",
+      judgementSet: "set18",
+      judgementScale: 102,
+      judgementScales: {
+        set09: 102,
+        set10: 102,
+        set08: 181,
+        set12: 102,
+        set06: 102,
+        set18: 102,
+        set02: 102,
+        set26: 199,
+        set30: 199,
+      },
+      keymodeProfiles: {
+        4: {
+          tapColor: "#9cf2ae",
+          tapColors: [],
+          lnHeadColor: "#dfffe6",
+          lnHeadColors: ["#e3a5de", "#e3a5de", "#e3a5de", "#e3a5de", "#e3a5de"],
+          columnWidth: 75,
+          columnSpacing: 2,
+          columnWidths: [],
+          columnSpacings: [],
+          noteHeightScale: 50,
+          assets: {
+            columns: [],
+            judgements: {},
+            combo: null,
+          },
+        },
+      },
     });
+  });
+
+  it("parses the shared default skin code", () => {
+    const code = "mhreplay3.WyJEZWZhdWx0Iix7ImEiOjEsImciOjAsImoiOjEsIm4iOjQ4LCJ0Ijoic2V0MTEiLCJ1Ijoic2V0MTgiLCJ3Ijp7InNldDA5IjoxMDIsInNldDEwIjoxMDIsInNldDA4IjoxODEsInNldDEyIjoxMDIsInNldDA2IjoxMDIsInNldDE4IjoxMDIsInNldDAyIjoxMDIsInNldDI2IjoxOTksInNldDMwIjoxOTl9LCJxIjp7IjQiOnsiZSI6ImUzYTVkZWUzYTVkZWUzYTVkZWUzYTVkZWUzYTVkZSIsImgiOjc1LCJpIjoyfX19XQ";
+    const payload = parseReplaySkinShareKey(code);
+
+    expect(payload?.name).toBe("Default");
+    expect(payload?.settings).toEqual(DEFAULT_REPLAY_SKIN_SETTINGS);
   });
 
   it("normalizes partial persisted settings over defaults", () => {
@@ -73,7 +108,10 @@ describe("replay skin settings", () => {
       tapColors: ["#ffffff", "", "#123456"],
       columnWidth: 50,
       columnSpacing: 0,
-      hitPosition: 110,
+      hitPosition: 48,
+      judgementScale: 100,
+      judgementScales: {},
+      keymodeProfiles: {},
       percy: true,
     });
   });
@@ -95,6 +133,9 @@ describe("replay skin settings", () => {
       lnHeadColors: ["#445566"],
       lnBodyColor: "#123456",
       hitPosition: 768,
+      judgementScale: 100,
+      judgementScales: {},
+      keymodeProfiles: {},
     });
   });
 
@@ -213,56 +254,14 @@ describe("replay skin settings", () => {
     });
 
     expect(JSON.parse(window.localStorage.getItem(REPLAY_SKIN_STORAGE_KEY) ?? "{}")).toEqual({
-      version: 2,
-      style: "circles",
+      ...DEFAULT_REPLAY_SKIN_SETTINGS,
       tapColor: "#101820",
-      tapColors: [],
       lnHeadColor: "#f2aa4c",
-      lnHeadColors: [],
-      lnBodyColor: "#8b8b93",
-      outlineEnabled: true,
-      outlineColor: "#ffffff",
-      outlineWidth: 2,
-      percy: true,
-      upscroll: false,
-      keysUnderNotes: false,
-      columnWidth: 50,
-      columnSpacing: 0,
-      noteHeightScale: 50,
-      hitPosition: 110,
-      scorePosition: 438,
-      comboPosition: 485,
-      comboFontSet: "set1",
-      judgementSet: "skin",
-      judgementScale: 100,
-      judgementScales: {},
-      keymodeProfiles: {},
     });
     expect(readReplaySkinSettings()).toEqual({
-      version: 2,
-      style: "circles",
+      ...DEFAULT_REPLAY_SKIN_SETTINGS,
       tapColor: "#101820",
-      tapColors: [],
       lnHeadColor: "#f2aa4c",
-      lnHeadColors: [],
-      lnBodyColor: "#8b8b93",
-      outlineEnabled: true,
-      outlineColor: "#ffffff",
-      outlineWidth: 2,
-      percy: true,
-      upscroll: false,
-      keysUnderNotes: false,
-      columnWidth: 50,
-      columnSpacing: 0,
-      noteHeightScale: 50,
-      hitPosition: 110,
-      scorePosition: 438,
-      comboPosition: 485,
-      comboFontSet: "set1",
-      judgementSet: "skin",
-      judgementScale: 100,
-      judgementScales: {},
-      keymodeProfiles: {},
     });
   });
 

@@ -75,7 +75,7 @@ const REPLAY_SKIN_PALETTE = [
 ];
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 const DRAFT_PRESET_ID = "custom";
-const DEFAULT_DRAFT_PRESET_NAME = "New preset";
+const DEFAULT_DRAFT_PRESET_NAME = "Default";
 const PREVIEW_BAR_NOTE_HEIGHT_RATIO = 0.22;
 const PREVIEW_MANIA_SKIN_STAGE_HEIGHT = 480;
 const PREVIEW_MIN_HEIGHT = 300;
