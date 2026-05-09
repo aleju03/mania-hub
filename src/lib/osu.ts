@@ -1739,7 +1739,7 @@ function toLeanTrackerScore(score: OsuScore): LeanTrackerScore {
     legacy_score_id: score.legacy_score_id,
     user_id: score.user_id,
     accuracy: score.accuracy,
-    beatmap_id: score.beatmap_id,
+    beatmap_id: score.beatmap_id ?? score.beatmap?.id,
     mods: score.mods,
     score: score.score,
     total_score: score.total_score,

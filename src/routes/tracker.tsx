@@ -249,9 +249,11 @@ function ScoresPage() {
   useEffect(() => {
     if (userIds.length === 0 || initialRefreshDone || initialFetchInFlightRef.current) return;
 
-    const shouldRefresh =
+    const feedIsStale =
       feedScores.length === 0 ||
       !feedScoresFetchedAt || isCacheStale(feedScoresFetchedAt, CLIENT_CACHE_TTL.scoresFeed);
+    const shouldBackfillSeededSnapshot = snapshot?.country === selectedCountry && snapshot.seedBatchCount > 0;
+    const shouldRefresh = feedIsStale || shouldBackfillSeededSnapshot;
 
     if (!shouldRefresh) {
       setInitialLoaded(true);
@@ -274,9 +276,15 @@ function ScoresPage() {
 
     (async () => {
       const totalBatches = Math.ceil(requestedUserIds.length / BATCH);
-      const skipBatchZero = snapshot?.country === requestedCountry;
-      const firstBatchIndex = skipBatchZero ? Math.min(snapshot.seedBatchCount, totalBatches) : 0;
-      const parallelBatchEnd = Math.min(totalBatches, 3);
+      const backfillBatchCount = feedIsStale
+        ? totalBatches
+        : Math.min(snapshot?.seedBatchCount ?? totalBatches, totalBatches);
+      // The loader snapshot is intentionally fast and may be sourced from the
+      // public live feed, which can miss osu! recent-score entries with odd
+      // shapes. Still backfill from osu! after first paint so the seeded top
+      // players do not get stuck with a partial live snapshot.
+      const firstBatchIndex = 0;
+      const parallelBatchEnd = Math.min(backfillBatchCount, 3);
       const fetchBatch = async (batchIndex: number) => {
         if (cancelled) return;
         try {
@@ -298,7 +306,7 @@ function ScoresPage() {
         ),
       );
 
-      for (let b = Math.max(firstBatchIndex, parallelBatchEnd); b < totalBatches; b++) {
+      for (let b = Math.max(firstBatchIndex, parallelBatchEnd); b < backfillBatchCount; b++) {
         await fetchBatch(b);
       }
       if (!cancelled) {
