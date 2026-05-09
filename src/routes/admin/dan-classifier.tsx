@@ -1,13 +1,13 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, Search, UserRound } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { parseManiaBeatmap } from "../../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../../lib/beatmap-search";
 import { estimateDan } from "../../lib/dan-estimator";
 import { estimateDanielDan } from "../../lib/daniel-estimator";
-import { getBeatmapFile, getBeatmapset, getBeatmapsetForBeatmap, searchBeatmaps, searchBeatmapsByMappers } from "../../lib/osu";
+import { getBeatmapFile, getBeatmapset, getBeatmapsetForBeatmap, getUser, getUserScoresBestWindow, searchBeatmaps, searchBeatmapsByMappers } from "../../lib/osu";
 import type { DanEstimate } from "../../lib/dan-estimator";
-import type { OsuBeatmap, OsuBeatmapset } from "../../lib/types";
+import type { OsuBeatmap, OsuBeatmapset, OsuScore } from "../../lib/types";
 import { canUseDevFeatures } from "../../lib/auth-shared";
 
 type DanClassifierId = "aleju" | "daniel";
@@ -66,9 +66,45 @@ function mergeBeatmapsets(...groups: OsuBeatmapset[][]): OsuBeatmapset[] {
   const beatmapsetsById = new Map<number, OsuBeatmapset>();
   for (const group of groups) {
     for (const beatmapset of group) {
-      if (!beatmapsetsById.has(beatmapset.id)) beatmapsetsById.set(beatmapset.id, beatmapset);
+      const existing = beatmapsetsById.get(beatmapset.id);
+      if (!existing) {
+        beatmapsetsById.set(beatmapset.id, beatmapset);
+        continue;
+      }
+
+      const existingBeatmaps = existing.beatmaps ?? [];
+      const beatmapsById = new Map(existingBeatmaps.map((beatmap) => [beatmap.id, beatmap]));
+      for (const beatmap of beatmapset.beatmaps ?? []) {
+        if (!beatmapsById.has(beatmap.id)) beatmapsById.set(beatmap.id, beatmap);
+      }
+      beatmapsetsById.set(beatmapset.id, {
+        ...existing,
+        beatmaps: [...beatmapsById.values()],
+      });
     }
   }
+  return [...beatmapsetsById.values()];
+}
+
+function topPlayScoresToBeatmapsets(scores: OsuScore[]): OsuBeatmapset[] {
+  const beatmapsetsById = new Map<number, OsuBeatmapset>();
+  const seenBeatmaps = new Set<number>();
+
+  for (const score of scores) {
+    const beatmap = score.beatmap;
+    const beatmapset = score.beatmapset;
+    if (!beatmap || !beatmapset || beatmap.mode !== "mania" || beatmap.cs !== 4 || seenBeatmaps.has(beatmap.id)) {
+      continue;
+    }
+
+    seenBeatmaps.add(beatmap.id);
+    const existing = beatmapsetsById.get(beatmapset.id);
+    beatmapsetsById.set(beatmapset.id, {
+      ...beatmapset,
+      beatmaps: [...(existing?.beatmaps ?? []), beatmap],
+    });
+  }
+
   return [...beatmapsetsById.values()];
 }
 
@@ -128,10 +164,14 @@ export const Route = createFileRoute("/admin/dan-classifier")({
 
 function DanClassifierPage() {
   const [query, setQuery] = useState("");
+  const [playerQuery, setPlayerQuery] = useState("");
   const [rate, setRate] = useState(1);
   const [classifier, setClassifier] = useState<DanClassifierId>("aleju");
   const [results, setResults] = useState<OsuBeatmapset[]>([]);
+  const [showingPlayerMaps, setShowingPlayerMaps] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [playerMapsLoading, setPlayerMapsLoading] = useState(false);
+  const [loadedPlayerName, setLoadedPlayerName] = useState<string | null>(null);
   const [selectedSet, setSelectedSet] = useState<OsuBeatmapset | null>(null);
   const [selectedBeatmap, setSelectedBeatmap] = useState<OsuBeatmap | null>(null);
   const [estimate, setEstimate] = useState<DanEstimate | null>(null);
@@ -143,7 +183,9 @@ function DanClassifierPage() {
 
   useEffect(() => {
     if (query.trim().length < 2) {
-      setResults([]);
+      if (!showingPlayerMaps) {
+        setResults([]);
+      }
       setSearchLoading(false);
       return;
     }
@@ -197,7 +239,7 @@ function DanClassifierPage() {
     }, 300);
 
     return () => clearTimeout(timerRef.current);
-  }, [query]);
+  }, [query, showingPlayerMaps]);
 
   useEffect(() => () => clearTimeout(copiedTimerRef.current), []);
 
@@ -238,6 +280,34 @@ function DanClassifierPage() {
     }
   }
 
+  async function loadPlayerTopPlayMaps() {
+    const key = playerQuery.trim();
+    if (key.length < 2) {
+      setError("Enter a player username or ID.");
+      return;
+    }
+
+    setPlayerMapsLoading(true);
+    setError(null);
+
+    try {
+      const user = await getUser({ data: { key } });
+      const scores = await getUserScoresBestWindow({ data: { userId: user.id, totalLimit: 100 } });
+      const beatmapsets = topPlayScoresToBeatmapsets(scores);
+      setLoadedPlayerName(user.username);
+      setShowingPlayerMaps(true);
+      setResults(beatmapsets);
+      setQuery("");
+      if (beatmapsets.length === 0) {
+        setError(`${user.username} has no 4K mania maps in their top plays.`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load this player's top plays.");
+    } finally {
+      setPlayerMapsLoading(false);
+    }
+  }
+
   async function copyBeatmapId(beatmapId: number) {
     const copied = await copyTextToClipboard(String(beatmapId));
     if (!copied) return;
@@ -270,6 +340,8 @@ function DanClassifierPage() {
                 value={query}
                 onChange={(event) => {
                   setQuery(event.target.value);
+                  setLoadedPlayerName(null);
+                  setShowingPlayerMaps(false);
                   setError(null);
                 }}
                 placeholder="Search beatmap..."
@@ -320,6 +392,49 @@ function DanClassifierPage() {
                   <option key={option.id} value={option.id}>{option.label}</option>
                 ))}
               </select>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-osu-b3/30 bg-osu-b5/60 p-3">
+              <label className="text-[11px] uppercase tracking-wide text-osu-f1 font-bold" htmlFor="dan-player-top-plays">
+                Player top plays
+              </label>
+              <div className="mt-2 flex min-w-0 flex-col gap-2 sm:flex-row">
+                <div className="relative min-w-0 flex-1">
+                  <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-osu-f1" />
+                  <input
+                    id="dan-player-top-plays"
+                    type="text"
+                    value={playerQuery}
+                    onChange={(event) => {
+                      setPlayerQuery(event.target.value);
+                      setError(null);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") void loadPlayerTopPlayMaps();
+                    }}
+                    placeholder="Username or ID..."
+                    className="w-full rounded-md border border-osu-b3/50 bg-osu-b5 py-2 pl-9 pr-3 text-sm text-osu-c1 shadow-[inset_0_1px_3px_rgba(0,0,0,0.3)] transition-colors placeholder:text-osu-f1 focus:border-osu-h1/40 focus:outline-none"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void loadPlayerTopPlayMaps()}
+                  disabled={playerMapsLoading}
+                  className="inline-flex h-10 cursor-pointer items-center justify-center gap-2 rounded-md border border-osu-pink/30 bg-osu-pink/20 px-3 text-xs font-black text-white transition-colors hover:border-osu-pink/60 hover:bg-osu-pink/30 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {playerMapsLoading ? (
+                    <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                  ) : (
+                    <Search className="h-4 w-4" />
+                  )}
+                  Load 4K maps
+                </button>
+              </div>
+              {loadedPlayerName && !playerMapsLoading ? (
+                <div className="mt-2 text-[11px] text-osu-f1">
+                  Showing 4K maps from {loadedPlayerName}'s top plays.
+                </div>
+              ) : null}
             </div>
 
             {error && (
@@ -402,7 +517,7 @@ function DanClassifierPage() {
                 <div className="py-12 text-center text-sm text-osu-f1">No mania beatmaps found.</div>
               )}
 
-              {query.trim().length < 2 && (
+              {query.trim().length < 2 && results.length === 0 && (
                 <div className="py-12 text-center text-sm text-osu-f1">Start typing to search osu!mania maps.</div>
               )}
             </div>
