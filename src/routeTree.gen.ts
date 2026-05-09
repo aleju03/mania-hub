@@ -25,10 +25,12 @@ import { Route as ApiFaviconRouteImport } from './routes/api/favicon'
 import { Route as ApiBackgroundRouteImport } from './routes/api/background'
 import { Route as ApiAvatarRouteImport } from './routes/api/avatar'
 import { Route as ApiAudioRouteImport } from './routes/api/audio'
+import { Route as AdminR2RouteImport } from './routes/admin/r2'
 import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
 import { Route as AdminMonitorRouteImport } from './routes/admin/monitor'
 import { Route as AdminManiacardRouteImport } from './routes/admin/maniacard'
 import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
+import { Route as VideosIdFilenameRouteImport } from './routes/videos/$id/$filename'
 import { Route as ApiAuthOsuRouteImport } from './routes/api/auth/osu'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthOsuCallbackRouteImport } from './routes/api/auth/osu/callback'
@@ -113,6 +115,11 @@ const ApiAudioRoute = ApiAudioRouteImport.update({
   path: '/api/audio',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminR2Route = AdminR2RouteImport.update({
+  id: '/admin/r2',
+  path: '/admin/r2',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminOgPreviewRoute = AdminOgPreviewRouteImport.update({
   id: '/admin/og-preview',
   path: '/admin/og-preview',
@@ -131,6 +138,11 @@ const AdminManiacardRoute = AdminManiacardRouteImport.update({
 const AdminDanClassifierRoute = AdminDanClassifierRouteImport.update({
   id: '/admin/dan-classifier',
   path: '/admin/dan-classifier',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VideosIdFilenameRoute = VideosIdFilenameRouteImport.update({
+  id: '/videos/$id/$filename',
+  path: '/videos/$id/$filename',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAuthOsuRoute = ApiAuthOsuRouteImport.update({
@@ -162,6 +174,7 @@ export interface FileRoutesByFullPath {
   '/admin/maniacard': typeof AdminManiacardRoute
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
+  '/admin/r2': typeof AdminR2Route
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
@@ -172,6 +185,7 @@ export interface FileRoutesByFullPath {
   '/player/$username': typeof PlayerUsernameRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
+  '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
 export interface FileRoutesByTo {
@@ -187,6 +201,7 @@ export interface FileRoutesByTo {
   '/admin/maniacard': typeof AdminManiacardRoute
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
+  '/admin/r2': typeof AdminR2Route
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
@@ -197,6 +212,7 @@ export interface FileRoutesByTo {
   '/player/$username': typeof PlayerUsernameRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
+  '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
 export interface FileRoutesById {
@@ -213,6 +229,7 @@ export interface FileRoutesById {
   '/admin/maniacard': typeof AdminManiacardRoute
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
+  '/admin/r2': typeof AdminR2Route
   '/api/audio': typeof ApiAudioRoute
   '/api/avatar': typeof ApiAvatarRoute
   '/api/background': typeof ApiBackgroundRoute
@@ -223,6 +240,7 @@ export interface FileRoutesById {
   '/player/$username': typeof PlayerUsernameRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
+  '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
 export interface FileRouteTypes {
@@ -240,6 +258,7 @@ export interface FileRouteTypes {
     | '/admin/maniacard'
     | '/admin/monitor'
     | '/admin/og-preview'
+    | '/admin/r2'
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
@@ -250,6 +269,7 @@ export interface FileRouteTypes {
     | '/player/$username'
     | '/api/auth/logout'
     | '/api/auth/osu'
+    | '/videos/$id/$filename'
     | '/api/auth/osu/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -265,6 +285,7 @@ export interface FileRouteTypes {
     | '/admin/maniacard'
     | '/admin/monitor'
     | '/admin/og-preview'
+    | '/admin/r2'
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
@@ -275,6 +296,7 @@ export interface FileRouteTypes {
     | '/player/$username'
     | '/api/auth/logout'
     | '/api/auth/osu'
+    | '/videos/$id/$filename'
     | '/api/auth/osu/callback'
   id:
     | '__root__'
@@ -290,6 +312,7 @@ export interface FileRouteTypes {
     | '/admin/maniacard'
     | '/admin/monitor'
     | '/admin/og-preview'
+    | '/admin/r2'
     | '/api/audio'
     | '/api/avatar'
     | '/api/background'
@@ -300,6 +323,7 @@ export interface FileRouteTypes {
     | '/player/$username'
     | '/api/auth/logout'
     | '/api/auth/osu'
+    | '/videos/$id/$filename'
     | '/api/auth/osu/callback'
   fileRoutesById: FileRoutesById
 }
@@ -316,6 +340,7 @@ export interface RootRouteChildren {
   AdminManiacardRoute: typeof AdminManiacardRoute
   AdminMonitorRoute: typeof AdminMonitorRoute
   AdminOgPreviewRoute: typeof AdminOgPreviewRoute
+  AdminR2Route: typeof AdminR2Route
   ApiAudioRoute: typeof ApiAudioRoute
   ApiAvatarRoute: typeof ApiAvatarRoute
   ApiBackgroundRoute: typeof ApiBackgroundRoute
@@ -326,6 +351,7 @@ export interface RootRouteChildren {
   PlayerUsernameRoute: typeof PlayerUsernameRoute
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
   ApiAuthOsuRoute: typeof ApiAuthOsuRouteWithChildren
+  VideosIdFilenameRoute: typeof VideosIdFilenameRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -442,6 +468,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAudioRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/r2': {
+      id: '/admin/r2'
+      path: '/admin/r2'
+      fullPath: '/admin/r2'
+      preLoaderRoute: typeof AdminR2RouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/og-preview': {
       id: '/admin/og-preview'
       path: '/admin/og-preview'
@@ -468,6 +501,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/dan-classifier'
       fullPath: '/admin/dan-classifier'
       preLoaderRoute: typeof AdminDanClassifierRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/videos/$id/$filename': {
+      id: '/videos/$id/$filename'
+      path: '/videos/$id/$filename'
+      fullPath: '/videos/$id/$filename'
+      preLoaderRoute: typeof VideosIdFilenameRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/auth/osu': {
@@ -519,6 +559,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminManiacardRoute: AdminManiacardRoute,
   AdminMonitorRoute: AdminMonitorRoute,
   AdminOgPreviewRoute: AdminOgPreviewRoute,
+  AdminR2Route: AdminR2Route,
   ApiAudioRoute: ApiAudioRoute,
   ApiAvatarRoute: ApiAvatarRoute,
   ApiBackgroundRoute: ApiBackgroundRoute,
@@ -529,6 +570,7 @@ const rootRouteChildren: RootRouteChildren = {
   PlayerUsernameRoute: PlayerUsernameRoute,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
   ApiAuthOsuRoute: ApiAuthOsuRouteWithChildren,
+  VideosIdFilenameRoute: VideosIdFilenameRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

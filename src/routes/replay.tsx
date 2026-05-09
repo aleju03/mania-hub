@@ -11,6 +11,7 @@ import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { ReplayBrowseView } from "../components/replay/ReplayBrowseView";
 import type { ReplayBrowseMode } from "../components/replay/ReplayBrowseView";
 import { ReplayControls, ReplayProgressBar } from "../components/replay/ReplayControls";
+import type { ReplayVideoExportOptions } from "../components/replay/ReplayControls";
 import { ReplayInfo } from "../components/replay/ReplayInfo";
 import { ReplaySkinSettingsModal } from "../components/replay/ReplaySkinSettingsModal";
 import { track } from "../lib/posthog";
@@ -37,6 +38,7 @@ import {
 } from "../lib/replay-overlays";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
 import { startProgressPoll } from "../lib/progress-poll";
+import { useAuth } from "../lib/auth-context";
 import {
   normalizeReplayBackgroundDim,
   normalizeReplayInputColor,
@@ -83,6 +85,22 @@ type FullscreenTarget = HTMLElement & {
 const MOBILE_FULLSCREEN_BUTTON_HIDE_MS = 2000;
 const FULLSCREEN_POINTER_CHROME_HIDE_MS = 1800;
 const FULLSCREEN_TAP_CHROME_HIDE_MS = 3000;
+const REPLAY_VIDEO_EXPORT_FPS = 30;
+const REPLAY_VIDEO_EXPORT_UPLOAD_CONCURRENCY = 4;
+const REPLAY_VIDEO_EXPORT_CLIP_SECONDS = 20;
+const REPLAY_VIDEO_EXPORT_RESOLUTIONS: Record<ReplayVideoExportOptions["resolution"], { width: number; height: number }> = {
+  "720p": { width: 1280, height: 720 },
+  "1080p": { width: 1920, height: 1080 },
+};
+const REPLAY_END_AUDIO_FADE_MS = 1500;
+
+type ReplayVideoExportState = {
+  exporting: boolean;
+  progress: number;
+  error: string | null;
+  url: string | null;
+  signed: boolean;
+};
 
 function getNativeFullscreenElement() {
   if (typeof document === "undefined") return null;
@@ -119,6 +137,83 @@ function isMobileReplayPointer(event: ReactPointerEvent<HTMLElement>) {
   return typeof window !== "undefined"
     && typeof window.matchMedia === "function"
     && window.matchMedia("(pointer: coarse)").matches;
+}
+
+function drawCoverImage(ctx: CanvasRenderingContext2D, image: HTMLImageElement, width: number, height: number) {
+  const imgAspect = image.naturalWidth / image.naturalHeight;
+  const canvasAspect = width / height;
+  let drawWidth = width;
+  let drawHeight = height;
+  if (imgAspect > canvasAspect) {
+    drawHeight = height;
+    drawWidth = height * imgAspect;
+  } else {
+    drawWidth = width;
+    drawHeight = width / imgAspect;
+  }
+  ctx.drawImage(image, (width - drawWidth) / 2, (height - drawHeight) / 2, drawWidth, drawHeight);
+}
+
+function loadExportBackground(src: string | null): Promise<HTMLImageElement | null> {
+  if (!src) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.crossOrigin = "anonymous";
+    image.decoding = "async";
+    image.onload = () => resolve(image);
+    image.onerror = () => resolve(null);
+    image.src = src;
+  });
+}
+
+function sanitizeReplayVideoFilename(value: string): string {
+  return value
+    .trim()
+    .replace(/[^\w.-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 90) || "replay";
+}
+
+function canvasToJpegBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("Couldn't encode replay frame."));
+    }, "image/jpeg", 0.92);
+  });
+}
+
+async function postReplayVideoJson<T>(action: string, body: unknown, id?: string): Promise<T> {
+  const url = new URL("/api/replay-video-job", window.location.origin);
+  url.searchParams.set("action", action);
+  if (id) url.searchParams.set("id", id);
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body ?? {}),
+  });
+  const payload = await response.json().catch(() => null) as (T & { error?: string }) | null;
+  if (!response.ok || !payload) {
+    throw new Error(payload?.error || `Replay video job ${action} failed.`);
+  }
+  return payload;
+}
+
+async function postReplayVideoFrame(jobId: string, index: number, blob: Blob): Promise<void> {
+  const url = new URL("/api/replay-video-job", window.location.origin);
+  url.searchParams.set("action", "frame");
+  url.searchParams.set("id", jobId);
+  url.searchParams.set("index", String(index));
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "image/jpeg" },
+    body: blob,
+  });
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(payload?.error || `Replay frame ${index + 1} upload failed.`);
+  }
 }
 
 // Browsers default `preservesPitch` to true (the DT/HT behavior). NC/DC need
@@ -705,6 +800,7 @@ function ReplayViewer({
   fallbackBeatmapsetId?: number;
   initialTime?: number;
 }) {
+  const auth = useAuth();
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<ReplayRendererLike | null>(null);
@@ -755,6 +851,13 @@ function ReplayViewer({
   const [pendingPlay, setPendingPlay] = useState(false);
   const [buffering, setBuffering] = useState(false);
   const [bgSrc, setBgSrc] = useState<string | null>(null);
+  const [videoExport, setVideoExport] = useState<ReplayVideoExportState>({
+    exporting: false,
+    progress: 0,
+    error: null,
+    url: null,
+    signed: false,
+  });
   const scrubbingRef = useRef(false);
   const scrubResumeOnReleaseRef = useRef(false);
   const fullscreenChromeTimeoutRef = useRef<number | null>(null);
@@ -771,7 +874,62 @@ function ReplayViewer({
   const skinSettingsRef = useRef<ReplaySkinSettings>(skinSettings);
   const overlaySettingsRef = useRef<ReplayOverlaySettings>(overlaySettings);
   const shouldResumeAudioRef = useRef(false);
+  const volumeRef = useRef(volume);
+  const replayEndAudioFadeActiveRef = useRef(false);
+  const replayEndAudioFadeFrameRef = useRef<number | null>(null);
   const isCanvasFullscreen = isNativeFullscreen || isPseudoFullscreen;
+  const replayVideoExportAvailable = auth.canUseAdminFeatures;
+
+  const cancelReplayEndAudioFade = useCallback((restoreVolume = true) => {
+    replayEndAudioFadeActiveRef.current = false;
+    if (replayEndAudioFadeFrameRef.current != null && typeof window !== "undefined") {
+      window.cancelAnimationFrame(replayEndAudioFadeFrameRef.current);
+    }
+    replayEndAudioFadeFrameRef.current = null;
+    if (restoreVolume && audioRef.current) {
+      audioRef.current.volume = volumeRef.current;
+    }
+  }, []);
+
+  const startReplayEndAudioFade = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio || !audioEnabled || audio.ended) return false;
+    if (replayEndAudioFadeActiveRef.current) return true;
+
+    const startVolume = audio.volume;
+    replayEndAudioFadeActiveRef.current = true;
+    shouldResumeAudioRef.current = false;
+
+    if (startVolume <= 0 || typeof window === "undefined") {
+      cancelReplayEndAudioFade(true);
+      audio.pause();
+      return true;
+    }
+
+    const startedAt = performance.now();
+    const step = (now: number) => {
+      if (!replayEndAudioFadeActiveRef.current) return;
+      const progress = Math.min(1, Math.max(0, (now - startedAt) / REPLAY_END_AUDIO_FADE_MS));
+      audio.volume = startVolume * (1 - progress);
+
+      if (progress < 1 && !audio.paused && !audio.ended) {
+        replayEndAudioFadeFrameRef.current = window.requestAnimationFrame(step);
+        return;
+      }
+
+      replayEndAudioFadeActiveRef.current = false;
+      replayEndAudioFadeFrameRef.current = null;
+      audio.pause();
+      audio.volume = volumeRef.current;
+    };
+
+    if (audio.paused && audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+      audio.play().catch(() => {});
+    }
+    replayEndAudioFadeFrameRef.current = window.requestAnimationFrame(step);
+    return true;
+  }, [audioEnabled, cancelReplayEndAudioFade]);
+
   const applyScrollSpeed = useCallback((next: number, persist = false) => {
     const normalized = normalizeReplayScrollSpeed(next);
     setScrollSpeed(normalized);
@@ -1004,12 +1162,21 @@ function ReplayViewer({
   }, [isCanvasFullscreen, resizeReplayRenderer]);
 
   useEffect(() => {
+    cancelReplayEndAudioFade(false);
     setAudioError(null);
     setAudioReady(false);
     setBuffering(false);
     shouldResumeAudioRef.current = false;
     audioUrlActiveRef.current = !!audioUrl;
-  }, [audioUrl]);
+  }, [audioUrl, cancelReplayEndAudioFade]);
+
+  useEffect(() => {
+    volumeRef.current = volume;
+  }, [volume]);
+
+  useEffect(() => {
+    return () => cancelReplayEndAudioFade(false);
+  }, [cancelReplayEndAudioFade]);
 
   useEffect(() => {
     audioEnabledRef.current = audioEnabled;
@@ -1173,16 +1340,20 @@ function ReplayViewer({
     const id = setInterval(() => {
       const r = rendererRef.current;
       if (!r) return;
-      if (!r.isPlaying) setIsPlaying(false);
+      if (!r.isPlaying) {
+        if (r.time >= r.duration) startReplayEndAudioFade();
+        setIsPlaying(false);
+      }
     }, 250);
     return () => clearInterval(id);
-  }, [isPlaying]);
+  }, [isPlaying, startReplayEndAudioFade]);
 
   // Sync audio with replay play/pause/seek
   useEffect(() => {
     if (!audioRef.current || !audioEnabled) return;
-    audioRef.current.volume = volume;
+    if (!replayEndAudioFadeActiveRef.current) audioRef.current.volume = volume;
     if (isPlaying) {
+      cancelReplayEndAudioFade();
       audioRef.current.playbackRate = effectiveRate;
       setAudioPreservesPitch(audioRef.current, audioPreservesPitch);
       if (audioRef.current.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
@@ -1192,9 +1363,9 @@ function ReplayViewer({
       }
     } else {
       shouldResumeAudioRef.current = false;
-      audioRef.current.pause();
+      if (!replayEndAudioFadeActiveRef.current) audioRef.current.pause();
     }
-  }, [isPlaying, audioEnabled, speed, volume]);
+  }, [isPlaying, audioEnabled, speed, volume, cancelReplayEndAudioFade]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1234,6 +1405,12 @@ function ReplayViewer({
       if (!audioEnabled || !isPlaying) return;
       const renderer = rendererRef.current;
       if (audio.ended || !renderer?.isPlaying || renderer.time >= renderer.duration) {
+        if (!audio.ended && renderer?.isPlaying && renderer.time >= renderer.duration) {
+          startReplayEndAudioFade();
+          setBuffering(false);
+          setIsPlaying(false);
+          return;
+        }
         shouldResumeAudioRef.current = false;
         setBuffering(false);
         setIsPlaying(false);
@@ -1273,6 +1450,7 @@ function ReplayViewer({
     const handleStalled = () => updateBuffering();
     const handleSeeking = () => updateBuffering();
     const handleEnded = () => {
+      cancelReplayEndAudioFade();
       const renderer = rendererRef.current;
       if (renderer) {
         renderer.seek(renderer.duration);
@@ -1332,11 +1510,12 @@ function ReplayViewer({
         document.removeEventListener("visibilitychange", handleVisibility);
       }
     };
-  }, [audioEnabled, isPlaying, effectiveRate, volume, audioUrl]);
+  }, [audioEnabled, isPlaying, effectiveRate, volume, audioUrl, startReplayEndAudioFade, cancelReplayEndAudioFade]);
 
   // Sync audio time on seek — pause first to force re-buffer, then resume
   const syncAudioTime = (timeMs: number) => {
     if (!audioRef.current || !audioEnabled) return;
+    cancelReplayEndAudioFade();
     const wasPlaying = !audioRef.current.paused;
     shouldResumeAudioRef.current = wasPlaying || isPlaying;
     audioRef.current.pause();
@@ -1350,6 +1529,7 @@ function ReplayViewer({
   const startPlayback = useCallback(() => {
     const r = rendererRef.current;
     if (!r) return;
+    cancelReplayEndAudioFade();
     if (r.time >= r.duration) r.seek(0);
     r.play();
     setIsPlaying(true);
@@ -1363,12 +1543,13 @@ function ReplayViewer({
         shouldResumeAudioRef.current = true;
       });
     }
-  }, [audioEnabled, audioPreservesPitch, effectiveRate, volume]);
+  }, [audioEnabled, audioPreservesPitch, effectiveRate, volume, cancelReplayEndAudioFade]);
 
   const togglePlay = () => {
     const r = rendererRef.current;
     if (!r) return;
     if (isPlaying) {
+      cancelReplayEndAudioFade();
       r.pause();
       setIsPlaying(false);
       setPendingPlay(false);
@@ -1398,6 +1579,7 @@ function ReplayViewer({
 
   const toggleAudio = () => {
     if (!audioRef.current) return;
+    cancelReplayEndAudioFade();
     if (audioEnabled) {
       audioRef.current.pause();
       setAudioEnabled(false);
@@ -1418,6 +1600,7 @@ function ReplayViewer({
 
 
   const handleAudioError = () => {
+    cancelReplayEndAudioFade();
     setAudioError("Couldn't load the song audio for this replay.");
     shouldResumeAudioRef.current = false;
   };
@@ -1425,6 +1608,7 @@ function ReplayViewer({
   const handleProgressPointerDown = () => {
     const r = rendererRef.current;
     if (!r) return;
+    cancelReplayEndAudioFade();
     if (isCanvasFullscreen) showFullscreenChromeTemporarily(false);
     scrubbingRef.current = true;
     scrubResumeOnReleaseRef.current = r.isPlaying;
@@ -1477,6 +1661,230 @@ function ReplayViewer({
       syncAudioTime(timeMs);
     }
   };
+
+  const exportReplayVideo = useCallback(async (options: ReplayVideoExportOptions) => {
+    const sourceCanvas = canvasRef.current;
+    const sourceRenderer = rendererRef.current;
+    if (!sourceRenderer || !sourceCanvas) return;
+
+    const replayDuration = Math.max(0, sourceRenderer.duration);
+    let startTime = 0;
+    let endTime = replayDuration;
+
+    if (options.kind === "custom") {
+      const markedStart = Math.max(0, Math.min(replayDuration, options.startTimeMs ?? 0));
+      const markedEnd = Math.max(0, Math.min(replayDuration, options.endTimeMs ?? 0));
+      startTime = Math.min(markedStart, markedEnd);
+      endTime = Math.max(markedStart, markedEnd);
+      if (endTime - startTime < 500) {
+        setVideoExport({ exporting: false, progress: 0, error: "Mark a longer custom clip range.", url: null, signed: false });
+        return;
+      }
+    } else if (options.kind === "clip") {
+      const clipSeconds = Math.max(1, Math.min(120, Math.round(options.durationSeconds ?? REPLAY_VIDEO_EXPORT_CLIP_SECONDS)));
+      startTime = sourceRenderer.time >= replayDuration - 500 ? 0 : sourceRenderer.time;
+      endTime = Math.min(
+        replayDuration,
+        startTime + clipSeconds * 1000 * Math.max(0.01, effectiveRate),
+      );
+    }
+
+    const sourceDurationMs = Math.max(1, endTime - startTime);
+    const outputDurationSeconds = sourceDurationMs / (1000 * Math.max(0.01, effectiveRate));
+    const frameCount = Math.max(1, Math.ceil(outputDurationSeconds * REPLAY_VIDEO_EXPORT_FPS));
+    let exportRenderer: ReplayRendererLike | null = null;
+    let exportHost: HTMLDivElement | null = null;
+    let jobId: string | null = null;
+
+    setVideoExport({ exporting: true, progress: 0, error: null, url: null, signed: false });
+
+    try {
+      const resolution = REPLAY_VIDEO_EXPORT_RESOLUTIONS[options.resolution] ?? REPLAY_VIDEO_EXPORT_RESOLUTIONS["1080p"];
+      const cssWidth = resolution.width;
+      const cssHeight = resolution.height;
+      exportHost = document.createElement("div");
+      exportHost.style.cssText = [
+        "position:fixed",
+        "left:-10000px",
+        "top:0",
+        `width:${cssWidth}px`,
+        `height:${cssHeight}px`,
+        "overflow:hidden",
+        "pointer-events:none",
+        "opacity:0",
+      ].join(";");
+
+      const exportCanvas = document.createElement("canvas");
+      exportCanvas.width = cssWidth;
+      exportCanvas.height = cssHeight;
+      exportCanvas.style.width = `${cssWidth}px`;
+      exportCanvas.style.height = `${cssHeight}px`;
+      exportHost.appendChild(exportCanvas);
+      document.body.appendChild(exportHost);
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+      const { ManiaReplayRenderer } = await withTimeout(
+        import("../components/replay/ReplayCanvas"),
+        8000,
+        "Timed out loading the replay renderer.",
+      );
+
+      exportRenderer = new ManiaReplayRenderer(
+        exportCanvas,
+        replay.frames,
+        replay.keyCount,
+        beatmap?.notes ?? [],
+        {
+          isConvert: scoreInfo?.beatmap?.convert ?? false,
+          isLazer: replayUsesLazerScoring,
+          od: beatmap?.od,
+          showInputOverlay,
+          mods: modAcronyms,
+          speedMultiplier: modRate,
+          transparentBackground: true,
+          hidePerformanceStats: true,
+          scrollVelocities: beatmap?.scrollVelocities,
+          expectedCounts: getScoreExpectedCounts(scoreInfo, replay),
+          lifeBarFrames: replay.lifeBarFrames,
+          skinSettings,
+          overlaySettings,
+          inputOverlayOnly,
+          inputOverlayColor,
+          inputOverlayKeyHistory,
+        },
+      ) as ReplayRendererLike;
+
+      await withTimeout(
+        exportRenderer.ready(),
+        8000,
+        "Timed out starting the export renderer.",
+      );
+      exportRenderer.setScrollSpeed(scrollSpeed);
+      exportRenderer.setSpeed(speed);
+
+      const width = cssWidth;
+      const height = cssHeight;
+      const compositeCanvas = document.createElement("canvas");
+      compositeCanvas.width = width;
+      compositeCanvas.height = height;
+      const ctx = compositeCanvas.getContext("2d", { alpha: false });
+      if (!ctx) throw new Error("Couldn't create the video compositor.");
+
+      const backgroundImage = await loadExportBackground(beatmapBackgroundUrl ?? bgSrc);
+      let canDrawBackgroundImage = true;
+      const drawCompositeFrame = () => {
+        const gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, "#0a0a18");
+        gradient.addColorStop(0.5, "#1a1016");
+        gradient.addColorStop(1, "#0c0c14");
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, width, height);
+
+        if (backgroundImage && canDrawBackgroundImage) {
+          try {
+            ctx.save();
+            ctx.globalAlpha = 1;
+            drawCoverImage(ctx, backgroundImage, width, height);
+            ctx.restore();
+          } catch {
+            canDrawBackgroundImage = false;
+          }
+        }
+
+        ctx.fillStyle = `rgba(0, 0, 0, ${Math.max(0, Math.min(1, bgDim / 100))})`;
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(exportCanvas, 0, 0, width, height);
+      };
+
+      const player = sanitizeReplayVideoFilename(replay.header.playerName || scoreInfo?.user?.username || "player");
+      const title = sanitizeReplayVideoFilename(scoreInfo?.beatmapset?.title ?? "replay");
+      const diff = sanitizeReplayVideoFilename(scoreInfo?.beatmap?.version ?? "mania");
+      const scoreSuffix = scoreInfo?.id ? `-${scoreInfo.id}` : "";
+      const job = await postReplayVideoJson<{ id: string }>("start", {
+        filename: `${player}-${title}-${diff}${scoreSuffix}.webm`,
+        fps: REPLAY_VIDEO_EXPORT_FPS,
+        width,
+        height,
+        frameCount,
+        audioUrl: audioEnabled && audioUrl && !audioError ? audioUrl : null,
+        audioStartSeconds: startTime / 1000,
+        sourceDurationSeconds: sourceDurationMs / 1000,
+        effectiveRate,
+      });
+      jobId = job.id;
+
+      const pendingUploads = new Set<Promise<void>>();
+      for (let index = 0; index < frameCount; index++) {
+        const gameTime = Math.min(endTime, startTime + (index / REPLAY_VIDEO_EXPORT_FPS) * 1000 * effectiveRate);
+        exportRenderer.seek(gameTime);
+        drawCompositeFrame();
+        const frameBlob = await canvasToJpegBlob(compositeCanvas);
+        const upload = postReplayVideoFrame(jobId, index, frameBlob)
+          .finally(() => pendingUploads.delete(upload));
+        pendingUploads.add(upload);
+        if (pendingUploads.size >= REPLAY_VIDEO_EXPORT_UPLOAD_CONCURRENCY) {
+          await Promise.race(pendingUploads);
+        }
+        setVideoExport({
+          exporting: true,
+          progress: Math.min(0.86, ((index + 1) / frameCount) * 0.86),
+          error: null,
+          url: null,
+          signed: false,
+        });
+      }
+      await Promise.all(pendingUploads);
+
+      setVideoExport({ exporting: true, progress: 0.94, error: null, url: null, signed: false });
+      const uploaded = await postReplayVideoJson<{ url: string; signed: boolean }>("finish", {}, jobId);
+      setVideoExport({
+        exporting: false,
+        progress: 1,
+        error: null,
+        url: uploaded.url,
+        signed: uploaded.signed,
+      });
+    } catch (error) {
+      if (jobId) {
+        void postReplayVideoJson("cancel", {}, jobId).catch(() => {});
+      }
+      const message = error instanceof Error ? error.message : "Couldn't export the replay video.";
+      setVideoExport({ exporting: false, progress: 0, error: message, url: null, signed: false });
+    } finally {
+      exportRenderer?.destroy();
+      exportRenderer = null;
+      exportHost?.remove();
+    }
+  }, [
+    audioEnabled,
+    audioError,
+    audioUrl,
+    bgDim,
+    bgSrc,
+    effectiveRate,
+    beatmap,
+    beatmapBackgroundUrl,
+    inputOverlayColor,
+    inputOverlayKeyHistory,
+    inputOverlayOnly,
+    modAcronyms,
+    modRate,
+    overlaySettings,
+    replay.header.playerName,
+    replay.frames,
+    replay.keyCount,
+    replay.lifeBarFrames,
+    replayUsesLazerScoring,
+    scoreInfo,
+    scoreInfo?.beatmap?.version,
+    scoreInfo?.beatmapset?.title,
+    scoreInfo?.id,
+    scoreInfo?.user?.username,
+    scrollSpeed,
+    showInputOverlay,
+    skinSettings,
+    speed,
+  ]);
 
   const fullscreenChromeVisible = isCanvasFullscreen && showFullscreenChrome;
   const mobileFullscreenButtonVisible = !isCanvasFullscreen && showFullscreenChrome;
@@ -1634,7 +2042,12 @@ function ReplayViewer({
         skinSettingsOpen={skinSettingsOpen}
         scrollSpeed={scrollSpeed}
         bgDim={bgDim}
+        videoExporting={videoExport.exporting}
+        videoExportProgress={videoExport.progress}
+        videoExportError={videoExport.error}
+        videoExportUrl={videoExport.url}
         onTogglePlay={togglePlay}
+        onExportVideo={replayVideoExportAvailable ? exportReplayVideo : undefined}
         onSetSpeed={(nextSpeed) => {
           setSpeed(nextSpeed);
           rendererRef.current?.setSpeed(nextSpeed);
@@ -1645,9 +2058,11 @@ function ReplayViewer({
         }}
         onToggleAudio={toggleAudio}
         onSetVolume={(nextVolume) => {
-          setVolume(normalizeReplayVolume(nextVolume));
-          if (!audioEnabled && nextVolume > 0) setAudioEnabled(true);
-          if (audioRef.current) audioRef.current.volume = nextVolume;
+          const normalized = normalizeReplayVolume(nextVolume);
+          volumeRef.current = normalized;
+          setVolume(normalized);
+          if (!audioEnabled && normalized > 0) setAudioEnabled(true);
+          if (audioRef.current && !replayEndAudioFadeActiveRef.current) audioRef.current.volume = normalized;
         }}
         onToggleInputOverlay={() => setShowInputOverlay((value) => !value)}
         onToggleInputOverlayOnly={() => setInputOverlayOnly((value) => !value)}

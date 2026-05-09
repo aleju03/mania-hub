@@ -46,11 +46,12 @@ export const Route = createFileRoute("/rankings")({
     return pageSeo({
       title: countryName ? `${countryName} mania rankings` : "Country mania rankings",
       description: countryName
-        ? `Top osu!mania players in ${countryName}, sortable by PP, accuracy, play count, and recent rank changes.`
-        : "Sort osu!mania country rankings by PP, accuracy, play count, and recent rank changes.",
+        ? `Top osu!mania players in ${countryName}`
+        : "osu!mania country rankings",
       path: withSearchParams("/rankings", { page: match.search.page === 2 ? 2 : undefined, country }),
       origin: match.context.origin,
       imageCountry: country,
+      imageKind: "rankings",
     });
   },
   component: RankingsPage,

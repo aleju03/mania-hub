@@ -26,11 +26,12 @@ export const Route = createFileRoute("/")({
     return pageSeo({
       title: SITE_NAME,
       description: countryName
-        ? `Top osu!mania players and recent scores in ${countryName}.`
-        : "osu!mania rankings, fresh scores, and top plays by country.",
+        ? `Top osu!mania players and scores in ${countryName}`
+        : "osu!mania across countries: rankings, scores, top plays",
       path: withSearchParams("/", { country }),
       origin: match.context.origin,
       imageCountry: country,
+      imageKind: country ? "home" : undefined,
       social: Boolean(country),
     });
   },

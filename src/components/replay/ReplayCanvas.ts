@@ -136,6 +136,7 @@ interface RendererOptions {
   speedMultiplier?: number;
   transparentBackground?: boolean;
   hideHud?: boolean;
+  hidePerformanceStats?: boolean;
   showCombo?: boolean;
   initialCombo?: number;
   barePlayfield?: boolean;
@@ -245,6 +246,7 @@ export class ManiaReplayRenderer {
   private inputOverlayKeyHistory = false;
   private transparentBackground = false;
   private hideHud = false;
+  private hidePerformanceStats = false;
   private showCombo = false;
   private initialCombo = 0;
   private barePlayfield = false;
@@ -395,6 +397,7 @@ export class ManiaReplayRenderer {
     this.inputOverlayKeyHistory = options?.inputOverlayKeyHistory ?? false;
     this.transparentBackground = options?.transparentBackground ?? false;
     this.hideHud = options?.hideHud ?? false;
+    this.hidePerformanceStats = options?.hidePerformanceStats ?? false;
     this.showCombo = options?.showCombo ?? false;
     this.initialCombo = Math.max(0, Math.floor(options?.initialCombo ?? 0));
     this.combo = this.initialCombo;
@@ -2586,6 +2589,7 @@ export class ManiaReplayRenderer {
       anchorX: 1,
       anchorY: 1,
     });
+    if (this.hidePerformanceStats) return;
     this.addText(`FPS ${this.hudCachedFps}`, w - 8, 8, {
       fontSize: 11,
       fill: this.measuredFps >= 55 || this.measuredFps === 0 ? "#ffffff" : "#ffcc22",

@@ -15,3 +15,8 @@ export async function requireAdminAccess(action: string): Promise<void> {
   const { requireAdminAccess: requireAccess } = await import("./auth-server");
   await requireAccess(action);
 }
+
+export async function requireTrueAdminAccess(action: string): Promise<void> {
+  const { requireTrueAdminAccess: requireAccess } = await import("./auth-server");
+  await requireAccess(action);
+}

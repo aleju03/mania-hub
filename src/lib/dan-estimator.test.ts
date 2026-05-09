@@ -707,7 +707,7 @@ describe("estimateDan", () => {
     expect(higherRate.rawDan).toBeGreaterThan(lowerRate.rawDan);
   });
 
-  it("keeps Lolit Speed marathon in alpha stamina instead of beta", () => {
+  it("keeps Lolit Speed marathon as plain alpha stamina instead of alpha+ or beta", () => {
     const estimate = estimateDan(readFixtureBeatmap("icyworld/DJ-Sharpnel-Lolit-Speed-IcyWorld-4K-Marathon.osu"), {
       starRating: 6.43949,
       totalLength: 405,
@@ -718,8 +718,9 @@ describe("estimateDan", () => {
     expect(estimate.metrics.chordRatio).toBeLessThan(0.56);
     expect(estimate.metrics.jackPressure).toBeLessThan(135);
     expect(estimate.family).toBe("stamina");
-    expect(estimate.label).toBe("alpha");
+    expect(estimate.displayName).toBe("alpha");
     expect(estimate.debug?.scoring.terms.longJumpstreamStaminaCompression).toBeGreaterThan(0);
+    expect(estimate.debug?.scoring.terms.simpleLongJumpstreamPatternCompression).toBeGreaterThan(0);
   });
 
   it("tracks the Road from Gamma to Delta jack practice pack targets", () => {

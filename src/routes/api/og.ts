@@ -1,6 +1,7 @@
 import { ImageResponse } from "@vercel/og";
 import { createFileRoute } from "@tanstack/react-router";
 import { createElement as h } from "react";
+import type { ReactNode } from "react";
 import { getCachedUser, getRankings, getCountryMapsFavourites, getScore } from "../../lib/osu";
 import { getCountryName, isSupportedCountryCode } from "../../lib/country";
 import { getAssetOrigin } from "../../lib/origin";
@@ -126,6 +127,13 @@ function scoreAwardsRankedPp(score: OsuScore): boolean {
 
   const status = score.beatmapset?.status?.toLowerCase();
   return !status || status === "ranked" || status === "approved";
+}
+
+// Higher-res raster flags than osu!'s 70×47 PNG. flagcdn.com serves
+// width-keyed PNGs (`w640/<lower>.png`) so our polaroid card stays
+// crisp at 320px+ render sizes instead of getting blurry.
+function flagImageUrl(country: string): string {
+  return `https://flagcdn.com/w640/${country.toLowerCase()}.png`;
 }
 
 async function fetchCountryMapUsers(country: string) {
@@ -1073,13 +1081,641 @@ async function renderPlayerOg(request: Request, rawUsername: string): Promise<Re
   return response;
 }
 
+/* Polaroid card primitive used by both home and rankings OGs. Renders an
+   image inside a flat off-white frame with a small caption strip below.
+   No gradients/shadows/glows — just the frame, the photo, and the
+   caption — so the card reads as a paper print on a flat surface. The
+   caller positions and rotates each card to scatter it across the
+   canvas. */
+type PolaroidProps = {
+  imgSrc: string;
+  caption?: string;
+  subCaption?: string;
+  captionFontSize?: number;
+  size: number;
+  rotate: number;
+  top: number;
+  left: number;
+  badge?: string;
+  badgeColor?: string;
+  variant?: "photo" | "flag";
+  key: string;
+};
+
+function polaroid(props: PolaroidProps) {
+  const {
+    imgSrc,
+    caption,
+    subCaption,
+    captionFontSize = 22,
+    size,
+    rotate,
+    top,
+    left,
+    badge,
+    badgeColor,
+    variant = "photo",
+    key,
+  } = props;
+  const frameWidth = size + 28;
+  const captionHeight = caption
+    ? subCaption
+      ? captionFontSize + 40
+      : captionFontSize + 24
+    : 28;
+  const photoHeight = variant === "flag" ? Math.round(size * 0.66) : size;
+  const frameHeight = 14 + photoHeight + 14 + captionHeight;
+  return h(
+    "div",
+    {
+      key,
+      style: {
+        position: "absolute",
+        top: `${top}px`,
+        left: `${left}px`,
+        display: "flex",
+        flexDirection: "column",
+        width: `${frameWidth}px`,
+        height: `${frameHeight}px`,
+        padding: "14px 14px 0",
+        background: "#f3ece4",
+        boxSizing: "border-box",
+        transform: `rotate(${rotate}deg)`,
+      },
+    },
+    [
+      h(
+        "div",
+        {
+          key: "frame",
+          style: {
+            position: "relative",
+            display: "flex",
+            width: `${size}px`,
+            height: `${photoHeight}px`,
+            background: "#1a1317",
+            overflow: "hidden",
+          },
+        },
+        [
+          h("img", {
+            key: "img",
+            src: imgSrc,
+            style: {
+              width: `${size}px`,
+              height: `${photoHeight}px`,
+              objectFit: "cover",
+            },
+          }),
+          badge
+            ? h(
+                "div",
+                {
+                  key: "badge",
+                  style: {
+                    position: "absolute",
+                    top: "10px",
+                    left: "10px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "4px 10px",
+                    background: badgeColor ?? "#ff66aa",
+                    color: "#1a1317",
+                    fontSize: "20px",
+                    fontWeight: 900,
+                    letterSpacing: "0.04em",
+                  },
+                },
+                badge,
+              )
+            : null,
+        ],
+      ),
+      caption
+        ? h(
+            "div",
+            {
+              key: "cap",
+              style: {
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                width: `${size}px`,
+                paddingTop: "10px",
+              },
+            },
+            [
+              h(
+                "div",
+                {
+                  key: "main",
+                  style: {
+                    fontSize: `${captionFontSize}px`,
+                    fontWeight: 900,
+                    color: "#1a1317",
+                    lineHeight: "1.0",
+                    overflow: "hidden",
+                    maxWidth: `${size}px`,
+                  },
+                },
+                caption,
+              ),
+              subCaption
+                ? h(
+                    "div",
+                    {
+                      key: "sub",
+                      style: {
+                        fontSize: "16px",
+                        fontWeight: 900,
+                        color: "#7a6b74",
+                        lineHeight: "1.0",
+                        marginTop: "4px",
+                      },
+                    },
+                    subCaption,
+                  )
+                : null,
+            ],
+          )
+        : null,
+    ],
+  );
+}
+
+/* Dimmed avatar backdrop. Renders the country's tail-end ranked
+   players as small frameless tinted avatars scattered across the
+   canvas so the focal polaroids on top read as "the country's mania
+   scene" rather than just 8 isolated faces. Positions/rotations are
+   deterministic per-country via mulberry32 so the same country renders
+   the same backdrop until the upstream rankings shift.
+
+   The scatter is generated on a coarse grid then jittered: it
+   guarantees full coverage without piling cards on each other, while
+   still feeling hand-placed. */
+// Linear-interpolate two #rrggbb hex colours. Used to pre-bake "dimmed"
+// frame colours into solid hex so the polaroid frame stays fully
+// opaque and occludes cards behind it. (Using CSS opacity on the whole
+// card would let stacked cards bleed through each other.)
+function lerpHex(from: string, to: string, t: number): string {
+  const fr = parseInt(from.slice(1, 3), 16);
+  const fg = parseInt(from.slice(3, 5), 16);
+  const fb = parseInt(from.slice(5, 7), 16);
+  const tr = parseInt(to.slice(1, 3), 16);
+  const tg = parseInt(to.slice(3, 5), 16);
+  const tb = parseInt(to.slice(5, 7), 16);
+  const r = Math.round(fr + (tr - fr) * t);
+  const g = Math.round(fg + (tg - fg) * t);
+  const b = Math.round(fb + (tb - fb) * t);
+  const hex = (n: number) => n.toString(16).padStart(2, "0");
+  return `#${hex(r)}${hex(g)}${hex(b)}`;
+}
+
+const SURFACE_COLOR = "#1a1620";
+const POLAROID_FRAME_COLOR = "#f3ece4";
+const PHOTO_BG_COLOR = "#1a1317";
+
+function backdropAvatars(
+  country: string,
+  avatars: Array<{ url: string }>,
+): ReactNode[] {
+  if (avatars.length === 0) return [];
+  // Dense grid so coverage stays even (no large empty patches), with
+  // moderate jitter so the result still reads as scattered. Cards CAN
+  // overlap — that's part of the pile-of-polaroids feel — but we
+  // pre-bake the frame's dimming into a solid hex colour so each card
+  // fully occludes anything behind it (no bleed-through from CSS
+  // alpha-blending stacked translucent cards).
+  const cols = 11;
+  const rows = 5;
+  const cellW = WIDTH / cols;
+  const cellH = HEIGHT / rows;
+  const rng = mulberry32(hashString(country));
+  const cells: ReactNode[] = [];
+  let cursor = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const avatar = avatars[cursor % avatars.length];
+      cursor++;
+      // Size varies — smaller = further away, larger = closer.
+      const photoSize = 56 + Math.floor(rng() * 56);
+      const cardW = photoSize + 28;
+      const cardH = photoSize + 14 + 28;
+      // Moderate jitter (~55% of cell) keeps coverage even while
+      // breaking the grid and letting cards overlap their neighbours.
+      const jitterX = (rng() - 0.5) * cellW * 0.55;
+      const jitterY = (rng() - 0.5) * cellH * 0.55;
+      const left = c * cellW + (cellW - cardW) / 2 + jitterX;
+      const top = r * cellH + (cellH - cardH) / 2 + jitterY;
+      const rotate = (rng() - 0.5) * 22;
+      // "Depth" drives both size (already done) and brightness here.
+      // Lower depth = further back = frame fades toward the surface
+      // colour, avatar fades toward photo-bg. Higher depth = closer
+      // to foreground.
+      const depth = 0.18 + rng() * 0.6;
+      const frameColor = lerpHex(SURFACE_COLOR, POLAROID_FRAME_COLOR, depth);
+      // Avatar opacity is applied inside the frame, on top of the dark
+      // photo bg. That blends toward the photo bg (still inside the
+      // card), never toward whatever's behind the frame.
+      const avatarOpacity = depth;
+      cells.push(
+        h(
+          "div",
+          {
+            key: `bg-${r}-${c}`,
+            style: {
+              position: "absolute",
+              top: `${top}px`,
+              left: `${left}px`,
+              width: `${cardW}px`,
+              height: `${cardH}px`,
+              padding: "14px 14px 0",
+              background: frameColor,
+              boxSizing: "border-box",
+              transform: `rotate(${rotate.toFixed(2)}deg)`,
+              display: "flex",
+            },
+          },
+          h(
+            "div",
+            {
+              key: "frame",
+              style: {
+                display: "flex",
+                width: `${photoSize}px`,
+                height: `${photoSize}px`,
+                background: PHOTO_BG_COLOR,
+                overflow: "hidden",
+              },
+            },
+            h("img", {
+              src: avatar.url,
+              style: {
+                width: `${photoSize}px`,
+                height: `${photoSize}px`,
+                objectFit: "cover",
+                opacity: avatarOpacity,
+              },
+            }),
+          ),
+        ),
+      );
+    }
+  }
+  return cells;
+}
+
+/* Sticker primitive: a flat solid-colour rectangle of text. No image,
+   no caption — used for "Costa Rica", "rankings", "the mania scene" etc.
+   Stuck onto the scrapbook surface alongside the polaroids with the
+   same tilt mechanic so it sits in the same plane as the photo cards. */
+type StickerProps = {
+  text: string;
+  subText?: string;
+  fontSize: number;
+  background: string;
+  color: string;
+  paddingX: number;
+  paddingY: number;
+  rotate: number;
+  top: number;
+  left: number;
+  key: string;
+};
+
+function sticker(props: StickerProps) {
+  const {
+    text,
+    subText,
+    fontSize,
+    background,
+    color,
+    paddingX,
+    paddingY,
+    rotate,
+    top,
+    left,
+    key,
+  } = props;
+  return h(
+    "div",
+    {
+      key,
+      style: {
+        position: "absolute",
+        top: `${top}px`,
+        left: `${left}px`,
+        display: "flex",
+        flexDirection: "column",
+        padding: `${paddingY}px ${paddingX}px`,
+        background,
+        color,
+        transform: `rotate(${rotate}deg)`,
+      },
+    },
+    [
+      h(
+        "div",
+        {
+          key: "t",
+          style: {
+            fontSize: `${fontSize}px`,
+            fontWeight: 900,
+            lineHeight: "1.0",
+            letterSpacing: "0.01em",
+          },
+        },
+        text,
+      ),
+      subText
+        ? h(
+            "div",
+            {
+              key: "s",
+              style: {
+                fontSize: `${Math.round(fontSize * 0.22)}px`,
+                fontWeight: 900,
+                lineHeight: "1.0",
+                marginTop: "8px",
+                letterSpacing: "0.18em",
+                opacity: 0.75,
+              },
+            },
+            subText,
+          )
+        : null,
+    ],
+  );
+}
+
+/* Home layout: scrapbook scatter. The country's top players' avatars
+   are pinned to the canvas as polaroids at varying tilts. A flag
+   polaroid and a country/title sticker sit in the centre band so the
+   identity reads without dominating. Flat #15131a paper-on-table
+   surface; no gradients, glows, or radial decorations. */
+async function renderHomeOg(request: Request, country: string): Promise<Response> {
+  const [regularFont, heavyFont, rankings] = await Promise.all([
+    getFont(request, "Torus-Regular.otf"),
+    getFont(request, "Torus-Heavy.otf"),
+    getRankings({ data: { type: "performance", page: 1, country } }),
+  ]);
+
+  const players = rankings.ranking.slice(0, 8);
+  // Backdrop pulls from positions 8..50 — the rest of the country's
+  // ranked roster — so the foreground polaroids and the dimmed
+  // background never show the same avatar twice.
+  const backdropPlayers = rankings.ranking
+    .slice(8, 50)
+    .map((entry) => ({ url: entry.user.avatar_url }));
+  const countryName = getCountryName(country) || country;
+  const flagUrl = flagImageUrl(country);
+
+  // Hand-tuned scatter so the centre band stays open for the country
+  // sticker and the corners get filled by polaroids. Coordinates are
+  // top/left of each card's bounding box pre-rotation — Satori applies
+  // the rotate transform around the card's centre.
+  const playerSlots: Array<{
+    top: number;
+    left: number;
+    rotate: number;
+    size: number;
+  }> = [
+    { top: 30, left: 30, rotate: -7, size: 150 },
+    { top: 12, left: 230, rotate: 4, size: 130 },
+    { top: 56, left: 980, rotate: 6, size: 150 },
+    { top: 22, left: 800, rotate: -5, size: 130 },
+    { top: 380, left: 60, rotate: 5, size: 140 },
+    { top: 410, left: 260, rotate: -4, size: 120 },
+    { top: 380, left: 880, rotate: -6, size: 140 },
+    { top: 420, left: 1060, rotate: 7, size: 120 },
+  ];
+
+  const polaroids = players.map((entry, i) => {
+    const slot = playerSlots[i];
+    if (!slot) return null;
+    return polaroid({
+      key: `p-${i}`,
+      imgSrc: entry.user.avatar_url,
+      caption: entry.user.username,
+      size: slot.size,
+      rotate: slot.rotate,
+      top: slot.top,
+      left: slot.left,
+    });
+  });
+
+  const response = new ImageResponse(
+    h(
+      "div",
+      {
+        style: {
+          width: `${WIDTH}px`,
+          height: `${HEIGHT}px`,
+          display: "flex",
+          position: "relative",
+          overflow: "hidden",
+          background: "#1a1620",
+          fontFamily: '"Torus OG"',
+          color: "#ffffff",
+        },
+      },
+      [
+        // Dimmed avatar backdrop — the rest of the country's ranked
+        // roster, scattered behind the foreground polaroids.
+        ...backdropAvatars(country, backdropPlayers),
+
+        ...polaroids,
+
+        // Flag polaroid as the focal centrepiece — country name doubles
+        // as its caption so flag and label live on the same card. Larger
+        // and more upright than the surrounding scatter so the eye lands
+        // here first.
+        polaroid({
+          key: "flag-card",
+          imgSrc: flagUrl,
+          variant: "flag",
+          caption: countryName,
+          captionFontSize: 56,
+          size: 320,
+          rotate: -2,
+          top: 130,
+          left: 440,
+        }),
+
+        // Brand sticker — small, taped at the bottom-centre, tilted.
+        sticker({
+          key: "brand",
+          text: "o!mania tracker",
+          fontSize: 22,
+          background: "#f3ece4",
+          color: "#1a1317",
+          paddingX: 14,
+          paddingY: 10,
+          rotate: -3,
+          top: 568,
+          left: 510,
+        }),
+      ],
+    ),
+    {
+      width: WIDTH,
+      height: HEIGHT,
+      fonts: ogFontList(regularFont, heavyFont),
+    },
+  );
+
+  response.headers.set("Cache-Control", OG_CACHE_HEADER);
+  return response;
+}
+
+/* Rankings layout: same scrapbook language, tighter composition. Top 3
+   players' polaroids fanned out across the centre, each stamped with
+   their rank and PP. The country flag polaroid + a "rankings" sticker
+   complete the identity. */
+async function renderRankingsOg(
+  request: Request,
+  country: string,
+): Promise<Response> {
+  const [regularFont, heavyFont, rankings] = await Promise.all([
+    getFont(request, "Torus-Regular.otf"),
+    getFont(request, "Torus-Heavy.otf"),
+    getRankings({ data: { type: "performance", page: 1, country } }),
+  ]);
+
+  const top3 = rankings.ranking.slice(0, 3);
+  // Backdrop pulls from positions 3..50 — everyone else in the country's
+  // ranked roster — so dimmed extras don't duplicate the fanned three.
+  const backdropPlayers = rankings.ranking
+    .slice(3, 50)
+    .map((entry) => ({ url: entry.user.avatar_url }));
+  const countryName = getCountryName(country) || country;
+  const flagUrl = flagImageUrl(country);
+
+  // Centre card (#1) is the largest and sits on top. #2 leans left,
+  // #3 leans right — fanned-deck feel. PP as the sub-caption, rank as
+  // a corner stamp on the photo. Render order matters: Satori uses DOM
+  // order for stacking (z-index isn't supported), so #1 must be last
+  // among the three cards to land on top of #2 and #3.
+  const slots = [
+    { rank: 2, entry: top3[1] ?? null, size: 230, rotate: -8, top: 145, left: 130 },
+    { rank: 3, entry: top3[2] ?? null, size: 220, rotate: 9, top: 160, left: 830 },
+    { rank: 1, entry: top3[0] ?? null, size: 280, rotate: 3, top: 110, left: 470 },
+  ];
+
+  const cards = slots
+    .filter((s) => s.entry !== null)
+    .map((s) =>
+      polaroid({
+        key: `r-${s.rank}`,
+        imgSrc: s.entry!.user.avatar_url,
+        caption: s.entry!.user.username,
+        subCaption: `${formatOgInt(s.entry!.pp)}pp`,
+        size: s.size,
+        rotate: s.rotate,
+        top: s.top,
+        left: s.left,
+        badge: `#${s.rank}`,
+        badgeColor: s.rank === 1 ? "#ff66aa" : "#f3ece4",
+      }),
+    );
+
+  const response = new ImageResponse(
+    h(
+      "div",
+      {
+        style: {
+          width: `${WIDTH}px`,
+          height: `${HEIGHT}px`,
+          display: "flex",
+          position: "relative",
+          overflow: "hidden",
+          background: "#1a1620",
+          fontFamily: '"Torus OG"',
+          color: "#ffffff",
+        },
+      },
+      [
+        // Dimmed avatar backdrop — the rest of the country's ranked
+        // roster, scattered behind the fanned polaroids.
+        ...backdropAvatars(country, backdropPlayers),
+
+        // Flag polaroid pinned bottom-left.
+        polaroid({
+          key: "flag",
+          imgSrc: flagUrl,
+          variant: "flag",
+          size: 170,
+          rotate: -6,
+          top: 460,
+          left: 70,
+        }),
+
+        ...cards,
+
+        // "rankings" sticker, top-left corner, tilted.
+        sticker({
+          key: "label",
+          text: "rankings",
+          fontSize: 56,
+          background: "#ff66aa",
+          color: "#1a1317",
+          paddingX: 22,
+          paddingY: 14,
+          rotate: -4,
+          top: 30,
+          left: 60,
+        }),
+
+        // Country sticker bottom-right, tilted opposite for balance.
+        sticker({
+          key: "country",
+          text: countryName,
+          fontSize: 52,
+          background: "#f3ece4",
+          color: "#1a1317",
+          paddingX: 22,
+          paddingY: 14,
+          rotate: 4,
+          top: 510,
+          left: 720,
+        }),
+
+        // Tiny brand mark, taped corner.
+        sticker({
+          key: "brand",
+          text: "o!mania tracker",
+          fontSize: 16,
+          background: "#1a1317",
+          color: "#7a6b74",
+          paddingX: 10,
+          paddingY: 6,
+          rotate: -2,
+          top: 50,
+          left: 1010,
+        }),
+      ],
+    ),
+    {
+      width: WIDTH,
+      height: HEIGHT,
+      fonts: ogFontList(regularFont, heavyFont),
+    },
+  );
+
+  response.headers.set("Cache-Control", OG_CACHE_HEADER);
+  return response;
+}
+
 /* Country layout: a scoreboard preview showing the top 5 of the country's
-   current ranking. Used for every page that has a `?country=XX` param
-   (home, rankings, top-plays, maps, tracker, snipes). The country name
-   is the focal element; the title from the URL appears as a small muted
-   caption so each page still reads distinctly. Description/subtitle is
-   intentionally not rendered here — it lives in the HTML <meta> so the
-   social-card body text shows it once, not duplicated inside the image. */
+   current ranking. Generic fallback for any page that bakes
+   `?country=XX` into its og:image URL without specifying a `kind`. The
+   country name is the focal element; the title from the URL appears as
+   a small muted caption so each page still reads distinctly.
+   Description/subtitle is intentionally not rendered here — it lives in
+   the HTML <meta> so the social-card body text shows it once, not
+   duplicated inside the image. */
 async function renderCountryOg(
   request: Request,
   country: string,
@@ -1346,10 +1982,244 @@ function scoreboardRow(
   );
 }
 
-/* Fallback layout. Used when no country is present and no kind is
-   recognised (replay page, preview-tool presets without country). The
-   description lives in the HTML <meta> so the social card body text
-   carries it — baking it into the image too would just duplicate. */
+/* Bare flag sticker: a country flag rendered as a tilted card on the
+   surface. No polaroid frame — that's reserved for the focal flag on
+   the country pages, where the flag IS the hero. On the default
+   layout we want flags to feel like decorative stickers/stamps, not
+   hero cards, so we drop the white frame and just render the flag
+   image with a thin border to keep the edges crisp. */
+function flagSticker(props: {
+  country: string;
+  width: number;
+  rotate: number;
+  top: number;
+  left: number;
+  key: string;
+}) {
+  const { country, width, rotate, top, left, key } = props;
+  // Flags are rendered at 3:2 (matching flagcdn.com's source aspect).
+  const height = Math.round(width * 0.66);
+  return h(
+    "div",
+    {
+      key,
+      style: {
+        position: "absolute",
+        top: `${top}px`,
+        left: `${left}px`,
+        display: "flex",
+        width: `${width}px`,
+        height: `${height}px`,
+        transform: `rotate(${rotate}deg)`,
+        overflow: "hidden",
+      },
+    },
+    h("img", {
+      src: flagImageUrl(country),
+      style: {
+        width: `${width}px`,
+        height: `${height}px`,
+        objectFit: "cover",
+      },
+    }),
+  );
+}
+
+/* Grade sticker: a stylised badge floating on the surface, no
+   polaroid frame, no caption. The grade SVG is rendered at the
+   requested size and tilted just like the polaroid cards so it sits
+   in the same plane. Used in the default layout to nod at osu!mania
+   scoring without competing with the polaroid avatar/flag cards. */
+function gradeSticker(props: {
+  grade: keyof typeof GRADE_FILE;
+  width: number;
+  rotate: number;
+  top: number;
+  left: number;
+  request: Request;
+  key: string;
+}) {
+  const { grade, width, rotate, top, left, request, key } = props;
+  // The score-ranks-v2019 SVGs are 32x16 (2:1).
+  const height = Math.round(width * 0.5);
+  return h(
+    "div",
+    {
+      key,
+      style: {
+        position: "absolute",
+        top: `${top}px`,
+        left: `${left}px`,
+        display: "flex",
+        width: `${width}px`,
+        height: `${height}px`,
+        transform: `rotate(${rotate}deg)`,
+      },
+    },
+    h("img", {
+      src: gradeImgUrl(request, grade),
+      style: { width: `${width}px`, height: `${height}px` },
+    }),
+  );
+}
+
+/* Default layout: shown when nobody has selected a country (bare site
+   URL). Same polaroid scrapbook language as the country pages, but
+   instead of one country flag we scatter a curated set of mania-active
+   countries' flags as polaroids and dot the canvas with grade badge
+   stickers. The backdrop pulls the global mania top 50 avatars (one
+   getRankings call with no country filter), so the page still feels
+   populated by real players. The focal centre is a pink
+   "o!mania tracker" sticker. */
+async function renderDefaultPolaroidOg(request: Request): Promise<Response> {
+  // Curated list of countries with active mania scenes / visually
+  // distinctive flags. Costa Rica leads (project's home scene). The
+  // rest is a mix of historic mania-strong countries and visually
+  // distinct flags so the scatter reads as "around the world." Order
+  // isn't a ranking — it's the position in the foreground scatter
+  // (see FLAG_SLOTS below).
+  const FEATURED_COUNTRIES = [
+    "CR", "KR", "JP", "US", "BR", "FI", "PL",
+    "RU", "DE", "FR", "CN", "TW", "AU", "MX",
+  ];
+
+  // Hand-tuned scatter for the foreground flag stickers. 14 slots,
+  // sizes in the 100-130px range (flags are 3:2 so they're wider
+  // than they are tall). The centre band stays open for the
+  // "o!mania tracker" focal sticker.
+  const FLAG_SLOTS: Array<{
+    top: number;
+    left: number;
+    rotate: number;
+    width: number;
+  }> = [
+    { top: 30, left: 40, rotate: -7, width: 130 },
+    { top: 50, left: 230, rotate: 5, width: 115 },
+    { top: 22, left: 410, rotate: -3, width: 110 },
+    { top: 40, left: 740, rotate: 4, width: 110 },
+    { top: 26, left: 920, rotate: -5, width: 120 },
+    { top: 44, left: 1080, rotate: 6, width: 100 },
+    { top: 250, left: 24, rotate: 6, width: 110 },
+    { top: 260, left: 1090, rotate: -5, width: 110 },
+    { top: 460, left: 40, rotate: 4, width: 130 },
+    { top: 478, left: 230, rotate: -6, width: 115 },
+    { top: 490, left: 410, rotate: 5, width: 110 },
+    { top: 478, left: 740, rotate: -4, width: 110 },
+    { top: 462, left: 920, rotate: 6, width: 120 },
+    { top: 480, left: 1080, rotate: -7, width: 100 },
+  ];
+
+  // Grade badge stickers scattered across the canvas. Picked
+  // positions tucked between flag polaroids so they read as decorative
+  // badges, not as part of the polaroid grid.
+  const GRADE_SLOTS: Array<{
+    grade: keyof typeof GRADE_FILE;
+    width: number;
+    rotate: number;
+    top: number;
+    left: number;
+  }> = [
+    { grade: "SS", width: 150, rotate: -10, top: 158, left: 200 },
+    { grade: "S", width: 120, rotate: 8, top: 178, left: 940 },
+    { grade: "A", width: 110, rotate: -6, top: 360, left: 200 },
+    { grade: "B", width: 100, rotate: 7, top: 374, left: 940 },
+  ];
+
+  const [regularFont, heavyFont, rankings] = await Promise.all([
+    getFont(request, "Torus-Regular.otf"),
+    getFont(request, "Torus-Heavy.otf"),
+    // Global mania performance top 50 for the dim backdrop.
+    getRankings({ data: { type: "performance", page: 1 } }),
+  ]);
+
+  const backdropPlayers = rankings.ranking
+    .slice(0, 50)
+    .map((entry) => ({ url: entry.user.avatar_url }));
+
+  const flagCards = FEATURED_COUNTRIES.map((cc, i) => {
+    const slot = FLAG_SLOTS[i];
+    if (!slot) return null;
+    return flagSticker({
+      key: `flag-${cc}`,
+      country: cc,
+      width: slot.width,
+      rotate: slot.rotate,
+      top: slot.top,
+      left: slot.left,
+    });
+  });
+
+  const gradeBadges = GRADE_SLOTS.map((s, i) =>
+    gradeSticker({
+      key: `grade-${i}`,
+      grade: s.grade,
+      width: s.width,
+      rotate: s.rotate,
+      top: s.top,
+      left: s.left,
+      request,
+    }),
+  );
+
+  const response = new ImageResponse(
+    h(
+      "div",
+      {
+        style: {
+          width: `${WIDTH}px`,
+          height: `${HEIGHT}px`,
+          display: "flex",
+          position: "relative",
+          overflow: "hidden",
+          background: SURFACE_COLOR,
+          fontFamily: '"Torus OG"',
+          color: "#ffffff",
+        },
+      },
+      [
+        // Dimmed avatar backdrop — global mania top 50, scattered
+        // behind the foreground cards.
+        ...backdropAvatars("__default__", backdropPlayers),
+
+        // Foreground scatter: flag polaroids first, then grade
+        // stickers on top, then the focal sticker last so it dominates.
+        ...flagCards,
+        ...gradeBadges,
+
+        // Centre focal sticker: large pink "o!mania tracker" with a
+        // small subtitle. Plays the role the flag polaroid does on the
+        // country pages.
+        sticker({
+          key: "title",
+          text: "o!mania tracker",
+          subText: "RANKINGS BY COUNTRY",
+          fontSize: 80,
+          background: "#ff66aa",
+          color: "#1a1317",
+          paddingX: 32,
+          paddingY: 24,
+          rotate: -2,
+          top: 240,
+          left: 280,
+        }),
+      ],
+    ),
+    {
+      width: WIDTH,
+      height: HEIGHT,
+      fonts: ogFontList(regularFont, heavyFont),
+    },
+  );
+
+  response.headers.set("Cache-Control", OG_CACHE_HEADER);
+  return response;
+}
+
+/* Title-only fallback. Used as a last resort if the polaroid default
+   render fails, and for any odd preview-tool presets that pass a raw
+   title without a country. The description lives in the HTML <meta>
+   so the social card body text carries it — baking it into the image
+   too would just duplicate. */
 async function renderDefaultOg(request: Request, url: URL): Promise<Response> {
   const title = clamp(url.searchParams.get("title"), MAX_TITLE_LEN) || "o!mania tracker";
   const showBrand = title !== "o!mania tracker";
@@ -1482,7 +2352,23 @@ export const Route = createFileRoute("/api/og")({
             }
           }
 
-          // No kind (home/rankings) — country scoreboard.
+          if (kind === "home") {
+            try {
+              return await renderHomeOg(request, country);
+            } catch (err) {
+              console.warn("[og] home render failed, falling back", err);
+            }
+          }
+
+          if (kind === "rankings") {
+            try {
+              return await renderRankingsOg(request, country);
+            } catch (err) {
+              console.warn("[og] rankings render failed, falling back", err);
+            }
+          }
+
+          // No recognized kind — generic country scoreboard fallback.
           try {
             return await renderCountryOg(
               request,
@@ -1494,6 +2380,14 @@ export const Route = createFileRoute("/api/og")({
           }
         }
 
+        // Default polaroid layout — used when nothing else matched
+        // (no country, no recognised kind). Falls back to the
+        // title-only minimal layout on error.
+        try {
+          return await renderDefaultPolaroidOg(request);
+        } catch (err) {
+          console.warn("[og] default polaroid render failed, falling back", err);
+        }
         return renderDefaultOg(request, url);
       },
     },

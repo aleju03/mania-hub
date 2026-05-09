@@ -34,6 +34,16 @@ function staticCacheHeaders(): Plugin {
   }
 }
 
+function localReplayVideoExport(): Plugin {
+  return {
+    name: 'local-replay-video-export',
+    async configureServer(server) {
+      const { replayVideoJobMiddleware } = await import('./scripts/dev/replay-video-job')
+      server.middlewares.use(replayVideoJobMiddleware())
+    },
+  }
+}
+
 function suppressDependencyBuildWarnings(warning: any, warn: (warning: any) => void) {
   const message = String(warning.message ?? '')
   if (warning.code === 'MODULE_LEVEL_DIRECTIVE' && message.includes('node_modules/')) return
@@ -59,6 +69,7 @@ const config = defineConfig({
   },
   plugins: [
     staticCacheHeaders(),
+    localReplayVideoExport(),
     devtools(),
     tsconfigPaths({ projects: ['./tsconfig.json'] }),
     tailwindcss(),

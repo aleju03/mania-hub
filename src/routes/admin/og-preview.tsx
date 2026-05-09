@@ -7,6 +7,8 @@ import { buildReplaySeoTitle } from "../../lib/replay-seo";
 
 type PresetKind =
   | "default"
+  | "home"
+  | "rankings"
   | "player"
   | "maps"
   | "replay";
@@ -30,21 +32,32 @@ type Preset = {
 
 const PRESETS: Preset[] = [
   {
-    key: "home",
-    label: "Home",
+    key: "default",
+    label: "Default (no country)",
     kind: "default",
     title: "o!mania tracker",
-    subtitle: "osu!mania rankings, fresh scores, and top plays by country.",
+    subtitle: "osu!mania across countries: rankings, scores, top plays",
+    path: "/",
+    /* This is the fallback the endpoint renders when no `kind` and no
+       valid `country` are set — what users see when they share the
+       bare site URL. Useful for sanity-checking the title/subtitle
+       baked into the minimal layout. */
+  },
+  {
+    key: "home",
+    label: "Home",
+    kind: "home",
+    title: "o!mania tracker",
+    subtitle: "osu!mania across countries: rankings, scores, top plays",
     path: "/",
     countryAware: true,
   },
   {
     key: "rankings",
     label: "Rankings",
-    kind: "default",
+    kind: "rankings",
     title: "Country mania rankings",
-    subtitle:
-      "Sort osu!mania country rankings by PP, accuracy, play count, and recent rank changes.",
+    subtitle: "osu!mania country rankings",
     path: "/rankings",
     countryAware: true,
   },
@@ -172,6 +185,15 @@ function OgPreviewPage() {
     if (kind === "maps") {
       const params = new URLSearchParams({
         kind,
+        country,
+        t: String(cacheBuster),
+      });
+      return `/api/og?${params.toString()}`;
+    }
+    if (kind === "home" || kind === "rankings") {
+      const params = new URLSearchParams({
+        kind,
+        title,
         country,
         t: String(cacheBuster),
       });
@@ -320,7 +342,11 @@ function OgPreviewPage() {
               </div>
             ) : (
               <div className="text-[10px] text-osu-f1/70">
-                This preset is not country-aware — default minimal layout only.
+                This is the no-country embed — what users see when sharing the
+                bare site URL. The image renders as a polaroid scrapbook with
+                grade badges, featured country flags, and the global mania top
+                50 as the dim avatar backdrop. Title/subtitle fields here only
+                affect the title-only fallback if the polaroid render fails.
               </div>
             )}
           </div>

@@ -12,6 +12,7 @@ export interface AuthViewer {
 
 export interface AuthState {
   viewer: AuthViewer | null;
+  isAdmin: boolean;
   canUseDevFeatures: boolean;
   canUseAdminFeatures: boolean;
   loginAvailable: boolean;
@@ -20,6 +21,7 @@ export interface AuthState {
 
 export const ANONYMOUS_AUTH_STATE: AuthState = {
   viewer: null,
+  isAdmin: false,
   canUseDevFeatures: false,
   canUseAdminFeatures: false,
   loginAvailable: false,
@@ -32,6 +34,10 @@ export function canUseDevFeatures(auth: AuthState | undefined | null): boolean {
 
 export function canUseAdminFeatures(auth: AuthState | undefined | null): boolean {
   return auth?.canUseAdminFeatures === true;
+}
+
+export function isAdmin(auth: AuthState | undefined | null): boolean {
+  return auth?.isAdmin === true;
 }
 
 export function hasAuthCookieHeader(cookieHeader: string | null): boolean {

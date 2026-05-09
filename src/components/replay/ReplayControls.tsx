@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { MutableRefObject, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Settings } from "lucide-react";
+import { ChevronDown, Film, Settings } from "lucide-react";
 
 import type { ReplayRendererLike } from "#/lib/replay-types";
 
@@ -25,7 +25,12 @@ interface ReplayControlsProps {
   skinSettingsOpen: boolean;
   scrollSpeed: number;
   bgDim: number;
+  videoExporting?: boolean;
+  videoExportProgress?: number;
+  videoExportError?: string | null;
+  videoExportUrl?: string | null;
   onTogglePlay: () => void;
+  onExportVideo?: (options: ReplayVideoExportOptions) => void;
   onSetSpeed: (speed: number) => void;
   onToggleAudio: () => void;
   onSetVolume: (volume: number) => void;
@@ -40,6 +45,38 @@ interface ReplayControlsProps {
   onPointerUp: () => void;
   onSeek: (timeMs: number) => void;
   onContextMenu: (timeMsGame: number, clientX: number, clientY: number) => void;
+}
+
+export type ReplayVideoExportOptions = {
+  kind: "clip" | "full" | "custom";
+  durationSeconds?: number;
+  startTimeMs?: number;
+  endTimeMs?: number;
+  resolution: "720p" | "1080p";
+};
+
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard?.writeText(text);
+    return true;
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    textarea.style.top = "0";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    try {
+      return document.execCommand("copy");
+    } catch {
+      return false;
+    } finally {
+      textarea.remove();
+    }
+  }
 }
 
 export function ReplayControls({
@@ -62,7 +99,12 @@ export function ReplayControls({
   skinSettingsOpen,
   scrollSpeed,
   bgDim,
+  videoExporting = false,
+  videoExportProgress = 0,
+  videoExportError = null,
+  videoExportUrl = null,
   onTogglePlay,
+  onExportVideo,
   onSetSpeed,
   onToggleAudio,
   onSetVolume,
@@ -82,7 +124,48 @@ export function ReplayControls({
   const [sharePos, setSharePos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [shareLabel, setShareLabel] = useState("");
   const [copied, setCopied] = useState(false);
+  const [videoMenuOpen, setVideoMenuOpen] = useState(false);
+  const [videoClipMode, setVideoClipMode] = useState(false);
+  const [videoExportKind, setVideoExportKind] = useState<ReplayVideoExportOptions["kind"]>("clip");
+  const [videoClipSeconds, setVideoClipSeconds] = useState(20);
+  const [videoCustomStartMs, setVideoCustomStartMs] = useState<number | null>(null);
+  const [videoCustomEndMs, setVideoCustomEndMs] = useState<number | null>(null);
+  const [videoResolution, setVideoResolution] = useState<ReplayVideoExportOptions["resolution"]>("1080p");
+  const [videoToast, setVideoToast] = useState<{ id: number; message: string; url?: string } | null>(null);
+  const videoToastIdRef = useRef(0);
+  const videoMenuRef = useRef<HTMLDivElement>(null);
   const sliderClass = "h-1 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink";
+
+  useEffect(() => {
+    if (!videoMenuOpen) return;
+    const onDocPointer = (event: PointerEvent) => {
+      const el = videoMenuRef.current;
+      if (el && !el.contains(event.target as Node)) setVideoMenuOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setVideoMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", onDocPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDocPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [videoMenuOpen]);
+
+  useEffect(() => {
+    if (!videoExportUrl) return;
+    videoToastIdRef.current += 1;
+    const toastId = videoToastIdRef.current;
+    const showToast = (message: string, url?: string) => {
+      setVideoToast({ id: toastId, message, url });
+      window.setTimeout(() => {
+        setVideoToast((current) => (current?.id === toastId ? null : current));
+      }, url ? 9000 : 3500);
+    };
+    void copyTextToClipboard(videoExportUrl)
+      .then((ok) => showToast(ok ? "Discord video URL copied" : "Discord video ready", ok ? undefined : videoExportUrl));
+  }, [videoExportUrl]);
 
   const handleProgressContextMenu = (timeMsGame: number, clientX: number, clientY: number) => {
     onContextMenu(timeMsGame, clientX, clientY);
@@ -96,6 +179,16 @@ export function ReplayControls({
     setCopied(false);
   };
 
+  const currentReplayTimeMs = () => rendererRef.current?.time ?? 0;
+  const customStart = Math.min(videoCustomStartMs ?? 0, videoCustomEndMs ?? 0);
+  const customEnd = Math.max(videoCustomStartMs ?? 0, videoCustomEndMs ?? 0);
+  const hasCustomRange = videoCustomStartMs != null && videoCustomEndMs != null && customEnd > customStart;
+  const selectedExportLabel = videoExportKind === "full"
+    ? "Full"
+    : videoExportKind === "custom"
+      ? hasCustomRange ? "Custom" : "Mark"
+      : `${videoClipSeconds}s`;
+
   return (
     <div className="bg-osu-b4 rounded-xl border border-osu-b3/20">
       {audioError && (
@@ -103,11 +196,48 @@ export function ReplayControls({
           {audioError}
         </div>
       )}
+      {videoExportError && (
+        <div className="text-[11px] text-red-100 bg-red-500/10 border-b border-red-400/20 px-4 py-2 rounded-t-xl">
+          {videoExportError}
+        </div>
+      )}
+      <AnimatePresence>
+        {videoToast && (
+          <motion.div
+            key={videoToast.id}
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.14 }}
+            className="fixed right-4 top-4 z-[200] flex items-center gap-2 rounded-lg border border-osu-pink/30 bg-osu-b3 px-3 py-2 text-[12px] font-semibold text-white shadow-2xl"
+          >
+            <span>{videoToast.message}</span>
+            {videoToast.url && (
+              <button
+                type="button"
+                onClick={() => {
+                  void copyTextToClipboard(videoToast.url!).then((ok) => {
+                    if (ok) setVideoToast({ id: videoToast.id, message: "Discord video URL copied" });
+                  });
+                }}
+                className="rounded bg-osu-pink px-2 py-1 text-[11px] font-bold text-white hover:bg-osu-pink-light"
+              >
+                Copy
+              </button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <ReplayProgressBar
         rendererRef={rendererRef}
         heatmap={heatmap}
         sliderClass=""
+        clipPreviewSeconds={onExportVideo && videoClipMode && videoExportKind === "clip" ? videoClipSeconds : null}
+        clipPreviewRate={speed * modRate}
+        customPreviewRange={onExportVideo && videoClipMode && videoExportKind === "custom"
+          ? { startMs: videoCustomStartMs, endMs: videoCustomEndMs }
+          : null}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
         onSeek={onSeek}
@@ -202,6 +332,189 @@ export function ReplayControls({
         >
           <Settings className="h-4 w-4" strokeWidth={2.2} />
         </button>
+
+        {onExportVideo && (
+          <div ref={videoMenuRef} className="relative inline-flex">
+            <button
+              type="button"
+              onClick={() => {
+                setVideoClipMode((enabled) => !enabled);
+              }}
+              disabled={videoExporting}
+              aria-label="Generate replay video URL"
+              className={`h-7 rounded-l px-2.5 text-[10px] font-semibold transition-colors flex items-center gap-1.5 ${
+                videoExporting
+                  ? "cursor-default bg-osu-b3/40 text-osu-f1"
+                  : videoClipMode
+                    ? "cursor-pointer bg-osu-pink text-white hover:bg-osu-pink-light"
+                    : "cursor-pointer bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
+              }`}
+            >
+              <Film className="h-3.5 w-3.5" strokeWidth={2.3} />
+              <span className="tabular-nums">
+                {videoExporting
+                  ? `${Math.round(videoExportProgress * 100)}%`
+                  : selectedExportLabel}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setVideoMenuOpen((open) => !open)}
+              disabled={videoExporting}
+              aria-label="Replay video export options"
+              aria-expanded={videoMenuOpen}
+              className={`h-7 rounded-r border-l border-osu-b4/40 px-1 transition-colors flex items-center ${
+                videoExporting
+                  ? "cursor-default bg-osu-b3/40 text-osu-f1"
+                  : videoClipMode
+                    ? "cursor-pointer bg-osu-pink text-white hover:bg-osu-pink-light"
+                    : "cursor-pointer bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3"
+              }`}
+            >
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${videoMenuOpen ? "" : "rotate-180"}`} strokeWidth={2.3} />
+            </button>
+            <AnimatePresence>
+              {videoMenuOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 4 }}
+                  transition={{ duration: 0.1 }}
+                  className="absolute left-0 bottom-full z-50 mb-1.5 w-36 rounded-lg border border-osu-b2 bg-osu-b3 p-1.5 shadow-2xl"
+                >
+                  {[10, 20, 30, 60].map((seconds) => (
+                    <button
+                      key={seconds}
+                      type="button"
+                      onClick={() => {
+                        setVideoExportKind("clip");
+                        setVideoClipSeconds(seconds);
+                        setVideoMenuOpen(false);
+                      }}
+                      className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
+                        videoExportKind === "clip" && videoClipSeconds === seconds ? "text-white" : "text-osu-f0"
+                      }`}
+                    >
+                      <span>{seconds}s clip</span>
+                      <CheckMark on={videoExportKind === "clip" && videoClipSeconds === seconds} />
+                    </button>
+                  ))}
+                  <div className="my-1 h-px bg-osu-b2" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVideoExportKind("custom");
+                      setVideoClipMode(true);
+                    }}
+                    className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
+                      videoExportKind === "custom" ? "text-white" : "text-osu-f0"
+                    }`}
+                  >
+                    <span>Custom</span>
+                    <CheckMark on={videoExportKind === "custom"} />
+                  </button>
+                  {videoExportKind === "custom" && (
+                    <div className="space-y-1.5 px-1 pb-1">
+                      <div className="grid grid-cols-2 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVideoCustomStartMs(currentReplayTimeMs());
+                            setVideoClipMode(true);
+                          }}
+                          className={`cursor-pointer rounded px-1.5 py-1 text-[10px] font-semibold transition-colors ${
+                            videoCustomStartMs != null
+                              ? "bg-osu-pink/25 text-white ring-1 ring-inset ring-osu-pink/50"
+                              : "bg-osu-b4 text-osu-f0 hover:text-white"
+                          }`}
+                        >
+                          Start here
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVideoCustomEndMs(currentReplayTimeMs());
+                            setVideoClipMode(true);
+                          }}
+                          className={`cursor-pointer rounded px-1.5 py-1 text-[10px] font-semibold transition-colors ${
+                            videoCustomEndMs != null
+                              ? "bg-osu-pink/25 text-white ring-1 ring-inset ring-osu-pink/50"
+                              : "bg-osu-b4 text-osu-f0 hover:text-white"
+                          }`}
+                        >
+                          End here
+                        </button>
+                      </div>
+                      <div className="rounded bg-osu-b4/60 px-1.5 py-1 text-[10px] leading-tight text-osu-f1">
+                        <div className="flex justify-between gap-2">
+                          <span>Start</span>
+                          <span className={videoCustomStartMs != null ? "font-semibold text-white" : ""}>
+                            {videoCustomStartMs != null ? formatReplayMs(videoCustomStartMs / modRate) : "--:--"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <span>End</span>
+                          <span className={videoCustomEndMs != null ? "font-semibold text-white" : ""}>
+                            {videoCustomEndMs != null ? formatReplayMs(videoCustomEndMs / modRate) : "--:--"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="my-1 h-px bg-osu-b2" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVideoExportKind("full");
+                      setVideoMenuOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
+                      videoExportKind === "full" ? "text-white" : "text-osu-f0"
+                    }`}
+                  >
+                    <span>Full play</span>
+                    <CheckMark on={videoExportKind === "full"} />
+                  </button>
+                  <div className="my-1 h-px bg-osu-b2" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVideoClipMode(true);
+                      setVideoMenuOpen(false);
+                      if (videoExportKind === "full") {
+                        onExportVideo({ kind: "full", resolution: videoResolution });
+                      } else if (videoExportKind === "custom") {
+                        if (!hasCustomRange) return;
+                        onExportVideo({ kind: "custom", startTimeMs: customStart, endTimeMs: customEnd, resolution: videoResolution });
+                      } else {
+                        onExportVideo({ kind: "clip", durationSeconds: videoClipSeconds, resolution: videoResolution });
+                      }
+                    }}
+                    disabled={videoExportKind === "custom" && !hasCustomRange}
+                    className="flex w-full items-center justify-center rounded bg-osu-pink px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-osu-pink-light disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-osu-pink"
+                  >
+                    Generate URL
+                  </button>
+                  <div className="my-1 h-px bg-osu-b2" />
+                  <div className="grid grid-cols-2 gap-1">
+                    {(["720p", "1080p"] as const).map((resolution) => (
+                      <button
+                        key={resolution}
+                        type="button"
+                        onClick={() => setVideoResolution(resolution)}
+                        className={`rounded px-2 py-1.5 text-[11px] font-semibold hover:bg-osu-b4 ${
+                          videoResolution === resolution ? "bg-osu-pink text-white" : "text-osu-f0"
+                        }`}
+                      >
+                        {resolution}
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
 
         <div className="flex items-center gap-1">
           <span className="text-[10px] text-osu-f1 mr-0.5">Scroll</span>
@@ -460,6 +773,9 @@ export function ReplayProgressBar({
   heatmap,
   sliderClass,
   className = "",
+  clipPreviewSeconds = null,
+  clipPreviewRate = 1,
+  customPreviewRange = null,
   onPointerDown,
   onPointerUp,
   onSeek,
@@ -470,6 +786,9 @@ export function ReplayProgressBar({
   heatmap: number[];
   sliderClass: string;
   className?: string;
+  clipPreviewSeconds?: number | null;
+  clipPreviewRate?: number;
+  customPreviewRange?: { startMs: number | null; endMs: number | null } | null;
   onPointerDown: () => void;
   onPointerUp: () => void;
   onSeek: (timeMs: number) => void;
@@ -521,6 +840,13 @@ export function ReplayProgressBar({
             if (r) onSeek(v * r.duration);
           }}
           className={`block w-full h-1.5 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink ${sliderClass}`}
+        />
+        <ClipPreviewRange
+          progress={progress}
+          duration={rendererRef.current?.duration ?? 0}
+          seconds={clipPreviewSeconds}
+          rate={clipPreviewRate}
+          customRange={customPreviewRange}
         />
       </div>
       <span className="text-[10px] text-osu-f1 tabular-nums w-10 text-right">{rightLabel}</span>
@@ -576,6 +902,91 @@ function KeypressHeatmap({ heatmap }: { heatmap: number[] }) {
         vectorEffect="non-scaling-stroke"
       />
     </svg>
+  );
+}
+
+function ClipPreviewRange({
+  progress,
+  duration,
+  seconds,
+  rate,
+  customRange,
+}: {
+  progress: number;
+  duration: number;
+  seconds: number | null;
+  rate: number;
+  customRange: { startMs: number | null; endMs: number | null } | null;
+}) {
+  if (duration <= 0) return null;
+
+  if (customRange) {
+    const startMs = customRange.startMs == null ? null : Math.max(0, Math.min(duration, customRange.startMs));
+    const endMs = customRange.endMs == null ? null : Math.max(0, Math.min(duration, customRange.endMs));
+    const markers = [
+      startMs == null ? null : { key: "start", left: startMs / duration, label: "S" },
+      endMs == null ? null : { key: "end", left: endMs / duration, label: "E" },
+    ].filter((marker): marker is { key: string; left: number; label: string } => marker != null);
+
+    if (startMs != null && endMs != null && startMs !== endMs) {
+      const rangeStart = Math.min(startMs, endMs) / duration;
+      const maxWidth = Math.max(0, 1 - rangeStart);
+      const rangeWidth = Math.min(maxWidth, Math.abs(endMs - startMs) / duration);
+      return (
+        <>
+          <ClipPreviewPill start={rangeStart} width={rangeWidth} />
+          {markers.map((marker) => (
+            <ClipPreviewMarker key={marker.key} left={marker.left} label={marker.label} />
+          ))}
+        </>
+      );
+    }
+
+    return (
+      <>
+        {markers.map((marker) => (
+          <ClipPreviewMarker key={marker.key} left={marker.left} label={marker.label} />
+        ))}
+      </>
+    );
+  }
+
+  let start = 0;
+  let width = 0;
+  if (seconds) {
+    start = Math.max(0, Math.min(1, progress));
+    width = Math.min(1 - start, (seconds * 1000 * Math.max(0.01, rate)) / duration);
+  }
+
+  const maxWidth = Math.max(0, 1 - start);
+  width = Math.min(maxWidth, width);
+  if (width <= 0) return null;
+  width = Math.max(Math.min(0.006, maxWidth), width);
+  return <ClipPreviewPill start={start} width={width} />;
+}
+
+function ClipPreviewPill({ start, width }: { start: number; width: number }) {
+  return (
+    <div
+      className="pointer-events-none absolute top-1/2 z-10 h-1.5 -translate-y-1/2 rounded-full bg-osu-pink/35 ring-1 ring-inset ring-white/15"
+      style={{
+        left: `${start * 100}%`,
+        width: `${width * 100}%`,
+      }}
+      aria-hidden="true"
+    />
+  );
+}
+
+function ClipPreviewMarker({ left, label }: { left: number; label: string }) {
+  return (
+    <div
+      className="pointer-events-none absolute top-1/2 z-20 flex h-4 w-4 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-osu-pink text-[8px] font-black text-white shadow-[0_0_0_2px_rgba(255,255,255,0.18)]"
+      style={{ left: `${left * 100}%` }}
+      aria-hidden="true"
+    >
+      {label}
+    </div>
   );
 }
 

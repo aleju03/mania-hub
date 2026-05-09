@@ -1,0 +1,280 @@
+{
+  "source": "https://thebagelofman.github.io/Daniel/benchmark_report.html",
+  "generatedFrom": "Daniel Benchmark Report, 145 maps, 2026-03-29 09:47",
+  "notes": "Expected values are matched to the local .osu files currently present in this directory. Tiers may differ; the benchmark gate checks the dan family/level.",
+  "maps": [
+    {
+      "file": "Camellia - ANOMALY (Lynessa) [x1.2].osu",
+      "song": "Anomaly (1.2x)",
+      "expected": "Gamma Low",
+      "skillset": "stamina",
+      "referenceSr": 7.181
+    },
+    {
+      "file": "Camellia - shadows of cats (chicken Little) [Wafles_ Lv.24 1.2x].osu",
+      "song": "Shadows Of Cats (1.2x)",
+      "expected": "Delta Low",
+      "skillset": "tech",
+      "referenceSr": 7.795
+    },
+    {
+      "file": "DETRO - volcanic ([Crz]Player) [Challenge].osu",
+      "song": "Volcanic",
+      "expected": "Delta Mid",
+      "skillset": "speed",
+      "referenceSr": 7.756
+    },
+    {
+      "file": "DJ Sharpnel - Cyber Inductance (Speed Up Ver.) (IcyWorld) [NB4 1.4x].osu",
+      "song": "Cyber Inductance (1.4x)",
+      "expected": "Gamma Mid",
+      "skillset": "stamina",
+      "referenceSr": 7.504
+    },
+    {
+      "file": "DJ Sharpnel - FUTURE DOMINATORS (IcyWorld) [NB5 Hard 54235 1.3x].osu",
+      "song": "Future Dominators (1.3x)",
+      "expected": "Delta Mid",
+      "skillset": "stamina",
+      "referenceSr": 8.057
+    },
+    {
+      "file": "DJ Sharpnel - Pacific Girls (Fullerene-) [Fullerene- 1.4x].osu",
+      "song": "Pacific Girls (1.4x)",
+      "expected": "Delta Mid",
+      "skillset": "stamina",
+      "referenceSr": 7.96
+    },
+    {
+      "file": "Jea - Makiba (ilikexd) [Extra].osu",
+      "song": "Makiba",
+      "expected": "Alpha Mid",
+      "skillset": "speed",
+      "referenceSr": 6.568
+    },
+    {
+      "file": "Katagiri - Code Name Bravo  Katagiri wa Denki Kitsune no Yume o Miru ka (epic man 2) [Meisekina Akumu].osu",
+      "song": "Code Name Bravo",
+      "expected": "Eta Low",
+      "skillset": "tech",
+      "referenceSr": 9.98
+    },
+    {
+      "file": "Kobaryo - Bookmaker ([Crz]Rachel) [Extra].osu",
+      "song": "Bookmaker",
+      "expected": "Delta Mid",
+      "skillset": "jack",
+      "referenceSr": 8.031
+    },
+    {
+      "file": "Rahatt - Matusa Bomber (Ska) [1.05].osu",
+      "song": "Matusa Bomber (1.05x)",
+      "expected": "Gamma Mid",
+      "skillset": "tech",
+      "referenceSr": 7.494
+    },
+    {
+      "file": "Silentroom - Nhelv (Guilhermeziat) [Silent].osu",
+      "song": "Nhelv",
+      "expected": "Gamma High",
+      "skillset": "tech",
+      "referenceSr": 7.607
+    },
+    {
+      "file": "Skan & El Speaker - Hustler (feat. Highdiwaan) (Xingyue) [Ghost].osu",
+      "song": "Hustler",
+      "expected": "Gamma Low",
+      "skillset": "jack",
+      "referenceSr": 7.275
+    },
+    {
+      "file": "StudioEIM - Crescent Moon Island (Shoegazer) [Kuro 1.05x (181bpm)].osu",
+      "song": "Crescent Moon Island (1.05x)",
+      "expected": "Delta Mid",
+      "skillset": "tech",
+      "referenceSr": 8.173
+    },
+    {
+      "file": "The Quick Brown Fox - Break (beary605) [Smash 1.3x].osu",
+      "song": "Break (1.3x)",
+      "expected": "Epsilon Mid",
+      "skillset": "jack",
+      "referenceSr": 9.055
+    },
+    {
+      "file": "TheFatRat, Slaydit & Anjulie - Stronger (Girls frontline) [STRONGER].osu",
+      "song": "Stronger",
+      "expected": "Epsilon Mid",
+      "skillset": "jack",
+      "referenceSr": 8.431
+    },
+    {
+      "file": "Unlike Pluto - Rip Me Apart (Envy Frenchcore Remix) (Ena) [x_x].osu",
+      "song": "Rip Me Apart",
+      "expected": "Eta High",
+      "skillset": "jack",
+      "referenceSr": 10.331
+    },
+    {
+      "file": "Vaenus - Lazorbeamz (vladomen) [x1.0].osu",
+      "song": "Lazorbeamz (1.0x)",
+      "expected": "Alpha Mid",
+      "skillset": "stamina",
+      "referenceSr": 6.542
+    },
+    {
+      "file": "Various Artist - Rachel's Hard Jack Pack 2 ([Crz]Rachel) [Mutwa (Marathon)].osu",
+      "song": "Mutwa",
+      "expected": "Zeta Mid",
+      "skillset": "jack",
+      "referenceSr": 9.767
+    },
+    {
+      "file": "Various Artists - Dan ~ REFORM ~ Finalmaps ([GB]Thaumiel) [DJ Myosuke - Collapse of Ego ~ Eta Stamina ~].osu",
+      "song": "Collapse Of Ego",
+      "expected": "Eta Mid",
+      "skillset": "stamina",
+      "referenceSr": 9.959
+    },
+    {
+      "file": "Various Artists - Dan ~ REFORM ~ Finalmaps ([GB]Thaumiel) [Laur - Exitium ~ Eta Tech ~].osu",
+      "song": "Exitium",
+      "expected": "Eta Mid",
+      "skillset": "tech",
+      "referenceSr": 10.255
+    },
+    {
+      "file": "Various Artists - Dan ~ REFORM ~ Finalmaps ([GB]Thaumiel) [S.S.H. - Intersect Thunderbolt-Remix ~ Eta Speed ~].osu",
+      "song": "Intersect Thunderbolt",
+      "expected": "Eta Mid",
+      "skillset": "speed",
+      "referenceSr": 10.053
+    },
+    {
+      "file": "Various Artists - Dan ~ REFORM ~ Finalmaps ([GB]Thaumiel) [Suicidal Angels - Torment Payback ( Edited ) ~ Eta Jack ~].osu",
+      "song": "Torment Payback",
+      "expected": "Eta Mid",
+      "skillset": "jack",
+      "referenceSr": 10.382
+    },
+    {
+      "file": "Various Artists - Dan ~ REFORM ~ JackMap Pack (DDMythical) [Aquaris ~ Delta ~ (Marathon)].osu",
+      "song": "Aquaris (1.3x)",
+      "expected": "Delta Mid",
+      "skillset": "jack",
+      "referenceSr": 7.81
+    },
+    {
+      "file": "Various Artists - Dan ~ REFORM ~ JackMap Pack (DDMythical) [Break ~ Gamma ~ (Marathon)].osu",
+      "song": "Break (1.1x)",
+      "expected": "Gamma Mid",
+      "skillset": "jack",
+      "referenceSr": 7.539
+    },
+    {
+      "file": "Various Artists - Dan ~ REFORM ~ JackMap Pack (DDMythical) [Dark Sambaland ~ Alpha ~ (Marathon)].osu",
+      "song": "Dark Sambaland",
+      "expected": "Alpha Mid",
+      "skillset": "jack",
+      "referenceSr": 6.592
+    },
+    {
+      "file": "Various Artists - Dan ~ REFORM ~ JackMap Pack (DDMythical) [Paradigm Shift ~ Beta ~ (Marathon)].osu",
+      "song": "Paradigm Shift",
+      "expected": "Beta Mid",
+      "skillset": "jack",
+      "referenceSr": 6.937
+    },
+    {
+      "file": "Various Artists - Dan ~ REFORM ~ JackMap Pack (DDMythical) [Rose Quartz 1.3x ~ Epsilon ~ (Marathon)].osu",
+      "song": "Rose Quartz (1.3x)",
+      "expected": "Epsilon Mid",
+      "skillset": "jack",
+      "referenceSr": 8.767
+    },
+    {
+      "file": "Various Artists - Dan ~ REFORM ~ SpeedMap Pack (DDMythical) [5oul on D!splay ~ Beta ~ (Marathon)].osu",
+      "song": "5Oul On D!Splay",
+      "expected": "Beta Mid",
+      "skillset": "speed",
+      "referenceSr": 6.861
+    },
+    {
+      "file": "Various Artists - Dan ~ REFORM ~ SpeedMap Pack (DDMythical) [Amber Starlight ~ Beta ~ (Marathon)].osu",
+      "song": "Amber Starlight",
+      "expected": "Beta Mid",
+      "skillset": "speed",
+      "referenceSr": 6.722
+    },
+    {
+      "file": "Various Artists - Dan ~ REFORM ~ SpeedMap Pack (DDMythical) [Reflec Streamz ~ Gamma ~ (Marathon)].osu",
+      "song": "Reflec Streamz",
+      "expected": "Gamma Mid",
+      "skillset": "speed",
+      "referenceSr": 7.562
+    },
+    {
+      "file": "Various Artists - Dan ~ REFORM ~ StaminaMap Pack (DDMythical) [Shinbatsu o Tadori ~ Gamma ~ (Marathon)].osu",
+      "song": "Shinbatsu O Tadori (1.05x)",
+      "expected": "Gamma Mid",
+      "skillset": "stamina",
+      "referenceSr": 7.649
+    },
+    {
+      "file": "Various Artists - Dan ~ REFORM ~ StaminaMap Pack (DDMythical) [Time to Say Goodbye ~ Beta ~ (Marathon)].osu",
+      "song": "Time To Say Goodbye (1.0x)",
+      "expected": "Beta Mid",
+      "skillset": "stamina",
+      "referenceSr": 7.042
+    },
+    {
+      "file": "Various Artists - Dan ~ REFORM ~ TechMap Pack (DDMythical) [Blue Planet ~ Beta ~ (Marathon)].osu",
+      "song": "Blue Planet",
+      "expected": "Beta Mid",
+      "skillset": "tech",
+      "referenceSr": 7.126
+    },
+    {
+      "file": "Various Artists - Dan ~ REFORM ~ TechMap Pack (DDMythical) [Odoru Mizushibuki ~ Alpha ~ (Marathon)].osu",
+      "song": "Odoru (1.1x)",
+      "expected": "Alpha Mid",
+      "skillset": "tech",
+      "referenceSr": 6.551
+    },
+    {
+      "file": "Various Artists - LTD Pack (LTD) [SKAN - Give It To Dem (feat. Highdiwaan & Drama B)].osu",
+      "song": "Give It To Dem",
+      "expected": "Delta Mid",
+      "skillset": "jack",
+      "referenceSr": 8.264
+    },
+    {
+      "file": "Various Artists - The Journey from Beta to Gamma (Jack) (Reuju-) [Icicle Stinger 1.1x ~ Gamma ~ (Mid)].osu",
+      "song": "Icicle Stinger (1.1x)",
+      "expected": "Gamma Mid",
+      "skillset": "tech",
+      "referenceSr": 7.553
+    },
+    {
+      "file": "Yuki Kajiura - Credens Justitiam (Ska) [0.9x].osu",
+      "song": "Credens (0.9x)",
+      "expected": "Gamma Mid",
+      "skillset": "speed",
+      "referenceSr": 7.761
+    },
+    {
+      "file": "katagiri - Angel_s Salad (_Le mythe etendu_ ver.) (Penguinosity) [indifference].osu",
+      "song": "Angel'S Salad",
+      "expected": "Alpha High",
+      "skillset": "tech",
+      "referenceSr": 6.615
+    },
+    {
+      "file": "ueotan - Mario Paint (Time Regression Mix for BMS) (Fullerene-) [D-ANOTHER].osu",
+      "song": "Mario Paint",
+      "expected": "Epsilon Mid",
+      "skillset": "speed",
+      "referenceSr": 9.158
+    }
+  ]
+}

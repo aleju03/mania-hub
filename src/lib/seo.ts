@@ -1,9 +1,9 @@
 export const SITE_NAME = "o!mania tracker";
 
 export const DEFAULT_DESCRIPTION =
-  "osu!mania rankings, score feeds, top plays, maps, profiles, and replays by country.";
+  "osu!mania across countries: rankings, scores, top plays";
 
-const OG_IMAGE_VERSION = "3";
+const OG_IMAGE_VERSION = "13";
 
 /* Builds the og:image URL. The image itself only needs title + country —
    the description stays in the HTML `<meta>` for social-card body text
@@ -11,11 +11,14 @@ const OG_IMAGE_VERSION = "3";
    sentence both inside the graphic and below it in the embed. */
 export function ogImagePath(
   title = SITE_NAME,
-  options?: { country?: string | null },
+  options?: { country?: string | null; kind?: string | null },
 ): string {
   const params = new URLSearchParams({ title, v: OG_IMAGE_VERSION });
   if (options?.country) {
     params.set("country", options.country);
+  }
+  if (options?.kind) {
+    params.set("kind", options.kind);
   }
   return `/api/og?${params.toString()}`;
 }
@@ -72,6 +75,7 @@ export interface PageSeoInput {
   origin: string;
   image?: string;
   imageCountry?: string;
+  imageKind?: string;
   type?: "website" | "article" | "profile";
   social?: boolean;
   noindex?: boolean;
@@ -90,6 +94,7 @@ export function pageSeo({
   origin,
   image,
   imageCountry,
+  imageKind,
   type = "website",
   social = true,
   noindex = false,
@@ -97,7 +102,10 @@ export function pageSeo({
 }: PageSeoInput): PageSeo {
   const fullTitle = title === SITE_NAME || !appendSiteName ? title : `${title} - ${SITE_NAME}`;
   const url = absoluteUrl(path, origin);
-  const imageUrl = absoluteUrl(image ?? ogImagePath(title, { country: imageCountry }), origin);
+  const imageUrl = absoluteUrl(
+    image ?? ogImagePath(title, { country: imageCountry, kind: imageKind }),
+    origin,
+  );
 
   const meta: MetaEntry[] = [
     { title: fullTitle },

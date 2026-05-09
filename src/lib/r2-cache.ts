@@ -1,9 +1,11 @@
 import crypto from "node:crypto";
 import {
+  DeleteObjectsCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   type GetObjectCommandOutput,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -15,6 +17,11 @@ const REPLAY_CACHE_PREFIX = "replay-cache/";
 const SIGNED_URL_EXPIRES_SECONDS = 6 * 60 * 60;
 const DEFAULT_MAX_CACHE_BYTES = 2.5 * 1024 * 1024 * 1024;
 const BEATMAP_ASSET_CACHE_STATS_ID = 1;
+const R2_ADMIN_LIST_LIMIT = 100;
+const R2_ADMIN_DELETE_BATCH_SIZE = 1000;
+const R2_ADMIN_SEARCH_SCAN_LIMIT = 5000;
+const R2_ADMIN_FOLDER_STATS_SCAN_LIMIT = 5000;
+const R2_ADMIN_FOLDER_STATS_CONCURRENCY = 4;
 
 export type BeatmapAssetKind = "audio" | "background";
 export type ReplayEndpointKind = "legacy" | "modern";
@@ -26,6 +33,14 @@ type CachedAsset = {
   signedUrl: string;
 };
 
+type UploadedReplayVideo = {
+  storageKey: string;
+  sizeBytes: number;
+  mimeType: string;
+  url: string;
+  signed: boolean;
+};
+
 type CachedReplay = {
   scoreId: number;
   storageKey: string;
@@ -33,6 +48,49 @@ type CachedReplay = {
   sizeBytes: number;
   mimeType: string;
   buffer: Buffer;
+};
+
+export type R2AdminFolder = {
+  prefix: string;
+  name: string;
+  objectCount: number;
+  sizeBytes: number;
+  statsTruncated: boolean;
+};
+
+export type R2AdminObject = {
+  key: string;
+  name: string;
+  sizeBytes: number;
+  lastModified: string | null;
+  etag: string | null;
+};
+
+export type R2AdminListing = {
+  configured: boolean;
+  bucket: string;
+  prefix: string;
+  query: string;
+  folders: R2AdminFolder[];
+  objects: R2AdminObject[];
+  nextContinuationToken: string | null;
+  totalObjectsShown: number;
+  totalBytesShown: number;
+  scannedObjects: number;
+  searchTruncated: boolean;
+};
+
+export type R2AdminDeleteResult = {
+  ok: true;
+  deletedCount: number;
+  deletedBytes: number | null;
+};
+
+export type R2AdminPrefixSummary = {
+  prefix: string;
+  objectCount: number;
+  sizeBytes: number;
+  truncated: boolean;
 };
 
 let client: S3Client | null | undefined;
@@ -80,6 +138,14 @@ function sanitizeFilename(filename: string): string {
   return base.replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "asset";
 }
 
+function getPublicReplayCacheBaseUrl(): string | null {
+  const raw = process.env.R2_PUBLIC_BASE_URL
+    || process.env.R2_PUBLIC_URL
+    || process.env.CLOUDFLARE_R2_PUBLIC_URL;
+  if (!raw) return null;
+  return raw.replace(/\/+$/, "");
+}
+
 export function getBeatmapAssetStorageKey(kind: BeatmapAssetKind, beatmapsetId: string, filename: string): string {
   const hash = crypto.createHash("sha256").update(filename).digest("hex").slice(0, 16);
   return `${REPLAY_CACHE_PREFIX}${kind}/${beatmapsetId}/${hash}-${sanitizeFilename(filename)}`;
@@ -89,10 +155,76 @@ export function getReplayStorageKey(scoreId: number): string {
   return `${REPLAY_CACHE_PREFIX}replays/${scoreId}.osr`;
 }
 
+export function getReplayVideoStorageKey(id: string, filename: string): string {
+  const safeId = id.replace(/[^a-zA-Z0-9_-]+/g, "").slice(0, 48) || crypto.randomBytes(6).toString("base64url");
+  return `${REPLAY_CACHE_PREFIX}videos/${safeId}/${sanitizeFilename(filename)}`;
+}
+
+export async function getReplayVideoSignedUrl(id: string, filename: string): Promise<string | null> {
+  const r2 = getClient();
+  if (!r2) return null;
+  const storageKey = getReplayVideoStorageKey(id, filename);
+  assertReplayCacheKey(storageKey);
+  return signGetUrl(storageKey, "video/webm");
+}
+
+export async function getR2AdminSignedUrl(keyInput: string, mimeType?: string): Promise<string> {
+  const key = normalizeR2AdminObjectKey(keyInput);
+  return signGetUrl(key, mimeType);
+}
+
 function assertReplayCacheKey(storageKey: string): void {
   if (!storageKey.startsWith(REPLAY_CACHE_PREFIX)) {
     throw new Error(`Refusing to touch non replay-cache R2 key "${storageKey}"`);
   }
+}
+
+export function normalizeR2AdminPrefix(prefix: string | undefined | null): string {
+  const raw = (prefix ?? "").trim().replace(/^\/+/, "");
+  if (!raw) return REPLAY_CACHE_PREFIX;
+  const normalized = raw.endsWith("/") ? raw : `${raw}/`;
+  assertReplayCacheKey(normalized);
+  return normalized;
+}
+
+export function normalizeR2AdminObjectKey(key: string): string {
+  const normalized = key.trim().replace(/^\/+/, "");
+  assertReplayCacheKey(normalized);
+  if (!normalized || normalized.endsWith("/")) {
+    throw new Error("Choose a file key, not a folder prefix.");
+  }
+  return normalized;
+}
+
+function objectNameFromKey(key: string, prefix: string): string {
+  const relative = key.startsWith(prefix) ? key.slice(prefix.length) : key;
+  return relative || key.split("/").filter(Boolean).at(-1) || key;
+}
+
+function normalizeR2AdminQuery(query: string | undefined | null): string {
+  return (query ?? "").trim().slice(0, 120);
+}
+
+async function mapWithConcurrency<T, U>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<U>,
+): Promise<U[]> {
+  const results = new Array<U>(items.length);
+  let index = 0;
+
+  async function worker() {
+    while (index < items.length) {
+      const current = index;
+      index += 1;
+      results[current] = await mapper(items[current]);
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, () => worker()),
+  );
+  return results;
 }
 
 async function signGetUrl(storageKey: string, mimeType?: string): Promise<string> {
@@ -351,6 +483,40 @@ export async function putBeatmapAssetAndGetUrl(
   };
 }
 
+export async function putReplayVideoAndGetUrl(
+  id: string,
+  filename: string,
+  mimeType: string,
+  buffer: Buffer,
+): Promise<UploadedReplayVideo | null> {
+  const r2 = getClient();
+  if (!r2) return null;
+
+  const storageKey = getReplayVideoStorageKey(id, filename);
+  assertReplayCacheKey(storageKey);
+  const safeMimeType = mimeType === "video/webm" ? mimeType : "video/webm";
+
+  await r2.send(new PutObjectCommand({
+    Bucket: REPLAY_CACHE_BUCKET,
+    Key: storageKey,
+    Body: buffer,
+    ContentType: safeMimeType,
+    CacheControl: "public, max-age=31536000, immutable",
+    ContentDisposition: `inline; filename="${sanitizeFilename(filename)}"`,
+  }));
+
+  const publicBaseUrl = getPublicReplayCacheBaseUrl();
+  return {
+    storageKey,
+    sizeBytes: buffer.length,
+    mimeType: safeMimeType,
+    url: publicBaseUrl
+      ? `${publicBaseUrl}/${storageKey.split("/").map(encodeURIComponent).join("/")}`
+      : await signGetUrl(storageKey, safeMimeType),
+    signed: !publicBaseUrl,
+  };
+}
+
 export async function putCachedReplay(
   scoreId: number,
   endpointKind: ReplayEndpointKind,
@@ -419,6 +585,315 @@ export async function putCachedReplay(
     sizeBytes: buffer.length,
     mimeType,
     buffer,
+  };
+}
+
+async function deleteCacheRowsForKeys(keys: string[]): Promise<number> {
+  if (!db || keys.length === 0) return 0;
+  await ensureCacheSchema();
+
+  let deletedBytes = 0;
+  for (let i = 0; i < keys.length; i += 200) {
+    const chunk = keys.slice(i, i + 200);
+    const placeholders = chunk.map(() => "?").join(",");
+    const [assetRows, replayRows] = await Promise.all([
+      db.execute({
+        sql: `SELECT size_bytes FROM beatmap_asset_cache WHERE storage_key IN (${placeholders})`,
+        args: chunk,
+      }),
+      db.execute({
+        sql: `SELECT size_bytes FROM replay_cache WHERE storage_key IN (${placeholders})`,
+        args: chunk,
+      }),
+    ]);
+
+    for (const row of [...assetRows.rows, ...replayRows.rows]) {
+      const sizeBytes = Number(row.size_bytes ?? 0);
+      if (Number.isFinite(sizeBytes) && sizeBytes > 0) deletedBytes += sizeBytes;
+    }
+
+    await db.batch([
+      {
+        sql: `DELETE FROM beatmap_asset_cache WHERE storage_key IN (${placeholders})`,
+        args: chunk,
+      },
+      {
+        sql: `DELETE FROM replay_cache WHERE storage_key IN (${placeholders})`,
+        args: chunk,
+      },
+    ]);
+  }
+
+  if (deletedBytes > 0) {
+    await adjustBeatmapAssetCacheTotal(-deletedBytes, Date.now());
+  }
+  return deletedBytes;
+}
+
+export async function getR2AdminListing(
+  prefixInput?: string | null,
+  continuationToken?: string | null,
+  queryInput?: string | null,
+): Promise<R2AdminListing> {
+  const r2 = getClient();
+  const prefix = normalizeR2AdminPrefix(prefixInput);
+  const query = normalizeR2AdminQuery(queryInput);
+  if (!r2) {
+    return {
+      configured: false,
+      bucket: REPLAY_CACHE_BUCKET,
+      prefix,
+      query,
+      folders: [],
+      objects: [],
+      nextContinuationToken: null,
+      totalObjectsShown: 0,
+      totalBytesShown: 0,
+      scannedObjects: 0,
+      searchTruncated: false,
+    };
+  }
+
+  if (query) {
+    const queryLower = query.toLowerCase();
+    const objects: R2AdminObject[] = [];
+    let token = continuationToken?.trim() || undefined;
+    let nextContinuationToken: string | null = null;
+    let scannedObjects = 0;
+    let searchTruncated = false;
+
+    do {
+      const response = await r2.send(new ListObjectsV2Command({
+        Bucket: REPLAY_CACHE_BUCKET,
+        Prefix: prefix,
+        MaxKeys: R2_ADMIN_LIST_LIMIT,
+        ContinuationToken: token,
+      }));
+
+      for (const entry of response.Contents ?? []) {
+        const key = String(entry.Key ?? "");
+        if (!key || key === prefix) continue;
+        scannedObjects += 1;
+        const name = objectNameFromKey(key, prefix);
+        if (key.toLowerCase().includes(queryLower) || name.toLowerCase().includes(queryLower)) {
+          objects.push({
+            key,
+            name,
+            sizeBytes: Number(entry.Size ?? 0),
+            lastModified: entry.LastModified ? entry.LastModified.toISOString() : null,
+            etag: entry.ETag ?? null,
+          });
+        }
+        if (objects.length >= R2_ADMIN_LIST_LIMIT || scannedObjects >= R2_ADMIN_SEARCH_SCAN_LIMIT) break;
+      }
+
+      if (objects.length >= R2_ADMIN_LIST_LIMIT || scannedObjects >= R2_ADMIN_SEARCH_SCAN_LIMIT) {
+        nextContinuationToken = response.IsTruncated ? response.NextContinuationToken ?? null : null;
+        searchTruncated = scannedObjects >= R2_ADMIN_SEARCH_SCAN_LIMIT && Boolean(response.IsTruncated);
+        break;
+      }
+
+      token = response.IsTruncated ? response.NextContinuationToken : undefined;
+      nextContinuationToken = token ?? null;
+    } while (token);
+
+    return {
+      configured: true,
+      bucket: REPLAY_CACHE_BUCKET,
+      prefix,
+      query,
+      folders: [],
+      objects,
+      nextContinuationToken,
+      totalObjectsShown: objects.length,
+      totalBytesShown: objects.reduce((sum, object) => sum + object.sizeBytes, 0),
+      scannedObjects,
+      searchTruncated,
+    };
+  }
+
+  const response = await r2.send(new ListObjectsV2Command({
+    Bucket: REPLAY_CACHE_BUCKET,
+    Prefix: prefix,
+    Delimiter: "/",
+    MaxKeys: R2_ADMIN_LIST_LIMIT,
+    ContinuationToken: continuationToken?.trim() || undefined,
+  }));
+
+  const folderPrefixes = (response.CommonPrefixes ?? [])
+    .map((entry) => entry.Prefix)
+    .filter((entry): entry is string => !!entry && entry.startsWith(prefix));
+  const folderSummaries = await mapWithConcurrency(
+    folderPrefixes,
+    R2_ADMIN_FOLDER_STATS_CONCURRENCY,
+    (folderPrefix) => getR2PrefixSummaryInternal(r2, folderPrefix, R2_ADMIN_FOLDER_STATS_SCAN_LIMIT),
+  );
+  const folders = folderPrefixes.map((folderPrefix, index) => ({
+      prefix: folderPrefix,
+      name: objectNameFromKey(folderPrefix.replace(/\/$/, ""), prefix),
+      objectCount: folderSummaries[index]?.objectCount ?? 0,
+      sizeBytes: folderSummaries[index]?.sizeBytes ?? 0,
+      statsTruncated: folderSummaries[index]?.truncated ?? false,
+    }));
+
+  const objects = (response.Contents ?? [])
+    .filter((entry) => !!entry.Key && entry.Key !== prefix)
+    .map((entry) => {
+      const key = String(entry.Key);
+      return {
+        key,
+        name: objectNameFromKey(key, prefix),
+        sizeBytes: Number(entry.Size ?? 0),
+        lastModified: entry.LastModified ? entry.LastModified.toISOString() : null,
+        etag: entry.ETag ?? null,
+      };
+    });
+
+  return {
+    configured: true,
+    bucket: REPLAY_CACHE_BUCKET,
+    prefix,
+    query,
+    folders,
+    objects,
+    nextContinuationToken: response.NextContinuationToken ?? null,
+    totalObjectsShown: objects.length,
+    totalBytesShown: objects.reduce((sum, object) => sum + object.sizeBytes, 0),
+    scannedObjects: response.KeyCount ?? objects.length + folders.length,
+    searchTruncated: false,
+  };
+}
+
+async function getR2PrefixSummaryInternal(
+  r2: S3Client,
+  prefixInput: string,
+  maxObjects?: number,
+): Promise<R2AdminPrefixSummary> {
+  const prefix = normalizeR2AdminPrefix(prefixInput);
+  let continuationToken: string | undefined;
+  let objectCount = 0;
+  let sizeBytes = 0;
+  let truncated = false;
+
+  do {
+    const response = await r2.send(new ListObjectsV2Command({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Prefix: prefix,
+      MaxKeys: R2_ADMIN_DELETE_BATCH_SIZE,
+      ContinuationToken: continuationToken,
+    }));
+
+    for (const entry of response.Contents ?? []) {
+      if (!entry.Key?.startsWith(prefix)) continue;
+      objectCount += 1;
+      const objectSize = Number(entry.Size ?? 0);
+      if (Number.isFinite(objectSize) && objectSize > 0) sizeBytes += objectSize;
+      if (maxObjects != null && objectCount >= maxObjects) {
+        truncated = Boolean(response.IsTruncated);
+        break;
+      }
+    }
+
+    if (maxObjects != null && objectCount >= maxObjects) break;
+    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return { prefix, objectCount, sizeBytes, truncated };
+}
+
+export async function getR2AdminPrefixSummary(prefixInput: string): Promise<R2AdminPrefixSummary> {
+  const r2 = getClient();
+  if (!r2) throw new Error("R2 replay cache is not configured");
+  const prefix = normalizeR2AdminPrefix(prefixInput);
+  if (prefix === REPLAY_CACHE_PREFIX) {
+    throw new Error("Refusing to summarize the replay-cache root prefix for deletion.");
+  }
+  return getR2PrefixSummaryInternal(r2, prefix);
+}
+
+export async function deleteR2AdminObject(keyInput: string): Promise<R2AdminDeleteResult> {
+  const r2 = getClient();
+  if (!r2) throw new Error("R2 replay cache is not configured");
+
+  const key = normalizeR2AdminObjectKey(keyInput);
+  let sizeBytes: number | null = null;
+  try {
+    const head = await r2.send(new HeadObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: key,
+    }));
+    sizeBytes = Number(head.ContentLength ?? 0);
+  } catch {
+    sizeBytes = null;
+  }
+
+  await r2.send(new DeleteObjectCommand({
+    Bucket: REPLAY_CACHE_BUCKET,
+    Key: key,
+  }));
+
+  const cacheBytes = await deleteCacheRowsForKeys([key]);
+  return {
+    ok: true,
+    deletedCount: 1,
+    deletedBytes: Number.isFinite(sizeBytes) ? sizeBytes : cacheBytes || null,
+  };
+}
+
+export async function deleteR2AdminPrefix(prefixInput: string): Promise<R2AdminDeleteResult> {
+  const r2 = getClient();
+  if (!r2) throw new Error("R2 replay cache is not configured");
+
+  const prefix = normalizeR2AdminPrefix(prefixInput);
+  if (prefix === REPLAY_CACHE_PREFIX) {
+    throw new Error("Refusing to delete the replay-cache root prefix.");
+  }
+
+  let continuationToken: string | undefined;
+  let deletedCount = 0;
+  let deletedBytes = 0;
+
+  do {
+    const listed = await r2.send(new ListObjectsV2Command({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Prefix: prefix,
+      MaxKeys: R2_ADMIN_DELETE_BATCH_SIZE,
+      ContinuationToken: continuationToken,
+    }));
+    const objects = (listed.Contents ?? [])
+      .map((entry) => ({
+        key: entry.Key ?? "",
+        sizeBytes: Number(entry.Size ?? 0),
+      }))
+      .filter((entry) => entry.key.startsWith(prefix));
+
+    if (objects.length > 0) {
+      const response = await r2.send(new DeleteObjectsCommand({
+        Bucket: REPLAY_CACHE_BUCKET,
+        Delete: {
+          Objects: objects.map((object) => ({ Key: object.key })),
+          Quiet: true,
+        },
+      }));
+      if (response.Errors?.length) {
+        const first = response.Errors[0];
+        throw new Error(`R2 delete failed for ${first.Key ?? prefix}: ${first.Message ?? first.Code ?? "unknown error"}`);
+      }
+
+      deletedCount += objects.length;
+      deletedBytes += objects.reduce((sum, object) => (
+        Number.isFinite(object.sizeBytes) ? sum + object.sizeBytes : sum
+      ), 0);
+      await deleteCacheRowsForKeys(objects.map((object) => object.key));
+    }
+
+    continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return {
+    ok: true,
+    deletedCount,
+    deletedBytes,
   };
 }
 

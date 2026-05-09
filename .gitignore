@@ -21,5 +21,13 @@ cache/replay-fixtures/
 
 # Local classifier datasets
 datasets/
+cache/dan-analyze/
+!datasets/
+datasets/*
+!datasets/dan-classifier/
+datasets/dan-classifier/*
+!datasets/dan-classifier/benchmark/
+datasets/dan-classifier/benchmark/*
+!datasets/dan-classifier/benchmark/manifest.json
 src/lib/__fixtures__/dan-classifier/ln-yokaze/
 src/lib/__fixtures__/dan-classifier/ln-references/[0-9]*.osu

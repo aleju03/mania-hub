@@ -107,6 +107,7 @@ function buildAuthState(viewer: AuthViewer | null, request = getRequest()): Auth
 
   return {
     viewer,
+    isAdmin,
     canUseDevFeatures: isLocalDev || isAllowedDevUser,
     canUseAdminFeatures: isLocalDev || isAdmin,
     loginAvailable,
@@ -214,6 +215,13 @@ export async function requireAdminAccess(action: string): Promise<void> {
   const auth = await readCurrentAuth();
   if (!auth.canUseAdminFeatures) {
     throw new Error(`${action} is only available to admins.`);
+  }
+}
+
+export async function requireTrueAdminAccess(action: string): Promise<void> {
+  const auth = await readCurrentAuth();
+  if (!auth.isAdmin) {
+    throw new Error(`${action} is only available to admin users.`);
   }
 }
 
