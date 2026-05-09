@@ -85,8 +85,6 @@ type FullscreenTarget = HTMLElement & {
 const MOBILE_FULLSCREEN_BUTTON_HIDE_MS = 2000;
 const FULLSCREEN_POINTER_CHROME_HIDE_MS = 1800;
 const FULLSCREEN_TAP_CHROME_HIDE_MS = 3000;
-const REPLAY_VIDEO_EXPORT_FPS = 30;
-const REPLAY_VIDEO_EXPORT_UPLOAD_CONCURRENCY = 4;
 const REPLAY_VIDEO_EXPORT_CLIP_SECONDS = 20;
 const REPLAY_VIDEO_EXPORT_RESOLUTIONS: Record<ReplayVideoExportOptions["resolution"], { width: number; height: number }> = {
   "720p": { width: 1280, height: 720 },
@@ -101,6 +99,13 @@ type ReplayVideoExportState = {
   url: string | null;
   signed: boolean;
 };
+
+function getReplayVideoBitrate(width: number, height: number, fps: ReplayVideoExportOptions["fps"]): number {
+  const baseBitrate = height >= 1080 ? 5_000_000 : 3_000_000;
+  const fpsScale = fps <= 30 ? 1 : fps / 30 * 0.82;
+  const pixelScale = Math.max(0.7, Math.min(1.2, (width * height) / (1920 * 1080)));
+  return Math.round(baseBitrate * fpsScale * pixelScale);
+}
 
 function isLocalReplayVideoExportHost(): boolean {
   if (!import.meta.env.DEV || typeof window === "undefined") return false;
@@ -162,14 +167,28 @@ function drawCoverImage(ctx: CanvasRenderingContext2D, image: HTMLImageElement, 
 
 function loadExportBackground(src: string | null): Promise<HTMLImageElement | null> {
   if (!src) return Promise.resolve(null);
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const image = new Image();
     image.crossOrigin = "anonymous";
     image.decoding = "async";
     image.onload = () => resolve(image);
-    image.onerror = () => resolve(null);
+    image.onerror = () => reject(new Error("Couldn't load the replay background for video export."));
     image.src = src;
   });
+}
+
+function getExportBackgroundUrl(src: string | null): string | null {
+  if (!src) return null;
+  try {
+    const url = new URL(src, window.location.origin);
+    if (url.origin === window.location.origin && url.pathname === "/api/background") {
+      url.searchParams.set("inline", "1");
+      return `${url.pathname}${url.search}`;
+    }
+  } catch {
+    // Fall through and try the original value.
+  }
+  return src;
 }
 
 function sanitizeReplayVideoFilename(value: string): string {
@@ -179,15 +198,6 @@ function sanitizeReplayVideoFilename(value: string): string {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 90) || "replay";
-}
-
-function canvasToJpegBlob(canvas: HTMLCanvasElement): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) resolve(blob);
-      else reject(new Error("Couldn't encode replay frame."));
-    }, "image/jpeg", 0.92);
-  });
 }
 
 async function postReplayVideoJson<T>(action: string, body: unknown, id?: string): Promise<T> {
@@ -206,19 +216,18 @@ async function postReplayVideoJson<T>(action: string, body: unknown, id?: string
   return payload;
 }
 
-async function postReplayVideoFrame(jobId: string, index: number, blob: Blob): Promise<void> {
+async function postReplayVideoBlob(jobId: string, blob: Blob): Promise<void> {
   const url = new URL("/api/replay-video-job", window.location.origin);
-  url.searchParams.set("action", "frame");
+  url.searchParams.set("action", "upload-video");
   url.searchParams.set("id", jobId);
-  url.searchParams.set("index", String(index));
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "image/jpeg" },
+    headers: { "Content-Type": "video/mp4" },
     body: blob,
   });
   if (!response.ok) {
     const payload = await response.json().catch(() => null) as { error?: string } | null;
-    throw new Error(payload?.error || `Replay frame ${index + 1} upload failed.`);
+    throw new Error(payload?.error || "Replay video upload failed.");
   }
 }
 
@@ -1702,7 +1711,8 @@ function ReplayViewer({
 
     const sourceDurationMs = Math.max(1, endTime - startTime);
     const outputDurationSeconds = sourceDurationMs / (1000 * Math.max(0.01, effectiveRate));
-    const frameCount = Math.max(1, Math.ceil(outputDurationSeconds * REPLAY_VIDEO_EXPORT_FPS));
+    const exportFps = options.fps ?? 48;
+    const frameCount = Math.max(1, Math.ceil(outputDurationSeconds * exportFps));
     let exportRenderer: ReplayRendererLike | null = null;
     let exportHost: HTMLDivElement | null = null;
     let jobId: string | null = null;
@@ -1714,6 +1724,7 @@ function ReplayViewer({
       const cssWidth = resolution.width;
       const cssHeight = resolution.height;
       exportHost = document.createElement("div");
+      exportHost.dataset.replayFullscreen = "true";
       exportHost.style.cssText = [
         "position:fixed",
         "left:-10000px",
@@ -1781,8 +1792,7 @@ function ReplayViewer({
       const ctx = compositeCanvas.getContext("2d", { alpha: false });
       if (!ctx) throw new Error("Couldn't create the video compositor.");
 
-      const backgroundImage = await loadExportBackground(beatmapBackgroundUrl ?? bgSrc);
-      let canDrawBackgroundImage = true;
+      const backgroundImage = await loadExportBackground(getExportBackgroundUrl(beatmapBackgroundUrl ?? bgSrc));
       const drawCompositeFrame = () => {
         const gradient = ctx.createLinearGradient(0, 0, 0, height);
         gradient.addColorStop(0, "#0a0a18");
@@ -1791,14 +1801,14 @@ function ReplayViewer({
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
 
-        if (backgroundImage && canDrawBackgroundImage) {
+        if (backgroundImage) {
           try {
             ctx.save();
             ctx.globalAlpha = 1;
             drawCoverImage(ctx, backgroundImage, width, height);
             ctx.restore();
           } catch {
-            canDrawBackgroundImage = false;
+            throw new Error("Couldn't draw the replay background for video export.");
           }
         }
 
@@ -1812,8 +1822,8 @@ function ReplayViewer({
       const diff = sanitizeReplayVideoFilename(scoreInfo?.beatmap?.version ?? "mania");
       const scoreSuffix = scoreInfo?.id ? `-${scoreInfo.id}` : "";
       const job = await postReplayVideoJson<{ id: string }>("start", {
-        filename: `${player}-${title}-${diff}${scoreSuffix}.webm`,
-        fps: REPLAY_VIDEO_EXPORT_FPS,
+        filename: `${player}-${title}-${diff}${scoreSuffix}.mp4`,
+        fps: exportFps,
         width,
         height,
         frameCount,
@@ -1824,29 +1834,46 @@ function ReplayViewer({
       });
       jobId = job.id;
 
-      const pendingUploads = new Set<Promise<void>>();
-      for (let index = 0; index < frameCount; index++) {
-        const gameTime = Math.min(endTime, startTime + (index / REPLAY_VIDEO_EXPORT_FPS) * 1000 * effectiveRate);
-        exportRenderer.seek(gameTime);
-        drawCompositeFrame();
-        const frameBlob = await canvasToJpegBlob(compositeCanvas);
-        const upload = postReplayVideoFrame(jobId, index, frameBlob)
-          .finally(() => pendingUploads.delete(upload));
-        pendingUploads.add(upload);
-        if (pendingUploads.size >= REPLAY_VIDEO_EXPORT_UPLOAD_CONCURRENCY) {
-          await Promise.race(pendingUploads);
-        }
-        setVideoExport({
-          exporting: true,
-          progress: Math.min(0.86, ((index + 1) / frameCount) * 0.86),
-          error: null,
-          url: null,
-          signed: false,
-        });
-      }
-      await Promise.all(pendingUploads);
+      const { encodeReplayCanvasToMp4 } = await import("../lib/replay-video-encoder");
+      const encodedVideo = await encodeReplayCanvasToMp4({
+        canvas: compositeCanvas,
+        width,
+        height,
+        fps: exportFps,
+        frameCount,
+        bitrate: getReplayVideoBitrate(width, height, exportFps),
+        renderFrame: async (index) => {
+          const gameTime = Math.min(endTime, startTime + (index / exportFps) * 1000 * effectiveRate);
+          await exportRenderer?.renderFrameAt?.(gameTime);
+          drawCompositeFrame();
+        },
+        onProgress: (progress) => {
+          setVideoExport({
+            exporting: true,
+            progress: Math.min(0.86, progress * 0.86),
+            error: null,
+            url: null,
+            signed: false,
+          });
+        },
+      });
 
-      setVideoExport({ exporting: true, progress: 0.94, error: null, url: null, signed: false });
+      setVideoExport({
+        exporting: true,
+        progress: 0.9,
+        error: null,
+        url: null,
+        signed: false,
+      });
+      await postReplayVideoBlob(jobId, encodedVideo);
+
+      setVideoExport({
+        exporting: true,
+        progress: 0.94,
+        error: null,
+        url: null,
+        signed: false,
+      });
       const uploaded = await postReplayVideoJson<{ url: string; signed: boolean }>("finish", {}, jobId);
       setVideoExport({
         exporting: false,

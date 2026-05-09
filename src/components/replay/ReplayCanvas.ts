@@ -586,9 +586,9 @@ export class ManiaReplayRenderer {
     return calculateReplayAccuracy(this.judgmentCounts, this.ruleset.accuracyMode);
   }
 
-  private updateHudSnapshotIfNeeded() {
+  private updateHudSnapshotIfNeeded(force = false) {
     const elapsed = performance.now() - this.hudSnapshotTime;
-    if (elapsed < 50 && Number.isFinite(this.hudSnapshotTime)) return;
+    if (!force && elapsed < 50 && Number.isFinite(this.hudSnapshotTime)) return;
     this.hudSnapshotTime = performance.now();
 
     this.hudCachedAccuracy = `${this.getAccuracy().toFixed(2)}%`;
@@ -900,6 +900,14 @@ export class ManiaReplayRenderer {
     this.lastRenderTime = performance.now();
     this.resetAudioClockSmoothing();
     this.render();
+  }
+
+  renderFrameAt(timeMs: number) {
+    this.currentTime = Math.max(0, Math.min(timeMs, this.totalDuration));
+    this.recomputeStatsUpTo(this.currentTime);
+    this.lastRenderTime = performance.now();
+    this.resetAudioClockSmoothing();
+    this.render(true);
   }
 
   setSpeed(speed: number) { this.playbackSpeed = speed; }
@@ -1494,12 +1502,12 @@ export class ManiaReplayRenderer {
     }
   }
 
-  private render() {
+  private render(forceHudSnapshot = false) {
     if (!this.app) return;
 
     const layout = this.getLayout();
     this.currentKeyState = this.getCurrentKeyState();
-    this.updateHudSnapshotIfNeeded();
+    this.updateHudSnapshotIfNeeded(forceHudSnapshot);
 
     if (this.staticDirty) {
       this.staticGraphics.clear();

@@ -165,7 +165,8 @@ export async function getReplayVideoSignedUrl(id: string, filename: string): Pro
   if (!r2) return null;
   const storageKey = getReplayVideoStorageKey(id, filename);
   assertReplayCacheKey(storageKey);
-  return signGetUrl(storageKey, "video/webm");
+  const mimeType = filename.toLowerCase().endsWith(".mp4") ? "video/mp4" : "video/webm";
+  return signGetUrl(storageKey, mimeType);
 }
 
 export async function getR2AdminSignedUrl(keyInput: string, mimeType?: string): Promise<string> {
@@ -494,7 +495,7 @@ export async function putReplayVideoAndGetUrl(
 
   const storageKey = getReplayVideoStorageKey(id, filename);
   assertReplayCacheKey(storageKey);
-  const safeMimeType = mimeType === "video/webm" ? mimeType : "video/webm";
+  const safeMimeType = mimeType === "video/mp4" || mimeType === "video/webm" ? mimeType : "video/webm";
 
   await r2.send(new PutObjectCommand({
     Bucket: REPLAY_CACHE_BUCKET,

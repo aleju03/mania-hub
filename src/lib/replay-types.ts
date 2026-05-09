@@ -31,6 +31,7 @@ export interface ReplayRendererLike {
   pause: () => void;
   play: () => void;
   resize: () => void;
+  renderFrameAt?: (timeMs: number) => void | Promise<void>;
   seek: (timeMs: number) => void;
   setBackgroundDim: (value: number) => void;
   setBackgroundImage: (image: HTMLImageElement | null) => void;

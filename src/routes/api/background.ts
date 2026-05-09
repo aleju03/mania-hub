@@ -30,6 +30,7 @@ export const Route = createFileRoute("/api/background")({
         const url = new URL(request.url);
         const beatmapsetId = url.searchParams.get("beatmapsetId");
         const filename = url.searchParams.get("filename");
+        const inline = url.searchParams.get("inline") === "1";
 
         if (!beatmapsetId || !/^\d+$/.test(beatmapsetId)) {
           return new Response("Invalid beatmapsetId", { status: 400 });
@@ -56,7 +57,7 @@ export const Route = createFileRoute("/api/background")({
             "public, max-age=300, s-maxage=300, stale-while-revalidate=3600",
         };
 
-        if (isR2ReplayCacheConfigured()) {
+        if (!inline && isR2ReplayCacheConfigured()) {
           const cached = await getCachedBeatmapAssetUrl("background", beatmapsetId, filename);
           if (cached) {
             return new Response(null, {
@@ -78,7 +79,7 @@ export const Route = createFileRoute("/api/background")({
         }
 
         const mimeType = getMimeType(filename);
-        if (isR2ReplayCacheConfigured()) {
+        if (!inline && isR2ReplayCacheConfigured()) {
           try {
             const cached = await putBeatmapAssetAndGetUrl("background", beatmapsetId, filename, mimeType, buffer);
             if (cached) {

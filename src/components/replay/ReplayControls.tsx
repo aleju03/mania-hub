@@ -53,6 +53,7 @@ export type ReplayVideoExportOptions = {
   startTimeMs?: number;
   endTimeMs?: number;
   resolution: "720p" | "1080p";
+  fps: 30 | 48 | 60;
 };
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
@@ -131,6 +132,7 @@ export function ReplayControls({
   const [videoCustomStartMs, setVideoCustomStartMs] = useState<number | null>(null);
   const [videoCustomEndMs, setVideoCustomEndMs] = useState<number | null>(null);
   const [videoResolution, setVideoResolution] = useState<ReplayVideoExportOptions["resolution"]>("1080p");
+  const [videoFps, setVideoFps] = useState<ReplayVideoExportOptions["fps"]>(48);
   const [videoToast, setVideoToast] = useState<{ id: number; message: string; url?: string } | null>(null);
   const videoToastIdRef = useRef(0);
   const videoMenuRef = useRef<HTMLDivElement>(null);
@@ -480,12 +482,12 @@ export function ReplayControls({
                       setVideoClipMode(true);
                       setVideoMenuOpen(false);
                       if (videoExportKind === "full") {
-                        onExportVideo({ kind: "full", resolution: videoResolution });
+                        onExportVideo({ kind: "full", resolution: videoResolution, fps: videoFps });
                       } else if (videoExportKind === "custom") {
                         if (!hasCustomRange) return;
-                        onExportVideo({ kind: "custom", startTimeMs: customStart, endTimeMs: customEnd, resolution: videoResolution });
+                        onExportVideo({ kind: "custom", startTimeMs: customStart, endTimeMs: customEnd, resolution: videoResolution, fps: videoFps });
                       } else {
-                        onExportVideo({ kind: "clip", durationSeconds: videoClipSeconds, resolution: videoResolution });
+                        onExportVideo({ kind: "clip", durationSeconds: videoClipSeconds, resolution: videoResolution, fps: videoFps });
                       }
                     }}
                     disabled={videoExportKind === "custom" && !hasCustomRange}
@@ -505,6 +507,21 @@ export function ReplayControls({
                         }`}
                       >
                         {resolution}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="my-1 h-px bg-osu-b2" />
+                  <div className="grid grid-cols-3 gap-1">
+                    {([30, 48, 60] as const).map((fps) => (
+                      <button
+                        key={fps}
+                        type="button"
+                        onClick={() => setVideoFps(fps)}
+                        className={`cursor-pointer rounded px-2 py-1.5 text-[11px] font-semibold hover:bg-osu-b4 ${
+                          videoFps === fps ? "bg-osu-pink text-white" : "text-osu-f0"
+                        }`}
+                      >
+                        {fps}
                       </button>
                     ))}
                   </div>

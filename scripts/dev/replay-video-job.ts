@@ -8,8 +8,7 @@ import ffmpegStaticPath from "ffmpeg-static";
 import type { Connect } from "vite";
 import { isR2ReplayCacheConfigured, putReplayVideoAndGetUrl } from "#/lib/r2-cache";
 
-const MAX_FRAME_BYTES = 2.5 * 1024 * 1024;
-const MAX_FRAMES = 12_000;
+const MAX_VIDEO_BYTES = 600 * 1024 * 1024;
 const JOB_TTL_MS = 20 * 60 * 1000;
 const DEFAULT_REPLAY_VIDEO_PUBLIC_ORIGIN = "https://mania-tracker.com";
 const VIDEO_ID_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
@@ -21,7 +20,6 @@ type ReplayVideoJob = {
   fps: number;
   width: number;
   height: number;
-  frameCount: number;
   audioUrl: string | null;
   audioStartSeconds: number;
   sourceDurationSeconds: number;
@@ -67,7 +65,7 @@ async function readJsonBody(req: IncomingMessage): Promise<Record<string, unknow
 }
 
 function sanitizeFilename(value: unknown): string {
-  const fallback = `replay-${Date.now()}.webm`;
+  const fallback = `replay-${Date.now()}.mp4`;
   if (typeof value !== "string") return fallback;
   const safe = value
     .replace(/\\/g, "/")
@@ -77,7 +75,9 @@ function sanitizeFilename(value: unknown): string {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 120);
-  return safe && safe.toLowerCase().endsWith(".webm") ? safe : fallback;
+  if (!safe) return fallback;
+  const withoutExtension = safe.replace(/\.(webm|mp4)$/i, "");
+  return `${withoutExtension || "replay"}.mp4`;
 }
 
 function getReplayVideoPublicOrigin(): string {
@@ -122,8 +122,7 @@ function atempoChain(rate: number): string {
   return filters.join(",");
 }
 
-function runFfmpeg(args: string[]): Promise<void> {
-  const binary = process.env.FFMPEG_PATH || ffmpegStaticPath || "ffmpeg";
+function runFfmpeg(args: string[], binary = process.env.FFMPEG_PATH || ffmpegStaticPath || "ffmpeg"): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(binary, args, { stdio: ["ignore", "ignore", "pipe"] });
     let stderr = "";
@@ -143,87 +142,67 @@ function runFfmpeg(args: string[]): Promise<void> {
 }
 
 async function saveFetchedAudio(request: Request, audioUrl: string, outputPath: string): Promise<boolean> {
-  const response = await fetch(new URL(audioUrl, request.url), {
-    headers: { "User-Agent": "mania-hub-replay-video-export" },
-  });
-  if (!response.ok) return false;
-  await writeFile(outputPath, Buffer.from(await response.arrayBuffer()));
-  return true;
+  try {
+    const response = await fetch(new URL(audioUrl, request.url), {
+      headers: { "User-Agent": "mania-hub-replay-video-export" },
+    });
+    if (!response.ok) return false;
+    await writeFile(outputPath, Buffer.from(await response.arrayBuffer()));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function finishJob(request: Request, job: ReplayVideoJob) {
-  const outputPath = path.join(job.dir, "out.webm");
+  const inputPath = path.join(job.dir, "video.mp4");
+  const outputPath = path.join(job.dir, "out.mp4");
   const audioPath = path.join(job.dir, "audio.bin");
   const hasAudio = job.audioUrl ? await saveFetchedAudio(request, job.audioUrl, audioPath) : false;
   const sourceDuration = Math.max(0.1, job.sourceDurationSeconds);
 
-  const args = [
+  if (!hasAudio) {
+    const buffer = await readFile(inputPath);
+    const uploaded = await putReplayVideoAndGetUrl(job.id, job.filename, "video/mp4", buffer);
+    if (!uploaded) throw new Error("R2 upload failed.");
+    return { ...uploaded, encodedWith: "webcodecs-avc", hasAudio };
+  }
+
+  await runFfmpeg([
     "-y",
     "-hide_banner",
     "-loglevel",
     "error",
-    "-framerate",
-    String(job.fps),
     "-i",
-    path.join(job.dir, "frame-%06d.jpg"),
-  ];
-
-  if (hasAudio) {
-    args.push(
-      "-ss",
-      String(Math.max(0, job.audioStartSeconds)),
-      "-t",
-      String(sourceDuration),
-      "-i",
-      audioPath,
-    );
-  }
-
-  args.push(
+    inputPath,
+    "-ss",
+    String(Math.max(0, job.audioStartSeconds)),
+    "-t",
+    String(sourceDuration),
+    "-i",
+    audioPath,
     "-map",
     "0:v:0",
-  );
-
-  if (hasAudio) {
-    args.push("-map", "1:a:0");
-  }
-
-  args.push(
-    "-frames:v",
-    String(job.frameCount),
-    "-vf",
-    `scale=${job.width}:${job.height}:flags=lanczos,format=yuv420p`,
+    "-map",
+    "1:a:0",
     "-c:v",
-    "libvpx",
-    "-deadline",
-    "realtime",
-    "-cpu-used",
-    "8",
-    "-b:v",
-    process.env.REPLAY_VIDEO_BITRATE || "9000k",
-  );
+    "copy",
+    "-af",
+    atempoChain(job.effectiveRate),
+    "-c:a",
+    "aac",
+    "-b:a",
+    "160k",
+    "-shortest",
+    "-movflags",
+    "+faststart",
+    outputPath,
+  ]);
 
-  if (hasAudio) {
-    args.push(
-      "-af",
-      atempoChain(job.effectiveRate),
-      "-c:a",
-      "libopus",
-      "-b:a",
-      "128k",
-      "-shortest",
-    );
-  } else {
-    args.push("-an");
-  }
-
-  args.push(outputPath);
-
-  await runFfmpeg(args);
   const buffer = await readFile(outputPath);
-  const uploaded = await putReplayVideoAndGetUrl(job.id, job.filename, "video/webm", buffer);
+  const uploaded = await putReplayVideoAndGetUrl(job.id, job.filename, "video/mp4", buffer);
   if (!uploaded) throw new Error("R2 upload failed.");
-  return uploaded;
+  return { ...uploaded, encodedWith: "webcodecs-avc+ffmpeg-aac", hasAudio };
 }
 
 export function replayVideoJobMiddleware(): Connect.NextHandleFunction {
@@ -261,7 +240,6 @@ export function replayVideoJobMiddleware(): Connect.NextHandleFunction {
           fps: Math.round(parsePositiveNumber(body.fps, 30, 60)),
           width: Math.round(parsePositiveNumber(body.width, 1280, 1920)),
           height: Math.round(parsePositiveNumber(body.height, 720, 1080)),
-          frameCount: Math.min(MAX_FRAMES, Math.max(1, Math.round(Number(body.frameCount) || 1))),
           audioUrl: typeof body.audioUrl === "string" && body.audioUrl ? body.audioUrl : null,
           audioStartSeconds: Math.max(0, Number(body.audioStartSeconds) || 0),
           sourceDurationSeconds: parsePositiveNumber(body.sourceDurationSeconds, 1, 60 * 60),
@@ -280,30 +258,26 @@ export function replayVideoJobMiddleware(): Connect.NextHandleFunction {
         return;
       }
 
-      if (action === "frame") {
-        const index = Number(url.searchParams.get("index"));
-        if (!Number.isInteger(index) || index < 0 || index >= job.frameCount) {
-          sendJson(res, 400, { error: "Invalid frame index." });
-          return;
-        }
+      if (action === "upload-video") {
         const contentLength = Number(req.headers["content-length"] ?? 0);
-        if (Number.isFinite(contentLength) && contentLength > MAX_FRAME_BYTES) {
-          sendJson(res, 413, { error: "Frame is too large." });
+        if (Number.isFinite(contentLength) && contentLength > MAX_VIDEO_BYTES) {
+          sendJson(res, 413, { error: "Video is too large." });
           return;
         }
         const buffer = await readRequestBody(req);
-        if (buffer.length > MAX_FRAME_BYTES) {
-          sendJson(res, 413, { error: "Frame is too large." });
+        if (buffer.length > MAX_VIDEO_BYTES) {
+          sendJson(res, 413, { error: "Video is too large." });
           return;
         }
-        await writeFile(path.join(job.dir, `frame-${String(index + 1).padStart(6, "0")}.jpg`), buffer);
+        await writeFile(path.join(job.dir, "video.mp4"), buffer);
         sendJson(res, 200, { ok: true });
         return;
       }
 
       if (action === "finish") {
         try {
-          const request = new Request(new URL(requestUrl, "http://localhost").toString(), { method: "POST" });
+          const host = req.headers.host || "localhost";
+          const request = new Request(new URL(requestUrl, `http://${host}`).toString(), { method: "POST" });
           const uploaded = await finishJob(request, job);
           const publicUrl = new URL(
             `/videos/${encodeURIComponent(job.id)}/${encodeURIComponent(job.filename)}`,
@@ -317,6 +291,8 @@ export function replayVideoJobMiddleware(): Connect.NextHandleFunction {
             storageKey: uploaded.storageKey,
             sizeBytes: uploaded.sizeBytes,
             mimeType: uploaded.mimeType,
+            encodedWith: uploaded.encodedWith,
+            hasAudio: uploaded.hasAudio,
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : "ffmpeg export failed.";
