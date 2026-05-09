@@ -1,4 +1,5 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
+import { Check, Copy } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { parseManiaBeatmap } from "../../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../../lib/beatmap-search";
@@ -98,6 +99,17 @@ function isNumericDanLabel(label: string): boolean {
   return /^(10|[1-9])$/.test(label);
 }
 
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (!navigator.clipboard?.writeText) return false;
+
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export const Route = createFileRoute("/admin/dan-classifier")({
   head: () => ({
     meta: [
@@ -124,8 +136,10 @@ function DanClassifierPage() {
   const [selectedBeatmap, setSelectedBeatmap] = useState<OsuBeatmap | null>(null);
   const [estimate, setEstimate] = useState<DanEstimate | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
+  const [copiedBeatmapId, setCopiedBeatmapId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const copiedTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     if (query.trim().length < 2) {
@@ -185,6 +199,8 @@ function DanClassifierPage() {
     return () => clearTimeout(timerRef.current);
   }, [query]);
 
+  useEffect(() => () => clearTimeout(copiedTimerRef.current), []);
+
   const selectedTitle = useMemo(() => {
     if (!selectedSet || !selectedBeatmap) return null;
     return `${selectedSet.artist} - ${selectedSet.title} [${selectedBeatmap.version}]`;
@@ -220,6 +236,15 @@ function DanClassifierPage() {
     } finally {
       setAnalysisLoading(false);
     }
+  }
+
+  async function copyBeatmapId(beatmapId: number) {
+    const copied = await copyTextToClipboard(String(beatmapId));
+    if (!copied) return;
+
+    setCopiedBeatmapId(beatmapId);
+    clearTimeout(copiedTimerRef.current);
+    copiedTimerRef.current = setTimeout(() => setCopiedBeatmapId(null), 1200);
   }
 
   return (
@@ -309,6 +334,7 @@ function DanClassifierPage() {
                   .filter((beatmap) => beatmap.mode === "mania")
                   .sort((a, b) => a.cs - b.cs || a.difficulty_rating - b.difficulty_rating);
                 const coverUrl = beatmapset.covers?.["cover@2x"] || beatmapset.covers?.cover;
+                const copiedMapId = beatmapset.id;
 
                 return (
                   <div key={beatmapset.id} className="relative min-w-0 overflow-hidden rounded-lg border border-osu-b3/30 bg-osu-b5">
@@ -324,14 +350,29 @@ function DanClassifierPage() {
                             {beatmapset.artist} // {beatmapset.creator}
                           </div>
                         </div>
-                        <a
-                          href={`https://osu.ppy.sh/beatmapsets/${beatmapset.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[11px] font-bold text-osu-l2 hover:text-white transition-colors"
-                        >
-                          osu!
-                        </a>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void copyBeatmapId(copiedMapId)}
+                            className="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border border-white/10 bg-black/35 text-osu-l2 backdrop-blur-sm transition-colors hover:border-osu-l2/40 hover:bg-black/55 hover:text-white"
+                            title={`Copy beatmapset ID ${copiedMapId}`}
+                            aria-label={`Copy beatmapset ID ${copiedMapId}`}
+                          >
+                            {copiedBeatmapId === copiedMapId ? (
+                              <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                            ) : (
+                              <Copy className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                          <a
+                            href={`https://osu.ppy.sh/beatmapsets/${beatmapset.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] font-bold text-osu-l2 hover:text-white transition-colors"
+                          >
+                            osu!
+                          </a>
+                        </div>
                       </div>
 
                       <div className="mt-3 flex min-w-0 flex-wrap gap-1.5 overflow-hidden">

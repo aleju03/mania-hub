@@ -70,6 +70,24 @@
   --color-osu-orange: #ff8e5d;
 }
 body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family: var(--font-sans); }
+:where(
+  a[href],
+  button:not(:disabled),
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  summary,
+  label[for],
+  input[type="button"]:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  input[type="range"]:not(:disabled),
+  input[type="reset"]:not(:disabled),
+  input[type="submit"]:not(:disabled),
+  select:not(:disabled)
+) {
+  cursor: pointer;
+}
 @media (hover: hover) and (pointer: fine) {
   .player-score-row:hover .score-position-indicator {
     opacity: 1;
