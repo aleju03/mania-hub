@@ -89,7 +89,6 @@ import type {
 } from "./types";
 import { parseManiaBeatmap } from "./beatmap-parser";
 import { estimateDan } from "./dan-estimator";
-import { DAN_ESTIMATES_ENABLED } from "./feature-flags";
 import { isSupportedCountryCode, normalizeCountryCode } from "./country";
 
 const sanitizeServerProfilePageHtml = createServerOnlyFn(
@@ -4312,10 +4311,15 @@ export const getDanEstimates = createServerFn({ method: "GET" })
     }: {
       data: { items: DanEstimateRequest[] };
     }): Promise<Record<string, LeanDanEstimate | null>> => {
-      edgeCache(3600, 86400);
+      const { readCurrentAuth } = await import("./auth-server");
+      const auth = await readCurrentAuth();
+      const allowed = auth.canUseDevFeatures;
+
+      if (allowed) edgeCache(3600, 86400);
+      else setResponseHeader("Cache-Control", "private, no-store");
 
       const results: Record<string, LeanDanEstimate | null> = {};
-      if (!DAN_ESTIMATES_ENABLED) {
+      if (!allowed) {
         for (const req of data.items) {
           const rate = req.rate ?? 1;
           const key = rate === 1

@@ -35,7 +35,7 @@ import {
 import type { ReplaySkinSettings, ReplaySkinStyle } from "../../lib/replay-skin";
 import type { ReplayOverlaySettings } from "../../lib/replay-overlays";
 import { useAppStore } from "../../store";
-import { DAN_ESTIMATES_ENABLED } from "../../lib/feature-flags";
+import { useAuth } from "../../lib/auth-context";
 
 const MANIA_ARROW_ICON_STYLE: CSSProperties = {
   WebkitMask: "url('/images/notes/mania-arrow-right.svg') center / contain no-repeat",
@@ -86,6 +86,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   const [activeTab, setActiveTab] = useState<TabId>("skin");
   const showDanEstimates = useAppStore((state) => state.showDanEstimates);
   const setShowDanEstimates = useAppStore((state) => state.setShowDanEstimates);
+  const canUseDanEstimates = useAuth().canUseDevFeatures;
 
   const saveSkinSettings = (settings: ReplaySkinSettings) => {
     const normalized = normalizeReplaySkinSettings(settings);
@@ -165,6 +166,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
         <DansPanel
           showDanEstimates={showDanEstimates}
           onShowDanEstimatesChange={setShowDanEstimates}
+          canUseDanEstimates={canUseDanEstimates}
         />
       ) : null}
     </>
@@ -382,17 +384,19 @@ function ViewerPanel({
 function DansPanel({
   showDanEstimates,
   onShowDanEstimatesChange,
+  canUseDanEstimates,
 }: {
   showDanEstimates: boolean;
   onShowDanEstimatesChange: (checked: boolean) => void;
+  canUseDanEstimates: boolean;
 }) {
   return (
     <div className="space-y-6">
       <ToggleRow
         label="Show dan estimates"
         description="If you care about Dans"
-        checked={DAN_ESTIMATES_ENABLED && showDanEstimates}
-        disabled={!DAN_ESTIMATES_ENABLED}
+        checked={canUseDanEstimates && showDanEstimates}
+        disabled={!canUseDanEstimates}
         wipWhenDisabled
         onChange={onShowDanEstimatesChange}
       />

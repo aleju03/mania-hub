@@ -6,7 +6,6 @@ import { DEFAULT_COUNTRY_CODE, normalizeCountryCode } from "./lib/country";
 import { InitialCountryContext } from "./lib/country-context";
 import { readAutoCountryCookieClient, readCountryCookieClient, writeCountryCookieClient } from "./lib/country-cookie";
 import { getScoreIdentity, getScoreTimeMs } from "./lib/score";
-import { DAN_ESTIMATES_ENABLED } from "./lib/feature-flags";
 import type {
   OsuScore,
   RankingsResponse,
@@ -420,7 +419,7 @@ export const useAppStore = create<AppState>()(
         writeThemeSatToStorage(clamped);
         set({ themeSaturation: clamped });
       },
-      setShowDanEstimates: (show) => set({ showDanEstimates: DAN_ESTIMATES_ENABLED && show }),
+      setShowDanEstimates: (show) => set({ showDanEstimates: show }),
       resetThemeHue: () => {
         applyThemeHueToDom(DEFAULT_THEME_HUE);
         removeThemeHueFromStorage();
@@ -803,11 +802,9 @@ export const useAppStore = create<AppState>()(
           // haven't picked a color since this migration landed.
           themeHue: readThemeHueFromStorage()
             ?? clampThemeHue(nextState.themeHue ?? currentState.themeHue),
-          showDanEstimates: DAN_ESTIMATES_ENABLED && (
-            typeof nextState.showDanEstimates === "boolean"
-              ? nextState.showDanEstimates
-              : currentState.showDanEstimates
-          ),
+          showDanEstimates: typeof nextState.showDanEstimates === "boolean"
+            ? nextState.showDanEstimates
+            : currentState.showDanEstimates,
           // Dedicated key wins. The legacy blob fallback only matters for
           // returning users whose accents still live in `mania-hub-cache-v5`
           // and haven't been re-fetched since this migration landed; those
@@ -860,7 +857,7 @@ export const useAppStore = create<AppState>()(
       },
       partialize: (state) => ({
         selectedCountry: state.selectedCountry,
-        showDanEstimates: DAN_ESTIMATES_ENABLED && state.showDanEstimates,
+        showDanEstimates: state.showDanEstimates,
         // themeHue is persisted separately via THEME_HUE_STORAGE_KEY so a
         // QuotaExceededError on this big blob (common on mobile Safari) can't
         // drop a theme change on the floor.

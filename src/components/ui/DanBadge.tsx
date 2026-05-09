@@ -3,7 +3,7 @@ import { useAppStore } from "#/store";
 import type { LeanDanEstimate, LeanTrackerScore, OsuScore } from "#/lib/types";
 import { getDanEstimates } from "#/lib/osu";
 import { getScoreRate } from "#/lib/score";
-import { DAN_ESTIMATES_ENABLED } from "#/lib/feature-flags";
+import { useAuth } from "#/lib/auth-context";
 
 // ── Batched fetcher ────────────────────────────────────────────────────────────
 
@@ -152,7 +152,8 @@ function DanBadgeInner({ estimate }: { estimate: LeanDanEstimate }) {
 
 export function DanBadge({ score }: { score: OsuScore | LeanTrackerScore }) {
   const showDanEstimates = useAppStore((state) => state.showDanEstimates);
-  const canShowDanEstimates = DAN_ESTIMATES_ENABLED && showDanEstimates;
+  const canUseDanEstimates = useAuth().canUseDevFeatures;
+  const canShowDanEstimates = canUseDanEstimates && showDanEstimates;
   const beatmapId = score.beatmap?.id;
   const keyCount = score.beatmap?.cs;
   const starRating = score.beatmap?.difficulty_rating;
