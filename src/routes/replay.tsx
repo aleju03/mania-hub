@@ -885,7 +885,7 @@ function ReplayViewer({
   const replayEndAudioFadeActiveRef = useRef(false);
   const replayEndAudioFadeFrameRef = useRef<number | null>(null);
   const isCanvasFullscreen = isNativeFullscreen || isPseudoFullscreen;
-  const replayVideoExportAvailable = auth.isAdmin && localReplayVideoExportAvailable;
+  const replayVideoExportAvailable = auth.canUseAdminFeatures && localReplayVideoExportAvailable;
 
   const cancelReplayEndAudioFade = useCallback((restoreVolume = true) => {
     replayEndAudioFadeActiveRef.current = false;

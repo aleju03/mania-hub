@@ -389,9 +389,8 @@ export function ReplayControls({
                       onClick={() => {
                         setVideoExportKind("clip");
                         setVideoClipSeconds(seconds);
-                        setVideoMenuOpen(false);
                       }}
-                      className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
+                      className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
                         videoExportKind === "clip" && videoClipSeconds === seconds ? "text-white" : "text-osu-f0"
                       }`}
                     >
@@ -406,7 +405,7 @@ export function ReplayControls({
                       setVideoExportKind("custom");
                       setVideoClipMode(true);
                     }}
-                    className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
+                    className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
                       videoExportKind === "custom" ? "text-white" : "text-osu-f0"
                     }`}
                   >
@@ -466,9 +465,8 @@ export function ReplayControls({
                     type="button"
                     onClick={() => {
                       setVideoExportKind("full");
-                      setVideoMenuOpen(false);
                     }}
-                    className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
+                    className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
                       videoExportKind === "full" ? "text-white" : "text-osu-f0"
                     }`}
                   >
@@ -491,7 +489,7 @@ export function ReplayControls({
                       }
                     }}
                     disabled={videoExportKind === "custom" && !hasCustomRange}
-                    className="flex w-full items-center justify-center rounded bg-osu-pink px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-osu-pink-light disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-osu-pink"
+                    className="flex w-full cursor-pointer items-center justify-center rounded bg-osu-pink px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-osu-pink-light disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-osu-pink"
                   >
                     Generate URL
                   </button>
@@ -502,7 +500,7 @@ export function ReplayControls({
                         key={resolution}
                         type="button"
                         onClick={() => setVideoResolution(resolution)}
-                        className={`rounded px-2 py-1.5 text-[11px] font-semibold hover:bg-osu-b4 ${
+                        className={`cursor-pointer rounded px-2 py-1.5 text-[11px] font-semibold hover:bg-osu-b4 ${
                           videoResolution === resolution ? "bg-osu-pink text-white" : "text-osu-f0"
                         }`}
                       >
