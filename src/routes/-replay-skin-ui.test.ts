@@ -37,7 +37,6 @@ describe("replay skin settings UI", () => {
     expect(source).toContain("Note height");
     expect(source).toContain("ScorePosition");
     expect(source).toContain("ComboPosition");
-    expect(source).toContain("Keys under notes");
     expect(source).toContain("Note shape");
     expect(source).toContain("Per-column colors");
     expect(source).toContain("Column width");

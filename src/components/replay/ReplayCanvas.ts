@@ -1521,14 +1521,13 @@ export class ManiaReplayRenderer {
 
     this.renderBackground(layout);
     this.renderSegmentOverlays(layout);
-    if (this.skinSettings.keysUnderNotes) this.renderReceptors(layout);
     if (this.showInputOverlay && this.inputOverlayOnly) {
       this.renderInputOverlayNotes(layout);
     } else {
       this.renderNotes(layout);
     }
     this.renderJudgmentLine(layout);
-    if (!this.skinSettings.keysUnderNotes) this.renderReceptors(layout);
+    this.renderReceptors(layout);
     if (this.showHealthBar) this.renderHealthBar(layout);
     this.overlayHitboxes = [];
     if (!this.hideHud) this.renderHUD(layout);

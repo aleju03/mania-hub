@@ -1141,10 +1141,6 @@ export function ReplaySkinSettingsModal({
                     <span className="text-sm font-semibold text-osu-l1">Upscroll</span>
                     <ReplaySkinSwitch checked={draft.upscroll} onChange={(checked) => update({ upscroll: checked })} />
                   </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm font-semibold text-osu-l1">Keys under notes</span>
-                    <ReplaySkinSwitch checked={draft.keysUnderNotes} onChange={(checked) => update({ keysUnderNotes: checked })} />
-                  </div>
                 </section>
               </>
             ) : activeTab === "layout" ? (

@@ -125,7 +125,6 @@ export interface ReplaySkinSettings {
   outlineWidth: number;
   percy: boolean;
   upscroll: boolean;
-  keysUnderNotes: boolean;
   columnWidth: number;
   columnSpacing: number;
   noteHeightScale: number;
@@ -311,7 +310,6 @@ export const DEFAULT_REPLAY_SKIN_SETTINGS: ReplaySkinSettings = {
   outlineWidth: REPLAY_SKIN_DEFAULT_OUTLINE_WIDTH,
   percy: true,
   upscroll: false,
-  keysUnderNotes: false,
   columnWidth: DEFAULT_REPLAY_SKIN_PROFILE.columnWidth,
   columnSpacing: DEFAULT_REPLAY_SKIN_PROFILE.columnSpacing,
   noteHeightScale: DEFAULT_REPLAY_SKIN_PROFILE.noteHeightScale,
@@ -641,7 +639,6 @@ export function normalizeReplaySkinSettings(value: unknown): ReplaySkinSettings 
     outlineWidth: normalizeOutlineWidth(raw.outlineWidth),
     percy: typeof raw.percy === "boolean" ? raw.percy : DEFAULT_REPLAY_SKIN_SETTINGS.percy,
     upscroll: typeof raw.upscroll === "boolean" ? raw.upscroll : DEFAULT_REPLAY_SKIN_SETTINGS.upscroll,
-    keysUnderNotes: typeof raw.keysUnderNotes === "boolean" ? raw.keysUnderNotes : DEFAULT_REPLAY_SKIN_SETTINGS.keysUnderNotes,
     columnWidth: fallbackProfile.columnWidth,
     columnSpacing: fallbackProfile.columnSpacing,
     noteHeightScale: fallbackProfile.noteHeightScale,
@@ -854,7 +851,6 @@ function compactReplaySkinSettingsV3(settings: ReplaySkinSettings): Record<strin
   if (settings.outlineWidth !== def.outlineWidth) out.i = settings.outlineWidth;
   if (settings.percy !== def.percy) out.j = compactBoolean(settings.percy);
   if (settings.upscroll !== def.upscroll) out.k = compactBoolean(settings.upscroll);
-  if (settings.keysUnderNotes !== def.keysUnderNotes) out.l = compactBoolean(settings.keysUnderNotes);
   if (settings.columnWidth !== def.columnWidth) out.m = settings.columnWidth;
   if (settings.hitPosition !== def.hitPosition) out.n = settings.hitPosition;
   if (settings.scorePosition !== def.scorePosition) out.o = settings.scorePosition;
@@ -894,7 +890,6 @@ function expandReplaySkinSettingsV3(value: unknown): Record<string, unknown> {
     outlineWidth: raw.i,
     percy: expandBoolean(raw.j),
     upscroll: expandBoolean(raw.k),
-    keysUnderNotes: expandBoolean(raw.l),
     columnWidth: raw.m,
     columnSpacing: raw.r,
     noteHeightScale: raw.s,

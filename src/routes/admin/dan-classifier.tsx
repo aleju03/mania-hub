@@ -1,6 +1,6 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import JSZip from "jszip";
-import { Check, ClipboardList, Copy, FileSpreadsheet, Search, UserRound } from "lucide-react";
+import { Check, ClipboardList, Copy, FileSpreadsheet, RotateCcw, Search, UserRound, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseManiaBeatmap } from "../../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../../lib/beatmap-search";
@@ -15,7 +15,7 @@ import {
   getBenchmarkBeatmapsetIds,
   getBenchmarkLabelOptions,
 } from "../../lib/dan-benchmark-sets";
-import { getDanBenchmarkLabels, setDanBenchmarkLabel } from "../../lib/dan-benchmark";
+import { getDanBenchmarkHiddenDiffs, getDanBenchmarkLabels, setDanBenchmarkHiddenDiff, setDanBenchmarkLabel } from "../../lib/dan-benchmark";
 
 type DanClassifierId = "aleju" | "daniel";
 
@@ -1085,21 +1085,29 @@ function BenchmarkView({
     normal: new Map(),
     ln: new Map(),
   });
+  const [hiddenByFamily, setHiddenByFamily] = useState<Record<DanBenchmarkFamily, Set<number>>>({
+    normal: new Set(),
+    ln: new Set(),
+  });
   const [labelsLoaded, setLabelsLoaded] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
   const [exportState, setExportState] = useState<BenchmarkExportState>({ action: null, status: "idle" });
   const exportTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const expectedLabels = expectedLabelsByFamily[family];
+  const hiddenSet = hiddenByFamily[family];
   const labelOptions = useMemo(() => getBenchmarkLabelOptions(family), [family]);
 
-  // load expected labels for both families once
+  // load expected labels + hidden diffs for both families once
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const [normalRows, lnRows] = await Promise.all([
+        const [normalRows, lnRows, normalHidden, lnHidden] = await Promise.all([
           getDanBenchmarkLabels({ data: { family: "normal" } }),
           getDanBenchmarkLabels({ data: { family: "ln" } }),
+          getDanBenchmarkHiddenDiffs({ data: { family: "normal" } }),
+          getDanBenchmarkHiddenDiffs({ data: { family: "ln" } }),
         ]);
         if (cancelled) return;
         const normalMap = new Map<number, string>();
@@ -1107,6 +1115,7 @@ function BenchmarkView({
         const lnMap = new Map<number, string>();
         for (const row of lnRows) lnMap.set(row.beatmapId, row.expectedLabel);
         setExpectedLabelsByFamily({ normal: normalMap, ln: lnMap });
+        setHiddenByFamily({ normal: new Set(normalHidden), ln: new Set(lnHidden) });
         setLabelsLoaded(true);
       } catch {
         if (!cancelled) setLabelsLoaded(true);
@@ -1241,6 +1250,22 @@ function BenchmarkView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family, classifier, rate]);
 
+  async function handleToggleHidden(beatmapId: number, hidden: boolean) {
+    setHiddenByFamily((prev) => {
+      const next = new Set(prev[family]);
+      if (hidden) next.add(beatmapId);
+      else next.delete(beatmapId);
+      return { ...prev, [family]: next };
+    });
+    try {
+      await setDanBenchmarkHiddenDiff({
+        data: { beatmapId, family, hidden },
+      });
+    } catch {
+      // optimistic update remains until next reload
+    }
+  }
+
   async function handleExpectedChange(beatmapId: number, value: string) {
     setExpectedLabelsByFamily((prev) => {
       const next = new Map(prev[family]);
@@ -1308,6 +1333,7 @@ function BenchmarkView({
         if (!set.beatmapset) continue;
         for (const row of set.rows) {
           if (!row.beatmap) continue;
+          if (hiddenByFamily[fam].has(row.beatmap.id)) continue;
           const expectedDan = expectedLabelsByFamily[fam].get(row.beatmap.id) ?? null;
           const detectedDan = row.estimate?.displayName ?? row.estimate?.label ?? null;
           const detectedBase = row.estimate?.label ?? null;
@@ -1364,24 +1390,28 @@ function BenchmarkView({
     }
   }
 
-  const totalDiffs = sets.reduce((sum, set) => sum + set.rows.length, 0);
+  const isVisibleRow = (row: BenchmarkRow) => row.beatmap !== null && !hiddenSet.has(row.beatmap.id);
+  const totalDiffs = sets.reduce((sum, set) => sum + set.rows.filter(isVisibleRow).length, 0);
+  const hiddenCount = sets.reduce((sum, set) => sum + set.rows.filter((row) => row.beatmap !== null && hiddenSet.has(row.beatmap.id)).length, 0);
   const readyCount = sets.reduce(
-    (sum, set) => sum + set.rows.filter((row) => row.status === "ready").length,
+    (sum, set) => sum + set.rows.filter((row) => isVisibleRow(row) && row.status === "ready").length,
     0,
   );
   const exactMatchCount = sets.reduce((sum, set) => sum + set.rows.filter((row) => {
+    if (!isVisibleRow(row)) return false;
     if (row.status !== "ready" || !row.estimate || !row.beatmap) return false;
     const expected = expectedLabels.get(row.beatmap.id);
     return expected ? expected === row.estimate.displayName : false;
   }).length, 0);
   const baseMatchCount = sets.reduce((sum, set) => sum + set.rows.filter((row) => {
+    if (!isVisibleRow(row)) return false;
     if (row.status !== "ready" || !row.estimate || !row.beatmap) return false;
     const expected = expectedLabels.get(row.beatmap.id);
     if (!expected) return false;
     if (expected === row.estimate.displayName) return false;
     return splitExpectedLabel(expected).base === row.estimate.label;
   }).length, 0);
-  const labeledCount = sets.reduce((sum, set) => sum + set.rows.filter((row) => row.beatmap && expectedLabels.has(row.beatmap.id)).length, 0);
+  const labeledCount = sets.reduce((sum, set) => sum + set.rows.filter((row) => isVisibleRow(row) && row.beatmap && expectedLabels.has(row.beatmap.id)).length, 0);
   const exportBusy = exportState.status === "working";
   const getExportButtonStatus = (action: BenchmarkExportAction): BenchmarkExportStatus => (
     exportState.action === action ? exportState.status : "idle"
@@ -1445,6 +1475,20 @@ function BenchmarkView({
               /{labeledCount}
             </div>
           ) : null}
+          {hiddenCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowHidden((v) => !v)}
+              className={`inline-flex items-center gap-1 whitespace-nowrap rounded border px-2 py-0.5 font-bold uppercase tracking-wide cursor-pointer transition-colors ${
+                showHidden
+                  ? "border-osu-pink/50 bg-osu-pink/15 text-white"
+                  : "border-osu-b3/50 bg-osu-b5 text-osu-f1 hover:text-osu-c1"
+              }`}
+              title={showHidden ? "Hide excluded diffs" : "Show excluded diffs"}
+            >
+              {showHidden ? "hide" : "show"} hidden ({hiddenCount})
+            </button>
+          ) : null}
           <div className="flex flex-wrap items-center justify-end gap-1">
             <button
               type="button"
@@ -1477,6 +1521,9 @@ function BenchmarkView({
             set={set}
             labelOptions={labelOptions}
             expectedLabels={expectedLabels}
+            hiddenSet={hiddenSet}
+            showHidden={showHidden}
+            onToggleHidden={handleToggleHidden}
             onExpectedChange={handleExpectedChange}
             onAnalyze={onAnalyze}
             onCopyId={onCopyId}
@@ -1522,6 +1569,9 @@ interface BenchmarkSetBlockProps {
   set: BenchmarkSetState;
   labelOptions: string[];
   expectedLabels: Map<number, string>;
+  hiddenSet: Set<number>;
+  showHidden: boolean;
+  onToggleHidden: (beatmapId: number, hidden: boolean) => void;
   onExpectedChange: (beatmapId: number, value: string) => void;
   onAnalyze: (set: OsuBeatmapset, beatmap: OsuBeatmap) => void;
   onCopyId: (id: number) => void;
@@ -1533,6 +1583,9 @@ function BenchmarkSetBlock({
   set,
   labelOptions,
   expectedLabels,
+  hiddenSet,
+  showHidden,
+  onToggleHidden,
   onExpectedChange,
   onAnalyze,
   onCopyId,
@@ -1588,24 +1641,37 @@ function BenchmarkSetBlock({
         </div>
       </div>
 
-      {set.rows.length === 0 ? (
-        <div className="px-2.5 py-2 text-[11px] text-osu-f1">No 4K mania diffs.</div>
-      ) : (
-        <div className={`grid gap-1.5 p-1.5 ${set.rows.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
-          {set.rows.map((row) => (
-            <BenchmarkDiffRow
-              key={row.beatmap?.id ?? Math.random()}
-              row={row}
-              coverUrl={coverUrl}
-              labelOptions={labelOptions}
-              expected={row.beatmap ? expectedLabels.get(row.beatmap.id) ?? "" : ""}
-              onExpectedChange={onExpectedChange}
-              onAnalyze={onAnalyze}
-              isSelected={row.beatmap?.id === selectedBeatmapId}
-            />
-          ))}
-        </div>
-      )}
+      {(() => {
+        if (set.rows.length === 0) {
+          return <div className="px-2.5 py-2 text-[11px] text-osu-f1">No 4K mania diffs.</div>;
+        }
+        const visibleRows = set.rows.filter((row) => {
+          if (!row.beatmap) return true;
+          if (hiddenSet.has(row.beatmap.id)) return showHidden;
+          return true;
+        });
+        if (visibleRows.length === 0) {
+          return <div className="px-2.5 py-2 text-[11px] text-osu-f1 italic">All diffs hidden.</div>;
+        }
+        return (
+          <div className={`grid gap-1.5 p-1.5 ${visibleRows.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+            {visibleRows.map((row) => (
+              <BenchmarkDiffRow
+                key={row.beatmap?.id ?? Math.random()}
+                row={row}
+                coverUrl={coverUrl}
+                labelOptions={labelOptions}
+                expected={row.beatmap ? expectedLabels.get(row.beatmap.id) ?? "" : ""}
+                isHidden={row.beatmap ? hiddenSet.has(row.beatmap.id) : false}
+                onToggleHidden={onToggleHidden}
+                onExpectedChange={onExpectedChange}
+                onAnalyze={onAnalyze}
+                isSelected={row.beatmap?.id === selectedBeatmapId}
+              />
+            ))}
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -1615,12 +1681,14 @@ interface BenchmarkDiffRowProps {
   coverUrl: string | null;
   labelOptions: string[];
   expected: string;
+  isHidden: boolean;
+  onToggleHidden: (beatmapId: number, hidden: boolean) => void;
   onExpectedChange: (beatmapId: number, value: string) => void;
   onAnalyze: (set: OsuBeatmapset, beatmap: OsuBeatmap) => void;
   isSelected: boolean;
 }
 
-function BenchmarkDiffRow({ row, coverUrl, labelOptions, expected, onExpectedChange, onAnalyze, isSelected }: BenchmarkDiffRowProps) {
+function BenchmarkDiffRow({ row, coverUrl, labelOptions, expected, isHidden, onToggleHidden, onExpectedChange, onAnalyze, isSelected }: BenchmarkDiffRowProps) {
   if (!row.beatmap || !row.beatmapset) return null;
   const beatmap = row.beatmap;
   const beatmapset = row.beatmapset;
@@ -1650,11 +1718,26 @@ function BenchmarkDiffRow({ row, coverUrl, labelOptions, expected, onExpectedCha
           : "border-osu-b3/40 hover:border-osu-b3/70";
 
   return (
-    <div className={`group relative flex min-w-0 flex-col overflow-hidden rounded-md border bg-osu-b5 ${tileBorder} transition-colors`}>
+    <div className={`group relative flex min-w-0 flex-col overflow-hidden rounded-md border bg-osu-b5 ${tileBorder} ${isHidden ? "opacity-50" : ""} transition-colors`}>
       {coverUrl ? (
         <img src={coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-30 transition-opacity group-hover:opacity-40" loading="lazy" />
       ) : null}
       <div className="absolute inset-0 bg-gradient-to-r from-osu-b5/95 via-osu-b5/75 to-osu-b5/40" />
+
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggleHidden(beatmap.id, !isHidden);
+        }}
+        className={`absolute right-1 top-1 z-10 inline-flex h-5 w-5 cursor-pointer items-center justify-center rounded text-osu-f1 transition-all hover:bg-osu-b5/70 hover:text-white ${
+          isHidden ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        }`}
+        title={isHidden ? "Restore diff" : "Hide diff from benchmark"}
+        aria-label={isHidden ? "Restore diff" : "Hide diff from benchmark"}
+      >
+        {isHidden ? <RotateCcw className="h-3 w-3" /> : <X className="h-3 w-3" />}
+      </button>
 
       <button
         type="button"

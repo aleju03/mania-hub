@@ -91,3 +91,12 @@ CREATE TABLE IF NOT EXISTS dan_benchmark_labels (
 
 CREATE INDEX IF NOT EXISTS idx_dan_benchmark_labels_family
 ON dan_benchmark_labels (family);
+
+CREATE TABLE IF NOT EXISTS dan_benchmark_hidden_diffs (
+  beatmap_id INTEGER PRIMARY KEY,
+  family TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_dan_benchmark_hidden_diffs_family
+ON dan_benchmark_hidden_diffs (family);

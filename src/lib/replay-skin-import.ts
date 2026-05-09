@@ -316,8 +316,6 @@ function settingsFromManiaBlock(block: Record<string, string>): Partial<ReplaySk
   if (comboPosition != null) patch.comboPosition = osuManiaStagePositionToReplayPosition(comboPosition);
   if (block.UpsideDown === "1") patch.upscroll = true;
   if (block.UpsideDown === "0") patch.upscroll = false;
-  if (block.KeysUnderNotes === "1") patch.keysUnderNotes = true;
-  if (block.KeysUnderNotes === "0") patch.keysUnderNotes = false;
   return patch;
 }
 

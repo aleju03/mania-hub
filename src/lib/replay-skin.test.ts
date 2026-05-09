@@ -45,7 +45,6 @@ describe("replay skin settings", () => {
       outlineWidth: 2,
       percy: true,
       upscroll: false,
-      keysUnderNotes: false,
       columnWidth: 50,
       columnSpacing: 0,
       noteHeightScale: 50,
