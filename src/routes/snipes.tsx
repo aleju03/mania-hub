@@ -665,14 +665,6 @@ function SnipeRow({
         className="flex items-center gap-2 sm:gap-3 py-3 px-3 sm:px-4 hover:bg-osu-b3/50 transition-colors duration-[120ms] cursor-pointer"
         onClick={() => onToggle(eventKey)}
       >
-        {/* Cover thumb (desktop only) */}
-        {event.beatmapset.cover_url && (
-          <div
-            className="hidden sm:block w-9 h-9 rounded flex-shrink-0 bg-cover bg-center"
-            style={{ backgroundImage: `url(${event.beatmapset.cover_url})` }}
-          />
-        )}
-
         {/* Sniper */}
         <button
           onClick={(e) => {
