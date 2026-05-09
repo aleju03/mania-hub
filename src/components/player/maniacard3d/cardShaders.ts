@@ -15,7 +15,21 @@ uniform float uIntensity;
 uniform vec2 uLight;
 uniform vec3 uTierColor;
 uniform vec4 uAvatarMask;
+uniform vec2 uTextureSize;
+uniform float uAvatarRadius;
 varying vec2 vUv;
+
+float roundedRectMaskPx(vec2 uv, vec4 rectUv, float radiusPx, vec2 textureSize) {
+  vec2 p = uv * textureSize;
+  vec2 rectMin = rectUv.xy * textureSize;
+  vec2 rectSize = rectUv.zw * textureSize;
+  vec2 center = rectMin + rectSize * 0.5;
+
+  vec2 q = abs(p - center) - rectSize * 0.5 + vec2(radiusPx);
+  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - radiusPx;
+
+  return 1.0 - smoothstep(0.0, 2.0, d);
+}
 
 vec3 screen(vec3 base, vec3 blend) {
   return 1.0 - (1.0 - base) * (1.0 - blend);
@@ -108,10 +122,7 @@ void main() {
   // Specular streak (white core along the beam).
   vec3 sweep = vec3(bandSharp * 0.62 + glare * 0.22);
 
-  vec2 avatarMin = uAvatarMask.xy;
-  vec2 avatarMax = uAvatarMask.xy + uAvatarMask.zw;
-  float inAvatar = step(avatarMin.x, vUv.x) * step(avatarMin.y, vUv.y)
-                 * step(vUv.x, avatarMax.x) * step(vUv.y, avatarMax.y);
+  float inAvatar = roundedRectMaskPx(vUv, uAvatarMask, uAvatarRadius, uTextureSize);
   float foilGain = mix(1.0, 0.30, inAvatar);
   float mask = roundedCardMask(vUv);
 

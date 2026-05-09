@@ -49,6 +49,8 @@ export function createOverlayMaterial(data: ManiaCardReadyData, layout: FaceLayo
           avatar.height / CARD_TEXTURE_HEIGHT,
         ),
       },
+      uTextureSize: { value: new Vector2(CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT) },
+      uAvatarRadius: { value: layout.front.avatar.radius },
     },
   });
 }
