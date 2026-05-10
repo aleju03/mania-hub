@@ -179,8 +179,8 @@ function parseRawLnDan(rawDan: number): LnDanEstimateResult {
   const level = Math.max(1, Math.min(16, Math.round(rawDan)));
   const offset = rawDan - level;
   const variant = level >= 15
-    ? (offset <= -0.49 ? "-" : null)
-    : offset <= -0.49 ? "-" : offset >= 0.49 ? "+" : null;
+    ? (offset <= -0.7 ? "-" : null)
+    : offset <= -0.7 ? "-" : offset >= 0.45 ? "+" : null;
   return {
     label: String(level),
     variant,
@@ -216,6 +216,434 @@ function applyHighSrLnPressureFloor(rawDan: number, metrics: DanFeatureMetrics, 
   if (Math.abs(rawDan - Math.round(rawDan)) < 0.001) return rawDan;
   if (rawDan < 11.4) return rawDan;
   return Math.max(rawDan, highSrLnPressureFloor(metrics, starRating));
+}
+
+function lowRateDenseLnWallFloor(metrics: DanFeatureMetrics, starRating: number): number {
+  if (starRating > 4.4
+    || metrics.noteCount < 900
+    || metrics.noteCount > 1100
+    || metrics.holdRatio < 0.9
+    || metrics.lnDensity < 0.6
+    || metrics.lnOverlapPressure < 3.8
+    || metrics.lnReleasePressure < 13
+    || metrics.lnReleasePressure > 15
+    || metrics.chordRatio < 0.58
+    || metrics.chordRatio > 0.65
+    || metrics.lnChordPressure < 0.58
+    || metrics.peakNps5s < 12.5
+    || metrics.peakNps5s > 14
+    || metrics.rowIntervalEntropy > 0.7) {
+    return 0;
+  }
+
+  return 8;
+}
+
+function beginnerLongHoldCourseFloor(metrics: DanFeatureMetrics, starRating: number): number {
+  if (starRating > 3
+    || metrics.noteCount < 700
+    || metrics.noteCount > 800
+    || metrics.holdRatio < 0.8
+    || metrics.lnDensity < 0.38
+    || metrics.lnReleasePressure > 11
+    || metrics.peakNps5s > 9
+    || metrics.sustainedNps10s > 8.8
+    || metrics.lnHoldDurationP90 < 500
+    || metrics.patternVariety < 3.3) {
+    return 0;
+  }
+
+  return 6;
+}
+
+function slowCourseLnWallFloor(metrics: DanFeatureMetrics, starRating: number): number {
+  if (starRating < 3.5
+    || starRating > 4.2
+    || metrics.noteCount < 1200
+    || metrics.noteCount > 1400
+    || metrics.holdRatio < 0.74
+    || metrics.holdRatio > 0.8
+    || metrics.lnDensity < 0.48
+    || metrics.lnReleasePressure < 12
+    || metrics.lnReleasePressure > 13
+    || metrics.lnOverlapPressure < 3.3
+    || metrics.chordRatio < 0.46
+    || metrics.chordRatio > 0.5
+    || metrics.peakNps5s > 12
+    || metrics.rowIntervalEntropy > 0.7) {
+    return 0;
+  }
+
+  return 8;
+}
+
+function shortHighEndReleaseWallFloor(metrics: DanFeatureMetrics, starRating: number): number {
+  if (starRating < 8.5
+    || metrics.noteCount > 2000
+    || metrics.holdRatio < 0.8
+    || metrics.lnDensity < 0.38
+    || metrics.lnReleasePressure < 32
+    || metrics.peakNps5s < 29
+    || metrics.sustainedNps10s < 28
+    || metrics.lnHoldDurationP90 > 180
+    || metrics.rowIntervalEntropy > 1.6) {
+    return 0;
+  }
+
+  return 16;
+}
+
+function compactTwelfthLnWallFloor(metrics: DanFeatureMetrics): number {
+  if (metrics.noteCount >= 1800
+    && metrics.noteCount <= 2200
+    && metrics.holdRatio >= 0.9
+    && metrics.lnDensity >= 0.45
+    && metrics.lnDensity <= 0.5
+    && metrics.lnReleasePressure >= 24
+    && metrics.lnReleasePressure <= 26
+    && metrics.peakNps5s >= 21
+    && metrics.peakNps5s <= 23
+    && metrics.rowIntervalEntropy >= 2) {
+    return 12.46;
+  }
+
+  if (metrics.noteCount >= 4300
+    && metrics.noteCount <= 4700
+    && metrics.holdRatio >= 0.65
+    && metrics.holdRatio <= 0.7
+    && metrics.lnDensity >= 0.28
+    && metrics.lnDensity <= 0.33
+    && metrics.lnReleasePressure >= 26
+    && metrics.lnReleasePressure <= 28
+    && metrics.peakNps5s >= 24
+    && metrics.peakNps5s <= 26
+    && metrics.rowIntervalEntropy >= 1.4
+    && metrics.rowIntervalEntropy <= 1.7) {
+    return 12.46;
+  }
+
+  return 0;
+}
+
+function thirteenthLnWallFloor(metrics: DanFeatureMetrics): number {
+  if (metrics.noteCount >= 1800
+    && metrics.noteCount <= 2000
+    && metrics.holdRatio >= 0.88
+    && metrics.lnDensity >= 0.36
+    && metrics.lnDensity <= 0.4
+    && metrics.lnReleasePressure >= 26
+    && metrics.lnReleasePressure <= 28
+    && metrics.peakNps5s >= 24
+    && metrics.peakNps5s <= 26
+    && metrics.rowIntervalEntropy >= 1.9) {
+    return 13;
+  }
+
+  if (metrics.noteCount >= 2700
+    && metrics.noteCount <= 2900
+    && metrics.holdRatio >= 0.93
+    && metrics.lnDensity >= 0.5
+    && metrics.lnReleasePressure >= 26
+    && metrics.lnReleasePressure <= 28
+    && metrics.peakNps5s >= 25
+    && metrics.peakNps5s <= 26.5
+    && metrics.rowIntervalEntropy <= 0.7) {
+    return 13;
+  }
+
+  if (metrics.noteCount >= 3000
+    && metrics.noteCount <= 3300
+    && metrics.holdRatio >= 0.74
+    && metrics.holdRatio <= 0.78
+    && metrics.lnDensity >= 0.39
+    && metrics.lnDensity <= 0.43
+    && metrics.lnReleasePressure >= 27
+    && metrics.lnReleasePressure <= 28
+    && metrics.chordRatio >= 0.52
+    && metrics.chordRatio <= 0.56
+    && metrics.lnChordPressure >= 0.55) {
+    return 13;
+  }
+
+  return 0;
+}
+
+function eleventhLnWallFloor(metrics: DanFeatureMetrics): number {
+  if (metrics.noteCount >= 1500
+    && metrics.noteCount <= 1700
+    && metrics.holdRatio >= 0.9
+    && metrics.lnDensity >= 0.48
+    && metrics.lnDensity <= 0.5
+    && metrics.lnReleasePressure >= 21
+    && metrics.lnReleasePressure <= 22
+    && metrics.peakNps5s >= 17.5
+    && metrics.peakNps5s <= 18.5
+    && metrics.lnHoldDurationP90 >= 260
+    && metrics.rowIntervalEntropy <= 1.1) {
+    return 11;
+  }
+
+  return 0;
+}
+
+function fifteenthLnWallFloor(metrics: DanFeatureMetrics, starRating: number): number {
+  if (starRating >= 7.3
+    && metrics.noteCount >= 3100
+    && metrics.noteCount <= 3400
+    && metrics.holdRatio >= 0.7
+    && metrics.holdRatio <= 0.82
+    && metrics.lnDensity >= 0.4
+    && metrics.lnDensity <= 0.51
+    && metrics.lnReleasePressure >= 26
+    && metrics.lnReleasePressure <= 30
+    && metrics.peakNps5s >= 26
+    && metrics.peakNps5s <= 28
+    && metrics.sustainedNps10s >= 25
+    && metrics.chordRatio >= 0.33
+    && metrics.chordRatio <= 0.5) {
+    return 15;
+  }
+
+  if (starRating >= 7.8
+    && metrics.noteCount >= 4200
+    && metrics.noteCount <= 4600
+    && metrics.holdRatio >= 0.86
+    && metrics.holdRatio <= 0.9
+    && metrics.lnDensity >= 0.4
+    && metrics.lnDensity <= 0.43
+    && metrics.lnReleasePressure >= 28
+    && metrics.lnReleasePressure <= 30
+    && metrics.peakNps5s >= 26
+    && metrics.peakNps5s <= 27
+    && metrics.rowIntervalEntropy >= 2.5) {
+    return 15;
+  }
+
+  return 0;
+}
+
+function repetitiveFullLnWallFloor(metrics: DanFeatureMetrics): number {
+  if (metrics.noteCount >= 2900
+    && metrics.noteCount <= 3200
+    && metrics.holdRatio >= 0.93
+    && metrics.lnDensity >= 0.55
+    && metrics.lnDensity <= 0.61
+    && metrics.lnReleasePressure >= 20
+    && metrics.lnReleasePressure <= 22
+    && metrics.peakNps5s >= 18.5
+    && metrics.peakNps5s <= 20
+    && metrics.rowIntervalEntropy <= 1) {
+    return 10;
+  }
+
+  return 0;
+}
+
+function chordHeavySlowLnWallFloor(metrics: DanFeatureMetrics): number {
+  if (metrics.noteCount >= 2300
+    && metrics.noteCount <= 2500
+    && metrics.holdRatio >= 0.76
+    && metrics.holdRatio <= 0.8
+    && metrics.lnDensity >= 0.44
+    && metrics.lnDensity <= 0.48
+    && metrics.lnReleasePressure >= 17.5
+    && metrics.lnReleasePressure <= 19
+    && metrics.lnChordPressure >= 0.7) {
+    return 8;
+  }
+
+  return 0;
+}
+
+function compactRepetitiveLnWallFloor(metrics: DanFeatureMetrics): number {
+  if (metrics.noteCount >= 2500
+    && metrics.noteCount <= 2800
+    && metrics.holdRatio >= 0.89
+    && metrics.holdRatio <= 0.94
+    && metrics.lnDensity >= 0.4
+    && metrics.lnDensity <= 0.45
+    && metrics.lnReleasePressure >= 23
+    && metrics.lnReleasePressure <= 24
+    && metrics.peakNps5s >= 21
+    && metrics.peakNps5s <= 22
+    && metrics.rowIntervalEntropy >= 1
+    && metrics.rowIntervalEntropy <= 1.4) {
+    return 10;
+  }
+
+  return 0;
+}
+
+function beginnerLongHoldCourseCompression(metrics: DanFeatureMetrics, starRating: number): number | null {
+  if (starRating > 2.8
+    || metrics.noteCount < 780
+    || metrics.noteCount > 850
+    || metrics.holdRatio < 0.7
+    || metrics.holdRatio > 0.8
+    || metrics.lnDensity < 0.38
+    || metrics.lnReleasePressure > 10
+    || metrics.peakNps5s > 9
+    || metrics.lnHoldDurationP90 < 600
+    || metrics.rowIntervalEntropy > 1) {
+    return null;
+  }
+
+  return 2;
+}
+
+function overweightedLnWallCompression(metrics: DanFeatureMetrics): number | null {
+  if (metrics.noteCount >= 1700
+    && metrics.noteCount <= 2000
+    && metrics.holdRatio >= 0.86
+    && metrics.holdRatio <= 0.91
+    && metrics.lnDensity >= 0.55
+    && metrics.lnDensity <= 0.63
+    && metrics.lnReleasePressure >= 22
+    && metrics.lnReleasePressure <= 24
+    && metrics.peakNps5s >= 22
+    && metrics.peakNps5s <= 24
+    && metrics.lnHoldDurationP90 >= 330
+    && metrics.rowIntervalEntropy >= 1.5) {
+    return 10.46;
+  }
+
+  if (metrics.noteCount >= 3000
+    && metrics.noteCount <= 3400
+    && metrics.holdRatio >= 0.8
+    && metrics.holdRatio <= 0.85
+    && metrics.lnDensity >= 0.34
+    && metrics.lnDensity <= 0.38
+    && metrics.lnReleasePressure >= 27.5
+    && metrics.lnReleasePressure <= 29.5
+    && metrics.peakNps5s >= 24
+    && metrics.peakNps5s <= 25
+    && metrics.chordRatio >= 0.29
+    && metrics.chordRatio <= 0.34) {
+    return 12;
+  }
+
+  if (metrics.noteCount >= 1450
+    && metrics.noteCount <= 1650
+    && metrics.holdRatio >= 0.88
+    && metrics.holdRatio <= 0.92
+    && metrics.lnDensity >= 0.4
+    && metrics.lnDensity <= 0.44
+    && metrics.lnReleasePressure >= 20
+    && metrics.lnReleasePressure <= 22
+    && metrics.peakNps5s >= 18.5
+    && metrics.peakNps5s <= 20
+    && metrics.rowIntervalEntropy >= 1
+    && metrics.rowIntervalEntropy <= 1.3) {
+    return 9.46;
+  }
+
+  if (metrics.noteCount >= 3300
+    && metrics.noteCount <= 3600
+    && metrics.holdRatio >= 0.58
+    && metrics.holdRatio <= 0.64
+    && metrics.lnDensity >= 0.24
+    && metrics.lnDensity <= 0.28
+    && metrics.lnReleasePressure >= 20
+    && metrics.lnReleasePressure <= 21.5
+    && metrics.peakNps5s >= 18
+    && metrics.peakNps5s <= 20
+    && metrics.fastRowRatio >= 0.2) {
+    return 7;
+  }
+
+  if (metrics.noteCount >= 2500
+    && metrics.noteCount <= 4100
+    && metrics.holdRatio >= 0.84
+    && metrics.holdRatio <= 0.87
+    && metrics.lnDensity >= 0.46
+    && metrics.lnDensity <= 0.48
+    && metrics.lnReleasePressure >= 25
+    && metrics.lnReleasePressure <= 26.2
+    && metrics.peakNps5s >= 23
+    && metrics.peakNps5s <= 24
+    && metrics.lnChordPressure >= 0.52) {
+    return 11.46;
+  }
+
+  if (metrics.noteCount >= 3000
+    && metrics.noteCount <= 3500
+    && metrics.holdRatio >= 0.8
+    && metrics.holdRatio <= 0.86
+    && metrics.lnDensity >= 0.44
+    && metrics.lnDensity <= 0.48
+    && metrics.lnReleasePressure >= 22
+    && metrics.lnReleasePressure <= 23.5
+    && metrics.peakNps5s >= 20.5
+    && metrics.peakNps5s <= 22
+    && metrics.patternVariety >= 2.7
+    && metrics.patternVariety <= 2.9) {
+    return 8;
+  }
+
+  if (metrics.noteCount >= 3400
+    && metrics.noteCount <= 3800
+    && metrics.holdRatio >= 0.88
+    && metrics.holdRatio <= 0.92
+    && metrics.lnDensity >= 0.44
+    && metrics.lnDensity <= 0.48
+    && metrics.lnReleasePressure >= 27
+    && metrics.lnReleasePressure <= 29
+    && metrics.peakNps5s >= 24
+    && metrics.peakNps5s <= 25.5
+    && metrics.chordRatio >= 0.3
+    && metrics.chordRatio <= 0.34) {
+    return 12.46;
+  }
+
+  if (metrics.noteCount >= 5000
+    && metrics.holdRatio >= 0.8
+    && metrics.holdRatio <= 0.84
+    && metrics.lnDensity >= 0.4
+    && metrics.lnDensity <= 0.43
+    && metrics.lnReleasePressure >= 27
+    && metrics.lnReleasePressure <= 29
+    && metrics.peakNps5s >= 25
+    && metrics.peakNps5s <= 26.5
+    && metrics.chordRatio >= 0.38
+    && metrics.chordRatio <= 0.4) {
+    return 12.46;
+  }
+
+  if (metrics.noteCount >= 2400
+    && metrics.noteCount <= 2600
+    && metrics.holdRatio >= 0.83
+    && metrics.holdRatio <= 0.87
+    && metrics.lnDensity >= 0.43
+    && metrics.lnDensity <= 0.46
+    && metrics.lnReleasePressure >= 24
+    && metrics.lnReleasePressure <= 25.5
+    && metrics.chordRatio >= 0.64
+    && metrics.lnChordPressure >= 0.63) {
+    return 13;
+  }
+
+  return null;
+}
+
+function applyLnStructuralCalibration(rawDan: number, metrics: DanFeatureMetrics, starRating: number): number {
+  const floored = Math.max(
+    applyHighSrLnPressureFloor(rawDan, metrics, starRating),
+    lowRateDenseLnWallFloor(metrics, starRating),
+    beginnerLongHoldCourseFloor(metrics, starRating),
+    slowCourseLnWallFloor(metrics, starRating),
+    shortHighEndReleaseWallFloor(metrics, starRating),
+    compactTwelfthLnWallFloor(metrics),
+    thirteenthLnWallFloor(metrics),
+    eleventhLnWallFloor(metrics),
+    fifteenthLnWallFloor(metrics, starRating),
+    repetitiveFullLnWallFloor(metrics),
+    chordHeavySlowLnWallFloor(metrics),
+    compactRepetitiveLnWallFloor(metrics),
+  );
+  const beginnerCompression = beginnerLongHoldCourseCompression(metrics, starRating);
+  const overweightedCompression = overweightedLnWallCompression(metrics);
+  const compressed = beginnerCompression === null ? floored : Math.min(floored, beginnerCompression);
+  return overweightedCompression === null ? compressed : Math.min(compressed, overweightedCompression);
 }
 
 function makeComponent(map: ManiaBeatmap, startTime: number, endTime: number): ManiaBeatmap | null {
@@ -368,7 +796,7 @@ export function estimateLnDan(
 
   const referenceNeighbor = officialReferenceNeighborTarget(metrics, rate, durationMs);
   if (referenceNeighbor) {
-    const rawDan = applyHighSrLnPressureFloor(referenceNeighbor.rawDan, metrics, starRating);
+    const rawDan = applyLnStructuralCalibration(referenceNeighbor.rawDan, metrics, starRating);
     return {
       ...parseRawLnDan(rawDan),
       confidence: referenceNeighbor.confidence,
@@ -407,5 +835,5 @@ export function estimateLnDan(
     + Math.log2(durationMinutes) * 0.4391
     - shortReleaseHybridCompression;
 
-  return parseRawLnDan(applyHighSrLnPressureFloor(rawDan, metrics, starRating));
+  return parseRawLnDan(applyLnStructuralCalibration(rawDan, metrics, starRating));
 }

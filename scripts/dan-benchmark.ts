@@ -34,6 +34,7 @@ interface CliOptions {
   classifier: ClassifierId;
   family: DanBenchmarkFamily;
   includeUnlabeled: boolean;
+  debug: boolean;
   json: boolean;
   rate: number;
 }
@@ -46,6 +47,9 @@ interface RowResult {
   predicted: string | null;
   predictedFamily: string | null;
   predictedConfidence: number | null;
+  predictedRawDan: number | null;
+  predictedSrProxy: number | null;
+  debug?: Pick<DanEstimate, "metrics" | "skillScores" | "debug">;
   match: MatchKind;
   error: string | null;
 }
@@ -70,6 +74,7 @@ function usage(exitCode = 2): never {
     "  --rate N                 Playback rate. Default: 1",
     "  --cache-dir DIR          Beatmapset download cache. Default: cache/dan-analyze",
     "  --include-unlabeled      Show diffs without an expected label (never counted toward accuracy)",
+    "  --debug                  Include metrics and scoring internals in JSON output",
     "  --json                   Emit structured JSON instead of a table",
     "",
     "Requires TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in the environment (or .env).",
@@ -83,6 +88,7 @@ function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = {
     cacheDir: DEFAULT_CACHE_DIR,
     classifier: "aleju",
+    debug: false,
     family: "normal",
     includeUnlabeled: false,
     json: false,
@@ -95,6 +101,8 @@ function parseArgs(argv: string[]): CliOptions {
       usage(0);
     } else if (arg === "--json") {
       options.json = true;
+    } else if (arg === "--debug") {
+      options.debug = true;
     } else if (arg === "--include-unlabeled") {
       options.includeUnlabeled = true;
     } else if (arg === "--family") {
@@ -226,6 +234,10 @@ function computeMatch(predicted: string | null, expected: string | null, predict
   const expectedBase = splitVariant(expected).base;
   if (predictedBase && predictedBase === expectedBase) return "base";
   return "wrong";
+}
+
+function comparableDanLabel(estimate: DanEstimate): string {
+  return `${estimate.label}${estimate.variant ?? ""}`;
 }
 
 function pad(value: unknown, width: number, align: "left" | "right" = "left"): string {
@@ -372,6 +384,8 @@ async function main(): Promise<void> {
         predicted: null,
         predictedFamily: null,
         predictedConfidence: null,
+        predictedRawDan: null,
+        predictedSrProxy: null,
         match: "unlabeled",
         error: null,
       });
@@ -394,7 +408,16 @@ async function main(): Promise<void> {
       target.predicted = estimate.displayName;
       target.predictedFamily = estimate.family;
       target.predictedConfidence = estimate.confidence;
-      target.match = computeMatch(estimate.displayName, target.expected, estimate.label);
+      target.predictedRawDan = estimate.rawDan;
+      target.predictedSrProxy = estimate.estimatedSr;
+      if (options.debug) {
+        target.debug = {
+          metrics: estimate.metrics,
+          skillScores: estimate.skillScores,
+          debug: estimate.debug,
+        };
+      }
+      target.match = computeMatch(comparableDanLabel(estimate), target.expected, estimate.label);
       if (!setShells[setIndex].title) {
         setShells[setIndex].title = title;
         setShells[setIndex].artist = artist;

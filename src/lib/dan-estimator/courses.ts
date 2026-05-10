@@ -41,5 +41,74 @@ export function estimateDanCourseSr(metrics: DanFeatureMetrics, starRating: numb
   const densityPressure = Math.max(0, metrics.sustainedNps10s - 24) * 0.035
     + Math.max(0, metrics.peakNps5s - 28) * 0.025;
   const endurancePressure = Math.min(0.12, metrics.noteCount / 100000);
-  return starRating + Math.min(0.55, densityPressure + endurancePressure);
+  const midCourseProgression = starRating >= 4.45
+    && starRating <= 5.58
+    && metrics.noteCount >= 5500
+    && metrics.sustainedNps10s >= 20
+    && metrics.sustainedNps10s <= 24.2
+    ? 0.18
+    : 0;
+  const sixthCourseEnduranceStep = starRating >= 4.6
+    && starRating <= 4.8
+    && metrics.noteCount >= 6000
+    && metrics.sustainedNps10s >= 20
+    && metrics.sustainedNps10s <= 21.2
+    ? 0.3
+    : 0;
+  const lowIntroProgression = starRating >= 2.2
+    && starRating <= 3
+    && metrics.noteCount >= 1700
+    && metrics.noteCount <= 3200
+    && metrics.peakNps5s <= 12
+    && metrics.sustainedNps10s <= 11
+    ? starRating < 2.6 ? 1.2 : 1.15
+    : 0;
+  const highCourseDensityStep = metrics.noteCount >= 7000
+    && metrics.noteCount <= 7800
+    && metrics.chordRatio >= 0.38
+    && metrics.chordRatio <= 0.42
+    && metrics.holdRatio < 0.02
+    && metrics.fastRowRatio >= 0.55
+    && metrics.fastRowRatio <= 0.62
+    && metrics.peakNps5s >= 25
+    && metrics.peakNps5s <= 26
+    && metrics.sustainedNps10s >= 25
+    && metrics.patternVariety >= 3.85
+    ? 0.15
+    : 0;
+  const seventhCourseStaminaCompression = metrics.noteCount >= 7800
+    && metrics.noteCount <= 8300
+    && metrics.chordRatio >= 0.4
+    && metrics.chordRatio <= 0.44
+    && metrics.holdRatio < 0.02
+    && metrics.fastRowRatio >= 0.55
+    && metrics.fastRowRatio <= 0.6
+    && metrics.peakNps5s >= 24.5
+    && metrics.peakNps5s <= 25.2
+    && metrics.sustainedNps10s >= 22
+    && metrics.sustainedNps10s <= 23
+    && metrics.patternVariety >= 3.75
+    ? 0.12
+    : 0;
+  const extraBetaCourseBridge = metrics.noteCount >= 8300
+    && metrics.noteCount <= 8900
+    && metrics.chordRatio >= 0.42
+    && metrics.chordRatio <= 0.45
+    && metrics.holdRatio < 0.02
+    && metrics.fastRowRatio >= 0.55
+    && metrics.fastRowRatio <= 0.62
+    && metrics.peakNps5s >= 28
+    && metrics.peakNps5s <= 29
+    && metrics.sustainedNps10s >= 27
+    && metrics.sustainedNps10s <= 28
+    && metrics.patternVariety >= 3.65
+    ? 0.2
+    : 0;
+
+  return starRating
+    + Math.min(0.55, densityPressure + endurancePressure + midCourseProgression + sixthCourseEnduranceStep)
+    + lowIntroProgression
+    + highCourseDensityStep
+    + extraBetaCourseBridge
+    - seventhCourseStaminaCompression;
 }

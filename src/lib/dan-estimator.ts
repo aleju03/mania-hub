@@ -74,7 +74,7 @@ export function estimateDan(map: ManiaBeatmap, input: DanEstimateInput = {}): Da
   const estimatedSr = isCourse
     ? estimateDanCourseSr(metrics, starRating, skillScores[skillFamily])
     : skillScores[skillFamily];
-  const rawDan = srToRawDan(estimatedSr, skillFamily);
+  const rawDan = srToRawDan(estimatedSr, skillFamily, { calibrate: !isCourse });
   const parsed = parseDan(rawDan);
   const confidence = Math.max(
     0.15,

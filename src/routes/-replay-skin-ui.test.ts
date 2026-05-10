@@ -54,7 +54,7 @@ describe("replay skin settings UI", () => {
     const controlsSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplayControls.tsx"), "utf8");
 
     expect(routeSource).toContain("setInputOverlayOptions");
-    expect(controlsSource).toContain("Input overlay color");
+    expect(controlsSource).toContain("Color");
     expect(controlsSource).toContain("inputOverlayOnly");
   });
 
