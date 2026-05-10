@@ -32,7 +32,7 @@ export const Route = createFileRoute("/")({
       origin: match.context.origin,
       imageCountry: country,
       imageKind: country ? "home" : undefined,
-      social: Boolean(country),
+      social: true,
     });
   },
   component: HomePage,
