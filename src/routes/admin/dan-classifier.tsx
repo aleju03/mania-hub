@@ -1412,6 +1412,10 @@ function BenchmarkView({
     return splitExpectedLabel(expected).base === row.estimate.label;
   }).length, 0);
   const labeledCount = sets.reduce((sum, set) => sum + set.rows.filter((row) => isVisibleRow(row) && row.beatmap && expectedLabels.has(row.beatmap.id)).length, 0);
+  const matchedCount = exactMatchCount + baseMatchCount;
+  const wrongCount = Math.max(0, labeledCount - matchedCount);
+  const modelAccuracy = labeledCount > 0 ? (matchedCount / labeledCount) * 100 : 0;
+  const exactAccuracy = labeledCount > 0 ? (exactMatchCount / labeledCount) * 100 : 0;
   const exportBusy = exportState.status === "working";
   const getExportButtonStatus = (action: BenchmarkExportAction): BenchmarkExportStatus => (
     exportState.action === action ? exportState.status : "idle"
@@ -1469,11 +1473,20 @@ function BenchmarkView({
             <span className="font-bold text-osu-c1">{readyCount}</span>/{totalDiffs}
           </div>
           {labeledCount > 0 && labelsLoaded ? (
-            <div title={`${exactMatchCount} exact, ${baseMatchCount} base-only, ${labeledCount - exactMatchCount - baseMatchCount} wrong`}>
-              <span className="font-bold text-emerald-300">{exactMatchCount}</span>
-              {baseMatchCount > 0 ? <span className="text-osu-yellow">+{baseMatchCount}</span> : null}
-              /{labeledCount}
-            </div>
+            <>
+              <div title={`${exactMatchCount} exact, ${baseMatchCount} base-only, ${wrongCount} wrong`}>
+                <span className="font-bold text-emerald-300">{exactMatchCount}</span>
+                {baseMatchCount > 0 ? <span className="text-osu-yellow">+{baseMatchCount}</span> : null}
+                /{labeledCount}
+              </div>
+              <div
+                className="inline-flex items-center gap-1 rounded border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 font-bold text-emerald-300"
+                title={`Total model accuracy: ${matchedCount}/${labeledCount} base-or-better. Exact accuracy: ${exactAccuracy.toFixed(1)}%. ${wrongCount} wrong.`}
+              >
+                <span className="uppercase tracking-wide text-osu-f1">Accuracy</span>
+                <span className="tabular-nums">{modelAccuracy.toFixed(1)}%</span>
+              </div>
+            </>
           ) : null}
           {hiddenCount > 0 ? (
             <button
