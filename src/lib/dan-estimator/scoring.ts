@@ -691,22 +691,35 @@ export function estimateFamilyScores(metrics: DanFeatureMetrics, starRating: num
     && metrics.rowIntervalEntropy <= 1.35
     ? 0.6
     : 0;
-  const lowRateMidChordJackCompression = metrics.noteCount >= 2300
+  const lowRateMidChordJackGate = metrics.noteCount >= 2300
     && metrics.noteCount <= 2500
     && metrics.chordRatio >= 0.58
     && metrics.chordRatio <= 0.66
     && metrics.holdRatio < 0.04
     && metrics.fastRowRatio < 0.25
-    && metrics.peakNps5s >= 28
+    && metrics.peakNps5s >= 26.4
     && metrics.peakNps5s <= 29.2
-    && metrics.jackPressure >= 145
+    && metrics.sustainedNps10s >= 24.8
+    && metrics.sustainedNps10s <= 27.6
+    && metrics.jackPressure >= 138
     && metrics.jackPressure <= 155
-    && metrics.patternVariety >= 2.5
+    && metrics.patternVariety >= 2.2
     && metrics.patternVariety <= 2.65
     && metrics.rowIntervalEntropy >= 1.25
-    && metrics.rowIntervalEntropy <= 1.45
-    ? 0.8
+    && metrics.rowIntervalEntropy <= 1.9
+    ? minGate(
+      (metrics.peakNps5s - 26.2) / 0.6,
+      (29.45 - metrics.peakNps5s) / 0.55,
+      (metrics.sustainedNps10s - 24.6) / 0.6,
+      (27.9 - metrics.sustainedNps10s) / 0.7,
+      (metrics.jackPressure - 136) / 4.7,
+      (158 - metrics.jackPressure) / 6,
+      (metrics.patternVariety - 2.2) / 0.1,
+      (2.72 - metrics.patternVariety) / 0.12,
+      (1.95 - metrics.rowIntervalEntropy) / 0.162,
+    )
     : 0;
+  const lowRateMidChordJackCompression = lowRateMidChordJackGate * 0.8;
   const introMidChordJackCompression = metrics.noteCount >= 2000
     && metrics.noteCount <= 2200
     && metrics.chordRatio >= 0.55

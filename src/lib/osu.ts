@@ -4098,7 +4098,7 @@ const DAN_ESTIMATE_CONCURRENCY = 6;
 
 function danCacheKey(beatmapId: number, rate: number): string {
   const r = Math.round(rate * 100);
-  return r === 100 ? `dan:v1:${beatmapId}` : `dan:v1:${beatmapId}:r${r}`;
+  return r === 100 ? `dan:v2:${beatmapId}` : `dan:v2:${beatmapId}:r${r}`;
 }
 
 interface DanEstimateRequest {
