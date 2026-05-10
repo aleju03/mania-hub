@@ -165,16 +165,16 @@ interface BenchmarkExportRow {
   family: DanBenchmarkFamily;
   beatmapsetId: number;
   beatmapId: number;
-  artist: string;
   title: string;
-  creator: string;
   version: string;
   sr: number;
+  srProxy: number | null;
+  rawDan: number | null;
+  confidence: number | null;
   expectedDan: string | null;
   detectedDan: string | null;
   detectedFamily: string | null;
   match: boolean | null;
-  osuUrl: string;
 }
 
 type BenchmarkExportDataset = Record<DanBenchmarkFamily, BenchmarkExportRow[]>;
@@ -193,16 +193,16 @@ const BENCHMARK_EXPORT_FAMILIES: DanBenchmarkFamily[] = ["normal", "ln"];
 const BENCHMARK_EXPORT_COLUMNS: BenchmarkExportColumn[] = [
   { key: "beatmapsetId", label: "Beatmapset ID", width: 90, type: "number" },
   { key: "beatmapId", label: "Beatmap ID", width: 85, type: "number" },
-  { key: "artist", label: "Artist", width: 160 },
   { key: "title", label: "Title", width: 190 },
-  { key: "creator", label: "Creator", width: 120 },
   { key: "version", label: "Difficulty", width: 220 },
   { key: "sr", label: "SR", width: 55, type: "number" },
+  { key: "srProxy", label: "SR Proxy", width: 75, type: "number" },
+  { key: "rawDan", label: "Raw Dan", width: 75, type: "number" },
+  { key: "confidence", label: "Confidence", width: 82, type: "number" },
   { key: "expectedDan", label: "Expected Dan", width: 95 },
   { key: "detectedDan", label: "Detected Dan", width: 95 },
   { key: "detectedFamily", label: "Detected Family", width: 105 },
   { key: "match", label: "Match", width: 65 },
-  { key: "osuUrl", label: "osu! URL", width: 250 },
 ];
 
 const XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -217,6 +217,15 @@ function getBenchmarkExportCellValue(row: BenchmarkExportRow, key: BenchmarkExpo
   }
   if (key === "sr") {
     return Number(row.sr.toFixed(2));
+  }
+  if (key === "srProxy") {
+    return row.srProxy == null ? "" : Number(row.srProxy.toFixed(2));
+  }
+  if (key === "rawDan") {
+    return row.rawDan == null ? "" : Number(row.rawDan.toFixed(2));
+  }
+  if (key === "confidence") {
+    return row.confidence == null ? "" : Number(row.confidence.toFixed(2));
   }
   return row[key] ?? "";
 }
@@ -1343,15 +1352,15 @@ function BenchmarkView({
             beatmapsetId: set.beatmapset.id,
             beatmapId: row.beatmap.id,
             title: set.beatmapset.title,
-            artist: set.beatmapset.artist,
-            creator: set.beatmapset.creator,
             version: row.beatmap.version,
             sr: row.beatmap.difficulty_rating,
+            srProxy: row.estimate?.estimatedSr ?? null,
+            rawDan: row.estimate?.rawDan ?? null,
+            confidence: row.estimate?.confidence ?? null,
             expectedDan,
             detectedDan,
             detectedFamily: row.estimate?.family ?? null,
             match: expectedBase && detectedBase ? expectedBase === detectedBase : null,
-            osuUrl: `https://osu.ppy.sh/beatmapsets/${set.beatmapset.id}#mania/${row.beatmap.id}`,
           });
         }
       }
