@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   getUser,
-  getUserProfileInsights,
   getUserScoresBestWindow,
   getUserScoresRecent,
 } from "../../lib/osu";
@@ -32,7 +31,8 @@ import { DanBadge } from "../../components/ui/DanBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
 import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCard3DPanel as ManiaCardPanel } from "../../components/player/maniacard3d/ManiaCard3DPanel";
-import type { OsuScore, OsuUser, UserProfileInsights, InsightScoreSnapshot } from "../../lib/types";
+import type { InsightScoreSnapshot, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
+import { calculateUserProfileInsights } from "../../lib/profile-insights";
 import { pageSeo, playerOgImagePath } from "../../lib/seo";
 import { getRankTierClass } from "../../lib/rankings";
 import { useAuth } from "../../lib/auth-context";
@@ -40,18 +40,16 @@ import { useAuth } from "../../lib/auth-context";
 const userRequestCache = new Map<string, Promise<OsuUser>>();
 const userRecentRequestCache = new Map<number, Promise<OsuScore[]>>();
 const userBestWindowRequestCache = new Map<number, Promise<OsuScore[]>>();
-const userProfileInsightsRequestCache = new Map<number, Promise<UserProfileInsights>>();
 const userDataCache = new Map<string, { data: OsuUser; expiresAt: number }>();
 const userRecentDataCache = new Map<number, { data: OsuScore[]; expiresAt: number }>();
 const userBestWindowDataCache = new Map<number, { data: OsuScore[]; expiresAt: number }>();
-const userProfileInsightsDataCache = new Map<number, { data: UserProfileInsights; expiresAt: number }>();
 const USER_CLIENT_CACHE_TTL = 2 * 60 * 1000;
 const USER_RECENT_CLIENT_CACHE_TTL = 60 * 1000;
 const USER_BEST_WINDOW_CLIENT_CACHE_TTL = 60 * 1000;
-const USER_PROFILE_INSIGHTS_CLIENT_CACHE_TTL = 10 * 60 * 1000;
 const INITIAL_SCORE_BATCH_SIZE = 5;
 const SHOW_MORE_BATCH_SIZE = 50;
 const BEST_SCORES_WINDOW_SIZE = 200;
+const RECENT_PRIORITY_DEFER_MS = 1200;
 const TUNG_TUNG_SAHUR_AUDIO_SRC = "/audio/tung-tung-sahur-keycap.mp3";
 const TUNG_TUNG_SAHUR_GLOW_COLORS = ["#38d9ff", "#ff3f57", "#8bff3f", "#b45cff", "#ffd53d", "#ff7a2f"];
 const TUNG_TUNG_SAHUR_BASE_REST = { y: 0, scaleY: 1 };
@@ -183,36 +181,6 @@ function sortBestScores(scores: OsuScore[], sort: BestSort): OsuScore[] {
   return copy;
 }
 
-function scoreToInsightSnapshot(score: OsuScore): InsightScoreSnapshot {
-  const display = getScoreDisplayValues(score);
-
-  return {
-    title: score.beatmapset?.title ?? "Unknown",
-    artist: score.beatmapset?.artist ?? "",
-    version: score.beatmap?.version ?? "",
-    pp: score.pp,
-    rank: display.rank,
-    coverUrl: score.beatmapset?.covers?.cover ?? "",
-    beatmapUrl: score.beatmap?.url ?? `https://osu.ppy.sh/b/${score.beatmap?.id ?? 0}`,
-    date: getScoreTimestamp(score) ?? "",
-    mods: getModAcronyms(score.mods),
-  };
-}
-
-function getTopPlayDateExtremes(scores: OsuScore[]): Pick<UserProfileInsights, "newestTopPlay" | "oldestTopPlay"> | null {
-  const datedScores = scores
-    .map((score) => ({ score, ms: getScoreTimeMs(score) }))
-    .filter(({ ms }) => Number.isFinite(ms) && ms > 0)
-    .sort((a, b) => a.ms - b.ms);
-
-  if (datedScores.length === 0) return null;
-
-  return {
-    newestTopPlay: scoreToInsightSnapshot(datedScores[datedScores.length - 1].score),
-    oldestTopPlay: scoreToInsightSnapshot(datedScores[0].score),
-  };
-}
-
 export function cycleModFilterMode(current: ModFilterMode | undefined): ModFilterMode | undefined {
   if (current === undefined) return "include";
   if (current === "include") return "exclude";
@@ -268,31 +236,32 @@ function dedupeScores(scores: OsuScore[]): OsuScore[] {
 }
 
 function loadUserCached(username: string): Promise<OsuUser> {
+  const cacheKey = username.trim().toLowerCase();
   const now = Date.now();
-  const cachedData = userDataCache.get(username);
+  const cachedData = userDataCache.get(cacheKey);
   if (cachedData && cachedData.expiresAt > now) {
     return Promise.resolve(cachedData.data);
   }
   if (cachedData) {
-    userDataCache.delete(username);
+    userDataCache.delete(cacheKey);
   }
 
-  const cached = userRequestCache.get(username);
+  const cached = userRequestCache.get(cacheKey);
   if (cached) return cached;
 
   const request = getUser({ data: { key: username } })
     .then((user) => {
-      userDataCache.set(username, {
+      userDataCache.set(cacheKey, {
         data: user,
         expiresAt: Date.now() + USER_CLIENT_CACHE_TTL,
       });
       return user;
     })
     .finally(() => {
-      userRequestCache.delete(username);
+      userRequestCache.delete(cacheKey);
     });
 
-  userRequestCache.set(username, request);
+  userRequestCache.set(cacheKey, request);
   return request;
 }
 
@@ -313,11 +282,12 @@ function loadUserRecentCached(userId: number): Promise<OsuScore[]> {
     data: { userId, limit: INITIAL_SCORE_BATCH_SIZE, offset: 0, include_fails: true },
   })
     .then((scores) => {
+      const dedupedScores = dedupeScores(scores);
       userRecentDataCache.set(userId, {
-        data: scores,
+        data: dedupedScores,
         expiresAt: Date.now() + USER_RECENT_CLIENT_CACHE_TTL,
       });
-      return scores;
+      return dedupedScores;
     })
     .finally(() => {
       userRecentRequestCache.delete(userId);
@@ -353,35 +323,6 @@ function loadUserBestWindowCached(userId: number): Promise<OsuScore[]> {
     });
 
   userBestWindowRequestCache.set(userId, request);
-  return request;
-}
-
-function loadUserProfileInsightsCached(userId: number): Promise<UserProfileInsights> {
-  const now = Date.now();
-  const cachedData = userProfileInsightsDataCache.get(userId);
-  if (cachedData && cachedData.expiresAt > now) {
-    return Promise.resolve(cachedData.data);
-  }
-  if (cachedData) {
-    userProfileInsightsDataCache.delete(userId);
-  }
-
-  const cached = userProfileInsightsRequestCache.get(userId);
-  if (cached) return cached;
-
-  const request = getUserProfileInsights({ data: { userId } })
-    .then((insights) => {
-      userProfileInsightsDataCache.set(userId, {
-        data: insights,
-        expiresAt: Date.now() + USER_PROFILE_INSIGHTS_CLIENT_CACHE_TTL,
-      });
-      return insights;
-    })
-    .finally(() => {
-      userProfileInsightsRequestCache.delete(userId);
-    });
-
-  userProfileInsightsRequestCache.set(userId, request);
   return request;
 }
 
@@ -476,12 +417,52 @@ function PlayerPage() {
     if (!user) return;
 
     let cancelled = false;
+    const timeout = tab === "recent"
+      ? window.setTimeout(loadBestWindow, RECENT_PRIORITY_DEFER_MS)
+      : null;
+
+    if (timeout == null) loadBestWindow();
+
+    function loadBestWindow() {
+      setLoadingInsights(true);
+      // The 200-score window unlocks filters, show-more, and profile insights.
+      loadUserBestWindowCached(user!.id)
+        .then((windowScores) => {
+          if (cancelled) return;
+          const dedupedScores = dedupeScores(windowScores);
+          setBest(dedupedScores);
+          setBestWindowLoaded(true);
+          setBestError(null);
+          setProfileInsights(calculateUserProfileInsights(dedupedScores));
+          setInsightsError(null);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setBestError("Couldn't load top plays right now.");
+          setInsightsError("Couldn't load profile insights right now.");
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setLoadingInsights(false);
+        });
+    }
+
+    return () => {
+      cancelled = true;
+      if (timeout != null) window.clearTimeout(timeout);
+    };
+  }, [tab, user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    let cancelled = false;
     setLoadingRecent(true);
 
     loadUserRecentCached(user.id)
       .then((recentScores) => {
         if (cancelled) return;
-        setRecent(dedupeScores(recentScores));
+        setRecent(recentScores);
         setRecentHasMore(recentScores.length === INITIAL_SCORE_BATCH_SIZE);
         setRecentError(null);
       })
@@ -492,46 +473,6 @@ function PlayerPage() {
       .finally(() => {
         if (cancelled) return;
         setLoadingRecent(false);
-      });
-
-    // Single source of truth for the Best tab: the 200-score window also
-    // backs the initial 5-row paint. Skeleton stays up until this resolves.
-    loadUserBestWindowCached(user.id)
-      .then((windowScores) => {
-        if (cancelled) return;
-        setBest(windowScores);
-        setBestWindowLoaded(true);
-        setBestError(null);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setBestError("Couldn't load top plays right now.");
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    let cancelled = false;
-    setLoadingInsights(true);
-
-    loadUserProfileInsightsCached(user.id)
-      .then((insights) => {
-        if (cancelled) return;
-        setProfileInsights(insights);
-        setInsightsError(null);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setInsightsError("Couldn't load profile insights right now.");
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoadingInsights(false);
       });
 
     return () => {
@@ -621,13 +562,7 @@ function PlayerPage() {
     () => getAvailableKeyModes([...best, ...recent]),
     [best, recent],
   );
-  const displayedProfileInsights = useMemo(() => {
-    if (!profileInsights) return null;
-    if (!bestWindowLoaded || best.length === 0) return profileInsights;
-
-    const topPlayExtremes = getTopPlayDateExtremes(best);
-    return topPlayExtremes ? { ...profileInsights, ...topPlayExtremes } : profileInsights;
-  }, [best, bestWindowLoaded, profileInsights]);
+  const displayedProfileInsights = profileInsights;
 
   const cycleBestMod = useCallback((mod: string) => {
     setBestModFilter((prev) => {
@@ -656,7 +591,7 @@ function PlayerPage() {
   }, []);
 
   if (loadingUser && !user) {
-    return <PlayerPageSkeleton />;
+    return <PlayerPageSkeleton tab={tab} onTabChange={setTab} devMode={devMode} />;
   }
 
   if (userError || !user) {
@@ -680,9 +615,7 @@ function PlayerPage() {
     )
     : keyFilteredScores;
   const visibleScores = filteredScores.slice(0, currentVisibleCount);
-  // Best is now backed entirely by the 200-score window, so its loading state
-  // is just whether that window has resolved.
-  const loadingBest = !bestWindowLoaded && !bestError;
+  const loadingBest = best.length === 0 && !bestWindowLoaded && !bestError;
   const loadingScores = tab === "best" ? loadingBest : loadingRecent;
   const scoresError = tab === "best" ? bestError : recentError;
   const currentHasMore = tab === "best" ? !bestWindowLoaded : recentHasMore;
@@ -699,10 +632,10 @@ function PlayerPage() {
     ? "loading"
     : isSettlingInitialFilteredView
       ? "settling"
-      : scoresError
-        ? "error"
-        : visibleScores.length > 0
-          ? "loaded"
+      : visibleScores.length > 0
+        ? "loaded"
+        : scoresError
+          ? "error"
           : "empty";
 
   const avatarSrc = user.avatar_url;
@@ -1528,7 +1461,15 @@ function TungTungSahurKeycap() {
   );
 }
 
-function PlayerPageSkeleton() {
+function PlayerPageSkeleton({
+  tab,
+  onTabChange,
+  devMode,
+}: {
+  tab: PlayerTab;
+  onTabChange: (tab: PlayerTab) => void;
+  devMode: boolean;
+}) {
   return (
     <div className="flex-1 bg-osu-b5">
       <div className="relative h-[220px] sm:h-[280px] overflow-hidden bg-osu-b4">
@@ -1593,6 +1534,23 @@ function PlayerPageSkeleton() {
                 <Skeleton className="h-4 w-40 mt-2" />
                 <Skeleton className="h-3 w-32 mt-1" />
               </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-5 pt-1 border-t border-osu-b3/30">
+          <div className="flex flex-wrap">
+            {((["best", "recent", ...(devMode ? ["card"] : [])]) as PlayerTab[]).map((t) => (
+              <button
+                key={t}
+                onClick={() => onTabChange(t)}
+                className={`px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] capitalize ${tab === t
+                    ? "text-osu-c1 border-b-2 border-osu-h1"
+                    : "text-osu-f1 hover:text-osu-l2"
+                  }`}
+              >
+                {t === "best" ? "Best Performance" : t === "recent" ? "Recent Plays" : "Maniacard"}
+              </button>
             ))}
           </div>
         </div>
