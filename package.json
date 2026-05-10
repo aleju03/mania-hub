@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "dan:analyze": "vite-node scripts/dan-analyze.ts",
+    "dan:benchmark": "node --env-file-if-exists=.env node_modules/vite-node/vite-node.mjs scripts/dan-benchmark.ts",
     "replay:validate": "node --env-file-if-exists=.env scripts/replay-validate.ts",
     "db:init": "turso db shell mania-hub < db/schema.sql",
     "db:inspect": "turso db shell mania-hub",

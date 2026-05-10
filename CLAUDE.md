@@ -11,6 +11,7 @@ osu!mania hub - a TanStack Start (SSR React) + Vite app for osu!mania data. Defa
 - `npm run dev` - dev server on port 3000
 - `npm run preview` - serve a production build locally
 - `npm run dan:analyze -- <path|beatmapsetId|osuUrl>` - diagnose dan/LN classifier output for local `.osu`/`.osz` files or downloaded sets. Useful flags: `--rate 1,1.5`, `--segments`, `--explain`, `--json`, `--neighbors N`, `--sr N`. Use `--explain` for calibration/debugging (shows confidence, LN distribution, segmentation, top skill families, nearest-reference deltas); default table is best for bulk comparisons.
+- `npm run dan:benchmark` - run the dan classifier against the curated benchmark beatmapsets and compare predicted dan vs the expected labels from Turso (same dataset as the admin /admin/dan-classifier benchmark tab). Flags: `--family normal|ln`, `--classifier aleju|daniel`, `--rate N`, `--json`, `--include-unlabeled`. Requires `TURSO_DATABASE_URL` / `TURSO_AUTH_TOKEN`. For machine-readable output use `npm run --silent dan:benchmark -- --json` so npm's header lines don't pollute stdout.
 - `npm run replay:validate` - runs `scripts/replay-validate.ts` with `.env` if present
 - `npm run db:init` - initialize Turso DB from `db/schema.sql`
 - `npm run db:inspect` - open interactive Turso shell

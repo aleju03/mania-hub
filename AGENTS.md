@@ -19,6 +19,7 @@ Important routes include `index.tsx`, `rankings.tsx`, `tracker.tsx`, `top-plays.
 - `npm run preview` serves the production build locally.
 - `npm run test` runs Vitest once.
 - `npm run dan:analyze -- <path|beatmapsetId|osuUrl>` diagnoses dan/LN classifier output for local `.osu`/`.osz` files or downloaded beatmapsets; useful flags include `--rate 1,1.5`, `--segments`, `--explain`, `--json`, `--neighbors N`, and `--sr N`. Use `--explain` for calibration/debugging work because it shows confidence, LN distributions, segmentation, top skill families, and nearest-reference deltas; use the default table for bulk comparisons and `--json` for machine-readable details.
+- `npm run dan:benchmark` runs the dan classifier against curated benchmark beatmapsets and compares predicted dan against expected labels from Turso, using the same dataset as the admin `/admin/dan-classifier` benchmark tab. Useful flags include `--family normal|ln`, `--classifier aleju|daniel`, `--rate N`, `--json`, and `--include-unlabeled`. Requires `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`; for machine-readable output use `npm run --silent dan:benchmark -- --json` so npm header lines do not pollute stdout.
 - `npm run replay:validate` runs `scripts/replay-validate.ts` with `.env` if present.
 - `npm run db:init` initializes the Turso database from `db/schema.sql`.
 - `npm run db:inspect` opens the Turso shell.
