@@ -921,7 +921,7 @@ function PlayerPage() {
                 type="button"
                 onClick={() => setBpmModalOpen(false)}
                 aria-label="Close"
-                className="absolute top-3 right-3 z-10 w-7 h-7 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
+                className="absolute top-3 right-3 z-20 w-7 h-7 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <path d="M1 1l12 12M13 1L1 13" />
