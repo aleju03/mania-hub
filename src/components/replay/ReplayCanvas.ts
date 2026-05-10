@@ -51,6 +51,11 @@ const REPLAY_JUDGEMENT_POP_DURATION_MS = 280;
 const REPLAY_JUDGEMENT_HOLD_DURATION_MS = 80;
 const REPLAY_JUDGEMENT_FADE_DURATION_MS = 80;
 const REPLAY_JUDGEMENT_REFERENCE_ASPECT = 256 / 72;
+const REPLAY_COMBO_POP_DURATION_MS = 300;
+const REPLAY_COMBO_POP_SCALE_Y = 1.4;
+const REPLAY_COMBO_FADE_IN_DURATION_MS = 120;
+const REPLAY_COMBO_BREAK_DURATION_MS = 200;
+const REPLAY_COMBO_BREAK_SCALE = 4;
 const MANIA_MAX_TIME_RANGE = 11485;
 const MANIA_REFERENCE_HEIGHT = 768;
 const MANIA_SKIN_STAGE_HEIGHT = 480;
@@ -120,6 +125,11 @@ function easeOutElastic(t: number): number {
   if (clamped === 0 || clamped === 1) return clamped;
   const c4 = (2 * Math.PI) / 3;
   return Math.pow(2, -10 * clamped) * Math.sin((clamped * 10 - 0.75) * c4) + 1;
+}
+
+function easeOutQuad(t: number): number {
+  const clamped = Math.max(0, Math.min(1, t));
+  return 1 - (1 - clamped) * (1 - clamped);
 }
 
 interface RendererOptions {
@@ -317,6 +327,9 @@ export class ManiaReplayRenderer {
 
   private combo = 0;
   private maxComboSoFar = 0;
+  private comboAnimationValue = 0;
+  private comboAnimationTime = -Infinity;
+  private comboAnimationKind: "hit" | "break" | null = null;
   private statsScanIndex = 0;
   private comboScanIndex = 0;
   private judgmentCounts: number[] = [0, 0, 0, 0, 0, 0, 0];
@@ -521,6 +534,9 @@ export class ManiaReplayRenderer {
     this.comboScanIndex = 0;
     this.combo = this.initialCombo;
     this.maxComboSoFar = this.combo;
+    this.comboAnimationValue = 0;
+    this.comboAnimationTime = -Infinity;
+    this.comboAnimationKind = null;
     this.judgmentCounts = [0, 0, 0, 0, 0, 0, 0];
     this.leftHandMisses = 0;
     this.rightHandMisses = 0;
@@ -572,10 +588,18 @@ export class ManiaReplayRenderer {
       if (event.time > time) break;
 
       if (event.kind === "break") {
+        if (this.combo > 0) {
+          this.comboAnimationValue = this.combo;
+          this.comboAnimationTime = event.time;
+          this.comboAnimationKind = "break";
+        }
         this.combo = 0;
       } else {
         this.combo++;
         this.maxComboSoFar = Math.max(this.maxComboSoFar, this.combo);
+        this.comboAnimationValue = this.combo;
+        this.comboAnimationTime = event.time;
+        this.comboAnimationKind = "hit";
       }
 
       this.comboScanIndex++;
@@ -2653,23 +2677,77 @@ export class ManiaReplayRenderer {
   }
 
   private renderCombo(layout: Layout) {
-    if (this.combo <= 0) return;
+    const animation = this.getComboAnimationState();
+    const breakAnimation = this.getComboBreakAnimationState();
+    if (!animation && !breakAnimation) return;
 
     const { h, playfieldX, playfieldWidth } = layout;
     const playfieldCenterX = playfieldX + playfieldWidth / 2;
     const comboY = this.getStagePositionY(this.skinSettings.comboPosition, layout);
-    if (this.skinSettings.comboFontSet === DEFAULT_REPLAY_COMBO_FONT_SET && this.renderComboImages(`${this.combo}x`, playfieldCenterX, comboY, layout)) return;
     const comboFont = getReplayComboFontStyle(this.skinSettings.comboFontSet);
-    this.addText(`${this.combo}x`, playfieldCenterX, comboY, {
-      fontSize: Math.max(22, h * 0.05),
-      fill: "#ffffff",
-      alpha: 0.85,
-      fontFamily: comboFont.family,
-      fontWeight: comboFont.weight,
-      fontStyle: comboFont.style,
-      anchorX: 0.5,
-      anchorY: 0.5,
-    });
+    const fontSize = Math.max(22, h * 0.05);
+    const drawCombo = (state: { value: number; scaleX: number; scaleY: number; alpha: number; color: string; tint: number }) => {
+      const text = String(state.value);
+      if (this.skinSettings.comboFontSet === DEFAULT_REPLAY_COMBO_FONT_SET && this.renderComboImages(text, playfieldCenterX, comboY, layout, state)) return;
+      this.addText(text, playfieldCenterX, comboY, {
+        fontSize,
+        fill: state.color,
+        alpha: state.alpha * 0.85,
+        fontFamily: comboFont.family,
+        fontWeight: comboFont.weight,
+        fontStyle: comboFont.style,
+        anchorX: 0.5,
+        anchorY: 0.5,
+        scaleX: state.scaleX,
+        scaleY: state.scaleY,
+      });
+    };
+
+    if (animation) drawCombo(animation);
+    if (breakAnimation) drawCombo(breakAnimation);
+  }
+
+  private getComboAnimationState(): { value: number; scaleX: number; scaleY: number; alpha: number; color: string; tint: number } | null {
+    if (this.combo <= 0) return null;
+    let scaleX = 1;
+    let scaleY = 1;
+    let alpha = 1;
+    if (this.comboAnimationKind === "hit") {
+      const elapsed = this.currentTime - this.comboAnimationTime;
+      if (elapsed >= 0 && elapsed < REPLAY_COMBO_POP_DURATION_MS) {
+        const progress = Math.max(0, Math.min(1, elapsed / REPLAY_COMBO_POP_DURATION_MS));
+        const eased = easeOutQuad(progress);
+        scaleY = REPLAY_COMBO_POP_SCALE_Y - (REPLAY_COMBO_POP_SCALE_Y - 1) * eased;
+        alpha = this.comboAnimationValue <= 1
+          ? Math.min(1, elapsed / REPLAY_COMBO_FADE_IN_DURATION_MS)
+          : 1;
+      }
+    }
+
+    return {
+      value: this.combo,
+      scaleX,
+      scaleY,
+      alpha,
+      color: "#ffffff",
+      tint: 0xffffff,
+    };
+  }
+
+  private getComboBreakAnimationState(): { value: number; scaleX: number; scaleY: number; alpha: number; color: string; tint: number } | null {
+    if (this.comboAnimationKind !== "break") return null;
+    const elapsed = this.currentTime - this.comboAnimationTime;
+    if (elapsed < 0 || elapsed > REPLAY_COMBO_BREAK_DURATION_MS || this.comboAnimationValue <= 0) return null;
+    const progress = Math.max(0, Math.min(1, elapsed / REPLAY_COMBO_BREAK_DURATION_MS));
+    const scale = 1 + (REPLAY_COMBO_BREAK_SCALE - 1) * progress;
+    return {
+      value: this.comboAnimationValue,
+      scaleX: scale,
+      scaleY: scale,
+      alpha: 0.8 * (1 - progress),
+      color: "#ff5555",
+      tint: 0xff5555,
+    };
   }
 
   private getCurrentKeyState(): number {
@@ -2914,7 +2992,13 @@ export class ManiaReplayRenderer {
     return Math.max(1, fallbackWidth);
   }
 
-  private renderComboImages(text: string, centerX: number, centerY: number, layout: Layout): boolean {
+  private renderComboImages(
+    text: string,
+    centerX: number,
+    centerY: number,
+    layout: Layout,
+    animation: { scaleX: number; scaleY: number; alpha: number; color: string; tint: number },
+  ): boolean {
     const combo = this.skinProfile.assets.combo;
     if (!combo) return false;
 
@@ -2937,17 +3021,30 @@ export class ManiaReplayRenderer {
     let x = centerX - totalWidth / 2;
     glyphs.forEach((asset, index) => {
       const size = sizes[index];
-      if (asset) this.drawSkinImage(asset, x, centerY - size.height / 2, size.width, size.height, 0, 0, 0.9);
+      const glyphCenterX = x + size.width / 2;
+      if (asset) this.drawSkinImage(
+        asset,
+        glyphCenterX,
+        centerY,
+        size.width * animation.scaleX,
+        size.height * animation.scaleY,
+        0.5,
+        0.5,
+        animation.alpha * 0.9,
+        animation.tint,
+      );
       else {
-        this.addText(text[index], x + size.width / 2, centerY, {
+        this.addText(text[index], glyphCenterX, centerY, {
           fontSize: fallbackHeight,
-          fill: "#ffffff",
-          alpha: 0.85,
+          fill: animation.color,
+          alpha: animation.alpha * 0.85,
           fontFamily: comboFont.family,
           fontWeight: comboFont.weight,
           fontStyle: comboFont.style,
           anchorX: 0.5,
           anchorY: 0.5,
+          scaleX: animation.scaleX,
+          scaleY: animation.scaleY,
         });
       }
       x += size.width - overlap;
@@ -3281,6 +3378,8 @@ export class ManiaReplayRenderer {
       fontStyle?: "normal" | "italic";
       anchorX?: number;
       anchorY?: number;
+      scaleX?: number;
+      scaleY?: number;
     },
   ) {
     let label = this.textPool[this.textPoolCursor] as
@@ -3318,6 +3417,9 @@ export class ManiaReplayRenderer {
     if (label.y !== y) label.y = y;
     const alpha = options.alpha ?? 1;
     if (label.alpha !== alpha) label.alpha = alpha;
+    const scaleX = options.scaleX ?? 1;
+    const scaleY = options.scaleY ?? 1;
+    if (label.scale.x !== scaleX || label.scale.y !== scaleY) label.scale.set(scaleX, scaleY);
 
     const ax = options.anchorX ?? 0;
     const ay = options.anchorY ?? 0;
@@ -3337,6 +3439,7 @@ export class ManiaReplayRenderer {
     anchorX: number,
     anchorY: number,
     alpha: number,
+    tint = 0xffffff,
   ) {
     if (width <= 0 || height <= 0 || alpha <= 0) return;
     const texture = this.getTexture(asset);
@@ -3358,7 +3461,7 @@ export class ManiaReplayRenderer {
     sprite.width = width;
     sprite.height = height;
     sprite.alpha = alpha;
-    sprite.tint = 0xffffff;
+    sprite.tint = tint;
   }
 
   private getTexture(asset: ReplaySkinImageAsset): Texture {
