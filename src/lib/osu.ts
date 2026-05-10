@@ -4043,22 +4043,6 @@ async function runSnipesScan(
         return bMs - aMs;
       });
       const probeBatch = seedQueue.slice(0, SNIPES_SEED_PROBE_BUDGET);
-      const skipped = seedQueue.slice(SNIPES_SEED_PROBE_BUDGET);
-
-      for (const { beatmapId, bestCandidate } of skipped) {
-        const score = boardScoreFromScore(bestCandidate);
-        const meta = boardMetadataFromScore(bestCandidate);
-        if (score && meta) {
-          const lane = getBoardLaneKey(score.mods, score.isLazer);
-          snapshot[beatmapId] = {
-            [lane]: {
-              ...meta,
-              scores: [score],
-              lastTouchedAt: Date.now(),
-            },
-          };
-        }
-      }
 
       writeSnipesScanStatus(
         country,
@@ -4174,9 +4158,9 @@ export const getCountrySnipes = createServerFn({ method: "GET" })
   .handler(async ({ data }: { data: { country?: string } }): Promise<SnipesResponse> => {
     edgeCache(60, 600);
     const country = normalizeCountryCode(data.country);
-    const cacheKey = `country-snipes-response:v4:${country}`;
-    const snapshotKey = `country-board-snapshot:v4:${country}`;
-    const logKey = `country-snipes-log:v2:${country}`;
+    const cacheKey = `country-snipes-response:v5:${country}`;
+    const snapshotKey = `country-board-snapshot:v5:${country}`;
+    const logKey = `country-snipes-log:v3:${country}`;
 
     // Stale-while-revalidate: return expired data immediately so the client
     // never blocks on the ~55s scan. A background scan refreshes the cache
