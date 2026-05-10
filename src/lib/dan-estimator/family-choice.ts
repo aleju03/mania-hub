@@ -76,6 +76,10 @@ const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
       && metrics.jackPressure >= 125
       && metrics.jackPressure <= 190
       && metrics.chordjackPressure >= 170
+      && !(metrics.chordRatio < 0.64
+        && metrics.noteCount >= 2800
+        && metrics.sustainedNps10s <= 30.5
+        && skillScores.jack >= skillScores.chordjack - 0.25)
       && skillScores.chordjack >= skillScores.jack - 0.25
       && skillScores.chordjack >= topScore - 0.7,
   },
@@ -123,6 +127,18 @@ const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
       && metrics.rowIntervalEntropy < 1.7
       && metrics.sustainedPressureRatio >= 0.65
       && skillScores.jack >= topScore - 0.5,
+  },
+  {
+    id: "compact-high-chord-wall-chordjack",
+    family: "chordjack",
+    applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 1800
+      && metrics.noteCount <= 2200
+      && metrics.chordRatio >= 0.84
+      && metrics.chordRatio <= 0.9
+      && metrics.holdRatio < 0.06
+      && metrics.peakNps5s >= 29
+      && metrics.sustainedNps10s >= 28
+      && skillScores.chordjack >= topScore - 0.95,
   },
   {
     id: "dense-wall-jack",

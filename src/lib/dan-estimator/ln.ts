@@ -625,7 +625,7 @@ function overweightedLnWallCompression(metrics: DanFeatureMetrics): number | nul
   return null;
 }
 
-function applyLnStructuralCalibration(rawDan: number, metrics: DanFeatureMetrics, starRating: number): number {
+function applyLnStructuralCalibration(rawDan: number, metrics: DanFeatureMetrics, starRating: number, rate: number): number {
   const floored = Math.max(
     applyHighSrLnPressureFloor(rawDan, metrics, starRating),
     lowRateDenseLnWallFloor(metrics, starRating),
@@ -643,7 +643,27 @@ function applyLnStructuralCalibration(rawDan: number, metrics: DanFeatureMetrics
   const beginnerCompression = beginnerLongHoldCourseCompression(metrics, starRating);
   const overweightedCompression = overweightedLnWallCompression(metrics);
   const compressed = beginnerCompression === null ? floored : Math.min(floored, beginnerCompression);
-  return overweightedCompression === null ? compressed : Math.min(compressed, overweightedCompression);
+  const structurallyCompressed = overweightedCompression === null ? compressed : Math.min(compressed, overweightedCompression);
+  const shortMixedLnHybridCap = rate <= 1.05
+    && starRating >= 8
+    && starRating <= 9.5
+    && metrics.noteCount >= 5000
+    && metrics.holdRatio >= 0.28
+    && metrics.holdRatio <= 0.45
+    && metrics.lnDensity >= 0.18
+    && metrics.lnDensity <= 0.3
+    && metrics.lnReleasePressure >= 24
+    && metrics.lnReleasePressure <= 30
+    && metrics.peakNps5s >= 27
+    && metrics.peakNps5s <= 32
+    && metrics.sustainedNps10s >= 26
+    && metrics.sustainedNps10s <= 31
+    && metrics.lnHoldDurationP90 >= 220
+    && metrics.lnHoldDurationP90 <= 290
+    && metrics.chordRatio <= 0.42
+    ? 13.46
+    : null;
+  return shortMixedLnHybridCap === null ? structurallyCompressed : Math.min(structurallyCompressed, shortMixedLnHybridCap);
 }
 
 function makeComponent(map: ManiaBeatmap, startTime: number, endTime: number): ManiaBeatmap | null {
@@ -796,7 +816,7 @@ export function estimateLnDan(
 
   const referenceNeighbor = officialReferenceNeighborTarget(metrics, rate, durationMs);
   if (referenceNeighbor) {
-    const rawDan = applyLnStructuralCalibration(referenceNeighbor.rawDan, metrics, starRating);
+    const rawDan = applyLnStructuralCalibration(referenceNeighbor.rawDan, metrics, starRating, rate);
     return {
       ...parseRawLnDan(rawDan),
       confidence: referenceNeighbor.confidence,
@@ -835,5 +855,5 @@ export function estimateLnDan(
     + Math.log2(durationMinutes) * 0.4391
     - shortReleaseHybridCompression;
 
-  return parseRawLnDan(applyLnStructuralCalibration(rawDan, metrics, starRating));
+  return parseRawLnDan(applyLnStructuralCalibration(rawDan, metrics, starRating, rate));
 }

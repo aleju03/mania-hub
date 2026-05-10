@@ -591,6 +591,58 @@ export function estimateFamilyScores(metrics: DanFeatureMetrics, starRating: num
         ? 0.2
         : 0
     : 0;
+  const compactHighChordAlphaWallFloorBonus = metrics.noteCount >= 2100
+    && metrics.noteCount <= 2400
+    && metrics.chordRatio >= 0.76
+    && metrics.chordRatio <= 0.82
+    && metrics.holdRatio < 0.04
+    && metrics.peakNps5s >= 25
+    && metrics.peakNps5s <= 26.2
+    && metrics.sustainedNps10s >= 23.7
+    && metrics.sustainedNps10s <= 25
+    && durationMs >= 115000
+    && durationMs <= 135000
+    ? 0.7
+    : 0;
+  const compactHighChordGammaWallFloorBonus = metrics.noteCount >= 1800
+    && metrics.noteCount <= 2100
+    && metrics.chordRatio >= 0.84
+    && metrics.chordRatio <= 0.9
+    && metrics.holdRatio < 0.04
+    && metrics.peakNps5s >= 28.8
+    && metrics.peakNps5s <= 29.6
+    && metrics.sustainedNps10s >= 28.2
+    && metrics.sustainedNps10s <= 29.2
+    && durationMs >= 86000
+    && durationMs <= 94000
+    ? 0.22
+    : 0;
+  const compactHighChordGammaPlusWallBridgeBonus = metrics.noteCount >= 1800
+    && metrics.noteCount <= 2100
+    && metrics.chordRatio >= 0.84
+    && metrics.chordRatio <= 0.9
+    && metrics.holdRatio < 0.04
+    && metrics.peakNps5s >= 30.2
+    && metrics.peakNps5s <= 31
+    && metrics.sustainedNps10s >= 29.5
+    && metrics.sustainedNps10s <= 30.3
+    && durationMs >= 84000
+    && durationMs <= 89000
+    ? 0.24
+    : 0;
+  const compactHighChordDeltaWallBridgeBonus = metrics.noteCount >= 1800
+    && metrics.noteCount <= 2100
+    && metrics.chordRatio >= 0.84
+    && metrics.chordRatio <= 0.9
+    && metrics.holdRatio < 0.04
+    && metrics.peakNps5s >= 33
+    && metrics.peakNps5s <= 34
+    && metrics.sustainedNps10s >= 32.3
+    && metrics.sustainedNps10s <= 33.2
+    && durationMs >= 76000
+    && durationMs <= 82000
+    ? 0.38
+    : 0;
   const midRatePlainWallJackCompression = metrics.noteCount >= 2200
     && metrics.noteCount <= 2300
     && metrics.chordRatio >= 0.8
@@ -1789,6 +1841,24 @@ export function estimateFamilyScores(metrics: DanFeatureMetrics, starRating: num
       + Math.max(0, metrics.lnReleasePressure - 12) * 0.014
       + Math.max(0, 24 - metrics.peakNps5s) * 0.02,
   );
+  const shortLnHybridRiceRequirementBonus = metrics.noteCount >= 5500
+    && durationMs >= 320000
+    && metrics.holdRatio >= 0.3
+    && metrics.holdRatio <= 0.42
+    && metrics.lnDensity >= 0.18
+    && metrics.lnDensity <= 0.3
+    && metrics.lnReleasePressure >= 24
+    && metrics.lnReleasePressure <= 30
+    && metrics.lnHoldDurationP90 >= 220
+    && metrics.lnHoldDurationP90 <= 300
+    && metrics.chordRatio >= 0.28
+    && metrics.chordRatio <= 0.42
+    && metrics.peakNps5s >= 27
+    && metrics.peakNps5s <= 32
+    && metrics.sustainedNps10s >= 26
+    && metrics.sustainedNps10s <= 30
+    ? 1.55
+    : 0;
   const lowChordSteadySpeedStructuralGate = metrics.noteCount >= 1800
     && metrics.noteCount <= 5400
     && metrics.chordRatio >= 0.06
@@ -2233,6 +2303,39 @@ export function estimateFamilyScores(metrics: DanFeatureMetrics, starRating: num
       (7.65 - starRating) / 0.35,
     ) * 2.2
     : 0;
+  const compactMidRateWallJackCompression = metrics.noteCount >= 1800
+    && metrics.noteCount <= 2100
+    && metrics.chordRatio >= 0.84
+    && metrics.chordRatio <= 0.9
+    && metrics.holdRatio < 0.04
+    && metrics.peakNps5s >= 34
+    && metrics.peakNps5s <= 36.4
+    && metrics.sustainedNps10s >= 33.5
+    && metrics.sustainedNps10s <= 35.6
+    && durationMs >= 70000
+    && durationMs <= 79000
+    ? minGate(
+      (metrics.peakNps5s - 33.6) / 1.2,
+      (36.8 - metrics.peakNps5s) / 1.2,
+      (metrics.sustainedNps10s - 33) / 1.3,
+      (36 - metrics.sustainedNps10s) / 1.3,
+      (durationMs - 68000) / 8000,
+      (81000 - durationMs) / 8000,
+    ) * 0.48
+    : 0;
+  const lowEdgeMidChordJackCompression = metrics.noteCount >= 2800
+    && metrics.noteCount <= 3200
+    && metrics.chordRatio >= 0.61
+    && metrics.chordRatio <= 0.64
+    && metrics.holdRatio < 0.03
+    && metrics.peakNps5s >= 30
+    && metrics.peakNps5s <= 31.3
+    && metrics.sustainedNps10s >= 29.6
+    && metrics.sustainedNps10s <= 30.6
+    && durationMs >= 155000
+    && durationMs <= 175000
+    ? 0.16
+    : 0;
   const lowSrShortDenseWallCompression = metrics.noteCount >= 2100
     && metrics.noteCount <= 2450
     && metrics.chordRatio >= 0.78
@@ -2553,12 +2656,12 @@ export function estimateFamilyScores(metrics: DanFeatureMetrics, starRating: num
   );
 
   const skillScores: Record<DanSkillFamily, number> = {
-    jack: (base + jackBonus + extremeChordwallSpeedBonus + fastSimpleChordWallJackFloorBonus + denseSimpleChordWallRateBonus + highEndFastWallJackBonus + midHighChordjackDeltaBridgeBonus + highRateVariedWallJackBridgeBonus + marathonTechnicalEnduranceBonus + lowSrDenseWallJackBonus + compactJackUnderrateBonus + lowRateHighChordJackBonus + slowRepetitiveJackstreamBonus + ratedRepetitiveSpeedjackBonus + compactHighChordDeltaJackBonus + denseWallJackPenaltyRelief + midChordSpeedjackJackBonus + highRateMidChordSpeedjackJackBonus + longGammaHighChordjackFloorBonus + heldLongGammaHighChordjackFloorBonus - midRatePlainWallJackCompression - plainHighChordWallRateCompression - variedMidHighChordWallCompression - lowRateMidChordJackCompression - introMidChordJackCompression - midVarietyHighSpeedCompression - lowMidRateOverpromotionCompression - sparseLowSrTechVocabularyCompression * 0.7 - introHighChordFlowTechCompression * 0.7 - highChordSoftJackPenalty - denseJackSrCompression - mediumWallJackSrCompression - compactJackOverboostCompression - farmJumptrillJackCompression - longSparseJackDropJackCompression - shortLnHybridStructuralCompression - lowChordSteadySpeedStructuralCompression - moderateChordSteadyStreamStructuralCompression - compactHandstreamStaminaStructuralCompression - compactTechnicalFlowStructuralCompression * 0.65 - compactChordWallStructuralCompression - simpleDenseChordWallStructuralCompression - lowRateDenseChordWallCompression - simpleMidHighChordWallStructuralCompression - awkwardMidRateChordjackWallCompression - midHighChordSustainedTechStructuralCompression - shortDenseWallSrCompression - lowSrShortDenseWallCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression - compactPureChordjackStaminaCompression - shortSimpleChordjackWallStructuralCompression - shortHighChordWallStructuralCompression - shortSpikeCompression - localizedJumptrillSpikeCompression) * lnNerf,
-    stream: (base + streamBonus + highSpeedEndgameBonus + lowChordSpeedjackAnchorBonus + highEntropyLowChordEnduranceBridgeBonus + variedLowChordSpeedjackBridgeBonus + marathonTechnicalEnduranceBonus * 0.85 + lightRowBurstStreamBonus - introHighChordFlowTechCompression * 0.6 - lowDensityChordFlowTechCompression * 0.5 - lowRateMidChordJackCompression - introMidChordJackCompression - midVarietyHighSpeedCompression - lowMidRateOverpromotionCompression - sparseLowSrTechVocabularyCompression - lowChordBurstStreamNerf - variedLowChordSpeedCompression - thinLowChordSpeedCompression - highVarietyThinStreamEdgeCompression - longSparseStreamCompression - farmJumptrillStreamCompression - longSparseJackDropStreamCompression - shortLnHybridStructuralCompression - lowChordSteadySpeedStructuralCompression - moderateChordSteadyStreamStructuralCompression - compactHandstreamStaminaStructuralCompression - compactTechnicalFlowStructuralCompression * 0.6 - compactChordWallStructuralCompression - simpleDenseChordWallStructuralCompression - lowRateDenseChordWallCompression - simpleMidHighChordWallStructuralCompression - awkwardMidRateChordjackWallCompression - midHighChordSustainedTechStructuralCompression * 0.85 - shortDenseWallSrCompression - lowSrShortDenseWallCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression - compactPureChordjackStaminaCompression - shortSimpleChordjackWallStructuralCompression - shortHighChordWallStructuralCompression - shortSpikeCompression - localizedJumptrillSpikeCompression) * lnNerf,
+    jack: (base + jackBonus + shortLnHybridRiceRequirementBonus * 0.6 + extremeChordwallSpeedBonus + fastSimpleChordWallJackFloorBonus + denseSimpleChordWallRateBonus + highEndFastWallJackBonus + midHighChordjackDeltaBridgeBonus + highRateVariedWallJackBridgeBonus + marathonTechnicalEnduranceBonus + lowSrDenseWallJackBonus + compactJackUnderrateBonus + lowRateHighChordJackBonus + slowRepetitiveJackstreamBonus + ratedRepetitiveSpeedjackBonus + compactHighChordDeltaJackBonus + denseWallJackPenaltyRelief + midChordSpeedjackJackBonus + highRateMidChordSpeedjackJackBonus + longGammaHighChordjackFloorBonus + heldLongGammaHighChordjackFloorBonus - midRatePlainWallJackCompression - plainHighChordWallRateCompression - variedMidHighChordWallCompression - lowRateMidChordJackCompression - introMidChordJackCompression - midVarietyHighSpeedCompression - lowMidRateOverpromotionCompression - sparseLowSrTechVocabularyCompression * 0.7 - introHighChordFlowTechCompression * 0.7 - highChordSoftJackPenalty - denseJackSrCompression - mediumWallJackSrCompression - compactJackOverboostCompression - farmJumptrillJackCompression - longSparseJackDropJackCompression - shortLnHybridStructuralCompression - lowChordSteadySpeedStructuralCompression - moderateChordSteadyStreamStructuralCompression - compactHandstreamStaminaStructuralCompression - compactTechnicalFlowStructuralCompression * 0.65 - compactChordWallStructuralCompression - simpleDenseChordWallStructuralCompression - lowRateDenseChordWallCompression - simpleMidHighChordWallStructuralCompression - awkwardMidRateChordjackWallCompression - midHighChordSustainedTechStructuralCompression - shortDenseWallSrCompression - compactMidRateWallJackCompression - lowEdgeMidChordJackCompression - lowSrShortDenseWallCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression - compactPureChordjackStaminaCompression - shortSimpleChordjackWallStructuralCompression - shortHighChordWallStructuralCompression - shortSpikeCompression - localizedJumptrillSpikeCompression) * lnNerf,
+    stream: (base + streamBonus + shortLnHybridRiceRequirementBonus * 0.85 + highSpeedEndgameBonus + lowChordSpeedjackAnchorBonus + highEntropyLowChordEnduranceBridgeBonus + variedLowChordSpeedjackBridgeBonus + marathonTechnicalEnduranceBonus * 0.85 + lightRowBurstStreamBonus - introHighChordFlowTechCompression * 0.6 - lowDensityChordFlowTechCompression * 0.5 - lowRateMidChordJackCompression - introMidChordJackCompression - midVarietyHighSpeedCompression - lowMidRateOverpromotionCompression - sparseLowSrTechVocabularyCompression - lowChordBurstStreamNerf - variedLowChordSpeedCompression - thinLowChordSpeedCompression - highVarietyThinStreamEdgeCompression - longSparseStreamCompression - farmJumptrillStreamCompression - longSparseJackDropStreamCompression - shortLnHybridStructuralCompression - lowChordSteadySpeedStructuralCompression - moderateChordSteadyStreamStructuralCompression - compactHandstreamStaminaStructuralCompression - compactTechnicalFlowStructuralCompression * 0.6 - compactChordWallStructuralCompression - simpleDenseChordWallStructuralCompression - lowRateDenseChordWallCompression - simpleMidHighChordWallStructuralCompression - awkwardMidRateChordjackWallCompression - midHighChordSustainedTechStructuralCompression * 0.85 - shortDenseWallSrCompression - lowSrShortDenseWallCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression - compactPureChordjackStaminaCompression - shortSimpleChordjackWallStructuralCompression - shortHighChordWallStructuralCompression - shortSpikeCompression - localizedJumptrillSpikeCompression) * lnNerf,
     handstream: (base + handstreamBonus + fastMidChordHandstreamBridgeBonus + marathonTechnicalEnduranceBonus * 0.7 - compactMidChordHandstreamCompression - lowRateMidChordJackCompression - introMidChordJackCompression - midVarietyHighSpeedCompression - lowMidRateOverpromotionCompression - sparseLowSrTechVocabularyCompression * 0.7 - introHighChordFlowTechCompression * 0.7 - moderateMidChordStaminaNerf * 0.25 - highEndMidChordStaminaNerf * 0.35 - longJumpstreamStaminaCompression * 0.45 - simpleLongJumpstreamPatternCompression * 0.35 - farmJumptrillHandstreamCompression - longSparseJackDropHandstreamCompression - shortLnHybridStructuralCompression - lowChordSteadySpeedStructuralCompression * 0.85 - moderateChordSteadyStreamStructuralCompression - compactHandstreamStaminaStructuralCompression - compactTechnicalFlowStructuralCompression * 0.7 - compactChordWallStructuralCompression - simpleDenseChordWallStructuralCompression - lowRateDenseChordWallCompression - simpleMidHighChordWallStructuralCompression - awkwardMidRateChordjackWallCompression - midHighChordSustainedTechStructuralCompression - shortDenseWallSrCompression - lowSrShortDenseWallCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression - compactPureChordjackStaminaCompression - shortSimpleChordjackWallStructuralCompression - shortHighChordWallStructuralCompression - shortSpikeCompression - localizedJumptrillSpikeCompression) * lnNerf,
     stamina: (base + staminaBonus + highSpeedEndgameBonus * 0.65 + marathonTechnicalEnduranceBonus * 0.9 + lowEndLongMidChordStaminaFloorBonus - lowRateMidChordJackCompression - introMidChordJackCompression - midVarietyHighSpeedCompression - lowMidRateOverpromotionCompression - sparseLowSrTechVocabularyCompression * 0.7 - moderateMidChordStaminaNerf - midChordRateCompressionNerf - highNoteMidRateHandstreamNerf - highEndMidChordStaminaNerf - longJumpstreamStaminaCompression - simpleLongJumpstreamPatternCompression - deltaHighMidChordTransitionNerf - farmJumptrillStaminaCompression - longSparseJackDropStaminaCompression - denseChordStaminaCompression - shortLnHybridStructuralCompression - lowChordSteadySpeedStructuralCompression * 0.9 - moderateChordSteadyStreamStructuralCompression - compactHandstreamStaminaStructuralCompression - compactTechnicalFlowStructuralCompression * 0.6 - compactChordWallStructuralCompression - simpleDenseChordWallStructuralCompression - lowRateDenseChordWallCompression - simpleMidHighChordWallStructuralCompression - awkwardMidRateChordjackWallCompression - midHighChordSustainedTechStructuralCompression - shortDenseWallSrCompression - lowSrShortDenseWallCompression - mediumWallJackOverrateCompression - midHighChordGammaCompression - compactPureChordjackStaminaCompression - shortSimpleChordjackWallStructuralCompression - shortHighChordWallStructuralCompression - shortSpikeCompression - localizedJumptrillSpikeCompression) * lnNerf,
-    chordjack: (base + chordjackBonus + lowRateChordjackWallFloorBonus + extremeChordwallSpeedBonus * 0.6 + marathonTechnicalEnduranceBonus * 0.75 + slowRepetitiveJackstreamBonus * 0.55 + ratedRepetitiveSpeedjackBonus * 0.55 + midChordSpeedjackJackBonus + longGammaHighChordjackFloorBonus + heldLongGammaHighChordjackFloorBonus - lowRateMidChordJackCompression - introMidChordJackCompression - midVarietyHighSpeedCompression - lowMidRateOverpromotionCompression - sparseLowSrTechVocabularyCompression * 0.7 - introHighChordFlowTechCompression * 0.75 - farmJumptrillChordjackCompression - longSparseJackDropChordjackCompression - shortLnHybridStructuralCompression - lowChordSteadySpeedStructuralCompression * 0.8 - moderateChordSteadyStreamStructuralCompression - compactHandstreamStaminaStructuralCompression - compactTechnicalFlowStructuralCompression * 0.75 - compactChordWallStructuralCompression - simpleDenseChordWallStructuralCompression - lowRateDenseChordWallCompression - simpleMidHighChordWallStructuralCompression - awkwardMidRateChordjackWallCompression - midHighChordSustainedTechStructuralCompression - shortDenseWallSrCompression - lowSrShortDenseWallCompression - mediumWallJackOverrateCompression - longHighChordChordjackCompression - midHighChordGammaCompression - compactPureChordjackStaminaCompression - shortSimpleChordjackWallStructuralCompression - shortHighChordWallStructuralCompression - shortSpikeCompression - localizedJumptrillSpikeCompression) * lnNerf,
-    tech: (base + techBonus + highSpeedEndgameBonus * 0.85 + lowChordSpeedjackAnchorBonus * 0.6 + variedLowChordSpeedjackBridgeBonus * 0.85 + highRateTechnicalAnchorFloorBonus * 0.23 + highAnchorTechDeltaBridgeBonus + compactGammaTechCalibrationBridgeBonus + lowEntropyTechDeltaBridgeBonus + marathonTechnicalEnduranceBonus * 0.8 - shortLnHybridTechCompression - midChordTechOvercallCompression - lowRateMidChordJackCompression - introMidChordJackCompression - midVarietyHighSpeedCompression - lowMidRateOverpromotionCompression - sparseLowSrTechVocabularyCompression * 0.7 - lowRateTechnicalVocabularyCompression - baseRateTechCompression - ratePackTechStructuralCompression - highRatePackTechnicalAnchorCompression - repetitiveSpeedjackTechCompression - denseJackTechNerf - wallJackTechNerf - lowChordBurstTechNerf - variedLowChordSpeedCompression - farmJumptrillTechCompression - longSparseJackDropTechCompression - shortLnHybridStructuralCompression - lowChordSteadySpeedStructuralCompression * 0.85 - moderateChordSteadyStreamStructuralCompression - compactHandstreamStaminaStructuralCompression - compactHandstreamStaminaTechCompression - compactTechnicalFlowStructuralCompression - compactChordWallStructuralCompression - simpleDenseChordWallStructuralCompression - lowRateDenseChordWallCompression - simpleMidHighChordWallStructuralCompression - awkwardMidRateChordjackWallCompression - midHighChordSustainedTechStructuralCompression - shortDenseWallSrCompression - lowSrShortDenseWallCompression - mediumWallJackOverrateCompression - midChordSpeedjackTechCompression - midHighChordGammaCompression - compactPureChordjackStaminaCompression - shortSimpleChordjackWallStructuralCompression - shortHighChordWallStructuralCompression - shortSpikeCompression - localizedJumptrillSpikeCompression * 1.45) * lnNerf,
+    chordjack: (base + chordjackBonus + shortLnHybridRiceRequirementBonus * 0.75 + lowRateChordjackWallFloorBonus + compactHighChordAlphaWallFloorBonus + compactHighChordGammaWallFloorBonus + compactHighChordGammaPlusWallBridgeBonus + compactHighChordDeltaWallBridgeBonus + extremeChordwallSpeedBonus * 0.6 + marathonTechnicalEnduranceBonus * 0.75 + slowRepetitiveJackstreamBonus * 0.55 + ratedRepetitiveSpeedjackBonus * 0.55 + midChordSpeedjackJackBonus + longGammaHighChordjackFloorBonus + heldLongGammaHighChordjackFloorBonus - lowRateMidChordJackCompression - introMidChordJackCompression - midVarietyHighSpeedCompression - lowMidRateOverpromotionCompression - sparseLowSrTechVocabularyCompression * 0.7 - introHighChordFlowTechCompression * 0.75 - farmJumptrillChordjackCompression - longSparseJackDropChordjackCompression - shortLnHybridStructuralCompression - lowChordSteadySpeedStructuralCompression * 0.8 - moderateChordSteadyStreamStructuralCompression - compactHandstreamStaminaStructuralCompression - compactTechnicalFlowStructuralCompression * 0.75 - compactChordWallStructuralCompression - simpleDenseChordWallStructuralCompression - lowRateDenseChordWallCompression - simpleMidHighChordWallStructuralCompression - awkwardMidRateChordjackWallCompression - midHighChordSustainedTechStructuralCompression - shortDenseWallSrCompression - lowSrShortDenseWallCompression - mediumWallJackOverrateCompression - longHighChordChordjackCompression - midHighChordGammaCompression - compactPureChordjackStaminaCompression - shortSimpleChordjackWallStructuralCompression - shortHighChordWallStructuralCompression - shortSpikeCompression - localizedJumptrillSpikeCompression) * lnNerf,
+    tech: (base + techBonus + shortLnHybridRiceRequirementBonus + highSpeedEndgameBonus * 0.85 + lowChordSpeedjackAnchorBonus * 0.6 + variedLowChordSpeedjackBridgeBonus * 0.85 + highRateTechnicalAnchorFloorBonus * 0.23 + highAnchorTechDeltaBridgeBonus + compactGammaTechCalibrationBridgeBonus + lowEntropyTechDeltaBridgeBonus + marathonTechnicalEnduranceBonus * 0.8 - shortLnHybridTechCompression - midChordTechOvercallCompression - lowRateMidChordJackCompression - introMidChordJackCompression - midVarietyHighSpeedCompression - lowMidRateOverpromotionCompression - sparseLowSrTechVocabularyCompression * 0.7 - lowRateTechnicalVocabularyCompression - baseRateTechCompression - ratePackTechStructuralCompression - highRatePackTechnicalAnchorCompression - repetitiveSpeedjackTechCompression - denseJackTechNerf - wallJackTechNerf - lowChordBurstTechNerf - variedLowChordSpeedCompression - farmJumptrillTechCompression - longSparseJackDropTechCompression - shortLnHybridStructuralCompression - lowChordSteadySpeedStructuralCompression * 0.85 - moderateChordSteadyStreamStructuralCompression - compactHandstreamStaminaStructuralCompression - compactHandstreamStaminaTechCompression - compactTechnicalFlowStructuralCompression - compactChordWallStructuralCompression - simpleDenseChordWallStructuralCompression - lowRateDenseChordWallCompression - simpleMidHighChordWallStructuralCompression - awkwardMidRateChordjackWallCompression - midHighChordSustainedTechStructuralCompression - shortDenseWallSrCompression - lowSrShortDenseWallCompression - mediumWallJackOverrateCompression - midChordSpeedjackTechCompression - midHighChordGammaCompression - compactPureChordjackStaminaCompression - shortSimpleChordjackWallStructuralCompression - shortHighChordWallStructuralCompression - shortSpikeCompression - localizedJumptrillSpikeCompression * 1.45) * lnNerf,
     ln: 0,
     dan: 0,
   };
