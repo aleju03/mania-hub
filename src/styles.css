@@ -70,6 +70,12 @@
   --color-osu-orange: #ff8e5d;
 }
 body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family: var(--font-sans); }
+.modal-card-mobile-safe {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  isolation: isolate;
+  contain: paint;
+}
 :where(
   a[href],
   button:not(:disabled),

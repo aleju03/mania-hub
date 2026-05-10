@@ -901,7 +901,7 @@ function PlayerPage() {
       <AnimatePresence>
         {bpmModalOpen && profileInsights && profileInsights.medianBpm != null && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/75 cursor-pointer p-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 sm:backdrop-blur-sm cursor-pointer p-4"
             onClick={() => setBpmModalOpen(false)}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -909,13 +909,14 @@ function PlayerPage() {
             transition={{ duration: 0.2 }}
           >
             <motion.div
-              className="relative bg-osu-b4 border border-osu-b3/20 rounded-2xl w-[420px] max-w-full max-h-[85vh] overflow-hidden shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
+              className="modal-card-mobile-safe relative isolate bg-osu-b4 border border-osu-b3/20 rounded-2xl w-[420px] max-w-full max-h-[85vh] overflow-hidden shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
               onClick={(e) => e.stopPropagation()}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 8 }}
               transition={{ duration: 0.16, ease: "easeOut" }}
             >
+              <div className="pointer-events-none absolute inset-0 bg-osu-b4" aria-hidden="true" />
               <button
                 type="button"
                 onClick={() => setBpmModalOpen(false)}
@@ -926,7 +927,7 @@ function PlayerPage() {
                   <path d="M1 1l12 12M13 1L1 13" />
                 </svg>
               </button>
-              <div className="max-h-[85vh] overflow-y-auto p-5 [scrollbar-gutter:stable]">
+              <div className="relative z-10 max-h-[85vh] overflow-y-auto p-5 [scrollbar-gutter:stable]">
                 <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">BPM Breakdown</div>
                 <div className="mt-0.5 text-[11px] text-osu-f1/60">
                   across {profileInsights.sampleSize} top plays · adjusted for rate mods

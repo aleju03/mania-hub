@@ -289,7 +289,7 @@ export function Nav() {
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50">
+    <header className="fixed top-0 left-0 z-50" style={{ right: "var(--modal-scrollbar-compensation, 0px)" }}>
       <div className="absolute inset-0 bg-osu-b6">
         <img
           src="/images/layout/nav2-background-hue0.webp"

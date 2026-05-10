@@ -2589,24 +2589,47 @@ function MapDetailsModal({
   country: string;
   onClose: () => void;
 }) {
+  const [bodyLockActive, setBodyLockActive] = useState(false);
+
   useEffect(() => {
     if (!details) return;
+    setBodyLockActive(true);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     document.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
     };
   }, [details, onClose]);
+
+  useEffect(() => {
+    if (!bodyLockActive) return;
+    const prevOverflow = document.body.style.overflow;
+    const prevPaddingRight = document.body.style.paddingRight;
+    const prevScrollbarCompensation = document.documentElement.style.getPropertyValue("--modal-scrollbar-compensation");
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      const currentPaddingRight = parseFloat(window.getComputedStyle(document.body).paddingRight) || 0;
+      document.body.style.paddingRight = `${currentPaddingRight + scrollbarWidth}px`;
+      document.documentElement.style.setProperty("--modal-scrollbar-compensation", `${scrollbarWidth}px`);
+    }
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.paddingRight = prevPaddingRight;
+      if (prevScrollbarCompensation) {
+        document.documentElement.style.setProperty("--modal-scrollbar-compensation", prevScrollbarCompensation);
+      } else {
+        document.documentElement.style.removeProperty("--modal-scrollbar-compensation");
+      }
+    };
+  }, [bodyLockActive]);
 
   if (typeof document === "undefined") return null;
 
   return createPortal(
-    <AnimatePresence>
+    <AnimatePresence onExitComplete={() => setBodyLockActive(false)}>
       {details && (
         <motion.div
           key="map-details"
@@ -2621,14 +2644,17 @@ function MapDetailsModal({
             onClick={onClose}
           />
           <motion.div
-            className="relative z-10 w-full max-w-[640px] max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-3rem)] overflow-hidden rounded-2xl bg-osu-b5 ring-1 ring-white/10 shadow-2xl flex flex-col"
-            initial={{ opacity: 0, scale: 0.96, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.97, y: 4 }}
-            transition={{ duration: 0.16, ease: "easeOut" }}
+            className="modal-card-mobile-safe relative isolate z-10 w-full max-w-[640px] max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-3rem)] overflow-hidden rounded-2xl bg-osu-b5 ring-1 ring-white/10 shadow-2xl flex flex-col"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.12, ease: "easeOut" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <MapDetailsContent details={details} country={country} onClose={onClose} />
+            <div className="pointer-events-none absolute inset-0 bg-osu-b5" aria-hidden="true" />
+            <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+              <MapDetailsContent details={details} country={country} onClose={onClose} />
+            </div>
           </motion.div>
         </motion.div>
       )}
@@ -2695,7 +2721,31 @@ function MapDetailsContent({
         : null;
   const bpm = details.kind === "farmed" ? details.map.bpm : null;
 
-  const [coverLoaded, setCoverLoaded] = useState(false);
+  const [decodedCover, setDecodedCover] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setDecodedCover(null);
+
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => {
+      const decode = typeof image.decode === "function" ? image.decode() : Promise.resolve();
+      decode
+        .catch(() => undefined)
+        .then(() => {
+          if (!cancelled) setDecodedCover(cover);
+        });
+    };
+    image.onerror = () => {
+      if (!cancelled) setDecodedCover(cover);
+    };
+    image.src = cover;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cover]);
+  const coverReady = decodedCover === cover;
 
   return (
     <>
@@ -2711,16 +2761,14 @@ function MapDetailsContent({
         </svg>
       </button>
 
-      <div className="relative shrink-0 overflow-hidden bg-osu-b6">
-        <img
-          src={cover}
-          alt=""
-          className={`h-[190px] w-full object-cover transition-opacity duration-500 ease-out sm:h-[220px] ${coverLoaded ? "opacity-100" : "opacity-0"}`}
-          onLoad={() => setCoverLoaded(true)}
-          onError={() => setCoverLoaded(true)}
+      <div className="relative z-10 -mb-px h-[190px] shrink-0 overflow-hidden bg-osu-b5 sm:h-[220px]">
+        <div
+          className={`absolute inset-0 bg-cover bg-center transition-opacity duration-0 ease-out sm:duration-300 ${coverReady ? "opacity-100" : "opacity-0"}`}
+          style={coverReady ? { backgroundImage: `url("${cover.replace(/"/g, '\\"')}")` } : undefined}
+          aria-hidden="true"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-osu-b5 via-osu-b5/45 to-black/25" />
-        <div className="absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4 pr-14">
+        <div className="absolute inset-0 z-10 bg-gradient-to-t from-osu-b5 via-osu-b5/45 to-black/25" />
+        <div className="absolute inset-x-0 top-0 z-20 flex items-start justify-between gap-3 p-4 pr-14">
           <BeatmapStatusBadge status={status} />
           <div className="flex flex-wrap justify-end gap-1.5">
             {keyCount && (
@@ -2735,7 +2783,7 @@ function MapDetailsContent({
             )}
           </div>
         </div>
-        <div className="absolute inset-x-0 bottom-0 px-5 pb-5 sm:px-6">
+        <div className="absolute inset-x-0 bottom-0 z-20 px-5 pb-5 sm:px-6">
           <div className="text-[10px] text-white/70 truncate uppercase tracking-wide">
             {artist}
           </div>
@@ -3004,7 +3052,7 @@ function FavouriteDetails({ entry, country }: { entry: MapsAggregatedFavourite; 
 
       <div>
         <SectionHeader title="Favourited by" count={entry.players.length} />
-        <div className="rounded-xl bg-osu-b4 ring-1 ring-osu-b3/55 p-1 max-h-[280px] overflow-y-auto">
+        <div className="grid grid-cols-1 min-[390px]:grid-cols-2 sm:grid-cols-3 gap-1 rounded-xl bg-osu-b4 ring-1 ring-osu-b3/55 p-1 max-h-[280px] overflow-y-auto">
           {entry.players.map((p) => (
             <PlayerRow
               key={p.id}
