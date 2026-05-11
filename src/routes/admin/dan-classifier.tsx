@@ -6,6 +6,7 @@ import { parseManiaBeatmap } from "../../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../../lib/beatmap-search";
 import { estimateDan } from "../../lib/dan-estimator";
 import { estimateDanielDan } from "../../lib/daniel-estimator";
+import { formatNumber } from "../../lib/format";
 import { getBeatmapFile, getBeatmapset, getBeatmapsetForBeatmap, getUser, getUserScoresBestWindow, searchBeatmaps, searchBeatmapsByMappers } from "../../lib/osu";
 import type { DanEstimate } from "../../lib/dan-estimator";
 import type { OsuBeatmap, OsuBeatmapset, OsuScore } from "../../lib/types";
@@ -827,7 +828,7 @@ function DanClassifierPage() {
                         <div className="min-w-0">
                           <div className="text-sm font-black text-white truncate">{beatmapset.title}</div>
                           <div className="mt-1 text-[11px] text-osu-f1 truncate">
-                            {beatmapset.artist} // {beatmapset.creator}
+                            {beatmapset.artist} // {beatmapset.creator} // Playcount {formatNumber(beatmapset.play_count)}
                           </div>
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
