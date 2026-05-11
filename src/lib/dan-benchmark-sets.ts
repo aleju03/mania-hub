@@ -25,6 +25,14 @@ export const NORMAL_BENCHMARK_BEATMAPSET_IDS: number[] = [
   1188968,
   2221500,
   1320653,
+  1964086,
+  2050821,
+  2051930,
+  1989541,
+  1989522,
+  1988375,
+  1987756,
+  2222141,
 ];
 
 export const LN_BENCHMARK_BEATMAPSET_IDS: number[] = [
