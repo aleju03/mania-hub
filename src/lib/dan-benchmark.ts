@@ -11,7 +11,7 @@ export interface DanBenchmarkLabel {
 }
 
 function isBenchmarkFamily(value: unknown): value is DanBenchmarkFamily {
-  return value === "normal" || value === "ln";
+  return value === "normal" || value === "ln" || value === "ranked";
 }
 
 function normalizeListPayload(input: unknown): { family: DanBenchmarkFamily } {

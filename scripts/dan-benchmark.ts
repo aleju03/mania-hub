@@ -16,7 +16,10 @@ import { estimateDanielDan } from "../src/lib/daniel-estimator.ts";
 import type { DanEstimate, DanFeatureMetrics } from "../src/lib/dan-estimator/types.ts";
 import {
   type DanBenchmarkFamily,
+  getBenchmarkBeatmapIds,
+  getBenchmarkBeatmapStarRating,
   getBenchmarkBeatmapsetIds,
+  RANKED_BENCHMARK_BEATMAP_IDS,
 } from "../src/lib/dan-benchmark-sets.ts";
 import { db, hasDb } from "../src/lib/db.ts";
 import {
@@ -26,6 +29,7 @@ import {
   extractOsz,
   fetchCatboyBeatmapset,
   fetchCatboyBeatmapsetByTitle,
+  fetchBeatmapFile,
 } from "./_dan-shared.ts";
 
 type ClassifierId = "aleju" | "daniel";
@@ -180,7 +184,7 @@ function usage(exitCode = 2): never {
     "Usage: npm run dan:benchmark -- [options]",
     "",
     "Options:",
-    "  --family normal|ln       Benchmark family. Default: normal",
+    "  --family normal|ln|ranked Benchmark family. Default: normal",
     "  --classifier aleju|daniel  Estimator to run. Default: aleju",
     "  --rate N                 Playback rate. Default: 1",
     "  --set IDS                Comma-separated beatmapset IDs to run",
@@ -284,7 +288,7 @@ function parseArgs(argv: string[]): CliOptions {
       options.includeUnlabeled = true;
     } else if (arg === "--family") {
       const value = argv[++i];
-      if (value !== "normal" && value !== "ln") usage();
+      if (value !== "normal" && value !== "ln" && value !== "ranked") usage();
       options.family = value;
       options.familySpecified = true;
     } else if (arg === "--classifier") {
@@ -466,7 +470,7 @@ async function loadFailureTargets(filePath: string): Promise<FailureTargets> {
     throw new Error(`--failures-from expects a JSON file emitted by dan:benchmark --json: ${filePath}`);
   }
 
-  const family = parsed.family === "normal" || parsed.family === "ln" ? parsed.family : null;
+  const family = parsed.family === "normal" || parsed.family === "ln" || parsed.family === "ranked" ? parsed.family : null;
   const beatmapsetIds: number[] = [];
   const beatmapIds: number[] = [];
   for (const set of parsed.sets) {
@@ -1091,49 +1095,64 @@ async function main(): Promise<void> {
   }
 
   const beatmapsetIds = options.beatmapsetIds ?? getBenchmarkBeatmapsetIds(options.family);
+  const benchmarkBeatmapIds = options.beatmapIds ?? getBenchmarkBeatmapIds(options.family);
+  const includeUnlabeled = options.includeUnlabeled || options.family === "ranked";
   const [expectedLabels, hiddenDiffs] = await Promise.all([
     loadExpectedLabels(options.family),
     loadHiddenDiffs(options.family),
   ]);
 
-  const fetched = await mapWithConcurrency(beatmapsetIds, 4, (id) => fetchSet(id, options.cacheDir));
-
   // build the flat work list (one entry per visible 4K diff) so we can run
   // estimates with bounded concurrency across all sets at once
   const work: Array<{ setIndex: number; rowIndex: number } & DiffWork> = [];
-  const setShells: SetResult[] = fetched.map((set, setIndex) => {
-    if (set.error) {
-      return {
-        beatmapsetId: set.beatmapsetId,
+  let setShells: SetResult[];
+
+  if (options.family === "ranked" && !options.beatmapsetIds) {
+    const rankedBeatmapIds = RANKED_BENCHMARK_BEATMAP_IDS.filter((beatmapId) =>
+      !benchmarkBeatmapIds || benchmarkBeatmapIds.has(beatmapId),
+    );
+    const fetchedRanked = await mapWithConcurrency(rankedBeatmapIds, 4, async (beatmapId) => {
+      try {
+        const text = await fetchBeatmapFile(beatmapId);
+        const setIdMatch = text.match(/^BeatmapSetID\s*:\s*(\d+)/m);
+        return {
+          beatmapId,
+          beatmapsetId: setIdMatch ? Number(setIdMatch[1]) : beatmapId,
+          meta: {
+            beatmapId,
+            source: String(beatmapId),
+            starRating: getBenchmarkBeatmapStarRating(beatmapId),
+            text,
+          } satisfies BeatmapMeta,
+          error: null as string | null,
+        };
+      } catch (error) {
+        return {
+          beatmapId,
+          beatmapsetId: beatmapId,
+          meta: null,
+          error: error instanceof Error ? error.message : "Failed to fetch beatmap.",
+        };
+      }
+    });
+
+    setShells = fetchedRanked.map((entry, setIndex) => {
+      const shell: SetResult = {
+        beatmapsetId: entry.beatmapsetId,
         title: null,
         artist: null,
         rows: [],
-        error: set.error,
+        error: entry.error,
       };
-    }
-    const shell: SetResult = {
-      beatmapsetId: set.beatmapsetId,
-      title: null,
-      artist: null,
-      rows: [],
-      error: null,
-    };
-    for (const meta of set.metas) {
-      if (meta.beatmapId == null) continue;
-      const explicitlyTargetedBeatmap = options.beatmapIds?.has(meta.beatmapId) ?? false;
-      if (options.beatmapIds && !explicitlyTargetedBeatmap) continue;
-      if (hiddenDiffs.has(meta.beatmapId)) continue;
-      const expected = expectedLabels.get(meta.beatmapId) ?? null;
-      if (options.expectedLabels && (!expected || !options.expectedLabels.has(expected))) continue;
-      const shouldIncludeUnlabeled = options.includeUnlabeled
-        || explicitlyTargetedBeatmap
-        || (options.matchKinds?.has("unlabeled") ?? false);
-      if (!expected && !shouldIncludeUnlabeled) continue;
+      if (!entry.meta || entry.error) return shell;
+      if (hiddenDiffs.has(entry.beatmapId)) return shell;
+      const expected = expectedLabels.get(entry.beatmapId) ?? null;
+      if (options.expectedLabels && (!expected || !options.expectedLabels.has(expected))) return shell;
       const rowIndex = shell.rows.length;
       shell.rows.push({
-        beatmapId: meta.beatmapId,
+        beatmapId: entry.beatmapId,
         version: "",
-        starRating: meta.starRating,
+        starRating: entry.meta.starRating,
         expected,
         predicted: null,
         predictedFamily: null,
@@ -1143,10 +1162,58 @@ async function main(): Promise<void> {
         match: "unlabeled",
         error: null,
       });
-      work.push({ setIndex, rowIndex, beatmapsetId: set.beatmapsetId, meta, expected });
-    }
-    return shell;
-  });
+      work.push({ setIndex, rowIndex, beatmapsetId: entry.beatmapsetId, meta: entry.meta, expected });
+      return shell;
+    });
+  } else {
+    const fetched = await mapWithConcurrency(beatmapsetIds, 4, (id) => fetchSet(id, options.cacheDir));
+    setShells = fetched.map((set, setIndex) => {
+      if (set.error) {
+        return {
+          beatmapsetId: set.beatmapsetId,
+          title: null,
+          artist: null,
+          rows: [],
+          error: set.error,
+        };
+      }
+      const shell: SetResult = {
+        beatmapsetId: set.beatmapsetId,
+        title: null,
+        artist: null,
+        rows: [],
+        error: null,
+      };
+      for (const meta of set.metas) {
+        if (meta.beatmapId == null) continue;
+        const explicitlyTargetedBeatmap = benchmarkBeatmapIds?.has(meta.beatmapId) ?? false;
+        if (benchmarkBeatmapIds && !explicitlyTargetedBeatmap) continue;
+        if (hiddenDiffs.has(meta.beatmapId)) continue;
+        const expected = expectedLabels.get(meta.beatmapId) ?? null;
+        if (options.expectedLabels && (!expected || !options.expectedLabels.has(expected))) continue;
+        const shouldIncludeUnlabeled = includeUnlabeled
+          || explicitlyTargetedBeatmap
+          || (options.matchKinds?.has("unlabeled") ?? false);
+        if (!expected && !shouldIncludeUnlabeled) continue;
+        const rowIndex = shell.rows.length;
+        shell.rows.push({
+          beatmapId: meta.beatmapId,
+          version: "",
+          starRating: meta.starRating,
+          expected,
+          predicted: null,
+          predictedFamily: null,
+          predictedConfidence: null,
+          predictedRawDan: null,
+          predictedSrProxy: null,
+          match: "unlabeled",
+          error: null,
+        });
+        work.push({ setIndex, rowIndex, beatmapsetId: set.beatmapsetId, meta, expected });
+      }
+      return shell;
+    });
+  }
 
   await mapWithConcurrency(work, 4, async ({ setIndex, rowIndex, meta }) => {
     const target = setShells[setIndex].rows[rowIndex];

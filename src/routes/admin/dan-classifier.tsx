@@ -7,19 +7,19 @@ import { filterBeatmapSearchResults } from "../../lib/beatmap-search";
 import { estimateDan } from "../../lib/dan-estimator";
 import { estimateDanielDan } from "../../lib/daniel-estimator";
 import { formatNumber } from "../../lib/format";
-import { getBeatmapFile, getBeatmapset, getBeatmapsetForBeatmap, getRankings, getUser, getUserScoresBestWindow, searchBeatmaps, searchBeatmapsByMappers } from "../../lib/osu";
+import { getBeatmapFile, getBeatmapset, getBeatmapsetForBeatmap, getUser, getUserScoresBestWindow, searchBeatmaps, searchBeatmapsByMappers } from "../../lib/osu";
 import type { DanEstimate } from "../../lib/dan-estimator";
 import type { OsuBeatmap, OsuBeatmapset, OsuScore } from "../../lib/types";
 import { canUseDevFeatures } from "../../lib/auth-shared";
 import {
   type DanBenchmarkFamily,
+  getBenchmarkBeatmapIds,
   getBenchmarkBeatmapsetIds,
   getBenchmarkLabelOptions,
 } from "../../lib/dan-benchmark-sets";
 import { getDanBenchmarkHiddenDiffs, getDanBenchmarkLabels, setDanBenchmarkHiddenDiff, setDanBenchmarkLabel } from "../../lib/dan-benchmark";
 
 type DanClassifierId = "aleju" | "daniel";
-type DanClassifierView = "search" | "benchmark" | "ranked";
 
 const DAN_CLASSIFIERS: Array<{ id: DanClassifierId; label: string }> = [
   { id: "aleju", label: "aleju" },
@@ -117,111 +117,6 @@ function topPlayScoresToBeatmapsets(scores: OsuScore[]): OsuBeatmapset[] {
   return [...beatmapsetsById.values()];
 }
 
-function rankedScoreBeatmapset(score: OsuScore): OsuBeatmapset | null {
-  if (!score.beatmap || !score.beatmapset) return null;
-  return {
-    id: score.beatmapset.id,
-    title: score.beatmapset.title,
-    artist: score.beatmapset.artist,
-    creator: "",
-    user_id: 0,
-    covers: score.beatmapset.covers,
-    status: "",
-    play_count: 0,
-    favourite_count: 0,
-    submitted_date: "",
-    ranked_date: null,
-    last_updated: "",
-    bpm: score.beatmap.bpm ?? 0,
-    beatmaps: [],
-    preview_url: "",
-  };
-}
-
-function rankedScoreBeatmap(score: OsuScore): OsuBeatmap | null {
-  const beatmap = score.beatmap;
-  if (!beatmap || beatmap.mode !== "mania" || beatmap.cs !== 4) return null;
-  return {
-    id: beatmap.id,
-    beatmapset_id: beatmap.beatmapset_id,
-    difficulty_rating: beatmap.difficulty_rating,
-    mode: beatmap.mode,
-    status: "",
-    total_length: 0,
-    cs: beatmap.cs,
-    drain: 0,
-    accuracy: 0,
-    ar: 0,
-    bpm: beatmap.bpm,
-    convert: false,
-    count_circles: 0,
-    count_sliders: 0,
-    count_spinners: 0,
-    max_combo: beatmap.max_combo,
-    version: beatmap.version,
-    url: beatmap.url,
-  };
-}
-
-function buildRankedCommonMaps(
-  playerScores: Array<{ username: string; scores: OsuScore[] }>,
-): RankedCommonMap[] {
-  const maps = new Map<number, RankedCommonMap & { playerSet: Set<string> }>();
-
-  for (const player of playerScores) {
-    const seenForPlayer = new Set<number>();
-    for (const score of player.scores) {
-      const beatmap = rankedScoreBeatmap(score);
-      const beatmapset = rankedScoreBeatmapset(score);
-      if (!beatmap || !beatmapset || seenForPlayer.has(beatmap.id)) continue;
-      seenForPlayer.add(beatmap.id);
-
-      const existing = maps.get(beatmap.id);
-      const pp = score.pp ?? 0;
-      if (existing) {
-        existing.playerSet.add(player.username);
-        existing.players = [...existing.playerSet].sort((a, b) => a.localeCompare(b));
-        existing.playerCount = existing.playerSet.size;
-        existing.scoreCount += 1;
-        existing.bestPp = Math.max(existing.bestPp, pp);
-        existing.totalPp += pp;
-        continue;
-      }
-
-      const playerSet = new Set([player.username]);
-      maps.set(beatmap.id, {
-        beatmapId: beatmap.id,
-        beatmapsetId: beatmapset.id,
-        title: beatmapset.title,
-        artist: beatmapset.artist,
-        version: beatmap.version,
-        starRating: beatmap.difficulty_rating,
-        bpm: beatmap.bpm,
-        coverUrl: beatmapset.covers?.["cover@2x"] || beatmapset.covers?.cover || null,
-        playerCount: 1,
-        scoreCount: 1,
-        bestPp: pp,
-        totalPp: pp,
-        players: [player.username],
-        beatmapset: { ...beatmapset, beatmaps: [beatmap] },
-        beatmap,
-        playerSet,
-      });
-    }
-  }
-
-  return [...maps.values()]
-    .sort((left, right) =>
-      right.playerCount - left.playerCount
-      || right.scoreCount - left.scoreCount
-      || right.bestPp - left.bestPp
-      || right.starRating - left.starRating
-      || left.title.localeCompare(right.title),
-    )
-    .slice(0, 150)
-    .map(({ playerSet: _playerSet, ...map }) => map);
-}
-
 function extractBeatmapsetId(query: string): number | null {
   const beatmapsetUrlMatch = query.match(/beatmapsets\/(\d+)/i);
   const numericQueryMatch = query.trim().match(/^(\d{5,})$/);
@@ -268,24 +163,6 @@ interface BenchmarkExportState {
   status: BenchmarkExportStatus;
 }
 
-interface RankedCommonMap {
-  beatmapId: number;
-  beatmapsetId: number;
-  title: string;
-  artist: string;
-  version: string;
-  starRating: number;
-  bpm?: number;
-  coverUrl: string | null;
-  playerCount: number;
-  scoreCount: number;
-  bestPp: number;
-  totalPp: number;
-  players: string[];
-  beatmapset: OsuBeatmapset;
-  beatmap: OsuBeatmap;
-}
-
 interface BenchmarkExportRow {
   family: DanBenchmarkFamily;
   beatmapsetId: number;
@@ -313,7 +190,7 @@ interface BenchmarkExportColumn {
   type?: "number";
 }
 
-const BENCHMARK_EXPORT_FAMILIES: DanBenchmarkFamily[] = ["normal", "ln"];
+const BENCHMARK_EXPORT_FAMILIES: DanBenchmarkFamily[] = ["normal", "ln", "ranked"];
 
 const BENCHMARK_EXPORT_COLUMNS: BenchmarkExportColumn[] = [
   { key: "beatmapsetId", label: "Beatmapset ID", width: 90, type: "number" },
@@ -333,7 +210,9 @@ const BENCHMARK_EXPORT_COLUMNS: BenchmarkExportColumn[] = [
 const XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 function formatBenchmarkFamily(family: DanBenchmarkFamily): string {
-  return family === "ln" ? "LN" : "Normal";
+  if (family === "ln") return "LN";
+  if (family === "ranked") return "Ranked";
+  return "Normal";
 }
 
 function getBenchmarkExportCellValue(row: BenchmarkExportRow, key: BenchmarkExportColumnKey): string | number {
@@ -654,18 +533,15 @@ export const Route = createFileRoute("/admin/dan-classifier")({
 });
 
 function DanClassifierPage() {
-  const [view, setView] = useState<DanClassifierView>("search");
+  const [view, setView] = useState<"search" | "benchmark">("search");
   const [benchmarkFamily, setBenchmarkFamily] = useState<DanBenchmarkFamily>("normal");
   const [query, setQuery] = useState("");
   const [playerQuery, setPlayerQuery] = useState("");
   const [rate, setRate] = useState(1);
   const [classifier, setClassifier] = useState<DanClassifierId>("aleju");
   const [results, setResults] = useState<OsuBeatmapset[]>([]);
-  const [rankedMaps, setRankedMaps] = useState<RankedCommonMap[]>([]);
   const [showingPlayerMaps, setShowingPlayerMaps] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [rankedLoading, setRankedLoading] = useState(false);
-  const [rankedLoadedAt, setRankedLoadedAt] = useState<number | null>(null);
   const [playerMapsLoading, setPlayerMapsLoading] = useState(false);
   const [loadedPlayerName, setLoadedPlayerName] = useState<string | null>(null);
   const [selectedSet, setSelectedSet] = useState<OsuBeatmapset | null>(null);
@@ -739,12 +615,6 @@ function DanClassifierPage() {
 
   useEffect(() => () => clearTimeout(copiedTimerRef.current), []);
 
-  useEffect(() => {
-    if (view !== "ranked" || rankedMaps.length > 0 || rankedLoading) return;
-    void loadRankedCommonMaps();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, rankedMaps.length, rankedLoading]);
-
   const selectedTitle = useMemo(() => {
     if (!selectedSet || !selectedBeatmap) return null;
     return `${selectedSet.artist} - ${selectedSet.title} [${selectedBeatmap.version}]`;
@@ -795,37 +665,6 @@ function DanClassifierPage() {
     }
   }
 
-  async function loadRankedCommonMaps(refresh = false) {
-    if (rankedLoading) return;
-    if (!refresh && rankedMaps.length > 0) return;
-
-    setRankedLoading(true);
-    setError(null);
-
-    try {
-      const rankings = await getRankings({ data: { type: "performance", page: 1, country: "CR" } });
-      const players = rankings.ranking
-        .filter((entry) => entry.user.is_active !== false)
-        .slice(0, 15)
-        .map((entry) => ({
-          id: entry.user.id,
-          username: entry.user.username,
-        }));
-
-      const playerScores = await mapWithConcurrencyClient(players, 3, async (player) => {
-        const scores = await getUserScoresBestWindow({ data: { userId: player.id, totalLimit: 100 } });
-        return { username: player.username, scores };
-      });
-
-      setRankedMaps(buildRankedCommonMaps(playerScores));
-      setRankedLoadedAt(Date.now());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not load ranked CR top-play maps.");
-    } finally {
-      setRankedLoading(false);
-    }
-  }
-
   const copyBeatmapId = useCallback(async (beatmapId: number) => {
     const copied = await copyTextToClipboard(String(beatmapId));
     if (!copied) return;
@@ -853,13 +692,11 @@ function DanClassifierPage() {
         <div className="mt-5 flex items-center gap-1 border-b border-osu-b3/30">
           <ViewTab active={view === "search"} onClick={() => setView("search")}>Search</ViewTab>
           <ViewTab active={view === "benchmark"} onClick={() => setView("benchmark")}>Benchmark</ViewTab>
-          <ViewTab active={view === "ranked"} onClick={() => setView("ranked")}>Ranked</ViewTab>
         </div>
 
         <div
           className={`mt-6 grid min-w-0 gap-6 items-start ${
             view === "benchmark" && !selectedBeatmap
-              || view === "ranked" && !selectedBeatmap
               ? "lg:grid-cols-1"
               : "lg:grid-cols-[minmax(0,1fr)_360px]"
           }`}
@@ -1054,7 +891,7 @@ function DanClassifierPage() {
               )}
             </div>
           </section>
-          ) : view === "benchmark" ? (
+          ) : (
             <BenchmarkView
               family={benchmarkFamily}
               onFamilyChange={setBenchmarkFamily}
@@ -1067,20 +904,9 @@ function DanClassifierPage() {
               onCopyId={copyBeatmapId}
               copiedBeatmapId={copiedBeatmapId}
             />
-          ) : (
-            <RankedView
-              maps={rankedMaps}
-              loading={rankedLoading}
-              loadedAt={rankedLoadedAt}
-              onRefresh={() => void loadRankedCommonMaps(true)}
-              onAnalyze={analyzeBeatmap}
-              onCopyId={copyBeatmapId}
-              copiedBeatmapId={copiedBeatmapId}
-              selectedBeatmapId={selectedBeatmap?.id ?? null}
-            />
           )}
 
-          {!((view === "benchmark" || view === "ranked") && !selectedBeatmap) && (
+          {!(view === "benchmark" && !selectedBeatmap) && (
           <aside className="min-w-0 rounded-lg border border-osu-b3/30 bg-osu-b4/35 p-4 sm:p-5 lg:sticky lg:top-24">
             <div className="flex items-start justify-between gap-2">
               <div>
@@ -1271,10 +1097,12 @@ function BenchmarkView({
   const [expectedLabelsByFamily, setExpectedLabelsByFamily] = useState<Record<DanBenchmarkFamily, Map<number, string>>>({
     normal: new Map(),
     ln: new Map(),
+    ranked: new Map(),
   });
   const [hiddenByFamily, setHiddenByFamily] = useState<Record<DanBenchmarkFamily, Set<number>>>({
     normal: new Set(),
     ln: new Set(),
+    ranked: new Set(),
   });
   const [labelsLoaded, setLabelsLoaded] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
@@ -1285,24 +1113,28 @@ function BenchmarkView({
   const hiddenSet = hiddenByFamily[family];
   const labelOptions = useMemo(() => getBenchmarkLabelOptions(family), [family]);
 
-  // load expected labels + hidden diffs for both families once
+  // load expected labels + hidden diffs for every family once
   useEffect(() => {
     let cancelled = false;
     void (async () => {
       try {
-        const [normalRows, lnRows, normalHidden, lnHidden] = await Promise.all([
+        const [normalRows, lnRows, rankedRows, normalHidden, lnHidden, rankedHidden] = await Promise.all([
           getDanBenchmarkLabels({ data: { family: "normal" } }),
           getDanBenchmarkLabels({ data: { family: "ln" } }),
+          getDanBenchmarkLabels({ data: { family: "ranked" } }),
           getDanBenchmarkHiddenDiffs({ data: { family: "normal" } }),
           getDanBenchmarkHiddenDiffs({ data: { family: "ln" } }),
+          getDanBenchmarkHiddenDiffs({ data: { family: "ranked" } }),
         ]);
         if (cancelled) return;
         const normalMap = new Map<number, string>();
         for (const row of normalRows) normalMap.set(row.beatmapId, row.expectedLabel);
         const lnMap = new Map<number, string>();
         for (const row of lnRows) lnMap.set(row.beatmapId, row.expectedLabel);
-        setExpectedLabelsByFamily({ normal: normalMap, ln: lnMap });
-        setHiddenByFamily({ normal: new Set(normalHidden), ln: new Set(lnHidden) });
+        const rankedMap = new Map<number, string>();
+        for (const row of rankedRows) rankedMap.set(row.beatmapId, row.expectedLabel);
+        setExpectedLabelsByFamily({ normal: normalMap, ln: lnMap, ranked: rankedMap });
+        setHiddenByFamily({ normal: new Set(normalHidden), ln: new Set(lnHidden), ranked: new Set(rankedHidden) });
         setLabelsLoaded(true);
       } catch {
         if (!cancelled) setLabelsLoaded(true);
@@ -1357,6 +1189,7 @@ function BenchmarkView({
     }
 
     const ids = getBenchmarkBeatmapsetIds(family);
+    const targetBeatmapIds = getBenchmarkBeatmapIds(family);
     const initial: BenchmarkSetState[] = ids.map((id) => ({
       beatmapsetId: id,
       beatmapset: null,
@@ -1389,6 +1222,7 @@ function BenchmarkView({
         }
         const maniaDiffs = (beatmapset.beatmaps ?? [])
           .filter((bm) => bm.mode === "mania" && bm.cs === 4)
+          .filter((bm) => !targetBeatmapIds || targetBeatmapIds.has(bm.id))
           .sort((a, b) => a.difficulty_rating - b.difficulty_rating);
         return {
           beatmapsetId: id,
@@ -1502,6 +1336,7 @@ function BenchmarkView({
       if (cached) return { family: fam, sets: cached };
 
       const ids = getBenchmarkBeatmapsetIds(fam);
+      const targetBeatmapIds = getBenchmarkBeatmapIds(fam);
       const fetched = await mapWithConcurrencyClient(ids, 4, async (id) => {
         try {
           const beatmapset = await getBeatmapset({ data: { beatmapsetId: id } });
@@ -1518,6 +1353,7 @@ function BenchmarkView({
         rows: beatmapset
           ? (beatmapset.beatmaps ?? [])
               .filter((bm) => bm.mode === "mania" && bm.cs === 4)
+              .filter((bm) => !targetBeatmapIds || targetBeatmapIds.has(bm.id))
               .sort((a, b) => a.difficulty_rating - b.difficulty_rating)
               .map((bm) => ({
                 beatmapsetId: id,
@@ -1533,7 +1369,7 @@ function BenchmarkView({
       return { family: fam, sets: setsState };
     }));
 
-    const dataset: BenchmarkExportDataset = { normal: [], ln: [] };
+    const dataset: BenchmarkExportDataset = { normal: [], ln: [], ranked: [] };
 
     for (const { family: fam, sets: famSets } of datasets) {
       for (const set of famSets) {
@@ -1647,6 +1483,7 @@ function BenchmarkView({
         <div className="flex items-center gap-1 rounded-md border border-osu-b3/40 bg-osu-b5/60 p-0.5">
           <SubTab active={family === "normal"} onClick={() => onFamilyChange("normal")}>Normal</SubTab>
           <SubTab active={family === "ln"} onClick={() => onFamilyChange("ln")}>LN</SubTab>
+          <SubTab active={family === "ranked"} onClick={() => onFamilyChange("ranked")}>Ranked</SubTab>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2 text-[11px] text-osu-f1 sm:gap-3">
           <label className="flex items-center gap-1.5">
@@ -1769,166 +1606,6 @@ function SubTab({ active, onClick, children }: { active: boolean; onClick: () =>
     </button>
   );
 }
-
-interface RankedViewProps {
-  maps: RankedCommonMap[];
-  loading: boolean;
-  loadedAt: number | null;
-  onRefresh: () => void;
-  onAnalyze: (set: OsuBeatmapset, beatmap: OsuBeatmap) => void;
-  onCopyId: (id: number) => void;
-  copiedBeatmapId: number | null;
-  selectedBeatmapId: number | null;
-}
-
-function RankedView({
-  maps,
-  loading,
-  loadedAt,
-  onRefresh,
-  onAnalyze,
-  onCopyId,
-  copiedBeatmapId,
-  selectedBeatmapId,
-}: RankedViewProps) {
-  return (
-    <section className="min-w-0">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-2">
-        <div>
-          <div className="text-sm font-black text-white">Costa Rica ranked top-play maps</div>
-          <div className="mt-0.5 text-[11px] text-osu-f1">
-            Top 150 recurring 4K maps across the top 15 CR profiles' best plays.
-          </div>
-        </div>
-        <div className="flex items-center gap-3 text-[11px] text-osu-f1">
-          {loadedAt ? (
-            <span>{maps.length} maps loaded</span>
-          ) : null}
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={loading}
-            className="inline-flex h-8 cursor-pointer items-center justify-center gap-2 rounded-md border border-osu-pink/30 bg-osu-pink/20 px-3 text-xs font-black text-white transition-colors hover:border-osu-pink/60 hover:bg-osu-pink/30 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? (
-              <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-            ) : (
-              <Search className="h-4 w-4" />
-            )}
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      {loading && maps.length === 0 ? (
-        <div className="mt-5 rounded-md border border-osu-b3/30 bg-osu-b5/40 px-4 py-8 text-center text-sm text-osu-f1">
-          Loading CR rankings and top plays...
-        </div>
-      ) : null}
-
-      {!loading && maps.length === 0 ? (
-        <div className="mt-5 rounded-md border border-osu-b3/30 bg-osu-b5/40 px-4 py-8 text-center text-sm text-osu-f1">
-          No ranked maps loaded yet.
-        </div>
-      ) : null}
-
-      {maps.length > 0 ? (
-        <div className="mt-3 grid gap-2 lg:grid-cols-2">
-          {maps.map((map, index) => (
-            <RankedMapRow
-              key={map.beatmapId}
-              map={map}
-              rank={index + 1}
-              onAnalyze={onAnalyze}
-              onCopyId={onCopyId}
-              copiedBeatmapId={copiedBeatmapId}
-              isSelected={selectedBeatmapId === map.beatmapId}
-            />
-          ))}
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-interface RankedMapRowProps {
-  map: RankedCommonMap;
-  rank: number;
-  onAnalyze: (set: OsuBeatmapset, beatmap: OsuBeatmap) => void;
-  onCopyId: (id: number) => void;
-  copiedBeatmapId: number | null;
-  isSelected: boolean;
-}
-
-const RankedMapRow = memo(function RankedMapRow({
-  map,
-  rank,
-  onAnalyze,
-  onCopyId,
-  copiedBeatmapId,
-  isSelected,
-}: RankedMapRowProps) {
-  return (
-    <div className={`group relative min-w-0 overflow-hidden rounded-md border bg-osu-b5 [content-visibility:auto] [contain-intrinsic-size:104px] ${
-      isSelected ? "border-osu-pink ring-1 ring-osu-pink/40" : "border-osu-b3/35 hover:border-osu-b3/70"
-    }`}>
-      {map.coverUrl ? (
-        <img src={map.coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-25 transition-opacity group-hover:opacity-35" loading="lazy" decoding="async" />
-      ) : null}
-      <div className="absolute inset-0 bg-gradient-to-r from-osu-b5 via-osu-b5/90 to-osu-b5/60" />
-      <div className="relative flex min-w-0 items-center gap-3 p-3">
-        <div className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-md border border-osu-b3/35 bg-black/30">
-          <span className="text-[10px] font-bold text-osu-f1">#{rank}</span>
-          <span className="text-sm font-black text-white">{map.playerCount}</span>
-        </div>
-        <button
-          type="button"
-          onClick={() => onAnalyze(map.beatmapset, map.beatmap)}
-          className="min-w-0 flex-1 cursor-pointer text-left"
-        >
-          <div className="truncate text-sm font-black text-white">{map.artist} - {map.title}</div>
-          <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] text-osu-f1">
-            <span className="shrink-0 tabular-nums text-osu-l2">&#9733;{map.starRating.toFixed(2)}</span>
-            {map.bpm ? <span className="shrink-0">{Math.round(map.bpm)} BPM</span> : null}
-            <span className="min-w-0 truncate">[{map.version.replace(/\s*\[\d+[Kk]\]\s*/g, " ").trim()}]</span>
-          </div>
-          <div className="mt-1 truncate text-[10px] text-osu-f1">
-            {map.players.join(", ")}
-          </div>
-        </button>
-        <div className="flex shrink-0 flex-col items-end gap-1 text-[10px] text-osu-f1">
-          <span title="Number of top-15 CR players with this map in their top plays">
-            {map.playerCount}/15 players
-          </span>
-          <span>{Math.round(map.bestPp)}pp best</span>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => onCopyId(map.beatmapId)}
-              className="inline-flex h-6 w-6 cursor-pointer items-center justify-center rounded-md border border-white/10 bg-black/35 text-osu-l2 backdrop-blur-sm transition-colors hover:border-osu-l2/40 hover:bg-black/55 hover:text-white"
-              title={`Copy beatmap ID ${map.beatmapId}`}
-              aria-label={`Copy beatmap ID ${map.beatmapId}`}
-            >
-              {copiedBeatmapId === map.beatmapId ? (
-                <Check className="h-3.5 w-3.5" strokeWidth={3} />
-              ) : (
-                <Copy className="h-3.5 w-3.5" />
-              )}
-            </button>
-            <a
-              href={`https://osu.ppy.sh/beatmaps/${map.beatmapId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-md border border-white/10 bg-black/35 px-2 py-1 font-bold text-osu-l2 backdrop-blur-sm transition-colors hover:border-osu-l2/40 hover:bg-black/55 hover:text-white"
-            >
-              osu!
-            </a>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-});
 
 function applyRowUpdates(
   sets: BenchmarkSetState[],
