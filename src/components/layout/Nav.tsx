@@ -10,7 +10,7 @@ import { ThemePicker } from "./ThemePicker";
 import { useAuth } from "../../lib/auth-context";
 import { clearDevServerCaches } from "../../lib/api";
 import { searchUsers } from "../../lib/osu";
-import { TOP_PLAYS_RANGE_STORAGE_KEY, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
+import { DEFAULT_SNIPES_FILTERS, SNIPES_FILTERS_STORAGE_KEY, TOP_PLAYS_RANGE_STORAGE_KEY, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
 import { readCountryFromSearchStr } from "../../lib/country-search";
 import { getCountryFlagGradient, getCountryFlagUrl } from "../../lib/country";
 import { useDynamicFavicon } from "../../lib/favicon";
@@ -64,6 +64,7 @@ async function clearClientCaches(): Promise<void> {
       window.localStorage.removeItem(key);
     });
     window.localStorage.removeItem(TOP_PLAYS_RANGE_STORAGE_KEY);
+    window.localStorage.removeItem(SNIPES_FILTERS_STORAGE_KEY);
     window.sessionStorage.clear();
   }
 
@@ -110,8 +111,10 @@ export function Nav() {
   const logoutHref = `/api/auth/logout?next=${encodeURIComponent(returnTo)}`;
   const visibleLinks = links;
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
+  const snipesFilters = useAppStore((state) => state.snipesFiltersByCountry[selectedCountry] ?? DEFAULT_SNIPES_FILTERS);
   const hydrated = useHasHydrated();
   const topPlaysRangeForLink = hydrated && topPlaysRange !== "7d" ? topPlaysRange : "7d";
+  const snipesFiltersForLink = hydrated ? snipesFilters : DEFAULT_SNIPES_FILTERS;
   const settingsActive = location.pathname.startsWith("/settings");
   const current = visibleLinks.find((l) => location.pathname.startsWith(l.to === "/" ? "/__home" : l.to)) ||
     (location.pathname === "/" ? links[0] : location.pathname.startsWith("/player") || settingsActive ? null : links[0]);
@@ -382,7 +385,7 @@ export function Nav() {
                         : l.id === "maps"
                           ? preserveSearchWithCountryOnFirstPage(selectedCountry)
                           : l.id === "snipes"
-                            ? preserveSearchWithCountry(selectedCountry)
+                            ? { country: selectedCountry, ...snipesFiltersForLink, page: 0 }
                             : undefined
                 }
                 preload={l.id === "tracker" ? false : "intent"}
@@ -630,7 +633,7 @@ export function Nav() {
                             : l.id === "maps"
                               ? preserveSearchWithCountryOnFirstPage(selectedCountry)
                               : l.id === "snipes"
-                                ? preserveSearchWithCountry(selectedCountry)
+                                ? { country: selectedCountry, ...snipesFiltersForLink, page: 0 }
                                 : undefined
                     }
                     preload={l.id === "tracker" ? false : "intent"}

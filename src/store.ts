@@ -30,6 +30,7 @@ export const AVATAR_ACCENT_CLIENT_TTL = 24 * 60 * 60 * 1000;
 export const AVATAR_ACCENT_FAILURE_TTL = 5 * 60 * 1000;
 export const TRACKER_PP_GAIN_CLIENT_TTL = 10 * 60 * 1000;
 export const TOP_PLAYS_RANGE_STORAGE_KEY = "mania-hub-top-plays-range-v1";
+export const SNIPES_FILTERS_STORAGE_KEY = "mania-hub-snipes-filters-v1";
 export const DEFAULT_THEME_HUE = 333;
 // Persisted separately from the main `mania-hub-cache-v5` blob. Mobile Safari's
 // localStorage quota is tight (~5MB) and our cache payload can approach it; a
@@ -188,6 +189,18 @@ export interface CachedPopoff {
 }
 
 export type TopPlaysRange = "24h" | "3d" | "7d" | "30d";
+export type SnipesRange = "24h" | "7d" | "30d" | "all";
+export type SnipesKeyFilter = "all" | "4k" | "7k";
+
+export interface SnipesFilters {
+  keys: SnipesKeyFilter;
+  range: SnipesRange;
+}
+
+export const DEFAULT_SNIPES_FILTERS: SnipesFilters = {
+  keys: "all",
+  range: "7d",
+};
 
 type CountryRecord<T> = Record<string, T>;
 
@@ -206,6 +219,7 @@ interface AppState {
   homePopoffsByCountry: CountryRecord<LeanHomePopoff[]>;
   homePopoffsFetchedAtByCountry: CountryRecord<number>;
   topPlaysRangeByCountry: CountryRecord<TopPlaysRange>;
+  snipesFiltersByCountry: CountryRecord<SnipesFilters>;
   popoffsByCountry: CountryRecord<CachedPopoff[]>;
   popoffsFetchedAtByCountry: CountryRecord<number>;
   popoffsWindowByCountry: CountryRecord<TopPlaysRange>;
@@ -230,6 +244,7 @@ interface AppState {
   setHomeRecentScores: (country: string, scores: LeanHomeScore[]) => void;
   setHomePopoffs: (country: string, popoffs: LeanHomePopoff[]) => void;
   setTopPlaysRange: (country: string, range: TopPlaysRange) => void;
+  setSnipesFilters: (country: string, filters: SnipesFilters) => void;
   setPopoffs: (country: string, popoffs: CachedPopoff[], window: TopPlaysRange) => void;
   setMapsData: (country: string, data: CountryMapsData) => void;
   setSnipes: (country: string, events: SnipeEvent[], scannedAt: number) => void;
@@ -279,6 +294,51 @@ function writeTopPlaysRangeByCountry(ranges: CountryRecord<TopPlaysRange>): void
     localStorage.setItem(TOP_PLAYS_RANGE_STORAGE_KEY, JSON.stringify(ranges));
   } catch (error) {
     warnStorageIssue(`write "${TOP_PLAYS_RANGE_STORAGE_KEY}"`, error);
+  }
+}
+
+function isSnipesRange(value: unknown): value is SnipesRange {
+  return value === "24h" || value === "7d" || value === "30d" || value === "all";
+}
+
+function isSnipesKeyFilter(value: unknown): value is SnipesKeyFilter {
+  return value === "all" || value === "4k" || value === "7k";
+}
+
+function readSnipesFiltersByCountry(): CountryRecord<SnipesFilters> {
+  if (typeof window === "undefined") return {};
+
+  try {
+    const raw = localStorage.getItem(SNIPES_FILTERS_STORAGE_KEY);
+    if (!raw) return {};
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+
+    const result: CountryRecord<SnipesFilters> = {};
+    for (const [country, filters] of Object.entries(parsed)) {
+      if (!filters || typeof filters !== "object" || Array.isArray(filters)) continue;
+      const candidate = filters as Partial<SnipesFilters>;
+      if (!isSnipesRange(candidate.range) || !isSnipesKeyFilter(candidate.keys)) continue;
+      result[normalizeCountryCode(country)] = {
+        range: candidate.range,
+        keys: candidate.keys,
+      };
+    }
+    return result;
+  } catch (error) {
+    warnStorageIssue(`read "${SNIPES_FILTERS_STORAGE_KEY}"`, error);
+    return {};
+  }
+}
+
+function writeSnipesFiltersByCountry(filters: CountryRecord<SnipesFilters>): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    localStorage.setItem(SNIPES_FILTERS_STORAGE_KEY, JSON.stringify(filters));
+  } catch (error) {
+    warnStorageIssue(`write "${SNIPES_FILTERS_STORAGE_KEY}"`, error);
   }
 }
 
@@ -389,6 +449,7 @@ export const useAppStore = create<AppState>()(
       homePopoffsByCountry: {},
       homePopoffsFetchedAtByCountry: {},
       topPlaysRangeByCountry: readTopPlaysRangeByCountry(),
+      snipesFiltersByCountry: readSnipesFiltersByCountry(),
       popoffsByCountry: {},
       popoffsFetchedAtByCountry: {},
       popoffsWindowByCountry: {},
@@ -508,6 +569,27 @@ export const useAppStore = create<AppState>()(
 
           return {
             topPlaysRangeByCountry: nextTopPlaysRangeByCountry,
+          };
+        }),
+      setSnipesFilters: (country, filters) =>
+        set((state) => {
+          const normalizedCountry = normalizeCountryCode(country);
+          const previous = state.snipesFiltersByCountry[normalizedCountry];
+          if (
+            previous?.keys === filters.keys &&
+            previous.range === filters.range
+          ) {
+            return state;
+          }
+          const nextSnipesFiltersByCountry = {
+            ...state.snipesFiltersByCountry,
+            [normalizedCountry]: filters,
+          };
+
+          writeSnipesFiltersByCountry(nextSnipesFiltersByCountry);
+
+          return {
+            snipesFiltersByCountry: nextSnipesFiltersByCountry,
           };
         }),
       setPopoffs: (country, popoffs, window) =>
@@ -817,6 +899,7 @@ export const useAppStore = create<AppState>()(
             return migrated;
           })(),
           topPlaysRangeByCountry: currentState.topPlaysRangeByCountry,
+          snipesFiltersByCountry: currentState.snipesFiltersByCountry,
           // Keep persisted top-plays data even when stale so the route can render it
           // immediately after a reload and revalidate in the background.
           popoffsByCountry: persistedPopoffsByCountry as CountryRecord<CachedPopoff[]>,
@@ -872,6 +955,9 @@ export const useAppStore = create<AppState>()(
         homeRecentScoresFetchedAtByCountry: state.homeRecentScoresFetchedAtByCountry,
         homePopoffsByCountry: state.homePopoffsByCountry,
         homePopoffsFetchedAtByCountry: state.homePopoffsFetchedAtByCountry,
+        // topPlaysRangeByCountry and snipesFiltersByCountry are persisted
+        // separately in small dedicated localStorage keys so preference writes
+        // survive even if the large cache blob hits quota.
         popoffsByCountry: state.popoffsByCountry,
         popoffsFetchedAtByCountry: state.popoffsFetchedAtByCountry,
         popoffsWindowByCountry: state.popoffsWindowByCountry,

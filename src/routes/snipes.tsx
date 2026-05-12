@@ -1,4 +1,4 @@
-import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCountrySnipes, getPartialSnipeEvents, getSnipesScanStatus } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
@@ -12,15 +12,15 @@ import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { SnipeEvent, SnipesScanStatus } from "../lib/types";
-import { useAppStore, useSelectedCountry } from "../store";
+import { DEFAULT_SNIPES_FILTERS, useAppStore, useSelectedCountry, type SnipesFilters, type SnipesKeyFilter, type SnipesRange } from "../store";
 import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { startProgressPoll } from "../lib/progress-poll";
 import { fetchLiveSnipesSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
 
-type KeyFilter = "all" | "4k" | "7k";
-type RangeFilter = "24h" | "7d" | "30d" | "all";
+type KeyFilter = SnipesKeyFilter;
+type RangeFilter = SnipesRange;
 
 type SnipesSearch = {
   keys: KeyFilter;
@@ -91,6 +91,7 @@ export const Route = createFileRoute("/snipes")({
 
 function SnipesPage() {
   const search = Route.useSearch();
+  const location = useLocation();
   const navigate = useNavigate();
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = search.country ?? fallbackCountry;
@@ -106,7 +107,11 @@ function SnipesPage() {
 
   const snipes = useAppStore((state) => state.snipesByCountry[selectedCountry]) ?? EMPTY_SNIPES;
   const snipesFetchedAt = useAppStore((state) => state.snipesFetchedAtByCountry[selectedCountry]) ?? null;
+  const rememberedFilters = useAppStore(
+    (state) => state.snipesFiltersByCountry[selectedCountry] ?? DEFAULT_SNIPES_FILTERS,
+  );
   const setSnipes = useAppStore((state) => state.setSnipes);
+  const setSnipesFilters = useAppStore((state) => state.setSnipesFilters);
 
   const [loading, setLoading] = useState(snipes.length === 0);
   const [refreshing, setRefreshing] = useState(false);
@@ -120,6 +125,7 @@ function SnipesPage() {
   const sawScanActivityRef = useRef(false);
   const finalizingRefreshRef = useRef(false);
   const refreshInProgressRef = useRef(false);
+  const hasRestoredRememberedFiltersRef = useRef(false);
   const liveBackendEnabled = isLiveBackendConfigured();
 
   // Render-driving "elapsed" timer for the secondary header indicator.
@@ -245,13 +251,19 @@ function SnipesPage() {
   searchRef.current = search;
   const updateSearch = useCallback(
     (patch: Partial<SnipesSearch>) => {
+      if (patch.range || patch.keys) {
+        setSnipesFilters(selectedCountry, {
+          range: patch.range ?? searchRef.current.range,
+          keys: patch.keys ?? searchRef.current.keys,
+        });
+      }
       navigate({
         to: "/snipes",
         search: { ...searchRef.current, ...patch },
         replace: true,
       });
     },
-    [navigate],
+    [navigate, selectedCountry, setSnipesFilters],
   );
 
   // Reset transient UI state on country switch.
@@ -267,9 +279,60 @@ function SnipesPage() {
     sawScanActivityRef.current = false;
     finalizingRefreshRef.current = false;
     refreshInProgressRef.current = false;
+    hasRestoredRememberedFiltersRef.current = false;
     if (search.page !== 0) updateSearch({ page: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCountry]);
+
+  useEffect(() => {
+    if (hasRestoredRememberedFiltersRef.current) return;
+
+    hasRestoredRememberedFiltersRef.current = true;
+    const params = new URLSearchParams(location.searchStr);
+    const hasExplicitRange = params.has("range");
+    const hasExplicitKeys = params.has("keys");
+    if (hasExplicitRange && hasExplicitKeys) return;
+
+    const nextSearch = {
+      ...search,
+      range: hasExplicitRange ? search.range : rememberedFilters.range,
+      keys: hasExplicitKeys ? search.keys : rememberedFilters.keys,
+      page: 0,
+    };
+    if (
+      nextSearch.range === search.range &&
+      nextSearch.keys === search.keys &&
+      nextSearch.page === search.page
+    ) {
+      return;
+    }
+
+    navigate({
+      to: "/snipes",
+      search: nextSearch,
+      replace: true,
+    });
+  }, [location.searchStr, navigate, rememberedFilters.keys, rememberedFilters.range, search]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.searchStr);
+    const restoringMissingFilters =
+      (!params.has("range") && rememberedFilters.range !== search.range) ||
+      (!params.has("keys") && rememberedFilters.keys !== search.keys);
+    if (restoringMissingFilters) return;
+
+    const currentFilters: SnipesFilters = {
+      keys: search.keys,
+      range: search.range,
+    };
+    if (
+      rememberedFilters.keys === currentFilters.keys &&
+      rememberedFilters.range === currentFilters.range
+    ) {
+      return;
+    }
+    setSnipesFilters(selectedCountry, currentFilters);
+  }, [location.searchStr, rememberedFilters.keys, rememberedFilters.range, search.keys, search.range, selectedCountry, setSnipesFilters]);
 
   // Fetch snipes when stale. State updates are gated on the country still
   // matching at resolve time so a country switch doesn't write the wrong
