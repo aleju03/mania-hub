@@ -47,8 +47,6 @@ Styling uses Tailwind CSS v4 via `@tailwindcss/vite`, with global styles in `src
 
 Vitest is the test runner and uses the Vite config. Tests live beside source files as `*.test.ts` or `*.test.tsx`, including route helper tests, replay parsing/rendering tests, score normalization, profile shaping, beatmap search, cache behavior, and maniacard layout/rendering tests.
 
-Add focused tests for changes to parsing, replay behavior, score shaping, rankings, cache behavior, server data shaping, or route helper logic. Do not run `npm run test` or `npm run build` unless the user explicitly asks for either command.
-
 ## Security & Configuration Tips
 
 Local secrets belong in `.env`. Core live data needs `OSU_CLIENT_ID` and `OSU_CLIENT_SECRET`. Turso uses `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`; the app should degrade when Turso is missing. Optional integrations include `VITE_POSTHOG_KEY`, `POSTHOG_PERSONAL_API_KEY`, `POSTHOG_PROJECT_ID`, `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_REPLAY_CACHE_MAX_BYTES`, and `VITE_DEV_MODE`.
