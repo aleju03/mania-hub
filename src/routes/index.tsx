@@ -1,18 +1,19 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { getHomePopoffs, getHomeRecentScores, getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
+import { getModDisplayList, getScoreDisplayValues, getScoreTimestamp } from "../lib/score";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
 import { RankingRowSkeleton, ScoreRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { UsernameText } from "../components/ui/UsernameText";
-import type { RankingsResponse, LeanHomeScore, LeanHomePopoff } from "../lib/types";
+import type { RankingsResponse, LeanHomeScore, LeanHomePopoff, LeanTrackerScore } from "../lib/types";
 import { useAppStore, useHasHydrated, useSelectedCountry } from "../store";
 import { DEFAULT_DESCRIPTION, pageSeo, SITE_NAME } from "../lib/seo";
 
@@ -63,12 +64,59 @@ function getFeaturedPopoffGridClass(total: number): string {
 }
 
 const EMPTY_SCORES: LeanHomeScore[] = [];
+const EMPTY_TRACKER_SCORES: LeanTrackerScore[] = [];
 const EMPTY_POPOFFS: LeanHomePopoff[] = [];
 const HOME_RANKING_SKELETON_MOBILE_COUNT = 5;
 const HOME_RANKING_SKELETON_DESKTOP_COUNT = 10;
 const HOME_RECENT_SCORES_SKELETON_COUNT = 2;
 const HOME_RECENT_SCORES_PLAYER_COUNT = 50;
 const HOME_POPOFFS_PLAYER_COUNT = 10;
+
+function getHomeScoreTimeMs(score: LeanHomeScore): number {
+  return new Date(score.timestamp).getTime() || 0;
+}
+
+function trackerScoreToHomeScore(score: LeanTrackerScore): LeanHomeScore {
+  const display = getScoreDisplayValues(score);
+  return {
+    id: score.id,
+    pp: score.pp,
+    displayAcc: display.accuracy,
+    displayRank: display.rank,
+    isLazer: display.isLazer,
+    mods: getModDisplayList(score.mods),
+    timestamp: getScoreTimestamp(score),
+    title: score.beatmapset.title,
+    version: score.beatmap.version,
+    keyCount: Number(score.beatmap.cs) || 0,
+    beatmapsetId: score.beatmapset.id,
+    user: {
+      id: score.user.id,
+      username: score.user.username,
+      avatar_url: score.user.avatar_url,
+    },
+  };
+}
+
+function mergeHomeRecentScores(
+  homeScores: LeanHomeScore[],
+  trackerScores: LeanTrackerScore[],
+  limit = 5,
+): LeanHomeScore[] {
+  const trackerHomeScores = trackerScores
+    .filter((score) => getScoreDisplayValues(score).passed)
+    .map((score) => trackerScoreToHomeScore(score));
+  const seenUsers = new Set<number>();
+
+  return [...trackerHomeScores, ...homeScores]
+    .sort((a, b) => getHomeScoreTimeMs(b) - getHomeScoreTimeMs(a))
+    .filter((score) => {
+      if (seenUsers.has(score.user.id)) return false;
+      seenUsers.add(score.user.id);
+      return true;
+    })
+    .slice(0, limit);
+}
 
 function HomePage() {
   const navigate = useNavigate();
@@ -79,6 +127,7 @@ function HomePage() {
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const recentScores = useAppStore((state) => state.homeRecentScoresByCountry[selectedCountry]) ?? EMPTY_SCORES;
   const recentScoresFetchedAt = useAppStore((state) => state.homeRecentScoresFetchedAtByCountry[selectedCountry]) ?? null;
+  const trackerFeedScores = useAppStore((state) => state.feedScoresByCountry[selectedCountry]) ?? EMPTY_TRACKER_SCORES;
   const popoffs = useAppStore((state) => state.homePopoffsByCountry[selectedCountry]) ?? EMPTY_POPOFFS;
   const popoffsFetchedAt = useAppStore((state) => state.homePopoffsFetchedAtByCountry[selectedCountry]) ?? null;
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
@@ -242,6 +291,10 @@ function HomePage() {
   const topPlayersMobile = rankings?.ranking.slice(0, 5) ?? [];
   const topPlayersDesktop = rankings?.ranking.slice(0, 10) ?? [];
   const featuredPopoffs = popoffs.slice(0, 3);
+  const displayedRecentScores = useMemo(
+    () => mergeHomeRecentScores(recentScores, trackerFeedScores),
+    [recentScores, trackerFeedScores],
+  );
 
   return (
     <div className="flex-1 relative overflow-hidden min-h-[calc(100vh-60px)]">
@@ -420,14 +473,14 @@ function HomePage() {
             <Link to="/tracker" search={{ country: selectedCountry }} className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
           </div>
           <div className="divide-y divide-osu-b3/15">
-            {loadingScores ? (
+            {loadingScores && displayedRecentScores.length === 0 ? (
               Array.from({ length: HOME_RECENT_SCORES_SKELETON_COUNT }).map((_, i) => (
                 <div key={i} className="px-4 py-2">
                   <ScoreRowSkeleton />
                 </div>
               ))
-            ) : recentScores.length > 0 ? (
-              recentScores.map((s: LeanHomeScore, i: number) => (
+            ) : displayedRecentScores.length > 0 ? (
+              displayedRecentScores.map((s: LeanHomeScore, i: number) => (
                 <motion.div key={s.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
                   className="flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3/50 transition-colors cursor-pointer"
                   onClick={() => navigate({ to: "/player/$username", params: { username: s.user.username } })}>
