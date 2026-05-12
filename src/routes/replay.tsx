@@ -877,6 +877,7 @@ function ReplayViewer({
   const scrubbingRef = useRef(false);
   const scrubResumeOnReleaseRef = useRef(false);
   const fullscreenChromeTimeoutRef = useRef<number | null>(null);
+  const suppressNextMobileCanvasPointerUpRef = useRef(false);
   // Refs mirror state for the renderer's external clock callback so it always
   // reads the latest values without needing to be re-registered on every
   // React re-render.
@@ -1049,14 +1050,25 @@ function ReplayViewer({
 
   const handleReplayCanvasPointerDown = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (!isMobileReplayPointer(event)) return;
+    if (isCanvasFullscreen && showFullscreenChrome) {
+      suppressNextMobileCanvasPointerUpRef.current = true;
+      clearFullscreenChromeTimeout();
+      setShowFullscreenChrome(false);
+      return;
+    }
+    suppressNextMobileCanvasPointerUpRef.current = false;
     showFullscreenChromeTemporarily(
       true,
       isCanvasFullscreen ? FULLSCREEN_TAP_CHROME_HIDE_MS : MOBILE_FULLSCREEN_BUTTON_HIDE_MS,
     );
-  }, [isCanvasFullscreen, showFullscreenChromeTemporarily]);
+  }, [clearFullscreenChromeTimeout, isCanvasFullscreen, showFullscreenChrome, showFullscreenChromeTemporarily]);
 
   const handleReplayCanvasPointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     if (!isCanvasFullscreen || !isMobileReplayPointer(event)) return;
+    if (suppressNextMobileCanvasPointerUpRef.current) {
+      suppressNextMobileCanvasPointerUpRef.current = false;
+      return;
+    }
     showFullscreenChromeTemporarily(true, FULLSCREEN_TAP_CHROME_HIDE_MS);
   }, [isCanvasFullscreen, showFullscreenChromeTemporarily]);
 

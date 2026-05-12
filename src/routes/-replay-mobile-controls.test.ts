@@ -12,6 +12,8 @@ describe("replay mobile controls", () => {
     expect(routeSource).toContain("handleReplayCanvasPointerUp");
     expect(routeSource).toContain("isMobileReplayPointer(event)");
     expect(routeSource).toContain("mobileFullscreenButtonVisible");
+    expect(routeSource).toContain("suppressNextMobileCanvasPointerUpRef");
+    expect(routeSource).toContain("setShowFullscreenChrome(false)");
     expect(routeSource).toContain("onPointerDown={handleReplayCanvasPointerDown}");
     expect(routeSource).toContain("onPointerUp={handleReplayCanvasPointerUp}");
   });
