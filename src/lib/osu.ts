@@ -416,10 +416,11 @@ interface OscScoresResponse {
   success?: boolean;
   meta?: {
     count?: number;
-    cursors?: {
-      newer?: string | null;
-      older?: string | null;
-    } | null;
+    oldest?: number | null;
+    newest?: number | null;
+    mode?: string;
+    users?: number[];
+    maps?: number[];
   };
   scores?: OscScore[];
 }
@@ -1320,14 +1321,17 @@ function getOscScoreTimeMs(score: OscScore): number {
   return timestamp ? new Date(timestamp).getTime() : 0;
 }
 
-async function fetchOscRecentScoresPage(before?: string | null): Promise<OscScoresResponse> {
+async function fetchOscRecentScoresPage(before?: number | null): Promise<OscScoresResponse> {
   const baseUrl = getOscBaseUrl();
   if (!baseUrl) throw new Error("oSC tracker feed is disabled.");
 
-  const params = new URLSearchParams({ limit: String(OSC_RECENT_SCORES_LIMIT) });
-  if (before) params.set("before", before);
+  const params = new URLSearchParams({
+    limit: String(OSC_RECENT_SCORES_LIMIT),
+    mode: "mania",
+  });
+  if (before != null) params.set("before", String(before));
   return fetchPublicJsonWithTimeout<OscScoresResponse>(
-    `${baseUrl}/api/scores/mania?${params.toString()}`,
+    `${baseUrl}/api/scores?${params.toString()}`,
     OSC_FETCH_TIMEOUT_MS,
   );
 }
@@ -1340,7 +1344,7 @@ async function fetchOscRecentScores(): Promise<OscScore[]> {
   const request = fetchWithCacheLock(cacheKey, OSC_RECENT_SCORES_CACHE_TTL, async () => {
     const scores: OscScore[] = [];
     const seen = new Set<number>();
-    let before: string | null | undefined;
+    let before: number | null | undefined;
 
     for (let page = 0; page < OSC_RECENT_SCORES_PAGES; page++) {
       const response = await fetchOscRecentScoresPage(before);
@@ -1355,7 +1359,7 @@ async function fetchOscRecentScores(): Promise<OscScore[]> {
         scores.push(score);
       }
 
-      const older = response.meta?.cursors?.older;
+      const older = response.meta?.oldest;
       if (!older || pageScores.length === 0) break;
       before = older;
     }
