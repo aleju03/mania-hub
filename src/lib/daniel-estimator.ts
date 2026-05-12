@@ -666,6 +666,10 @@ function buildMetrics(map: ManiaBeatmap, rate: number): DanEstimate["metrics"] {
 
   const peakNps5s = countInWindow(noteTimes, 5000) / 5;
   const sustainedNps10s = countInWindow(noteTimes, 10000) / 10;
+  const sustainedNps30s = countInWindow(noteTimes, 30000) / 30;
+  const sustainedNps60s = countInWindow(noteTimes, 60000) / 60;
+  const durationMs = noteTimes.length > 1 ? noteTimes[noteTimes.length - 1] - noteTimes[0] : 0;
+  const activeNps = durationMs > 0 ? notes.length / (durationMs / 1000) : 0;
   const jackPressure = quantile(jackValues, 0.92);
   const streamPressure = quantile(streamValues, 0.9);
 
@@ -680,6 +684,11 @@ function buildMetrics(map: ManiaBeatmap, rate: number): DanEstimate["metrics"] {
     nps5sP90: peakNps5s,
     nps5sP95: peakNps5s,
     sustainedNps10s,
+    sustainedNps30s,
+    sustainedNps60s,
+    activeNps,
+    longGapRatio: 0,
+    longGapCount: 0,
     jackPressure,
     streamPressure,
     chordjackPressure: jackPressure * (0.28 + chordRatio * 1.35),
@@ -688,6 +697,14 @@ function buildMetrics(map: ManiaBeatmap, rate: number): DanEstimate["metrics"] {
     fastRowRatio: 0,
     rowIntervalEntropy: 0,
     patternVariety: 0,
+    rowPatternEntropy: 0,
+    rowPatternVariety: 0,
+    repeatedRowPatternRatio: 0,
+    alternatingRowPatternRatio: 0,
+    rowPatternChangeRate: 0,
+    rowMotifRepeatRatio: 0,
+    rhythmMotifRepeatRatio: 0,
+    adjacentMotifRepeatRatio: 0,
     strainSpikiness: 0,
     sustainedPressureRatio: 0,
     anchorPressure: 0,

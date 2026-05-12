@@ -14,6 +14,11 @@ const vertexBetaMidChordProfile: DanFeatureMetrics = {
   nps5sP90: 23.6,
   nps5sP95: 24.4,
   sustainedNps10s: 25.4,
+  sustainedNps30s: 24.1,
+  sustainedNps60s: 22.7,
+  activeNps: 12.4,
+  longGapRatio: 0.02,
+  longGapCount: 3,
   jackPressure: 140.187,
   streamPressure: 4.367,
   chordjackPressure: 171.727,
@@ -22,6 +27,14 @@ const vertexBetaMidChordProfile: DanFeatureMetrics = {
   fastRowRatio: 0.17,
   rowIntervalEntropy: 1.812,
   patternVariety: 2.443,
+  rowPatternEntropy: 1.812,
+  rowPatternVariety: 2.443,
+  repeatedRowPatternRatio: 0.24,
+  alternatingRowPatternRatio: 0.18,
+  rowPatternChangeRate: 0.548,
+  rowMotifRepeatRatio: 0.21,
+  rhythmMotifRepeatRatio: 0.16,
+  adjacentMotifRepeatRatio: 0.14,
   strainSpikiness: 1.786,
   sustainedPressureRatio: 0.668,
   anchorPressure: 0.111,
@@ -35,11 +48,6 @@ const vertexBetaMidChordProfile: DanFeatureMetrics = {
   directionChangeRate: 0.669,
   staminaPressure: 25.4,
 };
-
-function jackDisplayName(metrics: DanFeatureMetrics, starRating: number, durationMs: number): string {
-  const score = estimateFamilyScores(metrics, starRating, durationMs).skillScores.jack;
-  return parseDan(srToRawDan(score, "jack")).displayName;
-}
 
 function jackRawDan(metrics: DanFeatureMetrics, starRating: number, durationMs: number): number {
   const score = estimateFamilyScores(metrics, starRating, durationMs).skillScores.jack;
