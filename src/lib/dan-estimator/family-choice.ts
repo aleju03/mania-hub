@@ -49,6 +49,22 @@ const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
       && skillScores.stamina >= topScore - 1.35,
   },
   {
+    id: "steady-low-rate-jumpstream",
+    family: "stream",
+    applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 3600
+      && metrics.noteCount <= 5000
+      && metrics.chordRatio >= 0.42
+      && metrics.chordRatio <= 0.52
+      && metrics.holdRatio < 0.03
+      && metrics.jackPressure < 130
+      && metrics.peakNps5s <= 21
+      && metrics.sustainedNps10s <= 20
+      && metrics.activeNps <= 16.5
+      && metrics.rowBurstPressure <= 14
+      && metrics.rhythmMotifRepeatRatio >= 0.55
+      && skillScores.stream >= topScore - 0.5,
+  },
+  {
     id: "mid-chord-speedjack",
     family: "jack",
     applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 2200
@@ -331,6 +347,21 @@ const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
       && metrics.holdRatio < 0.08
       && metrics.sustainedNps10s >= 20
       && skillScores.stamina >= topScore - 0.75,
+  },
+  {
+    id: "simple-fast-high-chord-wall-jack",
+    family: "jack",
+    applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 3000
+      && metrics.chordRatio >= 0.78
+      && metrics.holdRatio < 0.08
+      && metrics.jackPressure >= 125
+      && metrics.jackPressure < 145
+      && metrics.peakNps5s >= 32
+      && metrics.sustainedNps10s >= 31
+      && metrics.rowIntervalEntropy <= 1.2
+      && metrics.patternVariety <= 1.8
+      && metrics.rowPatternChangeRate <= 0.5
+      && skillScores.jack >= topScore - 0.5,
   },
   {
     id: "low-chord-sustained-speed",

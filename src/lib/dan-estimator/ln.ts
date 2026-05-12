@@ -805,6 +805,7 @@ export function estimateLnDan(
     metrics.holdRatio >= 0.34
     && metrics.lnDensity >= 0.1
     && metrics.lnOverlapPressure >= 0.75
+    && metrics.lnHoldDurationP90 >= 160
   );
   const lnCandidate = metadataLnSignal || chartLnSignal;
   if (!lnCandidate) return null;

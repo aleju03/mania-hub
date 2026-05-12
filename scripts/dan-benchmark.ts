@@ -36,10 +36,12 @@ interface CliOptions {
   beatmapsetIds: number[] | null;
   cacheDir: string;
   classifier: ClassifierId;
+  compareFiles: [string, string] | null;
   expectedLabels: Set<string> | null;
   family: DanBenchmarkFamily;
   familySpecified: boolean;
   failuresFrom: string | null;
+  grepText: string | null;
   includeUnlabeled: boolean;
   debug: boolean;
   explainWrong: boolean;
@@ -47,6 +49,8 @@ interface CliOptions {
   matchKinds: Set<MatchKind> | null;
   neighbors: number;
   rate: number;
+  showChangesFrom: string | null;
+  summaryBySet: boolean;
 }
 
 interface BenchmarkDiagnostics {
@@ -134,6 +138,43 @@ interface SetResult {
 
 const DEFAULT_CACHE_DIR = "cache/dan-analyze";
 
+interface BenchmarkJson {
+  family?: DanBenchmarkFamily;
+  classifier?: ClassifierId;
+  rate?: number;
+  filters?: string[];
+  summary?: ReturnType<typeof summarize> & {
+    exactPct?: number;
+    basePct?: number;
+  };
+  sets: SetResult[];
+}
+
+interface RowWithSet {
+  set: SetResult;
+  row: RowResult;
+}
+
+interface ChangedRow {
+  beatmapsetId: number;
+  beatmapId: number | null;
+  version: string;
+  expected: string | null;
+  before: {
+    predicted: string | null;
+    family: string | null;
+    match: MatchKind;
+    srProxy: number | null;
+  };
+  after: {
+    predicted: string | null;
+    family: string | null;
+    match: MatchKind;
+    srProxy: number | null;
+  };
+  direction: "wrong-to-ok" | "ok-to-wrong" | "changed-correctness" | "changed-prediction";
+}
+
 function usage(exitCode = 2): never {
   const output = [
     "Usage: npm run dan:benchmark -- [options]",
@@ -147,7 +188,11 @@ function usage(exitCode = 2): never {
     "  --expected LABELS        Comma-separated expected labels to run",
     "  --label LABELS           Alias for --expected",
     "  --match KINDS            Keep current exact/base/wrong/unlabeled rows after scoring",
+    "  --grep TEXT              Keep rows whose set title, artist, or diff version contains text",
     "  --failures-from FILE     Rerun beatmaps that were wrong in a previous --json output",
+    "  --show-changes FILE      After scoring, compare current output to a previous --json file",
+    "  --compare BEFORE AFTER   Compare two existing --json outputs without running the classifier",
+    "  --summary-by-set         Print per-beatmapset exact/base/wrong totals",
     "  --explain-wrong          Print calibration diagnostics for current wrong rows",
     "  --neighbors N            LN reference neighbors for --explain-wrong. Default: 5",
     "  --cache-dir DIR          Beatmapset download cache. Default: cache/dan-analyze",
@@ -160,6 +205,8 @@ function usage(exitCode = 2): never {
     "  npm run dan:benchmark -- --beatmap 4767800 --explain-wrong",
     "  npm run dan:benchmark -- --json > before.json",
     "  npm run dan:benchmark -- --failures-from before.json --match wrong --explain-wrong",
+    "  npm run dan:benchmark -- --compare before.json after.json --summary-by-set",
+    "  npm run dan:benchmark -- --set 2192368 --grep Sendan",
     "",
     "Requires TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in the environment (or .env).",
   ].join("\n");
@@ -208,17 +255,21 @@ function parseArgs(argv: string[]): CliOptions {
     beatmapsetIds: null,
     cacheDir: DEFAULT_CACHE_DIR,
     classifier: "aleju",
+    compareFiles: null,
     debug: false,
     expectedLabels: null,
     explainWrong: false,
     family: "normal",
     familySpecified: false,
     failuresFrom: null,
+    grepText: null,
     includeUnlabeled: false,
     json: false,
     matchKinds: null,
     neighbors: 5,
     rate: 1,
+    showChangesFrom: null,
+    summaryBySet: false,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -259,10 +310,25 @@ function parseArgs(argv: string[]): CliOptions {
       options.expectedLabels = parseStringSet(argv[++i]);
     } else if (arg === "--match") {
       options.matchKinds = parseMatchKinds(argv[++i]);
+    } else if (arg === "--grep") {
+      const value = argv[++i];
+      if (!value) usage();
+      options.grepText = value;
     } else if (arg === "--failures-from") {
       const value = argv[++i];
       if (!value) usage();
       options.failuresFrom = value;
+    } else if (arg === "--show-changes") {
+      const value = argv[++i];
+      if (!value) usage();
+      options.showChangesFrom = value;
+    } else if (arg === "--compare") {
+      const before = argv[++i];
+      const after = argv[++i];
+      if (!before || !after) usage();
+      options.compareFiles = [before, after];
+    } else if (arg === "--summary-by-set") {
+      options.summaryBySet = true;
     } else if (arg === "--explain-wrong") {
       options.explainWrong = true;
     } else if (arg === "--neighbors") {
@@ -424,6 +490,87 @@ async function loadFailureTargets(filePath: string): Promise<FailureTargets> {
     beatmapsetIds: [...new Set(beatmapsetIds)],
     beatmapIds: [...new Set(beatmapIds)],
   };
+}
+
+async function loadBenchmarkJson(filePath: string): Promise<BenchmarkJson> {
+  const parsed = JSON.parse(await readFile(filePath, "utf8")) as unknown;
+  if (!isRecord(parsed) || !Array.isArray(parsed.sets)) {
+    throw new Error(`Expected a JSON file emitted by dan:benchmark --json: ${filePath}`);
+  }
+  return parsed as unknown as BenchmarkJson;
+}
+
+function rowKey(set: SetResult, row: RowResult): string {
+  return row.beatmapId != null ? `beatmap:${row.beatmapId}` : `set:${set.beatmapsetId}:${row.version}`;
+}
+
+function isOkMatch(match: MatchKind): boolean {
+  return match === "exact" || match === "base";
+}
+
+function flattenRows(sets: SetResult[]): RowWithSet[] {
+  return sets.flatMap((set) => set.rows.map((row) => ({ set, row })));
+}
+
+function filterSetsByText(sets: SetResult[], text: string | null): SetResult[] {
+  const query = text?.trim().toLowerCase();
+  if (!query) return sets;
+  return sets
+    .map((set) => {
+      const setText = `${set.title ?? ""} ${set.artist ?? ""}`.toLowerCase();
+      return {
+        ...set,
+        rows: set.rows.filter((row) => `${setText} ${row.version}`.toLowerCase().includes(query)),
+      };
+    })
+    .filter((set) => set.error || set.rows.length > 0);
+}
+
+function compareRows(beforeSets: SetResult[], afterSets: SetResult[]): ChangedRow[] {
+  const beforeByKey = new Map(flattenRows(beforeSets).map(({ set, row }) => [rowKey(set, row), { set, row }]));
+  const changes: ChangedRow[] = [];
+
+  for (const { set, row: after } of flattenRows(afterSets)) {
+    const beforeEntry = beforeByKey.get(rowKey(set, after));
+    if (!beforeEntry) continue;
+    const before = beforeEntry.row;
+    const changedPrediction = before.predicted !== after.predicted
+      || before.predictedFamily !== after.predictedFamily
+      || before.match !== after.match;
+    if (!changedPrediction) continue;
+
+    const beforeOk = isOkMatch(before.match);
+    const afterOk = isOkMatch(after.match);
+    const direction: ChangedRow["direction"] = !beforeOk && afterOk
+      ? "wrong-to-ok"
+      : beforeOk && !afterOk
+        ? "ok-to-wrong"
+        : beforeOk !== afterOk
+          ? "changed-correctness"
+          : "changed-prediction";
+
+    changes.push({
+      beatmapsetId: set.beatmapsetId,
+      beatmapId: after.beatmapId,
+      version: after.version || before.version,
+      expected: after.expected ?? before.expected,
+      before: {
+        predicted: before.predicted,
+        family: before.predictedFamily,
+        match: before.match,
+        srProxy: before.predictedSrProxy,
+      },
+      after: {
+        predicted: after.predicted,
+        family: after.predictedFamily,
+        match: after.match,
+        srProxy: after.predictedSrProxy,
+      },
+      direction,
+    });
+  }
+
+  return changes;
 }
 
 function comparableDanLabel(estimate: DanEstimate): string {
@@ -590,7 +737,9 @@ function describeActiveFilters(options: CliOptions): string[] {
   if (options.beatmapIds) filters.push(`beatmaps ${[...options.beatmapIds].join(",")}`);
   if (options.expectedLabels) filters.push(`expected ${[...options.expectedLabels].join(",")}`);
   if (options.matchKinds) filters.push(`match ${[...options.matchKinds].join(",")}`);
+  if (options.grepText) filters.push(`grep ${options.grepText}`);
   if (options.failuresFrom) filters.push(`failures from ${options.failuresFrom}`);
+  if (options.showChangesFrom) filters.push(`show changes from ${options.showChangesFrom}`);
   return filters;
 }
 
@@ -601,6 +750,193 @@ function signed(value: number, digits = 2): string {
 
 function compactPair(label: string, value: unknown): string {
   return `${label} ${value}`;
+}
+
+function accuracyPct(summary: ReturnType<typeof summarize>): { exactPct: number; basePct: number } {
+  return {
+    exactPct: summary.labeled > 0 ? (summary.exact / summary.labeled) * 100 : 0,
+    basePct: summary.labeled > 0 ? ((summary.exact + summary.base) / summary.labeled) * 100 : 0,
+  };
+}
+
+function formatSummary(summary: ReturnType<typeof summarize>): string {
+  const pct = accuracyPct(summary);
+  return `${summary.exact} exact + ${summary.base} base / ${summary.labeled} labeled, ${summary.wrong} wrong (${pct.basePct.toFixed(2)}% base)`;
+}
+
+function printSummaryBySet(sets: SetResult[]): void {
+  const rows = sets
+    .map((set) => {
+      const summary = summarize([set]);
+      const pct = accuracyPct(summary);
+      const title = set.title ? `${set.artist ? `${set.artist} - ` : ""}${set.title}` : `Beatmapset ${set.beatmapsetId}`;
+      return { set, summary, pct, title };
+    })
+    .filter(({ summary, set }) => set.error || summary.total > 0);
+
+  if (rows.length === 0) return;
+
+  const widths = { set: 10, title: 42, exact: 7, base: 7, wrong: 7, pct: 9 };
+  process.stdout.write("\nSummary by set\n");
+  process.stdout.write("==============\n");
+  process.stdout.write([
+    pad("Set", widths.set, "right"),
+    pad("Title", widths.title),
+    pad("Exact", widths.exact, "right"),
+    pad("Base", widths.base, "right"),
+    pad("Wrong", widths.wrong, "right"),
+    pad("Base %", widths.pct, "right"),
+  ].join("  ") + "\n");
+  process.stdout.write("-".repeat(widths.set + widths.title + widths.exact + widths.base + widths.wrong + widths.pct + 10) + "\n");
+  for (const { set, summary, pct, title } of rows) {
+    process.stdout.write([
+      pad(set.beatmapsetId, widths.set, "right"),
+      pad(title, widths.title),
+      pad(summary.exact, widths.exact, "right"),
+      pad(summary.base, widths.base, "right"),
+      pad(summary.wrong, widths.wrong, "right"),
+      pad(`${pct.basePct.toFixed(1)}%`, widths.pct, "right"),
+    ].join("  ") + "\n");
+  }
+}
+
+function compareSetSummaries(beforeSets: SetResult[], afterSets: SetResult[]) {
+  const beforeById = new Map(beforeSets.map((set) => [set.beatmapsetId, set]));
+  const afterById = new Map(afterSets.map((set) => [set.beatmapsetId, set]));
+  const ids = [...new Set([...beforeById.keys(), ...afterById.keys()])].sort((left, right) => left - right);
+
+  return ids.map((id) => {
+    const before = beforeById.get(id);
+    const after = afterById.get(id);
+    const beforeSummary = summarize(before ? [before] : []);
+    const afterSummary = summarize(after ? [after] : []);
+    const beforePct = accuracyPct(beforeSummary);
+    const afterPct = accuracyPct(afterSummary);
+    return {
+      beatmapsetId: id,
+      title: after?.title ?? before?.title ?? null,
+      artist: after?.artist ?? before?.artist ?? null,
+      before: { ...beforeSummary, ...beforePct },
+      after: { ...afterSummary, ...afterPct },
+      delta: {
+        exact: afterSummary.exact - beforeSummary.exact,
+        base: afterSummary.base - beforeSummary.base,
+        wrong: afterSummary.wrong - beforeSummary.wrong,
+        basePct: afterPct.basePct - beforePct.basePct,
+      },
+    };
+  });
+}
+
+function printCompareSummaryBySet(beforeSets: SetResult[], afterSets: SetResult[]): void {
+  const summaries = compareSetSummaries(beforeSets, afterSets);
+  if (summaries.length === 0) return;
+
+  const widths = { set: 10, title: 38, before: 12, after: 12, delta: 10 };
+  process.stdout.write("\nSummary by set\n");
+  process.stdout.write("==============\n");
+  process.stdout.write([
+    pad("Set", widths.set, "right"),
+    pad("Title", widths.title),
+    pad("Before", widths.before, "right"),
+    pad("After", widths.after, "right"),
+    pad("Delta", widths.delta, "right"),
+  ].join("  ") + "\n");
+  process.stdout.write("-".repeat(widths.set + widths.title + widths.before + widths.after + widths.delta + 8) + "\n");
+
+  for (const summary of summaries) {
+    const title = summary.title ? `${summary.artist ? `${summary.artist} - ` : ""}${summary.title}` : `Beatmapset ${summary.beatmapsetId}`;
+    process.stdout.write([
+      pad(summary.beatmapsetId, widths.set, "right"),
+      pad(title, widths.title),
+      pad(`${summary.before.basePct.toFixed(1)}%`, widths.before, "right"),
+      pad(`${summary.after.basePct.toFixed(1)}%`, widths.after, "right"),
+      pad(signed(summary.delta.basePct, 1), widths.delta, "right"),
+    ].join("  ") + "\n");
+  }
+}
+
+function printChanges(changes: ChangedRow[], heading = "Prediction changes"): void {
+  if (changes.length === 0) {
+    process.stdout.write(`\n${heading}: none\n`);
+    return;
+  }
+
+  const widths = { id: 10, set: 10, diff: 32, expected: 10, before: 15, after: 15, match: 16 };
+  process.stdout.write(`\n${heading}\n`);
+  process.stdout.write("=".repeat(heading.length) + "\n");
+  process.stdout.write([
+    pad("Beatmap", widths.id, "right"),
+    pad("Set", widths.set, "right"),
+    pad("Diff", widths.diff),
+    pad("Expected", widths.expected),
+    pad("Before", widths.before),
+    pad("After", widths.after),
+    pad("Match", widths.match),
+  ].join("  ") + "\n");
+  process.stdout.write("-".repeat(widths.id + widths.set + widths.diff + widths.expected + widths.before + widths.after + widths.match + 12) + "\n");
+
+  for (const change of changes) {
+    const before = `${change.before.predicted ?? "-"}${change.before.family ? `/${change.before.family}` : ""}`;
+    const after = `${change.after.predicted ?? "-"}${change.after.family ? `/${change.after.family}` : ""}`;
+    process.stdout.write([
+      pad(change.beatmapId ?? "-", widths.id, "right"),
+      pad(change.beatmapsetId, widths.set, "right"),
+      pad(change.version || "-", widths.diff),
+      pad(change.expected ?? "-", widths.expected),
+      pad(before, widths.before),
+      pad(after, widths.after),
+      pad(`${change.before.match}->${change.after.match}`, widths.match),
+    ].join("  ") + "\n");
+  }
+}
+
+function printComparison(before: BenchmarkJson, after: BenchmarkJson, options: CliOptions): void {
+  const beforeSets = filterSetsByText(before.sets, options.grepText);
+  const afterSets = filterSetsByText(after.sets, options.grepText);
+  const beforeSummary = summarize(beforeSets);
+  const afterSummary = summarize(afterSets);
+  const changes = compareRows(beforeSets, afterSets);
+  const wrongToOk = changes.filter((change) => change.direction === "wrong-to-ok").length;
+  const okToWrong = changes.filter((change) => change.direction === "ok-to-wrong").length;
+
+  if (options.json) {
+    process.stdout.write(JSON.stringify({
+      before: {
+        family: before.family,
+        classifier: before.classifier,
+        rate: before.rate,
+        summary: { ...beforeSummary, ...accuracyPct(beforeSummary) },
+      },
+      after: {
+        family: after.family,
+        classifier: after.classifier,
+        rate: after.rate,
+        summary: { ...afterSummary, ...accuracyPct(afterSummary) },
+      },
+      delta: {
+        exact: afterSummary.exact - beforeSummary.exact,
+        base: afterSummary.base - beforeSummary.base,
+        wrong: afterSummary.wrong - beforeSummary.wrong,
+        basePct: accuracyPct(afterSummary).basePct - accuracyPct(beforeSummary).basePct,
+        wrongToOk,
+        okToWrong,
+      },
+      changes,
+      setSummaries: options.summaryBySet ? compareSetSummaries(beforeSets, afterSets) : undefined,
+    }, null, 2) + "\n");
+    return;
+  }
+
+  process.stdout.write("Benchmark comparison\n");
+  process.stdout.write("====================\n");
+  if (options.grepText) process.stdout.write(`Filter: ${options.grepText}\n`);
+  process.stdout.write(`Before: ${formatSummary(beforeSummary)}\n`);
+  process.stdout.write(`After:  ${formatSummary(afterSummary)}\n`);
+  process.stdout.write(`Delta:  exact ${signed(afterSummary.exact - beforeSummary.exact, 0)}, base ${signed(afterSummary.base - beforeSummary.base, 0)}, wrong ${signed(afterSummary.wrong - beforeSummary.wrong, 0)}, base% ${signed(accuracyPct(afterSummary).basePct - accuracyPct(beforeSummary).basePct, 2)}\n`);
+  process.stdout.write(`Changed rows: ${changes.length}; wrong->ok ${wrongToOk}; ok->wrong ${okToWrong}\n`);
+  if (options.summaryBySet) printCompareSummaryBySet(beforeSets, afterSets);
+  printChanges(changes);
 }
 
 function printTable(sets: SetResult[], options: CliOptions, summary: ReturnType<typeof summarize>): void {
@@ -730,6 +1066,15 @@ function summarize(sets: SetResult[]) {
 
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
+  if (options.compareFiles) {
+    const [before, after] = await Promise.all([
+      loadBenchmarkJson(options.compareFiles[0]),
+      loadBenchmarkJson(options.compareFiles[1]),
+    ]);
+    printComparison(before, after, options);
+    return;
+  }
+
   if (options.failuresFrom) {
     const targets = await loadFailureTargets(options.failuresFrom);
     if (targets.family && !options.familySpecified) options.family = targets.family;
@@ -847,26 +1192,40 @@ async function main(): Promise<void> {
   }
 
   // strip empty sets that ended up with no visible rows after filtering
-  const populated = setShells.filter((set) => set.error || set.rows.length > 0);
+  let populated = setShells.filter((set) => set.error || set.rows.length > 0);
+  populated = filterSetsByText(populated, options.grepText);
   const summary = summarize(populated);
+  const previous = options.showChangesFrom ? await loadBenchmarkJson(options.showChangesFrom) : null;
+  const changes = previous ? compareRows(filterSetsByText(previous.sets, options.grepText), populated) : [];
 
   if (options.json) {
-    process.stdout.write(JSON.stringify({
+    const payload: Record<string, unknown> = {
       family: options.family,
       classifier: options.classifier,
       rate: options.rate,
       filters: describeActiveFilters(options),
       summary: {
         ...summary,
-        exactPct: summary.labeled > 0 ? (summary.exact / summary.labeled) * 100 : 0,
-        basePct: summary.labeled > 0 ? ((summary.exact + summary.base) / summary.labeled) * 100 : 0,
+        ...accuracyPct(summary),
       },
       sets: populated,
-    }, null, 2) + "\n");
+    };
+    if (options.summaryBySet) {
+      payload.setSummaries = compareSetSummaries([], populated).map((entry) => ({
+        beatmapsetId: entry.beatmapsetId,
+        title: entry.title,
+        artist: entry.artist,
+        summary: entry.after,
+      }));
+    }
+    if (previous) payload.changes = changes;
+    process.stdout.write(JSON.stringify(payload, null, 2) + "\n");
     return;
   }
 
   printTable(populated, options, summary);
+  if (options.summaryBySet) printSummaryBySet(populated);
+  if (previous) printChanges(changes, `Changes from ${options.showChangesFrom}`);
   if (options.explainWrong) printWrongExplanations(populated);
 }
 

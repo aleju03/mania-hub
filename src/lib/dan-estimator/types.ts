@@ -36,6 +36,11 @@ export interface DanFeatureMetrics {
   nps5sP90: number;
   nps5sP95: number;
   sustainedNps10s: number;
+  sustainedNps30s: number;
+  sustainedNps60s: number;
+  activeNps: number;
+  longGapRatio: number;
+  longGapCount: number;
   jackPressure: number;
   streamPressure: number;
   chordjackPressure: number;
@@ -44,6 +49,14 @@ export interface DanFeatureMetrics {
   fastRowRatio: number;
   rowIntervalEntropy: number;
   patternVariety: number;
+  rowPatternEntropy: number;
+  rowPatternVariety: number;
+  repeatedRowPatternRatio: number;
+  alternatingRowPatternRatio: number;
+  rowPatternChangeRate: number;
+  rowMotifRepeatRatio: number;
+  rhythmMotifRepeatRatio: number;
+  adjacentMotifRepeatRatio: number;
   strainSpikiness: number;
   sustainedPressureRatio: number;
   anchorPressure: number;
