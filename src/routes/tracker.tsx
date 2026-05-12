@@ -80,7 +80,7 @@ export const Route = createFileRoute("/tracker")({
   component: ScoresPage,
 });
 
-type ScoreFilter = "all" | "ranked" | "passed";
+type ScoreFilter = "all" | "ranked";
 type GradeFilter = "all" | "SS" | "S" | "A" | "B";
 type FailedFilter = "hide" | "show" | "only";
 const EMPTY_IDS: number[] = [];
@@ -401,8 +401,6 @@ function ScoresPage() {
       switch (filter) {
         case "ranked":
           return score.pp != null && score.pp > 0;
-        case "passed":
-          return passed;
         default:
           break;
       }
@@ -440,7 +438,6 @@ function ScoresPage() {
   const filters: { id: ScoreFilter; label: string }[] = [
     { id: "all", label: "All" },
     { id: "ranked", label: "Ranked (PP)" },
-    { id: "passed", label: "Passed" },
   ];
   const grades: { id: GradeFilter; label: string }[] = [
     { id: "all", label: "Any" },
