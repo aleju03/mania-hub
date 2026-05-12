@@ -126,6 +126,37 @@ export function getBenchmarkBeatmapStarRating(beatmapId: number): number | null 
   return index >= 0 ? RANKED_BENCHMARK_STAR_RATINGS[index] ?? null : null;
 }
 
+const BENCHMARK_EXPECTED_LABEL_OVERRIDES: Array<{
+  family: DanBenchmarkFamily;
+  beatmapsetId: number;
+  beatmapId: number;
+  version: string;
+  expectedLabel: string;
+}> = [
+  {
+    family: "normal",
+    beatmapsetId: 1748375,
+    beatmapId: 3809146,
+    version: "Hydria's Challenge 0.9x",
+    expectedLabel: "alpha--",
+  },
+];
+
+export function getBenchmarkExpectedLabelOverride(
+  family: DanBenchmarkFamily,
+  beatmapsetId: number,
+  beatmapId: number | null,
+  version: string,
+): string | null {
+  if (beatmapId == null) return null;
+  return BENCHMARK_EXPECTED_LABEL_OVERRIDES.find((override) => (
+    override.family === family
+    && override.beatmapsetId === beatmapsetId
+    && override.beatmapId === beatmapId
+    && override.version === version
+  ))?.expectedLabel ?? null;
+}
+
 export const NORMAL_DAN_LABEL_OPTIONS: string[] = [
   "1",
   "2",

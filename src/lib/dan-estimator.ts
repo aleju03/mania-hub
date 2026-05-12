@@ -35,6 +35,7 @@ function estimateNormalSkillSrAdjustment(
   starRating: number,
   family: DanPrimaryFamily,
   skillSr: number,
+  rate: number,
 ): NormalSkillSrAdjustment {
   const baseRawDan = srToRawDan(skillSr, family);
   const compactMidChordTechDrillCompression = family === "tech"
@@ -230,7 +231,7 @@ function estimateNormalSkillSrAdjustment(
     && metrics.chordRatio >= 0.75
     && metrics.chordRatio <= 0.82
     && metrics.rowBurstPressure >= 24
-    && metrics.peakNps5s >= 25
+    && metrics.peakNps5s >= 26.5
     ? 0.7
     : 0;
   const lowActiveAlphaStreamLateCompression = family === "stream"
@@ -396,6 +397,23 @@ function estimateNormalSkillSrAdjustment(
     && metrics.rhythmMotifRepeatRatio >= 0.55
     ? 0.55
     : 0;
+  const lowRateHighChordWallFloorBoost = family === "chordjack"
+    && rate <= 0.85
+    && metrics.noteCount >= 2200
+    && metrics.noteCount <= 2350
+    && metrics.chordRatio >= 0.76
+    && metrics.chordRatio <= 0.82
+    && metrics.holdRatio < 0.03
+    && metrics.peakNps5s >= 22.8
+    && metrics.peakNps5s <= 23.8
+    && metrics.sustainedNps10s >= 21.6
+    && metrics.sustainedNps10s <= 22.8
+    && metrics.jackPressure >= 110
+    && metrics.jackPressure <= 122
+    && metrics.rowBurstPressure >= 22
+    && metrics.rowBurstPressure <= 24
+    ? 0.38
+    : 0;
 
   return {
     compression,
@@ -408,6 +426,7 @@ function estimateNormalSkillSrAdjustment(
       lowChordjackLateBoost,
       compactRepeatedGammaStreamLateBoost,
       steadyLowRateJumpstreamFloorBoost,
+      lowRateHighChordWallFloorBoost,
     ),
   };
 }
@@ -465,7 +484,7 @@ export function estimateDan(map: ManiaBeatmap, input: DanEstimateInput = {}): Da
     : skillScores[skillFamily];
   const normalSkillSrAdjustment = isCourse
     ? { compression: 0, boost: 0 }
-    : estimateNormalSkillSrAdjustment(metrics, starRating, skillFamily, unadjustedEstimatedSr);
+    : estimateNormalSkillSrAdjustment(metrics, starRating, skillFamily, unadjustedEstimatedSr, rate);
   const estimatedSr = Math.max(
     0,
     unadjustedEstimatedSr - normalSkillSrAdjustment.compression + normalSkillSrAdjustment.boost,

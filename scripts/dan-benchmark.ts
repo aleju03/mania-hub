@@ -17,6 +17,7 @@ import type { DanEstimate, DanFeatureMetrics } from "../src/lib/dan-estimator/ty
 import {
   type DanBenchmarkFamily,
   getBenchmarkBeatmapIds,
+  getBenchmarkExpectedLabelOverride,
   getBenchmarkBeatmapStarRating,
   getBenchmarkBeatmapsetIds,
   RANKED_BENCHMARK_BEATMAP_IDS,
@@ -141,6 +142,10 @@ interface SetResult {
 }
 
 const DEFAULT_CACHE_DIR = "cache/dan-analyze";
+
+function parseBeatmapVersion(text: string): string {
+  return text.match(/^Version\s*:\s*(.+)$/m)?.[1]?.trim() ?? "";
+}
 
 interface BenchmarkJson {
   family?: DanBenchmarkFamily;
@@ -1189,7 +1194,10 @@ async function main(): Promise<void> {
         const explicitlyTargetedBeatmap = benchmarkBeatmapIds?.has(meta.beatmapId) ?? false;
         if (benchmarkBeatmapIds && !explicitlyTargetedBeatmap) continue;
         if (hiddenDiffs.has(meta.beatmapId)) continue;
-        const expected = expectedLabels.get(meta.beatmapId) ?? null;
+        const version = parseBeatmapVersion(meta.text);
+        const expected = getBenchmarkExpectedLabelOverride(options.family, set.beatmapsetId, meta.beatmapId, version)
+          ?? expectedLabels.get(meta.beatmapId)
+          ?? null;
         if (options.expectedLabels && (!expected || !options.expectedLabels.has(expected))) continue;
         const shouldIncludeUnlabeled = includeUnlabeled
           || explicitlyTargetedBeatmap
@@ -1198,7 +1206,7 @@ async function main(): Promise<void> {
         const rowIndex = shell.rows.length;
         shell.rows.push({
           beatmapId: meta.beatmapId,
-          version: "",
+          version,
           starRating: meta.starRating,
           expected,
           predicted: null,
