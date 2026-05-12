@@ -1,7 +1,7 @@
 import { Link, createFileRoute, notFound } from "@tanstack/react-router";
 import JSZip from "jszip";
 import { Check, ClipboardList, Copy, FileSpreadsheet, RotateCcw, Search, UserRound, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseManiaBeatmap } from "../../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../../lib/beatmap-search";
 import { estimateDan } from "../../lib/dan-estimator";
@@ -662,14 +662,14 @@ function DanClassifierPage() {
     }
   }
 
-  async function copyBeatmapId(beatmapId: number) {
+  const copyBeatmapId = useCallback(async (beatmapId: number) => {
     const copied = await copyTextToClipboard(String(beatmapId));
     if (!copied) return;
 
     setCopiedBeatmapId(beatmapId);
     clearTimeout(copiedTimerRef.current);
     copiedTimerRef.current = setTimeout(() => setCopiedBeatmapId(null), 1200);
-  }
+  }, []);
 
   return (
     <main className="min-h-screen overflow-x-clip bg-osu-b5 text-osu-c1">
@@ -1141,6 +1141,32 @@ function BenchmarkView({
   // run estimates whenever family/classifier/rate changes
   useEffect(() => {
     let cancelled = false;
+    let estimateFlushTimer: ReturnType<typeof setTimeout> | null = null;
+    let queuedEstimateUpdates: Array<{ beatmapsetId: number; beatmapId: number; patch: Partial<BenchmarkRow> }> = [];
+    const flushEstimateUpdates = () => {
+      if (estimateFlushTimer) {
+        clearTimeout(estimateFlushTimer);
+        estimateFlushTimer = null;
+      }
+      if (queuedEstimateUpdates.length === 0 || cancelled) return;
+      const updates = queuedEstimateUpdates;
+      queuedEstimateUpdates = [];
+      setSets((prev) => applyRowUpdates(prev, updates));
+      const cachedFamily = cacheRef.current.get(family);
+      if (cachedFamily) {
+        cacheRef.current.set(family, applyRowUpdates(cachedFamily, updates));
+      }
+    };
+    const queueEstimateUpdate = (
+      beatmapsetId: number,
+      beatmapId: number,
+      patch: Partial<BenchmarkRow>,
+    ) => {
+      queuedEstimateUpdates.push({ beatmapsetId, beatmapId, patch });
+      if (!estimateFlushTimer) {
+        estimateFlushTimer = setTimeout(flushEstimateUpdates, 80);
+      }
+    };
     const cached = cacheRef.current.get(family);
 
     if (cached) {
@@ -1149,6 +1175,7 @@ function BenchmarkView({
       void runEstimatesForSets(cached);
       return () => {
         cancelled = true;
+        flushEstimateUpdates();
       };
     }
 
@@ -1228,39 +1255,32 @@ function BenchmarkView({
         try {
           const estimate = await runEstimate(row.beatmapset, row.beatmap, classifier, rate);
           if (cancelled) return;
-          setSets((prev) => updateRow(prev, row.beatmapsetId, row.beatmap!.id, {
+          queueEstimateUpdate(row.beatmapsetId, row.beatmap.id, {
             estimate,
             status: "ready",
             error: null,
-          }));
-          // also update cache
-          const cachedFamily = cacheRef.current.get(family);
-          if (cachedFamily) {
-            cacheRef.current.set(family, updateRow(cachedFamily, row.beatmapsetId, row.beatmap.id, {
-              estimate,
-              status: "ready",
-              error: null,
-            }));
-          }
+          });
         } catch (err) {
           if (cancelled) return;
           const message = err instanceof Error ? err.message : "Could not estimate.";
-          setSets((prev) => updateRow(prev, row.beatmapsetId, row.beatmap!.id, {
+          queueEstimateUpdate(row.beatmapsetId, row.beatmap!.id, {
             estimate: null,
             status: "error",
             error: message,
-          }));
+          });
         }
       });
+      flushEstimateUpdates();
     }
 
     return () => {
       cancelled = true;
+      flushEstimateUpdates();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family, classifier, rate]);
 
-  async function handleToggleHidden(beatmapId: number, hidden: boolean) {
+  const handleToggleHidden = useCallback(async (beatmapId: number, hidden: boolean) => {
     setHiddenByFamily((prev) => {
       const next = new Set(prev[family]);
       if (hidden) next.add(beatmapId);
@@ -1274,9 +1294,9 @@ function BenchmarkView({
     } catch {
       // optimistic update remains until next reload
     }
-  }
+  }, [family]);
 
-  async function handleExpectedChange(beatmapId: number, value: string) {
+  const handleExpectedChange = useCallback(async (beatmapId: number, value: string) => {
     setExpectedLabelsByFamily((prev) => {
       const next = new Map(prev[family]);
       if (value === "") {
@@ -1297,7 +1317,7 @@ function BenchmarkView({
     } catch {
       // ignore: the optimistic update remains until the next reload
     }
-  }
+  }, [family]);
 
   async function buildExportDataset(): Promise<BenchmarkExportDataset> {
     const datasets = await Promise.all(BENCHMARK_EXPORT_FAMILIES.map(async (fam) => {
@@ -1573,19 +1593,36 @@ function SubTab({ active, onClick, children }: { active: boolean; onClick: () =>
   );
 }
 
-function updateRow(
+function applyRowUpdates(
   sets: BenchmarkSetState[],
-  beatmapsetId: number,
-  beatmapId: number,
-  patch: Partial<BenchmarkRow>,
+  updates: Array<{ beatmapsetId: number; beatmapId: number; patch: Partial<BenchmarkRow> }>,
 ): BenchmarkSetState[] {
-  return sets.map((set) => {
-    if (set.beatmapsetId !== beatmapsetId) return set;
-    return {
-      ...set,
-      rows: set.rows.map((row) => (row.beatmap?.id === beatmapId ? { ...row, ...patch } : row)),
-    };
+  if (updates.length === 0) return sets;
+  const patchesByKey = new Map<string, Partial<BenchmarkRow>>();
+  for (const update of updates) {
+    const key = `${update.beatmapsetId}:${update.beatmapId}`;
+    patchesByKey.set(key, {
+      ...(patchesByKey.get(key) ?? {}),
+      ...update.patch,
+    });
+  }
+
+  let changedSets = false;
+  const nextSets = sets.map((set) => {
+    let changedRows = false;
+    const rows = set.rows.map((row) => {
+      if (!row.beatmap) return row;
+      const patch = patchesByKey.get(`${set.beatmapsetId}:${row.beatmap.id}`);
+      if (!patch) return row;
+      changedRows = true;
+      return { ...row, ...patch };
+    });
+    if (!changedRows) return set;
+    changedSets = true;
+    return { ...set, rows };
   });
+
+  return changedSets ? nextSets : sets;
 }
 
 interface BenchmarkSetBlockProps {
@@ -1602,7 +1639,7 @@ interface BenchmarkSetBlockProps {
   selectedBeatmapId: number | null;
 }
 
-function BenchmarkSetBlock({
+const BenchmarkSetBlock = memo(function BenchmarkSetBlock({
   set,
   labelOptions,
   expectedLabels,
@@ -1635,7 +1672,7 @@ function BenchmarkSetBlock({
   const coverUrl = beatmapset.covers?.["cover@2x"] || beatmapset.covers?.cover || null;
 
   return (
-    <div className="min-w-0 rounded-md border border-osu-b3/30 bg-osu-b5/40 overflow-hidden">
+    <div className="min-w-0 rounded-md border border-osu-b3/30 bg-osu-b5/40 overflow-hidden [content-visibility:auto] [contain-intrinsic-size:360px]">
       <div className="flex min-w-0 items-center gap-2 px-2.5 py-1.5 text-[11px] border-b border-osu-b3/20 bg-osu-b5/60">
         <span className="min-w-0 truncate text-white font-bold">{beatmapset.title}</span>
         <span className="shrink-0 text-osu-f1 truncate">// {beatmapset.creator}</span>
@@ -1697,7 +1734,7 @@ function BenchmarkSetBlock({
       })()}
     </div>
   );
-}
+});
 
 interface BenchmarkDiffRowProps {
   row: BenchmarkRow;
@@ -1711,7 +1748,7 @@ interface BenchmarkDiffRowProps {
   isSelected: boolean;
 }
 
-function BenchmarkDiffRow({ row, coverUrl, labelOptions, expected, isHidden, onToggleHidden, onExpectedChange, onAnalyze, isSelected }: BenchmarkDiffRowProps) {
+const BenchmarkDiffRow = memo(function BenchmarkDiffRow({ row, coverUrl, labelOptions, expected, isHidden, onToggleHidden, onExpectedChange, onAnalyze, isSelected }: BenchmarkDiffRowProps) {
   if (!row.beatmap || !row.beatmapset) return null;
   const beatmap = row.beatmap;
   const beatmapset = row.beatmapset;
@@ -1743,7 +1780,7 @@ function BenchmarkDiffRow({ row, coverUrl, labelOptions, expected, isHidden, onT
   return (
     <div className={`group relative flex min-w-0 flex-col overflow-hidden rounded-md border bg-osu-b5 ${tileBorder} ${isHidden ? "opacity-50" : ""} transition-colors`}>
       {coverUrl ? (
-        <img src={coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-30 transition-opacity group-hover:opacity-40" loading="lazy" />
+        <img src={coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover opacity-30 transition-opacity group-hover:opacity-40" loading="lazy" decoding="async" />
       ) : null}
       <div className="absolute inset-0 bg-gradient-to-r from-osu-b5/95 via-osu-b5/75 to-osu-b5/40" />
 
@@ -1857,4 +1894,4 @@ function BenchmarkDiffRow({ row, coverUrl, labelOptions, expected, isHidden, onT
       </div>
     </div>
   );
-}
+});

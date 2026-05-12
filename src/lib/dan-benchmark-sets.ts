@@ -1,6 +1,8 @@
 export type DanBenchmarkFamily = "normal" | "ln";
 
 export const NORMAL_BENCHMARK_BEATMAPSET_IDS: number[] = [
+  435387,
+  509116,
   2172412,
   2192368,
   1748375,
