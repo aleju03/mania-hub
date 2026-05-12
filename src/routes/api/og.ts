@@ -497,9 +497,9 @@ function judgementCompositionBar(judgements: Array<{ label: string; value: numbe
 /* Replay: score result card. Layout split into vertical bands so
    Satori can't get confused by mixing position:absolute children with
    flex layout (a previous version had an offset bug from that). Top:
-   big REPLAY eyebrow + brand. Middle: grade SVG + username + beatmap
-   title + diff. Then a thin segmented composition bar visualising the
-   judgement distribution, then pp / acc / mods / combo. */
+   big REPLAY eyebrow. Middle: grade SVG + username + beatmap title +
+   diff. Then a thin segmented composition bar visualising the judgement
+   distribution, then pp / acc / mods / combo. */
 async function renderReplayOg(request: Request, scoreId: number): Promise<Response> {
   const [regularFont, heavyFont, score] = await Promise.all([
     getFont(request, "Torus-Regular.otf"),
@@ -594,7 +594,7 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
             },
           },
           [
-            // Top band: REPLAY eyebrow on left, brand mark on right.
+            // Top band: REPLAY eyebrow.
             h(
               "div",
               {
@@ -619,19 +619,6 @@ async function renderReplayOg(request: Request, scoreId: number): Promise<Respon
                     },
                   },
                   "REPLAY",
-                ),
-                h(
-                  "div",
-                  {
-                    key: "brand",
-                    style: {
-                      marginLeft: "auto",
-                      fontSize: "18px",
-                      color: "#7a6b74",
-                      letterSpacing: "0.06em",
-                    },
-                  },
-                  "o!mania tracker",
                 ),
               ],
             ),
@@ -2187,12 +2174,12 @@ async function renderDefaultPolaroidOg(request: Request): Promise<Response> {
         ...gradeBadges,
 
         // Centre focal sticker: large pink "o!mania tracker" with a
-        // small subtitle. Plays the role the flag polaroid does on the
-        // country pages.
+        // small product line. Plays the role the flag polaroid does on
+        // the country pages.
         sticker({
           key: "title",
           text: "o!mania tracker",
-          subText: "RANKINGS BY COUNTRY",
+          subText: "RANKS / SCORES / MAPS / REPLAYS",
           fontSize: 80,
           background: "#ff66aa",
           color: "#1a1317",

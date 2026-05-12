@@ -14,7 +14,7 @@ import { ManiaRain } from "../components/home/ManiaRain";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse, LeanHomeScore, LeanHomePopoff } from "../lib/types";
 import { useAppStore, useHasHydrated, useSelectedCountry } from "../store";
-import { pageSeo, SITE_NAME } from "../lib/seo";
+import { DEFAULT_DESCRIPTION, pageSeo, SITE_NAME } from "../lib/seo";
 
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -27,7 +27,7 @@ export const Route = createFileRoute("/")({
       title: SITE_NAME,
       description: countryName
         ? `Top osu!mania players and scores in ${countryName}`
-        : "osu!mania across countries: rankings, scores, top plays",
+        : DEFAULT_DESCRIPTION,
       path: withSearchParams("/", { country }),
       origin: match.context.origin,
       imageCountry: country,

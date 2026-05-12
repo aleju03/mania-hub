@@ -36,7 +36,7 @@ const PRESETS: Preset[] = [
     label: "Default (no country)",
     kind: "default",
     title: "o!mania tracker",
-    subtitle: "osu!mania across countries: rankings, scores, top plays",
+    subtitle: "osu!mania rankings, live scores, maps, snipes, and replays",
     path: "/",
     /* This is the fallback the endpoint renders when no `kind` and no
        valid `country` are set — what users see when they share the
@@ -48,7 +48,7 @@ const PRESETS: Preset[] = [
     label: "Home",
     kind: "home",
     title: "o!mania tracker",
-    subtitle: "osu!mania across countries: rankings, scores, top plays",
+    subtitle: "osu!mania rankings, live scores, maps, snipes, and replays",
     path: "/",
     countryAware: true,
   },
