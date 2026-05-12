@@ -208,7 +208,7 @@ const POPOFF_WINDOW_MS: Record<PopoffWindow, number> = {
   "30d": 30 * 24 * 60 * 60 * 1000,
 };
 const HOME_RECENT_SCORES_LIVE_PLAYER_COUNT = 50;
-const HOME_RECENT_SCORES_OSU_FALLBACK_PLAYER_COUNT = 10;
+const HOME_RECENT_SCORES_OSU_FALLBACK_PLAYER_COUNT = 50;
 const HOME_POPOFFS_PLAYER_COUNT = 10;
 const USER_CACHE_TTL = 2 * 60 * 1000;
 const USER_SCORE_LIST_CACHE_TTL = 60 * 1000;
@@ -1741,7 +1741,7 @@ async function buildHomeRecentScoresPreview(userIds: number[]): Promise<LeanHome
   const fallbackUserIds = liveUserIds.slice(0, HOME_RECENT_SCORES_OSU_FALLBACK_PLAYER_COUNT);
   // Keep the response lean while merging the public live tracker feed for the
   // first rankings page with a smaller osu! recent-score fallback.
-  const cacheKey = `home-recent-scores:v3:${liveUserIds.join(",")}`;
+  const cacheKey = `home-recent-scores:v4:${liveUserIds.join(",")}`;
 
   return fetchWithCacheLock(cacheKey, HOME_RECENT_SCORES_CACHE_TTL, async () => {
     const [liveResult, fallbackResult] = await Promise.allSettled([
