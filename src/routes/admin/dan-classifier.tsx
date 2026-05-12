@@ -10,7 +10,7 @@ import { formatNumber } from "../../lib/format";
 import { getBeatmapFile, getBeatmapset, getBeatmapsetForBeatmap, getUser, getUserScoresBestWindow, searchBeatmaps, searchBeatmapsByMappers } from "../../lib/osu";
 import type { DanEstimate } from "../../lib/dan-estimator";
 import type { OsuBeatmap, OsuBeatmapset, OsuScore } from "../../lib/types";
-import { canUseDevFeatures } from "../../lib/auth-shared";
+import { canUseDevFeatures, isAdmin } from "../../lib/auth-shared";
 import {
   type DanBenchmarkFamily,
   getBenchmarkBeatmapIds,
@@ -533,6 +533,8 @@ export const Route = createFileRoute("/admin/dan-classifier")({
 });
 
 function DanClassifierPage() {
+  const { auth } = Route.useRouteContext();
+  const canUseBenchmark = isAdmin(auth);
   const [view, setView] = useState<"search" | "benchmark">("search");
   const [benchmarkFamily, setBenchmarkFamily] = useState<DanBenchmarkFamily>("normal");
   const [query, setQuery] = useState("");
@@ -615,6 +617,12 @@ function DanClassifierPage() {
 
   useEffect(() => () => clearTimeout(copiedTimerRef.current), []);
 
+  useEffect(() => {
+    if (!canUseBenchmark && view === "benchmark") {
+      setView("search");
+    }
+  }, [canUseBenchmark, view]);
+
   const selectedTitle = useMemo(() => {
     if (!selectedSet || !selectedBeatmap) return null;
     return `${selectedSet.artist} - ${selectedSet.title} [${selectedBeatmap.version}]`;
@@ -691,7 +699,9 @@ function DanClassifierPage() {
 
         <div className="mt-5 flex items-center gap-1 border-b border-osu-b3/30">
           <ViewTab active={view === "search"} onClick={() => setView("search")}>Search</ViewTab>
-          <ViewTab active={view === "benchmark"} onClick={() => setView("benchmark")}>Benchmark</ViewTab>
+          {canUseBenchmark ? (
+            <ViewTab active={view === "benchmark"} onClick={() => setView("benchmark")}>Benchmark</ViewTab>
+          ) : null}
         </div>
 
         <div
