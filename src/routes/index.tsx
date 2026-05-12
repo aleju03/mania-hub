@@ -67,6 +67,8 @@ const EMPTY_POPOFFS: LeanHomePopoff[] = [];
 const HOME_RANKING_SKELETON_MOBILE_COUNT = 5;
 const HOME_RANKING_SKELETON_DESKTOP_COUNT = 10;
 const HOME_RECENT_SCORES_SKELETON_COUNT = 2;
+const HOME_RECENT_SCORES_PLAYER_COUNT = 50;
+const HOME_POPOFFS_PLAYER_COUNT = 10;
 
 function HomePage() {
   const navigate = useNavigate();
@@ -88,17 +90,18 @@ function HomePage() {
   const [loadingScores, setLoadingScores] = useState(recentScores.length === 0);
   const [loadingPopoffs, setLoadingPopoffs] = useState(popoffs.length === 0);
   const countryName = getCountryName(selectedCountry);
-  const homePreviewPlayers = rankings?.ranking
+  const homeActivePlayers = rankings?.ranking
     .filter((entry) => entry.user.is_active !== false)
-    .slice(0, 10)
     .map((entry) => ({
       id: entry.user.id,
       username: entry.user.username,
       avatar_url: entry.user.avatar_url,
     })) ?? [];
-  const homePreviewUserIds = homePreviewPlayers.map((player) => player.id);
-  const homePreviewPlayerIdsKey = homePreviewUserIds.join(",");
-  const homePreviewPlayersKey = homePreviewPlayers
+  const homeRecentPlayers = homeActivePlayers.slice(0, HOME_RECENT_SCORES_PLAYER_COUNT);
+  const homePopoffPlayers = homeActivePlayers.slice(0, HOME_POPOFFS_PLAYER_COUNT);
+  const homeRecentUserIds = homeRecentPlayers.map((player) => player.id);
+  const homeRecentPlayerIdsKey = homeRecentUserIds.join(",");
+  const homePopoffPlayersKey = homePopoffPlayers
     .map((player) => `${player.id}:${player.username}:${player.avatar_url}`)
     .join("|");
 
@@ -152,7 +155,7 @@ function HomePage() {
       };
     }
 
-    if (homePreviewUserIds.length === 0) {
+    if (homeRecentUserIds.length === 0) {
       setLoadingScores(recentScores.length === 0 && !rankingsError);
       return () => {
         cancelled = true;
@@ -161,7 +164,7 @@ function HomePage() {
 
     setLoadingScores(recentScores.length === 0);
 
-    getHomeRecentScores({ data: { userIds: homePreviewUserIds } })
+    getHomeRecentScores({ data: { userIds: homeRecentUserIds } })
       .then((data) => {
         if (cancelled) return;
         setHomeRecentScores(selectedCountry, data);
@@ -182,7 +185,7 @@ function HomePage() {
   }, [
     recentScores.length,
     recentScoresFetchedAt,
-    homePreviewPlayerIdsKey,
+    homeRecentPlayerIdsKey,
     rankingsError,
     selectedCountry,
     setHomeRecentScores,
@@ -200,7 +203,7 @@ function HomePage() {
       };
     }
 
-    if (homePreviewPlayers.length === 0) {
+    if (homePopoffPlayers.length === 0) {
       setLoadingPopoffs(popoffs.length === 0 && !rankingsError);
       return () => {
         cancelled = true;
@@ -209,7 +212,7 @@ function HomePage() {
 
     setLoadingPopoffs(popoffs.length === 0);
 
-    getHomePopoffs({ data: { players: homePreviewPlayers } })
+    getHomePopoffs({ data: { players: homePopoffPlayers } })
       .then((data) => {
         if (cancelled) return;
         setHomePopoffs(selectedCountry, data);
@@ -230,7 +233,7 @@ function HomePage() {
   }, [
     popoffs.length,
     popoffsFetchedAt,
-    homePreviewPlayersKey,
+    homePopoffPlayersKey,
     rankingsError,
     selectedCountry,
     setHomePopoffs,

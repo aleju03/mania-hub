@@ -181,7 +181,7 @@ const COUNTRY_BEATMAP_LOOKUP_CONCURRENCY = 15;
 const USER_PROFILE_INSIGHTS_CACHE_TTL = 6 * 60 * 60 * 1000;
 const USER_PROFILE_INSIGHTS_CACHE_VERSION = 6;
 const HOME_PAGE_CACHE_TTL = 60 * 1000;
-const HOME_RECENT_SCORES_CACHE_TTL = 5 * 60 * 1000;
+const HOME_RECENT_SCORES_CACHE_TTL = 60 * 1000;
 const HOME_POPOFFS_CACHE_TTL = 10 * 60 * 1000;
 const COUNTRY_POPOFFS_CACHE_TTL = 90 * 1000;
 const COUNTRY_POPOFFS_CACHE_VERSION = 4;
@@ -207,7 +207,8 @@ const POPOFF_WINDOW_MS: Record<PopoffWindow, number> = {
   "7d": 7 * 24 * 60 * 60 * 1000,
   "30d": 30 * 24 * 60 * 60 * 1000,
 };
-const HOME_RECENT_SCORES_PLAYER_COUNT = 10;
+const HOME_RECENT_SCORES_LIVE_PLAYER_COUNT = 50;
+const HOME_RECENT_SCORES_OSU_FALLBACK_PLAYER_COUNT = 10;
 const HOME_POPOFFS_PLAYER_COUNT = 10;
 const USER_CACHE_TTL = 2 * 60 * 1000;
 const USER_SCORE_LIST_CACHE_TTL = 60 * 1000;
@@ -1735,18 +1736,29 @@ function buildRecentScoresPreview(scores: OsuScore[], limit = 5): OsuScore[] {
 }
 
 async function buildHomeRecentScoresPreview(userIds: number[]): Promise<LeanHomeScore[]> {
-  const previewUserIds = userIds.slice(0, HOME_RECENT_SCORES_PLAYER_COUNT);
-  if (previewUserIds.length === 0) return [];
-  // v2: response is now LeanHomeScore[] (pre-digested display values, no
-  // fat beatmapset/beatmap fields).
-  const cacheKey = `home-recent-scores:v2:${previewUserIds.join(",")}`;
+  const liveUserIds = userIds.slice(0, HOME_RECENT_SCORES_LIVE_PLAYER_COUNT);
+  if (liveUserIds.length === 0) return [];
+  const fallbackUserIds = liveUserIds.slice(0, HOME_RECENT_SCORES_OSU_FALLBACK_PLAYER_COUNT);
+  // Keep the response lean while merging the public live tracker feed for the
+  // first rankings page with a smaller osu! recent-score fallback.
+  const cacheKey = `home-recent-scores:v3:${liveUserIds.join(",")}`;
 
   return fetchWithCacheLock(cacheKey, HOME_RECENT_SCORES_CACHE_TTL, async () => {
-    const scores = await fetchCountryRecentScores(previewUserIds, {
-      batchSize: previewUserIds.length,
-      batchIndex: 0,
-      recentLimit: 20,
-    });
+    const [liveResult, fallbackResult] = await Promise.allSettled([
+      fetchOscCountryRecentScores(liveUserIds, {
+        batchSize: liveUserIds.length,
+        batchIndex: 0,
+        recentLimit: 20,
+      }),
+      fetchCountryRecentScores(fallbackUserIds, {
+        batchSize: fallbackUserIds.length,
+        batchIndex: 0,
+        recentLimit: 20,
+      }),
+    ]);
+    const liveScores = liveResult.status === "fulfilled" ? liveResult.value ?? [] : [];
+    const fallbackScores = fallbackResult.status === "fulfilled" ? fallbackResult.value : [];
+    const scores = [...liveScores, ...fallbackScores];
     return buildRecentScoresPreview(scores, 5).map((score) => toLeanHomeScore(score));
   });
 }
