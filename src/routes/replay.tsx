@@ -38,6 +38,7 @@ import {
 } from "../lib/replay-overlays";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
 import { startProgressPoll } from "../lib/progress-poll";
+import { getLiveBackendUrl } from "../lib/live-backend";
 import { useAuth } from "../lib/auth-context";
 import {
   normalizeReplayBackgroundDim,
@@ -200,10 +201,24 @@ function sanitizeReplayVideoFilename(value: string): string {
     .slice(0, 90) || "replay";
 }
 
-async function postReplayVideoJson<T>(action: string, body: unknown, id?: string): Promise<T> {
-  const url = new URL("/api/replay-video-job", window.location.origin);
+type ReplayVideoJobPayload = {
+  id: string;
+  status?: "started" | "uploaded" | "queued" | "running" | "done" | "failed" | "cancelled";
+  url?: string | null;
+  signed?: boolean;
+  error?: string | null;
+};
+
+function getReplayVideoJobUrl(action: string, id?: string): URL {
+  const base = getLiveBackendUrl() ?? window.location.origin;
+  const url = new URL("/api/replay-video-job", base);
   url.searchParams.set("action", action);
   if (id) url.searchParams.set("id", id);
+  return url;
+}
+
+async function postReplayVideoJson<T>(action: string, body: unknown, id?: string): Promise<T> {
+  const url = getReplayVideoJobUrl(action, id);
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -217,9 +232,7 @@ async function postReplayVideoJson<T>(action: string, body: unknown, id?: string
 }
 
 async function postReplayVideoBlob(jobId: string, blob: Blob): Promise<void> {
-  const url = new URL("/api/replay-video-job", window.location.origin);
-  url.searchParams.set("action", "upload-video");
-  url.searchParams.set("id", jobId);
+  const url = getReplayVideoJobUrl("upload-video", jobId);
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "video/mp4" },
@@ -229,6 +242,19 @@ async function postReplayVideoBlob(jobId: string, blob: Blob): Promise<void> {
     const payload = await response.json().catch(() => null) as { error?: string } | null;
     throw new Error(payload?.error || "Replay video upload failed.");
   }
+}
+
+async function waitForReplayVideoJob(jobId: string, onProgress: (progress: number) => void): Promise<{ url: string; signed: boolean }> {
+  for (let attempt = 0; attempt < 90; attempt++) {
+    await new Promise((resolve) => window.setTimeout(resolve, 2000));
+    const job = await postReplayVideoJson<ReplayVideoJobPayload>("status", {}, jobId);
+    if (job.status === "done" && job.url) return { url: job.url, signed: Boolean(job.signed) };
+    if (job.status === "failed" || job.status === "cancelled") {
+      throw new Error(job.error || `Replay video job ${job.status}.`);
+    }
+    onProgress(Math.min(0.99, 0.94 + attempt * 0.0005));
+  }
+  throw new Error("Replay video export is still queued. Try again in a moment.");
 }
 
 // Browsers default `preservesPitch` to true (the DT/HT behavior). NC/DC need
@@ -1839,7 +1865,7 @@ function ReplayViewer({
         width,
         height,
         frameCount,
-        audioUrl: audioEnabled && audioUrl && !audioError ? audioUrl : null,
+        audioUrl: audioEnabled && audioUrl && !audioError ? new URL(audioUrl, window.location.origin).toString() : null,
         audioStartSeconds: startTime / 1000,
         sourceDurationSeconds: sourceDurationMs / 1000,
         effectiveRate,
@@ -1886,7 +1912,18 @@ function ReplayViewer({
         url: null,
         signed: false,
       });
-      const uploaded = await postReplayVideoJson<{ url: string; signed: boolean }>("finish", {}, jobId);
+      const finished = await postReplayVideoJson<ReplayVideoJobPayload>("finish", {}, jobId);
+      const uploaded = finished.status === "done" && finished.url
+        ? { url: finished.url, signed: Boolean(finished.signed) }
+        : await waitForReplayVideoJob(jobId, (progress) => {
+            setVideoExport({
+              exporting: true,
+              progress,
+              error: null,
+              url: null,
+              signed: false,
+            });
+          });
       setVideoExport({
         exporting: false,
         progress: 1,

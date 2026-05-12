@@ -1,0 +1,22 @@
+[
+  {
+    "id": 9001,
+    "user_id": 101,
+    "accuracy": 0.987,
+    "beatmap_id": 501,
+    "mods": [],
+    "score": 987654,
+    "total_score": 987654,
+    "max_combo": 1234,
+    "passed": true,
+    "rank": "S",
+    "statistics": { "count_geki": 900, "count_300": 300 },
+    "pp": 252.4,
+    "beatmap": { "id": 501, "beatmapset_id": 50, "difficulty_rating": 5.6, "mode": "mania", "cs": 4, "bpm": 180, "max_combo": 1234, "version": "Another", "url": "https://osu.ppy.sh/beatmaps/501" },
+    "beatmapset": { "id": 50, "title": "Fixture Song", "artist": "Fixture Artist", "covers": { "cover": "https://assets.example/cover.jpg" } },
+    "user": { "id": 101, "username": "Sniper", "avatar_url": "https://assets.example/sniper.png", "country_code": "CR" },
+    "created_at": "2026-05-12T00:00:00.000Z",
+    "ended_at": "2026-05-12T00:02:00.000Z",
+    "type": "solo_score"
+  }
+]

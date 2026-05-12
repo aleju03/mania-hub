@@ -1,0 +1,26 @@
+{
+  "name": "mania-hub-live-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env --import tsx src/server.ts",
+    "start": "node dist/server.js",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "verify": "vitest run && tsc -p tsconfig.json",
+    "smoke:osc": "node --env-file-if-exists=.env --import tsx src/smoke-osc.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1045.0",
+    "@aws-sdk/s3-request-presigner": "^3.1045.0",
+    "@libsql/client": "^0.17.3",
+    "ffmpeg-static": "^5.3.0",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.7.2",
+    "vitest": "^3.0.5"
+  }
+}

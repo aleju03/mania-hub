@@ -17,6 +17,7 @@ import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { startProgressPoll } from "../lib/progress-poll";
+import { fetchLiveSnipesSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
 
 type KeyFilter = "all" | "4k" | "7k";
 type RangeFilter = "24h" | "7d" | "30d" | "all";
@@ -119,6 +120,7 @@ function SnipesPage() {
   const sawScanActivityRef = useRef(false);
   const finalizingRefreshRef = useRef(false);
   const refreshInProgressRef = useRef(false);
+  const liveBackendEnabled = isLiveBackendConfigured();
 
   // Render-driving "elapsed" timer for the secondary header indicator.
   useEffect(() => {
@@ -131,6 +133,11 @@ function SnipesPage() {
 
   // Poll scan progress and partial events while the request is in flight.
   useEffect(() => {
+    if (liveBackendEnabled) {
+      setScanStatus(null);
+      setPartialEvents([]);
+      return;
+    }
     if (scanStartedAt == null) {
       setScanStatus(null);
       setPartialEvents([]);
@@ -189,7 +196,50 @@ function SnipesPage() {
       cancelled = true;
       stopPolling();
     };
-  }, [scanStartedAt, selectedCountry, setSnipes]);
+  }, [liveBackendEnabled, scanStartedAt, selectedCountry, setSnipes]);
+
+  useEffect(() => {
+    if (!liveBackendEnabled) return;
+    let cancelled = false;
+    const requestedCountry = selectedCountry;
+    fetchLiveSnipesSnapshot(requestedCountry)
+      .then((snapshot) => {
+        if (cancelled || currentCountryRef.current !== requestedCountry) return;
+        setSnipes(requestedCountry, snapshot.events, snapshot.scannedAt);
+        setLoading(false);
+        setRefreshing(false);
+        setScanStartedAt(null);
+      })
+      .catch((err) => {
+        if (currentCountryRef.current === requestedCountry && snipes.length === 0) {
+          setError(err instanceof Error ? err.message : "Couldn't load live snipes.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [liveBackendEnabled, selectedCountry, setSnipes, snipes.length]);
+
+  useEffect(() => {
+    if (!liveBackendEnabled) return;
+    const source = openLiveEventSource(selectedCountry);
+    if (!source) return;
+    source.addEventListener("snipe", (event) => {
+      const snipe = JSON.parse(event.data) as SnipeEvent;
+      const merged = new Map<string, SnipeEvent>();
+      merged.set(`${snipe.beatmap_id}:${snipe.score_id}`, snipe);
+      for (const existing of snipes) {
+        const key = `${existing.beatmap_id}:${existing.score_id}`;
+        if (!merged.has(key)) merged.set(key, existing);
+      }
+      setSnipes(selectedCountry, [...merged.values()], Date.now());
+    });
+    source.addEventListener("job_status", () => {
+      setRefreshing(false);
+      setScanStartedAt(null);
+    });
+    return () => source.close();
+  }, [liveBackendEnabled, selectedCountry, setSnipes, snipes]);
 
   const searchRef = useRef(search);
   searchRef.current = search;
@@ -226,6 +276,7 @@ function SnipesPage() {
   // result. We don't cancel on cleanup — strict-mode double-mounting would
   // otherwise drop the only inflight fetch and leave us stuck loading.
   useEffect(() => {
+    if (liveBackendEnabled) return;
     if (fetchingRef.current) return;
     const stale = isCacheStale(snipesFetchedAt, CLIENT_CACHE_TTL.snipes);
     if (!stale) {
@@ -282,7 +333,7 @@ function SnipesPage() {
         }
         fetchingRef.current = false;
       });
-  }, [selectedCountry, snipesFetchedAt, snipes.length, scanStartedAt, setSnipes]);
+  }, [liveBackendEnabled, selectedCountry, snipesFetchedAt, snipes.length, scanStartedAt, setSnipes]);
 
   // ── Filter + sort ──────────────────────────────────────────────────────
   const visibleSnipes = useMemo(() => {

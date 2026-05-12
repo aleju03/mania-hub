@@ -1,0 +1,121 @@
+import type { Config } from "../config.js";
+import type { OscScore } from "../shared/types.js";
+
+export class TokenBucketLimiter {
+  private starts: number[] = [];
+  private recent: Array<{ startedAt: number; caller: string; path: string }> = [];
+
+  constructor(
+    private readonly hardPerMinute: number,
+    private readonly onCall?: (entry: { caller: string; path: string; startedAt: number }) => void,
+  ) {}
+
+  async schedule<T>(caller: string, path: string, fn: () => Promise<T>): Promise<T> {
+    const now = Date.now();
+    this.starts = this.starts.filter((startedAt) => now - startedAt < 60_000);
+    if (this.starts.length >= this.hardPerMinute) {
+      const waitMs = 60_000 - (now - this.starts[0]) + 1;
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+      return this.schedule(caller, path, fn);
+    }
+    const startedAt = Date.now();
+    this.starts.push(startedAt);
+    this.recent.push({ startedAt, caller, path });
+    this.onCall?.({ caller, path, startedAt });
+    this.recent = this.recent.filter((entry) => startedAt - entry.startedAt < 60_000);
+    return fn();
+  }
+
+  state() {
+    const now = Date.now();
+    this.starts = this.starts.filter((startedAt) => now - startedAt < 60_000);
+    this.recent = this.recent.filter((entry) => now - entry.startedAt < 60_000);
+    const byCaller = new Map<string, number>();
+    const byPath = new Map<string, number>();
+    for (const entry of this.recent) {
+      byCaller.set(entry.caller, (byCaller.get(entry.caller) ?? 0) + 1);
+      byPath.set(entry.path, (byPath.get(entry.path) ?? 0) + 1);
+    }
+    return {
+      hardPerMinute: this.hardPerMinute,
+      usedLastMinute: this.starts.length,
+      byCaller: [...byCaller.entries()]
+        .map(([caller, count]) => ({ caller, count }))
+        .sort((a, b) => b.count - a.count),
+      byPath: [...byPath.entries()]
+        .map(([path, count]) => ({ path, count }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10),
+    };
+  }
+}
+
+export class OsuApiClient {
+  private token: { accessToken: string; expiresAt: number } | null = null;
+  readonly limiter: TokenBucketLimiter;
+
+  constructor(
+    private readonly config: Pick<Config, "osuClientId" | "osuClientSecret" | "osuApiHardPerMinute">,
+    private readonly fetchImpl: typeof fetch = fetch,
+    onCall?: (entry: { caller: string; path: string; startedAt: number }) => void,
+  ) {
+    this.limiter = new TokenBucketLimiter(config.osuApiHardPerMinute, onCall);
+  }
+
+  hasCredentials(): boolean {
+    return !!this.config.osuClientId && !!this.config.osuClientSecret;
+  }
+
+  async getUser(userId: number, caller = "unknown"): Promise<Record<string, unknown>> {
+    return this.getJson(`/users/${userId}/mania`, caller);
+  }
+
+  async getBeatmap(beatmapId: number, caller = "unknown"): Promise<Record<string, unknown>> {
+    return this.getJson(`/beatmaps/${beatmapId}`, caller);
+  }
+
+  async getUserBestScores(userId: number, caller = "unknown"): Promise<OscScore[]> {
+    return this.getJson(`/users/${userId}/scores/best?mode=mania&limit=100`, caller) as Promise<OscScore[]>;
+  }
+
+  async getBeatmapUserScoresAll(beatmapId: number, userId: number, caller = "unknown"): Promise<OscScore[]> {
+    const body = await this.getJson<{ scores?: OscScore[] } | OscScore[]>(`/beatmaps/${beatmapId}/scores/users/${userId}/all?mode=mania`, caller);
+    return Array.isArray(body) ? body : body.scores ?? [];
+  }
+
+  async getRanking(country: string, page = 1, caller = "unknown"): Promise<Record<string, unknown>> {
+    return this.getJson(`/rankings/mania/performance?country=${encodeURIComponent(country)}&page=${page}`, caller);
+  }
+
+  async getJson<T = unknown>(path: string, caller = "unknown"): Promise<T> {
+    if (!this.hasCredentials()) {
+      throw new Error("OSU_CLIENT_ID and OSU_CLIENT_SECRET are required for osu! API calls");
+    }
+    return this.limiter.schedule(caller, path, async () => {
+      const token = await this.getAccessToken();
+      const response = await this.fetchImpl(`https://osu.ppy.sh/api/v2${path}`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error(`osu! API ${response.status} for ${path}`);
+      return response.json() as Promise<T>;
+    });
+  }
+
+  private async getAccessToken(): Promise<string> {
+    if (this.token && Date.now() < this.token.expiresAt - 60_000) return this.token.accessToken;
+    const response = await this.fetchImpl("https://osu.ppy.sh/oauth/token", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        client_id: Number(this.config.osuClientId),
+        client_secret: this.config.osuClientSecret,
+        grant_type: "client_credentials",
+        scope: "public",
+      }),
+    });
+    if (!response.ok) throw new Error(`osu! OAuth ${response.status}`);
+    const body = await response.json() as { access_token: string; expires_in: number };
+    this.token = { accessToken: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 };
+    return this.token.accessToken;
+  }
+}

@@ -23,6 +23,7 @@ import { parseCountrySearchParam, withSearchParams } from "../lib/country-search
 import { hasTopPlaysCache, shouldRefreshTopPlays } from "../lib/top-plays-cache";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { startProgressPoll } from "../lib/progress-poll";
+import { fetchLiveTopPlaysSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
 
 type PopOff = CountryTopPlay;
 
@@ -121,6 +122,7 @@ function PopOffsPage() {
     refreshingRef.current = refreshing;
   }, [refreshing]);
   const countryName = getCountryName(selectedCountry);
+  const liveBackendEnabled = isLiveBackendConfigured();
 
   useEffect(() => {
     setPlayersError(null);
@@ -220,6 +222,41 @@ function PopOffsPage() {
   }, []);
 
   useEffect(() => {
+    if (!liveBackendEnabled) return;
+    let cancelled = false;
+    const requestedCountry = selectedCountry;
+    fetchLiveTopPlaysSnapshot(requestedCountry, range)
+      .then((snapshot) => {
+        if (cancelled || currentCountryRef.current !== requestedCountry) return;
+        setCachedPopoffs(requestedCountry, mergePopoffs(snapshot.popoffs), snapshot.window);
+        setLoading(false);
+        setRefreshing(false);
+        setScanStartedAt(null);
+      })
+      .catch(() => {
+        // Existing server-function refresh remains the fallback.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [liveBackendEnabled, mergePopoffs, range, selectedCountry, setCachedPopoffs]);
+
+  useEffect(() => {
+    if (!liveBackendEnabled) return;
+    const source = openLiveEventSource(selectedCountry);
+    if (!source) return;
+    source.addEventListener("top_play", (event) => {
+      const popoff = JSON.parse(event.data) as PopOff;
+      setCachedPopoffs(selectedCountry, mergePopoffs([popoff, ...popoffs]), range);
+    });
+    source.addEventListener("job_status", () => {
+      setRefreshing(false);
+      setScanStartedAt(null);
+    });
+    return () => source.close();
+  }, [liveBackendEnabled, mergePopoffs, popoffs, range, selectedCountry, setCachedPopoffs]);
+
+  useEffect(() => {
     if (scanStartedAt == null) {
       setRefreshStatus(null);
       setPartialPopoffs([]);
@@ -289,6 +326,7 @@ function PopOffsPage() {
   }, [mergePopoffs, players, scanStartedAt, selectedCountry, setCachedPopoffs]);
 
   const fetchAll = useCallback(async () => {
+    if (liveBackendEnabled) return;
     if (refreshingRef.current) return;
 
     if (players.length === 0 || fetchingRef.current) {
@@ -367,7 +405,7 @@ function PopOffsPage() {
       }
       fetchingRef.current = false;
     }
-  }, [hasCachedPopoffs, mergePopoffs, players, popoffsFetchedAt, popoffsWindow, range, setCachedPopoffs, selectedCountry]);
+  }, [hasCachedPopoffs, liveBackendEnabled, mergePopoffs, players, popoffsFetchedAt, popoffsWindow, range, setCachedPopoffs, selectedCountry]);
 
   useEffect(() => {
     if (loadingPlayers || playersError) return;

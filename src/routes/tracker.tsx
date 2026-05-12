@@ -33,6 +33,7 @@ import type { LeanTrackerScore } from "../lib/types";
 import { pageSeo } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
+import { fetchLiveTrackerSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
 
 const TRACKER_SNAPSHOT_LOADER_TIMEOUT_MS = 2500;
 
@@ -138,6 +139,7 @@ function ScoresPage() {
   const pollInFlightRef = useRef(false);
   const pollRequestIdRef = useRef(0);
   const appliedSnapshotKeyRef = useRef<string | null>(null);
+  const liveBackendEnabled = isLiveBackendConfigured();
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const handleToggleExpand = useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key));
@@ -174,6 +176,44 @@ function ScoresPage() {
       setTrackerPpGains(selectedCountry, snapshot.gains, snapshot.fetchedAt);
     }
   }, [snapshot, selectedCountry, setRankings, setTrackedUserIds, addFeedScores, setTrackerPpGains]);
+
+  useEffect(() => {
+    if (!liveBackendEnabled) return;
+    let cancelled = false;
+    const requestedCountry = selectedCountry;
+    fetchLiveTrackerSnapshot(requestedCountry)
+      .then((liveSnapshot) => {
+        if (cancelled || requestedCountry !== selectedCountry) return;
+        if (liveSnapshot.scores.length > 0) addFeedScores(requestedCountry, liveSnapshot.scores);
+        if (Object.keys(liveSnapshot.gains).length > 0) {
+          setTrackerPpGains(requestedCountry, liveSnapshot.gains, liveSnapshot.fetchedAt);
+        }
+        markFeedScoresFetched(requestedCountry);
+        setInitialLoaded(true);
+      })
+      .catch(() => {
+        // The existing server-function path below remains the fallback.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [addFeedScores, liveBackendEnabled, markFeedScoresFetched, selectedCountry, setTrackerPpGains]);
+
+  useEffect(() => {
+    if (!liveBackendEnabled || !isPolling) return;
+    const source = openLiveEventSource(selectedCountry);
+    if (!source) return;
+    source.addEventListener("tracker_score", (event) => {
+      addFeedScores(selectedCountry, [JSON.parse(event.data) as LeanTrackerScore]);
+    });
+    source.addEventListener("score_gain", (event) => {
+      const data = JSON.parse(event.data) as { scoreId?: number; ppGain?: number };
+      if (data.scoreId != null && data.ppGain != null) {
+        setTrackerPpGains(selectedCountry, { [data.scoreId]: data.ppGain });
+      }
+    });
+    return () => source.close();
+  }, [addFeedScores, isPolling, liveBackendEnabled, selectedCountry, setTrackerPpGains]);
 
   useEffect(() => {
     setUserIds(trackedUserIds);
@@ -330,6 +370,7 @@ function ScoresPage() {
 
   const poll = useCallback(async () => {
     if (!isPolling) return;
+    if (liveBackendEnabled) return;
     if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
     if (pollInFlightRef.current) return;
     pollInFlightRef.current = true;
@@ -347,7 +388,7 @@ function ScoresPage() {
         setPolling(false);
       }
     }
-  }, [isPolling, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains, setTrackedUserIds]);
+  }, [isPolling, liveBackendEnabled, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains, setTrackedUserIds]);
 
   useEffect(() => {
     if (!isPolling) return;
@@ -452,6 +493,12 @@ function ScoresPage() {
     { id: "only", label: "Only failed" },
   ];
   const listKey = `${filter}:${gradeFilter}:${failedFilter}`;
+  const liveStatusLabel = liveBackendEnabled
+    ? isPolling ? "Stream live" : "Stream paused"
+    : isPolling ? "Live polling" : "Polling paused";
+  const liveToggleLabel = liveBackendEnabled
+    ? isPolling ? "Pause stream" : "Resume stream"
+    : isPolling ? "Pause" : "Resume";
 
   return (
     <div className="flex-1">
@@ -473,7 +520,7 @@ function ScoresPage() {
               <>
                 <div className={`w-2 h-2 rounded-full ${isPolling ? "bg-osu-green animate-pulse" : "bg-osu-f1"}`} />
                 <span className="text-[10px] text-osu-f1">
-                  {isPolling ? "Live" : "Paused"} {"\u00b7"} {feedScores.length} scores
+                  {liveStatusLabel} {"\u00b7"} {feedScores.length} scores
                 </span>
               </>
             )}
@@ -482,7 +529,7 @@ function ScoresPage() {
               className="px-2.5 py-1 rounded-lg bg-osu-b4 text-[10px] text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/30"
               disabled={loadingPlayers || !!playersError}
             >
-              {isPolling ? "Pause" : "Resume"}
+              {liveToggleLabel}
             </button>
           </div>
         }
