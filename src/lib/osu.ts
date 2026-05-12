@@ -88,6 +88,7 @@ import type {
 } from "./types";
 import { parseManiaBeatmap } from "./beatmap-parser";
 import { estimateDan } from "./dan-estimator";
+import { DAN_ESTIMATE_CACHE_VERSION } from "./dan-estimator/cache-version";
 import { isSupportedCountryCode, normalizeCountryCode } from "./country";
 
 const sanitizeServerProfilePageHtml = createServerOnlyFn(
@@ -4098,7 +4099,9 @@ const DAN_ESTIMATE_CONCURRENCY = 6;
 
 function danCacheKey(beatmapId: number, rate: number): string {
   const r = Math.round(rate * 100);
-  return r === 100 ? `dan:v2:${beatmapId}` : `dan:v2:${beatmapId}:r${r}`;
+  return r === 100
+    ? `dan:v${DAN_ESTIMATE_CACHE_VERSION}:${beatmapId}`
+    : `dan:v${DAN_ESTIMATE_CACHE_VERSION}:${beatmapId}:r${r}`;
 }
 
 interface DanEstimateRequest {
@@ -4132,6 +4135,7 @@ async function computeDanEstimate(
       rawDan: estimate.rawDan,
       family: estimate.family,
       confidence: estimate.confidence,
+      estimatorVersion: DAN_ESTIMATE_CACHE_VERSION,
     };
 
     await setPersistentCache(key, lean, DAN_ESTIMATE_CACHE_TTL);
@@ -4143,10 +4147,11 @@ async function computeDanEstimate(
 
 export const getDanEstimates = createServerFn({ method: "GET" })
   .inputValidator(
-    (input: { items?: unknown[] }): { items: DanEstimateRequest[] } => {
+    (input: { items?: unknown[]; estimatorVersion?: unknown }): { items: DanEstimateRequest[]; estimatorVersion: number } => {
       const raw = asInputRecord(input);
       const items = Array.isArray(raw.items) ? raw.items : [];
       return {
+        estimatorVersion: Number(raw.estimatorVersion) || DAN_ESTIMATE_CACHE_VERSION,
         items: items.map((item: any) => ({
           beatmapId: Number(item.beatmapId),
           starRating: item.starRating != null ? Number(item.starRating) : undefined,
@@ -4159,7 +4164,7 @@ export const getDanEstimates = createServerFn({ method: "GET" })
     async ({
       data,
     }: {
-      data: { items: DanEstimateRequest[] };
+      data: { items: DanEstimateRequest[]; estimatorVersion: number };
     }): Promise<Record<string, LeanDanEstimate | null>> => {
       const { readCurrentAuth } = await import("./auth-server");
       const auth = await readCurrentAuth();

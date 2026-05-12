@@ -4,6 +4,7 @@ import type { LeanDanEstimate, LeanTrackerScore, OsuScore } from "#/lib/types";
 import { getDanEstimates } from "#/lib/osu";
 import { getScoreRate } from "#/lib/score";
 import { useAuth } from "#/lib/auth-context";
+import { DAN_ESTIMATE_CACHE_VERSION } from "#/lib/dan-estimator/cache-version";
 
 // ── Batched fetcher ────────────────────────────────────────────────────────────
 
@@ -20,9 +21,13 @@ const pending = new Map<string, PendingRequest>();
 const listeners = new Set<Listener>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
-function estimateKey(beatmapId: number, rate: number): string {
+function estimateResponseKey(beatmapId: number, rate: number): string {
   const r = Math.round(rate * 100);
   return r === 100 ? String(beatmapId) : `${beatmapId}:${r}`;
+}
+
+function estimateKey(beatmapId: number, rate: number): string {
+  return `v${DAN_ESTIMATE_CACHE_VERSION}:${estimateResponseKey(beatmapId, rate)}`;
 }
 
 function scheduleFlush() {
@@ -40,6 +45,7 @@ async function flush() {
   try {
     const results = await getDanEstimates({
       data: {
+        estimatorVersion: DAN_ESTIMATE_CACHE_VERSION,
         items: batch.map((r) => ({
           beatmapId: r.beatmapId,
           starRating: r.starRating,
@@ -49,8 +55,10 @@ async function flush() {
     });
 
     const typed = results as Record<string, LeanDanEstimate | null>;
-    for (const [key, value] of Object.entries(typed)) {
-      cache.set(key, value);
+    for (const request of batch) {
+      const responseKey = estimateResponseKey(request.beatmapId, request.rate);
+      const key = estimateKey(request.beatmapId, request.rate);
+      cache.set(key, typed[responseKey] ?? null);
     }
   } catch {
     // Silently fail; badges just won't appear

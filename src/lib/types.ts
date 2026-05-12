@@ -300,6 +300,7 @@ export interface LeanDanEstimate {
   rawDan: number;
   family: string;
   confidence: number;
+  estimatorVersion?: number;
 }
 
 export interface UserSearchResponse {
