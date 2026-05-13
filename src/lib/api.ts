@@ -782,7 +782,7 @@ export type OsuFetchOptions = {
   context?: Record<string, OsuFetchContextValue>;
 };
 
-type BeatmapFileSource = "osu" | "catboy";
+type BeatmapFileSource = "osu" | "catboy" | "archive";
 type BeatmapFileCacheValue = {
   content: string;
   source: BeatmapFileSource;
@@ -956,12 +956,12 @@ export async function osuFetchBinary(
   throw new Error(`[osuFetchBinary:${caller}] retries exhausted on ${path}`);
 }
 
-export async function fetchBeatmapFile(beatmapId: number): Promise<string> {
+export async function fetchBeatmapFile(beatmapId: number, beatmapsetId?: number | null): Promise<string> {
   const cacheKey = `beatmap-file:v1:${beatmapId}`;
   const cached = await getPersistentCached<BeatmapFileCacheValue>(cacheKey);
   if (cached?.content?.trim()) return cached.content;
 
-  let osuError: unknown;
+  const errors: string[] = [];
   try {
     const osuFile = await fetchBeatmapFileFromSource(
       "osu",
@@ -974,7 +974,7 @@ export async function fetchBeatmapFile(beatmapId: number): Promise<string> {
     } satisfies BeatmapFileCacheValue, BEATMAP_FILE_CACHE_TTL);
     return osuFile;
   } catch (error) {
-    osuError = error;
+    errors.push(`osu (${error instanceof Error ? error.message : String(error)})`);
   }
 
   try {
@@ -989,10 +989,28 @@ export async function fetchBeatmapFile(beatmapId: number): Promise<string> {
     } satisfies BeatmapFileCacheValue, BEATMAP_FILE_CACHE_TTL);
     return catboyFile;
   } catch (catboyError) {
-    const osuMessage = osuError instanceof Error ? osuError.message : String(osuError);
-    const catboyMessage = catboyError instanceof Error ? catboyError.message : String(catboyError);
-    throw new Error(`Failed to fetch .osu file for beatmap ${beatmapId}: osu (${osuMessage}); catboy (${catboyMessage})`);
+    errors.push(`catboy (${catboyError instanceof Error ? catboyError.message : String(catboyError)})`);
   }
+
+  if (beatmapsetId) {
+    try {
+      const { extractBeatmapArchiveOsuFile } = await import("./beatmap-archive");
+      const archiveFile = await extractBeatmapArchiveOsuFile(String(beatmapsetId), beatmapId);
+      if (!isLikelyBeatmapFile(archiveFile)) {
+        throw new Error("archive returned an invalid .osu file");
+      }
+      await setPersistentCache(cacheKey, {
+        content: archiveFile,
+        source: "archive",
+        cachedAt: Date.now(),
+      } satisfies BeatmapFileCacheValue, BEATMAP_FILE_CACHE_TTL);
+      return archiveFile;
+    } catch (archiveError) {
+      errors.push(`archive (${archiveError instanceof Error ? archiveError.message : String(archiveError)})`);
+    }
+  }
+
+  throw new Error(`Failed to fetch .osu file for beatmap ${beatmapId}: ${errors.join("; ")}`);
 }
 
 function isLikelyBeatmapFile(content: string): boolean {

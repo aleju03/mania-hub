@@ -546,11 +546,11 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
-async function getBeatmapFileWithRetry(beatmapId: number) {
+async function getBeatmapFileWithRetry(beatmapId: number, beatmapsetId?: number) {
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const result = await getBeatmapFile({ data: { beatmapId } });
+      const result = await getBeatmapFile({ data: { beatmapId, beatmapsetId } });
       if (!result.content.trim()) throw new Error("Empty beatmap file");
       return result;
     } catch (error) {
@@ -3815,8 +3815,8 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     const referenceBeatmap = usesSetPreviewForReplayAudio ? getSetPreviewReferenceBeatmap(maniaBeatmaps) : null;
     const referenceBeatmapId = referenceBeatmap?.id && referenceBeatmap.id !== selectedBeatmap.id ? referenceBeatmap.id : null;
     Promise.all([
-      getBeatmapFileWithRetry(selectedBeatmap.id),
-      referenceBeatmapId ? getBeatmapFileWithRetry(referenceBeatmapId).catch(() => null) : Promise.resolve(null),
+      getBeatmapFileWithRetry(selectedBeatmap.id, bm.id),
+      referenceBeatmapId ? getBeatmapFileWithRetry(referenceBeatmapId, bm.id).catch(() => null) : Promise.resolve(null),
     ])
       .then(([selectedResult, referenceResult]) => {
         if (cancelled) return;

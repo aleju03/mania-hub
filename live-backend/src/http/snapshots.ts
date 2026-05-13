@@ -78,6 +78,14 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
     sendJson(req, res, ctx, 200, await statusBody(ctx));
     return true;
   }
+  if (url.pathname === "/api/admin/status") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, await statusBody(ctx, { includeWorkerActivity: true }));
+    return true;
+  }
   if (url.pathname === "/api/countries/activate") {
     if (req.method !== "POST") {
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
@@ -299,9 +307,10 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
   return false;
 }
 
-async function statusBody(ctx: HttpContext) {
+async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: boolean } = {}) {
   const db = await dbHealth(ctx.db);
   const last = (await exec(ctx.db, "select max(created_at) as created_at from live_event_log")).rows[0]?.created_at ?? null;
+  const worker = ctx.workerStatus?.() ?? null;
   return {
     ok: db,
     db,
@@ -314,7 +323,23 @@ async function statusBody(ctx: HttpContext) {
     rate: ctx.osu.limiter.state(),
     apiCallHistory: await apiCallHistory(ctx.db),
     countries: await getCountryRegistry(ctx.db, ctx.config),
-    worker: ctx.workerStatus?.() ?? null,
+    worker: options.includeWorkerActivity ? worker : publicWorkerStatus(worker),
+  };
+}
+
+function publicWorkerStatus(worker: ReturnType<NonNullable<HttpContext["workerStatus"]>> | null) {
+  if (!worker) return null;
+  return {
+    paused: worker.paused,
+    stopped: worker.stopped,
+    workerId: worker.workerId,
+    lanes: worker.lanes?.map((lane) => ({
+      name: lane.name,
+      claimLimit: lane.claimLimit,
+      intervalMs: lane.intervalMs,
+      jobTypes: lane.jobTypes,
+      activeJobCount: lane.activeJobs.length,
+    })),
   };
 }
 

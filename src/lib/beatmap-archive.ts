@@ -3,14 +3,12 @@ import JSZip from "jszip";
 const ARCHIVE_CACHE_TTL = 15 * 60 * 1000;
 const ARCHIVE_CACHE_MAX_ENTRIES = 6;
 const ARCHIVE_FETCH_TIMEOUT_MS = 15_000;
+const ARCHIVE_SOURCE_MIN_INTERVAL_MS = 2_500;
+const ARCHIVE_SOURCE_COOLDOWN_MS = 15 * 60 * 1000;
 const MAX_ARCHIVE_BYTES = 120 * 1024 * 1024;
 const MAX_EXTRACTED_FILE_BYTES = 60 * 1024 * 1024;
 
 const ARCHIVE_SOURCES = [
-  {
-    name: "catboy",
-    url: (beatmapsetId: string) => `https://catboy.best/d/${encodeURIComponent(beatmapsetId)}`,
-  },
   {
     name: "nerinyan",
     url: (beatmapsetId: string) => `https://api.nerinyan.moe/d/${encodeURIComponent(beatmapsetId)}`,
@@ -19,7 +17,13 @@ const ARCHIVE_SOURCES = [
     name: "osu.direct",
     url: (beatmapsetId: string) => `https://osu.direct/api/d/${encodeURIComponent(beatmapsetId)}`,
   },
+  {
+    name: "catboy",
+    url: (beatmapsetId: string) => `https://catboy.best/d/${encodeURIComponent(beatmapsetId)}`,
+  },
 ] as const;
+
+type ArchiveSourceName = (typeof ARCHIVE_SOURCES)[number]["name"];
 
 type ArchiveCacheEntry = {
   expiresAt: number;
@@ -28,6 +32,47 @@ type ArchiveCacheEntry = {
 };
 
 const archiveCache = new Map<string, ArchiveCacheEntry>();
+const archiveSourceState = new Map<ArchiveSourceName, { nextAvailableAt: number; cooldownUntil: number; tail: Promise<void> }>();
+
+function getArchiveSourceState(source: ArchiveSourceName) {
+  let state = archiveSourceState.get(source);
+  if (!state) {
+    state = { nextAvailableAt: 0, cooldownUntil: 0, tail: Promise.resolve() };
+    archiveSourceState.set(source, state);
+  }
+  return state;
+}
+
+async function wait(ms: number): Promise<void> {
+  if (ms <= 0) return;
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withArchiveSourceSlot<T>(source: ArchiveSourceName, task: () => Promise<T>): Promise<T> {
+  const state = getArchiveSourceState(source);
+  const previous = state.tail.catch(() => {});
+  let release!: () => void;
+  state.tail = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  const now = Date.now();
+  await wait(Math.max(0, state.nextAvailableAt - now));
+  state.nextAvailableAt = Date.now() + ARCHIVE_SOURCE_MIN_INTERVAL_MS;
+  try {
+    return await task();
+  } finally {
+    release();
+  }
+}
+
+function isArchiveSourceCoolingDown(source: ArchiveSourceName, now = Date.now()): boolean {
+  return getArchiveSourceState(source).cooldownUntil > now;
+}
+
+function cooldownArchiveSource(source: ArchiveSourceName): void {
+  getArchiveSourceState(source).cooldownUntil = Date.now() + ARCHIVE_SOURCE_COOLDOWN_MS;
+}
 
 function pruneArchiveCache(now = Date.now()): void {
   for (const [key, entry] of archiveCache.entries()) {
@@ -104,13 +149,14 @@ export async function getBeatmapArchive(beatmapsetId: string): Promise<JSZip> {
   const request = (async () => {
     const errors: string[] = [];
     for (const source of ARCHIVE_SOURCES) {
+      if (isArchiveSourceCoolingDown(source.name)) {
+        errors.push(`${source.name}: cooling down`);
+        continue;
+      }
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
       try {
-        const archiveResponse = await fetch(source.url(beatmapsetId), {
-          signal: controller.signal,
-          headers: { "User-Agent": "mania-hub/beatmap-archive" },
-        });
+        const archiveResponse = await withArchiveSourceSlot(source.name, () => fetch(source.url(beatmapsetId), { signal: controller.signal }));
         if (!archiveResponse.ok) {
           throw new Error(`${source.name} returned ${archiveResponse.status}`);
         }
@@ -118,6 +164,7 @@ export async function getBeatmapArchive(beatmapsetId: string): Promise<JSZip> {
         const archiveBuffer = await readResponseBufferWithLimit(archiveResponse, MAX_ARCHIVE_BYTES);
         return JSZip.loadAsync(archiveBuffer);
       } catch (error) {
+        cooldownArchiveSource(source.name);
         const message = error instanceof Error ? error.message : String(error);
         errors.push(`${source.name}: ${message}`);
       } finally {
@@ -185,4 +232,29 @@ export async function extractBeatmapArchiveFile(beatmapsetId: string, filename: 
     throw new Error(`File "${filename}" is too large`);
   }
   return buffer;
+}
+
+export async function extractBeatmapArchiveOsuFile(beatmapsetId: string, beatmapId: number): Promise<string> {
+  const zip = await getBeatmapArchive(beatmapsetId);
+  const expectedId = String(beatmapId);
+  let fallback: JSZip.JSZipObject | null = null;
+  let matched: JSZip.JSZipObject | null = null;
+
+  for (const [path, file] of Object.entries(zip.files)) {
+    if (file.dir || !path.toLowerCase().endsWith(".osu")) continue;
+    fallback ??= file;
+    const content = await file.async("string");
+    if (content.match(/^BeatmapID\s*:\s*(\d+)/m)?.[1] === expectedId) {
+      matched = file;
+      break;
+    }
+  }
+
+  const file = matched ?? fallback;
+  if (!file) throw new Error(`No .osu file found in beatmapset ${beatmapsetId}`);
+  const content = await file.async("string");
+  if (!content.trimStart().startsWith("osu file format")) {
+    throw new Error(`Archive .osu file for beatmap ${beatmapId} is invalid`);
+  }
+  return content;
 }

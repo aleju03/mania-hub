@@ -106,6 +106,29 @@ export const runLiveBackendAdminAction = createServerFn({ method: "POST" })
     return { ok: true, body: text || null };
   });
 
+export const fetchLiveBackendAdminStatus = createServerFn({ method: "GET" })
+  .handler(async (): Promise<any> => {
+    await requireAdminAccess("Live backend admin status");
+    const base = getServerLiveBackendUrl();
+    if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+    const headers: HeadersInit = {};
+    if (process.env.LIVE_ADMIN_TOKEN) {
+      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    }
+    let response = await fetch(`${base}/api/admin/status`, { headers });
+    if (response.status === 404) {
+      response = await fetch(`${base}/api/status`);
+    }
+    const body = await response.json() as any;
+    if (!response.ok) {
+      const message = body && typeof body === "object" && "error" in body
+        ? String((body as { error?: unknown }).error)
+        : `Live backend ${response.status} for /api/admin/status`;
+      throw new Error(message);
+    }
+    return body;
+  });
+
 export async function fetchLiveTrackerSnapshot(country: string, limit = 100): Promise<LiveTrackerSnapshot> {
   return fetchLiveJson(`/api/snapshots/tracker?country=${encodeURIComponent(country)}&limit=${limit}`);
 }

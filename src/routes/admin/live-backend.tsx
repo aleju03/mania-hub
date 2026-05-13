@@ -3,6 +3,7 @@ import { Activity, Database, HelpCircle, History, Pause, Play, Radio, RefreshCw,
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import {
+  fetchLiveBackendAdminStatus,
   fetchLiveSnipesSnapshot,
   fetchLiveTopPlaysSnapshot,
   fetchLiveTrackerSnapshot,
@@ -131,19 +132,12 @@ function LiveBackendPage() {
 
   const countryCode = useMemo(() => country.trim().toUpperCase().slice(0, 2) || DEFAULT_COUNTRY, [country]);
 
-  const fetchBackendJson = useCallback(async <T,>(path: string): Promise<T> => {
-    if (!backendUrl) throw new Error("VITE_LIVE_BACKEND_URL is not configured.");
-    const response = await fetch(`${backendUrl}${path}`, { credentials: "omit" });
-    if (!response.ok) throw new Error(`Live backend ${response.status} for ${path}`);
-    return response.json() as Promise<T>;
-  }, [backendUrl]);
-
   const load = useCallback(async (quiet = false): Promise<void> => {
     const requestId = ++requestIdRef.current;
     if (!quiet) setRefreshing(true);
     try {
       const [nextStatus, tracker, topPlays, snipes] = await Promise.all([
-        fetchBackendJson<LiveBackendStatus>("/api/status"),
+        fetchLiveBackendAdminStatus() as Promise<LiveBackendStatus>,
         fetchLiveTrackerSnapshot(countryCode, 100),
         fetchLiveTopPlaysSnapshot(countryCode, "7d"),
         fetchLiveSnipesSnapshot(countryCode, 500),
@@ -165,7 +159,7 @@ function LiveBackendPage() {
     } finally {
       if (requestId === requestIdRef.current) setRefreshing(false);
     }
-  }, [countryCode, fetchBackendJson]);
+  }, [countryCode]);
 
   const runAdminAction = useCallback(async (action: string, path: string) => {
     setActionBusy(action);

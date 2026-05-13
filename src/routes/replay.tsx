@@ -480,7 +480,7 @@ function ReplayPage() {
       const [parsed, bmResult] = await Promise.all([
         getReplayParsed({ data: { scoreId: sid, mode: "mania", keyCount } }),
         score?.beatmap?.id
-          ? getBeatmapFile({ data: { beatmapId: score.beatmap.id } }).catch(() => null)
+          ? getBeatmapFile({ data: { beatmapId: score.beatmap.id, beatmapsetId: score.beatmapset?.id } }).catch(() => null)
           : Promise.resolve(null),
       ]);
 

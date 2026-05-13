@@ -3409,10 +3409,19 @@ export const getReplayParsed = createServerFn({ method: "GET" })
   });
 
 export const getBeatmapFile = createServerFn({ method: "GET" })
-  .inputValidator(normalizeBeatmapPayload)
-  .handler(async ({ data }: { data: { beatmapId: number } }) => {
+  .inputValidator((input: unknown) => {
+    const data = normalizeBeatmapPayload(input);
+    const beatmapsetIdRaw = typeof input === "object" && input !== null && "beatmapsetId" in input
+      ? (input as { beatmapsetId?: unknown }).beatmapsetId
+      : undefined;
+    const beatmapsetId = beatmapsetIdRaw == null || beatmapsetIdRaw === ""
+      ? null
+      : parseBoundedInt(beatmapsetIdRaw, "beatmapsetId", { min: 1, max: 10_000_000 });
+    return { ...data, beatmapsetId };
+  })
+  .handler(async ({ data }: { data: { beatmapId: number; beatmapsetId: number | null } }) => {
     noStore();
-    const osuFile = await fetchBeatmapFile(data.beatmapId);
+    const osuFile = await fetchBeatmapFile(data.beatmapId, data.beatmapsetId);
     return { content: osuFile };
   });
 
