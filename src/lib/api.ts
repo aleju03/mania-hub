@@ -58,6 +58,8 @@ const warnedCacheIssues = new Set<string>();
 const CACHE_PURGE_EVERY_N_WRITES = 20;
 const CACHE_PURGE_BATCH_SIZE = 50;
 let writesSinceLastPurge = 0;
+let persistentCacheBypassUntil = 0;
+const PERSISTENT_CACHE_BYPASS_MS = 60_000;
 
 export type CacheLookup<T> =
   | { hit: true; value: T }
@@ -69,10 +71,21 @@ export type StaleCacheLookup<T> =
 
 function warnCacheIssue(action: string, key: string, error: unknown): void {
   const message = error instanceof Error ? error.message : String(error);
+  if (isPersistentCacheTransportError(message)) {
+    persistentCacheBypassUntil = Math.max(persistentCacheBypassUntil, Date.now() + PERSISTENT_CACHE_BYPASS_MS);
+  }
   const warningKey = `${action}:${key}:${message}`;
   if (warnedCacheIssues.has(warningKey)) return;
   warnedCacheIssues.add(warningKey);
   console.warn(`[cache] ${action} failed for "${key}": ${message}`);
+}
+
+function isPersistentCacheTransportError(message: string): boolean {
+  return /SERVER_ERROR|bad gateway|HTTP status 502|fetch failed|ECONNRESET|ETIMEDOUT|socket hang up|terminated/i.test(message);
+}
+
+function shouldBypassPersistentCache(): boolean {
+  return Date.now() < persistentCacheBypassUntil;
 }
 
 function getCacheKeyPrefix(key: string): string {
@@ -220,6 +233,7 @@ export function setCache(key: string, data: unknown, ttlMs = CACHE_TTL): void {
 export async function getPersistentCacheEntry<T>(key: string): Promise<CacheLookup<T>> {
   const memoryCached = getCachedEntry<T>(key);
   if (memoryCached.hit) return memoryCached;
+  if (shouldBypassPersistentCache()) return { hit: false };
   if (!hasDb() || !db) return { hit: false };
 
   try {
@@ -274,7 +288,7 @@ export async function getPersistentCacheEntries<T>(keys: string[]): Promise<Map<
     }
   }
 
-  if (dbKeys.length === 0 || !hasDb() || !db) return results;
+  if (dbKeys.length === 0 || shouldBypassPersistentCache() || !hasDb() || !db) return results;
 
   try {
     await ensureCacheSchema();
@@ -316,6 +330,7 @@ export async function getPersistentCacheEntryAllowStale<T>(
 ): Promise<StaleCacheLookup<T>> {
   const memoryCached = getCachedEntry<T>(key);
   if (memoryCached.hit) return { hit: true, value: memoryCached.value, isStale: false };
+  if (shouldBypassPersistentCache()) return { hit: false };
   if (!hasDb() || !db) return { hit: false };
 
   try {
@@ -358,6 +373,7 @@ export async function getPersistentCacheEntryAllowStale<T>(
 export async function setPersistentCache(key: string, data: unknown, ttlMs = CACHE_TTL): Promise<void> {
   const expiresAt = Date.now() + ttlMs;
   setMemoryCache(key, data, expiresAt);
+  if (shouldBypassPersistentCache()) return;
   if (!hasDb() || !db) return;
 
   try {
@@ -409,6 +425,7 @@ async function purgeExpiredCacheLocks(now: number): Promise<void> {
 }
 
 export async function acquireCacheLock(key: string, lockTtlMs: number): Promise<string | null> {
+  if (shouldBypassPersistentCache()) return makeLockOwner();
   if (!hasDb() || !db) return makeLockOwner();
   try {
     await ensureCacheSchema();
@@ -433,6 +450,7 @@ export async function acquireCacheLock(key: string, lockTtlMs: number): Promise<
 }
 
 export async function releaseCacheLock(key: string, owner: string | null): Promise<void> {
+  if (shouldBypassPersistentCache()) return;
   if (!hasDb() || !db) return;
   if (!owner) return;
   try {

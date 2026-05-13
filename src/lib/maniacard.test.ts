@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { computeManiaSkills } from "./maniacard";
+import { computeManiaSkills, getNextManiaCardTier } from "./maniacard";
 import type { OsuScore } from "./types";
 
 function score(overrides: Partial<OsuScore> = {}): OsuScore {
@@ -89,5 +89,35 @@ describe("computeManiaSkills", () => {
     ]);
 
     expect(tagged).toEqual(plain);
+  });
+});
+
+describe("getNextManiaCardTier", () => {
+  test("reports the remaining power for the next tier", () => {
+    expect(getNextManiaCardTier(500)).toMatchObject({
+      tier: "master",
+      label: "Master",
+      threshold: 520,
+      remaining: 20,
+    });
+  });
+
+  test("returns null at the top tier", () => {
+    expect(getNextManiaCardTier(665)).toBeNull();
+  });
+
+  test("balances upper-tier boundaries into distinct prestige ranks", () => {
+    expect(getNextManiaCardTier(560)).toMatchObject({
+      tier: "mythic",
+      threshold: 610,
+    });
+    expect(getNextManiaCardTier(610)).toMatchObject({
+      tier: "ascendant",
+      threshold: 640,
+    });
+    expect(getNextManiaCardTier(640)).toMatchObject({
+      tier: "worldClass",
+      threshold: 665,
+    });
   });
 });

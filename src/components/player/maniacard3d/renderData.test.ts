@@ -51,6 +51,10 @@ describe("buildManiaCardRenderData", () => {
     ]);
     expect(data.tier).toBeTypeOf("string");
     expect(data.tierStyle.label.length).toBeGreaterThan(0);
+    if (data.nextTier) {
+      expect(data.nextTier.remaining).toBeGreaterThan(0);
+      expect(data.nextTier.label.length).toBeGreaterThan(0);
+    }
   });
 
   test("returns empty status when no ranked play can mint a card", () => {

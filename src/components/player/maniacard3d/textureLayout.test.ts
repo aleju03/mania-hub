@@ -22,6 +22,12 @@ const data = {
     badgeHalo: "rgba(251,113,133,0.58)",
     badgeGlyphShadow: "rgba(88,28,135,0.45)",
   },
+  nextTier: {
+    tier: "master",
+    label: "Master",
+    threshold: 620,
+    remaining: 120,
+  },
   edgeColor: { r: 131, g: 24, b: 67, a: 0.94 },
   glowColor: { r: 251, g: 113, b: 133, a: 0.4 },
   badgeGradientStops: [

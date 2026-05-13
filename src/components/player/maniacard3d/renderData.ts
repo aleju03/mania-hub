@@ -1,6 +1,7 @@
 import {
   computeManiaSkills,
   getManiaCardTier,
+  getNextManiaCardTier,
   MANIA_TIER_STYLES,
 } from "#/lib/maniacard";
 import type {
@@ -13,16 +14,20 @@ import type {
 const EMPTY_CARD_MESSAGE = "Need at least one ranked play with full beatmap data to mint a card.";
 
 export function buildManiaCardRenderData({ user, scores }: ManiaCardRenderInput): ManiaCardRenderData {
-  const skills = computeManiaSkills(scores.map((score) => ({
-    ...score,
-    statistics: score.statistics ?? {},
-  })));
+  const skills = computeManiaSkills(
+    scores.map((score) => ({
+      ...score,
+      statistics: score.statistics ?? {},
+    })),
+    { globalPp: user.statistics?.pp },
+  );
   if (!skills) {
     return { status: "empty", message: EMPTY_CARD_MESSAGE };
   }
 
   const tier = getManiaCardTier(skills.cardPower);
   const tierStyle = MANIA_TIER_STYLES[tier];
+  const nextTier = getNextManiaCardTier(skills.cardPower);
 
   return {
     status: "ready",
@@ -32,6 +37,7 @@ export function buildManiaCardRenderData({ user, scores }: ManiaCardRenderInput)
     skills,
     tier,
     tierStyle,
+    nextTier,
     stats: [
       { label: "Control", value: skills.fingerControl },
       { label: "Speed", value: skills.speed },

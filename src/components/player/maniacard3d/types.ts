@@ -1,9 +1,9 @@
-import type { ManiaCardTier, ManiaCardTierStyle, ManiaSkills } from "#/lib/maniacard";
+import type { ManiaCardTier, ManiaCardTierStyle, ManiaSkills, NextManiaCardTier } from "#/lib/maniacard";
 import type { OsuScore, OsuUser } from "#/lib/types";
 
 export interface ManiaCardPanelProps {
   user: Pick<OsuUser, "id" | "username" | "avatar_url" | "country_code"> & {
-    statistics?: { global_rank: number | null };
+    statistics?: { global_rank: number | null; pp?: number };
   };
   scores: OsuScore[];
   loading: boolean;
@@ -34,6 +34,7 @@ export interface ManiaCardReadyData {
   skills: ManiaSkills;
   tier: ManiaCardTier;
   tierStyle: ManiaCardTierStyle;
+  nextTier: NextManiaCardTier | null;
   stats: ManiaCardStat[];
   edgeColor: RgbaColor;
   glowColor: RgbaColor;

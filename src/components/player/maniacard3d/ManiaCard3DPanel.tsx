@@ -1,3 +1,4 @@
+import { Info } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ManiaCardRenderer } from "./ManiaCardRenderer";
 import { buildManiaCardRenderData } from "./renderData";
@@ -34,6 +35,19 @@ function isMobileViewport() {
 function getDevicePixelRatio() {
   return typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
 }
+
+const NEXT_TIER_TEXT_COLOR: Record<string, string> = {
+  common: "text-slate-200",
+  rare: "text-sky-200",
+  elite: "text-violet-200",
+  superRare: "text-fuchsia-200",
+  ultraRare: "text-rose-200",
+  master: "text-amber-200",
+  grandmaster: "text-yellow-100",
+  mythic: "text-red-200",
+  ascendant: "text-white",
+  worldClass: "text-emerald-200",
+};
 
 export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -121,6 +135,22 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
           style={{ aspectRatio: "5 / 7", touchAction: "none" }}
           aria-label={`${data.user.username} ${data.tierStyle.label} Maniacard. Control ${data.skills.fingerControl}, Speed ${data.skills.speed}, Precision ${data.skills.accuracy}.`}
         />
+        {data.nextTier && (
+          <div className="mt-4 flex justify-center">
+            <div className="inline-flex items-center gap-2 rounded-lg border border-osu-b3/30 bg-osu-b4/45 px-3 py-2 text-xs font-semibold text-osu-l2 shadow-[0_8px_28px_rgba(0,0,0,0.18)]">
+              <span className="text-osu-f1">Next tier</span>
+              <span className="text-white">{data.nextTier.remaining} card rating</span>
+              <span className="text-osu-f1">to</span>
+              <span className={NEXT_TIER_TEXT_COLOR[data.nextTier.tier]}>{data.nextTier.label}</span>
+              <span className="group relative inline-flex">
+                <Info className="h-3.5 w-3.5 text-osu-f1" aria-label="Card rating info" />
+                <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-64 -translate-x-1/2 rounded-lg border border-osu-b3/40 bg-osu-b5 px-3 py-2 text-left text-[11px] font-medium leading-relaxed text-osu-l2 shadow-xl group-hover:block group-focus-within:block">
+                  Card rating comes from your top mania plays: PP strength, accuracy, combo, misses, speed, control, stamina, and rate-adjusted star difficulty.
+                </span>
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

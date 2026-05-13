@@ -91,7 +91,8 @@ function drawFront(
   context.save();
   clipCard(context);
   drawTierBackground(context, data);
-  drawTrianglePattern(context, 0.18);
+  drawTrianglePattern(context, data.tier === "worldClass" ? 0.07 : 0.18);
+  if (data.tier === "worldClass") drawWorldClassFoilAccents(context);
   drawModeBadge(context, data);
   drawUsername(context, layout);
   drawTierLabel(context, data, layout);
@@ -643,6 +644,11 @@ function drawLaurelHalf(context: CanvasRenderingContext2D, side: 1 | -1) {
 }
 
 function drawTierBackground(context: CanvasRenderingContext2D, data: ManiaCardReadyData) {
+  if (data.tier === "worldClass") {
+    drawWorldClassBackground(context);
+    return;
+  }
+
   const gradient = context.createLinearGradient(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
   const stops = data.badgeGradientStops.length > 0
     ? data.badgeGradientStops
@@ -650,6 +656,91 @@ function drawTierBackground(context: CanvasRenderingContext2D, data: ManiaCardRe
   for (const stop of stops) gradient.addColorStop(stop.offset, stop.color);
   context.fillStyle = gradient;
   context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
+}
+
+function drawWorldClassBackground(context: CanvasRenderingContext2D) {
+  context.save();
+
+  const base = context.createLinearGradient(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
+  base.addColorStop(0, "#010409");
+  base.addColorStop(0.38, "#020617");
+  base.addColorStop(0.72, "#030712");
+  base.addColorStop(1, "#000000");
+  context.fillStyle = base;
+  context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
+
+  const foilA = context.createRadialGradient(250, 210, 0, 250, 210, 560);
+  foilA.addColorStop(0, "rgba(74, 222, 128, 0.26)");
+  foilA.addColorStop(0.2, "rgba(16, 185, 129, 0.14)");
+  foilA.addColorStop(0.62, "rgba(16, 185, 129, 0)");
+  context.fillStyle = foilA;
+  context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
+
+  const foilB = context.createRadialGradient(800, 1110, 0, 800, 1110, 520);
+  foilB.addColorStop(0, "rgba(45, 212, 191, 0.16)");
+  foilB.addColorStop(0.26, "rgba(22, 163, 74, 0.1)");
+  foilB.addColorStop(0.76, "rgba(22, 163, 74, 0)");
+  context.fillStyle = foilB;
+  context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
+
+  const aurora = context.createLinearGradient(0, 180, CARD_TEXTURE_WIDTH, 880);
+  aurora.addColorStop(0, "rgba(20, 83, 45, 0)");
+  aurora.addColorStop(0.34, "rgba(34, 197, 94, 0.13)");
+  aurora.addColorStop(0.46, "rgba(6, 182, 212, 0.08)");
+  aurora.addColorStop(0.66, "rgba(21, 128, 61, 0.1)");
+  aurora.addColorStop(1, "rgba(20, 83, 45, 0)");
+  context.fillStyle = aurora;
+  context.fillRect(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
+
+  drawWorldClassStarfield(context);
+
+  context.restore();
+}
+
+function drawWorldClassStarfield(context: CanvasRenderingContext2D) {
+  context.save();
+  for (let index = 0; index < 90; index += 1) {
+    const x = random01(index * 19.43 + 2.1) * CARD_TEXTURE_WIDTH;
+    const y = random01(index * 31.77 + 8.4) * CARD_TEXTURE_HEIGHT;
+    if (!isInsideRoundedCard(x, y, 18)) continue;
+    const radius = 0.9 + random01(index * 7.91 + 4.6) * 2.2;
+    const alpha = 0.16 + random01(index * 11.23 + 1.9) * 0.42;
+    context.beginPath();
+    context.arc(x, y, radius, 0, Math.PI * 2);
+    context.fillStyle = `rgba(187, 247, 208, ${alpha.toFixed(3)})`;
+    context.fill();
+  }
+  context.restore();
+}
+
+function drawWorldClassFoilAccents(context: CanvasRenderingContext2D) {
+  context.save();
+
+  const rim = context.createLinearGradient(0, 0, CARD_TEXTURE_WIDTH, CARD_TEXTURE_HEIGHT);
+  rim.addColorStop(0, "rgba(236,253,245,0.72)");
+  rim.addColorStop(0.18, "rgba(34,197,94,0.88)");
+  rim.addColorStop(0.5, "rgba(6,182,212,0.26)");
+  rim.addColorStop(0.78, "rgba(34,197,94,0.72)");
+  rim.addColorStop(1, "rgba(236,253,245,0.62)");
+  roundedRect(context, 10, 10, CARD_TEXTURE_WIDTH - 20, CARD_TEXTURE_HEIGHT - 20, CARD_CORNER_RADIUS - 6);
+  context.strokeStyle = rim;
+  context.lineWidth = 6;
+  context.shadowColor = "rgba(34,197,94,0.52)";
+  context.shadowBlur = 18;
+  context.stroke();
+
+  const glints: Array<[number, number, number, number]> = [
+    [152, 130, 42, 0.7],
+    [832, 178, 26, 0.46],
+    [808, 1010, 36, 0.42],
+    [214, 1140, 22, 0.36],
+  ];
+  context.fillStyle = "rgba(220,252,231,0.88)";
+  for (const [x, y, size, opacity] of glints) {
+    drawSparkle(context, x, y, size, opacity);
+  }
+
+  context.restore();
 }
 
 function drawTrianglePattern(context: CanvasRenderingContext2D, opacity: number) {

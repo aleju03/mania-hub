@@ -35,7 +35,9 @@ export type ManiaCardTier =
   | "ultraRare"
   | "master"
   | "grandmaster"
-  | "ascendant";
+  | "mythic"
+  | "ascendant"
+  | "worldClass";
 
 const MAX_PLAYS = 200;
 
@@ -74,7 +76,7 @@ interface KeymodeProfile {
 
 const BASELINES: Record<number, KeymodeBaseline> = {
   4: {
-    pp: [80, 900],
+    pp: [80, 1500],
     sr: [3.2, 8.8],
     bpm: [145, 265],
     density: [3.2, 9.5],
@@ -82,7 +84,7 @@ const BASELINES: Record<number, KeymodeBaseline> = {
     objects: [280, 1800],
   },
   7: {
-    pp: [90, 1000],
+    pp: [90, 1700],
     sr: [3.4, 9.0],
     bpm: [125, 235],
     density: [3.5, 12.5],
@@ -92,7 +94,7 @@ const BASELINES: Record<number, KeymodeBaseline> = {
 };
 
 const DEFAULT_BASELINE: KeymodeBaseline = {
-  pp: [70, 850],
+  pp: [70, 1500],
   sr: [3.0, 8.6],
   bpm: [120, 245],
   density: [3.0, 10.5],
@@ -343,7 +345,12 @@ function toCardValue(value: number): number {
   return Math.round(clamp(value) * 1000);
 }
 
-export function computeManiaSkills(scores: OsuScore[]): ManiaSkills | null {
+export function computeGlobalPpStrength(pp: number | null | undefined): number {
+  const value = Math.max(0, pp ?? 0);
+  return curve(normalize(value, 12_000, 24_000), 0.7);
+}
+
+export function computeManiaSkills(scores: OsuScore[], options: { globalPp?: number | null } = {}): ManiaSkills | null {
   const pool = scores.filter(isUsable).slice(0, MAX_PLAYS);
   if (pool.length === 0) return null;
 
@@ -380,13 +387,15 @@ export function computeManiaSkills(scores: OsuScore[]): ManiaSkills | null {
   if (profiles.length === 0) return null;
 
   const blended = blendProfiles(profiles);
+  const globalPpStrength = computeGlobalPpStrength(options.globalPp);
   const cardPower =
-    blended.peak * 0.42 +
-    blended.control * 0.17 +
-    blended.speed * 0.14 +
-    blended.precision * 0.12 +
-    blended.stamina * 0.1 +
-    blended.versatility * 0.05;
+    blended.peak * 0.32 +
+    globalPpStrength * 0.38 +
+    blended.control * 0.09 +
+    blended.speed * 0.07 +
+    blended.precision * 0.05 +
+    blended.stamina * 0.06 +
+    blended.versatility * 0.03;
 
   return {
     starAvg: blended.starAvg,
@@ -404,14 +413,47 @@ export function computeManiaSkills(scores: OsuScore[]): ManiaSkills | null {
 }
 
 export function getManiaCardTier(cardPower: number): ManiaCardTier {
-  if (cardPower >= 725) return "ascendant";
-  if (cardPower >= 675) return "grandmaster";
-  if (cardPower >= 620) return "master";
-  if (cardPower >= 500) return "ultraRare";
+  if (cardPower >= 665) return "worldClass";
+  if (cardPower >= 640) return "ascendant";
+  if (cardPower >= 610) return "mythic";
+  if (cardPower >= 560) return "grandmaster";
+  if (cardPower >= 520) return "master";
+  if (cardPower >= 410) return "ultraRare";
   if (cardPower >= 380) return "superRare";
   if (cardPower >= 260) return "elite";
   if (cardPower >= 140) return "rare";
   return "common";
+}
+
+export interface NextManiaCardTier {
+  tier: ManiaCardTier;
+  label: string;
+  threshold: number;
+  remaining: number;
+}
+
+const MANIA_CARD_TIER_THRESHOLDS: Array<{ tier: ManiaCardTier; threshold: number }> = [
+  { tier: "rare", threshold: 140 },
+  { tier: "elite", threshold: 260 },
+  { tier: "superRare", threshold: 380 },
+  { tier: "ultraRare", threshold: 410 },
+  { tier: "master", threshold: 520 },
+  { tier: "grandmaster", threshold: 560 },
+  { tier: "mythic", threshold: 610 },
+  { tier: "ascendant", threshold: 640 },
+  { tier: "worldClass", threshold: 665 },
+];
+
+export function getNextManiaCardTier(cardPower: number): NextManiaCardTier | null {
+  const next = MANIA_CARD_TIER_THRESHOLDS.find(({ threshold }) => cardPower < threshold);
+  if (!next) return null;
+
+  return {
+    tier: next.tier,
+    label: MANIA_TIER_STYLES[next.tier].label,
+    threshold: next.threshold,
+    remaining: next.threshold - cardPower,
+  };
 }
 
 export interface ManiaCardTierStyle {
@@ -531,6 +573,20 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
     badgeHalo: "rgba(232,121,249,0.64)",
     badgeGlyphShadow: "rgba(88,28,135,0.45)",
   },
+  mythic: {
+    label: "Mythic",
+    background: "from-red-300 via-red-600 to-zinc-950",
+    border: "border-red-100/95",
+    glow: "shadow-[0_18px_78px_rgba(220,38,38,0.68)]",
+    edgeFill: "rgba(127, 29, 29, 0.94)",
+    glowColor: "rgba(248, 113, 113, 0.48)",
+    starColor: "text-red-100",
+    badgeColor: "text-red-50",
+    badgeGradient:
+      "linear-gradient(142deg, #fee2e2 0%, #ef4444 42%, #450a0a 100%)",
+    badgeHalo: "rgba(248,113,113,0.66)",
+    badgeGlyphShadow: "rgba(69,10,10,0.5)",
+  },
   ascendant: {
     label: "Ascendant",
     background: "from-white via-amber-200 to-fuchsia-700",
@@ -544,5 +600,19 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
       "linear-gradient(142deg, #ffffff 0%, #fde68a 34%, #f0abfc 68%, #7e22ce 100%)",
     badgeHalo: "rgba(255,255,255,0.72)",
     badgeGlyphShadow: "rgba(88,28,135,0.45)",
+  },
+  worldClass: {
+    label: "World Class",
+    background: "from-black via-emerald-950 to-zinc-950",
+    border: "border-emerald-100/95",
+    glow: "shadow-[0_18px_86px_rgba(16,185,129,0.48)]",
+    edgeFill: "rgba(2, 44, 34, 0.97)",
+    glowColor: "rgba(34, 197, 94, 0.42)",
+    starColor: "text-emerald-100",
+    badgeColor: "text-emerald-50",
+    badgeGradient:
+      "linear-gradient(142deg, #ecfdf5 0%, #22c55e 30%, #052e16 66%, #020617 100%)",
+    badgeHalo: "rgba(34,197,94,0.68)",
+    badgeGlyphShadow: "rgba(2,44,34,0.58)",
   },
 };
