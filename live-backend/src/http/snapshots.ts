@@ -15,6 +15,7 @@ import { enqueueOscBackfill } from "../osc/backfill.js";
 import {
   cancelReplayVideoExport,
   createReplayVideoExport,
+  createServerReplayVideoExport,
   getRecentReplayVideoExport,
   getReplayVideoExport,
   markReplayVideoQueued,
@@ -93,8 +94,7 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
     return true;
   }
   if (url.pathname === "/api/snapshots/maps") {
-    await activateCountry(ctx.db, ctx.queue, ctx.config, country);
-    const snapshot = await getMapsSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs);
+    const snapshot = await getMapsSnapshot(ctx.db, country, ctx.config.mapsRefreshIntervalMs);
     sendJson(req, res, ctx, snapshot.value ? 200 : 202, snapshot);
     return true;
   }
@@ -117,6 +117,13 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
     if (action === "start") {
       const job = await createReplayVideoExport(ctx.db, ctx.config, parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {}));
       sendJson(req, res, ctx, 200, { id: job.id });
+      return true;
+    }
+    if (action === "server-render") {
+      const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
+      const job = await createServerReplayVideoExport(ctx.db, ctx.config, body);
+      await ctx.queue.enqueue("replay_video_server_render", `replay-video-server:${job.id}`, { id: job.id, request: body }, { priority: 85 });
+      sendJson(req, res, ctx, 202, replayVideoExportResponse(job));
       return true;
     }
     const id = url.searchParams.get("id") ?? "";

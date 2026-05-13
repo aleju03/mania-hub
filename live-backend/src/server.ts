@@ -6,7 +6,7 @@ import { routeHttp, sendNotFound } from "./http/snapshots.js";
 import { ScoreIngestor } from "./ingest/score-ingestor.js";
 import { JobQueue } from "./jobs/queue.js";
 import { LiveEventLog } from "./live/event-log.js";
-import { enqueueMapsRefresh } from "./features/maps.js";
+import { enqueueMapsRefreshIfDue } from "./features/maps.js";
 import { handleSse } from "./live/sse.js";
 import { enqueueOscBackfill } from "./osc/backfill.js";
 import { OscSocketClient } from "./osc/client.js";
@@ -87,7 +87,7 @@ function startRosterScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: J
 function startMapsScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue, config: ReturnType<typeof readConfig>): void {
   const tick = async () => {
     const countries = await getActiveCountryCodes(db, config);
-    await Promise.all(countries.map((country) => enqueueMapsRefresh(queue, country))).catch((error) => {
+    await Promise.all(countries.map((country) => enqueueMapsRefreshIfDue(db, queue, country, config.mapsRefreshIntervalMs))).catch((error) => {
       console.warn("[maps] scheduled refresh failed", error);
     });
     setTimeout(tick, config.mapsRefreshIntervalMs).unref();

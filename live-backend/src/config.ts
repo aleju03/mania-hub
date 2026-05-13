@@ -35,6 +35,8 @@ export interface Config {
   replayVideoOptimizeCrf: number;
   replayVideoOptimizePreset: string;
   replayVideoAudioBitrate: string;
+  replayVideoRenderBaseUrl: string;
+  replayVideoChromePath?: string;
   replayVideoPublicOrigin: string;
   replayVideoWorkDir: string;
   r2Endpoint?: string;
@@ -104,6 +106,8 @@ export function readConfig(): Config {
     replayVideoOptimizeCrf: readBoundedInt("REPLAY_VIDEO_OPTIMIZE_CRF", 20, 16, 28),
     replayVideoOptimizePreset: process.env.REPLAY_VIDEO_OPTIMIZE_PRESET || "slow",
     replayVideoAudioBitrate: process.env.REPLAY_VIDEO_AUDIO_BITRATE || "160k",
+    replayVideoRenderBaseUrl: process.env.REPLAY_VIDEO_RENDER_BASE_URL || process.env.FRONTEND_ORIGIN || "http://localhost:3000",
+    replayVideoChromePath: process.env.REPLAY_VIDEO_CHROME_PATH || process.env.CHROME_PATH || undefined,
     replayVideoPublicOrigin: process.env.REPLAY_VIDEO_PUBLIC_ORIGIN ?? process.env.LIVE_PUBLIC_ORIGIN ?? "http://localhost:7227",
     replayVideoWorkDir: process.env.REPLAY_VIDEO_WORK_DIR ?? "./data/replay-video-jobs",
     r2Endpoint: process.env.R2_ENDPOINT || undefined,

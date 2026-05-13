@@ -101,6 +101,24 @@ type ReplayVideoExportState = {
   signed: boolean;
 };
 
+type ReplayVideoExportRequest = ReplayVideoExportOptions & {
+  forceClientRender?: boolean;
+  bgDim?: number;
+  scrollSpeed?: number;
+  showInputOverlay?: boolean;
+  inputOverlayOnly?: boolean;
+  inputOverlayColor?: string;
+  inputOverlayKeyHistory?: boolean;
+  skinSettings?: ReplaySkinSettings;
+  overlaySettings?: ReplayOverlaySettings;
+};
+
+declare global {
+  interface Window {
+    __maniaHubExportReplayVideo?: (options: ReplayVideoExportRequest) => Promise<ReplayVideoJobPayload | null>;
+  }
+}
+
 function getReplayVideoBitrate(width: number, height: number, fps: ReplayVideoExportOptions["fps"]): number {
   const baseBitrate = height >= 1080 ? 5_000_000 : 3_000_000;
   const fpsScale = fps <= 30 ? 1 : fps / 30 * 0.82;
@@ -251,7 +269,7 @@ async function postReplayVideoBlob(jobId: string, blob: Blob): Promise<void> {
   const url = getReplayVideoJobUrl("upload-video", jobId);
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "video/mp4" },
+    headers: { "Content-Type": blob.type || "video/mp4" },
     body: blob,
   });
   if (!response.ok) {
@@ -272,17 +290,32 @@ async function getRecentReplayVideoJob(scoreId: number): Promise<ReplayVideoJobP
   return payload as ReplayVideoJobPayload;
 }
 
-async function waitForReplayVideoJob(jobId: string, onProgress: (progress: number) => void): Promise<{ url: string; signed: boolean }> {
-  for (let attempt = 0; attempt < 90; attempt++) {
-    await new Promise((resolve) => window.setTimeout(resolve, 2000));
+async function waitForReplayVideoJob(
+  jobId: string,
+  onProgress: (progress: number) => void,
+  options: { minProgress?: number; maxProgress?: number; timeoutMs?: number; intervalMs?: number } = {},
+): Promise<{ url: string; signed: boolean }> {
+  const minProgress = options.minProgress ?? 0.94;
+  const maxProgress = options.maxProgress ?? 0.99;
+  const timeoutMs = options.timeoutMs ?? 20 * 60_000;
+  const intervalMs = options.intervalMs ?? 3_000;
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    await new Promise((resolve) => window.setTimeout(resolve, intervalMs));
     const job = await postReplayVideoJson<ReplayVideoJobPayload>("status", {}, jobId);
     if (job.status === "done" && job.url) return { url: job.url, signed: Boolean(job.signed) };
     if (job.status === "failed" || job.status === "cancelled") {
       throw new Error(job.error || `Replay video job ${job.status}.`);
     }
-    onProgress(Math.min(0.99, 0.94 + attempt * 0.0005));
+    const elapsedRatio = Math.min(1, (Date.now() - startedAt) / timeoutMs);
+    onProgress(Math.min(maxProgress, minProgress + (maxProgress - minProgress) * elapsedRatio));
   }
-  throw new Error("Replay video export is still queued. Try again in a moment.");
+  throw new Error("Replay video export is still running in the background. Try again in a moment.");
+}
+
+function shouldUseServerReplayVideoRender(): boolean {
+  return import.meta.env.VITE_REPLAY_VIDEO_SERVER_RENDER === "1";
 }
 
 // Browsers default `preservesPitch` to true (the DT/HT behavior). NC/DC need
@@ -1771,10 +1804,10 @@ function ReplayViewer({
     }
   };
 
-  const exportReplayVideo = useCallback(async (options: ReplayVideoExportOptions) => {
+  const exportReplayVideo = useCallback(async (options: ReplayVideoExportRequest): Promise<ReplayVideoJobPayload | null> => {
     const sourceCanvas = canvasRef.current;
     const sourceRenderer = rendererRef.current;
-    if (!sourceRenderer || !sourceCanvas) return;
+    if (!sourceRenderer || !sourceCanvas) return null;
 
     const replayDuration = Math.max(0, sourceRenderer.duration);
     let startTime = 0;
@@ -1787,7 +1820,7 @@ function ReplayViewer({
       endTime = Math.max(markedStart, markedEnd);
       if (endTime - startTime < 500) {
         setVideoExport({ exporting: false, progress: 0, error: "Mark a longer custom clip range.", url: null, signed: false });
-        return;
+        return null;
       }
     } else if (options.kind === "clip") {
       const clipSeconds = Math.max(1, Math.min(120, Math.round(options.durationSeconds ?? REPLAY_VIDEO_EXPORT_CLIP_SECONDS)));
@@ -1802,6 +1835,14 @@ function ReplayViewer({
     const outputDurationSeconds = sourceDurationMs / (1000 * Math.max(0.01, effectiveRate));
     const exportFps = options.fps ?? 48;
     const frameCount = Math.max(1, Math.ceil(outputDurationSeconds * exportFps));
+    const exportBgDim = options.bgDim ?? bgDim;
+    const exportScrollSpeed = options.scrollSpeed ?? scrollSpeed;
+    const exportShowInputOverlay = options.showInputOverlay ?? showInputOverlay;
+    const exportInputOverlayOnly = options.inputOverlayOnly ?? inputOverlayOnly;
+    const exportInputOverlayColor = options.inputOverlayColor ?? inputOverlayColor;
+    const exportInputOverlayKeyHistory = options.inputOverlayKeyHistory ?? inputOverlayKeyHistory;
+    const exportSkinSettings = options.skinSettings ?? skinSettings;
+    const exportOverlaySettings = options.overlaySettings ?? overlaySettings;
     let exportRenderer: ReplayRendererLike | null = null;
     let exportHost: HTMLDivElement | null = null;
     let jobId: string | null = null;
@@ -1810,6 +1851,51 @@ function ReplayViewer({
 
     try {
       const resolution = REPLAY_VIDEO_EXPORT_RESOLUTIONS[options.resolution] ?? REPLAY_VIDEO_EXPORT_RESOLUTIONS["1080p"];
+      const player = sanitizeReplayVideoFilename(replay.header.playerName || scoreInfo?.user?.username || "player");
+      const title = sanitizeReplayVideoFilename(scoreInfo?.beatmapset?.title ?? "replay");
+      const diff = sanitizeReplayVideoFilename(scoreInfo?.beatmap?.version ?? "mania");
+      const scoreSuffix = scoreInfo?.id ? `-${scoreInfo.id}` : "";
+      const filename = `${player}-${title}-${diff}${scoreSuffix}.mp4`;
+
+      if (!options.forceClientRender && getLiveBackendUrl() && shouldUseServerReplayVideoRender()) {
+        const job = await postReplayVideoJson<ReplayVideoJobPayload>("server-render", {
+          scoreId: scoreInfo?.id ?? null,
+          beatmapsetId: effectiveBeatmapsetId ?? null,
+          filename,
+          kind: options.kind,
+          startTimeMs: options.startTimeMs,
+          endTimeMs: options.endTimeMs,
+          resolution: options.resolution,
+          fps: exportFps,
+          width: resolution.width,
+          height: resolution.height,
+          frameCount,
+          audioStartSeconds: startTime / 1000,
+          sourceDurationSeconds: sourceDurationMs / 1000,
+          effectiveRate,
+          bgDim: exportBgDim,
+          scrollSpeed: exportScrollSpeed,
+          showInputOverlay: exportShowInputOverlay,
+          inputOverlayOnly: exportInputOverlayOnly,
+          inputOverlayColor: exportInputOverlayColor,
+          inputOverlayKeyHistory: exportInputOverlayKeyHistory,
+          skinSettings: exportSkinSettings,
+          overlaySettings: exportOverlaySettings,
+        });
+        jobId = job.id;
+        const uploaded = await waitForReplayVideoJob(job.id, (progress) => {
+          setVideoExport({ exporting: true, progress, error: null, url: null, signed: false });
+        }, {
+          minProgress: 0.04,
+          maxProgress: 0.98,
+          timeoutMs: 30 * 60_000,
+          intervalMs: 3_000,
+        });
+        const done = { ...job, status: "done" as const, url: uploaded.url, signed: uploaded.signed };
+        setVideoExport({ exporting: false, progress: 1, error: null, url: uploaded.url, signed: uploaded.signed });
+        return done;
+      }
+
       const cssWidth = resolution.width;
       const cssHeight = resolution.height;
       exportHost = document.createElement("div");
@@ -1849,7 +1935,7 @@ function ReplayViewer({
           isConvert: scoreInfo?.beatmap?.convert ?? false,
           isLazer: replayUsesLazerScoring,
           od: beatmap?.od,
-          showInputOverlay,
+          showInputOverlay: exportShowInputOverlay,
           mods: modAcronyms,
           speedMultiplier: modRate,
           transparentBackground: true,
@@ -1857,11 +1943,11 @@ function ReplayViewer({
           scrollVelocities: beatmap?.scrollVelocities,
           expectedCounts: getScoreExpectedCounts(scoreInfo, replay),
           lifeBarFrames: replay.lifeBarFrames,
-          skinSettings,
-          overlaySettings,
-          inputOverlayOnly,
-          inputOverlayColor,
-          inputOverlayKeyHistory,
+          skinSettings: exportSkinSettings,
+          overlaySettings: exportOverlaySettings,
+          inputOverlayOnly: exportInputOverlayOnly,
+          inputOverlayColor: exportInputOverlayColor,
+          inputOverlayKeyHistory: exportInputOverlayKeyHistory,
         },
       ) as ReplayRendererLike;
 
@@ -1870,7 +1956,7 @@ function ReplayViewer({
         8000,
         "Timed out starting the export renderer.",
       );
-      exportRenderer.setScrollSpeed(scrollSpeed);
+      exportRenderer.setScrollSpeed(exportScrollSpeed);
       exportRenderer.setSpeed(speed);
 
       const width = cssWidth;
@@ -1881,7 +1967,7 @@ function ReplayViewer({
       const ctx = compositeCanvas.getContext("2d", { alpha: false });
       if (!ctx) throw new Error("Couldn't create the video compositor.");
 
-      let backgroundImage = bgDim >= 100
+      let backgroundImage = exportBgDim >= 100
         ? null
         : await loadFirstExportBackground([beatmapBackgroundUrl, bgSrc, coverProxyUrl, coverUrl]);
       const drawCompositeFrame = () => {
@@ -1903,18 +1989,14 @@ function ReplayViewer({
           }
         }
 
-        ctx.fillStyle = `rgba(0, 0, 0, ${Math.max(0, Math.min(1, bgDim / 100))})`;
+        ctx.fillStyle = `rgba(0, 0, 0, ${Math.max(0, Math.min(1, exportBgDim / 100))})`;
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(exportCanvas, 0, 0, width, height);
       };
 
-      const player = sanitizeReplayVideoFilename(replay.header.playerName || scoreInfo?.user?.username || "player");
-      const title = sanitizeReplayVideoFilename(scoreInfo?.beatmapset?.title ?? "replay");
-      const diff = sanitizeReplayVideoFilename(scoreInfo?.beatmap?.version ?? "mania");
-      const scoreSuffix = scoreInfo?.id ? `-${scoreInfo.id}` : "";
       const job = await postReplayVideoJson<{ id: string }>("start", {
         scoreId: scoreInfo?.id ?? null,
-        filename: `${player}-${title}-${diff}${scoreSuffix}.mp4`,
+        filename,
         fps: exportFps,
         width,
         height,
@@ -1977,7 +2059,7 @@ function ReplayViewer({
               url: null,
               signed: false,
             });
-          });
+          }, { minProgress: 0.94, maxProgress: 0.99, timeoutMs: 20 * 60_000 });
       setVideoExport({
         exporting: false,
         progress: 1,
@@ -1985,12 +2067,14 @@ function ReplayViewer({
         url: uploaded.url,
         signed: uploaded.signed,
       });
+      return { id: jobId, status: "done", url: uploaded.url, signed: uploaded.signed };
     } catch (error) {
-      if (jobId) {
+      if (jobId && options.forceClientRender) {
         void postReplayVideoJson("cancel", {}, jobId).catch(() => {});
       }
       const message = error instanceof Error ? error.message : "Couldn't export the replay video.";
       setVideoExport({ exporting: false, progress: 0, error: message, url: null, signed: false });
+      throw error;
     } finally {
       exportRenderer?.destroy();
       exportRenderer = null;
@@ -2003,6 +2087,7 @@ function ReplayViewer({
     bgDim,
     bgSrc,
     effectiveRate,
+    effectiveBeatmapsetId,
     beatmap,
     beatmapBackgroundUrl,
     inputOverlayColor,
@@ -2026,6 +2111,19 @@ function ReplayViewer({
     skinSettings,
     speed,
   ]);
+
+  useEffect(() => {
+    window.__maniaHubExportReplayVideo = async (options) => {
+      const startedAt = Date.now();
+      while ((!rendererRef.current || !canvasRef.current) && Date.now() - startedAt < 120_000) {
+        await new Promise((resolve) => window.setTimeout(resolve, 250));
+      }
+      return exportReplayVideo({ ...options, forceClientRender: true });
+    };
+    return () => {
+      if (window.__maniaHubExportReplayVideo) delete window.__maniaHubExportReplayVideo;
+    };
+  }, [exportReplayVideo]);
 
   const fullscreenChromeVisible = isCanvasFullscreen && showFullscreenChrome;
   const mobileFullscreenButtonVisible = !isCanvasFullscreen && showFullscreenChrome;

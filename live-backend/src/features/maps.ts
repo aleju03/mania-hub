@@ -1,12 +1,12 @@
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
-import type { OsuApiClient } from "../osu/client.js";
+import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { getModAcronyms, getScoreTimestamp, nowIso } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 
 const MAPS_REFRESH_PRIORITY = 20;
-const MAPS_FETCH_CONCURRENCY = 4;
+const MAPS_FETCH_CONCURRENCY = 2;
 const FARMED_SINGLE_PLAYER_PP_MIN = 500;
 const USER_FAVOURITES_MAX_PAGES = 10;
 
@@ -180,28 +180,44 @@ export async function enqueueMapsRefresh(queue: JobQueue, country: string, optio
   );
 }
 
-export async function getMapsSnapshot(
+export async function enqueueMapsRefreshIfDue(
   db: Db,
   queue: JobQueue,
   country: string,
   maxAgeMs: number,
+  options: { priority?: number; replaceDone?: boolean } = {},
+): Promise<boolean> {
+  const snapshot = await readMapsSnapshot(db, country, maxAgeMs);
+  if (!snapshot.isStale) return false;
+  await enqueueMapsRefresh(queue, country, options);
+  return true;
+}
+
+export async function getMapsSnapshot(
+  db: Db,
+  country: string,
+  maxAgeMs: number,
 ): Promise<{ value: CountryMapsData | null; generatedAt: string | null; refreshedAt: string | null; isStale: boolean; refreshQueued: boolean }> {
+  return { ...await readMapsSnapshot(db, country, maxAgeMs), refreshQueued: false };
+}
+
+async function readMapsSnapshot(
+  db: Db,
+  country: string,
+  maxAgeMs: number,
+): Promise<{ value: CountryMapsData | null; generatedAt: string | null; refreshedAt: string | null; isStale: boolean }> {
   const normalized = country.toUpperCase();
   const row = (await exec(db, "select payload_json, generated_at, refreshed_at from country_maps_snapshots where country = ?", [normalized])).rows[0];
   const refreshedAt = row?.refreshed_at == null ? null : String(row.refreshed_at);
   const refreshedMs = refreshedAt ? new Date(refreshedAt).getTime() : 0;
-  const isStale = !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs;
-  let refreshQueued = false;
-  if (!row || isStale) {
-    await enqueueMapsRefresh(queue, normalized);
-    refreshQueued = true;
-  }
+  const parsed = row ? parseJson<CountryMapsData | null>(row.payload_json, null) : null;
+  const isUsable = isUsableMapsData(parsed);
+  const isStale = !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs || (!!row && !isUsable);
   return {
-    value: row ? parseJson<CountryMapsData | null>(row.payload_json, null) : null,
+    value: isUsable ? parsed : null,
     generatedAt: row?.generated_at == null ? null : String(row.generated_at),
     refreshedAt,
     isStale,
-    refreshQueued,
   };
 }
 
@@ -218,6 +234,7 @@ export async function refreshCountryMaps(
     buildCountryFavourites(osu, users),
   ]);
   const value = composeCountryMapsData(farmedSection, favSection);
+  assertUsableMapsData(value, users.length);
   await exec(
     db,
     `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
@@ -251,7 +268,11 @@ async function buildCountryFarmed(
   users: MapsUser[],
 ): Promise<CountryMapsFarmedSection> {
   const userResults = await mapWithConcurrency(users, MAPS_FETCH_CONCURRENCY, async (user) => {
-    const bestScores = await osu.getUserBestScoresWindow(user.id, 200, "job:refresh_country_maps:farmed").catch(() => [] as OscScore[]);
+    const bestScores = await osu.getUserBestScoresWindow(user.id, 200, "job:refresh_country_maps:farmed")
+      .catch((error) => {
+        throwIfMapsRefreshShouldAbort(error);
+        return [] as OscScore[];
+      });
     return { user, bestScores };
   });
 
@@ -321,10 +342,16 @@ async function buildCountryFavourites(
     const [mostPlayed, favourites] = await Promise.all([
       osu.getUserMostPlayed(user.id, "job:refresh_country_maps:most_played")
         .then((rows) => rows as RawBeatmapPlaycount[])
-        .catch(() => [] as RawBeatmapPlaycount[]),
+        .catch((error) => {
+          throwIfMapsRefreshShouldAbort(error);
+          return [] as RawBeatmapPlaycount[];
+        }),
       osu.getUserFavourites(user.id, USER_FAVOURITES_MAX_PAGES, "job:refresh_country_maps:favourites")
         .then((rows) => rows as RawBeatmapset[])
-        .catch(() => [] as RawBeatmapset[]),
+        .catch((error) => {
+          throwIfMapsRefreshShouldAbort(error);
+          return [] as RawBeatmapset[];
+        }),
     ]);
     return { user, mostPlayed, favourites };
   });
@@ -460,6 +487,26 @@ function composeCountryMapsData(farmedSection: CountryMapsFarmedSection, favSect
     farmedGeneratedAt: farmedAt,
     favouritesGeneratedAt: favAt,
   };
+}
+
+function isUsableMapsData(value: CountryMapsData | null): value is CountryMapsData {
+  if (!value) return false;
+  return (
+    value.farmed.length > 0 ||
+    value.favourites.length > 0 ||
+    value.favouritesByPlayer.length > 0 ||
+    Object.keys(value.beatmapsetsPool).length > 0
+  );
+}
+
+function assertUsableMapsData(value: CountryMapsData, userCount: number): void {
+  if (isUsableMapsData(value)) return;
+  throw new Error(`Maps refresh produced no usable data for ${userCount} users`);
+}
+
+function throwIfMapsRefreshShouldAbort(error: unknown): void {
+  if (error instanceof OsuApiError && (error.status === 429 || error.status >= 500)) throw error;
+  if (error instanceof Error && error.message.includes("OSU_CLIENT_ID")) throw error;
 }
 
 function getTotalLength(beatmap: RawBeatmap | NonNullable<OscScore["beatmap"]>): number {

@@ -4,26 +4,43 @@ import type { OscScore } from "../shared/types.js";
 export class TokenBucketLimiter {
   private starts: number[] = [];
   private recent: Array<{ startedAt: number; caller: string; path: string }> = [];
+  private pausedUntil = 0;
+  private nextStartAt = 0;
 
   constructor(
     private readonly hardPerMinute: number,
+    private readonly targetPerMinute = hardPerMinute,
     private readonly onCall?: (entry: { caller: string; path: string; startedAt: number }) => void,
   ) {}
 
   async schedule<T>(caller: string, path: string, fn: () => Promise<T>): Promise<T> {
     const now = Date.now();
+    if (now < this.pausedUntil) {
+      await new Promise((resolve) => setTimeout(resolve, this.pausedUntil - now));
+      return this.schedule(caller, path, fn);
+    }
     this.starts = this.starts.filter((startedAt) => now - startedAt < 60_000);
     if (this.starts.length >= this.hardPerMinute) {
       const waitMs = 60_000 - (now - this.starts[0]) + 1;
       await new Promise((resolve) => setTimeout(resolve, waitMs));
       return this.schedule(caller, path, fn);
     }
+    if (now < this.nextStartAt) {
+      await new Promise((resolve) => setTimeout(resolve, this.nextStartAt - now));
+      return this.schedule(caller, path, fn);
+    }
     const startedAt = Date.now();
     this.starts.push(startedAt);
+    this.nextStartAt = startedAt + Math.ceil(60_000 / Math.max(1, this.targetPerMinute));
     this.recent.push({ startedAt, caller, path });
     this.onCall?.({ caller, path, startedAt });
     this.recent = this.recent.filter((entry) => startedAt - entry.startedAt < 60_000);
     return fn();
+  }
+
+  pause(ms: number): void {
+    if (!Number.isFinite(ms) || ms <= 0) return;
+    this.pausedUntil = Math.max(this.pausedUntil, Date.now() + ms);
   }
 
   state() {
@@ -38,7 +55,9 @@ export class TokenBucketLimiter {
     }
     return {
       hardPerMinute: this.hardPerMinute,
+      targetPerMinute: this.targetPerMinute,
       usedLastMinute: this.starts.length,
+      pausedMs: Math.max(0, this.pausedUntil - now),
       byCaller: [...byCaller.entries()]
         .map(([caller, count]) => ({ caller, count }))
         .sort((a, b) => b.count - a.count),
@@ -50,16 +69,27 @@ export class TokenBucketLimiter {
   }
 }
 
+export class OsuApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly path: string,
+    readonly retryAfterMs: number | null = null,
+  ) {
+    super(`osu! API ${status} for ${path}`);
+    this.name = "OsuApiError";
+  }
+}
+
 export class OsuApiClient {
   private token: { accessToken: string; expiresAt: number } | null = null;
   readonly limiter: TokenBucketLimiter;
 
   constructor(
-    private readonly config: Pick<Config, "osuClientId" | "osuClientSecret" | "osuApiHardPerMinute">,
+    private readonly config: Pick<Config, "osuClientId" | "osuClientSecret" | "osuApiTargetPerMinute" | "osuApiHardPerMinute">,
     private readonly fetchImpl: typeof fetch = fetch,
     onCall?: (entry: { caller: string; path: string; startedAt: number }) => void,
   ) {
-    this.limiter = new TokenBucketLimiter(config.osuApiHardPerMinute, onCall);
+    this.limiter = new TokenBucketLimiter(config.osuApiHardPerMinute, config.osuApiTargetPerMinute, onCall);
   }
 
   hasCredentials(): boolean {
@@ -126,7 +156,11 @@ export class OsuApiClient {
       const response = await this.fetchImpl(`https://osu.ppy.sh/api/v2${path}`, {
         headers: { authorization: `Bearer ${token}` },
       });
-      if (!response.ok) throw new Error(`osu! API ${response.status} for ${path}`);
+      if (!response.ok) {
+        const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
+        if (response.status === 429) this.limiter.pause(retryAfterMs ?? 60_000);
+        throw new OsuApiError(response.status, path, retryAfterMs);
+      }
       return response.json() as Promise<T>;
     });
   }
@@ -148,4 +182,13 @@ export class OsuApiClient {
     this.token = { accessToken: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 };
     return this.token.accessToken;
   }
+}
+
+function parseRetryAfterMs(value: string | null): number | null {
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds * 1000);
+  const dateMs = Date.parse(value);
+  if (Number.isFinite(dateMs)) return Math.max(0, dateMs - Date.now());
+  return null;
 }

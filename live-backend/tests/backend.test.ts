@@ -5,8 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot } from "../src/features/snipes.js";
+import { enqueueMapsRefreshIfDue, getMapsSnapshot } from "../src/features/maps.js";
 import { confirmTopPlay } from "../src/features/top-plays.js";
 import { getTrackerSnapshot } from "../src/features/tracker.js";
+import { routeHttp } from "../src/http/snapshots.js";
 import { handleSse } from "../src/live/sse.js";
 import { OscBackfill } from "../src/osc/backfill.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
@@ -158,18 +160,61 @@ describe("live backend", () => {
 
   it("proves the osu! limiter hard cap", async () => {
     vi.useFakeTimers();
-    const limiter = new TokenBucketLimiter(2);
+    const limiter = new TokenBucketLimiter(2, 10_000);
     const calls: number[] = [];
     const tasks = [0, 1, 2].map(() => limiter.schedule("test", "/test", async () => {
       calls.push(Date.now());
       return true;
     }));
-    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(10);
     expect(calls).toHaveLength(2);
     await vi.advanceTimersByTimeAsync(60_001);
     await Promise.all(tasks);
     expect(calls).toHaveLength(3);
     expect(calls[2] - calls[0]).toBeGreaterThanOrEqual(60_000);
+  });
+
+  it("keeps maps snapshot reads side-effect free", async () => {
+    const { db, queue } = await setup();
+    const snapshot = await getMapsSnapshot(db, "CR", 7 * 24 * 60 * 60 * 1000);
+    expect(snapshot.value).toBeNull();
+    expect(snapshot.isStale).toBe(true);
+    expect(snapshot.refreshQueued).toBe(false);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_country_maps'")).rows[0].count)).toBe(0);
+
+    expect(await enqueueMapsRefreshIfDue(db, queue, "CR", 7 * 24 * 60 * 60 * 1000)).toBe(true);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_country_maps'")).rows[0].count)).toBe(1);
+  });
+
+  it("does not activate or queue jobs from the maps snapshot HTTP endpoint", async () => {
+    const { db, queue, events } = await setup();
+    const writes: string[] = [];
+    const req = new EventEmitter() as IncomingMessage;
+    req.method = "GET";
+    req.url = "/api/snapshots/maps?country=CR";
+    req.headers = { host: "localhost" };
+    const res = {
+      setHeader: vi.fn(),
+      end: (chunk: string) => {
+        writes.push(chunk);
+      },
+    } as unknown as ServerResponse;
+
+    expect(await routeHttp(req, res, {
+      db,
+      queue,
+      events,
+      config: {
+        allowedOrigins: ["http://localhost:3000"],
+        trackedCountries: ["CR"],
+        mapsRefreshIntervalMs: 7 * 24 * 60 * 60 * 1000,
+      },
+      osu: {},
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never)).toBe(true);
+
+    expect(JSON.parse(writes.join(""))).toMatchObject({ value: null, isStale: true, refreshQueued: false });
+    expect(Number((await exec(db, "select count(*) as count from jobs")).rows[0].count)).toBe(0);
   });
 
   it("streams SSE hello, heartbeat, and Last-Event-ID replay", async () => {

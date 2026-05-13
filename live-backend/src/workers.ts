@@ -6,10 +6,11 @@ import { confirmTopPlay } from "./features/top-plays.js";
 import { getHydratedTrackerScoresForMetadata } from "./features/tracker.js";
 import type { ClaimOptions, Job, JobQueue } from "./jobs/queue.js";
 import type { LiveEventLog } from "./live/event-log.js";
-import type { OsuApiClient } from "./osu/client.js";
+import { OsuApiError, type OsuApiClient } from "./osu/client.js";
 import { OscBackfill } from "./osc/backfill.js";
 import type { ScoreIngestor } from "./ingest/score-ingestor.js";
-import { finishReplayVideoExport } from "./replay-video/exports.js";
+import { finishReplayVideoExport, markReplayVideoDoneFromRender, markReplayVideoFailed, markReplayVideoRunning } from "./replay-video/exports.js";
+import { renderReplayVideoInChrome, type ServerReplayRenderRequest } from "./replay-video/server-render.js";
 import { refreshCountryRoster } from "./rosters/country-rosters.js";
 import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, isLazerScore, nowIso, scoreHasReplay } from "./shared/score.js";
 import { errorContext, logInfo, logWarn } from "./logger.js";
@@ -24,9 +25,15 @@ interface WorkerLane {
 const DEFAULT_WORKER_LANES: WorkerLane[] = [
   {
     name: "fast",
-    jobTypes: ["refresh_user_top_scores", "refresh_country_roster", "refresh_country_maps", "enrich_user", "enrich_beatmap", "osc_backfill"],
+    jobTypes: ["refresh_user_top_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "osc_backfill"],
     claimLimit: 4,
     intervalMs: 750,
+  },
+  {
+    name: "maps-refresh",
+    jobTypes: ["refresh_country_maps"],
+    claimLimit: 1,
+    intervalMs: 1_000,
   },
   {
     name: "snipe-seed",
@@ -35,7 +42,13 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     intervalMs: 1_000,
   },
   {
-    name: "replay-video",
+    name: "replay-video-render",
+    jobTypes: ["replay_video_server_render"],
+    claimLimit: 1,
+    intervalMs: 1_000,
+  },
+  {
+    name: "replay-video-finalize",
     jobTypes: ["replay_video_export"],
     claimLimit: 1,
     intervalMs: 1_000,
@@ -184,6 +197,20 @@ export class WorkerRunner {
       await this.events.append("replay_video_export", null, { id: result.id, status: result.status, url: result.url, error: result.error }, `replay_video_export:${result.id}:${result.status}`);
       return;
     }
+    if (job.type === "replay_video_server_render") {
+      const payload = job.payload as { id: string; request: ServerReplayRenderRequest };
+      const config = readConfig();
+      await markReplayVideoRunning(this.db, payload.id);
+      try {
+        const rendered = await renderReplayVideoInChrome(config, payload.request);
+        const result = await markReplayVideoDoneFromRender(this.db, payload.id, rendered);
+        await this.events.append("replay_video_export", null, { id: result.id, status: result.status, url: result.url, error: result.error }, `replay_video_export:${result.id}:${result.status}`);
+      } catch (error) {
+        await markReplayVideoFailed(this.db, payload.id, error);
+        throw error;
+      }
+      return;
+    }
     throw new Error(`Unknown job type: ${job.type}`);
   }
 
@@ -301,6 +328,9 @@ export class WorkerRunner {
 
 function getRetryDelayMs(type: string, attempts: number, error: unknown): number {
   if (error instanceof Error && error.message.includes("OSU_CLIENT_ID")) return 5 * 60_000;
+  if (error instanceof OsuApiError && error.status === 429) {
+    return Math.max(error.retryAfterMs ?? 60_000, 60_000);
+  }
   const nextAttempt = Math.max(1, attempts + 1);
   const base = type === "refresh_user_top_scores"
     ? 15_000

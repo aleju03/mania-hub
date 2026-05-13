@@ -6,6 +6,21 @@ const ARCHIVE_FETCH_TIMEOUT_MS = 15_000;
 const MAX_ARCHIVE_BYTES = 120 * 1024 * 1024;
 const MAX_EXTRACTED_FILE_BYTES = 60 * 1024 * 1024;
 
+const ARCHIVE_SOURCES = [
+  {
+    name: "catboy",
+    url: (beatmapsetId: string) => `https://catboy.best/d/${encodeURIComponent(beatmapsetId)}`,
+  },
+  {
+    name: "nerinyan",
+    url: (beatmapsetId: string) => `https://api.nerinyan.moe/d/${encodeURIComponent(beatmapsetId)}`,
+  },
+  {
+    name: "osu.direct",
+    url: (beatmapsetId: string) => `https://osu.direct/api/d/${encodeURIComponent(beatmapsetId)}`,
+  },
+] as const;
+
 type ArchiveCacheEntry = {
   expiresAt: number;
   lastAccessedAt: number;
@@ -87,20 +102,29 @@ export async function getBeatmapArchive(beatmapsetId: string): Promise<JSZip> {
   }
 
   const request = (async () => {
-    const archiveUrl = `https://catboy.best/d/${encodeURIComponent(beatmapsetId)}`;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
-    try {
-      const archiveResponse = await fetch(archiveUrl, { signal: controller.signal });
-      if (!archiveResponse.ok) {
-        throw new Error(`Archive fetch failed (${archiveResponse.status})`);
-      }
+    const errors: string[] = [];
+    for (const source of ARCHIVE_SOURCES) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
+      try {
+        const archiveResponse = await fetch(source.url(beatmapsetId), {
+          signal: controller.signal,
+          headers: { "User-Agent": "mania-hub/beatmap-archive" },
+        });
+        if (!archiveResponse.ok) {
+          throw new Error(`${source.name} returned ${archiveResponse.status}`);
+        }
 
-      const archiveBuffer = await readResponseBufferWithLimit(archiveResponse, MAX_ARCHIVE_BYTES);
-      return JSZip.loadAsync(archiveBuffer);
-    } finally {
-      clearTimeout(timeout);
+        const archiveBuffer = await readResponseBufferWithLimit(archiveResponse, MAX_ARCHIVE_BYTES);
+        return JSZip.loadAsync(archiveBuffer);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        errors.push(`${source.name}: ${message}`);
+      } finally {
+        clearTimeout(timeout);
+      }
     }
+    throw new Error(`Archive fetch failed for beatmapset ${beatmapsetId} (${errors.join("; ")})`);
   })();
 
   archiveCache.set(beatmapsetId, {

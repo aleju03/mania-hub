@@ -50,6 +50,10 @@ type StartInput = {
   effectiveRate?: unknown;
 };
 
+type ServerRenderInput = StartInput & {
+  renderRequest?: unknown;
+};
+
 export async function createReplayVideoExport(db: Db, config: Config, input: StartInput): Promise<ReplayVideoExportRow> {
   await ensureReplayVideoExportSchema(db);
   let id = createVideoId();
@@ -81,6 +85,12 @@ export async function createReplayVideoExport(db: Db, config: Config, input: Sta
   return row;
 }
 
+export async function createServerReplayVideoExport(db: Db, config: Config, input: ServerRenderInput): Promise<ReplayVideoExportRow> {
+  const row = await createReplayVideoExport(db, config, input);
+  await exec(db, "update replay_video_exports set status = 'queued', updated_at = ? where id = ?", [new Date().toISOString(), row.id]);
+  return requireReplayVideoExport(db, row.id);
+}
+
 export async function writeReplayVideoUpload(db: Db, config: Config, id: string, buffer: Buffer): Promise<ReplayVideoExportRow> {
   await ensureReplayVideoExportSchema(db);
   if (buffer.length > MAX_VIDEO_BYTES) throw new Error("Video is too large.");
@@ -104,6 +114,52 @@ export async function cancelReplayVideoExport(db: Db, config: Config, id: string
   await ensureReplayVideoExportSchema(db);
   await exec(db, "update replay_video_exports set status = 'cancelled', updated_at = ? where id = ?", [new Date().toISOString(), id]);
   await rm(workDir(config, id), { recursive: true, force: true });
+}
+
+export async function markReplayVideoRunning(db: Db, id: string): Promise<void> {
+  await ensureReplayVideoExportSchema(db);
+  await exec(db, "update replay_video_exports set status = 'running', error = null, updated_at = ? where id = ?", [new Date().toISOString(), id]);
+}
+
+export async function markReplayVideoDoneFromRender(
+  db: Db,
+  id: string,
+  result: {
+    url: string;
+    signed?: boolean;
+    sizeBytes?: number | null;
+    mimeType?: string | null;
+    encodedWith?: string | null;
+    hasAudio?: boolean | null;
+  },
+): Promise<ReplayVideoExportRow> {
+  await ensureReplayVideoExportSchema(db);
+  const now = new Date().toISOString();
+  await exec(
+    db,
+    `update replay_video_exports
+     set status = 'done', url = ?, signed = ?, size_bytes = coalesce(?, size_bytes), mime_type = coalesce(?, mime_type),
+         encoded_with = coalesce(?, encoded_with), has_audio = coalesce(?, has_audio), error = null, completed_at = ?, updated_at = ?
+     where id = ?`,
+    [
+      result.url,
+      result.signed ? 1 : 0,
+      result.sizeBytes ?? null,
+      result.mimeType ?? null,
+      result.encodedWith ?? null,
+      result.hasAudio == null ? null : result.hasAudio ? 1 : 0,
+      now,
+      now,
+      id,
+    ],
+  );
+  return requireReplayVideoExport(db, id);
+}
+
+export async function markReplayVideoFailed(db: Db, id: string, error: unknown): Promise<void> {
+  await ensureReplayVideoExportSchema(db);
+  const message = error instanceof Error ? error.message : String(error);
+  await exec(db, "update replay_video_exports set status = 'failed', error = ?, updated_at = ? where id = ?", [message, new Date().toISOString(), id]);
 }
 
 export async function finishReplayVideoExport(db: Db, config: Config, id: string): Promise<ReplayVideoExportRow> {

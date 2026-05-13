@@ -52,7 +52,7 @@ import { REPLAY_SCROLL_SPEED_CHANGE_EVENT, readReplayScrollSpeed } from "../lib/
 import { REPLAY_SKIN_SETTINGS_CHANGE_EVENT, readReplaySkinSettings } from "../lib/replay-skin";
 import type { ReplaySkinSettings } from "../lib/replay-skin";
 import { useAuth } from "../lib/auth-context";
-import { fetchLiveMapsSnapshot, isLiveBackendConfigured } from "../lib/live-backend";
+import { fetchLiveMapsSnapshot, isLiveBackendConfigured, runLiveBackendAdminAction } from "../lib/live-backend";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
 import {
   cycleTriStateCsv,
@@ -936,14 +936,14 @@ function MapsPage() {
   const countryName = getCountryName(selectedCountry);
 
   useEffect(() => {
-    setLoadingPlayers(!rankings);
+    setLoadingPlayers(liveBackendEnabled ? false : !rankings);
     setLoadingMaps(!mapsData || !hasValidMapsData);
     setLoadedSections(0);
     setSmoothProgress(0);
     setError(null);
     setLiveMapsAttempted(false);
     fetchingMapsRef.current = false;
-  }, [selectedCountry]);
+  }, [selectedCountry, liveBackendEnabled]);
 
   useEffect(() => {
     if (!loadingMaps) {
@@ -983,14 +983,21 @@ function MapsPage() {
     setLoadedSections(0);
     fetchLiveMapsSnapshot(selectedCountry)
       .then((snapshot) => {
-        if (cancelled || !snapshot.value) return;
+        if (cancelled) return;
+        if (!snapshot.value || !hasValidMapsDataShape(snapshot.value)) {
+          setLoadingMaps(false);
+          return;
+        }
         setMapsData(selectedCountry, snapshot.value);
         setLoadedSections(2);
         setLoadingMaps(false);
         setError(null);
       })
       .catch(() => {
-        // The old server-function path below remains the cold-start fallback.
+        if (!cancelled && !hasValidMapsDataShape(currentData)) {
+          setLoadingMaps(false);
+          setError("Couldn't load maps data. Try again later.");
+        }
       })
       .finally(() => {
         if (!cancelled) setLiveMapsAttempted(true);
@@ -1041,6 +1048,10 @@ function MapsPage() {
   // Fetch rankings
   useEffect(() => {
     let cancelled = false;
+    if (liveBackendEnabled) {
+      setLoadingPlayers(false);
+      return () => { cancelled = true; };
+    }
     if (!isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings) && rankings) {
       setLoadingPlayers(false);
       return () => { cancelled = true; };
@@ -1061,7 +1072,7 @@ function MapsPage() {
       });
 
     return () => { cancelled = true; };
-  }, [rankings, rankingsFetchedAt, selectedCountry, setRankings]);
+  }, [liveBackendEnabled, rankings, rankingsFetchedAt, selectedCountry, setRankings]);
 
   // Fetch maps data in two parallel sections (farmed + favourites) so the
   // header can show incremental progress. We intentionally exclude mapsData /
@@ -1070,8 +1081,8 @@ function MapsPage() {
   // effect re-trigger itself on every setMapsData and race with the cleanup.
   // fetchingMapsRef guards against concurrent fetches for the same country.
   useEffect(() => {
+    if (liveBackendEnabled) return;
     if (loadingPlayers || error || players.length === 0) return;
-    if (liveBackendEnabled && !liveMapsAttempted) return;
 
     // Snapshot the current store state inside the effect rather than depending
     // on selectors, so a fresh-cache early return is safe from reruns.
@@ -1494,10 +1505,18 @@ function MapsPage() {
   };
 
   const handleDevRebuildAll = async () => {
-    if (rebuilding || players.length === 0) return;
+    if (rebuilding || (!liveBackendEnabled && players.length === 0)) return;
     setRebuilding(true);
     setRebuildMenuOpen(false);
     try {
+      if (liveBackendEnabled) {
+        await runLiveBackendAdminAction({ data: { path: `/api/admin/refresh-maps?country=${selectedCountry}` } });
+        const snapshot = await fetchLiveMapsSnapshot(selectedCountry);
+        if (snapshot.value && hasValidMapsDataShape(snapshot.value)) {
+          setMapsData(selectedCountry, snapshot.value);
+        }
+        return;
+      }
       const result = await rebuildCountryMapsData({ data: { users: players } });
       if (result.value) setMapsData(selectedCountry, result.value);
     } catch {
