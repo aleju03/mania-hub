@@ -153,6 +153,7 @@ create table if not exists country_maps_snapshots (
 
 create table if not exists replay_video_exports (
   id text primary key,
+  score_id integer,
   filename text not null,
   status text not null,
   fps integer not null,

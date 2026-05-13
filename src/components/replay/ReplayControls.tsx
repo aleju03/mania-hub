@@ -128,8 +128,7 @@ export function ReplayControls({
   const [copied, setCopied] = useState(false);
   const [videoMenuOpen, setVideoMenuOpen] = useState(false);
   const [videoClipMode, setVideoClipMode] = useState(false);
-  const [videoExportKind, setVideoExportKind] = useState<ReplayVideoExportOptions["kind"]>("clip");
-  const [videoClipSeconds, setVideoClipSeconds] = useState(20);
+  const [videoExportKind, setVideoExportKind] = useState<ReplayVideoExportOptions["kind"]>("custom");
   const [videoCustomStartMs, setVideoCustomStartMs] = useState<number | null>(null);
   const [videoCustomEndMs, setVideoCustomEndMs] = useState<number | null>(null);
   const [videoResolution, setVideoResolution] = useState<ReplayVideoExportOptions["resolution"]>("1080p");
@@ -188,9 +187,18 @@ export function ReplayControls({
   const hasCustomRange = videoCustomStartMs != null && videoCustomEndMs != null && customEnd > customStart;
   const selectedExportLabel = videoExportKind === "full"
     ? "Full"
-    : videoExportKind === "custom"
-      ? hasCustomRange ? "Custom" : "Mark"
-      : `${videoClipSeconds}s`;
+    : videoCustomStartMs == null || videoCustomEndMs != null ? "Set start" : "Set end";
+
+  const markCustomVideoPoint = () => {
+    const timeMs = currentReplayTimeMs();
+    setVideoClipMode(true);
+    if (videoCustomStartMs == null || videoCustomEndMs != null) {
+      setVideoCustomStartMs(timeMs);
+      setVideoCustomEndMs(null);
+      return;
+    }
+    setVideoCustomEndMs(timeMs);
+  };
 
   return (
     <div className="bg-osu-b4 rounded-xl border border-osu-b3/20">
@@ -236,7 +244,7 @@ export function ReplayControls({
         rendererRef={rendererRef}
         heatmap={heatmap}
         sliderClass=""
-        clipPreviewSeconds={onExportVideo && videoClipMode && videoExportKind === "clip" ? videoClipSeconds : null}
+        clipPreviewSeconds={null}
         clipPreviewRate={speed * modRate}
         customPreviewRange={onExportVideo && videoClipMode && videoExportKind === "custom"
           ? { startMs: videoCustomStartMs, endMs: videoCustomEndMs }
@@ -341,7 +349,11 @@ export function ReplayControls({
             <button
               type="button"
               onClick={() => {
-                setVideoClipMode((enabled) => !enabled);
+                if (videoExportKind === "custom") {
+                  markCustomVideoPoint();
+                } else {
+                  setVideoClipMode((enabled) => !enabled);
+                }
               }}
               disabled={videoExporting}
               aria-label="Generate replay video URL"
@@ -385,37 +397,26 @@ export function ReplayControls({
                   transition={{ duration: 0.1 }}
                   className="absolute left-0 bottom-full z-50 mb-1.5 w-36 rounded-lg border border-osu-b2 bg-osu-b3 p-1.5 shadow-2xl"
                 >
-                  {[10, 20, 30, 60].map((seconds) => (
-                    <button
-                      key={seconds}
-                      type="button"
-                      onClick={() => {
-                        setVideoExportKind("clip");
-                        setVideoClipSeconds(seconds);
-                      }}
-                      className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
-                        videoExportKind === "clip" && videoClipSeconds === seconds ? "text-white" : "text-osu-f0"
-                      }`}
-                    >
-                      <span>{seconds}s clip</span>
-                      <CheckMark on={videoExportKind === "clip" && videoClipSeconds === seconds} />
-                    </button>
-                  ))}
-                  <div className="my-1 h-px bg-osu-b2" />
                   <button
                     type="button"
                     onClick={() => {
-                      setVideoExportKind("custom");
-                      setVideoClipMode(true);
+                      if (videoExportKind === "custom" && videoClipMode) {
+                        setVideoClipMode(false);
+                        setVideoCustomStartMs(null);
+                        setVideoCustomEndMs(null);
+                      } else {
+                        setVideoExportKind("custom");
+                        setVideoClipMode(true);
+                      }
                     }}
                     className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
-                      videoExportKind === "custom" ? "text-white" : "text-osu-f0"
+                      videoExportKind === "custom" && videoClipMode ? "text-white" : "text-osu-f0"
                     }`}
                   >
                     <span>Custom</span>
-                    <CheckMark on={videoExportKind === "custom"} />
+                    <CheckMark on={videoExportKind === "custom" && videoClipMode} />
                   </button>
-                  {videoExportKind === "custom" && (
+                  {videoExportKind === "custom" && videoClipMode && (
                     <div className="space-y-1.5 px-1 pb-1">
                       <div className="grid grid-cols-2 gap-1">
                         <button
@@ -461,6 +462,18 @@ export function ReplayControls({
                           </span>
                         </div>
                       </div>
+                      {(videoCustomStartMs != null || videoCustomEndMs != null) && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVideoCustomStartMs(null);
+                            setVideoCustomEndMs(null);
+                          }}
+                          className="w-full cursor-pointer rounded bg-osu-b4/70 px-1.5 py-1 text-[10px] font-semibold text-osu-f0 hover:text-white"
+                        >
+                          Clear marks
+                        </button>
+                      )}
                     </div>
                   )}
                   <div className="my-1 h-px bg-osu-b2" />
@@ -468,6 +481,7 @@ export function ReplayControls({
                     type="button"
                     onClick={() => {
                       setVideoExportKind("full");
+                      setVideoClipMode(false);
                     }}
                     className={`flex w-full cursor-pointer items-center justify-between rounded px-2 py-1.5 text-[11px] font-medium hover:bg-osu-b4 ${
                       videoExportKind === "full" ? "text-white" : "text-osu-f0"
@@ -487,8 +501,6 @@ export function ReplayControls({
                       } else if (videoExportKind === "custom") {
                         if (!hasCustomRange) return;
                         onExportVideo({ kind: "custom", startTimeMs: customStart, endTimeMs: customEnd, resolution: videoResolution, fps: videoFps });
-                      } else {
-                        onExportVideo({ kind: "clip", durationSeconds: videoClipSeconds, resolution: videoResolution, fps: videoFps });
                       }
                     }}
                     disabled={videoExportKind === "custom" && !hasCustomRange}
@@ -496,6 +508,9 @@ export function ReplayControls({
                   >
                     Generate URL
                   </button>
+                  <div className="px-1 py-1 text-center text-[10px] leading-tight text-osu-f1">
+                    For Discord embeds
+                  </div>
                   <div className="my-1 h-px bg-osu-b2" />
                   <div className="grid grid-cols-2 gap-1">
                     {(["720p", "1080p"] as const).map((resolution) => (

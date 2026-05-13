@@ -216,16 +216,20 @@ function sanitizeReplayVideoFilename(value: string): string {
 type ReplayVideoJobPayload = {
   id: string;
   status?: "started" | "uploaded" | "queued" | "running" | "done" | "failed" | "cancelled";
+  scoreId?: number | null;
   url?: string | null;
   signed?: boolean;
   error?: string | null;
 };
 
-function getReplayVideoJobUrl(action: string, id?: string): URL {
+function getReplayVideoJobUrl(action: string, id?: string, params: Record<string, string | number | null | undefined> = {}): URL {
   const base = getLiveBackendUrl() ?? window.location.origin;
   const url = new URL("/api/replay-video-job", base);
   url.searchParams.set("action", action);
   if (id) url.searchParams.set("id", id);
+  for (const [key, value] of Object.entries(params)) {
+    if (value != null) url.searchParams.set(key, String(value));
+  }
   return url;
 }
 
@@ -254,6 +258,18 @@ async function postReplayVideoBlob(jobId: string, blob: Blob): Promise<void> {
     const payload = await response.json().catch(() => null) as { error?: string } | null;
     throw new Error(payload?.error || "Replay video upload failed.");
   }
+}
+
+async function getRecentReplayVideoJob(scoreId: number): Promise<ReplayVideoJobPayload | null> {
+  const url = getReplayVideoJobUrl("recent", undefined, { scoreId });
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
+  });
+  const payload = await response.json().catch(() => null) as ReplayVideoJobPayload | { url?: null; error?: string } | null;
+  if (!response.ok || !payload || payload.url == null) return null;
+  return payload as ReplayVideoJobPayload;
 }
 
 async function waitForReplayVideoJob(jobId: string, onProgress: (progress: number) => void): Promise<{ url: string; signed: boolean }> {
@@ -930,10 +946,30 @@ function ReplayViewer({
   const overlaySettingsRef = useRef<ReplayOverlaySettings>(overlaySettings);
   const shouldResumeAudioRef = useRef(false);
   const volumeRef = useRef(volume);
+  const recoveredVideoScoreIdRef = useRef<number | null>(null);
   const replayEndAudioFadeActiveRef = useRef(false);
   const replayEndAudioFadeFrameRef = useRef<number | null>(null);
   const isCanvasFullscreen = isNativeFullscreen || isPseudoFullscreen;
   const replayVideoExportAvailable = auth.canUseAdminFeatures && localReplayVideoExportAvailable;
+
+  useEffect(() => {
+    const scoreId = scoreInfo?.id;
+    if (!replayVideoExportAvailable || !scoreId || videoExport.exporting) return;
+    if (recoveredVideoScoreIdRef.current === scoreId) return;
+    recoveredVideoScoreIdRef.current = scoreId;
+    let cancelled = false;
+    getRecentReplayVideoJob(scoreId)
+      .then((job) => {
+        if (cancelled || !job?.url) return;
+        setVideoExport((current) => current.exporting || current.url
+          ? current
+          : { exporting: false, progress: 1, error: null, url: job.url ?? null, signed: Boolean(job.signed) });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [replayVideoExportAvailable, scoreInfo?.id, videoExport.exporting]);
 
   const cancelReplayEndAudioFade = useCallback((restoreVolume = true) => {
     replayEndAudioFadeActiveRef.current = false;
@@ -1877,6 +1913,7 @@ function ReplayViewer({
       const diff = sanitizeReplayVideoFilename(scoreInfo?.beatmap?.version ?? "mania");
       const scoreSuffix = scoreInfo?.id ? `-${scoreInfo.id}` : "";
       const job = await postReplayVideoJson<{ id: string }>("start", {
+        scoreId: scoreInfo?.id ?? null,
         filename: `${player}-${title}-${diff}${scoreSuffix}.mp4`,
         fps: exportFps,
         width,

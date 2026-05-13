@@ -15,6 +15,7 @@ export type ReplayVideoExportStatus = "started" | "uploaded" | "queued" | "runni
 
 export type ReplayVideoExportRow = {
   id: string;
+  scoreId: number | null;
   filename: string;
   status: ReplayVideoExportStatus;
   fps: number;
@@ -38,6 +39,7 @@ export type ReplayVideoExportRow = {
 };
 
 type StartInput = {
+  scoreId?: unknown;
   filename?: unknown;
   fps?: unknown;
   width?: unknown;
@@ -49,6 +51,7 @@ type StartInput = {
 };
 
 export async function createReplayVideoExport(db: Db, config: Config, input: StartInput): Promise<ReplayVideoExportRow> {
+  await ensureReplayVideoExportSchema(db);
   let id = createVideoId();
   while (await getReplayVideoExport(db, id)) id = createVideoId();
   const now = new Date().toISOString();
@@ -56,10 +59,11 @@ export async function createReplayVideoExport(db: Db, config: Config, input: Sta
   await exec(
     db,
     `insert into replay_video_exports
-     (id, filename, status, fps, width, height, audio_url, audio_start_seconds, source_duration_seconds, effective_rate, created_at, updated_at)
-     values (?, ?, 'started', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     (id, score_id, filename, status, fps, width, height, audio_url, audio_start_seconds, source_duration_seconds, effective_rate, created_at, updated_at)
+     values (?, ?, ?, 'started', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
+      parseOptionalPositiveInteger(input.scoreId),
       sanitizeFilename(input.filename),
       Math.round(parsePositiveNumber(input.fps, 30, 60)),
       Math.round(parsePositiveNumber(input.width, 1280, 1920)),
@@ -78,6 +82,7 @@ export async function createReplayVideoExport(db: Db, config: Config, input: Sta
 }
 
 export async function writeReplayVideoUpload(db: Db, config: Config, id: string, buffer: Buffer): Promise<ReplayVideoExportRow> {
+  await ensureReplayVideoExportSchema(db);
   if (buffer.length > MAX_VIDEO_BYTES) throw new Error("Video is too large.");
   const row = await requireReplayVideoExport(db, id);
   if (row.status === "done" || row.status === "cancelled") throw new Error(`Replay video job is ${row.status}.`);
@@ -88,6 +93,7 @@ export async function writeReplayVideoUpload(db: Db, config: Config, id: string,
 }
 
 export async function markReplayVideoQueued(db: Db, id: string): Promise<ReplayVideoExportRow> {
+  await ensureReplayVideoExportSchema(db);
   const row = await requireReplayVideoExport(db, id);
   if (row.status !== "uploaded" && row.status !== "failed") throw new Error("Upload the replay video before finalizing.");
   await exec(db, "update replay_video_exports set status = 'queued', error = null, updated_at = ? where id = ?", [new Date().toISOString(), id]);
@@ -95,11 +101,13 @@ export async function markReplayVideoQueued(db: Db, id: string): Promise<ReplayV
 }
 
 export async function cancelReplayVideoExport(db: Db, config: Config, id: string): Promise<void> {
+  await ensureReplayVideoExportSchema(db);
   await exec(db, "update replay_video_exports set status = 'cancelled', updated_at = ? where id = ?", [new Date().toISOString(), id]);
   await rm(workDir(config, id), { recursive: true, force: true });
 }
 
 export async function finishReplayVideoExport(db: Db, config: Config, id: string): Promise<ReplayVideoExportRow> {
+  await ensureReplayVideoExportSchema(db);
   const row = await requireReplayVideoExport(db, id);
   if (row.status === "done") return row;
   if (row.status === "cancelled") throw new Error("Replay video export was cancelled.");
@@ -157,7 +165,21 @@ export async function finishReplayVideoExport(db: Db, config: Config, id: string
 }
 
 export async function getReplayVideoExport(db: Db, id: string): Promise<ReplayVideoExportRow | null> {
+  await ensureReplayVideoExportSchema(db);
   const row = (await exec(db, "select * from replay_video_exports where id = ? limit 1", [id])).rows[0];
+  return row ? rowToExport(row) : null;
+}
+
+export async function getRecentReplayVideoExport(db: Db, scoreId: number): Promise<ReplayVideoExportRow | null> {
+  await ensureReplayVideoExportSchema(db);
+  const row = (await exec(
+    db,
+    `select * from replay_video_exports
+     where score_id = ? and status = 'done' and url is not null
+     order by completed_at desc, updated_at desc
+     limit 1`,
+    [scoreId],
+  )).rows[0];
   return row ? rowToExport(row) : null;
 }
 
@@ -170,6 +192,7 @@ export async function requireReplayVideoExport(db: Db, id: string): Promise<Repl
 export function replayVideoExportResponse(row: ReplayVideoExportRow): Record<string, unknown> {
   return {
     id: row.id,
+    scoreId: row.scoreId,
     filename: row.filename,
     status: row.status,
     url: row.url,
@@ -186,6 +209,7 @@ export function replayVideoExportResponse(row: ReplayVideoExportRow): Record<str
 function rowToExport(row: Record<string, unknown>): ReplayVideoExportRow {
   return {
     id: String(row.id),
+    scoreId: row.score_id == null ? null : Number(row.score_id),
     filename: String(row.filename),
     status: String(row.status) as ReplayVideoExportStatus,
     fps: Number(row.fps),
@@ -378,6 +402,15 @@ function createVideoId(length = 8): string {
   return out;
 }
 
+async function ensureReplayVideoExportSchema(db: Db): Promise<void> {
+  const columns = await exec(db, "pragma table_info(replay_video_exports)");
+  const names = new Set(columns.rows.map((row) => String(row.name)));
+  if (!names.has("score_id")) {
+    await exec(db, "alter table replay_video_exports add column score_id integer");
+  }
+  await exec(db, "create index if not exists idx_replay_video_exports_score_done on replay_video_exports(score_id, completed_at desc)");
+}
+
 function sanitizeFilename(value: unknown): string {
   const fallback = `replay-${Date.now()}.mp4`;
   if (typeof value !== "string") return fallback;
@@ -398,6 +431,12 @@ function parsePositiveNumber(value: unknown, fallback: number, max: number): num
   const parsed = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
   return Math.min(max, parsed);
+}
+
+function parseOptionalPositiveInteger(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.floor(parsed);
 }
 
 function workDir(config: Config, id: string): string {

@@ -15,6 +15,7 @@ import { enqueueOscBackfill } from "../osc/backfill.js";
 import {
   cancelReplayVideoExport,
   createReplayVideoExport,
+  getRecentReplayVideoExport,
   getReplayVideoExport,
   markReplayVideoQueued,
   replayVideoExportResponse,
@@ -122,6 +123,16 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
     if (action === "status") {
       const job = await getReplayVideoExport(ctx.db, id);
       sendJson(req, res, ctx, job ? 200 : 404, job ? replayVideoExportResponse(job) : { error: "Unknown replay video job." });
+      return true;
+    }
+    if (action === "recent") {
+      const scoreId = Number(url.searchParams.get("scoreId"));
+      if (!Number.isFinite(scoreId) || scoreId <= 0) {
+        sendJson(req, res, ctx, 400, { error: "Invalid scoreId." });
+        return true;
+      }
+      const job = await getRecentReplayVideoExport(ctx.db, Math.floor(scoreId));
+      sendJson(req, res, ctx, 200, job ? replayVideoExportResponse(job) : { url: null });
       return true;
     }
     if (action === "upload-video") {
