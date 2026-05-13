@@ -1,5 +1,7 @@
 import type { LeanTrackerScore, OscScore, OsuMod, OsuScoreStatistics } from "./types.js";
 
+const PP_WEIGHT_DECAY = 0.95;
+
 export type ScoreLike = OscScore | LeanTrackerScore;
 
 export function nowIso(): string {
@@ -114,6 +116,70 @@ export function getBoardLaneKey(mods: string[], isLazer: boolean): string {
 
 export function calculateWeightedPp(pp: number, position: number): number {
   return pp * 0.95 ** position;
+}
+
+type WeightedPpScore = Pick<OscScore, "pp"> & Partial<Pick<OscScore, "id">>;
+
+function sortWeightedPpScores(scores: WeightedPpScore[]): WeightedPpScore[] {
+  return [...scores]
+    .filter((score) => score.pp != null && score.pp > 0)
+    .sort((a, b) => {
+      const ppDiff = (b.pp ?? 0) - (a.pp ?? 0);
+      if (ppDiff !== 0) return ppDiff;
+      return (a.id ?? 0) - (b.id ?? 0);
+    });
+}
+
+export function calculateWeightedPpTotal(scores: Array<Pick<OscScore, "pp">>): number {
+  return sortWeightedPpScores(scores as WeightedPpScore[]).reduce((total, score, index) => {
+    const pp = score.pp ?? 0;
+    return total + pp * PP_WEIGHT_DECAY ** index;
+  }, 0);
+}
+
+export function calculateApproxPpGainMap(bestScores: OscScore[]): Record<number, number> {
+  const rankedBestScores = sortWeightedPpScores(bestScores);
+  const weightedWithAll = calculateWeightedPpTotal(rankedBestScores);
+  const gains: Record<number, number> = {};
+
+  rankedBestScores.forEach((score) => {
+    const withoutScore = rankedBestScores.filter((candidate) => candidate.id !== score.id);
+    const weightedWithoutScore = calculateWeightedPpTotal(withoutScore);
+    const gain = weightedWithAll - weightedWithoutScore;
+
+    if (gain > 0 && score.id != null) {
+      gains[score.id] = gain;
+    }
+  });
+
+  return gains;
+}
+
+export function calculateReplacementPpGain(
+  bestScores: WeightedPpScore[],
+  currentScoreId: number,
+  previousScore: WeightedPpScore | null,
+): number {
+  const rankedBestScores = sortWeightedPpScores(bestScores);
+  if (!rankedBestScores.some((score) => score.id === currentScoreId)) {
+    return 0;
+  }
+
+  const weightedWithAll = calculateWeightedPpTotal(rankedBestScores);
+  const hypotheticalScores = rankedBestScores.filter((score) => score.id !== currentScoreId);
+
+  if (
+    previousScore &&
+    previousScore.id !== currentScoreId &&
+    previousScore.pp != null &&
+    previousScore.pp > 0
+  ) {
+    hypotheticalScores.push(previousScore);
+  }
+
+  const weightedWithPrevious = calculateWeightedPpTotal(hypotheticalScores);
+  const gain = weightedWithAll - weightedWithPrevious;
+  return gain > 0 ? gain : 0;
 }
 
 export function toLeanTrackerScore(score: OscScore): LeanTrackerScore {

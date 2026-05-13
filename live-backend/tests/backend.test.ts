@@ -207,10 +207,45 @@ describe("live backend", () => {
     await ingestor.ingestBatch([scores[0]]);
     expect(Number((await exec(db, "select count(*) as count from top_play_events")).rows[0].count)).toBe(0);
     const best = await fixture<OscScore[]>("top-best.json");
-    const emitted = await confirmTopPlay(db, events, { getUserBestScores: async (_userId: number, _caller?: string) => best }, { userId: 101, scoreId: 9001, country: "CR" });
+    const osu = {
+      getBeatmapUserScoresAll: async (_beatmapId: number, _userId: number, _caller?: string) => [],
+      getUserBestScores: async (_userId: number, _caller?: string) => best,
+    };
+    const emitted = await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" });
     expect(emitted).toBe(true);
     expect(Number((await exec(db, "select count(*) as count from top_play_events")).rows[0].count)).toBe(1);
-    expect(await confirmTopPlay(db, events, { getUserBestScores: async (_userId: number, _caller?: string) => best }, { userId: 101, scoreId: 9001, country: "CR" })).toBe(false);
+    expect(await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" })).toBe(false);
+  });
+
+  it("calculates top-play pp gain from the previous same-beatmap best", async () => {
+    const { db, events } = await setup();
+    const baseBest = (await fixture<OscScore[]>("top-best.json"))[0];
+    const current = { ...baseBest, id: 9001, beatmap_id: 501, pp: 223.538, ended_at: "2026-05-12T07:06:51.000Z", created_at: "2026-05-12T07:06:51.000Z" };
+    const best: OscScore[] = [
+      { ...baseBest, id: 8001, beatmap_id: 601, pp: 243.68 },
+      current,
+      { ...baseBest, id: 8002, beatmap_id: 602, pp: 222.453 },
+      { ...baseBest, id: 8003, beatmap_id: 603, pp: 145 },
+    ];
+    const previousSameMap = {
+      ...baseBest,
+      id: 7001,
+      beatmap_id: 501,
+      pp: 200,
+      ended_at: "2026-05-11T07:06:51.000Z",
+      created_at: "2026-05-11T07:06:51.000Z",
+    };
+    const osu = {
+      getBeatmapUserScoresAll: vi.fn(async (_beatmapId: number, _userId: number, _caller?: string) => [current, previousSameMap]),
+      getUserBestScores: async (_userId: number, _caller?: string) => best,
+    };
+
+    expect(await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" })).toBe(true);
+
+    const row = (await exec(db, "select pp_gain from top_play_events where score_id = ?", [9001])).rows[0];
+    expect(Number(row.pp_gain)).toBeCloseTo(21.2946, 4);
+    expect(Number(row.pp_gain)).not.toBeCloseTo(1.0308, 3);
+    expect(osu.getBeatmapUserScoresAll).toHaveBeenCalledWith(501, 101, "job:refresh_user_top_scores:pp_gain");
   });
 
   it("stores one snipe event from a durable country board", async () => {

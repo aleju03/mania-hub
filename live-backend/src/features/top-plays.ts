@@ -1,7 +1,7 @@
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
-import { calculateWeightedPp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
+import { calculateApproxPpGainMap, calculateReplacementPpGain, calculateWeightedPp, getScoreTimestamp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
 import type { CountryTopPlay, OscScore } from "../shared/types.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import type { OsuApiClient } from "../osu/client.js";
@@ -25,7 +25,7 @@ export async function maybeEnqueueTopPlayRefresh(
 export async function confirmTopPlay(
   db: Db,
   events: LiveEventLog,
-  osu: Pick<OsuApiClient, "getUserBestScores">,
+  osu: Pick<OsuApiClient, "getBeatmapUserScoresAll" | "getUserBestScores">,
   payload: { userId: number; scoreId: number; country: string },
 ): Promise<boolean> {
   const bestScores = await osu.getUserBestScores(payload.userId, "job:refresh_user_top_scores");
@@ -45,8 +45,7 @@ export async function confirmTopPlay(
   if (confirmedIndex < 0) return false;
   const score = bestScores[confirmedIndex];
   if (score.pp == null || !score.user) return false;
-  const previous = bestScores.find((candidate, index) => index !== confirmedIndex && (candidate.pp ?? 0) <= score.pp!);
-  const ppGain = Math.max(0, calculateWeightedPp(score.pp, confirmedIndex) - (previous?.pp ? calculateWeightedPp(previous.pp, confirmedIndex) : 0));
+  const ppGain = await calculateTopPlayPpGain(osu, bestScores, score);
   const event: CountryTopPlay = {
     user: { id: score.user_id, username: score.user.username, avatar_url: score.user.avatar_url },
     score,
@@ -64,6 +63,51 @@ export async function confirmTopPlay(
   if (inserted.rowsAffected === 0) return false;
   await events.append("top_play", payload.country, event, `top_play:${payload.country}:${payload.scoreId}`);
   return true;
+}
+
+async function calculateTopPlayPpGain(
+  osu: Pick<OsuApiClient, "getBeatmapUserScoresAll">,
+  bestScores: OscScore[],
+  score: OscScore,
+): Promise<number> {
+  const beatmapId = score.beatmap_id ?? score.beatmap?.id;
+  if (!beatmapId) return calculateApproxPpGainMap(bestScores)[score.id] ?? 0;
+
+  try {
+    const history = await osu.getBeatmapUserScoresAll(beatmapId, score.user_id, "job:refresh_user_top_scores:pp_gain");
+    return calculateReplacementPpGain(bestScores, score.id, getPreviousBeatmapBestScore(history, score));
+  } catch (error) {
+    console.warn("[top-plays] failed to fetch same-beatmap score history for pp gain", {
+      beatmapId,
+      scoreId: score.id,
+      userId: score.user_id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return calculateApproxPpGainMap(bestScores)[score.id] ?? 0;
+  }
+}
+
+function getPreviousBeatmapBestScore(scores: OscScore[], target: OscScore): OscScore | null {
+  const targetTimestampMs = new Date(getScoreTimestamp(target)).getTime();
+  if (!Number.isFinite(targetTimestampMs) || targetTimestampMs <= 0) return null;
+
+  const olderScores = scores
+    .filter((score) => score.id !== target.id)
+    .filter((score) => {
+      const timestampMs = new Date(getScoreTimestamp(score)).getTime();
+      return Number.isFinite(timestampMs) && timestampMs > 0 && timestampMs < targetTimestampMs;
+    })
+    .filter((score) => score.pp != null && score.pp > 0);
+
+  if (olderScores.length === 0) return null;
+
+  olderScores.sort((a, b) => {
+    const ppDiff = (b.pp ?? 0) - (a.pp ?? 0);
+    if (ppDiff !== 0) return ppDiff;
+    return new Date(getScoreTimestamp(b)).getTime() - new Date(getScoreTimestamp(a)).getTime();
+  });
+
+  return olderScores[0];
 }
 
 export async function getTopPlaysSnapshot(db: Db, country: string, window: string): Promise<{ popoffs: CountryTopPlay[]; scannedAt: number; window: string }> {
