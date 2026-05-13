@@ -22,6 +22,15 @@ interface WorkerLane {
   intervalMs: number;
 }
 
+interface WorkerActiveJob {
+  id: number;
+  type: string;
+  dedupeKey: string;
+  attempts: number;
+  startedAt: string;
+  payload: unknown;
+}
+
 const DEFAULT_WORKER_LANES: WorkerLane[] = [
   {
     name: "fast",
@@ -59,6 +68,7 @@ export class WorkerRunner {
   private stopped = false;
   private paused = false;
   private readonly backfill = new OscBackfill(readConfig());
+  private readonly activeJobs = new Map<string, WorkerActiveJob[]>();
 
   constructor(
     private readonly db: Db,
@@ -111,6 +121,15 @@ export class WorkerRunner {
 
   private async runJob(workerId: string, job: Job, lane: string): Promise<void> {
     if (this.paused) return;
+    const activeJob: WorkerActiveJob = {
+      id: job.id,
+      type: job.type,
+      dedupeKey: job.dedupeKey,
+      attempts: job.attempts + 1,
+      startedAt: nowIso(),
+      payload: job.payload,
+    };
+    this.activeJobs.set(lane, [...(this.activeJobs.get(lane) ?? []), activeJob]);
     try {
       logInfo("job_start", { job_id: job.id, type: job.type, lane, worker_id: workerId, attempts: job.attempts + 1 });
       await this.handle(job);
@@ -122,6 +141,13 @@ export class WorkerRunner {
       await this.queue.fail(job.id, error, retryDelayMs);
       logWarn("job_failed", { job_id: job.id, type: job.type, lane, worker_id: workerId, retry_delay_ms: retryDelayMs, ...errorContext(error) });
       await this.events.append("job_status", null, { id: job.id, type: job.type, status: "failed" }, `job:${job.id}:failed:${job.attempts}`);
+    } finally {
+      const remaining = (this.activeJobs.get(lane) ?? []).filter((current) => current.id !== job.id);
+      if (remaining.length > 0) {
+        this.activeJobs.set(lane, remaining);
+      } else {
+        this.activeJobs.delete(lane);
+      }
     }
   }
 
@@ -133,7 +159,7 @@ export class WorkerRunner {
     this.paused = false;
   }
 
-  status(): { paused: boolean; stopped: boolean; workerId: string; lanes: Array<Omit<WorkerLane, "jobTypes"> & { jobTypes: string[] | null }> } {
+  status(): { paused: boolean; stopped: boolean; workerId: string; lanes: Array<Omit<WorkerLane, "jobTypes"> & { jobTypes: string[] | null; activeJobs: WorkerActiveJob[] }> } {
     return {
       paused: this.paused,
       stopped: this.stopped,
@@ -143,6 +169,7 @@ export class WorkerRunner {
         claimLimit: lane.claimLimit,
         intervalMs: lane.intervalMs,
         jobTypes: lane.jobTypes ?? null,
+        activeJobs: this.activeJobs.get(lane.name) ?? [],
       })),
     };
   }

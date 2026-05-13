@@ -42,6 +42,14 @@ export interface HttpContext {
       claimLimit: number;
       intervalMs: number;
       jobTypes: string[] | null;
+      activeJobs: Array<{
+        id: number;
+        type: string;
+        dedupeKey: string;
+        attempts: number;
+        startedAt: string;
+        payload: unknown;
+      }>;
     }>;
   };
   pauseWorkers?: () => void;

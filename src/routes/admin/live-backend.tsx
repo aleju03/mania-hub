@@ -61,6 +61,14 @@ interface LiveBackendStatus {
       claimLimit: number;
       intervalMs: number;
       jobTypes: string[] | null;
+      activeJobs?: Array<{
+        id: number;
+        type: string;
+        dedupeKey: string;
+        attempts: number;
+        startedAt: string;
+        payload: unknown;
+      }>;
     }>;
   } | null;
 }
@@ -316,26 +324,21 @@ function LiveBackendPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-            <div className="lg:col-span-3 flex">
-              <ArchitectureCard />
-            </div>
-            <div className="lg:col-span-2 flex">
-              <QueueCard
-                status={status}
-                busy={actionBusy}
-                onClearFailed={() => void runAdminAction("clear-failed", "/api/admin/clear-failed-jobs")}
-                onRefreshRoster={() => void runAdminAction("refresh-roster", `/api/admin/refresh-roster?country=${encodeURIComponent(countryCode)}`)}
-                onRunRetention={() => void runAdminAction("retention", "/api/admin/run-retention")}
-                onOscSmoke={() => void runAdminAction("osc-smoke", "/api/admin/osc-smoke")}
-                onRunOscBackfill={() => void runAdminAction("osc-backfill", "/api/admin/run-osc-backfill")}
-                onResetLocalDb={() => void runAdminAction("reset-local-db", "/api/admin/reset-local-db")}
-                onToggleWorkers={() => void runAdminAction(
-                  status?.worker?.paused ? "resume-workers" : "pause-workers",
-                  status?.worker?.paused ? "/api/admin/resume-workers" : "/api/admin/pause-workers",
-                )}
-              />
-            </div>
+          <div className="grid grid-cols-1 gap-4">
+            <QueueCard
+              status={status}
+              busy={actionBusy}
+              onClearFailed={() => void runAdminAction("clear-failed", "/api/admin/clear-failed-jobs")}
+              onRefreshRoster={() => void runAdminAction("refresh-roster", `/api/admin/refresh-roster?country=${encodeURIComponent(countryCode)}`)}
+              onRunRetention={() => void runAdminAction("retention", "/api/admin/run-retention")}
+              onOscSmoke={() => void runAdminAction("osc-smoke", "/api/admin/osc-smoke")}
+              onRunOscBackfill={() => void runAdminAction("osc-backfill", "/api/admin/run-osc-backfill")}
+              onResetLocalDb={() => void runAdminAction("reset-local-db", "/api/admin/reset-local-db")}
+              onToggleWorkers={() => void runAdminAction(
+                status?.worker?.paused ? "resume-workers" : "pause-workers",
+                status?.worker?.paused ? "/api/admin/resume-workers" : "/api/admin/pause-workers",
+              )}
+            />
           </div>
         </div>
       </div>
@@ -489,8 +492,9 @@ function formatStorageHint(status: LiveBackendStatus | null): string {
 function StatusCard({ status, connectionState, country }: { status: LiveBackendStatus | null; connectionState: ConnectionState; country: string }) {
   const roster = status?.roster?.find((entry) => entry.country === country);
   const workerLanes = status?.worker?.lanes ?? [];
+  const activeJobCount = workerLanes.reduce((total, lane) => total + (lane.activeJobs?.length ?? 0), 0);
   return (
-    <SectionCard title="Process status" subtitle="health, readiness, socket, and worker pressure">
+    <SectionCard title="Process status" subtitle="health, readiness, socket, and worker activity">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <DetailRow label="SSE client" value={connectionState} tone={connectionState === "open" ? "good" : "warn"} />
         <DetailRow label="Last live event" value={status?.lastEventAt ? formatTimeAgo(status.lastEventAt) : "none"} />
@@ -499,10 +503,23 @@ function StatusCard({ status, connectionState, country }: { status: LiveBackendS
         <DetailRow label={`${country} roster`} value={roster ? `${formatNumber(roster.users)} users` : "not loaded"} tone={roster ? "good" : "warn"} />
         <DetailRow label="Roster refreshed" value={roster?.refreshedAt ? formatTimeAgo(roster.refreshedAt) : "never"} tone={roster?.refreshedAt ? "good" : "warn"} />
         <DetailRow label="Workers" value={status?.worker?.paused ? "paused" : "running"} tone={status?.worker?.paused ? "warn" : "good"} />
-        <DetailRow label="Worker id" value={status?.worker?.workerId ?? "unknown"} />
+        <DetailRow label="Active jobs" value={`${formatNumber(activeJobCount)} running`} tone={activeJobCount > 0 ? "warn" : "neutral"} />
+      </div>
+      <div className="mt-2 rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2">
+        <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Worker id</div>
+        <div className="mt-1 text-[10px] font-mono text-osu-c2 truncate">{status?.worker?.workerId ?? "unknown"}</div>
       </div>
       {workerLanes.length > 0 ? (
         <div className="mt-3 space-y-1.5">
+          <div className="flex items-center justify-between gap-3 px-1">
+            <div>
+              <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Worker lanes</div>
+              <div className="text-[10px] text-osu-f1">Current work per lane. Idle means that worker is waiting for a matching queued job.</div>
+            </div>
+            <div className={`text-[10px] font-bold ${activeJobCount > 0 ? "text-osu-yellow" : "text-osu-f1"}`}>
+              {formatNumber(activeJobCount)} active
+            </div>
+          </div>
           {workerLanes.map((lane) => (
             <WorkerLaneRow key={lane.name} lane={lane} />
           ))}
@@ -514,16 +531,58 @@ function StatusCard({ status, connectionState, country }: { status: LiveBackendS
 
 function WorkerLaneRow({ lane }: { lane: NonNullable<NonNullable<LiveBackendStatus["worker"]>["lanes"]>[number] }) {
   const jobTypes = lane.jobTypes?.join(", ") ?? "all jobs";
+  const activeJobs = lane.activeJobs ?? [];
   return (
     <div className="rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2">
       <div className="flex items-center gap-2">
         <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-white">{lane.name}</span>
+        <span className={`text-[10px] font-semibold ${activeJobs.length > 0 ? "text-osu-yellow" : "text-osu-f1"}`}>
+          {activeJobs.length > 0 ? `${formatNumber(activeJobs.length)} active` : "idle"}
+        </span>
         <span className="text-[10px] font-mono text-osu-c2">{formatNumber(lane.claimLimit)}x</span>
         <span className="text-[10px] font-mono text-osu-f1">{formatNumber(lane.intervalMs)}ms</span>
       </div>
-      <div className="mt-1 truncate text-[10px] font-mono text-osu-f1">{jobTypes}</div>
+      {activeJobs.length > 0 ? (
+        <div className="mt-2 space-y-1">
+          <div className="text-[9px] uppercase tracking-wider text-osu-yellow font-semibold">Currently doing</div>
+          {activeJobs.map((job) => (
+            <WorkerActiveJobRow key={job.id} job={job} />
+          ))}
+        </div>
+      ) : (
+        <div className="mt-1 space-y-1">
+          <div className="text-[10px] text-osu-f1">
+            <span className="font-semibold text-osu-c2">Currently doing:</span> nothing
+          </div>
+          <div className="truncate text-[10px] font-mono text-osu-f1">Handles: {jobTypes}</div>
+        </div>
+      )}
     </div>
   );
+}
+
+function WorkerActiveJobRow({ job }: { job: NonNullable<NonNullable<NonNullable<LiveBackendStatus["worker"]>["lanes"]>[number]["activeJobs"]>[number] }) {
+  return (
+    <div className="rounded bg-osu-b4/50 border border-osu-b3/20 px-2 py-1.5">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="text-[10px] font-mono text-osu-yellow">#{job.id}</span>
+        <span className="min-w-0 flex-1 truncate text-[10px] font-mono text-osu-c2">{job.type}</span>
+        <span className="text-[10px] text-osu-f1 flex-shrink-0">{formatTimeAgo(job.startedAt)}</span>
+        <span className="text-[10px] font-mono text-osu-f1 flex-shrink-0">try {formatNumber(job.attempts)}</span>
+      </div>
+      <div className="mt-1 text-[10px] font-mono text-osu-l2/75 truncate">{formatJobPayload(job.payload) || job.dedupeKey}</div>
+    </div>
+  );
+}
+
+function formatJobPayload(payload: unknown): string {
+  if (payload == null) return "";
+  if (typeof payload === "string") return payload;
+  try {
+    return JSON.stringify(payload);
+  } catch {
+    return String(payload);
+  }
 }
 
 function DetailRow({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "good" | "warn" | "bad" | "neutral" }) {
@@ -783,26 +842,6 @@ function QueueSummaryRow({ row }: { row: NonNullable<LiveBackendStatus["queueSum
       </div>
       {row.newestError ? <div className="mt-1 text-[10px] font-mono text-osu-red-light/80 truncate">{row.newestError}</div> : null}
     </div>
-  );
-}
-
-function ArchitectureCard() {
-  return (
-    <SectionCard title="What this means" subtitle="why pages still fetch">
-      <div className="space-y-3 text-[12px] text-osu-l2 leading-relaxed">
-        <p>
-          The backend is always connected to oSC and keeps durable projections warm even when the browser is closed.
-        </p>
-        <p>
-          A page visit still starts with a REST snapshot because the browser needs the current state after being away.
-          After that, SSE carries new tracker, top-play, snipe, and job events.
-        </p>
-        <p>
-          The old server-function paths are still present as fallback during this transition. If the live backend is down
-          or not configured, Tracker, Top Plays, and Snipes can still use the previous cache/polling behavior.
-        </p>
-      </div>
-    </SectionCard>
   );
 }
 
