@@ -10,16 +10,20 @@ const MAX_EXTRACTED_FILE_BYTES = 60 * 1024 * 1024;
 
 const ARCHIVE_SOURCES = [
   {
+    name: "osu.direct",
+    url: (beatmapsetId: string) => `https://osu.direct/api/d/${encodeURIComponent(beatmapsetId)}`,
+  },
+  {
     name: "catboy",
     url: (beatmapsetId: string) => `https://catboy.best/d/${encodeURIComponent(beatmapsetId)}`,
   },
   {
-    name: "nerinyan",
-    url: (beatmapsetId: string) => `https://api.nerinyan.moe/d/${encodeURIComponent(beatmapsetId)}`,
+    name: "hinai",
+    url: (beatmapsetId: string) => `https://mirror.hinamizawa.ai/d/${encodeURIComponent(beatmapsetId)}?redirect=true`,
   },
   {
-    name: "osu.direct",
-    url: (beatmapsetId: string) => `https://osu.direct/api/d/${encodeURIComponent(beatmapsetId)}`,
+    name: "nerinyan",
+    url: (beatmapsetId: string) => `https://api.nerinyan.moe/d/${encodeURIComponent(beatmapsetId)}`,
   },
 ] as const;
 
