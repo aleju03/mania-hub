@@ -27,6 +27,7 @@ async function setup() {
   const ingestor = new ScoreIngestor(db, queue, events, {
     topPlayMarginPp: 5,
     trackedCountries: ["CR"],
+    countryWarmTtlMs: 24 * 60 * 60 * 1000,
     osuClientId: "test-client",
     osuClientSecret: "test-secret",
   });

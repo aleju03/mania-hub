@@ -1,6 +1,6 @@
 import { HeadContent, Link, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { getCookie, getRequest, setCookie } from "@tanstack/react-start/server";
+import { getRequest, setCookie } from "@tanstack/react-start/server";
 import { Nav } from "../components/layout/Nav";
 import { DevRateLimitBadge } from "../components/layout/DevRateLimitBadge";
 import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
@@ -11,7 +11,7 @@ import {
   COUNTRY_AUTO_COOKIE_NAME,
   COUNTRY_COOKIE_MAX_AGE_SECONDS,
   COUNTRY_COOKIE_NAME,
-  parseCountryCookieValue,
+  parseCountryCookieHeader,
   readCountryCookieClient,
   resolveDetectedCountry,
   resolveInitialCountry,
@@ -44,7 +44,7 @@ function getRequestCountry(): string | null {
 }
 
 const getInitialCountry = createServerFn({ method: "GET" }).handler(() => {
-  const countryCookie = parseCountryCookieValue(getCookie(COUNTRY_COOKIE_NAME));
+  const countryCookie = parseCountryCookieHeader(getRequest().headers.get("cookie"));
   if (countryCookie) return countryCookie;
 
   const detectedCountry = getRequestCountry();

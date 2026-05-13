@@ -1,6 +1,7 @@
 import type { Config } from "../config.js";
 import type { Db } from "../db.js";
 import { exec, json } from "../db.js";
+import { getActiveCountryCodes, markCountryScoreSeen } from "../countries.js";
 import { updateSnipeProjection } from "../features/snipes.js";
 import { maybeEnqueueTopPlayRefresh } from "../features/top-plays.js";
 import { getTrackerScoreById } from "../features/tracker.js";
@@ -15,7 +16,7 @@ export class ScoreIngestor {
     private readonly db: Db,
     private readonly queue: JobQueue,
     private readonly events: LiveEventLog,
-    private readonly config: Pick<Config, "topPlayMarginPp" | "trackedCountries" | "osuClientId" | "osuClientSecret">,
+    private readonly config: Pick<Config, "topPlayMarginPp" | "trackedCountries" | "countryWarmTtlMs" | "osuClientId" | "osuClientSecret">,
   ) {}
 
   async ingestBatch(scores: OscScore[], source = "osc_socket"): Promise<{ inserted: number; skipped: number }> {
@@ -67,6 +68,7 @@ export class ScoreIngestor {
       ],
     );
     if (result.rowsAffected === 0) return false;
+    await markCountryScoreSeen(this.db, country);
     await this.updateOscCursor(score, receivedAt);
     const canUseOsuApi = this.canUseOsuApi();
     if (canUseOsuApi && country && !score.user) {
@@ -122,7 +124,7 @@ export class ScoreIngestor {
   }
 
   private async getTrackedCountry(score: OscScore): Promise<string | null> {
-    const trackedCountrySet = new Set(this.config.trackedCountries.map((country) => country.toUpperCase()));
+    const trackedCountrySet = new Set(await getActiveCountryCodes(this.db, this.config));
     const knownRows = (await exec(this.db, "select country from country_rosters where user_id = ? and is_tracked = 1", [score.user_id])).rows;
     const known = knownRows.map((row) => String(row.country).toUpperCase()).find((country) => trackedCountrySet.has(country));
     if (known) return known;
@@ -141,7 +143,8 @@ export class ScoreIngestor {
          on conflict(user_id) do update set username = excluded.username, avatar_url = excluded.avatar_url, country_code = excluded.country_code, updated_at = excluded.updated_at`,
         [score.user.id, score.user.username, score.user.avatar_url, score.user.country_code, json(score.user), now],
       );
-      if (score.user.country_code && this.config.trackedCountries.includes(score.user.country_code.toUpperCase())) {
+      const activeCountries = await getActiveCountryCodes(this.db, this.config);
+      if (score.user.country_code && activeCountries.includes(score.user.country_code.toUpperCase())) {
         await exec(
           this.db,
           `insert or ignore into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)

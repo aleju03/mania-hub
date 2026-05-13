@@ -1,6 +1,7 @@
 import type { Db } from "../db.js";
 import { exec, json } from "../db.js";
 import { readConfig } from "../config.js";
+import { markCountryRosterRefreshed } from "../countries.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { nowIso } from "../shared/score.js";
@@ -36,6 +37,7 @@ export async function refreshCountryRoster(db: Db, osu: Pick<OsuApiClient, "getR
     );
     count++;
   }
+  await markCountryRosterRefreshed(db, country);
   return count;
 }
 

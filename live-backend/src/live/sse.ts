@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { activateCountry } from "../countries.js";
 import type { HttpContext } from "../http/snapshots.js";
 import type { LiveEvent } from "../shared/types.js";
 
@@ -21,6 +22,7 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
     connection: "keep-alive",
   });
   const country = (url.searchParams.get("country") ?? ctx.config.trackedCountries[0] ?? "CR").toUpperCase();
+  await activateCountry(ctx.db, ctx.queue, ctx.config, country);
   const cursor = req.headers["last-event-id"] ?? url.searchParams.get("lastEventId");
   const lastEventId = Number(cursor ?? 0);
   writeEvent(res, { type: "hello", sequence: Number.isFinite(lastEventId) && lastEventId > 0 ? lastEventId : await ctx.events.latestSequence(), payload: { country, status: "connected" } });

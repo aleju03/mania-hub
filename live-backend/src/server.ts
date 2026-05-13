@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import { readConfig } from "./config.js";
+import { ensurePinnedCountries, getActiveCountryCodes } from "./countries.js";
 import { createDb, exec, migrate } from "./db.js";
 import { routeHttp, sendNotFound } from "./http/snapshots.js";
 import { ScoreIngestor } from "./ingest/score-ingestor.js";
@@ -19,6 +20,7 @@ export async function createApp() {
   await migrate(db);
   const queue = new JobQueue(db);
   const events = new LiveEventLog(db);
+  await ensurePinnedCountries(db, config);
   const osu = new OsuApiClient(config, fetch, (entry) => {
     void exec(db, "insert into api_call_log (provider, caller, path, started_at) values ('osu', ?, ?, ?)", [
       entry.caller,
@@ -60,7 +62,7 @@ export async function createApp() {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const app = await createApp();
   app.worker.start();
-  startRosterScheduler(app.queue, app.config);
+  startRosterScheduler(app.db, app.queue, app.config);
   startRetentionScheduler(app.db, app.config);
   enqueueOscBackfill(app.queue, app.db, app.config).catch((error) => console.warn("[osc] backfill enqueue failed", error));
   app.osc.start().catch((error) => console.warn("[osc] socket failed", error));
@@ -69,9 +71,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   });
 }
 
-function startRosterScheduler(queue: JobQueue, config: ReturnType<typeof readConfig>): void {
+function startRosterScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue, config: ReturnType<typeof readConfig>): void {
   const tick = async () => {
-    await enqueueRosterRefreshes(queue, config.trackedCountries).catch((error) => {
+    const countries = await getActiveCountryCodes(db, config);
+    await enqueueRosterRefreshes(queue, countries).catch((error) => {
       console.warn("[roster] scheduled refresh failed", error);
     });
     setTimeout(tick, config.rosterRefreshIntervalMs).unref();

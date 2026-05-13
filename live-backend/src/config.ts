@@ -11,6 +11,7 @@ export interface Config {
   livePublicOrigin: string;
   allowedOrigins: string[];
   liveAdminToken?: string;
+  countryWarmTtlMs: number;
   osuApiTargetPerMinute: number;
   osuApiHardPerMinute: number;
   oscJsonTargetPerMinute: number;
@@ -62,6 +63,7 @@ export function readConfig(): Config {
     livePublicOrigin: process.env.LIVE_PUBLIC_ORIGIN ?? "http://localhost:7227",
     allowedOrigins: csv(process.env.ALLOWED_ORIGINS, "http://localhost:3000"),
     liveAdminToken: process.env.LIVE_ADMIN_TOKEN || undefined,
+    countryWarmTtlMs: readInt("COUNTRY_WARM_TTL_MS", 24 * 60 * 60 * 1000),
     osuApiTargetPerMinute: readInt("OSU_API_TARGET_PER_MINUTE", 45),
     osuApiHardPerMinute: readInt("OSU_API_HARD_PER_MINUTE", 60),
     oscJsonTargetPerMinute: readInt("OSC_JSON_TARGET_PER_MINUTE", 30),

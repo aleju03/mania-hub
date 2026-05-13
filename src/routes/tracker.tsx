@@ -84,7 +84,6 @@ export const Route = createFileRoute("/tracker")({
 
 type ScoreFilter = "all" | "ranked";
 type GradeFilter = "all" | "SS" | "S" | "A" | "B";
-type FailedFilter = "hide" | "show" | "only";
 const EMPTY_IDS: number[] = [];
 const EMPTY_SCORES: LeanTrackerScore[] = [];
 const EMPTY_SCORE_GAINS: Record<number, { fetchedAt: number; value: number }> = {};
@@ -128,7 +127,6 @@ function ScoresPage() {
   const [playersError, setPlayersError] = useState<string | null>(null);
   const [filter, setFilter] = useState<ScoreFilter>("all");
   const [gradeFilter, setGradeFilter] = useState<GradeFilter>("all");
-  const [failedFilter, setFailedFilter] = useState<FailedFilter>("hide");
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<number[]>([]);
   const [initialLoaded, setInitialLoaded] = useState(feedScores.length > 0 || !!feedScoresFetchedAt || !!snapshot);
   const [initialRefreshDone, setInitialRefreshDone] = useState(false);
@@ -183,37 +181,55 @@ function ScoresPage() {
     return () => window.clearInterval(id);
   }, []);
 
+  const reconcileLiveSnapshot = useCallback(async (requestedCountry: string) => {
+    const liveSnapshot = await fetchLiveTrackerSnapshot(requestedCountry);
+    if (requestedCountry !== selectedCountry) return;
+    const passedScores = liveSnapshot.scores.filter(isDisplayedPassed);
+    if (passedScores.length > 0) addFeedScores(requestedCountry, passedScores);
+    if (Object.keys(liveSnapshot.gains).length > 0) {
+      setTrackerPpGains(requestedCountry, liveSnapshot.gains, liveSnapshot.fetchedAt);
+    }
+    markFeedScoresFetched(requestedCountry);
+    setInitialLoaded(true);
+    setInitialRefreshDone(true);
+    setInitialFetching(false);
+    setLoadingPlayers(false);
+  }, [addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains]);
+
   useEffect(() => {
     if (!liveBackendEnabled) return;
     let cancelled = false;
     const requestedCountry = selectedCountry;
-    fetchLiveTrackerSnapshot(requestedCountry)
-      .then((liveSnapshot) => {
-        if (cancelled || requestedCountry !== selectedCountry) return;
-        if (liveSnapshot.scores.length > 0) addFeedScores(requestedCountry, liveSnapshot.scores);
-        if (Object.keys(liveSnapshot.gains).length > 0) {
-          setTrackerPpGains(requestedCountry, liveSnapshot.gains, liveSnapshot.fetchedAt);
-        }
-        markFeedScoresFetched(requestedCountry);
-        setInitialLoaded(true);
-        setInitialRefreshDone(true);
-        setInitialFetching(false);
-        setLoadingPlayers(false);
-      })
-      .catch(() => {
+    const run = () => {
+      reconcileLiveSnapshot(requestedCountry).catch(() => {
         // The existing server-function path below remains the fallback.
       });
+    };
+    run();
+    const intervalId = window.setInterval(() => {
+      if (!cancelled && document.visibilityState === "visible") run();
+    }, 30_000);
+    const onVisibility = () => {
+      if (!cancelled && document.visibilityState === "visible") run();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       cancelled = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [addFeedScores, liveBackendEnabled, markFeedScoresFetched, selectedCountry, setTrackerPpGains]);
+  }, [liveBackendEnabled, reconcileLiveSnapshot, selectedCountry]);
 
   useEffect(() => {
     if (!liveBackendEnabled) return;
     const source = openLiveEventSource(selectedCountry);
     if (!source) return;
+    source.addEventListener("hello", () => {
+      void reconcileLiveSnapshot(selectedCountry);
+    });
     source.addEventListener("tracker_score", (event) => {
-      addFeedScores(selectedCountry, [JSON.parse(event.data) as LeanTrackerScore]);
+      const score = JSON.parse(event.data) as LeanTrackerScore;
+      if (isDisplayedPassed(score)) addFeedScores(selectedCountry, [score]);
     });
     source.addEventListener("score_gain", (event) => {
       const data = JSON.parse(event.data) as { scoreId?: number; ppGain?: number };
@@ -222,7 +238,7 @@ function ScoresPage() {
       }
     });
     return () => source.close();
-  }, [addFeedScores, liveBackendEnabled, selectedCountry, setTrackerPpGains]);
+  }, [addFeedScores, liveBackendEnabled, reconcileLiveSnapshot, selectedCountry, setTrackerPpGains]);
 
   useEffect(() => {
     setUserIds(trackedUserIds);
@@ -426,7 +442,7 @@ function ScoresPage() {
 
   useEffect(() => {
     setExpandedKey(null);
-  }, [filter, gradeFilter, failedFilter]);
+  }, [filter, gradeFilter]);
 
   const ppGainByScoreId = useMemo(
     () => Object.fromEntries(
@@ -457,9 +473,7 @@ function ScoresPage() {
       : feedScores;
 
     return playerFiltered.filter((score: LeanTrackerScore) => {
-      const passed = isDisplayedPassed(score);
-      if (failedFilter === "hide" && !passed) return false;
-      if (failedFilter === "only" && passed) return false;
+      if (!isDisplayedPassed(score)) return false;
       switch (filter) {
         case "ranked":
           return score.pp != null && score.pp > 0;
@@ -475,7 +489,7 @@ function ScoresPage() {
       }
       return true;
     });
-  }, [feedScores, filter, gradeFilter, failedFilter, selectedPlayerIdSet, selectedPlayerIds.length]);
+  }, [feedScores, filter, gradeFilter, selectedPlayerIdSet, selectedPlayerIds.length]);
 
   const activePlayers = useMemo(() => {
     const activeCutoff = Date.now() - 40 * 60 * 1000;
@@ -508,12 +522,7 @@ function ScoresPage() {
     { id: "A", label: "A" },
     { id: "B", label: "B" },
   ];
-  const failedOptions: { id: FailedFilter; label: string }[] = [
-    { id: "hide", label: "Hide failed" },
-    { id: "show", label: "Include failed" },
-    { id: "only", label: "Only failed" },
-  ];
-  const listKey = `${filter}:${gradeFilter}:${failedFilter}`;
+  const listKey = `${filter}:${gradeFilter}`;
   const liveStatusLabel = liveBackendEnabled ? "Live updates on" : "Live polling";
 
   return (
@@ -638,21 +647,6 @@ function ScoresPage() {
                 ))}
               </div>
             </div>
-          </div>
-          <div className="flex rounded-lg overflow-hidden border border-osu-b3/30 self-end sm:self-auto">
-            {failedOptions.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setFailedFilter(item.id)}
-                className={`px-2.5 py-1.5 text-[10px] font-medium cursor-pointer transition-colors duration-[120ms] ${
-                  failedFilter === item.id
-                    ? "bg-osu-b3 text-osu-l2"
-                    : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
-                }`}
-              >
-                {item.label}
-              </button>
-            ))}
           </div>
         </div>
       </div>

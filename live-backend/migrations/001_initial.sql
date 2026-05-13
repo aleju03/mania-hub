@@ -31,6 +31,17 @@ create table if not exists country_rosters (
   primary key (country, user_id)
 );
 
+create table if not exists country_registry (
+  country text primary key,
+  status text not null default 'warm',
+  pinned integer not null default 0,
+  first_requested_at text not null,
+  last_requested_at text not null,
+  last_roster_refresh_at text,
+  last_score_at text,
+  updated_at text not null
+);
+
 create table if not exists beatmapsets (
   beatmapset_id integer primary key,
   title text not null,
@@ -191,6 +202,7 @@ create table if not exists api_call_log (
 );
 
 create index if not exists idx_score_events_country_time on score_events(country, ended_at desc);
+create index if not exists idx_country_registry_status_request on country_registry(status, last_requested_at desc);
 create index if not exists idx_score_events_user_time on score_events(user_id, ended_at desc);
 create index if not exists idx_score_events_beatmap_time on score_events(beatmap_id, ended_at desc);
 create index if not exists idx_country_beatmap_scores_rank on country_beatmap_scores(country, beatmap_id, lane_key, total_score desc);

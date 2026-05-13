@@ -238,7 +238,7 @@ export class WorkerRunner {
     const roster = (await exec(this.db, "select user_id from country_rosters where country = ? and is_tracked = 1 order by rank asc limit ?", [payload.country, config.rosterSize])).rows;
     for (const row of roster) {
       const userId = Number(row.user_id);
-      const scores = await this.osu.getBeatmapUserScoresAll(payload.beatmapId, userId, "job:seed_snipe_board");
+      const scores = await this.getSnipeSeedScores(payload.beatmapId, userId);
       for (const score of scores) {
         const totalScore = getDisplayedTotalScore(score);
         if (totalScore == null) continue;
@@ -278,6 +278,18 @@ export class WorkerRunner {
           ],
         );
       }
+    }
+  }
+
+  private async getSnipeSeedScores(beatmapId: number, userId: number) {
+    try {
+      return await this.osu.getBeatmapUserScoresAll(beatmapId, userId, "job:seed_snipe_board");
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("osu! API 404")) {
+        logInfo("snipe_seed_user_scores_missing", { beatmap_id: beatmapId, user_id: userId });
+        return [];
+      }
+      throw error;
     }
   }
 }

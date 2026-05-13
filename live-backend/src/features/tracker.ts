@@ -28,7 +28,7 @@ export async function getTrackerSnapshot(db: Db, country: string, limit: number)
      left join users u on u.user_id = se.user_id
      left join beatmaps b on b.beatmap_id = se.beatmap_id
      left join beatmapsets bs on bs.beatmapset_id = b.beatmapset_id
-     where se.country = ?
+     where se.country = ? and se.passed = 1
      order by se.ended_at desc
      limit ?`,
     [country, limit],
@@ -51,7 +51,7 @@ export async function getTrackerScoreById(db: Db, scoreId: number): Promise<{ co
   const row = (await exec(
     db,
     `${trackerScoreSelectSql()}
-     where se.score_id = ?
+     where se.score_id = ? and se.passed = 1
      limit 1`,
     [scoreId],
   )).rows[0];
@@ -76,7 +76,7 @@ export async function getHydratedTrackerScoresForMetadata(db: Db, filter: { user
   const rows = (await exec(
     db,
     `${trackerScoreSelectSql()}
-     where (${clauses.join(" or ")})
+     where (${clauses.join(" or ")}) and se.passed = 1
      order by se.ended_at desc
      limit ?`,
     [...args, limit],

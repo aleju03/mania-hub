@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Config } from "../config.js";
+import { activateCountry, getCountryRegistry } from "../countries.js";
 import type { Db } from "../db.js";
 import { dbHealth, exec, parseJson } from "../db.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
@@ -66,19 +67,31 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
     sendJson(req, res, ctx, 200, await statusBody(ctx));
     return true;
   }
+  if (url.pathname === "/api/countries/activate") {
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, country: await activateCountry(ctx.db, ctx.queue, ctx.config, country) });
+    return true;
+  }
   if (url.pathname === "/api/snapshots/tracker") {
+    await activateCountry(ctx.db, ctx.queue, ctx.config, country);
     sendJson(req, res, ctx, 200, await getTrackerSnapshot(ctx.db, country, clampLimit(url.searchParams.get("limit"), 100, 500)));
     return true;
   }
   if (url.pathname === "/api/snapshots/top-plays") {
+    await activateCountry(ctx.db, ctx.queue, ctx.config, country);
     sendJson(req, res, ctx, 200, await getTopPlaysSnapshot(ctx.db, country, url.searchParams.get("window") ?? "7d"));
     return true;
   }
   if (url.pathname === "/api/snapshots/snipes") {
+    await activateCountry(ctx.db, ctx.queue, ctx.config, country);
     sendJson(req, res, ctx, 200, await getSnipesSnapshot(ctx.db, country, clampLimit(url.searchParams.get("limit"), 500, 1000)));
     return true;
   }
   if (url.pathname === "/api/events") {
+    await activateCountry(ctx.db, ctx.queue, ctx.config, country);
     const since = Number(url.searchParams.get("since") ?? 0);
     sendJson(req, res, ctx, 200, { events: await ctx.events.replay(country, Number.isFinite(since) ? since : 0, 500) });
     return true;
@@ -255,6 +268,7 @@ async function statusBody(ctx: HttpContext) {
     roster: await rosterSummary(ctx.db),
     rate: ctx.osu.limiter.state(),
     apiCallHistory: await apiCallHistory(ctx.db),
+    countries: await getCountryRegistry(ctx.db, ctx.config),
     worker: ctx.workerStatus?.() ?? null,
   };
 }

@@ -42,6 +42,15 @@ export async function fetchLiveTrackerSnapshot(country: string, limit = 100): Pr
   return fetchLiveJson(`/api/snapshots/tracker?country=${encodeURIComponent(country)}&limit=${limit}`);
 }
 
+export async function activateLiveCountry(country: string): Promise<void> {
+  const base = getLiveBackendUrl();
+  if (!base) return;
+  await fetch(`${base}/api/countries/activate?country=${encodeURIComponent(country)}`, {
+    method: "POST",
+    credentials: "omit",
+  }).catch(() => {});
+}
+
 export async function fetchLiveTopPlaysSnapshot(country: string, window: LiveTopPlaysSnapshot["window"]): Promise<LiveTopPlaysSnapshot> {
   return fetchLiveJson(`/api/snapshots/top-plays?country=${encodeURIComponent(country)}&window=${window}`);
 }

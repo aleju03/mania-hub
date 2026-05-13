@@ -13,6 +13,7 @@ import { searchUsers } from "../../lib/osu";
 import { DEFAULT_SNIPES_FILTERS, SNIPES_FILTERS_STORAGE_KEY, TOP_PLAYS_RANGE_STORAGE_KEY, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
 import { readCountryFromSearchStr } from "../../lib/country-search";
 import { getCountryFlagGradient, getCountryFlagUrl } from "../../lib/country";
+import { activateLiveCountry } from "../../lib/live-backend";
 import { useDynamicFavicon } from "../../lib/favicon";
 
 const links = [
@@ -247,6 +248,7 @@ export function Nav() {
 
   const handleCountrySelect = (country: string) => {
     setSelectedCountry(country);
+    void activateLiveCountry(country);
     setMenuOpen(false);
 
     if (location.pathname === "/") {
