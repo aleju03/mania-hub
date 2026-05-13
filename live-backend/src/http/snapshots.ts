@@ -94,7 +94,8 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
     return true;
   }
   if (url.pathname === "/api/snapshots/maps") {
-    const snapshot = await getMapsSnapshot(ctx.db, country, ctx.config.mapsRefreshIntervalMs);
+    await activateCountry(ctx.db, ctx.queue, ctx.config, country);
+    const snapshot = await getMapsSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs);
     sendJson(req, res, ctx, snapshot.value ? 200 : 202, snapshot);
     return true;
   }

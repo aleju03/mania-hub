@@ -174,19 +174,19 @@ describe("live backend", () => {
     expect(calls[2] - calls[0]).toBeGreaterThanOrEqual(60_000);
   });
 
-  it("keeps maps snapshot reads side-effect free", async () => {
+  it("queues stale maps snapshots without duplicating active refresh jobs", async () => {
     const { db, queue } = await setup();
-    const snapshot = await getMapsSnapshot(db, "CR", 7 * 24 * 60 * 60 * 1000);
+    const snapshot = await getMapsSnapshot(db, queue, "CR", 7 * 24 * 60 * 60 * 1000);
     expect(snapshot.value).toBeNull();
     expect(snapshot.isStale).toBe(true);
-    expect(snapshot.refreshQueued).toBe(false);
-    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_country_maps'")).rows[0].count)).toBe(0);
+    expect(snapshot.refreshQueued).toBe(true);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_country_maps'")).rows[0].count)).toBe(1);
 
     expect(await enqueueMapsRefreshIfDue(db, queue, "CR", 7 * 24 * 60 * 60 * 1000)).toBe(true);
     expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_country_maps'")).rows[0].count)).toBe(1);
   });
 
-  it("does not activate or queue jobs from the maps snapshot HTTP endpoint", async () => {
+  it("queues maps refreshes from the maps snapshot HTTP endpoint", async () => {
     const { db, queue, events } = await setup();
     const writes: string[] = [];
     const req = new EventEmitter() as IncomingMessage;
@@ -207,14 +207,15 @@ describe("live backend", () => {
       config: {
         allowedOrigins: ["http://localhost:3000"],
         trackedCountries: ["CR"],
+        rosterRefreshIntervalMs: 24 * 60 * 60 * 1000,
         mapsRefreshIntervalMs: 7 * 24 * 60 * 60 * 1000,
       },
       osu: {},
       oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
     } as never)).toBe(true);
 
-    expect(JSON.parse(writes.join(""))).toMatchObject({ value: null, isStale: true, refreshQueued: false });
-    expect(Number((await exec(db, "select count(*) as count from jobs")).rows[0].count)).toBe(0);
+    expect(JSON.parse(writes.join(""))).toMatchObject({ value: null, isStale: true, refreshQueued: true });
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_country_maps'")).rows[0].count)).toBe(1);
   });
 
   it("streams SSE hello, heartbeat, and Last-Event-ID replay", async () => {

@@ -802,6 +802,11 @@ function hasValidMapsDataShape(data: CountryMapsData | null): data is CountryMap
   return true;
 }
 
+function countLoadedMapsSections(data: CountryMapsData): number {
+  return (data.farmed.length > 0 ? 1 : 0)
+    + (data.mostPlayed.length > 0 || data.favourites.length > 0 || data.favouritesByPlayer.length > 0 || Object.keys(data.beatmapsetsPool).length > 0 ? 1 : 0);
+}
+
 // ── Route ──────────────────────────────────────────────────────────────────
 
 export const Route = createFileRoute("/maps")({
@@ -981,30 +986,40 @@ function MapsPage() {
     let cancelled = false;
     setLoadingMaps(!hasValidMapsDataShape(currentData));
     setLoadedSections(0);
-    fetchLiveMapsSnapshot(selectedCountry)
-      .then((snapshot) => {
-        if (cancelled) return;
-        if (!snapshot.value || !hasValidMapsDataShape(snapshot.value)) {
-          setLoadingMaps(false);
-          return;
-        }
-        setMapsData(selectedCountry, snapshot.value);
-        setLoadedSections(2);
-        setLoadingMaps(false);
-        setError(null);
-      })
-      .catch(() => {
-        if (!cancelled && !hasValidMapsDataShape(currentData)) {
-          setLoadingMaps(false);
-          setError("Couldn't load maps data. Try again later.");
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setLiveMapsAttempted(true);
-      });
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const loadSnapshot = () => {
+      fetchLiveMapsSnapshot(selectedCountry)
+        .then((snapshot) => {
+          if (cancelled) return;
+          if (snapshot.value && hasValidMapsDataShape(snapshot.value)) {
+            setMapsData(selectedCountry, snapshot.value);
+            setLoadedSections(countLoadedMapsSections(snapshot.value));
+            setLoadingMaps(false);
+            setError(null);
+          } else if (!hasValidMapsDataShape(useAppStore.getState().mapsDataByCountry[selectedCountry] ?? null)) {
+            setLoadingMaps(true);
+          }
+          if (!cancelled && (snapshot.isStale || snapshot.refreshQueued)) {
+            pollTimer = setTimeout(loadSnapshot, 5_000);
+          }
+        })
+        .catch(() => {
+          if (!cancelled && !hasValidMapsDataShape(useAppStore.getState().mapsDataByCountry[selectedCountry] ?? null)) {
+            setLoadingMaps(false);
+            setError("Couldn't load maps data. Try again later.");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLiveMapsAttempted(true);
+        });
+    };
+
+    loadSnapshot();
 
     return () => {
       cancelled = true;
+      if (pollTimer) clearTimeout(pollTimer);
     };
   }, [liveBackendEnabled, selectedCountry, setMapsData]);
 

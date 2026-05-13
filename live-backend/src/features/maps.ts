@@ -187,18 +187,28 @@ export async function enqueueMapsRefreshIfDue(
   maxAgeMs: number,
   options: { priority?: number; replaceDone?: boolean } = {},
 ): Promise<boolean> {
-  const snapshot = await readMapsSnapshot(db, country, maxAgeMs);
+  const normalized = country.toUpperCase();
+  const snapshot = await readMapsSnapshot(db, normalized, maxAgeMs);
   if (!snapshot.isStale) return false;
-  await enqueueMapsRefresh(queue, country, options);
+  if (await hasActiveMapsRefresh(db, normalized)) return true;
+  await enqueueMapsRefresh(queue, normalized, options);
   return true;
 }
 
 export async function getMapsSnapshot(
   db: Db,
+  queue: JobQueue,
   country: string,
   maxAgeMs: number,
 ): Promise<{ value: CountryMapsData | null; generatedAt: string | null; refreshedAt: string | null; isStale: boolean; refreshQueued: boolean }> {
-  return { ...await readMapsSnapshot(db, country, maxAgeMs), refreshQueued: false };
+  const normalized = country.toUpperCase();
+  const snapshot = await readMapsSnapshot(db, normalized, maxAgeMs);
+  let refreshQueued = await hasActiveMapsRefresh(db, normalized);
+  if (snapshot.isStale && !refreshQueued) {
+    await enqueueMapsRefresh(queue, normalized);
+    refreshQueued = true;
+  }
+  return { ...snapshot, refreshQueued };
 }
 
 async function readMapsSnapshot(
@@ -221,6 +231,20 @@ async function readMapsSnapshot(
   };
 }
 
+async function hasActiveMapsRefresh(db: Db, country: string): Promise<boolean> {
+  const now = nowIso();
+  const row = (await exec(
+    db,
+    `select 1 as active
+     from jobs
+     where dedupe_key = ?
+       and (status in ('queued', 'running') or (status = 'failed' and run_after > ?))
+     limit 1`,
+    [`maps:${country.toUpperCase()}`, now],
+  )).rows[0];
+  return !!row;
+}
+
 export async function refreshCountryMaps(
   db: Db,
   osu: Pick<OsuApiClient, "getUserBestScoresWindow" | "getUserMostPlayed" | "getUserFavourites">,
@@ -229,20 +253,48 @@ export async function refreshCountryMaps(
   const country = payload.country.toUpperCase();
   const users = await getMapsUsers(db, country);
   if (users.length === 0) throw new Error(`No tracked roster users available for ${country}`);
-  const [farmedSection, favSection] = await Promise.all([
-    buildCountryFarmed(osu, users),
-    buildCountryFavourites(osu, users),
-  ]);
+  const emptyGeneratedAt = nowIso();
+  let latestFarmed: CountryMapsFarmedSection = { farmed: [], generatedAt: emptyGeneratedAt };
+  let latestFavourites: CountryMapsFavouritesSection = {
+    mostPlayed: [],
+    favourites: [],
+    favouritesByPlayer: [],
+    beatmapsetsPool: {},
+    generatedAt: emptyGeneratedAt,
+  };
+  let persistChain = Promise.resolve();
+  const persistLatest = () => {
+    const value = composeCountryMapsData(latestFarmed, latestFavourites);
+    persistChain = persistChain.then(() => persistMapsSnapshot(db, country, value));
+    return persistChain;
+  };
+
+  const farmedPromise = buildCountryFarmed(osu, users).then(async (section) => {
+    latestFarmed = section;
+    await persistLatest();
+    return section;
+  });
+  const favouritesPromise = buildCountryFavourites(osu, users).then(async (section) => {
+    latestFavourites = section;
+    await persistLatest();
+    return section;
+  });
+
+  const [farmedSection, favSection] = await Promise.all([farmedPromise, favouritesPromise]);
   const value = composeCountryMapsData(farmedSection, favSection);
   assertUsableMapsData(value, users.length);
+  await persistMapsSnapshot(db, country, value);
+  return value;
+}
+
+async function persistMapsSnapshot(db: Db, country: string, value: CountryMapsData): Promise<void> {
   await exec(
     db,
     `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
      values (?, ?, ?, ?)
      on conflict(country) do update set payload_json = excluded.payload_json, generated_at = excluded.generated_at, refreshed_at = excluded.refreshed_at`,
-    [country, json(value), value.generatedAt, nowIso()],
+    [country.toUpperCase(), json(value), value.generatedAt, nowIso()],
   );
-  return value;
 }
 
 async function getMapsUsers(db: Db, country: string): Promise<MapsUser[]> {
