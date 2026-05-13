@@ -1,5 +1,6 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, useMemo, useSyncExternalStore } from "react";
+import type { MouseEvent } from "react";
 import { getRankings, getUsersRankHistory } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
@@ -15,6 +16,17 @@ import { useAppStore, useSelectedCountry } from "../store";
 import { pageSeo } from "../lib/seo";
 
 type SortField = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "ss" | "s" | "a";
+
+function getPlayerPath(username: string): string {
+  return `/player/${encodeURIComponent(username)}`;
+}
+
+function handlePlayerAuxClick(event: MouseEvent<HTMLElement>, username: string): void {
+  if (event.button !== 1) return;
+  if ((event.target as Element | null)?.closest("a")) return;
+
+  window.open(getPlayerPath(username), "_blank", "noopener,noreferrer");
+}
 
 // Track the sm breakpoint with useSyncExternalStore so the initial render
 // reads the real viewport width synchronously (no second-render flicker) and
@@ -393,10 +405,11 @@ function RankingsPage() {
                 })();
 
                 return (
-                  <div
+                  <Link
                     key={entry.user.id}
+                    to="/player/$username"
+                    params={{ username: entry.user.username }}
                     className="rounded-lg bg-osu-b4/50 p-3 cursor-pointer hover:bg-osu-b4 transition-colors"
-                    onClick={() => navigate({ to: "/player/$username", params: { username: entry.user.username } })}
                   >
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-bold text-osu-f1 w-8">#{originalRank}</span>
@@ -413,7 +426,7 @@ function RankingsPage() {
                       </div>
                       <span className="text-sm font-bold text-right flex-shrink-0">{sortedValue}</span>
                     </div>
-                  </div>
+                  </Link>
                 );
               })
             ) : (
@@ -476,17 +489,22 @@ function RankingsPage() {
                         onClick={() =>
                           navigate({ to: "/player/$username", params: { username: entry.user.username } })
                         }
+                        onAuxClick={(event) => handlePlayerAuxClick(event, entry.user.username)}
                       >
                         <td className="py-2.5 px-3 text-sm font-bold text-osu-f1">#{originalRank}</td>
                         <td className="py-2.5 px-3">
-                          <div className="flex items-center gap-3">
+                          <Link
+                            to="/player/$username"
+                            params={{ username: entry.user.username }}
+                            className="flex items-center gap-3"
+                          >
                             <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} online={entry.user.is_online} />
                             <UsernameText
                               username={entry.user.username}
                               avatarUrl={entry.user.avatar_url}
                               className="text-sm font-medium"
                             />
-                          </div>
+                          </Link>
                         </td>
                         <td className="py-2.5 px-3">
                           <GlobalRankCell history={history} rankChange={globalChange} />
