@@ -150,35 +150,20 @@ function getAccuracyGate(acc: number): number {
   return 0.35 + curve(normalize(acc, 0.94, 0.995), 0.8) * 0.65;
 }
 
-function getPatternSignals(score: OsuScore): {
-  ln: number;
-  tech: number;
-  speed: number;
-  stamina: number;
-} {
-  const b = score.beatmap;
-  const text = [
-    b.version,
-    score.beatmapset?.title,
-    score.beatmapset?.artist,
-  ].join(" ").toLowerCase();
-  const notes = b.count_circles + b.count_sliders;
-  const lnRatio = notes > 0 ? b.count_sliders / notes : 0;
+function getEffectiveStarRating(score: OsuScore, rate: number): number {
+  const star = score.beatmap.difficulty_rating;
+  if (!Number.isFinite(rate) || rate <= 0 || Math.abs(rate - 1) < 0.001) return star;
 
-  const hasAny = (words: string[]) => words.some((word) => text.includes(word));
-
-  return {
-    ln: clamp(lnRatio * 2.4 + (hasAny(["ln", "long note", "longnote"]) ? 0.25 : 0)),
-    tech: hasAny(["tech", "hybrid", "release", "dump", "jack", "chord", "stream"]) ? 1 : 0,
-    speed: hasAny(["speed", "stream", "burst", "dump", "jack"]) ? 1 : 0,
-    stamina: hasAny(["marathon", "stamina", "endurance", "long"]) ? 1 : 0,
-  };
+  // The best-score payload only includes beatmap base SR, not mod-adjusted SR.
+  // Tempo mods still matter for mania difficulty, so approximate mania's
+  // observed rate scaling until we have per-score beatmap attributes from osu!.
+  return star * Math.pow(rate, 0.72);
 }
 
 function computePlayTraits(score: OsuScore, baseline: KeymodeBaseline) {
   const b = score.beatmap;
   const rate = getScoreRate(score.mods);
-  const star = b.difficulty_rating;
+  const star = getEffectiveStarRating(score, rate);
   const effectiveBpm = b.bpm * rate;
   const length = Math.max(1, b.total_length / Math.max(0.1, rate));
   const objects = b.count_circles + b.count_sliders;
@@ -191,7 +176,6 @@ function computePlayTraits(score: OsuScore, baseline: KeymodeBaseline) {
   const missPenalty = clamp(1 - missCount * 0.035, 0.75, 1);
   const comboGate = 0.82 + curve(comboRatio, 0.65) * 0.18;
   const accGate = getAccuracyGate(acc);
-  const patterns = getPatternSignals(score);
   const acronyms = getModAcronyms(score.mods);
   const isRateFarm = acronyms.includes("DT") || acronyms.includes("NC");
 
@@ -211,7 +195,7 @@ function computePlayTraits(score: OsuScore, baseline: KeymodeBaseline) {
   );
 
   const speed = clamp(
-    (bpmScore * 0.42 + densityScore * 0.32 + srScore * 0.18 + patterns.speed * 0.08) *
+    (bpmScore * 0.44 + densityScore * 0.34 + srScore * 0.22) *
       accGate *
       comboGate,
   );
@@ -219,10 +203,9 @@ function computePlayTraits(score: OsuScore, baseline: KeymodeBaseline) {
   const control = clamp(
     (srScore * 0.34 +
       odScore * 0.18 +
-      densityScore * 0.14 +
-      precisionBase * 0.16 +
-      patterns.tech * 0.1 +
-      patterns.ln * 0.08) *
+      densityScore * 0.2 +
+      precisionBase * 0.2 +
+      objectScore * 0.08) *
       (isRateFarm ? 0.96 : 1.03) *
       accGate *
       comboGate,
@@ -231,9 +214,8 @@ function computePlayTraits(score: OsuScore, baseline: KeymodeBaseline) {
   const stamina = clamp(
     (lengthScore * 0.36 +
       objectScore * 0.25 +
-      densityScore * 0.17 +
-      srScore * 0.14 +
-      patterns.stamina * 0.08) *
+      densityScore * 0.19 +
+      srScore * 0.2) *
       accGate *
       comboGate,
   );

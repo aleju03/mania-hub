@@ -35,7 +35,6 @@ import type { InsightScoreSnapshot, OsuScore, OsuUser, UserProfileInsights } fro
 import { calculateUserProfileInsights } from "../../lib/profile-insights";
 import { pageSeo, playerOgImagePath } from "../../lib/seo";
 import { getRankTierClass } from "../../lib/rankings";
-import { useAuth } from "../../lib/auth-context";
 
 const userRequestCache = new Map<string, Promise<OsuUser>>();
 const userRecentRequestCache = new Map<number, Promise<OsuScore[]>>();
@@ -328,8 +327,6 @@ function loadUserBestWindowCached(userId: number): Promise<OsuScore[]> {
 
 function PlayerPage() {
   const { username } = Route.useParams();
-  const auth = useAuth();
-  const devMode = auth.canUseDevFeatures;
   const [user, setUser] = useState<OsuUser | null>(null);
   const [best, setBest] = useState<OsuScore[]>([]);
   const [recent, setRecent] = useState<OsuScore[]>([]);
@@ -483,8 +480,7 @@ function PlayerPage() {
   // Safety: if we're on the About tab but the user has no page content, fall back to Best
   useEffect(() => {
     if (tab === "about" && !user?.page?.html) setTab("best");
-    if (tab === "card" && !devMode) setTab("best");
-  }, [devMode, tab, user]);
+  }, [tab, user]);
 
   const fetchMoreRecent = useCallback(async () => {
     if (!user || loadingMoreRecent) return;
@@ -591,7 +587,7 @@ function PlayerPage() {
   }, []);
 
   if (loadingUser && !user) {
-    return <PlayerPageSkeleton tab={tab} onTabChange={setTab} devMode={devMode} />;
+    return <PlayerPageSkeleton tab={tab} onTabChange={setTab} />;
   }
 
   if (userError || !user) {
@@ -1180,7 +1176,7 @@ function PlayerPage() {
           {/* Player tabs */}
           <div className="mt-5 pt-1 border-t border-osu-b3/30 flex flex-wrap items-center justify-between gap-3">
             <div className="flex">
-              {((["best", "recent", ...(user.page?.html ? ["about"] : []), ...(devMode ? ["card"] : [])]) as PlayerTab[]).map((t) => (
+              {((["best", "recent", ...(user.page?.html ? ["about"] : []), "card"]) as PlayerTab[]).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -1239,7 +1235,7 @@ function PlayerPage() {
               >
                 <PlayerAboutCard html={user.page.html} />
               </motion.div>
-            ) : tab === "card" && devMode ? (
+            ) : tab === "card" ? (
               <motion.div
                 key="card"
                 initial={{ opacity: 0, y: 6 }}
@@ -1465,11 +1461,9 @@ function TungTungSahurKeycap() {
 function PlayerPageSkeleton({
   tab,
   onTabChange,
-  devMode,
 }: {
   tab: PlayerTab;
   onTabChange: (tab: PlayerTab) => void;
-  devMode: boolean;
 }) {
   return (
     <div className="flex-1 bg-osu-b5">
@@ -1541,7 +1535,7 @@ function PlayerPageSkeleton({
 
         <div className="mt-5 pt-1 border-t border-osu-b3/30">
           <div className="flex flex-wrap">
-            {((["best", "recent", ...(devMode ? ["card"] : [])]) as PlayerTab[]).map((t) => (
+            {((["best", "recent", "card"]) as PlayerTab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => onTabChange(t)}

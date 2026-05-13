@@ -28,7 +28,6 @@ import { Route as ApiAudioRouteImport } from './routes/api/audio'
 import { Route as AdminR2RouteImport } from './routes/admin/r2'
 import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
 import { Route as AdminMonitorRouteImport } from './routes/admin/monitor'
-import { Route as AdminManiacardRouteImport } from './routes/admin/maniacard'
 import { Route as AdminLiveBackendRouteImport } from './routes/admin/live-backend'
 import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
 import { Route as VideosIdFilenameRouteImport } from './routes/videos/$id/$filename'
@@ -131,11 +130,6 @@ const AdminMonitorRoute = AdminMonitorRouteImport.update({
   path: '/admin/monitor',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminManiacardRoute = AdminManiacardRouteImport.update({
-  id: '/admin/maniacard',
-  path: '/admin/maniacard',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AdminLiveBackendRoute = AdminLiveBackendRouteImport.update({
   id: '/admin/live-backend',
   path: '/admin/live-backend',
@@ -178,7 +172,6 @@ export interface FileRoutesByFullPath {
   '/tracker': typeof TrackerRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
-  '/admin/maniacard': typeof AdminManiacardRoute
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
@@ -206,7 +199,6 @@ export interface FileRoutesByTo {
   '/tracker': typeof TrackerRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
-  '/admin/maniacard': typeof AdminManiacardRoute
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
@@ -235,7 +227,6 @@ export interface FileRoutesById {
   '/tracker': typeof TrackerRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
-  '/admin/maniacard': typeof AdminManiacardRoute
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
   '/admin/r2': typeof AdminR2Route
@@ -265,7 +256,6 @@ export interface FileRouteTypes {
     | '/tracker'
     | '/admin/dan-classifier'
     | '/admin/live-backend'
-    | '/admin/maniacard'
     | '/admin/monitor'
     | '/admin/og-preview'
     | '/admin/r2'
@@ -293,7 +283,6 @@ export interface FileRouteTypes {
     | '/tracker'
     | '/admin/dan-classifier'
     | '/admin/live-backend'
-    | '/admin/maniacard'
     | '/admin/monitor'
     | '/admin/og-preview'
     | '/admin/r2'
@@ -321,7 +310,6 @@ export interface FileRouteTypes {
     | '/tracker'
     | '/admin/dan-classifier'
     | '/admin/live-backend'
-    | '/admin/maniacard'
     | '/admin/monitor'
     | '/admin/og-preview'
     | '/admin/r2'
@@ -350,7 +338,6 @@ export interface RootRouteChildren {
   TrackerRoute: typeof TrackerRoute
   AdminDanClassifierRoute: typeof AdminDanClassifierRoute
   AdminLiveBackendRoute: typeof AdminLiveBackendRoute
-  AdminManiacardRoute: typeof AdminManiacardRoute
   AdminMonitorRoute: typeof AdminMonitorRoute
   AdminOgPreviewRoute: typeof AdminOgPreviewRoute
   AdminR2Route: typeof AdminR2Route
@@ -502,13 +489,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminMonitorRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/maniacard': {
-      id: '/admin/maniacard'
-      path: '/admin/maniacard'
-      fullPath: '/admin/maniacard'
-      preLoaderRoute: typeof AdminManiacardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/admin/live-backend': {
       id: '/admin/live-backend'
       path: '/admin/live-backend'
@@ -577,7 +557,6 @@ const rootRouteChildren: RootRouteChildren = {
   TrackerRoute: TrackerRoute,
   AdminDanClassifierRoute: AdminDanClassifierRoute,
   AdminLiveBackendRoute: AdminLiveBackendRoute,
-  AdminManiacardRoute: AdminManiacardRoute,
   AdminMonitorRoute: AdminMonitorRoute,
   AdminOgPreviewRoute: AdminOgPreviewRoute,
   AdminR2Route: AdminR2Route,
