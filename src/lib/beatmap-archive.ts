@@ -10,16 +10,16 @@ const MAX_EXTRACTED_FILE_BYTES = 60 * 1024 * 1024;
 
 const ARCHIVE_SOURCES = [
   {
+    name: "catboy",
+    url: (beatmapsetId: string) => `https://catboy.best/d/${encodeURIComponent(beatmapsetId)}`,
+  },
+  {
     name: "nerinyan",
     url: (beatmapsetId: string) => `https://api.nerinyan.moe/d/${encodeURIComponent(beatmapsetId)}`,
   },
   {
     name: "osu.direct",
     url: (beatmapsetId: string) => `https://osu.direct/api/d/${encodeURIComponent(beatmapsetId)}`,
-  },
-  {
-    name: "catboy",
-    url: (beatmapsetId: string) => `https://catboy.best/d/${encodeURIComponent(beatmapsetId)}`,
   },
 ] as const;
 
@@ -72,6 +72,10 @@ function isArchiveSourceCoolingDown(source: ArchiveSourceName, now = Date.now())
 
 function cooldownArchiveSource(source: ArchiveSourceName): void {
   getArchiveSourceState(source).cooldownUntil = Date.now() + ARCHIVE_SOURCE_COOLDOWN_MS;
+}
+
+function shouldCooldownArchiveSource(status: number): boolean {
+  return status === 403 || status === 429 || status >= 500;
 }
 
 function pruneArchiveCache(now = Date.now()): void {
@@ -161,9 +165,11 @@ export async function getBeatmapArchive(beatmapsetId: string): Promise<JSZip> {
       }
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
+      let shouldCooldown = false;
       try {
         const archiveResponse = await withArchiveSourceSlot(source.name, () => fetch(source.url(beatmapsetId), { signal: controller.signal }));
         if (!archiveResponse.ok) {
+          shouldCooldown = shouldCooldownArchiveSource(archiveResponse.status);
           throw new Error(`${source.name} returned ${archiveResponse.status}`);
         }
 
@@ -173,7 +179,9 @@ export async function getBeatmapArchive(beatmapsetId: string): Promise<JSZip> {
         }
         return JSZip.loadAsync(archiveBuffer);
       } catch (error) {
-        cooldownArchiveSource(source.name);
+        if (shouldCooldown || (error instanceof Error && error.name === "AbortError")) {
+          cooldownArchiveSource(source.name);
+        }
         const message = error instanceof Error ? error.message : String(error);
         errors.push(`${source.name}: ${message}`);
       } finally {
