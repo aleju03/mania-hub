@@ -413,7 +413,7 @@ function KpiCard({
 
 function SectionCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/30 overflow-hidden flex flex-col w-full">
+    <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/30 flex flex-col w-full">
       <div className="px-4 pt-3 pb-2 border-b border-osu-b3/20">
         <div className="text-[11px] font-semibold text-osu-c2 uppercase tracking-wider">{title}</div>
         {subtitle ? <div className="text-[10px] text-osu-f1 mt-0.5">{subtitle}</div> : null}
@@ -688,7 +688,7 @@ function AdminButton({
     <button
       onClick={onClick}
       disabled={busy}
-      className="relative inline-grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 rounded-md bg-osu-b4/60 border border-osu-b3/30 px-2.5 py-1.5 text-left text-[10px] font-semibold text-osu-l2 hover:bg-osu-b3/60 hover:text-white transition-colors duration-[120ms] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+      className="group relative inline-grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 rounded-md bg-osu-b4/60 border border-osu-b3/30 px-2.5 py-1.5 text-left text-[10px] font-semibold text-osu-l2 hover:bg-osu-b3/60 hover:text-white transition-colors duration-[120ms] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
       aria-label={`${label}. ${description}`}
     >
       <span className="flex h-4 w-4 items-center justify-center">
@@ -696,11 +696,11 @@ function AdminButton({
       </span>
       <span className="min-w-0 truncate">{label}</span>
       <span
-        className="group/info relative flex h-4 w-4 items-center justify-center rounded-full text-osu-f1 hover:text-osu-pink-light"
-        aria-label={description}
+        className="relative flex h-4 w-4 items-center justify-center rounded-full text-osu-f1 group-hover:text-osu-pink-light"
+        aria-hidden="true"
       >
         <HelpCircle className="h-3.5 w-3.5" />
-        <span className="pointer-events-none absolute right-0 top-6 z-20 hidden w-56 rounded-md border border-osu-b3/40 bg-osu-b5 px-2.5 py-2 text-[10px] font-medium leading-relaxed text-osu-l2 shadow-xl shadow-black/30 group-hover/info:block">
+        <span className="pointer-events-none absolute right-0 top-6 z-30 hidden w-56 rounded-md border border-osu-b3/40 bg-osu-b5 px-2.5 py-2 text-[10px] font-medium leading-relaxed text-osu-l2 shadow-xl shadow-black/30 group-hover:block group-focus-visible:block">
           {description}
         </span>
       </span>
