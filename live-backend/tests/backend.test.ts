@@ -15,12 +15,13 @@ import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { LiveEventLog } from "../src/live/event-log.js";
 import { TokenBucketLimiter } from "../src/osu/client.js";
+import { WorkerRunner } from "../src/workers.js";
 import type { OscScore } from "../src/shared/types.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 let dir = "";
 
-async function setup() {
+async function setup(trackedCountries = ["CR"]) {
   dir = await mkdtemp(join(tmpdir(), "mania-live-"));
   const db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
   await migrate(db);
@@ -28,7 +29,7 @@ async function setup() {
   const events = new LiveEventLog(db);
   const ingestor = new ScoreIngestor(db, queue, events, {
     topPlayMarginPp: 5,
-    trackedCountries: ["CR"],
+    trackedCountries,
     countryWarmTtlMs: 24 * 60 * 60 * 1000,
     osuClientId: "test-client",
     osuClientSecret: "test-secret",
@@ -71,6 +72,82 @@ describe("live backend", () => {
     const jobs = (await exec(db, "select type, count(*) as count from jobs group by type order by type")).rows;
     expect(jobs.map((row) => row.type)).toContain("enrich_user");
     expect(jobs.map((row) => row.type)).toContain("enrich_beatmap");
+  });
+
+  it("queues active-user recent reconciliation from oSC ingestion", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T00:05:00.000Z"));
+    const { db, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    await ingestor.ingestBatch([scores[0]]);
+    const rows = (await exec(db, "select type, dedupe_key from jobs where type = 'reconcile_user_recent_scores'")).rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].dedupe_key).toBe("recent:user:101");
+  });
+
+  it("reconciles id-zero graveyard recent scores once and fans them out by tracked country", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T00:05:00.000Z"));
+    const { db, queue, events, ingestor } = await setup(["CR", "US"]);
+    await exec(db, "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('CR', 101, 1, 'test', 1, ?)", [new Date().toISOString()]);
+    await exec(db, "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('US', 101, 1, 'test', 1, ?)", [new Date().toISOString()]);
+    await queue.enqueue("reconcile_user_recent_scores", "recent:user:101", { userId: 101 }, { priority: 100 });
+
+    const recentScore: OscScore = {
+      id: 0,
+      user_id: 101,
+      ruleset_id: 3,
+      accuracy: 0.925,
+      beatmap_id: 777,
+      mods: [],
+      score: 765432,
+      total_score: 765432,
+      max_combo: 777,
+      passed: true,
+      rank: "A",
+      statistics: { count_geki: 700, count_300: 200, count_katu: 30, count_100: 10, count_50: 0, count_miss: 0 },
+      pp: null,
+      beatmap: { id: 777, beatmapset_id: 70, difficulty_rating: 4.8, mode: "mania", status: "graveyard", cs: 4, bpm: 180, max_combo: 777, version: "[4K] practice", url: "https://osu.ppy.sh/beatmaps/777" },
+      beatmapset: { id: 70, title: "Practice Pack", artist: "Mapper", creator: "mapper", covers: { cover: "https://assets.example/cover.jpg" }, status: "graveyard" },
+      user: { id: 101, username: "Sniper", avatar_url: "https://assets.example/sniper.png", country_code: "CR" },
+      created_at: "2026-05-12T00:04:00.000Z",
+      ended_at: "2026-05-12T00:04:00.000Z",
+      has_replay: false,
+      type: "solo_score",
+    };
+    const failedRecentScore: OscScore = {
+      ...recentScore,
+      id: 0,
+      rank: "F",
+      passed: false,
+      ended_at: "2026-05-12T00:04:30.000Z",
+      created_at: "2026-05-12T00:04:30.000Z",
+    };
+    const osu = { getUserRecentScores: vi.fn(async () => [failedRecentScore, recentScore]) };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+    await queue.enqueue("reconcile_user_recent_scores", "recent:user:101:manual", { userId: 101 }, { priority: 100 });
+    await worker.runOnce();
+
+    expect(osu.getUserRecentScores).toHaveBeenCalledTimes(2);
+    expect(Number((await exec(db, "select count(*) as count from score_events")).rows[0].count)).toBe(2);
+    expect(Number((await exec(db, "select count(*) as count from top_play_events")).rows[0].count)).toBe(0);
+    expect(Number((await exec(db, "select count(*) as count from snipe_events")).rows[0].count)).toBe(0);
+    const countries = (await exec(db, "select country, count(*) as count from score_events group by country order by country")).rows;
+    expect(countries.map((row) => `${row.country}:${row.count}`)).toEqual(["CR:1", "US:1"]);
+    expect((await events.replay("CR", 0)).some((event) => event.type === "tracker_score")).toBe(true);
+    expect((await events.replay("US", 0)).some((event) => event.type === "tracker_score")).toBe(true);
+  });
+
+  it("dedupes reconciled stable scores against oSC legacy score ids", async () => {
+    const { db, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    const oscScore = { ...scores[0], legacy_score_id: 4444 };
+    const recentScore = { ...scores[0], id: 4444, legacy_score_id: undefined };
+    expect(await ingestor.ingestBatch([oscScore], "osc_socket")).toEqual({ inserted: 1, skipped: 0 });
+    expect(await ingestor.ingestBatch([recentScore], "osu_recent", { enqueueRecentReconcile: false, processLeaderboardFeatures: false })).toEqual({ inserted: 0, skipped: 1 });
+    expect(Number((await exec(db, "select count(*) as count from score_events")).rows[0].count)).toBe(1);
   });
 
   it("updates the oSC cursor for metadata-light tracked scores", async () => {

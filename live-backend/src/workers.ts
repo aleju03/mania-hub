@@ -25,7 +25,7 @@ interface WorkerLane {
 const DEFAULT_WORKER_LANES: WorkerLane[] = [
   {
     name: "fast",
-    jobTypes: ["refresh_user_top_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "osc_backfill"],
+    jobTypes: ["refresh_user_top_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "osc_backfill", "reconcile_user_recent_scores"],
     claimLimit: 4,
     intervalMs: 750,
   },
@@ -157,6 +157,10 @@ export class WorkerRunner {
       await this.events.append("status", null, { type: "osc_backfill", ...result }, `osc_backfill:${job.id}:${job.attempts}`);
       return;
     }
+    if (job.type === "reconcile_user_recent_scores") {
+      await this.reconcileUserRecentScores(job.payload as { userId: number });
+      return;
+    }
     if (job.type === "refresh_country_roster") {
       const payload = job.payload as { country: string };
       await refreshCountryRoster(this.db, this.osu, payload.country, "job:refresh_country_roster");
@@ -265,6 +269,38 @@ export class WorkerRunner {
     }
   }
 
+  private async reconcileUserRecentScores(payload: { userId: number }): Promise<void> {
+    const userId = Number(payload.userId);
+    if (!Number.isFinite(userId) || userId <= 0) return;
+    const scores = (await this.osu.getUserRecentScores(userId, "job:reconcile_user_recent_scores"))
+      .filter((score) => score.passed)
+      .map((score) => ({ ...score, ruleset_id: score.ruleset_id ?? 3 }));
+    await this.ingestor.ingestBatch(scores, "osu_recent", {
+      enqueueRecentReconcile: false,
+      processLeaderboardFeatures: false,
+    });
+    if (await this.isUserActive(userId)) {
+      const runAfter = new Date(Date.now() + 2 * 60_000);
+      const bucket = Math.floor(runAfter.getTime() / (2 * 60_000));
+      await this.queue.enqueue(
+        "reconcile_user_recent_scores",
+        `recent:user:${userId}:next:${bucket}`,
+        { userId },
+        { priority: 25, runAfter },
+      );
+    }
+  }
+
+  private async isUserActive(userId: number): Promise<boolean> {
+    const cutoff = new Date(Date.now() - 40 * 60_000).toISOString();
+    const row = (await exec(
+      this.db,
+      "select 1 from score_events where user_id = ? and ended_at >= ? limit 1",
+      [userId, cutoff],
+    )).rows[0];
+    return !!row;
+  }
+
   private async seedSnipeBoard(payload: { country: string; beatmapId: number; laneKey: string }): Promise<void> {
     const config = readConfig();
     const roster = (await exec(this.db, "select user_id from country_rosters where country = ? and is_tracked = 1 order by rank asc limit ?", [payload.country, config.rosterSize])).rows;
@@ -334,6 +370,8 @@ function getRetryDelayMs(type: string, attempts: number, error: unknown): number
   const nextAttempt = Math.max(1, attempts + 1);
   const base = type === "refresh_user_top_scores"
     ? 15_000
+    : type === "reconcile_user_recent_scores"
+      ? 2 * 60_000
     : type === "osc_backfill"
       ? 60_000
     : type === "refresh_country_maps"

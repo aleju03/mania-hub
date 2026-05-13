@@ -121,6 +121,10 @@ export class OsuApiClient {
     return [...firstPage, ...secondPage];
   }
 
+  async getUserRecentScores(userId: number, caller = "unknown"): Promise<OscScore[]> {
+    return this.getJson(`/users/${userId}/scores/recent?mode=mania&include_fails=1&limit=20`, caller) as Promise<OscScore[]>;
+  }
+
   async getUserMostPlayed(userId: number, caller = "unknown"): Promise<unknown[]> {
     return this.getJson(`/users/${userId}/beatmapsets/most_played?limit=100&offset=0`, caller);
   }

@@ -61,6 +61,20 @@ export async function getTrackerScoreById(db: Db, scoreId: number): Promise<{ co
   return { country: String(row.country), score: toLeanTrackerScore(score) };
 }
 
+export async function getTrackerScoreByIdentity(db: Db, country: string, scoreIdentity: string): Promise<{ country: string; score: LeanTrackerScore } | null> {
+  const row = (await exec(
+    db,
+    `${trackerScoreSelectSql()}
+     where se.country = ? and se.score_identity = ? and se.passed = 1
+     limit 1`,
+    [country, scoreIdentity],
+  )).rows[0];
+  if (!row) return null;
+  const score = hydrateScoreMetadata(row, parseJson<OscScore | null>(row.score_json, null));
+  if (!score?.beatmap || !score.beatmapset || !score.user || row.country == null) return null;
+  return { country: String(row.country), score: toLeanTrackerScore(score) };
+}
+
 export async function getHydratedTrackerScoresForMetadata(db: Db, filter: { userId?: number; beatmapId?: number }, limit = 10): Promise<Array<{ country: string; score: LeanTrackerScore }>> {
   const clauses: string[] = [];
   const args: Array<string | number> = [];

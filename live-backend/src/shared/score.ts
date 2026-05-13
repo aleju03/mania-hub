@@ -58,6 +58,24 @@ export function getDisplayedTotalScore(score: ScoreLike): number | null {
   return getPreferredTotalScore(score, isLazerScore(score));
 }
 
+export function getScoreIdentity(score: ScoreLike): string {
+  const officialId = score.legacy_score_id ?? score.id;
+  if (officialId > 0) return `official:${officialId}`;
+  const beatmapId = score.beatmap_id ?? score.beatmap?.id ?? "unknown";
+  const timestamp = score.ended_at ?? score.created_at ?? score.started_at ?? "unknown";
+  const mods = getModAcronyms(score.mods, false).join(",");
+  return [
+    "recent",
+    score.user_id,
+    beatmapId,
+    timestamp,
+    mods,
+    score.rank,
+    Math.round(getDisplayedAccuracy(score) * 1_000_000),
+    getDisplayedTotalScore(score) ?? score.score ?? 0,
+  ].join(":");
+}
+
 export function getDisplayedAccuracy(score: ScoreLike): number {
   if (isLazerScore(score) && Number.isFinite(score.accuracy) && score.accuracy > 0) return score.accuracy;
   return calculateStableAccuracy(score.statistics) || score.accuracy;

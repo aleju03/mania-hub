@@ -21,6 +21,7 @@ export async function migrate(db: Db): Promise<void> {
   for (const statement of splitSql(sql)) {
     await db.execute(statement);
   }
+  await migrateScoreEventsIdentity(db);
 }
 
 export async function dbHealth(db: Db): Promise<boolean> {
@@ -54,4 +55,64 @@ export function parseJson<T>(value: unknown, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+async function migrateScoreEventsIdentity(db: Db): Promise<void> {
+  const columns = (await db.execute("pragma table_info(score_events)")).rows.map((row) => String(row.name));
+  if (columns.includes("score_identity")) return;
+
+  await db.execute("alter table score_events rename to score_events_old");
+  await db.execute(`
+    create table score_events (
+      id integer primary key autoincrement,
+      score_id integer not null,
+      score_identity text not null,
+      legacy_score_id integer,
+      user_id integer not null,
+      country text,
+      beatmap_id integer not null,
+      ruleset_id integer not null,
+      score_json text not null,
+      pp real,
+      total_score integer,
+      accuracy real,
+      rank text,
+      passed integer not null,
+      processed integer not null default 0,
+      is_lazer integer not null,
+      has_replay integer not null,
+      ended_at text not null,
+      received_at text not null,
+      source text not null,
+      unique(country, score_identity)
+    )
+  `);
+  await db.execute(`
+    insert or ignore into score_events (
+      score_id, score_identity, legacy_score_id, user_id, country, beatmap_id, ruleset_id, score_json,
+      pp, total_score, accuracy, rank, passed, processed, is_lazer, has_replay, ended_at, received_at, source
+    )
+    select
+      score_id,
+      'official:' || coalesce(legacy_score_id, score_id),
+      legacy_score_id,
+      user_id,
+      country,
+      beatmap_id,
+      ruleset_id,
+      score_json,
+      pp,
+      total_score,
+      accuracy,
+      rank,
+      passed,
+      processed,
+      is_lazer,
+      has_replay,
+      ended_at,
+      received_at,
+      source
+    from score_events_old
+  `);
+  await db.execute("drop table score_events_old");
 }

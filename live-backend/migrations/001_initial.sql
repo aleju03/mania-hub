@@ -69,7 +69,9 @@ create table if not exists beatmaps (
 );
 
 create table if not exists score_events (
-  score_id integer primary key,
+  id integer primary key autoincrement,
+  score_id integer not null,
+  score_identity text not null,
   legacy_score_id integer,
   user_id integer not null,
   country text,
@@ -86,7 +88,8 @@ create table if not exists score_events (
   has_replay integer not null,
   ended_at text not null,
   received_at text not null,
-  source text not null
+  source text not null,
+  unique(country, score_identity)
 );
 
 create table if not exists country_beatmap_scores (

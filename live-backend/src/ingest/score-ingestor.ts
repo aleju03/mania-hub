@@ -4,12 +4,17 @@ import { exec, json } from "../db.js";
 import { getActiveCountryCodes, markCountryScoreSeen } from "../countries.js";
 import { updateSnipeProjection } from "../features/snipes.js";
 import { maybeEnqueueTopPlayRefresh } from "../features/top-plays.js";
-import { getTrackerScoreById } from "../features/tracker.js";
+import { getTrackerScoreByIdentity } from "../features/tracker.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { LiveEventLog } from "../live/event-log.js";
-import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, isLazerScore, nowIso, scoreHasPublicLeaderboard, scoreHasReplay } from "../shared/score.js";
+import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, getScoreIdentity, isLazerScore, nowIso, scoreHasPublicLeaderboard, scoreHasReplay } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 import { logInfo } from "../logger.js";
+
+export interface ScoreIngestOptions {
+  enqueueRecentReconcile?: boolean;
+  processLeaderboardFeatures?: boolean;
+}
 
 export class ScoreIngestor {
   constructor(
@@ -19,74 +24,92 @@ export class ScoreIngestor {
     private readonly config: Pick<Config, "topPlayMarginPp" | "trackedCountries" | "countryWarmTtlMs" | "osuClientId" | "osuClientSecret">,
   ) {}
 
-  async ingestBatch(scores: OscScore[], source = "osc_socket"): Promise<{ inserted: number; skipped: number }> {
+  async ingestBatch(scores: OscScore[], source = "osc_socket", options: ScoreIngestOptions = {}): Promise<{ inserted: number; skipped: number }> {
     let inserted = 0;
     let skipped = 0;
     for (const score of scores) {
-      const didInsert = await this.ingestScore(score, source);
+      const didInsert = await this.ingestScore(score, source, options);
       if (didInsert) inserted++;
       else skipped++;
     }
     return { inserted, skipped };
   }
 
-  async ingestScore(score: OscScore, source = "osc_socket"): Promise<boolean> {
-    if (score.ruleset_id !== 3) return false;
+  async ingestScore(score: OscScore, source = "osc_socket", options: ScoreIngestOptions = {}): Promise<boolean> {
+    const enqueueRecentReconcile = options.enqueueRecentReconcile ?? source !== "osu_recent";
+    const processLeaderboardFeatures = options.processLeaderboardFeatures ?? source !== "osu_recent";
+    if (score.ruleset_id != null && score.ruleset_id !== 3) return false;
     const scoreId = Number(score.id);
     const beatmapId = Number(score.beatmap_id ?? score.beatmap?.id);
-    if (!Number.isFinite(scoreId) || scoreId <= 0 || !Number.isFinite(beatmapId) || beatmapId <= 0) return false;
+    if (!Number.isFinite(scoreId) || scoreId < 0 || !Number.isFinite(beatmapId) || beatmapId <= 0) return false;
     const receivedAt = nowIso();
-    const country = await this.getTrackedCountry(score);
-    if (!country) return false;
-    logInfo("score_ingest", { score_id: scoreId, user_id: score.user_id, country, beatmap_id: beatmapId, source });
+    const countries = await this.getTrackedCountries(score);
+    if (countries.length === 0) return false;
+    logInfo("score_ingest", { score_id: scoreId, user_id: score.user_id, countries, beatmap_id: beatmapId, source });
     await this.persistMetadata(score);
     const totalScore = getDisplayedTotalScore(score);
-    const result = await exec(
-      this.db,
-      `insert or ignore into score_events
-       (score_id, legacy_score_id, user_id, country, beatmap_id, ruleset_id, score_json, pp, total_score, accuracy, rank, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        scoreId,
-        score.legacy_score_id ?? null,
-        score.user_id,
-        country,
-        beatmapId,
-        3,
-        json(score),
-        score.pp,
-        totalScore,
-        getDisplayedAccuracy(score),
-        score.rank,
-        score.passed ? 1 : 0,
-        score.processed ? 1 : 0,
-        isLazerScore(score) ? 1 : 0,
-        scoreHasReplay(score) ? 1 : 0,
-        score.ended_at ?? score.created_at ?? receivedAt,
-        receivedAt,
-        source,
-      ],
-    );
-    if (result.rowsAffected === 0) return false;
-    await markCountryScoreSeen(this.db, country);
-    await this.updateOscCursor(score, receivedAt);
+    const scoreIdentity = getScoreIdentity(score);
+    let inserted = 0;
+    for (const country of countries) {
+      const result = await exec(
+        this.db,
+        `insert or ignore into score_events
+         (score_id, score_identity, legacy_score_id, user_id, country, beatmap_id, ruleset_id, score_json, pp, total_score, accuracy, rank, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          scoreId,
+          scoreIdentity,
+          score.legacy_score_id ?? null,
+          score.user_id,
+          country,
+          beatmapId,
+          3,
+          json(score),
+          score.pp,
+          totalScore,
+          getDisplayedAccuracy(score),
+          score.rank,
+          score.passed ? 1 : 0,
+          score.processed ? 1 : 0,
+          isLazerScore(score) ? 1 : 0,
+          scoreHasReplay(score) ? 1 : 0,
+          score.ended_at ?? score.created_at ?? receivedAt,
+          receivedAt,
+          source,
+        ],
+      );
+      if (result.rowsAffected === 0) continue;
+      inserted++;
+      await markCountryScoreSeen(this.db, country);
+      const liveScore = await getTrackerScoreByIdentity(this.db, country, scoreIdentity);
+      if (liveScore) {
+        await this.events.append("tracker_score", liveScore.country, liveScore.score, `tracker_score:${liveScore.country}:${scoreIdentity}`);
+      }
+    }
+    if (inserted === 0) return false;
+    if (source.startsWith("osc_")) await this.updateOscCursor(score, receivedAt);
     const canUseOsuApi = this.canUseOsuApi();
-    if (canUseOsuApi && country && !score.user) {
+    if (canUseOsuApi && !score.user) {
       await this.queue.enqueue("enrich_user", `user:${score.user_id}`, { userId: score.user_id }, { priority: 100 });
     }
-    if (canUseOsuApi && country && (!score.beatmap || !score.beatmapset)) {
+    if (canUseOsuApi && (!score.beatmap || !score.beatmapset)) {
       await this.queue.enqueue("enrich_beatmap", `beatmap:${beatmapId}`, { beatmapId }, { priority: 90 });
     }
-    const liveScore = await getTrackerScoreById(this.db, scoreId);
-    if (liveScore) {
-      await this.events.append("tracker_score", liveScore.country, liveScore.score, `tracker_score:${liveScore.country}:${score.id}`);
+    if (canUseOsuApi && enqueueRecentReconcile) {
+      await this.enqueueRecentReconcileIfDue(score);
     }
-    if (!country || !score.beatmap || !score.beatmapset || !score.user) return true;
-    if (canUseOsuApi) {
-      await maybeEnqueueTopPlayRefresh(this.db, this.queue, country, score, this.config.topPlayMarginPp);
-      await this.enqueueSnipeSeedIfNeeded(country, score);
+    if (!score.beatmap || !score.beatmapset || !score.user) return true;
+    if (canUseOsuApi && processLeaderboardFeatures) {
+      for (const country of countries) {
+        await maybeEnqueueTopPlayRefresh(this.db, this.queue, country, score, this.config.topPlayMarginPp);
+        await this.enqueueSnipeSeedIfNeeded(country, score);
+      }
     }
-    await updateSnipeProjection(this.db, this.events, country, score);
+    if (processLeaderboardFeatures) {
+      for (const country of countries) {
+        await updateSnipeProjection(this.db, this.events, country, score);
+      }
+    }
     return true;
   }
 
@@ -124,14 +147,39 @@ export class ScoreIngestor {
     );
   }
 
-  private async getTrackedCountry(score: OscScore): Promise<string | null> {
+  private async enqueueRecentReconcileIfDue(score: OscScore): Promise<void> {
+    const scoreTime = new Date(score.ended_at ?? score.created_at ?? 0).getTime();
+    if (!Number.isFinite(scoreTime) || Date.now() - scoreTime > 40 * 60_000) return;
+    const userId = score.user_id;
+    const dedupeKey = `recent:user:${userId}`;
+    const pending = (await exec(
+      this.db,
+      "select 1 from jobs where type = 'reconcile_user_recent_scores' and payload_json = ? and status in ('queued', 'failed', 'running') limit 1",
+      [json({ userId })],
+    )).rows[0];
+    if (pending) return;
+    const row = (await exec(
+      this.db,
+      "select status, updated_at from jobs where dedupe_key = ?",
+      [dedupeKey],
+    )).rows[0];
+    if (row && String(row.status) !== "done") return;
+    const updatedAt = row?.updated_at == null ? 0 : new Date(String(row.updated_at)).getTime();
+    if (Number.isFinite(updatedAt) && Date.now() - updatedAt < 2 * 60_000) return;
+    await this.queue.enqueue("reconcile_user_recent_scores", dedupeKey, { userId }, { priority: 70, replaceDone: true });
+  }
+
+  private async getTrackedCountries(score: OscScore): Promise<string[]> {
     const trackedCountrySet = new Set(await getActiveCountryCodes(this.db, this.config));
     const knownRows = (await exec(this.db, "select country from country_rosters where user_id = ? and is_tracked = 1", [score.user_id])).rows;
-    const known = knownRows.map((row) => String(row.country).toUpperCase()).find((country) => trackedCountrySet.has(country));
-    if (known) return known;
+    const countries = new Set(
+      knownRows
+        .map((row) => String(row.country).toUpperCase())
+        .filter((country) => trackedCountrySet.has(country)),
+    );
     const userCountry = score.user?.country_code?.toUpperCase();
-    if (userCountry && trackedCountrySet.has(userCountry)) return userCountry;
-    return null;
+    if (userCountry && trackedCountrySet.has(userCountry)) countries.add(userCountry);
+    return [...countries];
   }
 
   private async persistMetadata(score: OscScore): Promise<void> {
