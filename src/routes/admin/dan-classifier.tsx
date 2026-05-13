@@ -10,7 +10,7 @@ import { formatNumber } from "../../lib/format";
 import { getBeatmapFile, getBeatmapset, getBeatmapsetForBeatmap, getUser, getUserScoresBestWindow, searchBeatmaps, searchBeatmapsByMappers } from "../../lib/osu";
 import type { DanEstimate } from "../../lib/dan-estimator";
 import type { OsuBeatmap, OsuBeatmapset, OsuScore } from "../../lib/types";
-import { canUseDevFeatures, isAdmin } from "../../lib/auth-shared";
+import { canUseAdminFeatures, canUseDevFeatures } from "../../lib/auth-shared";
 import {
   type DanBenchmarkFamily,
   getBenchmarkBeatmapIds,
@@ -534,7 +534,7 @@ export const Route = createFileRoute("/admin/dan-classifier")({
 
 function DanClassifierPage() {
   const { auth } = Route.useRouteContext();
-  const canUseBenchmark = isAdmin(auth);
+  const canUseBenchmark = canUseAdminFeatures(auth);
   const [view, setView] = useState<"search" | "benchmark">("search");
   const [benchmarkFamily, setBenchmarkFamily] = useState<DanBenchmarkFamily>("normal");
   const [query, setQuery] = useState("");

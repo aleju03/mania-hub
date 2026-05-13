@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireTrueAdminAccess } from "./auth";
+import { requireAdminAccess } from "./auth";
 import { db, ensureCacheSchema, hasDb } from "./db";
 import type { DanBenchmarkFamily } from "./dan-benchmark-sets";
 
@@ -42,7 +42,7 @@ function normalizeSavePayload(input: unknown): {
 export const getDanBenchmarkLabels = createServerFn({ method: "GET" })
   .inputValidator(normalizeListPayload)
   .handler(async ({ data }: { data: { family: DanBenchmarkFamily } }): Promise<DanBenchmarkLabel[]> => {
-    await requireTrueAdminAccess("getDanBenchmarkLabels");
+    await requireAdminAccess("getDanBenchmarkLabels");
     if (!hasDb() || !db) return [];
     await ensureCacheSchema();
 
@@ -80,7 +80,7 @@ function normalizeHidePayload(input: unknown): {
 export const getDanBenchmarkHiddenDiffs = createServerFn({ method: "GET" })
   .inputValidator(normalizeListPayload)
   .handler(async ({ data }: { data: { family: DanBenchmarkFamily } }): Promise<number[]> => {
-    await requireTrueAdminAccess("getDanBenchmarkHiddenDiffs");
+    await requireAdminAccess("getDanBenchmarkHiddenDiffs");
     if (!hasDb() || !db) return [];
     await ensureCacheSchema();
 
@@ -95,7 +95,7 @@ export const getDanBenchmarkHiddenDiffs = createServerFn({ method: "GET" })
 export const setDanBenchmarkHiddenDiff = createServerFn({ method: "POST" })
   .inputValidator(normalizeHidePayload)
   .handler(async ({ data }: { data: { beatmapId: number; family: DanBenchmarkFamily; hidden: boolean } }): Promise<{ ok: true }> => {
-    await requireTrueAdminAccess("setDanBenchmarkHiddenDiff");
+    await requireAdminAccess("setDanBenchmarkHiddenDiff");
     if (!hasDb() || !db) return { ok: true };
     await ensureCacheSchema();
 
@@ -125,7 +125,7 @@ export const setDanBenchmarkHiddenDiff = createServerFn({ method: "POST" })
 export const setDanBenchmarkLabel = createServerFn({ method: "POST" })
   .inputValidator(normalizeSavePayload)
   .handler(async ({ data }: { data: { beatmapId: number; family: DanBenchmarkFamily; expectedLabel: string | null } }): Promise<{ ok: true }> => {
-    await requireTrueAdminAccess("setDanBenchmarkLabel");
+    await requireAdminAccess("setDanBenchmarkLabel");
     if (!hasDb() || !db) return { ok: true };
     await ensureCacheSchema();
 
