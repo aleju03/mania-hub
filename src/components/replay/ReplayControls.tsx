@@ -646,7 +646,7 @@ function InputOverlayMenu({
           showInputOverlay ? activeBtn : inactiveBtn
         }`}
       >
-        Input
+        Inputs
       </button>
       <button
         onClick={() => setOpen((v) => !v)}
