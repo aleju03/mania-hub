@@ -27,6 +27,7 @@ export interface ManiaBeatmap {
   bpm: number;
   notes: ManiaNote[];
   totalLength: number;
+  beatmapsetId?: number | null;
   audioFilename: string;
   previewTime: number;
   backgroundFilename: string;
@@ -128,6 +129,7 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
   let creator = "";
   let circleSize = 4; // CS = key count in mania
   let overallDifficulty = 8;
+  let beatmapsetId: number | null = null;
   let audioFilename = "";
   let previewTime = 0;
   let backgroundFilename = "";
@@ -154,6 +156,10 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
       if (line.startsWith("Artist:")) artist = line.slice(7).trim();
       if (line.startsWith("Version:")) version = line.slice(8).trim();
       if (line.startsWith("Creator:")) creator = line.slice(8).trim();
+      if (line.startsWith("BeatmapSetID:")) {
+        const parsed = Number(line.slice(13).trim());
+        beatmapsetId = Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+      }
     }
 
     if (section === "Events") {
@@ -240,6 +246,7 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
     bpm,
     notes: sortedNotes,
     totalLength,
+    beatmapsetId,
     audioFilename,
     previewTime,
     backgroundFilename,

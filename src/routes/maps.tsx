@@ -592,26 +592,47 @@ function resetAudioElement(audio: HTMLAudioElement | null, unload = false): void
   }
 }
 
-function waitForAudioMetadata(audio: HTMLAudioElement): Promise<void> {
+const AUDIO_METADATA_TIMEOUT_MS = 1500;
+const SELECTED_AUDIO_METADATA_TIMEOUT_MS = 60_000;
+const SELECTED_AUDIO_SEEK_SETTLE_TIMEOUT_MS = 5000;
+
+function waitForAudioMetadata(
+  audio: HTMLAudioElement,
+  timeoutMs = AUDIO_METADATA_TIMEOUT_MS,
+  requireMetadata = false,
+): Promise<void> {
   if (audio.readyState >= HTMLMediaElement.HAVE_METADATA) return Promise.resolve();
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let timeoutId: number | null = null;
-    const done = () => {
+    const done = (loaded: boolean) => {
       if (timeoutId) window.clearTimeout(timeoutId);
-      audio.removeEventListener("loadedmetadata", done);
-      audio.removeEventListener("error", done);
-      resolve();
+      audio.removeEventListener("loadedmetadata", onLoadedMetadata);
+      audio.removeEventListener("error", onError);
+      if (loaded || !requireMetadata) {
+        resolve();
+      } else {
+        reject(new Error("Audio metadata did not load"));
+      }
     };
-    audio.addEventListener("loadedmetadata", done);
-    audio.addEventListener("error", done);
-    timeoutId = window.setTimeout(done, 1500);
+    const onLoadedMetadata = () => done(true);
+    const onError = () => done(false);
+    const onTimeout = () => {
+      done(audio.readyState >= HTMLMediaElement.HAVE_METADATA);
+    };
+    audio.addEventListener("loadedmetadata", onLoadedMetadata);
+    audio.addEventListener("error", onError);
+    timeoutId = window.setTimeout(onTimeout, timeoutMs);
   });
 }
 
 const AUDIO_SEEK_TOLERANCE_SECONDS = 0.25;
 const AUDIO_SEEK_SETTLE_TIMEOUT_MS = 1200;
 
-function waitForAudioSeekSettle(audio: HTMLAudioElement, targetSeconds: number): Promise<void> {
+function waitForAudioSeekSettle(
+  audio: HTMLAudioElement,
+  targetSeconds: number,
+  timeoutMs = AUDIO_SEEK_SETTLE_TIMEOUT_MS,
+): Promise<void> {
   return new Promise((resolve) => {
     let rafId: number | null = null;
     let timeoutId: number | null = null;
@@ -657,20 +678,24 @@ function waitForAudioSeekSettle(audio: HTMLAudioElement, targetSeconds: number):
     audio.addEventListener("loadeddata", scheduleCheck);
     audio.addEventListener("timeupdate", scheduleCheck);
     audio.addEventListener("error", done);
-    timeoutId = window.setTimeout(done, AUDIO_SEEK_SETTLE_TIMEOUT_MS);
+    timeoutId = window.setTimeout(done, timeoutMs);
     scheduleCheck();
   });
 }
 
-async function seekAudioElement(audio: HTMLAudioElement, seconds: number): Promise<void> {
+async function seekAudioElement(
+  audio: HTMLAudioElement,
+  seconds: number,
+  options?: { metadataTimeoutMs?: number; requireMetadata?: boolean; seekSettleTimeoutMs?: number },
+): Promise<void> {
   const targetSeconds = Math.max(0, seconds);
-  await waitForAudioMetadata(audio);
+  await waitForAudioMetadata(audio, options?.metadataTimeoutMs, options?.requireMetadata);
   try {
     audio.currentTime = targetSeconds;
   } catch {
     return;
   }
-  await waitForAudioSeekSettle(audio, targetSeconds);
+  await waitForAudioSeekSettle(audio, targetSeconds, options?.seekSettleTimeoutMs);
 }
 
 function matchesKeyFilter(kc: number | null, filter: KeyFilter): boolean {
@@ -3729,6 +3754,8 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const selectedBeatmap = maniaBeatmaps.find((map) => map.id === selectedBeatmapId) ?? maniaBeatmaps[0] ?? null;
   const selectedDifficultyRate = parseSelectedDifficultyRate(selectedBeatmap, maniaBeatmaps.filter((beatmap) => beatmap.difficultyRating >= 0.5));
   const [previewBeatmap, setPreviewBeatmap] = useState<ManiaBeatmap | null>(null);
+  const metadataBeatmapsetId = selectedBeatmap?.beatmapsetId ?? bm.id;
+  const audioBeatmapsetId = previewBeatmap?.beatmapsetId ?? metadataBeatmapsetId;
   const [replayChartStartMs, setReplayChartStartMs] = useState(0);
   const [replayChartTimeScale, setReplayChartTimeScale] = useState(1);
   const [replayAudioMode, setReplayAudioMode] = useState<"set-preview" | "selected-file">("set-preview");
@@ -3743,7 +3770,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const replayAudioUrl = replayAudioMode === "set-preview"
     ? previewUrl
     : previewBeatmap?.audioFilename
-    ? `/api/audio?beatmapsetId=${encodeURIComponent(String(bm.id))}&filename=${encodeURIComponent(previewBeatmap.audioFilename)}`
+    ? `/api/audio?beatmapsetId=${encodeURIComponent(String(audioBeatmapsetId))}&filename=${encodeURIComponent(previewBeatmap.audioFilename)}`
     : null;
   const replayAudioPlaybackRate = replayAudioMode === "set-preview" ? selectedDifficultyRate : 1;
   const replayClockRateDivisor = replayAudioMode === "set-preview" ? selectedDifficultyRate : 1;
@@ -3788,7 +3815,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     replayAudioClockAnchorRef.current = null;
     replayAudioStartSecondsRef.current = 0;
     requestedAudioModeRef.current = null;
-  }, [bm.id, maniaBeatmaps]);
+  }, [metadataBeatmapsetId, maniaBeatmaps]);
 
   useEffect(() => {
     if (!selectedBeatmap || !replayPreviewRequested) {
@@ -3815,8 +3842,8 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     const referenceBeatmap = usesSetPreviewForReplayAudio ? getSetPreviewReferenceBeatmap(maniaBeatmaps) : null;
     const referenceBeatmapId = referenceBeatmap?.id && referenceBeatmap.id !== selectedBeatmap.id ? referenceBeatmap.id : null;
     Promise.all([
-      getBeatmapFileWithRetry(selectedBeatmap.id, bm.id),
-      referenceBeatmapId ? getBeatmapFileWithRetry(referenceBeatmapId, bm.id).catch(() => null) : Promise.resolve(null),
+      getBeatmapFileWithRetry(selectedBeatmap.id, metadataBeatmapsetId),
+      referenceBeatmapId ? getBeatmapFileWithRetry(referenceBeatmapId, metadataBeatmapsetId).catch(() => null) : Promise.resolve(null),
     ])
       .then(([selectedResult, referenceResult]) => {
         if (cancelled) return;
@@ -3851,7 +3878,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     return () => {
       cancelled = true;
     };
-  }, [maniaBeatmaps, replayPreviewRequested, selectedBeatmap, selectedDifficultyRate, usesSetPreviewForReplayAudio]);
+  }, [maniaBeatmaps, metadataBeatmapsetId, replayPreviewRequested, selectedBeatmap, selectedDifficultyRate, usesSetPreviewForReplayAudio]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
@@ -4050,6 +4077,15 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     setPreviewError(null);
     replayAudioStartSecondsRef.current = replayPreviewStartSeconds;
     audio.pause();
+    const isSelectedFileAudio = replayAudioMode === "selected-file";
+    if (isSelectedFileAudio) {
+      audio.preload = "auto";
+      try {
+        audio.load();
+      } catch {
+        // Some browsers may reject load() while React is still swapping sources.
+      }
+    }
     try {
       audio.currentTime = replayPreviewStartSeconds;
     } catch {
@@ -4059,8 +4095,8 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     audio.playbackRate = replayAudioPlaybackRate;
     setAudioPreservesPitch(audio, replayAudioMode !== "set-preview");
     try {
-      setReplayAudioLoading(replayAudioMode === "selected-file");
-      if (replayAudioMode === "selected-file" && replayAudioSizeBytes == null) {
+      setReplayAudioLoading(isSelectedFileAudio);
+      if (isSelectedFileAudio && replayAudioSizeBytes == null) {
         try {
           const sizeResponse = await fetch(replayAudioUrl, { method: "HEAD" });
           if (!isCurrentRequest()) {
@@ -4078,7 +4114,13 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         resetAudioElement(audio);
         return;
       }
-      await seekAudioElement(audio, replayPreviewStartSeconds);
+      await seekAudioElement(audio, replayPreviewStartSeconds, isSelectedFileAudio
+        ? {
+          metadataTimeoutMs: SELECTED_AUDIO_METADATA_TIMEOUT_MS,
+          requireMetadata: true,
+          seekSettleTimeoutMs: SELECTED_AUDIO_SEEK_SETTLE_TIMEOUT_MS,
+        }
+        : undefined);
       if (!isCurrentRequest()) {
         resetAudioElement(audio);
         return;

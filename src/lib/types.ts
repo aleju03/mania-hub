@@ -424,6 +424,7 @@ export interface MapsFavouriteBeatmapset {
   maniaKeys: number[];
   maniaBeatmaps: Array<{
     id: number;
+    beatmapsetId?: number;
     version: string;
     difficultyRating: number;
     totalLength: number;

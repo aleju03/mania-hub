@@ -2944,6 +2944,7 @@ async function buildCountryFavourites(users: MapsUser[]): Promise<CountryMapsFav
               maniaBeatmaps: maniaBeatmaps
                 .map((bm) => ({
                   id: bm.id,
+                  beatmapsetId: bm.beatmapset_id,
                   version: bm.version,
                   difficultyRating: bm.difficulty_rating,
                   totalLength: bm.total_length,

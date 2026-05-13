@@ -135,6 +135,12 @@ async function readResponseBufferWithLimit(response: Response, limitBytes: numbe
   return out.buffer;
 }
 
+function isLikelyZip(buffer: ArrayBuffer): boolean {
+  if (buffer.byteLength < 4) return false;
+  const bytes = new Uint8Array(buffer, 0, 4);
+  return bytes[0] === 0x50 && bytes[1] === 0x4b;
+}
+
 export async function getBeatmapArchive(beatmapsetId: string): Promise<JSZip> {
   const now = Date.now();
   const cached = archiveCache.get(beatmapsetId);
@@ -162,6 +168,9 @@ export async function getBeatmapArchive(beatmapsetId: string): Promise<JSZip> {
         }
 
         const archiveBuffer = await readResponseBufferWithLimit(archiveResponse, MAX_ARCHIVE_BYTES);
+        if (!isLikelyZip(archiveBuffer)) {
+          throw new Error(`${source.name} returned a non-zip response`);
+        }
         return JSZip.loadAsync(archiveBuffer);
       } catch (error) {
         cooldownArchiveSource(source.name);
