@@ -19,6 +19,7 @@ export interface Config {
   rosterRefreshIntervalMs: number;
   rosterRankingPages: number;
   rosterSize: number;
+  mapsRefreshIntervalMs: number;
   oscBackfillMaxAgeMs: number;
   oscBackfillPageLimit: number;
   oscBackfillMaxPages: number;
@@ -30,6 +31,10 @@ export interface Config {
   replayVideoJobRetentionDays: number;
   maxLocalDbBytes: number;
   targetLocalDbBytes: number;
+  replayVideoOptimize: boolean;
+  replayVideoOptimizeCrf: number;
+  replayVideoOptimizePreset: string;
+  replayVideoAudioBitrate: string;
   replayVideoPublicOrigin: string;
   replayVideoWorkDir: string;
   r2Endpoint?: string;
@@ -42,6 +47,16 @@ export interface Config {
 function readInt(name: string, fallback: number): number {
   const value = Number(process.env[name]);
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+}
+
+function readBool(name: string, fallback: boolean): boolean {
+  const value = process.env[name];
+  if (value == null || value.trim() === "") return fallback;
+  return /^(1|true|yes|on)$/i.test(value.trim());
+}
+
+function readBoundedInt(name: string, fallback: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, readInt(name, fallback)));
 }
 
 function csv(value: string | undefined, fallback: string): string[] {
@@ -73,6 +88,7 @@ export function readConfig(): Config {
     rosterRefreshIntervalMs: readInt("ROSTER_REFRESH_INTERVAL_MS", 6 * 60 * 60 * 1000),
     rosterRankingPages: readInt("ROSTER_RANKING_PAGES", 2),
     rosterSize: readInt("ROSTER_SIZE", 100),
+    mapsRefreshIntervalMs: readInt("MAPS_REFRESH_INTERVAL_MS", 7 * 24 * 60 * 60 * 1000),
     oscBackfillMaxAgeMs: readInt("OSC_BACKFILL_MAX_AGE_MS", 24 * 60 * 60 * 1000),
     oscBackfillPageLimit: Math.min(readInt("OSC_BACKFILL_PAGE_LIMIT", 1000), 1000),
     oscBackfillMaxPages: readInt("OSC_BACKFILL_MAX_PAGES", 30),
@@ -84,6 +100,10 @@ export function readConfig(): Config {
     replayVideoJobRetentionDays: readInt("REPLAY_VIDEO_JOB_RETENTION_DAYS", 2),
     maxLocalDbBytes: readInt("MAX_LOCAL_DB_BYTES", 10 * 1024 * 1024 * 1024),
     targetLocalDbBytes: readInt("TARGET_LOCAL_DB_BYTES", 8 * 1024 * 1024 * 1024),
+    replayVideoOptimize: readBool("REPLAY_VIDEO_OPTIMIZE", true),
+    replayVideoOptimizeCrf: readBoundedInt("REPLAY_VIDEO_OPTIMIZE_CRF", 20, 16, 28),
+    replayVideoOptimizePreset: process.env.REPLAY_VIDEO_OPTIMIZE_PRESET || "slow",
+    replayVideoAudioBitrate: process.env.REPLAY_VIDEO_AUDIO_BITRATE || "160k",
     replayVideoPublicOrigin: process.env.REPLAY_VIDEO_PUBLIC_ORIGIN ?? process.env.LIVE_PUBLIC_ORIGIN ?? "http://localhost:7227",
     replayVideoWorkDir: process.env.REPLAY_VIDEO_WORK_DIR ?? "./data/replay-video-jobs",
     r2Endpoint: process.env.R2_ENDPOINT || undefined,

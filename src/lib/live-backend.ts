@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireAdminAccess } from "./auth";
-import type { CountryTopPlay, LeanTrackerScore, SnipeEvent } from "./types";
+import type { CountryMapsData, CountryTopPlay, LeanTrackerScore, SnipeEvent } from "./types";
 
 export type LiveEventName =
   | "hello"
@@ -28,6 +28,14 @@ export interface LiveTopPlaysSnapshot {
 export interface LiveSnipesSnapshot {
   events: SnipeEvent[];
   scannedAt: number;
+}
+
+export interface LiveMapsSnapshot {
+  value: CountryMapsData | null;
+  generatedAt: string | null;
+  refreshedAt: string | null;
+  isStale: boolean;
+  refreshQueued: boolean;
 }
 
 export function getLiveBackendUrl(): string | null {
@@ -63,6 +71,10 @@ function normalizeAdminPath(input: unknown): string {
   if (url.pathname === "/api/admin/refresh-roster") {
     const country = url.searchParams.get("country");
     if (country && /^[A-Za-z]{2}$/.test(country)) return `/api/admin/refresh-roster?country=${country.toUpperCase()}`;
+  }
+  if (url.pathname === "/api/admin/refresh-maps") {
+    const country = url.searchParams.get("country");
+    if (country && /^[A-Za-z]{2}$/.test(country)) return `/api/admin/refresh-maps?country=${country.toUpperCase()}`;
   }
   throw new Error("Unsupported live backend admin action.");
 }
@@ -113,6 +125,10 @@ export async function fetchLiveTopPlaysSnapshot(country: string, window: LiveTop
 
 export async function fetchLiveSnipesSnapshot(country: string, limit = 500): Promise<LiveSnipesSnapshot> {
   return fetchLiveJson(`/api/snapshots/snipes?country=${encodeURIComponent(country)}&limit=${limit}`);
+}
+
+export async function fetchLiveMapsSnapshot(country: string): Promise<LiveMapsSnapshot> {
+  return fetchLiveJson(`/api/snapshots/maps?country=${encodeURIComponent(country)}`);
 }
 
 export function openLiveEventSource(country: string): EventSource | null {

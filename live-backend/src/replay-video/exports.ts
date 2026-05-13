@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import ffmpegStaticPath from "ffmpeg-static";
 import type { Config } from "../config.js";
@@ -109,45 +109,34 @@ export async function finishReplayVideoExport(db: Db, config: Config, id: string
     const input = inputPath(config, id);
     const output = outputPath(config, id);
     const audio = audioPath(config, id);
+    const optimized = optimizedPath(config, id);
     const hasAudio = row.audioUrl ? await saveFetchedAudio(row.audioUrl, audio) : false;
     const sourceDuration = Math.max(0.1, row.sourceDurationSeconds);
     let encodedWith = "webcodecs-avc";
+    let finalPath = input;
 
     if (hasAudio) {
-      await runFfmpeg([
-        "-y",
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-i",
-        input,
-        "-ss",
-        String(Math.max(0, row.audioStartSeconds)),
-        "-t",
-        String(sourceDuration),
-        "-i",
-        audio,
-        "-map",
-        "0:v:0",
-        "-map",
-        "1:a:0",
-        "-c:v",
-        "copy",
-        "-af",
-        atempoChain(row.effectiveRate),
-        "-c:a",
-        "aac",
-        "-b:a",
-        "160k",
-        "-shortest",
-        "-movflags",
-        "+faststart",
-        output,
-      ]);
-      encodedWith = "webcodecs-avc+ffmpeg-aac";
+      if (config.replayVideoOptimize) {
+        const optimizedWithAudio = await optimizeVideoWithAudio(config, input, audio, optimized, row, sourceDuration);
+        if (optimizedWithAudio) {
+          finalPath = optimized;
+          encodedWith = `webcodecs-avc+ffmpeg-x264-crf${config.replayVideoOptimizeCrf}+aac`;
+        }
+      }
+      if (finalPath === input) {
+        await muxAudioCopyVideo(config, input, audio, output, row, sourceDuration);
+        finalPath = output;
+        encodedWith = "webcodecs-avc+ffmpeg-aac";
+      }
+    } else if (config.replayVideoOptimize) {
+      const optimizedVideo = await optimizeVideoOnly(config, input, optimized);
+      if (optimizedVideo) {
+        finalPath = optimized;
+        encodedWith = `webcodecs-avc+ffmpeg-x264-crf${config.replayVideoOptimizeCrf}`;
+      }
     }
 
-    const buffer = await readFile(hasAudio ? output : input);
+    const buffer = await readFile(finalPath);
     const uploaded = await uploadReplayVideo(config, id, row.filename, "video/mp4", buffer);
     const now = new Date().toISOString();
     await exec(
@@ -247,6 +236,126 @@ function runFfmpeg(args: string[]): Promise<void> {
   });
 }
 
+async function optimizeVideoOnly(config: Config, input: string, output: string): Promise<boolean> {
+  try {
+    await runFfmpeg([
+      "-y",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      input,
+      "-map",
+      "0:v:0",
+      ...optimizedVideoArgs(config),
+      "-movflags",
+      "+faststart",
+      output,
+    ]);
+    const [inputStats, outputStats] = await Promise.all([stat(input), stat(output)]);
+    return outputStats.size < inputStats.size;
+  } catch {
+    return false;
+  }
+}
+
+async function optimizeVideoWithAudio(
+  config: Config,
+  input: string,
+  audio: string,
+  output: string,
+  row: ReplayVideoExportRow,
+  sourceDuration: number,
+): Promise<boolean> {
+  try {
+    await runFfmpeg([
+      "-y",
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-i",
+      input,
+      "-ss",
+      String(Math.max(0, row.audioStartSeconds)),
+      "-t",
+      String(sourceDuration),
+      "-i",
+      audio,
+      "-map",
+      "0:v:0",
+      "-map",
+      "1:a:0",
+      ...optimizedVideoArgs(config),
+      "-af",
+      atempoChain(row.effectiveRate),
+      "-c:a",
+      "aac",
+      "-b:a",
+      config.replayVideoAudioBitrate,
+      "-shortest",
+      "-movflags",
+      "+faststart",
+      output,
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function muxAudioCopyVideo(
+  config: Config,
+  input: string,
+  audio: string,
+  output: string,
+  row: ReplayVideoExportRow,
+  sourceDuration: number,
+): Promise<void> {
+  await runFfmpeg([
+    "-y",
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-i",
+    input,
+    "-ss",
+    String(Math.max(0, row.audioStartSeconds)),
+    "-t",
+    String(sourceDuration),
+    "-i",
+    audio,
+    "-map",
+    "0:v:0",
+    "-map",
+    "1:a:0",
+    "-c:v",
+    "copy",
+    "-af",
+    atempoChain(row.effectiveRate),
+    "-c:a",
+    "aac",
+    "-b:a",
+    config.replayVideoAudioBitrate,
+    "-shortest",
+    "-movflags",
+    "+faststart",
+    output,
+  ]);
+}
+
+function optimizedVideoArgs(config: Config): string[] {
+  return [
+    "-c:v",
+    "libx264",
+    "-preset",
+    config.replayVideoOptimizePreset,
+    "-crf",
+    String(config.replayVideoOptimizeCrf),
+    "-pix_fmt",
+    "yuv420p",
+  ];
+}
+
 function atempoChain(rate: number): string {
   let remaining = Math.max(0.25, Math.min(4, rate));
   const filters: string[] = [];
@@ -301,6 +410,10 @@ function inputPath(config: Config, id: string): string {
 
 function outputPath(config: Config, id: string): string {
   return resolve(workDir(config, id), "out.mp4");
+}
+
+function optimizedPath(config: Config, id: string): string {
+  return resolve(workDir(config, id), "optimized.mp4");
 }
 
 function audioPath(config: Config, id: string): string {

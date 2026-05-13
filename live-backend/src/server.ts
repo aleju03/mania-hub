@@ -6,6 +6,7 @@ import { routeHttp, sendNotFound } from "./http/snapshots.js";
 import { ScoreIngestor } from "./ingest/score-ingestor.js";
 import { JobQueue } from "./jobs/queue.js";
 import { LiveEventLog } from "./live/event-log.js";
+import { enqueueMapsRefresh } from "./features/maps.js";
 import { handleSse } from "./live/sse.js";
 import { enqueueOscBackfill } from "./osc/backfill.js";
 import { OscSocketClient } from "./osc/client.js";
@@ -63,6 +64,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const app = await createApp();
   app.worker.start();
   startRosterScheduler(app.db, app.queue, app.config);
+  startMapsScheduler(app.db, app.queue, app.config);
   startRetentionScheduler(app.db, app.config);
   enqueueOscBackfill(app.queue, app.db, app.config).catch((error) => console.warn("[osc] backfill enqueue failed", error));
   app.osc.start().catch((error) => console.warn("[osc] socket failed", error));
@@ -80,4 +82,15 @@ function startRosterScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: J
     setTimeout(tick, config.rosterRefreshIntervalMs).unref();
   };
   setTimeout(tick, config.rosterRefreshIntervalMs).unref();
+}
+
+function startMapsScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue, config: ReturnType<typeof readConfig>): void {
+  const tick = async () => {
+    const countries = await getActiveCountryCodes(db, config);
+    await Promise.all(countries.map((country) => enqueueMapsRefresh(queue, country))).catch((error) => {
+      console.warn("[maps] scheduled refresh failed", error);
+    });
+    setTimeout(tick, config.mapsRefreshIntervalMs).unref();
+  };
+  setTimeout(tick, 10_000).unref();
 }

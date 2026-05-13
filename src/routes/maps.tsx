@@ -52,6 +52,7 @@ import { REPLAY_SCROLL_SPEED_CHANGE_EVENT, readReplayScrollSpeed } from "../lib/
 import { REPLAY_SKIN_SETTINGS_CHANGE_EVENT, readReplaySkinSettings } from "../lib/replay-skin";
 import type { ReplaySkinSettings } from "../lib/replay-skin";
 import { useAuth } from "../lib/auth-context";
+import { fetchLiveMapsSnapshot, isLiveBackendConfigured } from "../lib/live-backend";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
 import {
   cycleTriStateCsv,
@@ -884,6 +885,7 @@ function MapsPage() {
   const [rebuilding, setRebuilding] = useState(false);
   const [rebuildMenuOpen, setRebuildMenuOpen] = useState(false);
   const [rebuildQuery, setRebuildQuery] = useState("");
+  const [liveMapsAttempted, setLiveMapsAttempted] = useState(false);
   const rebuildMenuRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!rebuildMenuOpen) return;
@@ -916,6 +918,7 @@ function MapsPage() {
   const rAvoidRepeats = mapsSearch.rAvoidRepeats;
   const isDevMode = auth.canUseDevFeatures;
   const canUseAdminFeatures = auth.canUseAdminFeatures;
+  const liveBackendEnabled = isLiveBackendConfigured();
   const randomStatus = useMemo(() => parseTriStateCsv(rStatusRaw, RANDOM_STATUS_OPTIONS), [rStatusRaw]);
   const randomKey = useMemo(() => parseTriStateCsv(rKeyRaw, RANDOM_KEY_OPTIONS), [rKeyRaw]);
   const randomPattern = useMemo(() => parseTriStateCsv(rPatternRaw, RANDOM_PATTERN_OPTIONS), [rPatternRaw]);
@@ -938,6 +941,7 @@ function MapsPage() {
     setLoadedSections(0);
     setSmoothProgress(0);
     setError(null);
+    setLiveMapsAttempted(false);
     fetchingMapsRef.current = false;
   }, [selectedCountry]);
 
@@ -957,6 +961,45 @@ function MapsPage() {
     }, 180);
     return () => clearInterval(id);
   }, [loadingMaps, loadedSections]);
+
+  useEffect(() => {
+    if (!liveBackendEnabled) return;
+
+    setLiveMapsAttempted(false);
+    const snapshot = useAppStore.getState();
+    const currentData = snapshot.mapsDataByCountry[selectedCountry] ?? null;
+    const currentFetchedAt = snapshot.mapsDataFetchedAtByCountry[selectedCountry] ?? null;
+    if (
+      !isCacheStale(currentFetchedAt, CLIENT_CACHE_TTL.mapsData) &&
+      hasValidMapsDataShape(currentData)
+    ) {
+      setLoadingMaps(false);
+      setLoadedSections(2);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingMaps(!hasValidMapsDataShape(currentData));
+    setLoadedSections(0);
+    fetchLiveMapsSnapshot(selectedCountry)
+      .then((snapshot) => {
+        if (cancelled || !snapshot.value) return;
+        setMapsData(selectedCountry, snapshot.value);
+        setLoadedSections(2);
+        setLoadingMaps(false);
+        setError(null);
+      })
+      .catch(() => {
+        // The old server-function path below remains the cold-start fallback.
+      })
+      .finally(() => {
+        if (!cancelled) setLiveMapsAttempted(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [liveBackendEnabled, selectedCountry, setMapsData]);
 
   const updateMapsSearch = (patch: Partial<MapsSearch>) => {
     navigate({
@@ -1028,6 +1071,7 @@ function MapsPage() {
   // fetchingMapsRef guards against concurrent fetches for the same country.
   useEffect(() => {
     if (loadingPlayers || error || players.length === 0) return;
+    if (liveBackendEnabled && !liveMapsAttempted) return;
 
     // Snapshot the current store state inside the effect rather than depending
     // on selectors, so a fresh-cache early return is safe from reruns.
@@ -1130,7 +1174,7 @@ function MapsPage() {
       cancelled = true;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadingPlayers, error, playerIdsKey, selectedCountry]);
+  }, [loadingPlayers, error, playerIdsKey, selectedCountry, liveBackendEnabled, liveMapsAttempted]);
 
   // ── Filtered + sorted: farmed (from best scores) ────────────────────────
   const filteredFarmed = useMemo(() => {

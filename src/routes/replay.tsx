@@ -168,14 +168,26 @@ function drawCoverImage(ctx: CanvasRenderingContext2D, image: HTMLImageElement, 
 
 function loadExportBackground(src: string | null): Promise<HTMLImageElement | null> {
   if (!src) return Promise.resolve(null);
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const image = new Image();
     image.crossOrigin = "anonymous";
     image.decoding = "async";
     image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Couldn't load the replay background for video export."));
+    image.onerror = () => resolve(null);
     image.src = src;
   });
+}
+
+async function loadFirstExportBackground(sources: Array<string | null | undefined>): Promise<HTMLImageElement | null> {
+  const seen = new Set<string>();
+  for (const source of sources) {
+    const url = getExportBackgroundUrl(source ?? null);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    const image = await loadExportBackground(url);
+    if (image) return image;
+  }
+  return null;
 }
 
 function getExportBackgroundUrl(src: string | null): string | null {
@@ -1111,6 +1123,9 @@ function ReplayViewer({
     ? `/api/audio?beatmapsetId=${encodeURIComponent(String(effectiveBeatmapsetId))}&filename=${encodeURIComponent(beatmap.audioFilename)}`
     : null;
   const coverUrl = scoreInfo?.beatmapset?.covers?.["cover@2x"] || scoreInfo?.beatmapset?.covers?.cover || null;
+  const coverProxyUrl = effectiveBeatmapsetId
+    ? `/api/background?beatmapsetId=${encodeURIComponent(String(effectiveBeatmapsetId))}`
+    : null;
   const beatmapBackgroundUrl = effectiveBeatmapsetId && beatmap?.backgroundFilename
     ? `/api/background?beatmapsetId=${encodeURIComponent(String(effectiveBeatmapsetId))}&filename=${encodeURIComponent(beatmap.backgroundFilename)}`
     : null;
@@ -1830,7 +1845,9 @@ function ReplayViewer({
       const ctx = compositeCanvas.getContext("2d", { alpha: false });
       if (!ctx) throw new Error("Couldn't create the video compositor.");
 
-      const backgroundImage = await loadExportBackground(getExportBackgroundUrl(beatmapBackgroundUrl ?? bgSrc));
+      let backgroundImage = bgDim >= 100
+        ? null
+        : await loadFirstExportBackground([beatmapBackgroundUrl, bgSrc, coverProxyUrl, coverUrl]);
       const drawCompositeFrame = () => {
         const gradient = ctx.createLinearGradient(0, 0, 0, height);
         gradient.addColorStop(0, "#0a0a18");
@@ -1846,7 +1863,7 @@ function ReplayViewer({
             drawCoverImage(ctx, backgroundImage, width, height);
             ctx.restore();
           } catch {
-            throw new Error("Couldn't draw the replay background for video export.");
+            backgroundImage = null;
           }
         }
 

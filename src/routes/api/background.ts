@@ -38,6 +38,23 @@ export const Route = createFileRoute("/api/background")({
 
         if (!filename) {
           const target = `${OSU_COVER_BASE}/${beatmapsetId}/covers/cover@2x.jpg`;
+          if (inline) {
+            const response = await fetch(target);
+            if (!response.ok) {
+              return new Response("Background cover not found", { status: response.status });
+            }
+            const contentType = response.headers.get("Content-Type") || "image/jpeg";
+            const buffer = Buffer.from(await response.arrayBuffer());
+            return new Response(buffer as unknown as BodyInit, {
+              status: 200,
+              headers: {
+                "Content-Type": contentType,
+                "Content-Length": String(buffer.length),
+                "Cache-Control":
+                  "public, max-age=86400, s-maxage=31536000, stale-while-revalidate=604800, immutable",
+              },
+            });
+          }
           return new Response(null, {
             status: 302,
             headers: {

@@ -1,6 +1,7 @@
 import type { Db } from "./db.js";
 import { readConfig } from "./config.js";
 import { exec, json } from "./db.js";
+import { refreshCountryMaps } from "./features/maps.js";
 import { confirmTopPlay } from "./features/top-plays.js";
 import { getHydratedTrackerScoresForMetadata } from "./features/tracker.js";
 import type { ClaimOptions, Job, JobQueue } from "./jobs/queue.js";
@@ -23,7 +24,7 @@ interface WorkerLane {
 const DEFAULT_WORKER_LANES: WorkerLane[] = [
   {
     name: "fast",
-    jobTypes: ["refresh_user_top_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "osc_backfill"],
+    jobTypes: ["refresh_user_top_scores", "refresh_country_roster", "refresh_country_maps", "enrich_user", "enrich_beatmap", "osc_backfill"],
     claimLimit: 4,
     intervalMs: 750,
   },
@@ -146,6 +147,10 @@ export class WorkerRunner {
     if (job.type === "refresh_country_roster") {
       const payload = job.payload as { country: string };
       await refreshCountryRoster(this.db, this.osu, payload.country, "job:refresh_country_roster");
+      return;
+    }
+    if (job.type === "refresh_country_maps") {
+      await refreshCountryMaps(this.db, this.osu, job.payload as { country: string });
       return;
     }
     if (job.type === "enrich_user") {
@@ -301,6 +306,8 @@ function getRetryDelayMs(type: string, attempts: number, error: unknown): number
     ? 15_000
     : type === "osc_backfill"
       ? 60_000
+    : type === "refresh_country_maps"
+      ? 10 * 60_000
     : type === "enrich_user"
       ? 60_000
       : type === "enrich_beatmap"

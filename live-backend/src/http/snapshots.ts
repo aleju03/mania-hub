@@ -3,6 +3,7 @@ import type { Config } from "../config.js";
 import { activateCountry, getCountryRegistry } from "../countries.js";
 import type { Db } from "../db.js";
 import { dbHealth, exec, parseJson } from "../db.js";
+import { enqueueMapsRefresh, getMapsSnapshot } from "../features/maps.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
 import { getTopPlaysSnapshot } from "../features/top-plays.js";
 import { getTrackerSnapshot } from "../features/tracker.js";
@@ -90,6 +91,12 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
     sendJson(req, res, ctx, 200, await getSnipesSnapshot(ctx.db, country, clampLimit(url.searchParams.get("limit"), 500, 1000)));
     return true;
   }
+  if (url.pathname === "/api/snapshots/maps") {
+    await activateCountry(ctx.db, ctx.queue, ctx.config, country);
+    const snapshot = await getMapsSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs);
+    sendJson(req, res, ctx, snapshot.value ? 200 : 202, snapshot);
+    return true;
+  }
   if (url.pathname === "/api/events") {
     await activateCountry(ctx.db, ctx.queue, ctx.config, country);
     const since = Number(url.searchParams.get("since") ?? 0);
@@ -154,6 +161,15 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
       return true;
     }
     await enqueueRosterRefreshes(ctx.queue, [country]);
+    sendJson(req, res, ctx, 200, { ok: true, country });
+    return true;
+  }
+  if (url.pathname === "/api/admin/refresh-maps") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    await enqueueMapsRefresh(ctx.queue, country, { priority: 90, replaceDone: true });
     sendJson(req, res, ctx, 200, { ok: true, country });
     return true;
   }
@@ -236,6 +252,7 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
       "user_top_scores",
       "top_play_events",
       "snipe_events",
+      "country_maps_snapshots",
       "replay_video_exports",
       "live_event_log",
       "api_call_log",

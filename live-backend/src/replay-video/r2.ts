@@ -1,11 +1,9 @@
 import crypto from "node:crypto";
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import type { Config } from "../config.js";
 
 const REPLAY_CACHE_BUCKET = "mania-hub-replay-cache";
 const REPLAY_CACHE_PREFIX = "replay-cache/";
-const SIGNED_URL_EXPIRES_SECONDS = 6 * 60 * 60;
 
 export type UploadedReplayVideo = {
   storageKey: string;
@@ -43,21 +41,19 @@ export async function uploadReplayVideo(config: Config, id: string, filename: st
     storageKey,
     sizeBytes: buffer.length,
     mimeType: safeMimeType,
-    url: publicBase ? `${publicBase}/${storageKey.split("/").map(encodeURIComponent).join("/")}` : await signReplayVideo(config, storageKey, safeMimeType),
-    signed: !publicBase,
+    url: publicBase
+      ? `${publicBase}/${storageKey.split("/").map(encodeURIComponent).join("/")}`
+      : getReplayVideoAppUrl(config, id, filename),
+    signed: false,
   };
 }
 
-async function signReplayVideo(config: Config, storageKey: string, mimeType: string): Promise<string> {
-  return getSignedUrl(
-    getClient(config),
-    new GetObjectCommand({
-      Bucket: requireBucket(config),
-      Key: storageKey,
-      ResponseContentType: mimeType,
-    }),
-    { expiresIn: SIGNED_URL_EXPIRES_SECONDS },
-  );
+function getReplayVideoAppUrl(config: Config, id: string, filename: string): string {
+  const origin = config.replayVideoPublicOrigin.replace(/\/+$/, "");
+  return new URL(
+    `/videos/${encodeURIComponent(id)}/${encodeURIComponent(sanitizeFilename(filename))}`,
+    origin,
+  ).toString();
 }
 
 function getClient(config: Config): S3Client {

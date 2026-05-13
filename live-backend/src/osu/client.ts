@@ -78,6 +78,36 @@ export class OsuApiClient {
     return this.getJson(`/users/${userId}/scores/best?mode=mania&limit=100`, caller) as Promise<OscScore[]>;
   }
 
+  async getUserBestScoresWindow(userId: number, totalLimit = 200, caller = "unknown"): Promise<OscScore[]> {
+    const firstPage = await this.getJson<OscScore[]>(
+      `/users/${userId}/scores/best?mode=mania&limit=${Math.min(totalLimit, 100)}&offset=0`,
+      caller,
+    );
+    if (totalLimit <= 100 || firstPage.length < 100) return firstPage;
+    const secondPage = await this.getJson<OscScore[]>(
+      `/users/${userId}/scores/best?mode=mania&limit=${Math.min(totalLimit - 100, 100)}&offset=100`,
+      caller,
+    );
+    return [...firstPage, ...secondPage];
+  }
+
+  async getUserMostPlayed(userId: number, caller = "unknown"): Promise<unknown[]> {
+    return this.getJson(`/users/${userId}/beatmapsets/most_played?limit=100&offset=0`, caller);
+  }
+
+  async getUserFavourites(userId: number, maxPages = 10, caller = "unknown"): Promise<unknown[]> {
+    const all: unknown[] = [];
+    for (let page = 0; page < maxPages; page++) {
+      const batch = await this.getJson<unknown[]>(
+        `/users/${userId}/beatmapsets/favourite?limit=100&offset=${page * 100}`,
+        caller,
+      );
+      all.push(...batch);
+      if (batch.length < 100) break;
+    }
+    return all;
+  }
+
   async getBeatmapUserScoresAll(beatmapId: number, userId: number, caller = "unknown"): Promise<OscScore[]> {
     const body = await this.getJson<{ scores?: OscScore[] } | OscScore[]>(`/beatmaps/${beatmapId}/scores/users/${userId}/all?mode=mania`, caller);
     return Array.isArray(body) ? body : body.scores ?? [];

@@ -144,6 +144,13 @@ create table if not exists snipe_events (
   primary key (country, beatmap_id, lane_key, score_id)
 );
 
+create table if not exists country_maps_snapshots (
+  country text primary key,
+  payload_json text not null,
+  generated_at text not null,
+  refreshed_at text not null
+);
+
 create table if not exists replay_video_exports (
   id text primary key,
   filename text not null,
@@ -209,6 +216,7 @@ create index if not exists idx_country_beatmap_scores_rank on country_beatmap_sc
 create index if not exists idx_top_play_events_country_time on top_play_events(country, detected_at desc);
 create index if not exists idx_top_play_events_country_pp on top_play_events(country, pp desc, detected_at desc);
 create index if not exists idx_snipe_events_country_time on snipe_events(country, detected_at desc);
+create index if not exists idx_country_maps_snapshots_refreshed on country_maps_snapshots(refreshed_at desc);
 create index if not exists idx_replay_video_exports_status_time on replay_video_exports(status, updated_at desc);
 create index if not exists idx_jobs_ready on jobs(status, run_after, priority desc);
 create index if not exists idx_live_event_country_sequence on live_event_log(country, sequence);
