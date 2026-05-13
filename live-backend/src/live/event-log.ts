@@ -18,7 +18,7 @@ export class LiveEventLog {
   async append(type: string, country: string | null, payload: unknown, eventId?: string): Promise<LiveEvent> {
     const createdAt = nowIso();
     const stableId = eventId ?? `${type}:${country ?? "global"}:${createdAt}:${Math.random().toString(36).slice(2)}`;
-    await exec(
+    const result = await exec(
       this.db,
       `insert or ignore into live_event_log (event_id, type, country, payload_json, created_at)
        values (?, ?, ?, ?, ?)`,
@@ -26,7 +26,9 @@ export class LiveEventLog {
     );
     const row = (await exec(this.db, "select * from live_event_log where event_id = ?", [stableId])).rows[0];
     const event = rowToLiveEvent(row);
-    for (const sink of this.sinks) sink(event);
+    if (Number(result.rowsAffected ?? 0) > 0) {
+      for (const sink of this.sinks) sink(event);
+    }
     return event;
   }
 

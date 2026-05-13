@@ -175,6 +175,14 @@ function PopOffsPage() {
     let cancelled = false;
     const shouldRefresh = !rankings || isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings);
 
+    if (liveBackendEnabled) {
+      setLoadingPlayers(false);
+      setPlayersError(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     if (!shouldRefresh) {
       setLoadingPlayers(false);
       setPlayersError(null);
@@ -203,7 +211,7 @@ function PopOffsPage() {
     return () => {
       cancelled = true;
     };
-  }, [rankings, rankingsFetchedAt, selectedCountry, setRankings]);
+  }, [liveBackendEnabled, rankings, rankingsFetchedAt, selectedCountry, setRankings]);
 
   // Fetch scores for all players, show results once complete
   const fetchingRef = useRef(false);
@@ -480,12 +488,12 @@ function PopOffsPage() {
       .map(([id, info]) => ({ id, ...info }));
   }, [rangedPopoffs]);
 
-  const showPpGainsRail = playerPpGains.length > 0 || loadingPlayers || loading;
+  const showPpGainsRail = playerPpGains.length > 0 || (!liveBackendEnabled && (loadingPlayers || loading));
 
   // Paginate
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-  const loadingLabel = loadingPlayers || players.length === 0
+  const loadingLabel = loadingPlayers || (!liveBackendEnabled && players.length === 0)
     ? "Loading players..."
     : hasCachedPopoffs
       ? "Refreshing..."

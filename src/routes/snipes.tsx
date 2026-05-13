@@ -679,7 +679,7 @@ function SnipesPage() {
                   <p className="mt-1 text-[11px]">
                     Snipes appear as top-{SNIPES_PLAYER_LIMIT_LABEL} country players push each other down the per-map country leaderboard.
                   </p>
-                  {snipesFetchedAt && (
+                  {snipesFetchedAt && !liveBackendEnabled && (
                     <p className="mt-2 text-[10px] text-osu-f1/60">
                       Last scanned {formatTimeAgo(new Date(snipesFetchedAt).toISOString())}.
                     </p>

@@ -93,14 +93,15 @@ export async function updateSnipeProjection(db: Db, events: LiveEventLog, countr
 export async function getSnipesSnapshot(db: Db, country: string, limit: number): Promise<{ events: SnipeEvent[]; scannedAt: number }> {
   const rows = (await exec(
     db,
-    `select payload_json from snipe_events
+    `select payload_json, detected_at from snipe_events
      where country = ?
      order by detected_at desc
      limit ?`,
     [country, limit],
   )).rows;
+  const latestDetectedAt = rows[0]?.detected_at == null ? null : new Date(String(rows[0].detected_at)).getTime();
   return {
     events: rows.map((row) => parseJson<SnipeEvent>(row.payload_json, {} as SnipeEvent)),
-    scannedAt: Date.now(),
+    scannedAt: latestDetectedAt != null && Number.isFinite(latestDetectedAt) ? latestDetectedAt : Date.now(),
   };
 }

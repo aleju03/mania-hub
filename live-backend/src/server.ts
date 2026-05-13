@@ -6,7 +6,7 @@ import { ScoreIngestor } from "./ingest/score-ingestor.js";
 import { JobQueue } from "./jobs/queue.js";
 import { LiveEventLog } from "./live/event-log.js";
 import { handleSse } from "./live/sse.js";
-import { OscBackfill } from "./osc/backfill.js";
+import { enqueueOscBackfill } from "./osc/backfill.js";
 import { OscSocketClient } from "./osc/client.js";
 import { OsuApiClient } from "./osu/client.js";
 import { enqueueRosterRefreshes } from "./rosters/country-rosters.js";
@@ -31,7 +31,7 @@ export async function createApp() {
   if (osu.hasCredentials()) {
     await enqueueRosterRefreshes(queue, config.trackedCountries);
   }
-  const worker = new WorkerRunner(db, queue, events, osu);
+  const worker = new WorkerRunner(db, queue, events, osu, ingestor);
   const ctx = {
     db,
     queue,
@@ -62,7 +62,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   app.worker.start();
   startRosterScheduler(app.queue, app.config);
   startRetentionScheduler(app.db, app.config);
-  new OscBackfill(app.config).run(app.db, app.ingestor).catch((error) => console.warn("[osc] backfill failed", error));
+  enqueueOscBackfill(app.queue, app.db, app.config).catch((error) => console.warn("[osc] backfill enqueue failed", error));
   app.osc.start().catch((error) => console.warn("[osc] socket failed", error));
   app.server.listen(app.config.port, () => {
     console.log(`[live-backend] listening on ${app.config.livePublicOrigin} (port ${app.config.port})`);

@@ -9,6 +9,7 @@ import type { JobQueue } from "../jobs/queue.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import type { OscStatus } from "../osc/client.js";
 import type { OsuApiClient } from "../osu/client.js";
+import { enqueueOscBackfill } from "../osc/backfill.js";
 import {
   cancelReplayVideoExport,
   createReplayVideoExport,
@@ -185,6 +186,15 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
       count: scores.length,
       maniaCount: scores.filter((score) => score.ruleset_id === 3 || score.ruleset_id == null).length,
     });
+    return true;
+  }
+  if (url.pathname === "/api/admin/run-osc-backfill") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    await enqueueOscBackfill(ctx.queue, ctx.db, ctx.config);
+    sendJson(req, res, ctx, 200, { ok: true });
     return true;
   }
   if (url.pathname === "/api/admin/reset-local-db") {

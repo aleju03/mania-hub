@@ -43,18 +43,20 @@ export class JobQueue {
     const rows = (await exec(
       this.db,
       `select * from jobs
-       where status in ('queued', 'failed') and run_after <= ?
+       where (status in ('queued', 'failed') and run_after <= ?)
+          or (status = 'running' and locked_until <= ?)
        order by priority desc, run_after asc
        limit ?`,
-      [now, limit],
+      [now, now, limit],
     )).rows;
     const jobs: Job[] = [];
     for (const row of rows) {
       const result = await exec(
         this.db,
         `update jobs set status = 'running', locked_by = ?, locked_until = ?, attempts = attempts + 1, updated_at = ?
-         where id = ? and status in ('queued', 'failed')`,
-        [workerId, lockedUntil, now, Number(row.id)],
+         where id = ?
+           and ((status in ('queued', 'failed') and run_after <= ?) or (status = 'running' and locked_until <= ?))`,
+        [workerId, lockedUntil, now, Number(row.id), now, now],
       );
       if (result.rowsAffected > 0) jobs.push(rowToJob(row));
     }

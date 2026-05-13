@@ -58,6 +58,7 @@ export const Route = createFileRoute("/tracker")({
     country: search.country,
   }),
   loader: async ({ deps }) => {
+    if (isLiveBackendConfigured()) return null;
     try {
       return await withSnapshotLoaderBudget(getTrackerSnapshot({ data: { country: deps.country } }));
     } catch {
@@ -125,7 +126,6 @@ function ScoresPage() {
   const [userIds, setUserIds] = useState<number[]>(trackedUserIds);
   const [loadingPlayers, setLoadingPlayers] = useState<boolean>(trackedUserIds.length === 0 && !rankings);
   const [playersError, setPlayersError] = useState<string | null>(null);
-  const [isPolling, setIsPolling] = useState(true);
   const [filter, setFilter] = useState<ScoreFilter>("all");
   const [gradeFilter, setGradeFilter] = useState<GradeFilter>("all");
   const [failedFilter, setFailedFilter] = useState<FailedFilter>("hide");
@@ -134,6 +134,7 @@ function ScoresPage() {
   const [initialRefreshDone, setInitialRefreshDone] = useState(false);
   const [initialFetching, setInitialFetching] = useState(false);
   const [polling, setPolling] = useState(false);
+  const [timeTick, setTimeTick] = useState(0);
   const refreshing = initialFetching || polling;
   const initialFetchInFlightRef = useRef(false);
   const pollInFlightRef = useRef(false);
@@ -178,6 +179,11 @@ function ScoresPage() {
   }, [snapshot, selectedCountry, setRankings, setTrackedUserIds, addFeedScores, setTrackerPpGains]);
 
   useEffect(() => {
+    const id = window.setInterval(() => setTimeTick((value) => value + 1), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
     if (!liveBackendEnabled) return;
     let cancelled = false;
     const requestedCountry = selectedCountry;
@@ -190,6 +196,9 @@ function ScoresPage() {
         }
         markFeedScoresFetched(requestedCountry);
         setInitialLoaded(true);
+        setInitialRefreshDone(true);
+        setInitialFetching(false);
+        setLoadingPlayers(false);
       })
       .catch(() => {
         // The existing server-function path below remains the fallback.
@@ -200,7 +209,7 @@ function ScoresPage() {
   }, [addFeedScores, liveBackendEnabled, markFeedScoresFetched, selectedCountry, setTrackerPpGains]);
 
   useEffect(() => {
-    if (!liveBackendEnabled || !isPolling) return;
+    if (!liveBackendEnabled) return;
     const source = openLiveEventSource(selectedCountry);
     if (!source) return;
     source.addEventListener("tracker_score", (event) => {
@@ -213,7 +222,7 @@ function ScoresPage() {
       }
     });
     return () => source.close();
-  }, [addFeedScores, isPolling, liveBackendEnabled, selectedCountry, setTrackerPpGains]);
+  }, [addFeedScores, liveBackendEnabled, selectedCountry, setTrackerPpGains]);
 
   useEffect(() => {
     setUserIds(trackedUserIds);
@@ -241,6 +250,14 @@ function ScoresPage() {
       setUserIds(cachedIds);
       setLoadingPlayers(false);
       setPlayersError(null);
+    }
+
+    if (liveBackendEnabled) {
+      setLoadingPlayers(false);
+      setPlayersError(null);
+      return () => {
+        cancelled = true;
+      };
     }
 
     const shouldRefresh = !rankings || isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings);
@@ -278,7 +295,7 @@ function ScoresPage() {
       cancelled = true;
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rankings, rankingsFetchedAt, selectedCountry]);
+  }, [rankings, rankingsFetchedAt, selectedCountry, liveBackendEnabled]);
 
   useEffect(() => {
     if (initialLoaded || feedScores.length > 0) {
@@ -287,6 +304,11 @@ function ScoresPage() {
   }, [feedScores.length, initialLoaded]);
 
   useEffect(() => {
+    if (liveBackendEnabled) {
+      setInitialRefreshDone(true);
+      setInitialFetching(false);
+      return;
+    }
     if (userIds.length === 0 || initialRefreshDone || initialFetchInFlightRef.current) return;
 
     const feedIsStale =
@@ -369,7 +391,6 @@ function ScoresPage() {
   }, [userIds, trackerUsers, initialRefreshDone, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains, snapshot]);
 
   const poll = useCallback(async () => {
-    if (!isPolling) return;
     if (liveBackendEnabled) return;
     if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
     if (pollInFlightRef.current) return;
@@ -388,10 +409,10 @@ function ScoresPage() {
         setPolling(false);
       }
     }
-  }, [isPolling, liveBackendEnabled, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains, setTrackedUserIds]);
+  }, [liveBackendEnabled, addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains, setTrackedUserIds]);
 
   useEffect(() => {
-    if (!isPolling) return;
+    if (liveBackendEnabled) return;
     const id = setInterval(poll, 60_000);
     const onVisibility = () => {
       if (document.visibilityState === "visible") void poll();
@@ -401,7 +422,7 @@ function ScoresPage() {
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [poll, isPolling]);
+  }, [poll, liveBackendEnabled]);
 
   useEffect(() => {
     setExpandedKey(null);
@@ -493,12 +514,7 @@ function ScoresPage() {
     { id: "only", label: "Only failed" },
   ];
   const listKey = `${filter}:${gradeFilter}:${failedFilter}`;
-  const liveStatusLabel = liveBackendEnabled
-    ? isPolling ? "Stream live" : "Stream paused"
-    : isPolling ? "Live polling" : "Polling paused";
-  const liveToggleLabel = liveBackendEnabled
-    ? isPolling ? "Pause stream" : "Resume stream"
-    : isPolling ? "Pause" : "Resume";
+  const liveStatusLabel = liveBackendEnabled ? "Live updates on" : "Live polling";
 
   return (
     <div className="flex-1">
@@ -518,19 +534,12 @@ function ScoresPage() {
               </>
             ) : (
               <>
-                <div className={`w-2 h-2 rounded-full ${isPolling ? "bg-osu-green animate-pulse" : "bg-osu-f1"}`} />
+                <div className="w-2 h-2 rounded-full bg-osu-green animate-pulse" />
                 <span className="text-[10px] text-osu-f1">
                   {liveStatusLabel} {"\u00b7"} {feedScores.length} scores
                 </span>
               </>
             )}
-            <button
-              onClick={() => setIsPolling(!isPolling)}
-              className="px-2.5 py-1 rounded-lg bg-osu-b4 text-[10px] text-osu-l2 hover:bg-osu-b3 transition-colors cursor-pointer border border-osu-b3/30"
-              disabled={loadingPlayers || !!playersError}
-            >
-              {liveToggleLabel}
-            </button>
           </div>
         }
       />
@@ -718,6 +727,7 @@ function ScoresPage() {
                 <VirtualScoreList
                   listKey={listKey}
                   scores={filtered}
+                  timeTick={timeTick}
                   expandedKey={expandedKey}
                   onToggle={handleToggleExpand}
                   ppGainByScoreId={ppGainByScoreId}
@@ -752,12 +762,14 @@ const ESTIMATED_ROW_HEIGHT = 80;
 function VirtualScoreList({
   listKey,
   scores,
+  timeTick,
   expandedKey,
   onToggle,
   ppGainByScoreId,
 }: {
   listKey: string;
   scores: LeanTrackerScore[];
+  timeTick: number;
   expandedKey: string | null;
   onToggle: (key: string) => void;
   ppGainByScoreId: Record<number, number>;
@@ -807,6 +819,7 @@ function VirtualScoreList({
             <ScoreFeedItem
               score={score}
               scoreKey={scoreKey}
+              timeTick={timeTick}
               approxPpGain={ppGainByScoreId[score.id] ?? null}
               expanded={expandedKey === scoreKey}
               onToggle={onToggle}
@@ -821,12 +834,14 @@ function VirtualScoreList({
 const ScoreFeedItem = memo(function ScoreFeedItem({
   score,
   scoreKey,
+  timeTick: _timeTick,
   approxPpGain,
   expanded,
   onToggle,
 }: {
   score: LeanTrackerScore;
   scoreKey: string;
+  timeTick: number;
   approxPpGain: number | null;
   expanded: boolean;
   onToggle: (key: string) => void;

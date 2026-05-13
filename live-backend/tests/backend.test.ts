@@ -8,6 +8,7 @@ import { getSnipesSnapshot } from "../src/features/snipes.js";
 import { confirmTopPlay } from "../src/features/top-plays.js";
 import { getTrackerSnapshot } from "../src/features/tracker.js";
 import { handleSse } from "../src/live/sse.js";
+import { OscBackfill } from "../src/osc/backfill.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { LiveEventLog } from "../src/live/event-log.js";
@@ -67,6 +68,46 @@ describe("live backend", () => {
     const jobs = (await exec(db, "select type, count(*) as count from jobs group by type order by type")).rows;
     expect(jobs.map((row) => row.type)).toContain("enrich_user");
     expect(jobs.map((row) => row.type)).toContain("enrich_beatmap");
+  });
+
+  it("updates the oSC cursor for metadata-light tracked scores", async () => {
+    const { db, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values ('CR', 202, 2, 'test', 1, ?)`,
+      [new Date().toISOString()],
+    );
+    await ingestor.ingestBatch([scores[1]], "osc_json");
+    const cursor = Number(JSON.parse(String((await exec(db, "select value_json from live_meta where key = 'osc_last_seen_ms'")).rows[0].value_json)));
+    expect(cursor).toBe(new Date("2026-05-12T00:03:00.000Z").getTime());
+  });
+
+  it("runs queued oSC backfill one page at a time and schedules the next page", async () => {
+    const { db, queue, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values ('CR', 202, 2, 'test', 1, ?)`,
+      [new Date().toISOString()],
+    );
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ scores, meta: { newest: "2026-05-12T00:03:00.000Z" } }), { status: 200 }));
+    const backfill = new OscBackfill({
+      oscBaseUrl: "https://osc.example",
+      oscJsonTargetPerMinute: 60,
+      oscBackfillMaxAgeMs: 24 * 60 * 60 * 1000,
+      oscBackfillPageLimit: 2,
+      oscBackfillMaxPages: 2,
+    }, fetchMock as never);
+    const result = await backfill.runPage(db, queue, ingestor, { after: new Date("2026-05-11T00:00:00.000Z").getTime(), pagesRemaining: 2 });
+    expect(result.fetched).toBe(2);
+    expect(result.inserted).toBe(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const rows = (await exec(db, "select type, status, payload_json from jobs where type = 'osc_backfill'")).rows;
+    expect(rows).toHaveLength(1);
+    expect(JSON.parse(String(rows[0].payload_json)).pagesRemaining).toBe(1);
   });
 
   it("returns tracker snapshots and replayable SSE event rows", async () => {

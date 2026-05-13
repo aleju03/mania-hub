@@ -7,13 +7,14 @@ import { getCountryName } from "../lib/country";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
 import { getModDisplayList, getScoreDisplayValues, getScoreTimestamp } from "../lib/score";
+import { fetchLiveTopPlaysSnapshot, fetchLiveTrackerSnapshot, isLiveBackendConfigured } from "../lib/live-backend";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
 import { RankingRowSkeleton, ScoreRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { UsernameText } from "../components/ui/UsernameText";
-import type { RankingsResponse, LeanHomeScore, LeanHomePopoff, LeanTrackerScore } from "../lib/types";
+import type { RankingsResponse, LeanHomeScore, LeanHomePopoff, LeanTrackerScore, CountryTopPlay } from "../lib/types";
 import { useAppStore, useHasHydrated, useSelectedCountry } from "../store";
 import { DEFAULT_DESCRIPTION, pageSeo, SITE_NAME } from "../lib/seo";
 
@@ -98,6 +99,36 @@ function trackerScoreToHomeScore(score: LeanTrackerScore): LeanHomeScore {
   };
 }
 
+function countryTopPlayToHomePopoff(play: CountryTopPlay): LeanHomePopoff | null {
+  const score = play.score;
+  if (!score?.beatmap || !score.beatmapset) return null;
+  const display = getScoreDisplayValues(score);
+  return {
+    user: {
+      username: play.user.username,
+      avatar_url: play.user.avatar_url,
+    },
+    score: {
+      id: score.id,
+      pp: score.pp ?? play.pp ?? null,
+      displayAcc: display.accuracy,
+      displayRank: display.rank,
+      isLazer: display.isLazer,
+      mods: getModDisplayList(score.mods),
+      timestamp: getScoreTimestamp(score) || play.time,
+      title: score.beatmapset.title,
+      version: score.beatmap.version,
+      keyCount: Number(score.beatmap.cs) || 0,
+      beatmapsetId: score.beatmapset.id,
+      user: {
+        id: play.user.id,
+        username: play.user.username,
+        avatar_url: play.user.avatar_url,
+      },
+    },
+  };
+}
+
 function mergeHomeRecentScores(
   homeScores: LeanHomeScore[],
   trackerScores: LeanTrackerScore[],
@@ -131,6 +162,7 @@ function HomePage() {
   const popoffs = useAppStore((state) => state.homePopoffsByCountry[selectedCountry]) ?? EMPTY_POPOFFS;
   const popoffsFetchedAt = useAppStore((state) => state.homePopoffsFetchedAtByCountry[selectedCountry]) ?? null;
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
+  const liveBackendEnabled = isLiveBackendConfigured();
   const hydrated = useHasHydrated();
   const setRankings = useAppStore((state) => state.setRankings);
   const setHomeRecentScores = useAppStore((state) => state.setHomeRecentScores);
@@ -204,6 +236,25 @@ function HomePage() {
       };
     }
 
+    if (liveBackendEnabled) {
+      setLoadingScores(recentScores.length === 0);
+      fetchLiveTrackerSnapshot(selectedCountry, 100)
+        .then((snapshot) => {
+          if (cancelled) return;
+          setHomeRecentScores(selectedCountry, snapshot.scores.map(trackerScoreToHomeScore));
+        })
+        .catch(() => {
+          if (cancelled) return;
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setLoadingScores(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+
     if (homeRecentUserIds.length === 0) {
       setLoadingScores(recentScores.length === 0 && !rankingsError);
       return () => {
@@ -238,6 +289,7 @@ function HomePage() {
     rankingsError,
     selectedCountry,
     setHomeRecentScores,
+    liveBackendEnabled,
   ]);
 
   useEffect(() => {
@@ -247,6 +299,30 @@ function HomePage() {
 
     if (!shouldRefreshPopoffs) {
       setLoadingPopoffs(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (liveBackendEnabled) {
+      setLoadingPopoffs(popoffs.length === 0);
+      fetchLiveTopPlaysSnapshot(selectedCountry, "7d")
+        .then((snapshot) => {
+          if (cancelled) return;
+          setHomePopoffs(
+            selectedCountry,
+            snapshot.popoffs
+              .map(countryTopPlayToHomePopoff)
+              .filter((play): play is LeanHomePopoff => play !== null),
+          );
+        })
+        .catch(() => {
+          if (cancelled) return;
+        })
+        .finally(() => {
+          if (cancelled) return;
+          setLoadingPopoffs(false);
+        });
       return () => {
         cancelled = true;
       };
@@ -286,6 +362,7 @@ function HomePage() {
     rankingsError,
     selectedCountry,
     setHomePopoffs,
+    liveBackendEnabled,
   ]);
 
   const topPlayersMobile = rankings?.ranking.slice(0, 5) ?? [];

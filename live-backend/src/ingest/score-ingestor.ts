@@ -3,9 +3,10 @@ import type { Db } from "../db.js";
 import { exec, json } from "../db.js";
 import { updateSnipeProjection } from "../features/snipes.js";
 import { maybeEnqueueTopPlayRefresh } from "../features/top-plays.js";
+import { getTrackerScoreById } from "../features/tracker.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { LiveEventLog } from "../live/event-log.js";
-import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, isLazerScore, nowIso, scoreHasReplay, toLeanTrackerScore } from "../shared/score.js";
+import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, isLazerScore, nowIso, scoreHasReplay } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 import { logInfo } from "../logger.js";
 
@@ -66,6 +67,7 @@ export class ScoreIngestor {
       ],
     );
     if (result.rowsAffected === 0) return false;
+    await this.updateOscCursor(score, receivedAt);
     const canUseOsuApi = this.canUseOsuApi();
     if (canUseOsuApi && country && !score.user) {
       await this.queue.enqueue("enrich_user", `user:${score.user_id}`, { userId: score.user_id }, { priority: 100 });
@@ -73,18 +75,29 @@ export class ScoreIngestor {
     if (canUseOsuApi && country && (!score.beatmap || !score.beatmapset)) {
       await this.queue.enqueue("enrich_beatmap", `beatmap:${beatmapId}`, { beatmapId }, { priority: 90 });
     }
+    const liveScore = await getTrackerScoreById(this.db, scoreId);
+    if (liveScore) {
+      await this.events.append("tracker_score", liveScore.country, liveScore.score, `tracker_score:${liveScore.country}:${score.id}`);
+    }
     if (!country || !score.beatmap || !score.beatmapset || !score.user) return true;
-    await this.events.append("tracker_score", country, toLeanTrackerScore(score), `tracker_score:${country}:${score.id}`);
     if (canUseOsuApi) {
       await maybeEnqueueTopPlayRefresh(this.db, this.queue, country, score, this.config.topPlayMarginPp);
       await this.enqueueSnipeSeedIfNeeded(country, score);
     }
     await updateSnipeProjection(this.db, this.events, country, score);
+    return true;
+  }
+
+  private async updateOscCursor(score: OscScore, receivedAt: string): Promise<void> {
+    const next = new Date(score.ended_at ?? score.created_at ?? receivedAt).getTime();
+    if (!Number.isFinite(next)) return;
+    const row = (await exec(this.db, "select value_json from live_meta where key = 'osc_last_seen_ms'")).rows[0];
+    const current = Number.parseInt(typeof row?.value_json === "string" ? row.value_json : "0", 10);
+    if (Number.isFinite(current) && current >= next) return;
     await exec(this.db, "insert or replace into live_meta (key, value_json, updated_at) values ('osc_last_seen_ms', ?, ?)", [
-      json(new Date(score.ended_at ?? score.created_at ?? receivedAt).getTime()),
+      json(next),
       receivedAt,
     ]);
-    return true;
   }
 
   private canUseOsuApi(): boolean {

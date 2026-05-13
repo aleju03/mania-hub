@@ -2,9 +2,12 @@ import type { Db } from "./db.js";
 import { readConfig } from "./config.js";
 import { exec, json } from "./db.js";
 import { confirmTopPlay } from "./features/top-plays.js";
+import { getHydratedTrackerScoresForMetadata } from "./features/tracker.js";
 import type { Job, JobQueue } from "./jobs/queue.js";
 import type { LiveEventLog } from "./live/event-log.js";
 import type { OsuApiClient } from "./osu/client.js";
+import { OscBackfill } from "./osc/backfill.js";
+import type { ScoreIngestor } from "./ingest/score-ingestor.js";
 import { finishReplayVideoExport } from "./replay-video/exports.js";
 import { refreshCountryRoster } from "./rosters/country-rosters.js";
 import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, isLazerScore, nowIso, scoreHasReplay } from "./shared/score.js";
@@ -13,12 +16,14 @@ import { errorContext, logInfo, logWarn } from "./logger.js";
 export class WorkerRunner {
   private stopped = false;
   private paused = false;
+  private readonly backfill = new OscBackfill(readConfig());
 
   constructor(
     private readonly db: Db,
     private readonly queue: JobQueue,
     private readonly events: LiveEventLog,
     private readonly osu: OsuApiClient,
+    private readonly ingestor: ScoreIngestor,
     private readonly workerId = `worker-${process.pid}`,
   ) {}
 
@@ -70,6 +75,11 @@ export class WorkerRunner {
       await confirmTopPlay(this.db, this.events, this.osu, job.payload as { userId: number; scoreId: number; country: string });
       return;
     }
+    if (job.type === "osc_backfill") {
+      const result = await this.backfill.runPage(this.db, this.queue, this.ingestor, job.payload as never);
+      await this.events.append("status", null, { type: "osc_backfill", ...result }, `osc_backfill:${job.id}:${job.attempts}`);
+      return;
+    }
     if (job.type === "refresh_country_roster") {
       const payload = job.payload as { country: string };
       await refreshCountryRoster(this.db, this.osu, payload.country, "job:refresh_country_roster");
@@ -85,12 +95,14 @@ export class WorkerRunner {
          on conflict(user_id) do update set username = excluded.username, avatar_url = excluded.avatar_url, country_code = excluded.country_code, profile_json = excluded.profile_json, updated_at = excluded.updated_at`,
         [payload.userId, String(user.username ?? `User ${payload.userId}`), String(user.avatar_url ?? ""), String(user.country_code ?? ""), json(user), nowIso()],
       );
+      await this.emitHydratedTrackerScores({ userId: payload.userId });
       return;
     }
     if (job.type === "enrich_beatmap") {
       const payload = job.payload as { beatmapId: number };
       const beatmap = await this.osu.getBeatmap(payload.beatmapId, "job:enrich_beatmap");
       await this.upsertBeatmap(beatmap, payload.beatmapId);
+      await this.emitHydratedTrackerScores({ beatmapId: payload.beatmapId });
       return;
     }
     if (job.type === "seed_snipe_board") {
@@ -104,6 +116,7 @@ export class WorkerRunner {
       await this.events.append("replay_video_export", null, { id: result.id, status: result.status, url: result.url, error: result.error }, `replay_video_export:${result.id}:${result.status}`);
       return;
     }
+    throw new Error(`Unknown job type: ${job.type}`);
   }
 
   private async upsertBeatmap(raw: Record<string, unknown>, beatmapId: number): Promise<void> {
@@ -148,6 +161,13 @@ export class WorkerRunner {
         now,
       ],
     );
+  }
+
+  private async emitHydratedTrackerScores(filter: { userId?: number; beatmapId?: number }): Promise<void> {
+    const rows = await getHydratedTrackerScoresForMetadata(this.db, filter);
+    for (const row of rows) {
+      await this.events.append("tracker_score", row.country, row.score, `tracker_score:${row.country}:${row.score.id}`);
+    }
   }
 
   private async seedSnipeBoard(payload: { country: string; beatmapId: number; laneKey: string }): Promise<void> {
@@ -204,6 +224,8 @@ function getRetryDelayMs(type: string, attempts: number, error: unknown): number
   const nextAttempt = Math.max(1, attempts + 1);
   const base = type === "refresh_user_top_scores"
     ? 15_000
+    : type === "osc_backfill"
+      ? 60_000
     : type === "enrich_user"
       ? 60_000
       : type === "enrich_beatmap"

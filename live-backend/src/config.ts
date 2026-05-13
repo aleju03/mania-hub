@@ -19,6 +19,8 @@ export interface Config {
   rosterRankingPages: number;
   rosterSize: number;
   oscBackfillMaxAgeMs: number;
+  oscBackfillPageLimit: number;
+  oscBackfillMaxPages: number;
   retentionIntervalMs: number;
   scoreEventRetentionDays: number;
   liveEventRetentionDays: number;
@@ -67,7 +69,9 @@ export function readConfig(): Config {
     rosterRefreshIntervalMs: readInt("ROSTER_REFRESH_INTERVAL_MS", 6 * 60 * 60 * 1000),
     rosterRankingPages: readInt("ROSTER_RANKING_PAGES", 2),
     rosterSize: readInt("ROSTER_SIZE", 100),
-    oscBackfillMaxAgeMs: readInt("OSC_BACKFILL_MAX_AGE_MS", 2 * 60 * 60 * 1000),
+    oscBackfillMaxAgeMs: readInt("OSC_BACKFILL_MAX_AGE_MS", 24 * 60 * 60 * 1000),
+    oscBackfillPageLimit: Math.min(readInt("OSC_BACKFILL_PAGE_LIMIT", 1000), 1000),
+    oscBackfillMaxPages: readInt("OSC_BACKFILL_MAX_PAGES", 30),
     retentionIntervalMs: readInt("RETENTION_INTERVAL_MS", 60 * 60 * 1000),
     scoreEventRetentionDays: readInt("SCORE_EVENT_RETENTION_DAYS", 14),
     liveEventRetentionDays: readInt("LIVE_EVENT_RETENTION_DAYS", 7),

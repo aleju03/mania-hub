@@ -21,10 +21,13 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
     connection: "keep-alive",
   });
   const country = (url.searchParams.get("country") ?? ctx.config.trackedCountries[0] ?? "CR").toUpperCase();
-  const lastEventId = Number(req.headers["last-event-id"] ?? url.searchParams.get("lastEventId") ?? 0);
-  writeEvent(res, { type: "hello", sequence: lastEventId || await ctx.events.latestSequence(), payload: { country, status: "connected" } });
-  const replay = await ctx.events.replay(country, Number.isFinite(lastEventId) ? lastEventId : 0, 100);
-  for (const event of replay) writeEvent(res, event);
+  const cursor = req.headers["last-event-id"] ?? url.searchParams.get("lastEventId");
+  const lastEventId = Number(cursor ?? 0);
+  writeEvent(res, { type: "hello", sequence: Number.isFinite(lastEventId) && lastEventId > 0 ? lastEventId : await ctx.events.latestSequence(), payload: { country, status: "connected" } });
+  if (cursor != null && Number.isFinite(lastEventId)) {
+    const replay = await ctx.events.replay(country, lastEventId, 100);
+    for (const event of replay) writeEvent(res, event);
+  }
   const unsubscribe = ctx.events.subscribe((event) => {
     if (event.country != null && event.country !== country) return;
     writeEvent(res, event);

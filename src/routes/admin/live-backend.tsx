@@ -1,5 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { Activity, Database, Pause, Play, Radio, RefreshCw, Server, Signal, Trash2, UserRound, Wifi, WifiOff } from "lucide-react";
+import { Activity, Database, HelpCircle, History, Pause, Play, Radio, RefreshCw, Server, Signal, Trash2, UserRound, Wifi, WifiOff } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import {
@@ -100,22 +100,23 @@ function LiveBackendPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+  const [refreshNonce, setRefreshNonce] = useState(0);
 
   const countryCode = useMemo(() => country.trim().toUpperCase().slice(0, 2) || DEFAULT_COUNTRY, [country]);
 
-  const fetchJson = useCallback(async <T,>(path: string): Promise<T> => {
+  const fetchBackendJson = useCallback(async <T,>(path: string): Promise<T> => {
     if (!backendUrl) throw new Error("VITE_LIVE_BACKEND_URL is not configured.");
     const response = await fetch(`${backendUrl}${path}`, { credentials: "omit" });
     if (!response.ok) throw new Error(`Live backend ${response.status} for ${path}`);
     return response.json() as Promise<T>;
   }, [backendUrl]);
 
-  const load = useCallback(async (quiet = false) => {
+  const load = useCallback(async (quiet = false): Promise<void> => {
     const requestId = ++requestIdRef.current;
     if (!quiet) setRefreshing(true);
     try {
       const [nextStatus, tracker, topPlays, snipes] = await Promise.all([
-        fetchJson<LiveBackendStatus>("/api/status"),
+        fetchBackendJson<LiveBackendStatus>("/api/status"),
         fetchLiveTrackerSnapshot(countryCode, 100),
         fetchLiveTopPlaysSnapshot(countryCode, "7d"),
         fetchLiveSnipesSnapshot(countryCode, 500),
@@ -137,7 +138,7 @@ function LiveBackendPage() {
     } finally {
       if (requestId === requestIdRef.current) setRefreshing(false);
     }
-  }, [countryCode, fetchJson]);
+  }, [countryCode, fetchBackendJson]);
 
   const runAdminAction = useCallback(async (action: string, path: string) => {
     if (!backendUrl) return;
@@ -155,16 +156,17 @@ function LiveBackendPage() {
   }, [backendUrl, load]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    const quiet = refreshNonce > 0;
+    void load(quiet);
+  }, [load, refreshNonce]);
 
   useEffect(() => {
     if (!autoRefresh) return;
     const id = window.setInterval(() => {
-      void load(true);
+      setRefreshNonce((value) => value + 1);
     }, REFRESH_MS);
     return () => window.clearInterval(id);
-  }, [autoRefresh, load]);
+  }, [autoRefresh]);
 
   useEffect(() => {
     setConnectionState("connecting");
@@ -216,7 +218,7 @@ function LiveBackendPage() {
         refreshing={refreshing}
         autoRefresh={autoRefresh}
         connectionState={connectionState}
-        onRefresh={() => void load()}
+        onRefresh={() => setRefreshNonce((value) => value + 1)}
         onToggleAutoRefresh={() => setAutoRefresh((value) => !value)}
       />
       <div className="bg-osu-b5 min-h-[calc(100vh-60px)]">
@@ -309,6 +311,7 @@ function LiveBackendPage() {
                 onRefreshRoster={() => void runAdminAction("refresh-roster", `/api/admin/refresh-roster?country=${encodeURIComponent(countryCode)}`)}
                 onRunRetention={() => void runAdminAction("retention", "/api/admin/run-retention")}
                 onOscSmoke={() => void runAdminAction("osc-smoke", "/api/admin/osc-smoke")}
+                onRunOscBackfill={() => void runAdminAction("osc-backfill", "/api/admin/run-osc-backfill")}
                 onResetLocalDb={() => void runAdminAction("reset-local-db", "/api/admin/reset-local-db")}
                 onToggleWorkers={() => void runAdminAction(
                   status?.worker?.paused ? "resume-workers" : "pause-workers",
@@ -582,6 +585,7 @@ function QueueCard({
   onRefreshRoster,
   onRunRetention,
   onOscSmoke,
+  onRunOscBackfill,
   onResetLocalDb,
   onToggleWorkers,
 }: {
@@ -591,6 +595,7 @@ function QueueCard({
   onRefreshRoster: () => void;
   onRunRetention: () => void;
   onOscSmoke: () => void;
+  onRunOscBackfill: () => void;
   onResetLocalDb: () => void;
   onToggleWorkers: () => void;
 }) {
@@ -601,37 +606,50 @@ function QueueCard({
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-2">
           <AdminButton
-            label={status?.worker?.paused ? "Resume workers" : "Pause workers"}
+            label={status?.worker?.paused ? "Resume jobs" : "Pause jobs"}
+            description={status?.worker?.paused ? "Let queued backend jobs start running again." : "Temporarily stop queued jobs. Live score intake can still write new scores."}
             icon={status?.worker?.paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
             busy={busy === "pause-workers" || busy === "resume-workers"}
             onClick={onToggleWorkers}
           />
           <AdminButton
             label="Refresh roster"
+            description="Fetch the latest tracked players for this country from osu! rankings."
             icon={<UserRound className="h-3.5 w-3.5" />}
             busy={busy === "refresh-roster"}
             onClick={onRefreshRoster}
           />
           <AdminButton
-            label="Clear failed"
+            label="Clear failed jobs"
+            description="Remove failed jobs from the queue list after you have inspected or fixed them."
             icon={<Trash2 className="h-3.5 w-3.5" />}
             busy={busy === "clear-failed"}
             onClick={onClearFailed}
           />
           <AdminButton
-            label="Run retention"
+            label="Run cleanup"
+            description="Delete old logs, completed jobs, and temporary event rows according to retention settings."
             icon={<RefreshCw className="h-3.5 w-3.5" />}
             busy={busy === "retention"}
             onClick={onRunRetention}
           />
           <AdminButton
-            label="oSC smoke"
+            label="Test oSC API"
+            description="Make one small oSC JSON request to confirm Kayla's API is reachable."
             icon={<Radio className="h-3.5 w-3.5" />}
             busy={busy === "osc-smoke"}
             onClick={onOscSmoke}
           />
           <AdminButton
+            label="Catch up missed scores"
+            description="Queue a paced oSC history scan to recover scores missed while the backend was offline."
+            icon={<History className="h-3.5 w-3.5" />}
+            busy={busy === "osc-backfill"}
+            onClick={onRunOscBackfill}
+          />
+          <AdminButton
             label="Reset local DB"
+            description="Local development only. Clears the live backend database tables."
             icon={<Trash2 className="h-3.5 w-3.5" />}
             busy={busy === "reset-local-db"}
             onClick={onResetLocalDb}
@@ -653,15 +671,39 @@ function QueueCard({
   );
 }
 
-function AdminButton({ label, icon, busy, onClick }: { label: string; icon: React.ReactNode; busy: boolean; onClick: () => void }) {
+function AdminButton({
+  label,
+  description,
+  icon,
+  busy,
+  onClick,
+}: {
+  label: string;
+  description: string;
+  icon: React.ReactNode;
+  busy: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
       disabled={busy}
-      className="inline-flex items-center justify-center gap-1.5 rounded-md bg-osu-b4/60 border border-osu-b3/30 px-2.5 py-1.5 text-[10px] font-semibold text-osu-l2 hover:bg-osu-b3/60 hover:text-white transition-colors duration-[120ms] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+      className="relative inline-grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 rounded-md bg-osu-b4/60 border border-osu-b3/30 px-2.5 py-1.5 text-left text-[10px] font-semibold text-osu-l2 hover:bg-osu-b3/60 hover:text-white transition-colors duration-[120ms] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+      aria-label={`${label}. ${description}`}
     >
-      {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : icon}
-      {label}
+      <span className="flex h-4 w-4 items-center justify-center">
+        {busy ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : icon}
+      </span>
+      <span className="min-w-0 truncate">{label}</span>
+      <span
+        className="group/info relative flex h-4 w-4 items-center justify-center rounded-full text-osu-f1 hover:text-osu-pink-light"
+        aria-label={description}
+      >
+        <HelpCircle className="h-3.5 w-3.5" />
+        <span className="pointer-events-none absolute right-0 top-6 z-20 hidden w-56 rounded-md border border-osu-b3/40 bg-osu-b5 px-2.5 py-2 text-[10px] font-medium leading-relaxed text-osu-l2 shadow-xl shadow-black/30 group-hover/info:block">
+          {description}
+        </span>
+      </span>
     </button>
   );
 }
