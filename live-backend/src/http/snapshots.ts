@@ -29,7 +29,17 @@ export interface HttpContext {
   config: Config;
   osu: OsuApiClient;
   oscStatus: () => OscStatus;
-  workerStatus?: () => { paused: boolean; stopped: boolean; workerId: string };
+  workerStatus?: () => {
+    paused: boolean;
+    stopped: boolean;
+    workerId: string;
+    lanes?: Array<{
+      name: string;
+      claimLimit: number;
+      intervalMs: number;
+      jobTypes: string[] | null;
+    }>;
+  };
   pauseWorkers?: () => void;
   resumeWorkers?: () => void;
 }

@@ -3,7 +3,7 @@ import { readConfig } from "./config.js";
 import { exec, json } from "./db.js";
 import { confirmTopPlay } from "./features/top-plays.js";
 import { getHydratedTrackerScoresForMetadata } from "./features/tracker.js";
-import type { Job, JobQueue } from "./jobs/queue.js";
+import type { ClaimOptions, Job, JobQueue } from "./jobs/queue.js";
 import type { LiveEventLog } from "./live/event-log.js";
 import type { OsuApiClient } from "./osu/client.js";
 import { OscBackfill } from "./osc/backfill.js";
@@ -12,6 +12,34 @@ import { finishReplayVideoExport } from "./replay-video/exports.js";
 import { refreshCountryRoster } from "./rosters/country-rosters.js";
 import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, isLazerScore, nowIso, scoreHasReplay } from "./shared/score.js";
 import { errorContext, logInfo, logWarn } from "./logger.js";
+
+interface WorkerLane {
+  name: string;
+  jobTypes?: string[];
+  claimLimit: number;
+  intervalMs: number;
+}
+
+const DEFAULT_WORKER_LANES: WorkerLane[] = [
+  {
+    name: "fast",
+    jobTypes: ["refresh_user_top_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "osc_backfill"],
+    claimLimit: 4,
+    intervalMs: 750,
+  },
+  {
+    name: "snipe-seed",
+    jobTypes: ["seed_snipe_board"],
+    claimLimit: 1,
+    intervalMs: 1_000,
+  },
+  {
+    name: "replay-video",
+    jobTypes: ["replay_video_export"],
+    claimLimit: 1,
+    intervalMs: 1_000,
+  },
+];
 
 export class WorkerRunner {
   private stopped = false;
@@ -25,36 +53,61 @@ export class WorkerRunner {
     private readonly osu: OsuApiClient,
     private readonly ingestor: ScoreIngestor,
     private readonly workerId = `worker-${process.pid}`,
+    private readonly lanes: WorkerLane[] = DEFAULT_WORKER_LANES,
   ) {}
 
-  start(intervalMs = 1000): () => void {
-    const tick = async () => {
-      if (this.stopped) return;
-      await this.runOnce().catch((error) => console.warn("[worker] tick failed", error));
-      if (!this.stopped) setTimeout(tick, intervalMs).unref();
-    };
-    setTimeout(tick, 0).unref();
+  start(): () => void {
+    for (const lane of this.lanes) {
+      this.startLane(lane);
+    }
     return () => {
       this.stopped = true;
     };
   }
 
+  private startLane(lane: WorkerLane): void {
+    const tick = async () => {
+      if (this.stopped) return;
+      await this.runLaneOnce(lane).catch((error) => console.warn(`[worker:${lane.name}] tick failed`, error));
+      if (!this.stopped) setTimeout(tick, lane.intervalMs).unref();
+    };
+    setTimeout(tick, 0).unref();
+  }
+
   async runOnce(): Promise<void> {
     if (this.paused) return;
-    const jobs = await this.queue.claim(this.workerId, 5);
-    for (const job of jobs) {
-      try {
-        logInfo("job_start", { job_id: job.id, type: job.type, attempts: job.attempts + 1 });
-        await this.handle(job);
-        await this.queue.complete(job.id);
-        logInfo("job_done", { job_id: job.id, type: job.type });
-        await this.events.append("job_status", null, { id: job.id, type: job.type, status: "done" }, `job:${job.id}:done:${job.attempts}`);
-      } catch (error) {
-        const retryDelayMs = getRetryDelayMs(job.type, job.attempts, error);
-        await this.queue.fail(job.id, error, retryDelayMs);
-        logWarn("job_failed", { job_id: job.id, type: job.type, retry_delay_ms: retryDelayMs, ...errorContext(error) });
-        await this.events.append("job_status", null, { id: job.id, type: job.type, status: "failed" }, `job:${job.id}:failed:${job.attempts}`);
-      }
+    await this.runJobs(this.workerId, await this.claimJobs(this.workerId, 5));
+  }
+
+  private async runLaneOnce(lane: WorkerLane): Promise<void> {
+    if (this.paused) return;
+    const laneWorkerId = `${this.workerId}:${lane.name}`;
+    const jobs = await this.claimJobs(laneWorkerId, lane.claimLimit, { types: lane.jobTypes });
+    await this.runJobs(laneWorkerId, jobs, lane.name);
+  }
+
+  private async claimJobs(workerId: string, limit: number, options?: ClaimOptions): Promise<Job[]> {
+    return this.queue.claim(workerId, limit, options);
+  }
+
+  private async runJobs(workerId: string, jobs: Job[], lane = "manual"): Promise<void> {
+    if (this.paused) return;
+    await Promise.all(jobs.map((job) => this.runJob(workerId, job, lane)));
+  }
+
+  private async runJob(workerId: string, job: Job, lane: string): Promise<void> {
+    if (this.paused) return;
+    try {
+      logInfo("job_start", { job_id: job.id, type: job.type, lane, worker_id: workerId, attempts: job.attempts + 1 });
+      await this.handle(job);
+      await this.queue.complete(job.id);
+      logInfo("job_done", { job_id: job.id, type: job.type, lane, worker_id: workerId });
+      await this.events.append("job_status", null, { id: job.id, type: job.type, status: "done" }, `job:${job.id}:done:${job.attempts}`);
+    } catch (error) {
+      const retryDelayMs = getRetryDelayMs(job.type, job.attempts, error);
+      await this.queue.fail(job.id, error, retryDelayMs);
+      logWarn("job_failed", { job_id: job.id, type: job.type, lane, worker_id: workerId, retry_delay_ms: retryDelayMs, ...errorContext(error) });
+      await this.events.append("job_status", null, { id: job.id, type: job.type, status: "failed" }, `job:${job.id}:failed:${job.attempts}`);
     }
   }
 
@@ -66,8 +119,18 @@ export class WorkerRunner {
     this.paused = false;
   }
 
-  status(): { paused: boolean; stopped: boolean; workerId: string } {
-    return { paused: this.paused, stopped: this.stopped, workerId: this.workerId };
+  status(): { paused: boolean; stopped: boolean; workerId: string; lanes: Array<Omit<WorkerLane, "jobTypes"> & { jobTypes: string[] | null }> } {
+    return {
+      paused: this.paused,
+      stopped: this.stopped,
+      workerId: this.workerId,
+      lanes: this.lanes.map((lane) => ({
+        name: lane.name,
+        claimLimit: lane.claimLimit,
+        intervalMs: lane.intervalMs,
+        jobTypes: lane.jobTypes ?? null,
+      })),
+    };
   }
 
   private async handle(job: Job): Promise<void> {

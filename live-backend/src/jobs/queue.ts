@@ -15,6 +15,10 @@ export interface Job<T = unknown> {
   payload: T;
 }
 
+export interface ClaimOptions {
+  types?: string[];
+}
+
 export class JobQueue {
   constructor(private readonly db: Db) {}
 
@@ -37,17 +41,19 @@ export class JobQueue {
     );
   }
 
-  async claim(workerId: string, limit = 1): Promise<Job[]> {
+  async claim(workerId: string, limit = 1, options: ClaimOptions = {}): Promise<Job[]> {
     const now = nowIso();
     const lockedUntil = new Date(Date.now() + 60_000).toISOString();
+    const typeFilter = buildTypeFilter(options.types);
     const rows = (await exec(
       this.db,
       `select * from jobs
-       where (status in ('queued', 'failed') and run_after <= ?)
-          or (status = 'running' and locked_until <= ?)
+       where ((status in ('queued', 'failed') and run_after <= ?)
+          or (status = 'running' and locked_until <= ?))
+       ${typeFilter.sql}
        order by priority desc, run_after asc
        limit ?`,
-      [now, now, limit],
+      [now, now, ...typeFilter.args, limit],
     )).rows;
     const jobs: Job[] = [];
     for (const row of rows) {
@@ -104,6 +110,14 @@ export class JobQueue {
       : await exec(this.db, "delete from jobs where status = 'failed'");
     return Number(result.rowsAffected ?? 0);
   }
+}
+
+function buildTypeFilter(types: string[] | undefined): { sql: string; args: string[] } {
+  if (!types?.length) return { sql: "", args: [] };
+  return {
+    sql: `and type in (${types.map(() => "?").join(", ")})`,
+    args: types,
+  };
 }
 
 function rowToJob(row: Record<string, unknown>): Job {

@@ -43,7 +43,17 @@ interface LiveBackendStatus {
     byCaller: Array<{ caller: string; count: number }>;
     byPath: Array<{ path: string; count: number }>;
   };
-  worker?: { paused: boolean; stopped: boolean; workerId: string } | null;
+  worker?: {
+    paused: boolean;
+    stopped: boolean;
+    workerId: string;
+    lanes?: Array<{
+      name: string;
+      claimLimit: number;
+      intervalMs: number;
+      jobTypes: string[] | null;
+    }>;
+  } | null;
 }
 
 interface SnapshotStats {
@@ -452,6 +462,7 @@ function SnapshotRow({ label, value, fetchedAt, suffix }: { label: string; value
 
 function StatusCard({ status, connectionState, country }: { status: LiveBackendStatus | null; connectionState: ConnectionState; country: string }) {
   const roster = status?.roster?.find((entry) => entry.country === country);
+  const workerLanes = status?.worker?.lanes ?? [];
   return (
     <SectionCard title="Process status" subtitle="health, readiness, socket, and worker pressure">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -464,7 +475,28 @@ function StatusCard({ status, connectionState, country }: { status: LiveBackendS
         <DetailRow label="Workers" value={status?.worker?.paused ? "paused" : "running"} tone={status?.worker?.paused ? "warn" : "good"} />
         <DetailRow label="Worker id" value={status?.worker?.workerId ?? "unknown"} />
       </div>
+      {workerLanes.length > 0 ? (
+        <div className="mt-3 space-y-1.5">
+          {workerLanes.map((lane) => (
+            <WorkerLaneRow key={lane.name} lane={lane} />
+          ))}
+        </div>
+      ) : null}
     </SectionCard>
+  );
+}
+
+function WorkerLaneRow({ lane }: { lane: NonNullable<NonNullable<LiveBackendStatus["worker"]>["lanes"]>[number] }) {
+  const jobTypes = lane.jobTypes?.join(", ") ?? "all jobs";
+  return (
+    <div className="rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2">
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-white">{lane.name}</span>
+        <span className="text-[10px] font-mono text-osu-c2">{formatNumber(lane.claimLimit)}x</span>
+        <span className="text-[10px] font-mono text-osu-f1">{formatNumber(lane.intervalMs)}ms</span>
+      </div>
+      <div className="mt-1 truncate text-[10px] font-mono text-osu-f1">{jobTypes}</div>
+    </div>
   );
 }
 
