@@ -7,7 +7,7 @@ import { maybeEnqueueTopPlayRefresh } from "../features/top-plays.js";
 import { getTrackerScoreById } from "../features/tracker.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { LiveEventLog } from "../live/event-log.js";
-import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, isLazerScore, nowIso, scoreHasReplay } from "../shared/score.js";
+import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, isLazerScore, nowIso, scoreHasPublicLeaderboard, scoreHasReplay } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 import { logInfo } from "../logger.js";
 
@@ -108,6 +108,7 @@ export class ScoreIngestor {
 
   private async enqueueSnipeSeedIfNeeded(country: string, score: OscScore): Promise<void> {
     if (!score.beatmap) return;
+    if (!scoreHasPublicLeaderboard(score)) return;
     const laneKey = getBoardLaneKey(getModAcronyms(score.mods), isLazerScore(score));
     const row = (await exec(
       this.db,

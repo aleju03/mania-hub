@@ -28,6 +28,8 @@ export interface Config {
   doneJobRetentionDays: number;
   apiCallLogRetentionDays: number;
   replayVideoJobRetentionDays: number;
+  maxLocalDbBytes: number;
+  targetLocalDbBytes: number;
   replayVideoPublicOrigin: string;
   replayVideoWorkDir: string;
   r2Endpoint?: string;
@@ -80,6 +82,8 @@ export function readConfig(): Config {
     doneJobRetentionDays: readInt("DONE_JOB_RETENTION_DAYS", 2),
     apiCallLogRetentionDays: readInt("API_CALL_LOG_RETENTION_DAYS", 7),
     replayVideoJobRetentionDays: readInt("REPLAY_VIDEO_JOB_RETENTION_DAYS", 2),
+    maxLocalDbBytes: readInt("MAX_LOCAL_DB_BYTES", 10 * 1024 * 1024 * 1024),
+    targetLocalDbBytes: readInt("TARGET_LOCAL_DB_BYTES", 8 * 1024 * 1024 * 1024),
     replayVideoPublicOrigin: process.env.REPLAY_VIDEO_PUBLIC_ORIGIN ?? process.env.LIVE_PUBLIC_ORIGIN ?? "http://localhost:7227",
     replayVideoWorkDir: process.env.REPLAY_VIDEO_WORK_DIR ?? "./data/replay-video-jobs",
     r2Endpoint: process.env.R2_ENDPOINT || undefined,

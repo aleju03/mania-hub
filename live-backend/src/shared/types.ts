@@ -82,6 +82,7 @@ export interface OscScore {
   replay?: boolean;
   has_replay?: boolean;
   processed?: boolean;
+  ranked?: boolean;
   type?: string;
   weight?: { percentage: number; pp: number };
 }

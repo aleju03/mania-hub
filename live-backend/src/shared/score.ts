@@ -67,6 +67,19 @@ export function scoreHasReplay(score: ScoreLike): boolean {
   return score.has_replay ?? score.replay ?? false;
 }
 
+export function hasPublicLeaderboardStatus(status: unknown): boolean {
+  const normalized = String(status ?? "").toLowerCase();
+  return normalized === "ranked"
+    || normalized === "approved"
+    || normalized === "loved"
+    || normalized === "qualified";
+}
+
+export function scoreHasPublicLeaderboard(score: Pick<OscScore, "ranked" | "beatmap" | "beatmapset">): boolean {
+  if (typeof score.ranked === "boolean") return score.ranked;
+  return hasPublicLeaderboardStatus(score.beatmap?.status ?? score.beatmapset?.status);
+}
+
 export type ScoreSpeedBucket = "ht" | "normal" | "dt";
 
 export function getScoreSpeedBucket(mods: string[]): ScoreSpeedBucket {

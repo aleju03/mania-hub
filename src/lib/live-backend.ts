@@ -1,3 +1,5 @@
+import { createServerFn } from "@tanstack/react-start";
+import { requireAdminAccess } from "./auth";
 import type { CountryTopPlay, LeanTrackerScore, SnipeEvent } from "./types";
 
 export type LiveEventName =
@@ -37,6 +39,60 @@ export function getLiveBackendUrl(): string | null {
 export function isLiveBackendConfigured(): boolean {
   return getLiveBackendUrl() !== null;
 }
+
+function getServerLiveBackendUrl(): string | null {
+  const value = process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL;
+  if (typeof value !== "string" || value.trim() === "") return null;
+  return value.replace(/\/+$/, "");
+}
+
+function normalizeAdminPath(input: unknown): string {
+  if (typeof input !== "string") throw new Error("Invalid live backend admin path.");
+  const url = new URL(input, "http://live-backend.local");
+  const path = `${url.pathname}${url.search}`;
+  const exact = new Set([
+    "/api/admin/clear-failed-jobs",
+    "/api/admin/pause-workers",
+    "/api/admin/resume-workers",
+    "/api/admin/run-retention",
+    "/api/admin/osc-smoke",
+    "/api/admin/run-osc-backfill",
+    "/api/admin/reset-local-db",
+  ]);
+  if (exact.has(path)) return path;
+  if (url.pathname === "/api/admin/refresh-roster") {
+    const country = url.searchParams.get("country");
+    if (country && /^[A-Za-z]{2}$/.test(country)) return `/api/admin/refresh-roster?country=${country.toUpperCase()}`;
+  }
+  throw new Error("Unsupported live backend admin action.");
+}
+
+export const runLiveBackendAdminAction = createServerFn({ method: "POST" })
+  .inputValidator((data: { path?: unknown }) => ({
+    path: normalizeAdminPath(data?.path),
+  }))
+  .handler(async ({ data }): Promise<{ ok: boolean; body: string | null }> => {
+    await requireAdminAccess("Live backend admin action");
+    const base = getServerLiveBackendUrl();
+    if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+    const headers: HeadersInit = {};
+    if (process.env.LIVE_ADMIN_TOKEN) {
+      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    }
+    const response = await fetch(`${base}${data.path}`, {
+      method: "POST",
+      headers,
+    });
+    const text = await response.text();
+    const body = text ? JSON.parse(text) as Record<string, unknown> : null;
+    if (!response.ok) {
+      const message = body && typeof body === "object" && "error" in body
+        ? String((body as { error?: unknown }).error)
+        : `Live backend ${response.status} for ${data.path}`;
+      throw new Error(message);
+    }
+    return { ok: true, body: text || null };
+  });
 
 export async function fetchLiveTrackerSnapshot(country: string, limit = 100): Promise<LiveTrackerSnapshot> {
   return fetchLiveJson(`/api/snapshots/tracker?country=${encodeURIComponent(country)}&limit=${limit}`);

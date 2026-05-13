@@ -8,6 +8,7 @@ import {
   fetchLiveTrackerSnapshot,
   getLiveBackendUrl,
   openLiveEventSource,
+  runLiveBackendAdminAction,
   type LiveEventName,
 } from "../../lib/live-backend";
 import { formatNumber, formatTimeAgo } from "../../lib/format";
@@ -17,6 +18,14 @@ type ConnectionState = "idle" | "connecting" | "open" | "error";
 interface LiveBackendStatus {
   ok: boolean;
   db: boolean;
+  storage?: {
+    filePath: string | null;
+    bytes: number | null;
+    walBytes: number | null;
+    maxBytes: number;
+    targetBytes: number;
+    overLimit: boolean;
+  };
   osc: {
     connected: boolean;
     lastBatchAt: string | null;
@@ -151,11 +160,9 @@ function LiveBackendPage() {
   }, [countryCode, fetchBackendJson]);
 
   const runAdminAction = useCallback(async (action: string, path: string) => {
-    if (!backendUrl) return;
     setActionBusy(action);
     try {
-      const response = await fetch(`${backendUrl}${path}`, { method: "POST", credentials: "omit" });
-      if (!response.ok) throw new Error(`Live backend ${response.status} for ${path}`);
+      await runLiveBackendAdminAction({ data: { path } });
       await load(true);
       setError(null);
     } catch (err) {
@@ -163,7 +170,7 @@ function LiveBackendPage() {
     } finally {
       setActionBusy(null);
     }
-  }, [backendUrl, load]);
+  }, [load]);
 
   useEffect(() => {
     const quiet = refreshNonce > 0;
@@ -264,8 +271,8 @@ function LiveBackendPage() {
             <KpiCard
               label="Database"
               value={status?.db ? "ready" : "down"}
-              hint="libSQL / SQLite"
-              tone={status?.db ? "good" : "bad"}
+              hint={formatStorageHint(status)}
+              tone={status?.storage?.overLimit ? "bad" : status?.db ? "good" : "bad"}
               icon={<Database className="h-4 w-4" />}
             />
             <KpiCard
@@ -458,6 +465,25 @@ function SnapshotRow({ label, value, fetchedAt, suffix }: { label: string; value
       </div>
     </div>
   );
+}
+
+function formatBytes(bytes: number | null | undefined): string {
+  if (bytes == null || !Number.isFinite(bytes)) return "unknown";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return `${value >= 10 || unit === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[unit]}`;
+}
+
+function formatStorageHint(status: LiveBackendStatus | null): string {
+  const storage = status?.storage;
+  if (!storage || storage.bytes == null) return "libSQL / SQLite";
+  const total = storage.bytes + (storage.walBytes ?? 0);
+  return `${formatBytes(total)} / ${formatBytes(storage.maxBytes)}`;
 }
 
 function StatusCard({ status, connectionState, country }: { status: LiveBackendStatus | null; connectionState: ConnectionState; country: string }) {

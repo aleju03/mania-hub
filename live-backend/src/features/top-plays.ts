@@ -1,7 +1,7 @@
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
-import { calculateWeightedPp, nowIso } from "../shared/score.js";
+import { calculateWeightedPp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
 import type { CountryTopPlay, OscScore } from "../shared/types.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import type { OsuApiClient } from "../osu/client.js";
@@ -14,6 +14,7 @@ export async function maybeEnqueueTopPlayRefresh(
   marginPp: number,
 ): Promise<void> {
   if (score.pp == null || score.pp <= 0) return;
+  if (!scoreHasPublicLeaderboard(score)) return;
   const row = (await exec(db, "select top_play_min_pp from users where user_id = ?", [score.user_id])).rows[0];
   const threshold = Math.max(0, Number(row?.top_play_min_pp ?? 0) - marginPp);
   if (score.pp >= threshold) {

@@ -21,7 +21,7 @@ import {
 } from "../replay-video/exports.js";
 import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
 import { enqueueRosterRefreshes } from "../rosters/country-rosters.js";
-import { runRetention } from "../retention.js";
+import { getLocalDbStorage, runRetention } from "../retention.js";
 
 export interface HttpContext {
   db: Db;
@@ -261,6 +261,7 @@ async function statusBody(ctx: HttpContext) {
   return {
     ok: db,
     db,
+    storage: await getLocalDbStorage(ctx.config),
     osc: ctx.oscStatus(),
     lastEventAt: last,
     queueDepth: await ctx.queue.depth(),

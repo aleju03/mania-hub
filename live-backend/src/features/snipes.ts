@@ -1,11 +1,12 @@
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import type { LiveEventLog } from "../live/event-log.js";
-import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, isLazerScore, nowIso, scoreHasReplay } from "../shared/score.js";
+import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, isLazerScore, nowIso, scoreHasPublicLeaderboard, scoreHasReplay } from "../shared/score.js";
 import type { OscScore, SnipeEvent } from "../shared/types.js";
 
 export async function updateSnipeProjection(db: Db, events: LiveEventLog, country: string, score: OscScore): Promise<SnipeEvent | null> {
   if (!score.beatmap || !score.beatmapset || !score.user) return null;
+  if (!scoreHasPublicLeaderboard(score)) return null;
   const totalScore = getDisplayedTotalScore(score);
   if (totalScore == null) return null;
   const isLazer = isLazerScore(score);
