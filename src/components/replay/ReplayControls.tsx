@@ -135,6 +135,7 @@ export function ReplayControls({
   const [videoFps, setVideoFps] = useState<ReplayVideoExportOptions["fps"]>(48);
   const [videoToast, setVideoToast] = useState<{ id: number; message: string; url?: string } | null>(null);
   const videoToastIdRef = useRef(0);
+  const wasVideoExportingRef = useRef(videoExporting);
   const videoMenuRef = useRef<HTMLDivElement>(null);
   const sliderClass = "h-1 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink";
 
@@ -156,7 +157,9 @@ export function ReplayControls({
   }, [videoMenuOpen]);
 
   useEffect(() => {
-    if (!videoExportUrl) return;
+    const completedExport = wasVideoExportingRef.current && !videoExporting && Boolean(videoExportUrl);
+    wasVideoExportingRef.current = videoExporting;
+    if (!completedExport || !videoExportUrl) return;
     videoToastIdRef.current += 1;
     const toastId = videoToastIdRef.current;
     const showToast = (message: string, url?: string) => {
@@ -165,9 +168,8 @@ export function ReplayControls({
         setVideoToast((current) => (current?.id === toastId ? null : current));
       }, url ? 9000 : 3500);
     };
-    void copyTextToClipboard(videoExportUrl)
-      .then((ok) => showToast(ok ? "Discord video URL copied" : "Discord video ready", ok ? undefined : videoExportUrl));
-  }, [videoExportUrl]);
+    showToast("Discord video ready", videoExportUrl);
+  }, [videoExporting, videoExportUrl]);
 
   const handleProgressContextMenu = (timeMsGame: number, clientX: number, clientY: number) => {
     onContextMenu(timeMsGame, clientX, clientY);
