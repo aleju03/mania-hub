@@ -22,7 +22,7 @@ export const DEFAULT_REPLAY_OVERLAY_SETTINGS: ReplayOverlaySettings = {
   kps: { enabled: false, x: 0.035, y: 0.77, scale: 0.75 },
   misses: { enabled: true, x: 0.085, y: 0.77, scale: 1 },
   accuracy: { enabled: true, x: 0.74, y: 0.02, scale: 1 },
-  judgements: { enabled: true, x: 0.74, y: 0.07, scale: 1 },
+  judgements: { enabled: true, x: 0.74, y: 0.07, scale: 1.25 },
   progress: { enabled: true, x: 0.03, y: 0.03, scale: 1 },
 };
 
