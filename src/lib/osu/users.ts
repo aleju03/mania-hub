@@ -36,7 +36,6 @@ import {
   USER_SCORE_LIST_CACHE_TTL
 } from "./constants";
 import {
-  MIXED_SCORE_USER_IDS,
   bestScoresWindowPromiseCache,
   rankHistoryPromiseCache,
   userPromiseCache,
@@ -58,12 +57,11 @@ import {
 import { mapWithConcurrency } from "./concurrency";
 
 export function getScoreRequestParams(
-  userId: number,
   params: Record<string, string | number | undefined>,
 ): Record<string, string | number | undefined> {
   return {
     ...params,
-    legacy_only: MIXED_SCORE_USER_IDS.has(userId) ? undefined : 1,
+    legacy_only: 1,
   };
 }
 
@@ -130,7 +128,7 @@ export async function getCachedUserScores(
   const request = fetchWithCacheLock(cacheKey, USER_SCORE_LIST_CACHE_TTL, () =>
     osuFetch<OsuScore[]>(
       `/users/${userId}/scores/${type}`,
-      getScoreRequestParams(userId, {
+      getScoreRequestParams({
         mode: "mania",
         limit: options.limit,
         offset: options.offset,
@@ -249,7 +247,7 @@ export async function fetchUserBestScoresWindow(
   const request = fetchWithCacheLock(cacheKey, BEST_SCORES_WINDOW_CACHE_TTL, async () => {
     const firstPage = await osuFetch<OsuScore[]>(
       `/users/${userId}/scores/best`,
-      getScoreRequestParams(userId, {
+      getScoreRequestParams({
         mode: "mania",
         limit: Math.min(totalLimit, 100),
         offset: 0,
@@ -271,7 +269,7 @@ export async function fetchUserBestScoresWindow(
     if (totalLimit > 100 && firstPage.length >= 100) {
       const secondPage = await osuFetch<OsuScore[]>(
         `/users/${userId}/scores/best`,
-        getScoreRequestParams(userId, {
+        getScoreRequestParams({
           mode: "mania",
           limit: Math.min(totalLimit - 100, 100),
           offset: 100,

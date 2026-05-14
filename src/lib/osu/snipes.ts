@@ -74,7 +74,7 @@ async function fetchUserRecentPlays(userId: number): Promise<OsuScore[]> {
   const request = fetchWithCacheLock(cacheKey, SNIPES_RECENT_PLAYS_CACHE_TTL, () =>
     osuFetch<OsuScore[]>(
       `/users/${userId}/scores/recent`,
-      getScoreRequestParams(userId, {
+      getScoreRequestParams({
         mode: "mania",
         limit: SNIPES_RECENT_LIMIT,
         offset: 0,

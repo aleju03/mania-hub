@@ -10,7 +10,3 @@ export const userScoresListPromiseCache = new Map<string, Promise<OsuScore[]>>()
 export const rankHistoryPromiseCache = new Map<number, Promise<number[] | null>>();
 export const bestScoresWindowPromiseCache = new Map<string, Promise<OsuScore[]>>();
 export const oscRecentScoresPromiseCache = new Map<string, Promise<OscScore[]>>();
-export const MIXED_SCORE_USER_IDS = new Set<number>([
-  23341349, // happy amke sure
-  25914429, // jaimito
-]);
