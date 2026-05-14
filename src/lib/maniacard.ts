@@ -6,13 +6,13 @@
 // plays, then normalizes per keymode so 4K and 7K are not compared on the same
 // raw BPM/density scale.
 
-import type { OsuScore } from "./types";
+import type { OsuScore, OsuScoreStatistics } from "./types";
 import { getDisplayedAccuracy, getModAcronyms, getScoreRate } from "./score";
 
 export interface ManiaSkills {
   // Average star rating across the considered plays (raw, unrounded).
   starAvg: number;
-  // The three numbers shown on the card, on a 0-1000-ish card scale.
+  // The three numbers shown on the card, on a generous RPG-style display scale.
   fingerControl: number;
   speed: number;
   accuracy: number;
@@ -33,8 +33,7 @@ export type ManiaCardTier =
   | "elite"
   | "superRare"
   | "ultraRare"
-  | "master"
-  | "grandmaster"
+  | "legendary"
   | "mythic"
   | "ascendant"
   | "worldClass";
@@ -53,6 +52,7 @@ interface KeymodeBaseline {
 interface TraitSums {
   star: number;
   precision: number;
+  precisionPeak: number;
   speed: number;
   control: number;
   stamina: number;
@@ -152,6 +152,15 @@ function getAccuracyGate(acc: number): number {
   return 0.35 + curve(normalize(acc, 0.94, 0.995), 0.8) * 0.65;
 }
 
+function getMaxJudgementRatioScore(stats: OsuScoreStatistics): number | null {
+  const max = stats.count_geki ?? stats.perfect ?? 0;
+  const perfect = stats.count_300 ?? stats.great ?? 0;
+  const total = max + perfect;
+  if (total <= 0) return null;
+
+  return curve(max / total, 0.72);
+}
+
 function getEffectiveStarRating(score: OsuScore, rate: number): number {
   const star = score.beatmap.difficulty_rating;
   if (!Number.isFinite(rate) || rate <= 0 || Math.abs(rate - 1) < 0.001) return star;
@@ -170,6 +179,10 @@ function computePlayTraits(score: OsuScore, baseline: KeymodeBaseline) {
   const length = Math.max(1, b.total_length / Math.max(0.1, rate));
   const objects = b.count_circles + b.count_sliders;
   const density = objects / length;
+  const lnRatio = objects > 0 ? clamp(b.count_sliders / objects) : 0;
+  const riceRatio = 1 - lnRatio;
+  const riceDensity = b.count_circles / length;
+  const lnDensity = b.count_sliders / length;
   const acc = getDisplayedAccuracy(score);
   const od = b.accuracy;
   const maxCombo = b.max_combo && b.max_combo > 0 ? b.max_combo : objects;
@@ -184,30 +197,42 @@ function computePlayTraits(score: OsuScore, baseline: KeymodeBaseline) {
   const srScore = curve(normalize(star, ...baseline.sr), 0.9);
   const bpmScore = curve(normalize(effectiveBpm, ...baseline.bpm), 0.95);
   const densityScore = curve(normalize(density, ...baseline.density), 0.85);
+  const riceDensityScore = curve(normalize(riceDensity, ...baseline.density), 0.85);
+  const lnDensityScore = curve(normalize(lnDensity, ...baseline.density), 0.85);
+  const riceBias = 0.72 + riceRatio * 0.38;
+  const lnBias = 0.82 + lnRatio * 0.42;
   const odScore = curve(normalize(od, 6.0, 9.8), 0.8);
   const lengthScore = curve(normalize(length, ...baseline.length), 0.8);
   const objectScore = curve(normalize(objects, ...baseline.objects), 0.75);
   const ppScore = curve(normalize(score.pp ?? 0, ...baseline.pp), 0.7);
   const precisionBase = curve(normalize(acc, 0.94, 0.999), 1.55);
+  const maxJudgementRatioScore = getMaxJudgementRatioScore(score.statistics);
+  const precisionDifficultyGate = 0.34 + srScore * 0.66;
+  const judgementPrecision = maxJudgementRatioScore == null
+    ? precisionBase
+    : precisionBase * 0.7 + (maxJudgementRatioScore * precisionDifficultyGate) * 0.3;
+  const speedRateGate = rate < 1 ? Math.pow(rate, 0.72) : 1;
 
   const precision = clamp(
-    (precisionBase * 0.7 + curve(normalize(acc, 0.985, 1), 1.1) * 0.18 + odScore * 0.12) *
-      (0.88 + srScore * 0.12) *
+    (judgementPrecision * 0.7 + curve(normalize(acc, 0.985, 1), 1.1) * 0.18 + odScore * 0.12) *
+      (0.34 + srScore * 0.66) *
       missPenalty,
   );
 
   const speed = clamp(
-    (bpmScore * 0.44 + densityScore * 0.34 + srScore * 0.22) *
+    (bpmScore * 0.45 + riceDensityScore * 0.35 + srScore * 0.2) *
       accGate *
-      comboGate,
+      speedRateGate *
+      riceBias,
   );
 
   const control = clamp(
     (srScore * 0.34 +
       odScore * 0.18 +
-      densityScore * 0.2 +
+      (densityScore * 0.09 + lnDensityScore * 0.13) +
       precisionBase * 0.2 +
       objectScore * 0.08) *
+      lnBias *
       (isRateFarm ? 0.96 : 1.03) *
       accGate *
       comboGate,
@@ -236,6 +261,7 @@ function createEmptySums(): TraitSums {
   return {
     star: 0,
     precision: 0,
+    precisionPeak: 0,
     speed: 0,
     control: 0,
     stamina: 0,
@@ -248,7 +274,8 @@ function createEmptySums(): TraitSums {
 function toProfile(keyMode: number, sums: TraitSums): KeymodeProfile | null {
   if (sums.weight <= 0 || sums.count <= 0) return null;
 
-  const precision = sums.precision / sums.weight;
+  const averagePrecision = sums.precision / sums.weight;
+  const precision = averagePrecision * 0.72 + sums.precisionPeak * 0.28;
   const speed = sums.speed / sums.weight;
   const control = sums.control / sums.weight;
   const stamina = sums.stamina / sums.weight;
@@ -345,6 +372,13 @@ function toCardValue(value: number): number {
   return Math.round(clamp(value) * 1000);
 }
 
+const DISPLAY_SKILL_SCALE = 1500;
+const DISPLAY_SKILL_CURVE = 0.68;
+
+function toDisplaySkillValue(value: number): number {
+  return Math.round(curve(value, DISPLAY_SKILL_CURVE) * DISPLAY_SKILL_SCALE);
+}
+
 export function computeGlobalPpStrength(pp: number | null | undefined): number {
   const value = Math.max(0, pp ?? 0);
   return curve(normalize(value, 12_000, 24_000), 0.7);
@@ -372,6 +406,7 @@ export function computeManiaSkills(scores: OsuScore[], options: { globalPp?: num
     const sums = byKeyMode.get(keyMode) ?? createEmptySums();
     sums.star += traits.star * weight;
     sums.precision += traits.precision * weight;
+    sums.precisionPeak = Math.max(sums.precisionPeak, traits.precision);
     sums.speed += traits.speed * weight;
     sums.control += traits.control * weight;
     sums.stamina += traits.stamina * weight;
@@ -389,22 +424,21 @@ export function computeManiaSkills(scores: OsuScore[], options: { globalPp?: num
   const blended = blendProfiles(profiles);
   const globalPpStrength = computeGlobalPpStrength(options.globalPp);
   const cardPower =
-    blended.peak * 0.32 +
-    globalPpStrength * 0.38 +
+    blended.peak * 0.33 +
+    globalPpStrength * 0.39 +
     blended.control * 0.09 +
     blended.speed * 0.07 +
     blended.precision * 0.05 +
-    blended.stamina * 0.06 +
-    blended.versatility * 0.03;
+    blended.stamina * 0.07;
 
   return {
     starAvg: blended.starAvg,
-    fingerControl: toCardValue(blended.control),
-    speed: toCardValue(blended.speed),
-    accuracy: toCardValue(blended.precision),
-    stamina: toCardValue(blended.stamina),
-    versatility: toCardValue(blended.versatility),
-    peak: toCardValue(blended.peak),
+    fingerControl: toDisplaySkillValue(blended.control),
+    speed: toDisplaySkillValue(blended.speed),
+    accuracy: toDisplaySkillValue(blended.precision),
+    stamina: toDisplaySkillValue(blended.stamina),
+    versatility: toDisplaySkillValue(blended.versatility),
+    peak: toDisplaySkillValue(blended.peak),
     cardPower: toCardValue(cardPower),
     mainKeyMode: blended.mainKeyMode,
     archetype: blended.archetype,
@@ -413,46 +447,55 @@ export function computeManiaSkills(scores: OsuScore[], options: { globalPp?: num
 }
 
 export function getManiaCardTier(cardPower: number): ManiaCardTier {
-  if (cardPower >= 665) return "worldClass";
-  if (cardPower >= 640) return "ascendant";
-  if (cardPower >= 610) return "mythic";
-  if (cardPower >= 560) return "grandmaster";
-  if (cardPower >= 520) return "master";
+  if (cardPower >= 700) return "worldClass";
+  if (cardPower >= 635) return "ascendant";
+  if (cardPower >= 575) return "mythic";
+  if (cardPower >= 470) return "legendary";
   if (cardPower >= 410) return "ultraRare";
-  if (cardPower >= 380) return "superRare";
-  if (cardPower >= 260) return "elite";
-  if (cardPower >= 140) return "rare";
+  if (cardPower >= 330) return "superRare";
+  if (cardPower >= 240) return "elite";
+  if (cardPower >= 120) return "rare";
   return "common";
 }
 
 export interface NextManiaCardTier {
   tier: ManiaCardTier;
   label: string;
+  currentTier: ManiaCardTier;
+  currentLabel: string;
   threshold: number;
   remaining: number;
+  progress: number;
 }
 
 const MANIA_CARD_TIER_THRESHOLDS: Array<{ tier: ManiaCardTier; threshold: number }> = [
-  { tier: "rare", threshold: 140 },
-  { tier: "elite", threshold: 260 },
-  { tier: "superRare", threshold: 380 },
+  { tier: "rare", threshold: 120 },
+  { tier: "elite", threshold: 240 },
+  { tier: "superRare", threshold: 330 },
   { tier: "ultraRare", threshold: 410 },
-  { tier: "master", threshold: 520 },
-  { tier: "grandmaster", threshold: 560 },
-  { tier: "mythic", threshold: 610 },
-  { tier: "ascendant", threshold: 640 },
-  { tier: "worldClass", threshold: 665 },
+  { tier: "legendary", threshold: 470 },
+  { tier: "mythic", threshold: 575 },
+  { tier: "ascendant", threshold: 635 },
+  { tier: "worldClass", threshold: 700 },
 ];
 
 export function getNextManiaCardTier(cardPower: number): NextManiaCardTier | null {
-  const next = MANIA_CARD_TIER_THRESHOLDS.find(({ threshold }) => cardPower < threshold);
-  if (!next) return null;
+  const nextIndex = MANIA_CARD_TIER_THRESHOLDS.findIndex(({ threshold }) => cardPower < threshold);
+  if (nextIndex === -1) return null;
+  const next = MANIA_CARD_TIER_THRESHOLDS[nextIndex];
+  const prevThreshold = nextIndex === 0 ? 0 : MANIA_CARD_TIER_THRESHOLDS[nextIndex - 1].threshold;
+  const span = next.threshold - prevThreshold;
+  const progress = span > 0 ? Math.min(1, Math.max(0, (cardPower - prevThreshold) / span)) : 0;
+  const currentTier: ManiaCardTier = nextIndex === 0 ? "common" : MANIA_CARD_TIER_THRESHOLDS[nextIndex - 1].tier;
 
   return {
     tier: next.tier,
     label: MANIA_TIER_STYLES[next.tier].label,
+    currentTier,
+    currentLabel: MANIA_TIER_STYLES[currentTier].label,
     threshold: next.threshold,
     remaining: next.threshold - cardPower,
+    progress,
   };
 }
 
@@ -545,33 +588,19 @@ export const MANIA_TIER_STYLES: Record<ManiaCardTier, ManiaCardTierStyle> = {
     badgeHalo: "rgba(255,70,150,0.58)",
     badgeGlyphShadow: "rgba(120,20,70,0.45)",
   },
-  master: {
-    label: "Master",
-    background: "from-amber-300 via-orange-500 to-rose-700",
-    border: "border-amber-100/90",
-    glow: "shadow-[0_18px_68px_rgba(217,119,6,0.62)]",
-    edgeFill: "rgba(154, 52, 18, 0.94)",
-    glowColor: "rgba(251, 191, 36, 0.4)",
-    starColor: "text-amber-100",
-    badgeColor: "text-amber-50",
-    badgeGradient:
-      "linear-gradient(142deg, #fef3c7 0%, #f59e0b 44%, #9a3412 100%)",
-    badgeHalo: "rgba(252,211,77,0.6)",
-    badgeGlyphShadow: "rgba(120,53,15,0.45)",
-  },
-  grandmaster: {
-    label: "Grandmaster",
-    background: "from-yellow-200 via-fuchsia-500 to-cyan-700",
+  legendary: {
+    label: "Legendary",
+    background: "from-yellow-200 via-amber-400 to-orange-800",
     border: "border-yellow-100/95",
-    glow: "shadow-[0_18px_74px_rgba(236,72,153,0.66)]",
-    edgeFill: "rgba(112, 26, 117, 0.94)",
-    glowColor: "rgba(244, 114, 182, 0.46)",
+    glow: "shadow-[0_18px_74px_rgba(245,158,11,0.66)]",
+    edgeFill: "rgba(146, 64, 14, 0.94)",
+    glowColor: "rgba(251, 191, 36, 0.5)",
     starColor: "text-yellow-100",
     badgeColor: "text-yellow-50",
     badgeGradient:
-      "linear-gradient(142deg, #fef9c3 0%, #e879f9 42%, #0e7490 100%)",
-    badgeHalo: "rgba(232,121,249,0.64)",
-    badgeGlyphShadow: "rgba(88,28,135,0.45)",
+      "linear-gradient(142deg, #fff7ad 0%, #fbbf24 42%, #92400e 100%)",
+    badgeHalo: "rgba(251,191,36,0.66)",
+    badgeGlyphShadow: "rgba(120,53,15,0.5)",
   },
   mythic: {
     label: "Mythic",

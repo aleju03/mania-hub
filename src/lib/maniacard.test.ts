@@ -90,34 +90,229 @@ describe("computeManiaSkills", () => {
 
     expect(tagged).toEqual(plain);
   });
+
+  test("keeps mid-accuracy precision readable instead of bottoming out", () => {
+    const skills = computeManiaSkills([score({ accuracy: 0.955 })]);
+
+    expect(skills?.accuracy).toBeGreaterThan(300);
+    expect(skills?.accuracy).toBeLessThan(750);
+  });
+
+  test("lets elite display stats break four digits without changing card power scale", () => {
+    const skills = computeManiaSkills([
+      score({
+        accuracy: 0.995,
+        pp: 1500,
+        beatmap: {
+          ...score().beatmap,
+          difficulty_rating: 9,
+          accuracy: 9.5,
+          bpm: 260,
+          total_length: 190,
+          count_circles: 1600,
+          max_combo: 1600,
+        },
+        max_combo: 1600,
+      }),
+    ]);
+
+    expect(skills?.speed).toBeGreaterThan(1000);
+    expect(skills?.fingerControl).toBeGreaterThan(1000);
+    expect(skills?.cardPower).toBeLessThanOrEqual(1000);
+  });
+
+  test("does not let half-time density farm read as full-rate speed", () => {
+    const denseMap = {
+      ...score().beatmap,
+      difficulty_rating: 9.4,
+      bpm: 260,
+      total_length: 150,
+      count_circles: 1900,
+      max_combo: 1900,
+    };
+    const nm = computeManiaSkills([
+      score({ accuracy: 0.98, pp: 900, beatmap: denseMap, max_combo: 1900 }),
+    ]);
+    const ht = computeManiaSkills([
+      score({
+        accuracy: 0.98,
+        pp: 900,
+        beatmap: denseMap,
+        max_combo: 1900,
+        mods: [{ acronym: "HT" }],
+      }),
+    ]);
+
+    expect(ht?.speed).toBeLessThan((nm?.speed ?? 0) * 0.85);
+  });
+
+  test("routes rice-heavy density toward speed and LN-heavy density toward control", () => {
+    const sharedBeatmap = {
+      ...score().beatmap,
+      difficulty_rating: 8.2,
+      bpm: 220,
+      total_length: 150,
+      max_combo: 2000,
+    };
+    const rice = computeManiaSkills([
+      score({
+        accuracy: 0.985,
+        pp: 900,
+        max_combo: 2000,
+        beatmap: {
+          ...sharedBeatmap,
+          count_circles: 1800,
+          count_sliders: 200,
+        },
+      }),
+    ]);
+    const ln = computeManiaSkills([
+      score({
+        accuracy: 0.985,
+        pp: 900,
+        max_combo: 2000,
+        beatmap: {
+          ...sharedBeatmap,
+          count_circles: 200,
+          count_sliders: 1800,
+        },
+      }),
+    ]);
+
+    expect(rice?.speed).toBeGreaterThan(ln?.speed ?? 0);
+    expect(ln?.fingerControl).toBeGreaterThan(rice?.fingerControl ?? 0);
+  });
+
+  test("rewards standout clean plays in the visible precision trait", () => {
+    const steady = computeManiaSkills([
+      score({ id: 1, accuracy: 0.955, pp: 500 }),
+      score({ id: 2, accuracy: 0.956, pp: 480 }),
+    ]);
+    const withCleanPeak = computeManiaSkills([
+      score({ id: 1, accuracy: 0.955, pp: 500 }),
+      score({ id: 2, accuracy: 0.995, pp: 480 }),
+    ]);
+
+    expect(withCleanPeak?.accuracy).toBeGreaterThan((steady?.accuracy ?? 0) + 200);
+  });
+
+  test("uses MAX to 300 judgement ratio as a precision signal when counts exist", () => {
+    const lowMax = computeManiaSkills([
+      score({
+        accuracy: 0.99,
+        statistics: { count_geki: 400, count_300: 600, count_miss: 0 },
+        beatmap: {
+          ...score().beatmap,
+          difficulty_rating: 7.4,
+          count_circles: 650,
+          count_sliders: 450,
+          max_combo: 1100,
+        },
+        max_combo: 1100,
+      }),
+    ]);
+    const highMax = computeManiaSkills([
+      score({
+        accuracy: 0.99,
+        statistics: { count_geki: 850, count_300: 150, count_miss: 0 },
+        beatmap: {
+          ...score().beatmap,
+          difficulty_rating: 7.4,
+          count_circles: 650,
+          count_sliders: 450,
+          max_combo: 1100,
+        },
+        max_combo: 1100,
+      }),
+    ]);
+
+    expect(highMax?.accuracy).toBeGreaterThan(lowMax?.accuracy ?? 0);
+  });
+
+  test("does not over-credit low-star perfects as top-tier precision", () => {
+    const cleanLowStar = computeManiaSkills([
+      score({
+        accuracy: 1,
+        pp: 300,
+        statistics: { count_geki: 900, count_300: 100, count_miss: 0 },
+        beatmap: {
+          ...score().beatmap,
+          difficulty_rating: 5.1,
+          accuracy: 8.5,
+        },
+      }),
+    ]);
+    const cleanHighStar = computeManiaSkills([
+      score({
+        accuracy: 1,
+        pp: 900,
+        statistics: { count_geki: 900, count_300: 100, count_miss: 0 },
+        beatmap: {
+          ...score().beatmap,
+          difficulty_rating: 8.2,
+          accuracy: 8.5,
+        },
+      }),
+    ]);
+
+    expect(cleanLowStar?.accuracy).toBeLessThan(1050);
+    expect(cleanHighStar?.accuracy).toBeGreaterThan(cleanLowStar?.accuracy ?? 0);
+  });
+
 });
 
 describe("getNextManiaCardTier", () => {
   test("reports the remaining power for the next tier", () => {
     expect(getNextManiaCardTier(500)).toMatchObject({
-      tier: "master",
-      label: "Master",
-      threshold: 520,
-      remaining: 20,
+      tier: "mythic",
+      label: "Mythic",
+      threshold: 575,
+      remaining: 75,
     });
   });
 
   test("returns null at the top tier", () => {
-    expect(getNextManiaCardTier(665)).toBeNull();
+    expect(getNextManiaCardTier(700)).toBeNull();
   });
 
   test("balances upper-tier boundaries into distinct prestige ranks", () => {
-    expect(getNextManiaCardTier(560)).toMatchObject({
-      tier: "mythic",
-      threshold: 610,
-    });
-    expect(getNextManiaCardTier(610)).toMatchObject({
+    expect(getNextManiaCardTier(575)).toMatchObject({
       tier: "ascendant",
-      threshold: 640,
+      threshold: 635,
     });
-    expect(getNextManiaCardTier(640)).toMatchObject({
+    expect(getNextManiaCardTier(635)).toMatchObject({
       tier: "worldClass",
-      threshold: 665,
+      threshold: 700,
+    });
+  });
+
+  test("reports progress through the current tier band", () => {
+    expect(getNextManiaCardTier(60)).toMatchObject({
+      tier: "rare",
+      currentTier: "common",
+      progress: 0.5,
+    });
+    const midSuperRare = getNextManiaCardTier(370);
+    expect(midSuperRare?.currentTier).toBe("superRare");
+    expect(midSuperRare?.progress).toBeCloseTo(0.5, 2);
+  });
+
+  test("maps calibrated mental-model breakpoints to expected tiers", () => {
+    expect(getNextManiaCardTier(239)).toMatchObject({
+      tier: "elite",
+      threshold: 240,
+    });
+    expect(getNextManiaCardTier(329)).toMatchObject({
+      tier: "superRare",
+      threshold: 330,
+    });
+    expect(getNextManiaCardTier(409)).toMatchObject({
+      tier: "ultraRare",
+      threshold: 410,
+    });
+    expect(getNextManiaCardTier(574)).toMatchObject({
+      tier: "mythic",
+      threshold: 575,
     });
   });
 });
