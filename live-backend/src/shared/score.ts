@@ -61,7 +61,7 @@ export function getDisplayedTotalScore(score: ScoreLike): number | null {
 }
 
 export function getScoreIdentity(score: ScoreLike): string {
-  const officialId = score.legacy_score_id ?? score.id;
+  const officialId = score.legacy_score_id != null && score.legacy_score_id > 0 ? score.legacy_score_id : score.id;
   if (officialId > 0) return `official:${officialId}`;
   const beatmapId = score.beatmap_id ?? score.beatmap?.id ?? "unknown";
   const timestamp = score.ended_at ?? score.created_at ?? score.started_at ?? "unknown";

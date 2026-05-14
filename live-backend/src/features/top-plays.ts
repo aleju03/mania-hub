@@ -69,7 +69,7 @@ export async function confirmTopPlay(
 }
 
 function getTopPlayConfirmationScoreId(score: Pick<OscScore, "id" | "legacy_score_id">): number {
-  return score.legacy_score_id ?? score.id;
+  return score.legacy_score_id != null && score.legacy_score_id > 0 ? score.legacy_score_id : score.id;
 }
 
 async function getTopPlayConfirmationScoreIdCandidates(

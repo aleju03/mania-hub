@@ -35,11 +35,7 @@ function getZlib(): Promise<ZlibAsync> {
   return zlibPromise;
 }
 
-let tokenCache: { access_token: string; expires_at: number } | null = null;
-const OSU_FETCH_RETRIES = 2;
-const OAUTH_FETCH_TIMEOUT_MS = 10_000;
-const OSU_FETCH_TIMEOUT_MS = 15_000;
-const BEATMAP_FILE_FETCH_TIMEOUT_MS = 15_000;
+const LIVE_BACKEND_OSU_TIMEOUT_MS = 120_000;
 const BEATMAP_FILE_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
 
 // Simple response cache (5 min TTL)
@@ -749,51 +745,6 @@ export const getOsuRateStats = createServerFn({ method: "GET" }).handler(async (
   };
 });
 
-function getRetryDelayMs(res: Response, attempt: number): number {
-  const retryAfter = res.headers.get("retry-after");
-  if (retryAfter) {
-    const seconds = Number(retryAfter);
-    if (Number.isFinite(seconds) && seconds > 0) {
-      return seconds * 1000;
-    }
-  }
-
-  return 500 * 2 ** attempt;
-}
-
-async function getToken(): Promise<string> {
-  if (tokenCache && Date.now() < tokenCache.expires_at - 60_000) {
-    return tokenCache.access_token;
-  }
-
-  const res = await fetchWithTimeout(
-    "https://osu.ppy.sh/oauth/token",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({
-        client_id: Number(process.env.OSU_CLIENT_ID),
-        client_secret: process.env.OSU_CLIENT_SECRET,
-        grant_type: "client_credentials",
-        scope: "public",
-      }),
-    },
-    OAUTH_FETCH_TIMEOUT_MS,
-  );
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`OAuth token request failed (${res.status}): ${text}`);
-  }
-
-  const data = await res.json();
-  tokenCache = {
-    access_token: data.access_token,
-    expires_at: Date.now() + data.expires_in * 1000,
-  };
-  return tokenCache.access_token;
-}
-
 export type OsuFetchContextValue = string | number | boolean | null | undefined;
 export type OsuFetchOptions = {
   caller?: string;
@@ -855,65 +806,11 @@ export async function osuFetch<T = unknown>(
 ): Promise<T> {
   const caller = options?.caller ?? "unknown";
   const context = cleanOsuFetchContext(options?.context);
-  const token = await getToken();
-
-  const url = new URL(`https://osu.ppy.sh/api/v2${path}`);
-  if (params) {
-    for (const [k, v] of Object.entries(params)) {
-      if (v !== undefined) url.searchParams.set(k, String(v));
-    }
-  }
-
-  for (let attempt = 0; attempt <= OSU_FETCH_RETRIES; attempt++) {
-    const res = await fetchWithTimeout(
-      url.toString(),
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          "x-api-version": "20220705",
-        },
-      },
-      OSU_FETCH_TIMEOUT_MS,
-    );
-    recordOsuCall(res, url.pathname.replace(/^\/api\/v2/, "") + url.search, caller);
-
-    if (res.ok) {
-      return res.json() as Promise<T>;
-    }
-
-    const shouldRetry = (res.status === 429 || res.status >= 500) && attempt < OSU_FETCH_RETRIES;
-    if (shouldRetry) {
-      await sleep(getRetryDelayMs(res, attempt));
-      continue;
-    }
-
-    const text = await res.text().catch(() => "");
-    const bodyPreview = truncateErrorBody(text);
-    const rate = getOsuRateSnapshot();
-    trackServerEvent("osu_api_error", {
-      caller,
-      path: url.pathname.replace(/^\/api\/v2/, "") + url.search,
-      status: res.status,
-      attempts: attempt + 1,
-      kind: "json",
-      body_preview: bodyPreview,
-      context,
-      rate_per_min: rate.perMin,
-      rate_remaining: rate.remaining,
-      rate_limit: rate.limit,
-      rate_updated_ago_ms: rate.updatedAgoMs,
-      retry_after: res.headers.get("retry-after"),
-    });
-    throw new Error(
-      `[osuFetch:${caller}] ${res.status} ${path} — ${bodyPreview || "<empty body>"}`,
-    );
-  }
-
-  // Unreachable: the loop's final iteration always throws above. Keep as a
-  // typing safety net so TS knows osuFetch never returns undefined.
-  throw new Error(`[osuFetch:${caller}] retries exhausted on ${path}`);
+  const requestPath = pathWithParams(path, params);
+  const response = await fetchLiveBackendOsu(path, params, caller, "json");
+  recordOsuCall(response, requestPath, caller);
+  if (response.ok) return response.json() as Promise<T>;
+  return await throwLiveBackendOsuError(response, caller, requestPath, "json", context);
 }
 
 export async function osuFetchBinary(
@@ -922,56 +819,10 @@ export async function osuFetchBinary(
 ): Promise<ArrayBuffer> {
   const caller = options?.caller ?? "unknown";
   const context = cleanOsuFetchContext(options?.context);
-  const token = await getToken();
-
-  for (let attempt = 0; attempt <= OSU_FETCH_RETRIES; attempt++) {
-    const res = await fetchWithTimeout(
-      `https://osu.ppy.sh/api/v2${path}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      },
-      OSU_FETCH_TIMEOUT_MS,
-    );
-    recordOsuCall(res, path, caller);
-
-    if (res.ok) {
-      return res.arrayBuffer();
-    }
-
-    const shouldRetry = (res.status === 429 || res.status >= 500) && attempt < OSU_FETCH_RETRIES;
-    if (shouldRetry) {
-      await sleep(getRetryDelayMs(res, attempt));
-      continue;
-    }
-
-    // Binary endpoints sometimes return a small text/html or text/plain
-    // error page. Capture it for the dashboard so we can see *why* the
-    // download failed instead of just "binary error 404".
-    const text = await res.text().catch(() => "");
-    const bodyPreview = truncateErrorBody(text);
-    const rate = getOsuRateSnapshot();
-    trackServerEvent("osu_api_error", {
-      caller,
-      path,
-      status: res.status,
-      attempts: attempt + 1,
-      kind: "binary",
-      body_preview: bodyPreview,
-      context,
-      rate_per_min: rate.perMin,
-      rate_remaining: rate.remaining,
-      rate_limit: rate.limit,
-      rate_updated_ago_ms: rate.updatedAgoMs,
-      retry_after: res.headers.get("retry-after"),
-    });
-    throw new Error(
-      `[osuFetchBinary:${caller}] ${res.status} ${path} — ${bodyPreview || "<empty body>"}`,
-    );
-  }
-
-  throw new Error(`[osuFetchBinary:${caller}] retries exhausted on ${path}`);
+  const response = await fetchLiveBackendOsu(path, undefined, caller, "binary");
+  recordOsuCall(response, path, caller);
+  if (response.ok) return response.arrayBuffer();
+  return await throwLiveBackendOsuError(response, caller, path, "binary", context);
 }
 
 export async function fetchBeatmapFile(beatmapId: number, beatmapsetId?: number | null): Promise<string> {
@@ -981,10 +832,7 @@ export async function fetchBeatmapFile(beatmapId: number, beatmapsetId?: number 
 
   const errors: string[] = [];
   try {
-    const osuFile = await fetchBeatmapFileFromSource(
-      "osu",
-      `https://osu.ppy.sh/osu/${beatmapId}`,
-    );
+    const osuFile = await fetchLiveBackendBeatmapFile(beatmapId, "fetchBeatmapFile");
     await setPersistentCache(cacheKey, {
       content: osuFile,
       source: "osu",
@@ -992,22 +840,7 @@ export async function fetchBeatmapFile(beatmapId: number, beatmapsetId?: number 
     } satisfies BeatmapFileCacheValue, BEATMAP_FILE_CACHE_TTL);
     return osuFile;
   } catch (error) {
-    errors.push(`osu (${error instanceof Error ? error.message : String(error)})`);
-  }
-
-  try {
-    const catboyFile = await fetchBeatmapFileFromSource(
-      "catboy",
-      `https://catboy.best/osu/${beatmapId}`,
-    );
-    await setPersistentCache(cacheKey, {
-      content: catboyFile,
-      source: "catboy",
-      cachedAt: Date.now(),
-    } satisfies BeatmapFileCacheValue, BEATMAP_FILE_CACHE_TTL);
-    return catboyFile;
-  } catch (catboyError) {
-    errors.push(`catboy (${catboyError instanceof Error ? catboyError.message : String(catboyError)})`);
+    errors.push(`live-backend (${error instanceof Error ? error.message : String(error)})`);
   }
 
   if (beatmapsetId) {
@@ -1036,17 +869,93 @@ function isLikelyBeatmapFile(content: string): boolean {
   return trimmed.startsWith("osu file format") && content.includes("[HitObjects]");
 }
 
-async function fetchBeatmapFileFromSource(
-  source: BeatmapFileSource,
-  url: string,
-): Promise<string> {
-  const res = await fetchWithTimeout(url, undefined, BEATMAP_FILE_FETCH_TIMEOUT_MS);
-  if (!res.ok) {
-    throw new Error(`${source} returned ${res.status}`);
+function getServerLiveBackendUrl(): string {
+  const value = process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL;
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error("LIVE_BACKEND_URL is required for osu! API calls.");
   }
-  const text = await res.text();
-  if (!isLikelyBeatmapFile(text)) {
-    throw new Error(`${source} returned an invalid .osu file`);
+  return value.replace(/\/+$/, "");
+}
+
+function liveBackendHeaders(): HeadersInit {
+  const headers: HeadersInit = { "content-type": "application/json" };
+  if (process.env.LIVE_ADMIN_TOKEN) {
+    headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
   }
+  return headers;
+}
+
+function pathWithParams(path: string, params?: Record<string, string | number | undefined>): string {
+  if (!params) return path;
+  const url = new URL(path, "https://osu.ppy.sh");
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) url.searchParams.set(key, String(value));
+  }
+  return `${url.pathname}${url.search}`;
+}
+
+async function fetchLiveBackendOsu(
+  path: string,
+  params: Record<string, string | number | undefined> | undefined,
+  caller: string,
+  kind: "json" | "binary",
+): Promise<Response> {
+  const base = getServerLiveBackendUrl();
+  return fetchWithTimeout(
+    `${base}/api/osu/v2`,
+    {
+      method: "POST",
+      headers: liveBackendHeaders(),
+      body: JSON.stringify({ path, params, caller, kind }),
+    },
+    LIVE_BACKEND_OSU_TIMEOUT_MS,
+  );
+}
+
+async function fetchLiveBackendBeatmapFile(beatmapId: number, caller: string): Promise<string> {
+  const base = getServerLiveBackendUrl();
+  const url = new URL(`${base}/api/osu/beatmap-file`);
+  url.searchParams.set("beatmapId", String(beatmapId));
+  url.searchParams.set("caller", caller);
+  const response = await fetchWithTimeout(
+    url,
+    { headers: liveBackendHeaders() },
+    LIVE_BACKEND_OSU_TIMEOUT_MS,
+  );
+  recordOsuCall(response, `/osu/${beatmapId}`, caller);
+  if (!response.ok) {
+    await throwLiveBackendOsuError(response, caller, `/osu/${beatmapId}`, "beatmap-file");
+  }
+  const text = await response.text();
+  if (!isLikelyBeatmapFile(text)) throw new Error("live backend returned an invalid .osu file");
   return text;
+}
+
+async function throwLiveBackendOsuError(
+  response: Response,
+  caller: string,
+  path: string,
+  kind: "json" | "binary" | "beatmap-file",
+  context?: Record<string, string | number | boolean | null>,
+): Promise<never> {
+  const text = await response.text().catch(() => "");
+  const bodyPreview = truncateErrorBody(text);
+  const rate = getOsuRateSnapshot();
+  trackServerEvent("osu_api_error", {
+    caller,
+    path,
+    status: response.status,
+    attempts: 1,
+    kind,
+    body_preview: bodyPreview,
+    context,
+    rate_per_min: rate.perMin,
+    rate_remaining: rate.remaining,
+    rate_limit: rate.limit,
+    rate_updated_ago_ms: rate.updatedAgoMs,
+    retry_after: response.headers.get("retry-after"),
+  });
+  throw new Error(
+    `[liveBackendOsu:${caller}] ${response.status} ${path} - ${bodyPreview || "<empty body>"}`,
+  );
 }

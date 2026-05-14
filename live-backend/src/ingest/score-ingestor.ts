@@ -112,6 +112,9 @@ export class ScoreIngestor {
           source,
         ],
       );
+      if (scoreId > 0) {
+        await this.deleteMatchingIdZeroRecentScore(country, score, beatmapId, totalScore, receivedAt);
+      }
       if (result.rowsAffected === 0) continue;
       inserted++;
       await markCountryScoreSeen(this.db, country);
@@ -145,6 +148,27 @@ export class ScoreIngestor {
       }
     }
     return true;
+  }
+
+  private async deleteMatchingIdZeroRecentScore(
+    country: string,
+    score: OscScore,
+    beatmapId: number,
+    totalScore: number | null,
+    receivedAt: string,
+  ): Promise<void> {
+    if (totalScore == null) return;
+    await exec(
+      this.db,
+      `delete from score_events
+       where country = ?
+         and score_id = 0
+         and user_id = ?
+         and beatmap_id = ?
+         and ended_at = ?
+         and total_score = ?`,
+      [country, score.user_id, beatmapId, score.ended_at ?? score.created_at ?? receivedAt, totalScore],
+    );
   }
 
   private async updateOscCursor(score: OscScore, receivedAt: string): Promise<void> {

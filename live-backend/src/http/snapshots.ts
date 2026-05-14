@@ -11,7 +11,7 @@ import { getTrackerSnapshot } from "../features/tracker.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import type { OscStatus } from "../osc/client.js";
-import type { OsuApiClient } from "../osu/client.js";
+import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { enqueueOscBackfill } from "../osc/backfill.js";
 import {
   cancelReplayVideoExport,
@@ -126,6 +126,58 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
     sendJson(req, res, ctx, 200, await getDanEstimateBatch(ctx.db, ctx.queue, ctx.osu, items, {
       computeMissing: body.computeMissing !== false,
     }));
+    return true;
+  }
+  if (url.pathname === "/api/osu/v2") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
+    const path = normalizeOsuApiPath(body.path, body.params);
+    const caller = normalizeCaller(body.caller);
+    try {
+      if (body.kind === "binary") {
+        const buffer = Buffer.from(await ctx.osu.getBinary(path, caller));
+        sendCors(req, res, ctx);
+        res.statusCode = 200;
+        res.setHeader("content-type", "application/octet-stream");
+        res.end(buffer);
+        return true;
+      }
+      sendJson(req, res, ctx, 200, await ctx.osu.getJson(path, caller));
+    } catch (error) {
+      sendOsuError(req, res, ctx, error);
+    }
+    return true;
+  }
+  if (url.pathname === "/api/osu/beatmap-file") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const beatmapId = Number(url.searchParams.get("beatmapId"));
+    if (!Number.isFinite(beatmapId) || beatmapId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_beatmap_id" });
+      return true;
+    }
+    try {
+      const content = await ctx.osu.getBeatmapFile(Math.floor(beatmapId), normalizeCaller(url.searchParams.get("caller")));
+      sendCors(req, res, ctx);
+      res.statusCode = 200;
+      res.setHeader("content-type", "text/plain; charset=utf-8");
+      res.end(content);
+    } catch (error) {
+      sendOsuError(req, res, ctx, error);
+    }
     return true;
   }
   if (url.pathname === "/api/events") {
@@ -431,6 +483,43 @@ export function sendNotFound(res: ServerResponse): void {
 function clampLimit(raw: string | null, fallback: number, max: number): number {
   const value = Number(raw ?? fallback);
   return Number.isFinite(value) ? Math.max(1, Math.min(max, Math.floor(value))) : fallback;
+}
+
+function normalizeOsuApiPath(rawPath: unknown, rawParams: unknown): string {
+  if (typeof rawPath !== "string" || rawPath.length > 500 || !rawPath.startsWith("/")) {
+    throw new Error("Invalid osu! API path.");
+  }
+  const url = new URL(rawPath, "https://osu.ppy.sh");
+  if (url.origin !== "https://osu.ppy.sh" || url.pathname.startsWith("/oauth/")) {
+    throw new Error("Invalid osu! API path.");
+  }
+  if (rawParams && typeof rawParams === "object" && !Array.isArray(rawParams)) {
+    for (const [key, value] of Object.entries(rawParams)) {
+      if (value === undefined || value === null) continue;
+      if (!/^[A-Za-z0-9_[\]-]+$/.test(key)) throw new Error("Invalid osu! API param.");
+      if (!["string", "number", "boolean"].includes(typeof value)) throw new Error("Invalid osu! API param.");
+      url.searchParams.set(key, String(value));
+    }
+  }
+  return `${url.pathname}${url.search}`;
+}
+
+function normalizeCaller(raw: unknown): string {
+  if (typeof raw !== "string" || !raw.trim()) return "frontend";
+  return raw.trim().replace(/[^\w:.-]/g, "_").slice(0, 120);
+}
+
+function sendOsuError(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, error: unknown): void {
+  if (error instanceof OsuApiError) {
+    sendJson(req, res, ctx, error.status, {
+      error: "osu_api_error",
+      status: error.status,
+      path: error.path,
+      retryAfterMs: error.retryAfterMs,
+    });
+    return;
+  }
+  sendJson(req, res, ctx, 502, { error: error instanceof Error ? error.message : String(error) });
 }
 
 function isAdmin(req: IncomingMessage, ctx: HttpContext): boolean {

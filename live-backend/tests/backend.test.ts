@@ -15,7 +15,7 @@ import { refreshCountryRoster } from "../src/rosters/country-rosters.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { LiveEventLog } from "../src/live/event-log.js";
-import { TokenBucketLimiter } from "../src/osu/client.js";
+import { OsuApiClient, TokenBucketLimiter } from "../src/osu/client.js";
 import { WorkerRunner } from "../src/workers.js";
 import type { OscScore } from "../src/shared/types.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -174,6 +174,76 @@ describe("live backend", () => {
     expect(countries.map((row) => `${row.country}:${row.count}`)).toEqual(["CR:1", "US:1"]);
     expect((await events.replay("CR", 0)).some((event) => event.type === "tracker_score")).toBe(true);
     expect((await events.replay("US", 0)).some((event) => event.type === "tracker_score")).toBe(true);
+  });
+
+  it("resolves id-zero API recent scores from the osu! web recent endpoint", async () => {
+    const { db, ingestor } = await setup();
+    const apiScore: OscScore = {
+      id: 0,
+      user_id: 101,
+      ruleset_id: 3,
+      accuracy: 0.925,
+      beatmap_id: 777,
+      mods: [],
+      score: 765432,
+      total_score: 765432,
+      max_combo: 777,
+      passed: true,
+      rank: "A",
+      statistics: { count_geki: 700, count_300: 200, count_katu: 30, count_100: 10, count_50: 0, count_miss: 0 },
+      pp: null,
+      beatmap: { id: 777, beatmapset_id: 70, difficulty_rating: 4.8, mode: "mania", status: "graveyard", cs: 4, bpm: 180, max_combo: 777, version: "[4K] practice", url: "https://osu.ppy.sh/beatmaps/777" },
+      beatmapset: { id: 70, title: "Practice Pack", artist: "Mapper", creator: "mapper", covers: { cover: "https://assets.example/cover.jpg" }, status: "graveyard" },
+      user: { id: 101, username: "Sniper", avatar_url: "https://assets.example/sniper.png", country_code: "CR" },
+      created_at: "2026-05-12T00:04:00.000Z",
+      ended_at: "2026-05-12T00:04:00.000Z",
+      has_replay: false,
+      type: "score_mania",
+    };
+    const webScore: OscScore = {
+      ...apiScore,
+      id: 123456,
+      type: "solo_score",
+      legacy_score_id: 0,
+      legacy_total_score: 765432,
+      total_score: 0,
+      score: 0,
+      accuracy: 0,
+      rank: "D",
+    };
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url === "https://osu.ppy.sh/oauth/token") {
+        return new Response(JSON.stringify({ access_token: "token", expires_in: 3600 }), { status: 200 });
+      }
+      if (url.includes("/api/v2/users/101/scores/recent")) {
+        return new Response(JSON.stringify([apiScore]), { status: 200 });
+      }
+      if (url.includes("/users/101/scores/recent")) {
+        return new Response(JSON.stringify([webScore]), { status: 200 });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    const osu = new OsuApiClient({
+      osuClientId: "test-client",
+      osuClientSecret: "test-secret",
+      osuApiHardPerMinute: 60_000,
+      osuApiTargetPerMinute: 60_000,
+    }, fetchMock as never);
+
+    const scores = await osu.getUserRecentScores(101, "test:recent-web-fallback");
+
+    expect(scores[0].id).toBe(123456);
+    expect(scores[0].type).toBe("solo_score");
+    expect(scores[0].rank).toBe("A");
+    expect(scores[0].legacy_total_score).toBe(765432);
+    await ingestor.ingestBatch([apiScore], "osu_recent", { enqueueRecentReconcile: false, processLeaderboardFeatures: false });
+    await ingestor.ingestBatch(scores, "osu_recent", { enqueueRecentReconcile: false, processLeaderboardFeatures: false });
+    const rows = (await exec(db, "select score_id, score_identity from score_events")).rows;
+    expect(rows).toHaveLength(1);
+    const row = rows[0];
+    expect(row.score_id).toBe(123456);
+    expect(row.score_identity).toBe("official:123456");
   });
 
   it("dedupes reconciled stable scores against oSC legacy score ids", async () => {
@@ -490,6 +560,32 @@ describe("live backend", () => {
     await Promise.all(tasks);
     expect(calls).toHaveLength(3);
     expect(calls[2] - calls[0]).toBeGreaterThanOrEqual(60_000);
+  });
+
+  it("prioritizes interactive osu! calls ahead of queued bulk work", async () => {
+    vi.useFakeTimers();
+    const limiter = new TokenBucketLimiter(100, 60_000);
+    const calls: string[] = [];
+
+    const tasks = [
+      limiter.schedule("job:seed_snipe_board", "/beatmaps/1/scores/users/1/all", async () => {
+        calls.push("bulk-1");
+        return true;
+      }),
+      limiter.schedule("job:seed_snipe_board", "/beatmaps/1/scores/users/2/all", async () => {
+        calls.push("bulk-2");
+        return true;
+      }),
+      limiter.schedule("getUser", "/users/123/mania", async () => {
+        calls.push("interactive");
+        return true;
+      }),
+    ];
+
+    await vi.advanceTimersByTimeAsync(3);
+    await Promise.all(tasks);
+
+    expect(calls).toEqual(["bulk-1", "interactive", "bulk-2"]);
   });
 
   it("queues stale maps snapshots without duplicating active refresh jobs", async () => {
