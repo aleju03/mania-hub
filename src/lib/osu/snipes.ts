@@ -24,9 +24,9 @@ import type {
   SnipesScanStatus
 } from "../types";
 import {
-  edgeCache,
   getErrorMessage
 } from "./core";
+import { edgeCache } from "./server";
 import {
   SNIPES_CACHE_TTL,
   SNIPES_LOCK_TTL,
@@ -727,4 +727,3 @@ export const getPartialSnipeEvents = createServerFn({ method: "GET" })
     const country = normalizeCountryCode(data.country);
     return (await getPersistentCached<SnipeEvent[]>(snipesPartialEventsKey(country))) ?? [];
   });
-

@@ -13,7 +13,7 @@ import type { OsuScore } from "../types";
 import {
   edgeCache,
   noStore
-} from "./core";
+} from "./server";
 import {
   normalizeBeatmapPayload,
   normalizeReplayParsedPayload,
@@ -260,4 +260,3 @@ export const getScore = createServerFn({ method: "GET" })
       caller: "getScore:modern",
     });
   });
-

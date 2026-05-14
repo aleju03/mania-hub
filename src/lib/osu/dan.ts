@@ -9,7 +9,7 @@ import { parseManiaBeatmap } from "../beatmap-parser";
 import { estimateDan } from "../dan-estimator";
 import { DAN_ESTIMATE_CACHE_VERSION } from "../dan-estimator/cache-version";
 import type { LeanDanEstimate } from "../types";
-import { edgeCache } from "./core";
+import { edgeCache } from "./server";
 import { asInputRecord } from "./validators";
 import { mapWithConcurrency } from "./concurrency";
 
@@ -117,4 +117,3 @@ export const getDanEstimates = createServerFn({ method: "GET" })
       return results;
     },
   );
-

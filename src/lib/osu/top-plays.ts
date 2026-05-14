@@ -19,11 +19,11 @@ import type {
   TopPlaysRefreshStatus,
   TopPlaysResponse
 } from "../types";
+import { getErrorMessage } from "./core";
 import {
   edgeCache,
-  getErrorMessage,
   noStore
-} from "./core";
+} from "./server";
 import { toLeanHomeScore } from "./mappers";
 import {
   APPROX_PP_GAINS_CONCURRENCY,

@@ -22,7 +22,7 @@ import type {
 import {
   edgeCache,
   noStore
-} from "./core";
+} from "./server";
 import {
   COUNTRY_BEATMAP_LOOKUP_CONCURRENCY,
   COUNTRY_BEATMAP_SCORES_CACHE_TTL,

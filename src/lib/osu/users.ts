@@ -18,11 +18,11 @@ import type {
   OsuScore,
   OsuUser
 } from "../types";
+import { getErrorMessage } from "./core";
 import {
   edgeCache,
-  getErrorMessage,
   sanitizeServerProfilePageHtml
-} from "./core";
+} from "./server";
 import {
   APPROX_PP_GAINS_CONCURRENCY,
   BEATMAP_USER_SCORES_ALL_CACHE_TTL,

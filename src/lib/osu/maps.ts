@@ -27,7 +27,7 @@ import type {
 import {
   assertDevMutationAllowed,
   edgeCache
-} from "./core";
+} from "./server";
 import {
   FARMED_SINGLE_PLAYER_PP_MIN,
   MAPS_DATA_CACHE_VERSION,
@@ -611,4 +611,3 @@ export const rebuildCountryMapsForUser = createServerFn({ method: "POST" })
       value: farmedValue && favValue ? composeCountryMapsData(farmedValue, favValue) : null,
     };
   });
-

@@ -13,9 +13,9 @@ import type {
   RankingsResponse
 } from "../types";
 import {
-  edgeCache,
   getErrorMessage
 } from "./core";
+import { edgeCache } from "./server";
 import {
   APPROX_PP_GAINS_CONCURRENCY,
   OSC_BEATMAP_METADATA_CACHE_TTL,

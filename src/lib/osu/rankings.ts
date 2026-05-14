@@ -4,7 +4,7 @@ import {
   osuFetch
 } from "../api";
 import type { RankingsResponse } from "../types";
-import { edgeCache } from "./core";
+import { edgeCache } from "./server";
 import { toLeanRankingEntry } from "./mappers";
 import type { RawRankingsResponse } from "./mappers";
 import {
