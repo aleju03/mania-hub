@@ -281,6 +281,26 @@ describe("live backend", () => {
     expect(Number((await exec(db, "select count(*) as count from top_play_events where score_id = 9001")).rows[0].count)).toBe(1);
   });
 
+  it("confirms reconciled top plays by the score id stored in score_json", async () => {
+    const { db, events } = await setup();
+    const best = await fixture<OscScore[]>("top-best.json");
+    const score = best[0];
+    await exec(
+      db,
+      `insert into score_events
+       (score_id, score_identity, legacy_score_id, user_id, country, beatmap_id, ruleset_id, score_json, pp, total_score, accuracy, rank, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
+       values (?, ?, null, ?, 'CR', ?, 3, ?, ?, ?, ?, ?, 1, 0, 0, 0, ?, ?, 'osu_recent')`,
+      [99001, "official:9001", score.user_id, score.beatmap_id ?? score.beatmap?.id ?? 501, JSON.stringify(score), score.pp, score.total_score ?? score.score, score.accuracy, score.rank, score.ended_at ?? score.created_at ?? "", new Date().toISOString()],
+    );
+    const osu = {
+      getBeatmapUserScoresAll: async (_beatmapId: number, _userId: number, _caller?: string) => [],
+      getUserBestScores: async (_userId: number, _caller?: string) => best,
+    };
+
+    expect(await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 99001, country: "CR" })).toBe(true);
+    expect(Number((await exec(db, "select count(*) as count from top_play_events where score_id = 9001")).rows[0].count)).toBe(1);
+  });
+
   it("calculates top-play pp gain from the previous same-beatmap best", async () => {
     const { db, events } = await setup();
     const baseBest = (await fixture<OscScore[]>("top-best.json"))[0];

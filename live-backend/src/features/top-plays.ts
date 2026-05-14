@@ -79,16 +79,22 @@ async function getTopPlayConfirmationScoreIdCandidates(
   const candidates = new Set<number>([payload.scoreId]);
   const rows = (await exec(
     db,
-    `select score_id, legacy_score_id from score_events
+    `select score_id, legacy_score_id, score_json from score_events
      where country = ? and user_id = ? and (score_id = ? or legacy_score_id = ?)
+        or (country = ? and user_id = ? and score_json like ?)
      limit 5`,
-    [payload.country, payload.userId, payload.scoreId, payload.scoreId],
+    [payload.country, payload.userId, payload.scoreId, payload.scoreId, payload.country, payload.userId, `%"id":${payload.scoreId}%`],
   )).rows;
   for (const row of rows) {
     const scoreId = Number(row.score_id);
     const legacyScoreId = Number(row.legacy_score_id);
     if (Number.isFinite(scoreId) && scoreId > 0) candidates.add(scoreId);
     if (Number.isFinite(legacyScoreId) && legacyScoreId > 0) candidates.add(legacyScoreId);
+    const score = parseJson<Partial<OscScore> & { best_id?: number | null } | null>(row.score_json, null);
+    const jsonScoreId = Number(score?.id);
+    const bestScoreId = Number(score?.best_id);
+    if (Number.isFinite(jsonScoreId) && jsonScoreId > 0) candidates.add(jsonScoreId);
+    if (Number.isFinite(bestScoreId) && bestScoreId > 0) candidates.add(bestScoreId);
   }
   return candidates;
 }
