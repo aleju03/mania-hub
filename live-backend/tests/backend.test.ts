@@ -207,6 +207,76 @@ describe("live backend", () => {
     expect(cursor).toBe(new Date("2026-05-12T00:03:00.000Z").getTime());
   });
 
+  it("seeds and replays snipe detection after metadata-light scores are hydrated", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const score = (await fixture<OscScore[]>("scores.json"))[1];
+    const now = new Date().toISOString();
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values
+         ('CR', 202, 2, 'test', 1, ?),
+         ('CR', 303, 3, 'test', 1, ?)`,
+      [now, now],
+    );
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, updated_at)
+       values (303, 'Victim', 'https://assets.example/victim.png', 'CR', ?)`,
+      [now],
+    );
+
+    await ingestor.ingestBatch([score], "osc_socket");
+    expect(Number((await exec(db, "select count(*) as count from snipe_events")).rows[0].count)).toBe(0);
+
+    const osu = {
+      getUser: vi.fn(async () => ({ id: 202, username: "Hydrated Sniper", avatar_url: "https://assets.example/sniper.png", country_code: "CR" })),
+      getBeatmap: vi.fn(async () => ({
+        id: 502,
+        beatmapset_id: 50,
+        difficulty_rating: 5.6,
+        mode: "mania",
+        status: "ranked",
+        cs: 4,
+        bpm: 180,
+        max_combo: 999,
+        version: "Hydrated Another",
+        url: "https://osu.ppy.sh/beatmaps/502",
+        beatmapset: {
+          id: 50,
+          title: "Fixture Song",
+          artist: "Fixture Artist",
+          creator: "mapper",
+          covers: { cover: "https://assets.example/cover.jpg", card: "https://assets.example/card.jpg" },
+          status: "ranked",
+        },
+      })),
+      getBeatmapUserScoresAll: vi.fn(async (_beatmapId: number, userId: number) => userId === 303
+        ? [{
+          ...score,
+          id: 7000,
+          user_id: 303,
+          score: 800000,
+          total_score: 800000,
+          pp: 190,
+          accuracy: 0.97,
+          ended_at: "2026-05-11T00:00:00.000Z",
+          created_at: "2026-05-11T00:00:00.000Z",
+        }]
+        : []),
+    };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+    expect(Number((await exec(db, "select count(*) as count from snipe_events")).rows[0].count)).toBe(0);
+    await worker.runOnce();
+
+    const snipes = await getSnipesSnapshot(db, "CR", 10);
+    expect(snipes.events).toHaveLength(1);
+    expect(snipes.events[0].score_id).toBe(9002);
+    expect(snipes.events[0].victim.id).toBe(303);
+  });
+
   it("runs queued oSC backfill one page at a time and schedules the next page", async () => {
     const { db, queue, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");

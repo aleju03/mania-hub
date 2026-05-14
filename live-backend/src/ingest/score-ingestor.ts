@@ -35,6 +35,12 @@ export class ScoreIngestor {
     return { inserted, skipped };
   }
 
+  async processHydratedSnipeFeatures(country: string, score: OscScore): Promise<void> {
+    if (!score.beatmap || !score.beatmapset || !score.user) return;
+    if (this.canUseOsuApi() && await this.enqueueSnipeSeedIfNeeded(country, score)) return;
+    await updateSnipeProjection(this.db, this.events, country, score);
+  }
+
   async ingestScore(score: OscScore, source = "osc_socket", options: ScoreIngestOptions = {}): Promise<boolean> {
     const enqueueRecentReconcile = options.enqueueRecentReconcile ?? source !== "osu_recent";
     const processLeaderboardFeatures = options.processLeaderboardFeatures ?? source !== "osu_recent";
@@ -132,13 +138,9 @@ export class ScoreIngestor {
       }
     }
     if (!score.beatmap || !score.beatmapset || !score.user) return true;
-    if (canUseOsuApi && processLeaderboardFeatures) {
-      for (const country of countries) {
-        await this.enqueueSnipeSeedIfNeeded(country, score);
-      }
-    }
     if (processLeaderboardFeatures) {
       for (const country of countries) {
+        if (canUseOsuApi && await this.enqueueSnipeSeedIfNeeded(country, score)) continue;
         await updateSnipeProjection(this.db, this.events, country, score);
       }
     }
@@ -161,22 +163,23 @@ export class ScoreIngestor {
     return !!this.config.osuClientId && !!this.config.osuClientSecret;
   }
 
-  private async enqueueSnipeSeedIfNeeded(country: string, score: OscScore): Promise<void> {
-    if (!score.beatmap) return;
-    if (!scoreHasPublicLeaderboard(score)) return;
+  private async enqueueSnipeSeedIfNeeded(country: string, score: OscScore): Promise<boolean> {
+    if (!score.beatmap) return false;
+    if (!scoreHasPublicLeaderboard(score)) return false;
     const laneKey = getBoardLaneKey(getModAcronyms(score.mods), isLazerScore(score));
     const row = (await exec(
       this.db,
       "select 1 from country_beatmap_scores where country = ? and beatmap_id = ? and lane_key = ? limit 1",
       [country, score.beatmap.id, laneKey],
     )).rows[0];
-    if (row) return;
+    if (row) return false;
     await this.queue.enqueue(
       "seed_snipe_board",
       `snipe-seed:${country}:${score.beatmap.id}:${laneKey}`,
       { country, beatmapId: score.beatmap.id, laneKey },
-      { priority: 20 },
+      { priority: 20, replaceDone: true },
     );
+    return true;
   }
 
   private async enqueueRecentReconcileIfDue(score: OscScore): Promise<void> {

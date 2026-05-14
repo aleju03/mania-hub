@@ -3,8 +3,9 @@ import { readConfig } from "./config.js";
 import { exec, json } from "./db.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { refreshCountryMaps } from "./features/maps.js";
+import { updateSnipeProjection } from "./features/snipes.js";
 import { confirmTopPlay } from "./features/top-plays.js";
-import { getHydratedTrackerScoresForMetadata } from "./features/tracker.js";
+import { getHydratedScoresForMetadata } from "./features/tracker.js";
 import type { ClaimOptions, Job, JobQueue } from "./jobs/queue.js";
 import type { LiveEventLog } from "./live/event-log.js";
 import { OsuApiError, type OsuApiClient } from "./osu/client.js";
@@ -218,18 +219,19 @@ export class WorkerRunner {
          on conflict(user_id) do update set username = excluded.username, avatar_url = excluded.avatar_url, country_code = excluded.country_code, profile_json = excluded.profile_json, updated_at = excluded.updated_at`,
         [payload.userId, String(user.username ?? `User ${payload.userId}`), String(user.avatar_url ?? ""), String(user.country_code ?? ""), json(user), nowIso()],
       );
-      await this.emitHydratedTrackerScores({ userId: payload.userId });
+      await this.processHydratedScores({ userId: payload.userId });
       return;
     }
     if (job.type === "enrich_beatmap") {
       const payload = job.payload as { beatmapId: number };
       const beatmap = await this.osu.getBeatmap(payload.beatmapId, "job:enrich_beatmap");
       await this.upsertBeatmap(beatmap, payload.beatmapId);
-      await this.emitHydratedTrackerScores({ beatmapId: payload.beatmapId });
+      await this.processHydratedScores({ beatmapId: payload.beatmapId });
       return;
     }
     if (job.type === "seed_snipe_board") {
       await this.seedSnipeBoard(job.payload as { country: string; beatmapId: number; laneKey: string });
+      await this.replaySeededSnipeScores(job.payload as { country: string; beatmapId: number; laneKey: string });
       return;
     }
     if (job.type === "replay_video_export") {
@@ -300,10 +302,21 @@ export class WorkerRunner {
     );
   }
 
-  private async emitHydratedTrackerScores(filter: { userId?: number; beatmapId?: number }): Promise<void> {
-    const rows = await getHydratedTrackerScoresForMetadata(this.db, filter);
+  private async processHydratedScores(filter: { userId?: number; beatmapId?: number }): Promise<void> {
+    const rows = await getHydratedScoresForMetadata(this.db, filter);
     for (const row of rows) {
       await this.events.append("tracker_score", row.country, row.score, `tracker_score:${row.country}:${row.score.id}`);
+      await this.ingestor.processHydratedSnipeFeatures(row.country, row.score);
+    }
+  }
+
+  private async replaySeededSnipeScores(payload: { country: string; beatmapId: number; laneKey: string }): Promise<void> {
+    const rows = await getHydratedScoresForMetadata(this.db, { beatmapId: payload.beatmapId }, 200);
+    for (const row of rows) {
+      if (row.country !== payload.country) continue;
+      const laneKey = getBoardLaneKey(getModAcronyms(row.score.mods), isLazerScore(row.score));
+      if (laneKey !== payload.laneKey) continue;
+      await updateSnipeProjection(this.db, this.events, row.country, row.score);
     }
   }
 

@@ -76,6 +76,11 @@ export async function getTrackerScoreByIdentity(db: Db, country: string, scoreId
 }
 
 export async function getHydratedTrackerScoresForMetadata(db: Db, filter: { userId?: number; beatmapId?: number }, limit = 10): Promise<Array<{ country: string; score: LeanTrackerScore }>> {
+  return (await getHydratedScoresForMetadata(db, filter, limit))
+    .map((row) => ({ country: row.country, score: toLeanTrackerScore(row.score) }));
+}
+
+export async function getHydratedScoresForMetadata(db: Db, filter: { userId?: number; beatmapId?: number }, limit = 10): Promise<Array<{ country: string; score: OscScore }>> {
   const clauses: string[] = [];
   const args: Array<string | number> = [];
   if (filter.userId != null) {
@@ -98,7 +103,7 @@ export async function getHydratedTrackerScoresForMetadata(db: Db, filter: { user
   return rows.flatMap((row) => {
     const score = hydrateScoreMetadata(row, parseJson<OscScore | null>(row.score_json, null));
     if (!score?.beatmap || !score.beatmapset || !score.user || row.country == null) return [];
-    return [{ country: String(row.country), score: toLeanTrackerScore(score) }];
+    return [{ country: String(row.country), score }];
   });
 }
 
@@ -113,6 +118,7 @@ function trackerScoreSelectSql(): string {
        b.beatmap_id,
        b.beatmapset_id,
        b.mode,
+       b.status as beatmap_status,
        b.cs,
        b.difficulty_rating,
        b.bpm,
@@ -121,6 +127,7 @@ function trackerScoreSelectSql(): string {
        b.url,
        bs.title,
        bs.artist,
+       bs.status as beatmapset_status,
        bs.covers_json
      from score_events se
      left join users u on u.user_id = se.user_id
@@ -156,6 +163,7 @@ function rowBeatmap(row: Record<string, unknown>): OsuBeatmap | undefined {
     beatmapset_id: beatmapsetId,
     difficulty_rating: Number(row.difficulty_rating ?? 0),
     mode: String(row.mode ?? "mania"),
+    status: row.beatmap_status == null ? undefined : String(row.beatmap_status),
     cs: Number(row.cs ?? 0),
     bpm: Number(row.bpm ?? 0),
     max_combo: row.max_combo == null ? undefined : Number(row.max_combo),
@@ -171,6 +179,7 @@ function rowBeatmapset(row: Record<string, unknown>): OsuBeatmapset | undefined 
     id,
     title: String(row.title),
     artist: String(row.artist),
+    status: row.beatmapset_status == null ? undefined : String(row.beatmapset_status),
     covers: parseJson<OsuBeatmapset["covers"]>(row.covers_json, {}),
   };
 }
