@@ -65,9 +65,11 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<ManiaCardRenderer | null>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
+  const [readyData, setReadyData] = useState<ReturnType<typeof buildManiaCardRenderData> | null>(null);
   const [ratingModalOpen, setRatingModalOpen] = useState(false);
   const reducedMotion = useReducedMotion();
   const data = useMemo(() => buildManiaCardRenderData({ user, scores }), [user, scores]);
+  const rendererReady = readyData === data;
 
   useEffect(() => {
     if (!ratingModalOpen) return;
@@ -79,6 +81,7 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
   }, [ratingModalOpen]);
 
   useEffect(() => {
+    setReadyData(null);
     if (loading || data.status !== "ready") return;
     const host = hostRef.current;
     if (!host) return;
@@ -109,6 +112,9 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
         mobile: isMobileViewport(),
         reducedMotion,
         devicePixelRatio: getDevicePixelRatio(),
+        onReady: () => {
+          if (active) setReadyData(data);
+        },
         onError: (error) => {
           if (!active) return;
           disposeRenderer();
@@ -157,7 +163,13 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
           style={{ aspectRatio: "5 / 7", touchAction: "none" }}
           aria-label={`${data.user.username} ${data.tierStyle.label} Maniacard. Control ${data.skills.fingerControl}, Speed ${data.skills.speed}, Precision ${data.skills.accuracy}.`}
         />
-        {data.nextTier && (
+        {!rendererReady && (
+          <div
+            className="pointer-events-none absolute inset-2 rounded-[22px] border-2 border-osu-b3/30 bg-osu-b4/40 animate-pulse"
+            aria-hidden="true"
+          />
+        )}
+        {rendererReady && data.nextTier && (
           <TierProgress
             nextTier={data.nextTier}
             cardRating={data.skills.cardPower}

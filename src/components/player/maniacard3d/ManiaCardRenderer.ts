@@ -41,6 +41,7 @@ export interface ManiaCardRendererOptions {
   mobile: boolean;
   reducedMotion: boolean;
   devicePixelRatio: number;
+  onReady?: () => void;
   onError?: (error: unknown) => void;
 }
 
@@ -48,6 +49,7 @@ export class ManiaCardRenderer {
   private readonly host: HTMLElement;
   private readonly renderer: WebGLRenderer;
   private readonly mobile: boolean;
+  private readonly onReady?: () => void;
   private readonly onError?: (error: unknown) => void;
   private readonly scene = new Scene();
   private readonly camera = new PerspectiveCamera(CAMERA_FOV_DEG, 5 / 7, 0.1, 100);
@@ -65,10 +67,12 @@ export class ManiaCardRenderer {
   private restBeta: number | null = null;
   private orientationAttached = false;
   private orientationPermissionRequested = false;
+  private readyEmitted = false;
 
   constructor(options: ManiaCardRendererOptions) {
     this.host = options.host;
     this.mobile = options.mobile;
+    this.onReady = options.onReady;
     this.onError = options.onError;
     this.quality = resolveQualityProfile({
       mobile: options.mobile,
@@ -109,6 +113,7 @@ export class ManiaCardRenderer {
 
   async setData(data: ManiaCardReadyData) {
     const requestId = ++this.dataRequestId;
+    this.readyEmitted = false;
     let textures: CardTextureSet;
     try {
       textures = await createCardTextures(data);
@@ -207,6 +212,10 @@ export class ManiaCardRenderer {
     }
 
     this.renderer.render(this.scene, this.camera);
+    if (this.textures && !this.readyEmitted) {
+      this.readyEmitted = true;
+      this.onReady?.();
+    }
     return this.shouldKeepAnimating();
   }
 
