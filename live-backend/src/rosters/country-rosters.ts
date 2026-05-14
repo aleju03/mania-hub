@@ -19,6 +19,7 @@ export async function refreshCountryRoster(db: Db, osu: Pick<OsuApiClient, "getR
   }
   const now = nowIso();
   let count = 0;
+  await exec(db, "update country_rosters set is_tracked = 0, refreshed_at = ? where country = ?", [now, country]);
   for (let index = 0; index < Math.min(rows.length, config.rosterSize); index++) {
     const user = rows[index].user;
     await exec(

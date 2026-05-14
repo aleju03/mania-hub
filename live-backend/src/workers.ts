@@ -341,7 +341,11 @@ export class WorkerRunner {
 
   private async seedSnipeBoard(payload: { country: string; beatmapId: number; laneKey: string }): Promise<void> {
     const config = readConfig();
-    const roster = (await exec(this.db, "select user_id from country_rosters where country = ? and is_tracked = 1 order by rank asc limit ?", [payload.country, config.rosterSize])).rows;
+    const roster = (await exec(
+      this.db,
+      "select user_id from country_rosters where country = ? and is_tracked = 1 and rank is not null order by rank asc limit ?",
+      [payload.country, config.rosterSize],
+    )).rows;
     for (const row of roster) {
       const userId = Number(row.user_id);
       const scores = await this.getSnipeSeedScores(payload.beatmapId, userId);

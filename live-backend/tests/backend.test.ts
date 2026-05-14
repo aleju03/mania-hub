@@ -11,6 +11,7 @@ import { getTrackerSnapshot } from "../src/features/tracker.js";
 import { routeHttp } from "../src/http/snapshots.js";
 import { handleSse } from "../src/live/sse.js";
 import { OscBackfill } from "../src/osc/backfill.js";
+import { refreshCountryRoster } from "../src/rosters/country-rosters.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { LiveEventLog } from "../src/live/event-log.js";
@@ -73,6 +74,40 @@ describe("live backend", () => {
     expect(jobs.map((row) => row.type)).toContain("enrich_user");
     expect(jobs.map((row) => row.type)).toContain("enrich_beatmap");
     expect(jobs.map((row) => row.type)).toContain("refresh_user_top_scores");
+  });
+
+  it("refreshes country rosters as the current top ranked users", async () => {
+    const { db } = await setup();
+    const now = new Date().toISOString();
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values
+         ('CR', 111, 1, 'osu_rankings', 1, ?),
+         ('CR', 222, 2, 'osu_rankings', 1, ?),
+         ('CR', 444, null, 'score', 1, ?)`,
+      [now, now, now],
+    );
+    const ranking = [
+      { user: { id: 222, username: "Still In", avatar_url: "https://assets.example/222.png", country_code: "CR", statistics: { pp: 1234, global_rank: 1000, country_rank: 1 } } },
+      { user: { id: 333, username: "New In", avatar_url: "https://assets.example/333.png", country_code: "CR", statistics: { pp: 1200, global_rank: 1100, country_rank: 2 } } },
+    ];
+    const osu = {
+      getRanking: vi.fn(async (_country: string, page: number) => ({ ranking: page === 1 ? ranking : [] })),
+    };
+
+    await expect(refreshCountryRoster(db, osu as never, "CR", "test")).resolves.toBe(2);
+
+    const rows = (await exec(
+      db,
+      "select user_id, rank, is_tracked from country_rosters where country = 'CR' order by user_id",
+    )).rows;
+    expect(rows.map((row) => `${row.user_id}:${row.rank ?? "null"}:${row.is_tracked}`)).toEqual([
+      "111:1:0",
+      "222:1:1",
+      "333:2:1",
+      "444:null:0",
+    ]);
   });
 
   it("queues active-user recent reconciliation from oSC ingestion", async () => {
@@ -327,6 +362,28 @@ describe("live backend", () => {
       "select total_score from country_beatmap_scores where country = 'CR' and beatmap_id = 501 and lane_key = 'normal:lazer' and user_id = 101",
     )).rows[0];
     expect(Number(updatedLeader.total_score)).toBe(987654);
+  });
+
+  it("seeds snipe boards from ranked current roster rows only", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const now = new Date().toISOString();
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values
+         ('CR', 101, 1, 'osu_rankings', 1, ?),
+         ('CR', 202, null, 'score', 1, ?),
+         ('CR', 303, 2, 'osu_rankings', 0, ?)`,
+      [now, now, now],
+    );
+    await queue.enqueue("seed_snipe_board", "test:snipe-seed", { country: "CR", beatmapId: 501, laneKey: "normal:lazer" }, { priority: 100 });
+    const osu = { getBeatmapUserScoresAll: vi.fn(async () => []) };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    expect(osu.getBeatmapUserScoresAll).toHaveBeenCalledTimes(1);
+    expect(osu.getBeatmapUserScoresAll).toHaveBeenCalledWith(501, 101, "job:seed_snipe_board");
   });
 
   it("proves the osu! limiter hard cap", async () => {
