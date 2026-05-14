@@ -179,6 +179,24 @@ create table if not exists replay_video_exports (
   completed_at text
 );
 
+create table if not exists dan_estimates (
+  estimator_version integer not null,
+  beatmap_id integer not null,
+  rate_percent integer not null,
+  status text not null,
+  label text,
+  variant text,
+  display_name text,
+  raw_dan real,
+  family text,
+  confidence real,
+  star_rating real,
+  error text,
+  computed_at text not null,
+  updated_at text not null,
+  primary key (estimator_version, beatmap_id, rate_percent)
+);
+
 create table if not exists jobs (
   id integer primary key autoincrement,
   type text not null,
@@ -222,6 +240,7 @@ create index if not exists idx_top_play_events_country_pp on top_play_events(cou
 create index if not exists idx_snipe_events_country_time on snipe_events(country, detected_at desc);
 create index if not exists idx_country_maps_snapshots_refreshed on country_maps_snapshots(refreshed_at desc);
 create index if not exists idx_replay_video_exports_status_time on replay_video_exports(status, updated_at desc);
+create index if not exists idx_dan_estimates_updated on dan_estimates(updated_at desc);
 create index if not exists idx_jobs_ready on jobs(status, run_after, priority desc);
 create index if not exists idx_live_event_country_sequence on live_event_log(country, sequence);
 create index if not exists idx_api_call_log_provider_time on api_call_log(provider, started_at desc);

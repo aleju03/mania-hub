@@ -1,6 +1,7 @@
 import type { Db } from "./db.js";
 import { readConfig } from "./config.js";
 import { exec, json } from "./db.js";
+import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { refreshCountryMaps } from "./features/maps.js";
 import { confirmTopPlay } from "./features/top-plays.js";
 import { getHydratedTrackerScoresForMetadata } from "./features/tracker.js";
@@ -42,6 +43,12 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     name: "maps-refresh",
     jobTypes: ["refresh_country_maps"],
     claimLimit: 1,
+    intervalMs: 1_000,
+  },
+  {
+    name: "dan-estimates",
+    jobTypes: ["compute_dan_estimate"],
+    claimLimit: 2,
     intervalMs: 1_000,
   },
   {
@@ -195,6 +202,10 @@ export class WorkerRunner {
     }
     if (job.type === "refresh_country_maps") {
       await refreshCountryMaps(this.db, this.osu, job.payload as { country: string });
+      return;
+    }
+    if (job.type === "compute_dan_estimate") {
+      await computeDanEstimateJob(this.db, this.osu, job.payload);
       return;
     }
     if (job.type === "enrich_user") {
@@ -403,14 +414,16 @@ function getRetryDelayMs(type: string, attempts: number, error: unknown): number
       ? 60_000
     : type === "refresh_country_maps"
       ? 10 * 60_000
-    : type === "enrich_user"
-      ? 60_000
-      : type === "enrich_beatmap"
+      : type === "compute_dan_estimate"
         ? 5 * 60_000
-        : type === "seed_snipe_board"
-          ? 10 * 60_000
-          : type === "replay_video_export"
-            ? 60_000
-          : 30 * 60_000;
+        : type === "enrich_user"
+          ? 60_000
+          : type === "enrich_beatmap"
+            ? 5 * 60_000
+            : type === "seed_snipe_board"
+              ? 10 * 60_000
+              : type === "replay_video_export"
+                ? 60_000
+                : 30 * 60_000;
   return Math.min(base * 2 ** Math.min(5, nextAttempt - 1), 60 * 60_000);
 }

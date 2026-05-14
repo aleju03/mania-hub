@@ -5,6 +5,7 @@ import { getDanEstimates } from "#/lib/osu";
 import { getScoreRate } from "#/lib/score";
 import { useAuth } from "#/lib/auth-context";
 import { DAN_ESTIMATE_CACHE_VERSION } from "#/lib/dan-estimator/cache-version";
+import { fetchLiveDanEstimates, isLiveBackendConfigured } from "#/lib/live-backend";
 
 // ── Batched fetcher ────────────────────────────────────────────────────────────
 
@@ -18,6 +19,8 @@ interface PendingRequest {
 
 const cache = new Map<string, LeanDanEstimate | null>();
 const pending = new Map<string, PendingRequest>();
+const pendingRetryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingRetryCounts = new Map<string, number>();
 const listeners = new Set<Listener>();
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -43,22 +46,46 @@ async function flush() {
   pending.clear();
 
   try {
-    const results = await getDanEstimates({
-      data: {
-        estimatorVersion: DAN_ESTIMATE_CACHE_VERSION,
-        items: batch.map((r) => ({
-          beatmapId: r.beatmapId,
-          starRating: r.starRating,
-          rate: r.rate !== 1 ? r.rate : undefined,
-        })),
-      },
-    });
+    const items = batch.map((r) => ({
+      beatmapId: r.beatmapId,
+      starRating: r.starRating,
+      rate: r.rate !== 1 ? r.rate : undefined,
+    }));
 
-    const typed = results as Record<string, LeanDanEstimate | null>;
+    let results: Record<string, LeanDanEstimate | null>;
+    let livePending = new Set<string>();
+
+    if (isLiveBackendConfigured()) {
+      try {
+        const live = await fetchLiveDanEstimates(items, DAN_ESTIMATE_CACHE_VERSION);
+        results = live.results;
+        livePending = new Set(live.pending);
+      } catch {
+        results = await getDanEstimates({
+          data: {
+            estimatorVersion: DAN_ESTIMATE_CACHE_VERSION,
+            items,
+          },
+        }) as Record<string, LeanDanEstimate | null>;
+      }
+    } else {
+      results = await getDanEstimates({
+        data: {
+          estimatorVersion: DAN_ESTIMATE_CACHE_VERSION,
+          items,
+        },
+      }) as Record<string, LeanDanEstimate | null>;
+    }
+
     for (const request of batch) {
       const responseKey = estimateResponseKey(request.beatmapId, request.rate);
       const key = estimateKey(request.beatmapId, request.rate);
-      cache.set(key, typed[responseKey] ?? null);
+      if (livePending.has(responseKey)) {
+        schedulePendingRetry(key);
+        continue;
+      }
+      clearPendingRetry(key);
+      cache.set(key, results[responseKey] ?? null);
     }
   } catch {
     // Silently fail; badges just won't appear
@@ -79,6 +106,31 @@ function requestEstimate(
     scheduleFlush();
   }
   return undefined;
+}
+
+function schedulePendingRetry(key: string) {
+  if (pendingRetryTimers.has(key)) return;
+  const retryCount = (pendingRetryCounts.get(key) ?? 0) + 1;
+  pendingRetryCounts.set(key, retryCount);
+  if (retryCount > 8) {
+    pendingRetryCounts.delete(key);
+    cache.set(key, null);
+    return;
+  }
+  const retryDelay = Math.min(30_000, 1500 * 2 ** Math.min(5, retryCount - 1));
+  pendingRetryTimers.set(key, setTimeout(() => {
+    pendingRetryTimers.delete(key);
+    for (const fn of listeners) fn();
+  }, retryDelay));
+}
+
+function clearPendingRetry(key: string) {
+  const timer = pendingRetryTimers.get(key);
+  if (timer) {
+    clearTimeout(timer);
+    pendingRetryTimers.delete(key);
+  }
+  pendingRetryCounts.delete(key);
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────────

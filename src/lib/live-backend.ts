@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireAdminAccess } from "./auth";
-import type { CountryMapsData, CountryTopPlay, LeanTrackerScore, SnipeEvent } from "./types";
+import type { CountryMapsData, CountryTopPlay, LeanDanEstimate, LeanTrackerScore, SnipeEvent } from "./types";
 
 export type LiveEventName =
   | "hello"
@@ -36,6 +36,18 @@ export interface LiveMapsSnapshot {
   refreshedAt: string | null;
   isStale: boolean;
   refreshQueued: boolean;
+}
+
+export interface LiveDanEstimateRequest {
+  beatmapId: number;
+  starRating?: number;
+  rate?: number;
+}
+
+export interface LiveDanEstimateBatch {
+  results: Record<string, LeanDanEstimate | null>;
+  pending: string[];
+  estimatorVersion: number;
 }
 
 export function getLiveBackendUrl(): string | null {
@@ -154,16 +166,24 @@ export async function fetchLiveMapsSnapshot(country: string): Promise<LiveMapsSn
   return fetchLiveJson(`/api/snapshots/maps?country=${encodeURIComponent(country)}`);
 }
 
+export async function fetchLiveDanEstimates(items: LiveDanEstimateRequest[], estimatorVersion: number): Promise<LiveDanEstimateBatch> {
+  return fetchLiveJson("/api/dan-estimates", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ items, estimatorVersion, computeMissing: true }),
+  });
+}
+
 export function openLiveEventSource(country: string): EventSource | null {
   const base = getLiveBackendUrl();
   if (!base || typeof EventSource === "undefined") return null;
   return new EventSource(`${base}/api/live?country=${encodeURIComponent(country)}`);
 }
 
-async function fetchLiveJson<T>(path: string): Promise<T> {
+async function fetchLiveJson<T>(path: string, init?: RequestInit): Promise<T> {
   const base = getLiveBackendUrl();
   if (!base) throw new Error("Live backend is not configured.");
-  const response = await fetch(`${base}${path}`, { credentials: "omit" });
+  const response = await fetch(`${base}${path}`, { credentials: "omit", ...init });
   if (!response.ok) throw new Error(`Live backend ${response.status}`);
   return response.json() as Promise<T>;
 }

@@ -1,6 +1,8 @@
 import type { Config } from "../config.js";
 import type { OscScore } from "../shared/types.js";
 
+const BEATMAP_FILE_FETCH_TIMEOUT_MS = 15_000;
+
 export class TokenBucketLimiter {
   private starts: number[] = [];
   private recent: Array<{ startedAt: number; caller: string; path: string }> = [];
@@ -104,6 +106,26 @@ export class OsuApiClient {
     return this.getJson(`/beatmaps/${beatmapId}`, caller);
   }
 
+  async getBeatmapFile(beatmapId: number, caller = "unknown"): Promise<string> {
+    const safeBeatmapId = Math.floor(beatmapId);
+    if (!Number.isFinite(safeBeatmapId) || safeBeatmapId <= 0) throw new Error("Invalid beatmap ID");
+    const errors: string[] = [];
+    const sources = [
+      { name: "osu", url: `https://osu.ppy.sh/osu/${safeBeatmapId}`, path: `/osu/${safeBeatmapId}` },
+      { name: "catboy", url: `https://catboy.best/osu/${safeBeatmapId}`, path: `catboy:/osu/${safeBeatmapId}` },
+    ];
+
+    for (const source of sources) {
+      try {
+        return await this.fetchBeatmapFileFromSource(source.url, source.path, caller);
+      } catch (error) {
+        errors.push(`${source.name} (${error instanceof Error ? error.message : String(error)})`);
+      }
+    }
+
+    throw new Error(`Failed to fetch .osu file for beatmap ${safeBeatmapId}: ${errors.join("; ")}`);
+  }
+
   async getUserBestScores(userId: number, caller = "unknown"): Promise<OscScore[]> {
     return this.getJson(`/users/${userId}/scores/best?mode=mania&limit=100`, caller) as Promise<OscScore[]>;
   }
@@ -169,6 +191,26 @@ export class OsuApiClient {
     });
   }
 
+  private async fetchBeatmapFileFromSource(url: string, path: string, caller: string): Promise<string> {
+    return this.limiter.schedule(caller, path, async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), BEATMAP_FILE_FETCH_TIMEOUT_MS);
+      try {
+        const response = await this.fetchImpl(url, { signal: controller.signal });
+        if (!response.ok) {
+          const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after"));
+          if (response.status === 429) this.limiter.pause(retryAfterMs ?? 60_000);
+          throw new Error(`${response.status}`);
+        }
+        const text = await response.text();
+        if (!isLikelyBeatmapFile(text)) throw new Error("invalid .osu file");
+        return text;
+      } finally {
+        clearTimeout(timeout);
+      }
+    });
+  }
+
   private async getAccessToken(): Promise<string> {
     if (this.token && Date.now() < this.token.expiresAt - 60_000) return this.token.accessToken;
     const response = await this.fetchImpl("https://osu.ppy.sh/oauth/token", {
@@ -186,6 +228,11 @@ export class OsuApiClient {
     this.token = { accessToken: body.access_token, expiresAt: Date.now() + body.expires_in * 1000 };
     return this.token.accessToken;
   }
+}
+
+function isLikelyBeatmapFile(content: string): boolean {
+  const trimmed = content.trimStart();
+  return trimmed.startsWith("osu file format") && content.includes("[HitObjects]");
 }
 
 function parseRetryAfterMs(value: string | null): number | null {
