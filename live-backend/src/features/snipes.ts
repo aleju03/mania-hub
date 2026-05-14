@@ -24,7 +24,12 @@ export async function updateSnipeProjection(db: Db, events: LiveEventLog, countr
   )).rows;
   const previousSelf = beforeRows.find((row) => Number(row.user_id) === score.user_id);
   if (previousSelf && Number(previousSelf.total_score) >= totalScore) return null;
-  const victimIndex = beforeRows.findIndex((row) => Number(row.user_id) !== score.user_id && Number(row.total_score) < totalScore);
+  const previousSelfIndex = previousSelf == null ? beforeRows.length : beforeRows.indexOf(previousSelf);
+  const victimIndex = beforeRows.findIndex((row, index) =>
+    index < previousSelfIndex
+    && Number(row.user_id) !== score.user_id
+    && Number(row.total_score) < totalScore
+  );
   await exec(
     db,
     `insert into country_beatmap_scores (country, beatmap_id, lane_key, user_id, score_id, total_score, pp, accuracy, rank, mods_json, is_lazer, has_replay, ended_at, updated_at)

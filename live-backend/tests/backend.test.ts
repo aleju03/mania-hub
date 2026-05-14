@@ -299,6 +299,36 @@ describe("live backend", () => {
     expect(Number((await exec(db, "select count(*) as count from snipe_events")).rows[0].count)).toBe(1);
   });
 
+  it("does not count improving an already leading score as a snipe", async () => {
+    const { db, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, updated_at)
+       values (303, 'Runner Up', 'https://assets.example/runner-up.png', 'CR', ?)`,
+      [new Date().toISOString()],
+    );
+    await exec(
+      db,
+      `insert into country_beatmap_scores (country, beatmap_id, lane_key, user_id, score_id, total_score, pp, accuracy, rank, mods_json, is_lazer, has_replay, ended_at, updated_at)
+       values
+         ('CR', 501, 'normal:lazer', 101, 7001, 950000, 210, 0.98, 'S', '[]', 1, 1, '2026-05-11T00:00:00.000Z', ?),
+         ('CR', 501, 'normal:lazer', 303, 7000, 900000, 200, 0.97, 'S', '[]', 1, 1, '2026-05-11T00:00:00.000Z', ?)`,
+      [new Date().toISOString(), new Date().toISOString()],
+    );
+
+    await ingestor.ingestBatch([scores[0]]);
+
+    const snipes = await getSnipesSnapshot(db, "CR", 10);
+    expect(snipes.events).toHaveLength(0);
+    expect(Number((await exec(db, "select count(*) as count from snipe_events")).rows[0].count)).toBe(0);
+    const updatedLeader = (await exec(
+      db,
+      "select total_score from country_beatmap_scores where country = 'CR' and beatmap_id = 501 and lane_key = 'normal:lazer' and user_id = 101",
+    )).rows[0];
+    expect(Number(updatedLeader.total_score)).toBe(987654);
+  });
+
   it("proves the osu! limiter hard cap", async () => {
     vi.useFakeTimers();
     const limiter = new TokenBucketLimiter(2, 10_000);
