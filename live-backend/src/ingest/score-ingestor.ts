@@ -53,9 +53,37 @@ export class ScoreIngestor {
     for (const country of countries) {
       const result = await exec(
         this.db,
-        `insert or ignore into score_events
+        `insert into score_events
          (score_id, score_identity, legacy_score_id, user_id, country, beatmap_id, ruleset_id, score_json, pp, total_score, accuracy, rank, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         on conflict(country, score_identity) do update set
+           legacy_score_id = excluded.legacy_score_id,
+           score_json = excluded.score_json,
+           pp = excluded.pp,
+           total_score = excluded.total_score,
+           accuracy = excluded.accuracy,
+           rank = excluded.rank,
+           passed = excluded.passed,
+           processed = excluded.processed,
+           is_lazer = excluded.is_lazer,
+           has_replay = excluded.has_replay,
+           ended_at = excluded.ended_at,
+           received_at = excluded.received_at,
+           source = excluded.source
+         where not (score_events.score_json like '%"speed_change"%'
+                    and excluded.score_json not like '%"speed_change"%')
+           and (
+             score_events.score_json <> excluded.score_json
+             or score_events.pp is not excluded.pp
+             or score_events.total_score is not excluded.total_score
+             or score_events.accuracy is not excluded.accuracy
+             or score_events.rank is not excluded.rank
+             or score_events.passed is not excluded.passed
+             or score_events.processed is not excluded.processed
+             or score_events.is_lazer is not excluded.is_lazer
+             or score_events.has_replay is not excluded.has_replay
+             or score_events.ended_at is not excluded.ended_at
+           )`,
         [
           scoreId,
           scoreIdentity,
@@ -98,10 +126,14 @@ export class ScoreIngestor {
     if (canUseOsuApi && enqueueRecentReconcile) {
       await this.enqueueRecentReconcileIfDue(score);
     }
-    if (!score.beatmap || !score.beatmapset || !score.user) return true;
     if (canUseOsuApi && processLeaderboardFeatures) {
       for (const country of countries) {
         await maybeEnqueueTopPlayRefresh(this.db, this.queue, country, score, this.config.topPlayMarginPp);
+      }
+    }
+    if (!score.beatmap || !score.beatmapset || !score.user) return true;
+    if (canUseOsuApi && processLeaderboardFeatures) {
+      for (const country of countries) {
         await this.enqueueSnipeSeedIfNeeded(country, score);
       }
     }

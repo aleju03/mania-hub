@@ -68,10 +68,11 @@ describe("live backend", () => {
        values ('CR', 202, 2, 'test', 1, ?)`,
       [new Date().toISOString()],
     );
-    expect(await ingestor.ingestBatch([scores[1]])).toEqual({ inserted: 1, skipped: 0 });
+    expect(await ingestor.ingestBatch([{ ...scores[1], ranked: true }])).toEqual({ inserted: 1, skipped: 0 });
     const jobs = (await exec(db, "select type, count(*) as count from jobs group by type order by type")).rows;
     expect(jobs.map((row) => row.type)).toContain("enrich_user");
     expect(jobs.map((row) => row.type)).toContain("enrich_beatmap");
+    expect(jobs.map((row) => row.type)).toContain("refresh_user_top_scores");
   });
 
   it("queues active-user recent reconciliation from oSC ingestion", async () => {
@@ -143,11 +144,18 @@ describe("live backend", () => {
   it("dedupes reconciled stable scores against oSC legacy score ids", async () => {
     const { db, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
-    const oscScore = { ...scores[0], legacy_score_id: 4444 };
-    const recentScore = { ...scores[0], id: 4444, legacy_score_id: undefined };
+    const oscScore = { ...scores[0], legacy_score_id: 4444, mods: ["NC"] as never };
+    const recentScore = {
+      ...scores[0],
+      id: 4444,
+      legacy_score_id: undefined,
+      mods: [{ acronym: "NC", settings: { speed_change: 1.3 } }],
+    };
     expect(await ingestor.ingestBatch([oscScore], "osc_socket")).toEqual({ inserted: 1, skipped: 0 });
-    expect(await ingestor.ingestBatch([recentScore], "osu_recent", { enqueueRecentReconcile: false, processLeaderboardFeatures: false })).toEqual({ inserted: 0, skipped: 1 });
+    expect(await ingestor.ingestBatch([recentScore], "osu_recent", { enqueueRecentReconcile: false, processLeaderboardFeatures: false })).toEqual({ inserted: 1, skipped: 0 });
     expect(Number((await exec(db, "select count(*) as count from score_events")).rows[0].count)).toBe(1);
+    const storedScore = JSON.parse(String((await exec(db, "select score_json from score_events")).rows[0].score_json)) as OscScore;
+    expect(storedScore.mods).toEqual([{ acronym: "NC", settings: { speed_change: 1.3 } }]);
   });
 
   it("updates the oSC cursor for metadata-light tracked scores", async () => {
