@@ -48,6 +48,11 @@ interface LiveBackendStatus {
     byCaller?: Array<{ caller: string; count: number }>;
     byPath?: Array<{ path: string; count: number }>;
   };
+  abuse?: {
+    windows: number;
+    sseTotal: number;
+    sseIps: number;
+  } | null;
   apiCallHistory?: {
     windowMinutes: number;
     byCaller: Array<{ caller: string; count: number }>;
@@ -328,6 +333,10 @@ function LiveBackendPage() {
                 <QueueSummaryCard status={status} />
               </div>
             </div>
+          </Section>
+
+          <Section title="Traffic guard" subtitle="In-memory abuse guard pressure for public traffic and SSE connections">
+            <AbuseGuardCard status={status} />
           </Section>
 
           <Section title="osu! API pressure" subtitle="Who and what is burning rate-limit budget">
@@ -709,6 +718,61 @@ function RateRows({ rows, max, empty }: { rows: Array<{ label: string; count: nu
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function AbuseGuardCard({ status }: { status: LiveBackendStatus | null }) {
+  const abuse = status?.abuse ?? null;
+  return (
+    <SectionCard title="Abuse guard" subtitle="Live backend public request limiter state">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <GuardMetric
+          label="SSE connections"
+          value={abuse ? formatNumber(abuse.sseTotal) : "—"}
+          hint="open EventSource sockets"
+          tone={abuse && abuse.sseTotal > 400 ? "warn" : "neutral"}
+        />
+        <GuardMetric
+          label="SSE IPs"
+          value={abuse ? formatNumber(abuse.sseIps) : "—"}
+          hint="unique IPs with live sockets"
+          tone="neutral"
+        />
+        <GuardMetric
+          label="Rate windows"
+          value={abuse ? formatNumber(abuse.windows) : "—"}
+          hint="active limiter buckets"
+          tone={abuse && abuse.windows > 5000 ? "warn" : "neutral"}
+        />
+      </div>
+      {!abuse ? (
+        <div className="mt-3 rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2 text-[11px] text-osu-f1">
+          This backend has not reported abuse guard state yet.
+        </div>
+      ) : null}
+    </SectionCard>
+  );
+}
+
+function GuardMetric({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+  tone: "warn" | "neutral";
+}) {
+  return (
+    <div className={`rounded-md border px-3 py-2 ${tone === "warn" ? "bg-osu-yellow/10 border-osu-yellow/25" : "bg-osu-b5/60 border-osu-b3/20"}`}>
+      <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
+      <div className={tone === "warn" ? "mt-1 text-xl leading-none font-bold text-osu-yellow" : "mt-1 text-xl leading-none font-bold text-white"}>
+        {value}
+      </div>
+      <div className="mt-1 text-[10px] text-osu-f1 truncate">{hint}</div>
     </div>
   );
 }

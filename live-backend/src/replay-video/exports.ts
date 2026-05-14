@@ -8,7 +8,7 @@ import type { Db } from "../db.js";
 import { exec } from "../db.js";
 import { uploadReplayVideo } from "./r2.js";
 
-const MAX_VIDEO_BYTES = 600 * 1024 * 1024;
+const DEFAULT_MAX_VIDEO_BYTES = 600 * 1024 * 1024;
 const VIDEO_ID_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 export type ReplayVideoExportStatus = "started" | "uploaded" | "queued" | "running" | "done" | "failed" | "cancelled";
@@ -93,7 +93,8 @@ export async function createServerReplayVideoExport(db: Db, config: Config, inpu
 
 export async function writeReplayVideoUpload(db: Db, config: Config, id: string, buffer: Buffer): Promise<ReplayVideoExportRow> {
   await ensureReplayVideoExportSchema(db);
-  if (buffer.length > MAX_VIDEO_BYTES) throw new Error("Video is too large.");
+  const maxBytes = Math.max(1, config.replayVideoUploadMaxBytes ?? DEFAULT_MAX_VIDEO_BYTES);
+  if (buffer.length > maxBytes) throw new Error("Video is too large.");
   const row = await requireReplayVideoExport(db, id);
   if (row.status === "done" || row.status === "cancelled") throw new Error(`Replay video job is ${row.status}.`);
   await mkdir(workDir(config, id), { recursive: true });

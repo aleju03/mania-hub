@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { activateCountry } from "../countries.js";
-import type { HttpContext } from "../http/snapshots.js";
+import { normalizeCountryParam } from "../http/abuse-guard.js";
+import { activatePublicCountry, sendRateLimited, type HttpContext } from "../http/snapshots.js";
 import type { LiveEvent } from "../shared/types.js";
 
 export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: HttpContext): Promise<boolean> {
@@ -16,13 +16,36 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
     res.setHeader("access-control-allow-origin", origin);
     res.setHeader("vary", "origin");
   }
+  const country = normalizeCountryParam(url.searchParams.get("country"))
+    ?? normalizeCountryParam(ctx.config.trackedCountries?.[0])
+    ?? "CR";
+  if (url.searchParams.has("country") && !normalizeCountryParam(url.searchParams.get("country"))) {
+    res.statusCode = 400;
+    res.setHeader("content-type", "application/json; charset=utf-8");
+    res.end(JSON.stringify({ error: "invalid_country" }));
+    return true;
+  }
+  const opened = ctx.abuse?.openSse(req, ctx.config);
+  if (opened && !opened.allowed) {
+    sendRateLimited(req, res, ctx, opened);
+    return true;
+  }
+  const releaseSse = opened?.allowed ? opened.release : null;
+  try {
+    const activated = await activatePublicCountry(req, res, ctx, country);
+    if (!activated) {
+      releaseSse?.();
+      return true;
+    }
+  } catch (error) {
+    releaseSse?.();
+    throw error;
+  }
   res.writeHead(200, {
     "content-type": "text/event-stream; charset=utf-8",
     "cache-control": "no-cache, no-transform",
     connection: "keep-alive",
   });
-  const country = (url.searchParams.get("country") ?? ctx.config.trackedCountries[0] ?? "CR").toUpperCase();
-  await activateCountry(ctx.db, ctx.queue, ctx.config, country);
   const cursor = req.headers["last-event-id"] ?? url.searchParams.get("lastEventId");
   const lastEventId = Number(cursor ?? 0);
   writeEvent(res, { type: "hello", sequence: Number.isFinite(lastEventId) && lastEventId > 0 ? lastEventId : await ctx.events.latestSequence(), payload: { country, status: "connected" } });
@@ -41,6 +64,7 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
   req.on("close", () => {
     clearInterval(heartbeat);
     unsubscribe();
+    releaseSse?.();
   });
   return true;
 }

@@ -11,7 +11,18 @@ export interface Config {
   livePublicOrigin: string;
   allowedOrigins: string[];
   liveAdminToken?: string;
+  trustProxyHeaders: boolean;
   countryWarmTtlMs: number;
+  publicApiRatePerMinute: number;
+  publicCostlyRatePerMinute: number;
+  countryActivateRatePerMinute: number;
+  countryActivateGlobalRatePerMinute: number;
+  countryActivateNewPerHour: number;
+  danEstimateRatePerMinute: number;
+  sseConnectRatePerMinute: number;
+  sseMaxConnectionsPerIp: number;
+  sseMaxConnectionsTotal: number;
+  replayVideoRatePerMinute: number;
   osuApiTargetPerMinute: number;
   osuApiHardPerMinute: number;
   oscJsonTargetPerMinute: number;
@@ -31,6 +42,8 @@ export interface Config {
   replayVideoJobRetentionDays: number;
   maxLocalDbBytes: number;
   targetLocalDbBytes: number;
+  replayVideoPublicEnabled: boolean;
+  replayVideoUploadMaxBytes: number;
   replayVideoOptimize: boolean;
   replayVideoOptimizeCrf: number;
   replayVideoOptimizePreset: string;
@@ -82,7 +95,18 @@ export function readConfig(): Config {
     livePublicOrigin: process.env.LIVE_PUBLIC_ORIGIN ?? "http://localhost:7227",
     allowedOrigins: csv(process.env.ALLOWED_ORIGINS, "http://localhost:3000"),
     liveAdminToken: process.env.LIVE_ADMIN_TOKEN || undefined,
+    trustProxyHeaders: readBool("TRUST_PROXY_HEADERS", false),
     countryWarmTtlMs: readInt("COUNTRY_WARM_TTL_MS", 24 * 60 * 60 * 1000),
+    publicApiRatePerMinute: readInt("PUBLIC_API_RATE_PER_MINUTE", 120),
+    publicCostlyRatePerMinute: readInt("PUBLIC_COSTLY_RATE_PER_MINUTE", 30),
+    countryActivateRatePerMinute: readInt("COUNTRY_ACTIVATE_RATE_PER_MINUTE", 10),
+    countryActivateGlobalRatePerMinute: readInt("COUNTRY_ACTIVATE_GLOBAL_RATE_PER_MINUTE", 120),
+    countryActivateNewPerHour: readInt("COUNTRY_ACTIVATE_NEW_PER_HOUR", 12),
+    danEstimateRatePerMinute: readInt("DAN_ESTIMATE_RATE_PER_MINUTE", 20),
+    sseConnectRatePerMinute: readInt("SSE_CONNECT_RATE_PER_MINUTE", 30),
+    sseMaxConnectionsPerIp: readInt("SSE_MAX_CONNECTIONS_PER_IP", 6),
+    sseMaxConnectionsTotal: readInt("SSE_MAX_CONNECTIONS_TOTAL", 500),
+    replayVideoRatePerMinute: readInt("REPLAY_VIDEO_RATE_PER_MINUTE", 2),
     osuApiTargetPerMinute: readInt("OSU_API_TARGET_PER_MINUTE", 45),
     osuApiHardPerMinute: readInt("OSU_API_HARD_PER_MINUTE", 60),
     oscJsonTargetPerMinute: readInt("OSC_JSON_TARGET_PER_MINUTE", 30),
@@ -102,6 +126,8 @@ export function readConfig(): Config {
     replayVideoJobRetentionDays: readInt("REPLAY_VIDEO_JOB_RETENTION_DAYS", 2),
     maxLocalDbBytes: readInt("MAX_LOCAL_DB_BYTES", 10 * 1024 * 1024 * 1024),
     targetLocalDbBytes: readInt("TARGET_LOCAL_DB_BYTES", 8 * 1024 * 1024 * 1024),
+    replayVideoPublicEnabled: readBool("REPLAY_VIDEO_PUBLIC_ENABLED", false),
+    replayVideoUploadMaxBytes: readInt("REPLAY_VIDEO_UPLOAD_MAX_BYTES", 600 * 1024 * 1024),
     replayVideoOptimize: readBool("REPLAY_VIDEO_OPTIMIZE", true),
     replayVideoOptimizeCrf: readBoundedInt("REPLAY_VIDEO_OPTIMIZE_CRF", 20, 16, 28),
     replayVideoOptimizePreset: process.env.REPLAY_VIDEO_OPTIMIZE_PRESET || "slow",

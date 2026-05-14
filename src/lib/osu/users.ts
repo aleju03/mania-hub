@@ -1,10 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
 import {
   fetchWithCacheLock,
+  getPersistentCacheEntryAllowStale,
   getPersistentCacheEntries,
   getPersistentCacheEntry,
-  getPersistentCached,
   osuFetch,
+  refreshCacheInBackground,
   setPersistentCache
 } from "../api";
 import type { OsuFetchContextValue } from "../api";
@@ -85,32 +86,65 @@ export function getUserScoreListCacheKey(
   ].join(":");
 }
 
+async function fetchUserFromOsu(key: string): Promise<OsuUser> {
+  const user = await osuFetch<OsuUser>(`/users/${encodeURIComponent(key)}/mania`, undefined, {
+    caller: "getUser",
+  });
+  if (user.page) {
+    user.page.html = await sanitizeServerProfilePageHtml(user.page.html);
+  }
+  void Promise.allSettled([
+    setPersistentCache(getUserCacheKey(user.username), user, USER_CACHE_TTL),
+    setPersistentCache(`user-id:v${USER_CACHE_VERSION}:${user.id}`, user, USER_CACHE_TTL),
+  ]);
+  return user;
+}
+
 export async function getCachedUser(key: string): Promise<OsuUser> {
   const cacheKey = getUserCacheKey(key);
-  const cached = await getPersistentCached<OsuUser>(cacheKey);
-  if (cached) return cached;
+  const cached = await getPersistentCacheEntryAllowStale<OsuUser>(cacheKey);
+  if (cached.hit) {
+    if (cached.isStale) {
+      void refreshCacheInBackground(cacheKey, USER_CACHE_TTL, () => fetchUserFromOsu(key));
+    }
+    return cached.value;
+  }
 
   const pending = userPromiseCache.get(cacheKey);
   if (pending) return pending;
 
-  const request = fetchWithCacheLock(cacheKey, USER_CACHE_TTL, async () => {
-    const user = await osuFetch<OsuUser>(`/users/${encodeURIComponent(key)}/mania`, undefined, {
-      caller: "getUser",
-    });
-    if (user.page) {
-      user.page.html = await sanitizeServerProfilePageHtml(user.page.html);
-    }
-    void Promise.allSettled([
-      setPersistentCache(getUserCacheKey(user.username), user, USER_CACHE_TTL),
-      setPersistentCache(`user-id:v${USER_CACHE_VERSION}:${user.id}`, user, USER_CACHE_TTL),
-    ]);
-    return user;
-  }).finally(() => {
+  const request = fetchWithCacheLock(cacheKey, USER_CACHE_TTL, () => fetchUserFromOsu(key)).finally(() => {
     userPromiseCache.delete(cacheKey);
   });
 
   userPromiseCache.set(cacheKey, request);
   return request;
+}
+
+function fetchUserScoresFromOsu(
+  type: "best" | "recent" | "firsts" | "pinned",
+  userId: number,
+  options: { limit: number; offset: number; includeFails?: boolean },
+): Promise<OsuScore[]> {
+  return osuFetch<OsuScore[]>(
+    `/users/${userId}/scores/${type}`,
+    getScoreRequestParams({
+      mode: "mania",
+      limit: options.limit,
+      offset: options.offset,
+      include_fails: type === "recent" && options.includeFails ? 1 : 0,
+    }),
+    {
+      caller: `getUserScores:${type}`,
+      context: {
+        source: "user-score-list",
+        userId,
+        limit: options.limit,
+        offset: options.offset,
+        includeFails: type === "recent" && !!options.includeFails,
+      },
+    },
+  );
 }
 
 export async function getCachedUserScores(
@@ -119,32 +153,19 @@ export async function getCachedUserScores(
   options: { limit: number; offset: number; includeFails?: boolean },
 ): Promise<OsuScore[]> {
   const cacheKey = getUserScoreListCacheKey(type, userId, options);
-  const cached = await getPersistentCached<OsuScore[]>(cacheKey);
-  if (cached) return cached;
+  const cached = await getPersistentCacheEntryAllowStale<OsuScore[]>(cacheKey);
+  if (cached.hit) {
+    if (cached.isStale) {
+      void refreshCacheInBackground(cacheKey, USER_SCORE_LIST_CACHE_TTL, () => fetchUserScoresFromOsu(type, userId, options));
+    }
+    return cached.value;
+  }
 
   const pending = userScoresListPromiseCache.get(cacheKey);
   if (pending) return pending;
 
   const request = fetchWithCacheLock(cacheKey, USER_SCORE_LIST_CACHE_TTL, () =>
-    osuFetch<OsuScore[]>(
-      `/users/${userId}/scores/${type}`,
-      getScoreRequestParams({
-        mode: "mania",
-        limit: options.limit,
-        offset: options.offset,
-        include_fails: type === "recent" && options.includeFails ? 1 : 0,
-      }),
-      {
-        caller: `getUserScores:${type}`,
-        context: {
-          source: "user-score-list",
-          userId,
-          limit: options.limit,
-          offset: options.offset,
-          includeFails: type === "recent" && !!options.includeFails,
-        },
-      },
-    ),
+    fetchUserScoresFromOsu(type, userId, options),
   ).finally(() => {
     userScoresListPromiseCache.delete(cacheKey);
   });
@@ -238,63 +259,74 @@ export async function fetchUserBestScoresWindow(
   context?: Record<string, OsuFetchContextValue>,
 ): Promise<OsuScore[]> {
   const cacheKey = `user-best-scores-window:${userId}:${totalLimit}`;
-  const cached = await getPersistentCached<OsuScore[]>(cacheKey);
-  if (cached) return cached;
+  const cached = await getPersistentCacheEntryAllowStale<OsuScore[]>(cacheKey);
+  if (cached.hit) {
+    if (cached.isStale) {
+      void refreshCacheInBackground(cacheKey, BEST_SCORES_WINDOW_CACHE_TTL, () =>
+        fetchUserBestScoresWindowFromOsu(userId, totalLimit, context),
+      );
+    }
+    return cached.value;
+  }
 
   const pending = bestScoresWindowPromiseCache.get(cacheKey);
   if (pending) return pending;
 
-  const request = fetchWithCacheLock(cacheKey, BEST_SCORES_WINDOW_CACHE_TTL, async () => {
-    const firstPage = await osuFetch<OsuScore[]>(
-      `/users/${userId}/scores/best`,
-      getScoreRequestParams({
-        mode: "mania",
-        limit: Math.min(totalLimit, 100),
-        offset: 0,
-      }),
-      {
-        caller: "fetchUserBestScoresWindow:p1",
-        context: {
-          source: "best-scores-window",
-          userId,
-          totalLimit,
-          page: 1,
-          ...context,
-        },
-      },
-    );
-
-    let scores = firstPage;
-
-    if (totalLimit > 100 && firstPage.length >= 100) {
-      const secondPage = await osuFetch<OsuScore[]>(
-        `/users/${userId}/scores/best`,
-        getScoreRequestParams({
-          mode: "mania",
-          limit: Math.min(totalLimit - 100, 100),
-          offset: 100,
-        }),
-        {
-          caller: "fetchUserBestScoresWindow:p2",
-          context: {
-            source: "best-scores-window",
-            userId,
-            totalLimit,
-            page: 2,
-            ...context,
-          },
-        },
-      );
-      scores = [...firstPage, ...secondPage];
-    }
-
-    return scores;
-  }).finally(() => {
+  const request = fetchWithCacheLock(cacheKey, BEST_SCORES_WINDOW_CACHE_TTL, () =>
+    fetchUserBestScoresWindowFromOsu(userId, totalLimit, context),
+  ).finally(() => {
     bestScoresWindowPromiseCache.delete(cacheKey);
   });
 
   bestScoresWindowPromiseCache.set(cacheKey, request);
   return request;
+}
+
+async function fetchUserBestScoresWindowFromOsu(
+  userId: number,
+  totalLimit: number,
+  context?: Record<string, OsuFetchContextValue>,
+): Promise<OsuScore[]> {
+  const firstPage = await osuFetch<OsuScore[]>(
+    `/users/${userId}/scores/best`,
+    getScoreRequestParams({
+      mode: "mania",
+      limit: Math.min(totalLimit, 100),
+      offset: 0,
+    }),
+    {
+      caller: "fetchUserBestScoresWindow:p1",
+      context: {
+        source: "best-scores-window",
+        userId,
+        totalLimit,
+        page: 1,
+        ...context,
+      },
+    },
+  );
+
+  if (totalLimit <= 100 || firstPage.length < 100) return firstPage;
+
+  const secondPage = await osuFetch<OsuScore[]>(
+    `/users/${userId}/scores/best`,
+    getScoreRequestParams({
+      mode: "mania",
+      limit: Math.min(totalLimit - 100, 100),
+      offset: 100,
+    }),
+    {
+      caller: "fetchUserBestScoresWindow:p2",
+      context: {
+        source: "best-scores-window",
+        userId,
+        totalLimit,
+        page: 2,
+        ...context,
+      },
+    },
+  );
+  return [...firstPage, ...secondPage];
 }
 
 export async function getBeatmapUserScoresAll(

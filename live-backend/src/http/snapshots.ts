@@ -8,6 +8,7 @@ import { enqueueMapsRefresh, getMapsSnapshot } from "../features/maps.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
 import { getTopPlaysSnapshot } from "../features/top-plays.js";
 import { getTrackerSnapshot } from "../features/tracker.js";
+import { type AbuseBucket, type AbuseGuard, normalizeCountryParam, type RateLimitResult } from "./abuse-guard.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import type { OscStatus } from "../osc/client.js";
@@ -32,6 +33,7 @@ export interface HttpContext {
   queue: JobQueue;
   events: LiveEventLog;
   config: Config;
+  abuse?: AbuseGuard;
   osu: OsuApiClient;
   oscStatus: () => OscStatus;
   workerStatus?: () => {
@@ -58,12 +60,35 @@ export interface HttpContext {
 }
 
 export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: HttpContext): Promise<boolean> {
+  try {
+    return await routeHttpUnsafe(req, res, ctx);
+  } catch (error) {
+    if (error instanceof HttpRequestError) {
+      sendJson(req, res, ctx, error.status, { error: error.code, message: error.message });
+      return true;
+    }
+    throw error;
+  }
+}
+
+async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: HttpContext): Promise<boolean> {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
-  const country = (url.searchParams.get("country") ?? ctx.config.trackedCountries[0] ?? "CR").toUpperCase();
+  const country = countryFromUrl(url, ctx);
+  if (hasInvalidCountryParam(url) && routeUsesCountry(url.pathname)) {
+    sendJson(req, res, ctx, 400, { error: "invalid_country" });
+    return true;
+  }
+  if (url.pathname.startsWith("/api/") && isDisallowedOrigin(req, ctx)) {
+    sendJson(req, res, ctx, 403, { error: "forbidden_origin" });
+    return true;
+  }
   if (req.method === "OPTIONS") {
     sendCors(req, res, ctx);
     res.statusCode = 204;
     res.end();
+    return true;
+  }
+  if (url.pathname.startsWith("/api/") && !isAdmin(req, ctx) && !checkRate(req, res, ctx, "publicApi")) {
     return true;
   }
   if (url.pathname === "/healthz") {
@@ -92,26 +117,29 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
-    sendJson(req, res, ctx, 200, { ok: true, country: await activateCountry(ctx.db, ctx.queue, ctx.config, country) });
+    if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    const activated = await activatePublicCountry(req, res, ctx, country);
+    if (!activated) return true;
+    sendJson(req, res, ctx, 200, { ok: true, country: activated });
     return true;
   }
   if (url.pathname === "/api/snapshots/tracker") {
-    await activateCountry(ctx.db, ctx.queue, ctx.config, country);
+    if (!await activatePublicCountry(req, res, ctx, country)) return true;
     sendJson(req, res, ctx, 200, await getTrackerSnapshot(ctx.db, country, clampLimit(url.searchParams.get("limit"), 100, 500)));
     return true;
   }
   if (url.pathname === "/api/snapshots/top-plays") {
-    await activateCountry(ctx.db, ctx.queue, ctx.config, country);
+    if (!await activatePublicCountry(req, res, ctx, country)) return true;
     sendJson(req, res, ctx, 200, await getTopPlaysSnapshot(ctx.db, country, url.searchParams.get("window") ?? "7d"));
     return true;
   }
   if (url.pathname === "/api/snapshots/snipes") {
-    await activateCountry(ctx.db, ctx.queue, ctx.config, country);
+    if (!await activatePublicCountry(req, res, ctx, country)) return true;
     sendJson(req, res, ctx, 200, await getSnipesSnapshot(ctx.db, country, clampLimit(url.searchParams.get("limit"), 500, 1000)));
     return true;
   }
   if (url.pathname === "/api/snapshots/maps") {
-    await activateCountry(ctx.db, ctx.queue, ctx.config, country);
+    if (!await activatePublicCountry(req, res, ctx, country)) return true;
     const snapshot = await getMapsSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs);
     sendJson(req, res, ctx, snapshot.value ? 200 : 202, snapshot);
     return true;
@@ -121,6 +149,8 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
+    if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    if (!checkRate(req, res, ctx, "danEstimate")) return true;
     const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
     const items = Array.isArray(body.items) ? body.items : [];
     sendJson(req, res, ctx, 200, await getDanEstimateBatch(ctx.db, ctx.queue, ctx.osu, items, {
@@ -181,7 +211,7 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
     return true;
   }
   if (url.pathname === "/api/events") {
-    await activateCountry(ctx.db, ctx.queue, ctx.config, country);
+    if (!await activatePublicCountry(req, res, ctx, country)) return true;
     const since = Number(url.searchParams.get("since") ?? 0);
     sendJson(req, res, ctx, 200, { events: await ctx.events.replay(country, Number.isFinite(since) ? since : 0, 500) });
     return true;
@@ -191,6 +221,12 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
       return true;
     }
+    if (!ctx.config.replayVideoPublicEnabled && !isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (!isAdmin(req, ctx) && !checkRate(req, res, ctx, "replayVideo")) return true;
+    if (!isAdmin(req, ctx) && !checkRate(req, res, ctx, "publicCostly")) return true;
     if (!isReplayVideoStorageConfigured(ctx.config)) {
       sendJson(req, res, ctx, 503, { error: "R2 is not configured for replay video uploads." });
       return true;
@@ -225,7 +261,7 @@ export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: 
       return true;
     }
     if (action === "upload-video") {
-      const buffer = await readBodyBuffer(req);
+      const buffer = await readBodyBuffer(req, ctx.config.replayVideoUploadMaxBytes);
       const job = await writeReplayVideoUpload(ctx.db, ctx.config, id, buffer);
       sendJson(req, res, ctx, 200, replayVideoExportResponse(job));
       return true;
@@ -387,6 +423,7 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
     queueSummary: await ctx.queue.summary(),
     roster: await rosterSummary(ctx.db),
     rate: ctx.osu.limiter.state(),
+    abuse: ctx.abuse?.state() ?? null,
     apiCallHistory: await apiCallHistory(ctx.db),
     countries: await getCountryRegistry(ctx.db, ctx.config),
     worker: options.includeWorkerActivity ? worker : publicWorkerStatus(worker),
@@ -454,6 +491,80 @@ async function apiCallHistory(db: Db) {
     byCaller: byCaller.rows.map((row) => ({ caller: String(row.caller), count: Number(row.count) })),
     byPath: byPath.rows.map((row) => ({ path: String(row.path), count: Number(row.count) })),
   };
+}
+
+export async function activatePublicCountry(
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: HttpContext,
+  country: string,
+): Promise<Awaited<ReturnType<typeof activateCountry>> | null> {
+  const registered = await isCountryRegistered(ctx.db, country);
+  if (!isAdmin(req, ctx) && ctx.abuse && !registered) {
+    const minute = ctx.abuse.check(req, ctx.config, "countryActivate");
+    if (!minute.allowed) {
+      sendRateLimited(req, res, ctx, minute);
+      return null;
+    }
+    const hourly = ctx.abuse.check(req, ctx.config, "countryActivateNew");
+    if (!hourly.allowed) {
+      sendRateLimited(req, res, ctx, hourly);
+      return null;
+    }
+    const global = ctx.abuse.checkGlobal(ctx.config, "countryActivateGlobal");
+    if (!global.allowed) {
+      sendRateLimited(req, res, ctx, global);
+      return null;
+    }
+  }
+  return activateCountry(ctx.db, ctx.queue, ctx.config, country);
+}
+
+async function isCountryRegistered(db: Db, country: string): Promise<boolean> {
+  const row = (await exec(db, "select 1 from country_registry where country = ? limit 1", [country])).rows[0];
+  return !!row;
+}
+
+function checkRate(req: IncomingMessage, res: ServerResponse, ctx: HttpContext, bucket: AbuseBucket): boolean {
+  if (!ctx.abuse || isAdmin(req, ctx)) return true;
+  const result = ctx.abuse.check(req, ctx.config, bucket);
+  if (result.allowed) return true;
+  sendRateLimited(req, res, ctx, result);
+  return false;
+}
+
+export function sendRateLimited(req: IncomingMessage, res: ServerResponse, ctx: Pick<HttpContext, "config">, result: Exclude<RateLimitResult, { allowed: true }>): void {
+  res.setHeader("retry-after", String(Math.max(1, Math.ceil(result.retryAfterMs / 1000))));
+  sendJson(req, res, ctx, 429, {
+    error: "rate_limited",
+    bucket: result.bucket,
+    limit: result.limit,
+    retryAfterMs: result.retryAfterMs,
+  });
+}
+
+function countryFromUrl(url: URL, ctx: HttpContext): string {
+  return normalizeCountryParam(url.searchParams.get("country"))
+    ?? normalizeCountryParam(ctx.config.trackedCountries?.[0])
+    ?? "CR";
+}
+
+function hasInvalidCountryParam(url: URL): boolean {
+  const raw = url.searchParams.get("country");
+  return raw != null && !normalizeCountryParam(raw);
+}
+
+function routeUsesCountry(pathname: string): boolean {
+  return pathname === "/api/countries/activate"
+    || pathname === "/api/events"
+    || pathname.startsWith("/api/snapshots/")
+    || pathname === "/api/admin/refresh-roster"
+    || pathname === "/api/admin/refresh-maps";
+}
+
+function isDisallowedOrigin(req: IncomingMessage, ctx: Pick<HttpContext, "config">): boolean {
+  const origin = req.headers.origin;
+  return !!origin && !ctx.config.allowedOrigins.includes("*") && !ctx.config.allowedOrigins.includes(origin);
 }
 
 export function sendJson(req: IncomingMessage, res: ServerResponse, ctx: Pick<HttpContext, "config">, status: number, body: unknown): void {
@@ -531,8 +642,35 @@ async function readBody(req: IncomingMessage): Promise<string> {
   return (await readBodyBuffer(req)).toString("utf8");
 }
 
-async function readBodyBuffer(req: IncomingMessage): Promise<Buffer> {
+const DEFAULT_BODY_LIMIT_BYTES = 1024 * 1024;
+
+class HttpRequestError extends Error {
+  constructor(readonly status: number, readonly code: string, message: string) {
+    super(message);
+  }
+}
+
+async function readBodyBuffer(req: IncomingMessage, limitBytes = DEFAULT_BODY_LIMIT_BYTES): Promise<Buffer> {
+  const limit = Math.max(1, Math.floor(limitBytes));
+  const rawLength = Array.isArray(req.headers["content-length"]) ? req.headers["content-length"][0] : req.headers["content-length"];
+  if (rawLength != null) {
+    const length = Number(rawLength);
+    if (!Number.isFinite(length) || length < 0) {
+      throw new HttpRequestError(400, "invalid_content_length", "Invalid Content-Length header.");
+    }
+    if (length > limit) {
+      throw new HttpRequestError(413, "payload_too_large", "Request body is too large.");
+    }
+  }
   const chunks: Buffer[] = [];
-  for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  return Buffer.concat(chunks);
+  let total = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += buffer.length;
+    if (total > limit) {
+      throw new HttpRequestError(413, "payload_too_large", "Request body is too large.");
+    }
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks, total);
 }

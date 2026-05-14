@@ -7,6 +7,7 @@ import { ScoreIngestor } from "./ingest/score-ingestor.js";
 import { JobQueue } from "./jobs/queue.js";
 import { LiveEventLog } from "./live/event-log.js";
 import { enqueueMapsRefreshIfDue } from "./features/maps.js";
+import { AbuseGuard } from "./http/abuse-guard.js";
 import { handleSse } from "./live/sse.js";
 import { enqueueOscBackfill } from "./osc/backfill.js";
 import { OscSocketClient } from "./osc/client.js";
@@ -30,6 +31,7 @@ export async function createApp() {
     ]).catch(() => {});
   });
   const ingestor = new ScoreIngestor(db, queue, events, config);
+  const abuse = new AbuseGuard();
   const osc = new OscSocketClient(config, ingestor);
   if (osu.hasCredentials()) {
     await enqueueRosterRefreshes(queue, config.trackedCountries);
@@ -40,6 +42,7 @@ export async function createApp() {
     queue,
     events,
     config,
+    abuse,
     osu,
     oscStatus: () => osc.status(),
     workerStatus: () => worker.status(),

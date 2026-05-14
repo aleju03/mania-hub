@@ -9,6 +9,7 @@ import { enqueueMapsRefreshIfDue, getMapsSnapshot } from "../src/features/maps.j
 import { confirmTopPlay } from "../src/features/top-plays.js";
 import { getTrackerSnapshot } from "../src/features/tracker.js";
 import { routeHttp } from "../src/http/snapshots.js";
+import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { handleSse } from "../src/live/sse.js";
 import { OscBackfill } from "../src/osc/backfill.js";
 import { refreshCountryRoster } from "../src/rosters/country-rosters.js";
@@ -40,6 +41,66 @@ async function setup(trackedCountries = ["CR"]) {
 
 async function fixture<T>(name: string): Promise<T> {
   return JSON.parse(await readFile(new URL(`../fixtures/${name}`, import.meta.url), "utf8")) as T;
+}
+
+function mockReq(method: string, url: string, headers: IncomingMessage["headers"] = {}): IncomingMessage {
+  const req = new EventEmitter() as IncomingMessage;
+  req.method = method;
+  req.url = url;
+  req.headers = { host: "localhost", ...headers };
+  return req;
+}
+
+function mockRes() {
+  const writes: string[] = [];
+  const headers: Record<string, string> = {};
+  let res: ServerResponse & { statusCode: number };
+  const partial = {
+    statusCode: 200,
+    setHeader: vi.fn((key: string, value: number | string | readonly string[]) => {
+      headers[key.toLowerCase()] = Array.isArray(value) ? value.join(",") : String(value);
+      return res;
+    }),
+    writeHead: vi.fn((status: number, value?: Record<string, string>) => {
+      res.statusCode = status;
+      for (const [key, headerValue] of Object.entries(value ?? {})) headers[key.toLowerCase()] = String(headerValue);
+      return res;
+    }),
+    write: vi.fn((chunk: string) => {
+      writes.push(chunk);
+      return true;
+    }),
+    end: vi.fn((chunk?: string | Buffer) => {
+      if (chunk != null) writes.push(String(chunk));
+    }),
+  };
+  res = partial as unknown as ServerResponse & { statusCode: number };
+  return { res, writes, headers };
+}
+
+function baseConfig(overrides: Record<string, unknown> = {}) {
+  return {
+    nodeEnv: "production",
+    allowedOrigins: ["http://localhost:3000"],
+    trackedCountries: ["CR"],
+    trustProxyHeaders: true,
+    countryWarmTtlMs: 24 * 60 * 60 * 1000,
+    rosterRefreshIntervalMs: 24 * 60 * 60 * 1000,
+    publicApiRatePerMinute: 120,
+    publicCostlyRatePerMinute: 30,
+    countryActivateRatePerMinute: 10,
+    countryActivateGlobalRatePerMinute: 120,
+    countryActivateNewPerHour: 12,
+    danEstimateRatePerMinute: 20,
+    sseConnectRatePerMinute: 30,
+    sseMaxConnectionsPerIp: 6,
+    sseMaxConnectionsTotal: 500,
+    replayVideoRatePerMinute: 2,
+    replayVideoPublicEnabled: false,
+    replayVideoUploadMaxBytes: 600 * 1024 * 1024,
+    mapsRefreshIntervalMs: 7 * 24 * 60 * 60 * 1000,
+    ...overrides,
+  };
 }
 
 beforeEach(() => {
@@ -654,6 +715,157 @@ describe("live backend", () => {
 
     expect(JSON.parse(writes.join(""))).toMatchObject({ value: null, isStale: true, refreshQueued: true });
     expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_country_maps'")).rows[0].count)).toBe(1);
+  });
+
+  it("rejects disallowed browser origins before public API work", async () => {
+    const { res, writes } = mockRes();
+    const handled = await routeHttp(mockReq("GET", "/api/osu/v2", { origin: "https://evil.example" }), res, {
+      config: baseConfig(),
+    } as never);
+
+    expect(handled).toBe(true);
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(writes.join(""))).toMatchObject({ error: "forbidden_origin" });
+  });
+
+  it("rate-limits no-origin public API requests by IP", async () => {
+    const abuse = new AbuseGuard();
+    const config = baseConfig({ publicApiRatePerMinute: 1 });
+    const first = mockRes();
+    const second = mockRes();
+
+    await routeHttp(mockReq("GET", "/api/osu/v2", { "x-real-ip": "203.0.113.10" }), first.res, {
+      config,
+      abuse,
+    } as never);
+    await routeHttp(mockReq("GET", "/api/osu/v2", { "x-real-ip": "203.0.113.10" }), second.res, {
+      config,
+      abuse,
+    } as never);
+
+    expect(first.res.statusCode).toBe(401);
+    expect(second.res.statusCode).toBe(429);
+    expect(second.headers["retry-after"]).toBe("60");
+  });
+
+  it("keeps dynamic countries but throttles new-country activation", async () => {
+    const { db, queue, events } = await setup();
+    const abuse = new AbuseGuard();
+    const config = baseConfig({ countryActivateRatePerMinute: 1, countryActivateNewPerHour: 20 });
+    const first = mockRes();
+    const second = mockRes();
+
+    await routeHttp(mockReq("GET", "/api/snapshots/tracker?country=CO", { "x-real-ip": "203.0.113.20" }), first.res, {
+      db,
+      queue,
+      events,
+      config,
+      abuse,
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0 }) } },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never);
+    await routeHttp(mockReq("GET", "/api/snapshots/tracker?country=MX", { "x-real-ip": "203.0.113.20" }), second.res, {
+      db,
+      queue,
+      events,
+      config,
+      abuse,
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0 }) } },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never);
+
+    expect(first.res.statusCode).toBe(200);
+    expect(JSON.parse(first.writes.join(""))).toMatchObject({ country: "CO" });
+    expect(second.res.statusCode).toBe(429);
+    expect(JSON.parse(second.writes.join(""))).toMatchObject({ error: "rate_limited", bucket: "countryActivate" });
+  });
+
+  it("keeps replay video uploads admin-only unless public exports are enabled", async () => {
+    const { db, queue, events } = await setup();
+    const config = baseConfig({
+      liveAdminToken: "secret",
+      replayVideoPublicEnabled: false,
+      r2Endpoint: "https://r2.example",
+      r2AccessKeyId: "key",
+      r2SecretAccessKey: "secret",
+      r2Bucket: "mania-hub-replay-cache",
+    });
+    const publicRes = mockRes();
+    const adminRes = mockRes();
+
+    await routeHttp(mockReq("POST", "/api/replay-video-job?action=status&id=missing"), publicRes.res, {
+      db,
+      queue,
+      events,
+      config,
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0 }) } },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never);
+    await routeHttp(mockReq("POST", "/api/replay-video-job?action=status&id=missing", { authorization: "Bearer secret" }), adminRes.res, {
+      db,
+      queue,
+      events,
+      config,
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0 }) } },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never);
+
+    expect(publicRes.res.statusCode).toBe(401);
+    expect(adminRes.res.statusCode).toBe(404);
+  });
+
+  it("rejects replay video uploads before buffering oversized bodies", async () => {
+    const config = baseConfig({
+      replayVideoPublicEnabled: true,
+      replayVideoUploadMaxBytes: 4,
+      r2Endpoint: "https://r2.example",
+      r2AccessKeyId: "key",
+      r2SecretAccessKey: "secret",
+      r2Bucket: "mania-hub-replay-cache",
+    });
+    const { res, writes } = mockRes();
+
+    await routeHttp(mockReq("POST", "/api/replay-video-job?action=upload-video&id=test", {
+      "content-length": "5",
+      "x-real-ip": "203.0.113.30",
+    }), res, {
+      config,
+      abuse: new AbuseGuard(),
+    } as never);
+
+    expect(res.statusCode).toBe(413);
+    expect(JSON.parse(writes.join(""))).toMatchObject({ error: "payload_too_large" });
+  });
+
+  it("caps concurrent SSE connections per IP and releases them on close", async () => {
+    const { db, queue, events } = await setup();
+    const abuse = new AbuseGuard();
+    const config = baseConfig({ sseMaxConnectionsPerIp: 1, sseMaxConnectionsTotal: 10 });
+    const firstReq = mockReq("GET", "/api/live?country=CR", { "x-real-ip": "203.0.113.40" });
+    const thirdReq = mockReq("GET", "/api/live?country=CR", { "x-real-ip": "203.0.113.40" });
+    const first = mockRes();
+    const second = mockRes();
+    const third = mockRes();
+    const ctx = {
+      db,
+      queue,
+      events,
+      config,
+      abuse,
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0 }) } },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never;
+
+    await handleSse(firstReq, first.res, ctx);
+    await handleSse(mockReq("GET", "/api/live?country=CR", { "x-real-ip": "203.0.113.40" }), second.res, ctx);
+    firstReq.emit("close");
+    await handleSse(thirdReq, third.res, ctx);
+
+    expect(first.res.writeHead).toHaveBeenCalledWith(200, expect.objectContaining({ "content-type": "text/event-stream; charset=utf-8" }));
+    expect(second.res.statusCode).toBe(429);
+    expect(JSON.parse(second.writes.join(""))).toMatchObject({ error: "rate_limited", bucket: "sseConnect" });
+    expect(third.res.writeHead).toHaveBeenCalledWith(200, expect.objectContaining({ "content-type": "text/event-stream; charset=utf-8" }));
+    thirdReq.emit("close");
   });
 
   it("streams SSE hello, heartbeat, and Last-Event-ID replay", async () => {

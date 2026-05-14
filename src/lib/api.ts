@@ -53,6 +53,13 @@ const warnedCacheIssues = new Set<string>();
 // scheduled jobs or new infrastructure.
 const CACHE_PURGE_EVERY_N_WRITES = 20;
 const CACHE_PURGE_BATCH_SIZE = 50;
+const PROFILE_STALE_CACHE_PREFIXES = new Set([
+  "user",
+  "user-id",
+  "user-score-list",
+  "user-best-scores-window",
+]);
+const PROFILE_STALE_CACHE_RETENTION_MS = 6 * 60 * 60 * 1000;
 let writesSinceLastPurge = 0;
 let persistentCacheBypassUntil = 0;
 const PERSISTENT_CACHE_BYPASS_MS = 60_000;
@@ -183,16 +190,18 @@ async function decodeCacheValue(raw: string): Promise<unknown> {
 async function purgeExpiredCacheEntries(): Promise<void> {
   if (!hasDb() || !db) return;
   try {
+    const now = Date.now();
     await db.execute({
       sql: `
         DELETE FROM cache_entries
         WHERE cache_key IN (
           SELECT cache_key FROM cache_entries
           WHERE expires_at < ?
+            AND NOT (cache_prefix IN (${[...PROFILE_STALE_CACHE_PREFIXES].map(() => "?").join(",")}) AND expires_at >= ?)
           LIMIT ?
         )
       `,
-      args: [Date.now(), CACHE_PURGE_BATCH_SIZE],
+      args: [now, ...PROFILE_STALE_CACHE_PREFIXES, now - PROFILE_STALE_CACHE_RETENTION_MS, CACHE_PURGE_BATCH_SIZE],
     });
   } catch (error) {
     warnCacheIssue("auto-purge expired", "cache_entries", error);
@@ -550,6 +559,28 @@ export async function fetchWithCacheLock<T>(
   const result = await fetchFn();
   await setPersistentCache(cacheKey, result, cacheTtlMs);
   return result;
+}
+
+export async function refreshCacheInBackground<T>(
+  cacheKey: string,
+  cacheTtlMs: number,
+  fetchFn: () => Promise<T>,
+  lockTtlMs: number = DEFAULT_LOCK_TTL,
+): Promise<void> {
+  const lockOwner = await acquireCacheLock(cacheKey, lockTtlMs);
+  if (!lockOwner) return;
+
+  try {
+    const rechecked = await getPersistentCacheEntryAllowStale<T>(cacheKey);
+    if (rechecked.hit && !rechecked.isStale) return;
+
+    const result = await runWithCacheLockRenewal(cacheKey, lockOwner, lockTtlMs, fetchFn);
+    await setPersistentCache(cacheKey, result, cacheTtlMs);
+  } catch (error) {
+    warnCacheIssue("background refresh", cacheKey, error);
+  } finally {
+    await releaseCacheLock(cacheKey, lockOwner);
+  }
 }
 
 export async function fetchWithStaleAllowed<T>(
