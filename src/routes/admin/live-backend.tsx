@@ -1,5 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { Activity, Database, HelpCircle, History, Pause, Play, Radio, RefreshCw, Server, Signal, Trash2, UserRound, Wifi, WifiOff } from "lucide-react";
+import { Activity, AlertTriangle, Database, HelpCircle, History, Pause, Play, Radio, RefreshCw, Server, Signal, Trash2, UserRound, Wifi, WifiOff } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import {
@@ -241,7 +241,7 @@ function LiveBackendPage() {
         onToggleAutoRefresh={() => setAutoRefresh((value) => !value)}
       />
       <div className="bg-osu-b5 min-h-[calc(100vh-60px)]">
-        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5 space-y-5">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5 space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Live backend</div>
@@ -262,64 +262,80 @@ function LiveBackendPage() {
 
           {error ? <ErrorBanner message={error} /> : null}
 
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            <KpiCard
-              label="Backend"
-              value={status?.ok ? "online" : "offline"}
-              hint={backendUrl ?? "not configured"}
-              tone={status?.ok ? "good" : "bad"}
-              icon={<Server className="h-4 w-4" />}
-            />
-            <KpiCard
-              label="Database"
-              value={status?.db ? "ready" : "down"}
-              hint={formatStorageHint(status)}
-              tone={status?.storage?.overLimit ? "bad" : status?.db ? "good" : "bad"}
-              icon={<Database className="h-4 w-4" />}
-            />
-            <KpiCard
-              label="oSC socket"
-              value={status?.osc.connected ? "connected" : "closed"}
-              hint={status?.osc.lastBatchAt ? `batch ${formatTimeAgo(status.osc.lastBatchAt)}` : "waiting for batch"}
-              tone={status?.osc.connected ? "good" : "warn"}
-              icon={<Radio className="h-4 w-4" />}
-            />
-            <KpiCard
-              label="Queue"
-              value={status?.queueDepth == null ? "—" : formatNumber(status.queueDepth)}
-              hint="queued / running jobs"
-              tone={(status?.queueDepth ?? 0) > 1000 ? "warn" : "neutral"}
-              icon={<Activity className="h-4 w-4" />}
-            />
-            <KpiCard
-              label="osu! rate"
-              value={status ? `${status.rate.usedLastMinute}/${status.rate.hardPerMinute}` : "—"}
-              hint="calls in last minute"
-              tone={status && status.rate.usedLastMinute >= status.rate.hardPerMinute ? "warn" : "neutral"}
-              icon={<Signal className="h-4 w-4" />}
-            />
-          </div>
+          <Section title="Health" subtitle="Is the backend up and ingesting?">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              <KpiCard
+                label="Backend"
+                value={status?.ok ? "online" : "offline"}
+                hint={backendUrl ?? "not configured"}
+                tone={status?.ok ? "good" : "bad"}
+                icon={<Server className="h-4 w-4" />}
+              />
+              <KpiCard
+                label="Database"
+                value={status?.db ? "ready" : "down"}
+                hint={formatStorageHint(status)}
+                tone={status?.storage?.overLimit ? "bad" : status?.db ? "good" : "bad"}
+                icon={<Database className="h-4 w-4" />}
+              />
+              <KpiCard
+                label="oSC socket"
+                value={status?.osc.connected ? "connected" : "closed"}
+                hint={status?.osc.lastBatchAt ? `batch ${formatTimeAgo(status.osc.lastBatchAt)}` : "waiting for batch"}
+                tone={status?.osc.connected ? "good" : "warn"}
+                icon={<Radio className="h-4 w-4" />}
+              />
+              <KpiCard
+                label="Queue"
+                value={status?.queueDepth == null ? "—" : formatNumber(status.queueDepth)}
+                hint="queued / running jobs"
+                tone={(status?.queueDepth ?? 0) > 1000 ? "warn" : "neutral"}
+                icon={<Activity className="h-4 w-4" />}
+              />
+              <KpiCard
+                label="osu! rate"
+                value={status ? `${status.rate.usedLastMinute}/${status.rate.hardPerMinute}` : "—"}
+                hint="calls in last minute"
+                tone={status && status.rate.usedLastMinute >= status.rate.hardPerMinute ? "warn" : "neutral"}
+                icon={<Signal className="h-4 w-4" />}
+              />
+            </div>
+          </Section>
 
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-            <div className="lg:col-span-2 flex">
-              <SnapshotCard snapshots={snapshots} country={countryCode} />
+          <Section title="Status" subtitle="Process, socket, roster, and country snapshots">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+              <div className="lg:col-span-3 flex">
+                <StatusCard status={status} connectionState={connectionState} country={countryCode} />
+              </div>
+              <div className="lg:col-span-2 flex">
+                <SnapshotCard snapshots={snapshots} country={countryCode} />
+              </div>
             </div>
-            <div className="lg:col-span-3 flex">
-              <StatusCard status={status} connectionState={connectionState} country={countryCode} />
-            </div>
-          </div>
+          </Section>
 
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-            <div className="lg:col-span-3 flex">
-              <EventStreamCard events={events} connectionState={connectionState} />
-            </div>
-            <div className="lg:col-span-2 flex">
-              <RateBreakdownCard status={status} />
-            </div>
-          </div>
+          {(status?.worker?.lanes?.length ?? 0) > 0 ? (
+            <Section title="Workers" subtitle="What each lane is processing right now">
+              <WorkerLanesCard status={status} />
+            </Section>
+          ) : null}
 
-          <div className="grid grid-cols-1 gap-4">
-            <QueueCard
+          <Section title="Activity" subtitle="Live SSE stream and job queue pressure">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+              <div className="lg:col-span-3 flex">
+                <EventStreamCard events={events} connectionState={connectionState} />
+              </div>
+              <div className="lg:col-span-2 flex">
+                <QueueSummaryCard status={status} />
+              </div>
+            </div>
+          </Section>
+
+          <Section title="osu! API pressure" subtitle="Who and what is burning rate-limit budget">
+            <RateBreakdownCard status={status} />
+          </Section>
+
+          <Section title="Controls" subtitle="Admin actions. Safe actions on top, destructive at the bottom.">
+            <ControlsCard
               status={status}
               busy={actionBusy}
               onClearFailed={() => void runAdminAction("clear-failed", "/api/admin/clear-failed-jobs")}
@@ -333,7 +349,7 @@ function LiveBackendPage() {
                 status?.worker?.paused ? "/api/admin/resume-workers" : "/api/admin/pause-workers",
               )}
             />
-          </div>
+          </Section>
         </div>
       </div>
     </div>
@@ -485,10 +501,8 @@ function formatStorageHint(status: LiveBackendStatus | null): string {
 
 function StatusCard({ status, connectionState, country }: { status: LiveBackendStatus | null; connectionState: ConnectionState; country: string }) {
   const roster = status?.roster?.find((entry) => entry.country === country);
-  const workerLanes = status?.worker?.lanes ?? [];
-  const activeJobCount = workerLanes.reduce((total, lane) => total + (lane.activeJobs?.length ?? 0), 0);
   return (
-    <SectionCard title="Process status" subtitle="health, readiness, socket, and worker activity">
+    <SectionCard title="Process status" subtitle="Health, readiness, socket, and roster">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <DetailRow label="SSE client" value={connectionState} tone={connectionState === "open" ? "good" : "warn"} />
         <DetailRow label="Last live event" value={status?.lastEventAt ? formatTimeAgo(status.lastEventAt) : "none"} />
@@ -497,29 +511,38 @@ function StatusCard({ status, connectionState, country }: { status: LiveBackendS
         <DetailRow label={`${country} roster`} value={roster ? `${formatNumber(roster.users)} users` : "not loaded"} tone={roster ? "good" : "warn"} />
         <DetailRow label="Roster refreshed" value={roster?.refreshedAt ? formatTimeAgo(roster.refreshedAt) : "never"} tone={roster?.refreshedAt ? "good" : "warn"} />
         <DetailRow label="Workers" value={status?.worker?.paused ? "paused" : "running"} tone={status?.worker?.paused ? "warn" : "good"} />
-        <DetailRow label="Active jobs" value={`${formatNumber(activeJobCount)} running`} tone={activeJobCount > 0 ? "warn" : "neutral"} />
+        <DetailRow label="Worker id" value={status?.worker?.workerId ?? "unknown"} />
       </div>
-      <div className="mt-2 rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2">
-        <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Worker id</div>
-        <div className="mt-1 text-[10px] font-mono text-osu-c2 truncate">{status?.worker?.workerId ?? "unknown"}</div>
-      </div>
-      {workerLanes.length > 0 ? (
-        <div className="mt-3 space-y-1.5">
-          <div className="flex items-center justify-between gap-3 px-1">
-            <div>
-              <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Worker lanes</div>
-              <div className="text-[10px] text-osu-f1">Current work per lane. Idle means that worker is waiting for a matching queued job.</div>
-            </div>
-            <div className={`text-[10px] font-bold ${activeJobCount > 0 ? "text-osu-yellow" : "text-osu-f1"}`}>
-              {formatNumber(activeJobCount)} active
-            </div>
-          </div>
-          {workerLanes.map((lane) => (
-            <WorkerLaneRow key={lane.name} lane={lane} />
-          ))}
-        </div>
-      ) : null}
     </SectionCard>
+  );
+}
+
+function WorkerLanesCard({ status }: { status: LiveBackendStatus | null }) {
+  const workerLanes = status?.worker?.lanes ?? [];
+  const activeJobCount = workerLanes.reduce((total, lane) => total + (lane.activeJobs?.length ?? 0), 0);
+  return (
+    <SectionCard
+      title="Worker lanes"
+      subtitle={`${formatNumber(activeJobCount)} active. Idle means the lane is waiting for a matching queued job.`}
+    >
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        {workerLanes.map((lane) => (
+          <WorkerLaneRow key={lane.name} lane={lane} />
+        ))}
+      </div>
+    </SectionCard>
+  );
+}
+
+function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-2.5">
+      <div>
+        <div className="text-[11px] font-semibold text-osu-c2 uppercase tracking-wider">{title}</div>
+        {subtitle ? <div className="text-[11px] text-osu-f1 mt-0.5">{subtitle}</div> : null}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -636,20 +659,21 @@ function RateBreakdownCard({ status }: { status: LiveBackendStatus | null }) {
   const paths = status?.rate.byPath ?? [];
   const historyCallers = status?.apiCallHistory?.byCaller ?? [];
   const historyPaths = status?.apiCallHistory?.byPath ?? [];
+  const windowMin = status?.apiCallHistory?.windowMinutes ?? 15;
   const max = Math.max(1, ...callers.map((row) => row.count), ...paths.map((row) => row.count), ...historyCallers.map((row) => row.count), ...historyPaths.map((row) => row.count));
   return (
-    <SectionCard title="osu! API pressure" subtitle="live minute and persisted recent history">
-      <div className="space-y-4">
+    <SectionCard title="osu! API breakdown" subtitle="Compare live minute against the persisted recent window">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Callers, last 60s</div>
           <RateRows
             rows={callers.map((row) => ({ label: row.caller, count: row.count }))}
             max={max}
-            empty="No osu! API calls in the last minute."
+            empty="No calls in the last minute."
           />
         </div>
         <div>
-          <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Callers, last {status?.apiCallHistory?.windowMinutes ?? 15}m</div>
+          <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Callers, last {windowMin}m</div>
           <RateRows
             rows={historyCallers.map((row) => ({ label: row.caller, count: row.count }))}
             max={max}
@@ -657,7 +681,7 @@ function RateBreakdownCard({ status }: { status: LiveBackendStatus | null }) {
           />
         </div>
         <div>
-          <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Paths, last {status?.apiCallHistory?.windowMinutes ?? 15}m</div>
+          <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Paths, last {windowMin}m</div>
           <RateRows
             rows={(paths.length ? paths : historyPaths).map((row) => ({ label: row.path, count: row.count }))}
             max={max}
@@ -689,7 +713,29 @@ function RateRows({ rows, max, empty }: { rows: Array<{ label: string; count: nu
   );
 }
 
-function QueueCard({
+function QueueSummaryCard({ status }: { status: LiveBackendStatus | null }) {
+  const depth = status?.queueDepth ?? 0;
+  const rows = status?.queueSummary ?? [];
+  return (
+    <SectionCard title="Job queue" subtitle="Counts by type and status">
+      <div className="space-y-3">
+        <div className="rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2 flex items-center gap-3">
+          <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Active depth</div>
+          <div className="ml-auto text-xl font-bold text-white">{formatNumber(depth)}</div>
+        </div>
+        <div className="space-y-1.5 max-h-[360px] overflow-auto pr-1">
+          {rows.length === 0 ? (
+            <div className="text-[11px] text-osu-f1 py-3">No jobs recorded.</div>
+          ) : (
+            rows.map((row) => <QueueSummaryRow key={`${row.status}:${row.type}`} row={row} />)
+          )}
+        </div>
+      </div>
+    </SectionCard>
+  );
+}
+
+function ControlsCard({
   status,
   busy,
   onClearFailed,
@@ -710,12 +756,10 @@ function QueueCard({
   onResetLocalDb: () => void;
   onToggleWorkers: () => void;
 }) {
-  const depth = status?.queueDepth ?? 0;
-  const rows = status?.queueSummary ?? [];
   return (
-    <SectionCard title="Queue and controls" subtitle="job pressure by type/status">
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-2">
+    <div className="space-y-3">
+      <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/30 p-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           <AdminButton
             label={status?.worker?.paused ? "Resume jobs" : "Pause jobs"}
             description={status?.worker?.paused ? "Let queued backend jobs start running again." : "Temporarily stop queued jobs. Live score intake can still write new scores."}
@@ -758,27 +802,26 @@ function QueueCard({
             busy={busy === "osc-backfill"}
             onClick={onRunOscBackfill}
           />
+        </div>
+      </div>
+      <div className="rounded-lg border border-osu-red/30 bg-osu-red/5 p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <AlertTriangle className="h-3.5 w-3.5 text-osu-red-light" />
+          <div className="text-[10px] uppercase tracking-wider text-osu-red-light font-semibold">Danger zone</div>
+          <div className="text-[10px] text-osu-f1">Destructive. Local development only.</div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
           <AdminButton
             label="Reset local DB"
             description="Local development only. Clears the live backend database tables."
             icon={<Trash2 className="h-3.5 w-3.5" />}
             busy={busy === "reset-local-db"}
             onClick={onResetLocalDb}
+            danger
           />
         </div>
-        <div className="rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2 flex items-center gap-3">
-          <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Active depth</div>
-          <div className="ml-auto text-xl font-bold text-white">{formatNumber(depth)}</div>
-        </div>
-        <div className="space-y-1.5 max-h-[280px] overflow-auto pr-1">
-          {rows.length === 0 ? (
-            <div className="text-[11px] text-osu-f1 py-3">No jobs recorded.</div>
-          ) : (
-            rows.map((row) => <QueueSummaryRow key={`${row.status}:${row.type}`} row={row} />)
-          )}
-        </div>
       </div>
-    </SectionCard>
+    </div>
   );
 }
 
@@ -788,18 +831,23 @@ function AdminButton({
   icon,
   busy,
   onClick,
+  danger,
 }: {
   label: string;
   description: string;
   icon: React.ReactNode;
   busy: boolean;
   onClick: () => void;
+  danger?: boolean;
 }) {
+  const base = danger
+    ? "bg-osu-red/15 border-osu-red/40 text-osu-red-light hover:bg-osu-red/25 hover:text-white"
+    : "bg-osu-b4/60 border-osu-b3/30 text-osu-l2 hover:bg-osu-b3/60 hover:text-white";
   return (
     <button
       onClick={onClick}
       disabled={busy}
-      className="group relative inline-grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 rounded-md bg-osu-b4/60 border border-osu-b3/30 px-2.5 py-1.5 text-left text-[10px] font-semibold text-osu-l2 hover:bg-osu-b3/60 hover:text-white transition-colors duration-[120ms] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+      className={`group relative inline-grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-left text-[10px] font-semibold transition-colors duration-[120ms] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer ${base}`}
       aria-label={`${label}. ${description}`}
     >
       <span className="flex h-4 w-4 items-center justify-center">
