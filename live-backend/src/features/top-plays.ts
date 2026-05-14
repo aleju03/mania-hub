@@ -18,7 +18,8 @@ export async function maybeEnqueueTopPlayRefresh(
   const row = (await exec(db, "select top_play_min_pp from users where user_id = ?", [score.user_id])).rows[0];
   const threshold = Math.max(0, Number(row?.top_play_min_pp ?? 0) - marginPp);
   if (score.pp >= threshold) {
-    await queue.enqueue("refresh_user_top_scores", `top:${score.user_id}:${score.id}`, { userId: score.user_id, scoreId: score.id, country }, { priority: 50 });
+    const confirmationScoreId = getTopPlayConfirmationScoreId(score);
+    await queue.enqueue("refresh_user_top_scores", `top:${score.user_id}:${confirmationScoreId}`, { userId: score.user_id, scoreId: confirmationScoreId, country }, { priority: 50 });
   }
 }
 
@@ -41,10 +42,12 @@ export async function confirmTopPlay(
       [payload.userId, score.id, index, json(score), score.pp, calculateWeightedPp(score.pp, index), score.ended_at ?? score.created_at ?? null, refreshedAt],
     );
   }
-  const confirmedIndex = bestScores.findIndex((score) => score.id === payload.scoreId);
+  const scoreIdCandidates = await getTopPlayConfirmationScoreIdCandidates(db, payload);
+  const confirmedIndex = bestScores.findIndex((score) => scoreIdCandidates.has(score.id));
   if (confirmedIndex < 0) return false;
   const score = bestScores[confirmedIndex];
   if (score.pp == null || !score.user) return false;
+  const confirmedScoreId = score.id;
   const ppGain = await calculateTopPlayPpGain(osu, bestScores, score);
   const event: CountryTopPlay = {
     user: { id: score.user_id, username: score.user.username, avatar_url: score.user.avatar_url },
@@ -58,11 +61,36 @@ export async function confirmTopPlay(
     db,
     `insert or ignore into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
      values (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [payload.country, payload.scoreId, payload.userId, event.pp, event.weightedPP, event.ppGain, json(event), refreshedAt],
+    [payload.country, confirmedScoreId, payload.userId, event.pp, event.weightedPP, event.ppGain, json(event), refreshedAt],
   );
   if (inserted.rowsAffected === 0) return false;
-  await events.append("top_play", payload.country, event, `top_play:${payload.country}:${payload.scoreId}`);
+  await events.append("top_play", payload.country, event, `top_play:${payload.country}:${confirmedScoreId}`);
   return true;
+}
+
+function getTopPlayConfirmationScoreId(score: Pick<OscScore, "id" | "legacy_score_id">): number {
+  return score.legacy_score_id ?? score.id;
+}
+
+async function getTopPlayConfirmationScoreIdCandidates(
+  db: Db,
+  payload: { userId: number; scoreId: number; country: string },
+): Promise<Set<number>> {
+  const candidates = new Set<number>([payload.scoreId]);
+  const rows = (await exec(
+    db,
+    `select score_id, legacy_score_id from score_events
+     where country = ? and user_id = ? and (score_id = ? or legacy_score_id = ?)
+     limit 5`,
+    [payload.country, payload.userId, payload.scoreId, payload.scoreId],
+  )).rows;
+  for (const row of rows) {
+    const scoreId = Number(row.score_id);
+    const legacyScoreId = Number(row.legacy_score_id);
+    if (Number.isFinite(scoreId) && scoreId > 0) candidates.add(scoreId);
+    if (Number.isFinite(legacyScoreId) && legacyScoreId > 0) candidates.add(legacyScoreId);
+  }
+  return candidates;
 }
 
 async function calculateTopPlayPpGain(

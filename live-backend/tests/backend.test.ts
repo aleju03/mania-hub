@@ -225,6 +225,27 @@ describe("live backend", () => {
     expect(await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" })).toBe(false);
   });
 
+  it("confirms oSC top plays by legacy score id when osu! best scores use the stable id", async () => {
+    const { db, events, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    const oscScore = { ...scores[0], id: 99001, legacy_score_id: 9001 };
+
+    await ingestor.ingestBatch([oscScore], "osc_socket");
+
+    const job = (await exec(db, "select dedupe_key, payload_json from jobs where type = 'refresh_user_top_scores'")).rows[0];
+    expect(job.dedupe_key).toBe("top:101:9001");
+    expect(JSON.parse(String(job.payload_json)).scoreId).toBe(9001);
+
+    const best = await fixture<OscScore[]>("top-best.json");
+    const osu = {
+      getBeatmapUserScoresAll: async (_beatmapId: number, _userId: number, _caller?: string) => [],
+      getUserBestScores: async (_userId: number, _caller?: string) => best,
+    };
+
+    expect(await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 99001, country: "CR" })).toBe(true);
+    expect(Number((await exec(db, "select count(*) as count from top_play_events where score_id = 9001")).rows[0].count)).toBe(1);
+  });
+
   it("calculates top-play pp gain from the previous same-beatmap best", async () => {
     const { db, events } = await setup();
     const baseBest = (await fixture<OscScore[]>("top-best.json"))[0];
