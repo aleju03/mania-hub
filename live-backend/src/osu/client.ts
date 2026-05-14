@@ -183,6 +183,7 @@ export class OsuApiError extends Error {
 
 export class OsuApiClient {
   private token: { accessToken: string; expiresAt: number } | null = null;
+  private readonly inFlight = new Map<string, Promise<unknown>>();
   readonly limiter: TokenBucketLimiter;
 
   constructor(
@@ -208,6 +209,10 @@ export class OsuApiClient {
   async getBeatmapFile(beatmapId: number, caller = "unknown"): Promise<string> {
     const safeBeatmapId = Math.floor(beatmapId);
     if (!Number.isFinite(safeBeatmapId) || safeBeatmapId <= 0) throw new Error("Invalid beatmap ID");
+    return this.coalesce(`beatmap-file:${safeBeatmapId}`, async () => this.getBeatmapFileUncached(safeBeatmapId, caller));
+  }
+
+  private async getBeatmapFileUncached(safeBeatmapId: number, caller: string): Promise<string> {
     const errors: string[] = [];
     const sources = [
       { name: "osu", url: `https://osu.ppy.sh/osu/${safeBeatmapId}`, path: `/osu/${safeBeatmapId}` },
@@ -288,7 +293,7 @@ export class OsuApiClient {
     if (!this.hasCredentials()) {
       throw new Error("OSU_CLIENT_ID and OSU_CLIENT_SECRET are required for osu! API calls");
     }
-    return this.limiter.schedule(caller, path, async () => {
+    return this.coalesce(`json:${path}`, () => this.limiter.schedule(caller, path, async () => {
       const token = await this.getAccessToken();
       const response = await this.fetchImpl(`https://osu.ppy.sh/api/v2${path}`, {
         headers: {
@@ -304,14 +309,14 @@ export class OsuApiClient {
         throw new OsuApiError(response.status, path, retryAfterMs);
       }
       return response.json() as Promise<T>;
-    });
+    }));
   }
 
   async getBinary(path: string, caller = "unknown"): Promise<ArrayBuffer> {
     if (!this.hasCredentials()) {
       throw new Error("OSU_CLIENT_ID and OSU_CLIENT_SECRET are required for osu! API calls");
     }
-    return this.limiter.schedule(caller, path, async () => {
+    return this.coalesce(`binary:${path}`, () => this.limiter.schedule(caller, path, async () => {
       const token = await this.getAccessToken();
       const response = await this.fetchImpl(`https://osu.ppy.sh/api/v2${path}`, {
         headers: { authorization: `Bearer ${token}` },
@@ -322,12 +327,12 @@ export class OsuApiClient {
         throw new OsuApiError(response.status, path, retryAfterMs);
       }
       return response.arrayBuffer();
-    });
+    }));
   }
 
   private async getUserRecentScoresWeb(userId: number, caller: string): Promise<OscScore[]> {
     const path = `/users/${userId}/scores/recent?mode=mania&include_fails=1&limit=20`;
-    return this.limiter.schedule(caller, `web:${path}`, async () => {
+    return this.coalesce(`web:${path}`, () => this.limiter.schedule(caller, `web:${path}`, async () => {
       const response = await this.fetchImpl(`https://osu.ppy.sh${path}`, {
         headers: { accept: "application/json" },
       });
@@ -339,7 +344,7 @@ export class OsuApiClient {
       const body = await response.json() as unknown;
       if (!Array.isArray(body)) throw new Error(`osu! web recent scores returned ${typeof body}`);
       return body as OscScore[];
-    });
+    }));
   }
 
   private async fetchBeatmapFileFromSource(url: string, path: string, caller: string): Promise<string> {
@@ -360,6 +365,17 @@ export class OsuApiClient {
         clearTimeout(timeout);
       }
     });
+  }
+
+  private coalesce<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const pending = this.inFlight.get(key);
+    if (pending) return pending as Promise<T>;
+
+    const request = fn().finally(() => {
+      this.inFlight.delete(key);
+    });
+    this.inFlight.set(key, request);
+    return request;
   }
 
   private async getAccessToken(): Promise<string> {

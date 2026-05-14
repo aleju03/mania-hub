@@ -588,6 +588,30 @@ describe("live backend", () => {
     expect(calls).toEqual(["bulk-1", "interactive", "bulk-2"]);
   });
 
+  it("coalesces identical in-flight osu! API calls", async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/oauth/token")) {
+        return Response.json({ access_token: "token", expires_in: 3600 });
+      }
+      return Response.json({ id: 123, username: "Coalesced" });
+    });
+    const osu = new OsuApiClient({
+      osuClientId: "test-client",
+      osuClientSecret: "test-secret",
+      osuApiHardPerMinute: 60,
+      osuApiTargetPerMinute: 60,
+    }, fetchImpl as typeof fetch);
+
+    const [first, second] = await Promise.all([
+      osu.getJson("/users/123/mania", "getUser"),
+      osu.getJson("/users/123/mania", "getUser"),
+    ]);
+
+    expect(first).toEqual(second);
+    expect(fetchImpl.mock.calls.filter(([input]) => String(input).includes("/api/v2/users/123/mania"))).toHaveLength(1);
+  });
+
   it("queues stale maps snapshots without duplicating active refresh jobs", async () => {
     const { db, queue } = await setup();
     const snapshot = await getMapsSnapshot(db, queue, "CR", 7 * 24 * 60 * 60 * 1000);
