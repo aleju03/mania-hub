@@ -225,14 +225,39 @@ function TierProgress({
   );
 }
 
-const RATING_CONTRIBUTORS: Array<{ label: string; weight: number; sub: string }> = [
-  { label: "Total PP", weight: 39, sub: "your global mania PP" },
-  { label: "Top-play strength", weight: 33, sub: "weighted PP across your top plays, keymode-normalized" },
+type RatingContributor = { label: string; weight: number; sub: string };
+
+const RATING_PP_CONTRIBUTORS: RatingContributor[] = [
+  { label: "Total PP", weight: 39, sub: "your overall mania PP number" },
+  { label: "Top-play strength", weight: 33, sub: "weighted PP across your top 200, higher plays count more" },
+];
+
+const RATING_SKILL_CONTRIBUTORS: RatingContributor[] = [
   { label: "Control", weight: 9, sub: "hard charts, LN density, OD, combo, accuracy" },
   { label: "Stamina", weight: 7, sub: "map length and object count" },
   { label: "Speed", weight: 7, sub: "BPM, rice density, stars" },
   { label: "Precision", weight: 5, sub: "accuracy, OD, MAX ratio, misses, difficulty" },
 ];
+
+const RATING_MAX_WEIGHT = RATING_PP_CONTRIBUTORS[0].weight;
+
+function ContributorRow({ contributor }: { contributor: RatingContributor }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="w-[110px] flex-shrink-0">
+        <div className="text-[12px] font-semibold text-white leading-tight">{contributor.label}</div>
+        <div className="text-[10px] text-osu-f1/70 leading-tight">{contributor.sub}</div>
+      </div>
+      <div className="flex-1 h-1.5 rounded-full bg-osu-b3/40 overflow-hidden">
+        <div
+          className="h-full rounded-full bg-osu-yellow"
+          style={{ width: `${(contributor.weight / RATING_MAX_WEIGHT) * 100}%` }}
+        />
+      </div>
+      <span className="text-[11px] text-osu-f1 tabular-nums w-9 text-right">{contributor.weight}%</span>
+    </div>
+  );
+}
 
 function RatingExplainerModal({
   nextTier,
@@ -284,34 +309,29 @@ function RatingExplainerModal({
             </span>
           </div>
           <p className="mt-3 text-[12px] text-osu-l2 leading-snug">
-            Your rating blends six signals from your top mania plays. Higher-ranked plays carry more weight,
-            but the full top 200 pool contributes.
+            Rating is mostly driven by PP, with skill traits from your top plays fine-tuning the rest.
           </p>
 
           <div className="mt-4">
-            <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Contributors</div>
+            <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">From your PP (72%)</div>
             <div className="space-y-2">
-              {RATING_CONTRIBUTORS.map((c) => (
-                <div key={c.label} className="flex items-center gap-2.5">
-                  <div className="w-[110px] flex-shrink-0">
-                    <div className="text-[12px] font-semibold text-white leading-tight">{c.label}</div>
-                    <div className="text-[10px] text-osu-f1/70 leading-tight">{c.sub}</div>
-                  </div>
-                  <div className="flex-1 h-1.5 rounded-full bg-osu-b3/40 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-osu-yellow"
-                      style={{ width: `${(c.weight / RATING_CONTRIBUTORS[0].weight) * 100}%` }}
-                    />
-                  </div>
-                  <span className="text-[11px] text-osu-f1 tabular-nums w-9 text-right">{c.weight}%</span>
-                </div>
+              {RATING_PP_CONTRIBUTORS.map((c) => (
+                <ContributorRow key={c.label} contributor={c} />
               ))}
             </div>
           </div>
 
-          <p className="mt-4 text-[11px] text-osu-f1 leading-snug">
-            Total PP and stronger top plays move the rating the most. Skill traits fine-tune the rest.
-          </p>
+          <div className="mt-4">
+            <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold mb-1">Skill traits (28%)</div>
+            <div className="text-[11px] text-osu-f1/80 mb-2 leading-snug">
+              Derived from your top plays. Control, Speed, and Precision are the three stats shown on the card front.
+            </div>
+            <div className="space-y-2">
+              {RATING_SKILL_CONTRIBUTORS.map((c) => (
+                <ContributorRow key={c.label} contributor={c} />
+              ))}
+            </div>
+          </div>
         </div>
       </motion.div>
     </motion.div>

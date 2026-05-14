@@ -887,6 +887,8 @@ function drawUsername(context: CanvasRenderingContext2D, layout: FaceLayout) {
   roundedRect(context, box.x, box.y, box.width, box.height, box.radius);
   context.fillStyle = "rgba(0,0,0,0.34)";
   context.fill();
+  roundedRect(context, box.x, box.y, box.width, box.height, box.radius);
+  context.clip();
   drawUsernamePixelTrail(context, box.x, box.y);
   context.font = `900 ${username.fontSize}px ${FONT}`;
   context.textAlign = "center";
