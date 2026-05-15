@@ -54,6 +54,7 @@ export const Route = createFileRoute("/top-plays")({
     return {
       meta: [
         { title: countryName ? `Top mania plays in ${countryName}` : "Top mania plays this week" },
+        { name: "description", content: "" },
       ],
     };
   },

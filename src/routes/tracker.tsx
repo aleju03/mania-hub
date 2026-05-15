@@ -81,6 +81,7 @@ export const Route = createFileRoute("/tracker")({
     return {
       meta: [
         { title: countryName ? `Live score tracker - ${countryName}` : "Live score tracker" },
+        { name: "description", content: "" },
         { name: "robots", content: "noindex, nofollow" },
       ],
     };

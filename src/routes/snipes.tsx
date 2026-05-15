@@ -68,6 +68,7 @@ export const Route = createFileRoute("/snipes")({
     return {
       meta: [
         { title: countryName ? `Snipes - ${countryName}` : "Snipes" },
+        { name: "description", content: "" },
         { name: "robots", content: "noindex, nofollow" },
       ],
     };

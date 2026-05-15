@@ -6,6 +6,7 @@ export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
       { title: "Settings" },
+      { name: "description", content: "" },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
