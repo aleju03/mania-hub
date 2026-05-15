@@ -13,6 +13,7 @@ import { createCardTextures, type CardTextureSet } from "./cardTexture";
 import {
   addRotation,
   createInteractionState,
+  orientationRestForRotation,
   orientationToRotation,
   pointerToLight,
   pointerToRotation,
@@ -30,6 +31,9 @@ import { CARD_WORLD_HEIGHT } from "./cardGeometry";
 // at overscan = 1.0.
 const CANVAS_OVERSCAN = 1.28;
 const CAMERA_FOV_DEG = 35;
+const ORIENTATION_SMOOTHING = 0.26;
+const ORIENTATION_JUMP_DEGREES = 32;
+const ORIENTATION_IDLE_REBASE_MS = 1200;
 
 type DeviceOrientationEventWithPermission = typeof DeviceOrientationEvent & {
   requestPermission?: () => Promise<PermissionState>;
@@ -66,6 +70,7 @@ export class ManiaCardRenderer {
   private overlay: Mesh | null = null;
   private restBeta: number | null = null;
   private restGamma: number | null = null;
+  private lastOrientationAt: number | null = null;
   private orientationAttached = false;
   private orientationPermissionRequested = false;
   private readyEmitted = false;
@@ -166,6 +171,7 @@ export class ManiaCardRenderer {
     this.detachPointerEvents();
     if (this.orientationAttached && typeof window !== "undefined") {
       window.removeEventListener("deviceorientation", this.onDeviceOrientation);
+      window.removeEventListener("orientationchange", this.resetOrientationBaseline);
       this.orientationAttached = false;
     }
     this.textures?.dispose();
@@ -269,19 +275,52 @@ export class ManiaCardRenderer {
 
   private onDeviceOrientation = (event: DeviceOrientationEvent) => {
     if (event.beta === null || event.gamma === null) return;
-    if (this.restBeta === null) this.restBeta = event.beta;
-    if (this.restGamma === null) this.restGamma = event.gamma;
     if (this.interaction.dragging) return;
 
-    this.orientationRotation = orientationToRotation({
+    const now = performance.now();
+    if (this.restBeta === null || this.restGamma === null) {
+      this.setOrientationRest(event.beta, event.gamma, { x: 0, y: 0 });
+    } else if (this.lastOrientationAt !== null && now - this.lastOrientationAt > ORIENTATION_IDLE_REBASE_MS) {
+      this.setOrientationRest(event.beta, event.gamma, this.orientationRotation);
+    }
+    if (this.restBeta === null || this.restGamma === null) return;
+
+    const nextRotation = orientationToRotation({
       beta: event.beta,
       gamma: event.gamma,
       restBeta: this.restBeta,
       restGamma: this.restGamma,
     });
+    if (this.lastOrientationAt !== null && this.isOrientationJump(nextRotation, this.orientationRotation)) {
+      this.setOrientationRest(event.beta, event.gamma, this.orientationRotation);
+      this.lastOrientationAt = now;
+      return;
+    }
+
+    this.orientationRotation = smoothRotation(this.orientationRotation, nextRotation, ORIENTATION_SMOOTHING);
     this.applyOrientationRotation();
-    this.interaction.lastInputAt = performance.now();
+    this.interaction.lastInputAt = now;
+    this.lastOrientationAt = now;
     this.start();
+  };
+
+  private setOrientationRest(beta: number, gamma: number, rotation: Rotation2D) {
+    const rest = orientationRestForRotation({ beta, gamma, rotation });
+    this.restBeta = rest.restBeta;
+    this.restGamma = rest.restGamma;
+  }
+
+  private isOrientationJump(nextRotation: Rotation2D, currentRotation: Rotation2D) {
+    return (
+      Math.abs(nextRotation.x - currentRotation.x) > ORIENTATION_JUMP_DEGREES ||
+      Math.abs(nextRotation.y - currentRotation.y) > ORIENTATION_JUMP_DEGREES
+    );
+  }
+
+  private resetOrientationBaseline = () => {
+    this.restBeta = null;
+    this.restGamma = null;
+    this.lastOrientationAt = null;
   };
 
   private shouldKeepAnimating() {
@@ -337,6 +376,19 @@ export class ManiaCardRenderer {
       return;
     }
     window.addEventListener("deviceorientation", this.onDeviceOrientation);
+    window.addEventListener("orientationchange", this.resetOrientationBaseline);
     this.orientationAttached = true;
   }
+}
+
+function smoothRotation(current: Rotation2D, next: Rotation2D, factor: number): Rotation2D {
+  return {
+    x: smoothValue(current.x, next.x, factor),
+    y: smoothValue(current.y, next.y, factor),
+  };
+}
+
+function smoothValue(current: number, next: number, factor: number) {
+  const value = current + (next - current) * factor;
+  return Math.abs(value - next) < 0.15 ? next : Number(value.toFixed(3));
 }
