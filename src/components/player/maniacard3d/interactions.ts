@@ -51,10 +51,26 @@ export function subtractRotation(rotation: Rotation2D, offset: Rotation2D): Rota
   };
 }
 
-export function orientationToRotation(input: { beta: number; gamma: number; restBeta: number }): Rotation2D {
+export function orientationToRotation(input: {
+  beta: number;
+  gamma: number;
+  restBeta: number;
+  restGamma: number;
+}): Rotation2D {
   return {
-    x: Math.round(clamp(input.beta - input.restBeta, -24, 24)),
-    y: Math.round(clamp(input.gamma, -24, 24)),
+    x: Math.round(clamp(shortestDegreesBetween(input.beta, input.restBeta), -24, 24)),
+    y: Math.round(clamp(shortestDegreesBetween(input.gamma, input.restGamma), -24, 24)),
+  };
+}
+
+export function orientationRestForRotation(input: {
+  beta: number;
+  gamma: number;
+  rotation: Rotation2D;
+}): { restBeta: number; restGamma: number } {
+  return {
+    restBeta: input.beta - input.rotation.x,
+    restGamma: input.gamma - input.rotation.y,
   };
 }
 
@@ -68,6 +84,10 @@ export function pointerToLight(rotation: Rotation2D): Light2D {
 
 function wrapDegrees(degrees: number) {
   return ((((degrees + 180) % 360) + 360) % 360) - 180;
+}
+
+function shortestDegreesBetween(current: number, rest: number) {
+  return wrapDegrees(current - rest);
 }
 
 export function settleRotation(rotation: Rotation2D, factor: number): Rotation2D {
