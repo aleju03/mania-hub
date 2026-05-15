@@ -555,6 +555,68 @@ describe("live backend", () => {
     expect(Number((await exec(db, "select count(*) as count from snipe_events")).rows[0].count)).toBe(1);
   });
 
+  it("detects the triggering snipe after first-time board seeding", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    const now = new Date().toISOString();
+    const current = { ...scores[0], pp: null, total_score: 1000, score: 1000 };
+    const previousSelf = {
+      ...current,
+      id: 8001,
+      total_score: 800,
+      score: 800,
+      ended_at: "2026-05-11T00:02:00.000Z",
+      created_at: "2026-05-11T00:02:00.000Z",
+    };
+    const victim = {
+      ...current,
+      id: 7001,
+      user_id: 303,
+      total_score: 900,
+      score: 900,
+      ended_at: "2026-05-10T00:02:00.000Z",
+      created_at: "2026-05-10T00:02:00.000Z",
+      user: {
+        id: 303,
+        username: "Victim",
+        avatar_url: "https://assets.example/victim.png",
+        country_code: "CR",
+      },
+    };
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, updated_at)
+       values (303, 'Victim', 'https://assets.example/victim.png', 'CR', ?)`,
+      [now],
+    );
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values
+         ('CR', 101, 1, 'osu_rankings', 1, ?),
+         ('CR', 303, 2, 'osu_rankings', 1, ?)`,
+      [now, now],
+    );
+
+    await ingestor.ingestBatch([current], "osc_socket", { enqueueRecentReconcile: false });
+    const osu = {
+      getBeatmapUserScoresAll: vi.fn(async (_beatmapId: number, userId: number) => {
+        if (userId === 101) return [current, previousSelf];
+        if (userId === 303) return [victim];
+        return [];
+      }),
+    };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    const snipes = await getSnipesSnapshot(db, "CR", 10);
+    expect(snipes.events).toHaveLength(1);
+    expect(snipes.events[0].score_id).toBe(current.id);
+    expect(snipes.events[0].victim.id).toBe(303);
+    expect(snipes.events[0].victimTotalScore).toBe(900);
+  });
+
   it("does not count improving an already leading score as a snipe", async () => {
     const { db, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");

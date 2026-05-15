@@ -1,6 +1,6 @@
 import type { Db } from "./db.js";
 import { readConfig } from "./config.js";
-import { exec, json } from "./db.js";
+import { exec, json, parseJson } from "./db.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { refreshCountryMaps } from "./features/maps.js";
 import { updateSnipeProjection } from "./features/snipes.js";
@@ -14,8 +14,9 @@ import type { ScoreIngestor } from "./ingest/score-ingestor.js";
 import { finishReplayVideoExport, markReplayVideoDoneFromRender, markReplayVideoFailed, markReplayVideoRunning } from "./replay-video/exports.js";
 import { renderReplayVideoInChrome, type ServerReplayRenderRequest } from "./replay-video/server-render.js";
 import { refreshCountryRoster } from "./rosters/country-rosters.js";
-import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, isLazerScore, nowIso, scoreHasReplay } from "./shared/score.js";
+import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, getScoreIdentity, getScoreTimestamp, isLazerScore, nowIso, scoreHasReplay } from "./shared/score.js";
 import { errorContext, logInfo, logWarn } from "./logger.js";
+import type { OscScore } from "./shared/types.js";
 
 interface WorkerLane {
   name: string;
@@ -311,11 +312,20 @@ export class WorkerRunner {
   }
 
   private async replaySeededSnipeScores(payload: { country: string; beatmapId: number; laneKey: string }): Promise<void> {
-    const rows = await getHydratedScoresForMetadata(this.db, { beatmapId: payload.beatmapId }, 200);
+    const rows = (await getHydratedScoresForMetadata(this.db, { beatmapId: payload.beatmapId }, 200))
+      .filter((row) => {
+        if (row.country !== payload.country) return false;
+        const laneKey = getBoardLaneKey(getModAcronyms(row.score.mods), isLazerScore(row.score));
+        return laneKey === payload.laneKey;
+      })
+      .sort((a, b) => {
+        const aTime = new Date(getScoreTimestamp(a.score)).getTime();
+        const bTime = new Date(getScoreTimestamp(b.score)).getTime();
+        const timeDiff = (Number.isFinite(aTime) ? aTime : 0) - (Number.isFinite(bTime) ? bTime : 0);
+        if (timeDiff !== 0) return timeDiff;
+        return a.score.id - b.score.id;
+      });
     for (const row of rows) {
-      if (row.country !== payload.country) continue;
-      const laneKey = getBoardLaneKey(getModAcronyms(row.score.mods), isLazerScore(row.score));
-      if (laneKey !== payload.laneKey) continue;
       await updateSnipeProjection(this.db, this.events, row.country, row.score);
     }
   }
@@ -354,6 +364,7 @@ export class WorkerRunner {
 
   private async seedSnipeBoard(payload: { country: string; beatmapId: number; laneKey: string }): Promise<void> {
     const config = readConfig();
+    const replayScoreIdentities = await this.getSeedReplayScoreIdentities(payload);
     const roster = (await exec(
       this.db,
       "select user_id from country_rosters where country = ? and is_tracked = 1 and rank is not null order by rank asc limit ?",
@@ -363,6 +374,7 @@ export class WorkerRunner {
       const userId = Number(row.user_id);
       const scores = await this.getSnipeSeedScores(payload.beatmapId, userId);
       for (const score of scores) {
+        if (replayScoreIdentities.has(getScoreIdentity(score))) continue;
         const totalScore = getDisplayedTotalScore(score);
         if (totalScore == null) continue;
         const laneKey = getBoardLaneKey(getModAcronyms(score.mods), isLazerScore(score));
@@ -402,6 +414,29 @@ export class WorkerRunner {
         );
       }
     }
+  }
+
+  private async getSeedReplayScoreIdentities(payload: { country: string; beatmapId: number; laneKey: string }): Promise<Set<string>> {
+    const rows = (await exec(
+      this.db,
+      `select score_identity, score_id, legacy_score_id, score_json
+       from score_events
+       where country = ? and beatmap_id = ? and passed = 1`,
+      [payload.country, payload.beatmapId],
+    )).rows;
+    const identities = new Set<string>();
+    for (const row of rows) {
+      const score = parseJson<OscScore | null>(row.score_json, null);
+      if (!score) continue;
+      const laneKey = getBoardLaneKey(getModAcronyms(score.mods), isLazerScore(score));
+      if (laneKey !== payload.laneKey) continue;
+      identities.add(String(row.score_identity));
+      const scoreId = Number(row.score_id);
+      const legacyScoreId = Number(row.legacy_score_id);
+      if (Number.isFinite(scoreId) && scoreId > 0) identities.add(`official:${scoreId}`);
+      if (Number.isFinite(legacyScoreId) && legacyScoreId > 0) identities.add(`official:${legacyScoreId}`);
+    }
+    return identities;
   }
 
   private async getSnipeSeedScores(beatmapId: number, userId: number) {
