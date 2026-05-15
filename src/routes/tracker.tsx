@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { getRankings, getCountryRecentScores, getTrackerLiveSnapshot, getTrackerSnapshot } from "../lib/osu";
@@ -26,6 +26,7 @@ import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
 import { DanBadge } from "../components/ui/DanBadge";
 import { TrackerRowSkeleton } from "../components/ui/LoadingSkeleton";
+import { Pagination } from "../components/ui/Pagination";
 import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
 import { TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useSelectedCountry } from "../store";
@@ -36,6 +37,8 @@ import { getReplaySearch } from "../lib/replay-navigation";
 import { fetchLiveTrackerSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
 
 const TRACKER_SNAPSHOT_LOADER_TIMEOUT_MS = 2500;
+const TRACKER_PAGE_SIZE = 100;
+const TRACKER_LIVE_SNAPSHOT_LIMIT = 500;
 
 async function withSnapshotLoaderBudget<T>(snapshotPromise: Promise<T>): Promise<T | null> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -53,7 +56,15 @@ async function withSnapshotLoaderBudget<T>(snapshotPromise: Promise<T>): Promise
 export const Route = createFileRoute("/tracker")({
   validateSearch: (search: Record<string, unknown>) => ({
     country: parseCountrySearchParam(search.country),
+    page: (() => {
+      const n = Number(search.page);
+      if (!Number.isFinite(n) || n < 0) return undefined;
+      return Math.floor(n);
+    })(),
   }),
+  search: {
+    middlewares: [stripSearchParams({ page: undefined })],
+  },
   loaderDeps: ({ search }) => ({
     country: search.country,
   }),
@@ -104,7 +115,9 @@ function getTrackerUserBatch(
 }
 
 function ScoresPage() {
-  const { country } = Route.useSearch();
+  const navigate = useNavigate();
+  const { country, page: searchPage } = Route.useSearch();
+  const page = searchPage ?? 0;
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = country ?? fallbackCountry;
   const loaderData = Route.useLoaderData();
@@ -182,7 +195,7 @@ function ScoresPage() {
   }, []);
 
   const reconcileLiveSnapshot = useCallback(async (requestedCountry: string) => {
-    const liveSnapshot = await fetchLiveTrackerSnapshot(requestedCountry);
+    const liveSnapshot = await fetchLiveTrackerSnapshot(requestedCountry, TRACKER_LIVE_SNAPSHOT_LIMIT);
     if (requestedCountry !== selectedCountry) return;
     const passedScores = liveSnapshot.scores.filter(isDisplayedPassed);
     if (passedScores.length > 0) addFeedScores(requestedCountry, passedScores);
@@ -455,17 +468,31 @@ function ScoresPage() {
 
   const selectedPlayerIdSet = useMemo(() => new Set(selectedPlayerIds), [selectedPlayerIds]);
 
+  const updateTrackerSearch = useCallback((patch: Partial<{ country: string | undefined; page: number | undefined }>) => {
+    const nextPage = patch.page ?? page;
+    navigate({
+      to: "/tracker",
+      search: {
+        country: patch.country ?? country,
+        page: nextPage > 0 ? nextPage : undefined,
+      },
+      replace: true,
+    });
+  }, [country, navigate, page]);
+
   const togglePlayerFilter = useCallback((playerId: number) => {
     setSelectedPlayerIds((current) =>
       current.includes(playerId)
         ? current.filter((id) => id !== playerId)
         : [...current, playerId]
     );
-  }, []);
+    updateTrackerSearch({ page: 0 });
+  }, [updateTrackerSearch]);
 
   const clearPlayerFilter = useCallback(() => {
     setSelectedPlayerIds([]);
-  }, []);
+    updateTrackerSearch({ page: 0 });
+  }, [updateTrackerSearch]);
 
   const filtered = useMemo(() => {
     const playerFiltered = selectedPlayerIds.length > 0
@@ -524,6 +551,16 @@ function ScoresPage() {
   ];
   const listKey = `${filter}:${gradeFilter}`;
   const liveStatusLabel = liveBackendEnabled ? "Live updates on" : "Live polling";
+  const totalPages = Math.max(1, Math.ceil(filtered.length / TRACKER_PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages - 1);
+  const paginatedScores = useMemo(
+    () => filtered.slice(currentPage * TRACKER_PAGE_SIZE, (currentPage + 1) * TRACKER_PAGE_SIZE),
+    [currentPage, filtered],
+  );
+
+  useEffect(() => {
+    if (page !== currentPage) updateTrackerSearch({ page: currentPage });
+  }, [currentPage, page, updateTrackerSearch]);
 
   return (
     <div className="flex-1">
@@ -571,7 +608,7 @@ function ScoresPage() {
             {filters.map((item) => (
               <button
                 key={item.id}
-                onClick={() => { setFilter(item.id); if (item.id !== "all") setGradeFilter("all"); }}
+                onClick={() => { setFilter(item.id); if (item.id !== "all") setGradeFilter("all"); updateTrackerSearch({ page: 0 }); }}
                 className={`px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] border-b-2 ${
                   filter === item.id
                     ? "text-osu-c1 border-osu-h1"
@@ -585,7 +622,7 @@ function ScoresPage() {
             {grades.map((item) => (
               <button
                 key={item.id}
-                onClick={() => { setGradeFilter(item.id); if (item.id !== "all") setFilter("all"); }}
+                onClick={() => { setGradeFilter(item.id); if (item.id !== "all") setFilter("all"); updateTrackerSearch({ page: 0 }); }}
                 className={`px-2.5 py-2 cursor-pointer transition-all duration-[120ms] border-b-2 flex items-center ${
                   gradeFilter === item.id
                     ? "border-osu-h1 opacity-100"
@@ -615,7 +652,7 @@ function ScoresPage() {
                 {filters.map((item) => (
                   <button
                     key={item.id}
-                    onClick={() => { setFilter(item.id); if (item.id !== "all") setGradeFilter("all"); }}
+                    onClick={() => { setFilter(item.id); if (item.id !== "all") setGradeFilter("all"); updateTrackerSearch({ page: 0 }); }}
                     className={`px-2.5 py-1.5 text-[11px] font-medium cursor-pointer transition-colors duration-[120ms] ${
                       filter === item.id && gradeFilter === "all"
                         ? "bg-osu-b3 text-osu-l2"
@@ -633,6 +670,7 @@ function ScoresPage() {
                     onClick={() => {
                       if (gradeFilter === item.id) { setGradeFilter("all"); }
                       else { setGradeFilter(item.id); setFilter("all"); }
+                      updateTrackerSearch({ page: 0 });
                     }}
                     className={`cursor-pointer transition-all duration-[120ms] ${
                       gradeFilter === item.id
@@ -719,12 +757,17 @@ function ScoresPage() {
             ) : (
               <>
                 <VirtualScoreList
-                  listKey={listKey}
-                  scores={filtered}
+                  listKey={`${listKey}:${currentPage}`}
+                  scores={paginatedScores}
                   timeTick={timeTick}
                   expandedKey={expandedKey}
                   onToggle={handleToggleExpand}
                   ppGainByScoreId={ppGainByScoreId}
+                />
+                <Pagination
+                  page={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={(nextPage) => updateTrackerSearch({ page: nextPage })}
                 />
                 {filtered.length === 0 && (
                   <div className="text-center py-16 text-osu-f1 text-sm">

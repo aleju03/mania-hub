@@ -29,6 +29,7 @@ export interface CachedScoreGain {
 export const AVATAR_ACCENT_CLIENT_TTL = 24 * 60 * 60 * 1000;
 export const AVATAR_ACCENT_FAILURE_TTL = 5 * 60 * 1000;
 export const TRACKER_PP_GAIN_CLIENT_TTL = 10 * 60 * 1000;
+export const TRACKER_FEED_SCORE_LIMIT = 500;
 export const TOP_PLAYS_RANGE_STORAGE_KEY = "mania-hub-top-plays-range-v1";
 export const SNIPES_FILTERS_STORAGE_KEY = "mania-hub-snipes-filters-v1";
 export const DEFAULT_THEME_HUE = 333;
@@ -651,7 +652,7 @@ export const useAppStore = create<AppState>()(
               seen.add(key);
               return true;
             })
-            .slice(0, 100);
+            .slice(0, TRACKER_FEED_SCORE_LIMIT);
 
           return {
             feedScoresByCountry: {
@@ -970,8 +971,8 @@ export const useAppStore = create<AppState>()(
         // pool alone is ~1-2MB per country; the snipes log is up to
         // 500 entries × ~1KB per country). The server cache serves them
         // in <100ms on hydration so the round-trip is cheap.
-        // feedScoresByCountry IS persisted: addFeedScores caps it at 100
-        // entries per country, so it stays well under quota.
+        // feedScoresByCountry IS persisted: addFeedScores caps it at a
+        // bounded tracker history size, so it stays well under quota.
         trackedUserIdsByCountry: state.trackedUserIdsByCountry,
         trackedUserIdsFetchedAtByCountry: state.trackedUserIdsFetchedAtByCountry,
         pollIndexByCountry: state.pollIndexByCountry,

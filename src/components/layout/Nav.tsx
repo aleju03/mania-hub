@@ -264,7 +264,7 @@ export function Nav() {
       return;
     }
     if (location.pathname === "/tracker") {
-      navigate({ to: "/tracker", search: { country }, replace: true });
+      navigate({ to: "/tracker", search: { country, page: undefined }, replace: true });
       return;
     }
     // For /snipes and /maps reuse route search via the reducer form

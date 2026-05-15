@@ -547,7 +547,7 @@ function HomePage() {
         <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden lg:flex-1">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Recent Scores</h2>
-            <Link to="/tracker" search={{ country: selectedCountry }} className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
+            <Link to="/tracker" search={{ country: selectedCountry, page: undefined }} className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
           </div>
           <div className="divide-y divide-osu-b3/15">
             {loadingScores && displayedRecentScores.length === 0 ? (
