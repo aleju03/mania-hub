@@ -72,27 +72,50 @@ export class OscBackfill {
     const pagesRemaining = Math.max(0, payload.pagesRemaining ?? this.config.oscBackfillMaxPages);
     const metaHasMore = Array.isArray(responseBody) ? undefined : responseBody.meta?.has_more ?? responseBody.meta?.hasMore;
     const hasMore = (metaHasMore ?? scores.length >= this.config.oscBackfillPageLimit) && nextAfter != null && pagesRemaining > 1;
+    const finishedAt = new Date().toISOString();
+    if (nextAfter != null) {
+      await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values ('osc_backfill_cursor_ms', ?, ?)", [
+        json(nextAfter),
+        finishedAt,
+      ]);
+    }
     if (hasMore) {
       await queue.enqueue(
         "osc_backfill",
         `osc-backfill:${nextAfter}`,
         { after: nextAfter, pagesRemaining: pagesRemaining - 1 } satisfies OscBackfillPayload,
-        { priority: 5, runAfter: new Date(Date.now() + this.pageDelayMs()) },
+        { priority: 5, runAfter: new Date(Date.now() + this.pageDelayMs()), replaceDone: true },
       );
     }
     await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values ('osc_backfill_last_result', ?, ?)", [
       json({ fetched: scores.length, inserted: result.inserted, skipped: result.skipped, after, nextAfter, hasMore }),
-      new Date().toISOString(),
+      finishedAt,
     ]);
     return { fetched: scores.length, inserted: result.inserted, skipped: result.skipped, after, nextAfter, hasMore };
   }
 
   private async resolveAfter(db: Db, payloadAfter: number | undefined): Promise<number> {
     if (Number.isFinite(payloadAfter) && Number(payloadAfter) > 0) return Number(payloadAfter);
-    const row = (await exec(db, "select value_json from live_meta where key = 'osc_last_seen_ms'")).rows[0];
-    const storedAfter = parseJson<number>(row?.value_json, 0);
+    const storedAfter = await this.getStoredBackfillAfter(db);
     const boundedAfter = Date.now() - this.config.oscBackfillMaxAgeMs;
     return Math.max(storedAfter, boundedAfter);
+  }
+
+  private async getStoredBackfillAfter(db: Db): Promise<number> {
+    const rows = (await exec(
+      db,
+      "select key, value_json from live_meta where key in ('osc_backfill_cursor_ms', 'osc_backfill_last_result', 'osc_last_seen_ms')",
+    )).rows;
+    const byKey = new Map(rows.map((row) => [String(row.key), row.value_json]));
+    const cursor = parseJson<number>(byKey.get("osc_backfill_cursor_ms"), 0);
+    if (Number.isFinite(cursor) && cursor > 0) return cursor;
+
+    const lastResult = parseJson<Partial<OscBackfillResult>>(byKey.get("osc_backfill_last_result"), {});
+    const lastResultAfter = Number(lastResult.nextAfter);
+    if (lastResult.hasMore && Number.isFinite(lastResultAfter) && lastResultAfter > 0) return lastResultAfter;
+
+    const liveLastSeen = parseJson<number>(byKey.get("osc_last_seen_ms"), 0);
+    return Number.isFinite(liveLastSeen) && liveLastSeen > 0 ? liveLastSeen : 0;
   }
 
   private pageDelayMs(): number {

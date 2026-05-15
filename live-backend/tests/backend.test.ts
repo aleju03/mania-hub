@@ -434,6 +434,75 @@ describe("live backend", () => {
     expect(JSON.parse(String(rows[0].payload_json)).pagesRemaining).toBe(1);
   });
 
+  it("requeues completed oSC backfill cursor jobs on a new catch-up chain", async () => {
+    const { db, queue, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    const nextAfter = new Date("2026-05-12T00:03:00.000Z").getTime() + 1;
+    await queue.enqueue("osc_backfill", `osc-backfill:${nextAfter}`, { after: nextAfter, pagesRemaining: 99 }, { priority: 5 });
+    const existing = (await exec(db, "select id from jobs where dedupe_key = ?", [`osc-backfill:${nextAfter}`])).rows[0];
+    await queue.complete(Number(existing.id));
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ scores, meta: { newest: "2026-05-12T00:03:00.000Z" } }), { status: 200 }));
+    const backfill = new OscBackfill({
+      oscBaseUrl: "https://osc.example",
+      oscJsonTargetPerMinute: 60,
+      oscBackfillMaxAgeMs: 24 * 60 * 60 * 1000,
+      oscBackfillPageLimit: 2,
+      oscBackfillMaxPages: 2,
+    }, fetchMock as never);
+
+    await backfill.runPage(db, queue, ingestor, { after: new Date("2026-05-11T00:00:00.000Z").getTime(), pagesRemaining: 2 });
+
+    const row = (await exec(db, "select status, attempts, payload_json from jobs where dedupe_key = ?", [`osc-backfill:${nextAfter}`])).rows[0];
+    expect(row.status).toBe("queued");
+    expect(Number(row.attempts)).toBe(0);
+    expect(JSON.parse(String(row.payload_json)).pagesRemaining).toBe(1);
+  });
+
+  it("resumes startup oSC backfill from an unfinished backfill cursor instead of latest live score", async () => {
+    const { db, queue } = await setup();
+    const oldGapCursor = Date.now() - 60 * 60_000;
+    const liveSocketCursor = Date.now() - 1_000;
+    await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values ('osc_last_seen_ms', ?, ?)", [
+      JSON.stringify(liveSocketCursor),
+      new Date().toISOString(),
+    ]);
+    await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values ('osc_backfill_last_result', ?, ?)", [
+      JSON.stringify({ fetched: 2, inserted: 1, skipped: 1, after: oldGapCursor - 1, nextAfter: oldGapCursor, hasMore: true }),
+      new Date().toISOString(),
+    ]);
+    const backfill = new OscBackfill({
+      oscBaseUrl: "https://osc.example",
+      oscJsonTargetPerMinute: 60,
+      oscBackfillMaxAgeMs: 24 * 60 * 60 * 1000,
+      oscBackfillPageLimit: 2,
+      oscBackfillMaxPages: 2,
+    });
+
+    await backfill.enqueueStartup(queue, db);
+
+    const row = (await exec(db, "select payload_json from jobs where dedupe_key = 'osc-backfill:startup'")).rows[0];
+    expect(JSON.parse(String(row.payload_json)).after).toBe(oldGapCursor);
+  });
+
+  it("stores a contiguous oSC backfill cursor after each page", async () => {
+    const { db, queue, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    const nextAfter = new Date("2026-05-12T00:03:00.000Z").getTime() + 1;
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ scores, meta: { newest: "2026-05-12T00:03:00.000Z" } }), { status: 200 }));
+    const backfill = new OscBackfill({
+      oscBaseUrl: "https://osc.example",
+      oscJsonTargetPerMinute: 60,
+      oscBackfillMaxAgeMs: 24 * 60 * 60 * 1000,
+      oscBackfillPageLimit: 2,
+      oscBackfillMaxPages: 2,
+    }, fetchMock as never);
+
+    await backfill.runPage(db, queue, ingestor, { after: new Date("2026-05-11T00:00:00.000Z").getTime(), pagesRemaining: 2 });
+
+    const row = (await exec(db, "select value_json from live_meta where key = 'osc_backfill_cursor_ms'")).rows[0];
+    expect(JSON.parse(String(row.value_json))).toBe(nextAfter);
+  });
+
   it("returns tracker snapshots and replayable SSE event rows", async () => {
     const { db, events, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
