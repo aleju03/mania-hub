@@ -63,17 +63,6 @@ export function orientationToRotation(input: {
   };
 }
 
-export function orientationRestForRotation(input: {
-  beta: number;
-  gamma: number;
-  rotation: Rotation2D;
-}): { restBeta: number; restGamma: number } {
-  return {
-    restBeta: input.beta - input.rotation.x,
-    restGamma: input.gamma - input.rotation.y,
-  };
-}
-
 export function pointerToLight(rotation: Rotation2D): Light2D {
   const wrappedY = wrapDegrees(rotation.y);
   return {
