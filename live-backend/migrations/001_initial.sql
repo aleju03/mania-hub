@@ -31,6 +31,22 @@ create table if not exists country_rosters (
   primary key (country, user_id)
 );
 
+create table if not exists country_rank_snapshots (
+  id integer primary key autoincrement,
+  country text not null,
+  user_id integer not null,
+  country_rank integer,
+  global_rank integer,
+  pp real,
+  captured_at text not null
+);
+
+create index if not exists idx_country_rank_snapshots_lookup
+  on country_rank_snapshots(country, user_id, captured_at);
+
+create index if not exists idx_country_rank_snapshots_captured
+  on country_rank_snapshots(captured_at);
+
 create table if not exists country_registry (
   country text primary key,
   status text not null default 'warm',

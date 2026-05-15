@@ -14,6 +14,7 @@ import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse } from "../lib/types";
 import { useAppStore, useSelectedCountry } from "../store";
 import { pageSeo } from "../lib/seo";
+import { fetchLiveRankDeltas, isLiveBackendConfigured, type LiveRankDelta } from "../lib/live-backend";
 
 type SortField = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "ss" | "s" | "a";
 
@@ -86,6 +87,7 @@ function RankingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortField>("rank");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [liveRankDeltas, setLiveRankDeltas] = useState<Record<number, LiveRankDelta>>({});
   const pageData = page === 1 ? cachedPageOneData : pageTwoData;
   const [rankingsLoading, setRankingsLoading] = useState(!(page === 1 ? cachedPageOneData : pageTwoData));
   const [rankHistoriesLoading, setRankHistoriesLoading] = useState(false);
@@ -96,6 +98,7 @@ function RankingsPage() {
   useEffect(() => {
     setPageTwoData(null);
     setPageTwoFetchedAt(null);
+    setLiveRankDeltas({});
     setError(null);
   }, [selectedCountry]);
 
@@ -152,39 +155,73 @@ function RankingsPage() {
     if (!pageData) return;
     let cancelled = false;
     const userIds = pageData.ranking.slice(0, 50).map((e) => e.user.id);
-    const userIdsToFetch = userIds.filter(
-      (userId) =>
-        !rankHistories[userId] ||
-        isCacheStale(rankHistoriesFetchedAt[userId], CLIENT_CACHE_TTL.rankHistories),
-    );
-    const hasAllHistories = userIdsToFetch.length === 0;
-    const shouldRefresh = userIdsToFetch.length > 0;
+    const loadRankDeltas = async () => {
+      const liveMissingIds = userIds.filter((userId) => !liveRankDeltas[userId]);
+      const historyMissingIds = userIds.filter(
+        (userId) =>
+          !rankHistories[userId] ||
+          isCacheStale(rankHistoriesFetchedAt[userId], CLIENT_CACHE_TTL.rankHistories),
+      );
+      if (liveMissingIds.length === 0 || historyMissingIds.length === 0) {
+        setRankHistoriesLoading(historyMissingIds.length > 0);
+      } else {
+        setRankHistoriesLoading(true);
+      }
 
-    if (!shouldRefresh) {
-      setRankHistoriesLoading(false);
-      return () => { cancelled = true; };
-    }
+      let liveDeltas: Record<number, LiveRankDelta> = {};
+      if (isLiveBackendConfigured() && liveMissingIds.length > 0) {
+        try {
+          const snapshot = await fetchLiveRankDeltas(selectedCountry, liveMissingIds);
+          if (cancelled) return;
+          liveDeltas = snapshot.deltas;
+          if (Object.keys(liveDeltas).length > 0) {
+            setLiveRankDeltas((current) => ({ ...current, ...liveDeltas }));
+          }
+        } catch {
+          // Fall back to osu! rank_history below.
+        }
+      }
 
-    setRankHistoriesLoading(!hasAllHistories);
+      const userIdsToFetch = userIds.filter(
+        (userId) =>
+          !liveDeltas[userId] &&
+          !liveRankDeltas[userId] &&
+          (!rankHistories[userId] ||
+            isCacheStale(rankHistoriesFetchedAt[userId], CLIENT_CACHE_TTL.rankHistories)),
+      );
 
-    getUsersRankHistory({ data: { userIds: userIdsToFetch } })
-      .then((histories) => {
+      if (userIdsToFetch.length === 0) {
+        if (!cancelled) setRankHistoriesLoading(false);
+        return;
+      }
+
+      try {
+        const histories = await getUsersRankHistory({ data: { userIds: userIdsToFetch } });
         if (cancelled) return;
         setRankHistories(histories);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setRankHistoriesLoading(false);
-      });
+      } finally {
+        if (!cancelled) setRankHistoriesLoading(false);
+      }
+    };
+
+    void loadRankDeltas();
 
     return () => { cancelled = true; };
-  }, [pageData, rankHistories, rankHistoriesFetchedAt, setRankHistories]);
+  }, [pageData, selectedCountry, liveRankDeltas, rankHistories, rankHistoriesFetchedAt, setRankHistories]);
 
   // Compare current country positions vs 7 days ago.
   const countryRankChanges = useMemo(() => {
     if (!pageData || Object.keys(rankHistories).length === 0) return {};
     return getCrRankChanges(pageData.ranking, rankHistories);
   }, [pageData, rankHistories]);
+
+  const liveCountryRankChanges = useMemo(() => (
+    Object.fromEntries(
+      Object.entries(liveRankDeltas)
+        .filter(([, delta]) => delta.countryChange !== null)
+        .map(([userId, delta]) => [Number(userId), delta.countryChange as number]),
+    )
+  ), [liveRankDeltas]);
 
   const sortedRankings = useMemo(() => {
     if (!pageData) return [];
@@ -206,13 +243,13 @@ function RankingsPage() {
         case "7d": {
           const aH = rankHistories[a.entry.user.id];
           const bH = rankHistories[b.entry.user.id];
-          aVal = getGlobalRankChange(aH) ?? -99999;
-          bVal = getGlobalRankChange(bH) ?? -99999;
+          aVal = liveRankDeltas[a.entry.user.id]?.globalChange ?? getGlobalRankChange(aH) ?? -99999;
+          bVal = liveRankDeltas[b.entry.user.id]?.globalChange ?? getGlobalRankChange(bH) ?? -99999;
           break;
         }
         case "cr7d":
-          aVal = countryRankChanges[a.entry.user.id] ?? -99999;
-          bVal = countryRankChanges[b.entry.user.id] ?? -99999;
+          aVal = liveCountryRankChanges[a.entry.user.id] ?? countryRankChanges[a.entry.user.id] ?? -99999;
+          bVal = liveCountryRankChanges[b.entry.user.id] ?? countryRankChanges[b.entry.user.id] ?? -99999;
           break;
         case "accuracy":
           aVal = a.entry.hit_accuracy;
@@ -241,7 +278,7 @@ function RankingsPage() {
       }
       return sortDir === "desc" ? (bVal as number) - (aVal as number) : (aVal as number) - (bVal as number);
     });
-  }, [pageData, page, sortBy, sortDir, rankHistories, countryRankChanges]);
+  }, [pageData, page, sortBy, sortDir, rankHistories, liveRankDeltas, countryRankChanges, liveCountryRankChanges]);
 
   const handleSort = (field: SortField) => {
     if (sortBy === field) {
@@ -329,8 +366,9 @@ function RankingsPage() {
             ) : pageData ? (
               sortedRankings.map(({ entry, originalRank }) => {
                 const history = rankHistories[entry.user.id];
-                const globalChange = getGlobalRankChange(history);
-                const crChange = countryRankChanges[entry.user.id] ?? null;
+                const liveDelta = liveRankDeltas[entry.user.id];
+                const globalChange = liveDelta?.globalChange ?? getGlobalRankChange(history);
+                const crChange = liveDelta?.countryChange ?? countryRankChanges[entry.user.id] ?? null;
 
                 // Show the value for the active sort field on the right side
                 const sortedValue = (() => {
@@ -364,9 +402,9 @@ function RankingsPage() {
                   if (sortBy === "7d" || sortBy === "cr7d") {
                     return (
                       <div className="flex items-center gap-2">
-                        {sortBy === "7d" && history && (
+                        {sortBy === "7d" && (history || globalChange !== null) && (
                           <>
-                            <MiniSparkline data={history} />
+                            {history && <MiniSparkline data={history} />}
                             {globalChange !== null && globalChange !== 0 && (
                               <span className={`font-semibold ${globalChange > 0 ? "text-osu-green" : "text-osu-red"}`}>
                                 {globalChange > 0 ? `+${formatNumber(globalChange)}` : formatNumber(globalChange)}
@@ -390,9 +428,9 @@ function RankingsPage() {
                   return (
                     <>
                       <span>{formatAccuracy(entry.hit_accuracy / 100)}</span>
-                      {history && (
+                      {(history || globalChange !== null) && (
                         <div className="flex items-center gap-1">
-                          <MiniSparkline data={history} />
+                          {history && <MiniSparkline data={history} />}
                           {globalChange !== null && globalChange !== 0 && (
                             <span className={`font-semibold ${globalChange > 0 ? "text-osu-green" : "text-osu-red"}`}>
                               {globalChange > 0 ? `+${formatNumber(globalChange)}` : formatNumber(globalChange)}
@@ -478,8 +516,10 @@ function RankingsPage() {
                 ) : pageData ? (
                   sortedRankings.map(({ entry, originalRank }, i: number) => {
                     const history = rankHistories[entry.user.id];
-                    const globalChange = getGlobalRankChange(history);
-                    const crChange = countryRankChanges[entry.user.id] ?? null;
+                    const liveDelta = liveRankDeltas[entry.user.id];
+                    const globalChange = liveDelta?.globalChange ?? getGlobalRankChange(history);
+                    const crChange = liveDelta?.countryChange ?? countryRankChanges[entry.user.id] ?? null;
+                    const deltasLoaded = !!liveDelta || !!history;
 
                     return (
                       <tr
@@ -507,10 +547,10 @@ function RankingsPage() {
                           </Link>
                         </td>
                         <td className="py-2.5 px-3">
-                          <GlobalRankCell history={history} rankChange={globalChange} />
+                          <GlobalRankCell history={history} rankChange={globalChange} loaded={deltasLoaded} />
                         </td>
                         <td className="py-2.5 px-3">
-                          <CRRankCell change={crChange} loaded={!!history} />
+                          <CRRankCell change={crChange} loaded={deltasLoaded} />
                         </td>
                         <td className="py-2.5 px-3 text-sm text-osu-l2 text-right">{formatAccuracy(entry.hit_accuracy / 100)}</td>
                         <td className="py-2.5 px-3 text-sm text-osu-f1 text-right">{formatNumber(entry.play_count)}</td>
@@ -605,13 +645,13 @@ function MiniSparkline({ data }: { data: number[] }) {
   );
 }
 
-function GlobalRankCell({ history, rankChange }: { history: number[] | undefined; rankChange: number | null }) {
-  if (!history) {
+function GlobalRankCell({ history, rankChange, loaded }: { history: number[] | undefined; rankChange: number | null; loaded: boolean }) {
+  if (!loaded) {
     return <div className="flex items-center justify-center"><Skeleton className="w-20 h-4" /></div>;
   }
   return (
     <div className="flex items-center justify-center gap-2">
-      <MiniSparkline data={history} />
+      {history && <MiniSparkline data={history} />}
       {rankChange !== null && rankChange !== 0 ? (
         <span className={`text-[11px] font-semibold ${rankChange > 0 ? "text-osu-green" : "text-osu-red"}`}>
           {rankChange > 0 ? `+${formatNumber(rankChange)}` : formatNumber(rankChange)}

@@ -14,12 +14,13 @@ export interface LocalDbStorage {
   overLimit: boolean;
 }
 
-export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | "scoreEventRetentionDays" | "liveEventRetentionDays" | "doneJobRetentionDays" | "apiCallLogRetentionDays" | "replayVideoJobRetentionDays" | "replayVideoWorkDir" | "maxLocalDbBytes" | "targetLocalDbBytes">): Promise<Record<string, number>> {
+export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | "scoreEventRetentionDays" | "liveEventRetentionDays" | "doneJobRetentionDays" | "apiCallLogRetentionDays" | "replayVideoJobRetentionDays" | "rankSnapshotRetentionDays" | "replayVideoWorkDir" | "maxLocalDbBytes" | "targetLocalDbBytes">): Promise<Record<string, number>> {
   const scoreCutoff = daysAgo(config.scoreEventRetentionDays);
   const liveCutoff = daysAgo(config.liveEventRetentionDays);
   const doneJobCutoff = daysAgo(config.doneJobRetentionDays);
   const apiCutoff = daysAgo(config.apiCallLogRetentionDays);
   const replayVideoCutoff = daysAgo(config.replayVideoJobRetentionDays);
+  const rankSnapshotCutoff = daysAgo(config.rankSnapshotRetentionDays);
   const oldReplayVideoJobs = (await exec(
     db,
     "select id from replay_video_exports where status in ('done', 'failed', 'cancelled') and updated_at < ?",
@@ -31,6 +32,7 @@ export async function runRetention(db: Db, config: Pick<Config, "databaseUrl" | 
     doneJobs: Number((await exec(db, "delete from jobs where status = 'done' and updated_at < ?", [doneJobCutoff])).rowsAffected ?? 0),
     apiCalls: Number((await exec(db, "delete from api_call_log where started_at < ?", [apiCutoff])).rowsAffected ?? 0),
     replayVideoJobs: Number((await exec(db, "delete from replay_video_exports where status in ('done', 'failed', 'cancelled') and updated_at < ?", [replayVideoCutoff])).rowsAffected ?? 0),
+    rankSnapshots: Number((await exec(db, "delete from country_rank_snapshots where captured_at < ?", [rankSnapshotCutoff])).rowsAffected ?? 0),
   };
   const storageBefore = await getLocalDbStorage(config);
   const emergency = storageBefore.overLimit ? await pruneForLocalDbLimit(db, config, storageBefore) : {};
@@ -83,6 +85,7 @@ async function pruneForLocalDbLimit(db: Db, config: Pick<Config, "targetLocalDbB
     ["api_call_log", "started_at"],
     ["live_event_log", "created_at"],
     ["score_events", "received_at"],
+    ["country_rank_snapshots", "captured_at"],
     ["jobs", "updated_at", "status in ('done', 'failed')"],
     ["replay_video_exports", "updated_at", "status in ('done', 'failed', 'cancelled')"],
   ] as const;

@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import {
   fetchWithCacheLock,
+  getPersistentCacheEntries,
   osuFetch
 } from "../api";
 import type { RankingsResponse } from "../types";
@@ -16,7 +17,10 @@ import {
   normalizeRankingsPayload
 } from "./validators";
 import { mapWithConcurrency } from "./concurrency";
-import { getUserRankHistory } from "./users";
+import {
+  fetchAndCacheUserRankHistory,
+  getRankHistoryCacheKey
+} from "./users";
 
 export const getRankings = createServerFn({ method: "GET" })
   .inputValidator(normalizeRankingsPayload)
@@ -55,13 +59,27 @@ export const getUsersRankHistory = createServerFn({ method: "GET" })
   .handler(async ({ data }: { data: { userIds: number[] } }) => {
     edgeCache(3600, 86400);
     const uniqueUserIds = [...new Set(data.userIds)];
+    const cacheKeysByUserId = new Map(uniqueUserIds.map((userId) => [userId, getRankHistoryCacheKey(userId)]));
+    const cachedHistories = await getPersistentCacheEntries<number[] | null>([...cacheKeysByUserId.values()]);
+    const out: Record<number, number[]> = {};
+    const missingUserIds: number[] = [];
 
-    const results = await mapWithConcurrency(
-      uniqueUserIds,
+    for (const userId of uniqueUserIds) {
+      const cacheKey = cacheKeysByUserId.get(userId)!;
+      if (!cachedHistories.has(cacheKey)) {
+        missingUserIds.push(userId);
+        continue;
+      }
+      const history = cachedHistories.get(cacheKey);
+      if (history?.length) out[userId] = history;
+    }
+
+    const fetchedResults = await mapWithConcurrency(
+      missingUserIds,
       RANK_HISTORY_CONCURRENCY,
       async (userId) => {
         try {
-          const history = await getUserRankHistory(userId);
+          const history = await fetchAndCacheUserRankHistory(userId);
           return { userId, history };
         } catch {
           return { userId, history: null };
@@ -69,9 +87,7 @@ export const getUsersRankHistory = createServerFn({ method: "GET" })
       },
     );
 
-    const out: Record<number, number[]> = {};
-
-    results.forEach(({ userId, history }) => {
+    fetchedResults.forEach(({ userId, history }) => {
       if (history?.length) {
         out[userId] = history;
       }

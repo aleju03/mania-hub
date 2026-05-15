@@ -5,6 +5,7 @@ import type { Db } from "../db.js";
 import { dbHealth, exec, parseJson } from "../db.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
 import { enqueueMapsRefresh, getMapsSnapshot } from "../features/maps.js";
+import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
 import { getTopPlaysSnapshot } from "../features/top-plays.js";
 import { getTrackerSnapshot } from "../features/tracker.js";
@@ -142,6 +143,11 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     if (!await activatePublicCountry(req, res, ctx, country)) return true;
     const snapshot = await getMapsSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs);
     sendJson(req, res, ctx, snapshot.value ? 200 : 202, snapshot);
+    return true;
+  }
+  if (url.pathname === "/api/snapshots/rank-deltas") {
+    if (!await activatePublicCountry(req, res, ctx, country)) return true;
+    sendJson(req, res, ctx, 200, await getRankDeltaSnapshot(ctx.db, country, parseUserIds(url.searchParams.get("userIds"))));
     return true;
   }
   if (url.pathname === "/api/dan-estimates") {
@@ -594,6 +600,15 @@ export function sendNotFound(res: ServerResponse): void {
 function clampLimit(raw: string | null, fallback: number, max: number): number {
   const value = Number(raw ?? fallback);
   return Number.isFinite(value) ? Math.max(1, Math.min(max, Math.floor(value))) : fallback;
+}
+
+function parseUserIds(raw: string | null): number[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((part) => Number(part.trim()))
+    .filter((id) => Number.isInteger(id) && id > 0)
+    .slice(0, 100);
 }
 
 function normalizeOsuApiPath(rawPath: unknown, rawParams: unknown): string {

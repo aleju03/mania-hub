@@ -40,6 +40,7 @@ export interface Config {
   doneJobRetentionDays: number;
   apiCallLogRetentionDays: number;
   replayVideoJobRetentionDays: number;
+  rankSnapshotRetentionDays: number;
   maxLocalDbBytes: number;
   targetLocalDbBytes: number;
   replayVideoPublicEnabled: boolean;
@@ -57,6 +58,11 @@ export interface Config {
   r2SecretAccessKey?: string;
   r2Bucket?: string;
   r2PublicBaseUrl?: string;
+  enableWorkers: boolean;
+  enableStartupRosterRefresh: boolean;
+  enableScheduledRefreshes: boolean;
+  enableOscBackfill: boolean;
+  enableOscSocket: boolean;
 }
 
 function readInt(name: string, fallback: number): number {
@@ -96,7 +102,7 @@ export function readConfig(): Config {
     allowedOrigins: csv(process.env.ALLOWED_ORIGINS, "http://localhost:3000"),
     liveAdminToken: process.env.LIVE_ADMIN_TOKEN || undefined,
     trustProxyHeaders: readBool("TRUST_PROXY_HEADERS", false),
-    countryWarmTtlMs: readInt("COUNTRY_WARM_TTL_MS", 24 * 60 * 60 * 1000),
+    countryWarmTtlMs: readInt("COUNTRY_WARM_TTL_MS", 72 * 60 * 60 * 1000),
     publicApiRatePerMinute: readInt("PUBLIC_API_RATE_PER_MINUTE", 120),
     publicCostlyRatePerMinute: readInt("PUBLIC_COSTLY_RATE_PER_MINUTE", 30),
     countryActivateRatePerMinute: readInt("COUNTRY_ACTIVATE_RATE_PER_MINUTE", 10),
@@ -124,6 +130,7 @@ export function readConfig(): Config {
     doneJobRetentionDays: readInt("DONE_JOB_RETENTION_DAYS", 2),
     apiCallLogRetentionDays: readInt("API_CALL_LOG_RETENTION_DAYS", 7),
     replayVideoJobRetentionDays: readInt("REPLAY_VIDEO_JOB_RETENTION_DAYS", 2),
+    rankSnapshotRetentionDays: readInt("RANK_SNAPSHOT_RETENTION_DAYS", 14),
     maxLocalDbBytes: readInt("MAX_LOCAL_DB_BYTES", 10 * 1024 * 1024 * 1024),
     targetLocalDbBytes: readInt("TARGET_LOCAL_DB_BYTES", 8 * 1024 * 1024 * 1024),
     replayVideoPublicEnabled: readBool("REPLAY_VIDEO_PUBLIC_ENABLED", false),
@@ -141,5 +148,10 @@ export function readConfig(): Config {
     r2SecretAccessKey: process.env.R2_SECRET_ACCESS_KEY || undefined,
     r2Bucket: process.env.R2_BUCKET || undefined,
     r2PublicBaseUrl: process.env.R2_PUBLIC_BASE_URL || process.env.R2_PUBLIC_URL || process.env.CLOUDFLARE_R2_PUBLIC_URL || undefined,
+    enableWorkers: readBool("ENABLE_WORKERS", true),
+    enableStartupRosterRefresh: readBool("ENABLE_STARTUP_ROSTER_REFRESH", true),
+    enableScheduledRefreshes: readBool("ENABLE_SCHEDULED_REFRESHES", true),
+    enableOscBackfill: readBool("ENABLE_OSC_BACKFILL", true),
+    enableOscSocket: readBool("ENABLE_OSC_SOCKET", true),
   };
 }

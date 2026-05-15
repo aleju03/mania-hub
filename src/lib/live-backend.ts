@@ -50,6 +50,22 @@ export interface LiveDanEstimateBatch {
   estimatorVersion: number;
 }
 
+export interface LiveRankDelta {
+  userId: number;
+  globalChange: number | null;
+  countryChange: number | null;
+  oldGlobalRank: number | null;
+  oldCountryRank: number | null;
+  capturedAt: string;
+}
+
+export interface LiveRankDeltaSnapshot {
+  country: string;
+  windowDays: number;
+  targetAt: string;
+  deltas: Record<number, LiveRankDelta>;
+}
+
 export function getLiveBackendUrl(): string | null {
   const value = import.meta.env.VITE_LIVE_BACKEND_URL || import.meta.env.LIVE_BACKEND_URL;
   if (typeof value !== "string" || value.trim() === "") return null;
@@ -164,6 +180,13 @@ export async function fetchLiveSnipesSnapshot(country: string, limit = 500): Pro
 
 export async function fetchLiveMapsSnapshot(country: string): Promise<LiveMapsSnapshot> {
   return fetchLiveJson(`/api/snapshots/maps?country=${encodeURIComponent(country)}`);
+}
+
+export async function fetchLiveRankDeltas(country: string, userIds: number[]): Promise<LiveRankDeltaSnapshot> {
+  const uniqueUserIds = [...new Set(userIds)]
+    .filter((id) => Number.isInteger(id) && id > 0)
+    .slice(0, 100);
+  return fetchLiveJson(`/api/snapshots/rank-deltas?country=${encodeURIComponent(country)}&userIds=${uniqueUserIds.join(",")}`);
 }
 
 export async function fetchLiveDanEstimates(items: LiveDanEstimateRequest[], estimatorVersion: number): Promise<LiveDanEstimateBatch> {

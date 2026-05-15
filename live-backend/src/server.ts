@@ -33,7 +33,7 @@ export async function createApp() {
   const ingestor = new ScoreIngestor(db, queue, events, config);
   const abuse = new AbuseGuard();
   const osc = new OscSocketClient(config, ingestor);
-  if (osu.hasCredentials()) {
+  if (config.enableStartupRosterRefresh && osu.hasCredentials()) {
     await enqueueRosterRefreshes(queue, config.trackedCountries);
   }
   const worker = new WorkerRunner(db, queue, events, osu, ingestor);
@@ -65,12 +65,18 @@ export async function createApp() {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const app = await createApp();
-  app.worker.start();
-  startRosterScheduler(app.db, app.queue, app.config);
-  startMapsScheduler(app.db, app.queue, app.config);
+  if (app.config.enableWorkers) app.worker.start();
+  if (app.config.enableScheduledRefreshes) {
+    startRosterScheduler(app.db, app.queue, app.config);
+    startMapsScheduler(app.db, app.queue, app.config);
+  }
   startRetentionScheduler(app.db, app.config);
-  enqueueOscBackfill(app.queue, app.db, app.config).catch((error) => console.warn("[osc] backfill enqueue failed", error));
-  app.osc.start().catch((error) => console.warn("[osc] socket failed", error));
+  if (app.config.enableOscBackfill) {
+    enqueueOscBackfill(app.queue, app.db, app.config).catch((error) => console.warn("[osc] backfill enqueue failed", error));
+  }
+  if (app.config.enableOscSocket) {
+    app.osc.start().catch((error) => console.warn("[osc] socket failed", error));
+  }
   app.server.listen(app.config.port, () => {
     console.log(`[live-backend] listening on ${app.config.livePublicOrigin} (port ${app.config.port})`);
   });

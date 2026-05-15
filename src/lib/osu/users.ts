@@ -175,10 +175,18 @@ export async function getCachedUserScores(
 }
 
 export async function getUserRankHistory(userId: number): Promise<number[] | null> {
-  const cacheKey = `rank-history:user:${userId}`;
+  const cacheKey = getRankHistoryCacheKey(userId);
   const cached = await getPersistentCacheEntry<number[] | null>(cacheKey);
   if (cached.hit) return cached.value;
 
+  return fetchAndCacheUserRankHistory(userId);
+}
+
+export function getRankHistoryCacheKey(userId: number): string {
+  return `rank-history:user:${userId}`;
+}
+
+export async function fetchAndCacheUserRankHistory(userId: number): Promise<number[] | null> {
   const pending = rankHistoryPromiseCache.get(userId);
   if (pending) return pending;
 
@@ -187,7 +195,7 @@ export async function getUserRankHistory(userId: number): Promise<number[] | nul
   })
     .then((user) => {
       const history = user.rank_history?.data ?? null;
-      void setPersistentCache(cacheKey, history, RANK_HISTORY_CACHE_TTL);
+      void setPersistentCache(getRankHistoryCacheKey(userId), history, RANK_HISTORY_CACHE_TTL);
       return history;
     })
     .finally(() => {

@@ -26,7 +26,7 @@ export async function refreshCountryRoster(db: Db, osu: Pick<OsuApiClient, "getR
       db,
       `insert into users (user_id, username, avatar_url, country_code, is_active, pp, global_rank, country_rank, profile_json, updated_at)
        values (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
-       on conflict(user_id) do update set username = excluded.username, avatar_url = excluded.avatar_url, country_code = excluded.country_code, pp = excluded.pp, updated_at = excluded.updated_at`,
+       on conflict(user_id) do update set username = excluded.username, avatar_url = excluded.avatar_url, country_code = excluded.country_code, pp = excluded.pp, global_rank = excluded.global_rank, country_rank = excluded.country_rank, profile_json = excluded.profile_json, updated_at = excluded.updated_at`,
       [user.id, user.username, user.avatar_url, user.country_code, user.statistics?.pp ?? null, user.statistics?.global_rank ?? null, user.statistics?.country_rank ?? null, json(user), now],
     );
     await exec(
@@ -35,6 +35,12 @@ export async function refreshCountryRoster(db: Db, osu: Pick<OsuApiClient, "getR
        values (?, ?, ?, 'osu_rankings', 1, ?)
        on conflict(country, user_id) do update set rank = excluded.rank, is_tracked = 1, refreshed_at = excluded.refreshed_at`,
       [country, user.id, index + 1, now],
+    );
+    await exec(
+      db,
+      `insert into country_rank_snapshots (country, user_id, country_rank, global_rank, pp, captured_at)
+       values (?, ?, ?, ?, ?, ?)`,
+      [country, user.id, index + 1, user.statistics?.global_rank ?? null, user.statistics?.pp ?? null, now],
     );
     count++;
   }
