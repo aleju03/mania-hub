@@ -649,6 +649,46 @@ describe("live backend", () => {
     expect(calls).toEqual(["bulk-1", "interactive", "bulk-2"]);
   });
 
+  it("allows a small burst for interactive osu! profile calls", async () => {
+    vi.useFakeTimers();
+    const limiter = new TokenBucketLimiter(60, 45, undefined, { interactiveBurstCapacity: 4 });
+    const calls: number[] = [];
+
+    const tasks = [0, 1, 2, 3].map((index) =>
+      limiter.schedule("getUser", `/users/${index}/mania`, async () => {
+        calls.push(Date.now());
+        return true;
+      }),
+    );
+
+    await vi.advanceTimersByTimeAsync(1);
+    await Promise.all(tasks);
+
+    expect(calls).toHaveLength(4);
+    expect(Math.max(...calls) - Math.min(...calls)).toBeLessThan(100);
+  });
+
+  it("keeps non-interactive osu! work on the normal pace", async () => {
+    vi.useFakeTimers();
+    const limiter = new TokenBucketLimiter(60, 60, undefined, { interactiveBurstCapacity: 4 });
+    const calls: number[] = [];
+
+    const tasks = [1, 2].map((userId) =>
+      limiter.schedule("job:seed_snipe_board", `/beatmaps/1/scores/users/${userId}/all`, async () => {
+        calls.push(Date.now());
+        return true;
+      }),
+    );
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(calls).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await Promise.all(tasks);
+
+    expect(calls).toHaveLength(2);
+    expect(calls[1] - calls[0]).toBeGreaterThanOrEqual(1_000);
+  });
+
   it("coalesces identical in-flight osu! API calls", async () => {
     const fetchImpl = vi.fn(async (input: string | URL | Request) => {
       const url = String(input);

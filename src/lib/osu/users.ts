@@ -257,13 +257,14 @@ export async function fetchUserBestScoresWindow(
   userId: number,
   totalLimit = 200,
   context?: Record<string, OsuFetchContextValue>,
+  options: { parallelPages?: boolean } = {},
 ): Promise<OsuScore[]> {
   const cacheKey = `user-best-scores-window:${userId}:${totalLimit}`;
   const cached = await getPersistentCacheEntryAllowStale<OsuScore[]>(cacheKey);
   if (cached.hit) {
     if (cached.isStale) {
       void refreshCacheInBackground(cacheKey, BEST_SCORES_WINDOW_CACHE_TTL, () =>
-        fetchUserBestScoresWindowFromOsu(userId, totalLimit, context),
+        fetchUserBestScoresWindowFromOsu(userId, totalLimit, context, options),
       );
     }
     return cached.value;
@@ -273,7 +274,7 @@ export async function fetchUserBestScoresWindow(
   if (pending) return pending;
 
   const request = fetchWithCacheLock(cacheKey, BEST_SCORES_WINDOW_CACHE_TTL, () =>
-    fetchUserBestScoresWindowFromOsu(userId, totalLimit, context),
+    fetchUserBestScoresWindowFromOsu(userId, totalLimit, context, options),
   ).finally(() => {
     bestScoresWindowPromiseCache.delete(cacheKey);
   });
@@ -286,46 +287,45 @@ async function fetchUserBestScoresWindowFromOsu(
   userId: number,
   totalLimit: number,
   context?: Record<string, OsuFetchContextValue>,
+  options: { parallelPages?: boolean } = {},
 ): Promise<OsuScore[]> {
-  const firstPage = await osuFetch<OsuScore[]>(
+  const fetchPage = (offset: number, limit: number, page: number) => osuFetch<OsuScore[]>(
     `/users/${userId}/scores/best`,
     getScoreRequestParams({
       mode: "mania",
-      limit: Math.min(totalLimit, 100),
-      offset: 0,
+      limit,
+      offset,
     }),
     {
-      caller: "fetchUserBestScoresWindow:p1",
+      caller: `fetchUserBestScoresWindow:p${page}`,
       context: {
         source: "best-scores-window",
         userId,
         totalLimit,
-        page: 1,
+        page,
         ...context,
       },
     },
   );
+
+  const firstPagePromise = fetchPage(0, Math.min(totalLimit, 100), 1);
+
+  if (options.parallelPages && totalLimit > 100) {
+    const secondPageResult = fetchPage(100, Math.min(totalLimit - 100, 100), 2)
+      .then((value) => ({ ok: true, value }) as const)
+      .catch((error) => ({ ok: false, error }) as const);
+    const firstPage = await firstPagePromise;
+    if (firstPage.length < 100) return firstPage;
+    const secondPage = await secondPageResult;
+    if (!secondPage.ok) throw secondPage.error;
+    return [...firstPage, ...secondPage.value];
+  }
+
+  const firstPage = await firstPagePromise;
 
   if (totalLimit <= 100 || firstPage.length < 100) return firstPage;
 
-  const secondPage = await osuFetch<OsuScore[]>(
-    `/users/${userId}/scores/best`,
-    getScoreRequestParams({
-      mode: "mania",
-      limit: Math.min(totalLimit - 100, 100),
-      offset: 100,
-    }),
-    {
-      caller: "fetchUserBestScoresWindow:p2",
-      context: {
-        source: "best-scores-window",
-        userId,
-        totalLimit,
-        page: 2,
-        ...context,
-      },
-    },
-  );
+  const secondPage = await fetchPage(100, Math.min(totalLimit - 100, 100), 2);
   return [...firstPage, ...secondPage];
 }
 
@@ -494,11 +494,13 @@ export async function calculateReplacementPpGainMapForTargets(
 
 export const getUserScoresBestWindow = createServerFn({ method: "GET" })
   .inputValidator(normalizeBestWindowPayload)
-  .handler(async ({ data }: { data: { userId: number; totalLimit?: number } }) => {
+  .handler(async ({ data }: { data: { userId: number; totalLimit?: number; parallel?: boolean } }) => {
     edgeCache(120, 600);
     return fetchUserBestScoresWindow(data.userId, data.totalLimit ?? 200, {
       feature: "user-best-window",
       source: "getUserScoresBestWindow",
+    }, {
+      parallelPages: data.parallel === true,
     });
   });
 

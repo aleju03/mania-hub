@@ -309,7 +309,7 @@ function loadUserBestWindowCached(userId: number): Promise<OsuScore[]> {
   const cached = userBestWindowRequestCache.get(userId);
   if (cached) return cached;
 
-  const request = getUserScoresBestWindow({ data: { userId, totalLimit: BEST_SCORES_WINDOW_SIZE } })
+  const request = getUserScoresBestWindow({ data: { userId, totalLimit: BEST_SCORES_WINDOW_SIZE, parallel: true } })
     .then((scores) => {
       userBestWindowDataCache.set(userId, {
         data: scores,

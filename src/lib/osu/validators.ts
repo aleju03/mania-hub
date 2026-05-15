@@ -159,7 +159,7 @@ export function normalizeScoreListPayload(data: unknown): {
   };
 }
 
-export function normalizeBestWindowPayload(data: unknown): { userId: number; totalLimit?: number } {
+export function normalizeBestWindowPayload(data: unknown): { userId: number; totalLimit?: number; parallel?: boolean } {
   const input = asInputRecord(data);
   return {
     userId: parseOsuId(input.userId, "user id"),
@@ -168,6 +168,7 @@ export function normalizeBestWindowPayload(data: unknown): { userId: number; tot
       max: MAX_BEST_WINDOW_LIMIT,
       fallback: 200,
     }),
+    parallel: input.parallel === true,
   };
 }
 

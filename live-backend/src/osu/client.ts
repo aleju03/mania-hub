@@ -16,6 +16,10 @@ type PendingLimiterCall<T = unknown> = {
   reject: (error: unknown) => void;
 };
 
+type LimiterOptions = {
+  interactiveBurstCapacity?: number;
+};
+
 export class TokenBucketLimiter {
   private starts: number[] = [];
   private recent: Array<{ startedAt: number; caller: string; path: string }> = [];
@@ -24,12 +28,19 @@ export class TokenBucketLimiter {
   private nextStartAt = 0;
   private sequence = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
+  private readonly interactiveBurstCapacity: number;
+  private interactiveBurstTokens: number;
+  private interactiveBurstUpdatedAt = Date.now();
 
   constructor(
     private readonly hardPerMinute: number,
     private readonly targetPerMinute = hardPerMinute,
     private readonly onCall?: (entry: { caller: string; path: string; startedAt: number }) => void,
-  ) {}
+    options: LimiterOptions = {},
+  ) {
+    this.interactiveBurstCapacity = Math.max(0, Math.floor(options.interactiveBurstCapacity ?? 0));
+    this.interactiveBurstTokens = this.interactiveBurstCapacity;
+  }
 
   async schedule<T>(caller: string, path: string, fn: () => Promise<T>): Promise<T> {
     const lane = classifyLimiterLane(caller, path);
@@ -44,13 +55,22 @@ export class TokenBucketLimiter {
         resolve,
         reject,
       } as PendingLimiterCall);
-      this.pump();
+      this.pump(true);
     });
   }
 
-  private pump(): void {
-    if (this.timer) return;
-    const waitMs = this.nextWaitMs();
+  private pump(reschedule = false): void {
+    if (this.timer) {
+      if (!reschedule) return;
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+
+    const nextIndex = this.bestPendingIndex();
+    if (nextIndex < 0) return;
+
+    const next = this.pending[nextIndex];
+    const waitMs = this.nextWaitMs(next);
     if (waitMs > 0) {
       this.timer = setTimeout(() => {
         this.timer = null;
@@ -60,10 +80,11 @@ export class TokenBucketLimiter {
       return;
     }
 
-    const next = this.takeNextPending();
-    if (!next) return;
+    this.pending.splice(nextIndex, 1);
 
     const startedAt = Date.now();
+    const usedInteractiveBurst = startedAt < this.nextStartAt && next.lane === "interactive";
+    if (usedInteractiveBurst) this.consumeInteractiveBurstToken(startedAt);
     this.starts.push(startedAt);
     this.nextStartAt = startedAt + Math.ceil(60_000 / Math.max(1, this.targetPerMinute));
     this.recent.push({ startedAt, caller: next.caller, path: next.path });
@@ -74,7 +95,7 @@ export class TokenBucketLimiter {
     this.pump();
   }
 
-  private nextWaitMs(): number {
+  private nextWaitMs(next: PendingLimiterCall): number {
     if (this.pending.length === 0) return 0;
     const now = Date.now();
     if (now < this.pausedUntil) {
@@ -85,13 +106,14 @@ export class TokenBucketLimiter {
       return 60_000 - (now - this.starts[0]) + 1;
     }
     if (now < this.nextStartAt) {
+      if (this.canUseInteractiveBurst(next, now)) return 0;
       return this.nextStartAt - now;
     }
     return 0;
   }
 
-  private takeNextPending(): PendingLimiterCall | null {
-    if (this.pending.length === 0) return null;
+  private bestPendingIndex(): number {
+    if (this.pending.length === 0) return -1;
     let bestIndex = 0;
     for (let i = 1; i < this.pending.length; i++) {
       const current = this.pending[i];
@@ -100,7 +122,29 @@ export class TokenBucketLimiter {
         bestIndex = i;
       }
     }
-    return this.pending.splice(bestIndex, 1)[0] ?? null;
+    return bestIndex;
+  }
+
+  private canUseInteractiveBurst(next: PendingLimiterCall, now: number): boolean {
+    if (next.lane !== "interactive" || this.interactiveBurstCapacity <= 0) return false;
+    this.refillInteractiveBurst(now);
+    return this.interactiveBurstTokens >= 1;
+  }
+
+  private consumeInteractiveBurstToken(now: number): void {
+    if (this.interactiveBurstCapacity <= 0) return;
+    this.refillInteractiveBurst(now);
+    this.interactiveBurstTokens = Math.max(0, this.interactiveBurstTokens - 1);
+  }
+
+  private refillInteractiveBurst(now: number): void {
+    if (this.interactiveBurstCapacity <= 0) return;
+    const elapsedMs = Math.max(0, now - this.interactiveBurstUpdatedAt);
+    if (elapsedMs > 0) {
+      const refill = elapsedMs * (Math.max(1, this.targetPerMinute) / 60_000);
+      this.interactiveBurstTokens = Math.min(this.interactiveBurstCapacity, this.interactiveBurstTokens + refill);
+      this.interactiveBurstUpdatedAt = now;
+    }
   }
 
   pause(ms: number): void {
@@ -110,6 +154,7 @@ export class TokenBucketLimiter {
 
   state() {
     const now = Date.now();
+    this.refillInteractiveBurst(now);
     this.starts = this.starts.filter((startedAt) => now - startedAt < 60_000);
     this.recent = this.recent.filter((entry) => now - entry.startedAt < 60_000);
     const byCaller = new Map<string, number>();
@@ -126,6 +171,8 @@ export class TokenBucketLimiter {
       hardPerMinute: this.hardPerMinute,
       targetPerMinute: this.targetPerMinute,
       usedLastMinute: this.starts.length,
+      interactiveBurstCapacity: this.interactiveBurstCapacity,
+      interactiveBurstTokens: Math.floor(this.interactiveBurstTokens),
       pausedMs: Math.max(0, this.pausedUntil - now),
       pending: this.pending.length,
       pendingByLane: [...pendingByLane.entries()]
@@ -191,7 +238,9 @@ export class OsuApiClient {
     private readonly fetchImpl: typeof fetch = fetch,
     onCall?: (entry: { caller: string; path: string; startedAt: number }) => void,
   ) {
-    this.limiter = new TokenBucketLimiter(config.osuApiHardPerMinute, config.osuApiTargetPerMinute, onCall);
+    this.limiter = new TokenBucketLimiter(config.osuApiHardPerMinute, config.osuApiTargetPerMinute, onCall, {
+      interactiveBurstCapacity: 4,
+    });
   }
 
   hasCredentials(): boolean {
