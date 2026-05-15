@@ -222,51 +222,48 @@ function TierProgress({
           style={{ width: `${Math.max(2, pct)}%`, backgroundColor: toColor }}
         />
       </div>
-      <button
-        type="button"
-        onClick={onExplain}
-        className="mt-2 flex items-baseline gap-1.5 text-[11px] cursor-pointer hover:opacity-80 transition-opacity"
-        aria-label="How card rating is calculated"
-      >
+      <div className="mt-2 flex items-baseline gap-1.5 text-[11px]">
         <span className="font-bold tabular-nums" style={{ color: toColor }}>+{nextTier.remaining}</span>
         <span className="text-osu-f1">to</span>
         <span className={`font-semibold ${TIER_TEXT_COLOR[nextTier.tier] ?? "text-osu-l2"}`}>{nextTier.label}</span>
-        <span className="text-osu-f1/70 ml-0.5">(?)</span>
-      </button>
+        <button
+          type="button"
+          onClick={onExplain}
+          className="ml-0.5 text-osu-f1/70 hover:text-osu-f1 cursor-pointer transition-colors"
+          aria-label="How card rating is calculated"
+        >
+          (?)
+        </button>
+      </div>
     </div>
   );
 }
 
-type RatingContributor = { label: string; weight: number; sub: string };
+type RatingTrait = { label: string; weight: number; inputs: string; onCard: boolean };
 
-const RATING_PP_CONTRIBUTORS: RatingContributor[] = [
-  { label: "Total PP", weight: 39, sub: "your overall mania PP number" },
-  { label: "Top-play strength", weight: 33, sub: "weighted PP across your top 200, higher plays count more" },
+const RATING_TRAITS: RatingTrait[] = [
+  { label: "Control", weight: 9, inputs: "stars, LN density, OD, combo retention", onCard: true },
+  { label: "Speed", weight: 7, inputs: "effective BPM (after rate mods), rice density, stars", onCard: true },
+  { label: "Precision", weight: 5, inputs: "accuracy curve, MAX/300 ratio, OD, misses", onCard: true },
+  { label: "Stamina", weight: 7, inputs: "rate-adjusted length, total object count", onCard: false },
 ];
 
-const RATING_SKILL_CONTRIBUTORS: RatingContributor[] = [
-  { label: "Control", weight: 9, sub: "hard charts, LN density, OD, combo, accuracy" },
-  { label: "Stamina", weight: 7, sub: "map length and object count" },
-  { label: "Speed", weight: 7, sub: "BPM, rice density, stars" },
-  { label: "Precision", weight: 5, sub: "accuracy, OD, MAX ratio, misses, difficulty" },
-];
-
-const RATING_MAX_WEIGHT = RATING_PP_CONTRIBUTORS[0].weight;
-
-function ContributorRow({ contributor }: { contributor: RatingContributor }) {
+function StepNumber({ n }: { n: number }) {
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="w-[110px] flex-shrink-0">
-        <div className="text-[12px] font-semibold text-white leading-tight">{contributor.label}</div>
-        <div className="text-[10px] text-osu-f1/70 leading-tight">{contributor.sub}</div>
+    <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-osu-b3/60 text-[11px] font-bold text-white tabular-nums">
+      {n}
+    </div>
+  );
+}
+
+function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex gap-3">
+      <StepNumber n={n} />
+      <div className="min-w-0 flex-1 pt-0.5">
+        <div className="text-[13px] font-semibold text-white leading-tight">{title}</div>
+        <div className="mt-1.5 text-[12px] text-osu-f1/85 leading-snug">{children}</div>
       </div>
-      <div className="flex-1 h-1.5 rounded-full bg-osu-b3/40 overflow-hidden">
-        <div
-          className="h-full rounded-full bg-osu-yellow"
-          style={{ width: `${(contributor.weight / RATING_MAX_WEIGHT) * 100}%` }}
-        />
-      </div>
-      <span className="text-[11px] text-osu-f1 tabular-nums w-9 text-right">{contributor.weight}%</span>
     </div>
   );
 }
@@ -311,7 +308,7 @@ function RatingExplainerModal({
           </svg>
         </button>
         <div className="relative z-10 max-h-[85vh] overflow-y-auto p-5 [scrollbar-gutter:stable]">
-          <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">Card Rating</div>
+          <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">How your Maniacard works</div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-white tabular-nums">{cardRating}</span>
             <span className="text-[11px] text-osu-f1">
@@ -320,29 +317,42 @@ function RatingExplainerModal({
               <span className={`font-semibold ${TIER_TEXT_COLOR[nextTier.tier] ?? "text-osu-l2"}`}>{nextTier.label}</span>
             </span>
           </div>
-          <p className="mt-3 text-[12px] text-osu-l2 leading-snug">
-            Rating is mostly driven by PP, with skill traits from your top plays fine-tuning the rest.
-          </p>
 
-          <div className="mt-4">
-            <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">From your PP (72%)</div>
-            <div className="space-y-2">
-              {RATING_PP_CONTRIBUTORS.map((c) => (
-                <ContributorRow key={c.label} contributor={c} />
-              ))}
-            </div>
-          </div>
+          <div className="mt-5 space-y-4">
+            <Step n={1} title="Your top 200 mania plays are pulled">
+              Each play is weighted by{" "}
+              <code className="text-osu-yellow font-mono text-[11px]">pp^0.72 × 0.965^rank</code>, so your best plays count most.
+            </Step>
 
-          <div className="mt-4">
-            <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold mb-1">Skill traits (28%)</div>
-            <div className="text-[11px] text-osu-f1/80 mb-2 leading-snug">
-              Derived from your top plays. Control, Speed, and Precision are the three stats shown on the card front.
-            </div>
-            <div className="space-y-2">
-              {RATING_SKILL_CONTRIBUTORS.map((c) => (
-                <ContributorRow key={c.label} contributor={c} />
-              ))}
-            </div>
+            <Step n={2} title="Each play gets scored on 4 traits">
+              <div className="space-y-1.5">
+                {RATING_TRAITS.map((t) => (
+                  <div key={t.label} className="flex gap-2">
+                    <span className="font-semibold text-white text-[12px] w-[68px] flex-shrink-0">{t.label}</span>
+                    <span className="text-osu-f1/80 text-[11px] leading-snug">{t.inputs}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-[11px] text-osu-f1/70">Traits are normalized per keymode, so plays from different keymodes don't get compared on the same BPM and density scale.</p>
+            </Step>
+
+            <Step n={3} title="Three traits go on the card front">
+              <span className="font-semibold text-white">Control</span>, <span className="font-semibold text-white">Speed</span>, and <span className="font-semibold text-white">Precision</span> are shown as the card's signature stats. Stamina still feeds the rating below, but isn't displayed.
+            </Step>
+
+            <Step n={4} title="Rating = PP + skill traits">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-osu-yellow font-semibold tabular-nums text-[12px] w-9">72%</span>
+                  <span>Total PP (39%) + top-play strength (33%)</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-osu-yellow font-semibold tabular-nums text-[12px] w-9">28%</span>
+                  <span>Control (9%) + Stamina (7%) + Speed (7%) + Precision (5%)</span>
+                </div>
+              </div>
+              <p className="mt-2 text-[11px] text-osu-f1/70">This number determines your tier.</p>
+            </Step>
           </div>
         </div>
       </motion.div>
