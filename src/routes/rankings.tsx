@@ -447,7 +447,7 @@ function RankingsPage() {
                     key={entry.user.id}
                     to="/player/$username"
                     params={{ username: entry.user.username }}
-                    className="rounded-lg bg-osu-b4/50 p-3 cursor-pointer hover:bg-osu-b4 transition-colors"
+                    className="block rounded-lg bg-osu-b4/50 p-3 cursor-pointer hover:bg-osu-b4 transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-bold text-osu-f1 w-8">#{originalRank}</span>
