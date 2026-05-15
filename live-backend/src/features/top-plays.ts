@@ -29,7 +29,7 @@ export async function confirmTopPlay(
   osu: Pick<OsuApiClient, "getBeatmapUserScoresAll" | "getUserBestScores">,
   payload: { userId: number; scoreId: number; country: string },
 ): Promise<boolean> {
-  const bestScores = await osu.getUserBestScores(payload.userId, "job:refresh_user_top_scores");
+  const bestScores = dedupeScoresById(await osu.getUserBestScores(payload.userId, "job:refresh_user_top_scores"));
   const refreshedAt = nowIso();
   await exec(db, "delete from user_top_scores where user_id = ?", [payload.userId]);
   for (let index = 0; index < bestScores.length; index++) {
@@ -66,6 +66,21 @@ export async function confirmTopPlay(
   if (inserted.rowsAffected === 0) return false;
   await events.append("top_play", payload.country, event, `top_play:${payload.country}:${confirmedScoreId}`);
   return true;
+}
+
+function dedupeScoresById(scores: OscScore[]): OscScore[] {
+  const seen = new Set<number>();
+  const deduped: OscScore[] = [];
+  for (const score of scores) {
+    if (score.id == null) {
+      deduped.push(score);
+      continue;
+    }
+    if (seen.has(score.id)) continue;
+    seen.add(score.id);
+    deduped.push(score);
+  }
+  return deduped;
 }
 
 function getTopPlayConfirmationScoreId(score: Pick<OscScore, "id" | "legacy_score_id">): number {

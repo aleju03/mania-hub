@@ -70,7 +70,7 @@ export class JobQueue {
   }
 
   async complete(id: number): Promise<void> {
-    await exec(this.db, "update jobs set status = 'done', locked_by = null, locked_until = null, updated_at = ? where id = ?", [nowIso(), id]);
+    await exec(this.db, "update jobs set status = 'done', locked_by = null, locked_until = null, last_error = null, updated_at = ? where id = ?", [nowIso(), id]);
   }
 
   async fail(id: number, error: unknown, retryDelayMs = 30_000): Promise<void> {

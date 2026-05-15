@@ -121,6 +121,18 @@ describe("live backend", () => {
     expect(await queue.depth()).toBeGreaterThanOrEqual(1);
   });
 
+  it("clears stale job errors when a retry succeeds", async () => {
+    const { db, queue } = await setup();
+    await queue.enqueue("refresh_user_top_scores", "top:test", { userId: 101, scoreId: 9001, country: "CR" });
+    const job = (await queue.claim("test-worker"))[0];
+    await queue.fail(job.id, new Error("temporary failure"), 1);
+    await queue.complete(job.id);
+
+    const row = (await exec(db, "select status, last_error from jobs where id = ?", [job.id])).rows[0];
+    expect(row.status).toBe("done");
+    expect(row.last_error).toBeNull();
+  });
+
   it("creates enrichment jobs for unknown metadata on known tracked roster users", async () => {
     const { db, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
@@ -528,6 +540,22 @@ describe("live backend", () => {
     expect(emitted).toBe(true);
     expect(Number((await exec(db, "select count(*) as count from top_play_events")).rows[0].count)).toBe(1);
     expect(await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" })).toBe(false);
+  });
+
+  it("deduplicates repeated best-score ids during top-play confirmation", async () => {
+    const { db, events, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    await ingestor.ingestBatch([scores[0]]);
+    const best = await fixture<OscScore[]>("top-best.json");
+    const osu = {
+      getBeatmapUserScoresAll: async (_beatmapId: number, _userId: number, _caller?: string) => [],
+      getUserBestScores: async (_userId: number, _caller?: string) => [best[0], { ...best[0] }, { ...best[0], id: 9002, pp: 200 }],
+    };
+
+    await expect(confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" })).resolves.toBe(true);
+
+    const row = (await exec(db, "select count(*) as count from user_top_scores where user_id = 101 and score_id = 9001")).rows[0];
+    expect(Number(row.count)).toBe(1);
   });
 
   it("confirms oSC top plays by legacy score id when osu! best scores use the stable id", async () => {
