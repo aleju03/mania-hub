@@ -13,6 +13,14 @@ export interface OsuGradeCounts {
   a: number;
 }
 
+export interface OsuManiaVariant {
+  mode: string;
+  variant: string;
+  pp: number;
+  global_rank: number | null;
+  country_rank: number | null;
+}
+
 export interface OsuUserStatistics {
   count_300: number;
   count_100: number;
@@ -32,6 +40,8 @@ export interface OsuUserStatistics {
   is_ranked: boolean;
   grade_counts: OsuGradeCounts;
   level: { current: number; progress: number };
+  // Per-keymode mania pp/ranks (e.g. 4k, 7k). Not all users have this populated.
+  variants?: OsuManiaVariant[];
 }
 
 export interface OsuRankHistory {

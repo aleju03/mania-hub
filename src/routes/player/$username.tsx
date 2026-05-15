@@ -31,7 +31,7 @@ import { DanBadge } from "../../components/ui/DanBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
 import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCard3DPanel as ManiaCardPanel } from "../../components/player/maniacard3d/ManiaCard3DPanel";
-import type { InsightScoreSnapshot, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
+import type { InsightScoreSnapshot, OsuManiaVariant, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { calculateUserProfileInsights } from "../../lib/profile-insights";
 import { pageSeo, playerOgImagePath } from "../../lib/seo";
 import { getRankTierClass } from "../../lib/rankings";
@@ -1041,7 +1041,7 @@ function PlayerPage() {
 
           {/* Secondary stats strip: compact inline row for the remaining mirror stats */}
           <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <CompactStat label="PP" value={formatNumber(Math.round(stats.pp))} accent />
+            <PpStat pp={stats.pp} variants={stats.variants} />
             <CompactStat label="Accuracy" value={formatAccuracy(stats.hit_accuracy / 100)} />
             <CompactStat label="Play Count" value={formatNumber(stats.play_count)} />
             <CompactStat label="Play Time" value={`${formatNumber(Math.floor((stats.play_time ?? 0) / 3600))}h`} />
@@ -1782,6 +1782,44 @@ function CompactStat({ label, value, accent }: { label: string; value: string; a
     <div className="bg-osu-b4 rounded-xl px-4 py-2.5 border border-osu-b3/20 min-h-[46px] flex items-center justify-between gap-3">
       <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</span>
       <span className={`text-base font-bold tabular-nums ${accent ? "text-osu-yellow" : "text-white"}`}>{value}</span>
+    </div>
+  );
+}
+
+// PP stat: overall figure keeps the standard CompactStat shape on the left,
+// with a tidy 4k/7k pp split anchored to the right edge. The split is only
+// shown when both keymodes have pp — a single keymode carries no comparison,
+// so single-keymode players keep the plain compact look. Each keymode row
+// carries its global / country rank in a hover title.
+function PpStat({ pp, variants }: { pp: number; variants?: OsuManiaVariant[] }) {
+  const withPp = (variants ?? [])
+    .filter((v) => v.mode === "mania" && v.pp > 0)
+    .sort((a, b) => a.variant.localeCompare(b.variant));
+  const keymodes = withPp.length >= 2 ? withPp : [];
+
+  return (
+    <div className="bg-osu-b4 rounded-xl px-4 py-2.5 border border-osu-b3/20 min-h-[46px] flex items-center justify-between gap-3">
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">PP</span>
+        <span className="text-base font-bold tabular-nums text-osu-yellow leading-none">{formatNumber(Math.round(pp))}</span>
+      </div>
+      {keymodes.length > 0 && (
+        <div className="flex flex-col gap-1 text-[10px] tabular-nums shrink-0">
+          {keymodes.map((v) => (
+            <div
+              key={v.variant}
+              className="flex items-center gap-1.5"
+              title={[
+                v.global_rank != null ? `#${formatNumber(v.global_rank)} global` : null,
+                v.country_rank != null ? `#${formatNumber(v.country_rank)} country` : null,
+              ].filter(Boolean).join("  •  ") || undefined}
+            >
+              <span className="font-bold uppercase text-osu-f1/70">{v.variant}</span>
+              <span className="font-semibold text-white/85">{formatNumber(Math.round(v.pp))}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
