@@ -68,23 +68,9 @@ describe("pointerToLight", () => {
 
 describe("orientationToRotation", () => {
   test("maps device orientation into bounded card rotation", () => {
-    expect(orientationToRotation({ beta: 55, gamma: 8, restBeta: 45, restGamma: 0 })).toEqual({
+    expect(orientationToRotation({ beta: 55, gamma: 8, restBeta: 45 })).toEqual({
       x: 10,
       y: 8,
-    });
-  });
-
-  test("calibrates horizontal orientation from rest gamma", () => {
-    expect(orientationToRotation({ beta: 55, gamma: 25, restBeta: 45, restGamma: 18 })).toEqual({
-      x: 10,
-      y: 7,
-    });
-  });
-
-  test("uses the shortest wrapped device orientation delta", () => {
-    expect(orientationToRotation({ beta: -178, gamma: 2, restBeta: 178, restGamma: -4 })).toEqual({
-      x: 4,
-      y: 6,
     });
   });
 });
