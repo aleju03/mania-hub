@@ -13,8 +13,7 @@ import { Pagination } from "../components/ui/Pagination";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { SnipeEvent, SnipesScanStatus } from "../lib/types";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useSelectedCountry, type SnipesFilters, type SnipesKeyFilter, type SnipesRange } from "../store";
-import { pageSeo } from "../lib/seo";
-import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
+import { parseCountrySearchParam } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { startProgressPoll } from "../lib/progress-poll";
 import { fetchLiveSnipesSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
@@ -66,16 +65,12 @@ export const Route = createFileRoute("/snipes")({
   head: ({ match }) => {
     const country = match.search.country;
     const countryName = country ? getCountryName(country) : null;
-    return pageSeo({
-      title: countryName ? `Snipes - ${countryName}` : "Snipes",
-      description: countryName
-        ? `Track when osu!mania #1 scores change hands in ${countryName}.`
-        : "Track when osu!mania #1 scores change hands in your country.",
-      path: withSearchParams("/snipes", { country }),
-      origin: match.context.origin,
-      social: false,
-      noindex: true,
-    });
+    return {
+      meta: [
+        { title: countryName ? `Snipes - ${countryName}` : "Snipes" },
+        { name: "robots", content: "noindex, nofollow" },
+      ],
+    };
   },
   search: {
     middlewares: [stripSearchParams(DEFAULT_SNIPES_SEARCH)],

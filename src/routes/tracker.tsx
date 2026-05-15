@@ -31,8 +31,7 @@ import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
 import { TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useSelectedCountry } from "../store";
 import type { LeanTrackerScore } from "../lib/types";
-import { pageSeo } from "../lib/seo";
-import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
+import { parseCountrySearchParam } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { fetchLiveTrackerSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
 
@@ -79,16 +78,12 @@ export const Route = createFileRoute("/tracker")({
   head: ({ match }) => {
     const country = match.search.country;
     const countryName = country ? getCountryName(country) : null;
-    return pageSeo({
-      title: countryName ? `Live score tracker - ${countryName}` : "Live score tracker",
-      description: countryName
-        ? `Live score feed for tracked osu!mania players in ${countryName}.`
-        : "Live score feed for tracked osu!mania players in your country.",
-      path: withSearchParams("/tracker", { country }),
-      origin: match.context.origin,
-      social: false,
-      noindex: true,
-    });
+    return {
+      meta: [
+        { title: countryName ? `Live score tracker - ${countryName}` : "Live score tracker" },
+        { name: "robots", content: "noindex, nofollow" },
+      ],
+    };
   },
   component: ScoresPage,
 });
