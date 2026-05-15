@@ -98,6 +98,14 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("showHealthBar: false");
   });
 
+  it("keeps combo digits on fixed-width advances", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("private measureTabularDigitAdvance(");
+    expect(source).toContain("this.renderTabularComboText(text, playfieldCenterX, comboY, fontSize, comboFont, state);");
+    expect(source).toContain("const totalWidth = advance * text.length;");
+  });
+
   it("uses the saved replay skin for chart previews", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "../../routes/maps.tsx"), "utf8");
 

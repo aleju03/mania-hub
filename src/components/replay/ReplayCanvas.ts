@@ -2290,6 +2290,19 @@ export class ManiaReplayRenderer {
     return context.measureText(text).width;
   }
 
+  private measureTabularDigitAdvance(
+    fontSize: number,
+    fontWeight: ReplayComboFontStyle["weight"] | "400" | "700" = "400",
+    fontStyle: "normal" | "italic" = "normal",
+    fontFamily = "Torus, sans-serif",
+  ): number {
+    let advance = 0;
+    for (let digit = 0; digit <= 9; digit++) {
+      advance = Math.max(advance, this.measureTextWidth(String(digit), fontSize, fontWeight, fontStyle, fontFamily));
+    }
+    return advance || fontSize * 0.58;
+  }
+
   private getTextOverlayWidth(
     text: string,
     fontSize: number,
@@ -2689,22 +2702,39 @@ export class ManiaReplayRenderer {
     const drawCombo = (state: { value: number; scaleX: number; scaleY: number; alpha: number; color: string; tint: number }) => {
       const text = String(state.value);
       if (this.skinSettings.comboFontSet === DEFAULT_REPLAY_COMBO_FONT_SET && this.renderComboImages(text, playfieldCenterX, comboY, layout, state)) return;
-      this.addText(text, playfieldCenterX, comboY, {
+      this.renderTabularComboText(text, playfieldCenterX, comboY, fontSize, comboFont, state);
+    };
+
+    if (animation) drawCombo(animation);
+    if (breakAnimation) drawCombo(breakAnimation);
+  }
+
+  private renderTabularComboText(
+    text: string,
+    centerX: number,
+    centerY: number,
+    fontSize: number,
+    comboFont: ReplayComboFontStyle,
+    animation: { scaleX: number; scaleY: number; alpha: number; color: string },
+  ) {
+    const advance = this.measureTabularDigitAdvance(fontSize, comboFont.weight, comboFont.style, comboFont.family);
+    const totalWidth = advance * text.length;
+    const startX = centerX - totalWidth / 2 + advance / 2;
+
+    Array.from(text).forEach((char, index) => {
+      this.addText(char, centerX + (startX + advance * index - centerX) * animation.scaleX, centerY, {
         fontSize,
-        fill: state.color,
-        alpha: state.alpha * 0.85,
+        fill: animation.color,
+        alpha: animation.alpha * 0.85,
         fontFamily: comboFont.family,
         fontWeight: comboFont.weight,
         fontStyle: comboFont.style,
         anchorX: 0.5,
         anchorY: 0.5,
-        scaleX: state.scaleX,
-        scaleY: state.scaleY,
+        scaleX: animation.scaleX,
+        scaleY: animation.scaleY,
       });
-    };
-
-    if (animation) drawCombo(animation);
-    if (breakAnimation) drawCombo(breakAnimation);
+    });
   }
 
   private getComboAnimationState(): { value: number; scaleX: number; scaleY: number; alpha: number; color: string; tint: number } | null {
