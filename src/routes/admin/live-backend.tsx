@@ -13,6 +13,7 @@ import {
   type LiveEventName,
 } from "../../lib/live-backend";
 import { formatNumber, formatTimeAgo } from "../../lib/format";
+import { getCountryFlagUrl, getCountryName } from "../../lib/country";
 
 type ConnectionState = "idle" | "connecting" | "open" | "error";
 
@@ -42,6 +43,16 @@ interface LiveBackendStatus {
     newestError: string | null;
   }>;
   roster?: Array<{ country: string; users: number; refreshedAt: string | null }>;
+  countries?: Array<{
+    country: string;
+    status: "active" | "warm" | "paused";
+    pinned: boolean;
+    firstRequestedAt: string;
+    lastRequestedAt: string;
+    lastRosterRefreshAt: string | null;
+    lastScoreAt: string | null;
+    isWarm: boolean;
+  }>;
   rate: {
     hardPerMinute: number;
     usedLastMinute: number;
@@ -318,6 +329,10 @@ function LiveBackendPage() {
             </div>
           </Section>
 
+          <Section title="Countries" subtitle="Which countries the backend is currently tracking">
+            <CountriesCard status={status} />
+          </Section>
+
           {(status?.worker?.lanes?.length ?? 0) > 0 ? (
             <Section title="Workers" subtitle="What each lane is processing right now">
               <WorkerLanesCard status={status} />
@@ -523,6 +538,93 @@ function StatusCard({ status, connectionState, country }: { status: LiveBackendS
         <DetailRow label="Worker id" value={status?.worker?.workerId ?? "unknown"} />
       </div>
     </SectionCard>
+  );
+}
+
+const COUNTRY_STATUS_RANK: Record<string, number> = { active: 0, warm: 1, paused: 2 };
+
+function CountriesCard({ status }: { status: LiveBackendStatus | null }) {
+  const countries = status?.countries ?? [];
+  const rosterByCountry = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const entry of status?.roster ?? []) map.set(entry.country, entry.users);
+    return map;
+  }, [status?.roster]);
+  const sorted = useMemo(
+    () =>
+      [...countries].sort((a, b) => {
+        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+        const rank = (COUNTRY_STATUS_RANK[a.status] ?? 3) - (COUNTRY_STATUS_RANK[b.status] ?? 3);
+        if (rank !== 0) return rank;
+        return a.country.localeCompare(b.country);
+      }),
+    [countries],
+  );
+  const activeCount = countries.filter((entry) => entry.status !== "paused").length;
+  return (
+    <SectionCard
+      title="Tracked countries"
+      subtitle={
+        countries.length
+          ? `${formatNumber(activeCount)} active of ${formatNumber(countries.length)} known. Pinned countries are always tracked.`
+          : "Country registry not loaded yet."
+      }
+    >
+      {sorted.length === 0 ? (
+        <div className="text-[11px] text-osu-f1">No countries registered.</div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {sorted.map((entry) => (
+            <CountryRow key={entry.country} entry={entry} users={rosterByCountry.get(entry.country) ?? null} />
+          ))}
+        </div>
+      )}
+    </SectionCard>
+  );
+}
+
+function CountryRow({
+  entry,
+  users,
+}: {
+  entry: NonNullable<LiveBackendStatus["countries"]>[number];
+  users: number | null;
+}) {
+  const statusTone =
+    entry.status === "active" ? "text-osu-green" : entry.status === "paused" ? "text-osu-red" : "text-osu-yellow";
+  return (
+    <div className="rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2">
+      <div className="flex items-center gap-2.5">
+        <img
+          src={getCountryFlagUrl(entry.country)}
+          alt={entry.country}
+          className="h-4 w-6 rounded-sm object-cover flex-shrink-0"
+          loading="lazy"
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-bold text-white truncate">{getCountryName(entry.country)}</span>
+            <span className="text-[10px] font-mono text-osu-c2">{entry.country}</span>
+            {entry.pinned ? (
+              <span className="text-[9px] uppercase tracking-wider font-semibold text-osu-c2/80">pinned</span>
+            ) : null}
+          </div>
+          <div className="text-[10px] text-osu-f1">
+            {users == null ? "roster not loaded" : `${formatNumber(users)} tracked users`}
+          </div>
+        </div>
+        <span className={`text-[10px] font-semibold uppercase tracking-wider ${statusTone}`}>{entry.status}</span>
+      </div>
+      <div className="mt-1.5 flex items-center gap-3 text-[10px] text-osu-f1">
+        <span>
+          <span className="text-osu-c2/80">last score</span> {entry.lastScoreAt ? formatTimeAgo(entry.lastScoreAt) : "never"}
+        </span>
+        <span>
+          <span className="text-osu-c2/80">roster refresh</span>{" "}
+          {entry.lastRosterRefreshAt ? formatTimeAgo(entry.lastRosterRefreshAt) : "never"}
+        </span>
+      </div>
+    </div>
   );
 }
 
