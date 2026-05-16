@@ -650,7 +650,7 @@ describe("live backend", () => {
     expect(await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" })).toBe(false);
   });
 
-  it("deduplicates repeated best-score ids during top-play confirmation", async () => {
+  it("deduplicates repeated best-score ids without storing top-score rows", async () => {
     const { db, events, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
     await ingestor.ingestBatch([scores[0]]);
@@ -662,35 +662,38 @@ describe("live backend", () => {
 
     await expect(confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" })).resolves.toBe(true);
 
-    const row = (await exec(db, "select count(*) as count from user_top_scores where user_id = 101 and score_id = 9001")).rows[0];
-    expect(Number(row.count)).toBe(1);
+    const cached = (await exec(db, "select count(*) as count from user_top_scores where user_id = 101")).rows[0];
+    expect(Number(cached.count)).toBe(0);
+    const user = (await exec(db, "select top_play_min_pp, top_scores_refreshed_at from users where user_id = 101")).rows[0];
+    expect(Number(user.top_play_min_pp)).toBe(0);
+    expect(String(user.top_scores_refreshed_at)).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
-  it("upserts and cleans stale rows during top-play score cache refresh", async () => {
+  it("updates the lightweight top-play threshold during confirmation", async () => {
     const { db, events, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
     await ingestor.ingestBatch([scores[0]]);
     const best = await fixture<OscScore[]>("top-best.json");
-    await exec(
-      db,
-      `insert into user_top_scores (user_id, score_id, position, score_json, pp, weighted_pp, ended_at, refreshed_at)
-       values
-         (101, 9001, 99, '{}', 1, 1, null, '2026-05-10T00:00:00.000Z'),
-         (101, 7777, 100, '{}', 1, 1, null, '2026-05-10T00:00:00.000Z')`,
+    const bestScores = Array.from(
+      { length: 100 },
+      (_, index): OscScore => ({
+        ...best[0],
+        id: index === 0 ? 9001 : 10_000 + index,
+        pp: 300 - index,
+      }),
     );
     const osu = {
       getBeatmapUserScoresAll: async (_beatmapId: number, _userId: number, _caller?: string) => [],
-      getUserBestScores: async (_userId: number, _caller?: string) => best,
+      getUserBestScores: async (_userId: number, _caller?: string) => bestScores,
     };
 
     await expect(confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" })).resolves.toBe(true);
 
-    const refreshed = (await exec(db, "select position, pp, score_json from user_top_scores where user_id = 101 and score_id = 9001")).rows[0];
-    expect(Number(refreshed.position)).toBe(0);
-    expect(Number(refreshed.pp)).toBe(best[0].pp);
-    expect(JSON.parse(String(refreshed.score_json)).id).toBe(9001);
-    const stale = (await exec(db, "select count(*) as count from user_top_scores where user_id = 101 and score_id = 7777")).rows[0];
-    expect(Number(stale.count)).toBe(0);
+    const user = (await exec(db, "select top_play_min_pp, top_scores_refreshed_at from users where user_id = 101")).rows[0];
+    expect(Number(user.top_play_min_pp)).toBe(201);
+    expect(String(user.top_scores_refreshed_at)).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    const cached = (await exec(db, "select count(*) as count from user_top_scores where user_id = 101")).rows[0];
+    expect(Number(cached.count)).toBe(0);
   });
 
   it("confirms oSC top plays by legacy score id when osu! best scores use the stable id", async () => {
