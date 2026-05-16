@@ -390,7 +390,7 @@ async function runSnipesScan(
           recentDone += 1;
           writeSnipesScanStatus(country, {
             phase: "recent",
-            label: `Loading recent plays from top ${players.length} players`,
+            label: `Loading recent plays from ${players.length} roster players`,
             current: recentDone,
             total: players.length,
           });

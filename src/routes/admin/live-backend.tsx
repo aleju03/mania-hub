@@ -1,5 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { Activity, Database, HelpCircle, History, Pause, Play, Radio, RefreshCw, Server, Signal, Trash2, UserRound, Wifi, WifiOff } from "lucide-react";
+import { Activity, Crosshair, Database, HelpCircle, History, Pause, Play, Radio, RefreshCw, Server, Signal, Trash2, UserRound, Wifi, WifiOff, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import {
@@ -345,6 +345,9 @@ function LiveBackendPage() {
               onDeleteCountry={(entry) => {
                 void runAdminAction(`delete-country-${entry.country}`, `/api/admin/delete-country?country=${encodeURIComponent(entry.country)}`);
               }}
+              onSetCountryTier={(entry, tier) => {
+                void runAdminAction(`set-tier-${entry.country}`, `/api/admin/set-country-tier?country=${encodeURIComponent(entry.country)}&tier=${encodeURIComponent(tier)}`);
+              }}
             />
           </Section>
 
@@ -587,11 +590,13 @@ function CountriesCard({
   busy,
   onToggleCountry,
   onDeleteCountry,
+  onSetCountryTier,
 }: {
   status: LiveBackendStatus | null;
   busy: string | null;
   onToggleCountry: (entry: CountryEntry) => void;
   onDeleteCountry: (entry: CountryEntry) => void;
+  onSetCountryTier: (entry: CountryEntry, tier: CountryFeatureTier) => void;
 }) {
   const [sortMode, setSortMode] = useState<CountrySortMode>("status");
   const [statusFilters, setStatusFilters] = useState<Record<CountryDisplayStatus, boolean>>({
@@ -770,9 +775,10 @@ function CountriesCard({
               key={entry.country}
               entry={entry}
               users={rosterByCountry.get(entry.country) ?? null}
-              busy={busy === `pause-country-${entry.country}` || busy === `resume-country-${entry.country}` || busy === `delete-country-${entry.country}`}
+              busy={busy === `pause-country-${entry.country}` || busy === `resume-country-${entry.country}` || busy === `delete-country-${entry.country}` || busy === `set-tier-${entry.country}`}
               onToggle={() => onToggleCountry(entry)}
               onDelete={() => onDeleteCountry(entry)}
+              onSetTier={(tier) => onSetCountryTier(entry, tier)}
             />
           ))}
         </div>
@@ -787,12 +793,14 @@ function CountryRow({
   busy,
   onToggle,
   onDelete,
+  onSetTier,
 }: {
   entry: CountryEntry;
   users: number | null;
   busy: boolean;
   onToggle: () => void;
   onDelete: () => void;
+  onSetTier: (tier: CountryFeatureTier) => void;
 }) {
   const displayStatus = getCountryDisplayStatus(entry);
   const statusTone = displayStatus === "paused" || displayStatus === "idle" ? "text-osu-red" : displayStatus === "active" ? "text-osu-green" : "text-osu-yellow";
@@ -800,7 +808,11 @@ function CountryRow({
   const activeUsers = entry.activeUsers ?? 0;
   const shouldResume = entry.status === "paused" || !entry.isWarm;
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Set when the Snipes tier cell is clicked: snipes enables the expensive
+  // snipe board seeding, so it takes a second deliberate confirm click.
+  const [confirmSnipes, setConfirmSnipes] = useState(false);
   const deleteRef = useRef<HTMLButtonElement | null>(null);
+  const snipesRow = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!confirmDelete) return;
     const id = window.setTimeout(() => setConfirmDelete(false), 4_000);
@@ -814,7 +826,22 @@ function CountryRow({
     };
   }, [confirmDelete]);
   useEffect(() => {
-    if (busy) setConfirmDelete(false);
+    if (!confirmSnipes) return;
+    const id = window.setTimeout(() => setConfirmSnipes(false), 5_000);
+    const onPointerDown = (event: PointerEvent) => {
+      if (!snipesRow.current?.contains(event.target as Node)) setConfirmSnipes(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      window.clearTimeout(id);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [confirmSnipes]);
+  useEffect(() => {
+    if (busy) {
+      setConfirmDelete(false);
+      setConfirmSnipes(false);
+    }
   }, [busy]);
   return (
     <div className="rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2">
@@ -832,7 +859,6 @@ function CountryRow({
             {entry.pinned ? (
               <span className="text-[9px] uppercase tracking-wider font-semibold text-osu-c2/80">pinned</span>
             ) : null}
-            <span className={`text-[9px] uppercase tracking-wider font-semibold ${countryFeatureTierTone(featureTier)}`}>tier {countryFeatureTierLabel(featureTier)}</span>
           </div>
           <div className="text-[10px] text-osu-f1">
             {users == null ? "roster not loaded" : `${formatNumber(users)} roster users`}
@@ -883,6 +909,72 @@ function CountryRow({
           )}
         </div>
       </div>
+      <div className="mt-2 flex items-center gap-2">
+        <span className="text-[9px] font-semibold uppercase tracking-wider text-osu-f1">Tier</span>
+        {confirmSnipes ? (
+          <div
+            ref={snipesRow}
+            className="flex items-center gap-1 rounded-md border border-osu-pink/50 bg-osu-pink/10 p-1"
+          >
+            <span className="px-1.5 text-[10px] font-semibold uppercase tracking-wider text-osu-pink-light">
+              Enable snipe board seeding?
+            </span>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setConfirmSnipes(false);
+                onSetTier("snipes");
+              }}
+              className="inline-flex h-6 items-center gap-1 rounded px-2 text-[10px] font-semibold uppercase tracking-wider text-white bg-osu-pink/30 transition hover:bg-osu-pink/45 disabled:opacity-50 cursor-pointer"
+            >
+              <Crosshair className="h-3 w-3" />
+              Confirm
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setConfirmSnipes(false)}
+              aria-label="Cancel enabling snipes"
+              className="inline-flex h-6 w-6 items-center justify-center rounded text-osu-f1 transition hover:text-white disabled:opacity-50 cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 rounded-md border border-osu-b3/25 bg-osu-b5/50 p-1">
+            {COUNTRY_TIER_OPTIONS.map((tier) => {
+              const active = tier.value === featureTier;
+              return (
+                <button
+                  key={tier.value}
+                  type="button"
+                  disabled={busy}
+                  aria-pressed={active}
+                  title={tier.blurb}
+                  onClick={() => {
+                    if (tier.value === featureTier) return;
+                    // Snipes enables the expensive board seeding: confirm first.
+                    if (tier.value === "snipes") {
+                      setConfirmSnipes(true);
+                      return;
+                    }
+                    onSetTier(tier.value);
+                  }}
+                  className={`flex items-center gap-1.5 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors duration-[120ms] disabled:opacity-50 ${
+                    active
+                      ? `bg-osu-b3/55 ${tier.tone}`
+                      : "text-osu-f1 hover:text-osu-l2 cursor-pointer"
+                  }`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${active ? tier.dot : "bg-osu-b3"}`} />
+                  {tier.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-osu-f1">
         <span>
           <span className="text-osu-c2/80">page users</span> {formatNumber(activeUsers)}
@@ -909,20 +1001,6 @@ function getCountryFeatureTier(entry: CountryEntry): CountryFeatureTier {
   return entry.featureTier === "snipes" || entry.featureTier === "live" || entry.featureTier === "maps_warm" || entry.featureTier === "indexed"
     ? entry.featureTier
     : "indexed";
-}
-
-function countryFeatureTierLabel(tier: CountryFeatureTier): string {
-  switch (tier) {
-    case "snipes": return "snipes";
-    case "live": return "live";
-    case "maps_warm": return "maps";
-    case "indexed": return "indexed";
-    default: return "indexed";
-  }
-}
-
-function countryFeatureTierTone(tier: CountryFeatureTier): string {
-  return COUNTRY_TIER_OPTIONS.find((option) => option.value === tier)?.tone ?? "text-osu-f1";
 }
 
 function getCountryDisplayStatus(entry: CountryEntry): CountryDisplayStatus {

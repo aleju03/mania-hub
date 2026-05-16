@@ -18,6 +18,7 @@ import { getReplaySearch } from "../lib/replay-navigation";
 import { startProgressPoll } from "../lib/progress-poll";
 import { fetchLiveSnipesSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
+import { SnipesNotTracked } from "../components/SnipesNotTracked";
 import { useCountryWarming } from "../lib/use-country-warming";
 
 type KeyFilter = SnipesKeyFilter;
@@ -45,9 +46,6 @@ const RANGE_MS: Record<Exclude<RangeFilter, "all">, number> = {
 
 const PAGE_SIZE = 25;
 const EMPTY_SNIPES: SnipeEvent[] = [];
-// Kept in sync with SNIPES_PLAYER_LIMIT in src/lib/osu.ts (15). UI-only copy,
-// not a functional dep, so not worth threading through a shared export.
-const SNIPES_PLAYER_LIMIT_LABEL = 15;
 
 const INLINE_PHASE_LABEL: Record<SnipesScanStatus["phase"], string> = {
   roster: "Loading country roster…",
@@ -125,7 +123,10 @@ function SnipesPage() {
   const refreshInProgressRef = useRef(false);
   const hasRestoredRememberedFiltersRef = useRef(false);
   const liveBackendEnabled = isLiveBackendConfigured();
-  const { warming } = useCountryWarming(selectedCountry);
+  const { warming, featureTier } = useCountryWarming(selectedCountry);
+  // Country is below the snipes tier: the backend won't seed/update snipe
+  // boards for it, so there is nothing live to wait for here.
+  const snipesTierDisabled = liveBackendEnabled && featureTier != null && featureTier !== "snipes";
 
   // Render-driving "elapsed" timer for the secondary header indicator.
   useEffect(() => {
@@ -511,7 +512,11 @@ function SnipesPage() {
 
       {warming && <CountryWarming country={selectedCountry} />}
 
-      {!warming && (
+      {!warming && snipesTierDisabled && (
+        <SnipesNotTracked country={selectedCountry} hasOldData={snipes.length > 0} />
+      )}
+
+      {!warming && !(snipesTierDisabled && snipes.length === 0) && (
       <>
       {/* ── Filter bar ─────────────────────────────────────────────────── */}
       <div className="bg-osu-d5 border-b border-osu-b3/20">
@@ -680,7 +685,7 @@ function SnipesPage() {
                 <div className="text-center py-16 text-osu-f1 text-sm">
                   <p>No snipes tracked yet for {countryName}.</p>
                   <p className="mt-1 text-[11px]">
-                    Snipes appear as top-{SNIPES_PLAYER_LIMIT_LABEL} country players push each other down the per-map country leaderboard.
+                    Snipes appear when tracked country players push each other down a beatmap's country leaderboard.
                   </p>
                   {snipesFetchedAt && !liveBackendEnabled && (
                     <p className="mt-2 text-[10px] text-osu-f1/60">
@@ -1069,7 +1074,7 @@ const PHASE_ORDER: SnipesScanStatus["phase"][] = [
 ];
 
 const PHASE_DESCRIPTIONS: Record<SnipesScanStatus["phase"], string> = {
-  roster: "Loading the country's top 15 mania players.",
+  roster: "Loading the country roster.",
   recent: "Pulling each player's recent plays from the osu! API.",
   compare: "Cross-checking those plays against the saved country leaderboards.",
   seed: "Looking up country rankings on beatmaps we haven't seen yet.",

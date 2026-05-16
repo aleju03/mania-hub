@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Config } from "../config.js";
-import { activateCountry, deleteCountryData, getCountryRegistry, isCountryFeatureAtLeast, setCountryPaused } from "../countries.js";
+import { activateCountry, deleteCountryData, getCountryRegistry, isCountryFeatureAtLeast, setCountryFeatureTier, setCountryPaused, type CountryFeatureTier } from "../countries.js";
 import type { Db } from "../db.js";
 import { dbHealth, exec, parseJson } from "../db.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
@@ -128,6 +128,8 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       country: activated,
       // Cold country: no roster projection yet, so every country surface is empty until warmup runs.
       warming: activated.lastRosterRefreshAt == null,
+      // Feature tier caps what the backend does for this country (snipes is the gated one).
+      featureTier: activated.featureTier,
     });
     return true;
   }
@@ -320,6 +322,24 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     const paused = url.pathname === "/api/admin/pause-country";
     sendJson(req, res, ctx, 200, { ok: true, country: await setCountryPaused(ctx.db, ctx.config, country, paused) });
+    return true;
+  }
+  if (url.pathname === "/api/admin/set-country-tier") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    const tier = parseCountryFeatureTierParam(url.searchParams.get("tier"));
+    if (!tier) {
+      sendJson(req, res, ctx, 400, { error: "invalid_tier" });
+      return true;
+    }
+    const updated = await setCountryFeatureTier(ctx.db, ctx.config, country, tier);
+    await enqueueRosterRefreshes(ctx.queue, [updated.country]);
+    if (isCountryFeatureAtLeast(updated.featureTier, "maps_warm")) {
+      await enqueueMapsRefreshIfDue(ctx.db, ctx.queue, updated.country, ctx.config.mapsRefreshIntervalMs, { priority: 90 });
+    }
+    sendJson(req, res, ctx, 200, { ok: true, country: updated });
     return true;
   }
   if (url.pathname === "/api/admin/delete-country") {
@@ -606,7 +626,14 @@ function routeUsesCountry(pathname: string): boolean {
     || pathname === "/api/events"
     || pathname.startsWith("/api/snapshots/")
     || pathname === "/api/admin/refresh-roster"
-    || pathname === "/api/admin/refresh-maps";
+    || pathname === "/api/admin/refresh-maps"
+    || pathname === "/api/admin/set-country-tier";
+}
+
+function parseCountryFeatureTierParam(value: string | null): CountryFeatureTier | null {
+  return value === "indexed" || value === "maps_warm" || value === "live" || value === "snipes"
+    ? value
+    : null;
 }
 
 function isDisallowedOrigin(req: IncomingMessage, ctx: Pick<HttpContext, "config">): boolean {

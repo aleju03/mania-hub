@@ -13,7 +13,8 @@ import { searchUsers } from "../../lib/osu";
 import { DEFAULT_SNIPES_FILTERS, SNIPES_FILTERS_STORAGE_KEY, TOP_PLAYS_RANGE_STORAGE_KEY, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
 import { readCountryFromSearchStr } from "../../lib/country-search";
 import { getCountryFlagGradient, getCountryFlagUrl } from "../../lib/country";
-import { activateLiveCountry } from "../../lib/live-backend";
+import { isLiveBackendConfigured } from "../../lib/live-backend";
+import { useCountryWarming } from "../../lib/use-country-warming";
 import { useDynamicFavicon } from "../../lib/favicon";
 
 const links = [
@@ -101,6 +102,10 @@ export function Nav() {
   const setSelectedCountry = useAppStore((state) => state.setSelectedCountry);
   const routeCountry = readCountryFromSearchStr(location.searchStr);
   const selectedCountry = routeCountry ?? fallbackCountry;
+  const liveBackendConfigured = isLiveBackendConfigured();
+  // Resolves the country's feature tier (cached per country, so a switch
+  // between two already-seen countries never flickers the Snipes tab).
+  const { featureTier: selectedCountryFeatureTier } = useCountryWarming(selectedCountry);
   const devMode = auth.canUseDevFeatures;
   const adminMode = auth.canUseAdminFeatures;
   const devToolsLabel = adminMode ? "Admin" : (
@@ -110,7 +115,11 @@ export function Nav() {
   const returnTo = `${location.pathname}${location.searchStr}`;
   const loginHref = `/api/auth/osu?next=${encodeURIComponent(returnTo)}`;
   const logoutHref = `/api/auth/logout?next=${encodeURIComponent(returnTo)}`;
-  const visibleLinks = links;
+  // When the live backend is off, Snipes is always shown. Otherwise show it
+  // only once the tier is known to be "snipes" — while the tier is still
+  // unknown (first-ever visit) the tab stays hidden rather than flashing in.
+  const showSnipesLink = !liveBackendConfigured || selectedCountryFeatureTier === "snipes";
+  const visibleLinks = showSnipesLink ? links : links.filter((link) => link.id !== "snipes");
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
   const snipesFilters = useAppStore((state) => state.snipesFiltersByCountry[selectedCountry] ?? DEFAULT_SNIPES_FILTERS);
   const hydrated = useHasHydrated();
@@ -118,7 +127,7 @@ export function Nav() {
   const snipesFiltersForLink = hydrated ? snipesFilters : DEFAULT_SNIPES_FILTERS;
   const settingsActive = location.pathname.startsWith("/settings");
   const current = visibleLinks.find((l) => location.pathname.startsWith(l.to === "/" ? "/__home" : l.to)) ||
-    (location.pathname === "/" ? links[0] : location.pathname.startsWith("/player") || settingsActive ? null : links[0]);
+    (location.pathname === "/" ? links[0] : location.pathname.startsWith("/player") || settingsActive || (location.pathname === "/snipes" && !showSnipesLink) ? null : visibleLinks[0]);
 
   // Active-link indicator: single always-mounted bar, measured from the
   // active link's rect. Replaces an earlier Framer Motion `layoutId` shared
@@ -248,7 +257,6 @@ export function Nav() {
 
   const handleCountrySelect = (country: string) => {
     setSelectedCountry(country);
-    void activateLiveCountry(country);
     setMenuOpen(false);
 
     if (location.pathname === "/") {

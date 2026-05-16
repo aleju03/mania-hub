@@ -12,6 +12,8 @@ export type LiveEventName =
   | "snipe"
   | "job_status";
 
+export type LiveCountryFeatureTier = "indexed" | "maps_warm" | "live" | "snipes";
+
 export interface LiveTrackerSnapshot {
   country: string;
   scores: LeanTrackerScore[];
@@ -111,6 +113,14 @@ function normalizeAdminPath(input: unknown): string {
     const country = url.searchParams.get("country");
     if (country && /^[A-Za-z]{2}$/.test(country)) return `/api/admin/refresh-maps?country=${country.toUpperCase()}`;
   }
+  if (url.pathname === "/api/admin/set-country-tier") {
+    const country = url.searchParams.get("country");
+    const tier = url.searchParams.get("tier");
+    const validTier = tier === "indexed" || tier === "maps_warm" || tier === "live" || tier === "snipes";
+    if (country && /^[A-Za-z]{2}$/.test(country) && validTier) {
+      return `/api/admin/set-country-tier?country=${country.toUpperCase()}&tier=${tier}`;
+    }
+  }
   throw new Error("Unsupported live backend admin action.");
 }
 
@@ -173,6 +183,15 @@ export interface LiveCountryActivation {
   // True while the country has no roster projection yet, so every country
   // surface (rankings/maps/tracker/...) is empty until backend warmup runs.
   warming: boolean;
+  // Feature tier caps what the backend does for this country. Snipes is the
+  // gated tier (enables the expensive snipe board seeding).
+  featureTier: LiveCountryFeatureTier;
+}
+
+function readCountryFeatureTier(value: unknown): LiveCountryFeatureTier {
+  return value === "snipes" || value === "live" || value === "maps_warm" || value === "indexed"
+    ? value
+    : "indexed";
 }
 
 export async function activateLiveCountry(country: string): Promise<LiveCountryActivation | null> {
@@ -185,7 +204,11 @@ export async function activateLiveCountry(country: string): Promise<LiveCountryA
     });
     if (!response.ok) return null;
     const body = (await response.json()) as Partial<LiveCountryActivation>;
-    return { ok: body.ok === true, warming: body.warming === true };
+    return {
+      ok: body.ok === true,
+      warming: body.warming === true,
+      featureTier: readCountryFeatureTier(body.featureTier),
+    };
   } catch {
     return null;
   }

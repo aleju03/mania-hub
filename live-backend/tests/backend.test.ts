@@ -13,7 +13,7 @@ import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { handleSse } from "../src/live/sse.js";
 import { OscBackfill } from "../src/osc/backfill.js";
 import { refreshCountryRoster } from "../src/rosters/country-rosters.js";
-import { activateCountry, canSeedSnipesForCountry, deleteCountryData, getActiveCountryCodes, getIndexedCountryCodes, getMapsWarmCountryCodes, setCountryPaused } from "../src/countries.js";
+import { activateCountry, canSeedSnipesForCountry, deleteCountryData, getActiveCountryCodes, getIndexedCountryCodes, getMapsWarmCountryCodes, setCountryFeatureTier, setCountryPaused } from "../src/countries.js";
 import { CountryClientTracker } from "../src/live/country-clients.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -158,6 +158,28 @@ describe("live backend", () => {
 
     expect(activated.featureTier).toBe("live");
     expect(await getActiveCountryCodes(db, config)).toEqual(expect.arrayContaining(["CR", "MX"]));
+    expect(await canSeedSnipesForCountry(db, config, "MX")).toBe(false);
+  });
+
+  it("lets admins promote and demote a country from the snipes tier", async () => {
+    const { db, queue } = await setup(["CR"]);
+    const config = {
+      trackedCountries: ["CR"],
+      prewarmCountries: ["MX"],
+      mapsWarmCountries: [],
+      countryWarmTtlMs: 24 * 60 * 60 * 1000,
+      rosterRefreshIntervalMs: 24 * 60 * 60 * 1000,
+    };
+
+    await activateCountry(db, queue, config, "MX");
+    expect(await canSeedSnipesForCountry(db, config, "MX")).toBe(false);
+
+    const promoted = await setCountryFeatureTier(db, config, "MX", "snipes");
+    expect(promoted).toMatchObject({ country: "MX", featureTier: "snipes", pinned: true });
+    expect(await canSeedSnipesForCountry(db, config, "MX")).toBe(true);
+
+    const demoted = await setCountryFeatureTier(db, config, "MX", "live");
+    expect(demoted).toMatchObject({ country: "MX", featureTier: "live", pinned: false });
     expect(await canSeedSnipesForCountry(db, config, "MX")).toBe(false);
   });
 

@@ -79,6 +79,34 @@ export async function setCountryPaused(
   return row;
 }
 
+export async function setCountryFeatureTier(
+  db: Db,
+  config: CountryWarmConfig,
+  country: string,
+  tier: CountryFeatureTier,
+): Promise<CountryRegistryRow> {
+  const normalized = normalizeCountry(country);
+  const now = nowIso();
+  await ensurePinnedCountries(db, config);
+  const configuredTier = getConfiguredCountryFeatureTier(config, normalized);
+  const featureTier = maxCountryFeatureTier(tier, configuredTier);
+  const pinned = config.trackedCountries.includes(normalized) || tier === "snipes";
+  await exec(
+    db,
+    `insert into country_registry (country, status, feature_tier, pinned, first_requested_at, last_requested_at, updated_at)
+     values (?, 'warm', ?, ?, ?, ?, ?)
+     on conflict(country) do update set
+       feature_tier = excluded.feature_tier,
+       pinned = excluded.pinned,
+       last_requested_at = excluded.last_requested_at,
+       updated_at = excluded.updated_at`,
+    [normalized, featureTier, pinned ? 1 : 0, now, now, now],
+  );
+  const row = await getCountryRegistryRow(db, normalized, config);
+  if (!row) throw new Error(`Could not update country ${normalized}`);
+  return row;
+}
+
 export async function deleteCountryData(db: Db, country: string): Promise<Record<string, number>> {
   const normalized = normalizeCountry(country);
   const deleted: Record<string, number> = {};
