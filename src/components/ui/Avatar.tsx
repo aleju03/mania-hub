@@ -1,12 +1,19 @@
 import { useEffect, useState } from "react";
 
-function parseAvatarUserId(url: string | undefined): number | null {
+type ParsedAvatarUrl = {
+  userId: number;
+  version: string | null;
+};
+
+function parseAvatarUrl(url: string | undefined): ParsedAvatarUrl | null {
   if (!url) return null;
   try {
     const parsed = new URL(url, "http://localhost");
     if (parsed.hostname !== "a.ppy.sh") return null;
     const id = Number(parsed.pathname.split("/").filter(Boolean)[0]);
-    return Number.isSafeInteger(id) && id > 0 ? id : null;
+    if (!Number.isSafeInteger(id) || id <= 0) return null;
+    const version = parsed.search ? parsed.search.slice(1) : null;
+    return { userId: id, version };
   } catch {
     return null;
   }
@@ -20,12 +27,19 @@ export function avatarImageSrc(
   userId?: number | string | null,
   options?: { proxy?: boolean },
 ): string | undefined {
+  const parsedUrl = parseAvatarUrl(url);
   const parsedUserId = userId == null || userId === "" ? null : Number(userId);
   const id = parsedUserId !== null && Number.isSafeInteger(parsedUserId) && parsedUserId > 0
     ? parsedUserId
-    : parseAvatarUserId(url);
-  if (options?.proxy) return id ? `/api/avatar?u=${id}` : url;
-  if (id) return `https://a.ppy.sh/${id}`;
+    : parsedUrl?.userId;
+  const version = parsedUrl && parsedUrl.userId === id ? parsedUrl.version : null;
+  if (options?.proxy) {
+    if (!id) return url;
+    const params = new URLSearchParams({ u: String(id) });
+    if (version) params.set("v", version);
+    return `/api/avatar?${params.toString()}`;
+  }
+  if (id) return `https://a.ppy.sh/${id}${version ? `?${version}` : ""}`;
   return url;
 }
 

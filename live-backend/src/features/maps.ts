@@ -247,13 +247,58 @@ async function readMapsSnapshot(
   const refreshedMs = refreshedAt ? new Date(refreshedAt).getTime() : 0;
   const parsed = row ? parseJson<CountryMapsData | null>(row.payload_json, null) : null;
   const isUsable = isUsableMapsData(parsed);
+  const value = isUsable && parsed ? await hydrateMapsSnapshotUsers(db, parsed) : null;
   const isStale = !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs || (!!row && !isUsable);
   return {
-    value: isUsable ? parsed : null,
+    value,
     generatedAt: row?.generated_at == null ? null : String(row.generated_at),
     refreshedAt,
     isStale,
   };
+}
+
+async function hydrateMapsSnapshotUsers(db: Db, value: CountryMapsData): Promise<CountryMapsData> {
+  const ids = [...collectMapsSnapshotUserIds(value)];
+  if (ids.length === 0) return value;
+  const placeholders = ids.map(() => "?").join(",");
+  const rows = (await exec(
+    db,
+    `select user_id, username, avatar_url from users where user_id in (${placeholders})`,
+    ids,
+  )).rows;
+  const usersById = new Map(
+    rows.map((row) => [
+      Number(row.user_id),
+      {
+        username: String(row.username ?? ""),
+        avatarUrl: String(row.avatar_url ?? ""),
+      },
+    ]),
+  );
+  const applyUser = (player: { id: number; username: string; avatarUrl: string }) => {
+    const user = usersById.get(player.id);
+    if (!user) return;
+    if (user.username) player.username = user.username;
+    if (user.avatarUrl) player.avatarUrl = user.avatarUrl;
+  };
+
+  for (const entry of value.farmed) entry.players.forEach(applyUser);
+  for (const entry of value.mostPlayed) entry.players.forEach(applyUser);
+  for (const entry of value.favourites) entry.players.forEach(applyUser);
+  value.favouritesByPlayer.forEach(applyUser);
+  return value;
+}
+
+function collectMapsSnapshotUserIds(value: CountryMapsData): Set<number> {
+  const ids = new Set<number>();
+  const add = (player: { id: number }) => {
+    if (Number.isSafeInteger(player.id) && player.id > 0) ids.add(player.id);
+  };
+  for (const entry of value.farmed) entry.players.forEach(add);
+  for (const entry of value.mostPlayed) entry.players.forEach(add);
+  for (const entry of value.favourites) entry.players.forEach(add);
+  value.favouritesByPlayer.forEach(add);
+  return ids;
 }
 
 async function hasActiveMapsRefresh(db: Db, country: string): Promise<boolean> {

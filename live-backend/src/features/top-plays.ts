@@ -2,7 +2,7 @@ import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { calculateApproxPpGainMap, calculateReplacementPpGain, calculateWeightedPp, getScoreTimestamp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
-import type { CountryTopPlay, OscScore } from "../shared/types.js";
+import type { CountryTopPlay, OscScore, ScoreUser } from "../shared/types.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import type { OsuApiClient } from "../osu/client.js";
 
@@ -39,6 +39,7 @@ export async function confirmTopPlay(
   if (score.pp == null || !score.user) return false;
   const confirmedScoreId = score.id;
   const ppGain = await calculateTopPlayPpGain(osu, bestScores, score);
+  await upsertTopPlayUser(db, score.user, refreshedAt);
   const event: CountryTopPlay = {
     user: { id: score.user_id, username: score.user.username, avatar_url: score.user.avatar_url },
     score,
@@ -56,6 +57,21 @@ export async function confirmTopPlay(
   if (inserted.rowsAffected === 0) return false;
   await events.append("top_play", payload.country, event, `top_play:${payload.country}:${confirmedScoreId}`);
   return true;
+}
+
+async function upsertTopPlayUser(db: Db, user: ScoreUser, updatedAt: string): Promise<void> {
+  await exec(
+    db,
+    `insert into users (user_id, username, avatar_url, country_code, profile_json, updated_at)
+     values (?, ?, ?, ?, ?, ?)
+     on conflict(user_id) do update set
+       username = excluded.username,
+       avatar_url = excluded.avatar_url,
+       country_code = excluded.country_code,
+       profile_json = excluded.profile_json,
+       updated_at = excluded.updated_at`,
+    [user.id, user.username, user.avatar_url, user.country_code, json(user), updatedAt],
+  );
 }
 
 function dedupeScoresById(scores: OscScore[]): OscScore[] {
@@ -168,15 +184,42 @@ export async function getTopPlaysSnapshot(db: Db, country: string, window: strin
   const cutoff = new Date(Date.now() - windowMs).toISOString();
   const rows = (await exec(
     db,
-    `select payload_json from top_play_events
-     where country = ? and detected_at >= ?
-     order by pp desc, detected_at desc
+    `select e.payload_json, u.username, u.avatar_url
+     from top_play_events e
+     left join users u on u.user_id = e.user_id
+     where e.country = ? and e.detected_at >= ?
+     order by e.pp desc, e.detected_at desc
      limit 200`,
     [country, cutoff],
   )).rows;
   return {
-    popoffs: rows.map((row) => parseJson<CountryTopPlay>(row.payload_json, {} as CountryTopPlay)),
+    popoffs: rows.map(hydrateTopPlayEvent),
     scannedAt: Date.now(),
     window,
+  };
+}
+
+function hydrateTopPlayEvent(row: Record<string, unknown>): CountryTopPlay {
+  const event = parseJson<CountryTopPlay>(row.payload_json, {} as CountryTopPlay);
+  const username = row.username == null ? "" : String(row.username);
+  const avatarUrl = row.avatar_url == null ? "" : String(row.avatar_url);
+  if (!event.user || (!username && !avatarUrl)) return event;
+
+  const user = {
+    ...event.user,
+    username: username || event.user.username,
+    avatar_url: avatarUrl || event.user.avatar_url,
+  };
+  const scoreUser = event.score?.user
+    ? {
+        ...event.score.user,
+        username: user.username,
+        avatar_url: user.avatar_url,
+      }
+    : event.score?.user;
+  return {
+    ...event,
+    user,
+    score: scoreUser ? { ...event.score, user: scoreUser } : event.score,
   };
 }

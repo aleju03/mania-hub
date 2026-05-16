@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot } from "../src/features/snipes.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefreshIfDue, getMapsSnapshot } from "../src/features/maps.js";
-import { confirmTopPlay } from "../src/features/top-plays.js";
+import { confirmTopPlay, getTopPlaysSnapshot } from "../src/features/top-plays.js";
 import { getTrackerSnapshot } from "../src/features/tracker.js";
 import { routeHttp } from "../src/http/snapshots.js";
 import { AbuseGuard } from "../src/http/abuse-guard.js";
@@ -719,6 +719,10 @@ describe("live backend", () => {
     const emitted = await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" });
     expect(emitted).toBe(true);
     expect(Number((await exec(db, "select count(*) as count from top_play_events")).rows[0].count)).toBe(1);
+    await exec(db, "update users set avatar_url = 'https://assets.example/fresh-top.png' where user_id = 101");
+    const snapshot = await getTopPlaysSnapshot(db, "CR", "7d");
+    expect(snapshot.popoffs[0].user.avatar_url).toBe("https://assets.example/fresh-top.png");
+    expect(snapshot.popoffs[0].score.user?.avatar_url).toBe("https://assets.example/fresh-top.png");
     expect(await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" })).toBe(false);
   });
 
@@ -861,6 +865,9 @@ describe("live backend", () => {
     expect(snipes.events).toHaveLength(1);
     expect(snipes.events[0].victim.id).toBe(303);
     expect(snipes.events[0].rank).toBe("S");
+    await exec(db, "update users set avatar_url = 'https://assets.example/fresh-victim.png' where user_id = 303");
+    const refreshedSnipes = await getSnipesSnapshot(db, "CR", 10);
+    expect(refreshedSnipes.events[0].victim.avatar_url).toBe("https://assets.example/fresh-victim.png");
     expect(Number((await exec(db, "select count(*) as count from snipe_events")).rows[0].count)).toBe(1);
   });
 
@@ -1094,6 +1101,49 @@ describe("live backend", () => {
 
     expect(await enqueueMapsRefreshIfDue(db, queue, "CR", 7 * 24 * 60 * 60 * 1000)).toBe(true);
     expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_country_maps'")).rows[0].count)).toBe(1);
+  });
+
+  it("hydrates cached maps snapshot avatars from current user metadata", async () => {
+    const { db, queue } = await setup();
+    const now = new Date().toISOString();
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, updated_at)
+       values (101, 'Fresh Maps User', 'https://assets.example/fresh-maps.png', 'CR', ?)`,
+      [now],
+    );
+    await exec(
+      db,
+      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
+       values ('CR', ?, ?, ?)`,
+      [
+        JSON.stringify({
+          farmed: [],
+          mostPlayed: [],
+          favourites: [],
+          favouritesByPlayer: [{
+            id: 101,
+            username: "Old Maps User",
+            avatarUrl: "https://assets.example/old-maps.png",
+            beatmapsetIds: [1],
+          }],
+          beatmapsetsPool: {},
+          generatedAt: now,
+          farmedGeneratedAt: now,
+          favouritesGeneratedAt: now,
+        }),
+        now,
+        now,
+      ],
+    );
+
+    const snapshot = await getMapsSnapshot(db, queue, "CR", 7 * 24 * 60 * 60 * 1000);
+
+    expect(snapshot.value?.favouritesByPlayer[0]).toMatchObject({
+      username: "Fresh Maps User",
+      avatarUrl: "https://assets.example/fresh-maps.png",
+    });
+    expect(snapshot.refreshQueued).toBe(false);
   });
 
   it("defers maps refreshes without marking them failed while the roster is missing", async () => {

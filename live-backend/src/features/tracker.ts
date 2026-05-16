@@ -137,10 +137,22 @@ function trackerScoreSelectSql(): string {
 
 function hydrateScoreMetadata(row: Record<string, unknown>, score: OscScore | null): OscScore | null {
   if (!score) return null;
-  const user = score.user ?? rowUser(row);
+  const storedUser = rowUser(row);
+  const user = storedUser ? mergeScoreUser(score.user, storedUser) : score.user;
   const beatmap = score.beatmap ?? rowBeatmap(row);
   const beatmapset = score.beatmapset ?? rowBeatmapset(row);
   return { ...score, user, beatmap, beatmapset };
+}
+
+function mergeScoreUser(current: ScoreUser | undefined, stored: ScoreUser): ScoreUser {
+  if (!current) return stored;
+  return {
+    ...current,
+    id: stored.id,
+    username: stored.username || current.username,
+    avatar_url: stored.avatar_url || current.avatar_url,
+    country_code: stored.country_code || current.country_code,
+  };
 }
 
 function rowUser(row: Record<string, unknown>): ScoreUser | undefined {

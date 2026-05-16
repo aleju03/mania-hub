@@ -100,15 +100,47 @@ export async function updateSnipeProjection(db: Db, events: LiveEventLog, countr
 export async function getSnipesSnapshot(db: Db, country: string, limit: number): Promise<{ events: SnipeEvent[]; scannedAt: number }> {
   const rows = (await exec(
     db,
-    `select payload_json, detected_at from snipe_events
-     where country = ?
-     order by detected_at desc
+    `select
+       s.payload_json,
+       s.detected_at,
+       sniper.username as sniper_username,
+       sniper.avatar_url as sniper_avatar_url,
+       victim.username as victim_username,
+       victim.avatar_url as victim_avatar_url
+     from snipe_events s
+     left join users sniper on sniper.user_id = s.sniper_id
+     left join users victim on victim.user_id = s.victim_id
+     where s.country = ?
+     order by s.detected_at desc
      limit ?`,
     [country, limit],
   )).rows;
   const latestDetectedAt = rows[0]?.detected_at == null ? null : new Date(String(rows[0].detected_at)).getTime();
   return {
-    events: rows.map((row) => parseJson<SnipeEvent>(row.payload_json, {} as SnipeEvent)),
+    events: rows.map(hydrateSnipeEvent),
     scannedAt: latestDetectedAt != null && Number.isFinite(latestDetectedAt) ? latestDetectedAt : Date.now(),
   };
+}
+
+function hydrateSnipeEvent(row: Record<string, unknown>): SnipeEvent {
+  const event = parseJson<SnipeEvent>(row.payload_json, {} as SnipeEvent);
+  if (event.sniper) {
+    const username = row.sniper_username == null ? "" : String(row.sniper_username);
+    const avatarUrl = row.sniper_avatar_url == null ? "" : String(row.sniper_avatar_url);
+    event.sniper = {
+      ...event.sniper,
+      username: username || event.sniper.username,
+      avatar_url: avatarUrl || event.sniper.avatar_url,
+    };
+  }
+  if (event.victim) {
+    const username = row.victim_username == null ? "" : String(row.victim_username);
+    const avatarUrl = row.victim_avatar_url == null ? "" : String(row.victim_avatar_url);
+    event.victim = {
+      ...event.victim,
+      username: username || event.victim.username,
+      avatar_url: avatarUrl || event.victim.avatar_url,
+    };
+  }
+  return event;
 }
