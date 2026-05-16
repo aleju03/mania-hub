@@ -755,7 +755,7 @@ function SnipeRow({
     ? getReplaySearch(event.score_id, event.beatmapset_id)
     : null;
 
-  const heldFor = useMemo(() => {
+  const previousScoreAge = useMemo(() => {
     const sniperMs = new Date(event.timestamp).getTime();
     const previousMs = new Date(event.victimTimestamp).getTime();
     if (!Number.isFinite(sniperMs) || !Number.isFinite(previousMs)) return null;
@@ -968,8 +968,8 @@ function SnipeRow({
                 color="text-osu-pink-light"
               />
             )}
-            {heldFor && (
-              <StatCell label="Held for" value={heldFor} color="text-osu-yellow" />
+            {previousScoreAge && (
+              <StatCell label="Previous score age" value={previousScoreAge} color="text-osu-yellow" />
             )}
           </div>
           <div className="relative mt-2 flex items-center justify-between gap-2 text-[10px] text-osu-f1">
