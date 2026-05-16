@@ -1,7 +1,7 @@
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import type { LiveEventLog } from "../live/event-log.js";
-import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, isLazerScore, nowIso, scoreHasPublicLeaderboard, scoreHasReplay } from "../shared/score.js";
+import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModAcronyms, isLazerScore, nowIso, scoreHasPublicLeaderboard, scoreHasReplay } from "../shared/score.js";
 import type { OscScore, SnipeEvent } from "../shared/types.js";
 
 export async function updateSnipeProjection(db: Db, events: LiveEventLog, country: string, score: OscScore): Promise<SnipeEvent | null> {
@@ -11,6 +11,7 @@ export async function updateSnipeProjection(db: Db, events: LiveEventLog, countr
   if (totalScore == null) return null;
   const isLazer = isLazerScore(score);
   const mods = getModAcronyms(score.mods);
+  const rank = getDisplayedRank(score);
   const laneKey = getBoardLaneKey(mods, isLazer);
   const endedAt = score.ended_at ?? score.created_at ?? nowIso();
   const beforeRows = (await exec(
@@ -46,7 +47,7 @@ export async function updateSnipeProjection(db: Db, events: LiveEventLog, countr
        ended_at = excluded.ended_at,
        updated_at = excluded.updated_at
      where excluded.total_score > country_beatmap_scores.total_score`,
-    [country, score.beatmap.id, laneKey, score.user_id, score.id, totalScore, score.pp, getDisplayedAccuracy(score), score.rank, json(mods), isLazer ? 1 : 0, scoreHasReplay(score) ? 1 : 0, endedAt, nowIso()],
+    [country, score.beatmap.id, laneKey, score.user_id, score.id, totalScore, score.pp, getDisplayedAccuracy(score), rank, json(mods), isLazer ? 1 : 0, scoreHasReplay(score) ? 1 : 0, endedAt, nowIso()],
   );
   if (victimIndex < 0) return null;
   const victim = beforeRows[victimIndex];
@@ -75,7 +76,7 @@ export async function updateSnipeProjection(db: Db, events: LiveEventLog, countr
     accuracy: getDisplayedAccuracy(score),
     mods,
     pp: score.pp,
-    rank: score.rank,
+    rank,
     isLazer,
     hasReplay: scoreHasReplay(score),
     timestamp: endedAt,

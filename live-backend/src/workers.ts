@@ -14,7 +14,7 @@ import type { ScoreIngestor } from "./ingest/score-ingestor.js";
 import { finishReplayVideoExport, markReplayVideoDoneFromRender, markReplayVideoFailed, markReplayVideoRunning } from "./replay-video/exports.js";
 import { renderReplayVideoInChrome, type ServerReplayRenderRequest } from "./replay-video/server-render.js";
 import { refreshCountryRoster } from "./rosters/country-rosters.js";
-import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, getScoreIdentity, getScoreTimestamp, isLazerScore, nowIso, scoreHasReplay } from "./shared/score.js";
+import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModAcronyms, getScoreIdentity, getScoreTimestamp, isLazerScore, nowIso, scoreHasReplay } from "./shared/score.js";
 import { errorContext, logInfo, logWarn } from "./logger.js";
 import type { OscScore } from "./shared/types.js";
 
@@ -404,7 +404,7 @@ export class WorkerRunner {
             totalScore,
             score.pp,
             getDisplayedAccuracy(score),
-            score.rank,
+            getDisplayedRank(score),
             json(getModAcronyms(score.mods)),
             isLazerScore(score) ? 1 : 0,
             scoreHasReplay(score) ? 1 : 0,

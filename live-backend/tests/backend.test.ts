@@ -743,6 +743,7 @@ describe("live backend", () => {
   it("stores one snipe event from a durable country board", async () => {
     const { db, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
+    const current = { ...scores[0], rank: "A", type: "score_mania" };
     await exec(
       db,
       `insert into users (user_id, username, avatar_url, country_code, updated_at)
@@ -752,13 +753,14 @@ describe("live backend", () => {
     await exec(
       db,
       `insert into country_beatmap_scores (country, beatmap_id, lane_key, user_id, score_id, total_score, pp, accuracy, rank, mods_json, is_lazer, has_replay, ended_at, updated_at)
-       values ('CR', 501, 'normal:lazer', 303, 7000, 900000, 200, 0.97, 'S', '[]', 1, 1, '2026-05-11T00:00:00.000Z', ?)`,
+       values ('CR', 501, 'normal:stable', 303, 7000, 900000, 200, 0.97, 'S', '[]', 0, 1, '2026-05-11T00:00:00.000Z', ?)`,
       [new Date().toISOString()],
     );
-    await ingestor.ingestBatch([scores[0]]);
+    await ingestor.ingestBatch([current]);
     const snipes = await getSnipesSnapshot(db, "CR", 10);
     expect(snipes.events).toHaveLength(1);
     expect(snipes.events[0].victim.id).toBe(303);
+    expect(snipes.events[0].rank).toBe("S");
     expect(Number((await exec(db, "select count(*) as count from snipe_events")).rows[0].count)).toBe(1);
   });
 

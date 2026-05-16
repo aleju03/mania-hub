@@ -46,6 +46,23 @@ function calculateStableAccuracy(stats: OsuScoreStatistics): number {
   return (counts.countMax * 300 + counts.count300 * 300 + counts.count200 * 200 + counts.count100 * 100 + counts.count50 * 50) / (total * 300);
 }
 
+function deriveStableManiaRank(score: ScoreLike): string | null {
+  const mode = score.beatmap?.mode ?? "mania";
+  if (mode !== "mania") return null;
+  if (!score.passed) return "F";
+
+  const stableAccuracy = calculateStableAccuracy(score.statistics);
+  if (!Number.isFinite(stableAccuracy) || stableAccuracy <= 0) return null;
+
+  const silverGrade = getModAcronyms(score.mods).some((mod) => mod === "HD" || mod === "FI" || mod === "FL");
+  if (stableAccuracy >= 1) return silverGrade ? "XH" : "X";
+  if (stableAccuracy > 0.95) return silverGrade ? "SH" : "S";
+  if (stableAccuracy > 0.9) return "A";
+  if (stableAccuracy > 0.8) return "B";
+  if (stableAccuracy > 0.7) return "C";
+  return "D";
+}
+
 function getPreferredTotalScore(score: ScoreLike, isLazer: boolean): number | null {
   const candidates = isLazer
     ? [score.classic_total_score, score.total_score, score.legacy_total_score, score.score]
@@ -81,6 +98,15 @@ export function getScoreIdentity(score: ScoreLike): string {
 export function getDisplayedAccuracy(score: ScoreLike): number {
   if (isLazerScore(score) && Number.isFinite(score.accuracy) && score.accuracy > 0) return score.accuracy;
   return calculateStableAccuracy(score.statistics) || score.accuracy;
+}
+
+export function getDisplayedRank(score: ScoreLike): string {
+  if (!isLazerScore(score)) {
+    const stableRank = deriveStableManiaRank(score);
+    if (stableRank) return stableRank;
+  }
+
+  return score.passed ? score.rank : "F";
 }
 
 export function scoreHasReplay(score: ScoreLike): boolean {
