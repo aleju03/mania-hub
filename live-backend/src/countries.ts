@@ -65,6 +65,37 @@ export async function setCountryPaused(
   return row;
 }
 
+export async function deleteCountryData(db: Db, country: string): Promise<Record<string, number>> {
+  const normalized = normalizeCountry(country);
+  const deleted: Record<string, number> = {};
+  const deleteFrom = async (table: string, column = "country") => {
+    deleted[table] = Number((await exec(db, `delete from ${table} where ${column} = ?`, [normalized])).rowsAffected ?? 0);
+  };
+
+  await deleteFrom("country_registry");
+  await deleteFrom("country_rosters");
+  await deleteFrom("country_rank_snapshots");
+  await deleteFrom("score_events");
+  await deleteFrom("country_beatmap_scores");
+  await deleteFrom("top_play_events");
+  await deleteFrom("snipe_events");
+  await deleteFrom("country_maps_snapshots");
+  await deleteFrom("live_event_log");
+
+  const jobCountryJson = `%"country":"${normalized}"%`;
+  deleted.jobs = Number((await exec(
+    db,
+    `delete from jobs
+     where dedupe_key like ?
+        or dedupe_key like ?
+        or dedupe_key like ?
+        or payload_json like ?`,
+    [`roster:${normalized}`, `maps:${normalized}`, `snipe-seed:${normalized}:%`, jobCountryJson],
+  )).rowsAffected ?? 0);
+
+  return deleted;
+}
+
 export async function markCountryRosterRefreshed(db: Db, country: string): Promise<void> {
   const now = nowIso();
   await exec(

@@ -103,6 +103,10 @@ function normalizeAdminPath(input: unknown): string {
     const country = url.searchParams.get("country");
     if (country && /^[A-Za-z]{2}$/.test(country)) return `${url.pathname}?country=${country.toUpperCase()}`;
   }
+  if (url.pathname === "/api/admin/delete-country") {
+    const country = url.searchParams.get("country");
+    if (country && /^[A-Za-z]{2}$/.test(country)) return `/api/admin/delete-country?country=${country.toUpperCase()}`;
+  }
   if (url.pathname === "/api/admin/refresh-maps") {
     const country = url.searchParams.get("country");
     if (country && /^[A-Za-z]{2}$/.test(country)) return `/api/admin/refresh-maps?country=${country.toUpperCase()}`;

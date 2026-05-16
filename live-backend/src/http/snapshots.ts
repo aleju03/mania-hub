@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Config } from "../config.js";
-import { activateCountry, getCountryRegistry, setCountryPaused } from "../countries.js";
+import { activateCountry, deleteCountryData, getCountryRegistry, setCountryPaused } from "../countries.js";
 import type { Db } from "../db.js";
 import { dbHealth, exec, parseJson } from "../db.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
@@ -315,6 +315,14 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     const paused = url.pathname === "/api/admin/pause-country";
     sendJson(req, res, ctx, 200, { ok: true, country: await setCountryPaused(ctx.db, ctx.config, country, paused) });
+    return true;
+  }
+  if (url.pathname === "/api/admin/delete-country") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, country, deleted: await deleteCountryData(ctx.db, country) });
     return true;
   }
   if (url.pathname === "/api/admin/refresh-maps") {

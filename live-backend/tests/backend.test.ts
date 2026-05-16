@@ -13,7 +13,7 @@ import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { handleSse } from "../src/live/sse.js";
 import { OscBackfill } from "../src/osc/backfill.js";
 import { refreshCountryRoster } from "../src/rosters/country-rosters.js";
-import { getActiveCountryCodes, setCountryPaused } from "../src/countries.js";
+import { deleteCountryData, getActiveCountryCodes, setCountryPaused } from "../src/countries.js";
 import { CountryClientTracker } from "../src/live/country-clients.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -137,6 +137,31 @@ describe("live backend", () => {
     expect(await getActiveCountryCodes(db, { trackedCountries: ["CR"], countryWarmTtlMs: 24 * 60 * 60 * 1000 })).toEqual(["CR"]);
     expect(await ingestor.ingestBatch([scores[0]])).toEqual({ inserted: 1, skipped: 0 });
     expect(Number((await exec(db, "select count(*) as count from score_events")).rows[0].count)).toBe(1);
+  });
+
+  it("deletes one country's registry and country-scoped projections", async () => {
+    const { db, queue, events, ingestor } = await setup(["CR", "US"]);
+    const scores = await fixture<OscScore[]>("scores.json");
+
+    await ingestor.ingestBatch([scores[0]]);
+    await exec(db, "insert or ignore into country_registry (country, status, pinned, first_requested_at, last_requested_at, updated_at) values ('US', 'active', 0, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')");
+    await exec(db, "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('US', 202, 1, 'test', 1, '2026-01-01T00:00:00.000Z')");
+    await exec(db, "insert into country_rank_snapshots (country, user_id, country_rank, global_rank, pp, captured_at) values ('CR', 101, 1, 10, 1000, '2026-01-01T00:00:00.000Z')");
+    await exec(db, "insert into country_beatmap_scores (country, beatmap_id, lane_key, user_id, score_id, total_score, pp, accuracy, rank, mods_json, is_lazer, has_replay, ended_at, updated_at) values ('CR', 501, '4K:NM', 101, 9001, 999999, 100, 0.99, 'S', '[]', 1, 1, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')");
+    await exec(db, "insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at) values ('CR', 9001, 101, 100, 95, 20, '{}', '2026-01-01T00:00:00.000Z')");
+    await exec(db, "insert into snipe_events (country, beatmap_id, lane_key, score_id, sniper_id, victim_id, board_rank, payload_json, detected_at) values ('CR', 501, '4K:NM', 9001, 101, 202, 1, '{}', '2026-01-01T00:00:00.000Z')");
+    await exec(db, "insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at) values ('CR', '{}', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')");
+    await events.append("status", "CR", { ok: true }, "delete-test:CR");
+    await queue.enqueue("refresh_country_roster", "roster:CR", { country: "CR" });
+
+    const deleted = await deleteCountryData(db, "CR");
+
+    expect(deleted.country_registry).toBe(1);
+    for (const table of ["country_registry", "country_rosters", "country_rank_snapshots", "score_events", "country_beatmap_scores", "top_play_events", "snipe_events", "country_maps_snapshots", "live_event_log"]) {
+      expect(Number((await exec(db, `select count(*) as count from ${table} where country = 'CR'`)).rows[0].count)).toBe(0);
+    }
+    expect(Number((await exec(db, "select count(*) as count from country_rosters where country = 'US'")).rows[0].count)).toBe(1);
+    expect(Number((await exec(db, "select count(*) as count from jobs where dedupe_key = 'roster:CR'")).rows[0].count)).toBe(0);
   });
 
   it("reports connected page users on country registry status rows", async () => {

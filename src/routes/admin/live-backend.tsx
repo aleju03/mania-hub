@@ -341,6 +341,9 @@ function LiveBackendPage() {
                 const path = shouldPause ? "/api/admin/pause-country" : "/api/admin/resume-country";
                 void runAdminAction(action, `${path}?country=${encodeURIComponent(entry.country)}`);
               }}
+              onDeleteCountry={(entry) => {
+                void runAdminAction(`delete-country-${entry.country}`, `/api/admin/delete-country?country=${encodeURIComponent(entry.country)}`);
+              }}
             />
           </Section>
 
@@ -551,32 +554,82 @@ function StatusCard({ status, connectionState, country }: { status: LiveBackendS
   );
 }
 
-const COUNTRY_STATUS_RANK: Record<string, number> = { active: 0, warm: 1, paused: 2 };
+type CountryEntry = NonNullable<LiveBackendStatus["countries"]>[number];
+type CountryDisplayStatus = "active" | "warm" | "idle" | "paused";
+type CountrySortMode = "status" | "active-users" | "tracked-users" | "country";
+
+const COUNTRY_STATUS_RANK: Record<CountryDisplayStatus, number> = { active: 0, warm: 1, idle: 2, paused: 3 };
+const COUNTRY_STATUS_OPTIONS: Array<{ value: CountryDisplayStatus; label: string; dot: string }> = [
+  { value: "active", label: "Active", dot: "bg-osu-green-light" },
+  { value: "warm", label: "Warm", dot: "bg-osu-yellow" },
+  { value: "idle", label: "Idle", dot: "bg-osu-red-light" },
+  { value: "paused", label: "Paused", dot: "bg-osu-red-light" },
+];
+const COUNTRY_SORT_OPTIONS: Array<{ value: CountrySortMode; label: string }> = [
+  { value: "status", label: "Status" },
+  { value: "active-users", label: "Page users" },
+  { value: "tracked-users", label: "Tracked" },
+  { value: "country", label: "Name" },
+];
 
 function CountriesCard({
   status,
   busy,
   onToggleCountry,
+  onDeleteCountry,
 }: {
   status: LiveBackendStatus | null;
   busy: string | null;
-  onToggleCountry: (entry: NonNullable<LiveBackendStatus["countries"]>[number]) => void;
+  onToggleCountry: (entry: CountryEntry) => void;
+  onDeleteCountry: (entry: CountryEntry) => void;
 }) {
+  const [sortMode, setSortMode] = useState<CountrySortMode>("status");
+  const [statusFilters, setStatusFilters] = useState<Record<CountryDisplayStatus, boolean>>({
+    active: true,
+    warm: true,
+    idle: true,
+    paused: true,
+  });
   const countries = status?.countries ?? [];
   const rosterByCountry = useMemo(() => {
     const map = new Map<string, number>();
     for (const entry of status?.roster ?? []) map.set(entry.country, entry.users);
     return map;
   }, [status?.roster]);
+  const statusCounts = useMemo(() => {
+    const counts: Record<CountryDisplayStatus, number> = { active: 0, warm: 0, idle: 0, paused: 0 };
+    for (const entry of countries) counts[getCountryDisplayStatus(entry)] += 1;
+    return counts;
+  }, [countries]);
+  const toggleFilter = (value: CountryDisplayStatus) => {
+    setStatusFilters((current) => {
+      const next = { ...current, [value]: !current[value] };
+      // never let every filter turn off; re-enable the one just toggled
+      if (!next.active && !next.warm && !next.idle && !next.paused) next[value] = true;
+      return next;
+    });
+  };
   const sorted = useMemo(
-    () =>
-      [...countries].sort((a, b) => {
+    () => {
+      const filtered = countries.filter((entry) => statusFilters[getCountryDisplayStatus(entry)]);
+      return filtered.sort((a, b) => {
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-        const rank = (COUNTRY_STATUS_RANK[a.status] ?? 3) - (COUNTRY_STATUS_RANK[b.status] ?? 3);
-        if (rank !== 0) return rank;
+        if (sortMode === "active-users") {
+          const activeRank = (b.activeUsers ?? 0) - (a.activeUsers ?? 0);
+          if (activeRank !== 0) return activeRank;
+          const activityRank = new Date(b.lastActiveAt ?? b.lastRequestedAt).getTime() - new Date(a.lastActiveAt ?? a.lastRequestedAt).getTime();
+          if (activityRank !== 0) return activityRank;
+        } else if (sortMode === "tracked-users") {
+          const userRank = (rosterByCountry.get(b.country) ?? -1) - (rosterByCountry.get(a.country) ?? -1);
+          if (userRank !== 0) return userRank;
+        } else if (sortMode === "status") {
+          const rank = COUNTRY_STATUS_RANK[getCountryDisplayStatus(a)] - COUNTRY_STATUS_RANK[getCountryDisplayStatus(b)];
+          if (rank !== 0) return rank;
+        }
         return a.country.localeCompare(b.country);
-      }),
-    [countries],
+      });
+    },
+    [countries, rosterByCountry, sortMode, statusFilters],
   );
   const activeCount = countries.filter((entry) => entry.status !== "paused" && entry.isWarm).length;
   const activeUsers = countries.reduce((total, entry) => total + (entry.activeUsers ?? 0), 0);
@@ -589,8 +642,49 @@ function CountriesCard({
           : "Country registry not loaded yet."
       }
     >
+      <div className="mb-3 flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-1 rounded-md border border-osu-b3/25 bg-osu-b5/50 p-1">
+          {COUNTRY_STATUS_OPTIONS.map((option) => {
+            const on = statusFilters[option.value];
+            const count = statusCounts[option.value];
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => toggleFilter(option.value)}
+                aria-pressed={on}
+                className={`group flex items-center gap-1.5 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors duration-[120ms] cursor-pointer ${
+                  on ? "bg-osu-b3/55 text-white" : "text-osu-f1 hover:text-osu-l2"
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${on ? option.dot : "bg-osu-b3"}`} />
+                {option.label}
+                <span className={`font-mono ${on ? "text-osu-c2" : "text-osu-f1/70"}`}>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1">
+          Sort
+          <div className="flex items-center gap-1 rounded-md border border-osu-b3/25 bg-osu-b5/50 p-1">
+            {COUNTRY_SORT_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setSortMode(option.value)}
+                aria-pressed={sortMode === option.value}
+                className={`rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors duration-[120ms] cursor-pointer ${
+                  sortMode === option.value ? "bg-osu-b3/55 text-white" : "text-osu-f1 hover:text-osu-l2"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
       {sorted.length === 0 ? (
-        <div className="text-[11px] text-osu-f1">No countries registered.</div>
+        <div className="text-[11px] text-osu-f1">{countries.length === 0 ? "No countries registered." : "No countries match these filters."}</div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {sorted.map((entry) => (
@@ -598,8 +692,9 @@ function CountriesCard({
               key={entry.country}
               entry={entry}
               users={rosterByCountry.get(entry.country) ?? null}
-              busy={busy === `pause-country-${entry.country}` || busy === `resume-country-${entry.country}`}
+              busy={busy === `pause-country-${entry.country}` || busy === `resume-country-${entry.country}` || busy === `delete-country-${entry.country}`}
               onToggle={() => onToggleCountry(entry)}
+              onDelete={() => onDeleteCountry(entry)}
             />
           ))}
         </div>
@@ -613,17 +708,35 @@ function CountryRow({
   users,
   busy,
   onToggle,
+  onDelete,
 }: {
-  entry: NonNullable<LiveBackendStatus["countries"]>[number];
+  entry: CountryEntry;
   users: number | null;
   busy: boolean;
   onToggle: () => void;
+  onDelete: () => void;
 }) {
-  const statusTone =
-    entry.status === "paused" || !entry.isWarm ? "text-osu-red" : entry.status === "active" ? "text-osu-green" : "text-osu-yellow";
+  const displayStatus = getCountryDisplayStatus(entry);
+  const statusTone = displayStatus === "paused" || displayStatus === "idle" ? "text-osu-red" : displayStatus === "active" ? "text-osu-green" : "text-osu-yellow";
   const activeUsers = entry.activeUsers ?? 0;
-  const displayStatus = entry.status === "paused" ? "paused" : entry.isWarm ? entry.status : "idle";
   const shouldResume = entry.status === "paused" || !entry.isWarm;
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleteRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const id = window.setTimeout(() => setConfirmDelete(false), 4_000);
+    const onPointerDown = (event: PointerEvent) => {
+      if (!deleteRef.current?.contains(event.target as Node)) setConfirmDelete(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      window.clearTimeout(id);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [confirmDelete]);
+  useEffect(() => {
+    if (busy) setConfirmDelete(false);
+  }, [busy]);
   return (
     <div className="rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2">
       <div className="flex items-center gap-2.5">
@@ -657,6 +770,34 @@ function CountryRow({
           >
             {shouldResume ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
           </button>
+          {confirmDelete ? (
+            <button
+              ref={deleteRef}
+              type="button"
+              title={`Confirm delete of ${entry.country} country data. This cannot be undone.`}
+              aria-label={`Confirm delete of ${entry.country} country data`}
+              disabled={busy}
+              onClick={() => {
+                setConfirmDelete(false);
+                onDelete();
+              }}
+              className="inline-flex h-7 items-center gap-1.5 rounded-md border border-osu-red/60 bg-osu-red/25 px-2 text-[10px] font-semibold uppercase tracking-wider text-white transition hover:bg-osu-red/35 disabled:opacity-50 cursor-pointer"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Confirm
+            </button>
+          ) : (
+            <button
+              type="button"
+              title={`Delete ${entry.country} country data`}
+              aria-label={`Delete ${entry.country} country data`}
+              disabled={busy}
+              onClick={() => setConfirmDelete(true)}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-osu-red/30 bg-osu-red/10 text-osu-red-light transition hover:border-osu-red-light/70 hover:bg-osu-red/20 hover:text-white disabled:opacity-50 cursor-pointer"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       </div>
       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-osu-f1">
@@ -679,6 +820,12 @@ function CountryRow({
       </div>
     </div>
   );
+}
+
+function getCountryDisplayStatus(entry: CountryEntry): CountryDisplayStatus {
+  if (entry.status === "paused") return "paused";
+  if (!entry.isWarm) return "idle";
+  return entry.status;
 }
 
 function WorkerLanesCard({ status }: { status: LiveBackendStatus | null }) {
