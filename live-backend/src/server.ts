@@ -6,7 +6,7 @@ import { routeHttp, sendNotFound } from "./http/snapshots.js";
 import { ScoreIngestor } from "./ingest/score-ingestor.js";
 import { JobQueue } from "./jobs/queue.js";
 import { LiveEventLog } from "./live/event-log.js";
-import { enqueueMapsRefreshIfDue } from "./features/maps.js";
+import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefreshIfDue } from "./features/maps.js";
 import { AbuseGuard } from "./http/abuse-guard.js";
 import { CountryClientTracker } from "./live/country-clients.js";
 import { handleSse } from "./live/sse.js";
@@ -23,6 +23,7 @@ export async function createApp() {
   await migrate(db);
   const queue = new JobQueue(db);
   const events = new LiveEventLog(db);
+  await deferMapsRefreshesWaitingForRoster(db);
   await ensurePinnedCountries(db, config);
   const osu = new OsuApiClient(config, fetch, (entry) => {
     void exec(db, "insert into api_call_log (provider, caller, path, started_at) values ('osu', ?, ?, ?)", [

@@ -107,6 +107,11 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 200, await statusBody(ctx));
     return true;
   }
+  if (url.pathname === "/api/countries/features") {
+    res.setHeader("cache-control", "public, max-age=30");
+    sendJson(req, res, ctx, 200, await countryFeaturesBody(ctx));
+    return true;
+  }
   if (url.pathname === "/api/admin/status") {
     if (!isAdmin(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
@@ -477,6 +482,17 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
     apiCallHistory: await apiCallHistory(ctx.db),
     countries: await countryRegistryStatus(ctx),
     worker: options.includeWorkerActivity ? worker : publicWorkerStatus(worker),
+  };
+}
+
+async function countryFeaturesBody(ctx: HttpContext) {
+  const countries = await getCountryRegistry(ctx.db, ctx.config);
+  return {
+    generatedAt: new Date().toISOString(),
+    countries: countries.map((entry) => ({
+      country: entry.country,
+      featureTier: entry.featureTier,
+    })),
   };
 }
 

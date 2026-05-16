@@ -19,6 +19,8 @@ import {
 import { PostHogProvider } from "../lib/posthog-provider";
 import { getCanonicalOrigin } from "../lib/origin";
 import { DEFAULT_DESCRIPTION, SITE_NAME, websiteJsonLd } from "../lib/seo";
+import { fetchLiveCountryFeatures } from "../lib/live-backend";
+import { seedCountryTierCache } from "../lib/use-country-warming";
 import appCss from "../styles.css?url";
 
 /* Origin is resolved through a configured canonical URL first, then through
@@ -67,7 +69,7 @@ const getInitialCountry = createServerFn({ method: "GET" }).handler(() => {
 export const Route = createRootRoute({
   beforeLoad: async () => {
     const onClient = typeof document !== "undefined";
-    const [initialCountry, origin, auth] = await Promise.all([
+    const [initialCountry, origin, auth, countryFeatures] = await Promise.all([
       onClient
         ? Promise.resolve(resolveInitialCountry(readCountryCookieClient()))
         : getInitialCountry(),
@@ -75,8 +77,9 @@ export const Route = createRootRoute({
         ? Promise.resolve(window.location.origin)
         : getRequestOrigin(),
       getCurrentAuth(),
+      fetchLiveCountryFeatures(),
     ]);
-    return { initialCountry, origin, auth };
+    return { initialCountry, origin, auth, countryFeatures };
   },
   head: () => ({
     meta: [
@@ -135,7 +138,8 @@ function NotFoundPage() {
 }
 
 function RootLayout() {
-  const { auth, initialCountry } = Route.useRouteContext();
+  const { auth, initialCountry, countryFeatures } = Route.useRouteContext();
+  seedCountryTierCache(countryFeatures?.countries);
   return (
     <InitialCountryContext.Provider value={initialCountry}>
       <AuthContext.Provider value={auth}>

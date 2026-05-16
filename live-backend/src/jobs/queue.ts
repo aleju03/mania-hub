@@ -82,6 +82,14 @@ export class JobQueue {
     );
   }
 
+  async defer(id: number, retryDelayMs = 30_000): Promise<void> {
+    await exec(
+      this.db,
+      "update jobs set status = 'queued', locked_by = null, locked_until = null, run_after = ?, last_error = null, updated_at = ? where id = ?",
+      [new Date(Date.now() + retryDelayMs).toISOString(), nowIso(), id],
+    );
+  }
+
   async depth(): Promise<number> {
     const row = (await exec(this.db, "select count(*) as count from jobs where status in ('queued', 'failed', 'running')")).rows[0];
     return Number(row?.count ?? 0);

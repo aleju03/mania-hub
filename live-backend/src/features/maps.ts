@@ -10,6 +10,13 @@ const MAPS_FETCH_CONCURRENCY = 2;
 const FARMED_SINGLE_PLAYER_PP_MIN = 500;
 const USER_FAVOURITES_MAX_PAGES = 10;
 
+export class MapsRosterNotReadyError extends Error {
+  constructor(readonly country: string) {
+    super(`Roster not ready for ${country}`);
+    this.name = "MapsRosterNotReadyError";
+  }
+}
+
 interface MapsUser {
   id: number;
   username: string;
@@ -195,6 +202,24 @@ export async function enqueueMapsRefreshIfDue(
   return true;
 }
 
+export async function deferMapsRefreshesWaitingForRoster(db: Db, retryDelayMs = 10 * 60_000): Promise<number> {
+  const result = await exec(
+    db,
+    `update jobs
+     set status = 'queued',
+         locked_by = null,
+         locked_until = null,
+         run_after = ?,
+         last_error = null,
+         updated_at = ?
+     where type = 'refresh_country_maps'
+       and status = 'failed'
+       and last_error like 'No tracked roster users available for %'`,
+    [new Date(Date.now() + retryDelayMs).toISOString(), nowIso()],
+  );
+  return Number(result.rowsAffected ?? 0);
+}
+
 export async function getMapsSnapshot(
   db: Db,
   queue: JobQueue,
@@ -252,7 +277,7 @@ export async function refreshCountryMaps(
 ): Promise<CountryMapsData> {
   const country = payload.country.toUpperCase();
   const users = await getMapsUsers(db, country);
-  if (users.length === 0) throw new Error(`No tracked roster users available for ${country}`);
+  if (users.length === 0) throw new MapsRosterNotReadyError(country);
   const emptyGeneratedAt = nowIso();
   let latestFarmed: CountryMapsFarmedSection = { farmed: [], generatedAt: emptyGeneratedAt };
   let latestFavourites: CountryMapsFavouritesSection = {

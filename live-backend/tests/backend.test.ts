@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot } from "../src/features/snipes.js";
-import { enqueueMapsRefreshIfDue, getMapsSnapshot } from "../src/features/maps.js";
+import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefreshIfDue, getMapsSnapshot } from "../src/features/maps.js";
 import { confirmTopPlay } from "../src/features/top-plays.js";
 import { getTrackerSnapshot } from "../src/features/tracker.js";
 import { routeHttp } from "../src/http/snapshots.js";
@@ -252,6 +252,34 @@ describe("live backend", () => {
       .find((entry) => entry.country === "CR");
     expect(inactiveCr).toMatchObject({ country: "CR", activeUsers: 0 });
     expect(inactiveCr?.lastActiveAt).toEqual(expect.any(String));
+  });
+
+  it("returns public country feature tiers without the full status payload", async () => {
+    const { db, queue, events } = await setup(["CR"]);
+    const response = mockRes();
+
+    await routeHttp(mockReq("GET", "/api/countries/features"), response.res, {
+      db,
+      queue,
+      events,
+      config: baseConfig({
+        trackedCountries: ["CR"],
+        prewarmCountries: ["MX"],
+        mapsWarmCountries: ["BR"],
+      }),
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0, byCaller: [], byPath: [] }) } },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never);
+
+    const body = JSON.parse(response.writes.join(""));
+    expect(response.res.statusCode).toBe(200);
+    expect(response.headers["cache-control"]).toBe("public, max-age=30");
+    expect(body.countries).toEqual(expect.arrayContaining([
+      { country: "CR", featureTier: "snipes" },
+      { country: "MX", featureTier: "indexed" },
+      { country: "BR", featureTier: "maps_warm" },
+    ]));
+    expect(body.queueDepth).toBeUndefined();
   });
 
   it("clears stale job errors when a retry succeeds", async () => {
@@ -1066,6 +1094,31 @@ describe("live backend", () => {
 
     expect(await enqueueMapsRefreshIfDue(db, queue, "CR", 7 * 24 * 60 * 60 * 1000)).toBe(true);
     expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_country_maps'")).rows[0].count)).toBe(1);
+  });
+
+  it("defers maps refreshes without marking them failed while the roster is missing", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    await enqueueMapsRefreshIfDue(db, queue, "AU", 7 * 24 * 60 * 60 * 1000);
+    const worker = new WorkerRunner(db, queue, events, {} as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    const job = (await exec(db, "select status, last_error, run_after from jobs where type = 'refresh_country_maps' and dedupe_key = 'maps:AU'")).rows[0];
+    expect(job).toMatchObject({ status: "queued", last_error: null });
+    expect(new Date(String(job.run_after)).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it("cleans up old maps roster-missing failures as deferred jobs", async () => {
+    const { db, queue } = await setup();
+    await queue.enqueue("refresh_country_maps", "maps:AU", { country: "AU" });
+    const job = (await queue.claim("test-worker"))[0];
+    await queue.fail(job.id, new Error("No tracked roster users available for AU"), 60 * 60_000);
+
+    expect(await deferMapsRefreshesWaitingForRoster(db)).toBe(1);
+
+    const row = (await exec(db, "select status, last_error, run_after from jobs where id = ?", [job.id])).rows[0];
+    expect(row).toMatchObject({ status: "queued", last_error: null });
+    expect(new Date(String(row.run_after)).getTime()).toBeGreaterThan(Date.now());
   });
 
   it("queues maps refreshes from the maps snapshot HTTP endpoint", async () => {

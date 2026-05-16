@@ -3,7 +3,7 @@ import { readConfig } from "./config.js";
 import { canSeedSnipesForCountry } from "./countries.js";
 import { exec, json, parseJson } from "./db.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
-import { refreshCountryMaps } from "./features/maps.js";
+import { MapsRosterNotReadyError, refreshCountryMaps } from "./features/maps.js";
 import { updateSnipeProjection } from "./features/snipes.js";
 import { confirmTopPlay } from "./features/top-plays.js";
 import { getHydratedScoresForMetadata } from "./features/tracker.js";
@@ -147,6 +147,13 @@ export class WorkerRunner {
       logInfo("job_done", { job_id: job.id, type: job.type, lane, worker_id: workerId });
       await this.events.append("job_status", null, { id: job.id, type: job.type, status: "done" }, `job:${job.id}:done:${job.attempts}`);
     } catch (error) {
+      if (error instanceof MapsRosterNotReadyError) {
+        const retryDelayMs = getRetryDelayMs(job.type, job.attempts, error);
+        await this.queue.defer(job.id, retryDelayMs);
+        logInfo("job_deferred", { job_id: job.id, type: job.type, lane, worker_id: workerId, retry_delay_ms: retryDelayMs, reason: error.message });
+        await this.events.append("job_status", null, { id: job.id, type: job.type, status: "queued", reason: error.message }, `job:${job.id}:deferred:${job.attempts}`);
+        return;
+      }
       const retryDelayMs = getRetryDelayMs(job.type, job.attempts, error);
       await this.queue.fail(job.id, error, retryDelayMs);
       logWarn("job_failed", { job_id: job.id, type: job.type, lane, worker_id: workerId, retry_delay_ms: retryDelayMs, ...errorContext(error) });

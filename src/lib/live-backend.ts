@@ -14,6 +14,16 @@ export type LiveEventName =
 
 export type LiveCountryFeatureTier = "indexed" | "maps_warm" | "live" | "snipes";
 
+export interface LiveCountryFeature {
+  country: string;
+  featureTier: LiveCountryFeatureTier;
+}
+
+export interface LiveCountryFeaturesSnapshot {
+  generatedAt: string;
+  countries: LiveCountryFeature[];
+}
+
 export interface LiveTrackerSnapshot {
   country: string;
   scores: LeanTrackerScore[];
@@ -174,6 +184,26 @@ export const fetchLiveBackendAdminStatus = createServerFn({ method: "GET" })
     return body;
   });
 
+export const fetchLiveCountryFeatures = createServerFn({ method: "GET" })
+  .handler(async (): Promise<LiveCountryFeaturesSnapshot | null> => {
+    const base = getServerLiveBackendUrl();
+    if (!base) return null;
+    const response = await fetch(`${base}/api/countries/features`);
+    const body = await response.json() as Partial<LiveCountryFeaturesSnapshot>;
+    if (!response.ok || !Array.isArray(body.countries)) return null;
+    return {
+      generatedAt: typeof body.generatedAt === "string" ? body.generatedAt : new Date().toISOString(),
+      countries: body.countries
+        .filter((entry): entry is LiveCountryFeature =>
+          !!entry &&
+          typeof entry === "object" &&
+          typeof entry.country === "string" &&
+          isCountryFeatureTier((entry as Partial<LiveCountryFeature>).featureTier),
+        )
+        .map((entry) => ({ country: entry.country.toUpperCase().slice(0, 2), featureTier: entry.featureTier })),
+    };
+  });
+
 export async function fetchLiveTrackerSnapshot(country: string, limit = 100): Promise<LiveTrackerSnapshot> {
   return fetchLiveJson(`/api/snapshots/tracker?country=${encodeURIComponent(country)}&limit=${limit}`);
 }
@@ -189,9 +219,13 @@ export interface LiveCountryActivation {
 }
 
 function readCountryFeatureTier(value: unknown): LiveCountryFeatureTier {
-  return value === "snipes" || value === "live" || value === "maps_warm" || value === "indexed"
+  return isCountryFeatureTier(value)
     ? value
     : "indexed";
+}
+
+function isCountryFeatureTier(value: unknown): value is LiveCountryFeatureTier {
+  return value === "snipes" || value === "live" || value === "maps_warm" || value === "indexed";
 }
 
 export async function activateLiveCountry(country: string): Promise<LiveCountryActivation | null> {
