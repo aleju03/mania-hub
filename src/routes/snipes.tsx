@@ -17,6 +17,8 @@ import { parseCountrySearchParam } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { startProgressPoll } from "../lib/progress-poll";
 import { fetchLiveSnipesSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
+import { CountryWarming } from "../components/CountryWarming";
+import { useCountryWarming } from "../lib/use-country-warming";
 
 type KeyFilter = SnipesKeyFilter;
 type RangeFilter = SnipesRange;
@@ -123,6 +125,7 @@ function SnipesPage() {
   const refreshInProgressRef = useRef(false);
   const hasRestoredRememberedFiltersRef = useRef(false);
   const liveBackendEnabled = isLiveBackendConfigured();
+  const { warming } = useCountryWarming(selectedCountry);
 
   // Render-driving "elapsed" timer for the secondary header indicator.
   useEffect(() => {
@@ -506,6 +509,10 @@ function SnipesPage() {
         }
       />
 
+      {warming && <CountryWarming country={selectedCountry} />}
+
+      {!warming && (
+      <>
       {/* ── Filter bar ─────────────────────────────────────────────────── */}
       <div className="bg-osu-d5 border-b border-osu-b3/20">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-2.5 flex flex-wrap items-start sm:items-center gap-x-4 gap-y-2">
@@ -724,6 +731,8 @@ function SnipesPage() {
           )}
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

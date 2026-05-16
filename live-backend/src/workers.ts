@@ -1,5 +1,6 @@
 import type { Db } from "./db.js";
 import { readConfig } from "./config.js";
+import { canSeedSnipesForCountry } from "./countries.js";
 import { exec, json, parseJson } from "./db.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { refreshCountryMaps } from "./features/maps.js";
@@ -231,8 +232,10 @@ export class WorkerRunner {
       return;
     }
     if (job.type === "seed_snipe_board") {
-      await this.seedSnipeBoard(job.payload as { country: string; beatmapId: number; laneKey: string });
-      await this.replaySeededSnipeScores(job.payload as { country: string; beatmapId: number; laneKey: string });
+      const payload = job.payload as { country: string; beatmapId: number; laneKey: string };
+      if (!await canSeedSnipesForCountry(this.db, readConfig(), payload.country)) return;
+      await this.seedSnipeBoard(payload);
+      await this.replaySeededSnipeScores(payload);
       return;
     }
     if (job.type === "replay_video_export") {

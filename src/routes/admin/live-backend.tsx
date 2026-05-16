@@ -46,6 +46,7 @@ interface LiveBackendStatus {
   countries?: Array<{
     country: string;
     status: "active" | "warm" | "paused";
+    featureTier?: "indexed" | "maps_warm" | "live" | "snipes";
     pinned: boolean;
     firstRequestedAt: string;
     lastRequestedAt: string;
@@ -556,6 +557,7 @@ function StatusCard({ status, connectionState, country }: { status: LiveBackendS
 
 type CountryEntry = NonNullable<LiveBackendStatus["countries"]>[number];
 type CountryDisplayStatus = "active" | "warm" | "idle" | "paused";
+type CountryFeatureTier = "indexed" | "maps_warm" | "live" | "snipes";
 type CountrySortMode = "status" | "active-users" | "tracked-users" | "country";
 
 const COUNTRY_STATUS_RANK: Record<CountryDisplayStatus, number> = { active: 0, warm: 1, idle: 2, paused: 3 };
@@ -566,10 +568,18 @@ const COUNTRY_STATUS_OPTIONS: Array<{ value: CountryDisplayStatus; label: string
   { value: "paused", label: "Paused", dot: "bg-osu-red-light" },
 ];
 const COUNTRY_SORT_OPTIONS: Array<{ value: CountrySortMode; label: string }> = [
-  { value: "status", label: "Status" },
+  { value: "status", label: "Lifecycle" },
   { value: "active-users", label: "Page users" },
-  { value: "tracked-users", label: "Tracked" },
+  { value: "tracked-users", label: "Roster" },
   { value: "country", label: "Name" },
+];
+// Feature tiers are cumulative: each tier does everything the cheaper ones do,
+// plus its own work. They cap how much the backend will do for a country.
+const COUNTRY_TIER_OPTIONS: Array<{ value: CountryFeatureTier; label: string; tone: string; dot: string; blurb: string }> = [
+  { value: "indexed", label: "Indexed", tone: "text-osu-f1", dot: "bg-osu-f1", blurb: "Roster + rank snapshots only (powers Rankings)" },
+  { value: "maps_warm", label: "Maps", tone: "text-osu-yellow", dot: "bg-osu-yellow", blurb: "Indexed + maps warmup (farmed / favourites)" },
+  { value: "live", label: "Live", tone: "text-osu-green", dot: "bg-osu-green", blurb: "Maps + live score ingest (Tracker / Top Plays)" },
+  { value: "snipes", label: "Snipes", tone: "text-osu-c2", dot: "bg-osu-c2", blurb: "Live + snipe board seeding (the expensive tier)" },
 ];
 
 function CountriesCard({
@@ -590,6 +600,12 @@ function CountriesCard({
     idle: true,
     paused: true,
   });
+  const [tierFilters, setTierFilters] = useState<Record<CountryFeatureTier, boolean>>({
+    indexed: true,
+    maps_warm: true,
+    live: true,
+    snipes: true,
+  });
   const countries = status?.countries ?? [];
   const rosterByCountry = useMemo(() => {
     const map = new Map<string, number>();
@@ -601,6 +617,11 @@ function CountriesCard({
     for (const entry of countries) counts[getCountryDisplayStatus(entry)] += 1;
     return counts;
   }, [countries]);
+  const tierCounts = useMemo(() => {
+    const counts: Record<CountryFeatureTier, number> = { indexed: 0, maps_warm: 0, live: 0, snipes: 0 };
+    for (const entry of countries) counts[getCountryFeatureTier(entry)] += 1;
+    return counts;
+  }, [countries]);
   const toggleFilter = (value: CountryDisplayStatus) => {
     setStatusFilters((current) => {
       const next = { ...current, [value]: !current[value] };
@@ -609,9 +630,19 @@ function CountriesCard({
       return next;
     });
   };
+  const toggleTierFilter = (value: CountryFeatureTier) => {
+    setTierFilters((current) => {
+      const next = { ...current, [value]: !current[value] };
+      // never let every tier turn off; re-enable the one just toggled
+      if (!next.indexed && !next.maps_warm && !next.live && !next.snipes) next[value] = true;
+      return next;
+    });
+  };
   const sorted = useMemo(
     () => {
-      const filtered = countries.filter((entry) => statusFilters[getCountryDisplayStatus(entry)]);
+      const filtered = countries.filter(
+        (entry) => statusFilters[getCountryDisplayStatus(entry)] && tierFilters[getCountryFeatureTier(entry)],
+      );
       return filtered.sort((a, b) => {
         if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
         if (sortMode === "active-users") {
@@ -629,40 +660,73 @@ function CountriesCard({
         return a.country.localeCompare(b.country);
       });
     },
-    [countries, rosterByCountry, sortMode, statusFilters],
+    [countries, rosterByCountry, sortMode, statusFilters, tierFilters],
   );
   const activeCount = countries.filter((entry) => entry.status !== "paused" && entry.isWarm).length;
   const activeUsers = countries.reduce((total, entry) => total + (entry.activeUsers ?? 0), 0);
+  const tierSummary = COUNTRY_TIER_OPTIONS
+    .filter((tier) => tierCounts[tier.value] > 0)
+    .map((tier) => `${formatNumber(tierCounts[tier.value])} ${tier.label.toLowerCase()}`)
+    .join(", ");
   return (
     <SectionCard
-      title="Tracked countries"
+      title="Country lifecycle and tiers"
       subtitle={
         countries.length
-          ? `${formatNumber(activeCount)} ingesting of ${formatNumber(countries.length)} known. ${formatNumber(activeUsers)} page users connected now.`
+          ? `${formatNumber(countries.length)} known: ${tierSummary}. ${formatNumber(activeCount)} warm, ${formatNumber(activeUsers)} page users connected now.`
           : "Country registry not loaded yet."
       }
     >
       <div className="mb-3 flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-1 rounded-md border border-osu-b3/25 bg-osu-b5/50 p-1">
-          {COUNTRY_STATUS_OPTIONS.map((option) => {
-            const on = statusFilters[option.value];
-            const count = statusCounts[option.value];
-            return (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => toggleFilter(option.value)}
-                aria-pressed={on}
-                className={`group flex items-center gap-1.5 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors duration-[120ms] cursor-pointer ${
-                  on ? "bg-osu-b3/55 text-white" : "text-osu-f1 hover:text-osu-l2"
-                }`}
-              >
-                <span className={`h-1.5 w-1.5 rounded-full ${on ? option.dot : "bg-osu-b3"}`} />
-                {option.label}
-                <span className={`font-mono ${on ? "text-osu-c2" : "text-osu-f1/70"}`}>{count}</span>
-              </button>
-            );
-          })}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1">
+            Lifecycle
+            <div className="flex items-center gap-1 rounded-md border border-osu-b3/25 bg-osu-b5/50 p-1">
+              {COUNTRY_STATUS_OPTIONS.map((option) => {
+                const on = statusFilters[option.value];
+                const count = statusCounts[option.value];
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => toggleFilter(option.value)}
+                    aria-pressed={on}
+                    className={`group flex items-center gap-1.5 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors duration-[120ms] cursor-pointer ${
+                      on ? "bg-osu-b3/55 text-white" : "text-osu-f1 hover:text-osu-l2"
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${on ? option.dot : "bg-osu-b3"}`} />
+                    {option.label}
+                    <span className={`font-mono ${on ? "text-osu-c2" : "text-osu-f1/70"}`}>{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1">
+            Tier
+            <div className="flex flex-wrap items-center gap-1 rounded-md border border-osu-b3/25 bg-osu-b5/50 p-1">
+              {COUNTRY_TIER_OPTIONS.map((tier) => {
+                const on = tierFilters[tier.value];
+                return (
+                  <button
+                    key={tier.value}
+                    type="button"
+                    onClick={() => toggleTierFilter(tier.value)}
+                    aria-pressed={on}
+                    title={tier.blurb}
+                    className={`group flex items-center gap-1.5 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors duration-[120ms] cursor-pointer ${
+                      on ? "bg-osu-b3/55 text-white" : "text-osu-f1 hover:text-osu-l2"
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full ${on ? tier.dot : "bg-osu-b3"}`} />
+                    {tier.label}
+                    <span className={`font-mono ${on ? "text-osu-c2" : "text-osu-f1/70"}`}>{tierCounts[tier.value]}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
         <div className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1">
           Sort
@@ -681,6 +745,20 @@ function CountriesCard({
               </button>
             ))}
           </div>
+        </div>
+      </div>
+      <div className="mb-3 rounded-md border border-osu-b3/25 bg-osu-b5/40 px-2.5 py-2">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-osu-f1">
+          What the tiers mean (each builds on the one before it)
+        </div>
+        <div className="mt-1.5 grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
+          {COUNTRY_TIER_OPTIONS.map((tier) => (
+            <div key={tier.value} className="flex items-center gap-1.5 text-[10px] text-osu-f1">
+              <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${tier.dot}`} />
+              <span className={`font-semibold uppercase tracking-wider ${tier.tone}`}>{tier.label}</span>
+              <span className="text-osu-f1/70">{tier.blurb}</span>
+            </div>
+          ))}
         </div>
       </div>
       {sorted.length === 0 ? (
@@ -718,6 +796,7 @@ function CountryRow({
 }) {
   const displayStatus = getCountryDisplayStatus(entry);
   const statusTone = displayStatus === "paused" || displayStatus === "idle" ? "text-osu-red" : displayStatus === "active" ? "text-osu-green" : "text-osu-yellow";
+  const featureTier = getCountryFeatureTier(entry);
   const activeUsers = entry.activeUsers ?? 0;
   const shouldResume = entry.status === "paused" || !entry.isWarm;
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -753,17 +832,21 @@ function CountryRow({
             {entry.pinned ? (
               <span className="text-[9px] uppercase tracking-wider font-semibold text-osu-c2/80">pinned</span>
             ) : null}
+            <span className={`text-[9px] uppercase tracking-wider font-semibold ${countryFeatureTierTone(featureTier)}`}>tier {countryFeatureTierLabel(featureTier)}</span>
           </div>
           <div className="text-[10px] text-osu-f1">
-            {users == null ? "roster not loaded" : `${formatNumber(users)} tracked users`}
+            {users == null ? "roster not loaded" : `${formatNumber(users)} roster users`}
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`text-[10px] font-semibold uppercase tracking-wider ${statusTone}`}>{displayStatus}</span>
+          <div className="flex flex-col items-end leading-none">
+            <span className="text-[8px] font-semibold uppercase tracking-wider text-osu-f1">lifecycle</span>
+            <span className={`text-[10px] font-semibold uppercase tracking-wider ${statusTone}`}>{displayStatus}</span>
+          </div>
           <button
             type="button"
-            title={shouldResume ? `Resume ${entry.country} ingestion` : `Pause ${entry.country} ingestion`}
-            aria-label={shouldResume ? `Resume ${entry.country} ingestion` : `Pause ${entry.country} ingestion`}
+            title={shouldResume ? `Resume ${entry.country} country warmup` : `Pause ${entry.country} country warmup`}
+            aria-label={shouldResume ? `Resume ${entry.country} country warmup` : `Pause ${entry.country} country warmup`}
             disabled={busy}
             onClick={onToggle}
             className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-osu-b3/40 bg-osu-b4/70 text-osu-f1 transition hover:border-osu-c2/60 hover:text-white disabled:opacity-50"
@@ -820,6 +903,26 @@ function CountryRow({
       </div>
     </div>
   );
+}
+
+function getCountryFeatureTier(entry: CountryEntry): CountryFeatureTier {
+  return entry.featureTier === "snipes" || entry.featureTier === "live" || entry.featureTier === "maps_warm" || entry.featureTier === "indexed"
+    ? entry.featureTier
+    : "indexed";
+}
+
+function countryFeatureTierLabel(tier: CountryFeatureTier): string {
+  switch (tier) {
+    case "snipes": return "snipes";
+    case "live": return "live";
+    case "maps_warm": return "maps";
+    case "indexed": return "indexed";
+    default: return "indexed";
+  }
+}
+
+function countryFeatureTierTone(tier: CountryFeatureTier): string {
+  return COUNTRY_TIER_OPTIONS.find((option) => option.value === tier)?.tone ?? "text-osu-f1";
 }
 
 function getCountryDisplayStatus(entry: CountryEntry): CountryDisplayStatus {

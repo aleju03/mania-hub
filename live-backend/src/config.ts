@@ -8,6 +8,8 @@ export interface Config {
   oscBaseUrl: string;
   oscSocketPath: string;
   trackedCountries: string[];
+  prewarmCountries: string[];
+  mapsWarmCountries: string[];
   livePublicOrigin: string;
   allowedOrigins: string[];
   liveAdminToken?: string;
@@ -87,7 +89,36 @@ function csv(value: string | undefined, fallback: string): string[] {
     .filter(Boolean);
 }
 
+const TOP_50_MANIA_COUNTRIES = [
+  "KR", "CN", "US", "JP", "PH", "ID", "VN", "TH", "RU", "CA",
+  "BR", "CL", "GB", "MY", "MX", "AR", "TW", "PE", "HK", "AU",
+  "PL", "FR", "ES", "DE", "SG", "CO", "IT", "VE", "SE", "NL",
+  "FI", "EC", "UA", "TR", "NZ", "RO", "NO", "PT", "CZ", "DK",
+  "CR", "BE", "SA", "KZ", "HU", "IL", "GR", "IE", "BO", "UY",
+];
+
+function uniqueCountries(countries: string[]): string[] {
+  return [...new Set(
+    countries
+      .map((country) => country.trim().toUpperCase())
+      .filter((country) => /^[A-Z]{2}$/.test(country)),
+  )];
+}
+
+function countryCsv(name: string, fallback: string[]): string[] {
+  const raw = process.env[name];
+  if (raw == null) return uniqueCountries(fallback);
+  return uniqueCountries(raw.split(","));
+}
+
 export function readConfig(): Config {
+  const trackedCountries = countryCsv("TRACKED_COUNTRIES", ["CR"]);
+  const prewarmCountries = countryCsv("PREWARM_COUNTRIES", TOP_50_MANIA_COUNTRIES);
+  const mapsWarmCountries = countryCsv("MAPS_WARM_COUNTRIES", [
+    ...TOP_50_MANIA_COUNTRIES.slice(0, 20),
+    ...trackedCountries,
+  ]);
+
   return {
     port: readInt("PORT", 7227),
     nodeEnv: process.env.NODE_ENV ?? "development",
@@ -97,7 +128,9 @@ export function readConfig(): Config {
     osuClientSecret: process.env.OSU_CLIENT_SECRET || undefined,
     oscBaseUrl: process.env.OSC_BASE_URL ?? "https://osc.kaysting.dev",
     oscSocketPath: process.env.OSC_SOCKET_PATH ?? "/ws",
-    trackedCountries: csv(process.env.TRACKED_COUNTRIES, "CR").map((country) => country.toUpperCase()),
+    trackedCountries,
+    prewarmCountries,
+    mapsWarmCountries,
     livePublicOrigin: process.env.LIVE_PUBLIC_ORIGIN ?? "http://localhost:7227",
     allowedOrigins: csv(process.env.ALLOWED_ORIGINS, "http://localhost:3000"),
     liveAdminToken: process.env.LIVE_ADMIN_TOKEN || undefined,

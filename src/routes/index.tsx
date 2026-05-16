@@ -8,6 +8,8 @@ import { parseCountrySearchParam, withSearchParams } from "../lib/country-search
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
 import { getModDisplayList, getScoreDisplayValues, getScoreTimestamp } from "../lib/score";
 import { fetchLiveTopPlaysSnapshot, fetchLiveTrackerSnapshot, isLiveBackendConfigured } from "../lib/live-backend";
+import { CountryWarming } from "../components/CountryWarming";
+import { useCountryWarming } from "../lib/use-country-warming";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
@@ -163,6 +165,7 @@ function HomePage() {
   const popoffsFetchedAt = useAppStore((state) => state.homePopoffsFetchedAtByCountry[selectedCountry]) ?? null;
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
   const liveBackendEnabled = isLiveBackendConfigured();
+  const { warming } = useCountryWarming(selectedCountry);
   const hydrated = useHasHydrated();
   const setRankings = useAppStore((state) => state.setRankings);
   const setHomeRecentScores = useAppStore((state) => state.setHomeRecentScores);
@@ -395,6 +398,9 @@ function HomePage() {
         </div>
       </section>
 
+      {warming && <CountryWarming country={selectedCountry} />}
+
+      {!warming && (
       <div className="relative max-w-[1200px] mx-auto px-4 sm:px-5 pb-8 grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-4">
         {/* CR Top 5 */}
         <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
@@ -596,6 +602,7 @@ function HomePage() {
         </section>
         </div>
       </div>
+      )}
     </div>
   );
 }

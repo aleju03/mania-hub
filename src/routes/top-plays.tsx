@@ -23,6 +23,8 @@ import { hasTopPlaysCache, shouldRefreshTopPlays } from "../lib/top-plays-cache"
 import { getReplaySearch } from "../lib/replay-navigation";
 import { startProgressPoll } from "../lib/progress-poll";
 import { fetchLiveTopPlaysSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
+import { CountryWarming } from "../components/CountryWarming";
+import { useCountryWarming } from "../lib/use-country-warming";
 
 type PopOff = CountryTopPlay;
 
@@ -116,6 +118,7 @@ function PopOffsPage() {
   }, [refreshing]);
   const countryName = getCountryName(selectedCountry);
   const liveBackendEnabled = isLiveBackendConfigured();
+  const { warming } = useCountryWarming(selectedCountry);
 
   useEffect(() => {
     setPlayersError(null);
@@ -527,6 +530,10 @@ function PopOffsPage() {
         }
       />
 
+      {warming && <CountryWarming country={selectedCountry} />}
+
+      {!warming && (
+      <>
       <PageTabs
         items={ranges}
         value={range}
@@ -949,6 +956,8 @@ function PopOffsPage() {
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

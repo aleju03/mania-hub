@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { readConfig } from "./config.js";
-import { ensurePinnedCountries, getActiveCountryCodes } from "./countries.js";
+import { ensurePinnedCountries, getIndexedCountryCodes, getMapsWarmCountryCodes } from "./countries.js";
 import { createDb, exec, migrate } from "./db.js";
 import { routeHttp, sendNotFound } from "./http/snapshots.js";
 import { ScoreIngestor } from "./ingest/score-ingestor.js";
@@ -36,7 +36,7 @@ export async function createApp() {
   const countryClients = new CountryClientTracker();
   const osc = new OscSocketClient(config, ingestor);
   if (config.enableStartupRosterRefresh && osu.hasCredentials()) {
-    await enqueueRosterRefreshes(queue, config.trackedCountries);
+    await enqueueRosterRefreshes(queue, await getIndexedCountryCodes(db, config));
   }
   const worker = new WorkerRunner(db, queue, events, osu, ingestor);
   const ctx = {
@@ -87,7 +87,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
 function startRosterScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue, config: ReturnType<typeof readConfig>): void {
   const tick = async () => {
-    const countries = await getActiveCountryCodes(db, config);
+    const countries = await getIndexedCountryCodes(db, config);
     await enqueueRosterRefreshes(queue, countries).catch((error) => {
       console.warn("[roster] scheduled refresh failed", error);
     });
@@ -98,7 +98,7 @@ function startRosterScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: J
 
 function startMapsScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue, config: ReturnType<typeof readConfig>): void {
   const tick = async () => {
-    const countries = await getActiveCountryCodes(db, config);
+    const countries = await getMapsWarmCountryCodes(db, config);
     await Promise.all(countries.map((country) => enqueueMapsRefreshIfDue(db, queue, country, config.mapsRefreshIntervalMs))).catch((error) => {
       console.warn("[maps] scheduled refresh failed", error);
     });

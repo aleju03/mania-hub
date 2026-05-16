@@ -34,6 +34,8 @@ import type { LeanTrackerScore } from "../lib/types";
 import { parseCountrySearchParam } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { fetchLiveTrackerSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
+import { CountryWarming } from "../components/CountryWarming";
+import { useCountryWarming } from "../lib/use-country-warming";
 
 const TRACKER_SNAPSHOT_LOADER_TIMEOUT_MS = 2500;
 const TRACKER_PAGE_SIZE = 100;
@@ -148,6 +150,7 @@ function ScoresPage() {
   const pollRequestIdRef = useRef(0);
   const appliedSnapshotKeyRef = useRef<string | null>(null);
   const liveBackendEnabled = isLiveBackendConfigured();
+  const { warming } = useCountryWarming(selectedCountry);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const handleToggleExpand = useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key));
@@ -586,6 +589,10 @@ function ScoresPage() {
         }
       />
 
+      {warming && <CountryWarming country={selectedCountry} />}
+
+      {!warming && (
+      <>
       <div className="bg-osu-d5 border-b border-osu-b3/30">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-0">
           {/* Desktop: single row with all filters */}
@@ -777,6 +784,8 @@ function ScoresPage() {
           </div>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

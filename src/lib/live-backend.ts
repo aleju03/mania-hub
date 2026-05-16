@@ -168,13 +168,27 @@ export async function fetchLiveTrackerSnapshot(country: string, limit = 100): Pr
   return fetchLiveJson(`/api/snapshots/tracker?country=${encodeURIComponent(country)}&limit=${limit}`);
 }
 
-export async function activateLiveCountry(country: string): Promise<void> {
+export interface LiveCountryActivation {
+  ok: boolean;
+  // True while the country has no roster projection yet, so every country
+  // surface (rankings/maps/tracker/...) is empty until backend warmup runs.
+  warming: boolean;
+}
+
+export async function activateLiveCountry(country: string): Promise<LiveCountryActivation | null> {
   const base = getLiveBackendUrl();
-  if (!base) return;
-  await fetch(`${base}/api/countries/activate?country=${encodeURIComponent(country)}`, {
-    method: "POST",
-    credentials: "omit",
-  }).catch(() => {});
+  if (!base) return null;
+  try {
+    const response = await fetch(`${base}/api/countries/activate?country=${encodeURIComponent(country)}`, {
+      method: "POST",
+      credentials: "omit",
+    });
+    if (!response.ok) return null;
+    const body = (await response.json()) as Partial<LiveCountryActivation>;
+    return { ok: body.ok === true, warming: body.warming === true };
+  } catch {
+    return null;
+  }
 }
 
 export async function fetchLiveTopPlaysSnapshot(country: string, window: LiveTopPlaysSnapshot["window"]): Promise<LiveTopPlaysSnapshot> {

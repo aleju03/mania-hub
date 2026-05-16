@@ -9,6 +9,8 @@ import { formatNumber, formatAccuracy } from "../lib/format";
 import { getCrRankChanges, getGlobalRankChange } from "../lib/rankings";
 import { Avatar } from "../components/ui/Avatar";
 import { PageHeader } from "../components/layout/PageHeader";
+import { CountryWarming } from "../components/CountryWarming";
+import { useCountryWarming } from "../lib/use-country-warming";
 import { RankingRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse } from "../lib/types";
@@ -88,17 +90,21 @@ function RankingsPage() {
   const [sortBy, setSortBy] = useState<SortField>("rank");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [liveRankDeltas, setLiveRankDeltas] = useState<Record<number, LiveRankDelta>>({});
+  const [rankDeltasReady, setRankDeltasReady] = useState(false);
   const pageData = page === 1 ? cachedPageOneData : pageTwoData;
   const [rankingsLoading, setRankingsLoading] = useState(!(page === 1 ? cachedPageOneData : pageTwoData));
   const [rankHistoriesLoading, setRankHistoriesLoading] = useState(false);
   const countryName = getCountryName(selectedCountry);
   const totalPlayers = cachedPageOneData?.total ?? pageData?.total ?? 0;
   const hasNextPage = totalPlayers > 50;
+  const liveBackendEnabled = isLiveBackendConfigured();
+  const { warming } = useCountryWarming(selectedCountry);
 
   useEffect(() => {
     setPageTwoData(null);
     setPageTwoFetchedAt(null);
     setLiveRankDeltas({});
+    setRankDeltasReady(false);
     setError(null);
   }, [selectedCountry]);
 
@@ -156,6 +162,7 @@ function RankingsPage() {
     let cancelled = false;
     const userIds = pageData.ranking.slice(0, 50).map((e) => e.user.id);
     const loadRankDeltas = async () => {
+      setRankDeltasReady(false);
       const liveMissingIds = userIds.filter((userId) => !liveRankDeltas[userId]);
       const historyMissingIds = userIds.filter(
         (userId) =>
@@ -169,7 +176,12 @@ function RankingsPage() {
       }
 
       let liveDeltas: Record<number, LiveRankDelta> = {};
-      if (isLiveBackendConfigured() && liveMissingIds.length > 0) {
+      if (liveBackendEnabled) {
+        if (liveMissingIds.length === 0) {
+          setRankHistoriesLoading(false);
+          setRankDeltasReady(true);
+          return;
+        }
         try {
           const snapshot = await fetchLiveRankDeltas(selectedCountry, liveMissingIds);
           if (cancelled) return;
@@ -177,6 +189,9 @@ function RankingsPage() {
           if (Object.keys(liveDeltas).length > 0) {
             setLiveRankDeltas((current) => ({ ...current, ...liveDeltas }));
           }
+          setRankHistoriesLoading(false);
+          setRankDeltasReady(true);
+          return;
         } catch {
           // Fall back to osu! rank_history below.
         }
@@ -191,7 +206,10 @@ function RankingsPage() {
       );
 
       if (userIdsToFetch.length === 0) {
-        if (!cancelled) setRankHistoriesLoading(false);
+        if (!cancelled) {
+          setRankHistoriesLoading(false);
+          setRankDeltasReady(true);
+        }
         return;
       }
 
@@ -200,14 +218,17 @@ function RankingsPage() {
         if (cancelled) return;
         setRankHistories(histories);
       } finally {
-        if (!cancelled) setRankHistoriesLoading(false);
+        if (!cancelled) {
+          setRankHistoriesLoading(false);
+          setRankDeltasReady(true);
+        }
       }
     };
 
     void loadRankDeltas();
 
     return () => { cancelled = true; };
-  }, [pageData, selectedCountry, liveRankDeltas, rankHistories, rankHistoriesFetchedAt, setRankHistories]);
+  }, [pageData, selectedCountry, rankHistories, rankHistoriesFetchedAt, setRankHistories, liveBackendEnabled]);
 
   // Compare current country positions vs 7 days ago.
   const countryRankChanges = useMemo(() => {
@@ -298,11 +319,18 @@ function RankingsPage() {
         right={
           <>
             {!pageData && rankingsLoading && !error && <span className="text-[10px] text-osu-f1">Loading rankings...</span>}
-            {pageData && rankHistoriesLoading && <span className="text-[10px] text-osu-f1">Loading 7d changes...</span>}
+            {pageData && rankHistoriesLoading && (
+              <span className="text-[10px] text-osu-f1">
+                {liveBackendEnabled ? "Checking 7d changes..." : "Loading 7d changes..."}
+              </span>
+            )}
           </>
         }
       />
 
+      {warming && <CountryWarming country={selectedCountry} />}
+
+      {!warming && (
       <div className="bg-osu-b5">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5">
           {!isDesktop && (
@@ -402,7 +430,7 @@ function RankingsPage() {
                   if (sortBy === "7d" || sortBy === "cr7d") {
                     return (
                       <div className="flex items-center gap-2">
-                        {sortBy === "7d" && (history || globalChange !== null) && (
+                        {sortBy === "7d" && (history || globalChange !== null || rankDeltasReady) && (
                           <>
                             {history && <MiniSparkline data={history} />}
                             {globalChange !== null && globalChange !== 0 && (
@@ -410,6 +438,7 @@ function RankingsPage() {
                                 {globalChange > 0 ? `+${formatNumber(globalChange)}` : formatNumber(globalChange)}
                               </span>
                             )}
+                            {globalChange === null || globalChange === 0 ? <span>7d -</span> : null}
                           </>
                         )}
                         {sortBy === "cr7d" && (
@@ -519,7 +548,7 @@ function RankingsPage() {
                     const liveDelta = liveRankDeltas[entry.user.id];
                     const globalChange = liveDelta?.globalChange ?? getGlobalRankChange(history);
                     const crChange = liveDelta?.countryChange ?? countryRankChanges[entry.user.id] ?? null;
-                    const deltasLoaded = !!liveDelta || !!history;
+                    const deltasLoaded = rankDeltasReady || !!liveDelta || !!history;
 
                     return (
                       <tr
@@ -613,6 +642,7 @@ function RankingsPage() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

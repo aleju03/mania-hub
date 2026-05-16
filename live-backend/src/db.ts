@@ -21,6 +21,7 @@ export async function migrate(db: Db): Promise<void> {
   for (const statement of splitSql(sql)) {
     await db.execute(statement);
   }
+  await migrateCountryRegistryFeatureTier(db);
   await migrateScoreEventsIdentity(db);
 }
 
@@ -55,6 +56,13 @@ export function parseJson<T>(value: unknown, fallback: T): T {
   } catch {
     return fallback;
   }
+}
+
+async function migrateCountryRegistryFeatureTier(db: Db): Promise<void> {
+  const columns = (await db.execute("pragma table_info(country_registry)")).rows.map((row) => String(row.name));
+  if (columns.includes("feature_tier")) return;
+
+  await db.execute("alter table country_registry add column feature_tier text not null default 'live'");
 }
 
 async function migrateScoreEventsIdentity(db: Db): Promise<void> {

@@ -1,10 +1,10 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Config } from "../config.js";
-import { activateCountry, deleteCountryData, getCountryRegistry, setCountryPaused } from "../countries.js";
+import { activateCountry, deleteCountryData, getCountryRegistry, isCountryFeatureAtLeast, setCountryPaused } from "../countries.js";
 import type { Db } from "../db.js";
 import { dbHealth, exec, parseJson } from "../db.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
-import { enqueueMapsRefresh, getMapsSnapshot } from "../features/maps.js";
+import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsSnapshot } from "../features/maps.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
 import { getTopPlaysSnapshot } from "../features/top-plays.js";
@@ -123,7 +123,12 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     if (!checkRate(req, res, ctx, "publicCostly")) return true;
     const activated = await activatePublicCountry(req, res, ctx, country);
     if (!activated) return true;
-    sendJson(req, res, ctx, 200, { ok: true, country: activated });
+    sendJson(req, res, ctx, 200, {
+      ok: true,
+      country: activated,
+      // Cold country: no roster projection yet, so every country surface is empty until warmup runs.
+      warming: activated.lastRosterRefreshAt == null,
+    });
     return true;
   }
   if (url.pathname === "/api/snapshots/tracker") {
@@ -555,7 +560,11 @@ export async function activatePublicCountry(
       return null;
     }
   }
-  return activateCountry(ctx.db, ctx.queue, ctx.config, country);
+  const activated = await activateCountry(ctx.db, ctx.queue, ctx.config, country);
+  if (isCountryFeatureAtLeast(activated.featureTier, "maps_warm")) {
+    await enqueueMapsRefreshIfDue(ctx.db, ctx.queue, activated.country, ctx.config.mapsRefreshIntervalMs, { priority: 15 });
+  }
+  return activated;
 }
 
 async function isCountryRegistered(db: Db, country: string): Promise<boolean> {

@@ -53,6 +53,8 @@ import { REPLAY_SKIN_SETTINGS_CHANGE_EVENT, readReplaySkinSettings } from "../li
 import type { ReplaySkinSettings } from "../lib/replay-skin";
 import { useAuth } from "../lib/auth-context";
 import { fetchLiveMapsSnapshot, isLiveBackendConfigured, runLiveBackendAdminAction } from "../lib/live-backend";
+import { CountryWarming } from "../components/CountryWarming";
+import { useCountryWarming } from "../lib/use-country-warming";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
 import {
   cycleTriStateCsv,
@@ -916,6 +918,10 @@ function MapsPage() {
   const [rebuildMenuOpen, setRebuildMenuOpen] = useState(false);
   const [rebuildQuery, setRebuildQuery] = useState("");
   const [liveMapsAttempted, setLiveMapsAttempted] = useState(false);
+  // True while the live backend is building this country's maps for the very
+  // first time (no snapshot has ever existed). Distinguishes a cold first build
+  // from a quick refresh of already-cached maps.
+  const [mapsFirstBuild, setMapsFirstBuild] = useState(false);
   const rebuildMenuRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     if (!rebuildMenuOpen) return;
@@ -949,6 +955,7 @@ function MapsPage() {
   const isDevMode = auth.canUseDevFeatures;
   const canUseAdminFeatures = auth.canUseAdminFeatures;
   const liveBackendEnabled = isLiveBackendConfigured();
+  const { warming } = useCountryWarming(selectedCountry);
   const randomStatus = useMemo(() => parseTriStateCsv(rStatusRaw, RANDOM_STATUS_OPTIONS), [rStatusRaw]);
   const randomKey = useMemo(() => parseTriStateCsv(rKeyRaw, RANDOM_KEY_OPTIONS), [rKeyRaw]);
   const randomPattern = useMemo(() => parseTriStateCsv(rPatternRaw, RANDOM_PATTERN_OPTIONS), [rPatternRaw]);
@@ -996,6 +1003,7 @@ function MapsPage() {
     if (!liveBackendEnabled) return;
 
     setLiveMapsAttempted(false);
+    setMapsFirstBuild(false);
     const snapshot = useAppStore.getState();
     const currentData = snapshot.mapsDataByCountry[selectedCountry] ?? null;
     const currentFetchedAt = snapshot.mapsDataFetchedAtByCountry[selectedCountry] ?? null;
@@ -1021,9 +1029,13 @@ function MapsPage() {
             setMapsData(selectedCountry, snapshot.value);
             setLoadedSections(countLoadedMapsSections(snapshot.value));
             setLoadingMaps(false);
+            setMapsFirstBuild(false);
             setError(null);
           } else if (!hasValidMapsDataShape(useAppStore.getState().mapsDataByCountry[selectedCountry] ?? null)) {
             setLoadingMaps(true);
+            // No snapshot has ever been generated for this country: this is a
+            // cold first build, not a refresh of stale cached data.
+            setMapsFirstBuild(snapshot.generatedAt == null);
           }
           if (!cancelled && (snapshot.isStale || snapshot.refreshQueued)) {
             pollTimer = setTimeout(loadSnapshot, 5_000);
@@ -1594,7 +1606,9 @@ function MapsPage() {
                 <span className="text-[10px] text-osu-f1 tabular-nums">
                   {loadingPlayers
                     ? "Loading players..."
-                    : `Loading maps... (${Math.round(smoothProgress)}%)`}
+                    : mapsFirstBuild
+                      ? "Building maps..."
+                      : `Loading maps... (${Math.round(smoothProgress)}%)`}
                 </span>
               </div>
             )}
@@ -1665,6 +1679,10 @@ function MapsPage() {
         }
       />
 
+      {warming && <CountryWarming country={selectedCountry} />}
+
+      {!warming && (
+      <>
       <PageTabs
         items={tabs}
         value={tab}
@@ -1922,7 +1940,13 @@ function MapsPage() {
           {/* Loading skeleton grid */}
           {!error && isLoading && (!mapsData || !hasValidMapsData) && (
             <div className="space-y-3">
-              <MapsLoadingIndicator loadingPlayers={loadingPlayers} />
+              {mapsFirstBuild && !loadingPlayers && (
+                <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/60 px-3.5 py-2.5 text-[11px] leading-relaxed text-osu-f1">
+                  <span className="font-semibold text-osu-c2">First time loading {countryName} maps.</span>{" "}
+                  Scanning its top players' plays and favourites. This can take a minute, and the page will fill in on its own.
+                </div>
+              )}
+              <MapsLoadingIndicator loadingPlayers={loadingPlayers} firstBuild={mapsFirstBuild} />
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
                 {Array.from({ length: 12 }).map((_, i) => (
                   <div key={i} className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
@@ -2185,6 +2209,8 @@ function MapsPage() {
           )}
         </div>
       </div>
+      </>
+      )}
 
       <MapDetailsModal
         details={detailsOpen}
@@ -2202,18 +2228,22 @@ const LOADING_STEPS = [
   "Almost there...",
 ];
 
-function MapsLoadingIndicator({ loadingPlayers }: { loadingPlayers: boolean }) {
+function MapsLoadingIndicator({ loadingPlayers, firstBuild }: { loadingPlayers: boolean; firstBuild: boolean }) {
   const [stepIndex, setStepIndex] = useState(0);
 
   useEffect(() => {
-    if (loadingPlayers) return;
+    if (loadingPlayers || firstBuild) return;
     const id = setInterval(() => {
       setStepIndex((i) => (i + 1) % LOADING_STEPS.length);
     }, 3000);
     return () => clearInterval(id);
-  }, [loadingPlayers]);
+  }, [loadingPlayers, firstBuild]);
 
-  const label = loadingPlayers ? "Loading players..." : LOADING_STEPS[stepIndex];
+  const label = loadingPlayers
+    ? "Loading players..."
+    : firstBuild
+      ? "Building maps for the first time..."
+      : LOADING_STEPS[stepIndex];
 
   return (
     <div className="flex items-center gap-3">

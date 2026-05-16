@@ -1,7 +1,7 @@
 import type { Config } from "../config.js";
 import type { Db } from "../db.js";
 import { exec, json } from "../db.js";
-import { getActiveCountryCodes, markCountryScoreSeen } from "../countries.js";
+import { canSeedSnipesForCountry, getActiveCountryCodes, markCountryScoreSeen } from "../countries.js";
 import { updateSnipeProjection } from "../features/snipes.js";
 import { maybeEnqueueTopPlayRefresh } from "../features/top-plays.js";
 import { getTrackerScoreByIdentity } from "../features/tracker.js";
@@ -21,7 +21,7 @@ export class ScoreIngestor {
     private readonly db: Db,
     private readonly queue: JobQueue,
     private readonly events: LiveEventLog,
-    private readonly config: Pick<Config, "topPlayMarginPp" | "trackedCountries" | "countryWarmTtlMs" | "osuClientId" | "osuClientSecret">,
+    private readonly config: Pick<Config, "topPlayMarginPp" | "trackedCountries" | "countryWarmTtlMs" | "osuClientId" | "osuClientSecret"> & Partial<Pick<Config, "prewarmCountries" | "mapsWarmCountries">>,
   ) {}
 
   async ingestBatch(scores: OscScore[], source = "osc_socket", options: ScoreIngestOptions = {}): Promise<{ inserted: number; skipped: number }> {
@@ -37,6 +37,7 @@ export class ScoreIngestor {
 
   async processHydratedSnipeFeatures(country: string, score: OscScore): Promise<void> {
     if (!score.beatmap || !score.beatmapset || !score.user) return;
+    if (!await canSeedSnipesForCountry(this.db, this.config, country)) return;
     if (this.canUseOsuApi() && await this.enqueueSnipeSeedIfNeeded(country, score)) return;
     await updateSnipeProjection(this.db, this.events, country, score);
   }
@@ -143,6 +144,7 @@ export class ScoreIngestor {
     if (!score.beatmap || !score.beatmapset || !score.user) return true;
     if (processLeaderboardFeatures) {
       for (const country of countries) {
+        if (!await canSeedSnipesForCountry(this.db, this.config, country)) continue;
         if (canUseOsuApi && await this.enqueueSnipeSeedIfNeeded(country, score)) continue;
         await updateSnipeProjection(this.db, this.events, country, score);
       }
