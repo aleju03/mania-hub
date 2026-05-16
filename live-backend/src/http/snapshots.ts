@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Config } from "../config.js";
-import { activateCountry, getCountryRegistry } from "../countries.js";
+import { activateCountry, getCountryRegistry, setCountryPaused } from "../countries.js";
 import type { Db } from "../db.js";
 import { dbHealth, exec, parseJson } from "../db.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
@@ -11,6 +11,7 @@ import { getTopPlaysSnapshot } from "../features/top-plays.js";
 import { getTrackerSnapshot } from "../features/tracker.js";
 import { type AbuseBucket, type AbuseGuard, normalizeCountryParam, type RateLimitResult } from "./abuse-guard.js";
 import type { JobQueue } from "../jobs/queue.js";
+import type { CountryClientTracker } from "../live/country-clients.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import type { OscStatus } from "../osc/client.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
@@ -35,6 +36,7 @@ export interface HttpContext {
   events: LiveEventLog;
   config: Config;
   abuse?: AbuseGuard;
+  countryClients?: CountryClientTracker;
   osu: OsuApiClient;
   oscStatus: () => OscStatus;
   workerStatus?: () => {
@@ -306,6 +308,15 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 200, { ok: true, country });
     return true;
   }
+  if (url.pathname === "/api/admin/pause-country" || url.pathname === "/api/admin/resume-country") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    const paused = url.pathname === "/api/admin/pause-country";
+    sendJson(req, res, ctx, 200, { ok: true, country: await setCountryPaused(ctx.db, ctx.config, country, paused) });
+    return true;
+  }
   if (url.pathname === "/api/admin/refresh-maps") {
     if (!isAdmin(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
@@ -431,7 +442,7 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
     rate: ctx.osu.limiter.state(),
     abuse: ctx.abuse?.state() ?? null,
     apiCallHistory: await apiCallHistory(ctx.db),
-    countries: await getCountryRegistry(ctx.db, ctx.config),
+    countries: await countryRegistryStatus(ctx),
     worker: options.includeWorkerActivity ? worker : publicWorkerStatus(worker),
   };
 }
@@ -466,6 +477,19 @@ async function rosterSummary(db: Db) {
     users: Number(row.users),
     refreshedAt: row.refreshed_at == null ? null : String(row.refreshed_at),
   }));
+}
+
+async function countryRegistryStatus(ctx: HttpContext) {
+  const countries = await getCountryRegistry(ctx.db, ctx.config);
+  const clients = new Map((ctx.countryClients?.snapshot() ?? []).map((entry) => [entry.country, entry]));
+  return countries.map((entry) => {
+    const client = clients.get(entry.country);
+    return {
+      ...entry,
+      activeUsers: client?.activeUsers ?? 0,
+      lastActiveAt: client?.lastActiveAt ?? entry.lastRequestedAt,
+    };
+  });
 }
 
 async function apiCallHistory(db: Db) {

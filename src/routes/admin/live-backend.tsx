@@ -1,5 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
-import { Activity, AlertTriangle, Database, HelpCircle, History, Pause, Play, Radio, RefreshCw, Server, Signal, Trash2, UserRound, Wifi, WifiOff } from "lucide-react";
+import { Activity, Database, HelpCircle, History, Pause, Play, Radio, RefreshCw, Server, Signal, Trash2, UserRound, Wifi, WifiOff } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import {
@@ -51,6 +51,8 @@ interface LiveBackendStatus {
     lastRequestedAt: string;
     lastRosterRefreshAt: string | null;
     lastScoreAt: string | null;
+    activeUsers: number;
+    lastActiveAt: string | null;
     isWarm: boolean;
   }>;
   rate: {
@@ -330,7 +332,16 @@ function LiveBackendPage() {
           </Section>
 
           <Section title="Countries" subtitle="Which countries the backend is currently tracking">
-            <CountriesCard status={status} />
+            <CountriesCard
+              status={status}
+              busy={actionBusy}
+              onToggleCountry={(entry) => {
+                const shouldPause = entry.status !== "paused" && entry.isWarm;
+                const action = shouldPause ? `pause-country-${entry.country}` : `resume-country-${entry.country}`;
+                const path = shouldPause ? "/api/admin/pause-country" : "/api/admin/resume-country";
+                void runAdminAction(action, `${path}?country=${encodeURIComponent(entry.country)}`);
+              }}
+            />
           </Section>
 
           {(status?.worker?.lanes?.length ?? 0) > 0 ? (
@@ -358,7 +369,7 @@ function LiveBackendPage() {
             <RateBreakdownCard status={status} />
           </Section>
 
-          <Section title="Controls" subtitle="Admin actions. Safe actions on top, destructive at the bottom.">
+          <Section title="Controls" subtitle="Admin actions for routine backend maintenance.">
             <ControlsCard
               status={status}
               busy={actionBusy}
@@ -367,7 +378,6 @@ function LiveBackendPage() {
               onRunRetention={() => void runAdminAction("retention", "/api/admin/run-retention")}
               onOscSmoke={() => void runAdminAction("osc-smoke", "/api/admin/osc-smoke")}
               onRunOscBackfill={() => void runAdminAction("osc-backfill", "/api/admin/run-osc-backfill")}
-              onResetLocalDb={() => void runAdminAction("reset-local-db", "/api/admin/reset-local-db")}
               onToggleWorkers={() => void runAdminAction(
                 status?.worker?.paused ? "resume-workers" : "pause-workers",
                 status?.worker?.paused ? "/api/admin/resume-workers" : "/api/admin/pause-workers",
@@ -543,7 +553,15 @@ function StatusCard({ status, connectionState, country }: { status: LiveBackendS
 
 const COUNTRY_STATUS_RANK: Record<string, number> = { active: 0, warm: 1, paused: 2 };
 
-function CountriesCard({ status }: { status: LiveBackendStatus | null }) {
+function CountriesCard({
+  status,
+  busy,
+  onToggleCountry,
+}: {
+  status: LiveBackendStatus | null;
+  busy: string | null;
+  onToggleCountry: (entry: NonNullable<LiveBackendStatus["countries"]>[number]) => void;
+}) {
   const countries = status?.countries ?? [];
   const rosterByCountry = useMemo(() => {
     const map = new Map<string, number>();
@@ -560,13 +578,14 @@ function CountriesCard({ status }: { status: LiveBackendStatus | null }) {
       }),
     [countries],
   );
-  const activeCount = countries.filter((entry) => entry.status !== "paused").length;
+  const activeCount = countries.filter((entry) => entry.status !== "paused" && entry.isWarm).length;
+  const activeUsers = countries.reduce((total, entry) => total + (entry.activeUsers ?? 0), 0);
   return (
     <SectionCard
       title="Tracked countries"
       subtitle={
         countries.length
-          ? `${formatNumber(activeCount)} active of ${formatNumber(countries.length)} known. Pinned countries are always tracked.`
+          ? `${formatNumber(activeCount)} ingesting of ${formatNumber(countries.length)} known. ${formatNumber(activeUsers)} page users connected now.`
           : "Country registry not loaded yet."
       }
     >
@@ -575,7 +594,13 @@ function CountriesCard({ status }: { status: LiveBackendStatus | null }) {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {sorted.map((entry) => (
-            <CountryRow key={entry.country} entry={entry} users={rosterByCountry.get(entry.country) ?? null} />
+            <CountryRow
+              key={entry.country}
+              entry={entry}
+              users={rosterByCountry.get(entry.country) ?? null}
+              busy={busy === `pause-country-${entry.country}` || busy === `resume-country-${entry.country}`}
+              onToggle={() => onToggleCountry(entry)}
+            />
           ))}
         </div>
       )}
@@ -586,12 +611,19 @@ function CountriesCard({ status }: { status: LiveBackendStatus | null }) {
 function CountryRow({
   entry,
   users,
+  busy,
+  onToggle,
 }: {
   entry: NonNullable<LiveBackendStatus["countries"]>[number];
   users: number | null;
+  busy: boolean;
+  onToggle: () => void;
 }) {
   const statusTone =
-    entry.status === "active" ? "text-osu-green" : entry.status === "paused" ? "text-osu-red" : "text-osu-yellow";
+    entry.status === "paused" || !entry.isWarm ? "text-osu-red" : entry.status === "active" ? "text-osu-green" : "text-osu-yellow";
+  const activeUsers = entry.activeUsers ?? 0;
+  const displayStatus = entry.status === "paused" ? "paused" : entry.isWarm ? entry.status : "idle";
+  const shouldResume = entry.status === "paused" || !entry.isWarm;
   return (
     <div className="rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2">
       <div className="flex items-center gap-2.5">
@@ -613,9 +645,30 @@ function CountryRow({
             {users == null ? "roster not loaded" : `${formatNumber(users)} tracked users`}
           </div>
         </div>
-        <span className={`text-[10px] font-semibold uppercase tracking-wider ${statusTone}`}>{entry.status}</span>
+        <div className="flex items-center gap-2">
+          <span className={`text-[10px] font-semibold uppercase tracking-wider ${statusTone}`}>{displayStatus}</span>
+          <button
+            type="button"
+            title={shouldResume ? `Resume ${entry.country} ingestion` : `Pause ${entry.country} ingestion`}
+            aria-label={shouldResume ? `Resume ${entry.country} ingestion` : `Pause ${entry.country} ingestion`}
+            disabled={busy}
+            onClick={onToggle}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-osu-b3/40 bg-osu-b4/70 text-osu-f1 transition hover:border-osu-c2/60 hover:text-white disabled:opacity-50"
+          >
+            {shouldResume ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+          </button>
+        </div>
       </div>
-      <div className="mt-1.5 flex items-center gap-3 text-[10px] text-osu-f1">
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-osu-f1">
+        <span>
+          <span className="text-osu-c2/80">page users</span> {formatNumber(activeUsers)}
+        </span>
+        {activeUsers === 0 ? (
+          <span>
+            <span className="text-osu-c2/80">last page activity</span>{" "}
+            {entry.lastActiveAt ? formatTimeAgo(entry.lastActiveAt) : "never"}
+          </span>
+        ) : null}
         <span>
           <span className="text-osu-c2/80">last score</span> {entry.lastScoreAt ? formatTimeAgo(entry.lastScoreAt) : "never"}
         </span>
@@ -909,7 +962,6 @@ function ControlsCard({
   onRunRetention,
   onOscSmoke,
   onRunOscBackfill,
-  onResetLocalDb,
   onToggleWorkers,
 }: {
   status: LiveBackendStatus | null;
@@ -919,7 +971,6 @@ function ControlsCard({
   onRunRetention: () => void;
   onOscSmoke: () => void;
   onRunOscBackfill: () => void;
-  onResetLocalDb: () => void;
   onToggleWorkers: () => void;
 }) {
   return (
@@ -967,23 +1018,6 @@ function ControlsCard({
             icon={<History className="h-3.5 w-3.5" />}
             busy={busy === "osc-backfill"}
             onClick={onRunOscBackfill}
-          />
-        </div>
-      </div>
-      <div className="rounded-lg border border-osu-red/30 bg-osu-red/5 p-3">
-        <div className="flex items-center gap-2 mb-2">
-          <AlertTriangle className="h-3.5 w-3.5 text-osu-red-light" />
-          <div className="text-[10px] uppercase tracking-wider text-osu-red-light font-semibold">Danger zone</div>
-          <div className="text-[10px] text-osu-f1">Destructive. Local development only.</div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-          <AdminButton
-            label="Reset local DB"
-            description="Local development only. Clears the live backend database tables."
-            icon={<Trash2 className="h-3.5 w-3.5" />}
-            busy={busy === "reset-local-db"}
-            onClick={onResetLocalDb}
-            danger
           />
         </div>
       </div>

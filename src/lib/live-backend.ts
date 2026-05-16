@@ -93,12 +93,15 @@ function normalizeAdminPath(input: unknown): string {
     "/api/admin/run-retention",
     "/api/admin/osc-smoke",
     "/api/admin/run-osc-backfill",
-    "/api/admin/reset-local-db",
   ]);
   if (exact.has(path)) return path;
   if (url.pathname === "/api/admin/refresh-roster") {
     const country = url.searchParams.get("country");
     if (country && /^[A-Za-z]{2}$/.test(country)) return `/api/admin/refresh-roster?country=${country.toUpperCase()}`;
+  }
+  if (url.pathname === "/api/admin/pause-country" || url.pathname === "/api/admin/resume-country") {
+    const country = url.searchParams.get("country");
+    if (country && /^[A-Za-z]{2}$/.test(country)) return `${url.pathname}?country=${country.toUpperCase()}`;
   }
   if (url.pathname === "/api/admin/refresh-maps") {
     const country = url.searchParams.get("country");

@@ -14,12 +14,14 @@ export interface CountryRegistryRow {
   lastRequestedAt: string;
   lastRosterRefreshAt: string | null;
   lastScoreAt: string | null;
+  activeUsers: number;
+  lastActiveAt: string | null;
   isWarm: boolean;
 }
 
 export async function ensurePinnedCountries(db: Db, config: Pick<Config, "trackedCountries">): Promise<void> {
   for (const country of config.trackedCountries) {
-    await upsertCountry(db, country, { pinned: true, status: "warm" });
+    await upsertCountry(db, country, { pinned: true, status: "warm", touch: false });
   }
 }
 
@@ -39,6 +41,27 @@ export async function activateCountry(
   }
   const row = await getCountryRegistryRow(db, normalized, config);
   if (!row) throw new Error(`Could not activate country ${normalized}`);
+  return row;
+}
+
+export async function setCountryPaused(
+  db: Db,
+  config: Pick<Config, "countryWarmTtlMs" | "trackedCountries">,
+  country: string,
+  paused: boolean,
+): Promise<CountryRegistryRow> {
+  const normalized = normalizeCountry(country);
+  const now = nowIso();
+  await ensurePinnedCountries(db, config);
+  await exec(
+    db,
+    `insert into country_registry (country, status, pinned, first_requested_at, last_requested_at, updated_at)
+     values (?, ?, ?, ?, ?, ?)
+     on conflict(country) do update set status = excluded.status, updated_at = excluded.updated_at`,
+    [normalized, paused ? "paused" : "active", config.trackedCountries.includes(normalized) ? 1 : 0, now, now, now],
+  );
+  const row = await getCountryRegistryRow(db, normalized, config);
+  if (!row) throw new Error(`Could not update country ${normalized}`);
   return row;
 }
 
@@ -64,6 +87,18 @@ export async function markCountryScoreSeen(db: Db, country: string): Promise<voi
   );
 }
 
+export async function touchCountryRequest(db: Db, country: string): Promise<void> {
+  const normalized = normalizeCountry(country);
+  const now = nowIso();
+  await exec(
+    db,
+    `insert into country_registry (country, status, pinned, first_requested_at, last_requested_at, updated_at)
+     values (?, 'warm', 0, ?, ?, ?)
+     on conflict(country) do update set last_requested_at = excluded.last_requested_at, updated_at = excluded.updated_at`,
+    [normalized, now, now, now],
+  );
+}
+
 export async function getActiveCountryCodes(db: Db, config: Pick<Config, "countryWarmTtlMs" | "trackedCountries">): Promise<string[]> {
   await ensurePinnedCountries(db, config);
   const cutoff = new Date(Date.now() - config.countryWarmTtlMs).toISOString();
@@ -75,7 +110,7 @@ export async function getActiveCountryCodes(db: Db, config: Pick<Config, "countr
      order by pinned desc, last_requested_at desc`,
     [cutoff],
   )).rows;
-  const countries = new Set(config.trackedCountries.map(normalizeCountry));
+  const countries = new Set<string>();
   for (const row of rows) countries.add(String(row.country).toUpperCase());
   return [...countries];
 }
@@ -96,19 +131,20 @@ async function getCountryRegistryRow(db: Db, country: string, config: Pick<Confi
   return row ? rowToCountryRegistry(row, config) : null;
 }
 
-async function upsertCountry(db: Db, country: string, options: { pinned: boolean; status: CountryRegistryStatus }): Promise<void> {
+async function upsertCountry(db: Db, country: string, options: { pinned: boolean; status: CountryRegistryStatus; touch?: boolean }): Promise<void> {
   const normalized = normalizeCountry(country);
   const now = nowIso();
+  const touch = options.touch !== false;
   await exec(
     db,
     `insert into country_registry (country, status, pinned, first_requested_at, last_requested_at, updated_at)
      values (?, ?, ?, ?, ?, ?)
      on conflict(country) do update set
-       status = case when country_registry.status = 'paused' and excluded.pinned = 0 then country_registry.status else excluded.status end,
+       status = case when country_registry.status = 'paused' then country_registry.status else excluded.status end,
        pinned = max(country_registry.pinned, excluded.pinned),
-       last_requested_at = excluded.last_requested_at,
-       updated_at = excluded.updated_at`,
-    [normalized, options.status, options.pinned ? 1 : 0, now, now, now],
+       last_requested_at = case when ? = 1 then excluded.last_requested_at else country_registry.last_requested_at end,
+       updated_at = case when ? = 1 or country_registry.pinned < excluded.pinned then excluded.updated_at else country_registry.updated_at end`,
+    [normalized, options.status, options.pinned ? 1 : 0, now, now, now, touch ? 1 : 0, touch ? 1 : 0],
   );
 }
 
@@ -125,6 +161,8 @@ function rowToCountryRegistry(row: Record<string, unknown>, config: Pick<Config,
     lastRequestedAt,
     lastRosterRefreshAt: row.last_roster_refresh_at == null ? null : String(row.last_roster_refresh_at),
     lastScoreAt: row.last_score_at == null ? null : String(row.last_score_at),
+    activeUsers: 0,
+    lastActiveAt: lastRequestedAt,
     isWarm: pinned || new Date(lastRequestedAt).getTime() >= warmCutoff,
   };
 }

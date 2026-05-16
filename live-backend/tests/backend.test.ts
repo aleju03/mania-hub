@@ -13,6 +13,8 @@ import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { handleSse } from "../src/live/sse.js";
 import { OscBackfill } from "../src/osc/backfill.js";
 import { refreshCountryRoster } from "../src/rosters/country-rosters.js";
+import { getActiveCountryCodes, setCountryPaused } from "../src/countries.js";
+import { CountryClientTracker } from "../src/live/country-clients.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { LiveEventLog } from "../src/live/event-log.js";
@@ -119,6 +121,68 @@ describe("live backend", () => {
     expect(await ingestor.ingestBatch(scores)).toEqual({ inserted: 0, skipped: 2 });
     expect(Number((await exec(db, "select count(*) as count from score_events")).rows[0].count)).toBe(1);
     expect(await queue.depth()).toBeGreaterThanOrEqual(1);
+  });
+
+  it("keeps paused countries out of ingestion even when they are pinned", async () => {
+    const { db, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+
+    await setCountryPaused(db, { trackedCountries: ["CR"], countryWarmTtlMs: 24 * 60 * 60 * 1000 }, "CR", true);
+
+    expect(await getActiveCountryCodes(db, { trackedCountries: ["CR"], countryWarmTtlMs: 24 * 60 * 60 * 1000 })).toEqual([]);
+    expect(await ingestor.ingestBatch([scores[0]])).toEqual({ inserted: 0, skipped: 1 });
+
+    await setCountryPaused(db, { trackedCountries: ["CR"], countryWarmTtlMs: 24 * 60 * 60 * 1000 }, "CR", false);
+
+    expect(await getActiveCountryCodes(db, { trackedCountries: ["CR"], countryWarmTtlMs: 24 * 60 * 60 * 1000 })).toEqual(["CR"]);
+    expect(await ingestor.ingestBatch([scores[0]])).toEqual({ inserted: 1, skipped: 0 });
+    expect(Number((await exec(db, "select count(*) as count from score_events")).rows[0].count)).toBe(1);
+  });
+
+  it("reports connected page users on country registry status rows", async () => {
+    const { db, queue, events } = await setup();
+    const countryClients = new CountryClientTracker();
+    const release = countryClients.open("CR");
+    const first = mockRes();
+
+    await routeHttp(mockReq("GET", "/api/status"), first.res, {
+      db,
+      queue,
+      events,
+      config: baseConfig({
+        databaseUrl: `file:${join(dir, "test.db")}`,
+        maxLocalDbBytes: 1024 * 1024,
+        targetLocalDbBytes: 512 * 1024,
+      }),
+      countryClients,
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0, byCaller: [], byPath: [] }) } },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never);
+
+    const cr = (JSON.parse(first.writes.join("")).countries as Array<{ country: string; activeUsers: number; lastActiveAt: string | null }>)
+      .find((entry) => entry.country === "CR");
+    expect(cr).toMatchObject({ country: "CR", activeUsers: 1 });
+    expect(cr?.lastActiveAt).toEqual(expect.any(String));
+
+    release();
+    const second = mockRes();
+    await routeHttp(mockReq("GET", "/api/status"), second.res, {
+      db,
+      queue,
+      events,
+      config: baseConfig({
+        databaseUrl: `file:${join(dir, "test.db")}`,
+        maxLocalDbBytes: 1024 * 1024,
+        targetLocalDbBytes: 512 * 1024,
+      }),
+      countryClients,
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0, byCaller: [], byPath: [] }) } },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never);
+    const inactiveCr = (JSON.parse(second.writes.join("")).countries as Array<{ country: string; activeUsers: number; lastActiveAt: string | null }>)
+      .find((entry) => entry.country === "CR");
+    expect(inactiveCr).toMatchObject({ country: "CR", activeUsers: 0 });
+    expect(inactiveCr?.lastActiveAt).toEqual(expect.any(String));
   });
 
   it("clears stale job errors when a retry succeeds", async () => {

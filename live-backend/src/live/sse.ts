@@ -1,7 +1,10 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { touchCountryRequest } from "../countries.js";
 import { normalizeCountryParam } from "../http/abuse-guard.js";
 import { activatePublicCountry, sendRateLimited, type HttpContext } from "../http/snapshots.js";
 import type { LiveEvent } from "../shared/types.js";
+
+const DEFAULT_COUNTRY_TOUCH_INTERVAL_MS = 60 * 60_000;
 
 export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: HttpContext): Promise<boolean> {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
@@ -31,13 +34,16 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
     return true;
   }
   const releaseSse = opened?.allowed ? opened.release : null;
+  let releaseCountryClient: (() => void) | null = null;
   try {
     const activated = await activatePublicCountry(req, res, ctx, country);
     if (!activated) {
       releaseSse?.();
       return true;
     }
+    releaseCountryClient = ctx.countryClients?.open(country) ?? null;
   } catch (error) {
+    releaseCountryClient?.();
     releaseSse?.();
     throw error;
   }
@@ -57,13 +63,24 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
     if (event.country != null && event.country !== country) return;
     writeEvent(res, event);
   });
+  let lastCountryTouchAt = Date.now();
+  const countryTouchIntervalMs = Math.max(
+    60_000,
+    Math.min(DEFAULT_COUNTRY_TOUCH_INTERVAL_MS, Math.floor((ctx.config.countryWarmTtlMs ?? 72 * 60 * 60_000) / 4)),
+  );
   const heartbeat = setInterval(() => {
     writeEvent(res, { type: "heartbeat", sequence: Date.now(), payload: { t: Date.now() } });
+    const now = Date.now();
+    if (now - lastCountryTouchAt >= countryTouchIntervalMs) {
+      lastCountryTouchAt = now;
+      void touchCountryRequest(ctx.db, country).catch(() => undefined);
+    }
   }, 15_000);
   heartbeat.unref();
   req.on("close", () => {
     clearInterval(heartbeat);
     unsubscribe();
+    releaseCountryClient?.();
     releaseSse?.();
   });
   return true;

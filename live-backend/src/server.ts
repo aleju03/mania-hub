@@ -8,6 +8,7 @@ import { JobQueue } from "./jobs/queue.js";
 import { LiveEventLog } from "./live/event-log.js";
 import { enqueueMapsRefreshIfDue } from "./features/maps.js";
 import { AbuseGuard } from "./http/abuse-guard.js";
+import { CountryClientTracker } from "./live/country-clients.js";
 import { handleSse } from "./live/sse.js";
 import { enqueueOscBackfill } from "./osc/backfill.js";
 import { OscSocketClient } from "./osc/client.js";
@@ -32,6 +33,7 @@ export async function createApp() {
   });
   const ingestor = new ScoreIngestor(db, queue, events, config);
   const abuse = new AbuseGuard();
+  const countryClients = new CountryClientTracker();
   const osc = new OscSocketClient(config, ingestor);
   if (config.enableStartupRosterRefresh && osu.hasCredentials()) {
     await enqueueRosterRefreshes(queue, config.trackedCountries);
@@ -43,6 +45,7 @@ export async function createApp() {
     events,
     config,
     abuse,
+    countryClients,
     osu,
     oscStatus: () => osc.status(),
     workerStatus: () => worker.status(),
@@ -60,7 +63,7 @@ export async function createApp() {
       res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
     }
   });
-  return { server, db, queue, events, osu, osc, worker, ingestor, config };
+  return { server, db, queue, events, osu, osc, worker, ingestor, config, countryClients };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
