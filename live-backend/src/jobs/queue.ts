@@ -90,9 +90,23 @@ export class JobQueue {
   async summary(): Promise<Array<{ status: string; type: string; count: number; oldestRunAfter: string | null; newestError: string | null }>> {
     const rows = (await exec(
       this.db,
-      `select status, type, count(*) as count, min(run_after) as oldest_run_after, max(last_error) as newest_error
-       from jobs
-       group by status, type
+      `select
+         j.status,
+         j.type,
+         count(*) as count,
+         min(j.run_after) as oldest_run_after,
+         (
+           select j2.last_error
+           from jobs j2
+           where j2.status = j.status
+             and j2.type = j.type
+             and j2.status != 'done'
+             and j2.last_error is not null
+           order by j2.updated_at desc, j2.id desc
+           limit 1
+         ) as newest_error
+       from jobs j
+       group by j.status, j.type
        order by count desc`,
     )).rows;
     return rows.map((row) => ({

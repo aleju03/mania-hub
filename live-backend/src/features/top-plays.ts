@@ -31,17 +31,25 @@ export async function confirmTopPlay(
 ): Promise<boolean> {
   const bestScores = dedupeScoresById(await osu.getUserBestScores(payload.userId, "job:refresh_user_top_scores"));
   const refreshedAt = nowIso();
-  await exec(db, "delete from user_top_scores where user_id = ?", [payload.userId]);
   for (let index = 0; index < bestScores.length; index++) {
     const score = bestScores[index];
     if (score.id == null || score.pp == null) continue;
     await exec(
       db,
       `insert into user_top_scores (user_id, score_id, position, score_json, pp, weighted_pp, ended_at, refreshed_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?)`,
+       values (?, ?, ?, ?, ?, ?, ?, ?)
+       on conflict(user_id, score_id) do update set
+         position = excluded.position,
+         score_json = excluded.score_json,
+         pp = excluded.pp,
+         weighted_pp = excluded.weighted_pp,
+         ended_at = excluded.ended_at,
+         refreshed_at = excluded.refreshed_at
+       where user_top_scores.refreshed_at <= excluded.refreshed_at`,
       [payload.userId, score.id, index, json(score), score.pp, calculateWeightedPp(score.pp, index), score.ended_at ?? score.created_at ?? null, refreshedAt],
     );
   }
+  await exec(db, "delete from user_top_scores where user_id = ? and refreshed_at < ?", [payload.userId, refreshedAt]);
   const scoreIdCandidates = await getTopPlayConfirmationScoreIdCandidates(db, payload);
   const confirmedIndex = bestScores.findIndex((score) => scoreIdCandidates.has(score.id));
   if (confirmedIndex < 0) return false;

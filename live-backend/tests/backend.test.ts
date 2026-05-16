@@ -197,6 +197,25 @@ describe("live backend", () => {
     expect(row.last_error).toBeNull();
   });
 
+  it("omits historical completed job errors from queue summaries", async () => {
+    const { db, queue } = await setup();
+    await queue.enqueue("refresh_user_top_scores", "top:done", { userId: 101, scoreId: 9001, country: "CR" });
+    const doneJob = (await queue.claim("test-worker"))[0];
+    await queue.fail(doneJob.id, new Error("old completed failure"), 1);
+    await exec(db, "update jobs set status = 'done', locked_by = null, locked_until = null where id = ?", [doneJob.id]);
+
+    await queue.enqueue("refresh_user_top_scores", "top:failed", { userId: 102, scoreId: 9002, country: "CR" });
+    const failedJob = (await queue.claim("test-worker"))[0];
+    await queue.fail(failedJob.id, new Error("current failure"), 1);
+
+    const summary = await queue.summary();
+    const doneRow = summary.find((row) => row.status === "done" && row.type === "refresh_user_top_scores");
+    const failedRow = summary.find((row) => row.status === "failed" && row.type === "refresh_user_top_scores");
+
+    expect(doneRow?.newestError).toBeNull();
+    expect(failedRow?.newestError).toBe("current failure");
+  });
+
   it("creates enrichment jobs for unknown metadata on known tracked roster users", async () => {
     const { db, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
@@ -620,6 +639,33 @@ describe("live backend", () => {
 
     const row = (await exec(db, "select count(*) as count from user_top_scores where user_id = 101 and score_id = 9001")).rows[0];
     expect(Number(row.count)).toBe(1);
+  });
+
+  it("upserts and cleans stale rows during top-play score cache refresh", async () => {
+    const { db, events, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    await ingestor.ingestBatch([scores[0]]);
+    const best = await fixture<OscScore[]>("top-best.json");
+    await exec(
+      db,
+      `insert into user_top_scores (user_id, score_id, position, score_json, pp, weighted_pp, ended_at, refreshed_at)
+       values
+         (101, 9001, 99, '{}', 1, 1, null, '2026-05-10T00:00:00.000Z'),
+         (101, 7777, 100, '{}', 1, 1, null, '2026-05-10T00:00:00.000Z')`,
+    );
+    const osu = {
+      getBeatmapUserScoresAll: async (_beatmapId: number, _userId: number, _caller?: string) => [],
+      getUserBestScores: async (_userId: number, _caller?: string) => best,
+    };
+
+    await expect(confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" })).resolves.toBe(true);
+
+    const refreshed = (await exec(db, "select position, pp, score_json from user_top_scores where user_id = 101 and score_id = 9001")).rows[0];
+    expect(Number(refreshed.position)).toBe(0);
+    expect(Number(refreshed.pp)).toBe(best[0].pp);
+    expect(JSON.parse(String(refreshed.score_json)).id).toBe(9001);
+    const stale = (await exec(db, "select count(*) as count from user_top_scores where user_id = 101 and score_id = 7777")).rows[0];
+    expect(Number(stale.count)).toBe(0);
   });
 
   it("confirms oSC top plays by legacy score id when osu! best scores use the stable id", async () => {
