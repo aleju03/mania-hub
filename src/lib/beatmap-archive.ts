@@ -1,3 +1,4 @@
+import { inflateRawSync } from "node:zlib";
 import JSZip from "jszip";
 
 const ARCHIVE_CACHE_TTL = 15 * 60 * 1000;
@@ -5,6 +6,8 @@ const ARCHIVE_CACHE_MAX_ENTRIES = 6;
 const ARCHIVE_FETCH_TIMEOUT_MS = 15_000;
 const ARCHIVE_SOURCE_MIN_INTERVAL_MS = 2_500;
 const ARCHIVE_SOURCE_COOLDOWN_MS = 15 * 60 * 1000;
+const ZIP_TAIL_BYTES = 128 * 1024;
+const MAX_ZIP_CENTRAL_DIRECTORY_BYTES = 8 * 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 120 * 1024 * 1024;
 const MAX_EXTRACTED_FILE_BYTES = 60 * 1024 * 1024;
 
@@ -37,6 +40,20 @@ type ArchiveCacheEntry = {
   expiresAt: number;
   lastAccessedAt: number;
   promise: Promise<JSZip>;
+};
+
+type RangeBuffer = {
+  buffer: ArrayBuffer;
+  totalBytes: number;
+};
+
+type ZipDirectoryEntry = {
+  path: string;
+  compressedSize: number;
+  uncompressedSize: number;
+  compressionMethod: number;
+  flags: number;
+  localHeaderOffset: number;
 };
 
 const archiveCache = new Map<string, ArchiveCacheEntry>();
@@ -147,6 +164,206 @@ async function readResponseBufferWithLimit(response: Response, limitBytes: numbe
   return out.buffer;
 }
 
+function parseContentRange(header: string | null): { start: number; end: number; total: number } | null {
+  const match = /^bytes\s+(\d+)-(\d+)\/(\d+)$/i.exec(header ?? "");
+  if (!match) return null;
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  const total = Number(match[3]);
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || !Number.isSafeInteger(total)) return null;
+  if (start < 0 || end < start || total <= end) return null;
+  return { start, end, total };
+}
+
+async function fetchRangeBuffer(url: string, range: string, limitBytes: number, signal: AbortSignal): Promise<RangeBuffer> {
+  const response = await fetch(url, {
+    signal,
+    headers: { Range: range },
+  });
+
+  if (response.status !== 206) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error(`range request returned ${response.status}`);
+  }
+
+  const contentRange = parseContentRange(response.headers.get("content-range"));
+  if (!contentRange) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error("range response omitted Content-Range");
+  }
+
+  const expectedBytes = contentRange.end - contentRange.start + 1;
+  if (expectedBytes > limitBytes) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error(`range response is too large (${expectedBytes} bytes)`);
+  }
+
+  const buffer = await readResponseBufferWithLimit(response, limitBytes);
+  if (buffer.byteLength !== expectedBytes) {
+    throw new Error(`range response length mismatch (${buffer.byteLength} !== ${expectedBytes})`);
+  }
+  return { buffer, totalBytes: contentRange.total };
+}
+
+function findEndOfCentralDirectory(tail: Uint8Array): number {
+  for (let i = tail.length - 22; i >= 0; i--) {
+    if (
+      tail[i] === 0x50 &&
+      tail[i + 1] === 0x4b &&
+      tail[i + 2] === 0x05 &&
+      tail[i + 3] === 0x06
+    ) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function decodeZipPath(bytes: Uint8Array, flags: number): string {
+  const encoding = flags & 0x800 ? "utf-8" : "latin1";
+  return new TextDecoder(encoding).decode(bytes).replace(/\\/g, "/");
+}
+
+function parseZipDirectoryEntries(buffer: ArrayBuffer): ZipDirectoryEntry[] {
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+  const entries: ZipDirectoryEntry[] = [];
+  let offset = 0;
+
+  while (offset + 46 <= bytes.length) {
+    if (view.getUint32(offset, true) !== 0x02014b50) break;
+    const flags = view.getUint16(offset + 8, true);
+    const compressionMethod = view.getUint16(offset + 10, true);
+    const compressedSize = view.getUint32(offset + 20, true);
+    const uncompressedSize = view.getUint32(offset + 24, true);
+    const filenameLength = view.getUint16(offset + 28, true);
+    const extraLength = view.getUint16(offset + 30, true);
+    const commentLength = view.getUint16(offset + 32, true);
+    const localHeaderOffset = view.getUint32(offset + 42, true);
+    const nextOffset = offset + 46 + filenameLength + extraLength + commentLength;
+    if (nextOffset > bytes.length) break;
+    if (
+      compressedSize === 0xffffffff ||
+      uncompressedSize === 0xffffffff ||
+      localHeaderOffset === 0xffffffff
+    ) {
+      throw new Error("zip64 archive entries are not supported by range extraction");
+    }
+
+    const pathBytes = bytes.subarray(offset + 46, offset + 46 + filenameLength);
+    const path = decodeZipPath(pathBytes, flags);
+    entries.push({ path, compressedSize, uncompressedSize, compressionMethod, flags, localHeaderOffset });
+    offset = nextOffset;
+  }
+
+  return entries;
+}
+
+function pickZipDirectoryEntry(entries: ZipDirectoryEntry[], filename: string): ZipDirectoryEntry | null {
+  const normalized = filename.replace(/\\/g, "/");
+  const lower = normalized.toLowerCase();
+  const baseName = normalized.split("/").pop()?.toLowerCase() ?? lower;
+
+  const files = entries.filter((entry) => !entry.path.endsWith("/"));
+  const exact = files.find((entry) => entry.path.toLowerCase() === lower);
+  if (exact) return exact;
+
+  const suffix = files.find((entry) => entry.path.toLowerCase().endsWith(`/${lower}`));
+  if (suffix) return suffix;
+
+  return files.find((entry) => entry.path.split("/").pop()?.toLowerCase() === baseName) ?? null;
+}
+
+async function extractArchiveFileByRangeFromUrl(url: string, filename: string, signal: AbortSignal): Promise<Buffer> {
+  const tail = await fetchRangeBuffer(url, `bytes=-${ZIP_TAIL_BYTES}`, ZIP_TAIL_BYTES, signal);
+  const tailBytes = new Uint8Array(tail.buffer);
+  const eocdOffset = findEndOfCentralDirectory(tailBytes);
+  if (eocdOffset < 0) throw new Error("zip central directory was not found");
+
+  const eocdView = new DataView(tail.buffer, eocdOffset);
+  const centralDirectorySize = eocdView.getUint32(12, true);
+  const centralDirectoryOffset = eocdView.getUint32(16, true);
+  if (centralDirectorySize === 0xffffffff || centralDirectoryOffset === 0xffffffff) {
+    throw new Error("zip64 archives are not supported by range extraction");
+  }
+  if (centralDirectorySize <= 0 || centralDirectorySize > MAX_ZIP_CENTRAL_DIRECTORY_BYTES) {
+    throw new Error(`zip central directory is too large (${centralDirectorySize} bytes)`);
+  }
+  if (centralDirectoryOffset + centralDirectorySize > tail.totalBytes) {
+    throw new Error("zip central directory points outside the archive");
+  }
+
+  const directory = await fetchRangeBuffer(
+    url,
+    `bytes=${centralDirectoryOffset}-${centralDirectoryOffset + centralDirectorySize - 1}`,
+    MAX_ZIP_CENTRAL_DIRECTORY_BYTES,
+    signal,
+  );
+  const entry = pickZipDirectoryEntry(parseZipDirectoryEntries(directory.buffer), filename);
+  if (!entry) throw new Error(`File "${filename}" not found in archive`);
+  if (entry.flags & 0x1) throw new Error(`File "${filename}" is encrypted`);
+  if (entry.uncompressedSize > MAX_EXTRACTED_FILE_BYTES || entry.compressedSize > MAX_EXTRACTED_FILE_BYTES) {
+    throw new Error(`File "${filename}" is too large`);
+  }
+  if (entry.compressionMethod !== 0 && entry.compressionMethod !== 8) {
+    throw new Error(`File "${filename}" uses unsupported zip compression method ${entry.compressionMethod}`);
+  }
+
+  const header = await fetchRangeBuffer(
+    url,
+    `bytes=${entry.localHeaderOffset}-${entry.localHeaderOffset + 29}`,
+    30,
+    signal,
+  );
+  const headerView = new DataView(header.buffer);
+  if (headerView.getUint32(0, true) !== 0x04034b50) {
+    throw new Error(`File "${filename}" local header is invalid`);
+  }
+
+  const filenameLength = headerView.getUint16(26, true);
+  const extraLength = headerView.getUint16(28, true);
+  const dataOffset = entry.localHeaderOffset + 30 + filenameLength + extraLength;
+  const data = await fetchRangeBuffer(
+    url,
+    `bytes=${dataOffset}-${dataOffset + entry.compressedSize - 1}`,
+    MAX_EXTRACTED_FILE_BYTES,
+    signal,
+  );
+  const compressed = Buffer.from(data.buffer);
+  const output = entry.compressionMethod === 0 ? compressed : inflateRawSync(compressed);
+  if (output.length > MAX_EXTRACTED_FILE_BYTES) {
+    throw new Error(`File "${filename}" is too large`);
+  }
+  return output;
+}
+
+async function extractArchiveFileByRange(beatmapsetId: string, filename: string): Promise<Buffer> {
+  const errors: string[] = [];
+  for (const source of ARCHIVE_SOURCES) {
+    if (isArchiveSourceCoolingDown(source.name)) {
+      errors.push(`${source.name}: cooling down`);
+      continue;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
+    try {
+      return await withArchiveSourceSlot(source.name, () => (
+        extractArchiveFileByRangeFromUrl(source.url(beatmapsetId), filename, controller.signal)
+      ));
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        cooldownArchiveSource(source.name);
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`${source.name}: ${message}`);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  throw new Error(`Archive range extraction failed for beatmapset ${beatmapsetId} (${errors.join("; ")})`);
+}
+
 function isLikelyZip(buffer: ArrayBuffer): boolean {
   if (buffer.byteLength < 4) return false;
   const bytes = new Uint8Array(buffer, 0, 4);
@@ -236,6 +453,14 @@ export function findBeatmapArchiveFile(zip: JSZip, filename: string): JSZip.JSZi
 }
 
 export async function extractBeatmapArchiveFile(beatmapsetId: string, filename: string): Promise<Buffer> {
+  try {
+    return await extractArchiveFileByRange(beatmapsetId, filename);
+  } catch {
+    // Mirrors do not all support HTTP range requests. Fall back to the older
+    // full-archive path so uncached assets still load when partial extraction
+    // is unavailable.
+  }
+
   const zip = await getBeatmapArchive(beatmapsetId);
   const file = findBeatmapArchiveFile(zip, filename);
   if (!file) {

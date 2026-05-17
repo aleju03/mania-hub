@@ -3925,9 +3925,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const [replayAudioLoading, setReplayAudioLoading] = useState(false);
   const [replayAudioSizeBytes, setReplayAudioSizeBytes] = useState<number | null>(null);
   const [replayPreviewError, setReplayPreviewError] = useState<string | null>(null);
-  const replayAudioUrl = replayAudioMode === "set-preview"
-    ? previewUrl
-    : previewBeatmap?.audioFilename
+  const replayAudioFullUrl = previewBeatmap?.audioFilename
     ? `/api/audio?beatmapsetId=${encodeURIComponent(String(audioBeatmapsetId))}&filename=${encodeURIComponent(previewBeatmap.audioFilename)}`
     : null;
   const replayAudioPlaybackRate = replayAudioMode === "set-preview" ? selectedDifficultyRate : 1;
@@ -3939,9 +3937,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     ? 390
     : 300;
   const replayPreviewGap = replayPreviewKeyCount >= 5 ? 24 : 48;
-  const replayPreviewStartSeconds = replayAudioMode === "set-preview"
-    ? 0
-    : Math.max(0, replayChartStartMs / 1000);
+  const replayPreviewTopBleed = 52;
   // Total mapped length, used to bound the scrub timeline. The last note's
   // endTime is a good proxy for chart length without parsing audio metadata.
   const replayChartLengthMs = useMemo(() => {
@@ -3963,6 +3959,12 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       RANDOM_REPLAY_PREVIEW_MS,
       replayChartLengthMs > 0 ? replayChartLengthMs - replayChartStartMs : RANDOM_REPLAY_PREVIEW_MS,
     );
+  const replayAudioUrl = replayAudioMode === "set-preview"
+    ? previewUrl
+    : replayAudioFullUrl;
+  const replayPreviewStartSeconds = replayAudioMode === "selected-file"
+    ? Math.max(0, replayChartStartMs / 1000)
+    : 0;
   // Scrubbing needs the full beatmap audio file (the short set-preview snippet
   // always plays from 0). seekChartPreview forces selected-file mode, but the
   // timeline must be reachable even before the first scrub, so it only depends
@@ -4069,7 +4071,11 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
           setReplayChartStartMs(previewPlan.startTimeMs);
           setReplayChartPlaybackMs(previewPlan.startTimeMs);
           setReplayChartTimeScale(previewPlan.timeScale);
-          setReplayAudioMode(previewPlan.audioMode);
+          setReplayAudioMode(
+            previewPlan.audioMode === "set-preview" && !timedRateVariant && previewPlan.beatmap.audioFilename
+              ? "selected-file"
+              : previewPlan.audioMode,
+          );
         }
       })
       .catch(() => {
@@ -4287,19 +4293,6 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     replayAudioStartSecondsRef.current = replayPreviewStartSeconds;
     audio.pause();
     const isSelectedFileAudio = replayAudioMode === "selected-file";
-    if (isSelectedFileAudio) {
-      audio.preload = "auto";
-      try {
-        audio.load();
-      } catch {
-        // Some browsers may reject load() while React is still swapping sources.
-      }
-    }
-    try {
-      audio.currentTime = replayPreviewStartSeconds;
-    } catch {
-      // The metadata may not be ready yet on mobile; playback will still be clipped.
-    }
     audio.volume = volume;
     audio.playbackRate = replayAudioPlaybackRate;
     setAudioPreservesPitch(audio, replayAudioMode !== "set-preview");
@@ -4312,16 +4305,34 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
             resetAudioElement(audio);
             return;
           }
-          const sizeRaw = sizeResponse.headers.get("x-audio-size-bytes") ?? sizeResponse.headers.get("content-length");
-          const size = sizeRaw ? Number(sizeRaw) : NaN;
-          if (Number.isFinite(size) && size > 0) setReplayAudioSizeBytes(size);
+          if (sizeResponse.ok) {
+            const sizeRaw = sizeResponse.headers.get("x-audio-size-bytes") ?? sizeResponse.headers.get("content-length");
+            const size = sizeRaw ? Number(sizeRaw) : NaN;
+            if (Number.isFinite(size) && size > 0) setReplayAudioSizeBytes(size);
+          }
         } catch {
-          // Keep showing the generic loading label if size probing fails.
+          if (!isCurrentRequest()) {
+            resetAudioElement(audio);
+            return;
+          }
         }
       }
       if (!isCurrentRequest()) {
         resetAudioElement(audio);
         return;
+      }
+      if (isSelectedFileAudio) {
+        audio.preload = "auto";
+        try {
+          audio.load();
+        } catch {
+          // Some browsers may reject load() while React is still swapping sources.
+        }
+      }
+      try {
+        audio.currentTime = replayPreviewStartSeconds;
+      } catch {
+        // The metadata may not be ready yet on mobile; playback will still be clipped.
       }
       await seekAudioElement(audio, replayPreviewStartSeconds, isSelectedFileAudio
         ? {
@@ -4793,7 +4804,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
               <audio
                 ref={replayAudioRef}
                 src={replayAudioUrl}
-                preload="metadata"
+                preload={replayAudioMode === "set-preview" ? "metadata" : "none"}
                 onCanPlay={() => setReplayAudioLoading(false)}
                 onPlaying={() => setReplayAudioLoading(false)}
                 onTimeUpdate={(e) => {
@@ -4824,9 +4835,10 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       </div>
 
       <div
-        className="relative mt-4 min-h-[360px] overflow-visible md:absolute md:left-[calc(100%_+_var(--replay-preview-gap))] md:top-0 md:mt-0 md:h-full md:w-[var(--replay-preview-width)] md:min-h-full"
+        className="relative mt-4 min-h-[420px] overflow-visible md:absolute md:left-[calc(100%_+_var(--replay-preview-gap))] md:top-[calc(var(--replay-preview-top-bleed)*-1)] md:mt-0 md:h-[calc(100%+var(--replay-preview-top-bleed))] md:w-[var(--replay-preview-width)] md:min-h-[calc(100%+var(--replay-preview-top-bleed))]"
         style={{
           "--replay-preview-gap": `${replayPreviewGap}px`,
+          "--replay-preview-top-bleed": `${replayPreviewTopBleed}px`,
           "--replay-preview-width": `${replayPreviewWidth}px`,
         } as CSSProperties}
       >

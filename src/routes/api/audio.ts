@@ -1,11 +1,21 @@
+import { spawn } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createFileRoute } from "@tanstack/react-router";
+import ffmpegStaticPath from "ffmpeg-static";
 import { extractBeatmapArchiveFile } from "#/lib/beatmap-archive";
-import { getCachedBeatmapAssetUrl, isR2ReplayCacheConfigured, putBeatmapAssetAndGetUrl } from "#/lib/r2-cache";
+import {
+  getCachedBeatmapAssetUrl,
+  isR2ReplayCacheConfigured,
+  putBeatmapAssetAndGetUrl,
+} from "#/lib/r2-cache";
 
 const AUDIO_CACHE_TTL = 15 * 60 * 1000;
 const AUDIO_CACHE_MAX_ENTRIES = 12;
 const AUDIO_CACHE_MAX_BYTES = 180 * 1024 * 1024;
 const MAX_AUDIO_FILENAME_LENGTH = 260;
+const MP4_AUDIO_MIME_TYPE = "audio/mp4";
 
 type AudioCacheValue = { buffer: Buffer; mimeType: string };
 type AudioCacheEntry = {
@@ -17,7 +27,7 @@ type AudioCacheEntry = {
 
 const audioCache = new Map<string, AudioCacheEntry>();
 
-const ALLOWED_AUDIO_EXTENSIONS = [".mp3", ".ogg", ".wav", ".flac"] as const;
+const ALLOWED_AUDIO_EXTENSIONS = [".mp3", ".ogg", ".wav", ".flac", ".m4a"] as const;
 
 function isAllowedAudioFilename(filename: string): boolean {
   if (filename.length > MAX_AUDIO_FILENAME_LENGTH || filename.includes("\0")) {
@@ -66,7 +76,37 @@ function getMimeType(filename: string): string {
   if (lower.endsWith(".ogg")) return "audio/ogg";
   if (lower.endsWith(".wav")) return "audio/wav";
   if (lower.endsWith(".flac")) return "audio/flac";
+  if (lower.endsWith(".m4a") || lower.endsWith(".mp4")) return MP4_AUDIO_MIME_TYPE;
   return "application/octet-stream";
+}
+
+function getAudioExtension(filename: string): string {
+  const lower = filename.toLowerCase();
+  const dot = lower.lastIndexOf(".");
+  return dot >= 0 ? lower.slice(dot) : ".bin";
+}
+
+function isMp3Audio(filename: string, mimeType?: string): boolean {
+  return filename.toLowerCase().endsWith(".mp3") || mimeType === "audio/mpeg" || mimeType === "audio/mp3";
+}
+
+function runFfmpeg(args: string[], binary = process.env.FFMPEG_PATH || ffmpegStaticPath || "ffmpeg"): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(binary, args, { stdio: ["ignore", "ignore", "pipe"] });
+    let stderr = "";
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+      if (stderr.length > 5000) stderr = stderr.slice(-5000);
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+      } else {
+        reject(new Error(`ffmpeg exited with ${code ?? "unknown"}: ${stderr.trim()}`));
+      }
+    });
+  });
 }
 
 async function extractAudioFromArchive(beatmapsetId: string, filename: string): Promise<AudioCacheValue> {
@@ -103,6 +143,43 @@ async function extractAudioFromArchive(beatmapsetId: string, filename: string): 
     audioCache.delete(cacheKey);
   });
   return request;
+}
+
+async function copyMp3IntoMp4(input: AudioCacheValue, filename: string): Promise<AudioCacheValue> {
+  const dir = await mkdtemp(join(tmpdir(), "mania-hub-audio-mp3-mp4-"));
+  const inputPath = join(dir, `input${getAudioExtension(filename)}`);
+  const outputPath = join(dir, "audio.mp4");
+  try {
+    await writeFile(inputPath, input.buffer);
+    await runFfmpeg([
+      "-hide_banner",
+      "-loglevel",
+      "error",
+      "-y",
+      "-i",
+      inputPath,
+      "-map",
+      "0:a:0",
+      "-vn",
+      "-sn",
+      "-dn",
+      "-c:a",
+      "copy",
+      "-movflags",
+      "+faststart",
+      outputPath,
+    ]);
+    return { buffer: await readFile(outputPath), mimeType: MP4_AUDIO_MIME_TYPE };
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+async function preparePlaybackAudio(source: AudioCacheValue, filename: string): Promise<AudioCacheValue> {
+  if (isMp3Audio(filename, source.mimeType)) {
+    return copyMp3IntoMp4(source, filename);
+  }
+  return source;
 }
 
 // Accepts: bytes=start-end | bytes=start- | bytes=-suffix
@@ -160,6 +237,7 @@ export const Route = createFileRoute("/api/audio")({
                 "Accept-Ranges": "bytes",
                 "Content-Length": String(cached.sizeBytes),
                 "Content-Type": cached.mimeType,
+                "X-Audio-Mp3-In-Mp4": isMp3Audio(filename) ? "1" : "0",
                 "X-Audio-Size-Bytes": String(cached.sizeBytes),
               },
             });
@@ -200,22 +278,18 @@ export const Route = createFileRoute("/api/audio")({
               },
             });
           }
-        }
 
-        let buffer: Buffer;
-        let mimeType: string;
-        try {
-          const extracted = await extractAudioFromArchive(beatmapsetId, filename);
-          buffer = extracted.buffer;
-          mimeType = extracted.mimeType;
-        } catch (error) {
-          const message = error instanceof Error ? error.message : "Unknown audio extraction error";
-          return new Response(message, { status: 404 });
-        }
-
-        if (isR2ReplayCacheConfigured()) {
+          let source: AudioCacheValue;
           try {
-            const cached = await putBeatmapAssetAndGetUrl("audio", beatmapsetId, filename, mimeType, buffer);
+            source = await extractAudioFromArchive(beatmapsetId, filename);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "Unknown audio extraction error";
+            return new Response(message, { status: 404 });
+          }
+
+          try {
+            const playback = await preparePlaybackAudio(source, filename);
+            const cached = await putBeatmapAssetAndGetUrl("audio", beatmapsetId, filename, playback.mimeType, playback.buffer);
             if (cached) {
               return new Response(null, {
                 status: 302,
@@ -226,8 +300,20 @@ export const Route = createFileRoute("/api/audio")({
               });
             }
           } catch {
-            // Fall through to the legacy in-process response so playback still works.
+            // Fall through to the in-process response so playback still works.
           }
+        }
+
+        let buffer: Buffer;
+        let mimeType: string;
+        try {
+          const extracted = await extractAudioFromArchive(beatmapsetId, filename);
+          const playback = await preparePlaybackAudio(extracted, filename).catch(() => extracted);
+          buffer = playback.buffer;
+          mimeType = playback.mimeType;
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Unknown audio extraction error";
+          return new Response(message, { status: 404 });
         }
 
         const size = buffer.length;

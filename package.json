@@ -16,7 +16,8 @@
     "db:init": "turso db shell mania-hub < db/schema.sql",
     "db:inspect": "turso db shell mania-hub",
     "snipes:reset": "node --env-file=.env scripts/reset-snipes.mjs",
-    "snipes:migrate-cache": "node --env-file-if-exists=.env scripts/migrate-snipes-cache.mjs"
+    "snipes:migrate-cache": "node --env-file-if-exists=.env scripts/migrate-snipes-cache.mjs",
+    "audio:migrate-playback": "node --env-file-if-exists=.env node_modules/vite-node/vite-node.mjs scripts/migrate-audio-playback-cache.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1037.0",

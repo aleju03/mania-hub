@@ -147,6 +147,15 @@ function sanitizeFilename(filename: string): string {
   return base.replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_+|_+$/g, "") || "asset";
 }
 
+function getAudioPlaybackObjectName(filename: string): string {
+  const safeSourceName = sanitizeFilename(filename);
+  if (!safeSourceName.toLowerCase().endsWith(".mp3")) return safeSourceName;
+  const baseName = safeSourceName.includes(".")
+    ? safeSourceName.slice(0, safeSourceName.lastIndexOf("."))
+    : safeSourceName;
+  return `${baseName || "audio"}.mp4`;
+}
+
 function getPublicReplayCacheBaseUrl(): string | null {
   const raw = process.env.R2_PUBLIC_BASE_URL
     || process.env.R2_PUBLIC_URL
@@ -157,7 +166,8 @@ function getPublicReplayCacheBaseUrl(): string | null {
 
 export function getBeatmapAssetStorageKey(kind: BeatmapAssetKind, beatmapsetId: string, filename: string): string {
   const hash = crypto.createHash("sha256").update(filename).digest("hex").slice(0, 16);
-  return `${REPLAY_CACHE_PREFIX}${kind}/${beatmapsetId}/${hash}-${sanitizeFilename(filename)}`;
+  const objectName = kind === "audio" ? getAudioPlaybackObjectName(filename) : sanitizeFilename(filename);
+  return `${REPLAY_CACHE_PREFIX}${kind}/${beatmapsetId}/${hash}-${objectName}`;
 }
 
 export function getReplayStorageKey(scoreId: number): string {
