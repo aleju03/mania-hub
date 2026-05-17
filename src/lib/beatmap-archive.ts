@@ -1,4 +1,3 @@
-import { inflateRawSync } from "node:zlib";
 import JSZip from "jszip";
 
 const ARCHIVE_CACHE_TTL = 15 * 60 * 1000;
@@ -56,8 +55,31 @@ type ZipDirectoryEntry = {
   localHeaderOffset: number;
 };
 
+type ZlibSync = {
+  inflateRawSync: (buffer: Buffer) => Buffer;
+};
+
 const archiveCache = new Map<string, ArchiveCacheEntry>();
 const archiveSourceState = new Map<ArchiveSourceName, { nextAvailableAt: number; cooldownUntil: number; tail: Promise<void> }>();
+let zlibSyncPromise: Promise<ZlibSync> | null = null;
+
+function getZlibSync(): Promise<ZlibSync> {
+  if (!zlibSyncPromise) {
+    zlibSyncPromise = (async () => {
+      // This helper is server-only in practice, but it is reachable from mixed
+      // TanStack Start modules. Hide the Node builtin from Vite's client graph.
+      const importNodeModule = new Function("specifier", "return import(specifier)") as (
+        specifier: string,
+      ) => Promise<typeof import("node:zlib")>;
+      const zlib = await importNodeModule("node:zlib");
+      return { inflateRawSync: zlib.inflateRawSync as (buffer: Buffer) => Buffer };
+    })().catch((error) => {
+      zlibSyncPromise = null;
+      throw error;
+    });
+  }
+  return zlibSyncPromise;
+}
 
 function getArchiveSourceState(source: ArchiveSourceName) {
   let state = archiveSourceState.get(source);
@@ -330,7 +352,9 @@ async function extractArchiveFileByRangeFromUrl(url: string, filename: string, s
     signal,
   );
   const compressed = Buffer.from(data.buffer);
-  const output = entry.compressionMethod === 0 ? compressed : inflateRawSync(compressed);
+  const output = entry.compressionMethod === 0
+    ? compressed
+    : (await getZlibSync()).inflateRawSync(compressed);
   if (output.length > MAX_EXTRACTED_FILE_BYTES) {
     throw new Error(`File "${filename}" is too large`);
   }
