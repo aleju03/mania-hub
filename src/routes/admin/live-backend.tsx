@@ -563,7 +563,20 @@ type CountryDisplayStatus = "active" | "warm" | "idle" | "paused";
 type CountryFeatureTier = "indexed" | "maps_warm" | "live" | "snipes";
 type CountrySortMode = "status" | "active-users" | "tracked-users" | "country";
 
+const COUNTRY_FILTERS_STORAGE_KEY = "mania-hub:admin-live-backend:country-filters:v1";
 const COUNTRY_STATUS_RANK: Record<CountryDisplayStatus, number> = { active: 0, warm: 1, idle: 2, paused: 3 };
+const DEFAULT_COUNTRY_STATUS_FILTERS: Record<CountryDisplayStatus, boolean> = {
+  active: true,
+  warm: true,
+  idle: true,
+  paused: true,
+};
+const DEFAULT_COUNTRY_TIER_FILTERS: Record<CountryFeatureTier, boolean> = {
+  indexed: true,
+  maps_warm: true,
+  live: true,
+  snipes: true,
+};
 const COUNTRY_STATUS_OPTIONS: Array<{ value: CountryDisplayStatus; label: string; dot: string }> = [
   { value: "active", label: "Active", dot: "bg-osu-green-light" },
   { value: "warm", label: "Warm", dot: "bg-osu-yellow" },
@@ -585,6 +598,68 @@ const COUNTRY_TIER_OPTIONS: Array<{ value: CountryFeatureTier; label: string; to
   { value: "snipes", label: "Snipes", tone: "text-osu-c2", dot: "bg-osu-c2", blurb: "Live + snipe board seeding (the expensive tier)" },
 ];
 
+interface CountryFilterPreferences {
+  sortMode: CountrySortMode;
+  statusFilters: Record<CountryDisplayStatus, boolean>;
+  tierFilters: Record<CountryFeatureTier, boolean>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizeCountrySortMode(value: unknown): CountrySortMode {
+  return COUNTRY_SORT_OPTIONS.some((option) => option.value === value) ? value as CountrySortMode : "status";
+}
+
+function normalizeCountryStatusFilters(value: unknown): Record<CountryDisplayStatus, boolean> {
+  if (!isRecord(value)) return { ...DEFAULT_COUNTRY_STATUS_FILTERS };
+  const next: Record<CountryDisplayStatus, boolean> = {
+    active: value.active === true,
+    warm: value.warm === true,
+    idle: value.idle === true,
+    paused: value.paused === true,
+  };
+  return next.active || next.warm || next.idle || next.paused ? next : { ...DEFAULT_COUNTRY_STATUS_FILTERS };
+}
+
+function normalizeCountryTierFilters(value: unknown): Record<CountryFeatureTier, boolean> {
+  if (!isRecord(value)) return { ...DEFAULT_COUNTRY_TIER_FILTERS };
+  const next: Record<CountryFeatureTier, boolean> = {
+    indexed: value.indexed === true,
+    maps_warm: value.maps_warm === true,
+    live: value.live === true,
+    snipes: value.snipes === true,
+  };
+  return next.indexed || next.maps_warm || next.live || next.snipes ? next : { ...DEFAULT_COUNTRY_TIER_FILTERS };
+}
+
+function readCountryFilterPreferences(): CountryFilterPreferences | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(COUNTRY_FILTERS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) return null;
+    return {
+      sortMode: normalizeCountrySortMode(parsed.sortMode),
+      statusFilters: normalizeCountryStatusFilters(parsed.statusFilters),
+      tierFilters: normalizeCountryTierFilters(parsed.tierFilters),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeCountryFilterPreferences(preferences: CountryFilterPreferences): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(COUNTRY_FILTERS_STORAGE_KEY, JSON.stringify(preferences));
+  } catch {
+    // Preferences are nice-to-have; localStorage can be unavailable or full.
+  }
+}
+
 function CountriesCard({
   status,
   busy,
@@ -599,19 +674,26 @@ function CountriesCard({
   onSetCountryTier: (entry: CountryEntry, tier: CountryFeatureTier) => void;
 }) {
   const [sortMode, setSortMode] = useState<CountrySortMode>("status");
-  const [statusFilters, setStatusFilters] = useState<Record<CountryDisplayStatus, boolean>>({
-    active: true,
-    warm: true,
-    idle: true,
-    paused: true,
-  });
-  const [tierFilters, setTierFilters] = useState<Record<CountryFeatureTier, boolean>>({
-    indexed: true,
-    maps_warm: true,
-    live: true,
-    snipes: true,
-  });
+  const [statusFilters, setStatusFilters] = useState<Record<CountryDisplayStatus, boolean>>(DEFAULT_COUNTRY_STATUS_FILTERS);
+  const [tierFilters, setTierFilters] = useState<Record<CountryFeatureTier, boolean>>(DEFAULT_COUNTRY_TIER_FILTERS);
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const countries = status?.countries ?? [];
+
+  useEffect(() => {
+    const preferences = readCountryFilterPreferences();
+    if (preferences) {
+      setSortMode(preferences.sortMode);
+      setStatusFilters(preferences.statusFilters);
+      setTierFilters(preferences.tierFilters);
+    }
+    setPreferencesLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (!preferencesLoaded) return;
+    writeCountryFilterPreferences({ sortMode, statusFilters, tierFilters });
+  }, [preferencesLoaded, sortMode, statusFilters, tierFilters]);
+
   const rosterByCountry = useMemo(() => {
     const map = new Map<string, number>();
     for (const entry of status?.roster ?? []) map.set(entry.country, entry.users);
