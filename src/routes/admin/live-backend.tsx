@@ -766,9 +766,9 @@ function CountriesCard({
     >
       <div className="mb-3 flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-col gap-1.5">
-          <div className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1">
+          <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1">
             Lifecycle
-            <div className="flex items-center gap-1 rounded-md border border-osu-b3/25 bg-osu-b5/50 p-1">
+            <div className="flex max-w-full flex-wrap items-center gap-1 rounded-md border border-osu-b3/25 bg-osu-b5/50 p-1">
               {COUNTRY_STATUS_OPTIONS.map((option) => {
                 const on = statusFilters[option.value];
                 const count = statusCounts[option.value];
@@ -815,9 +815,9 @@ function CountriesCard({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1">
+        <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1">
           Sort
-          <div className="flex items-center gap-1 rounded-md border border-osu-b3/25 bg-osu-b5/50 p-1">
+          <div className="flex max-w-full flex-wrap items-center gap-1 rounded-md border border-osu-b3/25 bg-osu-b5/50 p-1">
             {COUNTRY_SORT_OPTIONS.map((option) => (
               <button
                 key={option.value}
