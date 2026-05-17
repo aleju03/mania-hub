@@ -2,7 +2,6 @@ import { HeadContent, Link, Outlet, Scripts, createRootRoute } from "@tanstack/r
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest, setCookie } from "@tanstack/react-start/server";
 import { Nav } from "../components/layout/Nav";
-import { DevRateLimitBadge } from "../components/layout/DevRateLimitBadge";
 import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
 import { AuthContext } from "../lib/auth-context";
 import { getCurrentAuth } from "../lib/auth";
@@ -163,7 +162,6 @@ function RootLayout() {
               aleju03
             </a>
           </footer>
-          {auth.canUseDevFeatures ? <DevRateLimitBadge /> : null}
         </PostHogProvider>
       </AuthContext.Provider>
     </InitialCountryContext.Provider>

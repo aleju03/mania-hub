@@ -1,6 +1,6 @@
 // Server-only: OAuth token management + fetch wrapper for osu! API v2
 import { createServerFn } from "@tanstack/react-start";
-import { requireAdminAccess, requireDevFeatureAccess } from "./auth";
+import { requireAdminAccess } from "./auth";
 import { db, ensureCacheSchema, hasDb } from "./db";
 import { trackServerEvent } from "./server-track";
 
@@ -711,7 +711,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// ── osu! API rate-limit tracker (dev HUD) ──
+// ── osu! API rate-limit snapshot for server error telemetry ──
 // State is stashed on globalThis so that all server module contexts (SSR
 // loaders, route handlers, and extracted server-function bundles) share it.
 // TanStack Start / Vinxi can end up with multiple module instances of this
@@ -757,24 +757,6 @@ function recordOsuCall(res: Response, path: string, caller: string): void {
     }
   }
 }
-
-export const getOsuRateStats = createServerFn({ method: "GET" }).handler(async () => {
-  await requireDevFeatureAccess("osu! rate stats");
-  const state = getOsuRateState();
-  const now = Date.now();
-  const windowCutoff = now - RATE_WINDOW_MS;
-  let perMin = 0;
-  for (const c of state.recentCalls) {
-    if (c.ts >= windowCutoff) perMin += 1;
-  }
-  return {
-    perMin,
-    remaining: state.lastRateLimit?.remaining ?? null,
-    limit: state.lastRateLimit?.limit ?? null,
-    updatedAgoMs: state.lastRateLimit ? now - state.lastRateLimit.at : null,
-    recent: state.recentCalls.slice().reverse(),
-  };
-});
 
 export type OsuFetchContextValue = string | number | boolean | null | undefined;
 export type OsuFetchOptions = {
