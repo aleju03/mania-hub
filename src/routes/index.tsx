@@ -188,6 +188,9 @@ function HomePage() {
   const homePopoffPlayersKey = homePopoffPlayers
     .map((player) => `${player.id}:${player.username}:${player.avatar_url}`)
     .join("|");
+  const homeRecentEffectPlayerIdsKey = liveBackendEnabled ? "" : homeRecentPlayerIdsKey;
+  const homePopoffsEffectPlayersKey = liveBackendEnabled ? "" : homePopoffPlayersKey;
+  const homeEffectsRankingsError = liveBackendEnabled ? null : rankingsError;
 
   useEffect(() => {
     let cancelled = false;
@@ -288,8 +291,8 @@ function HomePage() {
   }, [
     recentScores.length,
     recentScoresFetchedAt,
-    homeRecentPlayerIdsKey,
-    rankingsError,
+    homeRecentEffectPlayerIdsKey,
+    homeEffectsRankingsError,
     selectedCountry,
     setHomeRecentScores,
     liveBackendEnabled,
@@ -361,8 +364,8 @@ function HomePage() {
   }, [
     popoffs.length,
     popoffsFetchedAt,
-    homePopoffPlayersKey,
-    rankingsError,
+    homePopoffsEffectPlayersKey,
+    homeEffectsRankingsError,
     selectedCountry,
     setHomePopoffs,
     liveBackendEnabled,
