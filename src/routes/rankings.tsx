@@ -168,50 +168,35 @@ function RankingsPage() {
     const userIds = pageData.ranking.slice(0, 50).map((e) => e.user.id);
     const loadRankDeltas = async () => {
       setRankDeltasReady(false);
-      const liveMissingIds = userIds.filter((userId) => !liveRankDeltas[userId]);
-      const historyMissingIds = userIds.filter(
-        (userId) =>
-          !rankHistories[userId] ||
-          isCacheStale(rankHistoriesFetchedAt[userId], CLIENT_CACHE_TTL.rankHistories),
-      );
-      if (liveMissingIds.length === 0 || historyMissingIds.length === 0) {
-        setRankHistoriesLoading(historyMissingIds.length > 0);
-      } else {
-        setRankHistoriesLoading(true);
-      }
-
-      let liveDeltas: Record<number, LiveRankDelta> = {};
       if (liveBackendEnabled) {
+        const liveMissingIds = userIds.filter((userId) => !liveRankDeltas[userId]);
         if (liveMissingIds.length === 0) {
           setRankHistoriesLoading(false);
           setRankDeltasReady(true);
           return;
         }
+        setRankHistoriesLoading(true);
         try {
           const snapshot = await fetchLiveRankDeltas(selectedCountry, liveMissingIds);
           if (cancelled) return;
-          liveDeltas = snapshot.deltas;
-          const hasUsableDelta = Object.values(liveDeltas).some(
-            (delta) => delta.globalChange !== null || delta.countryChange !== null,
-          );
-          if (hasUsableDelta) {
-            setLiveRankDeltas((current) => ({ ...current, ...liveDeltas }));
+          if (Object.keys(snapshot.deltas).length > 0) {
+            setLiveRankDeltas((current) => ({ ...current, ...snapshot.deltas }));
+          }
+        } catch {
+          // Keep the live-backend path local to our backend. The legacy
+          // rank_history fallback below can fan out to osu!, so only use it
+          // when no live backend is configured.
+        } finally {
+          if (!cancelled) {
             setRankHistoriesLoading(false);
             setRankDeltasReady(true);
-            return;
           }
-          // Live backend has no 7-day baseline yet (e.g. recently deployed):
-          // treat it like a failed call and fall through to osu! rank_history.
-          liveDeltas = {};
-        } catch {
-          // Fall back to osu! rank_history below.
         }
+        return;
       }
 
       const userIdsToFetch = userIds.filter(
         (userId) =>
-          !liveDeltas[userId] &&
-          !liveRankDeltas[userId] &&
           !triedRankHistoryIdsRef.current.has(userId) &&
           (!rankHistories[userId] ||
             isCacheStale(rankHistoriesFetchedAt[userId], CLIENT_CACHE_TTL.rankHistories)),
@@ -225,6 +210,7 @@ function RankingsPage() {
         return;
       }
 
+      setRankHistoriesLoading(true);
       try {
         const histories = await getUsersRankHistory({ data: { userIds: userIdsToFetch } });
         if (cancelled) return;

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot } from "../src/features/snipes.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefreshIfDue, getMapsSnapshot } from "../src/features/maps.js";
+import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
 import { confirmTopPlay, getTopPlaysSnapshot } from "../src/features/top-plays.js";
 import { getTrackerSnapshot } from "../src/features/tracker.js";
 import { routeHttp, sendJson } from "../src/http/snapshots.js";
@@ -343,8 +344,8 @@ describe("live backend", () => {
       [now, now, now],
     );
     const ranking = [
-      { user: { id: 222, username: "Still In", avatar_url: "https://assets.example/222.png", country_code: "CR", statistics: { pp: 1234, global_rank: 1000, country_rank: 1 } } },
-      { user: { id: 333, username: "New In", avatar_url: "https://assets.example/333.png", country_code: "CR", statistics: { pp: 1200, global_rank: 1100, country_rank: 2 } } },
+      { pp: 1234, global_rank: 1000, country_rank: 1, user: { id: 222, username: "Still In", avatar_url: "https://assets.example/222.png", country_code: "CR" } },
+      { pp: 1200, global_rank: 1100, country_rank: 2, user: { id: 333, username: "New In", avatar_url: "https://assets.example/333.png", country_code: "CR" } },
     ];
     const osu = {
       getRanking: vi.fn(async (_country: string, page: number) => ({ ranking: page === 1 ? ranking : [] })),
@@ -362,6 +363,56 @@ describe("live backend", () => {
       "333:2:1",
       "444:null:0",
     ]);
+
+    const users = (await exec(
+      db,
+      "select user_id, pp, global_rank, country_rank from users order by user_id",
+    )).rows;
+    expect(users.map((row) => `${row.user_id}:${row.pp}:${row.global_rank}:${row.country_rank}`)).toEqual([
+      "222:1234:1000:1",
+      "333:1200:1100:2",
+    ]);
+
+    const snapshots = (await exec(
+      db,
+      "select user_id, country_rank, global_rank, pp from country_rank_snapshots where country = 'CR' order by user_id",
+    )).rows;
+    expect(snapshots.map((row) => `${row.user_id}:${row.country_rank}:${row.global_rank}:${row.pp}`)).toEqual([
+      "222:1:1000:1234",
+      "333:2:1100:1200",
+    ]);
+  });
+
+  it("computes country rank deltas from the current roster projection", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-17T12:00:00.000Z"));
+    const { db } = await setup();
+
+    await exec(
+      db,
+      `insert into country_rank_snapshots (country, user_id, country_rank, global_rank, pp, captured_at)
+       values ('CR', 101, 3, 100, 1000, '2026-05-10T12:00:00.000Z')`,
+    );
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values ('CR', 101, 1, 'osu_rankings', 1, '2026-05-17T12:00:00.000Z')`,
+    );
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, is_active, pp, global_rank, country_rank, profile_json, updated_at)
+       values (101, 'Player', 'https://assets.example/101.png', 'CR', 1, 1100, 90, null, '{}', '2026-05-17T12:00:00.000Z')`,
+    );
+
+    const snapshot = await getRankDeltaSnapshot(db, "CR", [101]);
+
+    expect(snapshot.deltas[101]).toMatchObject({
+      globalChange: 10,
+      countryChange: 2,
+      oldGlobalRank: 100,
+      oldCountryRank: 3,
+      capturedAt: "2026-05-10T12:00:00.000Z",
+    });
   });
 
   it("queues active-user recent reconciliation from oSC ingestion", async () => {

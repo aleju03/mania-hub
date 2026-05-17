@@ -39,7 +39,7 @@ export async function getRankDeltaSnapshot(db: Db, country: string, userIds: num
        old.country_rank as old_country_rank,
        old.global_rank as old_global_rank,
        old.captured_at,
-       current.country_rank as current_country_rank,
+       coalesce(current_roster.rank, current.country_rank) as current_country_rank,
        current.global_rank as current_global_rank
      from country_rank_snapshots old
      join (
@@ -52,6 +52,10 @@ export async function getRankDeltaSnapshot(db: Db, country: string, userIds: num
        group by user_id
      ) picked on picked.user_id = old.user_id and picked.captured_at = old.captured_at
      left join users current on current.user_id = old.user_id
+     left join country_rosters current_roster
+       on current_roster.country = old.country
+      and current_roster.user_id = old.user_id
+      and current_roster.is_tracked = 1
      where old.country = ?`,
     [country, ...uniqueUserIds, targetAt, oldestAllowedAt, country],
   )).rows;
