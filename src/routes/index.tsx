@@ -151,6 +151,30 @@ function mergeHomeRecentScores(
     .slice(0, limit);
 }
 
+function getHomePopoffChartKey(popoff: LeanHomePopoff): string {
+  const score = popoff.score;
+  const modsKey = score.mods
+    .map((mod) => `${mod.acronym}:${mod.rate ?? ""}`)
+    .join(",");
+  return [
+    score.user.id,
+    score.beatmapsetId ?? score.title,
+    score.version,
+    score.keyCount,
+    modsKey,
+  ].join("|");
+}
+
+function dedupeHomePopoffs(popoffs: LeanHomePopoff[]): LeanHomePopoff[] {
+  const seenCharts = new Set<string>();
+  return popoffs.filter((popoff) => {
+    const key = getHomePopoffChartKey(popoff);
+    if (seenCharts.has(key)) return false;
+    seenCharts.add(key);
+    return true;
+  });
+}
+
 function HomePage() {
   const navigate = useNavigate();
   const { country } = Route.useSearch();
@@ -317,9 +341,11 @@ function HomePage() {
           if (cancelled) return;
           setHomePopoffs(
             selectedCountry,
-            snapshot.popoffs
-              .map(countryTopPlayToHomePopoff)
-              .filter((play): play is LeanHomePopoff => play !== null),
+            dedupeHomePopoffs(
+              snapshot.popoffs
+                .map(countryTopPlayToHomePopoff)
+                .filter((play): play is LeanHomePopoff => play !== null),
+            ),
           );
         })
         .catch(() => {
@@ -346,7 +372,7 @@ function HomePage() {
     getHomePopoffs({ data: { players: homePopoffPlayers } })
       .then((data) => {
         if (cancelled) return;
-        setHomePopoffs(selectedCountry, data);
+        setHomePopoffs(selectedCountry, dedupeHomePopoffs(data));
       })
       .catch(() => {
         if (cancelled) return;
@@ -373,7 +399,7 @@ function HomePage() {
 
   const topPlayersMobile = rankings?.ranking.slice(0, 5) ?? [];
   const topPlayersDesktop = rankings?.ranking.slice(0, 10) ?? [];
-  const featuredPopoffs = popoffs.slice(0, 3);
+  const featuredPopoffs = useMemo(() => dedupeHomePopoffs(popoffs).slice(0, 3), [popoffs]);
   const displayedRecentScores = useMemo(
     () => mergeHomeRecentScores(recentScores, trackerFeedScores),
     [recentScores, trackerFeedScores],
