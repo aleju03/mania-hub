@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useMemo, useSyncExternalStore } from "react";
 import type { MouseEvent } from "react";
 import { getRankings, getUsersRankHistory } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
@@ -91,6 +91,10 @@ function RankingsPage() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [liveRankDeltas, setLiveRankDeltas] = useState<Record<number, LiveRankDelta>>({});
   const [rankDeltasReady, setRankDeltasReady] = useState(false);
+  // userIds whose osu! rank_history fetch returned nothing. Tracked so the
+  // delta effect does not re-request them every render (would loop forever
+  // because getUsersRankHistory omits users with no history).
+  const triedRankHistoryIdsRef = useRef<Set<number>>(new Set());
   const pageData = page === 1 ? cachedPageOneData : pageTwoData;
   const [rankingsLoading, setRankingsLoading] = useState(!(page === 1 ? cachedPageOneData : pageTwoData));
   const [rankHistoriesLoading, setRankHistoriesLoading] = useState(false);
@@ -106,6 +110,7 @@ function RankingsPage() {
     setLiveRankDeltas({});
     setRankDeltasReady(false);
     setError(null);
+    triedRankHistoryIdsRef.current = new Set();
   }, [selectedCountry]);
 
   useEffect(() => {
@@ -186,12 +191,18 @@ function RankingsPage() {
           const snapshot = await fetchLiveRankDeltas(selectedCountry, liveMissingIds);
           if (cancelled) return;
           liveDeltas = snapshot.deltas;
-          if (Object.keys(liveDeltas).length > 0) {
+          const hasUsableDelta = Object.values(liveDeltas).some(
+            (delta) => delta.globalChange !== null || delta.countryChange !== null,
+          );
+          if (hasUsableDelta) {
             setLiveRankDeltas((current) => ({ ...current, ...liveDeltas }));
+            setRankHistoriesLoading(false);
+            setRankDeltasReady(true);
+            return;
           }
-          setRankHistoriesLoading(false);
-          setRankDeltasReady(true);
-          return;
+          // Live backend has no 7-day baseline yet (e.g. recently deployed):
+          // treat it like a failed call and fall through to osu! rank_history.
+          liveDeltas = {};
         } catch {
           // Fall back to osu! rank_history below.
         }
@@ -201,6 +212,7 @@ function RankingsPage() {
         (userId) =>
           !liveDeltas[userId] &&
           !liveRankDeltas[userId] &&
+          !triedRankHistoryIdsRef.current.has(userId) &&
           (!rankHistories[userId] ||
             isCacheStale(rankHistoriesFetchedAt[userId], CLIENT_CACHE_TTL.rankHistories)),
       );
@@ -216,6 +228,9 @@ function RankingsPage() {
       try {
         const histories = await getUsersRankHistory({ data: { userIds: userIdsToFetch } });
         if (cancelled) return;
+        for (const userId of userIdsToFetch) {
+          if (!histories[userId]) triedRankHistoryIdsRef.current.add(userId);
+        }
         setRankHistories(histories);
       } finally {
         if (!cancelled) {
