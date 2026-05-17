@@ -3,7 +3,6 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createFileRoute } from "@tanstack/react-router";
-import ffmpegStaticPath from "ffmpeg-static";
 import { extractBeatmapArchiveFile } from "#/lib/beatmap-archive";
 import {
   getCachedBeatmapAssetUrl,
@@ -28,6 +27,27 @@ type AudioCacheEntry = {
 const audioCache = new Map<string, AudioCacheEntry>();
 
 const ALLOWED_AUDIO_EXTENSIONS = [".mp3", ".ogg", ".wav", ".flac", ".m4a"] as const;
+let ffmpegStaticPathPromise: Promise<string | null> | null = null;
+
+function getFfmpegStaticPath(): Promise<string | null> {
+  if (!ffmpegStaticPathPromise) {
+    ffmpegStaticPathPromise = (async () => {
+      try {
+        // Keep ffmpeg-static out of the eager SSR route-entry load. The package
+        // uses CommonJS globals internally, and bundling it as ESM breaks every
+        // production request before this audio endpoint is even hit.
+        const importNodeModule = new Function("specifier", "return import(specifier)") as (
+          specifier: string,
+        ) => Promise<{ default?: unknown }>;
+        const mod = await importNodeModule("ffmpeg-static");
+        return typeof mod.default === "string" ? mod.default : null;
+      } catch {
+        return null;
+      }
+    })();
+  }
+  return ffmpegStaticPathPromise;
+}
 
 function isAllowedAudioFilename(filename: string): boolean {
   if (filename.length > MAX_AUDIO_FILENAME_LENGTH || filename.includes("\0")) {
@@ -90,9 +110,10 @@ function isMp3Audio(filename: string, mimeType?: string): boolean {
   return filename.toLowerCase().endsWith(".mp3") || mimeType === "audio/mpeg" || mimeType === "audio/mp3";
 }
 
-function runFfmpeg(args: string[], binary = process.env.FFMPEG_PATH || ffmpegStaticPath || "ffmpeg"): Promise<void> {
+async function runFfmpeg(args: string[], binary?: string): Promise<void> {
+  const resolvedBinary = binary || process.env.FFMPEG_PATH || await getFfmpegStaticPath() || "ffmpeg";
   return new Promise((resolve, reject) => {
-    const child = spawn(binary, args, { stdio: ["ignore", "ignore", "pipe"] });
+    const child = spawn(resolvedBinary, args, { stdio: ["ignore", "ignore", "pipe"] });
     let stderr = "";
     child.stderr.on("data", (chunk) => {
       stderr += String(chunk);
