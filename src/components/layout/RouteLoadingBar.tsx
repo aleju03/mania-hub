@@ -7,6 +7,7 @@ type RouteLoadingLocation = {
 };
 
 const REPLAY_LOADING_SEARCH_KEYS = ["scoreId", "uploadId"] as const;
+const COUNTRY_SCOPED_QUIET_ROUTES = new Set(["/maps", "/top-plays", "/tracker"]);
 
 function getSearchValue(location: RouteLoadingLocation, key: string): string | null {
   return new URLSearchParams(location.searchStr).get(key);
@@ -19,7 +20,7 @@ function unchangedSearchValues(from: RouteLoadingLocation, to: RouteLoadingLocat
 function isQuietSamePageNavigation(from: RouteLoadingLocation, to: RouteLoadingLocation): boolean {
   if (from.pathname !== to.pathname) return false;
 
-  if (to.pathname === "/maps") {
+  if (COUNTRY_SCOPED_QUIET_ROUTES.has(to.pathname)) {
     return getSearchValue(from, "country") === getSearchValue(to, "country");
   }
 

@@ -43,6 +43,38 @@ describe("route loading bar visibility", () => {
     )).toBe(true);
   });
 
+  it("suppresses tracker filter and page reset navigations in the same country", () => {
+    expect(shouldShowRouteLoadingBar(
+      true,
+      location("/tracker?country=CR"),
+      location("/tracker?country=CR&page=2"),
+    )).toBe(false);
+  });
+
+  it("still shows when changing tracker country", () => {
+    expect(shouldShowRouteLoadingBar(
+      true,
+      location("/tracker?country=JP"),
+      location("/tracker?country=CR"),
+    )).toBe(true);
+  });
+
+  it("suppresses top plays range navigations in the same country", () => {
+    expect(shouldShowRouteLoadingBar(
+      true,
+      location("/top-plays?country=CR&range=3d"),
+      location("/top-plays?country=CR&range=24h"),
+    )).toBe(false);
+  });
+
+  it("still shows when changing top plays country", () => {
+    expect(shouldShowRouteLoadingBar(
+      true,
+      location("/top-plays?country=JP&range=3d"),
+      location("/top-plays?country=CR&range=3d"),
+    )).toBe(true);
+  });
+
   it("still shows for real page changes", () => {
     expect(shouldShowRouteLoadingBar(
       true,
