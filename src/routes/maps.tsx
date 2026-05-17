@@ -1,5 +1,5 @@
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue } from "react";
 import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -105,6 +105,7 @@ const RECENT_BIAS = 0.1;
 const RECENT_PLAYER_HISTORY = 2;
 const RECENT_BEATMAP_HISTORY = 5;
 const RANDOM_PICK_SETTINGS_STORAGE_KEY = "mania-hub-maps-random-pick-settings-v1";
+const SEARCH_URL_DEBOUNCE_MS = 250;
 
 function beatmapStatusBadgeClass(status: string): string {
   const normalized = status.toLowerCase();
@@ -728,10 +729,10 @@ function mapKeyBucket(keyCount: number): RandomKey {
   return "other";
 }
 
-function matchesSearch(title: string, artist: string, query: string): boolean {
-  if (!query) return true;
-  const q = query.toLowerCase();
-  return (title ?? "").toLowerCase().includes(q) || (artist ?? "").toLowerCase().includes(q);
+function matchesSearch(query: string, fields: Array<string | null | undefined>): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  return fields.some((field) => (field ?? "").toLowerCase().includes(q));
 }
 
 function normalizeRandomForceSearch(value: string): string {
@@ -944,7 +945,9 @@ function MapsPage() {
   const statusFilter = mapsSearch.status;
   const ppFilter = mapsSearch.pp;
   const modFilter = mapsSearch.mod;
-  const searchQuery = mapsSearch.q;
+  const routeSearchQuery = mapsSearch.q;
+  const [searchInput, setSearchInput] = useState(routeSearchQuery);
+  const searchQuery = useDeferredValue(searchInput);
   const rStatusRaw = mapsSearch.rStatus;
   const rKeyRaw = mapsSearch.rKey;
   const rPatternRaw = mapsSearch.rPattern;
@@ -956,6 +959,13 @@ function MapsPage() {
   const canUseAdminFeatures = auth.canUseAdminFeatures;
   const liveBackendEnabled = isLiveBackendConfigured();
   const { warming } = useCountryWarming(selectedCountry);
+  const updateMapsSearch = useCallback((patch: Partial<MapsSearch>) => {
+    navigate({
+      to: "/maps",
+      search: { ...mapsSearch, ...patch },
+      replace: true,
+    });
+  }, [mapsSearch, navigate]);
   const randomStatus = useMemo(() => parseTriStateCsv(rStatusRaw, RANDOM_STATUS_OPTIONS), [rStatusRaw]);
   const randomKey = useMemo(() => parseTriStateCsv(rKeyRaw, RANDOM_KEY_OPTIONS), [rKeyRaw]);
   const randomPattern = useMemo(() => parseTriStateCsv(rPatternRaw, RANDOM_PATTERN_OPTIONS), [rPatternRaw]);
@@ -971,6 +981,18 @@ function MapsPage() {
   }, [randomPattern]);
   const totalRandomActive = triStateActive(randomStatus) + triStateActive(randomKey) + triStateActive(randomPattern) + (rStars > 0 || rStarsMax > 0 ? 1 : 0);
   const countryName = getCountryName(selectedCountry);
+
+  useEffect(() => {
+    setSearchInput(routeSearchQuery);
+  }, [routeSearchQuery]);
+
+  useEffect(() => {
+    if (searchInput === routeSearchQuery) return;
+    const timer = window.setTimeout(() => {
+      updateMapsSearch({ q: searchInput, page: 0 });
+    }, SEARCH_URL_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [routeSearchQuery, searchInput, updateMapsSearch]);
 
   useEffect(() => {
     setLoadingPlayers(liveBackendEnabled ? false : !rankings);
@@ -1059,14 +1081,6 @@ function MapsPage() {
       if (pollTimer) clearTimeout(pollTimer);
     };
   }, [liveBackendEnabled, selectedCountry, setMapsData]);
-
-  const updateMapsSearch = (patch: Partial<MapsSearch>) => {
-    navigate({
-      to: "/maps",
-      search: { ...mapsSearch, ...patch },
-      replace: true,
-    });
-  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1263,7 +1277,7 @@ function MapsPage() {
         (m): m is MapsFarmedEntry =>
           m !== null &&
           matchesKeyFilter(m.cs, keyFilter) &&
-          matchesSearch(m.title, m.artist, searchQuery) &&
+          matchesSearch(searchQuery, [m.title, m.artist, m.creator, m.version]) &&
           (modFilter === "all" || (
             modFilter === "dt" ? getDominantSpeedMod(m.players) === "DT" :
             modFilter === "ht" ? getDominantSpeedMod(m.players) === "HT" :
@@ -1288,7 +1302,7 @@ function MapsPage() {
       .filter(
         (m) =>
           matchesKeyFilter(parseKeyCount(m.version), keyFilter) &&
-          matchesSearch(m.title, m.artist, searchQuery),
+          matchesSearch(searchQuery, [m.title, m.artist, m.creator, m.version]),
       )
       .sort((a, b) => {
         if (beatmapSort === "plays") return b.totalPlays - a.totalPlays;
@@ -1305,7 +1319,7 @@ function MapsPage() {
       .filter(
         (f) =>
           matchesStatusFilter(f.status, statusFilter) &&
-          matchesSearch(f.title, f.artist, searchQuery),
+          matchesSearch(searchQuery, [f.title, f.artist, f.creator]),
       )
       .sort(
         (a, b) =>
@@ -1697,9 +1711,11 @@ function MapsPage() {
           {tab !== "random" && (
             <input
               type="text"
-              value={searchQuery}
-              onChange={(e) => updateMapsSearch({ q: e.target.value, page: 0 })}
-              placeholder="Search title or artist..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search maps..."
+              aria-label="Search by title, artist, mapper, or difficulty"
+              title="Search by title, artist, mapper, or difficulty"
               className="bg-osu-b4 border border-osu-b3/30 rounded-lg px-3 py-1.5 text-[11px] text-osu-l2 placeholder:text-osu-f1 w-full sm:w-48 focus:outline-none focus:border-osu-pink/40 transition-colors"
             />
           )}

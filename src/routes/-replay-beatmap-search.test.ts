@@ -7,7 +7,7 @@ describe("replay beatmap search", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "replay.tsx"), "utf8");
     const browseSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplayBrowseView.tsx"), "utf8");
 
-    expect(source).toContain('searchBeatmaps({ data: { query: beatmapQuery, sort: "relevance_desc" } })');
+    expect(source).toContain('searchBeatmaps({ data: { query: normalizedQuery, sort: "relevance_desc" } })');
     expect(browseSource).toContain('searchBeatmaps({ data: { query: normalizedQuery, sort: "relevance_desc" } })');
   });
 
@@ -24,7 +24,7 @@ describe("replay beatmap search", () => {
 
   it("fetches all mania scores for a selected player and beatmap difficulty", () => {
     const browseSource = fs.readFileSync(path.resolve(__dirname, "../components/replay/ReplayBrowseView.tsx"), "utf8");
-    const osuSource = fs.readFileSync(path.resolve(__dirname, "../lib/osu.ts"), "utf8");
+    const osuSource = fs.readFileSync(path.resolve(__dirname, "../lib/osu/users.ts"), "utf8");
 
     expect(browseSource).toContain("const searchRequestRef = useRef(0)");
     expect(browseSource).toContain("const scoreRequestRef = useRef(0)");

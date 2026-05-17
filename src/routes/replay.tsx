@@ -431,6 +431,7 @@ function ReplayPage() {
   const [beatmapScorePage, setBeatmapScorePage] = useState(1);
   const [loadingBeatmapScores, setLoadingBeatmapScores] = useState(false);
   const beatmapTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const beatmapSearchRequestRef = useRef(0);
   const beatmapScoreRequestRef = useRef(0);
   const scorePreviewTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
@@ -524,21 +525,28 @@ function ReplayPage() {
 
   // Debounced beatmap search
   useEffect(() => {
-    if (browseMode !== "beatmap") return;
-    if (beatmapQuery.length < 2) {
+    const normalizedQuery = beatmapQuery.trim().replace(/\s+/g, " ");
+    if (browseMode !== "beatmap" || normalizedQuery.length < 2) {
+      beatmapSearchRequestRef.current += 1;
+      clearTimeout(beatmapTimerRef.current);
       setBeatmapResults([]);
+      setBeatmapSearchLoading(false);
       return;
     }
+    const requestId = beatmapSearchRequestRef.current + 1;
+    beatmapSearchRequestRef.current = requestId;
     setBeatmapSearchLoading(true);
     clearTimeout(beatmapTimerRef.current);
     beatmapTimerRef.current = setTimeout(async () => {
       try {
-        const res = await searchBeatmaps({ data: { query: beatmapQuery, sort: "relevance_desc" } });
-        setBeatmapResults(filterBeatmapSearchResults(res.beatmapsets, beatmapQuery).slice(0, 12));
+        const res = await searchBeatmaps({ data: { query: normalizedQuery, sort: "relevance_desc" } });
+        if (beatmapSearchRequestRef.current !== requestId) return;
+        setBeatmapResults(filterBeatmapSearchResults(res.beatmapsets, normalizedQuery).slice(0, 12));
       } catch {
+        if (beatmapSearchRequestRef.current !== requestId) return;
         setBeatmapResults([]);
       } finally {
-        setBeatmapSearchLoading(false);
+        if (beatmapSearchRequestRef.current === requestId) setBeatmapSearchLoading(false);
       }
     }, 350);
     return () => clearTimeout(beatmapTimerRef.current);
@@ -840,6 +848,9 @@ function ReplayPage() {
                   setSelectedBeatmapset(null);
                   setSelectedDiffId(null);
                   setBeatmapQuery("");
+                  setBeatmapSearchLoading(false);
+                  clearTimeout(beatmapTimerRef.current);
+                  beatmapSearchRequestRef.current += 1;
                   setError(null);
                   navigate({ to: "/replay", search: mode === "beatmap" ? { tab: "beatmap" } : {}, replace: true });
                 }}
