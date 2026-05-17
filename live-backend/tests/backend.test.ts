@@ -8,7 +8,7 @@ import { getSnipesSnapshot } from "../src/features/snipes.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefreshIfDue, getMapsSnapshot } from "../src/features/maps.js";
 import { confirmTopPlay, getTopPlaysSnapshot } from "../src/features/top-plays.js";
 import { getTrackerSnapshot } from "../src/features/tracker.js";
-import { routeHttp } from "../src/http/snapshots.js";
+import { routeHttp, sendJson } from "../src/http/snapshots.js";
 import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { handleSse } from "../src/live/sse.js";
 import { OscBackfill } from "../src/osc/backfill.js";
@@ -63,6 +63,7 @@ function mockRes() {
       headers[key.toLowerCase()] = Array.isArray(value) ? value.join(",") : String(value);
       return res;
     }),
+    getHeader: vi.fn((key: string) => headers[key.toLowerCase()]),
     writeHead: vi.fn((status: number, value?: Record<string, string>) => {
       res.statusCode = status;
       for (const [key, headerValue] of Object.entries(value ?? {})) headers[key.toLowerCase()] = String(headerValue);
@@ -1146,6 +1147,78 @@ describe("live backend", () => {
     expect(snapshot.refreshQueued).toBe(false);
   });
 
+  it("splits maps snapshots into core and random sections", async () => {
+    const { db, queue } = await setup();
+    const now = new Date().toISOString();
+    await exec(
+      db,
+      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
+       values ('CR', ?, ?, ?)`,
+      [
+        JSON.stringify({
+          farmed: [{ beatmapId: 1, players: [] }],
+          mostPlayed: [{ beatmapId: 2, players: [] }],
+          favourites: [{
+            beatmapsetId: 10,
+            title: "Favourite",
+            artist: "Artist",
+            creator: "Mapper",
+            covers: {},
+            status: "ranked",
+            globalPlayCount: 1,
+            globalFavouriteCount: 1,
+            playerCount: 1,
+            players: [{ id: 101, username: "Player", avatarUrl: "https://assets.example/player.png" }],
+          }],
+          favouritesByPlayer: [{
+            id: 101,
+            username: "Player",
+            avatarUrl: "https://assets.example/player.png",
+            beatmapsetIds: [10],
+          }],
+          beatmapsetsPool: {
+            10: {
+              id: 10,
+              title: "Favourite",
+              artist: "Artist",
+              creator: "Mapper",
+              covers: {},
+              status: "ranked",
+              globalPlayCount: 1,
+              globalFavouriteCount: 1,
+              previewUrl: "",
+              maniaKeys: [4],
+              maniaBeatmaps: [],
+              starMin: 5,
+              starMax: 5,
+              bpm: 180,
+              patterns: ["stream"],
+            },
+          },
+          generatedAt: now,
+          farmedGeneratedAt: now,
+          favouritesGeneratedAt: now,
+        }),
+        now,
+        now,
+      ],
+    );
+
+    const core = await getMapsSnapshot(db, queue, "CR", 7 * 24 * 60 * 60 * 1000);
+    const random = await getMapsSnapshot(db, queue, "CR", 7 * 24 * 60 * 60 * 1000, "random");
+
+    expect(core.value?.farmed).toHaveLength(1);
+    expect(core.value?.mostPlayed).toHaveLength(1);
+    expect(core.value?.favourites).toHaveLength(1);
+    expect(core.value?.favouritesByPlayer).toHaveLength(1);
+    expect(core.value?.beatmapsetsPool).toEqual({});
+
+    expect(random.value?.farmed).toEqual([]);
+    expect(random.value?.mostPlayed).toEqual([]);
+    expect(random.value?.favourites).toEqual([]);
+    expect(random.value?.beatmapsetsPool[10]?.title).toBe("Favourite");
+  });
+
   it("defers maps refreshes without marking them failed while the roster is missing", async () => {
     const { db, queue, events, ingestor } = await setup();
     await enqueueMapsRefreshIfDue(db, queue, "AU", 7 * 24 * 60 * 60 * 1000);
@@ -1201,6 +1274,19 @@ describe("live backend", () => {
 
     expect(JSON.parse(writes.join(""))).toMatchObject({ value: null, isStale: true, refreshQueued: true });
     expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_country_maps'")).rows[0].count)).toBe(1);
+  });
+
+  it("marks large JSON responses as varying by accept-encoding", () => {
+    const { res, writes, headers } = mockRes();
+
+    sendJson(mockReq("GET", "/api/test"), res, { config: baseConfig() } as never, 200, {
+      data: "x".repeat(2000),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(headers.vary).toBe("accept-encoding");
+    expect(headers["content-encoding"]).toBeUndefined();
+    expect(JSON.parse(writes.join("")).data).toHaveLength(2000);
   });
 
   it("rejects disallowed browser origins before public API work", async () => {

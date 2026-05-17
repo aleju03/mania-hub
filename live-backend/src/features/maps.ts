@@ -220,11 +220,14 @@ export async function deferMapsRefreshesWaitingForRoster(db: Db, retryDelayMs = 
   return Number(result.rowsAffected ?? 0);
 }
 
+export type MapsSnapshotSection = "core" | "random";
+
 export async function getMapsSnapshot(
   db: Db,
   queue: JobQueue,
   country: string,
   maxAgeMs: number,
+  section: MapsSnapshotSection = "core",
 ): Promise<{ value: CountryMapsData | null; generatedAt: string | null; refreshedAt: string | null; isStale: boolean; refreshQueued: boolean }> {
   const normalized = country.toUpperCase();
   const snapshot = await readMapsSnapshot(db, normalized, maxAgeMs);
@@ -233,7 +236,20 @@ export async function getMapsSnapshot(
     await enqueueMapsRefresh(queue, normalized);
     refreshQueued = true;
   }
-  return { ...snapshot, refreshQueued };
+  return { ...snapshot, value: sliceMapsSnapshotSection(snapshot.value, section), refreshQueued };
+}
+
+// The maps snapshot is served in two parts so /maps first paint stays small.
+// "core" carries the three browsable tabs; "random" carries only the heavy
+// beatmapsetsPool the Random tab needs. favouritesByPlayer is tiny, so it
+// always rides with "core" — that lets the client tell "no random pool exists"
+// apart from "random pool not loaded yet".
+function sliceMapsSnapshotSection(value: CountryMapsData | null, section: MapsSnapshotSection): CountryMapsData | null {
+  if (!value) return value;
+  if (section === "random") {
+    return { ...value, farmed: [], mostPlayed: [], favourites: [] };
+  }
+  return { ...value, beatmapsetsPool: {} };
 }
 
 async function readMapsSnapshot(

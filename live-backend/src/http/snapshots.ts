@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { brotliCompress, constants as zlibConstants, gzip } from "node:zlib";
 import type { Config } from "../config.js";
 import { handleBeatmapAudioRequest } from "../audio/http.js";
 import { activateCountry, deleteCountryData, getCountryRegistry, isCountryFeatureAtLeast, setCountryFeatureTier, setCountryPaused, type CountryFeatureTier } from "../countries.js";
@@ -160,7 +161,8 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   }
   if (url.pathname === "/api/snapshots/maps") {
     if (!await activatePublicCountry(req, res, ctx, country)) return true;
-    const snapshot = await getMapsSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs);
+    const section = url.searchParams.get("section") === "random" ? "random" : "core";
+    const snapshot = await getMapsSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs, section);
     sendJson(req, res, ctx, snapshot.value ? 200 : 202, snapshot);
     return true;
   }
@@ -662,11 +664,80 @@ function isDisallowedOrigin(req: IncomingMessage, ctx: Pick<HttpContext, "config
   return !!origin && !ctx.config.allowedOrigins.includes("*") && !ctx.config.allowedOrigins.includes(origin);
 }
 
+// Below this size compression costs more than it saves (sub-MTU payloads).
+const COMPRESSIBLE_MIN_BYTES = 1400;
+
 export function sendJson(req: IncomingMessage, res: ServerResponse, ctx: Pick<HttpContext, "config">, status: number, body: unknown): void {
   sendCors(req, res, ctx);
   res.statusCode = status;
   res.setHeader("content-type", "application/json; charset=utf-8");
-  res.end(JSON.stringify(body));
+  const json = Buffer.from(JSON.stringify(body), "utf8");
+  if (json.length < COMPRESSIBLE_MIN_BYTES) {
+    res.end(json);
+    return;
+  }
+
+  appendVary(res, "accept-encoding");
+  const encoding = negotiateEncoding(req);
+  if (!encoding) {
+    res.end(json);
+    return;
+  }
+
+  const finish = (error: Error | null, compressed: Buffer): void => {
+    if (res.writableEnded || res.destroyed) return;
+    try {
+      if (error) {
+        res.end(json);
+      } else {
+        res.setHeader("content-encoding", encoding);
+        res.end(compressed);
+      }
+    } catch {
+      // Connection torn down mid-flight; nothing left to send.
+    }
+  };
+  if (encoding === "br") {
+    brotliCompress(json, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 5 } }, finish);
+  } else {
+    gzip(json, { level: 6 }, finish);
+  }
+}
+
+function negotiateEncoding(req: IncomingMessage): "br" | "gzip" | null {
+  const raw = req.headers["accept-encoding"];
+  const accepted = Array.isArray(raw) ? raw.join(",") : raw ?? "";
+  let brQ = 0;
+  let gzipQ = 0;
+  for (const item of accepted.split(",")) {
+    const [namePart, ...params] = item.trim().split(";");
+    const name = namePart.trim().toLowerCase();
+    if (name !== "br" && name !== "gzip") continue;
+    let q = 1;
+    for (const param of params) {
+      const [key, value] = param.trim().split("=");
+      if (key?.trim().toLowerCase() !== "q") continue;
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) q = parsed;
+    }
+    if (name === "br") brQ = Math.max(brQ, q);
+    if (name === "gzip") gzipQ = Math.max(gzipQ, q);
+  }
+  if (brQ <= 0 && gzipQ <= 0) return null;
+  if (brQ >= gzipQ) return "br";
+  if (gzipQ > 0) return "gzip";
+  return null;
+}
+
+function appendVary(res: ServerResponse, field: string): void {
+  const existing = res.getHeader("vary");
+  if (existing == null) {
+    res.setHeader("vary", field);
+    return;
+  }
+  const current = String(existing);
+  if (current.toLowerCase().split(/\s*,\s*/).includes(field.toLowerCase())) return;
+  res.setHeader("vary", `${current}, ${field}`);
 }
 
 function sendCors(req: IncomingMessage, res: ServerResponse, ctx: Pick<HttpContext, "config">): void {

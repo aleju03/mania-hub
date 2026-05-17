@@ -256,8 +256,13 @@ export async function fetchLiveSnipesSnapshot(country: string, limit = 500): Pro
   return fetchLiveJson(`/api/snapshots/snipes?country=${encodeURIComponent(country)}&limit=${limit}`);
 }
 
-export async function fetchLiveMapsSnapshot(country: string): Promise<LiveMapsSnapshot> {
-  return fetchLiveJson(`/api/snapshots/maps?country=${encodeURIComponent(country)}`);
+export async function fetchLiveMapsSnapshot(
+  country: string,
+  section: "core" | "random" = "core",
+): Promise<LiveMapsSnapshot> {
+  const query = new URLSearchParams({ country });
+  if (section === "random") query.set("section", "random");
+  return fetchLiveJson(`/api/snapshots/maps?${query.toString()}`);
 }
 
 export async function fetchLiveRankDeltas(country: string, userIds: number[]): Promise<LiveRankDeltaSnapshot> {

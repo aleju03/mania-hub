@@ -941,6 +941,7 @@ function MapsPage() {
   const [error, setError] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState<MapDetails | null>(null);
   const fetchingMapsRef = useRef(false);
+  const randomPoolFetchRef = useRef<string | null>(null);
   const tab = mapsSearch.tab;
   const page = mapsSearch.page;
   const keyFilter = mapsSearch.key;
@@ -1064,8 +1065,19 @@ function MapsPage() {
         .then((snapshot) => {
           if (cancelled) return;
           if (snapshot.value && hasValidMapsDataShape(snapshot.value)) {
-            setMapsData(selectedCountry, snapshot.value);
-            setLoadedSections(countLoadedMapsSections(snapshot.value));
+            const core = snapshot.value;
+            const cached = useAppStore.getState().mapsDataByCountry[selectedCountry] ?? null;
+            // Keep an already-fetched random pool across core refreshes when the
+            // favourites generation is unchanged, so polling doesn't drop it
+            // and re-trigger the background fetch.
+            const merged =
+              cached
+              && cached.favouritesGeneratedAt === core.favouritesGeneratedAt
+              && Object.keys(cached.beatmapsetsPool).length > 0
+                ? { ...core, beatmapsetsPool: cached.beatmapsetsPool }
+                : core;
+            setMapsData(selectedCountry, merged);
+            setLoadedSections(countLoadedMapsSections(merged));
             setLoadingMaps(false);
             setMapsFirstBuild(false);
             setError(null);
@@ -1097,6 +1109,46 @@ function MapsPage() {
       if (pollTimer) clearTimeout(pollTimer);
     };
   }, [liveBackendEnabled, selectedCountry, setMapsData]);
+
+  // The Random tab's heavy beatmapsetsPool is fetched separately so it doesn't
+  // weigh down /maps first paint. favouritesByPlayer ships with the core
+  // snapshot, so a country with no favourites reads as "ready" (nothing to
+  // load) instead of showing a perpetual spinner.
+  const randomPoolReady = useMemo(() => {
+    if (!mapsData) return false;
+    if (!mapsData.favouritesByPlayer || mapsData.favouritesByPlayer.length === 0) return true;
+    return !!mapsData.beatmapsetsPool && Object.keys(mapsData.beatmapsetsPool).length > 0;
+  }, [mapsData]);
+
+  const ensureRandomPool = useCallback((country: string) => {
+    if (!liveBackendEnabled) return;
+    const existing = useAppStore.getState().mapsDataByCountry[country] ?? null;
+    if (!hasValidMapsDataShape(existing)) return;
+    if (existing.favouritesByPlayer.length === 0) return;
+    if (Object.keys(existing.beatmapsetsPool).length > 0) return;
+    if (randomPoolFetchRef.current === country) return;
+    randomPoolFetchRef.current = country;
+    fetchLiveMapsSnapshot(country, "random")
+      .then((snapshot) => {
+        if (!snapshot.value) return;
+        const current = useAppStore.getState().mapsDataByCountry[country] ?? null;
+        if (!current) return;
+        if (current.favouritesGeneratedAt !== snapshot.value.favouritesGeneratedAt) return;
+        setMapsData(country, { ...current, beatmapsetsPool: snapshot.value.beatmapsetsPool });
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (randomPoolFetchRef.current === country) randomPoolFetchRef.current = null;
+      });
+  }, [liveBackendEnabled, setMapsData]);
+
+  // Prefetch the Random pool in the background once core maps data is ready, so
+  // the tab is instant when opened. Re-running on tab changes doubles as a
+  // retry when a background fetch failed.
+  useEffect(() => {
+    if (!liveBackendEnabled || !hasValidMapsData || randomPoolReady) return;
+    ensureRandomPool(selectedCountry);
+  }, [liveBackendEnabled, hasValidMapsData, randomPoolReady, selectedCountry, tab, ensureRandomPool]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1643,7 +1695,7 @@ function MapsPage() {
                 </span>
               </div>
             )}
-            {!isLoading && !error && mapsData && (
+            {!isLoading && !error && mapsData && (tab !== "random" || randomPoolReady) && (
               <span className="text-[10px] text-osu-f1">
                 {tab === "random" ? randomPool.length : currentList.length} maps &middot; updated {formatTimeAgo(tab === "farmed" ? mapsData.farmedGeneratedAt : mapsData.favouritesGeneratedAt)}
               </span>
@@ -2033,8 +2085,16 @@ function MapsPage() {
             </div>
           )}
 
+          {/* Random tab — pool still loading in the background */}
+          {tab === "random" && !error && !isLoading && mapsData && !randomPoolReady && (
+            <div className="flex flex-col items-center justify-center gap-3 py-20 text-osu-f1">
+              <div className="w-5 h-5 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
+              <span className="text-[11px]">Loading the random pool...</span>
+            </div>
+          )}
+
           {/* Random tab */}
-          {tab === "random" && !error && !isLoading && mapsData && (
+          {tab === "random" && !error && !isLoading && mapsData && randomPoolReady && (
             <div className="max-w-[640px] mx-auto space-y-5">
               {isDevMode ? (
                 <div ref={devRandomForceRef} className="relative z-30 rounded-lg border border-osu-yellow/25 bg-osu-yellow/10 p-2.5">
