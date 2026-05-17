@@ -37,6 +37,60 @@ function getDevicePixelRatio() {
   return typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
 }
 
+type IdleDeadlineLike = {
+  didTimeout: boolean;
+  timeRemaining: () => number;
+};
+
+type WindowWithIdleCallback = Window & {
+  requestIdleCallback?: (
+    callback: (deadline: IdleDeadlineLike) => void,
+    options?: { timeout?: number },
+  ) => number;
+  cancelIdleCallback?: (handle: number) => void;
+};
+
+const RENDER_START_DELAY_MS = 120;
+const RENDER_IDLE_TIMEOUT_MS = 500;
+
+function scheduleRendererStart(callback: () => void) {
+  if (typeof window === "undefined") {
+    callback();
+    return () => {};
+  }
+
+  const idleWindow = window as WindowWithIdleCallback;
+  let active = true;
+  let frameId: number | null = null;
+  let timeoutId: number | null = null;
+  let idleId: number | null = null;
+
+  frameId = window.requestAnimationFrame(() => {
+    frameId = null;
+    timeoutId = window.setTimeout(() => {
+      timeoutId = null;
+      if (!active) return;
+
+      if (idleWindow.requestIdleCallback) {
+        idleId = idleWindow.requestIdleCallback(() => {
+          idleId = null;
+          if (active) callback();
+        }, { timeout: RENDER_IDLE_TIMEOUT_MS });
+        return;
+      }
+
+      callback();
+    }, RENDER_START_DELAY_MS);
+  });
+
+  return () => {
+    active = false;
+    if (frameId !== null) window.cancelAnimationFrame(frameId);
+    if (timeoutId !== null) window.clearTimeout(timeoutId);
+    if (idleId !== null) idleWindow.cancelIdleCallback?.(idleId);
+  };
+}
+
 const TIER_TEXT_COLOR: Record<string, string> = {
   common: "text-slate-200",
   rare: "text-sky-200",
@@ -91,6 +145,7 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
     let renderer: ManiaCardRenderer | null = null;
     let resizeObserver: ResizeObserver | null = null;
     let removeResizeFallback = () => {};
+    let cancelScheduledStart = () => {};
     let active = true;
 
     const disposeRenderer = () => {
@@ -102,41 +157,45 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
 
     const cleanup = () => {
       active = false;
+      cancelScheduledStart();
       disposeRenderer();
     };
 
-    try {
-      renderer = new ManiaCardRenderer({
-        host,
-        data,
-        mobile: isMobileViewport(),
-        reducedMotion,
-        devicePixelRatio: getDevicePixelRatio(),
-        onReady: () => {
-          if (active) setReadyData(data);
-        },
-        onError: (error) => {
-          if (!active) return;
-          disposeRenderer();
-          setRenderError(error instanceof Error ? error.message : "3D renderer unavailable.");
-        },
-      });
-      rendererRef.current = renderer;
+    cancelScheduledStart = scheduleRendererStart(() => {
+      if (!active) return;
 
-      const resize = () => renderer?.resize();
-      if (typeof ResizeObserver === "function") {
-        resizeObserver = new ResizeObserver(resize);
-        resizeObserver.observe(host);
-      } else if (typeof window !== "undefined") {
-        window.addEventListener("resize", resize);
-        removeResizeFallback = () => window.removeEventListener("resize", resize);
+      try {
+        renderer = new ManiaCardRenderer({
+          host,
+          data,
+          mobile: isMobileViewport(),
+          reducedMotion,
+          devicePixelRatio: getDevicePixelRatio(),
+          onReady: () => {
+            if (active) setReadyData(data);
+          },
+          onError: (error) => {
+            if (!active) return;
+            disposeRenderer();
+            setRenderError(error instanceof Error ? error.message : "3D renderer unavailable.");
+          },
+        });
+        rendererRef.current = renderer;
+
+        const resize = () => renderer?.resize();
+        if (typeof ResizeObserver === "function") {
+          resizeObserver = new ResizeObserver(resize);
+          resizeObserver.observe(host);
+        } else if (typeof window !== "undefined") {
+          window.addEventListener("resize", resize);
+          removeResizeFallback = () => window.removeEventListener("resize", resize);
+        }
+        renderer.resize();
+      } catch (error) {
+        cleanup();
+        setRenderError(error instanceof Error ? error.message : "3D renderer unavailable.");
       }
-      renderer.resize();
-    } catch (error) {
-      cleanup();
-      setRenderError(error instanceof Error ? error.message : "3D renderer unavailable.");
-      return;
-    }
+    });
 
     return cleanup;
   }, [data, loading, reducedMotion]);

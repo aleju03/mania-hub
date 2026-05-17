@@ -411,7 +411,7 @@ function PlayerPage() {
   }, [username]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || bestWindowLoaded) return;
 
     let cancelled = false;
     const timeout = tab === "recent"
@@ -448,7 +448,7 @@ function PlayerPage() {
       cancelled = true;
       if (timeout != null) window.clearTimeout(timeout);
     };
-  }, [tab, user]);
+  }, [bestWindowLoaded, tab, user]);
 
   useEffect(() => {
     if (!user) return;
