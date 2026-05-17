@@ -1387,7 +1387,7 @@ function ReplayViewer({
     setShowFullscreenChrome(false);
   }, [clearFullscreenChromeTimeout, isCanvasFullscreen]);
 
-  // Build full audio URL from Sayobot CDN using beatmapset ID + audio filename from .osu
+  // Build full audio URL from the server archive extractor using beatmapset ID + audio filename from .osu.
   const effectiveBeatmapsetId = scoreInfo?.beatmapset?.id ?? fallbackBeatmapsetId;
   const audioUrl = effectiveBeatmapsetId && beatmap?.audioFilename
     ? `/api/audio?beatmapsetId=${encodeURIComponent(String(effectiveBeatmapsetId))}&filename=${encodeURIComponent(beatmap.audioFilename)}`

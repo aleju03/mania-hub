@@ -25,6 +25,10 @@ const ARCHIVE_SOURCES = [
     name: "nerinyan",
     url: (beatmapsetId: string) => `https://api.nerinyan.moe/d/${encodeURIComponent(beatmapsetId)}`,
   },
+  {
+    name: "sayobot",
+    url: (beatmapsetId: string) => `https://txy1.sayobot.cn/beatmaps/download/full/${encodeURIComponent(beatmapsetId)}`,
+  },
 ] as const;
 
 type ArchiveSourceName = (typeof ARCHIVE_SOURCES)[number]["name"];
