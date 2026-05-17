@@ -175,6 +175,35 @@ function dedupeHomePopoffs(popoffs: LeanHomePopoff[]): LeanHomePopoff[] {
   });
 }
 
+function getHomePopoffUserKey(popoff: LeanHomePopoff): string {
+  return String(popoff.score.user.id || popoff.user.username);
+}
+
+function selectFeaturedHomePopoffs(popoffs: LeanHomePopoff[], limit = 3): LeanHomePopoff[] {
+  const chartDeduped = dedupeHomePopoffs(popoffs);
+  const selected: LeanHomePopoff[] = [];
+  const selectedKeys = new Set<string>();
+  const seenUsers = new Set<string>();
+
+  for (const popoff of chartDeduped) {
+    const userKey = getHomePopoffUserKey(popoff);
+    if (seenUsers.has(userKey)) continue;
+    selected.push(popoff);
+    selectedKeys.add(String(popoff.score.id));
+    seenUsers.add(userKey);
+    if (selected.length >= limit) return selected;
+  }
+
+  for (const popoff of chartDeduped) {
+    const scoreKey = String(popoff.score.id);
+    if (selectedKeys.has(scoreKey)) continue;
+    selected.push(popoff);
+    if (selected.length >= limit) return selected;
+  }
+
+  return selected;
+}
+
 function HomePage() {
   const navigate = useNavigate();
   const { country } = Route.useSearch();
@@ -194,6 +223,8 @@ function HomePage() {
   const setRankings = useAppStore((state) => state.setRankings);
   const setHomeRecentScores = useAppStore((state) => state.setHomeRecentScores);
   const setHomePopoffs = useAppStore((state) => state.setHomePopoffs);
+  const addFeedScores = useAppStore((state) => state.addFeedScores);
+  const markFeedScoresFetched = useAppStore((state) => state.markFeedScoresFetched);
   const [rankingsError, setRankingsError] = useState<string | null>(null);
   const [loadingScores, setLoadingScores] = useState(recentScores.length === 0);
   const [loadingPopoffs, setLoadingPopoffs] = useState(popoffs.length === 0);
@@ -271,7 +302,10 @@ function HomePage() {
       fetchLiveTrackerSnapshot(selectedCountry, 100)
         .then((snapshot) => {
           if (cancelled) return;
-          setHomeRecentScores(selectedCountry, snapshot.scores.map(trackerScoreToHomeScore));
+          const passedScores = snapshot.scores.filter((score) => getScoreDisplayValues(score).passed);
+          setHomeRecentScores(selectedCountry, passedScores.map(trackerScoreToHomeScore));
+          if (passedScores.length > 0) addFeedScores(selectedCountry, passedScores);
+          else markFeedScoresFetched(selectedCountry);
         })
         .catch(() => {
           if (cancelled) return;
@@ -319,6 +353,8 @@ function HomePage() {
     homeEffectsRankingsError,
     selectedCountry,
     setHomeRecentScores,
+    addFeedScores,
+    markFeedScoresFetched,
     liveBackendEnabled,
   ]);
 
@@ -399,7 +435,7 @@ function HomePage() {
 
   const topPlayersMobile = rankings?.ranking.slice(0, 5) ?? [];
   const topPlayersDesktop = rankings?.ranking.slice(0, 10) ?? [];
-  const featuredPopoffs = useMemo(() => dedupeHomePopoffs(popoffs).slice(0, 3), [popoffs]);
+  const featuredPopoffs = useMemo(() => selectFeaturedHomePopoffs(popoffs), [popoffs]);
   const displayedRecentScores = useMemo(
     () => mergeHomeRecentScores(recentScores, trackerFeedScores),
     [recentScores, trackerFeedScores],
