@@ -257,6 +257,15 @@ export function normalizeBeatmapPayload(data: unknown): { beatmapId: number } {
   return { beatmapId: parseOsuId(input.beatmapId, "beatmap id") };
 }
 
+export function normalizeBeatmapChecksumPayload(data: unknown): { checksum: string } {
+  const input = asInputRecord(data);
+  const checksum = String(input.checksum ?? "").trim().toLowerCase();
+  if (!/^[a-f0-9]{32}$/.test(checksum)) {
+    throw new Error("Invalid beatmap checksum.");
+  }
+  return { checksum };
+}
+
 export function normalizeBeatmapScoresPayload(data: unknown): { beatmapId: number; country?: string; page: number } {
   const input = asInputRecord(data);
   const page = parseBoundedInt(input.page, "page", { min: 1, max: 2, fallback: 1 });

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { Upload } from "lucide-react";
 
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { GradeImg } from "#/components/ui/GradeImg";
@@ -14,7 +15,7 @@ import { searchBeatmaps, getUserBeatmapScores } from "#/lib/osu";
 import { filterBeatmapSearchResults } from "#/lib/beatmap-search";
 import type { BeatmapScoreLookupStatus, OsuBeatmap, OsuBeatmapset, OsuScore } from "#/lib/types";
 
-export type ReplayBrowseMode = "player" | "beatmap";
+export type ReplayBrowseMode = "player" | "beatmap" | "upload";
 type PlayerReplaySectionKey = "pinned" | "recent" | "best" | "firsts";
 type PlayerScoreGroups = { best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScore[]; recent: OsuScore[] };
 
@@ -32,6 +33,7 @@ interface ReplayBrowseViewProps {
   error: string | null;
   selectedCountry: string;
   onModeChange: (mode: ReplayBrowseMode) => void;
+  onUploadReplay: (file: File) => void;
   onPlayerSearch: (query: string) => Promise<{ id: number; username: string; avatar_url: string; country_code: string }[]>;
   onSelectPlayer: (user: { id: number; username: string }) => void;
   onPlayerSearchSubmit: (query: string) => void;
@@ -75,6 +77,7 @@ export function ReplayBrowseView({
   error,
   selectedCountry,
   onModeChange,
+  onUploadReplay,
   onPlayerSearch,
   onSelectPlayer,
   onPlayerSearchSubmit,
@@ -109,7 +112,7 @@ export function ReplayBrowseView({
     <motion.div key="browse" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <div className="flex justify-center mb-3">
         <div className="flex bg-osu-b4 rounded-lg border border-osu-b3/50 overflow-hidden">
-          {(["player", "beatmap"] as const).map((nextMode) => (
+          {(["player", "beatmap", "upload"] as const).map((nextMode) => (
             <button
               key={nextMode}
               onClick={() => onModeChange(nextMode)}
@@ -119,7 +122,7 @@ export function ReplayBrowseView({
                   : "text-osu-f1 hover:text-white"
               }`}
             >
-              {nextMode === "player" ? "By Player" : "By Beatmap"}
+              {nextMode === "player" ? "By Player" : nextMode === "beatmap" ? "By Beatmap" : "Upload"}
             </button>
           ))}
         </div>
@@ -170,7 +173,71 @@ export function ReplayBrowseView({
           onLoadMoreBeatmapScores={onLoadMoreBeatmapScores}
         />
       )}
+
+      {mode === "upload" && (
+        <UploadReplayBrowser onUploadReplay={onUploadReplay} />
+      )}
     </motion.div>
+  );
+}
+
+function UploadReplayBrowser({
+  onUploadReplay,
+}: Pick<ReplayBrowseViewProps, "onUploadReplay">) {
+  const [dragActive, setDragActive] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFiles = useCallback((files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    onUploadReplay(file);
+    if (inputRef.current) inputRef.current.value = "";
+  }, [onUploadReplay]);
+
+  return (
+    <div className="mx-auto max-w-lg">
+      <h3 className="mb-3 text-center text-sm font-semibold uppercase tracking-wider text-osu-f1">
+        Drop your own .osr file
+      </h3>
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          setDragActive(true);
+        }}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragActive(true);
+        }}
+        onDragLeave={(event) => {
+          event.preventDefault();
+          setDragActive(false);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          setDragActive(false);
+          handleFiles(event.dataTransfer.files);
+        }}
+        className={`flex min-h-[180px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-6 py-8 text-center transition-colors cursor-pointer ${
+          dragActive
+            ? "border-osu-pink/60 bg-osu-pink/10"
+            : "border-osu-b3/60 bg-osu-b4 hover:border-osu-pink/45 hover:bg-osu-b3/60"
+        }`}
+      >
+        <Upload className="h-7 w-7 text-osu-f1" aria-hidden="true" />
+        <span className="text-sm font-semibold text-white">
+          {dragActive ? "Drop to load it" : "Drag an .osr here, or click to browse"}
+        </span>
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".osr,application/octet-stream"
+        className="sr-only"
+        onChange={(event) => handleFiles(event.target.files)}
+      />
+    </div>
   );
 }
 

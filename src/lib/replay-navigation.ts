@@ -1,6 +1,6 @@
 export type ReplayBackSearch = {
   player?: string;
-  tab?: "beatmap";
+  tab?: "beatmap" | "upload";
 };
 
 export type ReplayScoreSearch = {
@@ -19,11 +19,11 @@ export function getReplayBackNavigation({
 }: {
   canGoBack: boolean;
   playerParam?: string;
-  tab?: "beatmap";
+  tab?: "beatmap" | "upload";
 }): ReplayBackNavigation {
   if (canGoBack) return { type: "history" };
   if (playerParam) return { type: "route", search: { player: playerParam } };
-  if (tab === "beatmap") return { type: "route", search: { tab: "beatmap" } };
+  if (tab === "beatmap" || tab === "upload") return { type: "route", search: { tab } };
   return { type: "route", search: {} };
 }
 

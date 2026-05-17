@@ -20,6 +20,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
 import { Route as ApiSitemapRouteImport } from './routes/api/sitemap'
+import { Route as ApiReplayUploadRouteImport } from './routes/api/replay-upload'
 import { Route as ApiOgRouteImport } from './routes/api/og'
 import { Route as ApiFaviconRouteImport } from './routes/api/favicon'
 import { Route as ApiBackgroundRouteImport } from './routes/api/background'
@@ -88,6 +89,11 @@ const ApiSyncRoute = ApiSyncRouteImport.update({
 const ApiSitemapRoute = ApiSitemapRouteImport.update({
   id: '/api/sitemap',
   path: '/api/sitemap',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiReplayUploadRoute = ApiReplayUploadRouteImport.update({
+  id: '/api/replay-upload',
+  path: '/api/replay-upload',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiOgRoute = ApiOgRouteImport.update({
@@ -180,6 +186,7 @@ export interface FileRoutesByFullPath {
   '/api/background': typeof ApiBackgroundRoute
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
+  '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
   '/player/$username': typeof PlayerUsernameRoute
@@ -207,6 +214,7 @@ export interface FileRoutesByTo {
   '/api/background': typeof ApiBackgroundRoute
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
+  '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
   '/player/$username': typeof PlayerUsernameRoute
@@ -235,6 +243,7 @@ export interface FileRoutesById {
   '/api/background': typeof ApiBackgroundRoute
   '/api/favicon': typeof ApiFaviconRoute
   '/api/og': typeof ApiOgRoute
+  '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
   '/player/$username': typeof PlayerUsernameRoute
@@ -264,6 +273,7 @@ export interface FileRouteTypes {
     | '/api/background'
     | '/api/favicon'
     | '/api/og'
+    | '/api/replay-upload'
     | '/api/sitemap'
     | '/api/sync'
     | '/player/$username'
@@ -291,6 +301,7 @@ export interface FileRouteTypes {
     | '/api/background'
     | '/api/favicon'
     | '/api/og'
+    | '/api/replay-upload'
     | '/api/sitemap'
     | '/api/sync'
     | '/player/$username'
@@ -318,6 +329,7 @@ export interface FileRouteTypes {
     | '/api/background'
     | '/api/favicon'
     | '/api/og'
+    | '/api/replay-upload'
     | '/api/sitemap'
     | '/api/sync'
     | '/player/$username'
@@ -346,6 +358,7 @@ export interface RootRouteChildren {
   ApiBackgroundRoute: typeof ApiBackgroundRoute
   ApiFaviconRoute: typeof ApiFaviconRoute
   ApiOgRoute: typeof ApiOgRoute
+  ApiReplayUploadRoute: typeof ApiReplayUploadRoute
   ApiSitemapRoute: typeof ApiSitemapRoute
   ApiSyncRoute: typeof ApiSyncRoute
   PlayerUsernameRoute: typeof PlayerUsernameRoute
@@ -431,6 +444,13 @@ declare module '@tanstack/react-router' {
       path: '/api/sitemap'
       fullPath: '/api/sitemap'
       preLoaderRoute: typeof ApiSitemapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/replay-upload': {
+      id: '/api/replay-upload'
+      path: '/api/replay-upload'
+      fullPath: '/api/replay-upload'
+      preLoaderRoute: typeof ApiReplayUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/og': {
@@ -565,6 +585,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiBackgroundRoute: ApiBackgroundRoute,
   ApiFaviconRoute: ApiFaviconRoute,
   ApiOgRoute: ApiOgRoute,
+  ApiReplayUploadRoute: ApiReplayUploadRoute,
   ApiSitemapRoute: ApiSitemapRoute,
   ApiSyncRoute: ApiSyncRoute,
   PlayerUsernameRoute: PlayerUsernameRoute,

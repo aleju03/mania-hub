@@ -9,13 +9,14 @@ import {
   runWithCacheLockRenewal
 } from "../api";
 import type { ReplayEndpointKind } from "../r2-cache";
-import type { OsuScore } from "../types";
+import type { OsuBeatmap, OsuBeatmapset, OsuScore } from "../types";
 import {
   edgeCache,
   noStore
 } from "./server";
 import {
   normalizeBeatmapPayload,
+  normalizeBeatmapChecksumPayload,
   normalizeReplayParsedPayload,
   normalizeScorePayload,
   parseBoundedInt
@@ -38,6 +39,9 @@ type ParsedReplayResponse = {
   header: {
     playerName: string;
     gameMode: number;
+    gameVersion?: number;
+    beatmapHash?: string;
+    modsUsed?: number;
     totalScore: number;
     maxCombo: number;
     count300: number;
@@ -51,6 +55,11 @@ type ParsedReplayResponse = {
   lifeBarFrames: Array<{ time: number; health: number }>;
   framesPacked: { count: number; times: string; keys: string };
   keyCount: number;
+};
+
+export type BeatmapChecksumLookupResult = OsuBeatmap & {
+  checksum?: string;
+  beatmapset?: OsuBeatmapset;
 };
 
 type ReplayCacheModule = typeof import("../r2-cache");
@@ -202,6 +211,9 @@ export const getReplayParsed = createServerFn({ method: "GET" })
         header: {
           playerName: info?.username ?? "Unknown",
           gameMode: info?.rulesetId ?? 3,
+          gameVersion: Number(score.replay?.gameVersion ?? 0) || undefined,
+          beatmapHash: info?.beatmapHashMD5 ?? "",
+          modsUsed: Number(info?.rawMods ?? info?.mods?.bitwise ?? 0) || 0,
           totalScore: info?.totalScore ?? 0,
           maxCombo: info?.maxCombo ?? 0,
           count300: info?.count300 ?? 0,
@@ -217,6 +229,17 @@ export const getReplayParsed = createServerFn({ method: "GET" })
         keyCount,
       };
     }, REPLAY_CACHE_LOCK_TTL_MS);
+  });
+
+export const lookupBeatmapByChecksum = createServerFn({ method: "GET" })
+  .inputValidator(normalizeBeatmapChecksumPayload)
+  .handler(async ({ data }: { data: { checksum: string } }) => {
+    edgeCache(300, 3600);
+    return osuFetch<BeatmapChecksumLookupResult>(
+      "/beatmaps/lookup",
+      { checksum: data.checksum },
+      { caller: "lookupBeatmapByChecksum" },
+    );
   });
 
 export const getBeatmapFile = createServerFn({ method: "GET" })

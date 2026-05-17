@@ -7,6 +7,9 @@ export interface ServerReplay {
   header: {
     playerName: string;
     gameMode: number;
+    gameVersion?: number;
+    beatmapHash?: string;
+    modsUsed?: number;
     totalScore: number;
     maxCombo: number;
     count300: number;

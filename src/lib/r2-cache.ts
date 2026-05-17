@@ -50,6 +50,15 @@ type CachedReplay = {
   buffer: Buffer;
 };
 
+type UploadedReplay = {
+  id: string;
+  storageKey: string;
+  sizeBytes: number;
+  mimeType: string;
+  buffer: Buffer;
+  originalFilename?: string;
+};
+
 export type R2AdminFolder = {
   prefix: string;
   name: string;
@@ -158,6 +167,12 @@ export function getReplayStorageKey(scoreId: number): string {
 export function getReplayVideoStorageKey(id: string, filename: string): string {
   const safeId = id.replace(/[^a-zA-Z0-9_-]+/g, "").slice(0, 48) || crypto.randomBytes(6).toString("base64url");
   return `${REPLAY_CACHE_PREFIX}videos/${safeId}/${sanitizeFilename(filename)}`;
+}
+
+export function getUploadedReplayStorageKey(id: string): string {
+  const safeId = id.replace(/[^a-zA-Z0-9_-]+/g, "").slice(0, 64);
+  if (!safeId) throw new Error("Invalid uploaded replay id.");
+  return `${REPLAY_CACHE_PREFIX}uploaded-replays/${safeId}.osr`;
 }
 
 export async function getReplayVideoSignedUrl(id: string, filename: string): Promise<string | null> {
@@ -416,6 +431,34 @@ export async function getCachedReplayEndpointKind(scoreId: number): Promise<Repl
   }
 }
 
+export async function getUploadedReplay(id: string): Promise<UploadedReplay | null> {
+  const r2 = getClient();
+  if (!r2) return null;
+
+  const storageKey = getUploadedReplayStorageKey(id);
+  assertReplayCacheKey(storageKey);
+
+  try {
+    const object = await r2.send(new GetObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: storageKey,
+    }));
+    const buffer = await readObjectBody(object.Body);
+    if (buffer.length === 0) return null;
+
+    return {
+      id,
+      storageKey,
+      sizeBytes: object.ContentLength ?? buffer.length,
+      mimeType: object.ContentType ?? "application/octet-stream",
+      buffer,
+      originalFilename: object.Metadata?.originalfilename,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function putBeatmapAssetAndGetUrl(
   kind: BeatmapAssetKind,
   beatmapsetId: string,
@@ -515,6 +558,34 @@ export async function putReplayVideoAndGetUrl(
       ? `${publicBaseUrl}/${storageKey.split("/").map(encodeURIComponent).join("/")}`
       : await signGetUrl(storageKey, safeMimeType),
     signed: !publicBaseUrl,
+  };
+}
+
+export async function putUploadedReplay(id: string, buffer: Buffer, originalFilename?: string): Promise<UploadedReplay | null> {
+  const r2 = getClient();
+  if (!r2) return null;
+
+  const storageKey = getUploadedReplayStorageKey(id);
+  assertReplayCacheKey(storageKey);
+  const mimeType = "application/octet-stream";
+
+  await r2.send(new PutObjectCommand({
+    Bucket: REPLAY_CACHE_BUCKET,
+    Key: storageKey,
+    Body: buffer,
+    ContentType: mimeType,
+    CacheControl: "private, max-age=31536000, immutable",
+    ContentDisposition: `inline; filename="${sanitizeFilename(originalFilename || `${id}.osr`)}"`,
+    Metadata: originalFilename ? { originalfilename: sanitizeFilename(originalFilename) } : undefined,
+  }));
+
+  return {
+    id,
+    storageKey,
+    sizeBytes: buffer.length,
+    mimeType,
+    buffer,
+    originalFilename: originalFilename ? sanitizeFilename(originalFilename) : undefined,
   };
 }
 

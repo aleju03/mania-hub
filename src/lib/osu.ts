@@ -50,6 +50,7 @@ export {
   getBeatmapFile,
   getReplayParsed,
   getScore,
+  lookupBeatmapByChecksum,
 } from "./osu/replay";
 export {
   getCountrySnipes,

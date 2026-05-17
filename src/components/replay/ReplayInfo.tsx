@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { Check, Copy } from "lucide-react";
 import { formatDate } from "#/lib/format";
 import { getDisplayedAccuracy, getScoreTimestamp, isLazerScore } from "#/lib/score";
 import type { ManiaBeatmap } from "#/lib/beatmap-parser";
@@ -8,10 +10,12 @@ interface ReplayInfoProps {
   replay: ServerReplay;
   score: OsuScore | null;
   beatmap: ManiaBeatmap | null;
+  fallbackBeatmapsetId?: number;
+  shareUrl?: string;
   onClear: () => void;
 }
 
-export function ReplayInfo({ replay, score, beatmap, onClear }: ReplayInfoProps) {
+export function ReplayInfo({ replay, score, beatmap, fallbackBeatmapsetId, shareUrl, onClear }: ReplayInfoProps) {
   const h = replay.header;
   const totalHits = h.countGeki + h.count300 + h.countKatu + h.count100 + h.count50;
   const accuracy = score
@@ -19,10 +23,12 @@ export function ReplayInfo({ replay, score, beatmap, onClear }: ReplayInfoProps)
     : totalHits + h.countMiss > 0
       ? ((h.countGeki * 6 + h.count300 * 6 + h.countKatu * 4 + h.count100 * 2 + h.count50) / ((totalHits + h.countMiss) * 6) * 100)
       : 0;
-  const beatmapsetId = score?.beatmapset?.id;
+  const beatmapsetId = score?.beatmapset?.id ?? fallbackBeatmapsetId;
   const beatmapId = score?.beatmap?.id;
   const mapUrl = beatmapsetId ? `https://osu.ppy.sh/beatmapsets/${beatmapsetId}${beatmapId ? `#mania/${beatmapId}` : ""}` : null;
-  const clientLabel = score ? (isLazerScore(score) ? "Lazer" : "Stable") : null;
+  const clientLabel = score
+    ? (isLazerScore(score) ? "Lazer" : "Stable")
+    : getReplayHeaderClientLabel(h.gameVersion);
   const playedAt = score ? getScoreTimestamp(score) : "";
   const playedDate = playedAt ? formatDate(playedAt) : null;
 
@@ -53,7 +59,10 @@ export function ReplayInfo({ replay, score, beatmap, onClear }: ReplayInfoProps)
               </div>
             </div>
           </div>
-          <button onClick={onClear} className="shrink-0 px-3 py-1.5 rounded-lg bg-osu-b3/50 text-xs text-osu-f1 hover:text-white hover:bg-osu-b2 transition-colors cursor-pointer">Back</button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {shareUrl && <ShareReplayButton shareUrl={shareUrl} compact />}
+            <button onClick={onClear} className="px-3 py-1.5 rounded-lg bg-osu-b3/50 text-xs text-osu-f1 hover:text-white hover:bg-osu-b2 transition-colors cursor-pointer">Back</button>
+          </div>
         </div>
 
         <div className="mt-3 grid grid-cols-4 gap-1.5">
@@ -119,10 +128,45 @@ export function ReplayInfo({ replay, score, beatmap, onClear }: ReplayInfoProps)
             </div>
             {beatmap && <div><div className="text-[9px] uppercase tracking-wider text-osu-f1">Notes</div><div className="text-sm font-bold text-osu-f1">{beatmap.notes.length.toLocaleString()}</div></div>}
           </div>
-          <button onClick={onClear} className="justify-self-end px-3 py-1.5 rounded-lg bg-osu-b3/50 text-xs text-osu-f1 hover:text-white hover:bg-osu-b2 transition-colors cursor-pointer">Back</button>
+          <div className="justify-self-end flex items-center gap-2">
+            {shareUrl && <ShareReplayButton shareUrl={shareUrl} />}
+            <button onClick={onClear} className="px-3 py-1.5 rounded-lg bg-osu-b3/50 text-xs text-osu-f1 hover:text-white hover:bg-osu-b2 transition-colors cursor-pointer">Back</button>
+          </div>
         </div>
       </div>
     </>
+  );
+}
+
+function getReplayHeaderClientLabel(gameVersion: number | undefined): "Lazer" | "Stable" | null {
+  if (!gameVersion) return null;
+  return gameVersion >= 30_000_000 ? "Lazer" : "Stable";
+}
+
+function ShareReplayButton({ shareUrl, compact = false }: { shareUrl: string; compact?: boolean }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  const Icon = copied ? Check : Copy;
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className={`inline-flex items-center gap-1.5 rounded-lg bg-osu-pink/20 font-semibold text-osu-pink-light transition-colors cursor-pointer hover:bg-osu-pink/30 hover:text-white ${compact ? "px-2.5 py-1.5 text-[11px]" : "px-3 py-1.5 text-xs"}`}
+      title={shareUrl}
+    >
+      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      {copied ? "Copied" : "Copy Link"}
+    </button>
   );
 }
 
