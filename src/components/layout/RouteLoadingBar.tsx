@@ -1,9 +1,53 @@
 import { useRouterState } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 
+type RouteLoadingLocation = {
+  pathname: string;
+  searchStr: string;
+};
+
+const REPLAY_LOADING_SEARCH_KEYS = ["scoreId", "uploadId"] as const;
+
+function getSearchValue(location: RouteLoadingLocation, key: string): string | null {
+  return new URLSearchParams(location.searchStr).get(key);
+}
+
+function unchangedSearchValues(from: RouteLoadingLocation, to: RouteLoadingLocation, keys: readonly string[]): boolean {
+  return keys.every((key) => getSearchValue(from, key) === getSearchValue(to, key));
+}
+
+function isQuietSamePageNavigation(from: RouteLoadingLocation, to: RouteLoadingLocation): boolean {
+  if (from.pathname !== to.pathname) return false;
+
+  if (to.pathname === "/maps") {
+    return getSearchValue(from, "country") === getSearchValue(to, "country");
+  }
+
+  if (to.pathname === "/replay") {
+    return unchangedSearchValues(from, to, REPLAY_LOADING_SEARCH_KEYS);
+  }
+
+  return false;
+}
+
+export function shouldShowRouteLoadingBar(
+  isLoading: boolean,
+  location: RouteLoadingLocation,
+  resolvedLocation?: RouteLoadingLocation,
+): boolean {
+  if (!isLoading) return false;
+  if (!resolvedLocation) return true;
+  if (location.pathname !== resolvedLocation.pathname) return true;
+  return !isQuietSamePageNavigation(resolvedLocation, location);
+}
+
 export function RouteLoadingBar() {
-  const isLoading = useRouterState({
-    select: (state) => state.isLoading,
+  const showRouteLoadingBar = useRouterState({
+    select: (state) => shouldShowRouteLoadingBar(
+      state.isLoading,
+      state.location,
+      state.resolvedLocation,
+    ),
   });
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
@@ -28,7 +72,7 @@ export function RouteLoadingBar() {
     if (finishTimeoutRef.current) clearTimeout(finishTimeoutRef.current);
     if (intervalRef.current) clearInterval(intervalRef.current);
 
-    if (isLoading) {
+    if (showRouteLoadingBar) {
       delayTimeoutRef.current = setTimeout(() => {
         setVisible(true);
         setProgress(14);
@@ -55,7 +99,7 @@ export function RouteLoadingBar() {
       setVisible(false);
       setProgress(0);
     }, 220);
-  }, [isLoading, mounted, visible]);
+  }, [showRouteLoadingBar, mounted, visible]);
 
   if (!mounted) return null;
 
