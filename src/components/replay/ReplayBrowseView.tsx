@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, Upload } from "lucide-react";
 
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { GradeImg } from "#/components/ui/GradeImg";
@@ -787,13 +787,42 @@ function PlayerSuggestions({
   suggestionPlayers,
   onSelectPlayer,
 }: Pick<ReplayBrowseViewProps, "selectedCountry" | "suggestionPlayers" | "onSelectPlayer">) {
+  const pageSize = 12;
+  const [page, setPage] = useState(0);
+  const pageCount = Math.ceil(suggestionPlayers.length / pageSize);
+  const visiblePlayers = suggestionPlayers.slice(page * pageSize, page * pageSize + pageSize);
+
   return (
     <div className="max-w-5xl mx-auto">
-      <h4 className="text-xs font-semibold text-osu-f1 uppercase tracking-wider mb-4 text-center">
-        Top {getCountryName(selectedCountry)} Players
-      </h4>
+      <div className="relative mb-4 flex items-center justify-center">
+        <h4 className="text-xs font-semibold text-osu-f1 uppercase tracking-wider text-center">
+          Top {getCountryName(selectedCountry)} Players
+        </h4>
+        {pageCount > 1 && (
+          <div className="absolute right-0 flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+              aria-label="Previous players"
+              className="p-1.5 rounded-lg bg-osu-b4 text-osu-f1 hover:bg-osu-b3 hover:text-white transition-colors disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+              disabled={page === pageCount - 1}
+              aria-label="Next players"
+              className="p-1.5 rounded-lg bg-osu-b4 text-osu-f1 hover:bg-osu-b3 hover:text-white transition-colors disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {suggestionPlayers.map((player, index) => (
+        {visiblePlayers.map((player, index) => (
           <motion.button
             key={player.id}
             initial={{ opacity: 0, y: 6 }}

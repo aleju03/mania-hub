@@ -841,7 +841,7 @@ function ReplayPage() {
   const suggestionPlayers = useMemo(
     () => (cachedRankings?.ranking ?? [])
       .filter((entry) => entry.user.is_active !== false)
-      .slice(0, 12)
+      .slice(0, 24)
       .map((entry) => ({
         id: entry.user.id,
         username: entry.user.username,
