@@ -148,6 +148,7 @@ function PopOffsPage() {
       to: "/top-plays",
       search: { range: rememberedRange, country },
       replace: true,
+      resetScroll: false,
     });
   }, [country, location.searchStr, navigate, range, rememberedRange]);
 
@@ -227,6 +228,18 @@ function PopOffsPage() {
 
   useEffect(() => {
     if (!liveBackendEnabled) return;
+    if (!shouldRefreshTopPlays({
+      fetchedAt: popoffsFetchedAt,
+      cachedWindow: popoffsWindow,
+      selectedRange: range,
+      cacheTtlMs: CLIENT_CACHE_TTL.popoffs,
+    })) {
+      setLoading(false);
+      setRefreshing(false);
+      setScanStartedAt(null);
+      return;
+    }
+
     let cancelled = false;
     const requestedCountry = selectedCountry;
     fetchLiveTopPlaysSnapshot(requestedCountry, range)
@@ -243,7 +256,7 @@ function PopOffsPage() {
     return () => {
       cancelled = true;
     };
-  }, [liveBackendEnabled, mergePopoffs, range, selectedCountry, setCachedPopoffs]);
+  }, [liveBackendEnabled, mergePopoffs, popoffsFetchedAt, popoffsWindow, range, selectedCountry, setCachedPopoffs]);
 
   useEffect(() => {
     if (!liveBackendEnabled) return;
@@ -251,14 +264,14 @@ function PopOffsPage() {
     if (!source) return;
     source.addEventListener("top_play", (event) => {
       const popoff = JSON.parse(event.data) as PopOff;
-      setCachedPopoffs(selectedCountry, mergePopoffs([popoff, ...popoffs]), range);
+      setCachedPopoffs(selectedCountry, mergePopoffs([popoff, ...popoffs]), popoffsWindow ?? range);
     });
     source.addEventListener("job_status", () => {
       setRefreshing(false);
       setScanStartedAt(null);
     });
     return () => source.close();
-  }, [liveBackendEnabled, mergePopoffs, popoffs, range, selectedCountry, setCachedPopoffs]);
+  }, [liveBackendEnabled, mergePopoffs, popoffs, popoffsWindow, range, selectedCountry, setCachedPopoffs]);
 
   useEffect(() => {
     if (scanStartedAt == null) {
@@ -543,6 +556,7 @@ function PopOffsPage() {
             to: "/top-plays",
             search: { range: nextRange, country },
             replace: true,
+            resetScroll: false,
           });
           setPage(0);
         }}

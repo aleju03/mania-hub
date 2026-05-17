@@ -6,6 +6,7 @@ import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
 import { AuthContext } from "../lib/auth-context";
 import { getCurrentAuth } from "../lib/auth";
 import { InitialCountryContext } from "../lib/country-context";
+import type { AuthState } from "../lib/auth-shared";
 import {
   COUNTRY_AUTO_COOKIE_NAME,
   COUNTRY_COOKIE_MAX_AGE_SECONDS,
@@ -19,6 +20,7 @@ import { PostHogProvider } from "../lib/posthog-provider";
 import { getCanonicalOrigin } from "../lib/origin";
 import { DEFAULT_DESCRIPTION, SITE_NAME, websiteJsonLd } from "../lib/seo";
 import { fetchLiveCountryFeatures } from "../lib/live-backend";
+import type { LiveCountryFeaturesSnapshot } from "../lib/live-backend";
 import { seedCountryTierCache } from "../lib/use-country-warming";
 import appCss from "../styles.css?url";
 
@@ -65,21 +67,98 @@ const getInitialCountry = createServerFn({ method: "GET" }).handler(() => {
   return resolveInitialCountry(countryCookie, detectedCountry);
 });
 
-export const Route = createRootRoute({
-  beforeLoad: async () => {
-    const onClient = typeof document !== "undefined";
-    const [initialCountry, origin, auth, countryFeatures] = await Promise.all([
-      onClient
-        ? Promise.resolve(resolveInitialCountry(readCountryCookieClient()))
-        : getInitialCountry(),
-      onClient
-        ? Promise.resolve(window.location.origin)
-        : getRequestOrigin(),
+type RootSlowContext = {
+  auth: AuthState;
+  countryFeatures: LiveCountryFeaturesSnapshot | null;
+};
+
+type RootRouteContext = RootSlowContext & {
+  initialCountry: string;
+  origin: string;
+};
+
+const CLIENT_ROOT_CONTEXT_TTL_MS = 60_000;
+
+let clientRootSlowContextCache: { value: RootSlowContext; expiresAt: number } | null = null;
+let clientRootSlowContextPromise: Promise<RootSlowContext> | null = null;
+
+function refreshClientRootSlowContext(): Promise<RootSlowContext> {
+  if (!clientRootSlowContextPromise) {
+    clientRootSlowContextPromise = Promise.all([
       getCurrentAuth(),
       fetchLiveCountryFeatures(),
-    ]);
-    return { initialCountry, origin, auth, countryFeatures };
-  },
+    ])
+      .then(([auth, countryFeatures]) => {
+        const value = { auth, countryFeatures };
+        clientRootSlowContextCache = {
+          value,
+          expiresAt: Date.now() + CLIENT_ROOT_CONTEXT_TTL_MS,
+        };
+        return value;
+      })
+      .finally(() => {
+        clientRootSlowContextPromise = null;
+      });
+  }
+
+  return clientRootSlowContextPromise;
+}
+
+function readClientRootSlowContext(): RootSlowContext | Promise<RootSlowContext> {
+  if (clientRootSlowContextCache) {
+    if (clientRootSlowContextCache.expiresAt <= Date.now()) {
+      void refreshClientRootSlowContext().catch(() => {});
+    }
+    return clientRootSlowContextCache.value;
+  }
+
+  return refreshClientRootSlowContext();
+}
+
+function seedClientRootSlowContext(value: RootSlowContext): void {
+  if (typeof document === "undefined") return;
+  if (
+    clientRootSlowContextCache &&
+    clientRootSlowContextCache.expiresAt > Date.now() &&
+    clientRootSlowContextCache.value.auth === value.auth &&
+    clientRootSlowContextCache.value.countryFeatures === value.countryFeatures
+  ) {
+    return;
+  }
+  clientRootSlowContextCache = {
+    value,
+    expiresAt: Date.now() + CLIENT_ROOT_CONTEXT_TTL_MS,
+  };
+}
+
+function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
+  return typeof (value as Promise<T>).then === "function";
+}
+
+function getClientRootContext(): RootRouteContext | Promise<RootRouteContext> {
+  const initialCountry = resolveInitialCountry(readCountryCookieClient());
+  const origin = window.location.origin;
+  const slowContext = readClientRootSlowContext();
+
+  if (isPromiseLike(slowContext)) {
+    return slowContext.then((context) => ({ initialCountry, origin, ...context }));
+  }
+
+  return { initialCountry, origin, ...slowContext };
+}
+
+async function getServerRootContext(): Promise<RootRouteContext> {
+  const [initialCountry, origin, auth, countryFeatures] = await Promise.all([
+    getInitialCountry(),
+    getRequestOrigin(),
+    getCurrentAuth(),
+    fetchLiveCountryFeatures(),
+  ]);
+  return { initialCountry, origin, auth, countryFeatures };
+}
+
+export const Route = createRootRoute({
+  beforeLoad: () => typeof document !== "undefined" ? getClientRootContext() : getServerRootContext(),
   head: () => ({
     meta: [
       { charSet: "utf-8" },
@@ -138,6 +217,7 @@ function NotFoundPage() {
 
 function RootLayout() {
   const { auth, initialCountry, countryFeatures } = Route.useRouteContext();
+  seedClientRootSlowContext({ auth, countryFeatures });
   seedCountryTierCache(countryFeatures?.countries);
   return (
     <InitialCountryContext.Provider value={initialCountry}>

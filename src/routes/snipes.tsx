@@ -251,6 +251,10 @@ function SnipesPage() {
   searchRef.current = search;
   const updateSearch = useCallback(
     (patch: Partial<SnipesSearch>) => {
+      const nextSearch = { ...searchRef.current, ...patch };
+      const changed = (Object.keys(patch) as Array<keyof SnipesSearch>).some((key) => searchRef.current[key] !== nextSearch[key]);
+      if (!changed) return;
+
       if (patch.range || patch.keys) {
         setSnipesFilters(selectedCountry, {
           range: patch.range ?? searchRef.current.range,
@@ -259,8 +263,9 @@ function SnipesPage() {
       }
       navigate({
         to: "/snipes",
-        search: { ...searchRef.current, ...patch },
+        search: nextSearch,
         replace: true,
+        resetScroll: false,
       });
     },
     [navigate, selectedCountry, setSnipesFilters],
@@ -311,6 +316,7 @@ function SnipesPage() {
       to: "/snipes",
       search: nextSearch,
       replace: true,
+      resetScroll: false,
     });
   }, [location.searchStr, navigate, rememberedFilters.keys, rememberedFilters.range, search]);
 

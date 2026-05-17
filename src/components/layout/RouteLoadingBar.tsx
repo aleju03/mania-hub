@@ -7,7 +7,7 @@ type RouteLoadingLocation = {
 };
 
 const REPLAY_LOADING_SEARCH_KEYS = ["scoreId", "uploadId"] as const;
-const COUNTRY_SCOPED_QUIET_ROUTES = new Set(["/maps", "/top-plays", "/tracker"]);
+const COUNTRY_SCOPED_QUIET_ROUTES = new Set(["/maps", "/top-plays", "/tracker", "/snipes"]);
 
 function getSearchValue(location: RouteLoadingLocation, key: string): string | null {
   return new URLSearchParams(location.searchStr).get(key);
@@ -43,13 +43,19 @@ export function shouldShowRouteLoadingBar(
 }
 
 export function RouteLoadingBar() {
-  const showRouteLoadingBar = useRouterState({
-    select: (state) => shouldShowRouteLoadingBar(
-      state.isLoading,
-      state.location,
-      state.resolvedLocation,
-    ),
+  const routeLoadingState = useRouterState({
+    select: (state) => ({
+      isLoading: state.isLoading,
+      location: state.location,
+      resolvedLocation: state.resolvedLocation,
+    }),
   });
+  const lastSettledLocationRef = useRef<RouteLoadingLocation | null>(
+    routeLoadingState.isLoading ? null : routeLoadingState.location,
+  );
+  const { isLoading, location, resolvedLocation } = routeLoadingState;
+  const comparisonLocation = resolvedLocation ?? lastSettledLocationRef.current ?? undefined;
+  const showRouteLoadingBar = shouldShowRouteLoadingBar(isLoading, location, comparisonLocation);
   const [mounted, setMounted] = useState(false);
   const [visible, setVisible] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -65,6 +71,11 @@ export function RouteLoadingBar() {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    if (isLoading) return;
+    lastSettledLocationRef.current = location;
+  }, [isLoading, location.pathname, location.searchStr]);
 
   useEffect(() => {
     if (!mounted) return;

@@ -902,6 +902,8 @@ export const Route = createFileRoute("/maps")({
 function MapsPage() {
   const navigate = useNavigate();
   const mapsSearch = Route.useSearch();
+  const mapsSearchRef = useRef(mapsSearch);
+  mapsSearchRef.current = mapsSearch;
   const auth = useAuth();
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = mapsSearch.country ?? fallbackCountry;
@@ -949,6 +951,7 @@ function MapsPage() {
   const routeSearchQuery = mapsSearch.q;
   const [searchInput, setSearchInput] = useState(routeSearchQuery);
   const searchQuery = useDeferredValue(searchInput);
+  const pendingSearchQueryRef = useRef<string | null>(null);
   const rStatusRaw = mapsSearch.rStatus;
   const rKeyRaw = mapsSearch.rKey;
   const rPatternRaw = mapsSearch.rPattern;
@@ -961,12 +964,18 @@ function MapsPage() {
   const liveBackendEnabled = isLiveBackendConfigured();
   const { warming } = useCountryWarming(selectedCountry);
   const updateMapsSearch = useCallback((patch: Partial<MapsSearch>) => {
+    const current = mapsSearchRef.current;
+    const nextSearch = { ...current, ...patch };
+    const changed = (Object.keys(patch) as Array<keyof MapsSearch>).some((key) => current[key] !== nextSearch[key]);
+    if (!changed) return;
+
     navigate({
       to: "/maps",
-      search: { ...mapsSearch, ...patch },
+      search: nextSearch,
       replace: true,
+      resetScroll: false,
     });
-  }, [mapsSearch, navigate]);
+  }, [navigate]);
   const randomStatus = useMemo(() => parseTriStateCsv(rStatusRaw, RANDOM_STATUS_OPTIONS), [rStatusRaw]);
   const randomKey = useMemo(() => parseTriStateCsv(rKeyRaw, RANDOM_KEY_OPTIONS), [rKeyRaw]);
   const randomPattern = useMemo(() => parseTriStateCsv(rPatternRaw, RANDOM_PATTERN_OPTIONS), [rPatternRaw]);
@@ -984,12 +993,17 @@ function MapsPage() {
   const countryName = getCountryName(selectedCountry);
 
   useEffect(() => {
+    if (routeSearchQuery === pendingSearchQueryRef.current) {
+      pendingSearchQueryRef.current = null;
+      return;
+    }
     setSearchInput(routeSearchQuery);
   }, [routeSearchQuery]);
 
   useEffect(() => {
     if (searchInput === routeSearchQuery) return;
     const timer = window.setTimeout(() => {
+      pendingSearchQueryRef.current = searchInput;
       updateMapsSearch({ q: searchInput, page: 0 });
     }, SEARCH_URL_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
@@ -1568,6 +1582,7 @@ function MapsPage() {
       to: "/maps",
       search: { ...DEFAULT_MAPS_SEARCH, tab, country: mapsSearch.country },
       replace: true,
+      resetScroll: false,
     });
   };
 

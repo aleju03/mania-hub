@@ -16,7 +16,9 @@ export function PageTabs<T extends string>({ items, value, onChange }: PageTabsP
         {items.map((item) => (
           <button
             key={item.id}
-            onClick={() => onChange(item.id)}
+            onClick={() => {
+              if (value !== item.id) onChange(item.id);
+            }}
             className={`relative px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] ${
               value === item.id
                 ? "text-osu-c1"

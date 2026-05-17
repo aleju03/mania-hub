@@ -478,13 +478,19 @@ function ScoresPage() {
 
   const updateTrackerSearch = useCallback((patch: Partial<{ country: string | undefined; page: number | undefined }>) => {
     const nextPage = patch.page ?? page;
+    const nextCountry = patch.country ?? country;
+    const nextPageParam = nextPage > 0 ? nextPage : undefined;
+    const currentPageParam = page > 0 ? page : undefined;
+    if (nextCountry === country && nextPageParam === currentPageParam) return;
+
     navigate({
       to: "/tracker",
       search: {
-        country: patch.country ?? country,
-        page: nextPage > 0 ? nextPage : undefined,
+        country: nextCountry,
+        page: nextPageParam,
       },
       replace: true,
+      resetScroll: false,
     });
   }, [country, navigate, page]);
 

@@ -75,6 +75,14 @@ describe("route loading bar visibility", () => {
     )).toBe(true);
   });
 
+  it("suppresses snipes filter navigations in the same country", () => {
+    expect(shouldShowRouteLoadingBar(
+      true,
+      location("/snipes?country=CR&range=24h"),
+      location("/snipes?country=CR&range=7d"),
+    )).toBe(false);
+  });
+
   it("still shows for real page changes", () => {
     expect(shouldShowRouteLoadingBar(
       true,
