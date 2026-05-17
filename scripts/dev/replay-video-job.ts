@@ -4,7 +4,6 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import os from "node:os";
 import path from "node:path";
-import ffmpegStaticPath from "ffmpeg-static";
 import type { Connect } from "vite";
 import { isR2ReplayCacheConfigured, putReplayVideoAndGetUrl } from "#/lib/r2-cache";
 
@@ -122,7 +121,7 @@ function atempoChain(rate: number): string {
   return filters.join(",");
 }
 
-function runFfmpeg(args: string[], binary = process.env.FFMPEG_PATH || ffmpegStaticPath || "ffmpeg"): Promise<void> {
+function runFfmpeg(args: string[], binary = process.env.FFMPEG_PATH || "ffmpeg"): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(binary, args, { stdio: ["ignore", "ignore", "pipe"] });
     let stderr = "";

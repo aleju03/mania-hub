@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Config } from "../config.js";
+import { handleBeatmapAudioRequest } from "../audio/http.js";
 import { activateCountry, deleteCountryData, getCountryRegistry, isCountryFeatureAtLeast, setCountryFeatureTier, setCountryPaused, type CountryFeatureTier } from "../countries.js";
 import type { Db } from "../db.js";
 import { dbHealth, exec, parseJson } from "../db.js";
@@ -89,6 +90,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendCors(req, res, ctx);
     res.statusCode = 204;
     res.end();
+    return true;
+  }
+  if (url.pathname === "/api/audio") {
+    await handleBeatmapAudioRequest(req, res, ctx.config, url);
     return true;
   }
   if (url.pathname.startsWith("/api/") && !isAdmin(req, ctx) && !checkRate(req, res, ctx, "publicApi")) {
@@ -666,11 +671,15 @@ export function sendJson(req: IncomingMessage, res: ServerResponse, ctx: Pick<Ht
 
 function sendCors(req: IncomingMessage, res: ServerResponse, ctx: Pick<HttpContext, "config">): void {
   const origin = req.headers.origin;
-  if (origin && ctx.config.allowedOrigins.includes(origin)) {
+  if (origin && (ctx.config.allowedOrigins.includes("*") || ctx.config.allowedOrigins.includes(origin))) {
     res.setHeader("access-control-allow-origin", origin);
     res.setHeader("vary", "origin");
-    res.setHeader("access-control-allow-methods", "GET,POST,OPTIONS");
-    res.setHeader("access-control-allow-headers", "content-type,authorization");
+    res.setHeader("access-control-allow-methods", "GET,HEAD,POST,OPTIONS");
+    res.setHeader("access-control-allow-headers", "content-type,authorization,range");
+    res.setHeader(
+      "access-control-expose-headers",
+      "accept-ranges,content-length,content-range,content-type,x-audio-mp3-in-mp4,x-audio-size-bytes",
+    );
     res.setHeader("access-control-max-age", "600");
   }
 }

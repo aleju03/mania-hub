@@ -41,6 +41,7 @@ import type { ManiaBeatmap, ManiaNote, ManiaScrollVelocity } from "../lib/beatma
 import { useAppStore, useSelectedCountry } from "../store";
 import { pageSeo, mapsOgImagePath } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
+import { getBeatmapAudioUrl } from "../lib/audio-url";
 import {
   RANDOM_REPLAY_PREVIEW_MS,
   buildAutoplayFrames,
@@ -3941,7 +3942,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const [replayAudioSizeBytes, setReplayAudioSizeBytes] = useState<number | null>(null);
   const [replayPreviewError, setReplayPreviewError] = useState<string | null>(null);
   const replayAudioFullUrl = previewBeatmap?.audioFilename
-    ? `/api/audio?beatmapsetId=${encodeURIComponent(String(audioBeatmapsetId))}&filename=${encodeURIComponent(previewBeatmap.audioFilename)}`
+    ? getBeatmapAudioUrl(audioBeatmapsetId, previewBeatmap.audioFilename)
     : null;
   const replayAudioPlaybackRate = replayAudioMode === "set-preview" ? selectedDifficultyRate : 1;
   const replayClockRateDivisor = replayAudioMode === "set-preview" ? selectedDifficultyRate : 1;

@@ -29,6 +29,7 @@ import { buildKeypressHeatmap } from "../lib/replay-keypress-heatmap";
 import { parseReplayScoreInput } from "../lib/replay-score-input";
 import { getReplayScoreAvailability } from "../lib/replay-score-availability";
 import { buildReplaySeoTitle, type ReplaySeoScore } from "../lib/replay-seo";
+import { getBeatmapAudioUrl } from "../lib/audio-url";
 import { DEFAULT_REPLAY_SCROLL_SPEED, REPLAY_SCROLL_SPEED_CHANGE_EVENT, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../lib/replay-scroll-speed";
 import {
   REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT,
@@ -1390,7 +1391,7 @@ function ReplayViewer({
   // Build full audio URL from the server archive extractor using beatmapset ID + audio filename from .osu.
   const effectiveBeatmapsetId = scoreInfo?.beatmapset?.id ?? fallbackBeatmapsetId;
   const audioUrl = effectiveBeatmapsetId && beatmap?.audioFilename
-    ? `/api/audio?beatmapsetId=${encodeURIComponent(String(effectiveBeatmapsetId))}&filename=${encodeURIComponent(beatmap.audioFilename)}`
+    ? getBeatmapAudioUrl(effectiveBeatmapsetId, beatmap.audioFilename)
     : null;
   const coverUrl = scoreInfo?.beatmapset?.covers?.["cover@2x"] || scoreInfo?.beatmapset?.covers?.cover || null;
   const coverProxyUrl = effectiveBeatmapsetId

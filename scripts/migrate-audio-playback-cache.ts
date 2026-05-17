@@ -12,7 +12,6 @@ import {
   type GetObjectCommandOutput,
   type _Object,
 } from "@aws-sdk/client-s3";
-import ffmpegStaticPath from "ffmpeg-static";
 
 const REPLAY_CACHE_BUCKET = "mania-hub-replay-cache";
 const AUDIO_PREFIX = "replay-cache/audio/";
@@ -153,7 +152,7 @@ async function objectExists(client: S3Client, bucket: string, key: string): Prom
   }
 }
 
-function runFfmpeg(args: string[], binary = process.env.FFMPEG_PATH || ffmpegStaticPath || "ffmpeg"): Promise<void> {
+function runFfmpeg(args: string[], binary = process.env.FFMPEG_PATH || "ffmpeg"): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(binary, args, { stdio: ["ignore", "ignore", "pipe"] });
     let stderr = "";
