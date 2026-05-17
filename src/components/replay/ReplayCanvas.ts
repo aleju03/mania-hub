@@ -372,6 +372,7 @@ export class ManiaReplayRenderer {
     options?: RendererOptions,
   ) {
     this.canvas = canvas;
+    this.canvas.style.visibility = "";
     this.frames = frames;
     this.lifeBarFrames = (options?.lifeBarFrames ?? [])
       .map((frame) => ({
@@ -832,10 +833,10 @@ export class ManiaReplayRenderer {
     const desiredPlayfieldWidth = configuredColumnWidths.reduce((sum, width) => sum + width, 0)
       + configuredColumnSpacings.reduce((sum, width) => sum + width, 0);
     const targetLayoutScale = h / MANIA_SKIN_STAGE_HEIGHT;
-    const maxPlayfieldWidth = Math.min(
-      w * (this.barePlayfield ? 0.82 : 0.72),
-      desiredPlayfieldWidth * targetLayoutScale,
-    );
+    const widthCap = w * (this.barePlayfield ? 0.82 : 0.72);
+    const maxPlayfieldWidth = this.barePlayfield
+      ? widthCap
+      : Math.min(widthCap, desiredPlayfieldWidth * targetLayoutScale);
     const layoutScale = desiredPlayfieldWidth > 0 ? maxPlayfieldWidth / desiredPlayfieldWidth : 1;
     const playfieldWidth = desiredPlayfieldWidth * layoutScale;
     const averageColumnWidth = configuredColumnWidths.reduce((sum, width) => sum + width, 0) / Math.max(1, configuredColumnWidths.length);
@@ -916,6 +917,79 @@ export class ManiaReplayRenderer {
 
   ready() {
     return this.initPromise;
+  }
+
+  setPreviewData(
+    frames: ReplayFrame[],
+    keyCount: number,
+    notes: ManiaNote[] = [],
+    options?: { od?: number; scrollVelocities?: ManiaScrollVelocity[]; initialCombo?: number },
+  ) {
+    this.frames = frames;
+    this.keyCount = Math.max(1, Math.floor(keyCount));
+    this.notes = [...notes];
+    this.colors = COLUMN_COLORS[this.keyCount] || this.generateColors(this.keyCount);
+    for (const c of this.colors) hexToNumber(c);
+
+    this.od = options?.od ?? this.od;
+    this.hitWindows = getManiaReplayHitWindows(this.od, this.ruleset);
+    this.initialCombo = Math.max(0, Math.floor(options?.initialCombo ?? 0));
+    this.combo = this.initialCombo;
+    this.maxComboSoFar = this.combo;
+    this.scrollVelocities = options?.scrollVelocities ?? [];
+    this.receptorFlashTimestamps = new Array(this.keyCount).fill(0);
+    this.hudCachedKeyKps = new Array(this.keyCount).fill("0");
+    this.keypressTimesByColumn = this.buildKeypressTimesByColumn();
+    this.keypressTimes = this.keypressTimesByColumn.flat().sort((a, b) => a - b);
+    this.updateSkinCache();
+    this.prepareScrollVelocities();
+
+    const frameDuration = frames.length > 0 ? frames[frames.length - 1].time : 0;
+    const noteDuration = this.notes.length > 0 ? Math.max(...this.notes.map((n) => n.endTime)) : 0;
+    const replayTailGrace = this.hitWindows.miss * 1.5;
+    this.totalDuration = Math.max(frameDuration, noteDuration + replayTailGrace);
+    this.maxHoldDuration = 0;
+    for (const n of this.notes) {
+      if (n.isHold) this.maxHoldDuration = Math.max(this.maxHoldDuration, n.endTime - n.time);
+    }
+
+    this.segments = buildReplaySegments(this.frames, this.keyCount, this.totalDuration);
+    const simulated = simulateManiaReplayJudgements(
+      this.notes,
+      this.segments,
+      this.keyCount,
+      this.hitWindows,
+      this.ruleset.accuracyMode,
+    );
+    const rawStableComboEvents = this.ruleset.accuracyMode === "stable"
+      ? buildStableReplayComboEvents(this.notes, simulated.noteStates)
+      : null;
+    this.judgmentEvents = simulated.events;
+    this.lifeBarFrames = this.buildFallbackLifeBarFrames(this.judgmentEvents);
+    this.noteStates = simulated.noteStates;
+    this.comboEvents = this.ruleset.accuracyMode === "stable"
+      ? rawStableComboEvents ?? buildStableReplayComboEvents(this.notes, this.noteStates)
+      : this.judgmentEvents.map((event) => ({
+          kind: event.judgment == null || event.judgment === 6 ? "break" : "hit",
+          time: event.time,
+        }));
+    const lastJudgementTime = this.judgmentEvents.length > 0
+      ? this.judgmentEvents[this.judgmentEvents.length - 1].time
+      : 0;
+    this.totalDuration = Math.max(this.totalDuration, lastJudgementTime);
+
+    this.currentTime = 0;
+    this.hudSnapshotTime = -Infinity;
+    this.measureCanvas();
+    this.invalidateLayoutCache();
+    if (this.app) {
+      this.app.renderer.resize(Math.max(1, this.cssWidth), Math.max(1, this.cssHeight), this.dpr);
+      this.positionBackgroundSprites();
+    }
+    this.recomputeStatsUpTo(0);
+    this.lastRenderTime = performance.now();
+    this.resetAudioClockSmoothing();
+    this.render(true);
   }
 
   seek(timeMs: number) {
@@ -3678,6 +3752,7 @@ export class ManiaReplayRenderer {
   destroy() {
     this.pause();
     this.destroyed = true;
+    this.canvas.style.visibility = "hidden";
     this.removeOverlayPointerHandlers();
     this.previousBackgroundImage = null;
     this.backgroundTransitionStartedAt = 0;

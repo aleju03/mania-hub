@@ -35,8 +35,9 @@ import type {
   MapsFavouriteBeatmapset,
   MapsPlayerEntry,
   MapsPlayerFavourites,
+  ReplayFrame,
 } from "../lib/types";
-import type { ManiaBeatmap } from "../lib/beatmap-parser";
+import type { ManiaBeatmap, ManiaNote, ManiaScrollVelocity } from "../lib/beatmap-parser";
 import { useAppStore, useSelectedCountry } from "../store";
 import { pageSeo, mapsOgImagePath } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
@@ -3522,6 +3523,12 @@ interface RandomPreviewRendererLike {
   ready: () => Promise<void>;
   resize: () => void;
   seek: (timeMs: number) => void;
+  setPreviewData: (
+    frames: ReplayFrame[],
+    keyCount: number,
+    notes: ManiaNote[],
+    options: { od?: number; scrollVelocities?: ManiaScrollVelocity[]; initialCombo?: number },
+  ) => void;
   setExternalClock: (cb: (() => { time: number; stalled: boolean } | null) | null) => void;
   setSkinSettings: (settings: ReplaySkinSettings) => void;
   setScrollSpeed: (value: number) => void;
@@ -3630,6 +3637,7 @@ function RandomReplayPreview({
   const scrollSpeedRef = useRef(readReplayScrollSpeed());
   const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
   const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
+  const [canvasReady, setCanvasReady] = useState(false);
   const initialCombo = useMemo(() => beatmap ? getPreviewInitialCombo(beatmap, startTimeMs) : 0, [beatmap, startTimeMs]);
   const notes = useMemo(() => beatmap ? getPreviewNotes(beatmap, startTimeMs, timeScale, windowMs) : [], [beatmap, startTimeMs, timeScale, windowMs]);
   const scrollVelocities = useMemo(() => beatmap ? getPreviewScrollVelocities(beatmap, startTimeMs, timeScale, windowMs) : [], [beatmap, startTimeMs, timeScale, windowMs]);
@@ -3675,6 +3683,7 @@ function RandomReplayPreview({
     let cancelled = false;
     let renderer: RandomPreviewRendererLike | null = null;
     let handleResize: (() => void) | null = null;
+    setCanvasReady(false);
 
     void import("../components/replay/ReplayCanvas").then(({ ManiaReplayRenderer }) => {
       if (cancelled || !canvasRef.current) return;
@@ -3704,6 +3713,7 @@ function RandomReplayPreview({
       window.addEventListener("resize", handleResize);
       void renderer.ready().then(() => {
         if (cancelled || rendererRef.current !== renderer) return;
+        setCanvasReady(true);
         onReady();
         const activeRenderer = rendererRef.current;
         if (isPlayingRef.current) activeRenderer?.play();
@@ -3716,7 +3726,18 @@ function RandomReplayPreview({
       rendererRef.current?.destroy();
       rendererRef.current = null;
     };
-  }, [beatmap, frames, initialCombo, notes, onReady, scrollVelocities]);
+  }, [beatmap]);
+
+  useEffect(() => {
+    const renderer = rendererRef.current;
+    if (!renderer || !beatmap) return;
+    renderer.setPreviewData(frames, beatmap.keyCount, notes, {
+      od: beatmap.od,
+      scrollVelocities,
+      initialCombo,
+    });
+    if (canvasReady) onReady();
+  }, [beatmap, canvasReady, frames, initialCombo, notes, onReady, scrollVelocities]);
 
   useEffect(() => {
     const renderer = rendererRef.current;
@@ -3741,7 +3762,10 @@ function RandomReplayPreview({
 
   return (
     <div className="absolute inset-0">
-      <canvas ref={canvasRef} className="relative z-10 h-full w-full" />
+      <canvas
+        ref={canvasRef}
+        className={`relative z-10 h-full w-full transition-opacity duration-75 ${canvasReady ? "opacity-100" : "opacity-0"}`}
+      />
     </div>
   );
 }
@@ -4816,7 +4840,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         >
           {previewBeatmap ? (
             <RandomReplayPreview
-              key={`${selectedBeatmap?.id ?? "preview"}:${replayChartStartMs}:${replayChartScrub?.nonce ?? 0}`}
+              key={selectedBeatmap?.id ?? "preview"}
               beatmap={previewBeatmap}
               startTimeMs={replayChartStartMs}
               timeScale={replayChartTimeScale}
