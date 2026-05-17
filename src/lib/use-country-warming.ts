@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { activateLiveCountry, isLiveBackendConfigured, type LiveCountryFeature, type LiveCountryFeatureTier } from "./live-backend";
+import { activateLiveCountry, isLiveBackendConfigured, type LiveCountryActivation, type LiveCountryFeature, type LiveCountryFeatureTier } from "./live-backend";
 import { normalizeCountryCode } from "./country";
 
 const POLL_INTERVAL_MS = 6_000;
@@ -10,6 +10,7 @@ const COUNTRY_TIER_CACHE_KEY = "mania-hub-country-feature-tiers-v1";
 // seen before, so consumers (e.g. the nav Snipes tab) don't flicker while a
 // fresh activation request is in flight.
 const tierCache = readTierCache();
+const activationRequests = new Map<string, Promise<LiveCountryActivation | null>>();
 
 export function getCachedCountryTier(country: string): LiveCountryFeatureTier | null {
   return tierCache.get(normalizeCountryCode(country)) ?? null;
@@ -67,7 +68,7 @@ export function useCountryWarming(country: string): CountryWarmingState {
     setFeatureTier(tierCache.get(normalizedCountry) ?? null);
 
     const check = () => {
-      activateLiveCountry(normalizedCountry).then((result) => {
+      activateLiveCountryOnce(normalizedCountry).then((result) => {
         if (cancelled) return;
         setChecking(false);
         if (result?.featureTier) {
@@ -92,6 +93,16 @@ export function useCountryWarming(country: string): CountryWarmingState {
   }, [liveBackendEnabled, normalizedCountry]);
 
   return { warming, checking, featureTier };
+}
+
+function activateLiveCountryOnce(country: string): Promise<LiveCountryActivation | null> {
+  const normalizedCountry = normalizeCountryCode(country);
+  const existing = activationRequests.get(normalizedCountry);
+  if (existing) return existing;
+  const request = activateLiveCountry(normalizedCountry)
+    .finally(() => activationRequests.delete(normalizedCountry));
+  activationRequests.set(normalizedCountry, request);
+  return request;
 }
 
 function readTierCache(): Map<string, LiveCountryFeatureTier> {
