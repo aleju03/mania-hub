@@ -40,7 +40,7 @@ Legacy/shared Turso schema is in `db/schema.sql`. Utility scripts live in `scrip
 - Turso shell: `npm run db:inspect`.
 - Snipes cache reset/migration for old cache paths: `npm run snipes:reset`, `npm run snipes:migrate-cache`.
 
-Do not run dev servers, root tests, or builds during normal work unless the user asks. The user often keeps local servers running. If the user explicitly asks you to run the app locally, frontend is `3000` and live backend is `7227`.
+The user often keeps local servers running. If the user explicitly asks you to run the app locally, frontend is `3000` and live backend is `7227`.
 
 ## Live Backend Architecture
 
@@ -159,8 +159,6 @@ For live backend changes, run at least:
 For frontend type-sensitive changes, run:
 
 - `npx tsc --noEmit`
-
-Do not run `npm run build` or root `npm run test` unless the user explicitly asks.
 
 ## Security And Config
 
