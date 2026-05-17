@@ -1,6 +1,6 @@
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -3527,11 +3527,88 @@ interface RandomPreviewRendererLike {
   setScrollSpeed: (value: number) => void;
 }
 
+// Draggable timeline for the chart preview. The handle follows playback, and
+// releasing it anywhere jumps the preview to that point in the map.
+function ChartPreviewTimeline({
+  positionMs,
+  lengthMs,
+  onSeek,
+}: {
+  positionMs: number;
+  lengthMs: number;
+  onSeek: (targetMs: number) => void;
+}) {
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  // Leave a small tail so a scrub never lands right on the final note.
+  const maxStartMs = Math.max(0, lengthMs - 2_000);
+  const [dragMs, setDragMs] = useState<number | null>(null);
+  const activeMs = dragMs ?? Math.min(positionMs, maxStartMs);
+  const ratio = maxStartMs > 0 ? Math.min(1, Math.max(0, activeMs / maxStartMs)) : 0;
+
+  const msFromClientX = useCallback((clientX: number) => {
+    const track = trackRef.current;
+    if (!track) return 0;
+    const rect = track.getBoundingClientRect();
+    const r = rect.width > 0 ? Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)) : 0;
+    return r * maxStartMs;
+  }, [maxStartMs]);
+
+  const handlePointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragMs(msFromClientX(e.clientX));
+  }, [msFromClientX]);
+
+  const handlePointerMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragMs == null) return;
+    setDragMs(msFromClientX(e.clientX));
+  }, [dragMs, msFromClientX]);
+
+  const handlePointerUp = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    if (dragMs == null) return;
+    const target = msFromClientX(e.clientX);
+    setDragMs(null);
+    onSeek(target);
+  }, [dragMs, msFromClientX, onSeek]);
+
+  const dragging = dragMs != null;
+
+  return (
+    <div className="group flex items-center gap-2">
+      <span className="text-[9px] tabular-nums text-osu-f1/60 shrink-0">
+        {formatDuration(Math.floor(activeMs / 1000))}
+      </span>
+      <div
+        ref={trackRef}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={() => setDragMs(null)}
+        className="relative flex h-3 flex-1 items-center cursor-pointer touch-none select-none"
+      >
+        <div className="absolute inset-x-0 h-px rounded-full bg-osu-f1/20" />
+        <div
+          className={`absolute left-0 h-px rounded-full transition-colors ${dragging ? "bg-osu-pink/70" : "bg-osu-f1/40 group-hover:bg-osu-pink/60"}`}
+          style={{ width: `${ratio * 100}%` }}
+        />
+        <div
+          className={`absolute h-1.5 w-1.5 -translate-x-1/2 rounded-full transition-all ${dragging ? "scale-125 bg-osu-pink" : "bg-osu-f1/70 group-hover:bg-osu-pink"}`}
+          style={{ left: `${ratio * 100}%` }}
+        />
+      </div>
+      <span className="text-[9px] tabular-nums text-osu-f1/60 shrink-0">
+        {formatDuration(Math.floor(lengthMs / 1000))}
+      </span>
+    </div>
+  );
+}
+
 function RandomReplayPreview({
   beatmap,
   startTimeMs,
   timeScale,
+  windowMs,
   isPlaying,
+  resetWhenIdle,
   getClock,
   onReady,
   onEnded,
@@ -3539,7 +3616,9 @@ function RandomReplayPreview({
   beatmap: ManiaBeatmap | null;
   startTimeMs: number;
   timeScale: number;
+  windowMs: number;
   isPlaying: boolean;
+  resetWhenIdle: boolean;
   getClock: () => { time: number; stalled: boolean } | null;
   onReady: () => void;
   onEnded: () => void;
@@ -3552,9 +3631,9 @@ function RandomReplayPreview({
   const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
   const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
   const initialCombo = useMemo(() => beatmap ? getPreviewInitialCombo(beatmap, startTimeMs) : 0, [beatmap, startTimeMs]);
-  const notes = useMemo(() => beatmap ? getPreviewNotes(beatmap, startTimeMs, timeScale) : [], [beatmap, startTimeMs, timeScale]);
-  const scrollVelocities = useMemo(() => beatmap ? getPreviewScrollVelocities(beatmap, startTimeMs, timeScale) : [], [beatmap, startTimeMs, timeScale]);
-  const frames = useMemo(() => beatmap ? buildAutoplayFrames(notes, beatmap.keyCount) : [], [beatmap, notes]);
+  const notes = useMemo(() => beatmap ? getPreviewNotes(beatmap, startTimeMs, timeScale, windowMs) : [], [beatmap, startTimeMs, timeScale, windowMs]);
+  const scrollVelocities = useMemo(() => beatmap ? getPreviewScrollVelocities(beatmap, startTimeMs, timeScale, windowMs) : [], [beatmap, startTimeMs, timeScale, windowMs]);
+  const frames = useMemo(() => beatmap ? buildAutoplayFrames(notes, beatmap.keyCount, windowMs) : [], [beatmap, notes, windowMs]);
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
@@ -3647,8 +3726,8 @@ function RandomReplayPreview({
   }, [isPlaying]);
 
   useEffect(() => {
-    if (!isPlaying) rendererRef.current?.seek(0);
-  }, [beatmap, isPlaying]);
+    if (!isPlaying && resetWhenIdle) rendererRef.current?.seek(0);
+  }, [beatmap, isPlaying, resetWhenIdle]);
 
   useEffect(() => {
     if (!isPlaying) return;
@@ -3799,12 +3878,21 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const [selectedBeatmapId, setSelectedBeatmapId] = useState<number | null>(() => getDefaultRandomBeatmapId(maniaBeatmaps));
   const selectedBeatmap = maniaBeatmaps.find((map) => map.id === selectedBeatmapId) ?? maniaBeatmaps[0] ?? null;
   const selectedDifficultyRate = parseSelectedDifficultyRate(selectedBeatmap, maniaBeatmaps.filter((beatmap) => beatmap.difficultyRating >= 0.5));
+  const mapMetadata = [
+    bm.bpm > 0 ? `${Math.round(bm.bpm)} BPM` : null,
+    selectedBeatmap && selectedBeatmap.totalLength > 0 ? formatDuration(selectedBeatmap.totalLength) : null,
+  ].filter((part): part is string => Boolean(part));
   const [previewBeatmap, setPreviewBeatmap] = useState<ManiaBeatmap | null>(null);
   const metadataBeatmapsetId = selectedBeatmap?.beatmapsetId ?? bm.id;
   const audioBeatmapsetId = previewBeatmap?.beatmapsetId ?? metadataBeatmapsetId;
   const [replayChartStartMs, setReplayChartStartMs] = useState(0);
+  const [replayChartPlaybackMs, setReplayChartPlaybackMs] = useState(0);
   const [replayChartTimeScale, setReplayChartTimeScale] = useState(1);
   const [replayAudioMode, setReplayAudioMode] = useState<"set-preview" | "selected-file">("set-preview");
+  // When the user scrubs the chart preview to a custom point we pin the start
+  // offset here; null means "use whatever getChartPreviewPlaybackPlan picked".
+  // The nonce lets re-scrubbing the same spot still re-trigger the plan effect.
+  const [replayChartScrub, setReplayChartScrub] = useState<{ ms: number; nonce: number } | null>(null);
   const [replayPreviewRequested, setReplayPreviewRequested] = useState(false);
   const [isReplayPreviewPlaying, setIsReplayPreviewPlaying] = useState(false);
   const [isReplayPreviewEnding, setIsReplayPreviewEnding] = useState(false);
@@ -3830,6 +3918,34 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const replayPreviewStartSeconds = replayAudioMode === "set-preview"
     ? 0
     : Math.max(0, replayChartStartMs / 1000);
+  // Total mapped length, used to bound the scrub timeline. The last note's
+  // endTime is a good proxy for chart length without parsing audio metadata.
+  const replayChartLengthMs = useMemo(() => {
+    if (!previewBeatmap?.notes.length) return 0;
+    let end = 0;
+    for (const note of previewBeatmap.notes) {
+      if (note.endTime > end) end = note.endTime;
+    }
+    return end;
+  }, [previewBeatmap]);
+  // The chart preview plays continuously from its start point: notes flow until
+  // the chart (or audio) ends rather than being clipped to a fixed window. The
+  // set-preview snippet is short and ends on its own, so the window there only
+  // needs to comfortably outlast the snippet, not span a multi-minute chart.
+  const SET_PREVIEW_WINDOW_MS = 40_000;
+  const replayPreviewWindowMs = replayAudioMode === "set-preview"
+    ? Math.min(SET_PREVIEW_WINDOW_MS, Math.max(RANDOM_REPLAY_PREVIEW_MS, replayChartLengthMs))
+    : Math.max(
+      RANDOM_REPLAY_PREVIEW_MS,
+      replayChartLengthMs > 0 ? replayChartLengthMs - replayChartStartMs : RANDOM_REPLAY_PREVIEW_MS,
+    );
+  // Scrubbing needs the full beatmap audio file (the short set-preview snippet
+  // always plays from 0). seekChartPreview forces selected-file mode, but the
+  // timeline must be reachable even before the first scrub, so it only depends
+  // on the chart being longer than the fixed preview window. Without an audio
+  // file to fall back to, scrubbed audio can't follow, so require one.
+  const canScrubChartPreview = replayChartLengthMs > RANDOM_REPLAY_PREVIEW_MS
+    && (replayAudioMode === "selected-file" || Boolean(previewBeatmap?.audioFilename));
 
   // Some beatmapsets have no background image — the cover URL 404s. Track load
   // failure so we can swap in a deterministic gradient fallback.
@@ -3853,8 +3969,10 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     setCurrentTime(0);
     setPreviewBeatmap(null);
     setReplayChartStartMs(0);
+    setReplayChartPlaybackMs(0);
     setReplayChartTimeScale(1);
     setReplayAudioMode("set-preview");
+    setReplayChartScrub(null);
     replayAudioStartPendingRef.current = false;
     replayAudioReadyRef.current = false;
     replayAudioClockSampleRef.current = null;
@@ -3867,6 +3985,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     if (!selectedBeatmap || !replayPreviewRequested) {
       setPreviewBeatmap(null);
       setReplayChartStartMs(0);
+      setReplayChartPlaybackMs(0);
       setReplayChartTimeScale(1);
       setReplayAudioMode("set-preview");
       setIsReplayPreviewReady(false);
@@ -3907,9 +4026,27 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         });
 
         setPreviewBeatmap(previewPlan.beatmap);
-        setReplayChartStartMs(previewPlan.startTimeMs);
-        setReplayChartTimeScale(previewPlan.timeScale);
-        setReplayAudioMode(previewPlan.audioMode);
+        const scrubMs = replayChartScrub?.ms ?? null;
+        if (scrubMs != null) {
+          // Honour a user-picked scrub point: clamp it to the new chart and
+          // force full-file audio so the audio can follow the chosen offset.
+          let chartEnd = 0;
+          for (const note of previewPlan.beatmap.notes) {
+            if (note.endTime > chartEnd) chartEnd = note.endTime;
+          }
+          // Leave a little chart at the end so a scrub never lands on silence.
+          const maxStart = Math.max(0, chartEnd - 2_000);
+          const nextStartMs = Math.min(Math.max(0, scrubMs), maxStart);
+          setReplayChartStartMs(nextStartMs);
+          setReplayChartPlaybackMs(nextStartMs);
+          setReplayChartTimeScale(1);
+          setReplayAudioMode("selected-file");
+        } else {
+          setReplayChartStartMs(previewPlan.startTimeMs);
+          setReplayChartPlaybackMs(previewPlan.startTimeMs);
+          setReplayChartTimeScale(previewPlan.timeScale);
+          setReplayAudioMode(previewPlan.audioMode);
+        }
       })
       .catch(() => {
         if (cancelled) return;
@@ -3924,7 +4061,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     return () => {
       cancelled = true;
     };
-  }, [maniaBeatmaps, metadataBeatmapsetId, replayPreviewRequested, selectedBeatmap, selectedDifficultyRate, usesSetPreviewForReplayAudio]);
+  }, [maniaBeatmaps, metadataBeatmapsetId, replayChartScrub, replayPreviewRequested, selectedBeatmap, selectedDifficultyRate, usesSetPreviewForReplayAudio]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
@@ -4035,8 +4172,10 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     setReplayAudioSizeBytes(null);
     setPreviewBeatmap(null);
     setReplayChartStartMs(0);
+    setReplayChartPlaybackMs(0);
     setReplayChartTimeScale(1);
     setReplayAudioMode("set-preview");
+    setReplayChartScrub(null);
     setReplayPreviewError(null);
     resetAudioElement(replayAudioRef.current);
     if (requestedAudioModeRef.current === "replay") {
@@ -4200,6 +4339,40 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     }
   }, [pausePreviewAudio, replayAudioMode, replayAudioPlaybackRate, replayAudioSizeBytes, replayAudioUrl, replayPreviewStartSeconds, volume]);
 
+  const getReplayChartPlaybackMs = useCallback(() => {
+    const baseMs = Math.max(0, replayChartStartMs);
+    const audio = replayAudioRef.current;
+    if (!audio || requestedAudioModeRef.current !== "replay" || !replayAudioReadyRef.current) {
+      return Math.min(baseMs, Math.max(0, replayChartLengthMs));
+    }
+
+    const elapsedMediaMs = Math.max(0, (audio.currentTime - replayAudioStartSecondsRef.current) * 1000);
+    const displayMs = elapsedMediaMs / Math.max(0.1, replayClockRateDivisor);
+    const chartMs = baseMs + (displayMs * Math.max(0.1, replayChartTimeScale));
+    return Math.min(Math.max(0, chartMs), Math.max(0, replayChartLengthMs));
+  }, [replayChartLengthMs, replayChartStartMs, replayChartTimeScale, replayClockRateDivisor]);
+
+  useEffect(() => {
+    if (!replayPreviewRequested || isReplayPreviewEnding) return;
+
+    let frameId: number | null = null;
+    const update = () => {
+      const nextMs = getReplayChartPlaybackMs();
+      setReplayChartPlaybackMs((currentMs) => (
+        Math.abs(currentMs - nextMs) >= 16 ? nextMs : currentMs
+      ));
+
+      if (isReplayPreviewPlaying) {
+        frameId = window.requestAnimationFrame(update);
+      }
+    };
+
+    update();
+    return () => {
+      if (frameId != null) window.cancelAnimationFrame(frameId);
+    };
+  }, [getReplayChartPlaybackMs, isReplayPreviewEnding, isReplayPreviewPlaying, replayPreviewRequested]);
+
   const getReplayPreviewClock = useCallback(() => {
     const audio = replayAudioRef.current;
     if (!audio || requestedAudioModeRef.current !== "replay") {
@@ -4230,14 +4403,70 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     const lowReadyState = audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA;
     const audioClockIsMoving = anchor != null || hasRecentReplayAudioClockProgress(replayAudioClockSampleRef, mediaSeconds);
     return {
-      time: Math.min(RANDOM_REPLAY_PREVIEW_MS, (elapsedSeconds * 1000) / rate),
+      time: Math.min(replayPreviewWindowMs, (elapsedSeconds * 1000) / rate),
       stalled: lowReadyState && !audioClockIsMoving,
     };
-  }, [replayAudioPlaybackRate, replayClockRateDivisor]);
+  }, [replayAudioPlaybackRate, replayClockRateDivisor, replayPreviewWindowMs]);
 
   const markReplayPreviewReady = useCallback(() => {
     setIsReplayPreviewReady(true);
   }, []);
+
+  // Jump the chart preview to an arbitrary point in the map. Pins the scrub
+  // offset and restarts the playback pipeline: the plan effect re-resolves the
+  // chart, the renderer re-keys, and the pending-audio effect starts playback.
+  const seekChartPreview = useCallback((targetMs: number) => {
+    clearReplayPreviewEndTimer();
+    const token = replayPlaybackTokenRef.current + 1;
+    replayPlaybackTokenRef.current = token;
+    requestedAudioModeRef.current = "replay";
+    replayAudioReadyRef.current = false;
+    replayAudioStartPendingRef.current = true;
+    replayAudioClockSampleRef.current = null;
+    replayAudioClockAnchorRef.current = null;
+    resetAudioElement(replayAudioRef.current);
+    pausePreviewAudio(false);
+    setIsReplayPreviewPlaying(false);
+    setIsReplayPreviewReady(false);
+    setIsReplayPreviewEnding(false);
+    setReplayPreviewError(null);
+    setReplayPreviewRequested(true);
+    const nextMs = Math.max(0, Math.round(targetMs));
+    setReplayChartPlaybackMs(nextMs);
+    setReplayChartScrub((prev) => ({
+      ms: nextMs,
+      nonce: (prev?.nonce ?? 0) + 1,
+    }));
+  }, [clearReplayPreviewEndTimer, pausePreviewAudio]);
+
+  // Pause or resume the running chart preview (clicking the playfield toggles
+  // it). The audio is the master clock, so resuming re-anchors the dead-reckon
+  // clock to the audio's current position to avoid a time jump.
+  const toggleChartPreviewPlayback = useCallback(() => {
+    const audio = replayAudioRef.current;
+    if (!audio || requestedAudioModeRef.current !== "replay" || !replayAudioReadyRef.current) return;
+    if (isReplayPreviewPlaying) {
+      setReplayChartPlaybackMs(getReplayChartPlaybackMs());
+      audio.pause();
+      replayAudioClockAnchorRef.current = null;
+      setIsReplayPreviewPlaying(false);
+      return;
+    }
+    resetReplayAudioClockSample(replayAudioClockSampleRef, audio.currentTime);
+    replayAudioClockAnchorRef.current = {
+      mediaSeconds: audio.currentTime,
+      startedAtMs: performance.now(),
+      playbackRate: getReplayAudioPlaybackRate(audio, replayAudioPlaybackRate),
+    };
+    void audio.play()
+      .then(() => {
+        if (replayAudioRef.current !== audio || requestedAudioModeRef.current !== "replay") return;
+        setIsReplayPreviewPlaying(true);
+      })
+      .catch(() => {
+        replayAudioClockAnchorRef.current = null;
+      });
+  }, [getReplayChartPlaybackMs, isReplayPreviewPlaying, replayAudioPlaybackRate]);
 
   const startReplayPreview = useCallback(() => {
     const audio = replayAudioRef.current;
@@ -4262,12 +4491,13 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       setAudioPreservesPitch(audio, replayAudioMode !== "set-preview");
     }
     replayAudioStartSecondsRef.current = replayPreviewStartSeconds;
+    setReplayChartPlaybackMs(replayChartStartMs);
     setReplayPreviewRequested(true);
     replayAudioStartPendingRef.current = true;
     if (previewBeatmap && isReplayPreviewReady) {
       void startReplayPreviewAudio(token);
     }
-  }, [clearReplayPreviewEndTimer, isReplayPreviewReady, pausePreviewAudio, previewBeatmap, replayAudioMode, replayAudioPlaybackRate, replayPreviewStartSeconds, startReplayPreviewAudio]);
+  }, [clearReplayPreviewEndTimer, isReplayPreviewReady, pausePreviewAudio, previewBeatmap, replayAudioMode, replayAudioPlaybackRate, replayChartStartMs, replayPreviewStartSeconds, startReplayPreviewAudio]);
 
   useEffect(() => {
     if (replayPreviewRequested && previewBeatmap && isReplayPreviewReady && !replayPreviewLoading && replayAudioStartPendingRef.current) {
@@ -4296,12 +4526,30 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
 
   const displayDuration = duration > 0 ? Math.min(duration, RANDOM_REPLAY_PREVIEW_MS / 1000) : 0;
   const progressRatio = displayDuration > 0 ? Math.min(1, currentTime / displayDuration) : 0;
-  const isReplayPreviewPreparing = replayPreviewRequested
-    && !isReplayPreviewEnding
+  // Paused == the preview is live and ready but the user stopped it; that is
+  // distinct from "preparing" (still spinning up), which keeps the spinner.
+  // replayAudioReadyRef is true only once audio playback has been established,
+  // so it cleanly excludes the brief ready-but-not-yet-playing startup gap.
+  const isReplayPreviewPaused = replayPreviewRequested
+    && isReplayPreviewReady
+    && replayAudioReadyRef.current
     && !isReplayPreviewPlaying
+    && !isReplayPreviewEnding
     && !replayAudioLoading
     && !previewError
     && !replayPreviewError;
+  const isReplayPreviewPreparing = replayPreviewRequested
+    && !isReplayPreviewEnding
+    && !isReplayPreviewPlaying
+    && !isReplayPreviewPaused
+    && !replayAudioLoading
+    && !previewError
+    && !replayPreviewError;
+  // The playfield itself is clickable to pause/resume once a preview is live.
+  const canToggleChartPreview = replayPreviewRequested
+    && !isReplayPreviewEnding
+    && !replayAudioLoading
+    && (isReplayPreviewPlaying || isReplayPreviewReady);
 
   return (
     <div className="relative w-[640px] max-w-full">
@@ -4343,8 +4591,8 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[11px] text-osu-f1 truncate">mapped by {bm.creator}</div>
-            {bm.bpm > 0 && (
-              <div className="text-[10px] text-osu-f1/80 truncate">{Math.round(bm.bpm)} BPM</div>
+            {mapMetadata.length > 0 && (
+              <div className="text-[10px] text-osu-f1/80 truncate">{mapMetadata.join(" / ")}</div>
             )}
           </div>
           <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-start flex-shrink-0">
@@ -4526,7 +4774,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
                 onPlaying={() => setReplayAudioLoading(false)}
                 onTimeUpdate={(e) => {
                   const audio = e.currentTarget;
-                  const maxSeconds = replayAudioStartSecondsRef.current + ((RANDOM_REPLAY_PREVIEW_MS / 1000) * replayAudioPlaybackRate);
+                  const maxSeconds = replayAudioStartSecondsRef.current + ((replayPreviewWindowMs / 1000) * replayAudioPlaybackRate);
                   if (audio.currentTime >= maxSeconds) {
                     finishReplayPreview();
                   }
@@ -4559,23 +4807,37 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         } as CSSProperties}
       >
         <div
-          className={`absolute inset-0 transition-opacity duration-200 ${
+          onClick={canToggleChartPreview ? toggleChartPreviewPlayback : undefined}
+          className={`absolute inset-x-0 top-0 transition-opacity duration-200 ${
+            canScrubChartPreview ? "bottom-7" : "bottom-0"
+          } ${
             previewBeatmap && !isReplayPreviewEnding ? "opacity-100" : "opacity-0"
-          }`}
+          } ${canToggleChartPreview ? "cursor-pointer" : ""}`}
         >
           {previewBeatmap ? (
             <RandomReplayPreview
-              key={selectedBeatmap?.id ?? "preview"}
+              key={`${selectedBeatmap?.id ?? "preview"}:${replayChartStartMs}:${replayChartScrub?.nonce ?? 0}`}
               beatmap={previewBeatmap}
               startTimeMs={replayChartStartMs}
               timeScale={replayChartTimeScale}
+              windowMs={replayPreviewWindowMs}
               isPlaying={isReplayPreviewPlaying}
+              resetWhenIdle={!replayPreviewRequested || isReplayPreviewEnding}
               getClock={getReplayPreviewClock}
               onReady={markReplayPreviewReady}
               onEnded={finishReplayPreview}
             />
           ) : null}
         </div>
+        {replayPreviewRequested && !isReplayPreviewEnding && canScrubChartPreview ? (
+          <div className="absolute inset-x-2 bottom-1.5 z-30">
+            <ChartPreviewTimeline
+              positionMs={replayChartPlaybackMs}
+              lengthMs={replayChartLengthMs}
+              onSeek={seekChartPreview}
+            />
+          </div>
+        ) : null}
         {replayAudioLoading ? (
           <div className="absolute inset-0 z-30 grid place-items-center bg-osu-b5/45 backdrop-blur-[1px]">
             <div className="grid h-8 w-8 place-items-center rounded-md border border-osu-b3/50 bg-osu-b5/85 shadow-lg">
@@ -4587,6 +4849,15 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
           <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center">
             <div className="grid h-7 w-7 place-items-center rounded-md border border-osu-b3/40 bg-osu-b5/65 shadow-lg shadow-black/20 backdrop-blur-[1px]">
               <div className="h-3.5 w-3.5 rounded-full border-2 border-osu-f1/25 border-t-osu-pink/90 animate-spin" />
+            </div>
+          </div>
+        ) : null}
+        {isReplayPreviewPaused ? (
+          <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center">
+            <div className="grid h-10 w-10 place-items-center rounded-full border border-osu-f1/30 bg-osu-b5/70 shadow-lg shadow-black/20 backdrop-blur-[1px]">
+              <svg viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 h-4 w-4 text-osu-l2" aria-hidden>
+                <path d="M8 5v14l11-7z" />
+              </svg>
             </div>
           </div>
         ) : null}

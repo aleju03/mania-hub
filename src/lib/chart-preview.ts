@@ -132,9 +132,14 @@ export function getChartPreviewPlaybackPlan({
   return { beatmap, startTimeMs, timeScale, audioMode };
 }
 
-export function getPreviewNotes(beatmap: ManiaBeatmap, startTimeMs = beatmap.previewTime, timeScale = 1): ManiaNote[] {
+export function getPreviewNotes(
+  beatmap: ManiaBeatmap,
+  startTimeMs = beatmap.previewTime,
+  timeScale = 1,
+  windowMs = RANDOM_REPLAY_PREVIEW_MS,
+): ManiaNote[] {
   const cache = getBoundedPreviewMap(previewNotesCache, beatmap);
-  const cacheKey = getPreviewCacheKey(startTimeMs, timeScale);
+  const cacheKey = `${getPreviewCacheKey(startTimeMs, timeScale)}:${Math.round(windowMs)}`;
   const cached = cache.get(cacheKey);
   if (cached) {
     cache.delete(cacheKey);
@@ -144,8 +149,9 @@ export function getPreviewNotes(beatmap: ManiaBeatmap, startTimeMs = beatmap.pre
 
   const start = Math.max(0, startTimeMs || 0);
   const scale = Math.max(0.1, timeScale);
-  const visualEnd = start + ((RANDOM_REPLAY_PREVIEW_MS + RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS) * scale);
-  const playbackEnd = RANDOM_REPLAY_PREVIEW_MS + RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS;
+  const window = Math.max(0, windowMs);
+  const visualEnd = start + ((window + RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS) * scale);
+  const playbackEnd = window + RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS;
 
   const notes = beatmap.notes
     .filter((note) => note.endTime >= start && note.time <= visualEnd)
@@ -173,9 +179,14 @@ export function getPreviewInitialCombo(beatmap: ManiaBeatmap, startTimeMs = beat
   return setBoundedPreviewCache(cache, cacheKey, combo);
 }
 
-export function getPreviewScrollVelocities(beatmap: ManiaBeatmap, startTimeMs = beatmap.previewTime, timeScale = 1): ManiaBeatmap["scrollVelocities"] {
+export function getPreviewScrollVelocities(
+  beatmap: ManiaBeatmap,
+  startTimeMs = beatmap.previewTime,
+  timeScale = 1,
+  windowMs = RANDOM_REPLAY_PREVIEW_MS,
+): ManiaBeatmap["scrollVelocities"] {
   const cache = getBoundedPreviewMap(previewScrollVelocityCache, beatmap);
-  const cacheKey = getPreviewCacheKey(startTimeMs, timeScale);
+  const cacheKey = `${getPreviewCacheKey(startTimeMs, timeScale)}:${Math.round(windowMs)}`;
   const cached = cache.get(cacheKey);
   if (cached) {
     cache.delete(cacheKey);
@@ -185,7 +196,7 @@ export function getPreviewScrollVelocities(beatmap: ManiaBeatmap, startTimeMs = 
 
   const start = Math.max(0, startTimeMs || 0);
   const scale = Math.max(0.1, timeScale);
-  const visualEnd = start + ((RANDOM_REPLAY_PREVIEW_MS + RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS) * scale);
+  const visualEnd = start + ((Math.max(0, windowMs) + RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS) * scale);
   const sourceVelocities = beatmap.scrollVelocities ?? [];
   let initialMultiplier = 1;
 
@@ -203,16 +214,21 @@ export function getPreviewScrollVelocities(beatmap: ManiaBeatmap, startTimeMs = 
   return setBoundedPreviewCache(cache, cacheKey, previewVelocities);
 }
 
-export function buildAutoplayFrames(notes: ManiaNote[], keyCount: number): ReplayFrame[] {
+export function buildAutoplayFrames(
+  notes: ManiaNote[],
+  keyCount: number,
+  windowMs = RANDOM_REPLAY_PREVIEW_MS,
+): ReplayFrame[] {
+  const window = Math.max(0, windowMs);
   const events: Array<{ time: number; column: number; pressed: boolean }> = [];
 
   for (const note of notes) {
-    if (note.time > RANDOM_REPLAY_PREVIEW_MS) continue;
+    if (note.time > window) continue;
     const column = Math.max(0, Math.min(keyCount - 1, note.column));
     const start = Math.max(0, Math.round(note.time));
     const end = Math.max(start + 1, Math.round(note.isHold ? note.endTime : note.time + RANDOM_REPLAY_TAP_HOLD_MS));
     events.push({ time: start, column, pressed: true });
-    events.push({ time: Math.min(RANDOM_REPLAY_PREVIEW_MS, end), column, pressed: false });
+    events.push({ time: Math.min(window, end), column, pressed: false });
   }
 
   events.sort((a, b) => a.time - b.time || (a.pressed === b.pressed ? 0 : a.pressed ? -1 : 1));
@@ -229,6 +245,6 @@ export function buildAutoplayFrames(notes: ManiaNote[], keyCount: number): Repla
     }
     frames.push({ time, keyState });
   }
-  frames.push({ time: RANDOM_REPLAY_PREVIEW_MS, keyState: 0 });
+  frames.push({ time: window, keyState: 0 });
   return frames;
 }
