@@ -99,7 +99,7 @@ function getPageviewProperties(pathname: string): Record<string, unknown> {
     if (player) props.replay_player = player;
   } else if (pathname === "/maps") {
     const tab = params.get("tab");
-    if (tab) props.maps_tab = tab;
+    props.maps_tab = tab === "popular" || tab === "favourites" || tab === "random" ? tab : "farmed";
   } else if (pathname === "/rankings") {
     const page = params.get("page");
     if (page) props.rankings_page = page;
