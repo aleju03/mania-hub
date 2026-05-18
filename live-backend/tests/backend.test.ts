@@ -7,7 +7,7 @@ import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot } from "../src/features/snipes.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefreshIfDue, getMapsSnapshot } from "../src/features/maps.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
-import { confirmTopPlay, getTopPlaysSnapshot } from "../src/features/top-plays.js";
+import { confirmTopPlay, getTopPlaysSnapshot, TopPlayConfirmationPendingError } from "../src/features/top-plays.js";
 import { getTrackerSnapshot } from "../src/features/tracker.js";
 import { routeHttp, sendJson } from "../src/http/snapshots.js";
 import { AbuseGuard } from "../src/http/abuse-guard.js";
@@ -863,6 +863,20 @@ describe("live backend", () => {
 
     expect(await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 99001, country: "CR" })).toBe(true);
     expect(Number((await exec(db, "select count(*) as count from top_play_events where score_id = 9001")).rows[0].count)).toBe(1);
+  });
+
+  it("retries fresh top-play confirmations while osu! best scores catch up", async () => {
+    const { db, events, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    await ingestor.ingestBatch([scores[0]]);
+    const osu = {
+      getBeatmapUserScoresAll: async (_beatmapId: number, _userId: number, _caller?: string) => [],
+      getUserBestScores: async (_userId: number, _caller?: string) => [],
+    };
+
+    await expect(confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" }))
+      .rejects.toBeInstanceOf(TopPlayConfirmationPendingError);
+    expect(Number((await exec(db, "select count(*) as count from top_play_events")).rows[0].count)).toBe(0);
   });
 
   it("calculates top-play pp gain from the previous same-beatmap best", async () => {

@@ -6,6 +6,15 @@ import type { CountryTopPlay, OscScore, ScoreUser } from "../shared/types.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import type { OsuApiClient } from "../osu/client.js";
 
+const TOP_PLAY_CONFIRMATION_PENDING_MS = 30 * 60_000;
+
+export class TopPlayConfirmationPendingError extends Error {
+  constructor(scoreId: number) {
+    super(`top play confirmation pending for score ${scoreId}`);
+    this.name = "TopPlayConfirmationPendingError";
+  }
+}
+
 export async function maybeEnqueueTopPlayRefresh(
   db: Db,
   queue: JobQueue,
@@ -32,9 +41,14 @@ export async function confirmTopPlay(
   const bestScores = dedupeScoresById(await osu.getUserBestScores(payload.userId, "job:refresh_user_top_scores"));
   const refreshedAt = nowIso();
   await updateUserTopPlayThreshold(db, payload.userId, bestScores, refreshedAt);
-  const scoreIdCandidates = await getTopPlayConfirmationScoreIdCandidates(db, payload);
-  const confirmedIndex = bestScores.findIndex((score) => scoreIdCandidates.has(score.id));
-  if (confirmedIndex < 0) return false;
+  const confirmation = await getTopPlayConfirmationScoreIdCandidates(db, payload);
+  const confirmedIndex = bestScores.findIndex((score) => confirmation.ids.has(score.id));
+  if (confirmedIndex < 0) {
+    if (isFreshScoreEvent(confirmation.latestReceivedAt, refreshedAt)) {
+      throw new TopPlayConfirmationPendingError(payload.scoreId);
+    }
+    return false;
+  }
   const score = bestScores[confirmedIndex];
   if (score.pp == null || !score.user) return false;
   const confirmedScoreId = score.id;
@@ -110,12 +124,13 @@ function getTopPlayConfirmationScoreId(score: Pick<OscScore, "id" | "legacy_scor
 async function getTopPlayConfirmationScoreIdCandidates(
   db: Db,
   payload: { userId: number; scoreId: number; country: string },
-): Promise<Set<number>> {
-  const candidates = new Set<number>([payload.scoreId]);
+): Promise<{ ids: Set<number>; latestReceivedAt: string | null }> {
+  const ids = new Set<number>([payload.scoreId]);
+  let latestReceivedAt: string | null = null;
   const rows = (await exec(
     db,
-    `select score_id, legacy_score_id, score_json from score_events
-     where country = ? and user_id = ? and (score_id = ? or legacy_score_id = ?)
+    `select score_id, legacy_score_id, score_json, received_at from score_events
+     where (country = ? and user_id = ? and (score_id = ? or legacy_score_id = ?))
         or (country = ? and user_id = ? and score_json like ?)
      limit 5`,
     [payload.country, payload.userId, payload.scoreId, payload.scoreId, payload.country, payload.userId, `%"id":${payload.scoreId}%`],
@@ -123,15 +138,25 @@ async function getTopPlayConfirmationScoreIdCandidates(
   for (const row of rows) {
     const scoreId = Number(row.score_id);
     const legacyScoreId = Number(row.legacy_score_id);
-    if (Number.isFinite(scoreId) && scoreId > 0) candidates.add(scoreId);
-    if (Number.isFinite(legacyScoreId) && legacyScoreId > 0) candidates.add(legacyScoreId);
+    if (Number.isFinite(scoreId) && scoreId > 0) ids.add(scoreId);
+    if (Number.isFinite(legacyScoreId) && legacyScoreId > 0) ids.add(legacyScoreId);
     const score = parseJson<Partial<OscScore> & { best_id?: number | null } | null>(row.score_json, null);
     const jsonScoreId = Number(score?.id);
     const bestScoreId = Number(score?.best_id);
-    if (Number.isFinite(jsonScoreId) && jsonScoreId > 0) candidates.add(jsonScoreId);
-    if (Number.isFinite(bestScoreId) && bestScoreId > 0) candidates.add(bestScoreId);
+    if (Number.isFinite(jsonScoreId) && jsonScoreId > 0) ids.add(jsonScoreId);
+    if (Number.isFinite(bestScoreId) && bestScoreId > 0) ids.add(bestScoreId);
+    const receivedAt = row.received_at == null ? null : String(row.received_at);
+    if (receivedAt && (!latestReceivedAt || receivedAt > latestReceivedAt)) latestReceivedAt = receivedAt;
   }
-  return candidates;
+  return { ids, latestReceivedAt };
+}
+
+function isFreshScoreEvent(receivedAt: string | null, now: string): boolean {
+  if (!receivedAt) return false;
+  const receivedAtMs = new Date(receivedAt).getTime();
+  const nowMs = new Date(now).getTime();
+  if (!Number.isFinite(receivedAtMs) || !Number.isFinite(nowMs)) return false;
+  return nowMs - receivedAtMs <= TOP_PLAY_CONFIRMATION_PENDING_MS;
 }
 
 async function calculateTopPlayPpGain(
