@@ -99,26 +99,122 @@ describe("computeManiaSkills", () => {
   });
 
   test("lets elite display stats break four digits without changing card power scale", () => {
-    const skills = computeManiaSkills([
-      score({
-        accuracy: 0.995,
-        pp: 1500,
-        beatmap: {
-          ...score().beatmap,
-          difficulty_rating: 9,
-          accuracy: 9.5,
-          bpm: 260,
-          total_length: 190,
-          count_circles: 1600,
+    const skills = computeManiaSkills(
+      [
+        score({
+          accuracy: 0.995,
+          pp: 1500,
+          beatmap: {
+            ...score().beatmap,
+            difficulty_rating: 9,
+            accuracy: 9.5,
+            bpm: 260,
+            total_length: 190,
+            count_circles: 1600,
+            max_combo: 1600,
+          },
           max_combo: 1600,
-        },
-        max_combo: 1600,
-      }),
-    ]);
+        }),
+      ],
+      { globalPp: 20_000 },
+    );
 
     expect(skills?.speed).toBeGreaterThan(1000);
     expect(skills?.fingerControl).toBeGreaterThan(1000);
     expect(skills?.cardPower).toBeLessThanOrEqual(1000);
+  });
+
+  test("keeps displayed stat totals aligned with card rating progression", () => {
+    const specialist = computeManiaSkills(
+      [
+        score({
+          accuracy: 0.995,
+          pp: 900,
+          beatmap: {
+            ...score().beatmap,
+            difficulty_rating: 9,
+            accuracy: 9.5,
+            bpm: 260,
+            total_length: 190,
+            count_circles: 1600,
+            max_combo: 1600,
+          },
+          max_combo: 1600,
+        }),
+      ],
+      { globalPp: 13_500 },
+    );
+    const higherRated = computeManiaSkills(
+      [
+        score({
+          accuracy: 0.9876,
+          pp: 900,
+          beatmap: {
+            ...score().beatmap,
+            difficulty_rating: 7.2,
+            bpm: 210,
+            total_length: 160,
+            count_circles: 1100,
+            max_combo: 1100,
+          },
+          max_combo: 1100,
+        }),
+      ],
+      { globalPp: 24_000 },
+    );
+
+    const displayTotal = (skills: NonNullable<ReturnType<typeof computeManiaSkills>>) =>
+      skills.fingerControl + skills.speed + skills.accuracy;
+
+    if (!specialist || !higherRated) throw new Error("expected both cards to be computable");
+    expect(higherRated.cardPower).toBeGreaterThan(specialist.cardPower);
+    expect(displayTotal(higherRated)).toBeGreaterThan(displayTotal(specialist));
+  });
+
+  test("lets elite total pp outrank a lower-pp trait specialist with similar peak strength", () => {
+    const elitePp7k = computeManiaSkills(
+      [
+        score({
+          accuracy: 0.96,
+          pp: 900,
+          beatmap: {
+            ...score().beatmap,
+            difficulty_rating: 10.8,
+            accuracy: 8.8,
+            bpm: 205,
+            total_length: 596,
+            cs: 7,
+            count_circles: 8500,
+            count_sliders: 6500,
+            max_combo: 15000,
+          },
+          max_combo: 1400,
+        }),
+      ],
+      { globalPp: 18_500 },
+    );
+    const lowerPp4kSpecialist = computeManiaSkills(
+      [
+        score({
+          accuracy: 0.992,
+          pp: 820,
+          beatmap: {
+            ...score().beatmap,
+            difficulty_rating: 8.4,
+            accuracy: 9.5,
+            bpm: 245,
+            total_length: 420,
+            count_circles: 6000,
+            max_combo: 6000,
+          },
+          max_combo: 4200,
+        }),
+      ],
+      { globalPp: 15_995 },
+    );
+
+    if (!elitePp7k || !lowerPp4kSpecialist) throw new Error("expected both cards to be computable");
+    expect(elitePp7k.cardPower).toBeGreaterThan(lowerPp4kSpecialist.cardPower);
   });
 
   test("does not let half-time density farm read as full-rate speed", () => {

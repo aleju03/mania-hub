@@ -397,6 +397,9 @@ function RatingExplainerModal({
 
             <Step n={3} title="Three traits go on the card front">
               <span className="font-semibold text-white">Control</span>, <span className="font-semibold text-white">Speed</span>, and <span className="font-semibold text-white">Precision</span> are shown as the card's signature stats. Stamina still feeds the rating below, but isn't displayed.
+              <p className="mt-2 text-[11px] text-osu-f1/70">
+                The front stats keep your trait spread, then use the same rating budget as the tier progress so card numbers and rarity move together.
+              </p>
             </Step>
 
             <Step n={4} title="Rating = PP + skill traits">

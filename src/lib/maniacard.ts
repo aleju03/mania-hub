@@ -379,9 +379,25 @@ function toDisplaySkillValue(value: number): number {
   return Math.round(curve(value, DISPLAY_SKILL_CURVE) * DISPLAY_SKILL_SCALE);
 }
 
+function calibrateDisplaySkillValues(cardPower: number, values: number[]): number[] {
+  if (values.length === 0) return values;
+
+  const targetMean = toDisplaySkillValue(cardPower / 1000);
+  const currentMean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  if (!Number.isFinite(currentMean) || currentMean <= 0) return values;
+
+  const scale = targetMean / currentMean;
+  return values.map((value) => Math.round(clamp(value * scale, 0, DISPLAY_SKILL_SCALE)));
+}
+
 export function computeGlobalPpStrength(pp: number | null | undefined): number {
   const value = Math.max(0, pp ?? 0);
   return curve(normalize(value, 12_000, 24_000), 0.7);
+}
+
+function computeElitePpPrestige(pp: number | null | undefined): number {
+  const value = Math.max(0, pp ?? 0);
+  return curve(normalize(value, 16_000, 22_000), 0.85);
 }
 
 export function computeManiaSkills(scores: OsuScore[], options: { globalPp?: number | null } = {}): ManiaSkills | null {
@@ -423,23 +439,34 @@ export function computeManiaSkills(scores: OsuScore[], options: { globalPp?: num
 
   const blended = blendProfiles(profiles);
   const globalPpStrength = computeGlobalPpStrength(options.globalPp);
+  const elitePpPrestige = computeElitePpPrestige(options.globalPp);
   const cardPower =
     blended.peak * 0.33 +
     globalPpStrength * 0.39 +
     blended.control * 0.09 +
     blended.speed * 0.07 +
     blended.precision * 0.05 +
-    blended.stamina * 0.07;
+    blended.stamina * 0.07 +
+    elitePpPrestige * 0.07;
+  const cardPowerValue = toCardValue(cardPower);
+  const visibleSkills = calibrateDisplaySkillValues(cardPowerValue, [
+    toDisplaySkillValue(blended.control),
+    toDisplaySkillValue(blended.speed),
+    toDisplaySkillValue(blended.precision),
+  ]);
+  const fingerControl = visibleSkills[0] ?? 0;
+  const speed = visibleSkills[1] ?? 0;
+  const accuracy = visibleSkills[2] ?? 0;
 
   return {
     starAvg: blended.starAvg,
-    fingerControl: toDisplaySkillValue(blended.control),
-    speed: toDisplaySkillValue(blended.speed),
-    accuracy: toDisplaySkillValue(blended.precision),
+    fingerControl,
+    speed,
+    accuracy,
     stamina: toDisplaySkillValue(blended.stamina),
     versatility: toDisplaySkillValue(blended.versatility),
     peak: toDisplaySkillValue(blended.peak),
-    cardPower: toCardValue(cardPower),
+    cardPower: cardPowerValue,
     mainKeyMode: blended.mainKeyMode,
     archetype: blended.archetype,
     sampleSize: profiles.reduce((sum, profile) => sum + profile.count, 0),
