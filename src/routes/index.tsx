@@ -18,7 +18,7 @@ import { RankingRowSkeleton, ScoreRowSkeleton, Skeleton } from "../components/ui
 import { ManiaRain } from "../components/home/ManiaRain";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse, LeanHomeScore, LeanHomePopoff, LeanTrackerScore, CountryTopPlay } from "../lib/types";
-import { useAppStore, useHasHydrated, useSelectedCountry } from "../store";
+import { useAppStore, useHasHydrated, useHiddenUserIds, useSelectedCountry } from "../store";
 import { DEFAULT_DESCRIPTION, pageSeo, SITE_NAME } from "../lib/seo";
 
 export const Route = createFileRoute("/")({
@@ -221,6 +221,7 @@ function HomePage() {
   const liveBackendEnabled = isLiveBackendConfigured();
   const { warming } = useCountryWarming(selectedCountry);
   const hydrated = useHasHydrated();
+  const hiddenUserIds = useHiddenUserIds();
   const setRankings = useAppStore((state) => state.setRankings);
   const setHomeRecentScores = useAppStore((state) => state.setHomeRecentScores);
   const setHomePopoffs = useAppStore((state) => state.setHomePopoffs);
@@ -434,12 +435,22 @@ function HomePage() {
     liveBackendEnabled,
   ]);
 
-  const topPlayersMobile = rankings?.ranking.slice(0, 5) ?? [];
-  const topPlayersDesktop = rankings?.ranking.slice(0, 10) ?? [];
-  const featuredPopoffs = useMemo(() => selectFeaturedHomePopoffs(popoffs), [popoffs]);
+  const visibleRanking = useMemo(
+    () => (rankings?.ranking ?? []).filter((entry) => !hiddenUserIds.has(entry.user.id)),
+    [rankings, hiddenUserIds],
+  );
+  const topPlayersMobile = visibleRanking.slice(0, 5);
+  const topPlayersDesktop = visibleRanking.slice(0, 10);
+  const featuredPopoffs = useMemo(
+    () => selectFeaturedHomePopoffs(popoffs.filter((p) => !hiddenUserIds.has(p.score.user.id))),
+    [popoffs, hiddenUserIds],
+  );
   const displayedRecentScores = useMemo(
-    () => mergeHomeRecentScores(recentScores, trackerFeedScores),
-    [recentScores, trackerFeedScores],
+    () => mergeHomeRecentScores(
+      recentScores.filter((s) => !hiddenUserIds.has(s.user.id)),
+      trackerFeedScores.filter((s) => !hiddenUserIds.has(s.user_id)),
+    ),
+    [recentScores, trackerFeedScores, hiddenUserIds],
   );
 
   return (

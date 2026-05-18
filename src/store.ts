@@ -1,4 +1,4 @@
-import { useContext, useSyncExternalStore } from "react";
+import { useContext, useMemo, useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { getAvatarAccentStoreKey } from "./lib/avatar-accent";
@@ -49,6 +49,15 @@ export const DEFAULT_THEME_SAT = 100;
 // in storage on reload the username re-faded from white every time. This key
 // writes synchronously and bypasses the debounce entirely.
 export const AVATAR_ACCENTS_STORAGE_KEY = "mania-hub-avatar-accents-v1";
+// Hidden players: a personal, per-browser list of users whose scores are
+// filtered out of every surface. Lives in its own key (not the main blob) so
+// it can be seeded synchronously before persist hydrates — rankings is
+// server-rendered, so without an early seed a hidden player would flash in
+// and then vanish on the hydration re-render.
+export const HIDDEN_USERS_STORAGE_KEY = "mania-hub-hidden-users-v1";
+// Keep the list bounded so it can never grow the localStorage payload in a way
+// that matters; well above any realistic personal hide list.
+export const HIDDEN_USERS_LIMIT = 200;
 
 function applyThemeHueToDom(hue: number): void {
   if (typeof document === "undefined") return;
@@ -180,6 +189,53 @@ export interface CachedPlayer {
   avatar_url: string;
 }
 
+export interface HiddenUser {
+  id: number;
+  username: string;
+  avatarUrl: string;
+  countryCode: string;
+}
+
+function isHiddenUser(value: unknown): value is HiddenUser {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const user = value as Record<string, unknown>;
+  return (
+    typeof user.id === "number" &&
+    Number.isFinite(user.id) &&
+    typeof user.username === "string" &&
+    typeof user.avatarUrl === "string" &&
+    typeof user.countryCode === "string"
+  );
+}
+
+function readHiddenUsersFromStorage(): Record<number, HiddenUser> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(HIDDEN_USERS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const result: Record<number, HiddenUser> = {};
+    for (const entry of Object.values(parsed)) {
+      if (!isHiddenUser(entry)) continue;
+      result[entry.id] = entry;
+    }
+    return result;
+  } catch (error) {
+    warnStorageIssue(`read "${HIDDEN_USERS_STORAGE_KEY}"`, error);
+    return {};
+  }
+}
+
+function writeHiddenUsersToStorage(users: Record<number, HiddenUser>): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(HIDDEN_USERS_STORAGE_KEY, JSON.stringify(users));
+  } catch (error) {
+    warnStorageIssue(`write "${HIDDEN_USERS_STORAGE_KEY}"`, error);
+  }
+}
+
 export interface CachedPopoff {
   user: CachedPlayer;
   score: OsuScore;
@@ -210,6 +266,7 @@ interface AppState {
   themeHue: number;
   themeSaturation: number;
   showDanEstimates: boolean;
+  hiddenUsers: Record<number, HiddenUser>;
   avatarAccents: Record<string, CachedAvatarAccent>;
   rankingsByCountry: CountryRecord<RankingsResponse>;
   rankingsFetchedAtByCountry: CountryRecord<number>;
@@ -238,6 +295,8 @@ interface AppState {
   setThemeHue: (hue: number) => void;
   setThemeSaturation: (sat: number) => void;
   setShowDanEstimates: (show: boolean) => void;
+  addHiddenUser: (user: HiddenUser) => void;
+  removeHiddenUser: (userId: number) => void;
   resetThemeHue: () => void;
   setAvatarAccents: (accents: Record<string, string | null>, fetchedAt?: number) => void;
   setRankings: (country: string, rankings: RankingsResponse) => void;
@@ -432,6 +491,10 @@ const initialClientThemeSat = readThemeSatFromStorage();
 // initial render uses an empty map and the username flashes white before the
 // hydration re-render swaps in the persisted accents.
 const initialClientAvatarAccents = readAvatarAccentsFromStorage();
+// Same idea: seed the hidden-players list before persist hydrates so the very
+// first render — including server-rendered surfaces like rankings — already
+// filters them out instead of flashing them in.
+const initialClientHiddenUsers = readHiddenUsersFromStorage();
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -440,6 +503,7 @@ export const useAppStore = create<AppState>()(
       themeHue: initialClientThemeHue ?? DEFAULT_THEME_HUE,
       themeSaturation: initialClientThemeSat ?? DEFAULT_THEME_SAT,
       showDanEstimates: false,
+      hiddenUsers: initialClientHiddenUsers,
       avatarAccents: initialClientAvatarAccents,
       rankingsByCountry: {},
       rankingsFetchedAtByCountry: {},
@@ -482,6 +546,26 @@ export const useAppStore = create<AppState>()(
         set({ themeSaturation: clamped });
       },
       setShowDanEstimates: (show) => set({ showDanEstimates: show }),
+      addHiddenUser: (user) =>
+        set((state) => {
+          // Re-adding an existing entry refreshes its stored username/avatar
+          // without counting against the limit.
+          const alreadyHidden = user.id in state.hiddenUsers;
+          if (!alreadyHidden && Object.keys(state.hiddenUsers).length >= HIDDEN_USERS_LIMIT) {
+            return state;
+          }
+          const next = { ...state.hiddenUsers, [user.id]: user };
+          writeHiddenUsersToStorage(next);
+          return { hiddenUsers: next };
+        }),
+      removeHiddenUser: (userId) =>
+        set((state) => {
+          if (!(userId in state.hiddenUsers)) return state;
+          const next = { ...state.hiddenUsers };
+          delete next[userId];
+          writeHiddenUsersToStorage(next);
+          return { hiddenUsers: next };
+        }),
       resetThemeHue: () => {
         applyThemeHueToDom(DEFAULT_THEME_HUE);
         removeThemeHueFromStorage();
@@ -901,6 +985,9 @@ export const useAppStore = create<AppState>()(
           })(),
           topPlaysRangeByCountry: currentState.topPlaysRangeByCountry,
           snipesFiltersByCountry: currentState.snipesFiltersByCountry,
+          // Seeded synchronously from the dedicated key and written there on
+          // every change, so the pre-hydration value is already authoritative.
+          hiddenUsers: currentState.hiddenUsers,
           // Keep persisted top-plays data even when stale so the route can render it
           // immediately after a reload and revalidate in the background.
           popoffsByCountry: persistedPopoffsByCountry as CountryRecord<CachedPopoff[]>,
@@ -1040,4 +1127,13 @@ export function useSelectedCountry(): string {
   const fromStore = useAppStore((state) => state.selectedCountry);
   const hydrated = useHasHydrated();
   return hydrated ? fromStore : fromContext;
+}
+
+// Hidden-player user ids as a Set for cheap membership checks while filtering
+// rankings/tracker/top-plays/snipes/home/maps. The Set is rebuilt only when the
+// hidden-users record actually changes, so consumers don't re-render on every
+// unrelated store update.
+export function useHiddenUserIds(): Set<number> {
+  const hiddenUsers = useAppStore((state) => state.hiddenUsers);
+  return useMemo(() => new Set(Object.keys(hiddenUsers).map(Number)), [hiddenUsers]);
 }

@@ -17,7 +17,7 @@ import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
 import { Pagination } from "../components/ui/Pagination";
 import type { CountryTopPlay, RankingsResponse, TopPlaysRefreshStatus } from "../lib/types";
-import { useAppStore, useSelectedCountry, type CachedPopoff, type TopPlaysRange } from "../store";
+import { useAppStore, useHiddenUserIds, useSelectedCountry, type CachedPopoff, type TopPlaysRange } from "../store";
 import { parseCountrySearchParam } from "../lib/country-search";
 import { hasTopPlaysCache, shouldRefreshTopPlays } from "../lib/top-plays-cache";
 import { getReplaySearch } from "../lib/replay-navigation";
@@ -96,6 +96,7 @@ function PopOffsPage() {
   const setRankings = useAppStore((state) => state.setRankings);
   const setCachedPopoffs = useAppStore((state) => state.setPopoffs);
   const setTopPlaysRange = useAppStore((state) => state.setTopPlaysRange);
+  const hiddenUserIds = useHiddenUserIds();
   const hasCachedPopoffs = hasTopPlaysCache(popoffsFetchedAt, popoffsWindow);
   const [playersError, setPlayersError] = useState<string | null>(null);
   const [loadingPlayers, setLoadingPlayers] = useState(!rankings);
@@ -458,10 +459,11 @@ function PopOffsPage() {
   // Filter by time range
   const rangedPopoffs = useMemo(() => {
     return livePopoffs.filter((popoff) => {
+      if (hiddenUserIds.has(popoff.user.id)) return false;
       const age = Date.now() - new Date(popoff.time).getTime();
       return age < RANGE_MS[range];
     });
-  }, [livePopoffs, range]);
+  }, [livePopoffs, range, hiddenUserIds]);
 
   const filtered = useMemo(() => {
     const playerFiltered = selectedPlayerIds.length > 0

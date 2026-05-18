@@ -12,7 +12,7 @@ import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { SnipeEvent, SnipesScanStatus } from "../lib/types";
-import { DEFAULT_SNIPES_FILTERS, useAppStore, useSelectedCountry, type SnipesFilters, type SnipesKeyFilter, type SnipesRange } from "../store";
+import { DEFAULT_SNIPES_FILTERS, useAppStore, useHiddenUserIds, useSelectedCountry, type SnipesFilters, type SnipesKeyFilter, type SnipesRange } from "../store";
 import { parseCountrySearchParam } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { startProgressPoll } from "../lib/progress-poll";
@@ -108,6 +108,7 @@ function SnipesPage() {
   );
   const setSnipes = useAppStore((state) => state.setSnipes);
   const setSnipesFilters = useAppStore((state) => state.setSnipesFilters);
+  const hiddenUserIds = useHiddenUserIds();
 
   const [loading, setLoading] = useState(snipes.length === 0);
   const [refreshing, setRefreshing] = useState(false);
@@ -421,6 +422,9 @@ function SnipesPage() {
   const filtered = useMemo(() => {
     const cutoff = search.range === "all" ? 0 : Date.now() - RANGE_MS[search.range];
     return visibleSnipes.filter((event) => {
+      // Drop the whole event if either side is hidden — a snipe row only makes
+      // sense with both the sniper and the victim shown.
+      if (hiddenUserIds.has(event.sniper.id) || hiddenUserIds.has(event.victim.id)) return false;
       const ts = new Date(event.timestamp).getTime();
       if (cutoff && ts < cutoff) return false;
       if (search.keys !== "all") {
@@ -430,7 +434,7 @@ function SnipesPage() {
       }
       return true;
     });
-  }, [visibleSnipes, search.range, search.keys]);
+  }, [visibleSnipes, search.range, search.keys, hiddenUserIds]);
 
   const sorted = useMemo(() => {
     const out = [...filtered];

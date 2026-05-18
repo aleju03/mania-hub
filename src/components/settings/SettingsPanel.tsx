@@ -1,11 +1,15 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { AnimatePresence } from "framer-motion";
-import { ArrowDown, ArrowUp, Pencil, RotateCcw, Volume1, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Loader2, Pencil, RotateCcw, Search, Volume1, Volume2, VolumeX, X } from "lucide-react";
 
 import { PageHeader } from "../layout/PageHeader";
 import { PageTabs } from "../layout/PageTabs";
+import { Avatar } from "../ui/Avatar";
 import { ReplaySkinSettingsModal } from "../replay/ReplaySkinSettingsModal";
+import { searchUsers } from "../../lib/osu";
+import { HIDDEN_USERS_LIMIT } from "../../store";
+import type { HiddenUser } from "../../store";
 import {
   DEFAULT_REPLAY_SKIN_SETTINGS,
   normalizeReplaySkinSettings,
@@ -62,11 +66,12 @@ const STYLE_LABELS: Record<ReplaySkinStyle, string> = {
   arrows: "Arrows",
 };
 
-type TabId = "skin" | "viewer" | "dans";
+type TabId = "skin" | "viewer" | "dans" | "hidden";
 const TABS: { id: TabId; label: string }[] = [
   { id: "skin", label: "skin & layout" },
   { id: "viewer", label: "playback" },
   { id: "dans", label: "dans" },
+  { id: "hidden", label: "hidden players" },
 ];
 
 type Variant = "page" | "drawer";
@@ -169,6 +174,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
           canUseDanEstimates={canUseDanEstimates}
         />
       ) : null}
+      {activeTab === "hidden" ? <HiddenPlayersPanel /> : null}
     </>
   );
 
@@ -400,6 +406,186 @@ function DansPanel({
         wipWhenDisabled
         onChange={onShowDanEstimatesChange}
       />
+    </div>
+  );
+}
+
+// Flag straight from osu!'s own flag images, keyed by the raw country code so
+// players from any country render correctly — not just the tracked ones. osu!
+// serves XX.png as the "?" placeholder for users with no country, which also
+// doubles as the fallback for any code it doesn't recognise.
+function CountryFlag({ countryCode }: { countryCode: string }) {
+  const code = countryCode.trim().toUpperCase() || "XX";
+  return (
+    <img
+      src={`https://osu.ppy.sh/images/flags/${code}.png`}
+      alt={code === "XX" ? "Unknown country" : code}
+      title={code === "XX" ? "Unknown country" : code}
+      className="h-[15px] w-[21px] shrink-0 rounded-[2px] object-cover"
+      loading="lazy"
+      onError={(event) => {
+        const fallback = "https://osu.ppy.sh/images/flags/XX.png";
+        if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
+      }}
+    />
+  );
+}
+
+function HiddenPlayersPanel() {
+  const hiddenUsers = useAppStore((state) => state.hiddenUsers);
+  const addHiddenUser = useAppStore((state) => state.addHiddenUser);
+  const removeHiddenUser = useAppStore((state) => state.removeHiddenUser);
+
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<HiddenUser[]>([]);
+  const [status, setStatus] = useState<"idle" | "searching" | "error">("idle");
+  const requestRef = useRef(0);
+
+  const hiddenList = useMemo(
+    () =>
+      Object.values(hiddenUsers).sort((a, b) =>
+        a.username.toLowerCase().localeCompare(b.username.toLowerCase()),
+      ),
+    [hiddenUsers],
+  );
+  const atLimit = hiddenList.length >= HIDDEN_USERS_LIMIT;
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setResults([]);
+      setStatus("idle");
+      return;
+    }
+    const requestId = ++requestRef.current;
+    setStatus("searching");
+    const timer = setTimeout(async () => {
+      try {
+        const res = await searchUsers({ data: { query: trimmed } });
+        if (requestRef.current !== requestId) return;
+        setResults(
+          (res.user?.data ?? []).slice(0, 8).map((u) => ({
+            id: u.id,
+            username: u.username,
+            avatarUrl: u.avatar_url,
+            countryCode: u.country_code,
+          })),
+        );
+        setStatus("idle");
+      } catch {
+        if (requestRef.current !== requestId) return;
+        setResults([]);
+        setStatus("error");
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const trimmedQuery = query.trim();
+
+  return (
+    <div className="space-y-6">
+      <PanelGroup label="Hidden players">
+        <p className="text-[12px] leading-relaxed text-osu-f1">
+          Players you hide are removed from rankings and feeds across the site. This list is stored
+          on this browser only.
+        </p>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-osu-f1" />
+          <input
+            type="text"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search players by username"
+            disabled={atLimit}
+            className="h-10 w-full rounded-lg border border-osu-b3/50 bg-osu-b5/70 pl-9 pr-9 text-sm text-osu-l1 outline-none transition-colors placeholder:text-osu-f1/70 focus:border-osu-pink/60 disabled:cursor-not-allowed disabled:opacity-50"
+          />
+          {status === "searching" ? (
+            <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-osu-pink-light" />
+          ) : query ? (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 cursor-pointer place-items-center rounded text-osu-f1 transition-colors hover:bg-osu-b3/50 hover:text-white"
+              aria-label="Clear search"
+            >
+              <X className="h-3.5 w-3.5" strokeWidth={2.4} />
+            </button>
+          ) : null}
+        </div>
+
+        {atLimit ? (
+          <p className="text-[11px] text-osu-red">
+            You have reached the limit of {HIDDEN_USERS_LIMIT} hidden players. Remove someone to add more.
+          </p>
+        ) : trimmedQuery.length >= 2 ? (
+          <div className="overflow-hidden rounded-lg border border-osu-b3/40 bg-osu-b5/40">
+            {status === "error" ? (
+              <p className="px-3 py-3 text-[12px] text-osu-f1">Search failed. Try again.</p>
+            ) : results.length === 0 && status === "idle" ? (
+              <p className="px-3 py-3 text-[12px] text-osu-f1">No players found.</p>
+            ) : (
+              <ul className="divide-y divide-osu-b3/30">
+                {results.map((user) => {
+                  const isHidden = user.id in hiddenUsers;
+                  return (
+                    <li key={user.id} className="flex items-center gap-3 px-3 py-2">
+                      <Avatar url={user.avatarUrl} userId={user.id} size={32} />
+                      <CountryFlag countryCode={user.countryCode} />
+                      <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-osu-l1">
+                        {user.username}
+                      </span>
+                      {isHidden ? (
+                        <span className="rounded-md border border-osu-b3/50 bg-osu-b5/70 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-osu-f1">
+                          Hidden
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => addHiddenUser(user)}
+                          className="inline-flex h-7 cursor-pointer items-center rounded-md border border-osu-pink/40 bg-osu-pink/10 px-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-pink-light transition-colors hover:border-osu-pink hover:bg-osu-pink/20 hover:text-white"
+                        >
+                          Hide
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        ) : null}
+      </PanelGroup>
+
+      <PanelGroup label={`Hidden list (${hiddenList.length})`}>
+        {hiddenList.length === 0 ? (
+          <p className="rounded-lg border border-osu-b3/40 bg-osu-b5/40 px-4 py-6 text-center text-[12px] text-osu-f1">
+            No hidden players yet.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {hiddenList.map((user) => (
+              <li
+                key={user.id}
+                className="flex items-center gap-3 rounded-lg border border-osu-b3/40 bg-osu-b5/40 px-3 py-2"
+              >
+                <Avatar url={user.avatarUrl} userId={user.id} size={32} />
+                <CountryFlag countryCode={user.countryCode} />
+                <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-osu-l1">
+                  {user.username}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeHiddenUser(user.id)}
+                  className="inline-flex h-7 cursor-pointer items-center rounded-md border border-osu-b3/60 bg-osu-b5/70 px-2.5 text-[10px] font-bold uppercase tracking-wider text-osu-f1 transition-colors hover:border-osu-red/60 hover:bg-osu-red/10 hover:text-osu-red"
+                >
+                  Unhide
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </PanelGroup>
     </div>
   );
 }

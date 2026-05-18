@@ -38,7 +38,7 @@ import type {
   ReplayFrame,
 } from "../lib/types";
 import type { ManiaBeatmap, ManiaNote, ManiaScrollVelocity } from "../lib/beatmap-parser";
-import { useAppStore, useSelectedCountry } from "../store";
+import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import { pageSeo, mapsOgImagePath } from "../lib/seo";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { getBeatmapAudioUrl } from "../lib/audio-url";
@@ -913,6 +913,7 @@ function MapsPage() {
   const mapsData = useAppStore((s) => s.mapsDataByCountry[selectedCountry] ?? null);
   const setRankings = useAppStore((s) => s.setRankings);
   const setMapsData = useAppStore((s) => s.setMapsData);
+  const hiddenUserIds = useHiddenUserIds();
   const hasValidMapsData = hasValidMapsDataShape(mapsData);
 
   const [loadingPlayers, setLoadingPlayers] = useState(!rankings);
@@ -1326,9 +1327,61 @@ function MapsPage() {
   }, [loadingPlayers, error, playerIdsKey, selectedCountry, liveBackendEnabled, liveMapsAttempted]);
 
   // ── Filtered + sorted: farmed (from best scores) ────────────────────────
+  // Maps data is aggregate (per-map player lists). Strip hidden players from
+  // every player list once here and recompute the derived counts, so the
+  // farmed/popular/favourites/random views all read already-cleaned data.
+  const visibleMapsData = useMemo<CountryMapsData | null>(() => {
+    if (!mapsData) return null;
+    if (hiddenUserIds.size === 0) return mapsData;
+
+    const farmed = mapsData.farmed
+      .map((entry) => {
+        const players = entry.players.filter((p) => !hiddenUserIds.has(p.id));
+        if (players.length === entry.players.length) return entry;
+        if (players.length === 0) return null;
+        return {
+          ...entry,
+          players,
+          playerCount: players.length,
+          avgPp: players.reduce((sum, p) => sum + p.pp, 0) / players.length,
+          maxPp: Math.max(...players.map((p) => p.pp), 0),
+        };
+      })
+      .filter((entry): entry is MapsFarmedEntry => entry !== null);
+
+    const mostPlayed = mapsData.mostPlayed
+      .map((entry) => {
+        const players = entry.players.filter((p) => !hiddenUserIds.has(p.id));
+        if (players.length === entry.players.length) return entry;
+        if (players.length === 0) return null;
+        return {
+          ...entry,
+          players,
+          playerCount: players.length,
+          totalPlays: players.reduce((sum, p) => sum + p.count, 0),
+        };
+      })
+      .filter((entry): entry is MapsAggregatedBeatmap => entry !== null);
+
+    const favourites = mapsData.favourites
+      .map((entry) => {
+        const players = entry.players.filter((p) => !hiddenUserIds.has(p.id));
+        if (players.length === entry.players.length) return entry;
+        if (players.length === 0) return null;
+        return { ...entry, players, playerCount: players.length };
+      })
+      .filter((entry): entry is MapsAggregatedFavourite => entry !== null);
+
+    const favouritesByPlayer = mapsData.favouritesByPlayer.filter(
+      (player) => !hiddenUserIds.has(player.id),
+    );
+
+    return { ...mapsData, farmed, mostPlayed, favourites, favouritesByPlayer };
+  }, [mapsData, hiddenUserIds]);
+
   const filteredFarmed = useMemo(() => {
-    if (!mapsData?.farmed?.length) return [];
-    return mapsData.farmed
+    if (!visibleMapsData?.farmed?.length) return [];
+    return visibleMapsData.farmed
       .map((entry) => {
         // When pp filter is active, only keep players meeting the threshold
         if (ppFilter > 0) {
@@ -1365,12 +1418,12 @@ function MapsPage() {
         }
         return b.difficultyRating - a.difficultyRating;
       });
-  }, [mapsData, keyFilter, searchQuery, farmedSort, ppFilter, modFilter]);
+  }, [visibleMapsData, keyFilter, searchQuery, farmedSort, ppFilter, modFilter]);
 
   // ── Filtered + sorted: most played (from most_played endpoint) ──────────
   const filteredMostPlayed = useMemo(() => {
-    if (!mapsData?.mostPlayed?.length) return [];
-    return mapsData.mostPlayed
+    if (!visibleMapsData?.mostPlayed?.length) return [];
+    return visibleMapsData.mostPlayed
       .filter(
         (m) =>
           matchesKeyFilter(parseKeyCount(m.version), keyFilter) &&
@@ -1382,12 +1435,12 @@ function MapsPage() {
         if (beatmapSort === "stars") return b.difficultyRating - a.difficultyRating;
         return b.totalLength - a.totalLength;
       });
-  }, [mapsData, keyFilter, searchQuery, beatmapSort]);
+  }, [visibleMapsData, keyFilter, searchQuery, beatmapSort]);
 
   // ── Filtered + sorted: favourites ───────────────────────────────────────
   const filteredFavourites = useMemo(() => {
-    if (!mapsData?.favourites?.length) return [];
-    return mapsData.favourites
+    if (!visibleMapsData?.favourites?.length) return [];
+    return visibleMapsData.favourites
       .filter(
         (f) =>
           matchesStatusFilter(f.status, statusFilter) &&
@@ -1397,7 +1450,7 @@ function MapsPage() {
         (a, b) =>
           b.playerCount - a.playerCount || b.globalFavouriteCount - a.globalFavouriteCount,
       );
-  }, [mapsData, statusFilter, searchQuery]);
+  }, [visibleMapsData, statusFilter, searchQuery]);
 
   const currentList =
     tab === "farmed"
@@ -1538,11 +1591,11 @@ function MapsPage() {
   useEffect(() => { if (filtersOpen) setDragOffset(0); }, [filtersOpen]);
 
   const randomPool = useMemo(() => {
-    if (!mapsData?.favouritesByPlayer || !mapsData?.beatmapsetsPool) return [];
+    if (!visibleMapsData?.favouritesByPlayer || !visibleMapsData?.beatmapsetsPool) return [];
     const pairs: Array<{ player: MapsPlayerFavourites; beatmapset: MapsFavouriteBeatmapset }> = [];
-    for (const player of mapsData.favouritesByPlayer) {
+    for (const player of visibleMapsData.favouritesByPlayer) {
       for (const bid of player.beatmapsetIds) {
-        const beatmapset = mapsData.beatmapsetsPool[bid];
+        const beatmapset = visibleMapsData.beatmapsetsPool[bid];
         if (!beatmapset) continue;
         const statusBucket = mapStatusBucket(beatmapset.status);
         if (randomStatus.includes.size > 0 && !randomStatus.includes.has(statusBucket)) continue;
@@ -1559,7 +1612,7 @@ function MapsPage() {
       }
     }
     return pairs;
-  }, [mapsData, randomStatus, randomKey, randomPatternCanonical, rStars, rStarsMax]);
+  }, [visibleMapsData, randomStatus, randomKey, randomPatternCanonical, rStars, rStarsMax]);
 
   // Group eligible pairs by player so sampling can be uniform per-player
   // rather than per-pair (players with more favourites would otherwise win).

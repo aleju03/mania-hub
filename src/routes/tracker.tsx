@@ -29,7 +29,7 @@ import { TrackerRowSkeleton } from "../components/ui/LoadingSkeleton";
 import { Pagination } from "../components/ui/Pagination";
 import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
-import { TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useSelectedCountry } from "../store";
+import { TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import type { LeanTrackerScore } from "../lib/types";
 import { parseCountrySearchParam } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
@@ -142,6 +142,7 @@ function ScoresPage() {
   const setRankings = useAppStore((state) => state.setRankings);
   const setTrackedUserIds = useAppStore((state) => state.setTrackedUserIds);
   const resetPollIndex = useAppStore((state) => state.resetPollIndex);
+  const hiddenUserIds = useHiddenUserIds();
   const [userIds, setUserIds] = useState<number[]>(trackedUserIds);
   const [loadingPlayers, setLoadingPlayers] = useState<boolean>(trackedUserIds.length === 0 && !rankings);
   const [playersError, setPlayersError] = useState<string | null>(null);
@@ -515,6 +516,7 @@ function ScoresPage() {
       : feedScores;
 
     return playerFiltered.filter((score: LeanTrackerScore) => {
+      if (hiddenUserIds.has(score.user_id)) return false;
       if (!isDisplayedPassed(score)) return false;
       if (!scoreMatchesKeyFilter(score, keyFilter)) return false;
       switch (filter) {
@@ -532,7 +534,7 @@ function ScoresPage() {
       }
       return true;
     });
-  }, [feedScores, filter, gradeFilter, keyFilter, selectedPlayerIdSet, selectedPlayerIds.length]);
+  }, [feedScores, filter, gradeFilter, keyFilter, selectedPlayerIdSet, selectedPlayerIds.length, hiddenUserIds]);
 
   const activePlayers = useMemo(() => {
     const activeCutoff = Date.now() - 40 * 60 * 1000;
@@ -540,6 +542,7 @@ function ScoresPage() {
     for (const score of feedScores) {
       const timeMs = getScoreTimeMs(score);
       if (timeMs < activeCutoff || !score.user) continue;
+      if (hiddenUserIds.has(score.user_id)) continue;
       const existing = seen.get(score.user_id);
       if (!existing || timeMs > existing.latestTime) {
         seen.set(score.user_id, {
@@ -552,7 +555,7 @@ function ScoresPage() {
     return [...seen.entries()]
       .sort((a, b) => b[1].latestTime - a[1].latestTime)
       .map(([id, info]) => ({ id, ...info }));
-  }, [feedScores]);
+  }, [feedScores, hiddenUserIds]);
 
   const filters: { id: ScoreFilter; label: string }[] = [
     { id: "all", label: "All" },

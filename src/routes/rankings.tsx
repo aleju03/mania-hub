@@ -14,7 +14,7 @@ import { useCountryWarming } from "../lib/use-country-warming";
 import { RankingRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse } from "../lib/types";
-import { useAppStore, useSelectedCountry } from "../store";
+import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import { pageSeo } from "../lib/seo";
 import { fetchLiveRankDeltas, isLiveBackendConfigured, type LiveRankDelta } from "../lib/live-backend";
 
@@ -84,6 +84,7 @@ function RankingsPage() {
   const rankHistoriesFetchedAt = useAppStore((state) => state.rankHistoriesFetchedAt);
   const setRankings = useAppStore((state) => state.setRankings);
   const setRankHistories = useAppStore((state) => state.setRankHistories);
+  const hiddenUserIds = useHiddenUserIds();
   const [pageTwoData, setPageTwoData] = useState<RankingsResponse | null>(null);
   const [pageTwoFetchedAt, setPageTwoFetchedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -267,7 +268,12 @@ function RankingsPage() {
   const sortedRankings = useMemo(() => {
     if (!pageData) return [];
     const startRank = (page - 1) * 50;
-    const entries = pageData.ranking.slice(0, 50).map((entry, i) => ({ entry, originalRank: startRank + i + 1 }));
+    // originalRank is taken from the unfiltered index so hiding a player
+    // leaves a gap (e.g. #4 then #6) rather than renumbering the leaderboard.
+    const entries = pageData.ranking
+      .slice(0, 50)
+      .map((entry, i) => ({ entry, originalRank: startRank + i + 1 }))
+      .filter(({ entry }) => !hiddenUserIds.has(entry.user.id));
     if (sortBy === "rank") return sortDir === "desc" ? entries : [...entries].reverse();
 
     return [...entries].sort((a, b) => {
@@ -319,7 +325,7 @@ function RankingsPage() {
       }
       return sortDir === "desc" ? (bVal as number) - (aVal as number) : (aVal as number) - (bVal as number);
     });
-  }, [pageData, page, sortBy, sortDir, rankHistories, liveRankDeltas, countryRankChanges, liveCountryRankChanges]);
+  }, [pageData, page, sortBy, sortDir, rankHistories, liveRankDeltas, countryRankChanges, liveCountryRankChanges, hiddenUserIds]);
 
   const handleSort = (field: SortField) => {
     if (sortBy === field) {
