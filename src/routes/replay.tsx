@@ -5,7 +5,7 @@ import { Info, LoaderCircle, Maximize2, Minimize2, Pause, Play } from "lucide-re
 import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum } from "../lib/osu";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
 import { getScoreDisplayValues, getScoreRate, modShiftsPitchWithRate, scoreHasReplay } from "../lib/score";
-import { useAppStore, useSelectedCountry } from "../store";
+import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { ReplayBrowseView } from "../components/replay/ReplayBrowseView";
@@ -449,6 +449,7 @@ function ReplayPage() {
   const router = useRouter();
   const canGoBack = useCanGoBack();
   const selectedCountry = useSelectedCountry();
+  const hiddenUserIds = useHiddenUserIds();
   const cachedRankings = useAppStore((s) => s.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((s) => s.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const setRankings = useAppStore((s) => s.setRankings);
@@ -492,9 +493,12 @@ function ReplayPage() {
   const beatmapScoreRequestRef = useRef(0);
   const scorePreviewTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const visibleRawBeatmapScores = loadingBeatmapScores && partialBeatmapScores.length > 0
-    ? mergeScoresById(beatmapScorePage > 1 ? rawBeatmapScores : [], partialBeatmapScores)
-    : rawBeatmapScores;
+  const visibleRawBeatmapScores = useMemo(() => {
+    const scores = loadingBeatmapScores && partialBeatmapScores.length > 0
+      ? mergeScoresById(beatmapScorePage > 1 ? rawBeatmapScores : [], partialBeatmapScores)
+      : rawBeatmapScores;
+    return scores.filter((score) => !hiddenUserIds.has(score.user_id));
+  }, [beatmapScorePage, hiddenUserIds, loadingBeatmapScores, partialBeatmapScores, rawBeatmapScores]);
 
   const beatmapScores = useMemo(
     () => visibleRawBeatmapScores.filter((s) => scoreHasReplay(s)),
@@ -841,6 +845,7 @@ function ReplayPage() {
   const suggestionPlayers = useMemo(
     () => (cachedRankings?.ranking ?? [])
       .filter((entry) => entry.user.is_active !== false)
+      .filter((entry) => !hiddenUserIds.has(entry.user.id))
       .slice(0, 24)
       .map((entry) => ({
         id: entry.user.id,
@@ -849,7 +854,7 @@ function ReplayPage() {
         cover_url: entry.user.cover_url,
         global_rank: entry.global_rank,
       })),
-    [cachedRankings],
+    [cachedRankings, hiddenUserIds],
   );
 
   // Auto-load player scores when arriving via URL with ?player=
