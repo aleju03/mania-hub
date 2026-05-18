@@ -4,12 +4,14 @@ import { normalizeCountryCode } from "./country";
 
 const POLL_INTERVAL_MS = 6_000;
 const COUNTRY_TIER_CACHE_KEY = "mania-hub-country-feature-tiers-v1";
+const COUNTRY_WARMING_CACHE_KEY = "mania-hub-country-warming-v1";
 
 // Last known feature tier per country, kept across re-renders and route
 // changes. Lets the hook return a tier synchronously when a country has been
 // seen before, so consumers (e.g. the nav Snipes tab) don't flicker while a
 // fresh activation request is in flight.
 const tierCache = readTierCache();
+const warmingCache = readWarmingCache();
 const activationRequests = new Map<string, Promise<LiveCountryActivation | null>>();
 
 export function getCachedCountryTier(country: string): LiveCountryFeatureTier | null {
@@ -47,11 +49,16 @@ export interface CountryWarmingState {
 export function useCountryWarming(country: string): CountryWarmingState {
   const normalizedCountry = normalizeCountryCode(country);
   const liveBackendEnabled = isLiveBackendConfigured();
-  const [warming, setWarming] = useState(false);
+  const [warming, setWarmingState] = useState(() => liveBackendEnabled && warmingCache.has(normalizedCountry));
   const [checking, setChecking] = useState(liveBackendEnabled);
   const [featureTier, setFeatureTier] = useState<LiveCountryFeatureTier | null>(
     () => tierCache.get(normalizedCountry) ?? null,
   );
+  const warmingFromCache = liveBackendEnabled && warmingCache.has(normalizedCountry);
+  const setWarming = (value: boolean) => {
+    setCachedCountryWarming(normalizedCountry, value);
+    setWarmingState(value);
+  };
 
   useEffect(() => {
     if (!liveBackendEnabled) {
@@ -66,6 +73,7 @@ export function useCountryWarming(country: string): CountryWarmingState {
     setChecking(true);
     // Seed from cache so a previously-seen country resolves with no flicker.
     setFeatureTier(tierCache.get(normalizedCountry) ?? null);
+    setWarmingState(warmingCache.has(normalizedCountry));
 
     const check = () => {
       activateLiveCountryOnce(normalizedCountry).then((result) => {
@@ -76,7 +84,7 @@ export function useCountryWarming(country: string): CountryWarmingState {
           writeTierCache(tierCache);
           setFeatureTier(result.featureTier);
         }
-        const stillWarming = result?.warming === true;
+        const stillWarming = result ? result.warming === true : warmingCache.has(normalizedCountry);
         setWarming(stillWarming);
         if (stillWarming) {
           pollTimer = setTimeout(check, POLL_INTERVAL_MS);
@@ -92,7 +100,7 @@ export function useCountryWarming(country: string): CountryWarmingState {
     };
   }, [liveBackendEnabled, normalizedCountry]);
 
-  return { warming, checking, featureTier };
+  return { warming: warming || warmingFromCache, checking, featureTier };
 }
 
 function activateLiveCountryOnce(country: string): Promise<LiveCountryActivation | null> {
@@ -126,6 +134,35 @@ function writeTierCache(cache: Map<string, LiveCountryFeatureTier>): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(COUNTRY_TIER_CACHE_KEY, JSON.stringify(Object.fromEntries(cache)));
+  } catch {
+    // Best-effort cache only.
+  }
+}
+
+function readWarmingCache(): Set<string> {
+  const entries = new Set<string>();
+  if (typeof window === "undefined") return entries;
+  try {
+    const raw = window.localStorage.getItem(COUNTRY_WARMING_CACHE_KEY);
+    if (!raw) return entries;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return entries;
+    for (const country of parsed) {
+      if (typeof country === "string") entries.add(normalizeCountryCode(country));
+    }
+  } catch {
+    // Best-effort cache only; activation polling will repair it.
+  }
+  return entries;
+}
+
+function setCachedCountryWarming(country: string, warming: boolean): void {
+  const normalizedCountry = normalizeCountryCode(country);
+  if (warming) warmingCache.add(normalizedCountry);
+  else warmingCache.delete(normalizedCountry);
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(COUNTRY_WARMING_CACHE_KEY, JSON.stringify([...warmingCache]));
   } catch {
     // Best-effort cache only.
   }

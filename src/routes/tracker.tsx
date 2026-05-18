@@ -35,6 +35,7 @@ import { parseCountrySearchParam } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { fetchLiveTrackerSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
+import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
 
 const TRACKER_SNAPSHOT_LOADER_TIMEOUT_MS = 2500;
@@ -824,11 +825,15 @@ function ScoresPage() {
                   onPageChange={(nextPage) => updateTrackerSearch({ page: nextPage })}
                 />
                 {filtered.length === 0 && (
-                  <div className="text-center py-16 text-osu-f1 text-sm">
-                    {feedScores.length === 0
-                      ? "No recent scores yet."
-                      : "No scores match this filter"}
-                  </div>
+                  feedScores.length === 0 && liveBackendEnabled ? (
+                    <LiveDataEmptyState country={selectedCountry} kind="scores" />
+                  ) : (
+                    <div className="text-center py-16 text-osu-f1 text-sm">
+                      {feedScores.length === 0
+                        ? "No recent scores yet."
+                        : "No scores match this filter"}
+                    </div>
+                  )
                 )}
               </>
             )}

@@ -9,6 +9,7 @@ import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/fo
 import { getModDisplayList, getScoreDisplayValues, getScoreTimestamp } from "../lib/score";
 import { fetchLiveTopPlaysSnapshot, fetchLiveTrackerSnapshot, isLiveBackendConfigured } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
+import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
@@ -610,7 +611,11 @@ function HomePage() {
               ))}
             </div>
           ) : (
-            <div className="px-4 py-6 text-center text-xs text-osu-f1">No recent top plays</div>
+            liveBackendEnabled && rankings ? (
+              <LiveDataEmptyState country={selectedCountry} kind="top-plays" compact />
+            ) : (
+              <div className="px-4 py-6 text-center text-xs text-osu-f1">No recent top plays</div>
+            )
           )}
         </section>
 
@@ -661,7 +666,11 @@ function HomePage() {
                 </motion.div>
               ))
             ) : (
-              <div className="px-4 py-6 text-center text-xs text-osu-f1">No recent scores</div>
+              liveBackendEnabled && rankings ? (
+                <LiveDataEmptyState country={selectedCountry} kind="scores" compact />
+              ) : (
+                <div className="px-4 py-6 text-center text-xs text-osu-f1">No recent scores</div>
+              )
             )}
           </div>
         </section>

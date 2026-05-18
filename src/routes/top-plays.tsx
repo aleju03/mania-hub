@@ -24,6 +24,7 @@ import { getReplaySearch } from "../lib/replay-navigation";
 import { startProgressPoll } from "../lib/progress-poll";
 import { fetchLiveTopPlaysSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
+import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
 
 type PopOff = CountryTopPlay;
@@ -958,9 +959,13 @@ function PopOffsPage() {
           )}
 
           {!playersError && !loadingPlayers && !loading && filtered.length === 0 && (
-            <div className="text-center py-16 text-osu-f1 text-sm">
-              No top plays in this time range
-            </div>
+            liveBackendEnabled ? (
+              <LiveDataEmptyState country={selectedCountry} kind="top-plays" />
+            ) : (
+              <div className="text-center py-16 text-osu-f1 text-sm">
+                No top plays in this time range
+              </div>
+            )
           )}
 
           {/* Pagination */}
