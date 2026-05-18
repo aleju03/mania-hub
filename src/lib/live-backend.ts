@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireAdminAccess } from "./auth";
-import type { CountryMapsData, CountryTopPlay, LeanDanEstimate, LeanTrackerScore, SnipeEvent } from "./types";
+import type { CountryMapsData, CountryTopPlay, LeanDanEstimate, LeanTrackerScore, OsuScore, OsuUser, SnipeEvent } from "./types";
 
 export type LiveEventName =
   | "hello"
@@ -76,6 +76,28 @@ export interface LiveRankDeltaSnapshot {
   windowDays: number;
   targetAt: string;
   deltas: Record<number, LiveRankDelta>;
+}
+
+export interface LivePlayerProfileSnapshot {
+  user: OsuUser;
+  bestScores: OsuScore[];
+  fetchedAt: string;
+  userFetchedAt: string;
+  isStale: boolean;
+  projection: {
+    appliedTopPlayEvents: number;
+    projectedPp: number | null;
+    basePp: number | null;
+    provenanceByScoreId: Record<number, "osu_snapshot" | "live_top_play_event">;
+  };
+}
+
+export interface LivePlayerProfileSection<T> {
+  userId: number;
+  section: "about" | "recent";
+  payload: T;
+  fetchedAt: string;
+  isStale: boolean;
 }
 
 export function getLiveBackendUrl(): string | null {
@@ -203,6 +225,57 @@ export const fetchLiveCountryFeatures = createServerFn({ method: "GET" })
         .map((entry) => ({ country: entry.country.toUpperCase().slice(0, 2), featureTier: entry.featureTier })),
     };
   });
+
+export const fetchLivePlayerProfileSnapshot = createServerFn({ method: "GET" })
+  .inputValidator((data: { key?: unknown }) => {
+    if (typeof data?.key !== "string" || !data.key.trim()) throw new Error("Invalid profile key.");
+    return { key: data.key.trim().slice(0, 120) };
+  })
+  .handler(async ({ data }): Promise<LivePlayerProfileSnapshot | null> => {
+    const base = getServerLiveBackendUrl();
+    if (!base) return null;
+    const response = await fetch(`${base}/api/profiles/${encodeURIComponent(data.key)}/snapshot`);
+    if (!response.ok) throw new Error(`Live backend ${response.status} for profile snapshot`);
+    return response.json() as Promise<LivePlayerProfileSnapshot>;
+  });
+
+export const fetchLivePlayerRecentScores = createServerFn({ method: "GET" })
+  .inputValidator((data: { userId?: unknown }) => {
+    const userId = Number(data?.userId);
+    if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+    return { userId };
+  })
+  .handler(async ({ data }): Promise<LivePlayerProfileSection<OsuScore[]> | null> => {
+    const base = getServerLiveBackendUrl();
+    if (!base) return null;
+    const response = await fetch(`${base}/api/profiles/${data.userId}/recent`);
+    if (!response.ok) throw new Error(`Live backend ${response.status} for profile recent scores`);
+    return response.json() as Promise<LivePlayerProfileSection<OsuScore[]>>;
+  });
+
+export const fetchLivePlayerAbout = createServerFn({ method: "GET" })
+  .inputValidator((data: { userId?: unknown }) => {
+    const userId = Number(data?.userId);
+    if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+    return { userId };
+  })
+  .handler(async ({ data }): Promise<LivePlayerProfileSection<{ html: string | null }> | null> => {
+    const base = getServerLiveBackendUrl();
+    if (!base) return null;
+    const response = await fetch(`${base}/api/profiles/${data.userId}/about`);
+    if (!response.ok) throw new Error(`Live backend ${response.status} for profile about`);
+    return response.json() as Promise<LivePlayerProfileSection<{ html: string | null }>>;
+  });
+
+export async function fetchLivePlayerRecentScoresDirect(userId: number): Promise<LivePlayerProfileSection<OsuScore[]>> {
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  return fetchLiveJson(`/api/profiles/${userId}/recent`);
+}
+
+export async function fetchLivePlayerAboutDirect(userId: number): Promise<LivePlayerProfileSection<{ html: string | null }>> {
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  return fetchLiveJson(`/api/profiles/${userId}/about`);
+}
 
 export async function fetchLiveTrackerSnapshot(country: string, limit = 100): Promise<LiveTrackerSnapshot> {
   return fetchLiveJson(`/api/snapshots/tracker?country=${encodeURIComponent(country)}&limit=${limit}`);

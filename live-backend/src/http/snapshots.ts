@@ -7,6 +7,7 @@ import type { Db } from "../db.js";
 import { dbHealth, exec, parseJson } from "../db.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
 import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsSnapshot } from "../features/maps.js";
+import { getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
 import { getTopPlaysSnapshot } from "../features/top-plays.js";
@@ -116,6 +117,31 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/countries/features") {
     res.setHeader("cache-control", "public, max-age=30");
     sendJson(req, res, ctx, 200, await countryFeaturesBody(ctx));
+    return true;
+  }
+  const profileRoute = parseProfileRoute(url.pathname);
+  if (profileRoute) {
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (profileRoute.kind === "snapshot") {
+      if (!checkRate(req, res, ctx, "publicCostly")) return true;
+      sendJson(req, res, ctx, 200, await getPlayerProfileSnapshot(ctx.db, ctx.osu, profileRoute.key));
+      return true;
+    }
+    const userId = Number(profileRoute.key);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    if (profileRoute.kind === "recent") {
+      if (!checkRate(req, res, ctx, "publicCostly")) return true;
+      sendJson(req, res, ctx, 200, await getPlayerRecentScores(ctx.db, ctx.osu, userId));
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    sendJson(req, res, ctx, 200, await getPlayerAbout(ctx.db, ctx.osu, userId));
     return true;
   }
   if (url.pathname === "/api/admin/status") {
@@ -773,6 +799,21 @@ function parseUserIds(raw: string | null): number[] {
     .map((part) => Number(part.trim()))
     .filter((id) => Number.isInteger(id) && id > 0)
     .slice(0, 100);
+}
+
+function parseProfileRoute(pathname: string): { kind: "snapshot" | "recent" | "about"; key: string } | null {
+  const match = /^\/api\/profiles\/([^/]+)\/(snapshot|recent|about)$/.exec(pathname);
+  if (!match) return null;
+  let key: string;
+  try {
+    key = decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+  return {
+    key,
+    kind: match[2] as "snapshot" | "recent" | "about",
+  };
 }
 
 function normalizeOsuApiPath(rawPath: unknown, rawParams: unknown): string {

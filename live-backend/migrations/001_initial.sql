@@ -139,6 +139,33 @@ create table if not exists user_top_scores (
   primary key (user_id, score_id)
 );
 
+create table if not exists profile_snapshots (
+  user_id integer primary key,
+  username_key text not null unique,
+  user_json text not null,
+  best_scores_json text not null,
+  best_scores_limit integer not null,
+  fetched_at text not null,
+  user_fetched_at text not null,
+  updated_at text not null,
+  refresh_error text
+);
+
+create index if not exists idx_profile_snapshots_username_key
+  on profile_snapshots(username_key);
+
+create table if not exists profile_section_cache (
+  cache_key text primary key,
+  user_id integer not null,
+  section text not null,
+  payload_json text not null,
+  fetched_at text not null,
+  updated_at text not null
+);
+
+create index if not exists idx_profile_section_cache_user_section
+  on profile_section_cache(user_id, section);
+
 create table if not exists top_play_events (
   country text not null,
   score_id integer not null,

@@ -4,8 +4,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   getUser,
   getUserScoresBestWindow,
-  getUserScoresRecent,
 } from "../../lib/osu";
+import {
+  fetchLivePlayerAboutDirect,
+  fetchLivePlayerProfileSnapshot,
+  fetchLivePlayerRecentScoresDirect,
+} from "../../lib/live-backend";
 import {
   formatNumber,
   formatAccuracy,
@@ -42,9 +46,17 @@ const userBestWindowRequestCache = new Map<number, Promise<OsuScore[]>>();
 const userDataCache = new Map<string, { data: OsuUser; expiresAt: number }>();
 const userRecentDataCache = new Map<number, { data: OsuScore[]; expiresAt: number }>();
 const userBestWindowDataCache = new Map<number, { data: OsuScore[]; expiresAt: number }>();
+const playerSnapshotDataCache = new Map<string, { data: { user: OsuUser; bestScores: OsuScore[] }; expiresAt: number }>();
+const playerSnapshotRequestCache = new Map<string, Promise<{ user: OsuUser; bestScores: OsuScore[] } | null>>();
+const playerAboutDataCache = new Map<number, { data: string | null; expiresAt: number }>();
+const playerAboutRequestCache = new Map<string, Promise<string | null>>();
 const USER_CLIENT_CACHE_TTL = 5 * 60 * 1000;
-const USER_RECENT_CLIENT_CACHE_TTL = 5 * 60 * 1000;
+const USER_RECENT_CLIENT_CACHE_TTL = 2 * 60 * 1000;
 const USER_BEST_WINDOW_CLIENT_CACHE_TTL = 5 * 60 * 1000;
+const PLAYER_SNAPSHOT_CLIENT_CACHE_TTL = 5 * 60 * 1000;
+const PLAYER_ABOUT_CLIENT_CACHE_TTL = 2 * 60 * 1000;
+const PLAYER_ABOUT_LIVE_TIMEOUT_MS = 8_000;
+const PLAYER_RECENT_LIVE_TIMEOUT_MS = 8_000;
 const INITIAL_SCORE_BATCH_SIZE = 5;
 const SHOW_MORE_BATCH_SIZE = 50;
 const BEST_SCORES_WINDOW_SIZE = 200;
@@ -264,6 +276,50 @@ function loadUserCached(username: string): Promise<OsuUser> {
   return request;
 }
 
+function loadPlayerSnapshotCached(username: string): Promise<{ user: OsuUser; bestScores: OsuScore[] } | null> {
+  const cacheKey = username.trim().toLowerCase();
+  const now = Date.now();
+  const cachedData = playerSnapshotDataCache.get(cacheKey);
+  if (cachedData && cachedData.expiresAt > now) {
+    return Promise.resolve(cachedData.data);
+  }
+  if (cachedData) {
+    playerSnapshotDataCache.delete(cacheKey);
+  }
+
+  const cached = playerSnapshotRequestCache.get(cacheKey);
+  if (cached) return cached;
+
+  const request = fetchLivePlayerProfileSnapshot({ data: { key: username } })
+    .then((snapshot) => {
+      if (!snapshot) return null;
+      const data = {
+        user: snapshot.user,
+        bestScores: dedupeScores(snapshot.bestScores),
+      };
+      playerSnapshotDataCache.set(cacheKey, {
+        data,
+        expiresAt: Date.now() + PLAYER_SNAPSHOT_CLIENT_CACHE_TTL,
+      });
+      userDataCache.set(cacheKey, {
+        data: data.user,
+        expiresAt: Date.now() + USER_CLIENT_CACHE_TTL,
+      });
+      userBestWindowDataCache.set(data.user.id, {
+        data: data.bestScores,
+        expiresAt: Date.now() + USER_BEST_WINDOW_CLIENT_CACHE_TTL,
+      });
+      return data;
+    })
+    .catch(() => null)
+    .finally(() => {
+      playerSnapshotRequestCache.delete(cacheKey);
+    });
+
+  playerSnapshotRequestCache.set(cacheKey, request);
+  return request;
+}
+
 function loadUserRecentCached(userId: number): Promise<OsuScore[]> {
   const now = Date.now();
   const cachedData = userRecentDataCache.get(userId);
@@ -277,9 +333,8 @@ function loadUserRecentCached(userId: number): Promise<OsuScore[]> {
   const cached = userRecentRequestCache.get(userId);
   if (cached) return cached;
 
-  const request = getUserScoresRecent({
-    data: { userId, limit: INITIAL_SCORE_BATCH_SIZE, offset: 0, include_fails: true },
-  })
+  const request = withTimeout(fetchLivePlayerRecentScoresDirect(userId), PLAYER_RECENT_LIVE_TIMEOUT_MS)
+    .then((section) => section.payload)
     .then((scores) => {
       const dedupedScores = dedupeScores(scores);
       userRecentDataCache.set(userId, {
@@ -294,6 +349,65 @@ function loadUserRecentCached(userId: number): Promise<OsuScore[]> {
 
   userRecentRequestCache.set(userId, request);
   return request;
+}
+
+function readCachedUserRecent(userId: number): OsuScore[] | undefined {
+  const cachedData = userRecentDataCache.get(userId);
+  if (!cachedData) return undefined;
+  if (cachedData.expiresAt <= Date.now()) {
+    userRecentDataCache.delete(userId);
+    return undefined;
+  }
+  return cachedData.data;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new Error("Request timed out.")), timeoutMs);
+    promise
+      .then(resolve, reject)
+      .finally(() => window.clearTimeout(timeout));
+  });
+}
+
+function loadPlayerAboutCached(userId: number, username: string): Promise<string | null> {
+  const now = Date.now();
+  const cachedData = playerAboutDataCache.get(userId);
+  if (cachedData && cachedData.expiresAt > now) {
+    return Promise.resolve(cachedData.data);
+  }
+  if (cachedData) {
+    playerAboutDataCache.delete(userId);
+  }
+
+  const requestKey = `${userId}:${username.trim().toLowerCase()}`;
+  const cached = playerAboutRequestCache.get(requestKey);
+  if (cached) return cached;
+
+  const request = withTimeout(fetchLivePlayerAboutDirect(userId), PLAYER_ABOUT_LIVE_TIMEOUT_MS)
+    .then((section) => section?.payload.html ?? null)
+    .finally(() => {
+      playerAboutRequestCache.delete(requestKey);
+    });
+
+  playerAboutRequestCache.set(requestKey, request);
+  return request.then((html) => {
+    playerAboutDataCache.set(userId, {
+      data: html,
+      expiresAt: Date.now() + PLAYER_ABOUT_CLIENT_CACHE_TTL,
+    });
+    return html;
+  });
+}
+
+function readCachedPlayerAbout(userId: number): string | null | undefined {
+  const cachedData = playerAboutDataCache.get(userId);
+  if (!cachedData) return undefined;
+  if (cachedData.expiresAt <= Date.now()) {
+    playerAboutDataCache.delete(userId);
+    return undefined;
+  }
+  return cachedData.data;
 }
 
 function loadUserBestWindowCached(userId: number): Promise<OsuScore[]> {
@@ -330,13 +444,16 @@ function PlayerPage() {
   const [user, setUser] = useState<OsuUser | null>(null);
   const [best, setBest] = useState<OsuScore[]>([]);
   const [recent, setRecent] = useState<OsuScore[]>([]);
+  const [aboutHtml, setAboutHtml] = useState<string | null>(null);
   const [profileInsights, setProfileInsights] = useState<UserProfileInsights | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [loadingRecent, setLoadingRecent] = useState(true);
+  const [loadingAbout, setLoadingAbout] = useState(false);
   const [loadingInsights, setLoadingInsights] = useState(true);
   const [userError, setUserError] = useState<string | null>(null);
   const [bestError, setBestError] = useState<string | null>(null);
   const [recentError, setRecentError] = useState<string | null>(null);
+  const [aboutError, setAboutError] = useState<string | null>(null);
   const [insightsError, setInsightsError] = useState<string | null>(null);
   const [tab, setTab] = useState<PlayerTab>("best");
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
@@ -348,8 +465,7 @@ function PlayerPage() {
   const [includeNoModUsage, setIncludeNoModUsage] = useState(true);
   const [hoveredMod, setHoveredMod] = useState<string | null>(null);
   const [bpmModalOpen, setBpmModalOpen] = useState(false);
-  const [recentHasMore, setRecentHasMore] = useState(true);
-  const [loadingMoreRecent, setLoadingMoreRecent] = useState(false);
+  const [recentHasMore, setRecentHasMore] = useState(false);
   const [bestVisibleCount, setBestVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const [recentVisibleCount, setRecentVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
 
@@ -372,6 +488,7 @@ function PlayerPage() {
     setUser(null);
     setBest([]);
     setRecent([]);
+    setAboutHtml(null);
     setProfileInsights(null);
     setTab("best");
     setKeyFilter("all");
@@ -381,24 +498,35 @@ function PlayerPage() {
     setUserError(null);
     setBestError(null);
     setRecentError(null);
+    setAboutError(null);
     setInsightsError(null);
     setLoadingUser(true);
-    setLoadingRecent(true);
+    setLoadingRecent(false);
+    setLoadingAbout(false);
     setLoadingInsights(true);
-    setRecentHasMore(true);
-    setLoadingMoreRecent(false);
+    setRecentHasMore(false);
     setBestVisibleCount(INITIAL_SCORE_BATCH_SIZE);
     setRecentVisibleCount(INITIAL_SCORE_BATCH_SIZE);
 
-    loadUserCached(username)
+    loadPlayerSnapshotCached(username)
+      .then(async (snapshot) => snapshot ?? { user: await loadUserCached(username), bestScores: [] })
       .then((result) => {
         if (cancelled) return;
-        setUser(result);
+        setUser(result.user);
         setUserError(null);
+        if (result.bestScores.length > 0) {
+          setBest(result.bestScores);
+          setBestWindowLoaded(true);
+          setBestError(null);
+          setProfileInsights(calculateUserProfileInsights(result.bestScores));
+          setInsightsError(null);
+          setLoadingInsights(false);
+        }
       })
       .catch(() => {
         if (cancelled) return;
         setUserError("Couldn't load this player right now.");
+        setLoadingInsights(false);
       })
       .finally(() => {
         if (cancelled) return;
@@ -451,7 +579,15 @@ function PlayerPage() {
   }, [bestWindowLoaded, tab, user]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || tab !== "recent" || recent.length > 0) return;
+    const cachedRecent = readCachedUserRecent(user.id);
+    if (cachedRecent) {
+      setRecent(cachedRecent);
+      setRecentHasMore(false);
+      setRecentError(null);
+      setLoadingRecent(false);
+      return;
+    }
 
     let cancelled = false;
     setLoadingRecent(true);
@@ -460,7 +596,7 @@ function PlayerPage() {
       .then((recentScores) => {
         if (cancelled) return;
         setRecent(recentScores);
-        setRecentHasMore(recentScores.length === INITIAL_SCORE_BATCH_SIZE);
+        setRecentHasMore(false);
         setRecentError(null);
       })
       .catch(() => {
@@ -475,36 +611,42 @@ function PlayerPage() {
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [recent.length, tab, user]);
 
-  // Safety: if we're on the About tab but the user has no page content, fall back to Best
   useEffect(() => {
-    if (tab === "about" && !user?.page?.html) setTab("best");
-  }, [tab, user]);
+    if (!user || tab !== "about" || aboutHtml != null) return;
+    if (user.page?.html) {
+      setAboutHtml(user.page.html);
+      return;
+    }
+    const cachedAbout = readCachedPlayerAbout(user.id);
+    if (cachedAbout !== undefined) {
+      setAboutHtml(cachedAbout);
+      return;
+    }
 
-  const fetchMoreRecent = useCallback(async () => {
-    if (!user || loadingMoreRecent) return;
+    let cancelled = false;
+    setLoadingAbout(true);
+    setAboutError(null);
 
-    setLoadingMoreRecent(true);
-
-    try {
-      const nextScores = await getUserScoresRecent({
-        data: {
-          userId: user.id,
-          limit: SHOW_MORE_BATCH_SIZE,
-          offset: recent.length,
-          include_fails: true,
-        },
+    loadPlayerAboutCached(user.id, user.username)
+      .then((html) => {
+        if (cancelled) return;
+        setAboutHtml(html);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setAboutError("Couldn't load About right now.");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingAbout(false);
       });
 
-      setRecent((prev) => dedupeScores([...prev, ...nextScores]));
-      setRecentHasMore(nextScores.length === SHOW_MORE_BATCH_SIZE);
-    } catch {
-      setRecentError("Couldn't load more scores right now.");
-    } finally {
-      setLoadingMoreRecent(false);
-    }
-  }, [loadingMoreRecent, recent, user]);
+    return () => {
+      cancelled = true;
+    };
+  }, [aboutHtml, tab, user]);
 
   useEffect(() => {
     setBestVisibleCount(INITIAL_SCORE_BATCH_SIZE);
@@ -524,27 +666,6 @@ function PlayerPage() {
     setRecentVisibleCount((count) => count + SHOW_MORE_BATCH_SIZE);
   }, [tab]);
 
-  useEffect(() => {
-    if (tab !== "recent") return;
-    const filteredScores = recent.filter((score) => matchesKeyFilter(score, keyFilter));
-
-    if (loadingRecent || recentError || loadingMoreRecent) return;
-    if (filteredScores.length >= recentVisibleCount) return;
-    if (!recentHasMore) return;
-
-    void fetchMoreRecent();
-  }, [
-    fetchMoreRecent,
-    keyFilter,
-    loadingMoreRecent,
-    loadingRecent,
-    recent,
-    recentError,
-    recentHasMore,
-    recentVisibleCount,
-    tab,
-  ]);
-
   const relevantBestMods = useMemo(() => getRelevantMods(best), [best]);
   const bestPositionByIdentity = useMemo(() => {
     const positions = new Map<string, number>();
@@ -559,6 +680,7 @@ function PlayerPage() {
     [best, recent],
   );
   const displayedProfileInsights = profileInsights;
+  const displayedAboutHtml = aboutHtml ?? (user ? readCachedPlayerAbout(user.id) : undefined);
 
   const cycleBestMod = useCallback((mod: string) => {
     setBestModFilter((prev) => {
@@ -615,7 +737,7 @@ function PlayerPage() {
   const loadingScores = tab === "best" ? loadingBest : loadingRecent;
   const scoresError = tab === "best" ? bestError : recentError;
   const currentHasMore = tab === "best" ? !bestWindowLoaded : recentHasMore;
-  const isLoadingMoreCurrentTab = tab === "recent" && loadingMoreRecent;
+  const isLoadingMoreCurrentTab = false;
   const canShowMore = tab === "best"
     ? bestWindowLoaded && filteredScores.length > visibleScores.length
     : filteredScores.length > visibleScores.length || recentHasMore;
@@ -1176,7 +1298,7 @@ function PlayerPage() {
           {/* Player tabs */}
           <div className="mt-5 pt-1 border-t border-osu-b3/30 flex flex-wrap items-center justify-between gap-3">
             <div className="flex">
-              {((["best", "recent", ...(user.page?.html ? ["about"] : []), "card"]) as PlayerTab[]).map((t) => (
+              {((["best", "recent", "about", "card"]) as PlayerTab[]).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -1225,7 +1347,7 @@ function PlayerPage() {
       <div className="bg-osu-b5 border-t border-osu-b3/20">
         <div className="max-w-[1200px] mx-auto px-5 py-5 space-y-1.5">
           <AnimatePresence mode="wait" initial={false}>
-            {tab === "about" && user.page?.html ? (
+            {tab === "about" ? (
               <motion.div
                 key="about"
                 initial={{ opacity: 0, y: 6 }}
@@ -1233,7 +1355,19 @@ function PlayerPage() {
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.14 }}
               >
-                <PlayerAboutCard html={user.page.html} />
+                {loadingAbout ? (
+                  <div className="space-y-2 rounded-xl bg-osu-b4 border border-osu-b3/20 p-5">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-2/3" />
+                  </div>
+                ) : aboutError ? (
+                  <div className="text-center py-8 text-osu-f1 text-sm">{aboutError}</div>
+                ) : displayedAboutHtml ? (
+                  <PlayerAboutCard html={displayedAboutHtml} />
+                ) : (
+                  <div className="text-center py-8 text-osu-f1 text-sm">No About content found.</div>
+                )}
               </motion.div>
             ) : tab === "card" ? (
               <motion.div

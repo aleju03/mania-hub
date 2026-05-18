@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot } from "../src/features/snipes.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefreshIfDue, getMapsSnapshot } from "../src/features/maps.js";
+import { getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../src/features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
 import { confirmTopPlay, getTopPlaysSnapshot, TopPlayConfirmationPendingError } from "../src/features/top-plays.js";
 import { getTrackerSnapshot } from "../src/features/tracker.js";
@@ -776,6 +777,158 @@ describe("live backend", () => {
     expect(snapshot.popoffs[0].user.avatar_url).toBe("https://assets.example/fresh-top.png");
     expect(snapshot.popoffs[0].score.user?.avatar_url).toBe("https://assets.example/fresh-top.png");
     expect(await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" })).toBe(false);
+  });
+
+  it("caches player profile snapshots and serves subsequent visits without osu calls", async () => {
+    const { db } = await setup();
+    const best = await fixture<OscScore[]>("top-best.json");
+    const getUserByKey = vi.fn(async () => ({
+      id: 101,
+      username: "Sniper",
+      avatar_url: "https://assets.example/sniper.png",
+      country_code: "CR",
+      statistics: { pp: 1234, global_rank: 100, country_rank: 1 },
+      page: { html: "<b>about</b>", raw: "about" },
+    }));
+    const getUser = vi.fn(async () => {
+      throw new Error("fresh profile users should not refresh within the short user TTL");
+    });
+    const getUserBestScoresWindow = vi.fn(async () => best);
+
+    const first = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    const second = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "sniper");
+
+    expect(first.user).toMatchObject({ id: 101, username: "Sniper", page: null });
+    expect(first.bestScores).toHaveLength(best.length);
+    expect(first.userFetchedAt).toBe(first.fetchedAt);
+    expect(second.bestScores[0].id).toBe(first.bestScores[0].id);
+    expect(getUserByKey).toHaveBeenCalledTimes(1);
+    expect(getUser).not.toHaveBeenCalled();
+    expect(getUserBestScoresWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes stale profile user stats without refetching the best-score snapshot", async () => {
+    const { db } = await setup();
+    const best = await fixture<OscScore[]>("top-best.json");
+    const getUserByKey = vi.fn(async () => ({
+      id: 101,
+      username: "Sniper",
+      avatar_url: "https://assets.example/sniper.png",
+      country_code: "CR",
+      statistics: { pp: 1000, global_rank: 100, country_rank: 1, play_count: 10 },
+      page: null,
+    }));
+    const getUser = vi.fn(async () => ({
+      id: 101,
+      username: "Sniper",
+      avatar_url: "https://assets.example/sniper-new.png",
+      country_code: "CR",
+      statistics: { pp: 1100, global_rank: 90, country_rank: 1, play_count: 20 },
+      page: { html: "<b>fresh but stripped</b>" },
+    }));
+    const getUserBestScoresWindow = vi.fn(async () => best);
+
+    await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    await exec(db, "update profile_snapshots set user_fetched_at = ? where user_id = 101", [
+      new Date(Date.now() - 11 * 60_000).toISOString(),
+    ]);
+
+    const snapshot = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+
+    expect(snapshot.user).toMatchObject({
+      avatar_url: "https://assets.example/sniper-new.png",
+      page: null,
+      statistics: expect.objectContaining({ global_rank: 90, play_count: 20 }),
+    });
+    expect(snapshot.fetchedAt).not.toBe(snapshot.userFetchedAt);
+    expect(getUserByKey).toHaveBeenCalledTimes(1);
+    expect(getUser).toHaveBeenCalledTimes(1);
+    expect(getUserBestScoresWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it("projects confirmed live top plays into cached player snapshots without same-map duplicates", async () => {
+    const { db } = await setup();
+    const base = (await fixture<OscScore[]>("top-best.json"))[0];
+    const oldSameMap: OscScore = {
+      ...base,
+      id: 7001,
+      pp: 200,
+      beatmap_id: base.beatmap_id ?? base.beatmap?.id,
+      ended_at: "2026-05-10T00:00:00.000Z",
+      created_at: "2026-05-10T00:00:00.000Z",
+    };
+    const liveTop: OscScore = {
+      ...base,
+      id: 9001,
+      pp: 250,
+      ended_at: "2026-05-12T00:00:00.000Z",
+      created_at: "2026-05-12T00:00:00.000Z",
+    };
+    const getUserByKey = vi.fn(async () => ({
+      id: 101,
+      username: "Sniper",
+      avatar_url: "https://assets.example/sniper.png",
+      country_code: "CR",
+      statistics: { pp: 1000, global_rank: 100, country_rank: 1 },
+      page: null,
+    }));
+    const getUser = vi.fn(async () => ({
+      id: 101,
+      username: "Sniper",
+      avatar_url: "https://assets.example/sniper.png",
+      country_code: "CR",
+      statistics: { pp: 1000, global_rank: 100, country_rank: 1 },
+      page: null,
+    }));
+    const getUserBestScoresWindow = vi.fn(async () => [oldSameMap, { ...base, id: 8002, beatmap_id: 999, pp: 150 }]);
+
+    const baseSnapshot = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    const staleTop = { ...base, id: 6601, beatmap_id: 6601, pp: 999 };
+    await exec(
+      db,
+      `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
+       values ('CR', ?, 101, ?, ?, 50, ?, ?)`,
+      [staleTop.id, staleTop.pp, staleTop.pp, JSON.stringify({ user: { id: 101, username: "Sniper", avatar_url: "https://assets.example/sniper.png" }, score: staleTop, pp: staleTop.pp, weightedPP: staleTop.pp, ppGain: 50, time: staleTop.ended_at }), new Date(Date.parse(baseSnapshot.fetchedAt) - 1000).toISOString()],
+    );
+    await exec(
+      db,
+      `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
+       values ('CR', ?, 101, ?, ?, 50, ?, ?)`,
+      [liveTop.id, liveTop.pp, liveTop.pp, JSON.stringify({ user: { id: 101, username: "Sniper", avatar_url: "https://assets.example/sniper.png" }, score: liveTop, pp: liveTop.pp, weightedPP: liveTop.pp, ppGain: 50, time: liveTop.ended_at }), new Date().toISOString()],
+    );
+
+    const snapshot = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    const scoreIds = snapshot.bestScores.map((score) => score.id);
+
+    expect(scoreIds).toContain(9001);
+    expect(scoreIds).not.toContain(6601);
+    expect(scoreIds).not.toContain(7001);
+    expect(snapshot.projection.appliedTopPlayEvents).toBe(1);
+    expect(snapshot.projection.provenanceByScoreId[9001]).toBe("live_top_play_event");
+    expect(Number((snapshot.user.statistics as { pp?: number }).pp)).toBeGreaterThan(1000);
+  });
+
+  it("caches lazy player recent and about sections separately from the snapshot", async () => {
+    const { db } = await setup();
+    const best = await fixture<OscScore[]>("top-best.json");
+    const getUserRecentScores = vi.fn(async () => [best[0], { ...best[0], id: 9902 }]);
+    const getUser = vi.fn(async () => ({
+      id: 101,
+      username: "Sniper",
+      page: { html: "<script>alert(1)</script><b>hi</b>" },
+    }));
+
+    const recent = await getPlayerRecentScores(db, { getUserRecentScores }, 101);
+    const recentAgain = await getPlayerRecentScores(db, { getUserRecentScores }, 101);
+    const about = await getPlayerAbout(db, { getUser }, 101);
+    const aboutAgain = await getPlayerAbout(db, { getUser }, 101);
+
+    expect(recent.payload).toHaveLength(2);
+    expect(recentAgain.payload).toHaveLength(2);
+    expect(getUserRecentScores).toHaveBeenCalledTimes(1);
+    expect(about.payload).toMatchObject({ html: "<b>hi</b>" });
+    expect(aboutAgain.payload).toMatchObject({ html: "<b>hi</b>" });
+    expect(getUser).toHaveBeenCalledTimes(1);
   });
 
   it("deduplicates repeated best-score ids without storing top-score rows", async () => {

@@ -251,6 +251,10 @@ export class OsuApiClient {
     return this.getJson(`/users/${userId}/mania`, caller);
   }
 
+  async getUserByKey(key: string, caller = "unknown"): Promise<Record<string, unknown>> {
+    return this.getJson(`/users/${encodeURIComponent(key)}/mania`, caller);
+  }
+
   async getBeatmap(beatmapId: number, caller = "unknown"): Promise<Record<string, unknown>> {
     return this.getJson(`/beatmaps/${beatmapId}`, caller);
   }

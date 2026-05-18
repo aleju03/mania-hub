@@ -23,6 +23,7 @@ export async function migrate(db: Db): Promise<void> {
   }
   await migrateCountryRegistryFeatureTier(db);
   await migrateScoreEventsIdentity(db);
+  await migrateProfileSnapshots(db);
 }
 
 export async function dbHealth(db: Db): Promise<boolean> {
@@ -123,4 +124,43 @@ async function migrateScoreEventsIdentity(db: Db): Promise<void> {
     from score_events_old
   `);
   await db.execute("drop table score_events_old");
+}
+
+async function migrateProfileSnapshots(db: Db): Promise<void> {
+  await db.execute(`
+    create table if not exists profile_snapshots (
+      user_id integer primary key,
+      username_key text not null unique,
+      user_json text not null,
+      best_scores_json text not null,
+      best_scores_limit integer not null,
+      fetched_at text not null,
+      user_fetched_at text not null,
+      updated_at text not null,
+      refresh_error text
+    )
+  `);
+  const snapshotColumns = (await db.execute("pragma table_info(profile_snapshots)")).rows.map((row) => String(row.name));
+  if (!snapshotColumns.includes("user_fetched_at")) {
+    await db.execute("alter table profile_snapshots add column user_fetched_at text");
+    await db.execute("update profile_snapshots set user_fetched_at = fetched_at where user_fetched_at is null");
+  }
+  await db.execute(`
+    create index if not exists idx_profile_snapshots_username_key
+      on profile_snapshots(username_key)
+  `);
+  await db.execute(`
+    create table if not exists profile_section_cache (
+      cache_key text primary key,
+      user_id integer not null,
+      section text not null,
+      payload_json text not null,
+      fetched_at text not null,
+      updated_at text not null
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_profile_section_cache_user_section
+      on profile_section_cache(user_id, section)
+  `);
 }
