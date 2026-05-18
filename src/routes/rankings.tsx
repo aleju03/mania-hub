@@ -166,10 +166,33 @@ function RankingsPage() {
     if (!pageData) return;
     let cancelled = false;
     const userIds = pageData.ranking.slice(0, 50).map((e) => e.user.id);
+    const loadRankHistoryFallback = async (candidateUserIds: number[]) => {
+      const userIdsToFetch = candidateUserIds.filter(
+        (userId) =>
+          !triedRankHistoryIdsRef.current.has(userId) &&
+          (!rankHistories[userId] ||
+            isCacheStale(rankHistoriesFetchedAt[userId], CLIENT_CACHE_TTL.rankHistories)),
+      );
+
+      if (userIdsToFetch.length === 0) return;
+
+      const histories = await getUsersRankHistory({ data: { userIds: userIdsToFetch } });
+      if (cancelled) return;
+      for (const userId of userIdsToFetch) {
+        if (!histories[userId]) triedRankHistoryIdsRef.current.add(userId);
+      }
+      setRankHistories(histories);
+    };
+
     const loadRankDeltas = async () => {
       setRankDeltasReady(false);
       if (liveBackendEnabled) {
-        const liveMissingIds = userIds.filter((userId) => !liveRankDeltas[userId]);
+        const liveMissingIds = userIds.filter(
+          (userId) =>
+            !liveRankDeltas[userId] &&
+            (!rankHistories[userId] ||
+              isCacheStale(rankHistoriesFetchedAt[userId], CLIENT_CACHE_TTL.rankHistories)),
+        );
         if (liveMissingIds.length === 0) {
           setRankHistoriesLoading(false);
           setRankDeltasReady(true);
@@ -182,10 +205,13 @@ function RankingsPage() {
           if (Object.keys(snapshot.deltas).length > 0) {
             setLiveRankDeltas((current) => ({ ...current, ...snapshot.deltas }));
           }
+          const usersWithoutLiveDelta = liveMissingIds.filter((userId) => !snapshot.deltas[userId]);
+          await loadRankHistoryFallback(usersWithoutLiveDelta);
         } catch {
-          // Keep the live-backend path local to our backend. The legacy
-          // rank_history fallback below can fan out to osu!, so only use it
-          // when no live backend is configured.
+          // Fresh live-backend countries have no week-old snapshots yet, and
+          // transient backend failures should not leave the rankings columns
+          // permanently blank. Fall back to the cached osu! rank_history path.
+          await loadRankHistoryFallback(liveMissingIds);
         } finally {
           if (!cancelled) {
             setRankHistoriesLoading(false);
@@ -194,15 +220,13 @@ function RankingsPage() {
         }
         return;
       }
-
-      const userIdsToFetch = userIds.filter(
+      const hasAnyRankHistoryToFetch = userIds.some(
         (userId) =>
           !triedRankHistoryIdsRef.current.has(userId) &&
           (!rankHistories[userId] ||
             isCacheStale(rankHistoriesFetchedAt[userId], CLIENT_CACHE_TTL.rankHistories)),
       );
-
-      if (userIdsToFetch.length === 0) {
+      if (!hasAnyRankHistoryToFetch) {
         if (!cancelled) {
           setRankHistoriesLoading(false);
           setRankDeltasReady(true);
@@ -212,12 +236,7 @@ function RankingsPage() {
 
       setRankHistoriesLoading(true);
       try {
-        const histories = await getUsersRankHistory({ data: { userIds: userIdsToFetch } });
-        if (cancelled) return;
-        for (const userId of userIdsToFetch) {
-          if (!histories[userId]) triedRankHistoryIdsRef.current.add(userId);
-        }
-        setRankHistories(histories);
+        await loadRankHistoryFallback(userIds);
       } finally {
         if (!cancelled) {
           setRankHistoriesLoading(false);
