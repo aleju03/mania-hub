@@ -38,7 +38,7 @@ import { CountryWarming } from "../components/CountryWarming";
 import { useCountryWarming } from "../lib/use-country-warming";
 
 const TRACKER_SNAPSHOT_LOADER_TIMEOUT_MS = 2500;
-const TRACKER_PAGE_SIZE = 100;
+const TRACKER_PAGE_SIZE = 45;
 const TRACKER_LIVE_SNAPSHOT_LIMIT = 500;
 
 async function withSnapshotLoaderBudget<T>(snapshotPromise: Promise<T>): Promise<T | null> {
