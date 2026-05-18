@@ -923,6 +923,7 @@ function MapsPage() {
   const [rebuildMenuOpen, setRebuildMenuOpen] = useState(false);
   const [rebuildQuery, setRebuildQuery] = useState("");
   const [liveMapsAttempted, setLiveMapsAttempted] = useState(false);
+  const [liveMapsRefreshing, setLiveMapsRefreshing] = useState(false);
   // True while the live backend is building this country's maps for the very
   // first time (no snapshot has ever existed). Distinguishes a cold first build
   // from a quick refresh of already-cached maps.
@@ -1018,6 +1019,7 @@ function MapsPage() {
     setSmoothProgress(0);
     setError(null);
     setLiveMapsAttempted(false);
+    setLiveMapsRefreshing(false);
     fetchingMapsRef.current = false;
   }, [selectedCountry, liveBackendEnabled]);
 
@@ -1064,6 +1066,7 @@ function MapsPage() {
       fetchLiveMapsSnapshot(selectedCountry)
         .then((snapshot) => {
           if (cancelled) return;
+          setLiveMapsRefreshing(snapshot.isStale || snapshot.refreshQueued);
           if (snapshot.value && hasValidMapsDataShape(snapshot.value)) {
             const core = snapshot.value;
             const cached = useAppStore.getState().mapsDataByCountry[selectedCountry] ?? null;
@@ -1096,6 +1099,7 @@ function MapsPage() {
             setLoadingMaps(false);
             setError("Couldn't load maps data. Try again later.");
           }
+          if (!cancelled) setLiveMapsRefreshing(false);
         })
         .finally(() => {
           if (!cancelled) setLiveMapsAttempted(true);
@@ -1404,6 +1408,26 @@ function MapsPage() {
           ? filteredFavourites
           : [];
   const totalPages = tab === "random" ? 0 : Math.ceil(currentList.length / PAGE_SIZE);
+  const currentRawListLength =
+    tab === "farmed"
+      ? mapsData?.farmed.length ?? 0
+      : tab === "popular"
+        ? mapsData?.mostPlayed.length ?? 0
+        : tab === "favourites"
+          ? mapsData?.favourites.length ?? 0
+          : 0;
+  const currentMapsSectionLoading =
+    liveBackendEnabled &&
+    liveMapsRefreshing &&
+    tab !== "random" &&
+    !!mapsData &&
+    currentRawListLength === 0;
+  const currentMapsSectionLabel =
+    tab === "farmed"
+      ? "most farmed"
+      : tab === "popular"
+        ? "widely played"
+        : "community favorites";
 
   useEffect(() => {
     if (tab === "random" || totalPages === 0 || page < totalPages) return;
@@ -1419,7 +1443,7 @@ function MapsPage() {
     { id: "random", label: "random picks" },
   ];
 
-  const isLoading = loadingPlayers || loadingMaps;
+  const isLoading = loadingPlayers || loadingMaps || currentMapsSectionLoading;
 
   // ── Random tab: pick a random top-50 player and a single random favourite ──
   const [randomPlayer, setRandomPlayer] = useState<MapsPlayerFavourites | null>(null);
@@ -1689,7 +1713,9 @@ function MapsPage() {
                 <span className="text-[10px] text-osu-f1 tabular-nums">
                   {loadingPlayers
                     ? "Loading players..."
-                    : mapsFirstBuild
+                    : currentMapsSectionLoading
+                      ? `Loading ${currentMapsSectionLabel}...`
+                      : mapsFirstBuild
                       ? "Building maps..."
                       : `Loading maps... (${Math.round(smoothProgress)}%)`}
                 </span>
@@ -2047,8 +2073,30 @@ function MapsPage() {
             </div>
           )}
 
+          {!error && currentMapsSectionLoading && mapsData && hasValidMapsData && (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/60 px-3.5 py-2.5 text-[11px] leading-relaxed text-osu-f1">
+                <span className="font-semibold text-osu-c2">Still loading {currentMapsSectionLabel}.</span>{" "}
+                The other map tabs may appear first while this section catches up.
+              </div>
+              <MapsLoadingIndicator loadingPlayers={false} firstBuild={false} label={`Loading ${currentMapsSectionLabel}...`} />
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
+                    <Skeleton className="w-full h-[90px] rounded-none" />
+                    <div className="p-3 space-y-2">
+                      <Skeleton className="h-3.5 w-3/4" />
+                      <Skeleton className="h-3 w-1/2" />
+                      <Skeleton className="h-3 w-2/3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Card grid */}
-          {tab !== "random" && !error && paginated.length > 0 && (
+          {tab !== "random" && !error && !currentMapsSectionLoading && paginated.length > 0 && (
             <div key={`${tab}-${page}`} className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 cards-enter">
                 {tab === "farmed"
                   ? (paginated as MapsFarmedEntry[]).map((map) => (
@@ -2297,7 +2345,7 @@ function MapsPage() {
           )}
 
           {/* Pagination */}
-          {tab !== "random" && (
+          {tab !== "random" && !currentMapsSectionLoading && (
             <Pagination page={page} totalPages={totalPages} onPageChange={(p) => updateMapsSearch({ page: p })} />
           )}
         </div>
@@ -2321,7 +2369,7 @@ const LOADING_STEPS = [
   "Almost there...",
 ];
 
-function MapsLoadingIndicator({ loadingPlayers, firstBuild }: { loadingPlayers: boolean; firstBuild: boolean }) {
+function MapsLoadingIndicator({ loadingPlayers, firstBuild, label: overrideLabel }: { loadingPlayers: boolean; firstBuild: boolean; label?: string }) {
   const [stepIndex, setStepIndex] = useState(0);
 
   useEffect(() => {
@@ -2332,11 +2380,11 @@ function MapsLoadingIndicator({ loadingPlayers, firstBuild }: { loadingPlayers: 
     return () => clearInterval(id);
   }, [loadingPlayers, firstBuild]);
 
-  const label = loadingPlayers
+  const label = overrideLabel ?? (loadingPlayers
     ? "Loading players..."
     : firstBuild
       ? "Building maps for the first time..."
-      : LOADING_STEPS[stepIndex];
+      : LOADING_STEPS[stepIndex]);
 
   return (
     <div className="flex items-center gap-3">
