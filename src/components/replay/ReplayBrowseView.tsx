@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronLeft, ChevronRight, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileDown, Link2, Upload } from "lucide-react";
 
 import { avatarImageSrc } from "#/components/ui/Avatar";
 import { GradeImg } from "#/components/ui/GradeImg";
@@ -181,6 +181,28 @@ export function ReplayBrowseView({
   );
 }
 
+type UploadBgTriangle = { points: string; opacity: number };
+
+// The osu! triangle motif as a deliberate composition rather than scattered noise:
+// a handful of large interlocking triangles, up and down, whose vertices all sit on
+// one equilateral grid (side 256, height 222) so their edges line up cleanly. A few
+// flat pink tones give depth; large shapes are listed first so they render behind.
+const UPLOAD_BG_TRIANGLES: UploadBgTriangle[] = [
+  // Large shapes that bleed off the edges and anchor the composition.
+  { points: "128,-90 -128,354 384,354", opacity: 0.09 },
+  { points: "256,-90 768,-90 512,354", opacity: 0.09 },
+  // Mid shapes: the readable interlocking triangles.
+  { points: "128,-90 0,132 256,132", opacity: 0.2 },
+  { points: "384,-90 256,132 512,132", opacity: 0.11 },
+  { points: "512,132 384,-90 640,-90", opacity: 0.16 },
+  { points: "256,354 128,132 384,132", opacity: 0.15 },
+  { points: "640,132 512,354 768,354", opacity: 0.18 },
+  { points: "0,354 -128,132 128,132", opacity: 0.12 },
+  // Small accents subdividing otherwise-empty cells, for scale variety.
+  { points: "192,21 320,21 256,132", opacity: 0.2 },
+  { points: "384,132 320,243 448,243", opacity: 0.17 },
+];
+
 function UploadReplayBrowser({
   onUploadReplay,
 }: Pick<ReplayBrowseViewProps, "onUploadReplay">) {
@@ -195,10 +217,11 @@ function UploadReplayBrowser({
   }, [onUploadReplay]);
 
   return (
-    <div className="mx-auto max-w-lg">
+    <div className="mx-auto max-w-xl">
       <h3 className="mb-3 text-center text-sm font-semibold uppercase tracking-wider text-osu-f1">
         Drop your own .osr file
       </h3>
+
       <button
         type="button"
         onClick={() => inputRef.current?.click()}
@@ -219,17 +242,44 @@ function UploadReplayBrowser({
           setDragActive(false);
           handleFiles(event.dataTransfer.files);
         }}
-        className={`flex min-h-[180px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-6 py-8 text-center transition-colors cursor-pointer ${
+        className={`relative block w-full overflow-hidden rounded-xl border transition-colors cursor-pointer ${
           dragActive
-            ? "border-osu-pink/60 bg-osu-pink/10"
-            : "border-osu-b3/60 bg-osu-b4 hover:border-osu-pink/45 hover:bg-osu-b3/60"
+            ? "border-osu-pink/70 bg-osu-b5"
+            : "border-osu-b3/60 bg-osu-b4 hover:border-osu-pink/45"
         }`}
       >
-        <Upload className="h-7 w-7 text-osu-f1" aria-hidden="true" />
-        <span className="text-sm font-semibold text-white">
-          {dragActive ? "Drop to load it" : "Drag an .osr here, or click to browse"}
-        </span>
+        <svg
+          viewBox="0 0 640 260"
+          preserveAspectRatio="xMidYMid slice"
+          className={`pointer-events-none absolute inset-0 h-full w-full transition-[color,opacity] duration-150 ${
+            dragActive ? "text-osu-pink-light opacity-100" : "text-osu-pink opacity-80"
+          }`}
+          aria-hidden="true"
+        >
+          {UPLOAD_BG_TRIANGLES.map((triangle, index) => (
+            <polygon
+              key={index}
+              points={triangle.points}
+              fill="currentColor"
+              fillOpacity={triangle.opacity}
+            />
+          ))}
+        </svg>
+
+        <div className="relative z-10 flex min-h-[244px] flex-col items-center justify-center gap-2.5 px-6 py-12 text-center">
+          <Upload
+            className={`h-8 w-8 transition-colors ${dragActive ? "text-osu-pink-light" : "text-osu-f1"}`}
+            aria-hidden="true"
+          />
+          <div>
+            <div className="text-sm font-semibold text-white">
+              {dragActive ? "Drop to load it" : "Drag an .osr here, or click to browse"}
+            </div>
+            <div className="mt-1 text-[11px] text-osu-f1">osu!mania replays only</div>
+          </div>
+        </div>
       </button>
+
       <input
         ref={inputRef}
         type="file"
@@ -237,6 +287,17 @@ function UploadReplayBrowser({
         className="sr-only"
         onChange={(event) => handleFiles(event.target.files)}
       />
+
+      <div className="mt-3 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-center sm:gap-5">
+        <div className="flex items-center gap-2 text-[11px] text-osu-f1">
+          <FileDown className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+          <span>In osu!, right-click a score and choose Export to file.</span>
+        </div>
+        <div className="flex items-center gap-2 text-[11px] text-osu-f1">
+          <Link2 className="h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+          <span>Uploading gives you a share link for the replay.</span>
+        </div>
+      </div>
     </div>
   );
 }
