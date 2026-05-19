@@ -288,16 +288,24 @@ export class OsuApiClient {
   }
 
   async getUserBestScoresWindow(userId: number, totalLimit = 200, caller = "unknown"): Promise<OscScore[]> {
-    const firstPage = await this.getJson<OscScore[]>(
+    const firstPagePromise = this.getJson<OscScore[]>(
       `/users/${userId}/scores/best?mode=mania&limit=${Math.min(totalLimit, 100)}&offset=0`,
       caller,
     );
+    const secondPagePromise = totalLimit > 100
+      ? this.getJson<OscScore[]>(
+        `/users/${userId}/scores/best?mode=mania&limit=${Math.min(totalLimit - 100, 100)}&offset=100`,
+        caller,
+      )
+        .then((value) => ({ ok: true, value }) as const)
+        .catch((error) => ({ ok: false, error }) as const)
+      : null;
+
+    const firstPage = await firstPagePromise;
     if (totalLimit <= 100 || firstPage.length < 100) return firstPage;
-    const secondPage = await this.getJson<OscScore[]>(
-      `/users/${userId}/scores/best?mode=mania&limit=${Math.min(totalLimit - 100, 100)}&offset=100`,
-      caller,
-    );
-    return [...firstPage, ...secondPage];
+    const secondPage = await secondPagePromise;
+    if (!secondPage?.ok) throw secondPage?.error ?? new Error("Failed to fetch second best-score page");
+    return [...firstPage, ...secondPage.value];
   }
 
   async getUserRecentScores(userId: number, caller = "unknown"): Promise<OscScore[]> {

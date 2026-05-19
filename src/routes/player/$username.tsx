@@ -57,6 +57,7 @@ const PLAYER_SNAPSHOT_CLIENT_CACHE_TTL = 5 * 60 * 1000;
 const PLAYER_ABOUT_CLIENT_CACHE_TTL = 2 * 60 * 1000;
 const PLAYER_ABOUT_LIVE_TIMEOUT_MS = 8_000;
 const PLAYER_RECENT_LIVE_TIMEOUT_MS = 8_000;
+const PROFILE_SNAPSHOT_BEST_GRACE_MS = 450;
 const INITIAL_SCORE_BATCH_SIZE = 5;
 const SHOW_MORE_BATCH_SIZE = 50;
 const BEST_SCORES_WINDOW_SIZE = 200;
@@ -276,6 +277,17 @@ function loadUserCached(username: string): Promise<OsuUser> {
   return request;
 }
 
+function readCachedUser(username: string): OsuUser | undefined {
+  const cacheKey = username.trim().toLowerCase();
+  const cachedData = userDataCache.get(cacheKey);
+  if (!cachedData) return undefined;
+  if (cachedData.expiresAt <= Date.now()) {
+    userDataCache.delete(cacheKey);
+    return undefined;
+  }
+  return cachedData.data;
+}
+
 function loadPlayerSnapshotCached(username: string): Promise<{ user: OsuUser; bestScores: OsuScore[] } | null> {
   const cacheKey = username.trim().toLowerCase();
   const now = Date.now();
@@ -460,6 +472,7 @@ function PlayerPage() {
   const [bestModFilter, setBestModFilter] = useState<ModFilterState>({});
   const [bestSort, setBestSort] = useState<BestSort>("pp");
   const [bestWindowLoaded, setBestWindowLoaded] = useState(false);
+  const [waitingForSnapshotBest, setWaitingForSnapshotBest] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [modModalOpen, setModModalOpen] = useState(false);
   const [includeNoModUsage, setIncludeNoModUsage] = useState(true);
@@ -495,6 +508,7 @@ function PlayerPage() {
     setBestModFilter({});
     setBestSort("pp");
     setBestWindowLoaded(false);
+    setWaitingForSnapshotBest(true);
     setUserError(null);
     setBestError(null);
     setRecentError(null);
@@ -508,29 +522,66 @@ function PlayerPage() {
     setBestVisibleCount(INITIAL_SCORE_BATCH_SIZE);
     setRecentVisibleCount(INITIAL_SCORE_BATCH_SIZE);
 
-    loadPlayerSnapshotCached(username)
-      .then(async (snapshot) => snapshot ?? { user: await loadUserCached(username), bestScores: [] })
+    let snapshotApplied = false;
+    const cachedUser = readCachedUser(username);
+    if (cachedUser) {
+      setUser(cachedUser);
+      setLoadingUser(false);
+    }
+
+    const applySnapshot = (result: { user: OsuUser; bestScores: OsuScore[] } | null) => {
+      if (cancelled || !result) return;
+      snapshotApplied = true;
+      setUser(result.user);
+      setUserError(null);
+      setLoadingUser(false);
+      setWaitingForSnapshotBest(false);
+      if (result.bestScores.length > 0) {
+        setBest(result.bestScores);
+        setBestWindowLoaded(true);
+        setBestError(null);
+        setProfileInsights(calculateUserProfileInsights(result.bestScores));
+        setInsightsError(null);
+        setLoadingInsights(false);
+      }
+    };
+
+    const loadFallbackUser = () => loadUserCached(username)
       .then((result) => {
         if (cancelled) return;
-        setUser(result.user);
+        if (!snapshotApplied && !cachedUser) setUser(result);
         setUserError(null);
-        if (result.bestScores.length > 0) {
-          setBest(result.bestScores);
-          setBestWindowLoaded(true);
-          setBestError(null);
-          setProfileInsights(calculateUserProfileInsights(result.bestScores));
-          setInsightsError(null);
-          setLoadingInsights(false);
-        }
       })
       .catch(() => {
         if (cancelled) return;
-        setUserError("Couldn't load this player right now.");
-        setLoadingInsights(false);
+        if (!snapshotApplied && !cachedUser) {
+          setUserError("Couldn't load this player right now.");
+          setLoadingInsights(false);
+        }
       })
       .finally(() => {
         if (cancelled) return;
-        setLoadingUser(false);
+        if (!snapshotApplied && !cachedUser) setLoadingUser(false);
+      });
+
+    loadPlayerSnapshotCached(username)
+      .then((snapshot) => {
+        if (cancelled) return;
+        if (snapshot) {
+          applySnapshot(snapshot);
+          return;
+        }
+        setWaitingForSnapshotBest(false);
+        if (!cachedUser) void loadFallbackUser();
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setWaitingForSnapshotBest(false);
+        if (!cachedUser) {
+          void loadFallbackUser();
+          return;
+        }
+        if (!snapshotApplied) setLoadingInsights(false);
       });
 
     return () => {
@@ -539,14 +590,13 @@ function PlayerPage() {
   }, [username]);
 
   useEffect(() => {
-    if (!user || bestWindowLoaded) return;
+    if (!user || bestWindowLoaded || waitingForSnapshotBest) return;
 
     let cancelled = false;
-    const timeout = tab === "recent"
-      ? window.setTimeout(loadBestWindow, RECENT_PRIORITY_DEFER_MS)
-      : null;
-
-    if (timeout == null) loadBestWindow();
+    const timeout = window.setTimeout(
+      loadBestWindow,
+      tab === "recent" ? RECENT_PRIORITY_DEFER_MS : PROFILE_SNAPSHOT_BEST_GRACE_MS,
+    );
 
     function loadBestWindow() {
       setLoadingInsights(true);
@@ -576,7 +626,7 @@ function PlayerPage() {
       cancelled = true;
       if (timeout != null) window.clearTimeout(timeout);
     };
-  }, [bestWindowLoaded, tab, user]);
+  }, [bestWindowLoaded, tab, user, waitingForSnapshotBest]);
 
   useEffect(() => {
     if (!user || tab !== "recent" || recent.length > 0) return;
