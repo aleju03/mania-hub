@@ -1064,6 +1064,32 @@ describe("live backend", () => {
     expect(osu.getBeatmapUserScoresAll).toHaveBeenCalledWith(501, 101, "job:refresh_user_top_scores:pp_gain");
   });
 
+  it("uses the displaced 101st best score for top-play pp gain", async () => {
+    const { db, events } = await setup();
+    const baseBest = (await fixture<OscScore[]>("top-best.json"))[0];
+    const higherScores = Array.from({ length: 99 }, (_, index) => ({
+      ...baseBest,
+      id: 8000 + index,
+      beatmap_id: 6000 + index,
+      pp: 700 - index,
+    }));
+    const current = { ...baseBest, id: 9001, beatmap_id: 501, pp: 600, ended_at: "2026-05-12T07:06:51.000Z", created_at: "2026-05-12T07:06:51.000Z" };
+    const displaced = { ...baseBest, id: 7901, beatmap_id: 7901, pp: 300 };
+    const best = [...higherScores, current, displaced];
+    const osu = {
+      getBeatmapUserScoresAll: vi.fn(async (_beatmapId: number, _userId: number, _caller?: string) => [current]),
+      getUserBestScores: vi.fn(async (_userId: number, _caller?: string) => best.slice(0, 100)),
+      getUserBestScoresWindow: vi.fn(async (_userId: number, _limit: number, _caller?: string) => best),
+    };
+
+    expect(await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" })).toBe(true);
+
+    const row = (await exec(db, "select pp_gain from top_play_events where score_id = ?", [9001])).rows[0];
+    expect(Number(row.pp_gain)).toBeCloseTo((600 - 300) * 0.95 ** 99, 6);
+    expect(osu.getUserBestScoresWindow).toHaveBeenCalledWith(101, 200, "job:refresh_user_top_scores");
+    expect(osu.getUserBestScores).not.toHaveBeenCalled();
+  });
+
   it("stores one snipe event from a durable country board", async () => {
     const { db, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");

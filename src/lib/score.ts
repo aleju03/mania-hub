@@ -1,6 +1,7 @@
 import type { LeanTrackerScore, OsuMod, OsuScore, OsuScoreStatistics } from "./types";
 
 const PP_WEIGHT_DECAY = 0.95;
+const MAX_WEIGHTED_PP_SCORES = 100;
 export type ScoreLike = OsuScore | LeanTrackerScore;
 
 export interface ScoreDisplayValues {
@@ -363,7 +364,7 @@ function sortWeightedPpScores(scores: WeightedPpScore[]): WeightedPpScore[] {
 }
 
 export function calculateWeightedPpTotal(scores: Array<Pick<OsuScore, "pp">>): number {
-  return sortWeightedPpScores(scores as WeightedPpScore[]).reduce((total, score, index) => {
+  return sortWeightedPpScores(scores as WeightedPpScore[]).slice(0, MAX_WEIGHTED_PP_SCORES).reduce((total, score, index) => {
     const pp = score.pp ?? 0;
     return total + pp * PP_WEIGHT_DECAY ** index;
   }, 0);

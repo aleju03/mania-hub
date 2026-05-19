@@ -297,4 +297,17 @@ describe("calculateReplacementPpGain", () => {
 
     expect(gain).toBeCloseTo(589, 6);
   });
+
+  it("uses the displaced 101st play when a new score enters the weighted top 100", () => {
+    const higherScores = Array.from({ length: 99 }, (_, index) => createScore({ id: index + 1, pp: 700 - index }));
+    const bestScores = [
+      ...higherScores,
+      createScore({ id: 100, pp: 600 }),
+      createScore({ id: 101, pp: 300 }),
+    ];
+
+    const gain = calculateReplacementPpGain(bestScores, 100, null);
+
+    expect(gain).toBeCloseTo((600 - 300) * 0.95 ** 99, 6);
+  });
 });

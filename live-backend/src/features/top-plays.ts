@@ -36,10 +36,10 @@ export async function maybeEnqueueTopPlayRefresh(
 export async function confirmTopPlay(
   db: Db,
   events: LiveEventLog,
-  osu: Pick<OsuApiClient, "getBeatmapUserScoresAll" | "getUserBestScores">,
+  osu: Pick<OsuApiClient, "getBeatmapUserScoresAll" | "getUserBestScores"> & Partial<Pick<OsuApiClient, "getUserBestScoresWindow">>,
   payload: { userId: number; scoreId: number; country: string },
 ): Promise<boolean> {
-  const bestScores = dedupeScoresById(await osu.getUserBestScores(payload.userId, "job:refresh_user_top_scores"));
+  const bestScores = dedupeScoresById(await getUserBestScoresForPpGain(osu, payload.userId));
   const refreshedAt = nowIso();
   await updateUserTopPlayThreshold(db, payload.userId, bestScores, refreshedAt);
   const confirmation = await getTopPlayConfirmationScoreIdCandidates(db, payload);
@@ -81,6 +81,16 @@ export async function confirmTopPlay(
     );
   }
   return true;
+}
+
+async function getUserBestScoresForPpGain(
+  osu: Pick<OsuApiClient, "getUserBestScores"> & Partial<Pick<OsuApiClient, "getUserBestScoresWindow">>,
+  userId: number,
+): Promise<OscScore[]> {
+  if (osu.getUserBestScoresWindow) {
+    return osu.getUserBestScoresWindow(userId, 200, "job:refresh_user_top_scores");
+  }
+  return osu.getUserBestScores(userId, "job:refresh_user_top_scores");
 }
 
 async function upsertTopPlayUser(db: Db, user: ScoreUser, updatedAt: string): Promise<void> {

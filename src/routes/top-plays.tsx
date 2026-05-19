@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { getCountryPopoffs, getPartialTopPlays, getRankings, getTopPlaysRefreshStatus } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
-import { formatNumber, formatAccuracy, formatTimeAgo } from "../lib/format";
+import { formatNumber, formatAccuracy, formatTimeAgo, formatPpGain } from "../lib/format";
 import { getBeatmapUrl, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModDisplayList, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
@@ -495,7 +495,7 @@ function PopOffsPage() {
       }
     }
     return [...byUser.entries()]
-      .filter(([, info]) => Math.round(info.totalGain) > 0)
+      .filter(([, info]) => info.totalGain > 0)
       .sort((a, b) => b[1].totalGain - a[1].totalGain)
       .map(([id, info]) => ({ id, ...info }));
   }, [rangedPopoffs]);
@@ -625,7 +625,7 @@ function PopOffsPage() {
                       }}
                       aria-pressed={selectedPlayerIdSet.has(player.id)}
                       className="cursor-pointer group relative flex-shrink-0 flex flex-col items-center gap-0.5"
-                      title={`${player.username}: +${formatNumber(Math.round(player.totalGain))}pp - click to filter`}
+                      title={`${player.username}: +${formatPpGain(player.totalGain)}pp - click to filter`}
                     >
                       <div className={`ring-2 ring-inset rounded-full transition-all ${
                         selectedPlayerIdSet.has(player.id)
@@ -635,7 +635,7 @@ function PopOffsPage() {
                         <Avatar url={player.avatar_url} size={32} />
                       </div>
                       <span className="text-[9px] font-semibold text-osu-green">
-                        +{formatNumber(Math.round(player.totalGain))}
+                        +{formatPpGain(player.totalGain)}
                       </span>
                     </button>
                   ))
@@ -674,7 +674,7 @@ function PopOffsPage() {
                             }}
                             aria-pressed={selectedPlayerIdSet.has(player.id)}
                             className="cursor-pointer group relative flex flex-col items-center gap-0.5"
-                            title={`${player.username}: +${formatNumber(Math.round(player.totalGain))}pp - click to filter`}
+                            title={`${player.username}: +${formatPpGain(player.totalGain)}pp - click to filter`}
                           >
                             <div className={`ring-2 rounded-full transition-all ${
                               selectedPlayerIdSet.has(player.id)
@@ -684,7 +684,7 @@ function PopOffsPage() {
                               <Avatar url={player.avatar_url} size={32} />
                             </div>
                             <span className="text-[9px] font-semibold text-osu-green">
-                              +{formatNumber(Math.round(player.totalGain))}
+                              +{formatPpGain(player.totalGain)}
                             </span>
                           </button>
                         ))}
@@ -797,7 +797,7 @@ function PopOffsPage() {
                             className="text-[10px] font-semibold text-osu-green"
                             title="Estimated pp gain from replacing your previous best score on this map"
                           >
-                            +{formatNumber(Math.round(p.ppGain))}
+                            +{formatPpGain(p.ppGain)}
                           </div>
                         )}
                       </div>

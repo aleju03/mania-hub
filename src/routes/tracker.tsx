@@ -4,7 +4,7 @@ import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { getRankings, getCountryRecentScores, getTrackerLiveSnapshot, getTrackerSnapshot } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
-import { formatAccuracy, formatTimeAgo, formatPP, formatNumber } from "../lib/format";
+import { formatAccuracy, formatTimeAgo, formatPP, formatNumber, formatPpGain } from "../lib/format";
 import {
   getBeatmapUrl,
   getDisplayedAccuracy,
@@ -1044,7 +1044,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               <span className={`text-xs ${accColorClass}`}>{formatAccuracy(getDisplayedAccuracy(score))}</span>
               <span className="text-sm font-bold">{formatPP(score.pp)}</span>
               {approxPpGain != null && (
-                <span className="text-[10px] font-semibold text-osu-green">+{formatNumber(Math.round(approxPpGain))}</span>
+                <span className="text-[10px] font-semibold text-osu-green">+{formatPpGain(approxPpGain)}</span>
               )}
               {canReplay && (
                 <button
@@ -1077,7 +1077,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                 className="ml-1 text-[11px] font-semibold text-osu-green"
                 title="Estimated pp gain from replacing your previous best score on this map"
               >
-                (+{formatNumber(Math.round(approxPpGain))})
+                (+{formatPpGain(approxPpGain)})
               </span>
             )}
           </span>

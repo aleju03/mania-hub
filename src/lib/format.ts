@@ -7,6 +7,13 @@ export function formatPP(pp: number | null): string {
   return `${Math.round(pp).toLocaleString("en-US")}pp`;
 }
 
+export function formatPpGain(pp: number): string {
+  return pp.toLocaleString("en-US", {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 1,
+  });
+}
+
 export function formatAccuracy(acc: number): string {
   return `${(acc * 100).toFixed(2)}%`;
 }
