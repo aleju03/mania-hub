@@ -1494,6 +1494,69 @@ describe("live backend", () => {
     expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_country_maps'")).rows[0].count)).toBe(1);
   });
 
+  it("caches the maps snapshot HTTP response until the row's refreshed_at changes", async () => {
+    const { db, queue, events } = await setup();
+    const refreshedAt = new Date().toISOString();
+    const writePayload = () =>
+      JSON.stringify({
+        farmed: [],
+        mostPlayed: [],
+        favourites: [],
+        favouritesByPlayer: [{
+          id: 101,
+          username: "Player",
+          avatarUrl: "https://assets.example/player.png",
+          beatmapsetIds: [1],
+        }],
+        beatmapsetsPool: {},
+        generatedAt: refreshedAt,
+        farmedGeneratedAt: refreshedAt,
+        favouritesGeneratedAt: refreshedAt,
+      });
+    await exec(
+      db,
+      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
+       values ('CR', ?, ?, ?)`,
+      [writePayload(), refreshedAt, refreshedAt],
+    );
+
+    const ctx = {
+      db,
+      queue,
+      events,
+      config: baseConfig(),
+      osu: {},
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never;
+    const request = async () => {
+      const { res, writes } = mockRes();
+      await routeHttp(mockReq("GET", "/api/snapshots/maps?country=CR"), res, ctx);
+      return { status: res.statusCode, body: JSON.parse(writes.join("")) as { value: unknown } };
+    };
+
+    const first = await request();
+    expect(first.status).toBe(200);
+    expect(first.body.value).toBeTruthy();
+
+    // Corrupt the stored payload but keep refreshed_at: a fresh build would now
+    // fail to parse, so a still-good response proves it came from the cache.
+    await exec(db, "update country_maps_snapshots set payload_json = ? where country = 'CR'", ["{not json"]);
+    const cached = await request();
+    expect(cached.status).toBe(200);
+    expect(cached.body.value).toBeTruthy();
+
+    // Bumping refreshed_at changes the cache key, so the next request misses
+    // and sees the corrupt payload.
+    await exec(
+      db,
+      "update country_maps_snapshots set refreshed_at = ? where country = 'CR'",
+      [new Date(Date.now() + 1000).toISOString()],
+    );
+    const afterRefresh = await request();
+    expect(afterRefresh.status).toBe(202);
+    expect(afterRefresh.body.value).toBeNull();
+  });
+
   it("marks large JSON responses as varying by accept-encoding", () => {
     const { res, writes, headers } = mockRes();
 

@@ -239,6 +239,27 @@ export async function getMapsSnapshot(
   return { ...snapshot, value: sliceMapsSnapshotSection(snapshot.value, section), refreshQueued };
 }
 
+/**
+ * Timestamp-only read of a country's maps snapshot row — no payload_json parse
+ * or user hydration. The HTTP layer uses refreshedAt to key its response cache
+ * so a cache hit can skip the (expensive) getMapsSnapshot() path entirely.
+ */
+export async function getMapsSnapshotMeta(
+  db: Db,
+  country: string,
+): Promise<{ generatedAt: string | null; refreshedAt: string | null }> {
+  const normalized = country.toUpperCase();
+  const row = (await exec(
+    db,
+    "select generated_at, refreshed_at from country_maps_snapshots where country = ?",
+    [normalized],
+  )).rows[0];
+  return {
+    generatedAt: row?.generated_at == null ? null : String(row.generated_at),
+    refreshedAt: row?.refreshed_at == null ? null : String(row.refreshed_at),
+  };
+}
+
 // The maps snapshot is served in two parts so /maps first paint stays small.
 // "core" carries the three browsable tabs; "random" carries only the heavy
 // beatmapsetsPool the Random tab needs. favouritesByPlayer is tiny, so it

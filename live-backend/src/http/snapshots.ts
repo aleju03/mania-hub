@@ -6,7 +6,7 @@ import { activateCountry, deleteCountryData, getCountryRegistry, isCountryFeatur
 import type { Db } from "../db.js";
 import { dbHealth, exec, parseJson } from "../db.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
-import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsSnapshot } from "../features/maps.js";
+import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsSnapshot, getMapsSnapshotMeta } from "../features/maps.js";
 import { getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
@@ -188,8 +188,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/snapshots/maps") {
     if (!await activatePublicCountry(req, res, ctx, country)) return true;
     const section = url.searchParams.get("section") === "random" ? "random" : "core";
-    const snapshot = await getMapsSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs, section);
-    sendJson(req, res, ctx, snapshot.value ? 200 : 202, snapshot);
+    await handleMapsSnapshot(req, res, ctx, country, section);
     return true;
   }
   if (url.pathname === "/api/snapshots/rank-deltas") {
@@ -727,6 +726,130 @@ export function sendJson(req: IncomingMessage, res: ServerResponse, ctx: Pick<Ht
     brotliCompress(json, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 5 } }, finish);
   } else {
     gzip(json, { level: 6 }, finish);
+  }
+}
+
+// A JSON response that has already been serialized (and possibly compressed),
+// so it can be stored and replayed without redoing that work.
+interface PreparedJsonResponse {
+  status: number;
+  encoding: "br" | "gzip" | null;
+  vary: boolean;
+  body: Buffer;
+}
+
+function compressJsonBuffer(encoding: "br" | "gzip", json: Buffer): Promise<Buffer | null> {
+  return new Promise((resolve) => {
+    const finish = (error: Error | null, compressed: Buffer): void => {
+      resolve(error ? null : compressed);
+    };
+    if (encoding === "br") {
+      brotliCompress(json, { params: { [zlibConstants.BROTLI_PARAM_QUALITY]: 5 } }, finish);
+    } else {
+      gzip(json, { level: 6 }, finish);
+    }
+  });
+}
+
+async function prepareJsonResponse(
+  status: number,
+  body: unknown,
+  encoding: "br" | "gzip" | null,
+): Promise<PreparedJsonResponse> {
+  const json = Buffer.from(JSON.stringify(body), "utf8");
+  if (json.length < COMPRESSIBLE_MIN_BYTES) {
+    return { status, encoding: null, vary: false, body: json };
+  }
+  if (!encoding) {
+    return { status, encoding: null, vary: true, body: json };
+  }
+  const compressed = await compressJsonBuffer(encoding, json);
+  return compressed
+    ? { status, encoding, vary: true, body: compressed }
+    : { status, encoding: null, vary: true, body: json };
+}
+
+function writePreparedJson(
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: Pick<HttpContext, "config">,
+  prepared: PreparedJsonResponse,
+): void {
+  sendCors(req, res, ctx);
+  res.statusCode = prepared.status;
+  res.setHeader("content-type", "application/json; charset=utf-8");
+  if (prepared.vary) appendVary(res, "accept-encoding");
+  if (prepared.encoding) res.setHeader("content-encoding", prepared.encoding);
+  res.end(prepared.body);
+}
+
+// /api/snapshots/maps serves a multi-MB payload (a whole country roster's
+// farmed + favourite maps). The stored snapshot only changes when the weekly
+// maps refresh job rewrites the row, yet every visit otherwise re-parses,
+// re-slices and re-compresses it from scratch. We cache the finished
+// (already-compressed) response body keyed on the row's refreshed_at: that key
+// IS the real cache lifetime — it stays valid until the next rebuild, then
+// changes on its own, so a populated snapshot is effectively cached for the
+// whole week between refreshes regardless of traffic. The TTL is just a
+// periodic re-check so the volatile isStale / refreshQueued flags in the body
+// can't stay wrong indefinitely if a rebuild stalls; the weekly refresh is
+// enqueued on the activatePublicCountry path, independent of this cache.
+const MAPS_RESPONSE_CACHE_TTL_MS = 60 * 60_000;
+const MAPS_RESPONSE_CACHE_MAX_ENTRIES = 32;
+
+interface MapsResponseCacheEntry extends PreparedJsonResponse {
+  storedAt: number;
+}
+
+const mapsResponseCache = new Map<string, MapsResponseCacheEntry>();
+
+function pruneMapsResponseCache(now: number): void {
+  for (const [key, entry] of mapsResponseCache) {
+    if (now - entry.storedAt > MAPS_RESPONSE_CACHE_TTL_MS) mapsResponseCache.delete(key);
+  }
+  // Map iterates in insertion order, so the first key is the oldest entry.
+  while (mapsResponseCache.size > MAPS_RESPONSE_CACHE_MAX_ENTRIES) {
+    const oldest = mapsResponseCache.keys().next().value;
+    if (oldest === undefined) break;
+    mapsResponseCache.delete(oldest);
+  }
+}
+
+async function handleMapsSnapshot(
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: HttpContext,
+  country: string,
+  section: "core" | "random",
+): Promise<void> {
+  const now = Date.now();
+  pruneMapsResponseCache(now);
+
+  const encoding = negotiateEncoding(req);
+  // Cheap timestamp-only read first: a cache hit must avoid getMapsSnapshot(),
+  // which is itself the expensive payload_json parse/hydrate/slice path.
+  const meta = await getMapsSnapshotMeta(ctx.db, country);
+  const cacheKey = meta.refreshedAt
+    ? `${country.toUpperCase()}|${section}|${encoding ?? "identity"}|${meta.refreshedAt}`
+    : null;
+
+  if (cacheKey) {
+    const cached = mapsResponseCache.get(cacheKey);
+    if (cached && now - cached.storedAt <= MAPS_RESPONSE_CACHE_TTL_MS) {
+      writePreparedJson(req, res, ctx, cached);
+      return;
+    }
+  }
+
+  const snapshot = await getMapsSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs, section);
+  const status = snapshot.value ? 200 : 202;
+  const prepared = await prepareJsonResponse(status, snapshot, encoding);
+  writePreparedJson(req, res, ctx, prepared);
+
+  // Only cache populated 200s — never the cold "still building" 202/null state,
+  // whose body changes the moment the first real snapshot lands.
+  if (cacheKey && status === 200 && snapshot.value) {
+    mapsResponseCache.set(cacheKey, { ...prepared, storedAt: now });
   }
 }
 
