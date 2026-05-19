@@ -959,6 +959,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   const lazer = isLazerScore(score);
   const accColorClass = lazer ? "text-osu-pink-light" : "text-osu-l2";
   const canReplay = scoreHasReplay(score);
+  const showPpGain = approxPpGain != null && approxPpGain >= 0.05;
 
   return (
     <div className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
@@ -1043,7 +1044,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className={`text-xs ${accColorClass}`}>{formatAccuracy(getDisplayedAccuracy(score))}</span>
               <span className="text-sm font-bold">{formatPP(score.pp)}</span>
-              {approxPpGain != null && (
+              {showPpGain && (
                 <span className="text-[10px] font-semibold text-osu-green">+{formatPpGain(approxPpGain)}</span>
               )}
               {canReplay && (
@@ -1072,7 +1073,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
           <span className={`text-xs ${accColorClass}`}>{formatAccuracy(getDisplayedAccuracy(score))}</span>
           <span className="text-sm font-bold">
             {formatPP(score.pp)}
-            {approxPpGain != null && (
+            {showPpGain && (
               <span
                 className="ml-1 text-[11px] font-semibold text-osu-green"
                 title="Estimated pp gain from replacing your previous best score on this map"

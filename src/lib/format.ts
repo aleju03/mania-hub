@@ -8,6 +8,7 @@ export function formatPP(pp: number | null): string {
 }
 
 export function formatPpGain(pp: number): string {
+  if (Math.abs(pp) < 0.05) return "0";
   return pp.toLocaleString("en-US", {
     maximumFractionDigits: 1,
     minimumFractionDigits: 1,

@@ -495,7 +495,7 @@ function PopOffsPage() {
       }
     }
     return [...byUser.entries()]
-      .filter(([, info]) => info.totalGain > 0)
+      .filter(([, info]) => info.totalGain >= 0.05)
       .sort((a, b) => b[1].totalGain - a[1].totalGain)
       .map(([id, info]) => ({ id, ...info }));
   }, [rangedPopoffs]);
@@ -792,7 +792,7 @@ function PopOffsPage() {
                           {Math.round(p.pp)}
                         </div>
                         <div className="text-[8px] uppercase tracking-wider text-osu-f1 font-semibold">pp</div>
-                        {p.ppGain > 0 && (
+                        {p.ppGain >= 0.05 && (
                           <div
                             className="text-[10px] font-semibold text-osu-green"
                             title="Estimated pp gain from replacing your previous best score on this map"
