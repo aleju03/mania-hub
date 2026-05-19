@@ -20,6 +20,7 @@ import {
   scoreHasReplay,
 } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
+import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
@@ -102,6 +103,7 @@ function scoreMatchesKeyFilter(score: LeanTrackerScore, keyFilter: KeyFilter): b
   if (keys == null) return false;
   return keyFilter === "4k" ? keys === 4 : keys !== 4;
 }
+
 const EMPTY_IDS: number[] = [];
 const EMPTY_SCORES: LeanTrackerScore[] = [];
 const EMPTY_SCORE_GAINS: Record<number, { fetchedAt: number; value: number }> = {};
@@ -617,8 +619,9 @@ function ScoresPage() {
       {warming && <CountryWarming country={selectedCountry} />}
 
       {!warming && (
-      <>
-      <div className="bg-osu-d5 border-b border-osu-b3/30">
+      <div className="relative overflow-hidden bg-osu-b5">
+      <OsuTriangleBackdrop />
+      <div className="relative z-10 bg-osu-d5/90 border-b border-osu-b3/30 backdrop-blur-[1px]">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-0">
           {/* Desktop: single row with all filters */}
           <div className="hidden sm:flex items-center gap-0 w-auto">
@@ -747,7 +750,7 @@ function ScoresPage() {
         </div>
       </div>
 
-      <div className="bg-osu-b5">
+      <div className="relative z-10">
         <div className="max-w-[1200px] mx-auto px-5 py-5 flex flex-col lg:flex-row gap-4 lg:gap-5">
           {activePlayers.length > 0 && (
             <>
@@ -843,7 +846,7 @@ function ScoresPage() {
           </div>
         </div>
       </div>
-      </>
+      </div>
       )}
     </div>
   );

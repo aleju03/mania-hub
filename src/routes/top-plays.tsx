@@ -7,6 +7,7 @@ import { getCountryName } from "../lib/country";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPpGain } from "../lib/format";
 import { getBeatmapUrl, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModDisplayList, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
+import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
@@ -549,23 +550,26 @@ function PopOffsPage() {
       {warming && <CountryWarming country={selectedCountry} />}
 
       {!warming && (
-      <>
-      <PageTabs
-        items={ranges}
-        value={range}
-        onChange={(nextRange) => {
-          setTopPlaysRange(selectedCountry, nextRange);
-          navigate({
-            to: "/top-plays",
-            search: { range: nextRange, country },
-            replace: true,
-            resetScroll: false,
-          });
-          setPage(0);
-        }}
-      />
+      <div className="relative overflow-hidden bg-osu-b5">
+      <OsuTriangleBackdrop />
+      <div className="relative z-10">
+        <PageTabs
+          items={ranges}
+          value={range}
+          onChange={(nextRange) => {
+            setTopPlaysRange(selectedCountry, nextRange);
+            navigate({
+              to: "/top-plays",
+              search: { range: nextRange, country },
+              replace: true,
+              resetScroll: false,
+            });
+            setPage(0);
+          }}
+        />
+      </div>
 
-      <div className="bg-osu-d5 border-b border-osu-b3/20">
+      <div className="relative z-10 bg-osu-d5/90 border-b border-osu-b3/20 backdrop-blur-[1px]">
         <div className="max-w-[1200px] mx-auto px-5 py-2 flex items-center justify-between gap-2">
           <div className="min-h-7 flex items-center">
             {selectedPlayerIds.length > 0 && (
@@ -608,7 +612,7 @@ function PopOffsPage() {
         </div>
       </div>
 
-      <div className="bg-osu-b5">
+      <div className="relative z-10">
         <div className="max-w-[1200px] mx-auto px-5 py-6 flex flex-col lg:flex-row gap-4 lg:gap-5">
           {showPpGainsRail && (
             <>
@@ -977,7 +981,7 @@ function PopOffsPage() {
           </div>
         </div>
       </div>
-      </>
+      </div>
       )}
     </div>
   );

@@ -5,6 +5,7 @@ import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName } from "../lib/country";
 import { formatAccuracy, formatNumber, formatPP, formatTimeAgo } from "../lib/format";
 import { PageHeader } from "../components/layout/PageHeader";
+import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
 import { LazerBadge } from "../components/ui/LazerBadge";
@@ -527,9 +528,10 @@ function SnipesPage() {
       )}
 
       {!warming && !(snipesTierDisabled && snipes.length === 0) && (
-      <>
+      <div className="relative overflow-hidden bg-osu-b5">
+      <OsuTriangleBackdrop />
       {/* ── Filter bar ─────────────────────────────────────────────────── */}
-      <div className="bg-osu-d5 border-b border-osu-b3/20">
+      <div className="relative z-10 bg-osu-d5/90 border-b border-osu-b3/20 backdrop-blur-[1px]">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-2.5 flex flex-wrap items-start sm:items-center gap-x-4 gap-y-2">
           {/* Mobile filter toggle */}
           <div className="flex w-full items-center justify-between gap-2 sm:hidden">
@@ -636,7 +638,7 @@ function SnipesPage() {
       </div>
 
       {/* ── Content ────────────────────────────────────────────────────── */}
-      <div className="bg-osu-b5">
+      <div className="relative z-10">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-6">
           {error && (
             <div className="text-center py-16 text-osu-f1 text-sm">{error}</div>
@@ -746,7 +748,7 @@ function SnipesPage() {
           )}
         </div>
       </div>
-      </>
+      </div>
       )}
     </div>
   );
