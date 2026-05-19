@@ -54,7 +54,7 @@ import { REPLAY_SCROLL_SPEED_CHANGE_EVENT, readReplayScrollSpeed } from "../lib/
 import { REPLAY_SKIN_SETTINGS_CHANGE_EVENT, readReplaySkinSettings } from "../lib/replay-skin";
 import type { ReplaySkinSettings } from "../lib/replay-skin";
 import { useAuth } from "../lib/auth-context";
-import { fetchLiveMapsSnapshot, isLiveBackendConfigured, runLiveBackendAdminAction } from "../lib/live-backend";
+import { fetchLiveMapsSnapshot, isLiveBackendConfigured, openLiveEventSource, runLiveBackendAdminAction } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
@@ -1112,6 +1112,42 @@ function MapsPage() {
     return () => {
       cancelled = true;
       if (pollTimer) clearTimeout(pollTimer);
+    };
+  }, [liveBackendEnabled, selectedCountry, setMapsData]);
+
+  useEffect(() => {
+    if (!liveBackendEnabled) return;
+    const source = openLiveEventSource(selectedCountry);
+    if (!source) return;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let closed = false;
+
+    const refreshCoreSnapshot = () => {
+      if (refreshTimer) return;
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        fetchLiveMapsSnapshot(selectedCountry)
+          .then((snapshot) => {
+            if (closed || !snapshot.value || !hasValidMapsDataShape(snapshot.value)) return;
+            const cached = useAppStore.getState().mapsDataByCountry[selectedCountry] ?? null;
+            const merged =
+              cached
+              && cached.favouritesGeneratedAt === snapshot.value.favouritesGeneratedAt
+              && Object.keys(cached.beatmapsetsPool).length > 0
+                ? { ...snapshot.value, beatmapsetsPool: cached.beatmapsetsPool }
+                : snapshot.value;
+            setMapsData(selectedCountry, merged);
+            setLiveMapsRefreshing(snapshot.isStale || snapshot.refreshQueued);
+          })
+          .catch(() => {});
+      }, 750);
+    };
+
+    source.addEventListener("maps_farmed_update", refreshCoreSnapshot);
+    return () => {
+      closed = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
+      source.close();
     };
   }, [liveBackendEnabled, selectedCountry, setMapsData]);
 

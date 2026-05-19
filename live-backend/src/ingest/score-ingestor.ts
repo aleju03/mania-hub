@@ -2,6 +2,7 @@ import type { Config } from "../config.js";
 import type { Db } from "../db.js";
 import { exec, json } from "../db.js";
 import { canSeedSnipesForCountry, getActiveCountryCodes, markCountryScoreSeen } from "../countries.js";
+import { maybeEnqueueMapsFarmedRefresh } from "../features/maps.js";
 import { updateSnipeProjection } from "../features/snipes.js";
 import { maybeEnqueueTopPlayRefresh } from "../features/top-plays.js";
 import { getTrackerScoreByIdentity } from "../features/tracker.js";
@@ -139,6 +140,7 @@ export class ScoreIngestor {
     if (canUseOsuApi && processLeaderboardFeatures) {
       for (const country of countries) {
         await maybeEnqueueTopPlayRefresh(this.db, this.queue, country, score, this.config.topPlayMarginPp);
+        await maybeEnqueueMapsFarmedRefresh(this.db, this.queue, country, score, this.config.topPlayMarginPp);
       }
     }
     if (!score.beatmap || !score.beatmapset || !score.user) return true;

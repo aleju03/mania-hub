@@ -5,6 +5,7 @@ import { calculateApproxPpGainMap, calculateReplacementPpGain, calculateWeighted
 import type { CountryTopPlay, OscScore, ScoreUser } from "../shared/types.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import type { OsuApiClient } from "../osu/client.js";
+import { recordMapsFarmedScore } from "./maps.js";
 
 const TOP_PLAY_CONFIRMATION_PENDING_MS = 30 * 60_000;
 
@@ -69,7 +70,16 @@ export async function confirmTopPlay(
     [payload.country, confirmedScoreId, payload.userId, event.pp, event.weightedPP, event.ppGain, json(event), refreshedAt],
   );
   if (inserted.rowsAffected === 0) return false;
+  const farmedUpdate = await recordMapsFarmedScore(db, payload.country, score, refreshedAt);
   await events.append("top_play", payload.country, event, `top_play:${payload.country}:${confirmedScoreId}`);
+  if (farmedUpdate) {
+    await events.append(
+      "maps_farmed_update",
+      payload.country,
+      farmedUpdate,
+      `maps_farmed_update:${payload.country}:${confirmedScoreId}`,
+    );
+  }
   return true;
 }
 

@@ -18,6 +18,8 @@ create table if not exists users (
   profile_json text,
   top_play_min_pp real,
   top_scores_refreshed_at text,
+  maps_farmed_min_pp real,
+  maps_farmed_scores_refreshed_at text,
   updated_at text not null
 );
 
@@ -198,6 +200,18 @@ create table if not exists country_maps_snapshots (
   refreshed_at text not null
 );
 
+create table if not exists country_maps_farmed_scores (
+  country text not null,
+  user_id integer not null,
+  beatmap_id integer not null,
+  score_id integer not null,
+  pp real not null,
+  score_json text not null,
+  detected_at text not null,
+  updated_at text not null,
+  primary key (country, user_id, beatmap_id)
+);
+
 create table if not exists replay_video_exports (
   id text primary key,
   score_id integer,
@@ -283,6 +297,8 @@ create index if not exists idx_top_play_events_country_time on top_play_events(c
 create index if not exists idx_top_play_events_country_pp on top_play_events(country, pp desc, detected_at desc);
 create index if not exists idx_snipe_events_country_time on snipe_events(country, detected_at desc);
 create index if not exists idx_country_maps_snapshots_refreshed on country_maps_snapshots(refreshed_at desc);
+create index if not exists idx_country_maps_farmed_scores_country_updated on country_maps_farmed_scores(country, updated_at desc);
+create index if not exists idx_country_maps_farmed_scores_country_beatmap on country_maps_farmed_scores(country, beatmap_id);
 create index if not exists idx_replay_video_exports_status_time on replay_video_exports(status, updated_at desc);
 create index if not exists idx_dan_estimates_updated on dan_estimates(updated_at desc);
 create index if not exists idx_jobs_ready on jobs(status, run_after, priority desc);

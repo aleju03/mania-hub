@@ -24,6 +24,7 @@ export async function migrate(db: Db): Promise<void> {
   await migrateCountryRegistryFeatureTier(db);
   await migrateScoreEventsIdentity(db);
   await migrateProfileSnapshots(db);
+  await migrateMapsFarmedOverlay(db);
 }
 
 export async function dbHealth(db: Db): Promise<boolean> {
@@ -162,5 +163,37 @@ async function migrateProfileSnapshots(db: Db): Promise<void> {
   await db.execute(`
     create index if not exists idx_profile_section_cache_user_section
       on profile_section_cache(user_id, section)
+  `);
+}
+
+async function migrateMapsFarmedOverlay(db: Db): Promise<void> {
+  const userColumns = (await db.execute("pragma table_info(users)")).rows.map((row) => String(row.name));
+  if (!userColumns.includes("maps_farmed_min_pp")) {
+    await db.execute("alter table users add column maps_farmed_min_pp real");
+  }
+  if (!userColumns.includes("maps_farmed_scores_refreshed_at")) {
+    await db.execute("alter table users add column maps_farmed_scores_refreshed_at text");
+  }
+
+  await db.execute(`
+    create table if not exists country_maps_farmed_scores (
+      country text not null,
+      user_id integer not null,
+      beatmap_id integer not null,
+      score_id integer not null,
+      pp real not null,
+      score_json text not null,
+      detected_at text not null,
+      updated_at text not null,
+      primary key (country, user_id, beatmap_id)
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_country_maps_farmed_scores_country_updated
+      on country_maps_farmed_scores(country, updated_at desc)
+  `);
+  await db.execute(`
+    create index if not exists idx_country_maps_farmed_scores_country_beatmap
+      on country_maps_farmed_scores(country, beatmap_id)
   `);
 }

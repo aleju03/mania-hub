@@ -3,7 +3,7 @@ import { readConfig } from "./config.js";
 import { canSeedSnipesForCountry } from "./countries.js";
 import { exec, json, parseJson } from "./db.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
-import { MapsRosterNotReadyError, refreshCountryMaps } from "./features/maps.js";
+import { MapsRosterNotReadyError, refreshCountryMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
 import { updateSnipeProjection } from "./features/snipes.js";
 import { confirmTopPlay } from "./features/top-plays.js";
 import { getHydratedScoresForMetadata } from "./features/tracker.js";
@@ -38,7 +38,7 @@ interface WorkerActiveJob {
 const DEFAULT_WORKER_LANES: WorkerLane[] = [
   {
     name: "fast",
-    jobTypes: ["refresh_user_top_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "osc_backfill", "reconcile_user_recent_scores"],
+    jobTypes: ["refresh_user_top_scores", "refresh_user_maps_farmed_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "osc_backfill", "reconcile_user_recent_scores"],
     claimLimit: 4,
     intervalMs: 750,
   },
@@ -194,6 +194,16 @@ export class WorkerRunner {
   private async handle(job: Job): Promise<void> {
     if (job.type === "refresh_user_top_scores") {
       await confirmTopPlay(this.db, this.events, this.osu, job.payload as { userId: number; scoreId: number; country: string });
+      return;
+    }
+    if (job.type === "refresh_user_maps_farmed_scores") {
+      const result = await refreshUserMapsFarmedScores(this.db, this.osu, job.payload as { userId: number; country: string });
+      await this.events.append(
+        "maps_farmed_update",
+        result.country,
+        result,
+        `maps_farmed_update:${result.country}:${result.userId}:${result.updatedAt}`,
+      );
       return;
     }
     if (job.type === "osc_backfill") {
@@ -480,6 +490,8 @@ function getRetryDelayMs(type: string, attempts: number, error: unknown): number
   const nextAttempt = Math.max(1, attempts + 1);
   const base = type === "refresh_user_top_scores"
     ? 15_000
+    : type === "refresh_user_maps_farmed_scores"
+      ? 60_000
     : type === "reconcile_user_recent_scores"
       ? 2 * 60_000
     : type === "osc_backfill"

@@ -9,6 +9,7 @@ export type LiveEventName =
   | "tracker_score"
   | "score_gain"
   | "top_play"
+  | "maps_farmed_update"
   | "snipe"
   | "job_status";
 

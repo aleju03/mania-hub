@@ -829,8 +829,9 @@ async function handleMapsSnapshot(
   // Cheap timestamp-only read first: a cache hit must avoid getMapsSnapshot(),
   // which is itself the expensive payload_json parse/hydrate/slice path.
   const meta = await getMapsSnapshotMeta(ctx.db, country);
+  const farmedOverlayKey = section === "core" ? meta.farmedOverlayUpdatedAt ?? "" : "";
   const cacheKey = meta.refreshedAt
-    ? `${country.toUpperCase()}|${section}|${encoding ?? "identity"}|${meta.refreshedAt}`
+    ? `${country.toUpperCase()}|${section}|${encoding ?? "identity"}|${meta.refreshedAt}|${farmedOverlayKey}`
     : null;
 
   if (cacheKey) {

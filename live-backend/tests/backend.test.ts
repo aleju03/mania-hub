@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot } from "../src/features/snipes.js";
-import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefreshIfDue, getMapsSnapshot } from "../src/features/maps.js";
+import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefreshIfDue, getMapsSnapshot, recordMapsFarmedScore, refreshUserMapsFarmedScores } from "../src/features/maps.js";
 import { getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../src/features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
 import { confirmTopPlay, getTopPlaysSnapshot, TopPlayConfirmationPendingError } from "../src/features/top-plays.js";
@@ -204,7 +204,7 @@ describe("live backend", () => {
     const deleted = await deleteCountryData(db, "CR");
 
     expect(deleted.country_registry).toBe(1);
-    for (const table of ["country_registry", "country_rosters", "country_rank_snapshots", "score_events", "country_beatmap_scores", "top_play_events", "snipe_events", "country_maps_snapshots", "live_event_log"]) {
+    for (const table of ["country_registry", "country_rosters", "country_rank_snapshots", "score_events", "country_beatmap_scores", "top_play_events", "snipe_events", "country_maps_snapshots", "country_maps_farmed_scores", "live_event_log"]) {
       expect(Number((await exec(db, `select count(*) as count from ${table} where country = 'CR'`)).rows[0].count)).toBe(0);
     }
     expect(Number((await exec(db, "select count(*) as count from country_rosters where country = 'US'")).rows[0].count)).toBe(1);
@@ -772,6 +772,7 @@ describe("live backend", () => {
     const emitted = await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" });
     expect(emitted).toBe(true);
     expect(Number((await exec(db, "select count(*) as count from top_play_events")).rows[0].count)).toBe(1);
+    expect(Number((await exec(db, "select count(*) as count from country_maps_farmed_scores where country = 'CR' and user_id = 101")).rows[0].count)).toBe(1);
     await exec(db, "update users set avatar_url = 'https://assets.example/fresh-top.png' where user_id = 101");
     const snapshot = await getTopPlaysSnapshot(db, "CR", "7d");
     expect(snapshot.popoffs[0].user.avatar_url).toBe("https://assets.example/fresh-top.png");
@@ -1363,6 +1364,164 @@ describe("live backend", () => {
       avatarUrl: "https://assets.example/fresh-maps.png",
     });
     expect(snapshot.refreshQueued).toBe(false);
+  });
+
+  it("merges live farmed overlay scores into maps snapshots", async () => {
+    const { db, queue } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    const refreshedAt = "2026-05-12T00:01:00.000Z";
+    await exec(
+      db,
+      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
+       values ('CR', ?, ?, ?)`,
+      [
+        JSON.stringify({
+          farmed: [{
+            beatmapId: 501,
+            version: "Another",
+            difficultyRating: 5.6,
+            totalLength: 0,
+            cs: 4,
+            bpm: 180,
+            beatmapsetId: 50,
+            title: "Fixture Song",
+            artist: "Fixture Artist",
+            creator: "mapper",
+            covers: { cover: "https://assets.example/cover.jpg", card: "https://assets.example/card.jpg" },
+            status: "ranked",
+            playerCount: 1,
+            players: [{
+              id: 101,
+              username: "Sniper",
+              avatarUrl: "https://assets.example/sniper.png",
+              mods: [],
+              pp: 252.4,
+              scoreUrl: "https://osu.ppy.sh/scores/9001",
+              playedAt: "2026-05-12T00:02:00.000Z",
+            }],
+            avgPp: 252.4,
+            maxPp: 252.4,
+          }],
+          mostPlayed: [],
+          favourites: [],
+          favouritesByPlayer: [],
+          beatmapsetsPool: {},
+          generatedAt: refreshedAt,
+          farmedGeneratedAt: refreshedAt,
+          favouritesGeneratedAt: refreshedAt,
+        }),
+        refreshedAt,
+        refreshedAt,
+      ],
+    );
+    const overlayScore: OscScore = {
+      ...scores[0],
+      id: 9002,
+      user_id: 202,
+      pp: 300,
+      user: { id: 202, username: "Farmer", avatar_url: "https://assets.example/farmer.png", country_code: "CR" },
+      ended_at: "2026-05-12T00:04:00.000Z",
+      created_at: "2026-05-12T00:04:00.000Z",
+    };
+    await recordMapsFarmedScore(db, "CR", overlayScore, "2026-05-12T00:05:00.000Z");
+
+    const snapshot = await getMapsSnapshot(db, queue, "CR", 7 * 24 * 60 * 60 * 1000);
+
+    expect(snapshot.value?.farmed[0]).toMatchObject({
+      beatmapId: 501,
+      playerCount: 2,
+      maxPp: 300,
+    });
+    expect(snapshot.value?.farmed[0].players.map((player) => player.id)).toEqual([202, 101]);
+    expect(snapshot.value?.farmedGeneratedAt).toBe("2026-05-12T00:05:00.000Z");
+  });
+
+  it("invalidates the maps HTTP response cache when farmed overlay updates", async () => {
+    const { db, queue, events } = await setup();
+    const refreshedAt = "2026-05-12T10:00:00.000Z";
+    await exec(
+      db,
+      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
+       values ('CR', ?, ?, ?)`,
+      [
+        JSON.stringify({
+          farmed: [],
+          mostPlayed: [],
+          favourites: [],
+          favouritesByPlayer: [{
+            id: 101,
+            username: "Player",
+            avatarUrl: "https://assets.example/player.png",
+            beatmapsetIds: [1],
+          }],
+          beatmapsetsPool: {},
+          generatedAt: refreshedAt,
+          farmedGeneratedAt: refreshedAt,
+          favouritesGeneratedAt: refreshedAt,
+        }),
+        refreshedAt,
+        refreshedAt,
+      ],
+    );
+    const ctx = {
+      db,
+      queue,
+      events,
+      config: baseConfig(),
+      osu: {},
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never;
+    const request = async () => {
+      const { res, writes } = mockRes();
+      await routeHttp(mockReq("GET", "/api/snapshots/maps?country=CR"), res, ctx);
+      return JSON.parse(writes.join("")) as { value: { farmed: unknown[] } | null };
+    };
+
+    expect((await request()).value?.farmed).toHaveLength(0);
+
+    const score = { ...(await fixture<OscScore[]>("scores.json"))[0], pp: 550 };
+    await recordMapsFarmedScore(db, "CR", score, "2026-05-12T10:05:00.000Z");
+
+    expect((await request()).value?.farmed).toHaveLength(1);
+  });
+
+  it("refreshes a player's farmed overlay from their top-200 best-score window", async () => {
+    const { db } = await setup();
+    const [baseScore] = await fixture<OscScore[]>("scores.json");
+    const now = "2026-05-12T11:00:00.000Z";
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, updated_at)
+       values (101, 'Sniper', 'https://assets.example/sniper.png', 'CR', ?)`,
+      [now],
+    );
+    const bestScores = Array.from({ length: 200 }, (_, index): OscScore => ({
+      ...baseScore,
+      id: 20_000 + index,
+      beatmap_id: 10_000 + index,
+      pp: 400 - index,
+      beatmap: {
+        ...baseScore.beatmap!,
+        id: 10_000 + index,
+        beatmapset_id: 30_000 + index,
+      },
+      beatmapset: {
+        ...baseScore.beatmapset!,
+        id: 30_000 + index,
+      },
+    }));
+    const osu = {
+      getUserBestScoresWindow: vi.fn(async (_userId: number, _limit: number, _caller: string) => bestScores),
+    };
+
+    const result = await refreshUserMapsFarmedScores(db, osu, { country: "CR", userId: 101 });
+
+    expect(result.scoreCount).toBe(200);
+    expect(osu.getUserBestScoresWindow).toHaveBeenCalledWith(101, 200, "job:refresh_user_maps_farmed_scores");
+    expect(Number((await exec(db, "select count(*) as count from country_maps_farmed_scores where country = 'CR' and user_id = 101")).rows[0].count)).toBe(200);
+    const user = (await exec(db, "select maps_farmed_min_pp, maps_farmed_scores_refreshed_at from users where user_id = 101")).rows[0];
+    expect(Number(user.maps_farmed_min_pp)).toBe(201);
+    expect(String(user.maps_farmed_scores_refreshed_at)).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
   it("splits maps snapshots into core and random sections", async () => {

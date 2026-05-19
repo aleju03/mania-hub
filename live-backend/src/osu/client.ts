@@ -190,7 +190,7 @@ export class TokenBucketLimiter {
 }
 
 function classifyLimiterLane(caller: string, path: string): LimiterLane {
-  if (caller.startsWith("job:seed_snipe_board") || caller.startsWith("job:refresh_country_maps") || caller.startsWith("job:refresh_country_roster")) {
+  if (caller.startsWith("job:seed_snipe_board") || caller.startsWith("job:refresh_country_maps") || caller.startsWith("job:refresh_user_maps_farmed_scores") || caller.startsWith("job:refresh_country_roster")) {
     return "bulk";
   }
   if (caller.startsWith("job:")) return "job";
