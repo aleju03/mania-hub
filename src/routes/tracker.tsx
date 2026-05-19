@@ -862,6 +862,7 @@ function ScoresPage() {
 // position: relative and a fixed total height so the page scrollbar reflects
 // the full list even though only a few items are rendered.
 const ESTIMATED_ROW_HEIGHT = 80;
+const ignoreVirtualizerScrollCorrection = () => false;
 
 function VirtualScoreList({
   listKey,
@@ -886,10 +887,14 @@ function VirtualScoreList({
     estimateSize: () => ESTIMATED_ROW_HEIGHT,
     overscan: 4,
     scrollMargin,
+    useAnimationFrameWithResizeObserver: true,
     // Include the 8px gap (space-y-2) in the item's measured size via a
     // wrapper padding, so the virtualizer's offsets stay correct.
     getItemKey: (index) => getScoreIdentity(scores[index]),
   });
+  // Score detail expansion is a click-driven resize in visible rows; scroll
+  // correction here causes one-frame jumps while the accordion swaps rows.
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = ignoreVirtualizerScrollCorrection;
 
   const items = virtualizer.getVirtualItems();
 
@@ -901,6 +906,7 @@ function VirtualScoreList({
         height: `${virtualizer.getTotalSize()}px`,
         position: "relative",
         width: "100%",
+        overflowAnchor: "none",
       }}
     >
       {items.map((vi) => {
@@ -951,8 +957,6 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   onToggle: (key: string) => void;
 }) {
   const navigate = useNavigate();
-  const [rendered, setRendered] = useState(expanded);
-  useEffect(() => { if (expanded) setRendered(true); }, [expanded]);
 
   const keys = score.beatmap?.cs;
   const totalScore = getDisplayedTotalScore(score);
@@ -1104,10 +1108,9 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
       </div>
 
       {/* Expanded score details */}
-      {rendered && (
+      {expanded && (
         <div
-          className={`relative overflow-hidden px-4 pb-3 pt-1 border-t border-osu-b3/20 ${expanded ? "detail-enter" : "detail-exit"}`}
-          onAnimationEnd={() => { if (!expanded) setRendered(false); }}
+          className="relative overflow-hidden px-4 pb-3 pt-1 border-t border-osu-b3/20 detail-enter"
         >
               {(score.beatmapset?.covers?.["cover@2x"] || score.beatmapset?.covers?.cover) && (
                 <div
