@@ -343,7 +343,17 @@ export class WorkerRunner {
   private async reconcileUserRecentScores(payload: { userId: number }): Promise<void> {
     const userId = Number(payload.userId);
     if (!Number.isFinite(userId) || userId <= 0) return;
-    const scores = (await this.osu.getUserRecentScores(userId, "job:reconcile_user_recent_scores"))
+    let recentScores: OscScore[];
+    try {
+      recentScores = await this.osu.getUserRecentScores(userId, "job:reconcile_user_recent_scores");
+    } catch (error) {
+      if (error instanceof OsuApiError && error.status === 404) {
+        logInfo("reconcile_user_recent_scores_missing", { user_id: userId, path: error.path });
+        return;
+      }
+      throw error;
+    }
+    const scores = recentScores
       .filter((score) => score.passed)
       .map((score) => ({ ...score, ruleset_id: score.ruleset_id ?? 3 }));
     await this.ingestor.ingestBatch(scores, "osu_recent", {
