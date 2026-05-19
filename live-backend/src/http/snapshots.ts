@@ -578,20 +578,22 @@ async function apiCallHistory(db: Db) {
   const [byCaller, byPath] = await Promise.all([
     exec(
       db,
-      `select caller, count(*) as count
-       from api_call_log
-       where provider = 'osu' and started_at >= ?
-       group by caller
+      `select coalesce(t.caller, l.caller) as caller, count(*) as count
+       from api_call_log l
+       left join api_call_targets t on t.id = l.target_id
+       where l.provider = 'osu' and l.started_at >= ?
+       group by coalesce(t.caller, l.caller)
        order by count desc
        limit 20`,
       [since],
     ),
     exec(
       db,
-      `select path, count(*) as count
-       from api_call_log
-       where provider = 'osu' and started_at >= ?
-       group by path
+      `select coalesce(t.path, l.path) as path, count(*) as count
+       from api_call_log l
+       left join api_call_targets t on t.id = l.target_id
+       where l.provider = 'osu' and l.started_at >= ?
+       group by coalesce(t.path, l.path)
        order by count desc
        limit 20`,
       [since],

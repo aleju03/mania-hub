@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { readConfig } from "./config.js";
 import { ensurePinnedCountries, getIndexedCountryCodes, getMapsWarmCountryCodes } from "./countries.js";
-import { createDb, exec, migrate } from "./db.js";
+import { createDb, logApiCall, migrate } from "./db.js";
 import { routeHttp, sendNotFound } from "./http/snapshots.js";
 import { ScoreIngestor } from "./ingest/score-ingestor.js";
 import { JobQueue } from "./jobs/queue.js";
@@ -26,11 +26,12 @@ export async function createApp() {
   await deferMapsRefreshesWaitingForRoster(db);
   await ensurePinnedCountries(db, config);
   const osu = new OsuApiClient(config, fetch, (entry) => {
-    void exec(db, "insert into api_call_log (provider, caller, path, started_at) values ('osu', ?, ?, ?)", [
-      entry.caller,
-      entry.path,
-      new Date(entry.startedAt).toISOString(),
-    ]).catch(() => {});
+    void logApiCall(db, {
+      provider: "osu",
+      caller: entry.caller,
+      path: entry.path,
+      startedAt: new Date(entry.startedAt).toISOString(),
+    }).catch(() => {});
   });
   const ingestor = new ScoreIngestor(db, queue, events, config);
   const abuse = new AbuseGuard();

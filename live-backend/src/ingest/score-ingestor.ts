@@ -100,7 +100,7 @@ export class ScoreIngestor {
           country,
           beatmapId,
           3,
-          json(score),
+          json(toStoredScoreEvent(score)),
           score.pp,
           totalScore,
           getDisplayedAccuracy(score),
@@ -284,4 +284,9 @@ export class ScoreIngestor {
       );
     }
   }
+}
+
+export function toStoredScoreEvent(score: OscScore): Omit<OscScore, "user" | "beatmap" | "beatmapset"> {
+  const { user: _user, beatmap: _beatmap, beatmapset: _beatmapset, ...stored } = score;
+  return stored;
 }

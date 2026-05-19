@@ -1,6 +1,6 @@
 import type { Config } from "../config.js";
 import type { Db } from "../db.js";
-import { exec, json, parseJson } from "../db.js";
+import { exec, json, logApiCall, parseJson } from "../db.js";
 import type { ScoreIngestor } from "../ingest/score-ingestor.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { TokenBucketLimiter } from "../osu/client.js";
@@ -60,10 +60,12 @@ export class OscBackfill {
       const startedAt = new Date().toISOString();
       const response = await this.fetchImpl(url);
       if (!response.ok) throw new Error(`oSC JSON ${response.status}`);
-      await exec(db, "insert into api_call_log (provider, caller, path, started_at) values ('osc', 'job:osc_backfill', ?, ?)", [
-        `${url.pathname}${url.search}`,
+      await logApiCall(db, {
+        provider: "osc",
+        caller: "job:osc_backfill",
+        path: `${url.pathname}${url.search}`,
         startedAt,
-      ]).catch(() => {});
+      }).catch(() => {});
       return response.json() as Promise<OscScoresResponse>;
     });
     const scores = normalizeScores(responseBody);

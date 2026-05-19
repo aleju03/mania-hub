@@ -25,6 +25,7 @@ export async function migrate(db: Db): Promise<void> {
   await migrateScoreEventsIdentity(db);
   await migrateProfileSnapshots(db);
   await migrateMapsFarmedOverlay(db);
+  await migrateApiCallTargets(db);
 }
 
 export async function dbHealth(db: Db): Promise<boolean> {
@@ -45,6 +46,25 @@ export function splitSql(sql: string): string[] {
 
 export async function exec(db: Db, sql: string, args: InValue[] = []) {
   return db.execute({ sql, args });
+}
+
+export async function logApiCall(db: Db, entry: { provider: string; caller: string; path: string; startedAt: string }): Promise<void> {
+  await exec(
+    db,
+    `insert or ignore into api_call_targets (provider, caller, path)
+     values (?, ?, ?)`,
+    [entry.provider, entry.caller, entry.path],
+  );
+  const row = (await exec(
+    db,
+    "select id from api_call_targets where provider = ? and caller = ? and path = ?",
+    [entry.provider, entry.caller, entry.path],
+  )).rows[0];
+  await exec(
+    db,
+    "insert into api_call_log (provider, caller, path, target_id, started_at) values (?, '', '', ?, ?)",
+    [entry.provider, Number(row.id), entry.startedAt],
+  );
 }
 
 export function json<T>(value: T): string {
@@ -176,6 +196,43 @@ async function migrateMapsFarmedOverlay(db: Db): Promise<void> {
   }
 
   await db.execute(`
+    create table if not exists maps_beatmapsets (
+      beatmapset_id integer primary key,
+      title text not null,
+      artist text not null,
+      creator text,
+      status text,
+      covers_json text,
+      global_play_count integer,
+      global_favourite_count integer,
+      preview_url text,
+      bpm real,
+      mania_keys_json text,
+      patterns_json text,
+      updated_at text not null
+    )
+  `);
+  await db.execute(`
+    create table if not exists maps_beatmaps (
+      beatmap_id integer primary key,
+      beatmapset_id integer not null,
+      mode text not null,
+      status text,
+      cs real,
+      difficulty_rating real,
+      bpm real,
+      total_length integer,
+      version text not null,
+      url text,
+      updated_at text not null
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_maps_beatmaps_beatmapset
+      on maps_beatmaps(beatmapset_id)
+  `);
+
+  await db.execute(`
     create table if not exists country_maps_farmed_scores (
       country text not null,
       user_id integer not null,
@@ -183,11 +240,24 @@ async function migrateMapsFarmedOverlay(db: Db): Promise<void> {
       score_id integer not null,
       pp real not null,
       score_json text not null,
+      mods_json text,
+      score_url text,
+      played_at text,
       detected_at text not null,
       updated_at text not null,
       primary key (country, user_id, beatmap_id)
     )
   `);
+  const farmedColumns = (await db.execute("pragma table_info(country_maps_farmed_scores)")).rows.map((row) => String(row.name));
+  if (!farmedColumns.includes("mods_json")) {
+    await db.execute("alter table country_maps_farmed_scores add column mods_json text");
+  }
+  if (!farmedColumns.includes("score_url")) {
+    await db.execute("alter table country_maps_farmed_scores add column score_url text");
+  }
+  if (!farmedColumns.includes("played_at")) {
+    await db.execute("alter table country_maps_farmed_scores add column played_at text");
+  }
   await db.execute(`
     create index if not exists idx_country_maps_farmed_scores_country_updated
       on country_maps_farmed_scores(country, updated_at desc)
@@ -195,5 +265,25 @@ async function migrateMapsFarmedOverlay(db: Db): Promise<void> {
   await db.execute(`
     create index if not exists idx_country_maps_farmed_scores_country_beatmap
       on country_maps_farmed_scores(country, beatmap_id)
+  `);
+}
+
+async function migrateApiCallTargets(db: Db): Promise<void> {
+  await db.execute(`
+    create table if not exists api_call_targets (
+      id integer primary key autoincrement,
+      provider text not null,
+      caller text not null,
+      path text not null,
+      unique(provider, caller, path)
+    )
+  `);
+  const columns = (await db.execute("pragma table_info(api_call_log)")).rows.map((row) => String(row.name));
+  if (!columns.includes("target_id")) {
+    await db.execute("alter table api_call_log add column target_id integer");
+  }
+  await db.execute(`
+    create index if not exists idx_api_call_log_target_time
+      on api_call_log(target_id, started_at desc)
   `);
 }

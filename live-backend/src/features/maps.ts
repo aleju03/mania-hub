@@ -1,3 +1,4 @@
+import type { InValue } from "@libsql/client";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
@@ -127,6 +128,33 @@ export interface CountryMapsData {
   favourites: MapsAggregatedFavourite[];
   favouritesByPlayer: MapsPlayerFavourites[];
   beatmapsetsPool: Record<number, MapsFavouriteBeatmapset>;
+  generatedAt: string;
+  farmedGeneratedAt: string;
+  favouritesGeneratedAt: string;
+}
+
+interface StoredMapsPlayer {
+  id: number;
+}
+
+interface StoredMapsCountPlayer extends StoredMapsPlayer {
+  count: number;
+}
+
+interface StoredMapsFarmedPlayer extends StoredMapsPlayer {
+  mods: string[];
+  pp: number;
+  scoreUrl: string | null;
+  playedAt: string | null;
+}
+
+interface StoredCountryMapsData {
+  schemaVersion: 2;
+  farmed: Array<Pick<MapsFarmedEntry, "beatmapId" | "playerCount" | "avgPp" | "maxPp"> & { players: StoredMapsFarmedPlayer[] }>;
+  mostPlayed: Array<Pick<MapsAggregatedBeatmap, "beatmapId" | "totalPlays" | "playerCount"> & { players: StoredMapsCountPlayer[] }>;
+  favourites: Array<Pick<MapsAggregatedFavourite, "beatmapsetId" | "playerCount"> & { players: StoredMapsPlayer[] }>;
+  favouritesByPlayer: Array<Pick<MapsPlayerFavourites, "id" | "beatmapsetIds">>;
+  beatmapsetsPool: number[];
   generatedAt: string;
   farmedGeneratedAt: string;
   favouritesGeneratedAt: string;
@@ -317,9 +345,9 @@ async function readMapsSnapshot(
   const row = (await exec(db, "select payload_json, generated_at, refreshed_at from country_maps_snapshots where country = ?", [normalized])).rows[0];
   const refreshedAt = row?.refreshed_at == null ? null : String(row.refreshed_at);
   const refreshedMs = refreshedAt ? new Date(refreshedAt).getTime() : 0;
-  const parsed = row ? parseJson<CountryMapsData | null>(row.payload_json, null) : null;
-  const isUsable = isUsableMapsData(parsed);
-  const value = isUsable && parsed ? await hydrateMapsSnapshotUsers(db, parsed) : null;
+  const parsed = row ? parseJson<unknown>(row.payload_json, null) : null;
+  const value = parsed ? await hydrateStoredMapsSnapshot(db, parsed) : null;
+  const isUsable = isUsableMapsData(value);
   const isStale = !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs || (!!row && !isUsable);
   return {
     value,
@@ -327,6 +355,39 @@ async function readMapsSnapshot(
     refreshedAt,
     isStale,
   };
+}
+
+async function hydrateStoredMapsSnapshot(db: Db, parsed: unknown): Promise<CountryMapsData | null> {
+  if (isStoredCountryMapsData(parsed)) {
+    return hydrateCompactMapsSnapshot(db, parsed);
+  }
+  if (!isCountryMapsDataShape(parsed)) return null;
+  return hydrateMapsSnapshotUsers(db, parsed);
+}
+
+function isCountryMapsDataShape(value: unknown): value is CountryMapsData {
+  const candidate = value as Partial<CountryMapsData> | null;
+  return !!candidate
+    && Array.isArray(candidate.farmed)
+    && Array.isArray(candidate.mostPlayed)
+    && Array.isArray(candidate.favourites)
+    && Array.isArray(candidate.favouritesByPlayer)
+    && typeof candidate.beatmapsetsPool === "object"
+    && candidate.beatmapsetsPool != null
+    && typeof candidate.generatedAt === "string"
+    && typeof candidate.farmedGeneratedAt === "string"
+    && typeof candidate.favouritesGeneratedAt === "string";
+}
+
+function isStoredCountryMapsData(value: unknown): value is StoredCountryMapsData {
+  const candidate = value as Partial<StoredCountryMapsData> | null;
+  return !!candidate
+    && candidate.schemaVersion === 2
+    && Array.isArray(candidate.farmed)
+    && Array.isArray(candidate.mostPlayed)
+    && Array.isArray(candidate.favourites)
+    && Array.isArray(candidate.favouritesByPlayer)
+    && Array.isArray(candidate.beatmapsetsPool);
 }
 
 async function hydrateMapsSnapshotUsers(db: Db, value: CountryMapsData): Promise<CountryMapsData> {
@@ -371,6 +432,187 @@ function collectMapsSnapshotUserIds(value: CountryMapsData): Set<number> {
   for (const entry of value.favourites) entry.players.forEach(add);
   value.favouritesByPlayer.forEach(add);
   return ids;
+}
+
+function compactMapsSnapshotForStorage(value: CountryMapsData): StoredCountryMapsData {
+  return {
+    schemaVersion: 2,
+    farmed: value.farmed.map((entry) => ({
+      beatmapId: entry.beatmapId,
+      playerCount: entry.playerCount,
+      avgPp: entry.avgPp,
+      maxPp: entry.maxPp,
+      players: entry.players.map((player) => ({
+        id: player.id,
+        mods: player.mods,
+        pp: player.pp,
+        scoreUrl: player.scoreUrl,
+        playedAt: player.playedAt,
+      })),
+    })),
+    mostPlayed: value.mostPlayed.map((entry) => ({
+      beatmapId: entry.beatmapId,
+      totalPlays: entry.totalPlays,
+      playerCount: entry.playerCount,
+      players: entry.players.map((player) => ({ id: player.id, count: player.count })),
+    })),
+    favourites: value.favourites.map((entry) => ({
+      beatmapsetId: entry.beatmapsetId,
+      playerCount: entry.playerCount,
+      players: entry.players.map((player) => ({ id: player.id })),
+    })),
+    favouritesByPlayer: value.favouritesByPlayer.map((player) => ({
+      id: player.id,
+      beatmapsetIds: player.beatmapsetIds,
+    })),
+    beatmapsetsPool: Object.keys(value.beatmapsetsPool).map(Number).filter((id) => Number.isFinite(id) && id > 0),
+    generatedAt: value.generatedAt,
+    farmedGeneratedAt: value.farmedGeneratedAt,
+    favouritesGeneratedAt: value.favouritesGeneratedAt,
+  };
+}
+
+async function hydrateCompactMapsSnapshot(db: Db, value: StoredCountryMapsData): Promise<CountryMapsData> {
+  const directBeatmapIds = new Set<number>();
+  const beatmapsetIds = new Set<number>(value.beatmapsetsPool);
+  for (const entry of value.farmed) directBeatmapIds.add(entry.beatmapId);
+  for (const entry of value.mostPlayed) directBeatmapIds.add(entry.beatmapId);
+  for (const entry of value.favourites) beatmapsetIds.add(entry.beatmapsetId);
+
+  const directBeatmaps = await readMapsBeatmapsByIds(db, [...directBeatmapIds]);
+  for (const beatmap of directBeatmaps.values()) beatmapsetIds.add(beatmap.beatmapsetId);
+  const poolBeatmaps = await readMapsBeatmapsByBeatmapsetIds(db, [...value.beatmapsetsPool]);
+  const allBeatmaps = new Map(directBeatmaps);
+  for (const beatmap of poolBeatmaps) allBeatmaps.set(beatmap.beatmapId, beatmap);
+  const beatmapsets = await readMapsBeatmapsetsByIds(db, [...beatmapsetIds]);
+
+  const farmed = value.farmed.flatMap((entry): MapsFarmedEntry[] => {
+    const beatmap = allBeatmaps.get(entry.beatmapId);
+    const beatmapset = beatmap ? beatmapsets.get(beatmap.beatmapsetId) : undefined;
+    if (!beatmap || !beatmapset) return [];
+    return [{
+      beatmapId: entry.beatmapId,
+      version: beatmap.version,
+      difficultyRating: beatmap.difficultyRating,
+      totalLength: beatmap.totalLength,
+      cs: beatmap.cs,
+      bpm: beatmap.bpm,
+      beatmapsetId: beatmap.beatmapsetId,
+      title: beatmapset.title,
+      artist: beatmapset.artist,
+      creator: beatmapset.creator,
+      covers: beatmapset.covers,
+      status: beatmapset.status || beatmap.status,
+      playerCount: entry.playerCount,
+      players: entry.players.map((player) => ({
+        id: player.id,
+        username: "",
+        avatarUrl: "",
+        mods: player.mods,
+        pp: player.pp,
+        scoreUrl: player.scoreUrl,
+        playedAt: player.playedAt,
+      })),
+      avgPp: entry.avgPp,
+      maxPp: entry.maxPp,
+    }];
+  });
+
+  const mostPlayed = value.mostPlayed.flatMap((entry): MapsAggregatedBeatmap[] => {
+    const beatmap = allBeatmaps.get(entry.beatmapId);
+    const beatmapset = beatmap ? beatmapsets.get(beatmap.beatmapsetId) : undefined;
+    if (!beatmap || !beatmapset) return [];
+    return [{
+      beatmapId: entry.beatmapId,
+      version: beatmap.version,
+      difficultyRating: beatmap.difficultyRating,
+      totalLength: beatmap.totalLength,
+      beatmapsetId: beatmap.beatmapsetId,
+      title: beatmapset.title,
+      artist: beatmapset.artist,
+      creator: beatmapset.creator,
+      covers: beatmapset.covers,
+      status: beatmapset.status || beatmap.status,
+      globalPlayCount: beatmapset.globalPlayCount,
+      totalPlays: entry.totalPlays,
+      playerCount: entry.playerCount,
+      players: entry.players.map((player) => ({ id: player.id, username: "", avatarUrl: "", count: player.count })),
+    }];
+  });
+
+  const favourites = value.favourites.flatMap((entry): MapsAggregatedFavourite[] => {
+    const beatmapset = beatmapsets.get(entry.beatmapsetId);
+    if (!beatmapset) return [];
+    return [{
+      beatmapsetId: entry.beatmapsetId,
+      title: beatmapset.title,
+      artist: beatmapset.artist,
+      creator: beatmapset.creator,
+      covers: beatmapset.covers,
+      status: beatmapset.status,
+      globalPlayCount: beatmapset.globalPlayCount,
+      globalFavouriteCount: beatmapset.globalFavouriteCount,
+      playerCount: entry.playerCount,
+      players: entry.players.map((player) => ({ id: player.id, username: "", avatarUrl: "" })),
+    }];
+  });
+
+  const poolBeatmapsBySet = new Map<number, MapsBeatmapMetadata[]>();
+  for (const beatmap of poolBeatmaps) {
+    const current = poolBeatmapsBySet.get(beatmap.beatmapsetId) ?? [];
+    current.push(beatmap);
+    poolBeatmapsBySet.set(beatmap.beatmapsetId, current);
+  }
+  const beatmapsetsPool = Object.fromEntries(value.beatmapsetsPool.flatMap((id): Array<[number, MapsFavouriteBeatmapset]> => {
+    const beatmapset = beatmapsets.get(id);
+    if (!beatmapset) return [];
+    const maniaBeatmaps = (poolBeatmapsBySet.get(id) ?? [])
+      .map((beatmap) => ({
+        id: beatmap.beatmapId,
+        version: beatmap.version,
+        difficultyRating: beatmap.difficultyRating,
+        totalLength: beatmap.totalLength,
+        cs: beatmap.cs,
+      }))
+      .sort((a, b) => b.difficultyRating - a.difficultyRating);
+    const stars = maniaBeatmaps.map((beatmap) => beatmap.difficultyRating).filter((star) => Number.isFinite(star));
+    const maniaKeys = beatmapset.maniaKeys.length > 0
+      ? beatmapset.maniaKeys
+      : [...new Set(maniaBeatmaps.map((beatmap) => beatmap.cs).filter((key) => Number.isFinite(key)))].sort((a, b) => a - b);
+    return [[id, {
+      id,
+      title: beatmapset.title,
+      artist: beatmapset.artist,
+      creator: beatmapset.creator,
+      covers: beatmapset.covers,
+      status: beatmapset.status,
+      globalPlayCount: beatmapset.globalPlayCount,
+      globalFavouriteCount: beatmapset.globalFavouriteCount,
+      previewUrl: beatmapset.previewUrl,
+      maniaKeys,
+      maniaBeatmaps,
+      starMin: stars.length ? Math.min(...stars) : 0,
+      starMax: stars.length ? Math.max(...stars) : 0,
+      bpm: beatmapset.bpm,
+      patterns: beatmapset.patterns,
+    }]];
+  }));
+
+  return hydrateMapsSnapshotUsers(db, {
+    farmed,
+    mostPlayed,
+    favourites,
+    favouritesByPlayer: value.favouritesByPlayer.map((player) => ({
+      id: player.id,
+      username: "",
+      avatarUrl: "",
+      beatmapsetIds: player.beatmapsetIds,
+    })),
+    beatmapsetsPool,
+    generatedAt: value.generatedAt,
+    farmedGeneratedAt: value.farmedGeneratedAt,
+    favouritesGeneratedAt: value.favouritesGeneratedAt,
+  });
 }
 
 async function hasActiveMapsRefresh(db: Db, country: string): Promise<boolean> {
@@ -430,13 +672,347 @@ export async function refreshCountryMaps(
 }
 
 async function persistMapsSnapshot(db: Db, country: string, value: CountryMapsData): Promise<void> {
+  const refreshedAt = nowIso();
+  await persistMapsSnapshotDisplayMetadata(db, value, refreshedAt);
   await exec(
     db,
     `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
      values (?, ?, ?, ?)
      on conflict(country) do update set payload_json = excluded.payload_json, generated_at = excluded.generated_at, refreshed_at = excluded.refreshed_at`,
-    [country.toUpperCase(), json(value), value.generatedAt, nowIso()],
+    [country.toUpperCase(), json(compactMapsSnapshotForStorage(value)), value.generatedAt, refreshedAt],
   );
+}
+
+export async function compactCountryMapsSnapshots(db: Db): Promise<{ scanned: number; compacted: number; skipped: number }> {
+  const rows = (await exec(db, "select country, payload_json, generated_at, refreshed_at from country_maps_snapshots")).rows;
+  let compacted = 0;
+  let skipped = 0;
+  for (const row of rows) {
+    const parsed = parseJson<unknown>(row.payload_json, null);
+    if (!parsed || isStoredCountryMapsData(parsed)) {
+      skipped++;
+      continue;
+    }
+    if (!isCountryMapsDataShape(parsed) || !isUsableMapsData(parsed)) {
+      skipped++;
+      continue;
+    }
+    const refreshedAt = String(row.refreshed_at ?? nowIso());
+    await persistMapsSnapshotDisplayMetadata(db, parsed, refreshedAt);
+    await exec(
+      db,
+      `update country_maps_snapshots
+       set payload_json = ?, generated_at = ?, refreshed_at = ?
+       where country = ?`,
+      [json(compactMapsSnapshotForStorage(parsed)), String(row.generated_at ?? parsed.generatedAt), refreshedAt, String(row.country)],
+    );
+    compacted++;
+  }
+  return { scanned: rows.length, compacted, skipped };
+}
+
+interface MapsBeatmapMetadata {
+  beatmapId: number;
+  beatmapsetId: number;
+  mode: string;
+  status: string;
+  cs: number;
+  difficultyRating: number;
+  bpm: number;
+  totalLength: number;
+  version: string;
+  url: string;
+}
+
+interface MapsBeatmapsetMetadata {
+  beatmapsetId: number;
+  title: string;
+  artist: string;
+  creator: string;
+  status: string;
+  covers: Record<string, string | undefined>;
+  globalPlayCount: number;
+  globalFavouriteCount: number;
+  previewUrl: string;
+  bpm: number;
+  maniaKeys: number[];
+  patterns: string[];
+}
+
+async function persistMapsSnapshotDisplayMetadata(db: Db, value: CountryMapsData, updatedAt: string): Promise<void> {
+  const users = new Map<number, { username: string; avatarUrl: string }>();
+  const addUser = (player: { id: number; username: string; avatarUrl: string }) => {
+    if (!Number.isSafeInteger(player.id) || player.id <= 0) return;
+    if (!users.has(player.id) || player.username) users.set(player.id, { username: player.username, avatarUrl: player.avatarUrl });
+  };
+  for (const entry of value.farmed) entry.players.forEach(addUser);
+  for (const entry of value.mostPlayed) entry.players.forEach(addUser);
+  for (const entry of value.favourites) entry.players.forEach(addUser);
+  value.favouritesByPlayer.forEach(addUser);
+
+  for (const [userId, user] of users) {
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, updated_at)
+       values (?, ?, ?, null, ?)
+       on conflict(user_id) do update set
+         username = excluded.username,
+         avatar_url = excluded.avatar_url,
+         updated_at = excluded.updated_at`,
+      [userId, user.username || `User ${userId}`, user.avatarUrl, updatedAt],
+    );
+  }
+
+  for (const entry of value.farmed) {
+    await upsertMapsBeatmapset(db, {
+      beatmapsetId: entry.beatmapsetId,
+      title: entry.title,
+      artist: entry.artist,
+      creator: entry.creator,
+      status: entry.status,
+      covers: entry.covers,
+    }, updatedAt);
+    await upsertMapsBeatmap(db, {
+      beatmapId: entry.beatmapId,
+      beatmapsetId: entry.beatmapsetId,
+      mode: "mania",
+      status: entry.status,
+      cs: entry.cs,
+      difficultyRating: entry.difficultyRating,
+      bpm: entry.bpm,
+      totalLength: entry.totalLength,
+      version: entry.version,
+      url: `https://osu.ppy.sh/beatmaps/${entry.beatmapId}`,
+    }, updatedAt);
+  }
+
+  for (const entry of value.mostPlayed) {
+    await upsertMapsBeatmapset(db, {
+      beatmapsetId: entry.beatmapsetId,
+      title: entry.title,
+      artist: entry.artist,
+      creator: entry.creator,
+      status: entry.status,
+      covers: entry.covers,
+      globalPlayCount: entry.globalPlayCount,
+    }, updatedAt);
+    await upsertMapsBeatmap(db, {
+      beatmapId: entry.beatmapId,
+      beatmapsetId: entry.beatmapsetId,
+      mode: "mania",
+      status: entry.status,
+      difficultyRating: entry.difficultyRating,
+      totalLength: entry.totalLength,
+      version: entry.version,
+      url: `https://osu.ppy.sh/beatmaps/${entry.beatmapId}`,
+    }, updatedAt);
+  }
+
+  for (const entry of value.favourites) {
+    await upsertMapsBeatmapset(db, {
+      beatmapsetId: entry.beatmapsetId,
+      title: entry.title,
+      artist: entry.artist,
+      creator: entry.creator,
+      status: entry.status,
+      covers: entry.covers,
+      globalPlayCount: entry.globalPlayCount,
+      globalFavouriteCount: entry.globalFavouriteCount,
+    }, updatedAt);
+  }
+
+  for (const beatmapset of Object.values(value.beatmapsetsPool)) {
+    await upsertMapsBeatmapset(db, {
+      beatmapsetId: beatmapset.id,
+      title: beatmapset.title,
+      artist: beatmapset.artist,
+      creator: beatmapset.creator,
+      status: beatmapset.status,
+      covers: beatmapset.covers,
+      globalPlayCount: beatmapset.globalPlayCount,
+      globalFavouriteCount: beatmapset.globalFavouriteCount,
+      previewUrl: beatmapset.previewUrl,
+      bpm: beatmapset.bpm,
+      maniaKeys: beatmapset.maniaKeys,
+      patterns: beatmapset.patterns,
+    }, updatedAt);
+    for (const beatmap of beatmapset.maniaBeatmaps) {
+      await upsertMapsBeatmap(db, {
+        beatmapId: beatmap.id,
+        beatmapsetId: beatmapset.id,
+        mode: "mania",
+        status: beatmapset.status,
+        cs: beatmap.cs,
+        difficultyRating: beatmap.difficultyRating,
+        bpm: beatmapset.bpm,
+        totalLength: beatmap.totalLength,
+        version: beatmap.version,
+        url: `https://osu.ppy.sh/beatmaps/${beatmap.id}`,
+      }, updatedAt);
+    }
+  }
+}
+
+async function upsertMapsBeatmapset(
+  db: Db,
+  value: Pick<MapsBeatmapsetMetadata, "beatmapsetId" | "title" | "artist" | "creator" | "status" | "covers"> & Partial<Pick<MapsBeatmapsetMetadata, "globalPlayCount" | "globalFavouriteCount" | "previewUrl" | "bpm" | "maniaKeys" | "patterns">>,
+  updatedAt: string,
+): Promise<void> {
+  await exec(
+    db,
+    `insert into maps_beatmapsets
+       (beatmapset_id, title, artist, creator, status, covers_json, global_play_count, global_favourite_count, preview_url, bpm, mania_keys_json, patterns_json, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     on conflict(beatmapset_id) do update set
+       title = excluded.title,
+       artist = excluded.artist,
+       creator = excluded.creator,
+       status = excluded.status,
+       covers_json = excluded.covers_json,
+       global_play_count = coalesce(excluded.global_play_count, maps_beatmapsets.global_play_count),
+       global_favourite_count = coalesce(excluded.global_favourite_count, maps_beatmapsets.global_favourite_count),
+       preview_url = coalesce(excluded.preview_url, maps_beatmapsets.preview_url),
+       bpm = coalesce(excluded.bpm, maps_beatmapsets.bpm),
+       mania_keys_json = coalesce(excluded.mania_keys_json, maps_beatmapsets.mania_keys_json),
+       patterns_json = coalesce(excluded.patterns_json, maps_beatmapsets.patterns_json),
+       updated_at = excluded.updated_at`,
+    [
+      value.beatmapsetId,
+      value.title,
+      value.artist,
+      value.creator || null,
+      value.status || null,
+      json(value.covers ?? {}),
+      value.globalPlayCount ?? null,
+      value.globalFavouriteCount ?? null,
+      value.previewUrl || null,
+      value.bpm ?? null,
+      value.maniaKeys ? json(value.maniaKeys) : null,
+      value.patterns ? json(value.patterns) : null,
+      updatedAt,
+    ],
+  );
+}
+
+async function upsertMapsBeatmap(
+  db: Db,
+  value: Omit<MapsBeatmapMetadata, "cs" | "bpm"> & Partial<Pick<MapsBeatmapMetadata, "cs" | "bpm">>,
+  updatedAt: string,
+): Promise<void> {
+  await exec(
+    db,
+    `insert into maps_beatmaps
+       (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, total_length, version, url, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     on conflict(beatmap_id) do update set
+       beatmapset_id = excluded.beatmapset_id,
+       mode = excluded.mode,
+       status = coalesce(excluded.status, maps_beatmaps.status),
+       cs = coalesce(excluded.cs, maps_beatmaps.cs),
+       difficulty_rating = coalesce(excluded.difficulty_rating, maps_beatmaps.difficulty_rating),
+       bpm = coalesce(excluded.bpm, maps_beatmaps.bpm),
+       total_length = coalesce(excluded.total_length, maps_beatmaps.total_length),
+       version = excluded.version,
+       url = coalesce(excluded.url, maps_beatmaps.url),
+       updated_at = excluded.updated_at`,
+    [
+      value.beatmapId,
+      value.beatmapsetId,
+      value.mode,
+      value.status || null,
+      value.cs ?? null,
+      value.difficultyRating,
+      value.bpm ?? null,
+      value.totalLength,
+      value.version,
+      value.url,
+      updatedAt,
+    ],
+  );
+}
+
+async function readMapsBeatmapsByIds(db: Db, ids: number[]): Promise<Map<number, MapsBeatmapMetadata>> {
+  const rows = await selectRowsByIntegerSet(
+    db,
+    `select beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, total_length, version, url
+     from maps_beatmaps
+     where beatmap_id in`,
+    ids,
+  );
+  return new Map(rows.map((row) => {
+    const beatmap = rowToMapsBeatmapMetadata(row);
+    return [beatmap.beatmapId, beatmap];
+  }));
+}
+
+async function readMapsBeatmapsByBeatmapsetIds(db: Db, ids: number[]): Promise<MapsBeatmapMetadata[]> {
+  const rows = await selectRowsByIntegerSet(
+    db,
+    `select beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, total_length, version, url
+     from maps_beatmaps
+     where beatmapset_id in`,
+    ids,
+  );
+  return rows.map(rowToMapsBeatmapMetadata);
+}
+
+async function readMapsBeatmapsetsByIds(db: Db, ids: number[]): Promise<Map<number, MapsBeatmapsetMetadata>> {
+  const rows = await selectRowsByIntegerSet(
+    db,
+    `select beatmapset_id, title, artist, creator, status, covers_json, global_play_count, global_favourite_count, preview_url, bpm, mania_keys_json, patterns_json
+     from maps_beatmapsets
+     where beatmapset_id in`,
+    ids,
+  );
+  return new Map(rows.map((row) => {
+    const beatmapset = rowToMapsBeatmapsetMetadata(row);
+    return [beatmapset.beatmapsetId, beatmapset];
+  }));
+}
+
+async function selectRowsByIntegerSet(db: Db, sqlPrefix: string, values: number[]): Promise<Record<string, unknown>[]> {
+  const ids = [...new Set(values.filter((value) => Number.isSafeInteger(value) && value > 0))];
+  const rows: Record<string, unknown>[] = [];
+  for (let index = 0; index < ids.length; index += 900) {
+    const chunk = ids.slice(index, index + 900);
+    if (chunk.length === 0) continue;
+    const placeholders = chunk.map(() => "?").join(",");
+    rows.push(...(await exec(db, `${sqlPrefix} (${placeholders})`, chunk)).rows);
+  }
+  return rows;
+}
+
+function rowToMapsBeatmapMetadata(row: Record<string, unknown>): MapsBeatmapMetadata {
+  const beatmapId = Number(row.beatmap_id);
+  return {
+    beatmapId,
+    beatmapsetId: Number(row.beatmapset_id),
+    mode: String(row.mode ?? "mania"),
+    status: String(row.status ?? ""),
+    cs: Number(row.cs ?? 0),
+    difficultyRating: Number(row.difficulty_rating ?? 0),
+    bpm: Number(row.bpm ?? 0),
+    totalLength: Number(row.total_length ?? 0),
+    version: String(row.version ?? ""),
+    url: String(row.url ?? `https://osu.ppy.sh/beatmaps/${beatmapId}`),
+  };
+}
+
+function rowToMapsBeatmapsetMetadata(row: Record<string, unknown>): MapsBeatmapsetMetadata {
+  return {
+    beatmapsetId: Number(row.beatmapset_id),
+    title: String(row.title ?? ""),
+    artist: String(row.artist ?? ""),
+    creator: String(row.creator ?? ""),
+    status: String(row.status ?? ""),
+    covers: parseJson<Record<string, string | undefined>>(row.covers_json, {}),
+    globalPlayCount: Number(row.global_play_count ?? 0),
+    globalFavouriteCount: Number(row.global_favourite_count ?? 0),
+    previewUrl: String(row.preview_url ?? ""),
+    bpm: Number(row.bpm ?? 0),
+    maniaKeys: parseJson<number[]>(row.mania_keys_json, []),
+    patterns: parseJson<string[]>(row.patterns_json, []),
+  };
 }
 
 export async function refreshUserMapsFarmedScores(
@@ -448,6 +1024,7 @@ export async function refreshUserMapsFarmedScores(
   const bestScores = await osu.getUserBestScoresWindow(payload.userId, MAPS_FARMED_SCORE_WINDOW, "job:refresh_user_maps_farmed_scores");
   const updatedAt = nowIso();
   await updateUserMapsFarmedThreshold(db, payload.userId, bestScores, updatedAt);
+  await persistMapsFarmedScoreDisplayMetadata(db, bestScores, updatedAt);
   const rows = buildMapsFarmedOverlayRows(country, bestScores, updatedAt);
   await replaceUserMapsFarmedOverlay(db, country, payload.userId, rows, updatedAt);
   return { country, userId: payload.userId, scoreCount: rows.length, updatedAt };
@@ -462,15 +1039,19 @@ export async function recordMapsFarmedScore(
   const rows = buildMapsFarmedOverlayRows(country.toUpperCase(), [score], updatedAt);
   const row = rows[0];
   if (!row) return null;
+  await persistMapsFarmedScoreDisplayMetadata(db, [score], updatedAt);
   const result = await exec(
     db,
     `insert into country_maps_farmed_scores
-       (country, user_id, beatmap_id, score_id, pp, score_json, detected_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?, ?)
+       (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      on conflict(country, user_id, beatmap_id) do update set
        score_id = excluded.score_id,
        pp = excluded.pp,
        score_json = excluded.score_json,
+       mods_json = excluded.mods_json,
+       score_url = excluded.score_url,
+       played_at = excluded.played_at,
        detected_at = excluded.detected_at,
        updated_at = excluded.updated_at
      where excluded.pp > country_maps_farmed_scores.pp
@@ -482,6 +1063,9 @@ export async function recordMapsFarmedScore(
       row.scoreId,
       row.pp,
       row.scoreJson,
+      row.modsJson,
+      row.scoreUrl,
+      row.playedAt,
       row.detectedAt,
       row.updatedAt,
     ],
@@ -765,6 +1349,9 @@ interface MapsFarmedOverlayWriteRow {
   scoreId: number;
   pp: number;
   scoreJson: string;
+  modsJson: string;
+  scoreUrl: string | null;
+  playedAt: string | null;
   detectedAt: string;
   updatedAt: string;
 }
@@ -779,6 +1366,7 @@ function buildMapsFarmedOverlayRows(country: string, scores: OscScore[], updated
     if (!Number.isFinite(scoreId) || scoreId < 0) continue;
     const pp = Number(score.pp);
     const detectedAt = getScoreTimestamp(score) || updatedAt;
+    const playedAt = getScoreTimestamp(score) || null;
     const key = `${country}:${score.user_id}:${beatmapId}`;
     const candidate = {
       country,
@@ -786,7 +1374,10 @@ function buildMapsFarmedOverlayRows(country: string, scores: OscScore[], updated
       beatmapId,
       scoreId,
       pp,
-      scoreJson: json(score),
+      scoreJson: "{}",
+      modsJson: json(getModAcronyms(score.mods)),
+      scoreUrl: getScoreUrl(score),
+      playedAt,
       detectedAt,
       updatedAt,
     };
@@ -810,19 +1401,119 @@ async function replaceUserMapsFarmedOverlay(
     await exec(
       db,
       `insert into country_maps_farmed_scores
-         (country, user_id, beatmap_id, score_id, pp, score_json, detected_at, updated_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?)
+         (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict(country, user_id, beatmap_id) do update set
          score_id = excluded.score_id,
          pp = excluded.pp,
          score_json = excluded.score_json,
+         mods_json = excluded.mods_json,
+         score_url = excluded.score_url,
+         played_at = excluded.played_at,
          detected_at = excluded.detected_at,
          updated_at = excluded.updated_at`,
-      [row.country, row.userId, row.beatmapId, row.scoreId, row.pp, row.scoreJson, row.detectedAt, row.updatedAt],
+      [
+        row.country,
+        row.userId,
+        row.beatmapId,
+        row.scoreId,
+        row.pp,
+        row.scoreJson,
+        row.modsJson,
+        row.scoreUrl,
+        row.playedAt,
+        row.detectedAt,
+        row.updatedAt,
+      ],
     );
   }
   if (rows.length > 0 || Number(deleted.rowsAffected ?? 0) > 0) {
     await touchMapsFarmedOverlay(db, country, updatedAt);
+  }
+}
+
+async function persistMapsFarmedScoreDisplayMetadata(db: Db, scores: OscScore[], updatedAt: string): Promise<void> {
+  for (const score of scores) {
+    const statements: Array<{ sql: string; args: InValue[] }> = [];
+    if (score.user) {
+      statements.push({
+        sql: `insert into users (user_id, username, avatar_url, country_code, profile_json, updated_at)
+              values (?, ?, ?, ?, ?, ?)
+              on conflict(user_id) do update set
+                username = excluded.username,
+                avatar_url = excluded.avatar_url,
+                country_code = coalesce(excluded.country_code, users.country_code),
+                updated_at = excluded.updated_at`,
+        args: [
+          score.user.id,
+          score.user.username,
+          score.user.avatar_url,
+          score.user.country_code,
+          json(score.user),
+          updatedAt,
+        ],
+      });
+    }
+
+    if (score.beatmapset) {
+      statements.push({
+        sql: `insert into beatmapsets (beatmapset_id, title, artist, creator, status, covers_json, metadata_json, updated_at)
+              values (?, ?, ?, ?, ?, ?, ?, ?)
+              on conflict(beatmapset_id) do update set
+                title = excluded.title,
+                artist = excluded.artist,
+                creator = excluded.creator,
+                status = excluded.status,
+                covers_json = excluded.covers_json,
+                updated_at = excluded.updated_at`,
+        args: [
+          score.beatmapset.id,
+          score.beatmapset.title,
+          score.beatmapset.artist,
+          score.beatmapset.creator ?? null,
+          score.beatmapset.status ?? null,
+          json(score.beatmapset.covers ?? {}),
+          json(score.beatmapset),
+          updatedAt,
+        ],
+      });
+    }
+
+    if (score.beatmap) {
+      statements.push({
+        sql: `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, max_combo, version, url, metadata_json, updated_at)
+              values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              on conflict(beatmap_id) do update set
+                beatmapset_id = excluded.beatmapset_id,
+                mode = excluded.mode,
+                status = excluded.status,
+                cs = excluded.cs,
+                difficulty_rating = excluded.difficulty_rating,
+                bpm = excluded.bpm,
+                max_combo = excluded.max_combo,
+                version = excluded.version,
+                url = excluded.url,
+                updated_at = excluded.updated_at`,
+        args: [
+          score.beatmap.id,
+          score.beatmap.beatmapset_id,
+          score.beatmap.mode,
+          score.beatmap.status ?? null,
+          score.beatmap.cs,
+          score.beatmap.difficulty_rating,
+          score.beatmap.bpm,
+          score.beatmap.max_combo ?? null,
+          score.beatmap.version,
+          score.beatmap.url,
+          json(score.beatmap),
+          updatedAt,
+        ],
+      });
+    }
+
+    for (const statement of statements) {
+      await exec(db, statement.sql, statement.args);
+    }
   }
 }
 
@@ -856,6 +1547,9 @@ async function applyMapsFarmedOverlay(
        s.score_id,
        s.pp,
        s.score_json,
+       s.mods_json,
+       s.score_url,
+       s.played_at,
        s.detected_at,
        s.updated_at,
        u.username,
@@ -918,6 +1612,9 @@ async function applyMapsFarmedOverlay(
 }
 
 function farmedOverlayRowToEntry(row: Record<string, unknown>): { entry: MapsFarmedEntry; player: MapsFarmedEntry["players"][number] } | null {
+  const columnEntry = farmedOverlayColumnRowToEntry(row);
+  if (columnEntry) return columnEntry;
+
   const raw = parseJson<OscScore | null>(row.score_json, null);
   if (!raw) return null;
   const score = hydrateMapsFarmedOverlayScore(row, raw);
@@ -953,6 +1650,57 @@ function farmedOverlayRowToEntry(row: Record<string, unknown>): { entry: MapsFar
       creator: score.beatmapset.creator ?? "",
       covers: score.beatmapset.covers,
       status: score.beatmapset.status ?? score.beatmap.status ?? "",
+      playerCount: 1,
+      players: [player],
+      avgPp: pp,
+      maxPp: pp,
+    },
+    player,
+  };
+}
+
+function farmedOverlayColumnRowToEntry(row: Record<string, unknown>): { entry: MapsFarmedEntry; player: MapsFarmedEntry["players"][number] } | null {
+  const pp = Number(row.pp);
+  const beatmapId = Number(row.beatmap_id);
+  const beatmapsetId = Number(row.beatmapset_id);
+  const userId = Number(row.user_id);
+  if (
+    !Number.isFinite(pp) || pp <= 0
+    || !Number.isFinite(beatmapId) || beatmapId <= 0
+    || !Number.isFinite(beatmapsetId) || beatmapsetId <= 0
+    || !Number.isFinite(userId) || userId <= 0
+    || row.version == null
+    || row.title == null
+    || row.artist == null
+  ) {
+    return null;
+  }
+
+  const status = String(row.beatmapset_status ?? row.beatmap_status ?? "");
+  if (status && status.toLowerCase() !== "ranked") return null;
+  const player = {
+    id: userId,
+    username: String(row.username ?? `User ${userId}`),
+    avatarUrl: String(row.avatar_url ?? ""),
+    mods: parseJson<string[]>(row.mods_json, []),
+    pp,
+    scoreUrl: row.score_url == null ? null : String(row.score_url),
+    playedAt: row.played_at == null ? null : String(row.played_at),
+  };
+  return {
+    entry: {
+      beatmapId,
+      version: String(row.version),
+      difficultyRating: Number(row.difficulty_rating ?? 0),
+      totalLength: 0,
+      cs: Number(row.cs ?? 0),
+      bpm: Number(row.bpm ?? 0),
+      beatmapsetId,
+      title: String(row.title),
+      artist: String(row.artist),
+      creator: String(row.creator ?? ""),
+      covers: parseJson<Record<string, string | undefined>>(row.covers_json, {}),
+      status,
       playerCount: 1,
       players: [player],
       avgPp: pp,

@@ -200,6 +200,36 @@ create table if not exists country_maps_snapshots (
   refreshed_at text not null
 );
 
+create table if not exists maps_beatmapsets (
+  beatmapset_id integer primary key,
+  title text not null,
+  artist text not null,
+  creator text,
+  status text,
+  covers_json text,
+  global_play_count integer,
+  global_favourite_count integer,
+  preview_url text,
+  bpm real,
+  mania_keys_json text,
+  patterns_json text,
+  updated_at text not null
+);
+
+create table if not exists maps_beatmaps (
+  beatmap_id integer primary key,
+  beatmapset_id integer not null,
+  mode text not null,
+  status text,
+  cs real,
+  difficulty_rating real,
+  bpm real,
+  total_length integer,
+  version text not null,
+  url text,
+  updated_at text not null
+);
+
 create table if not exists country_maps_farmed_scores (
   country text not null,
   user_id integer not null,
@@ -207,6 +237,9 @@ create table if not exists country_maps_farmed_scores (
   score_id integer not null,
   pp real not null,
   score_json text not null,
+  mods_json text,
+  score_url text,
+  played_at text,
   detected_at text not null,
   updated_at text not null,
   primary key (country, user_id, beatmap_id)
@@ -285,7 +318,16 @@ create table if not exists api_call_log (
   provider text not null,
   caller text not null,
   path text not null,
+  target_id integer,
   started_at text not null
+);
+
+create table if not exists api_call_targets (
+  id integer primary key autoincrement,
+  provider text not null,
+  caller text not null,
+  path text not null,
+  unique(provider, caller, path)
 );
 
 create index if not exists idx_score_events_country_time on score_events(country, ended_at desc);
@@ -297,6 +339,7 @@ create index if not exists idx_top_play_events_country_time on top_play_events(c
 create index if not exists idx_top_play_events_country_pp on top_play_events(country, pp desc, detected_at desc);
 create index if not exists idx_snipe_events_country_time on snipe_events(country, detected_at desc);
 create index if not exists idx_country_maps_snapshots_refreshed on country_maps_snapshots(refreshed_at desc);
+create index if not exists idx_maps_beatmaps_beatmapset on maps_beatmaps(beatmapset_id);
 create index if not exists idx_country_maps_farmed_scores_country_updated on country_maps_farmed_scores(country, updated_at desc);
 create index if not exists idx_country_maps_farmed_scores_country_beatmap on country_maps_farmed_scores(country, beatmap_id);
 create index if not exists idx_replay_video_exports_status_time on replay_video_exports(status, updated_at desc);
@@ -304,3 +347,4 @@ create index if not exists idx_dan_estimates_updated on dan_estimates(updated_at
 create index if not exists idx_jobs_ready on jobs(status, run_after, priority desc);
 create index if not exists idx_live_event_country_sequence on live_event_log(country, sequence);
 create index if not exists idx_api_call_log_provider_time on api_call_log(provider, started_at desc);
+create index if not exists idx_api_call_log_target_time on api_call_log(target_id, started_at desc);
