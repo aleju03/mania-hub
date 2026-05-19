@@ -347,4 +347,3 @@ create index if not exists idx_dan_estimates_updated on dan_estimates(updated_at
 create index if not exists idx_jobs_ready on jobs(status, run_after, priority desc);
 create index if not exists idx_live_event_country_sequence on live_event_log(country, sequence);
 create index if not exists idx_api_call_log_provider_time on api_call_log(provider, started_at desc);
-create index if not exists idx_api_call_log_target_time on api_call_log(target_id, started_at desc);
