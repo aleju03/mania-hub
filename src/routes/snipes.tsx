@@ -768,10 +768,6 @@ function SnipeRow({
   onToggle: (key: string) => void;
 }) {
   const navigate = useNavigate();
-  const [rendered, setRendered] = useState(expanded);
-  useEffect(() => {
-    if (expanded) setRendered(true);
-  }, [expanded]);
 
   const keys = Math.round(event.beatmap.cs);
   const sniperHref = `/player/${encodeURIComponent(event.sniper.username)}`;
@@ -945,12 +941,9 @@ function SnipeRow({
         </div>
       </div>
 
-      {rendered && (
+      {expanded && (
         <div
-          className={`relative px-4 pb-3 pt-2 border-t border-osu-b3/20 overflow-hidden ${expanded ? "detail-enter" : "detail-exit"}`}
-          onAnimationEnd={() => {
-            if (!expanded) setRendered(false);
-          }}
+          className="relative px-4 pb-3 pt-2 border-t border-osu-b3/20 overflow-hidden detail-enter"
         >
           {event.beatmapset.cover_url && (
             <div

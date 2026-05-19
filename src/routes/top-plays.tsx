@@ -988,14 +988,9 @@ function PopOffsPage() {
 }
 
 function ExpandableDetail({ expanded, children }: { expanded: boolean; children: React.ReactNode }) {
-  const [rendered, setRendered] = useState(expanded);
-  useEffect(() => { if (expanded) setRendered(true); }, [expanded]);
-  if (!rendered) return null;
+  if (!expanded) return null;
   return (
-    <div
-      className={expanded ? "detail-enter" : "detail-exit"}
-      onAnimationEnd={() => { if (!expanded) setRendered(false); }}
-    >
+    <div className="detail-enter">
       {children}
     </div>
   );
