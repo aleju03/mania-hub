@@ -177,6 +177,7 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
 
 type RandomPickSettings = Pick<MapsSearch, "rWeight" | "rAvoidRepeats">;
 type LiveMapsPageState = LiveMapsPageValue & { requestKey: string };
+const liveMapsPageSessionCache = new Map<string, LiveMapsPageState>();
 
 function readRandomPickSettings(): Partial<RandomPickSettings> {
   if (typeof window === "undefined") return {};
@@ -930,7 +931,7 @@ function MapsPage() {
   const [liveMapsAttempted, setLiveMapsAttempted] = useState(false);
   const [liveMapsRefreshing, setLiveMapsRefreshing] = useState(false);
   const [liveMapsPage, setLiveMapsPage] = useState<LiveMapsPageState | null>(null);
-  const liveMapsPageCacheRef = useRef<Map<string, LiveMapsPageState>>(new Map());
+  const liveMapsPageCacheRef = useRef<Map<string, LiveMapsPageState>>(liveMapsPageSessionCache);
   // True while the live backend is building this country's maps for the very
   // first time (no snapshot has ever existed). Distinguishes a cold first build
   // from a quick refresh of already-cached maps.
@@ -1057,14 +1058,13 @@ function MapsPage() {
 
   useEffect(() => {
     setLoadingPlayers(liveBackendEnabled ? false : !rankings);
-    setLoadingMaps(!mapsData || !hasValidMapsData);
+    setLoadingMaps(liveBackendEnabled ? false : !mapsData || !hasValidMapsData);
     setLoadedSections(0);
     setSmoothProgress(0);
     setError(null);
     setLiveMapsAttempted(false);
     setLiveMapsRefreshing(false);
     setLiveMapsPage(null);
-    liveMapsPageCacheRef.current.clear();
     fetchingMapsRef.current = false;
   }, [selectedCountry, liveBackendEnabled]);
 
@@ -1406,6 +1406,7 @@ function MapsPage() {
   // farmed/popular/favourites/random views all read already-cleaned data.
   const visibleMapsData = useMemo<CountryMapsData | null>(() => {
     if (!mapsData) return null;
+    if (liveBackendPaged && tab !== "random") return mapsData;
     if (hiddenUserIds.size === 0) return mapsData;
 
     const farmed = mapsData.farmed
@@ -1451,9 +1452,10 @@ function MapsPage() {
     );
 
     return { ...mapsData, farmed, mostPlayed, favourites, favouritesByPlayer };
-  }, [mapsData, hiddenUserIds]);
+  }, [mapsData, hiddenUserIds, liveBackendPaged, tab]);
 
   const filteredFarmed = useMemo(() => {
+    if (liveBackendPaged || tab !== "farmed") return [];
     if (!visibleMapsData?.farmed?.length) return [];
     return visibleMapsData.farmed
       .map((entry) => {
@@ -1492,10 +1494,11 @@ function MapsPage() {
         }
         return b.difficultyRating - a.difficultyRating;
       });
-  }, [visibleMapsData, keyFilter, searchQuery, farmedSort, ppFilter, modFilter]);
+  }, [visibleMapsData, keyFilter, searchQuery, farmedSort, ppFilter, modFilter, liveBackendPaged, tab]);
 
   // ── Filtered + sorted: most played (from most_played endpoint) ──────────
   const filteredMostPlayed = useMemo(() => {
+    if (liveBackendPaged || tab !== "popular") return [];
     if (!visibleMapsData?.mostPlayed?.length) return [];
     return visibleMapsData.mostPlayed
       .filter(
@@ -1509,10 +1512,11 @@ function MapsPage() {
         if (beatmapSort === "stars") return b.difficultyRating - a.difficultyRating;
         return b.totalLength - a.totalLength;
       });
-  }, [visibleMapsData, keyFilter, searchQuery, beatmapSort]);
+  }, [visibleMapsData, keyFilter, searchQuery, beatmapSort, liveBackendPaged, tab]);
 
   // ── Filtered + sorted: favourites ───────────────────────────────────────
   const filteredFavourites = useMemo(() => {
+    if (liveBackendPaged || tab !== "favourites") return [];
     if (!visibleMapsData?.favourites?.length) return [];
     return visibleMapsData.favourites
       .filter(
@@ -1524,7 +1528,7 @@ function MapsPage() {
         (a, b) =>
           b.playerCount - a.playerCount || b.globalFavouriteCount - a.globalFavouriteCount,
       );
-  }, [visibleMapsData, statusFilter, searchQuery]);
+  }, [visibleMapsData, statusFilter, searchQuery, liveBackendPaged, tab]);
 
   const liveVisiblePageItems = useMemo(() => {
     if (!currentLiveMapsPage) return [];
@@ -1623,7 +1627,7 @@ function MapsPage() {
     { id: "random", label: "random picks" },
   ];
 
-  const isLoading = loadingPlayers || loadingMaps || currentMapsSectionLoading || liveMapsPagePending;
+  const isLoading = loadingPlayers || (liveBackendPaged ? liveMapsPagePending : loadingMaps) || currentMapsSectionLoading;
 
   // ── Random tab: pick a random top-50 player and a single random favourite ──
   const [randomPlayer, setRandomPlayer] = useState<MapsPlayerFavourites | null>(null);
@@ -1718,6 +1722,7 @@ function MapsPage() {
   useEffect(() => { if (filtersOpen) setDragOffset(0); }, [filtersOpen]);
 
   const randomPool = useMemo(() => {
+    if (tab !== "random") return [];
     if (!visibleMapsData?.favouritesByPlayer || !visibleMapsData?.beatmapsetsPool) return [];
     const pairs: Array<{ player: MapsPlayerFavourites; beatmapset: MapsFavouriteBeatmapset }> = [];
     for (const player of visibleMapsData.favouritesByPlayer) {
@@ -1739,7 +1744,7 @@ function MapsPage() {
       }
     }
     return pairs;
-  }, [visibleMapsData, randomStatus, randomKey, randomPatternCanonical, rStars, rStarsMax]);
+  }, [visibleMapsData, randomStatus, randomKey, randomPatternCanonical, rStars, rStarsMax, tab]);
 
   // Group eligible pairs by player so sampling can be uniform per-player
   // rather than per-pair (players with more favourites would otherwise win).
