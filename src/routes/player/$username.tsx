@@ -39,6 +39,7 @@ import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCard3DPanel as ManiaCardPanel } from "../../components/player/maniacard3d/ManiaCard3DPanel";
 import type { InsightScoreSnapshot, OsuManiaVariant, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { calculateUserProfileInsights } from "../../lib/profile-insights";
+import { readPlayerShell } from "../../lib/player-shell-cache";
 import { pageSeo, playerOgImagePath } from "../../lib/seo";
 import { getRankTierClass } from "../../lib/rankings";
 
@@ -566,7 +567,7 @@ function PlayerPage() {
     let cancelled = false;
     let snapshotTimer: number | null = null;
     const hasLoaderBestScores = loaderBestScores.length > 0;
-    const seededUser = loaderSnapshot?.user ?? readCachedUser(username) ?? null;
+    const seededUser = loaderSnapshot?.user ?? readCachedUser(username) ?? readPlayerShell(username);
 
     setUser(seededUser);
     setBest(loaderBestScores);

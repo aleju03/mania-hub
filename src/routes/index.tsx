@@ -20,6 +20,7 @@ import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse, LeanHomeScore, LeanHomePopoff, LeanTrackerScore, CountryTopPlay } from "../lib/types";
 import { useAppStore, useHasHydrated, useHiddenUserIds, useSelectedCountry } from "../store";
 import { DEFAULT_DESCRIPTION, pageSeo, SITE_NAME } from "../lib/seo";
+import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
 
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -288,6 +289,11 @@ function HomePage() {
   ]);
 
   useEffect(() => {
+    if (!rankings) return;
+    seedPlayerShellsFromRankingEntries(rankings.ranking, 1);
+  }, [rankings]);
+
+  useEffect(() => {
     let cancelled = false;
     const shouldRefreshScores =
       !recentScoresFetchedAt || isCacheStale(recentScoresFetchedAt, CLIENT_CACHE_TTL.homeRecentScores);
@@ -494,7 +500,10 @@ function HomePage() {
                   {topPlayersMobile.map((entry: RankingsResponse["ranking"][number], i: number) => (
                     <motion.div key={entry.user.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.04 }}
                       className="flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3/50 transition-colors cursor-pointer"
-                      onClick={() => navigate({ to: "/player/$username", params: { username: entry.user.username } })}>
+                      onClick={() => {
+                        seedPlayerShellFromRankingEntry(entry, i + 1);
+                        navigate({ to: "/player/$username", params: { username: entry.user.username } });
+                      }}>
                       <span className="text-sm font-bold text-osu-f1 w-6 text-center">#{i + 1}</span>
                       <Avatar url={entry.user.avatar_url} size={30} />
                       <UsernameText
@@ -510,7 +519,10 @@ function HomePage() {
                   {topPlayersDesktop.map((entry: RankingsResponse["ranking"][number], i: number) => (
                     <motion.div key={entry.user.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.035 }}
                       className="flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3/50 transition-colors cursor-pointer"
-                      onClick={() => navigate({ to: "/player/$username", params: { username: entry.user.username } })}>
+                      onClick={() => {
+                        seedPlayerShellFromRankingEntry(entry, i + 1);
+                        navigate({ to: "/player/$username", params: { username: entry.user.username } });
+                      }}>
                       <span className="text-sm font-bold text-osu-f1 w-6 text-center">#{i + 1}</span>
                       <Avatar url={entry.user.avatar_url} size={30} />
                       <UsernameText

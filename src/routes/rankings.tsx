@@ -17,6 +17,7 @@ import type { RankingsResponse } from "../lib/types";
 import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import { pageSeo } from "../lib/seo";
 import { fetchLiveRankDeltas, isLiveBackendConfigured, type LiveRankDelta } from "../lib/live-backend";
+import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
 
 type SortField = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "ss" | "s" | "a";
 
@@ -119,6 +120,11 @@ function RankingsPage() {
       navigate({ to: "/rankings", search: { page: 1, country: selectedCountry }, replace: true });
     }
   }, [hasNextPage, navigate, page, selectedCountry, totalPlayers]);
+
+  useEffect(() => {
+    if (!pageData) return;
+    seedPlayerShellsFromRankingEntries(pageData.ranking.slice(0, 50), (page - 1) * 50 + 1);
+  }, [page, pageData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -502,6 +508,7 @@ function RankingsPage() {
                     key={entry.user.id}
                     to="/player/$username"
                     params={{ username: entry.user.username }}
+                    onClick={() => seedPlayerShellFromRankingEntry(entry, originalRank)}
                     className="block rounded-lg bg-osu-b4/50 p-3 cursor-pointer hover:bg-osu-b4 transition-colors"
                   >
                     <div className="flex items-center gap-3">
@@ -581,16 +588,21 @@ function RankingsPage() {
                         key={entry.user.id}
                         className="border-t border-osu-b3/20 hover:bg-osu-b4/80 transition-colors duration-[120ms] cursor-pointer"
                         style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}
-                        onClick={() =>
-                          navigate({ to: "/player/$username", params: { username: entry.user.username } })
-                        }
-                        onAuxClick={(event) => handlePlayerAuxClick(event, entry.user.username)}
+                        onClick={() => {
+                          seedPlayerShellFromRankingEntry(entry, originalRank);
+                          navigate({ to: "/player/$username", params: { username: entry.user.username } });
+                        }}
+                        onAuxClick={(event) => {
+                          seedPlayerShellFromRankingEntry(entry, originalRank);
+                          handlePlayerAuxClick(event, entry.user.username);
+                        }}
                       >
                         <td className="py-2.5 px-3 text-sm font-bold text-osu-f1">#{originalRank}</td>
                         <td className="py-2.5 px-3">
                           <Link
                             to="/player/$username"
                             params={{ username: entry.user.username }}
+                            onClick={() => seedPlayerShellFromRankingEntry(entry, originalRank)}
                             className="flex items-center gap-3"
                           >
                             <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} online={entry.user.is_online} />
