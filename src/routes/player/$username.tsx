@@ -1304,7 +1304,7 @@ function PlayerPage() {
             <PpStat pp={stats.pp} variants={stats.variants} />
             <CompactStat label="Accuracy" value={profileStatsProjectedOnly ? "-" : formatAccuracy(stats.hit_accuracy / 100)} />
             <CompactStat label="Play Count" value={profileStatsProjectedOnly ? "-" : formatNumber(stats.play_count)} />
-            <CompactStat label="Play Time" value={profileStatsProjectedOnly ? "-" : `${formatNumber(Math.floor((stats.play_time ?? 0) / 3600))}h`} />
+            <CompactStat label="Play Time" value={profileStatsProjectedOnly || stats.play_time == null ? "-" : `${formatNumber(Math.floor(stats.play_time / 3600))}h`} />
           </div>
 
           {/* Profile insights */}
