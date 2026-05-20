@@ -684,10 +684,26 @@ async function persistMapsSnapshot(db: Db, country: string, value: CountryMapsDa
 }
 
 export async function compactCountryMapsSnapshots(db: Db): Promise<{ scanned: number; compacted: number; skipped: number }> {
-  const rows = (await exec(db, "select country, payload_json, generated_at, refreshed_at from country_maps_snapshots")).rows;
+  const countries = (await exec(
+    db,
+    `select country
+     from country_maps_snapshots
+     where payload_json not like '{"schemaVersion":2,%'
+     order by country`,
+  )).rows;
   let compacted = 0;
   let skipped = 0;
-  for (const row of rows) {
+  for (const countryRow of countries) {
+    const country = String(countryRow.country);
+    const row = (await exec(
+      db,
+      "select country, payload_json, generated_at, refreshed_at from country_maps_snapshots where country = ?",
+      [country],
+    )).rows[0];
+    if (!row) {
+      skipped++;
+      continue;
+    }
     const parsed = parseJson<unknown>(row.payload_json, null);
     if (!parsed || isStoredCountryMapsData(parsed)) {
       skipped++;
@@ -704,11 +720,11 @@ export async function compactCountryMapsSnapshots(db: Db): Promise<{ scanned: nu
       `update country_maps_snapshots
        set payload_json = ?, generated_at = ?, refreshed_at = ?
        where country = ?`,
-      [json(compactMapsSnapshotForStorage(parsed)), String(row.generated_at ?? parsed.generatedAt), refreshedAt, String(row.country)],
+      [json(compactMapsSnapshotForStorage(parsed)), String(row.generated_at ?? parsed.generatedAt), refreshedAt, country],
     );
     compacted++;
   }
-  return { scanned: rows.length, compacted, skipped };
+  return { scanned: countries.length, compacted, skipped };
 }
 
 interface MapsBeatmapMetadata {

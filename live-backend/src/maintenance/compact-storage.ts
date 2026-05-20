@@ -19,18 +19,23 @@ await migrate(db);
 
 const farmed = await compactMapsFarmedOverlay(options.batchSize);
 console.log(`country_maps_farmed_scores: compacted ${farmed.compacted}, failed ${farmed.failed}, scanned ${farmed.scanned}`);
+await releaseMemory();
 
 const snapshots = await compactCountryMapsSnapshots(db);
 console.log(`country_maps_snapshots: compacted ${snapshots.compacted}, skipped ${snapshots.skipped}, scanned ${snapshots.scanned}`);
+await releaseMemory();
 
 const scoreEvents = await compactScoreEvents(options.batchSize);
 console.log(`score_events: compacted ${scoreEvents.compacted}, failed ${scoreEvents.failed}, scanned ${scoreEvents.scanned}`);
+await releaseMemory();
 
-const events = await compactLiveEventLog();
+const events = await compactLiveEventLog(options.batchSize);
 console.log(`live_event_log: compacted ${events.compacted}, skipped ${events.skipped}, scanned ${events.scanned}`);
+await releaseMemory();
 
 const apiCalls = await compactApiCallLog();
 console.log(`api_call_log: compacted ${apiCalls.compactedRows} rows across ${apiCalls.compactedTargets} targets`);
+await releaseMemory();
 
 if (options.vacuum) {
   console.log("Running VACUUM. Keep the backend stopped until this finishes.");
@@ -89,42 +94,59 @@ async function compactMapsFarmedOverlay(batchSize: number): Promise<{ scanned: n
       result.compacted++;
     }
 
+    await releaseMemory();
     if (rows.length < batchSize) break;
   }
 
   return result;
 }
 
-async function compactLiveEventLog(): Promise<{ scanned: number; compacted: number; skipped: number }> {
-  const rows = (await exec(
-    db,
-    `select sequence, type, country, payload_json
-     from live_event_log
-     where type = 'tracker_score'`,
-  )).rows;
+async function compactLiveEventLog(batchSize: number): Promise<{ scanned: number; compacted: number; skipped: number }> {
+  let scanned = 0;
   let compacted = 0;
   let skipped = 0;
+  let afterSequence = 0;
 
-  for (const row of rows) {
-    const payload = parseUnknownJson(row.payload_json);
-    if (payload == null) {
-      skipped++;
-      continue;
-    }
-    const compact = compactLiveEventLogPayloadForStorage(String(row.type), row.country == null ? null : String(row.country), payload);
-    if (JSON.stringify(compact) === JSON.stringify(payload)) {
-      skipped++;
-      continue;
-    }
-    await exec(
+  while (true) {
+    const rows = (await exec(
       db,
-      "update live_event_log set payload_json = ? where sequence = ?",
-      [json(compact), Number(row.sequence)],
-    );
-    compacted++;
+      `select sequence, type, country, payload_json
+       from live_event_log
+       where type = 'tracker_score'
+         and sequence > ?
+       order by sequence asc
+       limit ?`,
+      [afterSequence, batchSize],
+    )).rows;
+
+    if (rows.length === 0) break;
+    scanned += rows.length;
+
+    for (const row of rows) {
+      afterSequence = Math.max(afterSequence, Number(row.sequence));
+      const payload = parseUnknownJson(row.payload_json);
+      if (payload == null) {
+        skipped++;
+        continue;
+      }
+      const compact = compactLiveEventLogPayloadForStorage(String(row.type), row.country == null ? null : String(row.country), payload);
+      if (JSON.stringify(compact) === JSON.stringify(payload)) {
+        skipped++;
+        continue;
+      }
+      await exec(
+        db,
+        "update live_event_log set payload_json = ? where sequence = ?",
+        [json(compact), Number(row.sequence)],
+      );
+      compacted++;
+    }
+
+    await releaseMemory();
+    if (rows.length < batchSize) break;
   }
 
-  return { scanned: rows.length, compacted, skipped };
+  return { scanned, compacted, skipped };
 }
 
 async function compactScoreEvents(batchSize: number): Promise<{ scanned: number; compacted: number; failed: number }> {
@@ -164,50 +186,63 @@ async function compactScoreEvents(batchSize: number): Promise<{ scanned: number;
       result.compacted++;
     }
 
+    await releaseMemory();
     if (rows.length < batchSize) break;
   }
 
   return result;
 }
 
+async function releaseMemory(): Promise<void> {
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  (globalThis as { gc?: () => void }).gc?.();
+}
+
 async function compactApiCallLog(): Promise<{ compactedTargets: number; compactedRows: number }> {
-  const targets = (await exec(
+  await exec(
     db,
-    `select provider, caller, path, count(*) as count
+    `create index if not exists idx_api_call_log_compact_source
+       on api_call_log(provider, caller, path)
+       where target_id is null and (caller <> '' or path <> '')`,
+  );
+  const compactedTargets = Number((await exec(
+    db,
+    `select count(*) as count
+     from (
+       select 1
+       from api_call_log
+       where target_id is null
+         and (caller <> '' or path <> '')
+       group by provider, caller, path
+     )`,
+  )).rows[0]?.count ?? 0);
+  await exec(
+    db,
+    `insert or ignore into api_call_targets (provider, caller, path)
+     select provider, caller, path
      from api_call_log
      where target_id is null
        and (caller <> '' or path <> '')
      group by provider, caller, path`,
-  )).rows;
-  let compactedRows = 0;
+  );
+  const result = await exec(
+    db,
+    `update api_call_log
+     set target_id = (
+           select t.id
+           from api_call_targets t
+           where t.provider = api_call_log.provider
+             and t.caller = api_call_log.caller
+             and t.path = api_call_log.path
+         ),
+         caller = '',
+         path = ''
+     where target_id is null
+       and (caller <> '' or path <> '')`,
+  );
+  await exec(db, "drop index if exists idx_api_call_log_compact_source");
 
-  for (const target of targets) {
-    const provider = String(target.provider);
-    const caller = String(target.caller);
-    const path = String(target.path);
-    await exec(
-      db,
-      `insert or ignore into api_call_targets (provider, caller, path)
-       values (?, ?, ?)`,
-      [provider, caller, path],
-    );
-    const id = Number((await exec(
-      db,
-      "select id from api_call_targets where provider = ? and caller = ? and path = ?",
-      [provider, caller, path],
-    )).rows[0]?.id);
-    if (!Number.isSafeInteger(id) || id <= 0) continue;
-    const result = await exec(
-      db,
-      `update api_call_log
-       set target_id = ?, caller = '', path = ''
-       where target_id is null and provider = ? and caller = ? and path = ?`,
-      [id, provider, caller, path],
-    );
-    compactedRows += Number(result.rowsAffected ?? 0);
-  }
-
-  return { compactedTargets: targets.length, compactedRows };
+  return { compactedTargets, compactedRows: Number(result.rowsAffected ?? 0) };
 }
 
 async function persistScoreDisplayMetadata(score: OscScore, updatedAt: string): Promise<void> {
