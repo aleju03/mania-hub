@@ -279,6 +279,36 @@ export async function deferMapsRefreshesWaitingForRoster(db: Db, retryDelayMs = 
 }
 
 export type MapsSnapshotSection = "core" | "random";
+export type MapsBrowseTab = "farmed" | "popular" | "favourites";
+export type MapsKeyFilter = "all" | "4k" | "7k" | "other";
+export type MapsBeatmapSort = "players" | "plays" | "stars" | "length";
+export type MapsFarmedSort = "players" | "avg-pp" | "max-pp" | "stars" | "recent";
+export type MapsStatusFilter = "all" | "ranked" | "loved" | "graveyard" | "other";
+export type MapsModFilter = "all" | "dt" | "ht" | "nm";
+
+export interface MapsPageQuery {
+  tab: MapsBrowseTab;
+  page: number;
+  pageSize: number;
+  key: MapsKeyFilter;
+  beatmapSort: MapsBeatmapSort;
+  farmedSort: MapsFarmedSort;
+  status: MapsStatusFilter;
+  pp: number;
+  mod: MapsModFilter;
+  q: string;
+}
+
+export interface MapsPageValue {
+  tab: MapsBrowseTab;
+  page: number;
+  pageSize: number;
+  total: number;
+  items: Array<MapsFarmedEntry | MapsAggregatedBeatmap | MapsAggregatedFavourite>;
+  generatedAt: string;
+  farmedGeneratedAt: string;
+  favouritesGeneratedAt: string;
+}
 
 export async function getMapsSnapshot(
   db: Db,
@@ -298,6 +328,34 @@ export async function getMapsSnapshot(
     refreshQueued = true;
   }
   return { ...snapshot, value: sliceMapsSnapshotSection(value, section), refreshQueued };
+}
+
+export async function getMapsPageSnapshot(
+  db: Db,
+  queue: JobQueue,
+  country: string,
+  maxAgeMs: number,
+  query: MapsPageQuery,
+): Promise<{ value: MapsPageValue | null; generatedAt: string | null; refreshedAt: string | null; isStale: boolean; refreshQueued: boolean }> {
+  const normalized = country.toUpperCase();
+  const snapshot = await readRawMapsSnapshot(db, normalized, maxAgeMs);
+  let refreshQueued = await hasActiveMapsRefresh(db, normalized);
+  if (snapshot.isStale && !refreshQueued) {
+    await enqueueMapsRefresh(queue, normalized);
+    refreshQueued = true;
+  }
+
+  const value = snapshot.parsed
+    ? await hydrateMapsPageValue(db, normalized, snapshot.parsed, query, snapshot.refreshedAt)
+    : null;
+
+  return {
+    value,
+    generatedAt: snapshot.generatedAt,
+    refreshedAt: snapshot.refreshedAt,
+    isStale: snapshot.isStale,
+    refreshQueued,
+  };
 }
 
 /**
@@ -351,6 +409,32 @@ async function readMapsSnapshot(
   const isStale = !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs || (!!row && !isUsable);
   return {
     value,
+    generatedAt: row?.generated_at == null ? null : String(row.generated_at),
+    refreshedAt,
+    isStale,
+  };
+}
+
+async function readRawMapsSnapshot(
+  db: Db,
+  country: string,
+  maxAgeMs: number,
+): Promise<{ parsed: StoredCountryMapsData | CountryMapsData | null; generatedAt: string | null; refreshedAt: string | null; isStale: boolean }> {
+  const normalized = country.toUpperCase();
+  const row = (await exec(
+    db,
+    "select payload_json, generated_at, refreshed_at from country_maps_snapshots where country = ?",
+    [normalized],
+  )).rows[0];
+  const refreshedAt = row?.refreshed_at == null ? null : String(row.refreshed_at);
+  const refreshedMs = refreshedAt ? new Date(refreshedAt).getTime() : 0;
+  const parsed = row ? parseJson<unknown>(row.payload_json, null) : null;
+  const usable = isStoredCountryMapsData(parsed)
+    ? isUsableStoredMapsData(parsed)
+    : isCountryMapsDataShape(parsed) && isUsableMapsData(parsed);
+  const isStale = !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs || (!!row && !usable);
+  return {
+    parsed: usable && (isStoredCountryMapsData(parsed) || isCountryMapsDataShape(parsed)) ? parsed : null,
     generatedAt: row?.generated_at == null ? null : String(row.generated_at),
     refreshedAt,
     isStale,
@@ -613,6 +697,367 @@ async function hydrateCompactMapsSnapshot(db: Db, value: StoredCountryMapsData):
     farmedGeneratedAt: value.farmedGeneratedAt,
     favouritesGeneratedAt: value.favouritesGeneratedAt,
   });
+}
+
+function isUsableStoredMapsData(value: StoredCountryMapsData): boolean {
+  return (
+    value.farmed.length > 0 ||
+    value.mostPlayed.length > 0 ||
+    value.favourites.length > 0 ||
+    value.favouritesByPlayer.length > 0 ||
+    value.beatmapsetsPool.length > 0
+  );
+}
+
+async function hydrateMapsPageValue(
+  db: Db,
+  country: string,
+  parsed: StoredCountryMapsData | CountryMapsData,
+  query: MapsPageQuery,
+  refreshedAt: string | null,
+): Promise<MapsPageValue> {
+  const page = Math.max(0, Math.floor(query.page));
+  const pageSize = Math.max(1, Math.min(48, Math.floor(query.pageSize)));
+
+  if (isStoredCountryMapsData(parsed)) {
+    const value = await hydrateCompactMapsPageValue(db, country, parsed, { ...query, page, pageSize }, refreshedAt);
+    return value;
+  }
+
+  let value = await hydrateMapsSnapshotUsers(db, parsed);
+  if (query.tab === "farmed") {
+    value = await applyMapsFarmedOverlay(db, country, value, refreshedAt);
+  }
+  const allItems = filterSortMapsPageItems(value, query);
+  const items = await hydrateMapsPageItemUsers(db, allItems.slice(page * pageSize, page * pageSize + pageSize));
+  return {
+    tab: query.tab,
+    page,
+    pageSize,
+    total: allItems.length,
+    items,
+    generatedAt: value.generatedAt,
+    farmedGeneratedAt: value.farmedGeneratedAt,
+    favouritesGeneratedAt: value.favouritesGeneratedAt,
+  };
+}
+
+async function hydrateCompactMapsPageValue(
+  db: Db,
+  country: string,
+  parsed: StoredCountryMapsData,
+  query: MapsPageQuery,
+  refreshedAt: string | null,
+): Promise<MapsPageValue> {
+  let value: CountryMapsData;
+
+  if (query.tab === "farmed") {
+    value = {
+      farmed: await hydrateCompactFarmedEntries(db, parsed.farmed),
+      mostPlayed: [],
+      favourites: [],
+      favouritesByPlayer: [],
+      beatmapsetsPool: {},
+      generatedAt: parsed.generatedAt,
+      farmedGeneratedAt: parsed.farmedGeneratedAt,
+      favouritesGeneratedAt: parsed.favouritesGeneratedAt,
+    };
+    value = await applyMapsFarmedOverlay(db, country, value, refreshedAt);
+  } else if (query.tab === "popular") {
+    value = {
+      farmed: [],
+      mostPlayed: await hydrateCompactMostPlayedEntries(db, parsed.mostPlayed),
+      favourites: [],
+      favouritesByPlayer: [],
+      beatmapsetsPool: {},
+      generatedAt: parsed.generatedAt,
+      farmedGeneratedAt: parsed.farmedGeneratedAt,
+      favouritesGeneratedAt: parsed.favouritesGeneratedAt,
+    };
+  } else {
+    value = {
+      farmed: [],
+      mostPlayed: [],
+      favourites: await hydrateCompactFavouriteEntries(db, parsed.favourites),
+      favouritesByPlayer: [],
+      beatmapsetsPool: {},
+      generatedAt: parsed.generatedAt,
+      farmedGeneratedAt: parsed.farmedGeneratedAt,
+      favouritesGeneratedAt: parsed.favouritesGeneratedAt,
+    };
+  }
+
+  const allItems = filterSortMapsPageItems(value, query);
+  const items = await hydrateMapsPageItemUsers(db, allItems.slice(query.page * query.pageSize, query.page * query.pageSize + query.pageSize));
+  return {
+    tab: query.tab,
+    page: query.page,
+    pageSize: query.pageSize,
+    total: allItems.length,
+    items,
+    generatedAt: value.generatedAt,
+    farmedGeneratedAt: value.farmedGeneratedAt,
+    favouritesGeneratedAt: value.favouritesGeneratedAt,
+  };
+}
+
+async function hydrateCompactFarmedEntries(
+  db: Db,
+  entries: StoredCountryMapsData["farmed"],
+): Promise<MapsFarmedEntry[]> {
+  const beatmaps = await readMapsBeatmapsByIds(db, entries.map((entry) => entry.beatmapId));
+  const beatmapsets = await readMapsBeatmapsetsByIds(db, [...new Set([...beatmaps.values()].map((beatmap) => beatmap.beatmapsetId))]);
+
+  return entries.flatMap((entry): MapsFarmedEntry[] => {
+    const beatmap = beatmaps.get(entry.beatmapId);
+    const beatmapset = beatmap ? beatmapsets.get(beatmap.beatmapsetId) : undefined;
+    if (!beatmap || !beatmapset) return [];
+    return [{
+      beatmapId: entry.beatmapId,
+      version: beatmap.version,
+      difficultyRating: beatmap.difficultyRating,
+      totalLength: beatmap.totalLength,
+      cs: beatmap.cs,
+      bpm: beatmap.bpm,
+      beatmapsetId: beatmap.beatmapsetId,
+      title: beatmapset.title,
+      artist: beatmapset.artist,
+      creator: beatmapset.creator,
+      covers: beatmapset.covers,
+      status: beatmapset.status || beatmap.status,
+      playerCount: Number(entry.playerCount ?? entry.players.length),
+      players: entry.players.map((player) => ({
+        id: player.id,
+        username: "",
+        avatarUrl: "",
+        mods: player.mods ?? [],
+        pp: Number(player.pp ?? 0),
+        scoreUrl: player.scoreUrl,
+        playedAt: player.playedAt,
+      })),
+      avgPp: Number(entry.avgPp ?? 0),
+      maxPp: Number(entry.maxPp ?? 0),
+    }];
+  });
+}
+
+async function hydrateCompactMostPlayedEntries(
+  db: Db,
+  entries: StoredCountryMapsData["mostPlayed"],
+): Promise<MapsAggregatedBeatmap[]> {
+  const beatmaps = await readMapsBeatmapsByIds(db, entries.map((entry) => entry.beatmapId));
+  const beatmapsets = await readMapsBeatmapsetsByIds(db, [...new Set([...beatmaps.values()].map((beatmap) => beatmap.beatmapsetId))]);
+
+  return entries.flatMap((entry): MapsAggregatedBeatmap[] => {
+    const beatmap = beatmaps.get(entry.beatmapId);
+    const beatmapset = beatmap ? beatmapsets.get(beatmap.beatmapsetId) : undefined;
+    if (!beatmap || !beatmapset) return [];
+    return [{
+      beatmapId: entry.beatmapId,
+      version: beatmap.version,
+      difficultyRating: beatmap.difficultyRating,
+      totalLength: beatmap.totalLength,
+      beatmapsetId: beatmap.beatmapsetId,
+      title: beatmapset.title,
+      artist: beatmapset.artist,
+      creator: beatmapset.creator,
+      covers: beatmapset.covers,
+      status: beatmapset.status || beatmap.status,
+      globalPlayCount: beatmapset.globalPlayCount,
+      totalPlays: Number(entry.totalPlays ?? 0),
+      playerCount: Number(entry.playerCount ?? entry.players.length),
+      players: entry.players.map((player) => ({
+        id: player.id,
+        username: "",
+        avatarUrl: "",
+        count: Number(player.count ?? 0),
+      })),
+    }];
+  });
+}
+
+async function hydrateCompactFavouriteEntries(
+  db: Db,
+  entries: StoredCountryMapsData["favourites"],
+): Promise<MapsAggregatedFavourite[]> {
+  const beatmapsets = await readMapsBeatmapsetsByIds(db, entries.map((entry) => entry.beatmapsetId));
+
+  return entries.flatMap((entry): MapsAggregatedFavourite[] => {
+    const beatmapset = beatmapsets.get(entry.beatmapsetId);
+    if (!beatmapset) return [];
+    return [{
+      beatmapsetId: entry.beatmapsetId,
+      title: beatmapset.title,
+      artist: beatmapset.artist,
+      creator: beatmapset.creator,
+      covers: beatmapset.covers,
+      status: beatmapset.status,
+      globalPlayCount: beatmapset.globalPlayCount,
+      globalFavouriteCount: beatmapset.globalFavouriteCount,
+      playerCount: Number(entry.playerCount ?? entry.players.length),
+      players: entry.players.map((player) => ({ id: player.id, username: "", avatarUrl: "" })),
+    }];
+  });
+}
+
+type MapsPageItem = MapsFarmedEntry | MapsAggregatedBeatmap | MapsAggregatedFavourite;
+
+async function hydrateMapsPageItemUsers<T extends MapsPageItem>(db: Db, items: T[]): Promise<T[]> {
+  const ids = new Set<number>();
+  for (const item of items) {
+    for (const player of item.players) {
+      if (Number.isSafeInteger(player.id) && player.id > 0) ids.add(player.id);
+    }
+  }
+  if (ids.size === 0) return items;
+
+  const users = await readMapsUserDisplayByIds(db, [...ids]);
+  for (const item of items) {
+    for (const player of item.players) {
+      const user = users.get(player.id);
+      if (!user) continue;
+      if (user.username) player.username = user.username;
+      if (user.avatarUrl) player.avatarUrl = user.avatarUrl;
+    }
+  }
+  return items;
+}
+
+async function readMapsUserDisplayByIds(
+  db: Db,
+  ids: number[],
+): Promise<Map<number, { username: string; avatarUrl: string }>> {
+  const rows = await selectRowsByIntegerSet(
+    db,
+    "select user_id, username, avatar_url from users where user_id in",
+    ids,
+  );
+  return new Map(rows.map((row) => [
+    Number(row.user_id),
+    {
+      username: String(row.username ?? ""),
+      avatarUrl: String(row.avatar_url ?? ""),
+    },
+  ]));
+}
+
+function filterSortMapsPageItems(value: CountryMapsData, query: MapsPageQuery): MapsPageItem[] {
+  if (query.tab === "farmed") return filterSortFarmedMaps(value.farmed, query);
+  if (query.tab === "popular") return filterSortMostPlayedMaps(value.mostPlayed, query);
+  return filterSortFavouriteMaps(value.favourites, query);
+}
+
+function filterSortFarmedMaps(items: MapsFarmedEntry[], query: MapsPageQuery): MapsFarmedEntry[] {
+  return items
+    .map((entry) => {
+      if (query.pp <= 0) return entry;
+      const players = entry.players.filter((player) => player.pp >= query.pp);
+      const maxPp = Math.max(...players.map((player) => player.pp), 0);
+      if (players.length < 2 && maxPp < FARMED_SINGLE_PLAYER_PP_MIN) return null;
+      return {
+        ...entry,
+        players,
+        playerCount: players.length,
+        avgPp: players.reduce((sum, player) => sum + player.pp, 0) / players.length,
+        maxPp,
+      };
+    })
+    .filter(
+      (entry): entry is MapsFarmedEntry =>
+        entry !== null &&
+        matchesMapsKeyFilter(entry.cs, query.key) &&
+        matchesMapsSearch(query.q, [entry.title, entry.artist, entry.creator, entry.version]) &&
+        (query.mod === "all" || (
+          query.mod === "dt" ? getDominantMapsSpeedMod(entry.players) === "DT" :
+          query.mod === "ht" ? getDominantMapsSpeedMod(entry.players) === "HT" :
+          getDominantMapsSpeedMod(entry.players) === null
+        )),
+    )
+    .sort((a, b) => {
+      if (query.farmedSort === "players") return b.playerCount - a.playerCount || b.avgPp - a.avgPp;
+      if (query.farmedSort === "avg-pp") return b.avgPp - a.avgPp;
+      if (query.farmedSort === "max-pp") return b.maxPp - a.maxPp;
+      if (query.farmedSort === "recent") {
+        return getLatestFarmedPlayTime(b) - getLatestFarmedPlayTime(a) || b.playerCount - a.playerCount || b.avgPp - a.avgPp;
+      }
+      return b.difficultyRating - a.difficultyRating;
+    });
+}
+
+function filterSortMostPlayedMaps(items: MapsAggregatedBeatmap[], query: MapsPageQuery): MapsAggregatedBeatmap[] {
+  return items
+    .filter((entry) =>
+      matchesMapsKeyFilter(parseMapsKeyCount(entry.version), query.key) &&
+      matchesMapsSearch(query.q, [entry.title, entry.artist, entry.creator, entry.version]),
+    )
+    .sort((a, b) => {
+      if (query.beatmapSort === "plays") return b.totalPlays - a.totalPlays;
+      if (query.beatmapSort === "players") return b.playerCount - a.playerCount || b.totalPlays - a.totalPlays;
+      if (query.beatmapSort === "stars") return b.difficultyRating - a.difficultyRating;
+      return b.totalLength - a.totalLength;
+    });
+}
+
+function filterSortFavouriteMaps(items: MapsAggregatedFavourite[], query: MapsPageQuery): MapsAggregatedFavourite[] {
+  return items
+    .filter((entry) =>
+      matchesMapsStatusFilter(entry.status, query.status) &&
+      matchesMapsSearch(query.q, [entry.title, entry.artist, entry.creator]),
+    )
+    .sort((a, b) => b.playerCount - a.playerCount || b.globalFavouriteCount - a.globalFavouriteCount);
+}
+
+function parseMapsKeyCount(version: string): number | null {
+  const match = version.match(/\b(\d)K\b/i);
+  return match ? Number.parseInt(match[1], 10) : null;
+}
+
+function matchesMapsKeyFilter(keyCount: number | null, filter: MapsKeyFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "4k") return keyCount === 4;
+  if (filter === "7k") return keyCount === 7;
+  return keyCount !== null && keyCount !== 4 && keyCount !== 7;
+}
+
+function matchesMapsStatusFilter(status: string, filter: MapsStatusFilter): boolean {
+  const normalized = status.toLowerCase();
+  if (filter === "all") return true;
+  if (filter === "ranked") return normalized === "ranked" || normalized === "approved";
+  if (filter === "loved") return normalized === "loved";
+  if (filter === "graveyard") return normalized === "graveyard";
+  return normalized !== "ranked" && normalized !== "approved" && normalized !== "loved" && normalized !== "graveyard";
+}
+
+function matchesMapsSearch(query: string, fields: Array<string | null | undefined>): boolean {
+  const normalized = query.trim().toLowerCase();
+  if (!normalized) return true;
+  return fields.some((field) => (field ?? "").toLowerCase().includes(normalized));
+}
+
+function getLatestFarmedPlayTime(entry: MapsFarmedEntry): number {
+  return entry.players.reduce((latest, player) => {
+    const time = new Date(player.playedAt ?? 0).getTime();
+    return Number.isFinite(time) ? Math.max(latest, time) : latest;
+  }, 0);
+}
+
+function getDominantMapsSpeedMod(players: MapsFarmedEntry["players"]): "DT" | "HT" | null {
+  if (players.length === 0) return null;
+  let dtCount = 0;
+  let htCount = 0;
+  for (const player of players) {
+    const mods = player.mods ?? [];
+    if (mods.includes("DT") || mods.includes("NC")) dtCount++;
+    else if (mods.includes("HT")) htCount++;
+  }
+
+  if (dtCount === 0 && htCount === 0) return null;
+  if (dtCount >= htCount) return dtCount > players.length / 2 ? "DT" : null;
+  if (htCount > players.length / 2) {
+    const topPlayer = players.reduce((best, player) => (player.pp > best.pp ? player : best), players[0]);
+    if ((topPlayer.mods ?? []).includes("HT")) return "HT";
+  }
+  return null;
 }
 
 async function hasActiveMapsRefresh(db: Db, country: string): Promise<boolean> {

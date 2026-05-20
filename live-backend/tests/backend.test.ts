@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot } from "../src/features/snipes.js";
-import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefreshIfDue, getMapsSnapshot, recordMapsFarmedScore, refreshUserMapsFarmedScores } from "../src/features/maps.js";
+import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsSnapshot, recordMapsFarmedScore, refreshUserMapsFarmedScores } from "../src/features/maps.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../src/features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
 import { confirmTopPlay, getTopPlaysSnapshot, TopPlayConfirmationPendingError } from "../src/features/top-plays.js";
@@ -1699,6 +1699,101 @@ describe("live backend", () => {
     expect(random.value?.mostPlayed).toEqual([]);
     expect(random.value?.favourites).toEqual([]);
     expect(random.value?.beatmapsetsPool[10]?.title).toBe("Favourite");
+  });
+
+  it("serves maps browse tabs as paginated lightweight pages", async () => {
+    const { db, queue, events } = await setup();
+    const now = "2026-05-12T12:00:00.000Z";
+    for (const user of [
+      [101, "Alpha"],
+      [102, "Bravo"],
+      [103, "Charlie"],
+    ] as const) {
+      await exec(
+        db,
+        `insert into users (user_id, username, avatar_url, country_code, updated_at)
+         values (?, ?, ?, 'CR', ?)`,
+        [user[0], user[1], `https://assets.example/${user[0]}.png`, now],
+      );
+    }
+    for (const id of [10, 20, 30]) {
+      await exec(
+        db,
+        `insert into maps_beatmapsets
+           (beatmapset_id, title, artist, creator, status, covers_json, global_play_count, global_favourite_count, preview_url, bpm, mania_keys_json, patterns_json, updated_at)
+         values (?, ?, 'Artist', 'Mapper', 'ranked', '{}', 1, 1, '', 180, '[4]', '[]', ?)`,
+        [id, `Set ${id}`, now],
+      );
+      await exec(
+        db,
+        `insert into maps_beatmaps
+           (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, total_length, version, url, updated_at)
+         values (?, ?, 'mania', 'ranked', 4, ?, 180, ?, ?, ?, ?)`,
+        [id + 1, id, id / 10 + 4, id * 10, `[4K] ${id}`, `https://osu.ppy.sh/beatmaps/${id + 1}`, now],
+      );
+    }
+    await exec(
+      db,
+      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
+       values ('CR', ?, ?, ?)`,
+      [
+        JSON.stringify({
+          schemaVersion: 2,
+          farmed: [
+            { beatmapId: 11, playerCount: 3, avgPp: 300, maxPp: 330, players: [{ id: 101, mods: [], pp: 330, scoreUrl: null, playedAt: now }, { id: 102, mods: [], pp: 300, scoreUrl: null, playedAt: now }, { id: 103, mods: [], pp: 270, scoreUrl: null, playedAt: now }] },
+            { beatmapId: 21, playerCount: 2, avgPp: 410, maxPp: 420, players: [{ id: 101, mods: [], pp: 420, scoreUrl: null, playedAt: now }, { id: 102, mods: [], pp: 400, scoreUrl: null, playedAt: now }] },
+            { beatmapId: 31, playerCount: 1, avgPp: 550, maxPp: 550, players: [{ id: 103, mods: ["DT"], pp: 550, scoreUrl: null, playedAt: now }] },
+          ],
+          mostPlayed: [],
+          favourites: [],
+          favouritesByPlayer: [],
+          beatmapsetsPool: [],
+          generatedAt: now,
+          farmedGeneratedAt: now,
+          favouritesGeneratedAt: now,
+        }),
+        now,
+        now,
+      ],
+    );
+
+    const page = await getMapsPageSnapshot(db, queue, "CR", 7 * 24 * 60 * 60 * 1000, {
+      tab: "farmed",
+      page: 1,
+      pageSize: 2,
+      key: "all",
+      beatmapSort: "players",
+      farmedSort: "players",
+      status: "all",
+      pp: 0,
+      mod: "all",
+      q: "",
+    });
+
+    expect(page.value?.total).toBe(3);
+    expect(page.value?.items).toHaveLength(1);
+    expect(page.value?.items[0]).toMatchObject({ beatmapId: 31, title: "Set 30" });
+    expect(page.value?.items[0].players[0]).toMatchObject({ username: "Charlie" });
+
+    const response = mockRes();
+    await routeHttp(
+      mockReq("GET", "/api/snapshots/maps-page?country=CR&tab=farmed&page=0&pageSize=2", { "accept-encoding": "br" }),
+      response.res,
+      {
+        db,
+        queue,
+        events,
+        config: baseConfig(),
+        osu: {},
+        oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+      } as never,
+    );
+
+    const body = JSON.parse(response.writes.join("")) as { value: { total: number; items: unknown[] } };
+    expect(response.res.statusCode).toBe(200);
+    expect(response.headers["content-encoding"]).toBeUndefined();
+    expect(body.value.total).toBe(3);
+    expect(body.value.items).toHaveLength(2);
   });
 
   it("defers maps refreshes without marking them failed while the roster is missing", async () => {

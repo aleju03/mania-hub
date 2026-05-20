@@ -1,6 +1,17 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireAdminAccess } from "./auth";
-import type { CountryMapsData, CountryTopPlay, LeanDanEstimate, LeanTrackerScore, OsuScore, OsuUser, SnipeEvent } from "./types";
+import type {
+  CountryMapsData,
+  CountryTopPlay,
+  LeanDanEstimate,
+  LeanTrackerScore,
+  MapsAggregatedBeatmap,
+  MapsAggregatedFavourite,
+  MapsFarmedEntry,
+  OsuScore,
+  OsuUser,
+  SnipeEvent,
+} from "./types";
 
 export type LiveEventName =
   | "hello"
@@ -45,6 +56,40 @@ export interface LiveSnipesSnapshot {
 
 export interface LiveMapsSnapshot {
   value: CountryMapsData | null;
+  generatedAt: string | null;
+  refreshedAt: string | null;
+  isStale: boolean;
+  refreshQueued: boolean;
+}
+
+export type LiveMapsBrowseTab = "farmed" | "popular" | "favourites";
+
+export interface LiveMapsPageParams {
+  tab: LiveMapsBrowseTab;
+  page: number;
+  pageSize: number;
+  key: string;
+  beatmapSort: string;
+  farmedSort: string;
+  status: string;
+  pp: number;
+  mod: string;
+  q: string;
+}
+
+export interface LiveMapsPageValue {
+  tab: LiveMapsBrowseTab;
+  page: number;
+  pageSize: number;
+  total: number;
+  items: Array<MapsFarmedEntry | MapsAggregatedBeatmap | MapsAggregatedFavourite>;
+  generatedAt: string;
+  farmedGeneratedAt: string;
+  favouritesGeneratedAt: string;
+}
+
+export interface LiveMapsPageSnapshot {
+  value: LiveMapsPageValue | null;
   generatedAt: string | null;
   refreshedAt: string | null;
   isStale: boolean;
@@ -373,6 +418,26 @@ export async function fetchLiveMapsSnapshot(
   const query = new URLSearchParams({ country });
   if (section === "random") query.set("section", "random");
   return fetchLiveJson(`/api/snapshots/maps?${query.toString()}`);
+}
+
+export async function fetchLiveMapsPageSnapshot(
+  country: string,
+  params: LiveMapsPageParams,
+): Promise<LiveMapsPageSnapshot> {
+  const query = new URLSearchParams({
+    country,
+    tab: params.tab,
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+    key: params.key,
+    beatmapSort: params.beatmapSort,
+    farmedSort: params.farmedSort,
+    status: params.status,
+    pp: String(params.pp),
+    mod: params.mod,
+  });
+  if (params.q.trim()) query.set("q", params.q.trim());
+  return fetchLiveJson(`/api/snapshots/maps-page?${query.toString()}`);
 }
 
 export async function fetchLiveRankDeltas(country: string, userIds: number[]): Promise<LiveRankDeltaSnapshot> {

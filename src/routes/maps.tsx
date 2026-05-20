@@ -54,7 +54,14 @@ import { REPLAY_SCROLL_SPEED_CHANGE_EVENT, readReplayScrollSpeed } from "../lib/
 import { REPLAY_SKIN_SETTINGS_CHANGE_EVENT, readReplaySkinSettings } from "../lib/replay-skin";
 import type { ReplaySkinSettings } from "../lib/replay-skin";
 import { useAuth } from "../lib/auth-context";
-import { fetchLiveMapsSnapshot, isLiveBackendConfigured, openLiveEventSource, runLiveBackendAdminAction } from "../lib/live-backend";
+import {
+  fetchLiveMapsPageSnapshot,
+  fetchLiveMapsSnapshot,
+  isLiveBackendConfigured,
+  openLiveEventSource,
+  runLiveBackendAdminAction,
+} from "../lib/live-backend";
+import type { LiveMapsBrowseTab, LiveMapsPageValue } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
@@ -108,6 +115,7 @@ const RECENT_PLAYER_HISTORY = 2;
 const RECENT_BEATMAP_HISTORY = 5;
 const RANDOM_PICK_SETTINGS_STORAGE_KEY = "mania-hub-maps-random-pick-settings-v1";
 const SEARCH_URL_DEBOUNCE_MS = 250;
+const LIVE_MAPS_PAGE_CACHE_MAX_ENTRIES = 48;
 
 function beatmapStatusBadgeClass(status: string): string {
   const normalized = status.toLowerCase();
@@ -168,6 +176,7 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
 };
 
 type RandomPickSettings = Pick<MapsSearch, "rWeight" | "rAvoidRepeats">;
+type LiveMapsPageState = LiveMapsPageValue & { requestKey: string };
 
 function readRandomPickSettings(): Partial<RandomPickSettings> {
   if (typeof window === "undefined") return {};
@@ -832,11 +841,6 @@ function hasValidMapsDataShape(data: CountryMapsData | null): data is CountryMap
   return true;
 }
 
-function countLoadedMapsSections(data: CountryMapsData): number {
-  return (data.farmed.length > 0 ? 1 : 0)
-    + (data.mostPlayed.length > 0 || data.favourites.length > 0 || data.favouritesByPlayer.length > 0 || Object.keys(data.beatmapsetsPool).length > 0 ? 1 : 0);
-}
-
 // ── Route ──────────────────────────────────────────────────────────────────
 
 export const Route = createFileRoute("/maps")({
@@ -925,6 +929,8 @@ function MapsPage() {
   const [rebuildQuery, setRebuildQuery] = useState("");
   const [liveMapsAttempted, setLiveMapsAttempted] = useState(false);
   const [liveMapsRefreshing, setLiveMapsRefreshing] = useState(false);
+  const [liveMapsPage, setLiveMapsPage] = useState<LiveMapsPageState | null>(null);
+  const liveMapsPageCacheRef = useRef<Map<string, LiveMapsPageState>>(new Map());
   // True while the live backend is building this country's maps for the very
   // first time (no snapshot has ever existed). Distinguishes a cold first build
   // from a quick refresh of already-cached maps.
@@ -943,7 +949,6 @@ function MapsPage() {
   const [error, setError] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState<MapDetails | null>(null);
   const fetchingMapsRef = useRef(false);
-  const randomPoolFetchRef = useRef<string | null>(null);
   const tab = mapsSearch.tab;
   const page = mapsSearch.page;
   const keyFilter = mapsSearch.key;
@@ -995,6 +1000,43 @@ function MapsPage() {
   }, [randomPattern]);
   const totalRandomActive = triStateActive(randomStatus) + triStateActive(randomKey) + triStateActive(randomPattern) + (rStars > 0 || rStarsMax > 0 ? 1 : 0);
   const countryName = getCountryName(selectedCountry);
+  const liveMapsBrowseTab = tab === "random" ? null : (tab as LiveMapsBrowseTab);
+  const liveMapsPageParams = useMemo(() => liveMapsBrowseTab ? {
+    tab: liveMapsBrowseTab,
+    page,
+    pageSize: PAGE_SIZE,
+    key: keyFilter,
+    beatmapSort,
+    farmedSort,
+    status: statusFilter,
+    pp: ppFilter,
+    mod: modFilter,
+    q: routeSearchQuery,
+  } : null, [liveMapsBrowseTab, page, keyFilter, beatmapSort, farmedSort, statusFilter, ppFilter, modFilter, routeSearchQuery]);
+  const liveMapsPageRequestKey = useMemo(
+    () => liveMapsPageParams ? JSON.stringify({ country: selectedCountry, ...liveMapsPageParams }) : null,
+    [liveMapsPageParams, selectedCountry],
+  );
+  const cachedLiveMapsPage = liveMapsPageRequestKey
+    ? liveMapsPageCacheRef.current.get(liveMapsPageRequestKey) ?? null
+    : null;
+  const currentLiveMapsPage =
+    liveMapsPageRequestKey && liveMapsPage?.requestKey === liveMapsPageRequestKey
+      ? liveMapsPage
+      : cachedLiveMapsPage;
+  const liveBackendPaged = liveBackendEnabled && !!liveMapsPageParams;
+  const liveMapsPagePending = liveBackendPaged && !currentLiveMapsPage;
+  const rememberLiveMapsPage = useCallback((pageState: LiveMapsPageState) => {
+    const cache = liveMapsPageCacheRef.current;
+    cache.delete(pageState.requestKey);
+    cache.set(pageState.requestKey, pageState);
+    while (cache.size > LIVE_MAPS_PAGE_CACHE_MAX_ENTRIES) {
+      const oldestKey = cache.keys().next().value;
+      if (oldestKey === undefined) break;
+      cache.delete(oldestKey);
+    }
+    setLiveMapsPage(pageState);
+  }, []);
 
   useEffect(() => {
     if (routeSearchQuery === pendingSearchQueryRef.current) {
@@ -1021,6 +1063,8 @@ function MapsPage() {
     setError(null);
     setLiveMapsAttempted(false);
     setLiveMapsRefreshing(false);
+    setLiveMapsPage(null);
+    liveMapsPageCacheRef.current.clear();
     fetchingMapsRef.current = false;
   }, [selectedCountry, liveBackendEnabled]);
 
@@ -1043,62 +1087,40 @@ function MapsPage() {
 
   useEffect(() => {
     if (!liveBackendEnabled) return;
+    if (!liveMapsPageParams || !liveMapsPageRequestKey) return;
 
     setLiveMapsAttempted(false);
     setMapsFirstBuild(false);
-    const snapshot = useAppStore.getState();
-    const currentData = snapshot.mapsDataByCountry[selectedCountry] ?? null;
-    const currentFetchedAt = snapshot.mapsDataFetchedAtByCountry[selectedCountry] ?? null;
-    if (
-      !isCacheStale(currentFetchedAt, CLIENT_CACHE_TTL.mapsData) &&
-      hasValidMapsDataShape(currentData)
-    ) {
-      setLoadingMaps(false);
-      setLoadedSections(2);
-      return;
-    }
-
     let cancelled = false;
-    setLoadingMaps(!hasValidMapsDataShape(currentData));
-    setLoadedSections(0);
+    const cachedPage = liveMapsPageCacheRef.current.get(liveMapsPageRequestKey) ?? null;
+    setLoadingMaps(!cachedPage);
+    setLoadedSections(cachedPage ? 2 : 0);
     let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const loadSnapshot = () => {
-      fetchLiveMapsSnapshot(selectedCountry)
+    const loadPage = () => {
+      fetchLiveMapsPageSnapshot(selectedCountry, liveMapsPageParams)
         .then((snapshot) => {
           if (cancelled) return;
           setLiveMapsRefreshing(snapshot.isStale || snapshot.refreshQueued);
-          if (snapshot.value && hasValidMapsDataShape(snapshot.value)) {
-            const core = snapshot.value;
-            const cached = useAppStore.getState().mapsDataByCountry[selectedCountry] ?? null;
-            // Keep an already-fetched random pool across core refreshes when the
-            // favourites generation is unchanged, so polling doesn't drop it
-            // and re-trigger the background fetch.
-            const merged =
-              cached
-              && cached.favouritesGeneratedAt === core.favouritesGeneratedAt
-              && Object.keys(cached.beatmapsetsPool).length > 0
-                ? { ...core, beatmapsetsPool: cached.beatmapsetsPool }
-                : core;
-            setMapsData(selectedCountry, merged);
-            setLoadedSections(countLoadedMapsSections(merged));
+          if (snapshot.value) {
+            rememberLiveMapsPage({ ...snapshot.value, requestKey: liveMapsPageRequestKey });
+            setLoadedSections(2);
             setLoadingMaps(false);
             setMapsFirstBuild(false);
             setError(null);
-          } else if (!hasValidMapsDataShape(useAppStore.getState().mapsDataByCountry[selectedCountry] ?? null)) {
+          } else if (!cachedPage) {
+            setLiveMapsPage(null);
             setLoadingMaps(true);
-            // No snapshot has ever been generated for this country: this is a
-            // cold first build, not a refresh of stale cached data.
             setMapsFirstBuild(snapshot.generatedAt == null);
           }
           if (!cancelled && (snapshot.isStale || snapshot.refreshQueued)) {
-            pollTimer = setTimeout(loadSnapshot, 5_000);
+            pollTimer = setTimeout(loadPage, 5_000);
           }
         })
         .catch(() => {
-          if (!cancelled && !hasValidMapsDataShape(useAppStore.getState().mapsDataByCountry[selectedCountry] ?? null)) {
+          if (!cancelled) {
             setLoadingMaps(false);
-            setError("Couldn't load maps data. Try again later.");
+            if (!cachedPage) setError("Couldn't load maps data. Try again later.");
           }
           if (!cancelled) setLiveMapsRefreshing(false);
         })
@@ -1107,16 +1129,17 @@ function MapsPage() {
         });
     };
 
-    loadSnapshot();
+    loadPage();
 
     return () => {
       cancelled = true;
       if (pollTimer) clearTimeout(pollTimer);
     };
-  }, [liveBackendEnabled, selectedCountry, setMapsData]);
+  }, [liveBackendEnabled, liveMapsPageParams, liveMapsPageRequestKey, rememberLiveMapsPage, selectedCountry]);
 
   useEffect(() => {
     if (!liveBackendEnabled) return;
+    if (!liveMapsPageParams || !liveMapsPageRequestKey) return;
     const source = openLiveEventSource(selectedCountry);
     if (!source) return;
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1126,17 +1149,11 @@ function MapsPage() {
       if (refreshTimer) return;
       refreshTimer = setTimeout(() => {
         refreshTimer = null;
-        fetchLiveMapsSnapshot(selectedCountry)
+        fetchLiveMapsPageSnapshot(selectedCountry, liveMapsPageParams)
           .then((snapshot) => {
-            if (closed || !snapshot.value || !hasValidMapsDataShape(snapshot.value)) return;
-            const cached = useAppStore.getState().mapsDataByCountry[selectedCountry] ?? null;
-            const merged =
-              cached
-              && cached.favouritesGeneratedAt === snapshot.value.favouritesGeneratedAt
-              && Object.keys(cached.beatmapsetsPool).length > 0
-                ? { ...snapshot.value, beatmapsetsPool: cached.beatmapsetsPool }
-                : snapshot.value;
-            setMapsData(selectedCountry, merged);
+            if (closed || !snapshot.value) return;
+            liveMapsPageCacheRef.current.clear();
+            rememberLiveMapsPage({ ...snapshot.value, requestKey: liveMapsPageRequestKey });
             setLiveMapsRefreshing(snapshot.isStale || snapshot.refreshQueued);
           })
           .catch(() => {});
@@ -1149,47 +1166,68 @@ function MapsPage() {
       if (refreshTimer) clearTimeout(refreshTimer);
       source.close();
     };
-  }, [liveBackendEnabled, selectedCountry, setMapsData]);
+  }, [liveBackendEnabled, liveMapsPageParams, liveMapsPageRequestKey, rememberLiveMapsPage, selectedCountry]);
 
-  // The Random tab's heavy beatmapsetsPool is fetched separately so it doesn't
-  // weigh down /maps first paint. favouritesByPlayer ships with the core
-  // snapshot, so a country with no favourites reads as "ready" (nothing to
-  // load) instead of showing a perpetual spinner.
+  // The Random tab still needs the heavy beatmapsetsPool, so it is fetched
+  // only when Random is opened. Normal map browsing uses the paged endpoint.
   const randomPoolReady = useMemo(() => {
     if (!mapsData) return false;
     if (!mapsData.favouritesByPlayer || mapsData.favouritesByPlayer.length === 0) return true;
     return !!mapsData.beatmapsetsPool && Object.keys(mapsData.beatmapsetsPool).length > 0;
   }, [mapsData]);
 
-  const ensureRandomPool = useCallback((country: string) => {
-    if (!liveBackendEnabled) return;
-    const existing = useAppStore.getState().mapsDataByCountry[country] ?? null;
-    if (!hasValidMapsDataShape(existing)) return;
-    if (existing.favouritesByPlayer.length === 0) return;
-    if (Object.keys(existing.beatmapsetsPool).length > 0) return;
-    if (randomPoolFetchRef.current === country) return;
-    randomPoolFetchRef.current = country;
-    fetchLiveMapsSnapshot(country, "random")
-      .then((snapshot) => {
-        if (!snapshot.value) return;
-        const current = useAppStore.getState().mapsDataByCountry[country] ?? null;
-        if (!current) return;
-        if (current.favouritesGeneratedAt !== snapshot.value.favouritesGeneratedAt) return;
-        setMapsData(country, { ...current, beatmapsetsPool: snapshot.value.beatmapsetsPool });
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (randomPoolFetchRef.current === country) randomPoolFetchRef.current = null;
-      });
-  }, [liveBackendEnabled, setMapsData]);
-
-  // Prefetch the Random pool in the background once core maps data is ready, so
-  // the tab is instant when opened. Re-running on tab changes doubles as a
-  // retry when a background fetch failed.
   useEffect(() => {
-    if (!liveBackendEnabled || !hasValidMapsData || randomPoolReady) return;
-    ensureRandomPool(selectedCountry);
-  }, [liveBackendEnabled, hasValidMapsData, randomPoolReady, selectedCountry, tab, ensureRandomPool]);
+    if (!liveBackendEnabled || tab !== "random") return;
+    setLiveMapsAttempted(false);
+    if (randomPoolReady) {
+      setLoadingMaps(false);
+      setLoadedSections(2);
+      return;
+    }
+
+    let cancelled = false;
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+    setLoadingMaps(true);
+    setLoadedSections(0);
+
+    const loadRandomPool = () => {
+      fetchLiveMapsSnapshot(selectedCountry, "random")
+        .then((snapshot) => {
+          if (cancelled) return;
+          setLiveMapsRefreshing(snapshot.isStale || snapshot.refreshQueued);
+          if (snapshot.value && hasValidMapsDataShape(snapshot.value)) {
+            setMapsData(selectedCountry, snapshot.value);
+            setLoadedSections(2);
+            setLoadingMaps(false);
+            setMapsFirstBuild(false);
+            setError(null);
+          } else {
+            setLoadingMaps(true);
+            setMapsFirstBuild(snapshot.generatedAt == null);
+          }
+          if (!cancelled && (snapshot.isStale || snapshot.refreshQueued)) {
+            pollTimer = setTimeout(loadRandomPool, 5_000);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setLoadingMaps(false);
+            setLiveMapsRefreshing(false);
+            setError("Couldn't load maps data. Try again later.");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) setLiveMapsAttempted(true);
+        });
+    };
+
+    loadRandomPool();
+
+    return () => {
+      cancelled = true;
+      if (pollTimer) clearTimeout(pollTimer);
+    };
+  }, [liveBackendEnabled, randomPoolReady, selectedCountry, setMapsData, tab]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -1488,17 +1526,69 @@ function MapsPage() {
       );
   }, [visibleMapsData, statusFilter, searchQuery]);
 
+  const liveVisiblePageItems = useMemo(() => {
+    if (!currentLiveMapsPage) return [];
+    if (hiddenUserIds.size === 0) return currentLiveMapsPage.items;
+
+    if (currentLiveMapsPage.tab === "farmed") {
+      return (currentLiveMapsPage.items as MapsFarmedEntry[])
+        .map((entry) => {
+          const players = entry.players.filter((p) => !hiddenUserIds.has(p.id));
+          if (players.length === entry.players.length) return entry;
+          if (players.length === 0) return null;
+          return {
+            ...entry,
+            players,
+            playerCount: players.length,
+            avgPp: players.reduce((sum, p) => sum + p.pp, 0) / players.length,
+            maxPp: Math.max(...players.map((p) => p.pp), 0),
+          };
+        })
+        .filter((entry): entry is MapsFarmedEntry => entry !== null);
+    }
+
+    if (currentLiveMapsPage.tab === "popular") {
+      return (currentLiveMapsPage.items as MapsAggregatedBeatmap[])
+        .map((entry) => {
+          const players = entry.players.filter((p) => !hiddenUserIds.has(p.id));
+          if (players.length === entry.players.length) return entry;
+          if (players.length === 0) return null;
+          return {
+            ...entry,
+            players,
+            playerCount: players.length,
+            totalPlays: players.reduce((sum, p) => sum + p.count, 0),
+          };
+        })
+        .filter((entry): entry is MapsAggregatedBeatmap => entry !== null);
+    }
+
+    return (currentLiveMapsPage.items as MapsAggregatedFavourite[])
+      .map((entry) => {
+        const players = entry.players.filter((p) => !hiddenUserIds.has(p.id));
+        if (players.length === entry.players.length) return entry;
+        if (players.length === 0) return null;
+        return { ...entry, players, playerCount: players.length };
+      })
+      .filter((entry): entry is MapsAggregatedFavourite => entry !== null);
+  }, [currentLiveMapsPage, hiddenUserIds]);
+
   const currentList =
-    tab === "farmed"
+    liveBackendPaged
+      ? liveVisiblePageItems
+      : tab === "farmed"
       ? filteredFarmed
       : tab === "popular"
         ? filteredMostPlayed
         : tab === "favourites"
           ? filteredFavourites
           : [];
-  const totalPages = tab === "random" ? 0 : Math.ceil(currentList.length / PAGE_SIZE);
+  const currentTotal = liveBackendPaged ? (currentLiveMapsPage?.total ?? 0) : currentList.length;
+  const totalPages = tab === "random" ? 0 : Math.ceil(currentTotal / PAGE_SIZE);
   const currentRawListLength =
-    tab === "farmed"
+    liveBackendPaged
+      ? currentTotal
+      : tab === "farmed"
       ? mapsData?.farmed.length ?? 0
       : tab === "popular"
         ? mapsData?.mostPlayed.length ?? 0
@@ -1509,6 +1599,7 @@ function MapsPage() {
     liveBackendEnabled &&
     liveMapsRefreshing &&
     tab !== "random" &&
+    !liveBackendPaged &&
     !!mapsData &&
     currentRawListLength === 0;
   const currentMapsSectionLabel =
@@ -1523,7 +1614,7 @@ function MapsPage() {
     updateMapsSearch({ page: totalPages - 1 });
   }, [page, tab, totalPages]);
 
-  const paginated = tab === "random" ? [] : currentList.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const paginated = tab === "random" ? [] : liveBackendPaged ? currentList : currentList.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "farmed", label: "most farmed" },
@@ -1532,7 +1623,7 @@ function MapsPage() {
     { id: "random", label: "random picks" },
   ];
 
-  const isLoading = loadingPlayers || loadingMaps || currentMapsSectionLoading;
+  const isLoading = loadingPlayers || loadingMaps || currentMapsSectionLoading || liveMapsPagePending;
 
   // ── Random tab: pick a random top-50 player and a single random favourite ──
   const [randomPlayer, setRandomPlayer] = useState<MapsPlayerFavourites | null>(null);
@@ -1759,9 +1850,17 @@ function MapsPage() {
     try {
       if (liveBackendEnabled) {
         await runLiveBackendAdminAction({ data: { path: `/api/admin/refresh-maps?country=${selectedCountry}` } });
-        const snapshot = await fetchLiveMapsSnapshot(selectedCountry);
-        if (snapshot.value && hasValidMapsDataShape(snapshot.value)) {
-          setMapsData(selectedCountry, snapshot.value);
+        if (tab === "random") {
+          const snapshot = await fetchLiveMapsSnapshot(selectedCountry, "random");
+          if (snapshot.value && hasValidMapsDataShape(snapshot.value)) {
+            setMapsData(selectedCountry, snapshot.value);
+          }
+        } else if (liveMapsPageParams && liveMapsPageRequestKey) {
+          const snapshot = await fetchLiveMapsPageSnapshot(selectedCountry, liveMapsPageParams);
+          if (snapshot.value) {
+            liveMapsPageCacheRef.current.clear();
+            rememberLiveMapsPage({ ...snapshot.value, requestKey: liveMapsPageRequestKey });
+          }
         }
         return;
       }
@@ -1789,6 +1888,19 @@ function MapsPage() {
     }
   };
 
+  const mapsUpdatedAt =
+    tab === "farmed"
+      ? currentLiveMapsPage?.farmedGeneratedAt ?? mapsData?.farmedGeneratedAt
+      : currentLiveMapsPage?.favouritesGeneratedAt ?? mapsData?.favouritesGeneratedAt;
+  const showMapsSummary =
+    !isLoading &&
+    !error &&
+    (tab === "random"
+      ? !!mapsData && randomPoolReady
+      : liveBackendPaged
+        ? !!currentLiveMapsPage
+        : !!mapsData);
+
   return (
     <div className="flex-1">
       <PageHeader
@@ -1810,12 +1922,12 @@ function MapsPage() {
                 </span>
               </div>
             )}
-            {!isLoading && !error && mapsData && (tab !== "random" || randomPoolReady) && (
+            {showMapsSummary && mapsUpdatedAt && (
               <span className="text-[10px] text-osu-f1">
-                {tab === "random" ? randomPool.length : currentList.length} maps &middot; updated {formatTimeAgo(tab === "farmed" ? mapsData.farmedGeneratedAt : mapsData.favouritesGeneratedAt)}
+                {tab === "random" ? randomPool.length : currentTotal} maps &middot; updated {formatTimeAgo(mapsUpdatedAt)}
               </span>
             )}
-            {canUseAdminFeatures && !isLoading && !error && mapsData && (
+            {canUseAdminFeatures && !isLoading && !error && (mapsData || currentLiveMapsPage) && (
               <div ref={rebuildMenuRef} className="relative">
                 <div className="flex items-stretch rounded-lg bg-osu-red/20 border border-osu-red/30 overflow-hidden">
                   <button
@@ -2138,7 +2250,7 @@ function MapsPage() {
           )}
 
           {/* Loading skeleton grid */}
-          {!error && isLoading && (!mapsData || !hasValidMapsData) && (
+          {!error && isLoading && (liveBackendPaged ? !currentLiveMapsPage : (!mapsData || !hasValidMapsData)) && (
             <div className="space-y-3">
               {mapsFirstBuild && !loadingPlayers && (
                 <div className="rounded-lg border border-osu-b3/30 bg-osu-b4/60 px-3.5 py-2.5 text-[11px] leading-relaxed text-osu-f1">

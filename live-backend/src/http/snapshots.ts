@@ -6,7 +6,7 @@ import { activateCountry, deleteCountryData, getCountryRegistry, isCountryFeatur
 import type { Db } from "../db.js";
 import { dbHealth, exec, parseJson } from "../db.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
-import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsSnapshot, getMapsSnapshotMeta } from "../features/maps.js";
+import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsSnapshot, getMapsSnapshotMeta, type MapsPageQuery } from "../features/maps.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
@@ -193,6 +193,11 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/snapshots/snipes") {
     if (!await activatePublicCountry(req, res, ctx, country)) return true;
     sendJson(req, res, ctx, 200, await getSnipesSnapshot(ctx.db, country, clampLimit(url.searchParams.get("limit"), 500, 1000)));
+    return true;
+  }
+  if (url.pathname === "/api/snapshots/maps-page") {
+    if (!await activatePublicCountry(req, res, ctx, country)) return true;
+    await handleMapsPageSnapshot(req, res, ctx, country, parseMapsPageQuery(url.searchParams));
     return true;
   }
   if (url.pathname === "/api/snapshots/maps") {
@@ -808,12 +813,15 @@ function writePreparedJson(
 // enqueued on the activatePublicCountry path, independent of this cache.
 const MAPS_RESPONSE_CACHE_TTL_MS = 60 * 60_000;
 const MAPS_RESPONSE_CACHE_MAX_ENTRIES = 32;
+const MAPS_PAGE_RESPONSE_CACHE_TTL_MS = 10 * 60_000;
+const MAPS_PAGE_RESPONSE_CACHE_MAX_ENTRIES = 128;
 
 interface MapsResponseCacheEntry extends PreparedJsonResponse {
   storedAt: number;
 }
 
 const mapsResponseCache = new Map<string, MapsResponseCacheEntry>();
+const mapsPageResponseCache = new Map<string, MapsResponseCacheEntry>();
 
 function pruneMapsResponseCache(now: number): void {
   for (const [key, entry] of mapsResponseCache) {
@@ -825,6 +833,121 @@ function pruneMapsResponseCache(now: number): void {
     if (oldest === undefined) break;
     mapsResponseCache.delete(oldest);
   }
+}
+
+function pruneMapsPageResponseCache(now: number): void {
+  for (const [key, entry] of mapsPageResponseCache) {
+    if (now - entry.storedAt > MAPS_PAGE_RESPONSE_CACHE_TTL_MS) mapsPageResponseCache.delete(key);
+  }
+  while (mapsPageResponseCache.size > MAPS_PAGE_RESPONSE_CACHE_MAX_ENTRIES) {
+    const oldest = mapsPageResponseCache.keys().next().value;
+    if (oldest === undefined) break;
+    mapsPageResponseCache.delete(oldest);
+  }
+}
+
+function parseMapsPageQuery(params: URLSearchParams): MapsPageQuery {
+  const rawTab = params.get("tab");
+  const tab = rawTab === "popular" || rawTab === "favourites" ? rawTab : "farmed";
+  const rawKey = params.get("key");
+  const key = rawKey === "4k" || rawKey === "7k" || rawKey === "other" ? rawKey : "all";
+  const rawBeatmapSort = params.get("beatmapSort");
+  const beatmapSort =
+    rawBeatmapSort === "plays" ||
+    rawBeatmapSort === "stars" ||
+    rawBeatmapSort === "length"
+      ? rawBeatmapSort
+      : "players";
+  const rawFarmedSort = params.get("farmedSort");
+  const farmedSort =
+    rawFarmedSort === "avg-pp" ||
+    rawFarmedSort === "max-pp" ||
+    rawFarmedSort === "stars" ||
+    rawFarmedSort === "recent"
+      ? rawFarmedSort
+      : "players";
+  const rawStatus = params.get("status");
+  const status = rawStatus === "ranked" || rawStatus === "loved" || rawStatus === "graveyard" || rawStatus === "other"
+    ? rawStatus
+    : "all";
+  const rawMod = params.get("mod");
+  const mod = rawMod === "dt" || rawMod === "ht" || rawMod === "nm" ? rawMod : "all";
+  const page = clampInteger(params.get("page"), 0, 10_000, 0);
+  const pageSize = clampInteger(params.get("pageSize"), 1, 48, 24);
+  const rawPp = Number(params.get("pp") ?? 0);
+  const pp = Number.isFinite(rawPp) && rawPp > 0
+    ? Math.round(Math.min(Math.max(rawPp, 200), 1000) / 25) * 25
+    : 0;
+
+  return {
+    tab,
+    page,
+    pageSize,
+    key,
+    beatmapSort,
+    farmedSort,
+    status,
+    pp,
+    mod,
+    q: (params.get("q") ?? "").trim().slice(0, 120),
+  };
+}
+
+async function handleMapsPageSnapshot(
+  req: IncomingMessage,
+  res: ServerResponse,
+  ctx: HttpContext,
+  country: string,
+  query: MapsPageQuery,
+): Promise<void> {
+  const now = Date.now();
+  pruneMapsPageResponseCache(now);
+
+  const meta = await getMapsSnapshotMeta(ctx.db, country);
+  const farmedOverlayKey = query.tab === "farmed" ? meta.farmedOverlayUpdatedAt ?? "" : "";
+  const cacheKey = meta.refreshedAt
+    ? [
+        country.toUpperCase(),
+        query.tab,
+        query.page,
+        query.pageSize,
+        query.key,
+        query.beatmapSort,
+        query.farmedSort,
+        query.status,
+        query.pp,
+        query.mod,
+        query.q,
+        meta.refreshedAt,
+        farmedOverlayKey,
+      ].join("|")
+    : null;
+
+  if (cacheKey) {
+    const cached = mapsPageResponseCache.get(cacheKey);
+    if (cached && now - cached.storedAt <= MAPS_PAGE_RESPONSE_CACHE_TTL_MS) {
+      writePreparedJson(req, res, ctx, cached);
+      return;
+    }
+  }
+
+  const snapshot = await getMapsPageSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs, query);
+  const status = snapshot.value ? 200 : 202;
+  const prepared = prepareIdentityJsonResponse(status, snapshot);
+  writePreparedJson(req, res, ctx, prepared);
+
+  if (cacheKey && status === 200 && snapshot.value) {
+    mapsPageResponseCache.set(cacheKey, { ...prepared, storedAt: now });
+  }
+}
+
+function prepareIdentityJsonResponse(status: number, body: unknown): PreparedJsonResponse {
+  return {
+    status,
+    encoding: null,
+    vary: false,
+    body: Buffer.from(JSON.stringify(body), "utf8"),
+  };
 }
 
 async function handleMapsSnapshot(
@@ -926,6 +1049,11 @@ export function sendNotFound(res: ServerResponse): void {
 function clampLimit(raw: string | null, fallback: number, max: number): number {
   const value = Number(raw ?? fallback);
   return Number.isFinite(value) ? Math.max(1, Math.min(max, Math.floor(value))) : fallback;
+}
+
+function clampInteger(raw: string | null, min: number, max: number, fallback: number): number {
+  const value = Number(raw ?? fallback);
+  return Number.isFinite(value) ? Math.max(min, Math.min(max, Math.floor(value))) : fallback;
 }
 
 function parseUserIds(raw: string | null): number[] {
