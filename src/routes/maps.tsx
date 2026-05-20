@@ -2249,7 +2249,7 @@ function MapsPage() {
             <div className="text-center py-16 text-osu-f1 text-sm">{error}</div>
           )}
 
-          {/* Loading skeleton grid */}
+          {/* Loading skeleton */}
           {!error && isLoading && (liveBackendPaged ? !currentLiveMapsPage : (!mapsData || !hasValidMapsData)) && (
             <div className="space-y-3">
               {mapsFirstBuild && !loadingPlayers && (
@@ -2259,18 +2259,11 @@ function MapsPage() {
                 </div>
               )}
               <MapsLoadingIndicator loadingPlayers={loadingPlayers} firstBuild={mapsFirstBuild} />
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {Array.from({ length: 12 }).map((_, i) => (
-                  <div key={i} className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
-                    <Skeleton className="w-full h-[90px] rounded-none" />
-                    <div className="p-3 space-y-2">
-                      <Skeleton className="h-3.5 w-3/4" />
-                      <Skeleton className="h-3 w-1/2" />
-                      <Skeleton className="h-3 w-2/3" />
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {tab === "random" ? (
+                <RandomPickLoadingSkeleton />
+              ) : (
+                <MapsCardGridSkeleton count={12} />
+              )}
             </div>
           )}
 
@@ -2281,18 +2274,7 @@ function MapsPage() {
                 The other map tabs may appear first while this section catches up.
               </div>
               <MapsLoadingIndicator loadingPlayers={false} firstBuild={false} label={`Loading ${currentMapsSectionLabel}...`} />
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
-                    <Skeleton className="w-full h-[90px] rounded-none" />
-                    <div className="p-3 space-y-2">
-                      <Skeleton className="h-3.5 w-3/4" />
-                      <Skeleton className="h-3 w-1/2" />
-                      <Skeleton className="h-3 w-2/3" />
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <MapsCardGridSkeleton count={8} />
             </div>
           )}
 
@@ -2335,11 +2317,8 @@ function MapsPage() {
           )}
 
           {/* Random tab — pool still loading in the background */}
-          {tab === "random" && !error && !isLoading && mapsData && !randomPoolReady && (
-            <div className="flex flex-col items-center justify-center gap-3 py-20 text-osu-f1">
-              <div className="w-5 h-5 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
-              <span className="text-[11px]">Loading the random pool...</span>
-            </div>
+          {tab === "random" && !error && !isLoading && !currentMapsSectionLoading && mapsData && !randomPoolReady && (
+            <RandomPickLoadingSkeleton />
           )}
 
           {/* Random tab */}
@@ -2593,6 +2572,101 @@ function MapsLoadingIndicator({ loadingPlayers, firstBuild, label: overrideLabel
         <div className="h-full w-1/3 rounded-full bg-osu-pink animate-[indeterminate_1.5s_ease-in-out_infinite]" />
       </div>
       <span className="text-[11px] text-osu-f1 flex-shrink-0">{label}</span>
+    </div>
+  );
+}
+
+function MapsCardGridSkeleton({ count }: { count: number }) {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
+          <Skeleton className="w-full h-[90px] rounded-none" />
+          <div className="p-3 space-y-2">
+            <Skeleton className="h-3.5 w-3/4" />
+            <Skeleton className="h-3 w-1/2" />
+            <Skeleton className="h-3 w-2/3" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RandomPickLoadingSkeleton() {
+  return (
+    <div className="max-w-[640px] mx-auto space-y-5">
+      <div className="flex flex-row items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <Skeleton className="h-11 w-11 rounded-full shrink-0" />
+          <div className="min-w-0 space-y-1.5">
+            <Skeleton className="h-2.5 w-24" />
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-2.5 w-20" />
+          </div>
+        </div>
+        <div className="flex h-8 w-20 shrink-0 overflow-hidden rounded-lg border border-osu-pink/25 bg-osu-pink/10">
+          <Skeleton className="h-full flex-1 rounded-none" />
+          <div className="w-px bg-osu-pink/20" />
+          <Skeleton className="h-full w-7 rounded-none" />
+        </div>
+      </div>
+
+      <div className="relative w-[640px] max-w-full">
+        <div className="overflow-hidden rounded-2xl border border-osu-b3/20 bg-osu-b4">
+          <div className="relative h-[220px] bg-osu-b6">
+            <Skeleton className="h-full w-full rounded-none" />
+            <Skeleton className="absolute left-3 top-3 h-5 w-12 rounded-full" />
+            <div className="absolute right-3 top-3 flex gap-1">
+              <Skeleton className="h-5 w-7" />
+              <Skeleton className="h-5 w-20" />
+            </div>
+            <div className="absolute bottom-3 left-4 right-4 space-y-1.5">
+              <Skeleton className="h-5 w-1/2" />
+              <Skeleton className="h-3.5 w-1/3" />
+            </div>
+          </div>
+
+          <div className="space-y-3 px-4 py-3">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div className="min-w-0 space-y-1.5">
+                <Skeleton className="h-3 w-40" />
+                <Skeleton className="h-2.5 w-24" />
+              </div>
+              <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-start">
+                <Skeleton className="h-4 w-14" />
+                <Skeleton className="h-4 w-16" />
+                <Skeleton className="hidden h-7 w-16 rounded-full sm:block" />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Skeleton className="h-5 w-8 rounded-full" />
+              <Skeleton className="h-5 w-14 rounded-full" />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-2.5 w-6" />
+              <Skeleton className="h-8 flex-1" />
+              <Skeleton className="h-7 w-12" />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+              <Skeleton className="h-1 flex-1 min-w-[160px] rounded-full" />
+              <Skeleton className="h-2.5 w-16" />
+              <Skeleton className="h-5 w-5" />
+              <Skeleton className="h-1 w-12 rounded-full" />
+            </div>
+          </div>
+        </div>
+
+        <div
+          className="relative mt-4 min-h-[420px] overflow-visible md:absolute md:left-[calc(100%_+_24px)] md:top-[-52px] md:mt-0 md:h-[calc(100%+52px)] md:w-[300px] md:min-h-[calc(100%+52px)]"
+        >
+          <Skeleton className="absolute left-1/2 top-1/2 h-8 w-28 -translate-x-1/2 -translate-y-1/2 md:left-[150px]" />
+        </div>
+      </div>
     </div>
   );
 }
