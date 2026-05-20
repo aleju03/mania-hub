@@ -4,9 +4,8 @@ import { requireAdminAccess } from "./auth";
 import { db, ensureCacheSchema, hasDb } from "./db";
 import { trackServerEvent } from "./server-track";
 
-// Lazy zlib loader. Using a dynamic import keeps `node:zlib` out of the client
-// module graph, because this file is transitively imported client-side via
-// `clearDevServerCaches` in Nav.tsx. A top-level `import "node:zlib"` would
+// Lazy zlib loader. Using a dynamic import keeps `node:zlib` out of any client
+// module graph that reaches this file. A top-level `import "node:zlib"` would
 // otherwise be externalized by Vite and crash the browser at runtime.
 type ZlibAsync = {
   gzipAsync: (buf: Buffer) => Promise<Buffer>;

@@ -8,9 +8,8 @@ import { CountrySelector } from "./CountrySelector";
 import { SettingsDrawer } from "./SettingsDrawer";
 import { ThemePicker } from "./ThemePicker";
 import { useAuth } from "../../lib/auth-context";
-import { clearDevServerCaches } from "../../lib/api";
 import { searchUsers } from "../../lib/osu";
-import { DEFAULT_SNIPES_FILTERS, SNIPES_FILTERS_STORAGE_KEY, TOP_PLAYS_RANGE_STORAGE_KEY, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
+import { DEFAULT_SNIPES_FILTERS, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
 import { readCountryFromSearchStr } from "../../lib/country-search";
 import { getCountryFlagGradient, getCountryFlagUrl } from "../../lib/country";
 import { isLiveBackendConfigured } from "../../lib/live-backend";
@@ -27,9 +26,6 @@ const links = [
   { id: "snipes", to: "/snipes", label: "snipes" },
 ] as const;
 
-const CLIENT_CACHE_KEYS = ["mania-hub-cache-v1", "mania-hub-cache-v2", "mania-hub-cache-v3", "mania-hub-cache-v4"];
-const SKIN_DB_NAME = "mania-hub-skins";
-
 /* Nav links to /maps and /snipes target routes whose validateSearch has
    many required fields. Passing only `{ country }` would be a partial and
    TanStack Router types the object form strictly. The reducer form is
@@ -42,52 +38,6 @@ function preserveSearchWithCountry(country: string) {
 
 function preserveSearchWithCountryOnFirstPage(country: string) {
   return ((prev: Record<string, unknown>) => ({ ...prev, country, page: 0 })) as never;
-}
-
-function deleteIndexedDb(name: string): Promise<void> {
-  return new Promise((resolve) => {
-    if (typeof indexedDB === "undefined") {
-      resolve();
-      return;
-    }
-
-    const request = indexedDB.deleteDatabase(name);
-    request.onsuccess = () => resolve();
-    request.onerror = () => resolve();
-    request.onblocked = () => resolve();
-  });
-}
-
-async function clearClientCaches(): Promise<void> {
-  useAppStore.persist.clearStorage();
-
-  if (typeof window !== "undefined") {
-    CLIENT_CACHE_KEYS.forEach((key) => {
-      window.localStorage.removeItem(key);
-    });
-    window.localStorage.removeItem(TOP_PLAYS_RANGE_STORAGE_KEY);
-    window.localStorage.removeItem(SNIPES_FILTERS_STORAGE_KEY);
-    window.sessionStorage.clear();
-  }
-
-  if (typeof caches !== "undefined") {
-    const cacheNames = await caches.keys();
-    await Promise.allSettled(cacheNames.map((name) => caches.delete(name)));
-  }
-
-  if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    await Promise.allSettled(registrations.map((registration) => registration.unregister()));
-  }
-
-  await deleteIndexedDb(SKIN_DB_NAME);
-}
-
-async function clearAllDevCaches(): Promise<void> {
-  await Promise.allSettled([
-    clearClientCaches(),
-    clearDevServerCaches(),
-  ]);
 }
 
 export function Nav() {
@@ -483,18 +433,6 @@ export function Nav() {
                   </div>
                 )}
               </div>
-              {adminMode && (
-                <button
-                  onClick={async () => {
-                    await clearAllDevCaches();
-                    window.location.reload();
-                  }}
-                  className="px-2 py-1 rounded-lg bg-osu-red/20 text-[10px] text-osu-red font-semibold whitespace-nowrap hover:bg-osu-red/30 transition-colors cursor-pointer border border-osu-red/30"
-                  title="Clear dev caches, including Turso cache entries, and reload"
-                >
-                  Clear cache
-                </button>
-              )}
             </>
           )}
           {auth.viewer ? (
@@ -736,18 +674,6 @@ export function Nav() {
                   >
                     OG preview
                   </Link>
-                  {adminMode && (
-                    <button
-                      onClick={async () => {
-                        await clearAllDevCaches();
-                        window.location.reload();
-                      }}
-                      className="w-full px-3 py-2 rounded-lg bg-osu-red/20 text-[10px] text-osu-red font-semibold hover:bg-osu-red/30 transition-colors cursor-pointer border border-osu-red/30"
-                      title="Clear dev caches"
-                    >
-                      Clear cache
-                    </button>
-                  )}
                 </div>
               )}
       </div>
