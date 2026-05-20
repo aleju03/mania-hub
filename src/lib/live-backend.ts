@@ -259,7 +259,7 @@ export interface LiveBackendBootstrap {
   countryFeatures: LiveCountryFeaturesSnapshot | null;
 }
 
-const LIVE_BACKEND_BOOTSTRAP_TIMEOUT_MS = 5_000;
+const LIVE_BACKEND_BOOTSTRAP_TIMEOUT_MS = 1_000;
 
 export const fetchLiveBackendBootstrap = createServerFn({ method: "GET" })
   .handler(async (): Promise<LiveBackendBootstrap> => {
@@ -287,12 +287,17 @@ export const fetchLiveBackendBootstrap = createServerFn({ method: "GET" })
             .map((entry) => ({ country: entry.country.toUpperCase().slice(0, 2), featureTier: entry.featureTier })),
         },
       };
-    } catch {
+    } catch (error) {
+      if (isAbortError(error)) return { status: "ok", countryFeatures: null };
       return { status: "offline", countryFeatures: null };
     } finally {
       clearTimeout(timeout);
     }
   });
+
+function isAbortError(error: unknown): boolean {
+  return !!error && typeof error === "object" && "name" in error && error.name === "AbortError";
+}
 
 export const fetchLivePlayerProfileSnapshot = createServerFn({ method: "GET" })
   .inputValidator((data: { key?: unknown }) => {
