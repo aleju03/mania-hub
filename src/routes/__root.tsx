@@ -19,8 +19,9 @@ import {
 import { PostHogProvider } from "../lib/posthog-provider";
 import { getCanonicalOrigin } from "../lib/origin";
 import { DEFAULT_DESCRIPTION, SITE_NAME, websiteJsonLd } from "../lib/seo";
-import { fetchLiveCountryFeatures } from "../lib/live-backend";
-import type { LiveCountryFeaturesSnapshot } from "../lib/live-backend";
+import { fetchLiveBackendBootstrap } from "../lib/live-backend";
+import type { LiveBackendStatus, LiveCountryFeaturesSnapshot } from "../lib/live-backend";
+import { BackendOfflineScreen } from "../components/BackendOfflineScreen";
 import { seedCountryTierCache } from "../lib/use-country-warming";
 import appCss from "../styles.css?url";
 
@@ -69,6 +70,7 @@ const getInitialCountry = createServerFn({ method: "GET" }).handler(() => {
 
 type RootSlowContext = {
   auth: AuthState;
+  backendStatus: LiveBackendStatus;
   countryFeatures: LiveCountryFeaturesSnapshot | null;
 };
 
@@ -86,10 +88,14 @@ function refreshClientRootSlowContext(): Promise<RootSlowContext> {
   if (!clientRootSlowContextPromise) {
     clientRootSlowContextPromise = Promise.all([
       getCurrentAuth(),
-      fetchLiveCountryFeatures(),
+      fetchLiveBackendBootstrap(),
     ])
-      .then(([auth, countryFeatures]) => {
-        const value = { auth, countryFeatures };
+      .then(([auth, bootstrap]) => {
+        const value = {
+          auth,
+          backendStatus: bootstrap.status,
+          countryFeatures: bootstrap.countryFeatures,
+        };
         clientRootSlowContextCache = {
           value,
           expiresAt: Date.now() + CLIENT_ROOT_CONTEXT_TTL_MS,
@@ -121,6 +127,7 @@ function seedClientRootSlowContext(value: RootSlowContext): void {
     clientRootSlowContextCache &&
     clientRootSlowContextCache.expiresAt > Date.now() &&
     clientRootSlowContextCache.value.auth === value.auth &&
+    clientRootSlowContextCache.value.backendStatus === value.backendStatus &&
     clientRootSlowContextCache.value.countryFeatures === value.countryFeatures
   ) {
     return;
@@ -148,13 +155,19 @@ function getClientRootContext(): RootRouteContext | Promise<RootRouteContext> {
 }
 
 async function getServerRootContext(): Promise<RootRouteContext> {
-  const [initialCountry, origin, auth, countryFeatures] = await Promise.all([
+  const [initialCountry, origin, auth, bootstrap] = await Promise.all([
     getInitialCountry(),
     getRequestOrigin(),
     getCurrentAuth(),
-    fetchLiveCountryFeatures(),
+    fetchLiveBackendBootstrap(),
   ]);
-  return { initialCountry, origin, auth, countryFeatures };
+  return {
+    initialCountry,
+    origin,
+    auth,
+    backendStatus: bootstrap.status,
+    countryFeatures: bootstrap.countryFeatures,
+  };
 }
 
 export const Route = createRootRoute({
@@ -216,18 +229,26 @@ function NotFoundPage() {
 }
 
 function RootLayout() {
-  const { auth, initialCountry, countryFeatures } = Route.useRouteContext();
-  seedClientRootSlowContext({ auth, countryFeatures });
+  const { auth, initialCountry, backendStatus, countryFeatures } = Route.useRouteContext();
+  seedClientRootSlowContext({ auth, backendStatus, countryFeatures });
   seedCountryTierCache(countryFeatures?.countries);
   return (
     <InitialCountryContext.Provider value={initialCountry}>
       <AuthContext.Provider value={auth}>
         <PostHogProvider>
-          <Nav />
-          <RouteLoadingBar />
-          <main className="flex-1 pt-[60px]">
-            <Outlet />
-          </main>
+          {backendStatus === "offline" ? (
+            <main className="flex-1 flex">
+              <BackendOfflineScreen />
+            </main>
+          ) : (
+            <>
+              <Nav />
+              <RouteLoadingBar />
+              <main className="flex-1 pt-[60px]">
+                <Outlet />
+              </main>
+            </>
+          )}
           <footer className="px-4 py-2 text-center text-[10px] text-osu-pink-light/30">
             <span title="Not affiliated with or endorsed by osu! or ppy Pty Ltd. All game data is fetched via the public osu! API.">
               not affiliated with ppy

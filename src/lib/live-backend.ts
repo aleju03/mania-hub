@@ -207,24 +207,46 @@ export const fetchLiveBackendAdminStatus = createServerFn({ method: "GET" })
     return body;
   });
 
-export const fetchLiveCountryFeatures = createServerFn({ method: "GET" })
-  .handler(async (): Promise<LiveCountryFeaturesSnapshot | null> => {
+export type LiveBackendStatus = "ok" | "offline";
+
+export interface LiveBackendBootstrap {
+  status: LiveBackendStatus;
+  countryFeatures: LiveCountryFeaturesSnapshot | null;
+}
+
+const LIVE_BACKEND_BOOTSTRAP_TIMEOUT_MS = 5_000;
+
+export const fetchLiveBackendBootstrap = createServerFn({ method: "GET" })
+  .handler(async (): Promise<LiveBackendBootstrap> => {
     const base = getServerLiveBackendUrl();
-    if (!base) return null;
-    const response = await fetch(`${base}/api/countries/features`);
-    const body = await response.json() as Partial<LiveCountryFeaturesSnapshot>;
-    if (!response.ok || !Array.isArray(body.countries)) return null;
-    return {
-      generatedAt: typeof body.generatedAt === "string" ? body.generatedAt : new Date().toISOString(),
-      countries: body.countries
-        .filter((entry): entry is LiveCountryFeature =>
-          !!entry &&
-          typeof entry === "object" &&
-          typeof entry.country === "string" &&
-          isCountryFeatureTier((entry as Partial<LiveCountryFeature>).featureTier),
-        )
-        .map((entry) => ({ country: entry.country.toUpperCase().slice(0, 2), featureTier: entry.featureTier })),
-    };
+    if (!base) return { status: "offline", countryFeatures: null };
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LIVE_BACKEND_BOOTSTRAP_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${base}/api/countries/features`, { signal: controller.signal });
+      const body = await response.json() as Partial<LiveCountryFeaturesSnapshot>;
+      if (!response.ok || !Array.isArray(body.countries)) {
+        return { status: "offline", countryFeatures: null };
+      }
+      return {
+        status: "ok",
+        countryFeatures: {
+          generatedAt: typeof body.generatedAt === "string" ? body.generatedAt : new Date().toISOString(),
+          countries: body.countries
+            .filter((entry): entry is LiveCountryFeature =>
+              !!entry &&
+              typeof entry === "object" &&
+              typeof entry.country === "string" &&
+              isCountryFeatureTier((entry as Partial<LiveCountryFeature>).featureTier),
+            )
+            .map((entry) => ({ country: entry.country.toUpperCase().slice(0, 2), featureTier: entry.featureTier })),
+        },
+      };
+    } catch {
+      return { status: "offline", countryFeatures: null };
+    } finally {
+      clearTimeout(timeout);
+    }
   });
 
 export const fetchLivePlayerProfileSnapshot = createServerFn({ method: "GET" })
