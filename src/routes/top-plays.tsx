@@ -31,7 +31,20 @@ import { useCountryWarming } from "../lib/use-country-warming";
 type PopOff = CountryTopPlay;
 
 type TimeRange = TopPlaysRange;
-type SortMode = "recent" | "pp";
+type SortMode = "recent" | "pp" | "gain";
+
+const RANGE_WIDTH: Record<TimeRange, number> = {
+  "24h": 0,
+  "3d": 1,
+  "7d": 2,
+  "30d": 3,
+};
+
+function widerWindow(a: TimeRange | null, b: TimeRange): TimeRange {
+  if (!a) return b;
+  return RANGE_WIDTH[a] >= RANGE_WIDTH[b] ? a : b;
+}
+
 type TopPlaysSearch = {
   range: TimeRange;
   country: string | undefined;
@@ -248,7 +261,17 @@ function PopOffsPage() {
     fetchLiveTopPlaysSnapshot(requestedCountry, range)
       .then((snapshot) => {
         if (cancelled || currentCountryRef.current !== requestedCountry) return;
-        setCachedPopoffs(requestedCountry, mergePopoffs(snapshot.popoffs), snapshot.window);
+        // Merge with the existing cache so narrower-window events fetched
+        // earlier survive a wider refetch. The backend caps snapshots at
+        // 200 rows ordered by pp, so a 30d snapshot can crowd out lower-pp
+        // events that the prior 24h snapshot had — replacing would lose them.
+        const cachedPopoffs = useAppStore.getState().popoffsByCountry[requestedCountry] ?? [];
+        const cachedWindow = useAppStore.getState().popoffsWindowByCountry[requestedCountry] ?? null;
+        setCachedPopoffs(
+          requestedCountry,
+          mergePopoffs([...cachedPopoffs, ...snapshot.popoffs]),
+          widerWindow(cachedWindow, snapshot.window),
+        );
         setLoading(false);
         setRefreshing(false);
         setScanStartedAt(null);
@@ -474,6 +497,10 @@ function PopOffsPage() {
     return [...playerFiltered].sort((a, b) => {
       if (sortMode === "pp") {
         if (b.pp !== a.pp) return b.pp - a.pp;
+      } else if (sortMode === "gain") {
+        const gainA = a.ppGain ?? 0;
+        const gainB = b.ppGain ?? 0;
+        if (gainB !== gainA) return gainB - gainA;
       }
 
       return new Date(b.time).getTime() - new Date(a.time).getTime();
@@ -607,6 +634,19 @@ function PopOffsPage() {
               }`}
             >
               Highest PP
+            </button>
+            <button
+              onClick={() => {
+                setSortMode("gain");
+                setPage(0);
+              }}
+              className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+                sortMode === "gain"
+                  ? "bg-osu-pink/15 text-osu-pink-light"
+                  : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3"
+              }`}
+            >
+              Highest PP Gain
             </button>
           </div>
         </div>
