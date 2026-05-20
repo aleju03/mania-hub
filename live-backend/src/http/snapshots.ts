@@ -7,7 +7,7 @@ import type { Db } from "../db.js";
 import { dbHealth, exec, parseJson } from "../db.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
 import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsSnapshot, getMapsSnapshotMeta } from "../features/maps.js";
-import { getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../features/player-profiles.js";
+import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
 import { getTopPlaysSnapshot } from "../features/top-plays.js";
@@ -123,6 +123,16 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (profileRoute) {
     if (req.method !== "GET") {
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (profileRoute.kind === "cached-snapshot") {
+      const snapshot = await getCachedPlayerProfileSnapshot(ctx.db, profileRoute.key);
+      if (!snapshot) {
+        sendJson(req, res, ctx, 404, { error: "not_cached" });
+        return true;
+      }
+      res.setHeader("cache-control", "public, max-age=15, stale-while-revalidate=60");
+      sendJson(req, res, ctx, 200, snapshot);
       return true;
     }
     if (profileRoute.kind === "snapshot") {
@@ -927,8 +937,8 @@ function parseUserIds(raw: string | null): number[] {
     .slice(0, 100);
 }
 
-function parseProfileRoute(pathname: string): { kind: "snapshot" | "recent" | "about"; key: string } | null {
-  const match = /^\/api\/profiles\/([^/]+)\/(snapshot|recent|about)$/.exec(pathname);
+function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "about"; key: string } | null {
+  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|about)$/.exec(pathname);
   if (!match) return null;
   let key: string;
   try {
@@ -938,7 +948,7 @@ function parseProfileRoute(pathname: string): { kind: "snapshot" | "recent" | "a
   }
   return {
     key,
-    kind: match[2] as "snapshot" | "recent" | "about",
+    kind: match[2] as "cached-snapshot" | "snapshot" | "recent" | "about",
   };
 }
 

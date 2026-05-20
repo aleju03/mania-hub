@@ -6,14 +6,25 @@ import type { JobQueue } from "../jobs/queue.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { nowIso } from "../shared/score.js";
 
-type RankingStats = { pp?: number | null; global_rank?: number | null; country_rank?: number | null };
+type RankingGradeCounts = { ss?: number | null; ssh?: number | null; s?: number | null; sh?: number | null; a?: number | null };
+type RankingStats = {
+  pp?: number | null;
+  global_rank?: number | null;
+  country_rank?: number | null;
+  hit_accuracy?: number | null;
+  play_count?: number | null;
+  ranked_score?: number | null;
+  total_score?: number | null;
+  grade_counts?: RankingGradeCounts | null;
+};
 type RankingRow = RankingStats & {
   user: {
     id: number;
     username: string;
     avatar_url: string;
     country_code: string;
-    statistics?: RankingStats | null;
+    statistics?: (RankingStats & Record<string, unknown>) | null;
+    [key: string]: unknown;
   };
 };
 
@@ -35,12 +46,13 @@ export async function refreshCountryRoster(db: Db, osu: Pick<OsuApiClient, "getR
     const pp = nullableNumber(row.pp ?? user.statistics?.pp);
     const globalRank = nullablePositiveInt(row.global_rank ?? user.statistics?.global_rank);
     const countryRank = nullablePositiveInt(row.country_rank ?? user.statistics?.country_rank) ?? index + 1;
+    const storedUser = buildStoredRankingUser(row, { pp, globalRank, countryRank });
     await exec(
       db,
       `insert into users (user_id, username, avatar_url, country_code, is_active, pp, global_rank, country_rank, profile_json, updated_at)
        values (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
        on conflict(user_id) do update set username = excluded.username, avatar_url = excluded.avatar_url, country_code = excluded.country_code, pp = excluded.pp, global_rank = excluded.global_rank, country_rank = excluded.country_rank, profile_json = excluded.profile_json, updated_at = excluded.updated_at`,
-      [user.id, user.username, user.avatar_url, user.country_code, pp, globalRank, countryRank, json(user), now],
+      [user.id, user.username, user.avatar_url, user.country_code, pp, globalRank, countryRank, json(storedUser), now],
     );
     await exec(
       db,
@@ -76,4 +88,60 @@ function nullableNumber(value: unknown): number | null {
 function nullablePositiveInt(value: unknown): number | null {
   const numberValue = Number(value);
   return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
+}
+
+function nullableNonNegativeInt(value: unknown): number | null {
+  const numberValue = Number(value);
+  return Number.isInteger(numberValue) && numberValue >= 0 ? numberValue : null;
+}
+
+function buildStoredRankingUser(
+  row: RankingRow,
+  ranks: { pp: number | null; globalRank: number | null; countryRank: number | null },
+): Record<string, unknown> {
+  const existingStatistics = isRecord(row.user.statistics) ? row.user.statistics : {};
+  const statistics: Record<string, unknown> = {
+    ...existingStatistics,
+    pp: ranks.pp ?? nullableNumber(existingStatistics.pp),
+    global_rank: ranks.globalRank ?? nullablePositiveInt(existingStatistics.global_rank),
+    country_rank: ranks.countryRank ?? nullablePositiveInt(existingStatistics.country_rank),
+  };
+
+  setNumberIfPresent(statistics, "hit_accuracy", row.hit_accuracy ?? existingStatistics.hit_accuracy);
+  setIntegerIfPresent(statistics, "play_count", row.play_count ?? existingStatistics.play_count);
+  setIntegerIfPresent(statistics, "ranked_score", row.ranked_score ?? existingStatistics.ranked_score);
+  setIntegerIfPresent(statistics, "total_score", row.total_score ?? existingStatistics.total_score);
+
+  const gradeCounts = normalizeGradeCounts(row.grade_counts ?? existingStatistics.grade_counts);
+  if (gradeCounts) statistics.grade_counts = gradeCounts;
+
+  return {
+    ...row.user,
+    statistics,
+  };
+}
+
+function setNumberIfPresent(target: Record<string, unknown>, key: string, value: unknown): void {
+  const numberValue = nullableNumber(value);
+  if (numberValue != null) target[key] = numberValue;
+}
+
+function setIntegerIfPresent(target: Record<string, unknown>, key: string, value: unknown): void {
+  const numberValue = nullableNonNegativeInt(value);
+  if (numberValue != null) target[key] = numberValue;
+}
+
+function normalizeGradeCounts(value: unknown): RankingGradeCounts | null {
+  if (!isRecord(value)) return null;
+  return {
+    ss: nullableNonNegativeInt(value.ss) ?? 0,
+    ssh: nullableNonNegativeInt(value.ssh) ?? 0,
+    s: nullableNonNegativeInt(value.s) ?? 0,
+    sh: nullableNonNegativeInt(value.sh) ?? 0,
+    a: nullableNonNegativeInt(value.a) ?? 0,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value);
 }

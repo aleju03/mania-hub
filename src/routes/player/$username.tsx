@@ -6,9 +6,11 @@ import {
   getUserScoresBestWindow,
 } from "../../lib/osu";
 import {
+  fetchLivePlayerCachedProfileSnapshot,
   fetchLivePlayerAboutDirect,
   fetchLivePlayerProfileSnapshot,
   fetchLivePlayerRecentScoresDirect,
+  type LivePlayerProfileSnapshot,
 } from "../../lib/live-backend";
 import {
   formatNumber,
@@ -58,6 +60,8 @@ const PLAYER_ABOUT_CLIENT_CACHE_TTL = 2 * 60 * 1000;
 const PLAYER_ABOUT_LIVE_TIMEOUT_MS = 8_000;
 const PLAYER_RECENT_LIVE_TIMEOUT_MS = 8_000;
 const PROFILE_SNAPSHOT_BEST_GRACE_MS = 450;
+const PROFILE_SNAPSHOT_REFRESH_DEFER_MS = 2500;
+const PROFILE_CACHED_SNAPSHOT_LOADER_TIMEOUT_MS = 650;
 const INITIAL_SCORE_BATCH_SIZE = 5;
 const SHOW_MORE_BATCH_SIZE = 50;
 const BEST_SCORES_WINDOW_SIZE = 200;
@@ -69,7 +73,36 @@ const TUNG_TUNG_SAHUR_TOP_REST = { x: -3.25, y: 4, scaleY: 1, filter: "brightnes
 const TUNG_TUNG_SAHUR_ACTUATION_MS = 49;
 type PlayerTab = "best" | "recent" | "card" | "about";
 
+type PlayerLoaderData = {
+  cachedSnapshot: LivePlayerProfileSnapshot | null;
+};
+
+function withProfileLoaderBudget<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<null>((resolve) => {
+    timeoutId = setTimeout(() => resolve(null), timeoutMs);
+  });
+  return Promise.race([
+    promise.finally(() => {
+      if (timeoutId) clearTimeout(timeoutId);
+    }),
+    timeoutPromise,
+  ]);
+}
+
 export const Route = createFileRoute("/player/$username")({
+  loader: async ({ params }): Promise<PlayerLoaderData> => {
+    try {
+      return {
+        cachedSnapshot: await withProfileLoaderBudget(
+          fetchLivePlayerCachedProfileSnapshot({ data: { key: params.username } }),
+          PROFILE_CACHED_SNAPSHOT_LOADER_TIMEOUT_MS,
+        ),
+      };
+    } catch {
+      return { cachedSnapshot: null };
+    }
+  },
   head: ({ params, match }) =>
     pageSeo({
       title: `${params.username}`,
@@ -191,6 +224,32 @@ function sortBestScores(scores: OsuScore[], sort: BestSort): OsuScore[] {
     return sort === "newest" ? diff : -diff;
   });
   return copy;
+}
+
+function hasProjectedOnlyProfileStats(user: OsuUser): boolean {
+  const stats = user.statistics;
+  const gradeCount =
+    (stats.grade_counts?.ss ?? 0) +
+    (stats.grade_counts?.ssh ?? 0) +
+    (stats.grade_counts?.s ?? 0) +
+    (stats.grade_counts?.sh ?? 0) +
+    (stats.grade_counts?.a ?? 0);
+  const hasRankingSignal =
+    stats.pp > 0 ||
+    stats.global_rank != null ||
+    stats.country_rank != null;
+
+  return hasRankingSignal &&
+    stats.hit_accuracy === 0 &&
+    stats.play_count === 0 &&
+    (stats.play_time ?? 0) === 0 &&
+    stats.total_hits === 0 &&
+    gradeCount === 0;
+}
+
+function hasValidDate(value: string | null | undefined): value is string {
+  if (!value) return false;
+  return Number.isFinite(Date.parse(value));
 }
 
 export function cycleModFilterMode(current: ModFilterMode | undefined): ModFilterMode | undefined {
@@ -453,15 +512,23 @@ function loadUserBestWindowCached(userId: number): Promise<OsuScore[]> {
 
 function PlayerPage() {
   const { username } = Route.useParams();
-  const [user, setUser] = useState<OsuUser | null>(null);
-  const [best, setBest] = useState<OsuScore[]>([]);
+  const loaderData = Route.useLoaderData();
+  const loaderSnapshot = loaderData?.cachedSnapshot ?? null;
+  const loaderBestScores = useMemo(
+    () => loaderSnapshot ? dedupeScores(loaderSnapshot.bestScores) : [],
+    [loaderSnapshot],
+  );
+  const [user, setUser] = useState<OsuUser | null>(() => loaderSnapshot?.user ?? null);
+  const [best, setBest] = useState<OsuScore[]>(() => loaderBestScores);
   const [recent, setRecent] = useState<OsuScore[]>([]);
   const [aboutHtml, setAboutHtml] = useState<string | null>(null);
-  const [profileInsights, setProfileInsights] = useState<UserProfileInsights | null>(null);
-  const [loadingUser, setLoadingUser] = useState(true);
+  const [profileInsights, setProfileInsights] = useState<UserProfileInsights | null>(() =>
+    loaderBestScores.length > 0 ? calculateUserProfileInsights(loaderBestScores) : null,
+  );
+  const [loadingUser, setLoadingUser] = useState(() => !loaderSnapshot?.user);
   const [loadingRecent, setLoadingRecent] = useState(true);
   const [loadingAbout, setLoadingAbout] = useState(false);
-  const [loadingInsights, setLoadingInsights] = useState(true);
+  const [loadingInsights, setLoadingInsights] = useState(() => loaderBestScores.length === 0);
   const [userError, setUserError] = useState<string | null>(null);
   const [bestError, setBestError] = useState<string | null>(null);
   const [recentError, setRecentError] = useState<string | null>(null);
@@ -471,8 +538,8 @@ function PlayerPage() {
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
   const [bestModFilter, setBestModFilter] = useState<ModFilterState>({});
   const [bestSort, setBestSort] = useState<BestSort>("pp");
-  const [bestWindowLoaded, setBestWindowLoaded] = useState(false);
-  const [waitingForSnapshotBest, setWaitingForSnapshotBest] = useState(false);
+  const [bestWindowLoaded, setBestWindowLoaded] = useState(() => loaderBestScores.length > 0);
+  const [waitingForSnapshotBest, setWaitingForSnapshotBest] = useState(() => loaderBestScores.length === 0);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [modModalOpen, setModModalOpen] = useState(false);
   const [includeNoModUsage, setIncludeNoModUsage] = useState(true);
@@ -497,36 +564,47 @@ function PlayerPage() {
 
   useEffect(() => {
     let cancelled = false;
+    let snapshotTimer: number | null = null;
+    const hasLoaderBestScores = loaderBestScores.length > 0;
+    const seededUser = loaderSnapshot?.user ?? readCachedUser(username) ?? null;
 
-    setUser(null);
-    setBest([]);
+    setUser(seededUser);
+    setBest(loaderBestScores);
     setRecent([]);
     setAboutHtml(null);
-    setProfileInsights(null);
+    setProfileInsights(hasLoaderBestScores ? calculateUserProfileInsights(loaderBestScores) : null);
     setTab("best");
     setKeyFilter("all");
     setBestModFilter({});
     setBestSort("pp");
-    setBestWindowLoaded(false);
-    setWaitingForSnapshotBest(true);
+    setBestWindowLoaded(hasLoaderBestScores);
+    setWaitingForSnapshotBest(!hasLoaderBestScores);
     setUserError(null);
     setBestError(null);
     setRecentError(null);
     setAboutError(null);
     setInsightsError(null);
-    setLoadingUser(true);
+    setLoadingUser(!seededUser);
     setLoadingRecent(false);
     setLoadingAbout(false);
-    setLoadingInsights(true);
+    setLoadingInsights(!hasLoaderBestScores);
     setRecentHasMore(false);
     setBestVisibleCount(INITIAL_SCORE_BATCH_SIZE);
     setRecentVisibleCount(INITIAL_SCORE_BATCH_SIZE);
 
     let snapshotApplied = false;
-    const cachedUser = readCachedUser(username);
-    if (cachedUser) {
-      setUser(cachedUser);
-      setLoadingUser(false);
+    if (loaderSnapshot?.user) {
+      const cacheKey = username.trim().toLowerCase();
+      userDataCache.set(cacheKey, {
+        data: loaderSnapshot.user,
+        expiresAt: Date.now() + USER_CLIENT_CACHE_TTL,
+      });
+      if (hasLoaderBestScores) {
+        userBestWindowDataCache.set(loaderSnapshot.user.id, {
+          data: loaderBestScores,
+          expiresAt: Date.now() + USER_BEST_WINDOW_CLIENT_CACHE_TTL,
+        });
+      }
     }
 
     const applySnapshot = (result: { user: OsuUser; bestScores: OsuScore[] } | null) => {
@@ -537,10 +615,11 @@ function PlayerPage() {
       setLoadingUser(false);
       setWaitingForSnapshotBest(false);
       if (result.bestScores.length > 0) {
-        setBest(result.bestScores);
+        const dedupedScores = dedupeScores(result.bestScores);
+        setBest(dedupedScores);
         setBestWindowLoaded(true);
         setBestError(null);
-        setProfileInsights(calculateUserProfileInsights(result.bestScores));
+        setProfileInsights(calculateUserProfileInsights(dedupedScores));
         setInsightsError(null);
         setLoadingInsights(false);
       }
@@ -549,45 +628,53 @@ function PlayerPage() {
     const loadFallbackUser = () => loadUserCached(username)
       .then((result) => {
         if (cancelled) return;
-        if (!snapshotApplied && !cachedUser) setUser(result);
+        if (!snapshotApplied && !seededUser) setUser(result);
         setUserError(null);
       })
       .catch(() => {
         if (cancelled) return;
-        if (!snapshotApplied && !cachedUser) {
+        if (!snapshotApplied && !seededUser) {
           setUserError("Couldn't load this player right now.");
           setLoadingInsights(false);
         }
       })
       .finally(() => {
         if (cancelled) return;
-        if (!snapshotApplied && !cachedUser) setLoadingUser(false);
+        if (!snapshotApplied && !seededUser) setLoadingUser(false);
       });
 
-    loadPlayerSnapshotCached(username)
-      .then((snapshot) => {
-        if (cancelled) return;
-        if (snapshot) {
-          applySnapshot(snapshot);
-          return;
-        }
-        setWaitingForSnapshotBest(false);
-        if (!cachedUser) void loadFallbackUser();
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setWaitingForSnapshotBest(false);
-        if (!cachedUser) {
-          void loadFallbackUser();
-          return;
-        }
-        if (!snapshotApplied) setLoadingInsights(false);
-      });
+    const loadSnapshot = () => {
+      loadPlayerSnapshotCached(username)
+        .then((snapshot) => {
+          if (cancelled) return;
+          if (snapshot) {
+            applySnapshot(snapshot);
+            return;
+          }
+          setWaitingForSnapshotBest(false);
+          if (!seededUser) void loadFallbackUser();
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setWaitingForSnapshotBest(false);
+          if (!seededUser) {
+            void loadFallbackUser();
+            return;
+          }
+          if (!snapshotApplied && !hasLoaderBestScores) setLoadingInsights(false);
+        });
+    };
+
+    snapshotTimer = window.setTimeout(
+      loadSnapshot,
+      hasLoaderBestScores ? PROFILE_SNAPSHOT_REFRESH_DEFER_MS : 0,
+    );
 
     return () => {
       cancelled = true;
+      if (snapshotTimer) window.clearTimeout(snapshotTimer);
     };
-  }, [username]);
+  }, [loaderBestScores, loaderSnapshot, username]);
 
   useEffect(() => {
     if (!user || bestWindowLoaded || waitingForSnapshotBest) return;
@@ -731,6 +818,7 @@ function PlayerPage() {
   );
   const displayedProfileInsights = profileInsights;
   const displayedAboutHtml = aboutHtml ?? (user ? readCachedPlayerAbout(user.id) : undefined);
+  const profileStatsProjectedOnly = user ? hasProjectedOnlyProfileStats(user) : false;
 
   const cycleBestMod = useCallback((mod: string) => {
     setBestModFilter((prev) => {
@@ -1214,9 +1302,9 @@ function PlayerPage() {
           {/* Secondary stats strip: compact inline row for the remaining mirror stats */}
           <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
             <PpStat pp={stats.pp} variants={stats.variants} />
-            <CompactStat label="Accuracy" value={formatAccuracy(stats.hit_accuracy / 100)} />
-            <CompactStat label="Play Count" value={formatNumber(stats.play_count)} />
-            <CompactStat label="Play Time" value={`${formatNumber(Math.floor((stats.play_time ?? 0) / 3600))}h`} />
+            <CompactStat label="Accuracy" value={profileStatsProjectedOnly ? "-" : formatAccuracy(stats.hit_accuracy / 100)} />
+            <CompactStat label="Play Count" value={profileStatsProjectedOnly ? "-" : formatNumber(stats.play_count)} />
+            <CompactStat label="Play Time" value={profileStatsProjectedOnly ? "-" : `${formatNumber(Math.floor((stats.play_time ?? 0) / 3600))}h`} />
           </div>
 
           {/* Profile insights */}
@@ -1329,13 +1417,15 @@ function PlayerPage() {
             ] as [string, number][]).map(([grade, count]) => (
               <div key={grade} className="flex items-center gap-1.5">
                 <GradeImg grade={grade} size={28} />
-                <span className="text-xs text-osu-f1 font-medium">{formatNumber(count)}</span>
+                <span className="text-xs text-osu-f1 font-medium">{profileStatsProjectedOnly ? "-" : formatNumber(count)}</span>
               </div>
             ))}
             <div className="w-full sm:w-auto sm:ml-auto text-[11px] text-osu-f1 space-x-4">
-              <span>
-                Joined <strong className="text-osu-l2">{formatDate(user.join_date)}</strong>
-              </span>
+              {!profileStatsProjectedOnly && hasValidDate(user.join_date) && (
+                <span>
+                  Joined <strong className="text-osu-l2">{formatDate(user.join_date)}</strong>
+                </span>
+              )}
               {user.playstyle && (
                 <span>
                   Plays with{" "}

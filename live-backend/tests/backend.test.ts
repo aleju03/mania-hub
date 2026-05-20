@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot } from "../src/features/snipes.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefreshIfDue, getMapsSnapshot, recordMapsFarmedScore, refreshUserMapsFarmedScores } from "../src/features/maps.js";
-import { getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../src/features/player-profiles.js";
+import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../src/features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
 import { confirmTopPlay, getTopPlaysSnapshot, TopPlayConfirmationPendingError } from "../src/features/top-plays.js";
 import { getTrackerSnapshot } from "../src/features/tracker.js";
@@ -345,8 +345,26 @@ describe("live backend", () => {
       [now, now, now],
     );
     const ranking = [
-      { pp: 1234, global_rank: 1000, country_rank: 1, user: { id: 222, username: "Still In", avatar_url: "https://assets.example/222.png", country_code: "CR" } },
-      { pp: 1200, global_rank: 1100, country_rank: 2, user: { id: 333, username: "New In", avatar_url: "https://assets.example/333.png", country_code: "CR" } },
+      {
+        pp: 1234,
+        global_rank: 1000,
+        country_rank: 1,
+        hit_accuracy: 98.76,
+        play_count: 42,
+        ranked_score: 987654321,
+        grade_counts: { ss: 2, ssh: 1, s: 8, sh: 3, a: 13 },
+        user: { id: 222, username: "Still In", avatar_url: "https://assets.example/222.png", country_code: "CR" },
+      },
+      {
+        pp: 1200,
+        global_rank: 1100,
+        country_rank: 2,
+        hit_accuracy: 97.5,
+        play_count: 24,
+        ranked_score: 123456789,
+        grade_counts: { ss: 0, ssh: 0, s: 5, sh: 2, a: 9 },
+        user: { id: 333, username: "New In", avatar_url: "https://assets.example/333.png", country_code: "CR" },
+      },
     ];
     const osu = {
       getRanking: vi.fn(async (_country: string, page: number) => ({ ranking: page === 1 ? ranking : [] })),
@@ -373,6 +391,17 @@ describe("live backend", () => {
       "222:1234:1000:1",
       "333:1200:1100:2",
     ]);
+
+    const cached = await getCachedPlayerProfileSnapshot(db, "Still In");
+    expect(cached?.user.statistics).toMatchObject({
+      pp: 1234,
+      global_rank: 1000,
+      country_rank: 1,
+      hit_accuracy: 98.76,
+      play_count: 42,
+      ranked_score: 987654321,
+      grade_counts: { ss: 2, ssh: 1, s: 8, sh: 3, a: 13 },
+    });
 
     const snapshots = (await exec(
       db,
@@ -806,6 +835,56 @@ describe("live backend", () => {
     expect(getUserByKey).toHaveBeenCalledTimes(1);
     expect(getUser).not.toHaveBeenCalled();
     expect(getUserBestScoresWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it("serves cached player profile snapshots from local storage without an osu client", async () => {
+    const { db } = await setup();
+    const best = await fixture<OscScore[]>("top-best.json");
+    const getUserByKey = vi.fn(async () => ({
+      id: 101,
+      username: "Sniper",
+      avatar_url: "https://assets.example/sniper.png",
+      country_code: "CR",
+      statistics: { pp: 1234, global_rank: 100, country_rank: 1 },
+      page: null,
+    }));
+    const getUser = vi.fn(async () => {
+      throw new Error("cached lookup should not refresh users");
+    });
+    const getUserBestScoresWindow = vi.fn(async () => best);
+
+    await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    const cached = await getCachedPlayerProfileSnapshot(db, "sniper");
+
+    expect(cached?.user).toMatchObject({ id: 101, username: "Sniper", page: null });
+    expect(cached?.bestScores).toHaveLength(best.length);
+    expect(cached?.isStale).toBe(false);
+    expect(getUserByKey).toHaveBeenCalledTimes(1);
+    expect(getUser).not.toHaveBeenCalled();
+    expect(getUserBestScoresWindow).toHaveBeenCalledTimes(1);
+  });
+
+  it("builds a cached player shell from the live users table when no profile snapshot exists", async () => {
+    const { db } = await setup();
+    const updatedAt = new Date().toISOString();
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, is_active, pp, global_rank, country_rank, profile_json, updated_at)
+       values (101, 'Sniper', 'https://assets.example/sniper.png', 'CR', 1, 1234, 100, 1, ?, ?)`,
+      [JSON.stringify({ id: 101, username: "Sniper", avatar_url: "https://assets.example/sniper.png", country_code: "CR" }), updatedAt],
+    );
+
+    const cached = await getCachedPlayerProfileSnapshot(db, "sniper");
+
+    expect(cached?.user).toMatchObject({
+      id: 101,
+      username: "Sniper",
+      avatar_url: "https://assets.example/sniper.png",
+      country_code: "CR",
+      statistics: expect.objectContaining({ pp: 1234, global_rank: 100, country_rank: 1 }),
+    });
+    expect(cached?.bestScores).toEqual([]);
+    expect(cached?.isStale).toBe(true);
   });
 
   it("refreshes stale profile user stats without refetching the best-score snapshot", async () => {

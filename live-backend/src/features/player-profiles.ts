@@ -119,6 +119,32 @@ export async function getPlayerProfileSnapshot(
   return buildServedSnapshot(db, await fetchAndStoreProfileSnapshot(db, osu, key), false);
 }
 
+export async function getCachedPlayerProfileSnapshot(
+  db: Db,
+  rawKey: string,
+): Promise<PlayerProfileSnapshot | null> {
+  const key = normalizeProfileKey(rawKey);
+  const row = await getStoredProfileSnapshot(db, key);
+  if (row) {
+    return buildServedSnapshot(db, row, isExpired(row.fetched_at, PROFILE_SNAPSHOT_TTL_MS));
+  }
+
+  const userRow = await getStoredProfileUser(db, key);
+  if (!userRow) return null;
+
+  const fetchedAt = typeof userRow.updated_at === "string" ? userRow.updated_at : nowIso();
+  const user = buildCachedProfileUser(userRow);
+  const bestScores = await getStoredUserTopScores(db, Number(userRow.user_id));
+  return buildServedSnapshot(db, {
+    user_id: Number(userRow.user_id),
+    username_key: normalizeProfileKey(String(user.username ?? userRow.username)),
+    user_json: json(user),
+    best_scores_json: json(bestScores),
+    fetched_at: fetchedAt,
+    user_fetched_at: fetchedAt,
+  }, true);
+}
+
 export async function getPlayerRecentScores(
   db: Db,
   osu: Pick<OsuApiClient, "getUserRecentScores">,
@@ -179,6 +205,28 @@ async function getStoredProfileSnapshot(db: Db, key: string): Promise<ProfileSna
     ? (await exec(db, "select * from profile_snapshots where user_id = ?", [numericKey])).rows[0]
     : (await exec(db, "select * from profile_snapshots where username_key = ?", [key])).rows[0];
   return row ? row as unknown as ProfileSnapshotRow : null;
+}
+
+async function getStoredProfileUser(db: Db, key: string): Promise<Record<string, unknown> | null> {
+  const numericKey = Number(key);
+  const row = Number.isInteger(numericKey) && numericKey > 0
+    ? (await exec(db, "select * from users where user_id = ?", [numericKey])).rows[0]
+    : (await exec(db, "select * from users where lower(username) = ?", [key])).rows[0];
+  return row ? row as Record<string, unknown> : null;
+}
+
+async function getStoredUserTopScores(db: Db, userId: number): Promise<OscScore[]> {
+  const rows = (await exec(
+    db,
+    `select score_json from user_top_scores
+     where user_id = ?
+     order by position asc
+     limit ?`,
+    [userId, PROFILE_BEST_SCORES_LIMIT],
+  )).rows;
+  return rows
+    .map((row) => parseJson<OscScore | null>(row.score_json, null))
+    .filter((score): score is OscScore => !!score);
 }
 
 async function fetchAndStoreProfileSnapshot(
@@ -441,6 +489,99 @@ function isExpired(fetchedAt: string, ttlMs: number): boolean {
 
 function readRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function buildCachedProfileUser(row: Record<string, unknown>): Record<string, unknown> {
+  const profile = readRecord(parseJson(row.profile_json, {})) ?? {};
+  const userId = readInteger(row.user_id) ?? readInteger(profile.id) ?? 0;
+  const username = readString(row.username) ?? readString(profile.username) ?? `User ${userId}`;
+  const avatarUrl = readString(row.avatar_url) ?? readString(profile.avatar_url) ?? "";
+  const countryCode = readString(row.country_code) ?? readString(profile.country_code) ?? "";
+  const cover = readRecord(profile.cover);
+  const coverUrl = readString(cover?.url) ?? readString(profile.cover_url) ?? avatarUrl;
+
+  return stripProfilePage({
+    ...profile,
+    id: userId,
+    username,
+    avatar_url: avatarUrl,
+    cover_url: coverUrl,
+    cover: {
+      custom_url: readString(cover?.custom_url),
+      url: coverUrl,
+      id: readString(cover?.id),
+    },
+    country_code: countryCode,
+    country: readRecord(profile.country) ?? { code: countryCode, name: countryCode },
+    join_date: readString(profile.join_date) ?? "",
+    last_visit: readString(profile.last_visit),
+    is_active: readBoolean(profile.is_active) ?? readBoolean(row.is_active) ?? true,
+    is_online: readBoolean(profile.is_online) ?? false,
+    is_supporter: readBoolean(profile.is_supporter) ?? false,
+    statistics: buildCachedProfileStatistics(readRecord(profile.statistics), row),
+    rank_history: readRecord(profile.rank_history),
+    rank_highest: readRecord(profile.rank_highest),
+    badges: Array.isArray(profile.badges) ? profile.badges : [],
+    user_achievements: Array.isArray(profile.user_achievements) ? profile.user_achievements : [],
+    follower_count: readInteger(profile.follower_count) ?? 0,
+    mapping_follower_count: readInteger(profile.mapping_follower_count) ?? 0,
+    previous_usernames: Array.isArray(profile.previous_usernames) ? profile.previous_usernames : [],
+    playmode: readString(profile.playmode) ?? "mania",
+    playstyle: Array.isArray(profile.playstyle) ? profile.playstyle : null,
+    post_count: readInteger(profile.post_count) ?? 0,
+    comments_count: readInteger(profile.comments_count) ?? 0,
+  });
+}
+
+function buildCachedProfileStatistics(
+  stats: Record<string, unknown> | null,
+  row: Record<string, unknown>,
+): Record<string, unknown> {
+  const globalRank = readInteger(row.global_rank) ?? readInteger(stats?.global_rank);
+  const countryRank = readInteger(row.country_rank) ?? readInteger(stats?.country_rank);
+  const pp = readNumber(row.pp) ?? readNumber(stats?.pp) ?? 0;
+  const gradeCounts = readRecord(stats?.grade_counts);
+  const level = readRecord(stats?.level);
+  return {
+    count_300: readInteger(stats?.count_300) ?? 0,
+    count_100: readInteger(stats?.count_100) ?? 0,
+    count_50: readInteger(stats?.count_50) ?? 0,
+    count_miss: readInteger(stats?.count_miss) ?? 0,
+    global_rank: globalRank,
+    country_rank: countryRank,
+    pp,
+    ranked_score: readInteger(stats?.ranked_score) ?? 0,
+    hit_accuracy: readNumber(stats?.hit_accuracy) ?? 0,
+    play_count: readInteger(stats?.play_count) ?? 0,
+    play_time: readInteger(stats?.play_time),
+    total_score: readInteger(stats?.total_score) ?? 0,
+    total_hits: readInteger(stats?.total_hits) ?? 0,
+    maximum_combo: readInteger(stats?.maximum_combo) ?? 0,
+    replays_watched_by_others: readInteger(stats?.replays_watched_by_others) ?? 0,
+    is_ranked: readBoolean(stats?.is_ranked) ?? (globalRank != null || pp > 0),
+    grade_counts: {
+      ss: readInteger(gradeCounts?.ss) ?? 0,
+      ssh: readInteger(gradeCounts?.ssh) ?? 0,
+      s: readInteger(gradeCounts?.s) ?? 0,
+      sh: readInteger(gradeCounts?.sh) ?? 0,
+      a: readInteger(gradeCounts?.a) ?? 0,
+    },
+    level: {
+      current: readInteger(level?.current) ?? 1,
+      progress: readInteger(level?.progress) ?? 0,
+    },
+    variants: Array.isArray(stats?.variants) ? stats.variants : undefined,
+  };
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function readBoolean(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value !== 0;
+  return null;
 }
 
 function readNumber(value: unknown): number | null {

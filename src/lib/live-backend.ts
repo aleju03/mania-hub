@@ -262,6 +262,20 @@ export const fetchLivePlayerProfileSnapshot = createServerFn({ method: "GET" })
     return response.json() as Promise<LivePlayerProfileSnapshot>;
   });
 
+export const fetchLivePlayerCachedProfileSnapshot = createServerFn({ method: "GET" })
+  .inputValidator((data: { key?: unknown }) => {
+    if (typeof data?.key !== "string" || !data.key.trim()) throw new Error("Invalid profile key.");
+    return { key: data.key.trim().slice(0, 120) };
+  })
+  .handler(async ({ data }): Promise<LivePlayerProfileSnapshot | null> => {
+    const base = getServerLiveBackendUrl();
+    if (!base) return null;
+    const response = await fetch(`${base}/api/profiles/${encodeURIComponent(data.key)}/cached-snapshot`);
+    if (response.status === 404) return null;
+    if (!response.ok) throw new Error(`Live backend ${response.status} for cached profile snapshot`);
+    return response.json() as Promise<LivePlayerProfileSnapshot>;
+  });
+
 export const fetchLivePlayerRecentScores = createServerFn({ method: "GET" })
   .inputValidator((data: { userId?: unknown }) => {
     const userId = Number(data?.userId);
