@@ -39,7 +39,7 @@ const DEFAULT_SNIPES_SEARCH: SnipesSearch = {
   country: undefined,
 };
 
-const RANGE_MS: Record<Exclude<RangeFilter, "all">, number> = {
+const RANGE_MS: Record<RangeFilter, number> = {
   "24h": 24 * 60 * 60 * 1000,
   "7d": 7 * 24 * 60 * 60 * 1000,
   "30d": 30 * 24 * 60 * 60 * 1000,
@@ -59,7 +59,7 @@ function readKeys(value: unknown): KeyFilter {
   return value === "4k" || value === "7k" ? value : "all";
 }
 function readRange(value: unknown): RangeFilter {
-  return value === "24h" || value === "30d" || value === "all" ? value : "7d";
+  return value === "24h" || value === "30d" ? value : "7d";
 }
 
 export const Route = createFileRoute("/snipes")({
@@ -421,13 +421,13 @@ function SnipesPage() {
   }, [snipes, partialEvents]);
 
   const filtered = useMemo(() => {
-    const cutoff = search.range === "all" ? 0 : Date.now() - RANGE_MS[search.range];
+    const cutoff = Date.now() - RANGE_MS[search.range];
     return visibleSnipes.filter((event) => {
       // Drop the whole event if either side is hidden — a snipe row only makes
       // sense with both the sniper and the victim shown.
       if (hiddenUserIds.has(event.sniper.id) || hiddenUserIds.has(event.victim.id)) return false;
       const ts = new Date(event.timestamp).getTime();
-      if (cutoff && ts < cutoff) return false;
+      if (ts < cutoff) return false;
       if (search.keys !== "all") {
         const keys = Math.round(event.beatmap.cs);
         if (search.keys === "4k" && keys !== 4) return false;
@@ -609,9 +609,9 @@ function SnipesPage() {
             </div>
 
             <FilterGroup label="Range">
-              {(["24h", "7d", "30d", "all"] as RangeFilter[]).map((r) => (
+              {(["24h", "7d", "30d"] as RangeFilter[]).map((r) => (
                 <FilterPill key={r} active={search.range === r} onClick={() => updateSearch({ range: r, page: 0 })}>
-                  {r === "all" ? "All time" : r === "24h" ? "24h" : r === "7d" ? "7 days" : "30 days"}
+                  {r === "24h" ? "24h" : r === "7d" ? "7 days" : "30 days"}
                 </FilterPill>
               ))}
             </FilterGroup>

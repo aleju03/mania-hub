@@ -246,7 +246,7 @@ export interface CachedPopoff {
 }
 
 export type TopPlaysRange = "24h" | "3d" | "7d" | "30d";
-export type SnipesRange = "24h" | "7d" | "30d" | "all";
+export type SnipesRange = "24h" | "7d" | "30d";
 export type SnipesKeyFilter = "all" | "4k" | "7k";
 
 export interface SnipesFilters {
@@ -358,7 +358,7 @@ function writeTopPlaysRangeByCountry(ranges: CountryRecord<TopPlaysRange>): void
 }
 
 function isSnipesRange(value: unknown): value is SnipesRange {
-  return value === "24h" || value === "7d" || value === "30d" || value === "all";
+  return value === "24h" || value === "7d" || value === "30d";
 }
 
 function isSnipesKeyFilter(value: unknown): value is SnipesKeyFilter {
