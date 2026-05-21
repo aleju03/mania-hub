@@ -80,6 +80,7 @@ type Tab = "farmed" | "popular" | "favourites" | "random";
 type KeyFilter = "all" | "4k" | "7k" | "other";
 type BeatmapSort = "plays" | "players" | "stars" | "length";
 type FarmedSort = "players" | "avg-pp" | "max-pp" | "stars" | "recent";
+type SortDirection = "desc" | "asc";
 type StatusFilter = "all" | "ranked" | "loved" | "graveyard" | "other";
 type PpFilter = number;
 type ModFilter = "all" | "dt" | "ht" | "nm";
@@ -90,6 +91,7 @@ type MapsSearch = {
   key: KeyFilter;
   beatmapSort: BeatmapSort;
   farmedSort: FarmedSort;
+  dir: SortDirection;
   status: StatusFilter;
   pp: PpFilter;
   mod: ModFilter;
@@ -161,6 +163,7 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
   key: "all",
   beatmapSort: "players",
   farmedSort: "players",
+  dir: "desc",
   status: "all",
   pp: 0,
   mod: "all",
@@ -178,6 +181,7 @@ const DEFAULT_MAPS_SEARCH: MapsSearch = {
 type RandomPickSettings = Pick<MapsSearch, "rWeight" | "rAvoidRepeats">;
 type LiveMapsPageState = LiveMapsPageValue & { requestKey: string };
 const liveMapsPageSessionCache = new Map<string, LiveMapsPageState>();
+const liveMapsPageTotalSessionCache = new Map<string, number>();
 
 function readRandomPickSettings(): Partial<RandomPickSettings> {
   if (typeof window === "undefined") return {};
@@ -874,6 +878,7 @@ export const Route = createFileRoute("/maps")({
       search.farmedSort === "recent"
         ? search.farmedSort
         : DEFAULT_MAPS_SEARCH.farmedSort,
+    dir: search.dir === "asc" || search.dir === "desc" ? search.dir : DEFAULT_MAPS_SEARCH.dir,
     status: search.status === "ranked" || search.status === "loved" || search.status === "graveyard" || search.status === "other" ? search.status : DEFAULT_MAPS_SEARCH.status,
     pp: (() => {
       const n = Number(search.pp);
@@ -932,6 +937,7 @@ function MapsPage() {
   const [liveMapsRefreshing, setLiveMapsRefreshing] = useState(false);
   const [liveMapsPage, setLiveMapsPage] = useState<LiveMapsPageState | null>(null);
   const liveMapsPageCacheRef = useRef<Map<string, LiveMapsPageState>>(liveMapsPageSessionCache);
+  const liveMapsPageTotalCacheRef = useRef<Map<string, number>>(liveMapsPageTotalSessionCache);
   // True while the live backend is building this country's maps for the very
   // first time (no snapshot has ever existed). Distinguishes a cold first build
   // from a quick refresh of already-cached maps.
@@ -955,6 +961,7 @@ function MapsPage() {
   const keyFilter = mapsSearch.key;
   const beatmapSort = mapsSearch.beatmapSort;
   const farmedSort = mapsSearch.farmedSort;
+  const sortDir = mapsSearch.dir;
   const statusFilter = mapsSearch.status;
   const ppFilter = mapsSearch.pp;
   const modFilter = mapsSearch.mod;
@@ -1009,15 +1016,32 @@ function MapsPage() {
     key: keyFilter,
     beatmapSort,
     farmedSort,
+    dir: sortDir,
     status: statusFilter,
     pp: ppFilter,
     mod: modFilter,
     q: routeSearchQuery,
-  } : null, [liveMapsBrowseTab, page, keyFilter, beatmapSort, farmedSort, statusFilter, ppFilter, modFilter, routeSearchQuery]);
+  } : null, [liveMapsBrowseTab, page, keyFilter, beatmapSort, farmedSort, sortDir, statusFilter, ppFilter, modFilter, routeSearchQuery]);
   const liveMapsPageRequestKey = useMemo(
     () => liveMapsPageParams ? JSON.stringify({ country: selectedCountry, ...liveMapsPageParams }) : null,
     [liveMapsPageParams, selectedCountry],
   );
+  const liveMapsPageScopeKey = useMemo(() => {
+    if (!liveMapsPageParams) return null;
+    return JSON.stringify({
+      country: selectedCountry,
+      tab: liveMapsPageParams.tab,
+      pageSize: liveMapsPageParams.pageSize,
+      key: liveMapsPageParams.key,
+      beatmapSort: liveMapsPageParams.beatmapSort,
+      farmedSort: liveMapsPageParams.farmedSort,
+      dir: liveMapsPageParams.dir,
+      status: liveMapsPageParams.status,
+      pp: liveMapsPageParams.pp,
+      mod: liveMapsPageParams.mod,
+      q: liveMapsPageParams.q,
+    });
+  }, [liveMapsPageParams, selectedCountry]);
   const cachedLiveMapsPage = liveMapsPageRequestKey
     ? liveMapsPageCacheRef.current.get(liveMapsPageRequestKey) ?? null
     : null;
@@ -1025,6 +1049,10 @@ function MapsPage() {
     liveMapsPageRequestKey && liveMapsPage?.requestKey === liveMapsPageRequestKey
       ? liveMapsPage
       : cachedLiveMapsPage;
+  const knownLiveMapsTotal =
+    liveBackendEnabled && liveMapsPageScopeKey
+      ? currentLiveMapsPage?.total ?? liveMapsPageTotalCacheRef.current.get(liveMapsPageScopeKey) ?? 0
+      : 0;
   const liveBackendPaged = liveBackendEnabled && !!liveMapsPageParams;
   const liveMapsPagePending = liveBackendPaged && !currentLiveMapsPage;
   const rememberLiveMapsPage = useCallback((pageState: LiveMapsPageState) => {
@@ -1038,6 +1066,11 @@ function MapsPage() {
     }
     setLiveMapsPage(pageState);
   }, []);
+
+  useEffect(() => {
+    if (!liveMapsPageScopeKey || !currentLiveMapsPage) return;
+    liveMapsPageTotalCacheRef.current.set(liveMapsPageScopeKey, currentLiveMapsPage.total);
+  }, [currentLiveMapsPage, liveMapsPageScopeKey]);
 
   useEffect(() => {
     if (routeSearchQuery === pendingSearchQueryRef.current) {
@@ -1486,15 +1519,16 @@ function MapsPage() {
           )),
       )
       .sort((a, b) => {
-        if (farmedSort === "players") return b.playerCount - a.playerCount || b.avgPp - a.avgPp;
-        if (farmedSort === "avg-pp") return b.avgPp - a.avgPp;
-        if (farmedSort === "max-pp") return b.maxPp - a.maxPp;
+        const flip = sortDir === "asc" ? -1 : 1;
+        if (farmedSort === "players") return (b.playerCount - a.playerCount) * flip || b.avgPp - a.avgPp;
+        if (farmedSort === "avg-pp") return (b.avgPp - a.avgPp) * flip;
+        if (farmedSort === "max-pp") return (b.maxPp - a.maxPp) * flip;
         if (farmedSort === "recent") {
-          return getLatestFarmedPlayTime(b) - getLatestFarmedPlayTime(a) || b.playerCount - a.playerCount || b.avgPp - a.avgPp;
+          return (getLatestFarmedPlayTime(b) - getLatestFarmedPlayTime(a)) * flip || b.playerCount - a.playerCount || b.avgPp - a.avgPp;
         }
-        return b.difficultyRating - a.difficultyRating;
+        return (b.difficultyRating - a.difficultyRating) * flip;
       });
-  }, [visibleMapsData, keyFilter, searchQuery, farmedSort, ppFilter, modFilter, liveBackendPaged, tab]);
+  }, [visibleMapsData, keyFilter, searchQuery, farmedSort, sortDir, ppFilter, modFilter, liveBackendPaged, tab]);
 
   // ── Filtered + sorted: most played (from most_played endpoint) ──────────
   const filteredMostPlayed = useMemo(() => {
@@ -1507,12 +1541,13 @@ function MapsPage() {
           matchesSearch(searchQuery, [m.title, m.artist, m.creator, m.version]),
       )
       .sort((a, b) => {
-        if (beatmapSort === "plays") return b.totalPlays - a.totalPlays;
-        if (beatmapSort === "players") return b.playerCount - a.playerCount || b.totalPlays - a.totalPlays;
-        if (beatmapSort === "stars") return b.difficultyRating - a.difficultyRating;
-        return b.totalLength - a.totalLength;
+        const flip = sortDir === "asc" ? -1 : 1;
+        if (beatmapSort === "plays") return (b.totalPlays - a.totalPlays) * flip;
+        if (beatmapSort === "players") return (b.playerCount - a.playerCount) * flip || b.totalPlays - a.totalPlays;
+        if (beatmapSort === "stars") return (b.difficultyRating - a.difficultyRating) * flip;
+        return (b.totalLength - a.totalLength) * flip;
       });
-  }, [visibleMapsData, keyFilter, searchQuery, beatmapSort, liveBackendPaged, tab]);
+  }, [visibleMapsData, keyFilter, searchQuery, beatmapSort, sortDir, liveBackendPaged, tab]);
 
   // ── Filtered + sorted: favourites ───────────────────────────────────────
   const filteredFavourites = useMemo(() => {
@@ -1589,6 +1624,8 @@ function MapsPage() {
           : [];
   const currentTotal = liveBackendPaged ? (currentLiveMapsPage?.total ?? 0) : currentList.length;
   const totalPages = tab === "random" ? 0 : Math.ceil(currentTotal / PAGE_SIZE);
+  const paginationTotal = liveBackendPaged ? knownLiveMapsTotal : currentTotal;
+  const paginationTotalPages = tab === "random" ? 0 : Math.ceil(paginationTotal / PAGE_SIZE);
   const currentRawListLength =
     liveBackendPaged
       ? currentTotal
@@ -1678,15 +1715,15 @@ function MapsPage() {
         (keyFilter !== "all" ? 1 : 0) +
         (modFilter !== "all" ? 1 : 0) +
         (ppFilter > 0 ? 1 : 0) +
-        (farmedSort !== "players" ? 1 : 0)
+        (farmedSort !== "players" || sortDir !== "desc" ? 1 : 0)
       );
     }
     if (tab === "popular") {
-      return (keyFilter !== "all" ? 1 : 0) + (beatmapSort !== "players" ? 1 : 0);
+      return (keyFilter !== "all" ? 1 : 0) + (beatmapSort !== "players" || sortDir !== "desc" ? 1 : 0);
     }
     if (tab === "favourites") return statusFilter !== "all" ? 1 : 0;
     return 0;
-  }, [tab, totalRandomActive, keyFilter, modFilter, ppFilter, farmedSort, beatmapSort, statusFilter]);
+  }, [tab, totalRandomActive, keyFilter, modFilter, ppFilter, farmedSort, beatmapSort, sortDir, statusFilter]);
 
   // Reset the panel when switching tabs so the new tab doesn't open mid-overlay.
   useEffect(() => { setFiltersOpen(false); }, [tab]);
@@ -1836,7 +1873,7 @@ function MapsPage() {
     tab === "random"
       ? totalRandomActive > 0
       : (
-          searchQuery || keyFilter !== "all" || statusFilter !== "all" || ppFilter > 0 || modFilter !== "all" || beatmapSort !== "players" || farmedSort !== "players" || tab !== "farmed"
+          searchQuery || keyFilter !== "all" || statusFilter !== "all" || ppFilter > 0 || modFilter !== "all" || beatmapSort !== "players" || farmedSort !== "players" || sortDir !== "desc" || tab !== "farmed"
         );
 
   const resetFilters = () => {
@@ -2192,9 +2229,17 @@ function MapsPage() {
                       ["stars", "Stars"],
                       ["recent", "Recent Plays"],
                     ] as [FarmedSort, string][]).map(([id, label]) => (
-                      <FilterPill key={id} active={farmedSort === id} onClick={() => updateMapsSearch({ farmedSort: id, page: 0 })}>
+                      <SortPill
+                        key={id}
+                        active={farmedSort === id}
+                        dir={sortDir}
+                        onClick={() => {
+                          const nextDir: SortDirection = farmedSort === id ? (sortDir === "desc" ? "asc" : "desc") : "desc";
+                          updateMapsSearch({ farmedSort: id, dir: nextDir, page: 0 });
+                        }}
+                      >
                         {label}
-                      </FilterPill>
+                      </SortPill>
                     ))}
                   </FilterGroup>
                 </>
@@ -2217,9 +2262,17 @@ function MapsPage() {
                       ["stars", "Stars"],
                       ["length", "Length"],
                     ] as [BeatmapSort, string][]).map(([id, label]) => (
-                      <FilterPill key={id} active={beatmapSort === id} onClick={() => updateMapsSearch({ beatmapSort: id, page: 0 })}>
+                      <SortPill
+                        key={id}
+                        active={beatmapSort === id}
+                        dir={sortDir}
+                        onClick={() => {
+                          const nextDir: SortDirection = beatmapSort === id ? (sortDir === "desc" ? "asc" : "desc") : "desc";
+                          updateMapsSearch({ beatmapSort: id, dir: nextDir, page: 0 });
+                        }}
+                      >
                         {label}
-                      </FilterPill>
+                      </SortPill>
                     ))}
                   </FilterGroup>
                 </>
@@ -2267,7 +2320,7 @@ function MapsPage() {
               {tab === "random" ? (
                 <RandomPickLoadingSkeleton />
               ) : (
-                <MapsCardGridSkeleton count={12} />
+                <MapsCardGridSkeleton count={PAGE_SIZE} />
               )}
             </div>
           )}
@@ -2530,8 +2583,13 @@ function MapsPage() {
           )}
 
           {/* Pagination */}
-          {tab !== "random" && !currentMapsSectionLoading && (
-            <Pagination page={page} totalPages={totalPages} onPageChange={(p) => updateMapsSearch({ page: p })} />
+          {tab !== "random" && !currentMapsSectionLoading && paginationTotalPages > 1 && (
+            <div
+              className="sticky bottom-0 z-10 -mx-4 sm:-mx-5 mt-6 px-4 sm:px-5 py-2 bg-osu-b5/90 backdrop-blur-sm border-t border-osu-b3/30 [&>div]:!mt-0 relative after:absolute after:left-0 after:right-0 after:top-full after:h-4 after:bg-osu-b5/90 after:backdrop-blur-sm after:content-['']"
+              style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))" }}
+            >
+              <Pagination page={page} totalPages={paginationTotalPages} onPageChange={(p) => updateMapsSearch({ page: p })} />
+            </div>
           )}
         </div>
       </div>
@@ -2684,6 +2742,38 @@ function FilterGroup({ label, children }: { label: string; children: React.React
       <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold shrink-0">{label}</span>
       <div className="flex min-w-0 flex-wrap gap-0.5">{children}</div>
     </div>
+  );
+}
+
+function SortPill({
+  active,
+  dir,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  dir: SortDirection;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-2 py-1 rounded text-[10px] font-medium transition-colors cursor-pointer inline-flex items-center gap-1 ${
+        active
+          ? "bg-osu-pink/20 text-osu-pink-light"
+          : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3"
+      }`}
+      aria-pressed={active}
+      title={active ? (dir === "desc" ? "Click to sort ascending" : "Click to sort descending") : undefined}
+    >
+      <span>{children}</span>
+      {active && (
+        <span aria-hidden className="text-[9px] leading-none opacity-90">
+          {dir === "desc" ? "↓" : "↑"}
+        </span>
+      )}
+    </button>
   );
 }
 

@@ -32,6 +32,7 @@ type PopOff = CountryTopPlay;
 
 type TimeRange = TopPlaysRange;
 type SortMode = "recent" | "pp" | "gain";
+type SortDirection = "desc" | "asc";
 
 const RANGE_WIDTH: Record<TimeRange, number> = {
   "24h": 0,
@@ -48,6 +49,8 @@ function widerWindow(a: TimeRange | null, b: TimeRange): TimeRange {
 type TopPlaysSearch = {
   range: TimeRange;
   country: string | undefined;
+  sort: SortMode;
+  dir: SortDirection;
 };
 
 const RANGE_MS: Record<TimeRange, number> = {
@@ -62,6 +65,8 @@ const PP_GAIN_SKELETON_COUNT = 6;
 const DEFAULT_TOP_PLAYS_SEARCH: TopPlaysSearch = {
   range: "7d",
   country: undefined,
+  sort: "recent",
+  dir: "desc",
 };
 
 export const Route = createFileRoute("/top-plays")({
@@ -87,6 +92,11 @@ export const Route = createFileRoute("/top-plays")({
         ? search.range
         : DEFAULT_TOP_PLAYS_SEARCH.range,
     country: parseCountrySearchParam(search.country),
+    sort:
+      search.sort === "recent" || search.sort === "pp" || search.sort === "gain"
+        ? search.sort
+        : DEFAULT_TOP_PLAYS_SEARCH.sort,
+    dir: search.dir === "asc" || search.dir === "desc" ? search.dir : DEFAULT_TOP_PLAYS_SEARCH.dir,
   }),
   component: PopOffsPage,
 });
@@ -94,7 +104,7 @@ export const Route = createFileRoute("/top-plays")({
 const EMPTY_POPOFFS: CachedPopoff[] = [];
 
 function PopOffsPage() {
-  const { range, country } = Route.useSearch();
+  const { range, country, sort, dir } = Route.useSearch();
   const location = useLocation();
   const navigate = useNavigate();
   const fallbackCountry = useSelectedCountry();
@@ -116,7 +126,6 @@ function PopOffsPage() {
   const [loadingPlayers, setLoadingPlayers] = useState(!rankings);
   const [loading, setLoading] = useState(!hasCachedPopoffs);
   const [refreshing, setRefreshing] = useState(false);
-  const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [page, setPage] = useState(0);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [scanStartedAt, setScanStartedAt] = useState<number | null>(null);
@@ -162,11 +171,11 @@ function PopOffsPage() {
 
     navigate({
       to: "/top-plays",
-      search: { range: rememberedRange, country },
+      search: { range: rememberedRange, country, sort, dir },
       replace: true,
       resetScroll: false,
     });
-  }, [country, location.searchStr, navigate, range, rememberedRange]);
+  }, [country, location.searchStr, navigate, range, rememberedRange, sort, dir]);
 
   useEffect(() => {
     if (rememberedRange === range) return;
@@ -494,18 +503,21 @@ function PopOffsPage() {
       ? rangedPopoffs.filter((popoff) => selectedPlayerIdSet.has(popoff.user.id))
       : rangedPopoffs;
 
+    const flip = dir === "asc" ? -1 : 1;
     return [...playerFiltered].sort((a, b) => {
-      if (sortMode === "pp") {
-        if (b.pp !== a.pp) return b.pp - a.pp;
-      } else if (sortMode === "gain") {
+      if (sort === "pp") {
+        if (b.pp !== a.pp) return (b.pp - a.pp) * flip;
+      } else if (sort === "gain") {
         const gainA = a.ppGain ?? 0;
         const gainB = b.ppGain ?? 0;
-        if (gainB !== gainA) return gainB - gainA;
+        if (gainB !== gainA) return (gainB - gainA) * flip;
+      } else {
+        return (new Date(b.time).getTime() - new Date(a.time).getTime()) * flip;
       }
 
       return new Date(b.time).getTime() - new Date(a.time).getTime();
     });
-  }, [rangedPopoffs, selectedPlayerIdSet, selectedPlayerIds.length, sortMode]);
+  }, [rangedPopoffs, selectedPlayerIdSet, selectedPlayerIds.length, sort, dir]);
 
   const playerPpGains = useMemo(() => {
     const byUser = new Map<number, { username: string; avatar_url: string; totalGain: number }>();
@@ -587,7 +599,7 @@ function PopOffsPage() {
             setTopPlaysRange(selectedCountry, nextRange);
             navigate({
               to: "/top-plays",
-              search: { range: nextRange, country },
+              search: { range: nextRange, country, sort, dir },
               replace: true,
               resetScroll: false,
             });
@@ -609,45 +621,29 @@ function PopOffsPage() {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                setSortMode("recent");
-                setPage(0);
-              }}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
-                sortMode === "recent"
-                  ? "bg-osu-pink/15 text-osu-pink-light"
-                  : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3"
-              }`}
-            >
-              Most Recent
-            </button>
-            <button
-              onClick={() => {
-                setSortMode("pp");
-                setPage(0);
-              }}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
-                sortMode === "pp"
-                  ? "bg-osu-pink/15 text-osu-pink-light"
-                  : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3"
-              }`}
-            >
-              Highest PP
-            </button>
-            <button
-              onClick={() => {
-                setSortMode("gain");
-                setPage(0);
-              }}
-              className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
-                sortMode === "gain"
-                  ? "bg-osu-pink/15 text-osu-pink-light"
-                  : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3"
-              }`}
-            >
-              Highest PP Gain
-            </button>
+            {([
+              ["recent", "Recent"],
+              ["pp", "PP"],
+              ["gain", "PP Gain"],
+            ] as const).map(([id, label]) => (
+              <SortPill
+                key={id}
+                active={sort === id}
+                dir={dir}
+                onClick={() => {
+                  const nextDir: SortDirection = sort === id ? (dir === "desc" ? "asc" : "desc") : "desc";
+                  navigate({
+                    to: "/top-plays",
+                    search: { range, country, sort: id, dir: nextDir },
+                    replace: true,
+                    resetScroll: false,
+                  });
+                  setPage(0);
+                }}
+              >
+                {label}
+              </SortPill>
+            ))}
           </div>
         </div>
       </div>
@@ -1024,6 +1020,38 @@ function PopOffsPage() {
       </div>
       )}
     </div>
+  );
+}
+
+function SortPill({
+  active,
+  dir,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  dir: SortDirection;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer inline-flex items-center gap-1 ${
+        active
+          ? "bg-osu-pink/15 text-osu-pink-light"
+          : "bg-osu-b4 text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3"
+      }`}
+      aria-pressed={active}
+      title={active ? (dir === "desc" ? "Click to sort ascending" : "Click to sort descending") : undefined}
+    >
+      <span>{children}</span>
+      {active && (
+        <span aria-hidden className="text-[10px] leading-none opacity-90">
+          {dir === "desc" ? "↓" : "↑"}
+        </span>
+      )}
+    </button>
   );
 }
 

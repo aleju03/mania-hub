@@ -283,6 +283,7 @@ export type MapsBrowseTab = "farmed" | "popular" | "favourites";
 export type MapsKeyFilter = "all" | "4k" | "7k" | "other";
 export type MapsBeatmapSort = "players" | "plays" | "stars" | "length";
 export type MapsFarmedSort = "players" | "avg-pp" | "max-pp" | "stars" | "recent";
+export type MapsSortDirection = "desc" | "asc";
 export type MapsStatusFilter = "all" | "ranked" | "loved" | "graveyard" | "other";
 export type MapsModFilter = "all" | "dt" | "ht" | "nm";
 
@@ -293,6 +294,7 @@ export interface MapsPageQuery {
   key: MapsKeyFilter;
   beatmapSort: MapsBeatmapSort;
   farmedSort: MapsFarmedSort;
+  dir: MapsSortDirection;
   status: MapsStatusFilter;
   pp: number;
   mod: MapsModFilter;
@@ -974,13 +976,14 @@ function filterSortFarmedMaps(items: MapsFarmedEntry[], query: MapsPageQuery): M
         )),
     )
     .sort((a, b) => {
-      if (query.farmedSort === "players") return b.playerCount - a.playerCount || b.avgPp - a.avgPp;
-      if (query.farmedSort === "avg-pp") return b.avgPp - a.avgPp;
-      if (query.farmedSort === "max-pp") return b.maxPp - a.maxPp;
+      const flip = query.dir === "asc" ? -1 : 1;
+      if (query.farmedSort === "players") return (b.playerCount - a.playerCount) * flip || b.avgPp - a.avgPp;
+      if (query.farmedSort === "avg-pp") return (b.avgPp - a.avgPp) * flip;
+      if (query.farmedSort === "max-pp") return (b.maxPp - a.maxPp) * flip;
       if (query.farmedSort === "recent") {
-        return getLatestFarmedPlayTime(b) - getLatestFarmedPlayTime(a) || b.playerCount - a.playerCount || b.avgPp - a.avgPp;
+        return (getLatestFarmedPlayTime(b) - getLatestFarmedPlayTime(a)) * flip || b.playerCount - a.playerCount || b.avgPp - a.avgPp;
       }
-      return b.difficultyRating - a.difficultyRating;
+      return (b.difficultyRating - a.difficultyRating) * flip;
     });
 }
 
@@ -991,10 +994,11 @@ function filterSortMostPlayedMaps(items: MapsAggregatedBeatmap[], query: MapsPag
       matchesMapsSearch(query.q, [entry.title, entry.artist, entry.creator, entry.version]),
     )
     .sort((a, b) => {
-      if (query.beatmapSort === "plays") return b.totalPlays - a.totalPlays;
-      if (query.beatmapSort === "players") return b.playerCount - a.playerCount || b.totalPlays - a.totalPlays;
-      if (query.beatmapSort === "stars") return b.difficultyRating - a.difficultyRating;
-      return b.totalLength - a.totalLength;
+      const flip = query.dir === "asc" ? -1 : 1;
+      if (query.beatmapSort === "plays") return (b.totalPlays - a.totalPlays) * flip;
+      if (query.beatmapSort === "players") return (b.playerCount - a.playerCount) * flip || b.totalPlays - a.totalPlays;
+      if (query.beatmapSort === "stars") return (b.difficultyRating - a.difficultyRating) * flip;
+      return (b.totalLength - a.totalLength) * flip;
     });
 }
 

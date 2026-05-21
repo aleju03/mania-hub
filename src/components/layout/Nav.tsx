@@ -218,7 +218,11 @@ export function Nav() {
       return;
     }
     if (location.pathname === "/top-plays") {
-      navigate({ to: "/top-plays", search: { country, range: topPlaysRangeForLink }, replace: true });
+      navigate({
+        to: "/top-plays",
+        search: { country, range: topPlaysRangeForLink, sort: "recent", dir: "desc" },
+        replace: true,
+      });
       return;
     }
     if (location.pathname === "/tracker") {

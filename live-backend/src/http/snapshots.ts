@@ -866,6 +866,8 @@ function parseMapsPageQuery(params: URLSearchParams): MapsPageQuery {
     rawFarmedSort === "recent"
       ? rawFarmedSort
       : "players";
+  const rawDir = params.get("dir");
+  const dir = rawDir === "asc" ? "asc" : "desc";
   const rawStatus = params.get("status");
   const status = rawStatus === "ranked" || rawStatus === "loved" || rawStatus === "graveyard" || rawStatus === "other"
     ? rawStatus
@@ -886,6 +888,7 @@ function parseMapsPageQuery(params: URLSearchParams): MapsPageQuery {
     key,
     beatmapSort,
     farmedSort,
+    dir,
     status,
     pp,
     mod,
@@ -914,6 +917,7 @@ async function handleMapsPageSnapshot(
         query.key,
         query.beatmapSort,
         query.farmedSort,
+        query.dir,
         query.status,
         query.pp,
         query.mod,

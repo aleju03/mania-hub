@@ -1824,6 +1824,7 @@ describe("live backend", () => {
       key: "all",
       beatmapSort: "players",
       farmedSort: "players",
+      dir: "desc",
       status: "all",
       pp: 0,
       mod: "all",

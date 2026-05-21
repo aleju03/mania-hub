@@ -96,12 +96,24 @@ export const Route = createFileRoute("/tracker")({
 type ScoreFilter = "all" | "ranked";
 type GradeFilter = "all" | "SS" | "S" | "A" | "B";
 type KeyFilter = "all" | "4k" | "7k";
+type MissFilter = "all" | "fc" | "fc_choke";
 
 function scoreMatchesKeyFilter(score: LeanTrackerScore, keyFilter: KeyFilter): boolean {
   if (keyFilter === "all") return true;
   const keys = score.beatmap?.cs;
   if (keys == null) return false;
   return keyFilter === "4k" ? keys === 4 : keys !== 4;
+}
+
+function getScoreMissCount(score: LeanTrackerScore): number {
+  const stats = score.statistics ?? {};
+  return stats.count_miss ?? stats.miss ?? 0;
+}
+
+function scoreMatchesMissFilter(score: LeanTrackerScore, missFilter: MissFilter): boolean {
+  if (missFilter === "all") return true;
+  const misses = getScoreMissCount(score);
+  return missFilter === "fc" ? misses === 0 : misses === 1;
 }
 
 const EMPTY_IDS: number[] = [];
@@ -151,6 +163,7 @@ function ScoresPage() {
   const [filter, setFilter] = useState<ScoreFilter>("all");
   const [gradeFilter, setGradeFilter] = useState<GradeFilter>("all");
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
+  const [missFilter, setMissFilter] = useState<MissFilter>("all");
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<number[]>([]);
   const [initialLoaded, setInitialLoaded] = useState(feedScores.length > 0 || !!feedScoresFetchedAt || !!snapshot);
   const [initialRefreshDone, setInitialRefreshDone] = useState(false);
@@ -467,7 +480,7 @@ function ScoresPage() {
 
   useEffect(() => {
     setExpandedKey(null);
-  }, [filter, gradeFilter, keyFilter]);
+  }, [filter, gradeFilter, keyFilter, missFilter]);
 
   const ppGainByScoreId = useMemo(
     () => Object.fromEntries(
@@ -521,6 +534,7 @@ function ScoresPage() {
       if (hiddenUserIds.has(score.user_id)) return false;
       if (!isDisplayedPassed(score)) return false;
       if (!scoreMatchesKeyFilter(score, keyFilter)) return false;
+      if (!scoreMatchesMissFilter(score, missFilter)) return false;
       switch (filter) {
         case "ranked":
           return score.pp != null && score.pp > 0;
@@ -536,7 +550,7 @@ function ScoresPage() {
       }
       return true;
     });
-  }, [feedScores, filter, gradeFilter, keyFilter, selectedPlayerIdSet, selectedPlayerIds.length, hiddenUserIds]);
+  }, [feedScores, filter, gradeFilter, keyFilter, missFilter, selectedPlayerIdSet, selectedPlayerIds.length, hiddenUserIds]);
 
   const activePlayers = useMemo(() => {
     const activeCutoff = Date.now() - 40 * 60 * 1000;
@@ -575,7 +589,17 @@ function ScoresPage() {
     { id: "4k", label: "4K" },
     { id: "7k", label: "7K" },
   ];
-  const listKey = `${filter}:${gradeFilter}:${keyFilter}`;
+  const cycleMissFilter = () => {
+    setMissFilter((current) => current === "all" ? "fc" : current === "fc" ? "fc_choke" : "all");
+    updateTrackerSearch({ page: 0 });
+  };
+  const missButtonLabel = missFilter === "fc_choke" ? "Choke" : "FC";
+  const missButtonTitle = missFilter === "fc"
+    ? "Showing full combos (0 misses) - click for FC chokes"
+    : missFilter === "fc_choke"
+      ? "Showing FC chokes (1 miss) - click to clear"
+      : "Click to filter by FC, then FC chokes";
+  const listKey = `${filter}:${gradeFilter}:${keyFilter}:${missFilter}`;
   const liveStatusLabel = liveBackendEnabled ? "Live updates on" : "Live polling";
   const totalPages = Math.max(1, Math.ceil(filtered.length / TRACKER_PAGE_SIZE));
   const currentPage = Math.min(page, totalPages - 1);
@@ -682,6 +706,20 @@ function ScoresPage() {
                 {item.label}
               </button>
             ))}
+            <div className="w-px h-5 bg-osu-b3/40 mx-2" />
+            <button
+              onClick={cycleMissFilter}
+              title={missButtonTitle}
+              className={`px-3 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] border-b-2 ${
+                missFilter === "fc"
+                  ? "text-osu-c1 border-osu-h1"
+                  : missFilter === "fc_choke"
+                    ? "text-osu-yellow border-osu-yellow"
+                    : "text-osu-f1 border-transparent hover:text-osu-l2"
+              }`}
+            >
+              {missButtonLabel}
+            </button>
           </div>
           {/* Mobile: compact single row */}
           <div className="sm:hidden w-full py-2">
@@ -745,6 +783,21 @@ function ScoresPage() {
                   ))}
                 </div>
               </div>
+            </div>
+            <div className="flex items-center justify-end mt-2">
+              <button
+                onClick={cycleMissFilter}
+                title={missButtonTitle}
+                className={`px-3 py-1.5 rounded-lg border text-[11px] font-medium cursor-pointer transition-colors duration-[120ms] ${
+                  missFilter === "fc"
+                    ? "bg-osu-pink/20 text-osu-pink-light border-osu-pink/40"
+                    : missFilter === "fc_choke"
+                      ? "bg-osu-yellow/15 text-osu-yellow border-osu-yellow/40"
+                      : "bg-osu-b4/50 text-osu-f1 border-osu-b3/30 hover:text-osu-l2"
+                }`}
+              >
+                {missButtonLabel}
+              </button>
             </div>
           </div>
         </div>

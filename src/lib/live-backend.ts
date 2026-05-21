@@ -71,6 +71,7 @@ export interface LiveMapsPageParams {
   key: string;
   beatmapSort: string;
   farmedSort: string;
+  dir: string;
   status: string;
   pp: number;
   mod: string;
@@ -437,6 +438,7 @@ export async function fetchLiveMapsPageSnapshot(
     key: params.key,
     beatmapSort: params.beatmapSort,
     farmedSort: params.farmedSort,
+    dir: params.dir,
     status: params.status,
     pp: String(params.pp),
     mod: params.mod,
