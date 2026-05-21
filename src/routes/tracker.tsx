@@ -594,6 +594,7 @@ function ScoresPage() {
     updateTrackerSearch({ page: 0 });
   };
   const missButtonLabel = missFilter === "fc_choke" ? "Choke" : "FC";
+  const mobileMissButtonLabel = missFilter === "fc_choke" ? "Ch" : "FC";
   const missButtonTitle = missFilter === "fc"
     ? "Showing full combos (0 misses) - click for FC chokes"
     : missFilter === "fc_choke"
@@ -731,13 +732,13 @@ function ScoresPage() {
                 Clear player filter
               </button>
             )}
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-1">
               <div className="flex rounded-lg overflow-hidden border border-osu-b3/30 flex-shrink-0">
                 {filters.map((item) => (
                   <button
                     key={item.id}
                     onClick={() => { setFilter(item.id); if (item.id !== "all") setGradeFilter("all"); updateTrackerSearch({ page: 0 }); }}
-                    className={`px-2.5 py-1.5 text-[11px] font-medium cursor-pointer transition-colors duration-[120ms] ${
+                    className={`px-2 py-1.5 text-[11px] font-medium cursor-pointer transition-colors duration-[120ms] ${
                       filter === item.id && gradeFilter === "all"
                         ? "bg-osu-b3 text-osu-l2"
                         : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
@@ -746,8 +747,21 @@ function ScoresPage() {
                     {item.id === "all" ? "All" : item.id === "ranked" ? "PP" : "Pass"}
                   </button>
                 ))}
+                <button
+                  onClick={cycleMissFilter}
+                  title={missButtonTitle}
+                  className={`w-8 py-1.5 text-[11px] font-medium cursor-pointer transition-colors duration-[120ms] ${
+                    missFilter === "fc"
+                      ? "bg-osu-pink/20 text-osu-pink-light"
+                      : missFilter === "fc_choke"
+                        ? "bg-osu-yellow/15 text-osu-yellow"
+                        : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
+                  }`}
+                >
+                  {mobileMissButtonLabel}
+                </button>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-1 min-w-0 items-center justify-center gap-1">
                 {grades.filter((g) => g.id !== "all").map((item) => (
                   <button
                     key={item.id}
@@ -767,37 +781,22 @@ function ScoresPage() {
                     <GradeImg grade={item.id} size={32} />
                   </button>
                 ))}
-                <div className="flex rounded-lg overflow-hidden border border-osu-b3/30 flex-shrink-0">
-                  {keymodes.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => { setKeyFilter(item.id); updateTrackerSearch({ page: 0 }); }}
-                      className={`px-2 py-1.5 text-[11px] font-medium cursor-pointer transition-colors duration-[120ms] tabular-nums ${
-                        keyFilter === item.id
-                          ? "bg-osu-b3 text-osu-l2"
-                          : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
-                      }`}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
               </div>
-            </div>
-            <div className="flex items-center justify-end mt-2">
-              <button
-                onClick={cycleMissFilter}
-                title={missButtonTitle}
-                className={`px-3 py-1.5 rounded-lg border text-[11px] font-medium cursor-pointer transition-colors duration-[120ms] ${
-                  missFilter === "fc"
-                    ? "bg-osu-pink/20 text-osu-pink-light border-osu-pink/40"
-                    : missFilter === "fc_choke"
-                      ? "bg-osu-yellow/15 text-osu-yellow border-osu-yellow/40"
-                      : "bg-osu-b4/50 text-osu-f1 border-osu-b3/30 hover:text-osu-l2"
-                }`}
-              >
-                {missButtonLabel}
-              </button>
+              <div className="flex rounded-lg overflow-hidden border border-osu-b3/30 flex-shrink-0">
+                {keymodes.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => { setKeyFilter(item.id); updateTrackerSearch({ page: 0 }); }}
+                    className={`px-1.5 py-1.5 text-[11px] font-medium cursor-pointer transition-colors duration-[120ms] tabular-nums ${
+                      keyFilter === item.id
+                        ? "bg-osu-b3 text-osu-l2"
+                        : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
