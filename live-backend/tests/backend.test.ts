@@ -988,6 +988,66 @@ describe("live backend", () => {
     expect(Number((snapshot.user.statistics as { pp?: number }).pp)).toBeGreaterThan(1000);
   });
 
+  it("does not add live top-play projection again after official profile pp refreshes", async () => {
+    const { db } = await setup();
+    const base = (await fixture<OscScore[]>("top-best.json"))[0];
+    const oldSameMap: OscScore = {
+      ...base,
+      id: 7001,
+      pp: 200,
+      beatmap_id: base.beatmap_id ?? base.beatmap?.id,
+      ended_at: "2026-05-10T00:00:00.000Z",
+      created_at: "2026-05-10T00:00:00.000Z",
+    };
+    const liveTop: OscScore = {
+      ...base,
+      id: 9001,
+      pp: 250,
+      ended_at: "2026-05-12T00:00:00.000Z",
+      created_at: "2026-05-12T00:00:00.000Z",
+    };
+    const getUserByKey = vi.fn(async () => ({
+      id: 101,
+      username: "Sniper",
+      avatar_url: "https://assets.example/sniper.png",
+      country_code: "CR",
+      statistics: { pp: 1000, global_rank: 100, country_rank: 1 },
+      page: null,
+    }));
+    const getUser = vi.fn(async () => ({
+      id: 101,
+      username: "Sniper",
+      avatar_url: "https://assets.example/sniper.png",
+      country_code: "CR",
+      statistics: { pp: 1100, global_rank: 90, country_rank: 1 },
+      page: null,
+    }));
+    const getUserBestScoresWindow = vi.fn(async () => [oldSameMap, { ...base, id: 8002, beatmap_id: 999, pp: 150 }]);
+
+    await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    const snapshotFetchedAt = new Date(Date.now() - 15 * 60_000).toISOString();
+    const eventDetectedAt = new Date(Date.parse(snapshotFetchedAt) + 60_000).toISOString();
+    await exec(db, "update profile_snapshots set fetched_at = ?, user_fetched_at = ? where user_id = 101", [
+      snapshotFetchedAt,
+      snapshotFetchedAt,
+    ]);
+    await exec(
+      db,
+      `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
+       values ('CR', ?, 101, ?, ?, 50, ?, ?)`,
+      [liveTop.id, liveTop.pp, liveTop.pp, JSON.stringify({ user: { id: 101, username: "Sniper", avatar_url: "https://assets.example/sniper.png" }, score: liveTop, pp: liveTop.pp, weightedPP: liveTop.pp, ppGain: 50, time: liveTop.ended_at }), eventDetectedAt],
+    );
+
+    const snapshot = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+
+    expect(snapshot.bestScores.map((score) => score.id)).toContain(9001);
+    expect(snapshot.projection.appliedTopPlayEvents).toBe(1);
+    expect(snapshot.projection.projectedPp).toBe(1100);
+    expect((snapshot.user.statistics as { pp?: number }).pp).toBe(1100);
+    expect(getUser).toHaveBeenCalledTimes(1);
+    expect(getUserBestScoresWindow).toHaveBeenCalledTimes(1);
+  });
+
   it("caches lazy player recent and about sections separately from the snapshot", async () => {
     const { db } = await setup();
     const best = await fixture<OscScore[]>("top-best.json");

@@ -350,16 +350,18 @@ async function upsertDisplayUser(
 async function buildServedSnapshot(db: Db, row: ProfileSnapshotRow, forceStale: boolean): Promise<PlayerProfileSnapshot> {
   const user = parseJson<Record<string, unknown>>(row.user_json, {});
   const rawBestScores = parseJson<OscScore[]>(row.best_scores_json, []);
-  const projection = await projectTopPlays(db, row.user_id, rawBestScores, row.fetched_at);
+  const userFetchedAt = row.user_fetched_at ?? row.fetched_at;
+  const projectionBaselineAt = latestValidTimestamp(row.fetched_at, userFetchedAt);
+  const projection = await projectTopPlays(db, row.user_id, rawBestScores, row.fetched_at, projectionBaselineAt);
   const basePp = readNumber(readRecord(user.statistics)?.pp);
-  const projectedPp = calculateProjectedUserPp(basePp, rawBestScores, projection.scores);
+  const projectedPp = calculateProjectedUserPp(basePp, projection.ppBaselineScores, projection.scores);
   const projectedUser = applyProjectedPp(user, projectedPp);
 
   return {
     user: projectedUser,
     bestScores: projection.scores,
     fetchedAt: row.fetched_at,
-    userFetchedAt: row.user_fetched_at ?? row.fetched_at,
+    userFetchedAt,
     isStale: forceStale || isExpired(row.fetched_at, PROFILE_SNAPSHOT_TTL_MS),
     projection: {
       appliedTopPlayEvents: projection.appliedTopPlayEvents,
@@ -375,14 +377,16 @@ async function projectTopPlays(
   userId: number,
   rawBestScores: OscScore[],
   snapshotFetchedAt: string,
-): Promise<{ scores: OscScore[]; appliedTopPlayEvents: number; provenanceByScoreId: Record<number, "osu_snapshot" | "live_top_play_event"> }> {
+  ppProjectionBaselineAt: string,
+): Promise<{ scores: OscScore[]; ppBaselineScores: OscScore[]; appliedTopPlayEvents: number; provenanceByScoreId: Record<number, "osu_snapshot" | "live_top_play_event"> }> {
   const rows = (await exec(
     db,
-    "select payload_json from top_play_events where user_id = ? and detected_at > ? order by detected_at asc",
+    "select payload_json, detected_at from top_play_events where user_id = ? and detected_at > ? order by detected_at asc",
     [userId, snapshotFetchedAt],
   )).rows;
   const provenanceByScoreId: Record<number, "osu_snapshot" | "live_top_play_event"> = {};
   let scores = dedupeScores(rawBestScores);
+  let ppBaselineScores = scores;
   for (const score of scores) provenanceByScoreId[score.id] = "osu_snapshot";
   let appliedTopPlayEvents = 0;
 
@@ -390,26 +394,51 @@ async function projectTopPlays(
     const payload = parseJson<{ score?: OscScore }>(row.payload_json, {});
     const eventScore = payload.score;
     if (!eventScore || eventScore.user_id !== userId || eventScore.pp == null || eventScore.pp <= 0) continue;
-    const identity = getScoreIdentity(eventScore);
-    const existingIndex = scores.findIndex((score) => getScoreIdentity(score) === identity || score.id === eventScore.id);
-    if (existingIndex >= 0) {
-      scores[existingIndex] = eventScore;
-    } else {
-      scores = scores.filter((score) => !isReplacedSameBeatmapScore(score, eventScore));
-      scores.push(eventScore);
-    }
+    scores = applyTopPlayEvent(scores, eventScore);
+    if (isAtOrBefore(row.detected_at, ppProjectionBaselineAt)) ppBaselineScores = scores;
     provenanceByScoreId[eventScore.id] = "live_top_play_event";
     appliedTopPlayEvents += 1;
   }
 
-  scores = dedupeScores(scores)
+  ppBaselineScores = rankBestScores(ppBaselineScores);
+  scores = rankBestScores(scores);
+
+  return { scores, ppBaselineScores, appliedTopPlayEvents, provenanceByScoreId };
+}
+
+function applyTopPlayEvent(scores: OscScore[], eventScore: OscScore): OscScore[] {
+  const identity = getScoreIdentity(eventScore);
+  const existingIndex = scores.findIndex((score) => getScoreIdentity(score) === identity || score.id === eventScore.id);
+  if (existingIndex >= 0) {
+    const next = [...scores];
+    next[existingIndex] = eventScore;
+    return next;
+  }
+  return [...scores.filter((score) => !isReplacedSameBeatmapScore(score, eventScore)), eventScore];
+}
+
+function rankBestScores(scores: OscScore[]): OscScore[] {
+  return dedupeScores(scores)
     .sort(compareBestScores)
     .slice(0, PROFILE_BEST_SCORES_LIMIT)
     .map((score, index) => score.pp != null && score.pp > 0
       ? { ...score, weight: { percentage: 0.95 ** index * 100, pp: score.pp * 0.95 ** index } }
       : score);
+}
 
-  return { scores, appliedTopPlayEvents, provenanceByScoreId };
+function latestValidTimestamp(a: string, b: string): string {
+  const aTime = Date.parse(a);
+  const bTime = Date.parse(b);
+  if (!Number.isFinite(aTime)) return b;
+  if (!Number.isFinite(bTime)) return a;
+  return bTime > aTime ? b : a;
+}
+
+function isAtOrBefore(value: unknown, cutoff: string): boolean {
+  if (typeof value !== "string") return false;
+  const valueTime = Date.parse(value);
+  const cutoffTime = Date.parse(cutoff);
+  return Number.isFinite(valueTime) && Number.isFinite(cutoffTime) && valueTime <= cutoffTime;
 }
 
 function isReplacedSameBeatmapScore(score: OscScore, eventScore: OscScore): boolean {
