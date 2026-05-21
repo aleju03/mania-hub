@@ -112,7 +112,7 @@ export function ReplayBrowseView({
     <motion.div key="browse" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
       <div className="flex justify-center mb-3">
         <div className="flex bg-osu-b4 rounded-lg border border-osu-b3/50 overflow-hidden">
-          {(["player", "beatmap", "upload"] as const).map((nextMode) => (
+          {(["player", "upload"] as const).map((nextMode) => (
             <button
               key={nextMode}
               onClick={() => onModeChange(nextMode)}
@@ -122,7 +122,7 @@ export function ReplayBrowseView({
                   : "text-osu-f1 hover:text-white"
               }`}
             >
-              {nextMode === "player" ? "By Player" : nextMode === "beatmap" ? "By Beatmap" : "Upload"}
+              {nextMode === "player" ? "By Player" : "Upload"}
             </button>
           ))}
         </div>
