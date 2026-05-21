@@ -69,6 +69,11 @@ const DEFAULT_TOP_PLAYS_SEARCH: TopPlaysSearch = {
   dir: "desc",
 };
 
+function hasPopoffsInRange(popoffs: PopOff[], range: TimeRange): boolean {
+  const now = Date.now();
+  return popoffs.some((popoff) => now - new Date(popoff.time).getTime() < RANGE_MS[range]);
+}
+
 export const Route = createFileRoute("/top-plays")({
   head: ({ match }) => {
     const country = match.search.country;
@@ -132,6 +137,7 @@ function PopOffsPage() {
   const [refreshStatus, setRefreshStatus] = useState<TopPlaysRefreshStatus | null>(null);
   const [partialPopoffs, setPartialPopoffs] = useState<PopOff[]>([]);
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<number[]>([]);
+  const [settledLiveSnapshotKey, setSettledLiveSnapshotKey] = useState<string | null>(null);
   const hasRestoredRememberedRangeRef = useRef(false);
   const sawRefreshActivityRef = useRef(false);
   const finalizingRefreshRef = useRef(false);
@@ -156,6 +162,7 @@ function PopOffsPage() {
     setRefreshStatus(null);
     setPartialPopoffs([]);
     setSelectedPlayerIds([]);
+    setSettledLiveSnapshotKey(null);
     fetchingRef.current = false;
     sawRefreshActivityRef.current = false;
     finalizingRefreshRef.current = false;
@@ -253,6 +260,7 @@ function PopOffsPage() {
 
   useEffect(() => {
     if (!liveBackendEnabled) return;
+    const snapshotKey = `${selectedCountry}:${range}:${popoffsFetchedAt ?? "none"}:${popoffsWindow ?? "none"}`;
     if (!shouldRefreshTopPlays({
       fetchedAt: popoffsFetchedAt,
       cachedWindow: popoffsWindow,
@@ -267,6 +275,12 @@ function PopOffsPage() {
 
     let cancelled = false;
     const requestedCountry = selectedCountry;
+    const currentPopoffs = useAppStore.getState().popoffsByCountry[requestedCountry] ?? [];
+    const hasVisibleCache = hasPopoffsInRange(currentPopoffs, range);
+    setLoading(!hasVisibleCache);
+    setRefreshing(hasVisibleCache);
+    setScanStartedAt(null);
+
     fetchLiveTopPlaysSnapshot(requestedCountry, range)
       .then((snapshot) => {
         if (cancelled || currentCountryRef.current !== requestedCountry) return;
@@ -286,7 +300,11 @@ function PopOffsPage() {
         setScanStartedAt(null);
       })
       .catch(() => {
-        // Existing server-function refresh remains the fallback.
+        if (cancelled || currentCountryRef.current !== requestedCountry) return;
+        setSettledLiveSnapshotKey(snapshotKey);
+        setLoading(false);
+        setRefreshing(false);
+        setScanStartedAt(null);
       });
     return () => {
       cancelled = true;
@@ -519,6 +537,18 @@ function PopOffsPage() {
     });
   }, [rangedPopoffs, selectedPlayerIdSet, selectedPlayerIds.length, sort, dir]);
 
+  const liveSnapshotKey = `${selectedCountry}:${range}:${popoffsFetchedAt ?? "none"}:${popoffsWindow ?? "none"}`;
+  const waitingForLiveSnapshot =
+    liveBackendEnabled &&
+    settledLiveSnapshotKey !== liveSnapshotKey &&
+    shouldRefreshTopPlays({
+      fetchedAt: popoffsFetchedAt,
+      cachedWindow: popoffsWindow,
+      selectedRange: range,
+      cacheTtlMs: CLIENT_CACHE_TTL.popoffs,
+    });
+  const showingInitialLiveSnapshot = waitingForLiveSnapshot && filtered.length === 0;
+
   const playerPpGains = useMemo(() => {
     const byUser = new Map<number, { username: string; avatar_url: string; totalGain: number }>();
     for (const p of rangedPopoffs) {
@@ -569,7 +599,7 @@ function PopOffsPage() {
         title={`${countryName} mania top plays`}
         right={
           <div className="flex items-center gap-2">
-            {(loadingPlayers || refreshing) && !playersError && (
+            {(loadingPlayers || refreshing || showingInitialLiveSnapshot) && !playersError && (
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
                 <span className="text-[10px] text-osu-f1 tabular-nums">
@@ -758,7 +788,7 @@ function PopOffsPage() {
           )}
 
           {/* Loading skeletons on initial load */}
-          {!playersError && (loadingPlayers || loading) && (
+          {!playersError && (loadingPlayers || loading || showingInitialLiveSnapshot) && (
             <div className="space-y-2">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
@@ -1000,7 +1030,7 @@ function PopOffsPage() {
             </div>
           )}
 
-          {!playersError && !loadingPlayers && !loading && filtered.length === 0 && (
+          {!playersError && !loadingPlayers && !loading && !showingInitialLiveSnapshot && filtered.length === 0 && (
             liveBackendEnabled ? (
               <LiveDataEmptyState country={selectedCountry} kind="top-plays" />
             ) : (
