@@ -1,4 +1,5 @@
 import type { ReplayHeader, ReplayFrame, ReplayLifeBarFrame, ParsedReplay } from "./types";
+import { decodeStableManiaReplayFrames } from "./replay-frames";
 
 class BinaryReader {
   private view: DataView;
@@ -379,7 +380,7 @@ function lzmaDecompress(
 }
 
 function parseReplayFrames(decompressed: string): ReplayFrame[] {
-  const frames: ReplayFrame[] = [];
+  const frames: Array<{ buttonState: number; mouseX: number; mouseY: number; time: number }> = [];
   let absoluteTime = 0;
 
   const parts = decompressed.split(",");
@@ -390,15 +391,19 @@ function parseReplayFrames(decompressed: string): ReplayFrame[] {
     if (fields.length < 2) continue;
 
     const timeDelta = parseInt(fields[0], 10);
-    const keyState = parseInt(fields[1], 10);
 
     if (timeDelta === -12345) continue; // RNG seed frame
 
     absoluteTime += timeDelta;
-    frames.push({ time: absoluteTime, keyState });
+    frames.push({
+      buttonState: Number.parseInt(fields[3] ?? "0", 10),
+      mouseX: Number.parseFloat(fields[1] ?? "0"),
+      mouseY: Number.parseFloat(fields[2] ?? "0"),
+      time: absoluteTime,
+    });
   }
 
-  return frames;
+  return decodeStableManiaReplayFrames(frames);
 }
 
 function detectKeyCount(frames: ReplayFrame[], modsUsed: number): number {

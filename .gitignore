@@ -18,6 +18,8 @@ tmp-*.mjs
 tmp-*.js
 tmp-*.ts
 cache/replay-fixtures/
+capture-replays/*
+!capture-replays/.gitkeep
 
 # Local classifier datasets
 datasets/

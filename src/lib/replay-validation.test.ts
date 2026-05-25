@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { ManiaNote } from "./beatmap-parser";
 import type { ReplayFrame } from "./types";
-import { countReplayJudgements, resolveReplayJudgementEvents, validateReplaySimulation } from "./replay-validation";
-import type { ReplayJudgementEvent } from "./mania-replay-judgement";
+import { buildStableReplayComboEvents, countReplayJudgements, resolveReplayJudgementEvents, validateReplaySimulation } from "./replay-validation";
+import type { ReplayJudgementEvent, ReplayNoteState } from "./mania-replay-judgement";
 
 describe("replay validation", () => {
   it("converts replay judgement events into osu!mania hit counts", () => {
@@ -71,6 +71,117 @@ describe("replay validation", () => {
 
     expect(resolved.resolved).toBe(true);
     expect(resolved.events.map((event) => event.judgment)).toEqual([6, 1]);
+  });
+
+  it("keeps missed stable LNs alive for held ticks and breaks again at tail miss", () => {
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 2000, isHold: true },
+    ];
+    const noteStates: ReplayNoteState[] = [
+      {
+        bodyBreakTime: null,
+        bodyBreakTimes: [],
+        displayJudgment: 6,
+        displayTime: 2000,
+        headJudgment: 6,
+        headOffsetMs: 180,
+        headTime: 1180,
+        heldSegments: [{ start: 900, end: 2100 }],
+        releaseTime: 2100,
+        tailJudgment: 6,
+        tailOffsetMs: 0,
+        tailTime: 2000,
+      },
+    ];
+
+    expect(buildStableReplayComboEvents(notes, noteStates)).toEqual([
+      { kind: "break", time: 1180 },
+      { kind: "hit", time: 1200 },
+      { kind: "hit", time: 1300 },
+      { kind: "hit", time: 1400 },
+      { kind: "hit", time: 1500 },
+      { kind: "hit", time: 1600 },
+      { kind: "hit", time: 1700 },
+      { kind: "hit", time: 1800 },
+      { kind: "hit", time: 1900 },
+      { kind: "break", time: 2000 },
+    ]);
+  });
+
+  it("orders delayed stable LN misses before same-end non-miss tail combo hits", () => {
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1007, endTime: 2000, isHold: true },
+      { column: 1, time: 1007, endTime: 2000, isHold: true },
+      { column: 2, time: 1007, endTime: 2000, isHold: true },
+      { column: 3, time: 1007, endTime: 2000, isHold: true },
+    ];
+    const noteStates: ReplayNoteState[] = [
+      {
+        bodyBreakTime: null,
+        bodyBreakTimes: [],
+        displayJudgment: 6,
+        displayTime: 1130,
+        headJudgment: 6,
+        headOffsetMs: 130,
+        headTime: 1130,
+        releaseTime: 0,
+        stableMissedInsideConsumedSegment: true,
+        tailJudgment: 6,
+        tailOffsetMs: 170,
+        tailTime: 1130,
+      },
+      {
+        bodyBreakTime: null,
+        bodyBreakTimes: [],
+        displayJudgment: 6,
+        displayTime: 1130,
+        headJudgment: 6,
+        headOffsetMs: 130,
+        headTime: 1130,
+        releaseTime: 0,
+        stableMissedInsideConsumedSegment: true,
+        tailJudgment: 6,
+        tailOffsetMs: 170,
+        tailTime: 1130,
+      },
+      {
+        bodyBreakTime: null,
+        bodyBreakTimes: [],
+        displayJudgment: 3,
+        displayTime: 2008,
+        headJudgment: 3,
+        headOffsetMs: 60,
+        headTime: 1060,
+        heldSegments: [{ start: 1060, end: 2008 }],
+        releaseTime: 2008,
+        tailJudgment: 3,
+        tailOffsetMs: 8,
+        tailTime: 2008,
+      },
+      {
+        bodyBreakTime: null,
+        bodyBreakTimes: [],
+        displayJudgment: 3,
+        displayTime: 2008,
+        headJudgment: 3,
+        headOffsetMs: 60,
+        headTime: 1060,
+        heldSegments: [{ start: 1060, end: 2008 }],
+        releaseTime: 2008,
+        tailJudgment: 3,
+        tailOffsetMs: 8,
+        tailTime: 2008,
+      },
+    ];
+
+    const endingEvents = buildStableReplayComboEvents(notes, noteStates).filter((event) => event.time >= 2000);
+
+    expect(endingEvents).toEqual([
+      { kind: "break", time: 2000 },
+      { kind: "break", time: 2000 },
+      { kind: "hit", time: 2008 },
+      { kind: "hit", time: 2008 },
+    ]);
   });
 
   it("validates simulated replay counts against expected stable counts", () => {
@@ -148,7 +259,7 @@ describe("replay validation", () => {
     expect(result.totalCountDiff).toBe(0);
   });
 
-  it("resolves stable legacy replay frame-edge ambiguity", () => {
+  it("uses stable sampled replay frame-edge ambiguity for raw scoring", () => {
     const notes: ManiaNote[] = [
       { column: 0, time: 1000, endTime: 1000, isHold: false },
     ];
@@ -330,8 +441,10 @@ describe("replay validation", () => {
     ];
     const frames: ReplayFrame[] = [
       { time: 0, keyState: 0 },
+      { time: 996, keyState: 0 },
       { time: 1000, keyState: 1 },
       { time: 1500, keyState: 1 },
+      { time: 1998, keyState: 1 },
       { time: 2000, keyState: 0 },
     ];
 

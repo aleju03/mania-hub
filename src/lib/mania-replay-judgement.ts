@@ -25,7 +25,6 @@ export interface ManiaReplayHitWindows {
 export interface ManiaReplayRuleset {
   accuracyMode: ReplayAccuracyMode;
   difficultyMultiplier: number;
-  effectiveOdMultiplier: number;
   isConvert: boolean;
   speedMultiplier: number;
   useClassicWindows: boolean;
@@ -42,7 +41,50 @@ export interface ReplayJudgementEvent {
 }
 
 export interface ManiaReplaySimulationOptions {
+  stableBodyBreakCapJudgment?: Judgment | null;
+  stableColumnInputOwnership?: boolean;
   legacyReplayFrameRounding?: boolean;
+  stableCoarseEdgePlaybackDelay?: number;
+  stableCoarsePressPlayback?: boolean;
+  stableCoarseReleasePlayback?: boolean;
+  stableConsumeHeldSegmentAtLongNoteTimeout?: boolean;
+  stableDenseCoarseEdgePlaybackDelay?: number;
+  stableDenseForceCoarsePlaybackMaxMedian?: number;
+  stableDisableLongNoteHeadRefinement?: boolean;
+  stableEnableLongNoteHeadRefinement?: boolean;
+  stableHighKeyReleaseDelayCap?: number;
+  stableForceCoarsePlayback?: boolean;
+  stableAllowCoarseLongNoteHeadRefinement?: boolean;
+  stableHeldOkTimeoutAsMiss?: boolean;
+  stableHeldOkTimeoutJudgment?: Judgment;
+  stableHeldTailTimeoutMode?: "timeout" | "first-sample" | "segment-end";
+  stableHighKeyReleaseDelayMaxHeadOffset?: number;
+  stableHighKeyReleaseDelayMissOnly?: boolean;
+  stableHighKeyReleaseDelayRawThreshold?: number;
+  stableMissedInsideConsumedSegmentJudgment?: Judgment;
+  stableMissedInsideConsumedNoAdvanceJudgment?: Judgment;
+  stableDensePreHeadReleaseMissConsumesRecoveryMaxMedian?: number;
+  stablePreHeadReleaseMissRecoveryExcludeBeforeTap?: boolean;
+  stablePreHeadReleaseMissRecoveryExcludeNextShortMaxDuration?: number;
+  stablePreHeadReleaseMissRecoveryExcludeNextShortMaxGap?: number;
+  stablePreHeadReleaseMissRecoveryMaxHeadOffset?: number;
+  stablePreHeadReleaseMissRecoveryMaxNextNoteGap?: number;
+  stablePreHeadReleaseMissRecoveryMaxTailOffset?: number;
+  stablePreHeadReleaseMissRecoveryMinNextNextNoteGap?: number;
+  stablePreHeadReleaseMissConsumesRecovery?: boolean;
+  stablePreHeadReleaseMissesAtHead?: boolean;
+  stablePreserveLongNoteScoringPressAfterBreak?: boolean;
+  stablePreserveLongNoteScoringPressAfterTailBreak?: boolean;
+  stablePreserveLongNoteScoringPressTime?: boolean;
+  stableRequirePreHeadRecoveryForActivation?: boolean;
+  stableSuppressHiddenBodyBreakCap?: boolean;
+  stableTailEarlyMissLenience?: number;
+  stableNextNoteEdgeGrace?: number;
+  stablePreciseEdgePosition?: number;
+  stableReuseTailSegmentForNextHead?: boolean;
+  stableTailSegmentReuseGrace?: number;
+  stableTailEdgeGrace?: number;
+  speedMultiplier?: number;
 }
 
 export interface ReplayNoteState {
@@ -55,6 +97,28 @@ export interface ReplayNoteState {
   headTime: number;
   heldSegments?: ReplaySegment[];
   releaseTime: number;
+  stableBarelyCrossedTailOnTimeout?: boolean;
+  stableConsumedHeldSegmentAtTimeout?: boolean;
+  stableHeldOkTimeout?: boolean;
+  stableHiddenBodyBreakPossible?: boolean;
+  stableLateStartReleasePastOk?: boolean;
+  stableMatchedPreviousTailSegment?: boolean;
+  stableMatchedSegmentIndex?: number;
+  stableMissedInsideConsumedSegment?: boolean;
+  stableNextSegmentCursor?: number;
+  stablePreHeadReleaseMiss?: boolean;
+  stablePreHeadReleaseMissConsumedRecovery?: boolean;
+  stablePreHeadPressActivatedLongNote?: boolean;
+  stableSegmentCursorAfter?: number;
+  stableSegmentCursorBefore?: number;
+  stableTailJudgementSourceTime?: number | null;
+  stableTailSegmentIndex?: number | null;
+  stableTailSegmentReleaseDelay?: number;
+  stableTailWasHeldAtJudgement?: boolean;
+  stableLastConsumedSegmentIndex?: number;
+  stableLastScannedSegmentIndex?: number;
+  scoringHeadOffsetMs?: number;
+  scoringTailOffsetMs?: number;
   tailJudgment: Judgment | null;
   tailOffsetMs: number;
   tailTime: number | null;
@@ -95,7 +159,6 @@ export function getManiaReplayRuleset(
   return {
     accuracyMode: isLazer ? "lazer" : "stable",
     difficultyMultiplier: modSet.has("HR") ? 1.4 : modSet.has("EZ") ? 1 / 1.4 : 1,
-    effectiveOdMultiplier: modSet.has("HR") ? 1.4 : modSet.has("EZ") ? 0.5 : 1,
     isConvert,
     speedMultiplier: Number.isFinite(speedMultiplier) && speedMultiplier > 0
       ? speedMultiplier
@@ -108,18 +171,28 @@ export function getManiaReplayRuleset(
   };
 }
 
+export function applyManiaReplayModsToNotes(
+  notes: ManiaNote[],
+  keyCount: number,
+  mods: string[] = [],
+): ManiaNote[] {
+  const modSet = new Set(mods.map((mod) => mod.toUpperCase()));
+  if (!modSet.has("MR")) return [...notes];
+
+  return notes.map((note) => ({
+    ...note,
+    column: keyCount - 1 - note.column,
+  }));
+}
+
 export function getManiaReplayHitWindows(
   od: number,
   ruleset: ManiaReplayRuleset,
 ): ManiaReplayHitWindows {
-  const totalMultiplier = ruleset.accuracyMode === "stable"
-    ? ruleset.speedMultiplier
-    : ruleset.speedMultiplier / ruleset.difficultyMultiplier;
+  const totalMultiplier = ruleset.speedMultiplier / ruleset.difficultyMultiplier;
 
   if (ruleset.useClassicWindows) {
-    const effectiveOd = ruleset.accuracyMode === "stable"
-      ? Math.max(0, Math.min(10, od * ruleset.effectiveOdMultiplier))
-      : od;
+    const effectiveOd = od;
 
     if (ruleset.isConvert) {
       return {
@@ -266,12 +339,189 @@ function getStableHeadJudgmentForOffset(
   offsetMs: number,
   windows: ManiaReplayHitWindows,
 ): Judgment {
+  offsetMs = Math.round(offsetMs);
   // Stable's score-v1 mania late OK window is open. For example, OD5 has
   // late OK at 111ms, while 112ms is already a miss.
   if (offsetMs >= Math.floor(windows.ok)) {
     return offsetMs <= windows.miss ? 6 : 0;
   }
   return getJudgmentForOffset(offsetMs, windows);
+}
+
+// Stable .osr data gives us sampled key states, not exact input-edge times.
+// When a key flips between two samples, estimate the edge inside that interval
+// tightly for high-resolution transitions, and conservatively for coarser
+// frame gaps.
+const STABLE_PRECISE_EDGE_INTERVAL = 4;
+const STABLE_PRECISE_EDGE_POSITION = 1;
+const STABLE_COARSE_EDGE_PLAYBACK_DELAY = 0;
+const STABLE_COARSE_REPLAY_MEDIAN_TRANSITION = 6;
+const STABLE_CROSSED_LN_HEAD_MEDIAN_TRANSITION = 9;
+const STABLE_MIN_NEXT_NOTE_EDGE_GRACE = 10;
+const STABLE_MAX_NEXT_NOTE_EDGE_GRACE = 15;
+const STABLE_TAIL_EDGE_GRACE = 0;
+const STABLE_HIDDEN_BODY_BREAK_MIN_GAP = 30;
+const STABLE_HIDDEN_BODY_BREAK_MEDIAN_SCALE = 4.5;
+
+function getStablePressEstimate(
+  segment: ReplaySegment,
+  _targetTime: number,
+  useCoarsePlayback: boolean,
+  coarsePlaybackDelay: number,
+  preciseEdgePosition = STABLE_PRECISE_EDGE_POSITION,
+): number {
+  const startMin = segment.startPrevious ?? segment.start;
+  const lower = Math.min(startMin, segment.start);
+  const upper = Math.max(startMin, segment.start);
+  if (upper - lower > STABLE_PRECISE_EDGE_INTERVAL) {
+    return useCoarsePlayback
+      ? segment.start + coarsePlaybackDelay
+      : lower + (upper - lower) * preciseEdgePosition;
+  }
+  return upper;
+}
+
+function getStableTapPressEstimate(
+  segment: ReplaySegment,
+  targetTime: number,
+  useCoarsePlayback: boolean,
+  coarsePlaybackDelay: number,
+  preciseEdgePosition = STABLE_PRECISE_EDGE_POSITION,
+): number {
+  return getStablePressEstimate(segment, targetTime, useCoarsePlayback, coarsePlaybackDelay, preciseEdgePosition);
+}
+
+function getStableReleaseEstimate(
+  segment: ReplaySegment,
+  _targetTime: number,
+  useCoarsePlayback: boolean,
+  coarsePlaybackDelay: number,
+  preciseEdgePosition = STABLE_PRECISE_EDGE_POSITION,
+): number {
+  const releaseMin = segment.endPrevious ?? segment.end;
+  const lower = Math.min(releaseMin, segment.end);
+  const upper = Math.max(releaseMin, segment.end);
+  if (upper - lower > STABLE_PRECISE_EDGE_INTERVAL) {
+    return useCoarsePlayback
+      ? segment.end + coarsePlaybackDelay
+      : lower + (upper - lower) * preciseEdgePosition;
+  }
+  return upper;
+}
+
+function getStableHeldTailTimeoutTime(
+  segment: ReplaySegment,
+  tailTimeout: number,
+  mode: ManiaReplaySimulationOptions["stableHeldTailTimeoutMode"],
+): number {
+  if (mode === "segment-end") return segment.end;
+  if (mode === "first-sample") {
+    for (const sample of segment.samples ?? []) {
+      if (sample >= tailTimeout) return sample;
+    }
+  }
+
+  return tailTimeout;
+}
+
+function getStableSegmentPressRange(segment: ReplaySegment): { min: number; max: number } {
+  const startMin = segment.startPrevious ?? segment.start;
+  return {
+    min: Math.min(startMin, segment.start),
+    max: Math.max(startMin, segment.start),
+  };
+}
+
+function getStableTapPressRange(segment: ReplaySegment): { min: number; max: number } {
+  return getStableSegmentPressRange(segment);
+}
+
+function getStableNextNoteEdgeGrace(transitionMedian: number): number {
+  // Stable .osg comparisons currently favor a fixed next-note edge allowance:
+  // sampled edges just past a following object still belong to the earlier
+  // active LN often enough that lowering this regresses more exact captures.
+  return transitionMedian > 0
+    ? STABLE_MAX_NEXT_NOTE_EDGE_GRACE
+    : STABLE_MIN_NEXT_NOTE_EDGE_GRACE;
+}
+
+function stableRangeIsPastHeadDeadline(rangeMin: number, deadline: number, edgeGrace: number): boolean {
+  const grace = edgeGrace > 0 ? edgeGrace : 0;
+  return rangeMin > deadline + grace;
+}
+
+function getStableColumnInputOwnershipEnd(
+  note: ManiaNote,
+  nextNote: ManiaNote | null,
+  windows: ManiaReplayHitWindows,
+): number {
+  if (!nextNote) return Number.POSITIVE_INFINITY;
+
+  const meh = Math.floor(windows.meh);
+  const gap = nextNote.time - note.time;
+  return Math.min(note.time + meh, nextNote.time - 1)
+    + Math.max(0, gap - meh * 2);
+}
+
+function stableCanBridgeTailEdgeGap(
+  segment: ReplaySegment,
+  nextSegment: ReplaySegment | undefined,
+  tailEarlyBound: number,
+  legacyReplayFrameRounding: boolean | undefined,
+  edgeGrace: number,
+  tailEdgeGrace: number,
+): boolean {
+  if (!legacyReplayFrameRounding || !nextSegment) return false;
+  if (tailEarlyBound - segment.end > tailEdgeGrace) return false;
+
+  const nextRange = getStableSegmentPressRange(nextSegment);
+  return nextRange.min <= tailEarlyBound + edgeGrace;
+}
+
+function getStableTransitionMedian(segments: ReplaySegment[][]): number {
+  const spans: number[] = [];
+  for (const columnSegments of segments) {
+    for (const segment of columnSegments) {
+      if (segment.startPrevious != null) {
+        const span = Math.abs(segment.start - segment.startPrevious);
+        if (span > 0) spans.push(span);
+      }
+      if (segment.endPrevious != null) {
+        const span = Math.abs(segment.end - segment.endPrevious);
+        if (span > 0) spans.push(span);
+      }
+    }
+  }
+
+  if (spans.length === 0) return 0;
+  spans.sort((a, b) => a - b);
+  return spans[Math.floor(spans.length / 2)];
+}
+
+function getStableHiddenBodyBreakGapThreshold(transitionMedian: number, speedMultiplier: number | undefined): number {
+  // DT replays are sampled in beatmap time, so the same real frame gap spans
+  // more milliseconds in replay time. Keep the threshold near the first truly
+  // skipped-frame gaps there, while using a median-scaled threshold for normal
+  // playback so dense, high-fps LN play does not invent dropped holds.
+  if (speedMultiplier != null && speedMultiplier > 1.01) {
+    return STABLE_HIDDEN_BODY_BREAK_MIN_GAP;
+  }
+
+  return Math.max(
+    STABLE_HIDDEN_BODY_BREAK_MIN_GAP,
+    transitionMedian * STABLE_HIDDEN_BODY_BREAK_MEDIAN_SCALE,
+  );
+}
+
+function stablePressIsLikelyForNextNote(
+  pressTime: number,
+  note: ManiaNote,
+  nextNote: ManiaNote | null,
+): boolean {
+  if (!nextNote) return false;
+  if (!(note.time < pressTime && pressTime < nextNote.time)) return false;
+
+  return nextNote.time - pressTime < pressTime - note.time;
 }
 
 function sampleRangeWithBoundaries(min: number, max: number, boundaries: number[]): number[] {
@@ -311,12 +561,12 @@ function getStableTapPossibleJudgments(
   note: ManiaNote,
   windows: ManiaReplayHitWindows,
 ): Judgment[] {
-  const startMin = segment.startPrevious ?? segment.start;
+  const range = getStableTapPressRange(segment);
   const possible = new Set<Judgment>();
 
   for (const offset of sampleRangeWithBoundaries(
-    startMin - note.time,
-    segment.start - note.time,
+    range.min - note.time,
+    range.max - note.time,
     stableOffsetBoundaries(windows),
   )) {
     const judgment = getStableHeadJudgmentForOffset(offset, windows);
@@ -328,18 +578,17 @@ function getStableTapPossibleJudgments(
 
 // Stable (ScoreV1) long-note combined judgement rule.
 // Wiki: https://osu.ppy.sh/wiki/en/Gameplay/Judgement/osu%21mania
-// The tail's judgement for an LN depends on head error AND the combined error
-// (|headErr| + |tailErr|). Each tier tightens both independently. Body breaks
-// cap the result to MEH. A miss only happens when the head press was a miss or
-// the key was never pressed inside the tail window.
+// The final judgement for an LN depends on head error AND the combined error
+// (|headErr| + |tailErr|). Each tier tightens both independently. Stable's
+// dropped-hold flag caps MAX/300 results to GOOD/200.
 function judgeStableLongNoteCombined(
   headOffsetMs: number,
   tailOffsetMs: number,
-  hadBodyBreak: boolean,
+  bodyBreakCapJudgment: Judgment | null,
   windows: ManiaReplayHitWindows,
 ): Judgment {
-  const headErr = Math.abs(headOffsetMs);
-  const tailErr = Math.abs(tailOffsetMs);
+  const headErr = Math.abs(Math.round(headOffsetMs));
+  const tailErr = Math.abs(Math.round(tailOffsetMs));
   const combinedErr = headErr + tailErr;
   const perfect = Math.floor(windows.perfect);
   const great = Math.floor(windows.great);
@@ -359,11 +608,79 @@ function judgeStableLongNoteCombined(
     result = 5;
   }
 
-  if (hadBodyBreak && result < 5) {
-    result = 5;
+  if (bodyBreakCapJudgment != null && result < bodyBreakCapJudgment) {
+    result = bodyBreakCapJudgment;
   }
 
   return result;
+}
+
+function getStableLongNoteScoringHeadTime(
+  note: ManiaNote,
+  pressTime: number,
+  windows: ManiaReplayHitWindows,
+): number {
+  const meh = Math.floor(windows.meh);
+  if (pressTime < note.time - meh) return note.endTime - 1;
+  if (pressTime < note.time) return note.time + (note.time - pressTime);
+  return pressTime;
+}
+
+function getStableLongNoteScoringTailTime(
+  note: ManiaNote,
+  tailTime: number,
+  tailWasHeldAtJudgement: boolean,
+): number {
+  if (tailWasHeldAtJudgement) return tailTime;
+  if (tailTime > note.endTime) return note.endTime - (tailTime - note.endTime);
+  return tailTime;
+}
+
+function getStableLongNoteHeadPreviewJudgment(
+  offsetMs: number,
+  windows: ManiaReplayHitWindows,
+): Judgment {
+  const delta = Math.abs(Math.round(offsetMs));
+  if (delta <= Math.floor(windows.perfect)) return 1;
+  if (delta <= Math.floor(windows.great)) return 2;
+  if (delta <= Math.floor(windows.good)) return 3;
+  if (delta <= Math.floor(windows.ok)) return 4;
+  if (delta <= Math.floor(windows.miss)) return 5;
+  return 0;
+}
+
+function judgeStableLongNoteScoreV1(
+  note: ManiaNote,
+  pressTime: number,
+  tailTime: number,
+  tailWasHeldAtJudgement: boolean,
+  bodyBreakCapJudgment: Judgment | null,
+  tailEarlyMissLenience: number,
+  windows: ManiaReplayHitWindows,
+): { headOffsetMs: number; judgment: Judgment; tailOffsetMs: number } {
+  const scoringHeadTime = getStableLongNoteScoringHeadTime(note, pressTime, windows);
+  const scoringTailTime = getStableLongNoteScoringTailTime(note, tailTime, tailWasHeldAtJudgement);
+  const meh = Math.floor(windows.meh);
+  const tailOffsetMs = scoringTailTime - note.endTime;
+
+  if (tailOffsetMs < -meh * tailEarlyMissLenience) {
+    return {
+      headOffsetMs: scoringHeadTime - note.time,
+      judgment: 6,
+      tailOffsetMs,
+    };
+  }
+
+  return {
+    headOffsetMs: scoringHeadTime - note.time,
+    judgment: judgeStableLongNoteCombined(
+      scoringHeadTime - note.time,
+      scoringTailTime - note.endTime,
+      bodyBreakCapJudgment,
+      windows,
+    ),
+    tailOffsetMs,
+  };
 }
 
 // Stable downloaded replays sample the key state once per game frame (typically
@@ -373,13 +690,12 @@ function judgeStableLongNoteCombined(
 // possible when the gap between adjacent observed events is substantially
 // longer than normal sampling cadence, indicating that at least one full
 // frame's worth of input state was actually skipped.
-const HIDDEN_BODY_BREAK_GAP_THRESHOLD = 25;
-
-function stableSegmentCanHideBodyBreak(
+function getStableSegmentHiddenBodyBreakTime(
   segment: ReplaySegment,
   startTime: number,
   endTime: number,
-): boolean {
+  gapThreshold: number,
+): number | null {
   const samples = segment.samples ?? [];
   let previousPressedSample: number | null = null;
 
@@ -393,8 +709,8 @@ function stableSegmentCanHideBodyBreak(
 
     if (previousPressedSample != null) {
       const lowerBound = Math.max(previousPressedSample, startTime);
-      if (sample - lowerBound > HIDDEN_BODY_BREAK_GAP_THRESHOLD) {
-        return true;
+      if (sample - lowerBound > gapThreshold) {
+        return lowerBound + (sample - lowerBound) / 2;
       }
     }
 
@@ -407,24 +723,40 @@ function stableSegmentCanHideBodyBreak(
   // contain a real release, not when it's just one frame of normal sampling.
   if (segment.end <= endTime && segment.endPrevious != null) {
     const lowerBound = Math.max(segment.endPrevious, startTime);
-    return segment.end - lowerBound > HIDDEN_BODY_BREAK_GAP_THRESHOLD;
+    if (segment.end - lowerBound > gapThreshold) {
+      return lowerBound + (segment.end - lowerBound) / 2;
+    }
   }
 
-  return false;
+  return null;
+}
+
+function getStableLongNoteHiddenBodyBreakTime(
+  note: ManiaNote,
+  scannedSegments: ReplaySegment[],
+  judgmentTime: number,
+  gapThreshold: number,
+): number | null {
+  const startTime = note.time;
+  const endTime = Math.max(startTime, judgmentTime);
+
+  for (const segment of scannedSegments) {
+    if (segment.end <= startTime || segment.start >= endTime) continue;
+
+    const breakTime = getStableSegmentHiddenBodyBreakTime(segment, startTime, endTime, gapThreshold);
+    if (breakTime != null) return breakTime;
+  }
+
+  return null;
 }
 
 function stableLongNoteCanHideBodyBreak(
   note: ManiaNote,
   scannedSegments: ReplaySegment[],
   judgmentTime: number,
+  gapThreshold: number,
 ): boolean {
-  const startTime = note.time;
-  const endTime = Math.max(startTime, judgmentTime);
-
-  return scannedSegments.some((segment) => {
-    if (segment.end <= startTime || segment.start >= endTime) return false;
-    return stableSegmentCanHideBodyBreak(segment, startTime, endTime);
-  });
+  return getStableLongNoteHiddenBodyBreakTime(note, scannedSegments, judgmentTime, gapThreshold) != null;
 }
 
 function getStableLongNotePossibleJudgments(
@@ -433,7 +765,7 @@ function getStableLongNotePossibleJudgments(
   tailSegment: ReplaySegment | null,
   currentJudgment: Judgment,
   currentTailOffsetMs: number,
-  hadBodyBreak: boolean,
+  bodyBreakCapJudgment: Judgment | null,
   hiddenBodyBreakPossible: boolean,
   windows: ManiaReplayHitWindows,
 ): Judgment[] {
@@ -466,13 +798,13 @@ function getStableLongNotePossibleJudgments(
 
   for (const headOffset of headOffsets) {
     for (const tailOffset of tailOffsets) {
-      possible.add(judgeStableLongNoteCombined(headOffset, tailOffset, hadBodyBreak, windows));
+      possible.add(judgeStableLongNoteCombined(headOffset, tailOffset, bodyBreakCapJudgment, windows));
 
       // Downloaded stable replays are sampled key states, not the full input
       // stream. Around short drops, the sampled edge can make the body-break
       // cap ambiguous even though the score header has the original result.
-      if (hadBodyBreak) {
-        possible.add(judgeStableLongNoteCombined(headOffset, tailOffset, false, windows));
+      if (bodyBreakCapJudgment != null) {
+        possible.add(judgeStableLongNoteCombined(headOffset, tailOffset, null, windows));
       }
     }
   }
@@ -492,12 +824,17 @@ function createMissState(
   accuracyMode: ReplayAccuracyMode,
   actualHead?: { time: number; offsetMs: number; releaseTime: number },
   possibleJudgments?: Judgment[],
+  stableJudgmentOverride?: Judgment,
 ): ReplayNoteState {
-  const passiveHeadWindow = accuracyMode === "lazer" ? windows.meh : windows.miss;
+  const isLN = note.isHold && note.endTime > note.time;
+  const passiveHeadWindow = accuracyMode === "lazer"
+    ? windows.meh
+    : accuracyMode === "stable" && isLN
+      ? windows.meh
+      : windows.miss;
   const headTime = actualHead?.time ?? note.time + passiveHeadWindow;
   const headOffsetMs = actualHead?.offsetMs ?? passiveHeadWindow;
   const releaseTime = actualHead?.releaseTime ?? 0;
-  const isLN = note.isHold && note.endTime > note.time;
 
   if (!isLN) {
     const stableTimeout = accuracyMode === "stable" && !actualHead;
@@ -558,12 +895,14 @@ function createMissState(
     };
   }
 
-  // Stable: one combined event; fire at the latest of head-miss time and
-  // the end of the OK release window so the HUD popup lines up with the tail.
-  const combinedTime = Math.max(headTime, note.endTime + windows.ok);
+  // Stable fires a passive LN head miss as soon as the head times out. The
+  // tail/body can still produce hit-error entries later, but the score bucket
+  // has already moved.
+  const combinedTime = headTime;
+  const stableJudgment = stableJudgmentOverride ?? 6;
   events.push({
     column,
-    judgment: 6,
+    judgment: stableJudgment,
     noteIndex,
     offsetMs: headOffsetMs,
     part: "hold-combined",
@@ -572,13 +911,13 @@ function createMissState(
   });
   return {
     bodyBreakTime: null,
-    displayJudgment: 6,
+    displayJudgment: stableJudgment,
     displayTime: combinedTime,
-    headJudgment: 6,
+    headJudgment: stableJudgment,
     headOffsetMs,
     headTime,
     releaseTime,
-    tailJudgment: 6,
+    tailJudgment: stableJudgment,
     tailOffsetMs: windows.miss,
     tailTime: combinedTime,
   };
@@ -596,6 +935,72 @@ export function simulateManiaReplayJudgements(
   const events: ReplayJudgementEvent[] = [];
   const notesByColumn: number[][] = Array.from({ length: keyCount }, () => []);
   const isLazer = accuracyMode === "lazer";
+  const stableTransitionMedian = !isLazer && options.legacyReplayFrameRounding
+    ? getStableTransitionMedian(segments)
+    : 0;
+  const useDenseForcedCoarsePlayback = !isLazer
+    && Boolean(options.legacyReplayFrameRounding)
+    && options.stableDenseForceCoarsePlaybackMaxMedian != null
+    && stableTransitionMedian <= options.stableDenseForceCoarsePlaybackMaxMedian;
+  const useCoarseStablePlayback = !isLazer
+    && Boolean(options.legacyReplayFrameRounding)
+    && (
+      options.stableForceCoarsePlayback
+      || useDenseForcedCoarsePlayback
+      || stableTransitionMedian > STABLE_COARSE_REPLAY_MEDIAN_TRANSITION
+    );
+  const stableCoarseEdgePlaybackDelay = useDenseForcedCoarsePlayback && options.stableDenseCoarseEdgePlaybackDelay != null
+    ? options.stableDenseCoarseEdgePlaybackDelay
+    : options.stableCoarseEdgePlaybackDelay ?? STABLE_COARSE_EDGE_PLAYBACK_DELAY;
+  const useStableCoarsePressPlayback = options.stableCoarsePressPlayback ?? useCoarseStablePlayback;
+  const useStableCoarseReleasePlayback = options.stableCoarseReleasePlayback
+    ?? (!isLazer && Boolean(options.legacyReplayFrameRounding));
+  const useStableLongNoteHeadRefinement = Boolean(options.stableEnableLongNoteHeadRefinement)
+    && !options.stableDisableLongNoteHeadRefinement
+    && (!useCoarseStablePlayback || Boolean(options.stableAllowCoarseLongNoteHeadRefinement));
+  const stableConsumeHeldSegmentAtLongNoteTimeout = options.stableConsumeHeldSegmentAtLongNoteTimeout ?? true;
+  const stableHighKeyReleaseDelayCap = options.stableHighKeyReleaseDelayCap ?? 2;
+  const stableHeldOkTimeoutAsMiss = options.stableHeldOkTimeoutAsMiss ?? keyCount <= 4;
+  const stableHeldOkTimeoutJudgment = options.stableHeldOkTimeoutJudgment ?? 6;
+  const stableHeldTailTimeoutMode = options.stableHeldTailTimeoutMode ?? "first-sample";
+  const stableHighKeyReleaseDelayMaxHeadOffset = options.stableHighKeyReleaseDelayMaxHeadOffset;
+  const stableHighKeyReleaseDelayMissOnly = options.stableHighKeyReleaseDelayMissOnly ?? false;
+  const stableHighKeyReleaseDelayRawThreshold = options.stableHighKeyReleaseDelayRawThreshold;
+  const stableMissedInsideConsumedSegmentJudgment = options.stableMissedInsideConsumedSegmentJudgment;
+  const stableMissedInsideConsumedNoAdvanceJudgment = options.stableMissedInsideConsumedNoAdvanceJudgment;
+  const stablePreHeadReleaseMissConsumesRecovery = (options.stablePreHeadReleaseMissConsumesRecovery ?? false)
+    || (
+      !isLazer
+      && Boolean(options.legacyReplayFrameRounding)
+      && options.stableDensePreHeadReleaseMissConsumesRecoveryMaxMedian != null
+      && stableTransitionMedian <= options.stableDensePreHeadReleaseMissConsumesRecoveryMaxMedian
+    );
+  const stablePreHeadReleaseMissRecoveryExcludeBeforeTap = options.stablePreHeadReleaseMissRecoveryExcludeBeforeTap ?? false;
+  const stablePreHeadReleaseMissRecoveryExcludeNextShortMaxDuration = options.stablePreHeadReleaseMissRecoveryExcludeNextShortMaxDuration;
+  const stablePreHeadReleaseMissRecoveryExcludeNextShortMaxGap = options.stablePreHeadReleaseMissRecoveryExcludeNextShortMaxGap;
+  const stablePreHeadReleaseMissRecoveryMaxHeadOffset = options.stablePreHeadReleaseMissRecoveryMaxHeadOffset;
+  const stablePreHeadReleaseMissRecoveryMaxNextNoteGap = options.stablePreHeadReleaseMissRecoveryMaxNextNoteGap;
+  const stablePreHeadReleaseMissRecoveryMaxTailOffset = options.stablePreHeadReleaseMissRecoveryMaxTailOffset;
+  const stablePreHeadReleaseMissRecoveryMinNextNextNoteGap = options.stablePreHeadReleaseMissRecoveryMinNextNextNoteGap;
+  const stablePreHeadReleaseMissesAtHead = options.stablePreHeadReleaseMissesAtHead ?? true;
+  const stablePreserveLongNoteScoringPressAfterBreak = options.stablePreserveLongNoteScoringPressAfterBreak ?? false;
+  const stablePreserveLongNoteScoringPressAfterTailBreak = options.stablePreserveLongNoteScoringPressAfterTailBreak ?? false;
+  const stablePreserveLongNoteScoringPressTime = options.stablePreserveLongNoteScoringPressTime ?? false;
+  const stableRequirePreHeadRecoveryForActivation = options.stableRequirePreHeadRecoveryForActivation ?? false;
+  const stableSuppressHiddenBodyBreakCap = options.stableSuppressHiddenBodyBreakCap ?? false;
+  const stableTailEarlyMissLenience = Math.max(1, options.stableTailEarlyMissLenience ?? 1);
+  const stableBodyBreakCapJudgment = options.stableBodyBreakCapJudgment === undefined
+    ? 3
+    : options.stableBodyBreakCapJudgment;
+  const stableTailSegmentReuseGrace = options.stableTailSegmentReuseGrace ?? 0;
+  const stableTailEdgeGrace = options.stableTailEdgeGrace ?? STABLE_TAIL_EDGE_GRACE;
+  const stableNextNoteEdgeGrace = !isLazer && options.legacyReplayFrameRounding
+    ? options.stableNextNoteEdgeGrace ?? getStableNextNoteEdgeGrace(stableTransitionMedian)
+    : 0;
+  const stablePreciseEdgePosition = options.stablePreciseEdgePosition ?? STABLE_PRECISE_EDGE_POSITION;
+  const stableHiddenBodyBreakGapThreshold = !isLazer && options.legacyReplayFrameRounding
+    ? getStableHiddenBodyBreakGapThreshold(stableTransitionMedian, options.speedMultiplier)
+    : Number.POSITIVE_INFINITY;
 
   for (let i = 0; i < notes.length; i++) {
     const column = notes[i].column;
@@ -612,37 +1017,200 @@ export function simulateManiaReplayJudgements(
     for (let notePosition = 0; notePosition < columnNotes.length; notePosition++) {
       const noteIndex = columnNotes[notePosition];
       const note = notes[noteIndex];
+      const previousNoteIndex = columnNotes[notePosition - 1] ?? null;
+      const previousNote = previousNoteIndex != null ? notes[previousNoteIndex] : null;
       const nextNoteIndex = columnNotes[notePosition + 1] ?? null;
       const nextNote = nextNoteIndex != null ? notes[nextNoteIndex] : null;
+      const nextNextNoteIndex = columnNotes[notePosition + 2] ?? null;
+      const nextNextNote = nextNextNoteIndex != null ? notes[nextNextNoteIndex] : null;
+      const isLN = note.isHold && note.endTime > note.time;
+      // Stable tap replay frames can straddle a press across the next note's
+      // start time. Keep those ambiguous taps eligible for the earlier note;
+      // LN heads have separate hold/body behaviour and should keep scrolling
+      // when they are held late.
+      const canUseStableCrossedHeadEdge = !isLN;
+      const stableNextEdgeGrace = !isLazer
+        && options.legacyReplayFrameRounding
+        && canUseStableCrossedHeadEdge
+        && nextNote != null
+        ? stableNextNoteEdgeGrace
+        : 0;
 
       while (segmentCursor < columnSegments.length && columnSegments[segmentCursor].start < note.time - windows.miss) {
         segmentCursor++;
       }
+      const stableSegmentCursorBefore = segmentCursor;
 
       let matchedSegmentIndex = -1;
       let headJudgment: Judgment = 0;
-      const stableHeadDeadline = note.time + Math.floor(windows.ok) - Number.EPSILON;
+      let headTime = 0;
+      const stableHeadDeadline = note.time + Math.floor(isLN ? windows.meh : windows.ok) - Number.EPSILON;
+      const stableHeadEdgeGrace = !isLazer
+        && options.legacyReplayFrameRounding
+        && canUseStableCrossedHeadEdge
+        && nextNote != null
+        ? Math.max(stableNextEdgeGrace, stableHeadDeadline - nextNote.time)
+        : stableNextEdgeGrace;
+      const stableColumnInputOwnershipEnd = !isLazer
+        && options.legacyReplayFrameRounding
+        && options.stableColumnInputOwnership
+        ? getStableColumnInputOwnershipEnd(note, nextNote, windows)
+        : Number.POSITIVE_INFINITY;
       const latestHeadHitTime = isLazer
         ? Math.min(note.time + windows.meh, nextNote ? nextNote.time - Number.EPSILON : note.time + windows.meh)
-        : Math.min(stableHeadDeadline, nextNote ? nextNote.time - Number.EPSILON : stableHeadDeadline);
+        : isLN
+          ? stableHeadDeadline
+          : Math.min(stableHeadDeadline, nextNote ? nextNote.time - Number.EPSILON : stableHeadDeadline);
 
-      for (let s = segmentCursor; s < columnSegments.length; s++) {
+      for (let s = segmentCursor; matchedSegmentIndex === -1 && s < columnSegments.length; s++) {
         const segment = columnSegments[s];
-        if (segment.start > latestHeadHitTime) break;
+        const pressRange = !isLazer && options.legacyReplayFrameRounding
+          ? isLN ? getStableSegmentPressRange(segment) : getStableTapPressRange(segment)
+          : null;
+        if (stableRangeIsPastHeadDeadline(pressRange?.min ?? segment.start, latestHeadHitTime, stableHeadEdgeGrace)) break;
 
-        headJudgment = isLazer
-          ? getJudgmentForOffset(segment.start - note.time, windows)
-          : getStableHeadJudgmentForOffset(segment.start - note.time, windows);
-        if (headJudgment !== 0) {
+        let currentHeadTime = pressRange
+          ? isLN
+            ? getStablePressEstimate(segment, note.time, useStableCoarsePressPlayback, stableCoarseEdgePlaybackDelay, stablePreciseEdgePosition)
+            : getStableTapPressEstimate(segment, note.time, useStableCoarsePressPlayback, stableCoarseEdgePlaybackDelay, stablePreciseEdgePosition)
+          : segment.start;
+        if (!useStableCoarsePressPlayback && currentHeadTime > latestHeadHitTime) {
+          if (!canUseStableCrossedHeadEdge) break;
+          if (!pressRange || stableRangeIsPastHeadDeadline(pressRange.min, latestHeadHitTime, stableHeadEdgeGrace)) break;
+        }
+        if (currentHeadTime > stableColumnInputOwnershipEnd) break;
+        const currentHeadOffsetMs = currentHeadTime - note.time;
+        const previousNoteIsLongNote = previousNote != null
+          && previousNote.isHold
+          && previousNote.endTime > previousNote.time;
+        if (
+          !isLazer &&
+          options.legacyReplayFrameRounding &&
+          previousNote != null &&
+          !previousNoteIsLongNote &&
+          currentHeadTime < previousNote.time
+        ) {
+          continue;
+        }
+
+        const currentHeadJudgment = isLazer
+          ? getJudgmentForOffset(currentHeadOffsetMs, windows)
+          : isLN
+            ? getStableLongNoteHeadPreviewJudgment(currentHeadOffsetMs, windows)
+            : getStableHeadJudgmentForOffset(currentHeadOffsetMs, windows);
+        if (currentHeadJudgment !== 0) {
+          const stableTimedOutCrossedLongNoteHead = !isLazer
+            && isLN
+            && stableTransitionMedian === STABLE_CROSSED_LN_HEAD_MEDIAN_TRANSITION
+            && currentHeadOffsetMs > windows.meh;
+          if (
+            !isLazer
+            && isLN
+            && nextNote
+            && currentHeadTime >= nextNote.time
+            && currentHeadJudgment >= 5
+            && (
+              stableTransitionMedian < STABLE_CROSSED_LN_HEAD_MEDIAN_TRANSITION
+              || stableTimedOutCrossedLongNoteHead
+            )
+          ) {
+            break;
+          }
           matchedSegmentIndex = s;
+          headJudgment = currentHeadJudgment;
+          headTime = currentHeadTime;
+          const keepShortLongNoteEarlyMeh = !isLazer
+            && isLN
+            && headJudgment === 5
+            && note.endTime - note.time <= Math.max(20, stableTransitionMedian * 4);
+
+          if (
+            !keepShortLongNoteEarlyMeh
+            && !isLazer
+              && isLN
+              && options.legacyReplayFrameRounding
+              && useStableLongNoteHeadRefinement
+              && headJudgment >= 4
+          ) {
+            let bestOffset = headTime - note.time;
+            for (let next = s + 1; next < columnSegments.length; next++) {
+              const nextSegment = columnSegments[next];
+              const nextRange = getStableSegmentPressRange(nextSegment);
+              if (stableRangeIsPastHeadDeadline(nextRange.min, latestHeadHitTime, stableHeadEdgeGrace)) break;
+
+              const nextHeadTime = getStablePressEstimate(
+                nextSegment,
+                note.time,
+                useStableCoarsePressPlayback,
+                stableCoarseEdgePlaybackDelay,
+                stablePreciseEdgePosition,
+              );
+              if (nextHeadTime > latestHeadHitTime) break;
+              if (stablePressIsLikelyForNextNote(nextHeadTime, note, nextNote)) continue;
+
+              const nextOffset = nextHeadTime - note.time;
+              const nextJudgment = getStableLongNoteHeadPreviewJudgment(nextOffset, windows);
+              if (nextJudgment === 0) continue;
+
+              const nextIsBetter = nextJudgment < headJudgment
+                || (nextJudgment === headJudgment && Math.abs(nextOffset) < Math.abs(bestOffset));
+              if (nextIsBetter) {
+                matchedSegmentIndex = next;
+                headJudgment = nextJudgment;
+                headTime = nextHeadTime;
+                bestOffset = nextOffset;
+              }
+            }
+          }
           break;
         }
       }
 
-      const isLN = note.isHold && note.endTime > note.time;
-
       if (matchedSegmentIndex === -1) {
-        noteStates[noteIndex] = createMissState(
+        let timedOutHeldSegmentIndex = -1;
+        if (
+          !isLazer
+          && isLN
+          && nextNote != null
+          && options.legacyReplayFrameRounding
+          && stableConsumeHeldSegmentAtLongNoteTimeout
+        ) {
+          const passiveTimeout = note.time + windows.meh;
+          for (let s = segmentCursor; s < columnSegments.length; s++) {
+            const segment = columnSegments[s];
+            const pressRange = getStableSegmentPressRange(segment);
+            if (pressRange.min > passiveTimeout + STABLE_PRECISE_EDGE_INTERVAL) break;
+            if (segment.end < passiveTimeout) continue;
+
+            const pressTime = getStablePressEstimate(
+              segment,
+              note.time,
+              useStableCoarsePressPlayback,
+              stableCoarseEdgePlaybackDelay,
+              stablePreciseEdgePosition,
+            );
+            const edgeCanBelongToNextHead = pressRange.min < nextNote.time && pressTime >= nextNote.time;
+            const startsAfterThisTail = pressTime > note.endTime;
+            if (edgeCanBelongToNextHead && startsAfterThisTail) {
+              timedOutHeldSegmentIndex = s;
+              break;
+            }
+          }
+        }
+
+        const previousConsumedSegment = columnSegments[Math.max(0, segmentCursor) - 1];
+        const stableMissedInsideConsumedSegment = !isLazer
+          && isLN
+          && options.legacyReplayFrameRounding
+          && previousConsumedSegment != null
+          && previousConsumedSegment.start < note.time
+          && previousConsumedSegment.end > note.time;
+        const stableMissedInsideConsumedNoAdvance = stableMissedInsideConsumedSegment
+          && timedOutHeldSegmentIndex < segmentCursor;
+        const stableMissedInsideConsumedJudgment = stableMissedInsideConsumedNoAdvance
+          ? stableMissedInsideConsumedNoAdvanceJudgment ?? stableMissedInsideConsumedSegmentJudgment
+          : stableMissedInsideConsumedSegmentJudgment;
+        const missState = createMissState(
           note,
           noteIndex,
           windows,
@@ -651,19 +1219,40 @@ export function simulateManiaReplayJudgements(
           accuracyMode,
           undefined,
           !isLazer && options.legacyReplayFrameRounding ? [1, 2, 3, 4, 5, 6] : undefined,
+          stableMissedInsideConsumedSegment ? stableMissedInsideConsumedJudgment : undefined,
         );
+        if (stableMissedInsideConsumedSegment) {
+          missState.stableMissedInsideConsumedSegment = true;
+        }
+        if (timedOutHeldSegmentIndex >= segmentCursor) {
+          missState.stableConsumedHeldSegmentAtTimeout = true;
+          segmentCursor = timedOutHeldSegmentIndex + 1;
+        }
+        missState.stableSegmentCursorBefore = stableSegmentCursorBefore;
+        missState.stableSegmentCursorAfter = segmentCursor;
+        missState.stableMatchedSegmentIndex = timedOutHeldSegmentIndex >= 0 ? timedOutHeldSegmentIndex : undefined;
+        missState.stableNextSegmentCursor = segmentCursor;
+        noteStates[noteIndex] = missState;
         continue;
       }
 
       const headSegment = columnSegments[matchedSegmentIndex];
-      const headOffsetMs = headSegment.start - note.time;
+      const headOffsetMs = headTime - note.time;
+      const stableMatchedPreviousTailSegment = !isLazer
+        && isLN
+        && options.legacyReplayFrameRounding
+        && previousNote != null
+        && previousNote.isHold
+        && previousNote.endTime > previousNote.time
+        && headSegment.start < previousNote.endTime
+        && headSegment.end > note.time;
 
       // A stable press that lands in the miss tier (|offset| in (meh, miss])
       // registers the LN as a miss at the real press time. Lazer is different:
       // the head is counted as a miss but the tail still gets its own judgement
       // (capped to Meh by the head-miss combo-break rule), so we let lazer fall
       // through to the regular flow.
-      if (headJudgment === 6 && !isLazer) {
+      if (headJudgment === 6 && !isLazer && !isLN) {
         noteStates[noteIndex] = createMissState(
           note,
           noteIndex,
@@ -671,10 +1260,12 @@ export function simulateManiaReplayJudgements(
           column,
           events,
           accuracyMode,
-          { time: headSegment.start, offsetMs: headOffsetMs, releaseTime: headSegment.end },
+          { time: headTime, offsetMs: headOffsetMs, releaseTime: headSegment.end },
           options.legacyReplayFrameRounding ? [1, 2, 3, 4, 5, 6] : undefined,
         );
-        segmentCursor = matchedSegmentIndex + 1;
+        if (!options.legacyReplayFrameRounding && matchedSegmentIndex >= segmentCursor) {
+          segmentCursor = matchedSegmentIndex + 1;
+        }
         continue;
       }
 
@@ -689,21 +1280,23 @@ export function simulateManiaReplayJudgements(
           ...(!isLazer && options.legacyReplayFrameRounding
             ? { possibleJudgments: getStableTapPossibleJudgments(headSegment, note, windows) }
             : {}),
-          time: headSegment.start,
+          time: headTime,
         });
         noteStates[noteIndex] = {
           bodyBreakTime: null,
           displayJudgment: headJudgment,
-          displayTime: headSegment.start,
+          displayTime: headTime,
           headJudgment,
           headOffsetMs,
-          headTime: headSegment.start,
+          headTime,
           releaseTime: headSegment.end,
           tailJudgment: null,
           tailOffsetMs: 0,
           tailTime: null,
         };
-        segmentCursor = matchedSegmentIndex + 1;
+        if (matchedSegmentIndex >= segmentCursor) {
+          segmentCursor = matchedSegmentIndex + 1;
+        }
         continue;
       }
 
@@ -715,7 +1308,7 @@ export function simulateManiaReplayJudgements(
           noteIndex,
           offsetMs: headOffsetMs,
           part: "hold-head",
-          time: headSegment.start,
+          time: headTime,
         });
 
         let bodyBreakTime: number | null = null;
@@ -802,96 +1395,366 @@ export function simulateManiaReplayJudgements(
           displayTime: tailTime,
           headJudgment,
           headOffsetMs,
-          headTime: headSegment.start,
+          headTime,
           releaseTime,
           tailJudgment,
           tailOffsetMs,
           tailTime,
         };
 
-        segmentCursor = matchedSegmentIndex + 1;
+        if (matchedSegmentIndex >= segmentCursor) {
+          segmentCursor = matchedSegmentIndex + 1;
+        }
         continue;
       }
 
-      // --- Stable LN: one combined judgement event at tail release time ---
-      const tailEarlyBound = note.endTime - windows.meh;
-      const tailLateBound = note.endTime + Math.floor(windows.ok) - Number.EPSILON;
+      // --- Stable LN: one ScoreV1 combined judgement event. Stable stores the
+      // last press/release times for the hold object, reflects early heads and
+      // late releases around the note boundaries, and only times out held tails
+      // at the 50 window.
+      const stableMeh = Math.floor(windows.meh);
+      const tailEarlyBound = note.endTime - stableMeh;
+      const tailTimeout = note.endTime + stableMeh;
+      const tailEarlyMissBound = note.endTime - stableMeh * stableTailEarlyMissLenience;
 
       let bodyBreakTime: number | null = null;
       const bodyBreakTimes: number[] = [];
+      let bodyBreakCapJudgment: Judgment | null = null;
       const heldSegments: ReplaySegment[] = [];
       let releaseTime = headSegment.end;
       let scanIndex = matchedSegmentIndex;
-      let tailReleaseTime: number | null = null;
+      let scoringPressTime = headTime;
+      let previousReleaseTime: number | null = null;
+      let previousReleaseWasBridged = false;
+      let tailJudgementSourceTime: number | null = null;
+      let tailWasHeldAtJudgement = false;
       let tailOffsetMs = windows.miss;
       let lastScannedSegmentIndex = matchedSegmentIndex;
       let tailSegment: ReplaySegment | null = null;
+      let tailSegmentIndex: number | null = null;
+      let tailSegmentReleaseDelay = 0;
+      let bodyBreakMiss: { offsetMs: number; time: number } | null = null;
+      let stablePreHeadPressActivatedLongNote = false;
+      let stablePreHeadReleaseMiss = false;
+      let stablePreHeadReleaseMissConsumedRecovery = false;
 
       while (scanIndex < columnSegments.length) {
         const segment = columnSegments[scanIndex];
+        const isFirstMatchedSegment = scanIndex === matchedSegmentIndex;
+        const segmentPressRange = options.legacyReplayFrameRounding
+          ? getStableSegmentPressRange(segment)
+          : null;
+        const segmentPressTimeForOwnership = segmentPressRange?.min ?? segment.start;
+        if (!isFirstMatchedSegment && segmentPressTimeForOwnership > stableColumnInputOwnershipEnd) {
+          break;
+        }
+
+        if (
+          !isFirstMatchedSegment &&
+          previousReleaseTime != null &&
+          !previousReleaseWasBridged &&
+          previousReleaseTime < tailEarlyBound &&
+          tailEarlyBound - previousReleaseTime <= stableNextNoteEdgeGrace &&
+          (segmentPressRange?.min ?? segment.start) > tailEarlyBound &&
+          segment.end < note.endTime
+        ) {
+          tailJudgementSourceTime = previousReleaseTime;
+          tailWasHeldAtJudgement = false;
+          break;
+        }
+
         lastScannedSegmentIndex = scanIndex;
+
+        if (
+          !isFirstMatchedSegment
+          && !previousReleaseWasBridged
+          && !stablePreserveLongNoteScoringPressTime
+          && !(stablePreserveLongNoteScoringPressAfterBreak && bodyBreakTime != null)
+          && !(
+            stablePreserveLongNoteScoringPressAfterTailBreak
+            && bodyBreakTime != null
+            && segmentPressTimeForOwnership >= note.endTime
+          )
+        ) {
+          scoringPressTime = options.legacyReplayFrameRounding
+            ? getStablePressEstimate(segment, note.time, useStableCoarsePressPlayback, stableCoarseEdgePlaybackDelay, stablePreciseEdgePosition)
+            : segment.start;
+        }
+
         releaseTime = Math.max(releaseTime, segment.end);
         if (segment.end > note.time && segment.start < note.endTime) {
           heldSegments.push(segment);
         }
 
-        // Case A: released before tail window. Body break, then look for a
-        // re-press that can still cover the tail window.
+        let segmentReleaseTime = options.legacyReplayFrameRounding
+          ? getStableReleaseEstimate(segment, note.endTime, useStableCoarseReleasePlayback, stableCoarseEdgePlaybackDelay, stablePreciseEdgePosition)
+          : segment.end;
+        const rawSegmentReleaseDelay = options.legacyReplayFrameRounding
+          && useStableCoarseReleasePlayback
+          && segment.endPrevious != null
+          && segmentReleaseTime > note.endTime
+          ? Math.max(0, segment.end - segment.endPrevious)
+          : 0;
+        const segmentReleaseDelay = keyCount > 4
+          ? stableHighKeyReleaseDelayRawThreshold != null
+            && rawSegmentReleaseDelay < stableHighKeyReleaseDelayRawThreshold
+              ? Math.min(2, rawSegmentReleaseDelay)
+              : Math.min(stableHighKeyReleaseDelayCap, rawSegmentReleaseDelay)
+          : 0;
         if (segment.end < tailEarlyBound) {
-          bodyBreakTimes.push(segment.end);
-          if (bodyBreakTime == null) {
-            bodyBreakTime = segment.end;
-            events.push({
-              column,
-              judgment: null,
-              noteIndex,
-              offsetMs: segment.end - note.endTime,
-              part: "hold-break",
-              time: segment.end,
-            });
+          const nextSegment = columnSegments[scanIndex + 1];
+          const canBridgeTailEdgeGap = stableCanBridgeTailEdgeGap(
+            segment,
+            nextSegment,
+            tailEarlyBound,
+            options.legacyReplayFrameRounding,
+            stableNextNoteEdgeGrace,
+            stableTailEdgeGrace,
+          );
+
+          const releasedAfterHead = segment.end > note.time;
+          const releasedMatchedPreHeadPress = isFirstMatchedSegment
+            && segment.start < note.time
+            && segment.end <= note.time;
+          const nextSegmentPressRange = nextSegment && options.legacyReplayFrameRounding
+            ? getStableSegmentPressRange(nextSegment)
+            : null;
+          const nextSegmentPressTime = nextSegment
+            ? options.legacyReplayFrameRounding
+              ? getStablePressEstimate(
+                  nextSegment,
+                  note.time,
+                  useStableCoarsePressPlayback,
+                  stableCoarseEdgePlaybackDelay,
+                  stablePreciseEdgePosition,
+                )
+              : nextSegment.start
+            : Number.POSITIVE_INFINITY;
+          const preHeadRecoveryIsAlreadyAtHead = nextSegmentPressTime <= note.time + STABLE_PRECISE_EDGE_INTERVAL;
+          const nextSegmentCoversTailEdge = nextSegment != null
+            && (nextSegmentPressRange?.min ?? nextSegment.start) <= tailEarlyBound
+            && nextSegment.end >= tailEarlyBound;
+          const isShortStableLongNote = note.endTime - note.time <= stableMeh;
+          const preHeadPressActivatedLongNote = releasedMatchedPreHeadPress
+            && isShortStableLongNote
+            && (
+              preHeadRecoveryIsAlreadyAtHead
+              || (!stableRequirePreHeadRecoveryForActivation && scoringPressTime < note.time - stableMeh)
+            );
+          const preHeadReleaseMissesAtHead = releasedMatchedPreHeadPress
+            && stablePreHeadReleaseMissesAtHead
+            && (
+              preHeadPressActivatedLongNote
+              || (!preHeadRecoveryIsAlreadyAtHead && !nextSegmentCoversTailEdge)
+            );
+          const nextNoteGap = nextNote ? nextNote.time - note.endTime : Number.POSITIVE_INFINITY;
+          const nextNoteDuration = nextNote ? nextNote.endTime - nextNote.time : Number.POSITIVE_INFINITY;
+          const nextNextNoteGap = nextNote && nextNextNote
+            ? nextNextNote.time - nextNote.endTime
+            : Number.POSITIVE_INFINITY;
+          const recoveryWouldStealCloseShortNextNote = nextNote?.isHold === true
+            && stablePreHeadReleaseMissRecoveryExcludeNextShortMaxGap != null
+            && stablePreHeadReleaseMissRecoveryExcludeNextShortMaxDuration != null
+            && nextNoteGap <= stablePreHeadReleaseMissRecoveryExcludeNextShortMaxGap
+            && nextNoteDuration <= stablePreHeadReleaseMissRecoveryExcludeNextShortMaxDuration;
+          const releaseBeforeTailEdge = tailEarlyBound - segment.end;
+          const lateTailEdgeBreakMisses = releasedAfterHead
+            && releaseBeforeTailEdge > 1
+            && releaseBeforeTailEdge <= stableNextNoteEdgeGrace
+            && segment.end < tailEarlyMissBound
+            && !nextSegmentCoversTailEdge;
+
+          if (!canBridgeTailEdgeGap && (releasedAfterHead || releasedMatchedPreHeadPress)) {
+            const capJudgment = stableBodyBreakCapJudgment;
+            if (capJudgment != null) {
+              bodyBreakCapJudgment = bodyBreakCapJudgment == null
+                ? capJudgment
+                : Math.max(bodyBreakCapJudgment, capJudgment) as Judgment;
+            }
+
+            if (releasedAfterHead) {
+              bodyBreakTimes.push(segment.end);
+            }
+
+            if (preHeadReleaseMissesAtHead || lateTailEdgeBreakMisses) {
+              stablePreHeadPressActivatedLongNote = preHeadPressActivatedLongNote;
+              stablePreHeadReleaseMiss = preHeadReleaseMissesAtHead;
+              bodyBreakMiss = {
+                offsetMs: segment.end - note.endTime,
+                time: preHeadReleaseMissesAtHead ? note.time : segment.end,
+              };
+              bodyBreakTime = bodyBreakMiss.time;
+              bodyBreakTimes.push(segment.end);
+              if (preHeadPressActivatedLongNote && nextSegment != null && nextSegment.start < note.time) {
+                lastScannedSegmentIndex = Math.max(lastScannedSegmentIndex, scanIndex + 1);
+              }
+              if (
+                preHeadReleaseMissesAtHead
+                && stablePreHeadReleaseMissConsumesRecovery
+                && nextSegment != null
+                && (nextSegmentPressRange?.min ?? nextSegment.start) < note.endTime
+                && (!stablePreHeadReleaseMissRecoveryExcludeBeforeTap || nextNote?.isHold !== false)
+                && !recoveryWouldStealCloseShortNextNote
+                && (
+                  stablePreHeadReleaseMissRecoveryMaxNextNoteGap == null
+                  || nextNoteGap <= stablePreHeadReleaseMissRecoveryMaxNextNoteGap
+                )
+                && (
+                  stablePreHeadReleaseMissRecoveryMinNextNextNoteGap == null
+                  || nextNextNoteGap >= stablePreHeadReleaseMissRecoveryMinNextNextNoteGap
+                )
+                && (
+                  stablePreHeadReleaseMissRecoveryMaxHeadOffset == null
+                  || Math.abs(getStableLongNoteScoringHeadTime(note, scoringPressTime, windows) - note.time)
+                    <= stablePreHeadReleaseMissRecoveryMaxHeadOffset
+                )
+                && (
+                  stablePreHeadReleaseMissRecoveryMaxTailOffset == null
+                  || segment.end - note.endTime <= stablePreHeadReleaseMissRecoveryMaxTailOffset
+                )
+              ) {
+                stablePreHeadReleaseMissConsumedRecovery = true;
+                lastScannedSegmentIndex = Math.max(lastScannedSegmentIndex, scanIndex + 1);
+              }
+              break;
+            }
+
+            if (releasedAfterHead && bodyBreakTime == null) {
+              bodyBreakTime = segment.end;
+              events.push({
+                column,
+                judgment: null,
+                noteIndex,
+                offsetMs: segment.end - note.endTime,
+                part: "hold-break",
+                time: segment.end,
+              });
+            }
           }
+
+          previousReleaseTime = segmentReleaseTime;
+          previousReleaseWasBridged = canBridgeTailEdgeGap;
           scanIndex++;
           continue;
         }
 
-        // Case B: segment starts after the late OK window, so the user never
-        // pressed during the tail window. No more chances.
-        if (segment.start > tailLateBound) {
-          break;
-        }
-
-        // Case C: segment ends inside the tail window. Normal release.
-        if (segment.end <= tailLateBound) {
-          tailReleaseTime = segment.end;
-          tailOffsetMs = segment.end - note.endTime;
+        if (segment.end <= tailTimeout) {
+          tailJudgementSourceTime = segmentReleaseTime;
+          tailWasHeldAtJudgement = false;
           tailSegment = segment;
+          tailSegmentIndex = scanIndex;
+          tailSegmentReleaseDelay = segmentReleaseDelay;
           break;
         }
 
-        // Case D: segment spans past the late OK window. The key was still
-        // held through the valid release interval, so judge at the late OK
-        // boundary instead of waiting for the eventual physical release.
-        tailReleaseTime = tailLateBound;
-        tailOffsetMs = Math.floor(windows.ok);
+        tailJudgementSourceTime = getStableHeldTailTimeoutTime(
+          segment,
+          tailTimeout,
+          stableHeldTailTimeoutMode,
+        );
+        tailWasHeldAtJudgement = true;
         tailSegment = segment;
+        tailSegmentIndex = scanIndex;
+        tailSegmentReleaseDelay = 0;
         break;
       }
 
       let combinedJudgment: Judgment;
       let combinedTime: number;
+      let scoringHeadOffsetMs = headOffsetMs;
+      let scoringTailOffsetMs = tailOffsetMs;
+      let barelyCrossedTailOnTimeout = false;
+      let lateStartReleasePastOk = false;
+      let stableHeldOkTimeout = false;
+      let hiddenBodyBreakPossible = false;
 
-      if (tailReleaseTime == null) {
+      if (bodyBreakMiss != null) {
         combinedJudgment = 6;
-        combinedTime = Math.max(headSegment.start, note.endTime + windows.ok);
-        tailOffsetMs = windows.miss;
+        combinedTime = bodyBreakMiss.time;
+        tailOffsetMs = bodyBreakMiss.offsetMs;
+        scoringHeadOffsetMs = getStableLongNoteScoringHeadTime(note, scoringPressTime, windows) - note.time;
+        scoringTailOffsetMs = bodyBreakMiss.offsetMs;
       } else {
-        combinedJudgment = judgeStableLongNoteCombined(
-          headOffsetMs,
-          tailOffsetMs,
-          bodyBreakTime != null,
-          windows,
-        );
-        combinedTime = tailReleaseTime;
+        if (tailJudgementSourceTime == null) {
+          tailJudgementSourceTime = previousReleaseTime;
+        }
+
+        if (tailJudgementSourceTime == null) {
+          combinedJudgment = 6;
+          combinedTime = Math.max(headTime, tailEarlyBound);
+          tailOffsetMs = -stableMeh;
+          scoringHeadOffsetMs = getStableLongNoteScoringHeadTime(note, scoringPressTime, windows) - note.time;
+          scoringTailOffsetMs = -stableMeh;
+        } else {
+          hiddenBodyBreakPossible = bodyBreakCapJudgment != null && stableLongNoteCanHideBodyBreak(
+            note,
+            columnSegments.slice(matchedSegmentIndex, lastScannedSegmentIndex + 1),
+            Math.max(tailJudgementSourceTime, tailEarlyBound),
+            stableHiddenBodyBreakGapThreshold,
+          );
+          const effectiveBodyBreakCapJudgment = stableSuppressHiddenBodyBreakCap && hiddenBodyBreakPossible
+            ? null
+            : bodyBreakCapJudgment;
+          const judged = judgeStableLongNoteScoreV1(
+            note,
+            scoringPressTime,
+            tailJudgementSourceTime,
+            tailWasHeldAtJudgement,
+            effectiveBodyBreakCapJudgment,
+            stableTailEarlyMissLenience,
+            windows,
+          );
+          const delayedJudged = !tailWasHeldAtJudgement
+            && tailSegmentReleaseDelay > 0
+            && judged.judgment >= 3
+            && judged.judgment <= 4
+              ? judgeStableLongNoteScoreV1(
+                  note,
+                  scoringPressTime,
+                  tailJudgementSourceTime + tailSegmentReleaseDelay,
+                  tailWasHeldAtJudgement,
+                  effectiveBodyBreakCapJudgment,
+                  stableTailEarlyMissLenience,
+                  windows,
+              )
+            : judged;
+          const highKeyReleaseDelayHeadAllowed = stableHighKeyReleaseDelayMaxHeadOffset == null
+            || Math.abs(judged.headOffsetMs) <= stableHighKeyReleaseDelayMaxHeadOffset;
+          const useDelayedJudgment = delayedJudged.judgment > judged.judgment
+            && highKeyReleaseDelayHeadAllowed
+            && (!stableHighKeyReleaseDelayMissOnly || delayedJudged.judgment === 6);
+          const finalJudged = useDelayedJudgment ? delayedJudged : judged;
+          barelyCrossedTailOnTimeout = headTime > note.endTime
+            && headTime <= note.endTime + STABLE_PRECISE_EDGE_INTERVAL;
+          lateStartReleasePastOk = scoringPressTime > note.endTime
+            && keyCount <= 4
+            && (options.speedMultiplier ?? 1) <= 1.01
+            && stableTransitionMedian >= STABLE_CROSSED_LN_HEAD_MEDIAN_TRANSITION
+            && !tailWasHeldAtJudgement
+            && tailJudgementSourceTime > note.endTime + Math.floor(windows.ok)
+            && tailJudgementSourceTime <= tailTimeout
+            && finalJudged.judgment === 4;
+          stableHeldOkTimeout = tailWasHeldAtJudgement
+            && stableHeldOkTimeoutAsMiss
+            && finalJudged.judgment === 4
+            && stableTransitionMedian <= 8
+            && !barelyCrossedTailOnTimeout;
+          combinedJudgment = lateStartReleasePastOk
+            ? 5
+            : stableHeldOkTimeout
+            ? stableHeldOkTimeoutJudgment
+            : finalJudged.judgment;
+          combinedTime = judged.judgment === 6
+            && headJudgment === 6
+            && headTime >= note.time + stableMeh
+            ? note.time + stableMeh
+            : tailWasHeldAtJudgement
+            ? tailTimeout
+            : Math.max(tailJudgementSourceTime, tailEarlyBound);
+          tailOffsetMs = finalJudged.tailOffsetMs;
+          scoringHeadOffsetMs = finalJudged.headOffsetMs;
+          scoringTailOffsetMs = finalJudged.tailOffsetMs;
+        }
       }
 
       events.push({
@@ -908,11 +1771,12 @@ export function simulateManiaReplayJudgements(
                 tailSegment,
                 combinedJudgment,
                 tailOffsetMs,
-                bodyBreakTime != null,
+                stableSuppressHiddenBodyBreakCap ? null : bodyBreakCapJudgment,
                 stableLongNoteCanHideBodyBreak(
                   note,
                   columnSegments.slice(matchedSegmentIndex, lastScannedSegmentIndex + 1),
                   combinedTime,
+                  stableHiddenBodyBreakGapThreshold,
                 ),
                 windows,
               ),
@@ -921,6 +1785,26 @@ export function simulateManiaReplayJudgements(
         time: combinedTime,
       });
 
+      let lastConsumedSegmentIndex = lastScannedSegmentIndex;
+      if (
+        options.stableReuseTailSegmentForNextHead
+        && tailSegment != null
+        && tailSegmentIndex != null
+        && tailSegmentIndex > matchedSegmentIndex
+        && nextNote != null
+      ) {
+        const tailSegmentPressRange = options.legacyReplayFrameRounding
+          ? getStableSegmentPressRange(tailSegment)
+          : { min: tailSegment.start, max: tailSegment.start };
+        const tailSegmentStartsAfterTail = tailSegmentPressRange.min >= note.endTime - stableTailSegmentReuseGrace
+          && tailSegmentPressRange.min < nextNote.time
+          && tailSegment.end > nextNote.time;
+        if (tailSegmentStartsAfterTail) {
+          lastConsumedSegmentIndex = tailSegmentIndex - 1;
+        }
+      }
+
+      const nextSegmentCursor = Math.max(matchedSegmentIndex + 1, lastConsumedSegmentIndex + 1);
       noteStates[noteIndex] = {
         bodyBreakTime,
         bodyBreakTimes,
@@ -928,15 +1812,37 @@ export function simulateManiaReplayJudgements(
         displayTime: combinedTime,
         headJudgment,
         headOffsetMs,
-        headTime: headSegment.start,
+        headTime,
         heldSegments,
         releaseTime,
+        stableBarelyCrossedTailOnTimeout: barelyCrossedTailOnTimeout || undefined,
+        stableHeldOkTimeout: stableHeldOkTimeout || undefined,
+        stableHiddenBodyBreakPossible: hiddenBodyBreakPossible || undefined,
+        stableLastConsumedSegmentIndex: lastConsumedSegmentIndex,
+        stableLastScannedSegmentIndex: lastScannedSegmentIndex,
+        stableLateStartReleasePastOk: lateStartReleasePastOk || undefined,
+        stableMatchedPreviousTailSegment: stableMatchedPreviousTailSegment || undefined,
+        stableMatchedSegmentIndex: matchedSegmentIndex,
+        stableNextSegmentCursor: nextSegmentCursor,
+        stablePreHeadPressActivatedLongNote: stablePreHeadPressActivatedLongNote || undefined,
+        stablePreHeadReleaseMiss: stablePreHeadReleaseMiss || undefined,
+        stablePreHeadReleaseMissConsumedRecovery: stablePreHeadReleaseMissConsumedRecovery || undefined,
+        stableSegmentCursorBefore,
+        stableTailWasHeldAtJudgement: tailWasHeldAtJudgement || undefined,
+        stableTailJudgementSourceTime: tailJudgementSourceTime,
+        stableTailSegmentIndex: tailSegmentIndex,
+        stableTailSegmentReleaseDelay: tailSegmentReleaseDelay || undefined,
+        scoringHeadOffsetMs,
+        scoringTailOffsetMs,
         tailJudgment: combinedJudgment,
         tailOffsetMs,
         tailTime: combinedTime,
       };
 
-      segmentCursor = Math.max(matchedSegmentIndex + 1, lastScannedSegmentIndex + 1);
+      if (nextSegmentCursor > segmentCursor) {
+        segmentCursor = nextSegmentCursor;
+      }
+      noteStates[noteIndex].stableSegmentCursorAfter = segmentCursor;
     }
   }
 

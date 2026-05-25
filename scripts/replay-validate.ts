@@ -10,6 +10,7 @@ import path from "node:path";
 import { ScoreDecoder } from "osu-parsers";
 import { parseManiaBeatmap } from "../src/lib/beatmap-parser.ts";
 import { getModAcronyms, isLazerScore } from "../src/lib/score.ts";
+import { decodeStableManiaReplayFrames } from "../src/lib/replay-frames.ts";
 import type { OsuScore } from "../src/lib/types.ts";
 import type { ReplayFrame } from "../src/lib/types.ts";
 import type { ReplayHitCounts, ReplayValidationResult } from "../src/lib/replay-validation.ts";
@@ -286,12 +287,7 @@ function pickExpectedMaxCombo(score: OsuScore, decodedInfo: any): number | null 
 
 function decodeFrames(decodedScore: any): ReplayFrame[] {
   const rawFrames = (decodedScore.replay?.frames ?? []) as any[];
-  return rawFrames
-    .map((frame): ReplayFrame => ({
-      time: Number(frame.startTime ?? frame.time ?? 0),
-      keyState: Math.round(Number(frame.mouseX ?? frame.position?.x ?? frame.buttonState ?? 0)) & 0xffff,
-    }))
-    .filter((frame) => Number.isFinite(frame.time) && frame.time >= 0);
+  return decodeStableManiaReplayFrames(rawFrames);
 }
 
 async function validateScoreId(scoreId: number, options: CliOptions): Promise<ReplayValidationResult & { scoreId: number; title: string; version: string; player: string; mods: string[]; keyCount: number }> {
@@ -314,6 +310,7 @@ async function validateScoreId(scoreId: number, options: CliOptions): Promise<Re
     mods,
     notes: beatmap.notes,
     od: beatmap.od,
+    resolveLegacyFrameAmbiguity: false,
   });
 
   return {
@@ -343,11 +340,13 @@ function printResult(result: ReplayValidationResult & { scoreId: number; title: 
 
   console.log(`\n[${status}] ${result.scoreId} ${result.accuracyMode} ${result.keyCount}K${mods}`);
   console.log(`${result.player} - ${result.title} [${result.version}]`);
-  console.log(`Accuracy expected ${formatPct(result.expectedAccuracy)} simulated ${formatPct(result.simulatedAccuracy)} (${result.accuracyDiff >= 0 ? "+" : ""}${result.accuracyDiff.toFixed(4)}pp)`);
+  console.log(`Accuracy expected ${formatPct(result.expectedAccuracy)} simulated ${formatPct(result.simulatedAccuracy)} (${result.accuracyDiff >= 0 ? "+" : ""}${result.accuracyDiff.toFixed(4)} accuracy points)`);
   if (result.legacyReplayResolution === "score-header") {
     console.log("Resolved using stored stable score counts after replay timing data was insufficient.");
   } else if (result.legacyReplayAmbiguityResolved) {
     console.log("Resolved via legacy .osr frame timing ambiguity.");
+  } else {
+    console.log("Raw replay simulation; stored score counts are used only as the comparison target.");
   }
   console.log(`Hits expected ${result.totalExpected} simulated ${result.totalSimulated} (total abs diff ${result.totalCountDiff})`);
   console.log(`Max combo expected ${result.expectedMaxCombo ?? "unknown"} simulated ${result.simulatedMaxCombo}${result.maxComboDiff == null ? "" : ` (${formatSigned(result.maxComboDiff)})`}`);

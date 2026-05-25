@@ -1,5 +1,6 @@
 import type { OsuMod } from "./types";
 import type { ServerReplay } from "./replay-types";
+import { decodeStableManiaReplayFrames } from "./replay-frames";
 
 const MANIA_RULESET_ID = 3;
 
@@ -66,13 +67,7 @@ export async function parseUploadedReplayBuffer(buffer: ArrayBuffer): Promise<Up
     throw new Error("This replay has no playable input frames.");
   }
 
-  const frames = rawFrames
-    .map((frame) => ({
-      time: Math.round(Number(frame.startTime ?? frame.time ?? 0)),
-      keyState: Math.round(Number(frame.mouseX ?? frame.position?.x ?? frame.buttonState ?? 0)) & 0xffff,
-    }))
-    .filter((frame) => Number.isFinite(frame.time))
-    .sort((a, b) => a.time - b.time);
+  const frames = decodeStableManiaReplayFrames(rawFrames);
 
   if (frames.length === 0) {
     throw new Error("This replay has no readable input frames.");

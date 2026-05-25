@@ -21,6 +21,7 @@ import {
   normalizeScorePayload,
   parseBoundedInt
 } from "./validators";
+import { decodeStableManiaReplayFrames } from "../replay-frames";
 
 // ── Replay (parsed server-side via osu-parsers) ────────────────────────────
 
@@ -28,7 +29,7 @@ const REPLAY_CACHE_LOCK_TTL_MS = 30_000;
 const REPLAY_CACHE_LOCK_WAIT_MS = 500;
 const REPLAY_CACHE_LOCK_WAIT_RETRIES = 8;
 const REPLAY_PARSED_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
-const REPLAY_PARSED_CACHE_VERSION = 1;
+const REPLAY_PARSED_CACHE_VERSION = 2;
 
 type ReplayDownload = {
   buffer: Buffer;
@@ -173,6 +174,7 @@ export const getReplayParsed = createServerFn({ method: "GET" })
 
       const info = score.info;
       const rawFrames = (score.replay?.frames ?? []) as any[];
+      const frames = decodeStableManiaReplayFrames(rawFrames);
       const lifeBarFrames = (score.replay?.lifeBar ?? [])
         .map((frame: any) => ({
           time: Math.round(Number(frame.startTime ?? frame.time ?? 0)),
@@ -184,13 +186,13 @@ export const getReplayParsed = createServerFn({ method: "GET" })
       // Pack frames into typed arrays to shrink the wire payload ~20x vs JSON.
       // Little-endian host is assumed (every x86/ARM server and client is LE).
       // For mania, column bitmask is in mouseX (position.x), NOT buttonState.
-      const frameCount = rawFrames.length;
+      const frameCount = frames.length;
       const times = new Int32Array(frameCount);
-      const keys = new Uint16Array(frameCount);
+      const keys = new Uint32Array(frameCount);
       for (let i = 0; i < frameCount; i++) {
-        const f = rawFrames[i];
-        times[i] = f.startTime | 0;
-        keys[i] = Math.round(f.mouseX ?? f.position?.x ?? f.buttonState ?? 0) & 0xffff;
+        const frame = frames[i];
+        times[i] = frame.time | 0;
+        keys[i] = frame.keyState;
       }
 
       // Detect key count: prefer beatmap CS from score API, fall back to OR of all frames

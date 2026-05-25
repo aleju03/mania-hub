@@ -81,12 +81,19 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("return this.fullscreenLayout || layout.w >= 640;");
   });
 
-  it("does not replace stable replay scoring with sampled intervals or final score headers", () => {
+  it("uses stable sampled-frame timing without replacing replay scoring with final score headers", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
     expect(source).not.toContain("buildStableReplayScoringSegments");
     expect(source).not.toContain("expectedFinalJudgmentCounts");
     expect(source).not.toContain("getDisplayJudgmentCounts");
+    expect(source).toContain("legacyReplayFrameRounding: this.ruleset.accuracyMode === \"stable\"");
+    expect(source).toContain("this.ruleset.accuracyMode !== \"stable\" && options?.expectedCounts");
+    expect(source).toContain("missedStableHoldHead");
+    expect(source).toContain("stableMissedHoldStillHeld");
+    expect(source).toContain("tailResolved && !stableMissedHoldStillHeld");
+    expect(source).not.toContain("lateStableHoldHead");
+    expect(source).toContain("const shouldLetPassLine = missedStableHoldHead || (awaitingJudgment && note.time < this.currentTime - 10);");
     expect(source).toContain("allowLegacyScoreReconciliation: false");
     expect(source).not.toContain("allowLegacyScoreReconciliation: this.ruleset.accuracyMode === \"stable\"");
     expect(source).toContain("return calculateReplayAccuracy(this.judgmentCounts, this.ruleset.accuracyMode);");

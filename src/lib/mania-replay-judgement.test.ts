@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "./mania-replay-judgement";
+import { applyManiaReplayModsToNotes, buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "./mania-replay-judgement";
 import type { ManiaNote } from "./beatmap-parser";
 import type { ReplayFrame } from "./types";
 
@@ -16,14 +16,14 @@ describe("mania replay judgement helpers", () => {
     expect(windows.miss).toBe(164.5);
   });
 
-  it("applies stable HR and EZ through OD before calculating classic windows", () => {
+  it("applies stable HR and EZ as classic window multipliers", () => {
     const hardRock = getManiaReplayHitWindows(8, getManiaReplayRuleset(false, ["HR"]));
     const easy = getManiaReplayHitWindows(8, getManiaReplayRuleset(false, ["EZ"]));
 
-    expect(hardRock.great).toBe(34.5);
-    expect(hardRock.good).toBe(67.5);
-    expect(easy.great).toBe(52.5);
-    expect(easy.good).toBe(85.5);
+    expect(hardRock.great).toBe(28.5);
+    expect(hardRock.good).toBe(52.5);
+    expect(easy.great).toBe(56.5);
+    expect(easy.good).toBe(102.5);
   });
 
   it("applies stable replay-time hit windows for rate-changing mods", () => {
@@ -55,6 +55,20 @@ describe("mania replay judgement helpers", () => {
 
     expect(calculateReplayAccuracy(counts, "stable")).toBe(100);
     expect(calculateReplayAccuracy(counts, "lazer")).toBeCloseTo(((305 + 300) / (2 * 305)) * 100, 6);
+  });
+
+  it("mirrors mania notes for the MR mod before replay judgement", () => {
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 1000, isHold: false },
+      { column: 3, time: 1100, endTime: 1500, isHold: true },
+    ];
+
+    expect(applyManiaReplayModsToNotes(notes, 4, ["MR"])).toEqual([
+      { column: 3, time: 1000, endTime: 1000, isHold: false },
+      { column: 0, time: 1100, endTime: 1500, isHold: true },
+    ]);
+    expect(applyManiaReplayModsToNotes(notes, 4, [])).toEqual(notes);
+    expect(applyManiaReplayModsToNotes(notes, 4, [])).not.toBe(notes);
   });
 
   it("stable mode misses tap notes after the late OK window instead of awarding late 50s", () => {
@@ -90,6 +104,29 @@ describe("mania replay judgement helpers", () => {
 
     expect(simulated.events).toEqual([
       expect.objectContaining({ part: "note", judgment: 5, time: 880 }),
+    ]);
+  });
+
+  it("stable sampled replay timing judges the observed coarse press edge", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 1000, isHold: false }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 890, keyState: 1 },
+      { time: 910, keyState: 0 },
+      { time: 993, keyState: 0 },
+      { time: 995, keyState: 1 },
+      { time: 1010, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1300);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+
+    expect(simulated.events).toEqual([
+      expect.objectContaining({ part: "note", judgment: 5, time: 890 }),
     ]);
   });
 
@@ -225,7 +262,7 @@ describe("mania replay judgement helpers", () => {
     }));
   });
 
-  it("stable mode caps the combined judgement to 50 after a body break", () => {
+  it("stable mode scores a broken LN from the recovery press when it crosses the actual tail", () => {
     const ruleset = getManiaReplayRuleset(false, []);
     const windows = getManiaReplayHitWindows(8, ruleset);
     const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 2000, isHold: true }];
@@ -243,6 +280,33 @@ describe("mania replay judgement helpers", () => {
     expect(simulated.events).toEqual([
       expect.objectContaining({ part: "hold-break", judgment: null, time: 1200 }),
       expect.objectContaining({ part: "hold-combined", judgment: 5, time: 2000 }),
+    ]);
+    expect(simulated.noteStates[0]).toEqual(expect.objectContaining({
+      bodyBreakTime: 1200,
+      headJudgment: 1,
+      tailJudgment: 5,
+      displayJudgment: 5,
+    }));
+  });
+
+  it("stable mode scores a recovered LN as 50 when the recovery releases before the actual tail", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 2000, isHold: true }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1000, keyState: 1 },
+      { time: 1200, keyState: 0 },
+      { time: 1950, keyState: 1 },
+      { time: 1990, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 2500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable");
+
+    expect(simulated.events).toEqual([
+      expect.objectContaining({ part: "hold-break", judgment: null, time: 1200 }),
+      expect.objectContaining({ part: "hold-combined", judgment: 5, time: 1990 }),
     ]);
     expect(simulated.noteStates[0]).toEqual(expect.objectContaining({
       bodyBreakTime: 1200,
@@ -318,6 +382,7 @@ describe("mania replay judgement helpers", () => {
     for (let time = 950; time < 1000; time += 17) frames.push({ time, keyState: 0 });
     frames.push({ time: 1000, keyState: 1 });
     frames.push({ time: 1500, keyState: 1 });
+    frames.push({ time: 1998, keyState: 1 });
     frames.push({ time: 2000, keyState: 0 });
 
     const segments = buildReplaySegments(frames, 1, 2500);
@@ -353,6 +418,470 @@ describe("mania replay judgement helpers", () => {
     expect(simulated.noteStates[1]).toEqual(expect.objectContaining({
       displayJudgment: 1,
       headJudgment: 1,
+    }));
+  });
+
+  it("keeps stable sampled tap edges that straddle the next note boundary on the earlier note", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 1000, isHold: false },
+      { column: 0, time: 1100, endTime: 1100, isHold: false },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1098, keyState: 0 },
+      { time: 1102, keyState: 1 },
+      { time: 1118, keyState: 1 },
+      { time: 1120, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1300);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+
+    expect(simulated.noteStates[0]).toEqual(expect.objectContaining({
+      displayJudgment: 4,
+      headJudgment: 4,
+      headOffsetMs: 102,
+    }));
+    expect(simulated.noteStates[1]).toEqual(expect.objectContaining({
+      displayJudgment: 6,
+      headJudgment: 6,
+    }));
+  });
+
+  it("keeps stable sampled tap edges just past the next note boundary on the earlier note", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(5, ruleset);
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 1000, isHold: false },
+      { column: 0, time: 1100, endTime: 1100, isHold: false },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1101, keyState: 0 },
+      { time: 1102, keyState: 1 },
+      { time: 1118, keyState: 1 },
+      { time: 1120, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1300);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+
+    expect(simulated.noteStates[0]).toEqual(expect.objectContaining({
+      displayJudgment: 4,
+      headJudgment: 4,
+      headOffsetMs: 102,
+    }));
+    expect(simulated.noteStates[1]).toEqual(expect.objectContaining({
+      displayJudgment: 6,
+      headJudgment: 6,
+    }));
+  });
+
+  it("bridges stable sampled LN tail-edge gaps that straddle the early tail window", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(5, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 1200, isHold: true }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1000, keyState: 1 },
+      { time: 1060, keyState: 0 },
+      { time: 1065, keyState: 1 },
+      { time: 1200, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+      stableTailEdgeGrace: 8,
+    });
+
+    expect(simulated.events).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ part: "hold-break" }),
+    ]));
+    expect(simulated.events).toEqual([
+      expect.objectContaining({ part: "hold-combined", judgment: 1, time: 1200 }),
+    ]);
+  });
+
+  it("does not bridge stable sampled LN tail-edge gaps wider than the edge grace", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(5, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 1200, isHold: true }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1000, keyState: 1 },
+      { time: 1054, keyState: 0 },
+      { time: 1065, keyState: 1 },
+      { time: 1200, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+
+    expect(simulated.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ part: "hold-break", time: 1054 }),
+      expect.objectContaining({ part: "hold-combined", judgment: 3, time: 1200 }),
+    ]));
+  });
+
+  it("scores stable LNs released before the body starts when recovery covers the tail edge", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(5, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 1200, isHold: true }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 900, keyState: 1 },
+      { time: 990, keyState: 0 },
+      { time: 1058, keyState: 0 },
+      { time: 1060, keyState: 1 },
+      { time: 1200, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+
+    expect(simulated.events).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ part: "hold-break" }),
+    ]));
+    expect(simulated.events).toEqual([
+      expect.objectContaining({ part: "hold-combined", judgment: 3, time: 1200 }),
+    ]);
+  });
+
+  it("misses stable LNs released before the body starts when recovery starts after the tail edge", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(5, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 1200, isHold: true }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 900, keyState: 1 },
+      { time: 990, keyState: 0 },
+      { time: 1070, keyState: 0 },
+      { time: 1075, keyState: 1 },
+      { time: 1200, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+
+    expect(simulated.events).toEqual([
+      expect.objectContaining({ part: "hold-combined", judgment: 6, time: 1000 }),
+    ]);
+  });
+
+  it("does not miss stable tail-edge releases exactly on the early tail edge", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(5, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 1200, isHold: true }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1000, keyState: 1 },
+      { time: 1064, keyState: 0 },
+      { time: 1070, keyState: 1 },
+      { time: 1200, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+
+    expect(simulated.events).toEqual([
+      expect.objectContaining({ part: "hold-combined", judgment: 3, time: 1064 }),
+    ]);
+  });
+
+  it("misses stable tail-edge releases just before the early tail edge when recovery starts after it", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(5, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 1200, isHold: true }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1000, keyState: 1 },
+      { time: 1054, keyState: 0 },
+      { time: 1066, keyState: 0 },
+      { time: 1070, keyState: 1 },
+      { time: 1200, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+
+    expect(simulated.events).toEqual([
+      expect.objectContaining({ part: "hold-combined", judgment: 6, time: 1054 }),
+    ]);
+  });
+
+  it("scores rate-adjusted stable LNs released before the body starts when recovery covers the tail edge", () => {
+    const ruleset = getManiaReplayRuleset(false, ["DT"]);
+    const windows = getManiaReplayHitWindows(5, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 1400, isHold: true }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 900, keyState: 1 },
+      { time: 990, keyState: 0 },
+      { time: 1188, keyState: 0 },
+      { time: 1190, keyState: 1 },
+      { time: 1400, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+
+    expect(simulated.events).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ part: "hold-break" }),
+    ]));
+    expect(simulated.events).toEqual([
+      expect.objectContaining({ part: "hold-combined", judgment: 5, time: 1400 }),
+    ]);
+  });
+
+  it("uses the first held sample after stable LN tail timeout by default", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(5, ruleset);
+    const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 1200, isHold: true }];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1000, keyState: 1 },
+      { time: 1330, keyState: 1 },
+      { time: 1345, keyState: 1 },
+      { time: 1370, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1500);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+    const timeoutSimulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+      stableHeldTailTimeoutMode: "timeout",
+    });
+
+    expect(simulated.noteStates[0]).toEqual(expect.objectContaining({
+      scoringTailOffsetMs: 145,
+      stableTailWasHeldAtJudgement: true,
+      tailOffsetMs: 145,
+      tailTime: 1336,
+    }));
+    expect(timeoutSimulated.noteStates[0]).toEqual(expect.objectContaining({
+      scoringTailOffsetMs: 136,
+      tailOffsetMs: 136,
+      tailTime: 1336,
+    }));
+  });
+
+  it("does not promote stable hidden re-presses across long replay stalls", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(5, ruleset);
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 1000, isHold: false },
+      { column: 0, time: 1100, endTime: 1100, isHold: false },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1000, keyState: 1 },
+      { time: 1040, keyState: 1 },
+      { time: 1160, keyState: 1 },
+      { time: 1180, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1300);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+
+    expect(simulated.noteStates[0]).toEqual(expect.objectContaining({
+      displayJudgment: 1,
+      headJudgment: 1,
+    }));
+    expect(simulated.noteStates[1]).toEqual(expect.objectContaining({
+      displayJudgment: 6,
+      headJudgment: 6,
+    }));
+  });
+
+  it("lets stable LN heads consume valid late presses after the next note starts", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(5, ruleset);
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 1150, isHold: true },
+      { column: 0, time: 1050, endTime: 1050, isHold: false },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1080, keyState: 1 },
+      { time: 1150, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1300);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+
+    expect(simulated.noteStates[0]).toEqual(expect.objectContaining({
+      headOffsetMs: 80,
+      headJudgment: 3,
+    }));
+    expect(simulated.noteStates[1]).toEqual(expect.objectContaining({
+      displayJudgment: 6,
+      headJudgment: 6,
+    }));
+  });
+
+  it("lets stable LN heads consume late Meh presses after the next note starts", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(5, ruleset);
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 1150, isHold: true },
+      { column: 0, time: 1050, endTime: 1050, isHold: false },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1130, keyState: 1 },
+      { time: 1150, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1300);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+
+    expect(simulated.noteStates[0]).toEqual(expect.objectContaining({
+      displayJudgment: 5,
+      headJudgment: 5,
+    }));
+    expect(simulated.noteStates[1]).toEqual(expect.objectContaining({
+      displayJudgment: 6,
+      headJudgment: 6,
+    }));
+  });
+
+  it("consumes sampled segments held across a passive stable LN timeout", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 1063, isHold: true },
+      { column: 0, time: 1127, endTime: 1127, isHold: false },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1120, keyState: 0 },
+      { time: 1129, keyState: 1 },
+      { time: 1138, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1300);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+    const withoutTimeoutConsumption = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+      stableConsumeHeldSegmentAtLongNoteTimeout: false,
+    });
+
+    expect(simulated.noteStates[0]).toEqual(expect.objectContaining({
+      displayJudgment: 6,
+      headJudgment: 6,
+    }));
+    expect(simulated.noteStates[1]).toEqual(expect.objectContaining({
+      displayJudgment: 6,
+      headJudgment: 6,
+    }));
+    expect(withoutTimeoutConsumption.noteStates[1]).toEqual(expect.objectContaining({
+      displayJudgment: 1,
+      headJudgment: 1,
+    }));
+  });
+
+  it("grades held stable LN OK timeouts as miss by default on 4K", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [
+      { column: 0, time: 1000, endTime: 1063, isHold: true },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1035, keyState: 0 },
+      { time: 1040, keyState: 1 },
+      { time: 1189, keyState: 1 },
+      { time: 1194, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 1, 1300);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+    const asKatu = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+      stableHeldOkTimeoutJudgment: 3,
+    });
+    const keepOk = simulateManiaReplayJudgements(notes, segments, 1, windows, "stable", {
+      legacyReplayFrameRounding: true,
+      stableHeldOkTimeoutAsMiss: false,
+    });
+
+    expect(simulated.noteStates[0]).toEqual(expect.objectContaining({
+      displayJudgment: 6,
+      headJudgment: 2,
+      tailJudgment: 6,
+    }));
+    expect(asKatu.noteStates[0]).toEqual(expect.objectContaining({
+      displayJudgment: 3,
+      tailJudgment: 3,
+    }));
+    expect(keepOk.noteStates[0]).toEqual(expect.objectContaining({
+      displayJudgment: 4,
+      tailJudgment: 4,
+    }));
+  });
+
+  it("keeps held stable LN OK timeouts as OK on high key counts", () => {
+    const ruleset = getManiaReplayRuleset(false, []);
+    const windows = getManiaReplayHitWindows(8, ruleset);
+    const notes: ManiaNote[] = [
+      { column: 3, time: 1000, endTime: 1063, isHold: true },
+    ];
+    const frames: ReplayFrame[] = [
+      { time: 0, keyState: 0 },
+      { time: 1035, keyState: 0 },
+      { time: 1040, keyState: 1 << 3 },
+      { time: 1189, keyState: 1 << 3 },
+      { time: 1194, keyState: 0 },
+    ];
+
+    const segments = buildReplaySegments(frames, 7, 1300);
+    const simulated = simulateManiaReplayJudgements(notes, segments, 7, windows, "stable", {
+      legacyReplayFrameRounding: true,
+    });
+    const asMiss = simulateManiaReplayJudgements(notes, segments, 7, windows, "stable", {
+      legacyReplayFrameRounding: true,
+      stableHeldOkTimeoutAsMiss: true,
+    });
+
+    expect(simulated.noteStates[0]).toEqual(expect.objectContaining({
+      displayJudgment: 4,
+      headJudgment: 2,
+      tailJudgment: 4,
+    }));
+    expect(asMiss.noteStates[0]).toEqual(expect.objectContaining({
+      displayJudgment: 6,
+      tailJudgment: 6,
     }));
   });
 });

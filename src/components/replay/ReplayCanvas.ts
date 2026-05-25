@@ -2,7 +2,7 @@ import { Application, Assets, Container, FillGradient, Graphics, GraphicsPath, M
 import type { ReplayFrame, ReplayLifeBarFrame } from "../../lib/types";
 import type { ManiaNote, ManiaScrollVelocity } from "../../lib/beatmap-parser";
 import type { Judgment, ManiaReplayHitWindows, ManiaReplayRuleset, ReplayJudgementEvent, ReplayNoteState } from "../../lib/mania-replay-judgement";
-import { buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "../../lib/mania-replay-judgement";
+import { applyManiaReplayModsToNotes, buildReplaySegments, calculateReplayAccuracy, getManiaReplayHitWindows, getManiaReplayRuleset, simulateManiaReplayJudgements } from "../../lib/mania-replay-judgement";
 import { DEFAULT_REPLAY_OVERLAY_SETTINGS, REPLAY_OVERLAY_MAX_SCALE, REPLAY_OVERLAY_MIN_SCALE, normalizeReplayOverlaySettings } from "../../lib/replay-overlays";
 import type { ReplayOverlayId, ReplayOverlaySettings } from "../../lib/replay-overlays";
 import { DEFAULT_REPLAY_SCROLL_SPEED } from "../../lib/replay-scroll-speed";
@@ -389,7 +389,6 @@ export class ManiaReplayRenderer {
     for (const c of this.colors) hexToNumber(c);
 
     const mods = new Set((options?.mods ?? []).filter(Boolean).map((m) => m.toUpperCase()));
-    const mirror = mods.has("MR");
     const speedMultiplier = Number(options?.speedMultiplier);
     this.modRate = Number.isFinite(speedMultiplier) && speedMultiplier > 0
       ? speedMultiplier
@@ -398,9 +397,7 @@ export class ManiaReplayRenderer {
         : mods.has("HT") || mods.has("DC")
           ? 0.75
           : 1;
-    this.notes = mirror
-      ? notes.map((n) => ({ ...n, column: keyCount - 1 - n.column }))
-      : [...notes];
+    this.notes = applyManiaReplayModsToNotes(notes, keyCount, [...mods]);
     this.ruleset = getManiaReplayRuleset(options?.isLazer ?? false, [...mods], options?.isConvert ?? false, this.modRate);
 
     this.backgroundImage = options?.backgroundImage ?? null;
@@ -446,13 +443,14 @@ export class ManiaReplayRenderer {
       this.hitWindows,
       this.ruleset.accuracyMode,
       {
-        legacyReplayFrameRounding: options?.expectedCounts != null,
+        legacyReplayFrameRounding: this.ruleset.accuracyMode === "stable",
+        speedMultiplier: this.ruleset.speedMultiplier,
       },
     );
     const rawStableComboEvents = this.ruleset.accuracyMode === "stable"
       ? buildStableReplayComboEvents(this.notes, simulated.noteStates)
       : null;
-    this.judgmentEvents = options?.expectedCounts
+    this.judgmentEvents = this.ruleset.accuracyMode !== "stable" && options?.expectedCounts
       ? resolveReplayJudgementEvents(simulated.events, options.expectedCounts, {
           allowLegacyScoreReconciliation: false,
           comboBreakTimes: rawStableComboEvents
@@ -611,12 +609,16 @@ export class ManiaReplayRenderer {
     return calculateReplayAccuracy(this.judgmentCounts, this.ruleset.accuracyMode);
   }
 
+  private formatAccuracy(value: number): string {
+    return `${value.toFixed(2)}%`;
+  }
+
   private updateHudSnapshotIfNeeded(force = false) {
     const elapsed = performance.now() - this.hudSnapshotTime;
     if (!force && elapsed < 50 && Number.isFinite(this.hudSnapshotTime)) return;
     this.hudSnapshotTime = performance.now();
 
-    this.hudCachedAccuracy = `${this.getAccuracy().toFixed(2)}%`;
+    this.hudCachedAccuracy = this.formatAccuracy(this.getAccuracy());
     this.hudCachedUr = String(Math.round(this.getUr()));
     const wallTime = this.currentTime / this.modRate;
     const mins = Math.floor(wallTime / 60000);
@@ -960,6 +962,10 @@ export class ManiaReplayRenderer {
       this.keyCount,
       this.hitWindows,
       this.ruleset.accuracyMode,
+      {
+        legacyReplayFrameRounding: this.ruleset.accuracyMode === "stable",
+        speedMultiplier: this.ruleset.speedMultiplier,
+      },
     );
     const rawStableComboEvents = this.ruleset.accuracyMode === "stable"
       ? buildStableReplayComboEvents(this.notes, simulated.noteStates)
@@ -1741,8 +1747,12 @@ export class ManiaReplayRenderer {
       const noteState = this.noteStates[i];
       const headResolved = noteState.headTime <= this.currentTime;
       const tailResolved = noteState.tailTime != null && noteState.tailTime <= this.currentTime;
+      const stableMissedHoldStillHeld = note.isHold
+        && this.ruleset.accuracyMode === "stable"
+        && noteState.headJudgment === 6
+        && (this.currentTime < noteState.releaseTime || this.isColumnEffectivelyHeldAtTime(col, this.currentTime));
 
-      if (headResolved && (!note.isHold || tailResolved)) continue;
+      if (headResolved && (!note.isHold || (tailResolved && !stableMissedHoldStillHeld))) continue;
 
       const { x: colX, width: colWidth } = this.getColumnLayout(col, layout);
       const x = colX + 3;
@@ -1764,7 +1774,8 @@ export class ManiaReplayRenderer {
         let headY = judgmentY + getVisualDelta(note.time) * pixelsPerMs * direction;
         const tailY = judgmentY + getVisualDelta(note.endTime) * pixelsPerMs * direction;
         const awaitingJudgment = !headResolved;
-        const shouldLetPassLine = awaitingJudgment && note.time < this.currentTime - 10;
+        const missedStableHoldHead = this.ruleset.accuracyMode === "stable" && noteState.headJudgment === 6;
+        const shouldLetPassLine = missedStableHoldHead || (awaitingJudgment && note.time < this.currentTime - 10);
         const withinMatchedSegment = this.currentTime < noteState.releaseTime;
         const stillPhysicallyHeld = withinMatchedSegment || this.isColumnEffectivelyHeldAtTime(col, this.currentTime);
         const releasedEarly =
@@ -1937,11 +1948,18 @@ export class ManiaReplayRenderer {
         const noteState = this.noteStates[i];
         const headResolved = noteState.headTime <= this.currentTime;
         const tailResolved = noteState.tailTime != null && noteState.tailTime <= this.currentTime;
-        if (headResolved && tailResolved) continue;
+        const stableMissedHoldStillHeld = note.isHold
+          && this.ruleset.accuracyMode === "stable"
+          && noteState.headJudgment === 6
+          && (this.currentTime < noteState.releaseTime || this.isColumnEffectivelyHeldAtTime(note.column, this.currentTime));
+        if (headResolved && tailResolved && !stableMissedHoldStillHeld) continue;
 
         let headY = judgmentY + getVisualDelta(note.time) * pixelsPerMs * (this.skinSettings.upscroll ? 1 : -1);
         const tailY = judgmentY + getVisualDelta(note.endTime) * pixelsPerMs * (this.skinSettings.upscroll ? 1 : -1);
-        if (headResolved) headY = this.skinSettings.upscroll ? Math.max(headY, judgmentY) : Math.min(headY, judgmentY);
+        const missedStableHoldHead = this.ruleset.accuracyMode === "stable" && noteState.headJudgment === 6;
+        if (headResolved && !missedStableHoldHead) {
+          headY = this.skinSettings.upscroll ? Math.max(headY, judgmentY) : Math.min(headY, judgmentY);
+        }
 
         const top = Math.min(headY, tailY);
         const bottom = this.skinSettings.upscroll

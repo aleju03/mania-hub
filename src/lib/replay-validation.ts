@@ -2,6 +2,7 @@ import type { ManiaNote } from "./beatmap-parser";
 import type { ReplayFrame, ReplayLifeBarFrame } from "./types";
 import type { Judgment, ReplayAccuracyMode, ReplayJudgementEvent, ReplayNoteState } from "./mania-replay-judgement.ts";
 import {
+  applyManiaReplayModsToNotes,
   buildReplaySegments,
   calculateReplayAccuracy,
   getManiaReplayHitWindows,
@@ -42,6 +43,7 @@ export interface ReplayValidationResult {
 }
 
 export interface ReplayValidationInput {
+  allowStableScoreHeaderReconciliation?: boolean;
   expectedCounts: ReplayHitCounts;
   expectedMaxCombo?: number | null;
   comboBreakTimes?: number[];
@@ -54,6 +56,7 @@ export interface ReplayValidationInput {
   mods?: string[];
   notes: ManiaNote[];
   od: number;
+  resolveLegacyFrameAmbiguity?: boolean;
 }
 
 export function emptyReplayHitCounts(): ReplayHitCounts {
@@ -141,6 +144,20 @@ function calculateReplayComboEventsMaxCombo(events: ReplayComboEvent[]): number 
 
 export function buildStableReplayComboEvents(notes: ManiaNote[], noteStates: ReplayNoteState[]): ReplayComboEvent[] {
   const events: ReplayComboEvent[] = [];
+  const delayedMissedHoldEndTimes = new Set<number>();
+
+  for (let index = 0; index < notes.length; index++) {
+    const note = notes[index];
+    const state = noteStates[index];
+    if (
+      state?.headJudgment === 6
+      && state.stableMissedInsideConsumedSegment
+      && note.isHold
+      && note.endTime > note.time
+    ) {
+      delayedMissedHoldEndTimes.add(note.endTime);
+    }
+  }
 
   for (let index = 0; index < notes.length; index++) {
     const note = notes[index];
@@ -157,21 +174,29 @@ export function buildStableReplayComboEvents(notes: ManiaNote[], noteStates: Rep
     }
 
     if (state.headJudgment === 6) {
-      events.push({ kind: "break", time: state.headTime });
-      continue;
+      events.push({
+        kind: "break",
+        time: state.stableMissedInsideConsumedSegment ? note.endTime : state.headTime,
+      });
+    } else {
+      events.push({ kind: "hit", time: state.headTime });
     }
-
-    events.push({ kind: "hit", time: state.headTime });
 
     for (const breakTime of state.bodyBreakTimes ?? (state.bodyBreakTime == null ? [] : [state.bodyBreakTime])) {
       events.push({ kind: "break", time: breakTime });
     }
+    let tailEventTime: number | null = null;
     if (state.tailJudgment === 6) {
-      events.push({ kind: "break", time: state.tailTime ?? note.endTime });
+      tailEventTime = state.tailTime ?? note.endTime;
+      events.push({ kind: "break", time: tailEventTime });
+    } else if (state.tailJudgment != null && delayedMissedHoldEndTimes.has(note.endTime)) {
+      tailEventTime = state.tailTime ?? note.endTime;
+      events.push({ kind: "hit", time: tailEventTime });
     }
 
     const heldSegments = state.heldSegments ?? [];
     for (let time = note.time + 100; time <= note.endTime + 1e-6; time += 100) {
+      if (tailEventTime != null && time >= tailEventTime - 1e-6) break;
       if (time >= state.headTime - 1e-6 && heldSegments.some((segment) => segmentCoversTime(segment, time))) {
         events.push({ kind: "hit", time });
       }
@@ -654,32 +679,34 @@ export function diffReplayHitCounts(
 
 export function validateReplaySimulation(input: ReplayValidationInput): ReplayValidationResult {
   const ruleset = getManiaReplayRuleset(input.isLazer ?? false, input.mods ?? [], input.isConvert ?? false);
+  const notes = applyManiaReplayModsToNotes(input.notes, input.keyCount, input.mods ?? []);
   const hitWindows = getManiaReplayHitWindows(input.od, ruleset);
   const frameDuration = input.frames.length > 0 ? input.frames[input.frames.length - 1].time : 0;
-  const noteDuration = input.notes.length > 0 ? Math.max(...input.notes.map((note) => note.endTime)) : 0;
+  const noteDuration = notes.length > 0 ? Math.max(...notes.map((note) => note.endTime)) : 0;
   const totalDuration = Math.max(frameDuration, noteDuration + hitWindows.miss * 1.5);
   const segments = buildReplaySegments(input.frames, input.keyCount, totalDuration);
   const simulated = simulateManiaReplayJudgements(
-    input.notes,
+    notes,
     segments,
     input.keyCount,
     hitWindows,
     ruleset.accuracyMode,
     {
       legacyReplayFrameRounding: input.legacyReplayFrameRounding ?? false,
+      speedMultiplier: ruleset.speedMultiplier,
     },
   );
   const rawSimulatedCounts = countReplayJudgements(simulated.events);
   const comboBreakTimes = input.comboBreakTimes
     ?? (ruleset.accuracyMode === "stable"
-      ? buildStableReplayComboEvents(input.notes, simulated.noteStates)
+      ? buildStableReplayComboEvents(notes, simulated.noteStates)
           .filter((event) => event.kind === "break")
           .map((event) => event.time)
       : undefined);
   const resolvedEvents =
-    input.legacyReplayFrameRounding
+    input.legacyReplayFrameRounding && (input.resolveLegacyFrameAmbiguity ?? true)
       ? resolveReplayJudgementEvents(simulated.events, input.expectedCounts, {
-          allowLegacyScoreReconciliation: ruleset.accuracyMode === "stable",
+          allowLegacyScoreReconciliation: Boolean(input.allowStableScoreHeaderReconciliation) && ruleset.accuracyMode === "stable",
           comboBreakTimes,
           lifeBarFrames: input.lifeBarFrames,
         })
@@ -692,7 +719,7 @@ export function validateReplaySimulation(input: ReplayValidationInput): ReplayVa
   const expectedMaxCombo = input.expectedMaxCombo != null && input.expectedMaxCombo > 0
     ? input.expectedMaxCombo
     : null;
-  const simulatedMaxCombo = calculateReplayMaxComboForMode(ruleset.accuracyMode, finalEvents, input.notes, simulated.noteStates);
+  const simulatedMaxCombo = calculateReplayMaxComboForMode(ruleset.accuracyMode, finalEvents, notes, simulated.noteStates);
   const maxComboDiff = expectedMaxCombo == null ? null : simulatedMaxCombo - expectedMaxCombo;
   const stableComboReconstruction = ruleset.accuracyMode === "stable"
     ? maxComboDiff === 0 ? "visible-frame-match" : "approximate"
