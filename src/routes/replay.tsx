@@ -24,7 +24,7 @@ import {
 } from "../lib/replay-skin";
 import { normalizeReplayPlayerParam, shouldStartReplayPlayerLoad } from "../lib/replay-player-autoload";
 import { getReplayBackNavigation } from "../lib/replay-navigation";
-import { unpackReplayFrames } from "../lib/replay-frames";
+import { resolveStableManiaReplayScrollSpeed, unpackReplayFrames } from "../lib/replay-frames";
 import { buildKeypressHeatmap } from "../lib/replay-keypress-heatmap";
 import { parseReplayScoreInput } from "../lib/replay-score-input";
 import { getReplayScoreAvailability } from "../lib/replay-score-availability";
@@ -555,6 +555,7 @@ function ReplayPage() {
         frames: unpackReplayFrames(parsed.framesPacked),
         lifeBarFrames: parsed.lifeBarFrames ?? [],
         keyCount: parsed.keyCount,
+        stableScrollSpeedScale: parsed.stableScrollSpeedScale,
       });
       if (bmResult) {
         setBeatmap(parseCachedManiaBeatmap(score?.beatmap?.id ?? 0, bmResult.content));
@@ -1109,6 +1110,10 @@ function ReplayViewer({
   const [showFullscreenChrome, setShowFullscreenChrome] = useState(false);
   const [speed, setSpeed] = useState(1);
   const effectiveReplayMods = useMemo(() => scoreInfo?.mods ?? replayMods ?? [], [replayMods, scoreInfo?.mods]);
+  const replayStableScrollSpeed = useMemo(
+    () => resolveStableManiaReplayScrollSpeed(replay.stableScrollSpeedScale, beatmap?.bpm ?? scoreInfo?.beatmap?.bpm),
+    [beatmap?.bpm, replay.stableScrollSpeedScale, scoreInfo?.beatmap?.bpm],
+  );
   const displayScoreValues = useMemo(
     () => (scoreInfo ? getScoreDisplayValues(scoreInfo) : null),
     [scoreInfo],
@@ -1129,7 +1134,7 @@ function ReplayViewer({
   const modRate = getScoreRate(effectiveReplayMods);
   const effectiveRate = speed * modRate;
   const audioPreservesPitch = !modShiftsPitchWithRate(effectiveReplayMods);
-  const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
+  const [scrollSpeed, setScrollSpeed] = useState(() => replayStableScrollSpeed ?? readReplayScrollSpeed());
   const [bgDim, setBgDim] = useState(readReplayBackgroundDim);
   const [audioEnabled, setAudioEnabled] = useState(true);
   const [volume, setVolume] = useState(readReplayVolume);
@@ -1167,6 +1172,7 @@ function ReplayViewer({
   const inputOverlayOnlyRef = useRef(false);
   const inputOverlayKeyHistoryRef = useRef(false);
   const inputOverlayColorRef = useRef("#a855f7");
+  const scrollSpeedUserOverrideRef = useRef(false);
   const scrollSpeedRef = useRef(DEFAULT_REPLAY_SCROLL_SPEED);
   const skinSettingsRef = useRef<ReplaySkinSettings>(skinSettings);
   const overlaySettingsRef = useRef<ReplayOverlaySettings>(overlaySettings);
@@ -1257,6 +1263,11 @@ function ReplayViewer({
     if (persist) writeReplayScrollSpeed(normalized);
   }, []);
 
+  useEffect(() => {
+    scrollSpeedUserOverrideRef.current = false;
+    applyScrollSpeed(replayStableScrollSpeed ?? readReplayScrollSpeed());
+  }, [applyScrollSpeed, replay, replayStableScrollSpeed]);
+
   const applySkinSettings = useCallback((next: ReplaySkinSettings) => {
     const normalized = normalizeReplaySkinSettings(next);
     skinSettingsRef.current = normalized;
@@ -1275,7 +1286,9 @@ function ReplayViewer({
 
   useEffect(() => {
     const refreshSharedReplaySettings = () => {
-      applyScrollSpeed(readReplayScrollSpeed());
+      if (replayStableScrollSpeed == null || scrollSpeedUserOverrideRef.current) {
+        applyScrollSpeed(readReplayScrollSpeed());
+      }
       setSkinSettings(readReplaySkinSettings());
       setOverlaySettings(readReplayOverlaySettings());
     };
@@ -1291,7 +1304,7 @@ function ReplayViewer({
       window.removeEventListener(REPLAY_OVERLAY_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
       window.removeEventListener("focus", refreshSharedReplaySettings);
     };
-  }, [applyScrollSpeed]);
+  }, [applyScrollSpeed, replayStableScrollSpeed]);
 
   const resizeReplayRenderer = useCallback(() => {
     requestAnimationFrame(() => rendererRef.current?.resize());
@@ -2502,8 +2515,10 @@ function ReplayViewer({
         onSetInputOverlayColor={(color) => setInputOverlayColor(normalizeReplayInputColor(color))}
         onOpenSkinSettings={() => setSkinSettingsOpen(true)}
         onSetScrollSpeed={(nextSpeed) => {
-          applyScrollSpeed(nextSpeed, true);
-          rendererRef.current?.setScrollSpeed(nextSpeed);
+          const normalized = normalizeReplayScrollSpeed(nextSpeed);
+          scrollSpeedUserOverrideRef.current = true;
+          applyScrollSpeed(normalized, true);
+          rendererRef.current?.setScrollSpeed(normalized);
         }}
         onSetBgDim={(nextDim) => {
           const normalized = normalizeReplayBackgroundDim(nextDim);

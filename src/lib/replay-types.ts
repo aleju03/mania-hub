@@ -23,6 +23,7 @@ export interface ServerReplay {
   frames: ReplayFrame[];
   lifeBarFrames: ReplayLifeBarFrame[];
   keyCount: number;
+  stableScrollSpeedScale?: number;
 }
 
 export interface ReplayRendererLike {

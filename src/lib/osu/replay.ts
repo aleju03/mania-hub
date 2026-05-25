@@ -21,7 +21,7 @@ import {
   normalizeScorePayload,
   parseBoundedInt
 } from "./validators";
-import { decodeStableManiaReplayFrames } from "../replay-frames";
+import { decodeStableManiaReplayFrames, getStableManiaReplayScrollSpeedScale } from "../replay-frames";
 
 // ── Replay (parsed server-side via osu-parsers) ────────────────────────────
 
@@ -29,7 +29,7 @@ const REPLAY_CACHE_LOCK_TTL_MS = 30_000;
 const REPLAY_CACHE_LOCK_WAIT_MS = 500;
 const REPLAY_CACHE_LOCK_WAIT_RETRIES = 8;
 const REPLAY_PARSED_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
-const REPLAY_PARSED_CACHE_VERSION = 2;
+const REPLAY_PARSED_CACHE_VERSION = 4;
 
 type ReplayDownload = {
   buffer: Buffer;
@@ -56,6 +56,7 @@ type ParsedReplayResponse = {
   lifeBarFrames: Array<{ time: number; health: number }>;
   framesPacked: { count: number; times: string; keys: string };
   keyCount: number;
+  stableScrollSpeedScale?: number;
 };
 
 export type BeatmapChecksumLookupResult = OsuBeatmap & {
@@ -175,6 +176,7 @@ export const getReplayParsed = createServerFn({ method: "GET" })
       const info = score.info;
       const rawFrames = (score.replay?.frames ?? []) as any[];
       const frames = decodeStableManiaReplayFrames(rawFrames);
+      const stableScrollSpeedScale = getStableManiaReplayScrollSpeedScale(rawFrames);
       const lifeBarFrames = (score.replay?.lifeBar ?? [])
         .map((frame: any) => ({
           time: Math.round(Number(frame.startTime ?? frame.time ?? 0)),
@@ -229,6 +231,7 @@ export const getReplayParsed = createServerFn({ method: "GET" })
         lifeBarFrames,
         framesPacked: { count: frameCount, times: timesB64, keys: keysB64 },
         keyCount,
+        stableScrollSpeedScale: stableScrollSpeedScale ?? undefined,
       };
     }, REPLAY_CACHE_LOCK_TTL_MS);
   });

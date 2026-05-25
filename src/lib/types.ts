@@ -702,4 +702,5 @@ export interface ParsedReplay {
   frames: ReplayFrame[];
   lifeBarFrames: ReplayLifeBarFrame[];
   keyCount: number;
+  stableScrollSpeedScale?: number;
 }

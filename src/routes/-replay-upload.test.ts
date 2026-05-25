@@ -10,10 +10,10 @@ describe("replay upload mode", () => {
     const apiSource = fs.readFileSync(path.resolve(__dirname, "api/replay-upload.ts"), "utf8");
 
     expect(browseSource).toContain('export type ReplayBrowseMode = "player" | "beatmap" | "upload"');
-    expect(browseSource).toContain('(["player", "beatmap", "upload"] as const)');
+    expect(browseSource).toContain('(["player", "upload"] as const)');
     expect(browseSource).toContain("<UploadReplayBrowser");
     expect(browseSource).toContain('accept=".osr,application/octet-stream"');
-    expect(browseSource).toContain("creates a share link");
+    expect(browseSource).toContain("Uploading gives you a share link");
     expect(routeSource).toContain('tab: s.tab === "beatmap" || s.tab === "upload" ? s.tab : undefined');
     expect(routeSource).toContain("uploadId: typeof s.uploadId");
     expect(routeSource).toContain("postUploadedReplay(buffer, file.name)");
@@ -35,5 +35,7 @@ describe("replay upload mode", () => {
     expect(uploadSource).toContain("scoreId: Number.isSafeInteger(scoreId)");
     expect(uploadSource).toContain('await import("osu-parsers")');
     expect(uploadSource).toContain("stableModBitmaskToMods");
+    expect(uploadSource).toContain("getStableManiaReplayScrollSpeedScale");
+    expect(routeSource).toContain("stableScrollSpeedScale: parsed.stableScrollSpeedScale");
   });
 });

@@ -1,8 +1,10 @@
 import type { ReplayFrame } from "./types";
+import { normalizeReplayScrollSpeed } from "./replay-scroll-speed";
 
 export const MANIA_REPLAY_KEY_MASK = (1 << 20) - 1;
+const STABLE_MANIA_SCROLL_SPEED_BPM_SCALE = 100;
 
-type RawReplayFrameLike = {
+export type RawReplayFrameLike = {
   buttonState?: number;
   mouseX?: number;
   mouseY?: number;
@@ -37,6 +39,26 @@ function isStableDummyStartupFrame(frame: NormalizedReplayFrame): boolean {
 
 export function getStableManiaReplayKeyState(frame: RawReplayFrameLike): number {
   return Math.round(replayFrameX(frame)) & MANIA_REPLAY_KEY_MASK;
+}
+
+export function getStableManiaReplayScrollSpeedScale(rawFrames: RawReplayFrameLike[]): number | null {
+  for (const frame of rawFrames) {
+    const x = replayFrameX(frame);
+    const y = replayFrameY(frame);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    if (Math.round(x) === 256 && Math.round(y) === -500) continue;
+    if (y <= 0) continue;
+    return y;
+  }
+
+  return null;
+}
+
+export function resolveStableManiaReplayScrollSpeed(scale: number | null | undefined, bpm: number | null | undefined): number | null {
+  if (scale == null || bpm == null) return null;
+  const scrollSpeed = scale * bpm / STABLE_MANIA_SCROLL_SPEED_BPM_SCALE;
+  if (!Number.isFinite(scrollSpeed) || scrollSpeed < 1 || scrollSpeed > 40) return null;
+  return normalizeReplayScrollSpeed(scrollSpeed);
 }
 
 export function decodeStableManiaReplayFrames(rawFrames: RawReplayFrameLike[]): ReplayFrame[] {

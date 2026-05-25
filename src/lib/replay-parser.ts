@@ -1,5 +1,5 @@
 import type { ReplayHeader, ReplayFrame, ReplayLifeBarFrame, ParsedReplay } from "./types";
-import { decodeStableManiaReplayFrames } from "./replay-frames";
+import { decodeStableManiaReplayFrames, getStableManiaReplayScrollSpeedScale } from "./replay-frames";
 
 class BinaryReader {
   private view: DataView;
@@ -379,7 +379,7 @@ function lzmaDecompress(
   return new Uint8Array(output);
 }
 
-function parseReplayFrames(decompressed: string): ReplayFrame[] {
+function parseReplayFrames(decompressed: string): { frames: ReplayFrame[]; stableScrollSpeedScale: number | null } {
   const frames: Array<{ buttonState: number; mouseX: number; mouseY: number; time: number }> = [];
   let absoluteTime = 0;
 
@@ -403,7 +403,10 @@ function parseReplayFrames(decompressed: string): ReplayFrame[] {
     });
   }
 
-  return decodeStableManiaReplayFrames(frames);
+  return {
+    frames: decodeStableManiaReplayFrames(frames),
+    stableScrollSpeedScale: getStableManiaReplayScrollSpeedScale(frames),
+  };
 }
 
 function detectKeyCount(frames: ReplayFrame[], modsUsed: number): number {
@@ -463,6 +466,7 @@ export async function parseReplay(buffer: ArrayBuffer): Promise<ParsedReplay> {
   }
 
   let frames: ReplayFrame[] = [];
+  let stableScrollSpeedScale: number | null = null;
 
   if (header.replayDataLength > 0) {
     const compressedData = reader.readBytes(header.replayDataLength);
@@ -470,7 +474,9 @@ export async function parseReplay(buffer: ArrayBuffer): Promise<ParsedReplay> {
     try {
       const decompressed = await decompressLZMA(compressedData);
       const text = new TextDecoder("utf-8").decode(decompressed);
-      frames = parseReplayFrames(text);
+      const parsedFrames = parseReplayFrames(text);
+      frames = parsedFrames.frames;
+      stableScrollSpeedScale = parsedFrames.stableScrollSpeedScale;
     } catch (e) {
       console.warn("LZMA decompression failed, trying raw parse:", e);
       // Some replays might not be compressed properly
@@ -480,5 +486,5 @@ export async function parseReplay(buffer: ArrayBuffer): Promise<ParsedReplay> {
   const keyCount = detectKeyCount(frames, header.modsUsed);
   const lifeBarFrames = parseLifeBarGraph(header.lifeBarGraph);
 
-  return { header, frames, lifeBarFrames, keyCount };
+  return { header, frames, lifeBarFrames, keyCount, stableScrollSpeedScale: stableScrollSpeedScale ?? undefined };
 }
