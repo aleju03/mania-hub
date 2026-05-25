@@ -1563,6 +1563,9 @@ export function simulateManiaReplayJudgements(
             && releaseBeforeTailEdge <= stableNextNoteEdgeGrace
             && segment.end < tailEarlyMissBound
             && !nextSegmentCoversTailEdge;
+          const releasedPreHeadButRecovered = releasedMatchedPreHeadPress
+            && !preHeadReleaseMissesAtHead
+            && nextSegmentCoversTailEdge;
 
           if (!canBridgeTailEdgeGap && (releasedAfterHead || releasedMatchedPreHeadPress)) {
             const capJudgment = stableBodyBreakCapJudgment;
@@ -1572,7 +1575,7 @@ export function simulateManiaReplayJudgements(
                 : Math.max(bodyBreakCapJudgment, capJudgment) as Judgment;
             }
 
-            if (releasedAfterHead) {
+            if (releasedAfterHead || releasedPreHeadButRecovered) {
               bodyBreakTimes.push(segment.end);
             }
 
@@ -1584,7 +1587,9 @@ export function simulateManiaReplayJudgements(
                 time: preHeadReleaseMissesAtHead ? note.time : segment.end,
               };
               bodyBreakTime = bodyBreakMiss.time;
-              bodyBreakTimes.push(segment.end);
+              if (!bodyBreakTimes.includes(segment.end)) {
+                bodyBreakTimes.push(segment.end);
+              }
               if (preHeadPressActivatedLongNote && nextSegment != null && nextSegment.start < note.time) {
                 lastScannedSegmentIndex = Math.max(lastScannedSegmentIndex, scanIndex + 1);
               }
@@ -1619,7 +1624,7 @@ export function simulateManiaReplayJudgements(
               break;
             }
 
-            if (releasedAfterHead && bodyBreakTime == null) {
+            if ((releasedAfterHead || releasedPreHeadButRecovered) && bodyBreakTime == null) {
               bodyBreakTime = segment.end;
               events.push({
                 column,

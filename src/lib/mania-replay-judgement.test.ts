@@ -532,7 +532,7 @@ describe("mania replay judgement helpers", () => {
     ]));
   });
 
-  it("scores stable LNs released before the body starts when recovery covers the tail edge", () => {
+  it("scores stable LNs released before the body starts and records the recovered combo break", () => {
     const ruleset = getManiaReplayRuleset(false, []);
     const windows = getManiaReplayHitWindows(5, ruleset);
     const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 1200, isHold: true }];
@@ -550,12 +550,11 @@ describe("mania replay judgement helpers", () => {
       legacyReplayFrameRounding: true,
     });
 
-    expect(simulated.events).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ part: "hold-break" }),
-    ]));
     expect(simulated.events).toEqual([
+      expect.objectContaining({ part: "hold-break", judgment: null, time: 990 }),
       expect.objectContaining({ part: "hold-combined", judgment: 3, time: 1200 }),
     ]);
+    expect(simulated.noteStates[0]?.bodyBreakTimes).toEqual([990]);
   });
 
   it("misses stable LNs released before the body starts when recovery starts after the tail edge", () => {
@@ -626,7 +625,7 @@ describe("mania replay judgement helpers", () => {
     ]);
   });
 
-  it("scores rate-adjusted stable LNs released before the body starts when recovery covers the tail edge", () => {
+  it("scores rate-adjusted stable LNs released before the body starts and records the recovered combo break", () => {
     const ruleset = getManiaReplayRuleset(false, ["DT"]);
     const windows = getManiaReplayHitWindows(5, ruleset);
     const notes: ManiaNote[] = [{ column: 0, time: 1000, endTime: 1400, isHold: true }];
@@ -644,12 +643,11 @@ describe("mania replay judgement helpers", () => {
       legacyReplayFrameRounding: true,
     });
 
-    expect(simulated.events).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ part: "hold-break" }),
-    ]));
     expect(simulated.events).toEqual([
+      expect.objectContaining({ part: "hold-break", judgment: null, time: 990 }),
       expect.objectContaining({ part: "hold-combined", judgment: 5, time: 1400 }),
     ]);
+    expect(simulated.noteStates[0]?.bodyBreakTimes).toEqual([990]);
   });
 
   it("uses the first held sample after stable LN tail timeout by default", () => {
