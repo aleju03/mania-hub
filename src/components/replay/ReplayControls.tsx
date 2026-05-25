@@ -134,10 +134,17 @@ export function ReplayControls({
   const [videoResolution, setVideoResolution] = useState<ReplayVideoExportOptions["resolution"]>("1080p");
   const [videoFps, setVideoFps] = useState<ReplayVideoExportOptions["fps"]>(48);
   const [videoToast, setVideoToast] = useState<{ id: number; message: string; url?: string } | null>(null);
+  const [scrollSpeedInput, setScrollSpeedInput] = useState(String(scrollSpeed));
+  const [editingScrollSpeed, setEditingScrollSpeed] = useState(false);
   const videoToastIdRef = useRef(0);
+  const cancelScrollSpeedCommitRef = useRef(false);
   const wasVideoExportingRef = useRef(videoExporting);
   const videoMenuRef = useRef<HTMLDivElement>(null);
   const sliderClass = "h-1 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink";
+
+  useEffect(() => {
+    if (!editingScrollSpeed) setScrollSpeedInput(String(scrollSpeed));
+  }, [editingScrollSpeed, scrollSpeed]);
 
   useEffect(() => {
     if (!videoMenuOpen) return;
@@ -200,6 +207,27 @@ export function ReplayControls({
       return;
     }
     setVideoCustomEndMs(timeMs);
+  };
+
+  const commitScrollSpeedInput = () => {
+    if (cancelScrollSpeedCommitRef.current) {
+      cancelScrollSpeedCommitRef.current = false;
+      setScrollSpeedInput(String(scrollSpeed));
+      setEditingScrollSpeed(false);
+      return;
+    }
+
+    const parsed = Number(scrollSpeedInput.trim());
+    if (!Number.isFinite(parsed)) {
+      setScrollSpeedInput(String(scrollSpeed));
+      setEditingScrollSpeed(false);
+      return;
+    }
+
+    const next = Math.max(1, Math.min(40, Math.round(parsed)));
+    setScrollSpeedInput(String(next));
+    setEditingScrollSpeed(false);
+    if (next !== scrollSpeed) onSetScrollSpeed(next);
   };
 
   return (
@@ -557,7 +585,25 @@ export function ReplayControls({
           >
             -
           </button>
-          <span className="text-xs text-white font-bold w-5 text-center tabular-nums">{scrollSpeed}</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={scrollSpeedInput}
+            aria-label="Scroll speed"
+            onFocus={() => setEditingScrollSpeed(true)}
+            onChange={(event) => setScrollSpeedInput(event.target.value.replace(/[^\d]/g, "").slice(0, 2))}
+            onBlur={commitScrollSpeedInput}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.currentTarget.blur();
+              if (event.key === "Escape") {
+                cancelScrollSpeedCommitRef.current = true;
+                setScrollSpeedInput(String(scrollSpeed));
+                setEditingScrollSpeed(false);
+                event.currentTarget.blur();
+              }
+            }}
+            className="h-5 w-7 rounded bg-transparent text-center text-xs font-bold text-white tabular-nums outline-none transition-colors focus:bg-osu-b3/60 focus:ring-1 focus:ring-osu-pink/40"
+          />
           <button
             onClick={() => onSetScrollSpeed(Math.min(40, scrollSpeed + 1))}
             className="w-5 h-5 rounded bg-osu-b3/50 text-osu-f1 hover:text-white hover:bg-osu-b3 transition-colors cursor-pointer flex items-center justify-center text-xs leading-none"

@@ -10,6 +10,7 @@ import { DEFAULT_REPLAY_COMBO_FONT_SET, DEFAULT_REPLAY_JUDGEMENT_SET, DEFAULT_RE
 import type { ReplayComboFontStyle, ReplaySkinColumnAssets, ReplaySkinImageAsset, ReplaySkinKeymodeProfile, ReplaySkinSettings } from "../../lib/replay-skin";
 import type { ReplayHitCounts } from "../../lib/replay-validation";
 import { buildStableReplayComboEvents, resolveReplayJudgementEvents } from "../../lib/replay-validation";
+import { MANIA_FLASHLIGHT_DIM_ALPHA, dampManiaHiddenCoverageReference, getManiaFlashlightBand, getManiaHiddenAlphaAtY, getManiaHiddenCoverageReference, getManiaHiddenCoverageReferencePx, getManiaHiddenFadePx } from "../../lib/replay-visibility-mods";
 import { formatPixiRendererType } from "./renderer-debug";
 
 type ReplaySegment = {
@@ -132,6 +133,36 @@ function easeOutQuad(t: number): number {
   return 1 - (1 - clamped) * (1 - clamped);
 }
 
+function getModAcronym(mod: ReplayRendererMod): string {
+  return (typeof mod === "string" ? mod : mod.acronym ?? "").toUpperCase();
+}
+
+function getModSetting(mod: ReplayRendererMod | undefined, names: string[]): unknown {
+  if (!mod || typeof mod === "string") return undefined;
+  const settings = mod.settings;
+  if (!settings) return undefined;
+  for (const name of names) {
+    if (name in settings) return settings[name];
+  }
+  return undefined;
+}
+
+function parseModBooleanSetting(value: unknown, fallback: boolean): boolean {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true" || normalized === "1") return true;
+    if (normalized === "false" || normalized === "0") return false;
+  }
+  return fallback;
+}
+
+function parseModNumberSetting(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 interface RendererOptions {
   backgroundImage?: HTMLImageElement;
   backgroundDim?: number;
@@ -142,7 +173,7 @@ interface RendererOptions {
   inputOverlayOnly?: boolean;
   inputOverlayColor?: string;
   inputOverlayKeyHistory?: boolean;
-  mods?: string[];
+  mods?: ReplayRendererMod[];
   speedMultiplier?: number;
   transparentBackground?: boolean;
   hideHud?: boolean;
@@ -193,6 +224,10 @@ type ReplayOverlayPlacementSnapshot = {
   width: number;
   height: number;
 };
+type ReplayRendererMod = string | {
+  acronym?: string;
+  settings?: Record<string, string | number | boolean>;
+};
 
 export class ManiaReplayRenderer {
   private canvas: HTMLCanvasElement;
@@ -213,6 +248,8 @@ export class ManiaReplayRenderer {
   private previousBackgroundSprite: Sprite | null = null;
   private receptorBeamGradients = new Map<string, FillGradient>();
   private inputHistoryTopFadeGradient: FillGradient | null = null;
+  private flashlightFadeToClearGradient: FillGradient | null = null;
+  private flashlightFadeToDimGradient: FillGradient | null = null;
   private initPromise: Promise<void>;
   private destroyed = false;
 
@@ -255,11 +292,17 @@ export class ManiaReplayRenderer {
   private inputOverlayOnly = false;
   private inputOverlayColor = "#a855f7";
   private inputOverlayKeyHistory = false;
+  private hasHiddenMod = false;
+  private hasFlashlightMod = false;
+  private flashlightComboBasedSize = false;
+  private flashlightSizeMultiplier = 1;
   private transparentBackground = false;
   private hideHud = false;
   private hidePerformanceStats = false;
   private showCombo = false;
   private initialCombo = 0;
+  private hiddenCoverageReference = getManiaHiddenCoverageReference(0);
+  private hiddenCoverageUpdatedAt = 0;
   private barePlayfield = false;
   private showHealthBar = true;
   private skinSettings: ReplaySkinSettings = DEFAULT_REPLAY_SKIN_SETTINGS;
@@ -388,7 +431,9 @@ export class ManiaReplayRenderer {
     this.colors = COLUMN_COLORS[keyCount] || this.generateColors(keyCount);
     for (const c of this.colors) hexToNumber(c);
 
-    const mods = new Set((options?.mods ?? []).filter(Boolean).map((m) => m.toUpperCase()));
+    const inputMods = (options?.mods ?? []).filter(Boolean);
+    const mods = new Set(inputMods.map((m) => getModAcronym(m)).filter(Boolean));
+    const flashlightMod = inputMods.find((m) => getModAcronym(m) === "FL");
     const speedMultiplier = Number(options?.speedMultiplier);
     this.modRate = Number.isFinite(speedMultiplier) && speedMultiplier > 0
       ? speedMultiplier
@@ -397,6 +442,16 @@ export class ManiaReplayRenderer {
         : mods.has("HT") || mods.has("DC")
           ? 0.75
           : 1;
+    this.hasHiddenMod = mods.has("HD");
+    this.hasFlashlightMod = mods.has("FL");
+    this.flashlightComboBasedSize = parseModBooleanSetting(
+      getModSetting(flashlightMod, ["combo_based_size", "comboBasedSize", "combo_based", "comboBased"]),
+      false,
+    );
+    this.flashlightSizeMultiplier = parseModNumberSetting(
+      getModSetting(flashlightMod, ["size_multiplier", "sizeMultiplier", "flashlight_size", "flashlightSize"]),
+      1,
+    );
     this.notes = applyManiaReplayModsToNotes(notes, keyCount, [...mods]);
     this.ruleset = getManiaReplayRuleset(options?.isLazer ?? false, [...mods], options?.isConvert ?? false, this.modRate);
 
@@ -413,6 +468,7 @@ export class ManiaReplayRenderer {
     this.showCombo = options?.showCombo ?? false;
     this.initialCombo = Math.max(0, Math.floor(options?.initialCombo ?? 0));
     this.combo = this.initialCombo;
+    this.hiddenCoverageReference = getManiaHiddenCoverageReference(this.combo);
     this.maxComboSoFar = this.combo;
     this.barePlayfield = options?.barePlayfield ?? false;
     this.showHealthBar = options?.showHealthBar ?? true;
@@ -993,6 +1049,7 @@ export class ManiaReplayRenderer {
       this.positionBackgroundSprites();
     }
     this.recomputeStatsUpTo(0);
+    this.resetHiddenCoverage();
     this.lastRenderTime = performance.now();
     this.resetAudioClockSmoothing();
     this.render(true);
@@ -1001,6 +1058,7 @@ export class ManiaReplayRenderer {
   seek(timeMs: number) {
     this.currentTime = Math.max(0, Math.min(timeMs, this.totalDuration));
     this.recomputeStatsUpTo(this.currentTime);
+    this.resetHiddenCoverage();
     this.lastRenderTime = performance.now();
     this.resetAudioClockSmoothing();
     this.render();
@@ -1009,6 +1067,7 @@ export class ManiaReplayRenderer {
   renderFrameAt(timeMs: number) {
     this.currentTime = Math.max(0, Math.min(timeMs, this.totalDuration));
     this.recomputeStatsUpTo(this.currentTime);
+    if (this.currentTime < this.hiddenCoverageUpdatedAt) this.resetHiddenCoverage();
     this.lastRenderTime = performance.now();
     this.resetAudioClockSmoothing();
     this.render(true);
@@ -1611,6 +1670,7 @@ export class ManiaReplayRenderer {
 
     const layout = this.getLayout();
     this.currentKeyState = this.getCurrentKeyState();
+    this.updateHiddenCoverage();
     this.updateHudSnapshotIfNeeded(forceHudSnapshot);
 
     if (this.staticDirty) {
@@ -1632,6 +1692,7 @@ export class ManiaReplayRenderer {
     }
     this.renderJudgmentLine(layout);
     this.renderReceptors(layout);
+    if (this.hasFlashlightMod) this.renderFlashlightOverlay(layout);
     if (this.showHealthBar) this.renderHealthBar(layout);
     this.overlayHitboxes = [];
     if (!this.hideHud) this.renderHUD(layout);
@@ -1723,6 +1784,37 @@ export class ManiaReplayRenderer {
     this.rect(x - 0.5, y, barWidth + 1, height, "#ffffff", 0.26, 1);
   }
 
+  private renderFlashlightOverlay(layout: Layout) {
+    const { w, h } = layout;
+    const band = getManiaFlashlightBand({
+      combo: this.combo,
+      comboBasedSize: this.flashlightComboBasedSize,
+      playfieldHeight: h,
+      referenceHeight: MANIA_REFERENCE_HEIGHT,
+      sizeMultiplier: this.flashlightSizeMultiplier,
+    });
+    const topFadeStart = Math.max(0, band.top - band.edgeFade);
+    const topFadeHeight = Math.max(0, band.top - topFadeStart);
+    const bottomFadeEnd = Math.min(h, band.bottom + band.edgeFade);
+    const bottomFadeHeight = Math.max(0, bottomFadeEnd - band.bottom);
+
+    this.fillRect(0, 0, w, topFadeStart, "#000000", MANIA_FLASHLIGHT_DIM_ALPHA);
+    if (topFadeHeight > 0) {
+      this.graphics.rect(0, topFadeStart, w, topFadeHeight).fill({
+        fill: this.getFlashlightFadeToClearGradient(),
+        alpha: MANIA_FLASHLIGHT_DIM_ALPHA,
+      });
+    }
+
+    if (bottomFadeHeight > 0) {
+      this.graphics.rect(0, band.bottom, w, bottomFadeHeight).fill({
+        fill: this.getFlashlightFadeToDimGradient(),
+        alpha: MANIA_FLASHLIGHT_DIM_ALPHA,
+      });
+    }
+    this.fillRect(0, bottomFadeEnd, w, h - bottomFadeEnd, "#000000", MANIA_FLASHLIGHT_DIM_ALPHA);
+  }
+
   private renderNotes(layout: Layout) {
     const { judgmentY, noteHeight, pixelsPerMs, h } = layout;
     if (this.notes.length === 0) return;
@@ -1794,6 +1886,8 @@ export class ManiaReplayRenderer {
         const headAlpha = releasedEarly ? 0.65 : 1;
         const headEndY = this.skinSettings.upscroll ? top : bottom;
         const tailEndY = this.skinSettings.upscroll ? bottom : top;
+        const headVisibilityAlpha = this.getHiddenAlphaAtY(headEndY, layout);
+        const bodyVisibilityAlpha = this.getHiddenAlphaForVerticalSpan(top, bottom, layout);
         const headTrimDelta = isArrowSkin
           ? arrowSize * 0.5
           : this.skinSettings.style === "circles"
@@ -1802,7 +1896,7 @@ export class ManiaReplayRenderer {
         const tailTrimDelta = this.skinSettings.percy
           ? Math.min(20, Math.max(noteHeight * 0.9, headTrimDelta * 1.1))
           : 0;
-        if (this.renderHoldSkinImages(layout, assets, colX, colWidth, top, bottom, headEndY, tailEndY, tailTrimDelta, bodyAlpha, headAlpha, noteFadeHeight)) {
+        if (this.renderHoldSkinImages(layout, assets, colX, colWidth, top, bottom, headEndY, tailEndY, tailTrimDelta, bodyAlpha, headAlpha, noteFadeHeight, layout)) {
           continue;
         }
 
@@ -1818,14 +1912,14 @@ export class ManiaReplayRenderer {
               bodyWidth,
               circleBodyRange.bottom - circleBodyRange.top,
               this.skinSettings.lnBodyColor,
-              bodyAlpha,
+              bodyAlpha * bodyVisibilityAlpha,
               noteFadeHeight,
               0.55,
             );
           }
-          this.circleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, circleLnHeadColor, headAlpha, noteFadeHeight, 0.55);
+          this.circleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, circleLnHeadColor, headAlpha * headVisibilityAlpha, noteFadeHeight, 0.55);
           if (this.skinSettings.outlineEnabled) {
-            this.strokeCircleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, this.skinSettings.outlineColor, headAlpha, this.skinSettings.outlineWidth, noteFadeHeight, 0.55);
+            this.strokeCircleWithTopFade(colX + colWidth / 2, headCenterY, circleRadius, this.skinSettings.outlineColor, headAlpha * headVisibilityAlpha, this.skinSettings.outlineWidth, noteFadeHeight, 0.55);
           }
           continue;
         }
@@ -1842,7 +1936,7 @@ export class ManiaReplayRenderer {
               bodyWidth,
               arrowBodyRange.bottom - arrowBodyRange.top,
               this.skinSettings.lnBodyColor,
-              bodyAlpha,
+              bodyAlpha * bodyVisibilityAlpha,
               noteFadeHeight,
               0.55,
               this.skinSettings.upscroll ? "bottom" : "top",
@@ -1854,9 +1948,9 @@ export class ManiaReplayRenderer {
             arrowSize,
             arrowDirection,
             arrowLnHeadColor,
-            headAlpha,
+            headAlpha * headVisibilityAlpha,
             this.skinSettings.outlineEnabled ? this.skinSettings.outlineColor : null,
-            headAlpha,
+            headAlpha * headVisibilityAlpha,
             this.skinSettings.outlineWidth,
             noteFadeHeight,
             0.55,
@@ -1872,7 +1966,7 @@ export class ManiaReplayRenderer {
         const bodyTailY = tailEndY + tailDelta;
         const barBodyTop = Math.min(bodyHeadY, bodyTailY);
         const barBodyBottom = Math.max(bodyHeadY, bodyTailY);
-        this.barLnBodyWithTopFade(x, barBodyTop, barWidth, barBodyBottom - barBodyTop, color, bodyAlpha, noteFadeHeight, 0.55);
+        this.barLnBodyWithTopFade(x, barBodyTop, barWidth, barBodyBottom - barBodyTop, color, bodyAlpha, noteFadeHeight, 0.55, layout);
       } else {
         if (note.time < this.currentTime - 10 && !headResolved) continue;
 
@@ -1882,16 +1976,21 @@ export class ManiaReplayRenderer {
         if (assets?.tap) {
           const assetHeight = this.getNoteAssetHeight(assets.tap, colWidth, layout, Math.max(noteHeight, circleDiameter, arrowSize));
           const noteTop = this.skinSettings.upscroll ? noteY : noteY - assetHeight;
-          const alpha = this.topFadeAlpha(Math.max(0, Math.min(noteTop + assetHeight, noteFadeHeight)), noteFadeHeight, 0.55);
+          const visibilityAlpha = this.getHiddenAlphaAtNoteEdge(noteTop, noteTop + assetHeight, layout);
+          if (visibilityAlpha <= 0) continue;
+          const alpha = this.topFadeAlpha(Math.max(0, Math.min(noteTop + assetHeight, noteFadeHeight)), noteFadeHeight, 0.55) * visibilityAlpha;
           this.drawSkinImage(assets.tap, colX + colWidth / 2, noteTop, colWidth, assetHeight, 0.5, 0, alpha);
           continue;
         }
 
+        const noteVisibilityAlpha = this.getHiddenAlphaAtY(noteY, layout);
+        if (noteVisibilityAlpha <= 0) continue;
+
         if (this.skinSettings.style === "circles") {
           const noteCenterY = this.getVisualCenterY(noteY, circleRadius);
-          this.circleWithTopFade(colX + colWidth / 2, noteCenterY, circleRadius, circleTapColor, 1, noteFadeHeight, 0.55);
+          this.circleWithTopFade(colX + colWidth / 2, noteCenterY, circleRadius, circleTapColor, noteVisibilityAlpha, noteFadeHeight, 0.55);
           if (this.skinSettings.outlineEnabled) {
-            this.strokeCircleWithTopFade(colX + colWidth / 2, noteCenterY, circleRadius, this.skinSettings.outlineColor, 1, this.skinSettings.outlineWidth, noteFadeHeight, 0.55);
+            this.strokeCircleWithTopFade(colX + colWidth / 2, noteCenterY, circleRadius, this.skinSettings.outlineColor, noteVisibilityAlpha, this.skinSettings.outlineWidth, noteFadeHeight, 0.55);
           }
           continue;
         }
@@ -1904,9 +2003,9 @@ export class ManiaReplayRenderer {
             arrowSize,
             arrowDirection,
             arrowTapColor,
-            1,
+            noteVisibilityAlpha,
             this.skinSettings.outlineEnabled ? this.skinSettings.outlineColor : null,
-            1,
+            noteVisibilityAlpha,
             this.skinSettings.outlineWidth,
             noteFadeHeight,
             0.55,
@@ -1915,9 +2014,9 @@ export class ManiaReplayRenderer {
         }
 
         const noteTop = this.skinSettings.upscroll ? noteY : noteY - noteHeight;
-        this.roundRectWithTopFade(x, noteTop, barWidth, noteHeight, 4, color, 1, noteFadeHeight, 0.55);
-        this.roundRectWithTopFade(x + 1, noteTop, barWidth - 2, noteHeight, 4, color, 0.32, noteFadeHeight, 0.55);
-        this.roundRectWithTopFade(x + 2, noteTop + 1, barWidth - 4, noteHeight / 3, 2, "#ffffff", 0.2, noteFadeHeight, 0.55);
+        this.roundRectWithTopFade(x, noteTop, barWidth, noteHeight, 4, color, 1, noteFadeHeight, 0.55, layout);
+        this.roundRectWithTopFade(x + 1, noteTop, barWidth - 2, noteHeight, 4, color, 0.32, noteFadeHeight, 0.55, layout);
+        this.roundRectWithTopFade(x + 2, noteTop + 1, barWidth - 4, noteHeight / 3, 2, "#ffffff", 0.2, noteFadeHeight, 0.55, layout);
       }
     }
   }
@@ -3050,6 +3149,7 @@ export class ManiaReplayRenderer {
     bodyAlpha: number,
     headAlpha: number,
     fadeHeight: number,
+    visibilityLayout?: Layout,
   ): boolean {
     if (!assets?.lnHead && !assets?.lnBody && !assets?.lnTail) return false;
 
@@ -3065,21 +3165,27 @@ export class ManiaReplayRenderer {
     const bodyBottom = Math.max(bodyHeadY, bodyTailY);
 
     if (bodyAsset && bodyBottom > bodyTop) {
-      const alpha = bodyAlpha * this.topFadeAlpha(Math.max(0, Math.min(bodyBottom, fadeHeight)), fadeHeight, 0.55);
+      const alpha = bodyAlpha
+        * this.topFadeAlpha(Math.max(0, Math.min(bodyBottom, fadeHeight)), fadeHeight, 0.55)
+        * this.getHiddenAlphaForVerticalSpan(bodyTop, bodyBottom, visibilityLayout);
       this.drawSkinImage(bodyAsset, colX + colWidth / 2, bodyTop, colWidth, bodyBottom - bodyTop, 0.5, 0, alpha);
     } else {
-      this.barLnBodyWithTopFade(colX + 3, bodyTop, colWidth - 6, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, bodyAlpha, fadeHeight, 0.55);
+      this.barLnBodyWithTopFade(colX + 3, bodyTop, colWidth - 6, bodyBottom - bodyTop, this.skinSettings.lnBodyColor, bodyAlpha, fadeHeight, 0.55, visibilityLayout);
     }
 
     if (tailAsset) {
       const tailTop = this.skinSettings.upscroll ? tailEndY - tailHeight : tailEndY;
-      const alpha = bodyAlpha * this.topFadeAlpha(Math.max(0, Math.min(tailTop + tailHeight, fadeHeight)), fadeHeight, 0.55);
+      const alpha = bodyAlpha
+        * this.topFadeAlpha(Math.max(0, Math.min(tailTop + tailHeight, fadeHeight)), fadeHeight, 0.55)
+        * this.getHiddenAlphaForVerticalSpan(tailTop, tailTop + tailHeight, visibilityLayout);
       this.drawSkinImage(tailAsset, colX + colWidth / 2, tailTop, colWidth, tailHeight, 0.5, 0, alpha);
     }
 
     if (headAsset) {
       const headTop = this.skinSettings.upscroll ? headEndY : headEndY - headHeight;
-      const alpha = headAlpha * this.topFadeAlpha(Math.max(0, Math.min(headTop + headHeight, fadeHeight)), fadeHeight, 0.55);
+      const alpha = headAlpha
+        * this.topFadeAlpha(Math.max(0, Math.min(headTop + headHeight, fadeHeight)), fadeHeight, 0.55)
+        * (visibilityLayout ? this.getHiddenAlphaAtNoteEdge(headTop, headTop + headHeight, visibilityLayout) : 1);
       this.drawSkinImage(headAsset, colX + colWidth / 2, headTop, colWidth, headHeight, 0.5, 0, alpha);
     }
 
@@ -3321,6 +3427,58 @@ export class ManiaReplayRenderer {
     return minAlpha + (1 - minAlpha) * ratio;
   }
 
+  private resetHiddenCoverage() {
+    this.hiddenCoverageReference = getManiaHiddenCoverageReference(this.combo);
+    this.hiddenCoverageUpdatedAt = this.currentTime;
+  }
+
+  private updateHiddenCoverage() {
+    if (!this.hasHiddenMod) return;
+
+    const elapsed = this.currentTime - this.hiddenCoverageUpdatedAt;
+    const target = getManiaHiddenCoverageReference(this.combo);
+
+    if (!Number.isFinite(elapsed) || elapsed < 0 || elapsed > 1000) {
+      this.hiddenCoverageReference = target;
+    } else {
+      this.hiddenCoverageReference = dampManiaHiddenCoverageReference(this.hiddenCoverageReference, target, elapsed);
+    }
+    this.hiddenCoverageUpdatedAt = this.currentTime;
+  }
+
+  private getHiddenCoveragePx(layout: Layout): number {
+    return getManiaHiddenCoverageReferencePx({
+      coverageReference: this.hiddenCoverageReference,
+      hitPosition: this.skinSettings.hitPosition ?? MANIA_HIT_TARGET_POSITION,
+      playfieldHeight: layout.h,
+      referenceHeight: MANIA_REFERENCE_HEIGHT,
+    });
+  }
+
+  private getHiddenAlphaAtY(y: number, layout?: Layout): number {
+    if (!layout || !this.hasHiddenMod) return 1;
+    return getManiaHiddenAlphaAtY({
+      coveragePx: this.getHiddenCoveragePx(layout),
+      fadePx: getManiaHiddenFadePx(layout.h),
+      judgmentY: layout.judgmentY,
+      upscroll: this.skinSettings.upscroll,
+      y,
+    });
+  }
+
+  private getHiddenAlphaAtNoteEdge(top: number, bottom: number, layout: Layout): number {
+    return this.getHiddenAlphaAtY(this.skinSettings.upscroll ? top : bottom, layout);
+  }
+
+  private getHiddenAlphaForVerticalSpan(top: number, bottom: number, layout?: Layout): number {
+    if (!layout || !this.hasHiddenMod) return 1;
+    return (
+      this.getHiddenAlphaAtY(top, layout) +
+      this.getHiddenAlphaAtY((top + bottom) / 2, layout) +
+      this.getHiddenAlphaAtY(bottom, layout)
+    ) / 3;
+  }
+
   private roundRectWithTopFade(
     x: number,
     y: number,
@@ -3331,27 +3489,32 @@ export class ManiaReplayRenderer {
     alpha: number,
     fadeHeight: number,
     minAlpha = 0,
+    visibilityLayout?: Layout,
   ) {
     if (w <= 0 || h <= 0 || alpha <= 0) return;
-    if (fadeHeight <= 0 || y >= fadeHeight) {
+    const useVisibility = !!visibilityLayout && this.hasHiddenMod;
+    if (!useVisibility && (fadeHeight <= 0 || y >= fadeHeight)) {
       this.roundRect(x, y, w, h, radius, color, alpha);
       return;
     }
 
     const bottom = y + h;
     if (bottom <= 0) return;
-    const fadeBottom = Math.min(bottom, fadeHeight);
     const start = Math.max(y, 0);
-    const sliceCount = 6;
-    const sliceHeight = (fadeBottom - start) / sliceCount;
+    const sliceEnd = useVisibility && visibilityLayout ? Math.min(bottom, visibilityLayout.h) : Math.min(bottom, fadeHeight);
+    if (sliceEnd <= start) return;
+    const sliceCount = useVisibility ? Math.max(6, Math.ceil((sliceEnd - start) / 8)) : 6;
+    const sliceHeight = (sliceEnd - start) / sliceCount;
 
     for (let i = 0; i < sliceCount; i++) {
       const sliceY = start + sliceHeight * i;
-      const sliceAlpha = alpha * this.topFadeAlpha(sliceY + sliceHeight, fadeHeight, minAlpha);
+      const topAlpha = this.topFadeAlpha(sliceY + sliceHeight, fadeHeight, minAlpha);
+      const visibilityAlpha = this.getHiddenAlphaAtY(sliceY + sliceHeight / 2, visibilityLayout);
+      const sliceAlpha = alpha * topAlpha * visibilityAlpha;
       this.roundRect(x, sliceY, w, sliceHeight + 0.5, radius, color, sliceAlpha);
     }
 
-    if (bottom > fadeHeight) {
+    if (!useVisibility && bottom > fadeHeight) {
       this.roundRect(x, fadeHeight, w, bottom - fadeHeight, radius, color, alpha);
     }
   }
@@ -3420,27 +3583,32 @@ export class ManiaReplayRenderer {
     alpha: number,
     fadeHeight: number,
     minAlpha = 0,
+    visibilityLayout?: Layout,
   ) {
     if (w <= 0 || h <= 0 || alpha <= 0) return;
-    if (fadeHeight <= 0 || y >= fadeHeight) {
+    const useVisibility = !!visibilityLayout && this.hasHiddenMod;
+    if (!useVisibility && (fadeHeight <= 0 || y >= fadeHeight)) {
       this.fillRect(x, y, w, h, color, alpha);
       return;
     }
 
     const bottom = y + h;
     if (bottom <= 0) return;
-    const fadeBottom = Math.min(bottom, fadeHeight);
     const start = Math.max(y, 0);
-    const sliceCount = 10;
-    const sliceHeight = (fadeBottom - start) / sliceCount;
+    const sliceEnd = useVisibility && visibilityLayout ? Math.min(bottom, visibilityLayout.h) : Math.min(bottom, fadeHeight);
+    if (sliceEnd <= start) return;
+    const sliceCount = useVisibility ? Math.max(10, Math.ceil((sliceEnd - start) / 8)) : 10;
+    const sliceHeight = (sliceEnd - start) / sliceCount;
 
     for (let i = 0; i < sliceCount; i++) {
       const sliceY = start + sliceHeight * i;
-      const sliceAlpha = alpha * this.topFadeAlpha(sliceY + sliceHeight, fadeHeight, minAlpha);
+      const topAlpha = this.topFadeAlpha(sliceY + sliceHeight, fadeHeight, minAlpha);
+      const visibilityAlpha = this.getHiddenAlphaAtY(sliceY + sliceHeight / 2, visibilityLayout);
+      const sliceAlpha = alpha * topAlpha * visibilityAlpha;
       this.fillRect(x, sliceY, w, sliceHeight + 0.5, color, sliceAlpha);
     }
 
-    if (bottom > fadeHeight) {
+    if (!useVisibility && bottom > fadeHeight) {
       this.fillRect(x, fadeHeight, w, bottom - fadeHeight, color, alpha);
     }
   }
@@ -3718,6 +3886,40 @@ export class ManiaReplayRenderer {
       ],
     });
     return this.inputHistoryTopFadeGradient;
+  }
+
+  private getFlashlightFadeToClearGradient(): FillGradient {
+    if (this.flashlightFadeToClearGradient) return this.flashlightFadeToClearGradient;
+
+    this.flashlightFadeToClearGradient = new FillGradient({
+      type: "linear",
+      start: { x: 0, y: 0 },
+      end: { x: 0, y: 1 },
+      textureSpace: "local",
+      textureSize: 128,
+      colorStops: [
+        { offset: 0, color: colorWithAlpha("#000000", 1) },
+        { offset: 1, color: colorWithAlpha("#000000", 0) },
+      ],
+    });
+    return this.flashlightFadeToClearGradient;
+  }
+
+  private getFlashlightFadeToDimGradient(): FillGradient {
+    if (this.flashlightFadeToDimGradient) return this.flashlightFadeToDimGradient;
+
+    this.flashlightFadeToDimGradient = new FillGradient({
+      type: "linear",
+      start: { x: 0, y: 0 },
+      end: { x: 0, y: 1 },
+      textureSpace: "local",
+      textureSize: 128,
+      colorStops: [
+        { offset: 0, color: colorWithAlpha("#000000", 0) },
+        { offset: 1, color: colorWithAlpha("#000000", 1) },
+      ],
+    });
+    return this.flashlightFadeToDimGradient;
   }
 
   private rebuildBackgroundSprites() {

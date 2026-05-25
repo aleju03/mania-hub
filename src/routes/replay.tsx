@@ -1109,10 +1109,6 @@ function ReplayViewer({
   const [showFullscreenChrome, setShowFullscreenChrome] = useState(false);
   const [speed, setSpeed] = useState(1);
   const effectiveReplayMods = useMemo(() => scoreInfo?.mods ?? replayMods ?? [], [replayMods, scoreInfo?.mods]);
-  const modAcronyms = useMemo(
-    () => effectiveReplayMods.map((m: any) => (typeof m === "string" ? m : m.acronym ?? "").toUpperCase()),
-    [effectiveReplayMods],
-  );
   const displayScoreValues = useMemo(
     () => (scoreInfo ? getScoreDisplayValues(scoreInfo) : null),
     [scoreInfo],
@@ -1586,7 +1582,7 @@ function ReplayViewer({
             isLazer: replayUsesLazerScoring,
             od: beatmap?.od,
             showInputOverlay: showInputOverlayRef.current,
-            mods: modAcronyms,
+            mods: effectiveReplayMods,
             speedMultiplier: modRate,
             transparentBackground: true,
             scrollVelocities: beatmap?.scrollVelocities,
@@ -1669,7 +1665,7 @@ function ReplayViewer({
         rendererRef.current = null;
       }
     };
-  }, [replay, beatmap, initialTime, modRate, modAcronyms, replayUsesLazerScoring, scoreInfo?.beatmap?.convert, applyOverlaySettings]);
+  }, [replay, beatmap, initialTime, modRate, effectiveReplayMods, replayUsesLazerScoring, scoreInfo?.beatmap?.convert, applyOverlaySettings]);
 
   // Detect when the renderer reaches the end on its own (no more frames) and
   // flip isPlaying back. ReplayProgressBar polls the renderer independently
@@ -2133,7 +2129,7 @@ function ReplayViewer({
           isLazer: replayUsesLazerScoring,
           od: beatmap?.od,
           showInputOverlay: exportShowInputOverlay,
-          mods: modAcronyms,
+          mods: effectiveReplayMods,
           speedMultiplier: modRate,
           transparentBackground: true,
           hidePerformanceStats: true,
@@ -2290,7 +2286,7 @@ function ReplayViewer({
     inputOverlayColor,
     inputOverlayKeyHistory,
     inputOverlayOnly,
-    modAcronyms,
+    effectiveReplayMods,
     modRate,
     overlaySettings,
     replay.header.playerName,
