@@ -1,6 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { Activity, Crosshair, Database, HelpCircle, History, Pause, Play, Radio, RefreshCw, Server, Signal, Trash2, UserRound, Wifi, WifiOff, X } from "lucide-react";
+import { Activity, Check, ChevronDown, Crosshair, Database, HelpCircle, History, Monitor, Pause, Play, Radio, RefreshCw, Server, Signal, Smartphone, Trash2, UserRound, Wifi, WifiOff, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { requireAdminAccess } from "../../lib/auth";
@@ -116,12 +116,15 @@ interface AnalyticsTopRouteRow {
   count: number;
 }
 
+type AnalyticsDeviceKind = "mobile" | "desktop" | "unknown";
+
 interface AnalyticsRecentEventRow {
   timestamp: string;
   event: string;
   path: string;
   country: string | null;
   selectedCountry: string | null;
+  deviceKind: AnalyticsDeviceKind;
   distinctId: string;
   mapsTab: string | null;
   rankingsPage: string | null;
@@ -186,8 +189,11 @@ interface AnalyticsBounceStats {
   landers: number;
 }
 
+type AnalyticsCacheState = "fresh" | "stale" | "warming";
+
 interface AnalyticsMonitorData {
-  range: AnalyticsRange;
+  rangeHours: AnalyticsRange;
+  cacheState: AnalyticsCacheState;
   activeVisitors: number;
   pageviewsInRange: number;
   uniqueVisitorsInRange: number;
@@ -209,25 +215,97 @@ const ANALYTICS_REFRESH_MS = 15_000;
 const DEFAULT_COUNTRY = "CR";
 const MONITORING_TABS = ["backend", "analytics"] as const;
 type MonitoringTab = (typeof MONITORING_TABS)[number];
-const ANALYTICS_RANGES = ["1h", "24h", "7d", "30d"] as const;
-type AnalyticsRange = (typeof ANALYTICS_RANGES)[number];
+type AnalyticsRange = number;
 const ANALYTICS_RANGE_STORAGE_KEY = "mh_monitor_range";
-const ANALYTICS_RANGE_SQL: Record<AnalyticsRange, string> = {
-  "1h": "now() - interval 1 hour",
-  "24h": "now() - interval 1 day",
-  "7d": "now() - interval 7 day",
-  "30d": "now() - interval 30 day",
-};
-const ANALYTICS_RANGE_LABEL: Record<AnalyticsRange, string> = {
-  "1h": "Last hour",
-  "24h": "Last 24h",
-  "7d": "Last 7 days",
-  "30d": "Last 30 days",
-};
+const ANALYTICS_DEFAULT_RANGE_HOURS = 24;
+const ANALYTICS_MIN_RANGE_HOURS = 1;
+const ANALYTICS_MAX_RANGE_HOURS = 720;
+const ANALYTICS_RANGE_STEPS = [1, 2, 3, 4, 5, 6, 8, 12, 18, 24, 36, 48, 72, 168, 336, 720] as const;
+const ANALYTICS_RANGE_PRESETS = [1, 3, 6, 12, 24, 168, 720] as const;
+const ANALYTICS_CACHE_FRESH_MS = 15_000;
+const ANALYTICS_COLD_RESPONSE_BUDGET_MS = 1_500;
 const POSTHOG_QUERY_TIMEOUT_MS = 15_000;
 
-function isAnalyticsRange(value: unknown): value is AnalyticsRange {
-  return typeof value === "string" && (ANALYTICS_RANGES as readonly string[]).includes(value);
+const LEGACY_ANALYTICS_RANGE_HOURS: Record<string, AnalyticsRange> = {
+  "1h": 1,
+  "24h": 24,
+  "7d": 168,
+  "30d": 720,
+};
+
+const analyticsMonitorCache = new Map<string, {
+  data: AnalyticsMonitorData | null;
+  promise: Promise<AnalyticsMonitorData> | null;
+}>();
+
+function clampAnalyticsRangeHours(value: number): AnalyticsRange {
+  if (!Number.isFinite(value)) return ANALYTICS_DEFAULT_RANGE_HOURS;
+  return Math.min(ANALYTICS_MAX_RANGE_HOURS, Math.max(ANALYTICS_MIN_RANGE_HOURS, Math.round(value)));
+}
+
+function parseAnalyticsRangeHours(value: unknown): AnalyticsRange | null {
+  if (typeof value === "number") return clampAnalyticsRangeHours(value);
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return null;
+  const legacy = LEGACY_ANALYTICS_RANGE_HOURS[trimmed];
+  if (legacy) return legacy;
+  if (/^\d+$/.test(trimmed)) return clampAnalyticsRangeHours(Number(trimmed));
+
+  const match = trimmed.match(/^(\d+)\s*(h|hr|hrs|hour|hours|d|day|days)$/);
+  if (!match) return null;
+  const amount = Number(match[1]);
+  const unit = match[2].startsWith("d") ? 24 : 1;
+  return clampAnalyticsRangeHours(amount * unit);
+}
+
+function normalizeAnalyticsRangeHours(value: unknown): AnalyticsRange {
+  return parseAnalyticsRangeHours(value) ?? ANALYTICS_DEFAULT_RANGE_HOURS;
+}
+
+function getAnalyticsRangeSql(rangeHours: AnalyticsRange): string {
+  const hours = clampAnalyticsRangeHours(rangeHours);
+  if (hours >= 24 && hours % 24 === 0) return `now() - interval ${hours / 24} day`;
+  return `now() - interval ${hours} hour`;
+}
+
+function formatAnalyticsRangeLabel(rangeHours: AnalyticsRange): string {
+  const hours = clampAnalyticsRangeHours(rangeHours);
+  if (hours === 1) return "Last hour";
+  if (hours === 24) return "Last 24h";
+  if (hours < 24) return `Last ${hours}h`;
+  if (hours % 24 === 0) {
+    const days = hours / 24;
+    return `Last ${days} ${days === 1 ? "day" : "days"}`;
+  }
+  return `Last ${hours}h`;
+}
+
+function formatAnalyticsRangeChipLabel(rangeHours: AnalyticsRange): string {
+  const hours = clampAnalyticsRangeHours(rangeHours);
+  if (hours < 24) return `${hours}h`;
+  if (hours === 24) return "24h";
+  if (hours % 24 === 0) return `${hours / 24}d`;
+  return `${hours}h`;
+}
+
+function getAnalyticsRangeStepIndex(rangeHours: AnalyticsRange): number {
+  const clamped = clampAnalyticsRangeHours(rangeHours);
+  let closestIndex = 0;
+  let closestDistance = Number.POSITIVE_INFINITY;
+  ANALYTICS_RANGE_STEPS.forEach((step, index) => {
+    const distance = Math.abs(step - clamped);
+    if (distance < closestDistance) {
+      closestIndex = index;
+      closestDistance = distance;
+    }
+  });
+  return closestIndex;
+}
+
+function getAnalyticsCacheKey(rangeHours: AnalyticsRange, recentCountry: string | null): string {
+  return `${clampAnalyticsRangeHours(rangeHours)}:${recentCountry ?? "all"}`;
 }
 
 function normalizeAnalyticsCountryFilter(value: unknown): string | null {
@@ -249,12 +327,226 @@ function formatServerErrorContext(value: unknown): string | null {
   return entries.length ? entries.join(" ") : null;
 }
 
+function parseAnalyticsDeviceWidth(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) && value > 0 ? value : null;
+  if (typeof value !== "string") return null;
+  const width = Number(value);
+  return Number.isFinite(width) && width > 0 ? width : null;
+}
+
+function getAnalyticsDeviceKind(screenWidth: unknown, viewportWidth: unknown): AnalyticsDeviceKind {
+  const width = parseAnalyticsDeviceWidth(screenWidth) ?? parseAnalyticsDeviceWidth(viewportWidth);
+  if (width == null) return "unknown";
+  return width < 768 ? "mobile" : "desktop";
+}
+
+function createEmptyAnalyticsMonitorData(rangeHours: AnalyticsRange, cacheState: AnalyticsCacheState): AnalyticsMonitorData {
+  return {
+    rangeHours,
+    cacheState,
+    activeVisitors: 0,
+    pageviewsInRange: 0,
+    uniqueVisitorsInRange: 0,
+    eventsInRange: 0,
+    bounce: {
+      bounced: 0,
+      landers: 0,
+    },
+    topRoutes: [],
+    recentEvents: [],
+    topPhysicalCountries: [],
+    topProfiles: [],
+    topReplays: [],
+    topReferrers: [],
+    serverErrors: [],
+    recentServerErrors: [],
+    fetchedAt: Date.now(),
+  };
+}
+
+function settleWithin<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<{ status: "resolved"; value: T } | { status: "rejected"; reason: unknown } | { status: "timeout" }> {
+  return Promise.race([
+    promise.then(
+      (value) => ({ status: "resolved" as const, value }),
+      (reason) => ({ status: "rejected" as const, reason }),
+    ),
+    new Promise<{ status: "timeout" }>((resolve) => {
+      setTimeout(() => resolve({ status: "timeout" }), timeoutMs);
+    }),
+  ]);
+}
+
+async function fetchAnalyticsMonitorDataFromPostHog({
+  endpoint,
+  apiKey,
+  rangeHours,
+  recentCountry,
+}: {
+  endpoint: string;
+  apiKey: string;
+  rangeHours: AnalyticsRange;
+  recentCountry: string | null;
+}): Promise<AnalyticsMonitorData> {
+  const since = getAnalyticsRangeSql(rangeHours);
+  const recentCountryClause = recentCountry ? ` AND properties.$geoip_country_code = '${recentCountry}'` : "";
+
+  async function runQuery(query: string): Promise<unknown[][]> {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), POSTHOG_QUERY_TIMEOUT_MS);
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
+      signal: controller.signal,
+    }).finally(() => {
+      clearTimeout(timeout);
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`PostHog query failed (${res.status}): ${text.slice(0, 400)}`);
+    }
+    const body = (await res.json()) as { results?: unknown[][] };
+    return body.results ?? [];
+  }
+
+  const [
+    active,
+    pvRange,
+    uvRange,
+    eventsRange,
+    topRoutes,
+    recent,
+    topPhysCountries,
+    topProfiles,
+    topReplays,
+    topReferrers,
+    serverErrors,
+    recentServerErrors,
+    bounce,
+  ] = await Promise.all([
+    runQuery(`SELECT count(DISTINCT distinct_id) FROM events WHERE timestamp > now() - interval 5 minute`),
+    runQuery(`SELECT count() FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$pathname NOT LIKE '/admin/%'`),
+    runQuery(`SELECT count(DISTINCT distinct_id) FROM events WHERE timestamp > ${since}`),
+    runQuery(`SELECT count() FROM events WHERE timestamp > ${since}`),
+    runQuery(
+      `SELECT properties.$pathname AS p, count() AS c FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$pathname IS NOT NULL AND properties.$pathname != '/' AND properties.$pathname NOT LIKE '/admin/%' GROUP BY p ORDER BY c DESC LIMIT 10`,
+    ),
+    runQuery(
+      `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id, properties.$screen_width, properties.$viewport_width FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT 30`,
+    ),
+    runQuery(
+      `SELECT properties.$geoip_country_code AS c, count(DISTINCT distinct_id) AS n FROM events WHERE timestamp > ${since} AND properties.$geoip_country_code IS NOT NULL GROUP BY c ORDER BY n DESC LIMIT 20`,
+    ),
+    runQuery(
+      `SELECT properties.profile_username AS u, count() AS n, max(timestamp) AS last_viewed_at, formatDateTime(toTimeZone(max(timestamp), 'America/Costa_Rica'), '%Y-%m-%d %h:%i %p') AS last_viewed_label, argMax(properties.$geoip_country_code, timestamp) AS last_country FROM events WHERE event = '$pageview' AND properties.profile_username IS NOT NULL AND timestamp > ${since} GROUP BY u ORDER BY n DESC, last_viewed_at DESC LIMIT 10`,
+    ),
+    runQuery(
+      `SELECT properties.replay_score_id AS score_id, any(properties.replay_title) AS title, any(properties.replay_artist) AS artist, any(properties.replay_difficulty) AS difficulty, any(properties.replay_player) AS player, any(properties.replay_cover_url) AS cover_url, count() AS n, max(timestamp) AS last_viewed_at, formatDateTime(toTimeZone(max(timestamp), 'America/Costa_Rica'), '%Y-%m-%d %h:%i %p') AS last_viewed_label, argMax(properties.$geoip_country_code, timestamp) AS last_country FROM events WHERE event = 'replay_view' AND properties.replay_score_id IS NOT NULL AND timestamp > ${since} GROUP BY score_id ORDER BY n DESC, last_viewed_at DESC LIMIT 10`,
+    ),
+    runQuery(
+      `SELECT properties.$referring_domain AS d, count(DISTINCT distinct_id) AS n FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$referring_domain IS NOT NULL AND properties.$referring_domain NOT IN ('localhost', '127.0.0.1', '::1') AND properties.$referring_domain NOT LIKE '%-aleju03s-projects.vercel.app' GROUP BY d ORDER BY n DESC LIMIT 10`,
+    ),
+    runQuery(
+      `SELECT properties.caller AS c, properties.path AS p, properties.status AS s, count() AS n FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} AND properties.caller IS NOT NULL GROUP BY c, p, s ORDER BY n DESC LIMIT 10`,
+    ),
+    runQuery(
+      `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), properties.caller, properties.path, properties.status, properties.body_preview, properties.attempts, properties.kind, properties.context, properties.rate_per_min, properties.rate_remaining, properties.rate_limit, properties.retry_after FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} AND properties.caller IS NOT NULL ORDER BY timestamp DESC LIMIT 15`,
+    ),
+    runQuery(
+      `SELECT countIf(pv_count = 1) AS bounced, count() AS landers FROM (SELECT distinct_id, count() AS pv_count FROM events WHERE event = '$pageview' AND timestamp > ${since} GROUP BY distinct_id HAVING countIf(properties.$pathname = '/') > 0)`,
+    ),
+  ]);
+
+  return {
+    rangeHours,
+    cacheState: "fresh",
+    activeVisitors: Number(active[0]?.[0] ?? 0),
+    pageviewsInRange: Number(pvRange[0]?.[0] ?? 0),
+    uniqueVisitorsInRange: Number(uvRange[0]?.[0] ?? 0),
+    eventsInRange: Number(eventsRange[0]?.[0] ?? 0),
+    bounce: {
+      bounced: Number(bounce[0]?.[0] ?? 0),
+      landers: Number(bounce[0]?.[1] ?? 0),
+    },
+    topRoutes: topRoutes.map((row) => ({
+      path: String(row[0] ?? ""),
+      count: Number(row[1] ?? 0),
+    })),
+    recentEvents: recent.map((row) => ({
+      timestamp: String(row[0] ?? ""),
+      event: String(row[1] ?? ""),
+      path: String(row[2] ?? ""),
+      country: row[3] ? String(row[3]) : null,
+      selectedCountry: row[4] ? String(row[4]) : null,
+      deviceKind: getAnalyticsDeviceKind(row[11], row[12]),
+      distinctId: String(row[5] ?? ""),
+      mapsTab: row[6] ? String(row[6]) : null,
+      rankingsPage: row[7] ? String(row[7]) : null,
+      profileUsername: row[8] ? String(row[8]) : null,
+      replayPlayer: row[9] ? String(row[9]) : null,
+      replayScoreId: row[10] ? String(row[10]) : null,
+    })),
+    topPhysicalCountries: topPhysCountries.map((row) => ({
+      country: String(row[0] ?? ""),
+      count: Number(row[1] ?? 0),
+    })),
+    topProfiles: topProfiles.map((row) => ({
+      username: String(row[0] ?? ""),
+      views: Number(row[1] ?? 0),
+      lastViewedLabel: row[3] ? String(row[3]) : null,
+      lastVisitorCountry: row[4] ? String(row[4]) : null,
+    })),
+    topReplays: topReplays.map((row) => ({
+      scoreId: String(row[0] ?? ""),
+      title: row[1] ? String(row[1]) : null,
+      artist: row[2] ? String(row[2]) : null,
+      difficulty: row[3] ? String(row[3]) : null,
+      player: row[4] ? String(row[4]) : null,
+      coverUrl: row[5] ? String(row[5]) : null,
+      views: Number(row[6] ?? 0),
+      lastViewedLabel: row[8] ? String(row[8]) : null,
+      lastVisitorCountry: row[9] ? String(row[9]) : null,
+    })),
+    topReferrers: topReferrers.map((row) => ({
+      domain: String(row[0] ?? ""),
+      count: Number(row[1] ?? 0),
+    })),
+    serverErrors: serverErrors.map((row) => ({
+      caller: row[0] ? String(row[0]) : "unknown",
+      path: String(row[1] ?? ""),
+      status: row[2] == null ? null : Number(row[2]),
+      count: Number(row[3] ?? 0),
+    })),
+    recentServerErrors: recentServerErrors.map((row) => ({
+      timestamp: String(row[0] ?? ""),
+      caller: row[1] ? String(row[1]) : "unknown",
+      path: String(row[2] ?? ""),
+      status: row[3] == null ? null : Number(row[3]),
+      bodyPreview: row[4] ? String(row[4]) : null,
+      attempts: row[5] == null ? null : Number(row[5]),
+      kind: row[6] ? String(row[6]) : null,
+      context: row[7] ? formatServerErrorContext(row[7]) : null,
+      ratePerMin: row[8] == null ? null : Number(row[8]),
+      rateRemaining: row[9] == null ? null : Number(row[9]),
+      rateLimit: row[10] == null ? null : Number(row[10]),
+      retryAfter: row[11] ? String(row[11]) : null,
+    })),
+    fetchedAt: Date.now(),
+  };
+}
+
 const getAnalyticsMonitorData = createServerFn({ method: "POST" })
-  .inputValidator((data: { range?: string; recentCountry?: unknown }) => ({
-    range: isAnalyticsRange(data?.range) ? data.range : ("24h" as AnalyticsRange),
+  .inputValidator((data: { range?: unknown; rangeHours?: unknown; recentCountry?: unknown }) => ({
+    rangeHours: normalizeAnalyticsRangeHours(data?.rangeHours ?? data?.range),
     recentCountry: normalizeAnalyticsCountryFilter(data?.recentCountry),
   }))
-  .handler(async ({ data }: { data: { range: AnalyticsRange; recentCountry: string | null } }): Promise<AnalyticsMonitorData> => {
+  .handler(async ({ data }: { data: { rangeHours: AnalyticsRange; recentCountry: string | null } }): Promise<AnalyticsMonitorData> => {
     await requireAdminAccess("Monitoring analytics");
 
     const apiKey = process.env.POSTHOG_PERSONAL_API_KEY;
@@ -264,153 +556,48 @@ const getAnalyticsMonitorData = createServerFn({ method: "POST" })
     }
 
     const endpoint = `https://us.posthog.com/api/projects/${projectId}/query/`;
-    const since = ANALYTICS_RANGE_SQL[data.range];
-    const recentCountryClause = data.recentCountry ? ` AND properties.$geoip_country_code = '${data.recentCountry}'` : "";
-
-    async function runQuery(query: string): Promise<unknown[][]> {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), POSTHOG_QUERY_TIMEOUT_MS);
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
-        signal: controller.signal,
-      }).finally(() => {
-        clearTimeout(timeout);
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`PostHog query failed (${res.status}): ${text.slice(0, 400)}`);
-      }
-      const body = (await res.json()) as { results?: unknown[][] };
-      return body.results ?? [];
+    const cacheKey = getAnalyticsCacheKey(data.rangeHours, data.recentCountry);
+    const cached = analyticsMonitorCache.get(cacheKey);
+    if (cached?.data && Date.now() - cached.data.fetchedAt <= ANALYTICS_CACHE_FRESH_MS) {
+      return { ...cached.data, cacheState: "fresh" };
     }
 
-    const [
-      active,
-      pvRange,
-      uvRange,
-      eventsRange,
-      topRoutes,
-      recent,
-      topPhysCountries,
-      topProfiles,
-      topReplays,
-      topReferrers,
-      serverErrors,
-      recentServerErrors,
-      bounce,
-    ] = await Promise.all([
-      runQuery(`SELECT count(DISTINCT distinct_id) FROM events WHERE timestamp > now() - interval 5 minute`),
-      runQuery(`SELECT count() FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$pathname NOT LIKE '/admin/%'`),
-      runQuery(`SELECT count(DISTINCT distinct_id) FROM events WHERE timestamp > ${since}`),
-      runQuery(`SELECT count() FROM events WHERE timestamp > ${since}`),
-      runQuery(
-        `SELECT properties.$pathname AS p, count() AS c FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$pathname IS NOT NULL AND properties.$pathname != '/' AND properties.$pathname NOT LIKE '/admin/%' GROUP BY p ORDER BY c DESC LIMIT 10`,
-      ),
-      runQuery(
-        `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT 30`,
-      ),
-      runQuery(
-        `SELECT properties.$geoip_country_code AS c, count(DISTINCT distinct_id) AS n FROM events WHERE timestamp > ${since} AND properties.$geoip_country_code IS NOT NULL GROUP BY c ORDER BY n DESC LIMIT 20`,
-      ),
-      runQuery(
-        `SELECT properties.profile_username AS u, count() AS n, max(timestamp) AS last_viewed_at, formatDateTime(toTimeZone(max(timestamp), 'America/Costa_Rica'), '%Y-%m-%d %h:%i %p') AS last_viewed_label, argMax(properties.$geoip_country_code, timestamp) AS last_country FROM events WHERE event = '$pageview' AND properties.profile_username IS NOT NULL AND timestamp > ${since} GROUP BY u ORDER BY n DESC, last_viewed_at DESC LIMIT 10`,
-      ),
-      runQuery(
-        `SELECT properties.replay_score_id AS score_id, any(properties.replay_title) AS title, any(properties.replay_artist) AS artist, any(properties.replay_difficulty) AS difficulty, any(properties.replay_player) AS player, any(properties.replay_cover_url) AS cover_url, count() AS n, max(timestamp) AS last_viewed_at, formatDateTime(toTimeZone(max(timestamp), 'America/Costa_Rica'), '%Y-%m-%d %h:%i %p') AS last_viewed_label, argMax(properties.$geoip_country_code, timestamp) AS last_country FROM events WHERE event = 'replay_view' AND properties.replay_score_id IS NOT NULL AND timestamp > ${since} GROUP BY score_id ORDER BY n DESC, last_viewed_at DESC LIMIT 10`,
-      ),
-      runQuery(
-        `SELECT properties.$referring_domain AS d, count(DISTINCT distinct_id) AS n FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$referring_domain IS NOT NULL AND properties.$referring_domain NOT IN ('localhost', '127.0.0.1', '::1') AND properties.$referring_domain NOT LIKE '%-aleju03s-projects.vercel.app' GROUP BY d ORDER BY n DESC LIMIT 10`,
-      ),
-      runQuery(
-        `SELECT properties.caller AS c, properties.path AS p, properties.status AS s, count() AS n FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} AND properties.caller IS NOT NULL GROUP BY c, p, s ORDER BY n DESC LIMIT 10`,
-      ),
-      runQuery(
-        `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), properties.caller, properties.path, properties.status, properties.body_preview, properties.attempts, properties.kind, properties.context, properties.rate_per_min, properties.rate_remaining, properties.rate_limit, properties.retry_after FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} AND properties.caller IS NOT NULL ORDER BY timestamp DESC LIMIT 15`,
-      ),
-      runQuery(
-        `SELECT countIf(pv_count = 1) AS bounced, count() AS landers FROM (SELECT distinct_id, count() AS pv_count FROM events WHERE event = '$pageview' AND timestamp > ${since} GROUP BY distinct_id HAVING countIf(properties.$pathname = '/') > 0)`,
-      ),
-    ]);
+    let refreshPromise = cached?.promise ?? null;
+    if (!refreshPromise) {
+      let nextPromise: Promise<AnalyticsMonitorData>;
+      nextPromise = fetchAnalyticsMonitorDataFromPostHog({
+        endpoint,
+        apiKey,
+        rangeHours: data.rangeHours,
+        recentCountry: data.recentCountry,
+      }).then(
+        (freshData) => {
+          analyticsMonitorCache.set(cacheKey, { data: freshData, promise: null });
+          return freshData;
+        },
+        (err) => {
+          const latest = analyticsMonitorCache.get(cacheKey);
+          if (latest?.promise === nextPromise) {
+            analyticsMonitorCache.set(cacheKey, { data: latest.data, promise: null });
+          }
+          throw err;
+        },
+      );
+      refreshPromise = nextPromise;
+      analyticsMonitorCache.set(cacheKey, { data: cached?.data ?? null, promise: refreshPromise });
+    }
 
-    return {
-      range: data.range,
-      activeVisitors: Number(active[0]?.[0] ?? 0),
-      pageviewsInRange: Number(pvRange[0]?.[0] ?? 0),
-      uniqueVisitorsInRange: Number(uvRange[0]?.[0] ?? 0),
-      eventsInRange: Number(eventsRange[0]?.[0] ?? 0),
-      bounce: {
-        bounced: Number(bounce[0]?.[0] ?? 0),
-        landers: Number(bounce[0]?.[1] ?? 0),
-      },
-      topRoutes: topRoutes.map((row) => ({
-        path: String(row[0] ?? ""),
-        count: Number(row[1] ?? 0),
-      })),
-      recentEvents: recent.map((row) => ({
-        timestamp: String(row[0] ?? ""),
-        event: String(row[1] ?? ""),
-        path: String(row[2] ?? ""),
-        country: row[3] ? String(row[3]) : null,
-        selectedCountry: row[4] ? String(row[4]) : null,
-        distinctId: String(row[5] ?? ""),
-        mapsTab: row[6] ? String(row[6]) : null,
-        rankingsPage: row[7] ? String(row[7]) : null,
-        profileUsername: row[8] ? String(row[8]) : null,
-        replayPlayer: row[9] ? String(row[9]) : null,
-        replayScoreId: row[10] ? String(row[10]) : null,
-      })),
-      topPhysicalCountries: topPhysCountries.map((row) => ({
-        country: String(row[0] ?? ""),
-        count: Number(row[1] ?? 0),
-      })),
-      topProfiles: topProfiles.map((row) => ({
-        username: String(row[0] ?? ""),
-        views: Number(row[1] ?? 0),
-        lastViewedLabel: row[3] ? String(row[3]) : null,
-        lastVisitorCountry: row[4] ? String(row[4]) : null,
-      })),
-      topReplays: topReplays.map((row) => ({
-        scoreId: String(row[0] ?? ""),
-        title: row[1] ? String(row[1]) : null,
-        artist: row[2] ? String(row[2]) : null,
-        difficulty: row[3] ? String(row[3]) : null,
-        player: row[4] ? String(row[4]) : null,
-        coverUrl: row[5] ? String(row[5]) : null,
-        views: Number(row[6] ?? 0),
-        lastViewedLabel: row[8] ? String(row[8]) : null,
-        lastVisitorCountry: row[9] ? String(row[9]) : null,
-      })),
-      topReferrers: topReferrers.map((row) => ({
-        domain: String(row[0] ?? ""),
-        count: Number(row[1] ?? 0),
-      })),
-      serverErrors: serverErrors.map((row) => ({
-        caller: row[0] ? String(row[0]) : "unknown",
-        path: String(row[1] ?? ""),
-        status: row[2] == null ? null : Number(row[2]),
-        count: Number(row[3] ?? 0),
-      })),
-      recentServerErrors: recentServerErrors.map((row) => ({
-        timestamp: String(row[0] ?? ""),
-        caller: row[1] ? String(row[1]) : "unknown",
-        path: String(row[2] ?? ""),
-        status: row[3] == null ? null : Number(row[3]),
-        bodyPreview: row[4] ? String(row[4]) : null,
-        attempts: row[5] == null ? null : Number(row[5]),
-        kind: row[6] ? String(row[6]) : null,
-        context: row[7] ? formatServerErrorContext(row[7]) : null,
-        ratePerMin: row[8] == null ? null : Number(row[8]),
-        rateRemaining: row[9] == null ? null : Number(row[9]),
-        rateLimit: row[10] == null ? null : Number(row[10]),
-        retryAfter: row[11] ? String(row[11]) : null,
-      })),
-      fetchedAt: Date.now(),
-    };
+    if (cached?.data) {
+      void refreshPromise.catch(() => undefined);
+      return { ...cached.data, cacheState: "stale" };
+    }
+
+    const settled = await settleWithin(refreshPromise, ANALYTICS_COLD_RESPONSE_BUDGET_MS);
+    if (settled.status === "resolved") return settled.value;
+    if (settled.status === "rejected") throw settled.reason;
+
+    void refreshPromise.catch(() => undefined);
+    return createEmptyAnalyticsMonitorData(data.rangeHours, "warming");
   });
 
 export const Route = createFileRoute("/admin/live-backend")({
@@ -808,7 +995,7 @@ function MonitoringTabs({ activeTab, onChange }: { activeTab: MonitoringTab; onC
 }
 
 function AnalyticsMonitorPanel() {
-  const [range, setRangeState] = useState<AnalyticsRange>("24h");
+  const [range, setRangeState] = useState<AnalyticsRange>(ANALYTICS_DEFAULT_RANGE_HOURS);
   const [recentCountry, setRecentCountry] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [data, setData] = useState<AnalyticsMonitorData | null>(null);
@@ -819,12 +1006,14 @@ function AnalyticsMonitorPanel() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const mountedRef = useRef(true);
   const requestIdRef = useRef(0);
+  const hasLoadedRef = useRef(false);
 
   const setRange = useCallback((next: AnalyticsRange) => {
-    setRangeState(next);
+    const normalized = clampAnalyticsRangeHours(next);
+    setRangeState(normalized);
     setRecentCountry(null);
     try {
-      window.localStorage.setItem(ANALYTICS_RANGE_STORAGE_KEY, next);
+      window.localStorage.setItem(ANALYTICS_RANGE_STORAGE_KEY, String(normalized));
     } catch {
       // ignore
     }
@@ -835,13 +1024,21 @@ function AnalyticsMonitorPanel() {
       const requestId = ++requestIdRef.current;
       if (!isInitial) setRefreshing(true);
       try {
-        const result = await getAnalyticsMonitorData({ data: { range: targetRange, recentCountry: targetRecentCountry } });
+        const result = await getAnalyticsMonitorData({ data: { rangeHours: targetRange, recentCountry: targetRecentCountry } });
         if (!mountedRef.current) return;
         if (requestId !== requestIdRef.current) return;
         setData(result);
         setDataRange(targetRange);
         setDataRecentCountry(targetRecentCountry);
         setError(null);
+        hasLoadedRef.current = true;
+        if (result.cacheState !== "fresh") {
+          window.setTimeout(() => {
+            if (!mountedRef.current) return;
+            if (requestId !== requestIdRef.current) return;
+            void load(targetRange, targetRecentCountry, false);
+          }, ANALYTICS_COLD_RESPONSE_BUDGET_MS);
+        }
       } catch (err) {
         if (!mountedRef.current) return;
         if (requestId !== requestIdRef.current) return;
@@ -858,8 +1055,9 @@ function AnalyticsMonitorPanel() {
   useEffect(() => {
     try {
       const stored = window.localStorage.getItem(ANALYTICS_RANGE_STORAGE_KEY);
-      if (isAnalyticsRange(stored)) {
-        setRangeState(stored);
+      const storedRange = parseAnalyticsRangeHours(stored);
+      if (storedRange) {
+        setRangeState(storedRange);
       }
     } catch {
       // ignore
@@ -876,7 +1074,11 @@ function AnalyticsMonitorPanel() {
 
   useEffect(() => {
     if (!hydrated) return;
-    void load(range, recentCountry, true);
+    const delay = hasLoadedRef.current ? 250 : 0;
+    const id = window.setTimeout(() => {
+      void load(range, recentCountry, true);
+    }, delay);
+    return () => window.clearTimeout(id);
   }, [hydrated, range, recentCountry, load]);
 
   useEffect(() => {
@@ -888,6 +1090,24 @@ function AnalyticsMonitorPanel() {
     return () => window.clearInterval(id);
   }, [hydrated, autoRefresh, range, recentCountry, load]);
 
+  const currentData = data && dataRange === range ? data : null;
+  const isRecentCountryPending = Boolean(currentData && dataRecentCountry !== recentCountry);
+  const statusData = currentData ?? data;
+  const statusText = statusData?.fetchedAt
+    ? statusData.cacheState === "warming"
+      ? "warming..."
+      : refreshing
+        ? "refreshing..."
+        : statusData.cacheState === "stale"
+          ? `cached ${formatTimeAgo(new Date(statusData.fetchedAt).toISOString())}`
+          : `updated ${formatTimeAgo(new Date(statusData.fetchedAt).toISOString())}`
+    : null;
+  const statusColorClass = statusData?.cacheState === "warming" || refreshing
+    ? "text-osu-pink-light"
+    : statusData?.cacheState === "stale"
+      ? "text-osu-yellow"
+      : "text-osu-f1";
+
   return (
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -898,9 +1118,9 @@ function AnalyticsMonitorPanel() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {data?.fetchedAt ? (
-            <span className={`text-[11px] ${refreshing ? "text-osu-pink-light" : "text-osu-f1"}`}>
-              {refreshing ? "refreshing..." : `updated ${formatTimeAgo(new Date(data.fetchedAt).toISOString())}`}
+          {statusText ? (
+            <span className={`text-[11px] ${statusColorClass}`}>
+              {statusText}
             </span>
           ) : null}
           <button
@@ -928,19 +1148,23 @@ function AnalyticsMonitorPanel() {
 
       <AnalyticsRangeSelector range={range} onChange={setRange} />
       {error ? <AnalyticsErrorBanner message={error} /> : null}
+      {currentData?.cacheState === "warming" ? (
+        <AnalyticsInfoBanner message="PostHog is still preparing this range; the view will fill in automatically." />
+      ) : null}
 
-      {data && dataRange === range && dataRecentCountry === recentCountry ? (
+      {currentData ? (
         <>
-          <AnalyticsKpiRow data={data} range={range} />
+          <AnalyticsKpiRow data={currentData} range={range} />
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
             <div className="lg:col-span-3 flex">
-              <AnalyticsTopReplaysCard rows={data.topReplays} range={range} />
+              <AnalyticsTopReplaysCard rows={currentData.topReplays} range={range} />
             </div>
             <div className="lg:col-span-2 flex">
               <AnalyticsRecentEventsCard
-                rows={data.recentEvents}
-                countries={data.topPhysicalCountries}
+                rows={currentData.recentEvents}
+                countries={currentData.topPhysicalCountries}
                 country={recentCountry}
+                loading={isRecentCountryPending}
                 onCountryChange={setRecentCountry}
               />
             </div>
@@ -948,21 +1172,21 @@ function AnalyticsMonitorPanel() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <AnalyticsCountriesCard
               title="Physical country"
-              subtitle={`unique visitors, ${ANALYTICS_RANGE_LABEL[range].toLowerCase()}`}
-              rows={data.topPhysicalCountries}
+              subtitle={`unique visitors, ${formatAnalyticsRangeLabel(range).toLowerCase()}`}
+              rows={currentData.topPhysicalCountries}
             />
-            <AnalyticsReferrersCard rows={data.topReferrers} range={range} />
+            <AnalyticsReferrersCard rows={currentData.topReferrers} range={range} />
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <AnalyticsServerErrorsCard
-              rows={data.serverErrors}
-              recent={data.recentServerErrors}
+              rows={currentData.serverErrors}
+              recent={currentData.recentServerErrors}
               range={range}
             />
-            <AnalyticsTopRoutesCard rows={data.topRoutes} range={range} />
+            <AnalyticsTopRoutesCard rows={currentData.topRoutes} range={range} />
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <AnalyticsTopProfilesCard rows={data.topProfiles} range={range} />
+            <AnalyticsTopProfilesCard rows={currentData.topProfiles} range={range} />
           </div>
         </>
       ) : (
@@ -972,35 +1196,96 @@ function AnalyticsMonitorPanel() {
   );
 }
 
+const ANALYTICS_RANGE_THUMB_PX = 14;
+
 function AnalyticsRangeSelector({ range, onChange }: { range: AnalyticsRange; onChange: (range: AnalyticsRange) => void }) {
+  const stepIndex = getAnalyticsRangeStepIndex(range);
+  const lastStep = ANALYTICS_RANGE_STEPS.length - 1;
+  const fraction = lastStep > 0 ? stepIndex / lastStep : 0;
+  const rangeLabel = formatAnalyticsRangeLabel(range);
+  const presetSteps = new Set(ANALYTICS_RANGE_PRESETS.map((entry) => getAnalyticsRangeStepIndex(entry)));
+  // The native thumb travels between its own half-widths, so a raw percentage
+  // fill drifts from the thumb at the ends. Offset by the thumb radius to track it.
+  const offsetFor = (f: number) => `calc(${f * 100}% + ${(0.5 - f) * ANALYTICS_RANGE_THUMB_PX}px)`;
+
   return (
-    <div className="flex items-center gap-2">
-      <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Range</div>
-      <div className="flex flex-wrap items-center gap-1 rounded-lg bg-osu-b4/40 border border-osu-b3/30 p-1">
-        {ANALYTICS_RANGES.map((entry) => {
-          const active = entry === range;
-          return (
-            <button
-              key={entry}
-              type="button"
-              onClick={() => onChange(entry)}
-              className={`px-3 py-1 rounded-md text-[11px] font-medium transition-colors duration-[120ms] cursor-pointer ${
-                active
-                  ? "bg-osu-pink/20 text-white"
-                  : "text-osu-l2 hover:text-white hover:bg-osu-b3/40"
-              }`}
-            >
-              {ANALYTICS_RANGE_LABEL[entry]}
-            </button>
-          );
-        })}
+    <div className="rounded-lg bg-osu-b4/40 border border-osu-b3/30 p-3">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-baseline gap-2">
+          <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Range</div>
+          <div className="text-[13px] font-semibold text-white">{rangeLabel}</div>
+        </div>
+        <div className="flex flex-wrap items-center gap-1">
+          {ANALYTICS_RANGE_PRESETS.map((entry) => {
+            const active = clampAnalyticsRangeHours(entry) === clampAnalyticsRangeHours(range);
+            return (
+              <button
+                key={entry}
+                type="button"
+                onClick={() => onChange(entry)}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors duration-[120ms] cursor-pointer ${
+                  active
+                    ? "bg-osu-pink/20 text-white"
+                    : "text-osu-l2 hover:text-white hover:bg-osu-b3/40"
+                }`}
+              >
+                {formatAnalyticsRangeChipLabel(entry)}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center gap-3">
+        <span className="w-7 shrink-0 text-right text-[10px] font-mono text-osu-f1">1h</span>
+        <div className="relative h-5 min-w-0 flex-1">
+          {/* base track */}
+          <div className="pointer-events-none absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-osu-b3/70" />
+          {/* filled portion up to the thumb */}
+          <div
+            className="pointer-events-none absolute left-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-osu-pink"
+            style={{ width: offsetFor(fraction) }}
+          />
+          {/* tick marks: taller + brighter on preset stops */}
+          {ANALYTICS_RANGE_STEPS.map((_, index) => {
+            const f = lastStep > 0 ? index / lastStep : 0;
+            const isPreset = presetSteps.has(index);
+            const passed = index <= stepIndex;
+            return (
+              <span
+                key={index}
+                className={`pointer-events-none absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full ${
+                  isPreset ? "h-2.5 w-0.5" : "h-1.5 w-px"
+                } ${passed ? "bg-osu-pink-light/70" : isPreset ? "bg-osu-f1/80" : "bg-osu-f1/40"}`}
+                style={{ left: offsetFor(f) }}
+              />
+            );
+          })}
+          <input
+            type="range"
+            min={0}
+            max={lastStep}
+            step={1}
+            value={stepIndex}
+            onChange={(event) => {
+              const nextStep = ANALYTICS_RANGE_STEPS[Number(event.currentTarget.value)];
+              if (nextStep) onChange(nextStep);
+            }}
+            aria-label="Analytics range"
+            aria-valuetext={rangeLabel}
+            className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent
+              [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-white [&::-webkit-slider-thumb]:bg-osu-pink [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:cursor-grab hover:[&::-webkit-slider-thumb]:scale-110 active:[&::-webkit-slider-thumb]:cursor-grabbing
+              [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:bg-osu-pink [&::-moz-range-thumb]:cursor-grab"
+          />
+        </div>
+        <span className="w-8 shrink-0 text-[10px] font-mono text-osu-f1">30d</span>
       </div>
     </div>
   );
 }
 
 function AnalyticsKpiRow({ data, range }: { data: AnalyticsMonitorData; range: AnalyticsRange }) {
-  const hint = ANALYTICS_RANGE_LABEL[range].toLowerCase();
+  const hint = formatAnalyticsRangeLabel(range).toLowerCase();
   const bouncePct = data.bounce.landers > 0
     ? Math.round((data.bounce.bounced / data.bounce.landers) * 100)
     : null;
@@ -1047,7 +1332,7 @@ function AnalyticsKpiCard({
 function AnalyticsTopRoutesCard({ rows, range }: { rows: AnalyticsTopRouteRow[]; range: AnalyticsRange }) {
   const max = Math.max(1, ...rows.map((row) => row.count));
   return (
-    <SectionCard title="Top routes" subtitle={`pageviews, ${ANALYTICS_RANGE_LABEL[range].toLowerCase()}`}>
+    <SectionCard title="Top routes" subtitle={`pageviews, ${formatAnalyticsRangeLabel(range).toLowerCase()}`}>
       {rows.length === 0 ? (
         <AnalyticsEmptyMessage text="No pageviews captured yet." />
       ) : (
@@ -1120,15 +1405,35 @@ function buildVisitorPalette(rows: AnalyticsRecentEventRow[]): Map<string, { slo
   return palette;
 }
 
+function AnalyticsVisitorDeviceIcon({ deviceKind }: { deviceKind: AnalyticsDeviceKind }) {
+  if (deviceKind === "mobile") {
+    return (
+      <span title="Mobile visitor" aria-label="Mobile visitor" className="inline-flex h-3 w-3 flex-shrink-0 items-center justify-center text-osu-f1/75">
+        <Smartphone className="h-3 w-3" aria-hidden="true" />
+      </span>
+    );
+  }
+  if (deviceKind === "desktop") {
+    return (
+      <span title="Desktop visitor" aria-label="Desktop visitor" className="inline-flex h-3 w-3 flex-shrink-0 items-center justify-center text-osu-f1/75">
+        <Monitor className="h-3 w-3" aria-hidden="true" />
+      </span>
+    );
+  }
+  return <span className="h-3 w-3 flex-shrink-0" aria-hidden="true" />;
+}
+
 function AnalyticsRecentEventsCard({
   rows,
   countries,
   country,
+  loading,
   onCountryChange,
 }: {
   rows: AnalyticsRecentEventRow[];
   countries: AnalyticsCountryRow[];
   country: string | null;
+  loading?: boolean;
   onCountryChange: (country: string | null) => void;
 }) {
   const visitorPalette = useMemo(() => buildVisitorPalette(rows), [rows]);
@@ -1145,34 +1450,28 @@ function AnalyticsRecentEventsCard({
   }, [countries, country]);
   const visitorCount = visitorPalette.size;
   const countryLabel = country ? ` in ${getCountryName(country) || country}` : "";
-  const subtitle = `last ${rows.length}${countryLabel} from ${visitorCount} visitor${visitorCount === 1 ? "" : "s"}`;
+  const subtitle = loading
+    ? `loading${countryLabel || " all countries"}...`
+    : `last ${rows.length}${countryLabel} from ${visitorCount} visitor${visitorCount === 1 ? "" : "s"}`;
   return (
     <SectionCard
       title="Recent activity"
       subtitle={subtitle}
       actions={
-        <div className="flex flex-wrap items-center justify-end gap-1.5">
-          <select
-            value={country ?? "all"}
-            onChange={(event) => onCountryChange(event.target.value === "all" ? null : event.target.value)}
-            className="h-7 max-w-[150px] rounded-md border border-osu-b3/30 bg-osu-b5/70 px-2 text-[10px] font-semibold text-osu-c2 outline-none transition-colors duration-[120ms] hover:border-osu-pink/30 focus:border-osu-pink/50"
-            aria-label="Recent activity country"
-            title="Filter recent activity by physical country"
-          >
-            <option value="all">All countries</option>
-            {countryOptions.map((entry) => {
-              const name = getCountryName(entry.country) || entry.country;
-              return (
-                <option key={entry.country} value={entry.country}>
-                  {name} ({entry.country})
-                </option>
-              );
-            })}
-          </select>
-        </div>
+        <AnalyticsCountryFilter
+          country={country}
+          options={countryOptions}
+          onChange={onCountryChange}
+        />
       }
     >
-      {rows.length === 0 ? (
+      {loading ? (
+        <div className="space-y-1 h-full max-h-[420px] overflow-hidden pr-1">
+          {Array.from({ length: 10 }).map((_, index) => (
+            <div key={index} className="skeleton-pulse h-[30px] rounded-md" />
+          ))}
+        </div>
+      ) : rows.length === 0 ? (
         <AnalyticsEmptyMessage text={country ? "No events captured for this country in the selected range." : "No events captured yet."} />
       ) : (
         <div className="space-y-1 h-full max-h-[420px] overflow-y-auto pr-1">
@@ -1193,6 +1492,7 @@ function AnalyticsRecentEventsCard({
                 ) : (
                   <span className="w-[14px] h-[10px] rounded-[1px] bg-osu-b3/40 flex-shrink-0" />
                 )}
+                <AnalyticsVisitorDeviceIcon deviceKind={row.deviceKind} />
                 <span className="text-osu-c2 truncate flex-1">{formatAnalyticsRecentEventLabel(row)}</span>
                 <span className={`font-mono font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${color ? `${color.bg} ${color.text}` : "text-osu-f1"}`}>
                   {visitorLabel}
@@ -1203,6 +1503,138 @@ function AnalyticsRecentEventsCard({
         </div>
       )}
     </SectionCard>
+  );
+}
+
+function AnalyticsCountryFilter({
+  country,
+  options,
+  onChange,
+}: {
+  country: string | null;
+  options: AnalyticsCountryRow[];
+  onChange: (country: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const select = (next: string | null) => {
+    onChange(next);
+    setOpen(false);
+  };
+
+  const activeName = country ? getCountryName(country) || country : null;
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Filter recent activity by physical country"
+        className={`flex h-7 max-w-[180px] items-center gap-1.5 rounded-md border px-2 text-[10px] font-semibold transition-colors duration-[120ms] cursor-pointer ${
+          country
+            ? "border-osu-pink/40 bg-osu-pink/15 text-white"
+            : "border-osu-b3/30 bg-osu-b5/70 text-osu-c2 hover:border-osu-b3/60 hover:text-white"
+        }`}
+      >
+        {country ? (
+          <img
+            src={getCountryFlagUrl(country)}
+            alt=""
+            className="h-[10px] w-[14px] flex-shrink-0 rounded-[1px] object-cover"
+          />
+        ) : null}
+        <span className="truncate">{activeName ?? "All countries"}</span>
+        <ChevronDown className={`h-3 w-3 flex-shrink-0 text-osu-f1 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open ? (
+        <div
+          role="listbox"
+          className="absolute right-0 top-full z-50 mt-1 max-h-[280px] w-52 overflow-y-auto overscroll-contain rounded-lg border border-osu-b3/50 bg-osu-b5 py-1 shadow-[0_10px_25px_rgba(0,0,0,0.5)]"
+        >
+          <AnalyticsCountryOption
+            label="All countries"
+            selected={country == null}
+            onSelect={() => select(null)}
+          />
+          {options.length > 0 ? <div className="my-1 h-px bg-osu-b3/30" /> : null}
+          {options.map((entry) => (
+            <AnalyticsCountryOption
+              key={entry.country}
+              code={entry.country}
+              label={getCountryName(entry.country) || entry.country}
+              count={entry.count}
+              selected={country === entry.country}
+              onSelect={() => select(entry.country)}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AnalyticsCountryOption({
+  code,
+  label,
+  count,
+  selected,
+  onSelect,
+}: {
+  code?: string;
+  label: string;
+  count?: number;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={selected}
+      onMouseDown={(event) => {
+        event.preventDefault();
+        onSelect();
+      }}
+      className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left transition-colors duration-[80ms] cursor-pointer ${
+        selected ? "bg-osu-pink/15 text-white" : "text-osu-l2 hover:bg-osu-b3/50 hover:text-white"
+      }`}
+    >
+      {code ? (
+        <img
+          src={getCountryFlagUrl(code)}
+          alt=""
+          className="h-[10px] w-[14px] flex-shrink-0 rounded-[1px] object-cover"
+          loading="lazy"
+        />
+      ) : (
+        <span className="h-[10px] w-[14px] flex-shrink-0" />
+      )}
+      <span className="flex-1 truncate text-[11px] font-medium">{label}</span>
+      {count != null ? (
+        <span className="font-mono text-[10px] text-osu-f1">{formatNumber(count)}</span>
+      ) : null}
+      {selected ? <Check className="h-3 w-3 flex-shrink-0 text-osu-pink" /> : null}
+    </button>
   );
 }
 
@@ -1251,7 +1683,7 @@ function AnalyticsInlineCountryFlag({ country }: { country: string | null }) {
 function AnalyticsTopProfilesCard({ rows, range }: { rows: AnalyticsTopProfileRow[]; range: AnalyticsRange }) {
   const max = Math.max(1, ...rows.map((row) => row.views));
   return (
-    <SectionCard title="Top profile visits" subtitle={ANALYTICS_RANGE_LABEL[range].toLowerCase()}>
+    <SectionCard title="Top profile visits" subtitle={formatAnalyticsRangeLabel(range).toLowerCase()}>
       {rows.length === 0 ? (
         <AnalyticsEmptyMessage text="No profile visits yet." />
       ) : (
@@ -1284,7 +1716,7 @@ function AnalyticsTopProfilesCard({ rows, range }: { rows: AnalyticsTopProfileRo
 function AnalyticsTopReplaysCard({ rows, range }: { rows: AnalyticsTopReplayRow[]; range: AnalyticsRange }) {
   const max = Math.max(1, ...rows.map((row) => row.views));
   return (
-    <SectionCard title="Top replay views" subtitle={`each replay open, ${ANALYTICS_RANGE_LABEL[range].toLowerCase()}`}>
+    <SectionCard title="Top replay views" subtitle={`each replay open, ${formatAnalyticsRangeLabel(range).toLowerCase()}`}>
       {rows.length === 0 ? (
         <AnalyticsEmptyMessage text="No replays opened yet." />
       ) : (
@@ -1366,7 +1798,7 @@ function formatReferrerLabel(domain: string): string {
 function AnalyticsReferrersCard({ rows, range }: { rows: AnalyticsReferrerRow[]; range: AnalyticsRange }) {
   const max = Math.max(1, ...rows.map((row) => row.count));
   return (
-    <SectionCard title="Top referrers" subtitle={`unique visitors by referring domain, ${ANALYTICS_RANGE_LABEL[range].toLowerCase()}`}>
+    <SectionCard title="Top referrers" subtitle={`unique visitors by referring domain, ${formatAnalyticsRangeLabel(range).toLowerCase()}`}>
       {rows.length === 0 ? (
         <AnalyticsEmptyMessage text="No external referrers captured yet." />
       ) : (
@@ -1435,7 +1867,7 @@ function AnalyticsServerErrorsCard({
   return (
     <SectionCard
       title="Server errors"
-      subtitle={`osu! API failures, ${ANALYTICS_RANGE_LABEL[range].toLowerCase()}`}
+      subtitle={`osu! API failures, ${formatAnalyticsRangeLabel(range).toLowerCase()}`}
       actions={recent.length > 0 ? (
         <button
           type="button"
@@ -1544,6 +1976,14 @@ function AnalyticsErrorBanner({ message }: { message: string }) {
     <div className="rounded-lg border border-osu-red/30 bg-osu-red/10 px-4 py-3">
       <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-red-light">Analytics error</div>
       <div className="text-[12px] text-osu-l2 mt-1 break-words">{message}</div>
+    </div>
+  );
+}
+
+function AnalyticsInfoBanner({ message }: { message: string }) {
+  return (
+    <div className="rounded-lg border border-osu-yellow/25 bg-osu-yellow/10 px-4 py-3 text-[12px] text-osu-l2">
+      {message}
     </div>
   );
 }
