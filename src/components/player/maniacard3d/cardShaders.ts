@@ -12,6 +12,7 @@ precision highp float;
 
 uniform float uTime;
 uniform float uIntensity;
+uniform float uFoil;
 uniform vec2 uLight;
 uniform vec3 uTierColor;
 uniform vec4 uAvatarMask;
@@ -105,8 +106,9 @@ void main() {
   float centerB = restB + lightOffset.x * 0.55 - lightOffset.y * 0.25 + drift2;
   vec2 beamB = beam(vUv, axisB, centerB, 22.0, 4.5);
 
-  float bandSharp = max(beamA.x, beamB.x * 0.7);
-  float bandWide = max(beamA.y, beamB.y * 0.85);
+  float bandSharp = max(beamA.x, beamB.x * 0.7) * uFoil;
+  float bandWide = max(beamA.y, beamB.y * 0.85) * uFoil;
+  glare *= uFoil;
 
   // Hue scrolls along each beam direction so the rainbow visibly shifts as
   // the bands move - that's the Pokemon holo "color flow".
