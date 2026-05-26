@@ -1173,17 +1173,18 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               <div className="relative grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 text-center">
                 <StatCell label="Score" value={totalScore != null ? formatNumber(totalScore) : "-"} />
                 <StatCell label="Combo" value={`${formatNumber(score.max_combo)}x`} />
-                {judgementStats.map((judgement) => (
-                  <StatCell key={judgement.label} label={judgement.label} value={formatNumber(judgement.value)} color={judgement.className} />
+                {judgementStats.map((judgement, i) => (
+                  <StatCell key={judgement.label} label={judgement.label} value={formatNumber(judgement.value)} color={judgement.className} className={JUDGEMENT_MOBILE_ORDER_CLASS[i]} />
                 ))}
-                {score.pp != null && score.pp > 0 && (
-                  <StatCell label="PP" value={`${Math.round(score.pp)}pp`} color="text-osu-pink" />
-                )}
                 {score.beatmap?.difficulty_rating != null && (
-                  <StatCell label="Stars" value={score.beatmap.difficulty_rating.toFixed(2)} />
+                  <StatCell label="Stars" value={score.beatmap.difficulty_rating.toFixed(2)} className="max-sm:order-8" />
                 )}
                 {score.beatmap?.bpm != null && (
-                  <StatCell label="BPM" value={String(Math.round(score.beatmap.bpm))} />
+                  <StatCell label="BPM" value={String(Math.round(score.beatmap.bpm))} className="max-sm:order-9" />
+                )}
+                {/* On mobile (2-col) PP gets its own centered full-width row as the headline stat; on sm+ it's a normal trailing cell. */}
+                {score.pp != null && score.pp > 0 && (
+                  <StatCell label="PP" value={`${Math.round(score.pp)}pp`} color="text-osu-pink" className="col-span-2 max-sm:order-10 sm:col-span-1" />
                 )}
               </div>
               <div className="relative mt-2 flex items-center justify-between gap-2">
@@ -1207,9 +1208,21 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   );
 });
 
-function StatCell({ label, value, color }: { label: string; value: string; color?: string }) {
+// Judgement cells render in canonical [MAX, 300, 200, 100, 50, Miss] DOM order (kept for
+// the desktop 4/6-col rows). On the mobile 2-col grid these max-sm orders swap MAX/300 so
+// each row pairs like the osu!mania score screen: 300|MAX, 200|100, 50|Miss.
+const JUDGEMENT_MOBILE_ORDER_CLASS = [
+  "max-sm:order-3",
+  "max-sm:order-2",
+  "max-sm:order-4",
+  "max-sm:order-5",
+  "max-sm:order-6",
+  "max-sm:order-7",
+];
+
+function StatCell({ label, value, color, className }: { label: string; value: string; color?: string; className?: string }) {
   return (
-    <div className="py-1.5">
+    <div className={`py-1.5${className ? ` ${className}` : ""}`}>
       <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">{label}</div>
       <div className={`text-sm font-bold ${color ?? "text-white"}`}>{value}</div>
     </div>
