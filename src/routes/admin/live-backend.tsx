@@ -211,7 +211,7 @@ interface AnalyticsMonitorData {
 }
 
 const BACKEND_REFRESH_MS = 5_000;
-const ANALYTICS_REFRESH_MS = 15_000;
+const ANALYTICS_REFRESH_MS = 30_000;
 const DEFAULT_COUNTRY = "CR";
 const MONITORING_TABS = ["backend", "analytics"] as const;
 type MonitoringTab = (typeof MONITORING_TABS)[number];
@@ -222,9 +222,9 @@ const ANALYTICS_MIN_RANGE_HOURS = 1;
 const ANALYTICS_MAX_RANGE_HOURS = 720;
 const ANALYTICS_RANGE_STEPS = [1, 2, 3, 4, 5, 6, 8, 12, 18, 24, 36, 48, 72, 168, 336, 720] as const;
 const ANALYTICS_RANGE_PRESETS = [1, 3, 6, 12, 24, 168, 720] as const;
-const ANALYTICS_CACHE_FRESH_MS = 15_000;
+const ANALYTICS_CACHE_FRESH_MS = 30_000;
 const ANALYTICS_COLD_RESPONSE_BUDGET_MS = 1_500;
-const POSTHOG_QUERY_TIMEOUT_MS = 15_000;
+const POSTHOG_QUERY_TIMEOUT_MS = 30_000;
 
 const LEGACY_ANALYTICS_RANGE_HOURS: Record<string, AnalyticsRange> = {
   "1h": 1,
@@ -306,6 +306,27 @@ function getAnalyticsRangeStepIndex(rangeHours: AnalyticsRange): number {
 
 function getAnalyticsCacheKey(rangeHours: AnalyticsRange, recentCountry: string | null): string {
   return `${clampAnalyticsRangeHours(rangeHours)}:${recentCountry ?? "all"}`;
+}
+
+class AnalyticsPostHogQueryError extends Error {
+  status: number | null;
+
+  constructor(status: number | null, message: string) {
+    super(status == null ? message : `PostHog query failed (${status}): ${message}`);
+    this.name = "AnalyticsPostHogQueryError";
+    this.status = status;
+  }
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && (err.name === "AbortError" || err.message.toLowerCase().includes("aborted"));
+}
+
+function isTransientAnalyticsQueryError(err: unknown): boolean {
+  if (err instanceof AnalyticsPostHogQueryError) {
+    return err.status == null || err.status === 408 || err.status === 429 || err.status >= 500;
+  }
+  return isAbortError(err);
 }
 
 function normalizeAnalyticsCountryFilter(value: unknown): string | null {
@@ -396,20 +417,28 @@ async function fetchAnalyticsMonitorDataFromPostHog({
   async function runQuery(query: string): Promise<unknown[][]> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), POSTHOG_QUERY_TIMEOUT_MS);
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
-      signal: controller.signal,
-    }).finally(() => {
+    let res: Response;
+    try {
+      res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (isAbortError(err)) {
+        throw new AnalyticsPostHogQueryError(null, `PostHog query timed out after ${Math.round(POSTHOG_QUERY_TIMEOUT_MS / 1000)}s.`);
+      }
+      throw err;
+    } finally {
       clearTimeout(timeout);
-    });
+    }
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`PostHog query failed (${res.status}): ${text.slice(0, 400)}`);
+      throw new AnalyticsPostHogQueryError(res.status, text.slice(0, 400));
     }
     const body = (await res.json()) as { results?: unknown[][] };
     return body.results ?? [];
@@ -594,7 +623,12 @@ const getAnalyticsMonitorData = createServerFn({ method: "POST" })
 
     const settled = await settleWithin(refreshPromise, ANALYTICS_COLD_RESPONSE_BUDGET_MS);
     if (settled.status === "resolved") return settled.value;
-    if (settled.status === "rejected") throw settled.reason;
+    if (settled.status === "rejected") {
+      if (isTransientAnalyticsQueryError(settled.reason)) {
+        return createEmptyAnalyticsMonitorData(data.rangeHours, "warming");
+      }
+      throw settled.reason;
+    }
 
     void refreshPromise.catch(() => undefined);
     return createEmptyAnalyticsMonitorData(data.rangeHours, "warming");
