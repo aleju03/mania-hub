@@ -58,6 +58,22 @@ interface LiveBackendStatus {
     lastActiveAt: string | null;
     isWarm: boolean;
   }>;
+  catchup?: Record<string, {
+    pending: number;
+    running: number;
+    failed: number;
+    lastError: string | null;
+    lastRunAt: string | null;
+    cursorMs: number | null;
+    lastResult: {
+      fetched: number;
+      inserted: number;
+      skipped: number;
+      after: number;
+      nextAfter: number | null;
+      hasMore: boolean;
+    } | null;
+  }>;
   rate: {
     hardPerMinute: number;
     usedLastMinute: number;
@@ -703,18 +719,53 @@ function LiveBackendPage() {
     }
   }, [countryCode]);
 
-  const runAdminAction = useCallback(async (action: string, path: string) => {
+  // Status-only refresh: skips the tracker/top-plays/snipes snapshot fetches in
+  // `load`, which can take tens of seconds. Used after admin actions so the
+  // country pills reconcile to backend truth within ~1s instead of blocking on
+  // those snapshots.
+  const refreshStatus = useCallback(async (): Promise<string | null> => {
+    const requestId = ++requestIdRef.current;
+    try {
+      const nextStatus = await fetchLiveBackendAdminStatus() as LiveBackendStatus;
+      if (requestId !== requestIdRef.current) return null;
+      setStatus(nextStatus);
+      return null;
+    } catch (err) {
+      if (requestId !== requestIdRef.current) return null;
+      return err instanceof Error ? err.message : "Could not reach live backend.";
+    }
+  }, []);
+
+  // `optimistic` patches local state before the request returns so the UI
+  // updates instantly; `refreshStatus` then reconciles (and reverts a bad
+  // optimistic patch) without the slow snapshot fetches `load` performs.
+  const runAdminAction = useCallback(async (action: string, path: string, optimistic?: () => void) => {
     setActionBusy(action);
+    optimistic?.();
+    let message: string | null = null;
     try {
       await runLiveBackendAdminAction({ data: { path } });
-      await load(true);
-      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Admin action failed.");
-    } finally {
-      setActionBusy(null);
+      message = err instanceof Error ? err.message : "Admin action failed.";
     }
-  }, [load]);
+    const refreshError = await refreshStatus();
+    setError(message ?? refreshError);
+    setActionBusy(null);
+  }, [refreshStatus]);
+
+  const patchCountryStatus = useCallback((country: string, lifecycle: CountryLifecycleStatus) => {
+    setStatus((current) => {
+      if (!current?.countries) return current;
+      return {
+        ...current,
+        countries: current.countries.map((entry) =>
+          entry.country === country
+            ? { ...entry, status: lifecycle, isWarm: lifecycle === "paused" ? entry.isWarm : true }
+            : entry,
+        ),
+      };
+    });
+  }, []);
 
   useEffect(() => {
     if (activeTab !== "backend") return;
@@ -873,6 +924,7 @@ function LiveBackendPage() {
                 void runAdminAction(
                   `set-status-${entry.country}`,
                   `/api/admin/set-country-status?country=${encodeURIComponent(entry.country)}&status=${encodeURIComponent(lifecycle)}`,
+                  () => patchCountryStatus(entry.country, lifecycle),
                 );
               }}
               onDeleteCountry={(entry) => {
@@ -882,7 +934,17 @@ function LiveBackendPage() {
                 void runAdminAction(`set-tier-${entry.country}`, `/api/admin/set-country-tier?country=${encodeURIComponent(entry.country)}&tier=${encodeURIComponent(tier)}`);
               }}
               onCatchUpCountry={(entry) => {
-                void runAdminAction(`catch-up-country-${entry.country}`, `/api/admin/catch-up-country?country=${encodeURIComponent(entry.country)}`);
+                void runAdminAction(
+                  `catch-up-country-${entry.country}`,
+                  `/api/admin/catch-up-country?country=${encodeURIComponent(entry.country)}`,
+                  () => patchCountryStatus(entry.country, "active"),
+                );
+              }}
+              onCancelCatchUpCountry={(entry) => {
+                void runAdminAction(
+                  `catch-up-country-${entry.country}`,
+                  `/api/admin/cancel-catch-up-country?country=${encodeURIComponent(entry.country)}`,
+                );
               }}
             />
           </Section>
@@ -2152,6 +2214,7 @@ function StatusCard({ status, connectionState, country }: { status: LiveBackendS
 }
 
 type CountryEntry = NonNullable<LiveBackendStatus["countries"]>[number];
+type CountryCatchupState = NonNullable<LiveBackendStatus["catchup"]>[string];
 type CountryLifecycleStatus = "active" | "warm" | "paused";
 type CountryDisplayStatus = "active" | "warm" | "idle" | "paused";
 type CountryFeatureTier = "indexed" | "maps_warm" | "live" | "snipes";
@@ -2266,6 +2329,7 @@ function CountriesCard({
   onDeleteCountry,
   onSetCountryTier,
   onCatchUpCountry,
+  onCancelCatchUpCountry,
 }: {
   status: LiveBackendStatus | null;
   busy: string | null;
@@ -2273,6 +2337,7 @@ function CountriesCard({
   onDeleteCountry: (entry: CountryEntry) => void;
   onSetCountryTier: (entry: CountryEntry, tier: CountryFeatureTier) => void;
   onCatchUpCountry: (entry: CountryEntry) => void;
+  onCancelCatchUpCountry: (entry: CountryEntry) => void;
 }) {
   const [sortMode, setSortMode] = useState<CountrySortMode>("status");
   const [statusFilters, setStatusFilters] = useState<Record<CountryDisplayStatus, boolean>>(DEFAULT_COUNTRY_STATUS_FILTERS);
@@ -2458,11 +2523,13 @@ function CountriesCard({
               key={entry.country}
               entry={entry}
               users={rosterByCountry.get(entry.country) ?? null}
+              catchup={status?.catchup?.[entry.country] ?? null}
               busy={busy === `set-status-${entry.country}` || busy === `delete-country-${entry.country}` || busy === `set-tier-${entry.country}` || busy === `catch-up-country-${entry.country}`}
               onSetStatus={(lifecycle) => onSetCountryStatus(entry, lifecycle)}
               onDelete={() => onDeleteCountry(entry)}
               onSetTier={(tier) => onSetCountryTier(entry, tier)}
               onCatchUp={() => onCatchUpCountry(entry)}
+              onCancelCatchUp={() => onCancelCatchUpCountry(entry)}
             />
           ))}
         </div>
@@ -2474,24 +2541,29 @@ function CountriesCard({
 function CountryRow({
   entry,
   users,
+  catchup,
   busy,
   onSetStatus,
   onDelete,
   onSetTier,
   onCatchUp,
+  onCancelCatchUp,
 }: {
   entry: CountryEntry;
   users: number | null;
+  catchup: CountryCatchupState | null;
   busy: boolean;
   onSetStatus: (lifecycle: CountryLifecycleStatus) => void;
   onDelete: () => void;
   onSetTier: (tier: CountryFeatureTier) => void;
   onCatchUp: () => void;
+  onCancelCatchUp: () => void;
 }) {
   const displayStatus = getCountryDisplayStatus(entry);
   const statusTone = displayStatus === "paused" || displayStatus === "idle" ? "text-osu-red" : displayStatus === "active" ? "text-osu-green" : "text-osu-yellow";
   const featureTier = getCountryFeatureTier(entry);
   const activeUsers = entry.activeUsers ?? 0;
+  const catchupActive = (catchup?.pending ?? 0) + (catchup?.running ?? 0) > 0;
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Set when the Snipes tier cell is clicked: snipes enables the expensive
   // snipe board seeding, so it takes a second deliberate confirm click.
@@ -2550,16 +2622,29 @@ function CountryRow({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            title={`Queue ${entry.country} score catch-up from this country's last stored score`}
-            aria-label={`Queue ${entry.country} score catch-up`}
-            disabled={busy}
-            onClick={onCatchUp}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-osu-b3/40 bg-osu-b4/70 text-osu-f1 transition hover:border-osu-c2/60 hover:text-white disabled:opacity-50 cursor-pointer"
-          >
-            <History className="h-3.5 w-3.5" />
-          </button>
+          {catchupActive ? (
+            <button
+              type="button"
+              title={`Cancel ${entry.country} score catch-up`}
+              aria-label={`Cancel ${entry.country} score catch-up`}
+              disabled={busy}
+              onClick={onCancelCatchUp}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-osu-red/40 bg-osu-red/10 text-osu-red-light transition hover:border-osu-red-light/70 hover:bg-osu-red/20 hover:text-white disabled:opacity-50 cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              title={`Queue ${entry.country} score catch-up from this country's last stored score`}
+              aria-label={`Queue ${entry.country} score catch-up`}
+              disabled={busy}
+              onClick={onCatchUp}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-osu-b3/40 bg-osu-b4/70 text-osu-f1 transition hover:border-osu-c2/60 hover:text-white disabled:opacity-50 cursor-pointer"
+            >
+              <History className="h-3.5 w-3.5" />
+            </button>
+          )}
           {confirmDelete ? (
             <button
               ref={deleteRef}
@@ -2706,6 +2791,50 @@ function CountryRow({
           {entry.lastRosterRefreshAt ? formatTimeAgo(entry.lastRosterRefreshAt) : "never"}
         </span>
       </div>
+      <CountryCatchupLine catchup={catchup} />
+    </div>
+  );
+}
+
+// Surfaces what the per-country oSC catch-up job is doing: queued/running vs the
+// last completed run's fetched/added counts. "+0 added (N fetched)" flags a run
+// that pulled scores but matched none for this country (tier/roster gating);
+// "+0 added (0 fetched)" flags that oSC has no history that far back.
+function CountryCatchupLine({ catchup }: { catchup: CountryCatchupState | null }) {
+  if (!catchup) return null;
+  const active = catchup.pending + catchup.running > 0;
+  const result = catchup.lastResult;
+  const cursorBehind = catchup.cursorMs != null ? formatTimeAgo(new Date(catchup.cursorMs).toISOString()) : null;
+  return (
+    <div className="mt-1.5 rounded-md border border-osu-b3/20 bg-osu-b5/40 px-2 py-1.5 text-[10px]">
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        <span className="flex items-center gap-1.5 font-semibold uppercase tracking-wider text-osu-f1">
+          <History className={`h-3 w-3 ${active ? "animate-spin text-osu-c2" : ""}`} />
+          Catch-up
+        </span>
+        {active ? (
+          <span className="text-osu-c2">
+            {catchup.running > 0 ? "running" : "queued"}
+            {cursorBehind ? <span className="text-osu-f1"> · up to {cursorBehind}</span> : null}
+          </span>
+        ) : result ? (
+          <span className="text-osu-f1">
+            last run {catchup.lastRunAt ? formatTimeAgo(catchup.lastRunAt) : ""}:{" "}
+            <span className={result.inserted > 0 ? "text-osu-green" : "text-osu-f1"}>
+              +{formatNumber(result.inserted)} added
+            </span>{" "}
+            <span className="text-osu-c2/70">({formatNumber(result.fetched)} fetched)</span>
+            {result.hasMore ? <span className="text-osu-yellow"> · more pending</span> : null}
+          </span>
+        ) : (
+          <span className="text-osu-f1/70">no runs yet</span>
+        )}
+      </div>
+      {catchup.failed > 0 ? (
+        <div className="mt-1 truncate text-osu-red-light" title={catchup.lastError ?? undefined}>
+          {formatNumber(catchup.failed)} failed{catchup.lastError ? `: ${catchup.lastError}` : ""}
+        </div>
+      ) : null}
     </div>
   );
 }

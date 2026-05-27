@@ -18,7 +18,7 @@ import type { CountryClientTracker } from "../live/country-clients.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import type { OscStatus } from "../osc/client.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
-import { enqueueOscBackfill, enqueueOscCountryCatchup } from "../osc/backfill.js";
+import { cancelOscCountryCatchup, enqueueOscBackfill, enqueueOscCountryCatchup } from "../osc/backfill.js";
 import {
   cancelReplayVideoExport,
   createReplayVideoExport,
@@ -435,6 +435,14 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 200, { ok: true, ...queued });
     return true;
   }
+  if (url.pathname === "/api/admin/cancel-catch-up-country") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, ...await cancelOscCountryCatchup(ctx.db, country) });
+    return true;
+  }
   if (url.pathname === "/api/admin/clear-failed-jobs") {
     if (!isAdmin(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
@@ -552,8 +560,75 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
     abuse: ctx.abuse?.state() ?? null,
     apiCallHistory: await apiCallHistory(ctx.db),
     countries: await countryRegistryStatus(ctx),
+    catchup: await countryCatchupStatus(ctx),
     worker: options.includeWorkerActivity ? worker : publicWorkerStatus(worker),
   };
+}
+
+interface CountryCatchupResult {
+  fetched: number;
+  inserted: number;
+  skipped: number;
+  after: number;
+  nextAfter: number | null;
+  hasMore: boolean;
+}
+
+interface CountryCatchupState {
+  pending: number;
+  running: number;
+  failed: number;
+  lastError: string | null;
+  lastRunAt: string | null;
+  cursorMs: number | null;
+  lastResult: CountryCatchupResult | null;
+}
+
+async function countryCatchupStatus(ctx: HttpContext): Promise<Record<string, CountryCatchupState>> {
+  const meta = (await exec(
+    ctx.db,
+    "select key, value_json, updated_at from live_meta where key like 'osc_country_catchup_last_result:%' or key like 'osc_country_catchup_cursor_ms:%'",
+  )).rows;
+  const jobs = (await exec(
+    ctx.db,
+    "select status, payload_json, last_error from jobs where type = 'osc_country_catchup' and status in ('queued', 'running', 'failed')",
+  )).rows;
+  const byCountry = new Map<string, CountryCatchupState>();
+  const ensure = (country: string): CountryCatchupState => {
+    let state = byCountry.get(country);
+    if (!state) {
+      state = { pending: 0, running: 0, failed: 0, lastError: null, lastRunAt: null, cursorMs: null, lastResult: null };
+      byCountry.set(country, state);
+    }
+    return state;
+  };
+  for (const row of meta) {
+    const key = String(row.key);
+    const country = key.split(":")[1]?.toUpperCase();
+    if (!country) continue;
+    const state = ensure(country);
+    if (key.startsWith("osc_country_catchup_last_result:")) {
+      state.lastResult = parseJson<CountryCatchupResult | null>(row.value_json, null);
+      state.lastRunAt = row.updated_at == null ? null : String(row.updated_at);
+    } else {
+      const cursor = parseJson<number>(row.value_json, Number.NaN);
+      state.cursorMs = Number.isFinite(cursor) ? cursor : null;
+    }
+  }
+  for (const row of jobs) {
+    const payload = parseJson<{ country?: string }>(row.payload_json, {});
+    const country = typeof payload.country === "string" ? payload.country.toUpperCase() : null;
+    if (!country) continue;
+    const state = ensure(country);
+    const status = String(row.status);
+    if (status === "running") state.running += 1;
+    else if (status === "queued") state.pending += 1;
+    else if (status === "failed") {
+      state.failed += 1;
+      if (row.last_error != null) state.lastError = String(row.last_error);
+    }
+  }
+  return Object.fromEntries(byCountry);
 }
 
 async function countryFeaturesBody(ctx: HttpContext) {

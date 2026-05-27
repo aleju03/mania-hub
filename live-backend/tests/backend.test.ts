@@ -13,7 +13,7 @@ import { getTrackerSnapshot } from "../src/features/tracker.js";
 import { routeHttp, sendJson } from "../src/http/snapshots.js";
 import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { handleSse } from "../src/live/sse.js";
-import { enqueueOscCountryCatchup, OscBackfill } from "../src/osc/backfill.js";
+import { cancelOscCountryCatchup, enqueueOscCountryCatchup, OscBackfill } from "../src/osc/backfill.js";
 import { refreshCountryRoster } from "../src/rosters/country-rosters.js";
 import { activateCountry, canSeedSnipesForCountry, deleteCountryData, getActiveCountryCodes, getIndexedCountryCodes, getMapsWarmCountryCodes, setCountryFeatureTier, setCountryPaused, setCountryStatus } from "../src/countries.js";
 import { CountryClientTracker } from "../src/live/country-clients.js";
@@ -814,6 +814,36 @@ describe("live backend", () => {
     const row = (await exec(db, "select type, payload_json from jobs where dedupe_key = ?", [`osc-country-catchup:CR:${queued.after}`])).rows[0];
     expect(row.type).toBe("osc_country_catchup");
     expect(JSON.parse(String(row.payload_json))).toMatchObject({ country: "CR", after: queued.after, pagesRemaining: 200 });
+  });
+
+  it("cancels a country catch-up chain and stops an in-flight page from re-enqueuing", async () => {
+    const { db, queue, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    await ingestor.ingestBatch([scores[0]]);
+    const config = { oscBackfillMaxAgeMs: 24 * 60 * 60 * 1000, oscBackfillMaxPages: 200 } as never;
+
+    const queued = await enqueueOscCountryCatchup(queue, db, config, "cr");
+    const payload = JSON.parse(
+      String((await exec(db, "select payload_json from jobs where dedupe_key = ?", [`osc-country-catchup:CR:${queued.after}`])).rows[0].payload_json),
+    ) as { epoch: number; after: number; pagesRemaining: number };
+
+    const cancelled = await cancelOscCountryCatchup(db, "cr");
+    expect(cancelled).toMatchObject({ country: "CR", cancelled: 1 });
+    expect((await exec(db, "select id from jobs where type = 'osc_country_catchup'")).rows).toHaveLength(0);
+
+    // A page still holding the pre-cancel epoch must no-op and not re-enqueue.
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ scores }), { status: 200 }));
+    const backfill = new OscBackfill({
+      oscBaseUrl: "https://osc.example",
+      oscJsonTargetPerMinute: 60,
+      oscBackfillMaxAgeMs: 24 * 60 * 60 * 1000,
+      oscBackfillPageLimit: 2,
+      oscBackfillMaxPages: 200,
+    }, fetchMock as never);
+    const result = await backfill.runPage(db, queue, ingestor, { country: "CR", after: payload.after, pagesRemaining: 200, epoch: payload.epoch });
+    expect(result).toMatchObject({ fetched: 0, inserted: 0, hasMore: false });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect((await exec(db, "select id from jobs where type = 'osc_country_catchup'")).rows).toHaveLength(0);
   });
 
   it("runs country catch-up without inserting other active countries or rewinding the global cursor", async () => {

@@ -10,6 +10,10 @@ export interface OscBackfillPayload {
   after?: number;
   pagesRemaining?: number;
   country?: string;
+  // Identifies a country catch-up chain. A page only runs/re-enqueues while its
+  // epoch matches the stored one; cancelling bumps the stored epoch so in-flight
+  // pages stop re-spawning the chain.
+  epoch?: number;
 }
 
 export interface OscBackfillResult {
@@ -57,6 +61,9 @@ export class OscBackfill {
   async runPage(db: Db, queue: JobQueue, ingestor: ScoreIngestor, payload: OscBackfillPayload = {}): Promise<OscBackfillResult> {
     const after = await this.resolveAfter(db, payload.after);
     const country = normalizeCountryPayload(payload.country);
+    if (country && payload.epoch != null && await isCatchupCancelled(db, country, payload.epoch)) {
+      return { fetched: 0, inserted: 0, skipped: 0, after, nextAfter: null, hasMore: false, country };
+    }
     const url = new URL("/api/scores", this.config.oscBaseUrl);
     url.searchParams.set("mode", "mania");
     url.searchParams.set("limit", String(this.config.oscBackfillPageLimit));
@@ -91,7 +98,11 @@ export class OscBackfill {
       ]);
     }
     if (hasMore) {
-      const nextPayload = { after: nextAfter, pagesRemaining: pagesRemaining - 1, ...(country ? { country } : {}) } satisfies OscBackfillPayload;
+      const nextPayload = {
+        after: nextAfter,
+        pagesRemaining: pagesRemaining - 1,
+        ...(country ? { country, ...(payload.epoch != null ? { epoch: payload.epoch } : {}) } : {}),
+      } satisfies OscBackfillPayload;
       await queue.enqueue(
         country ? "osc_country_catchup" : "osc_backfill",
         country ? `osc-country-catchup:${country}:${nextAfter}` : `osc-backfill:${nextAfter}`,
@@ -144,13 +155,42 @@ export async function enqueueOscCountryCatchup(queue: JobQueue, db: Db, config: 
   const normalized = normalizeCountryPayload(country);
   if (!normalized) throw new Error("Invalid country.");
   const after = await getCountryCatchupAfter(db, config, normalized);
+  const epoch = Date.now();
+  await setCatchupEpoch(db, normalized, epoch);
   await queue.enqueue(
     "osc_country_catchup",
     `osc-country-catchup:${normalized}:${after}`,
-    { country: normalized, after, pagesRemaining: config.oscBackfillMaxPages } satisfies OscBackfillPayload,
+    { country: normalized, after, pagesRemaining: config.oscBackfillMaxPages, epoch } satisfies OscBackfillPayload,
     { priority: 5, replaceDone: true },
   );
   return { country: normalized, after };
+}
+
+export async function cancelOscCountryCatchup(db: Db, country: string): Promise<{ country: string; cancelled: number }> {
+  const normalized = normalizeCountryPayload(country);
+  if (!normalized) throw new Error("Invalid country.");
+  // Bump the epoch first so any page already running stops re-enqueuing its chain.
+  await setCatchupEpoch(db, normalized, Date.now());
+  const result = await exec(
+    db,
+    "delete from jobs where type = 'osc_country_catchup' and dedupe_key like ? and status in ('queued', 'failed', 'running')",
+    [`osc-country-catchup:${normalized}:%`],
+  );
+  return { country: normalized, cancelled: Number(result.rowsAffected ?? 0) };
+}
+
+async function setCatchupEpoch(db: Db, country: string, epoch: number): Promise<void> {
+  await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)", [
+    `osc_country_catchup_epoch:${country}`,
+    json(epoch),
+    new Date().toISOString(),
+  ]);
+}
+
+async function isCatchupCancelled(db: Db, country: string, epoch: number): Promise<boolean> {
+  const row = (await exec(db, "select value_json from live_meta where key = ?", [`osc_country_catchup_epoch:${country}`])).rows[0];
+  const stored = parseJson<number>(row?.value_json, Number.NaN);
+  return Number.isFinite(stored) && stored !== epoch;
 }
 
 function normalizeScores(body: OscScoresResponse): OscScore[] {
