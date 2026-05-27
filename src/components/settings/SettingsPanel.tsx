@@ -92,6 +92,16 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   const showDanEstimates = useAppStore((state) => state.showDanEstimates);
   const setShowDanEstimates = useAppStore((state) => state.setShowDanEstimates);
   const canUseDanEstimates = useAuth().canUseDevFeatures;
+  const visibleTabs = useMemo(
+    () => canUseDanEstimates ? TABS : TABS.filter((tab) => tab.id !== "dans"),
+    [canUseDanEstimates],
+  );
+
+  useEffect(() => {
+    if (!canUseDanEstimates && activeTab === "dans") {
+      setActiveTab("skin");
+    }
+  }, [activeTab, canUseDanEstimates]);
 
   const saveSkinSettings = (settings: ReplaySkinSettings) => {
     const normalized = normalizeReplaySkinSettings(settings);
@@ -211,7 +221,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
             </button>
           ) : null}
         </div>
-        <PageTabs items={TABS} value={activeTab} onChange={setActiveTab} />
+        <PageTabs items={visibleTabs} value={activeTab} onChange={setActiveTab} />
         <div className="flex-1 overflow-y-auto">
           <div className="px-3 py-5 sm:px-5 sm:py-6 space-y-6">{body}</div>
         </div>
@@ -223,7 +233,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   return (
     <div className="flex-1">
       <PageHeader iconSrc="/images/icons/settings.svg" title="settings" right={resetButton} />
-      <PageTabs items={TABS} value={activeTab} onChange={setActiveTab} />
+      <PageTabs items={visibleTabs} value={activeTab} onChange={setActiveTab} />
       <div className="bg-osu-b5 min-h-[80vh]">
         <div className="mx-auto max-w-[900px] px-3 py-6 sm:px-5 sm:py-8 space-y-6">{body}</div>
       </div>
