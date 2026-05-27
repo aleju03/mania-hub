@@ -15,6 +15,7 @@ import { logInfo } from "../logger.js";
 export interface ScoreIngestOptions {
   enqueueRecentReconcile?: boolean;
   processLeaderboardFeatures?: boolean;
+  countryAllowlist?: string[];
 }
 
 export class ScoreIngestor {
@@ -51,7 +52,7 @@ export class ScoreIngestor {
     const beatmapId = Number(score.beatmap_id ?? score.beatmap?.id);
     if (!Number.isFinite(scoreId) || scoreId < 0 || !Number.isFinite(beatmapId) || beatmapId <= 0) return false;
     const receivedAt = nowIso();
-    const countries = await this.getTrackedCountries(score);
+    const countries = await this.getTrackedCountries(score, options.countryAllowlist);
     if (countries.length === 0) return false;
     logInfo("score_ingest", { score_id: scoreId, user_id: score.user_id, countries, beatmap_id: beatmapId, source });
     await this.persistMetadata(score);
@@ -232,16 +233,19 @@ export class ScoreIngestor {
     await this.queue.enqueue("reconcile_user_recent_scores", dedupeKey, { userId }, { priority: 70, replaceDone: true });
   }
 
-  private async getTrackedCountries(score: OscScore): Promise<string[]> {
+  private async getTrackedCountries(score: OscScore, countryAllowlist?: string[]): Promise<string[]> {
     const trackedCountrySet = new Set(await getActiveCountryCodes(this.db, this.config));
+    const allowedCountries = countryAllowlist == null
+      ? null
+      : new Set(countryAllowlist.map((country) => country.trim().toUpperCase()).filter((country) => /^[A-Z]{2}$/.test(country)));
     const knownRows = (await exec(this.db, "select country from country_rosters where user_id = ? and is_tracked = 1", [score.user_id])).rows;
     const countries = new Set(
       knownRows
         .map((row) => String(row.country).toUpperCase())
-        .filter((country) => trackedCountrySet.has(country)),
+        .filter((country) => trackedCountrySet.has(country) && (allowedCountries == null || allowedCountries.has(country))),
     );
     const userCountry = score.user?.country_code?.toUpperCase();
-    if (userCountry && trackedCountrySet.has(userCountry)) countries.add(userCountry);
+    if (userCountry && trackedCountrySet.has(userCountry) && (allowedCountries == null || allowedCountries.has(userCountry))) countries.add(userCountry);
     return [...countries];
   }
 

@@ -28,6 +28,7 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
     res.end(JSON.stringify({ error: "invalid_country" }));
     return true;
   }
+  const observeOnly = url.searchParams.get("observe") === "1";
   const opened = ctx.abuse?.openSse(req, ctx.config);
   if (opened && !opened.allowed) {
     sendRateLimited(req, res, ctx, opened);
@@ -36,12 +37,14 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
   const releaseSse = opened?.allowed ? opened.release : null;
   let releaseCountryClient: (() => void) | null = null;
   try {
-    const activated = await activatePublicCountry(req, res, ctx, country);
-    if (!activated) {
-      releaseSse?.();
-      return true;
+    if (!observeOnly) {
+      const activated = await activatePublicCountry(req, res, ctx, country);
+      if (!activated) {
+        releaseSse?.();
+        return true;
+      }
+      releaseCountryClient = ctx.countryClients?.open(country) ?? null;
     }
-    releaseCountryClient = ctx.countryClients?.open(country) ?? null;
   } catch (error) {
     releaseCountryClient?.();
     releaseSse?.();
@@ -71,7 +74,7 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
   const heartbeat = setInterval(() => {
     writeEvent(res, { type: "heartbeat", sequence: Date.now(), payload: { t: Date.now() } });
     const now = Date.now();
-    if (now - lastCountryTouchAt >= countryTouchIntervalMs) {
+    if (!observeOnly && now - lastCountryTouchAt >= countryTouchIntervalMs) {
       lastCountryTouchAt = now;
       void touchCountryRequest(ctx.db, country).catch(() => undefined);
     }

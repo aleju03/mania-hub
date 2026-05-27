@@ -38,7 +38,7 @@ interface WorkerActiveJob {
 const DEFAULT_WORKER_LANES: WorkerLane[] = [
   {
     name: "fast",
-    jobTypes: ["refresh_user_top_scores", "refresh_user_maps_farmed_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "osc_backfill", "reconcile_user_recent_scores"],
+    jobTypes: ["refresh_user_top_scores", "refresh_user_maps_farmed_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "osc_backfill", "osc_country_catchup", "reconcile_user_recent_scores"],
     claimLimit: 4,
     intervalMs: 750,
   },
@@ -206,9 +206,9 @@ export class WorkerRunner {
       );
       return;
     }
-    if (job.type === "osc_backfill") {
+    if (job.type === "osc_backfill" || job.type === "osc_country_catchup") {
       const result = await this.backfill.runPage(this.db, this.queue, this.ingestor, job.payload as never);
-      await this.events.append("status", null, { type: "osc_backfill", ...result }, `osc_backfill:${job.id}:${job.attempts}`);
+      await this.events.append("status", null, { type: job.type, ...result }, `${job.type}:${job.id}:${job.attempts}`);
       return;
     }
     if (job.type === "reconcile_user_recent_scores") {
@@ -494,7 +494,7 @@ function getRetryDelayMs(type: string, attempts: number, error: unknown): number
       ? 60_000
     : type === "reconcile_user_recent_scores"
       ? 2 * 60_000
-    : type === "osc_backfill"
+    : type === "osc_backfill" || type === "osc_country_catchup"
       ? 60_000
     : type === "refresh_country_maps"
       ? 10 * 60_000

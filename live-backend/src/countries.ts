@@ -44,10 +44,13 @@ export async function activateCountry(
 ): Promise<CountryRegistryRow> {
   const normalized = normalizeCountry(country);
   const configuredTier = getConfiguredCountryFeatureTier(config, normalized);
+  const existing = await getCountryRegistryRow(db, normalized, config);
   await upsertCountry(db, normalized, {
     pinned: config.trackedCountries.includes(normalized),
-    status: "active",
-    featureTier: maxCountryFeatureTier(configuredTier, config.trackedCountries.includes(normalized) ? "snipes" : "live"),
+    status: existing?.status === "warm" && existing.isWarm ? "warm" : "active",
+    featureTier: existing && existing.featureTier !== configuredTier
+      ? existing.featureTier
+      : maxCountryFeatureTier(configuredTier, config.trackedCountries.includes(normalized) ? "snipes" : "live"),
   });
   if (await shouldRefreshRoster(db, normalized, config.rosterRefreshIntervalMs)) {
     await queue.enqueue("refresh_country_roster", `roster:${normalized}`, { country: normalized }, { priority: 85, replaceDone: true });
@@ -63,6 +66,15 @@ export async function setCountryPaused(
   country: string,
   paused: boolean,
 ): Promise<CountryRegistryRow> {
+  return setCountryStatus(db, config, country, paused ? "paused" : "active");
+}
+
+export async function setCountryStatus(
+  db: Db,
+  config: CountryWarmConfig,
+  country: string,
+  status: CountryRegistryStatus,
+): Promise<CountryRegistryRow> {
   const normalized = normalizeCountry(country);
   const now = nowIso();
   await ensurePinnedCountries(db, config);
@@ -71,8 +83,11 @@ export async function setCountryPaused(
     db,
     `insert into country_registry (country, status, feature_tier, pinned, first_requested_at, last_requested_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?)
-     on conflict(country) do update set status = excluded.status, updated_at = excluded.updated_at`,
-    [normalized, paused ? "paused" : "active", configuredTier, config.trackedCountries.includes(normalized) ? 1 : 0, now, now, now],
+     on conflict(country) do update set
+       status = excluded.status,
+       last_requested_at = case when excluded.status = 'paused' then country_registry.last_requested_at else excluded.last_requested_at end,
+       updated_at = excluded.updated_at`,
+    [normalized, status, configuredTier, config.trackedCountries.includes(normalized) ? 1 : 0, now, now, now],
   );
   const row = await getCountryRegistryRow(db, normalized, config);
   if (!row) throw new Error(`Could not update country ${normalized}`);
@@ -88,8 +103,6 @@ export async function setCountryFeatureTier(
   const normalized = normalizeCountry(country);
   const now = nowIso();
   await ensurePinnedCountries(db, config);
-  const configuredTier = getConfiguredCountryFeatureTier(config, normalized);
-  const featureTier = maxCountryFeatureTier(tier, configuredTier);
   const pinned = config.trackedCountries.includes(normalized) || tier === "snipes";
   await exec(
     db,
@@ -100,7 +113,7 @@ export async function setCountryFeatureTier(
        pinned = excluded.pinned,
        last_requested_at = excluded.last_requested_at,
        updated_at = excluded.updated_at`,
-    [normalized, featureTier, pinned ? 1 : 0, now, now, now],
+    [normalized, tier, pinned ? 1 : 0, now, now, now],
   );
   const row = await getCountryRegistryRow(db, normalized, config);
   if (!row) throw new Error(`Could not update country ${normalized}`);
@@ -218,27 +231,19 @@ async function upsertCountry(db: Db, country: string, options: { pinned: boolean
     `insert into country_registry (country, status, feature_tier, pinned, first_requested_at, last_requested_at, updated_at)
      values (?, ?, ?, ?, ?, ?, ?)
      on conflict(country) do update set
-       status = case when country_registry.status = 'paused' then country_registry.status else excluded.status end,
-       feature_tier = case
-         when (case country_registry.feature_tier
-           when 'snipes' then 3
-           when 'live' then 2
-           when 'maps_warm' then 1
-           else 0
-         end) >= ? then country_registry.feature_tier
-         else excluded.feature_tier
-       end,
+       status = case when country_registry.status in ('active', 'paused') then country_registry.status else excluded.status end,
+       feature_tier = case when ? = 1 then excluded.feature_tier else country_registry.feature_tier end,
        pinned = max(country_registry.pinned, excluded.pinned),
        last_requested_at = case when ? = 1 then excluded.last_requested_at else country_registry.last_requested_at end,
        updated_at = case when ? = 1 or country_registry.pinned < excluded.pinned then excluded.updated_at else country_registry.updated_at end`,
-    [normalized, options.status, options.featureTier, options.pinned ? 1 : 0, now, now, now, tierRank(options.featureTier), touch ? 1 : 0, touch ? 1 : 0],
+    [normalized, options.status, options.featureTier, options.pinned ? 1 : 0, now, now, now, touch ? 1 : 0, touch ? 1 : 0, touch ? 1 : 0],
   );
 }
 
 function rowToCountryRegistry(row: Record<string, unknown>, config: CountryWarmConfig): CountryRegistryRow {
   const country = String(row.country).toUpperCase();
   const pinned = Number(row.pinned ?? 0) === 1 || config.trackedCountries.includes(country);
-  const featureTier = maxCountryFeatureTier(parseCountryFeatureTier(row.feature_tier), getConfiguredCountryFeatureTier(config, country));
+  const featureTier = parseCountryFeatureTier(row.feature_tier);
   const lastRequestedAt = String(row.last_requested_at);
   const warmCutoff = Date.now() - config.countryWarmTtlMs;
   const lastRequestedMs = new Date(lastRequestedAt).getTime();
@@ -263,7 +268,8 @@ function normalizeCountry(country: string): string {
 }
 
 async function getCountryCodesWithFeature(db: Db, config: CountryWarmConfig, minimumTier: CountryFeatureTier): Promise<string[]> {
-  const countries = new Set(configuredCountriesAtLeast(config, minimumTier));
+  await ensurePinnedCountries(db, config);
+  const countries = new Set<string>();
   const rows = (await exec(
     db,
     `select country, status, feature_tier, pinned, last_requested_at
@@ -278,20 +284,6 @@ async function getCountryCodesWithFeature(db: Db, config: CountryWarmConfig, min
     }
     if (!registry.isWarm) continue;
     if (isCountryFeatureAtLeast(registry.featureTier, minimumTier)) countries.add(registry.country);
-  }
-  return [...countries];
-}
-
-function configuredCountriesAtLeast(config: CountryFeatureConfig, minimumTier: CountryFeatureTier): string[] {
-  const countries = new Set<string>();
-  for (const country of config.prewarmCountries ?? []) {
-    if (isCountryFeatureAtLeast("indexed", minimumTier)) countries.add(normalizeCountry(country));
-  }
-  for (const country of config.mapsWarmCountries ?? []) {
-    if (isCountryFeatureAtLeast("maps_warm", minimumTier)) countries.add(normalizeCountry(country));
-  }
-  for (const country of config.trackedCountries) {
-    if (isCountryFeatureAtLeast("snipes", minimumTier)) countries.add(normalizeCountry(country));
   }
   return [...countries];
 }

@@ -680,9 +680,9 @@ function LiveBackendPage() {
     try {
       const [nextStatus, tracker, topPlays, snipes] = await Promise.all([
         fetchLiveBackendAdminStatus() as Promise<LiveBackendStatus>,
-        fetchLiveTrackerSnapshot(countryCode, 100),
-        fetchLiveTopPlaysSnapshot(countryCode, "7d"),
-        fetchLiveSnipesSnapshot(countryCode, 500),
+        fetchLiveTrackerSnapshot(countryCode, 100, { observe: true }),
+        fetchLiveTopPlaysSnapshot(countryCode, "7d", { observe: true }),
+        fetchLiveSnipesSnapshot(countryCode, 500, { observe: true }),
       ]);
       if (requestId !== requestIdRef.current) return;
       setStatus(nextStatus);
@@ -737,7 +737,7 @@ function LiveBackendPage() {
       return;
     }
     setConnectionState("connecting");
-    const source = openLiveEventSource(countryCode);
+    const source = openLiveEventSource(countryCode, { observe: true });
     if (!source) {
       setConnectionState("error");
       return;
@@ -869,17 +869,20 @@ function LiveBackendPage() {
             <CountriesCard
               status={status}
               busy={actionBusy}
-              onToggleCountry={(entry) => {
-                const shouldPause = entry.status !== "paused" && entry.isWarm;
-                const action = shouldPause ? `pause-country-${entry.country}` : `resume-country-${entry.country}`;
-                const path = shouldPause ? "/api/admin/pause-country" : "/api/admin/resume-country";
-                void runAdminAction(action, `${path}?country=${encodeURIComponent(entry.country)}`);
+              onSetCountryStatus={(entry, lifecycle) => {
+                void runAdminAction(
+                  `set-status-${entry.country}`,
+                  `/api/admin/set-country-status?country=${encodeURIComponent(entry.country)}&status=${encodeURIComponent(lifecycle)}`,
+                );
               }}
               onDeleteCountry={(entry) => {
                 void runAdminAction(`delete-country-${entry.country}`, `/api/admin/delete-country?country=${encodeURIComponent(entry.country)}`);
               }}
               onSetCountryTier={(entry, tier) => {
                 void runAdminAction(`set-tier-${entry.country}`, `/api/admin/set-country-tier?country=${encodeURIComponent(entry.country)}&tier=${encodeURIComponent(tier)}`);
+              }}
+              onCatchUpCountry={(entry) => {
+                void runAdminAction(`catch-up-country-${entry.country}`, `/api/admin/catch-up-country?country=${encodeURIComponent(entry.country)}`);
               }}
             />
           </Section>
@@ -2149,6 +2152,7 @@ function StatusCard({ status, connectionState, country }: { status: LiveBackendS
 }
 
 type CountryEntry = NonNullable<LiveBackendStatus["countries"]>[number];
+type CountryLifecycleStatus = "active" | "warm" | "paused";
 type CountryDisplayStatus = "active" | "warm" | "idle" | "paused";
 type CountryFeatureTier = "indexed" | "maps_warm" | "live" | "snipes";
 type CountrySortMode = "status" | "active-users" | "tracked-users" | "country";
@@ -2172,6 +2176,11 @@ const COUNTRY_STATUS_OPTIONS: Array<{ value: CountryDisplayStatus; label: string
   { value: "warm", label: "Warm", dot: "bg-osu-yellow" },
   { value: "idle", label: "Idle", dot: "bg-osu-red-light" },
   { value: "paused", label: "Paused", dot: "bg-osu-red-light" },
+];
+const COUNTRY_LIFECYCLE_OPTIONS: Array<{ value: CountryLifecycleStatus; label: string; tone: string; dot: string; blurb: string }> = [
+  { value: "active", label: "Active", tone: "text-osu-green", dot: "bg-osu-green-light", blurb: "Keep it marked as actively requested." },
+  { value: "warm", label: "Warm", tone: "text-osu-yellow", dot: "bg-osu-yellow", blurb: "Keep projections warm without the active marker." },
+  { value: "paused", label: "Paused", tone: "text-osu-red-light", dot: "bg-osu-red-light", blurb: "Exclude it from live warmup until resumed." },
 ];
 const COUNTRY_SORT_OPTIONS: Array<{ value: CountrySortMode; label: string }> = [
   { value: "status", label: "Lifecycle" },
@@ -2253,15 +2262,17 @@ function writeCountryFilterPreferences(preferences: CountryFilterPreferences): v
 function CountriesCard({
   status,
   busy,
-  onToggleCountry,
+  onSetCountryStatus,
   onDeleteCountry,
   onSetCountryTier,
+  onCatchUpCountry,
 }: {
   status: LiveBackendStatus | null;
   busy: string | null;
-  onToggleCountry: (entry: CountryEntry) => void;
+  onSetCountryStatus: (entry: CountryEntry, lifecycle: CountryLifecycleStatus) => void;
   onDeleteCountry: (entry: CountryEntry) => void;
   onSetCountryTier: (entry: CountryEntry, tier: CountryFeatureTier) => void;
+  onCatchUpCountry: (entry: CountryEntry) => void;
 }) {
   const [sortMode, setSortMode] = useState<CountrySortMode>("status");
   const [statusFilters, setStatusFilters] = useState<Record<CountryDisplayStatus, boolean>>(DEFAULT_COUNTRY_STATUS_FILTERS);
@@ -2447,10 +2458,11 @@ function CountriesCard({
               key={entry.country}
               entry={entry}
               users={rosterByCountry.get(entry.country) ?? null}
-              busy={busy === `pause-country-${entry.country}` || busy === `resume-country-${entry.country}` || busy === `delete-country-${entry.country}` || busy === `set-tier-${entry.country}`}
-              onToggle={() => onToggleCountry(entry)}
+              busy={busy === `set-status-${entry.country}` || busy === `delete-country-${entry.country}` || busy === `set-tier-${entry.country}` || busy === `catch-up-country-${entry.country}`}
+              onSetStatus={(lifecycle) => onSetCountryStatus(entry, lifecycle)}
               onDelete={() => onDeleteCountry(entry)}
               onSetTier={(tier) => onSetCountryTier(entry, tier)}
+              onCatchUp={() => onCatchUpCountry(entry)}
             />
           ))}
         </div>
@@ -2463,22 +2475,23 @@ function CountryRow({
   entry,
   users,
   busy,
-  onToggle,
+  onSetStatus,
   onDelete,
   onSetTier,
+  onCatchUp,
 }: {
   entry: CountryEntry;
   users: number | null;
   busy: boolean;
-  onToggle: () => void;
+  onSetStatus: (lifecycle: CountryLifecycleStatus) => void;
   onDelete: () => void;
   onSetTier: (tier: CountryFeatureTier) => void;
+  onCatchUp: () => void;
 }) {
   const displayStatus = getCountryDisplayStatus(entry);
   const statusTone = displayStatus === "paused" || displayStatus === "idle" ? "text-osu-red" : displayStatus === "active" ? "text-osu-green" : "text-osu-yellow";
   const featureTier = getCountryFeatureTier(entry);
   const activeUsers = entry.activeUsers ?? 0;
-  const shouldResume = entry.status === "paused" || !entry.isWarm;
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Set when the Snipes tier cell is clicked: snipes enables the expensive
   // snipe board seeding, so it takes a second deliberate confirm click.
@@ -2537,19 +2550,15 @@ function CountryRow({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex flex-col items-end leading-none">
-            <span className="text-[8px] font-semibold uppercase tracking-wider text-osu-f1">lifecycle</span>
-            <span className={`text-[10px] font-semibold uppercase tracking-wider ${statusTone}`}>{displayStatus}</span>
-          </div>
           <button
             type="button"
-            title={shouldResume ? `Resume ${entry.country} country warmup` : `Pause ${entry.country} country warmup`}
-            aria-label={shouldResume ? `Resume ${entry.country} country warmup` : `Pause ${entry.country} country warmup`}
+            title={`Queue ${entry.country} score catch-up from this country's last stored score`}
+            aria-label={`Queue ${entry.country} score catch-up`}
             disabled={busy}
-            onClick={onToggle}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-osu-b3/40 bg-osu-b4/70 text-osu-f1 transition hover:border-osu-c2/60 hover:text-white disabled:opacity-50"
+            onClick={onCatchUp}
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-osu-b3/40 bg-osu-b4/70 text-osu-f1 transition hover:border-osu-c2/60 hover:text-white disabled:opacity-50 cursor-pointer"
           >
-            {shouldResume ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+            <History className="h-3.5 w-3.5" />
           </button>
           {confirmDelete ? (
             <button
@@ -2580,6 +2589,38 @@ function CountryRow({
             </button>
           )}
         </div>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <span className="text-[9px] font-semibold uppercase tracking-wider text-osu-f1">Lifecycle</span>
+        <div className="flex items-center gap-1 rounded-md border border-osu-b3/25 bg-osu-b5/50 p-1">
+          {COUNTRY_LIFECYCLE_OPTIONS.map((lifecycle) => {
+            const active = lifecycle.value === entry.status;
+            return (
+              <button
+                key={lifecycle.value}
+                type="button"
+                disabled={busy}
+                aria-pressed={active}
+                title={lifecycle.blurb}
+                onClick={() => {
+                  if (lifecycle.value === entry.status) return;
+                  onSetStatus(lifecycle.value);
+                }}
+                className={`flex items-center gap-1.5 rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors duration-[120ms] disabled:opacity-50 ${
+                  active
+                    ? `bg-osu-b3/55 ${lifecycle.tone}`
+                    : "text-osu-f1 hover:text-osu-l2 cursor-pointer"
+                }`}
+              >
+                <span className={`h-1.5 w-1.5 rounded-full ${active ? lifecycle.dot : "bg-osu-b3"}`} />
+                {lifecycle.label}
+              </button>
+            );
+          })}
+        </div>
+        {displayStatus === "idle" ? (
+          <span className={`text-[10px] font-semibold uppercase tracking-wider ${statusTone}`}>idle by TTL</span>
+        ) : null}
       </div>
       <div className="mt-2 flex items-center gap-2">
         <span className="text-[9px] font-semibold uppercase tracking-wider text-osu-f1">Tier</span>

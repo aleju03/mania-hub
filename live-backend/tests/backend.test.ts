@@ -13,9 +13,9 @@ import { getTrackerSnapshot } from "../src/features/tracker.js";
 import { routeHttp, sendJson } from "../src/http/snapshots.js";
 import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { handleSse } from "../src/live/sse.js";
-import { OscBackfill } from "../src/osc/backfill.js";
+import { enqueueOscCountryCatchup, OscBackfill } from "../src/osc/backfill.js";
 import { refreshCountryRoster } from "../src/rosters/country-rosters.js";
-import { activateCountry, canSeedSnipesForCountry, deleteCountryData, getActiveCountryCodes, getIndexedCountryCodes, getMapsWarmCountryCodes, setCountryFeatureTier, setCountryPaused } from "../src/countries.js";
+import { activateCountry, canSeedSnipesForCountry, deleteCountryData, getActiveCountryCodes, getIndexedCountryCodes, getMapsWarmCountryCodes, setCountryFeatureTier, setCountryPaused, setCountryStatus } from "../src/countries.js";
 import { CountryClientTracker } from "../src/live/country-clients.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -142,6 +142,21 @@ describe("live backend", () => {
     expect(Number((await exec(db, "select count(*) as count from score_events")).rows[0].count)).toBe(1);
   });
 
+  it("keeps manually active configured countries active after registry reseeding", async () => {
+    const { db } = await setup(["CR"]);
+    const config = { trackedCountries: ["CR"], countryWarmTtlMs: 24 * 60 * 60 * 1000 };
+
+    await setCountryStatus(db, config, "CR", "active");
+
+    expect(await getActiveCountryCodes(db, config)).toEqual(["CR"]);
+    expect(String((await exec(db, "select status from country_registry where country = 'CR'")).rows[0].status)).toBe("active");
+
+    await setCountryStatus(db, config, "CR", "warm");
+    await activateCountry(db, new JobQueue(db), { ...config, rosterRefreshIntervalMs: 24 * 60 * 60 * 1000 }, "CR");
+
+    expect(String((await exec(db, "select status from country_registry where country = 'CR'")).rows[0].status)).toBe("warm");
+  });
+
   it("keeps prewarmed countries below live and snipes until they are requested", async () => {
     const { db, queue } = await setup(["CR"]);
     const config = {
@@ -184,6 +199,11 @@ describe("live backend", () => {
     const demoted = await setCountryFeatureTier(db, config, "MX", "live");
     expect(demoted).toMatchObject({ country: "MX", featureTier: "live", pinned: false });
     expect(await canSeedSnipesForCountry(db, config, "MX")).toBe(false);
+
+    const demotedPinned = await setCountryFeatureTier(db, config, "CR", "live");
+    expect(demotedPinned).toMatchObject({ country: "CR", featureTier: "live", pinned: true });
+    expect(await canSeedSnipesForCountry(db, config, "CR")).toBe(false);
+    expect((await activateCountry(db, queue, config, "CR")).featureTier).toBe("live");
   });
 
   it("deletes one country's registry and country-scoped projections", async () => {
@@ -775,6 +795,52 @@ describe("live backend", () => {
 
     const row = (await exec(db, "select value_json from live_meta where key = 'osc_backfill_cursor_ms'")).rows[0];
     expect(JSON.parse(String(row.value_json))).toBe(nextAfter);
+  });
+
+  it("queues country catch-up from that country's last stored score", async () => {
+    const { db, queue, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    await ingestor.ingestBatch([scores[0]]);
+
+    const queued = await enqueueOscCountryCatchup(queue, db, {
+      oscBackfillMaxAgeMs: 24 * 60 * 60 * 1000,
+      oscBackfillMaxPages: 200,
+    } as never, "cr");
+
+    expect(queued).toEqual({
+      country: "CR",
+      after: new Date("2026-05-12T00:02:00.000Z").getTime() - 5 * 60_000,
+    });
+    const row = (await exec(db, "select type, payload_json from jobs where dedupe_key = ?", [`osc-country-catchup:CR:${queued.after}`])).rows[0];
+    expect(row.type).toBe("osc_country_catchup");
+    expect(JSON.parse(String(row.payload_json))).toMatchObject({ country: "CR", after: queued.after, pagesRemaining: 200 });
+  });
+
+  it("runs country catch-up without inserting other active countries or rewinding the global cursor", async () => {
+    const { db, queue, ingestor } = await setup(["CR", "US"]);
+    const scores = await fixture<OscScore[]>("scores.json");
+    const existingCursor = new Date("2026-05-13T00:00:00.000Z").getTime();
+    await exec(db, "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('US', 101, 1, 'test', 1, ?)", [new Date().toISOString()]);
+    await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values ('osc_backfill_cursor_ms', ?, ?)", [
+      JSON.stringify(existingCursor),
+      new Date().toISOString(),
+    ]);
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ scores: [scores[0]], meta: { newest: "2026-05-12T00:02:00.000Z", has_more: false } }), { status: 200 }));
+    const backfill = new OscBackfill({
+      oscBaseUrl: "https://osc.example",
+      oscJsonTargetPerMinute: 60,
+      oscBackfillMaxAgeMs: 24 * 60 * 60 * 1000,
+      oscBackfillPageLimit: 2,
+      oscBackfillMaxPages: 2,
+    }, fetchMock as never);
+
+    const result = await backfill.runPage(db, queue, ingestor, { country: "CR", after: new Date("2026-05-11T00:00:00.000Z").getTime(), pagesRemaining: 2 });
+
+    expect(result).toMatchObject({ country: "CR", fetched: 1, inserted: 1 });
+    expect(Number((await exec(db, "select count(*) as count from score_events where country = 'CR'")).rows[0].count)).toBe(1);
+    expect(Number((await exec(db, "select count(*) as count from score_events where country = 'US'")).rows[0].count)).toBe(0);
+    expect(JSON.parse(String((await exec(db, "select value_json from live_meta where key = 'osc_backfill_cursor_ms'")).rows[0].value_json))).toBe(existingCursor);
+    expect((await exec(db, "select value_json from live_meta where key = 'osc_country_catchup_last_result:CR'")).rows).toHaveLength(1);
   });
 
   it("returns tracker snapshots and replayable SSE event rows", async () => {

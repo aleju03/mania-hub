@@ -180,9 +180,21 @@ function normalizeAdminPath(input: unknown): string {
     const country = url.searchParams.get("country");
     if (country && /^[A-Za-z]{2}$/.test(country)) return `/api/admin/refresh-roster?country=${country.toUpperCase()}`;
   }
+  if (url.pathname === "/api/admin/catch-up-country") {
+    const country = url.searchParams.get("country");
+    if (country && /^[A-Za-z]{2}$/.test(country)) return `/api/admin/catch-up-country?country=${country.toUpperCase()}`;
+  }
   if (url.pathname === "/api/admin/pause-country" || url.pathname === "/api/admin/resume-country") {
     const country = url.searchParams.get("country");
     if (country && /^[A-Za-z]{2}$/.test(country)) return `${url.pathname}?country=${country.toUpperCase()}`;
+  }
+  if (url.pathname === "/api/admin/set-country-status") {
+    const country = url.searchParams.get("country");
+    const status = url.searchParams.get("status");
+    const validStatus = status === "active" || status === "warm" || status === "paused";
+    if (country && /^[A-Za-z]{2}$/.test(country) && validStatus) {
+      return `/api/admin/set-country-status?country=${country.toUpperCase()}&status=${status}`;
+    }
   }
   if (url.pathname === "/api/admin/delete-country") {
     const country = url.searchParams.get("country");
@@ -365,8 +377,10 @@ export async function fetchLivePlayerAboutDirect(userId: number): Promise<LivePl
   return fetchLiveJson(`/api/profiles/${userId}/about`);
 }
 
-export async function fetchLiveTrackerSnapshot(country: string, limit = 100): Promise<LiveTrackerSnapshot> {
-  return fetchLiveJson(`/api/snapshots/tracker?country=${encodeURIComponent(country)}&limit=${limit}`);
+export async function fetchLiveTrackerSnapshot(country: string, limit = 100, options?: { observe?: boolean }): Promise<LiveTrackerSnapshot> {
+  const query = new URLSearchParams({ country, limit: String(limit) });
+  if (options?.observe) query.set("observe", "1");
+  return fetchLiveJson(`/api/snapshots/tracker?${query.toString()}`);
 }
 
 export interface LiveCountryActivation {
@@ -409,12 +423,16 @@ export async function activateLiveCountry(country: string): Promise<LiveCountryA
   }
 }
 
-export async function fetchLiveTopPlaysSnapshot(country: string, window: LiveTopPlaysSnapshot["window"]): Promise<LiveTopPlaysSnapshot> {
-  return fetchLiveJson(`/api/snapshots/top-plays?country=${encodeURIComponent(country)}&window=${window}`);
+export async function fetchLiveTopPlaysSnapshot(country: string, window: LiveTopPlaysSnapshot["window"], options?: { observe?: boolean }): Promise<LiveTopPlaysSnapshot> {
+  const query = new URLSearchParams({ country, window });
+  if (options?.observe) query.set("observe", "1");
+  return fetchLiveJson(`/api/snapshots/top-plays?${query.toString()}`);
 }
 
-export async function fetchLiveSnipesSnapshot(country: string, limit = 500): Promise<LiveSnipesSnapshot> {
-  return fetchLiveJson(`/api/snapshots/snipes?country=${encodeURIComponent(country)}&limit=${limit}`);
+export async function fetchLiveSnipesSnapshot(country: string, limit = 500, options?: { observe?: boolean }): Promise<LiveSnipesSnapshot> {
+  const query = new URLSearchParams({ country, limit: String(limit) });
+  if (options?.observe) query.set("observe", "1");
+  return fetchLiveJson(`/api/snapshots/snipes?${query.toString()}`);
 }
 
 export async function fetchLiveMapsSnapshot(
@@ -462,10 +480,12 @@ export async function fetchLiveDanEstimates(items: LiveDanEstimateRequest[], est
   });
 }
 
-export function openLiveEventSource(country: string): EventSource | null {
+export function openLiveEventSource(country: string, options?: { observe?: boolean }): EventSource | null {
   const base = getLiveBackendUrl();
   if (!base || typeof EventSource === "undefined") return null;
-  return new EventSource(`${base}/api/live?country=${encodeURIComponent(country)}`);
+  const query = new URLSearchParams({ country });
+  if (options?.observe) query.set("observe", "1");
+  return new EventSource(`${base}/api/live?${query.toString()}`);
 }
 
 async function fetchLiveJson<T>(path: string, init?: RequestInit): Promise<T> {

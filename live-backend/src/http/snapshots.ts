@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { brotliCompress, constants as zlibConstants, gzip } from "node:zlib";
 import type { Config } from "../config.js";
 import { handleBeatmapAudioRequest } from "../audio/http.js";
-import { activateCountry, deleteCountryData, getCountryRegistry, isCountryFeatureAtLeast, setCountryFeatureTier, setCountryPaused, type CountryFeatureTier } from "../countries.js";
+import { activateCountry, deleteCountryData, getCountryRegistry, isCountryFeatureAtLeast, setCountryFeatureTier, setCountryPaused, setCountryStatus, type CountryFeatureTier, type CountryRegistryStatus } from "../countries.js";
 import type { Db } from "../db.js";
 import { dbHealth, exec, parseJson } from "../db.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
@@ -18,7 +18,7 @@ import type { CountryClientTracker } from "../live/country-clients.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import type { OscStatus } from "../osc/client.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
-import { enqueueOscBackfill } from "../osc/backfill.js";
+import { enqueueOscBackfill, enqueueOscCountryCatchup } from "../osc/backfill.js";
 import {
   cancelReplayVideoExport,
   createReplayVideoExport,
@@ -181,33 +181,33 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     return true;
   }
   if (url.pathname === "/api/snapshots/tracker") {
-    if (!await activatePublicCountry(req, res, ctx, country)) return true;
+    if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     sendJson(req, res, ctx, 200, await getTrackerSnapshot(ctx.db, country, clampLimit(url.searchParams.get("limit"), 100, 500)));
     return true;
   }
   if (url.pathname === "/api/snapshots/top-plays") {
-    if (!await activatePublicCountry(req, res, ctx, country)) return true;
+    if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     sendJson(req, res, ctx, 200, await getTopPlaysSnapshot(ctx.db, country, url.searchParams.get("window") ?? "7d"));
     return true;
   }
   if (url.pathname === "/api/snapshots/snipes") {
-    if (!await activatePublicCountry(req, res, ctx, country)) return true;
+    if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     sendJson(req, res, ctx, 200, await getSnipesSnapshot(ctx.db, country, clampLimit(url.searchParams.get("limit"), 500, 1000)));
     return true;
   }
   if (url.pathname === "/api/snapshots/maps-page") {
-    if (!await activatePublicCountry(req, res, ctx, country)) return true;
+    if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     await handleMapsPageSnapshot(req, res, ctx, country, parseMapsPageQuery(url.searchParams));
     return true;
   }
   if (url.pathname === "/api/snapshots/maps") {
-    if (!await activatePublicCountry(req, res, ctx, country)) return true;
+    if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     const section = url.searchParams.get("section") === "random" ? "random" : "core";
     await handleMapsSnapshot(req, res, ctx, country, section);
     return true;
   }
   if (url.pathname === "/api/snapshots/rank-deltas") {
-    if (!await activatePublicCountry(req, res, ctx, country)) return true;
+    if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     sendJson(req, res, ctx, 200, await getRankDeltaSnapshot(ctx.db, country, parseUserIds(url.searchParams.get("userIds"))));
     return true;
   }
@@ -376,6 +376,19 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 200, { ok: true, country: await setCountryPaused(ctx.db, ctx.config, country, paused) });
     return true;
   }
+  if (url.pathname === "/api/admin/set-country-status") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    const status = parseCountryStatusParam(url.searchParams.get("status"));
+    if (!status) {
+      sendJson(req, res, ctx, 400, { error: "invalid_status" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, { ok: true, country: await setCountryStatus(ctx.db, ctx.config, country, status) });
+    return true;
+  }
   if (url.pathname === "/api/admin/set-country-tier") {
     if (!isAdmin(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
@@ -409,6 +422,17 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     await enqueueMapsRefresh(ctx.queue, country, { priority: 90, replaceDone: true });
     sendJson(req, res, ctx, 200, { ok: true, country });
+    return true;
+  }
+  if (url.pathname === "/api/admin/catch-up-country") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    await setCountryStatus(ctx.db, ctx.config, country, "active");
+    await enqueueRosterRefreshes(ctx.queue, [country]);
+    const queued = await enqueueOscCountryCatchup(ctx.queue, ctx.db, ctx.config, country);
+    sendJson(req, res, ctx, 200, { ok: true, ...queued });
     return true;
   }
   if (url.pathname === "/api/admin/clear-failed-jobs") {
@@ -686,13 +710,25 @@ function hasInvalidCountryParam(url: URL): boolean {
   return raw != null && !normalizeCountryParam(raw);
 }
 
+function isObserveCountryRequest(url: URL): boolean {
+  return url.searchParams.get("observe") === "1";
+}
+
 function routeUsesCountry(pathname: string): boolean {
   return pathname === "/api/countries/activate"
     || pathname === "/api/events"
     || pathname.startsWith("/api/snapshots/")
     || pathname === "/api/admin/refresh-roster"
     || pathname === "/api/admin/refresh-maps"
+    || pathname === "/api/admin/catch-up-country"
+    || pathname === "/api/admin/set-country-status"
     || pathname === "/api/admin/set-country-tier";
+}
+
+function parseCountryStatusParam(value: string | null): CountryRegistryStatus | null {
+  return value === "active" || value === "warm" || value === "paused"
+    ? value
+    : null;
 }
 
 function parseCountryFeatureTierParam(value: string | null): CountryFeatureTier | null {
