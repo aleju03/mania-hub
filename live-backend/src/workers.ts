@@ -39,16 +39,16 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
   {
     name: "fast",
     jobTypes: ["refresh_user_top_scores", "refresh_user_maps_farmed_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "reconcile_user_recent_scores"],
-    claimLimit: 4,
+    claimLimit: 3,
     intervalMs: 750,
   },
   {
-    // oSC JSON backfill/catch-up has its own limiter (separate from the osu! API)
-    // and the lowest priority, so it must not share the "fast" lane or it gets
-    // starved behind enrich/reconcile jobs whenever live traffic keeps that lane busy.
-    name: "osc-backfill",
-    jobTypes: ["osc_backfill", "osc_country_catchup"],
-    claimLimit: 2,
+    // Reserve one slot for admin-triggered country catch-up without increasing
+    // total worker pressure versus the old single fast lane. Global backfill is
+    // intentionally excluded because it can generate enough writes to stall HTTP.
+    name: "osc-country-catchup",
+    jobTypes: ["osc_country_catchup"],
+    claimLimit: 1,
     intervalMs: 1_000,
   },
   {

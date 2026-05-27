@@ -37,6 +37,8 @@ type OscScoresResponse = OscScore[] | {
 };
 
 const COUNTRY_CATCHUP_OVERLAP_MS = 5 * 60_000;
+const COUNTRY_CATCHUP_PAGE_LIMIT = 25;
+const COUNTRY_CATCHUP_PAGE_DELAY_MS = 5_000;
 
 export class OscBackfill {
   private readonly limiter: TokenBucketLimiter;
@@ -64,9 +66,10 @@ export class OscBackfill {
     if (country && payload.epoch != null && await isCatchupCancelled(db, country, payload.epoch)) {
       return { fetched: 0, inserted: 0, skipped: 0, after, nextAfter: null, hasMore: false, country };
     }
+    const pageLimit = country ? Math.min(this.config.oscBackfillPageLimit, COUNTRY_CATCHUP_PAGE_LIMIT) : this.config.oscBackfillPageLimit;
     const url = new URL("/api/scores", this.config.oscBaseUrl);
     url.searchParams.set("mode", "mania");
-    url.searchParams.set("limit", String(this.config.oscBackfillPageLimit));
+    url.searchParams.set("limit", String(pageLimit));
     if (after > 0) url.searchParams.set("after", String(after));
     const responseBody = await this.limiter.schedule("osc_json_backfill", "/api/scores", async () => {
       const startedAt = new Date().toISOString();
@@ -85,7 +88,7 @@ export class OscBackfill {
     const nextAfter = getNextAfter(responseBody, scores, after);
     const pagesRemaining = Math.max(0, payload.pagesRemaining ?? this.config.oscBackfillMaxPages);
     const metaHasMore = Array.isArray(responseBody) ? undefined : responseBody.meta?.has_more ?? responseBody.meta?.hasMore;
-    const hasMore = (metaHasMore ?? scores.length >= this.config.oscBackfillPageLimit) && nextAfter != null && pagesRemaining > 1;
+    const hasMore = (metaHasMore ?? scores.length >= pageLimit) && nextAfter != null && pagesRemaining > 1;
     const finishedAt = new Date().toISOString();
     if (nextAfter != null && !country) {
       await setGlobalCursor(db, nextAfter, finishedAt);
@@ -107,7 +110,7 @@ export class OscBackfill {
         country ? "osc_country_catchup" : "osc_backfill",
         country ? `osc-country-catchup:${country}:${nextAfter}` : `osc-backfill:${nextAfter}`,
         nextPayload,
-        { priority: 5, runAfter: new Date(Date.now() + this.pageDelayMs()), replaceDone: true },
+        { priority: 5, runAfter: new Date(Date.now() + (country ? COUNTRY_CATCHUP_PAGE_DELAY_MS : this.pageDelayMs())), replaceDone: true },
       );
     }
     await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)", [
