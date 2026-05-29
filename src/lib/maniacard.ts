@@ -7,7 +7,7 @@
 // raw BPM/density scale.
 
 import type { OsuScore, OsuScoreStatistics } from "./types";
-import { getDisplayedAccuracy, getModAcronyms, getScoreRate } from "./score";
+import { getModAcronyms, getScoreRate, getStableScaleManiaAccuracy, isLazerScore } from "./score";
 
 export interface ManiaSkills {
   // Average star rating across the considered plays (raw, unrounded).
@@ -183,7 +183,8 @@ function computePlayTraits(score: OsuScore, baseline: KeymodeBaseline) {
   const riceRatio = 1 - lnRatio;
   const riceDensity = b.count_circles / length;
   const lnDensity = b.count_sliders / length;
-  const acc = getDisplayedAccuracy(score);
+  const acc = getStableScaleManiaAccuracy(score);
+  const isLazer = isLazerScore(score);
   const od = b.accuracy;
   const maxCombo = b.max_combo && b.max_combo > 0 ? b.max_combo : objects;
   const comboRatio = maxCombo > 0 ? clamp(score.max_combo / maxCombo) : 1;
@@ -208,9 +209,16 @@ function computePlayTraits(score: OsuScore, baseline: KeymodeBaseline) {
   const precisionBase = curve(normalize(acc, 0.94, 0.999), 1.55);
   const maxJudgementRatioScore = getMaxJudgementRatioScore(score.statistics);
   const precisionDifficultyGate = 0.34 + srScore * 0.66;
-  const judgementPrecision = maxJudgementRatioScore == null
-    ? precisionBase
-    : precisionBase * 0.7 + (maxJudgementRatioScore * precisionDifficultyGate) * 0.3;
+  // Lazer scores an LN as two judgements (head + tail), and tails skew toward
+  // "great", so the MAX/300 ratio sags on LN-heavy maps without reflecting any
+  // real precision loss. Fade the ratio term out as LN density rises on lazer
+  // so those plays lean on the (client-normalized) accuracy instead. Stable
+  // judges an LN once, so its MAX stays an honest signal and keeps full weight.
+  const ratioReliability = isLazer ? 1 - lnRatio : 1;
+  const ratioWeight = maxJudgementRatioScore == null ? 0 : 0.3 * ratioReliability;
+  const judgementPrecision =
+    precisionBase * (1 - ratioWeight) +
+    (maxJudgementRatioScore ?? 0) * precisionDifficultyGate * ratioWeight;
   const speedRateGate = rate < 1 ? Math.pow(rate, 0.72) : 1;
 
   const precision = clamp(

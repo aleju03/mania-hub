@@ -325,6 +325,29 @@ describe("computeManiaSkills", () => {
     expect(highMax?.accuracy).toBeGreaterThan(lowMax?.accuracy ?? 0);
   });
 
+  test("fades the MAX-to-300 ratio signal on dense-LN lazer plays", () => {
+    const lnMap = {
+      ...score().beatmap,
+      difficulty_rating: 7.4,
+      count_circles: 200,
+      count_sliders: 1800,
+      max_combo: 2000,
+    };
+    const lnPlay = (statistics: OsuScore["statistics"]) =>
+      computeManiaSkills([
+        score({ accuracy: 1, max_combo: 2000, statistics, beatmap: lnMap }),
+      ]);
+
+    // On lazer, LN tails are separate, great-skewed judgements, so the MAX
+    // ratio swings wildly on dense-LN maps without reflecting real precision.
+    // The two plays should land close instead of one being punished.
+    const lowRatio = lnPlay({ count_geki: 400, count_300: 1600, count_miss: 0 });
+    const highRatio = lnPlay({ count_geki: 1600, count_300: 400, count_miss: 0 });
+
+    const gap = Math.abs((highRatio?.accuracy ?? 0) - (lowRatio?.accuracy ?? 0));
+    expect(gap).toBeLessThan(60);
+  });
+
   test("does not over-credit low-star perfects as top-tier precision", () => {
     const cleanLowStar = computeManiaSkills([
       score({

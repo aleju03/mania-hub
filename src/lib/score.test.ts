@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateReplacementPpGain, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getManiaJudgementCounts, getScoreDisplayValues, hasCustomRateMod, isLazerScore } from "./score";
+import { calculateReplacementPpGain, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getManiaJudgementCounts, getScoreDisplayValues, getStableScaleManiaAccuracy, hasCustomRateMod, isLazerScore } from "./score";
 import type { OsuScore } from "./types";
 
 function createScore(overrides: Partial<OsuScore>): OsuScore {
@@ -91,6 +91,47 @@ describe("getDisplayedAccuracy", () => {
     }));
 
     expect(accuracy).toBeCloseTo((305 + 300) / (2 * 305), 6);
+  });
+});
+
+describe("getStableScaleManiaAccuracy", () => {
+  it("scores a lazer all-great play as 100% instead of the 305-weighted value", () => {
+    const score = createScore({
+      accuracy: 300 / 305,
+      legacy_score_id: null,
+      legacy_total_score: 0,
+      statistics: { perfect: 0, great: 1000, miss: 0 },
+      type: "solo_score",
+    });
+
+    // Lazer reports ~98.4% via the 305 MAX weighting; on the stable scale a
+    // miss-free all-300 play is 100%.
+    expect(getDisplayedAccuracy(score)).toBeCloseTo(300 / 305, 6);
+    expect(getStableScaleManiaAccuracy(score)).toBe(1);
+  });
+
+  it("matches the stable accuracy for legacy-submitted scores", () => {
+    const score = createScore({
+      accuracy: 0.999012,
+      legacy_score_id: 654681964,
+      legacy_total_score: 998117,
+      statistics: { perfect: 1388, great: 89 },
+      type: "solo_score",
+    });
+
+    expect(getStableScaleManiaAccuracy(score)).toBe(1);
+  });
+
+  it("falls back to displayed accuracy when judgement counts are missing", () => {
+    const score = createScore({
+      accuracy: 0.97,
+      legacy_score_id: null,
+      legacy_total_score: 0,
+      statistics: {},
+      type: "solo_score",
+    });
+
+    expect(getStableScaleManiaAccuracy(score)).toBeCloseTo(0.97, 6);
   });
 });
 
