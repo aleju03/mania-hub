@@ -15,7 +15,7 @@ import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { handleSse } from "../src/live/sse.js";
 import { cancelOscCountryCatchup, enqueueOscCountryCatchup, OscBackfill } from "../src/osc/backfill.js";
 import { refreshCountryRoster } from "../src/rosters/country-rosters.js";
-import { activateCountry, canSeedSnipesForCountry, deleteCountryData, getActiveCountryCodes, getIndexedCountryCodes, getMapsWarmCountryCodes, setCountryFeatureTier, setCountryPaused, setCountryStatus } from "../src/countries.js";
+import { activateCountry, canSeedSnipesForCountry, deleteCountryData, getActiveCountryCodes, getIndexedCountryCodes, getMapsWarmCountryCodes, setCountryFeatureTier, setCountryPaused, setCountryStatus, touchCountryRequest } from "../src/countries.js";
 import { CountryClientTracker } from "../src/live/country-clients.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { JobQueue } from "../src/jobs/queue.js";
@@ -113,6 +113,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   if (dir) await rm(dir, { recursive: true, force: true });
 });
 
@@ -155,6 +156,40 @@ describe("live backend", () => {
     await activateCountry(db, new JobQueue(db), { ...config, rosterRefreshIntervalMs: 24 * 60 * 60 * 1000 }, "CR");
 
     expect(String((await exec(db, "select status from country_registry where country = 'CR'")).rows[0].status)).toBe("warm");
+  });
+
+  it("keeps manually warm countries warm after the passive request TTL", async () => {
+    const { db, queue } = await setup(["CR"]);
+    const config = {
+      trackedCountries: ["CR"],
+      countryWarmTtlMs: 60 * 60 * 1000,
+      rosterRefreshIntervalMs: 24 * 60 * 60 * 1000,
+    };
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-30T00:00:00.000Z"));
+
+    await activateCountry(db, queue, config, "MX");
+    await setCountryStatus(db, config, "MX", "warm");
+    vi.setSystemTime(new Date("2026-05-30T02:00:00.000Z"));
+
+    expect(await getActiveCountryCodes(db, config)).toEqual(expect.arrayContaining(["MX"]));
+    const row = (await exec(db, "select status, keep_warm from country_registry where country = 'MX'")).rows[0];
+    expect(String(row.status)).toBe("warm");
+    expect(Number(row.keep_warm)).toBe(1);
+  });
+
+  it("lets passively warmed countries expire by TTL", async () => {
+    const { db } = await setup(["CR"]);
+    const config = { trackedCountries: ["CR"], countryWarmTtlMs: 60 * 60 * 1000 };
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-30T00:00:00.000Z"));
+
+    await touchCountryRequest(db, "MX");
+    expect(await getIndexedCountryCodes(db, config)).toEqual(expect.arrayContaining(["MX"]));
+    vi.setSystemTime(new Date("2026-05-30T02:00:00.000Z"));
+
+    expect(await getIndexedCountryCodes(db, config)).not.toContain("MX");
+    expect(Number((await exec(db, "select keep_warm from country_registry where country = 'MX'")).rows[0].keep_warm)).toBe(0);
   });
 
   it("keeps prewarmed countries below live and snipes until they are requested", async () => {

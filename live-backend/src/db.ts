@@ -22,6 +22,7 @@ export async function migrate(db: Db): Promise<void> {
     await db.execute(statement);
   }
   await migrateCountryRegistryFeatureTier(db);
+  await migrateCountryRegistryKeepWarm(db);
   await migrateScoreEventsIdentity(db);
   await migrateProfileSnapshots(db);
   await migrateMapsFarmedOverlay(db);
@@ -85,6 +86,13 @@ async function migrateCountryRegistryFeatureTier(db: Db): Promise<void> {
   if (columns.includes("feature_tier")) return;
 
   await db.execute("alter table country_registry add column feature_tier text not null default 'live'");
+}
+
+async function migrateCountryRegistryKeepWarm(db: Db): Promise<void> {
+  const columns = (await db.execute("pragma table_info(country_registry)")).rows.map((row) => String(row.name));
+  if (columns.includes("keep_warm")) return;
+
+  await db.execute("alter table country_registry add column keep_warm integer not null default 0");
 }
 
 async function migrateScoreEventsIdentity(db: Db): Promise<void> {

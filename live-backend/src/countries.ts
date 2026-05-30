@@ -12,6 +12,7 @@ export interface CountryRegistryRow {
   status: CountryRegistryStatus;
   featureTier: CountryFeatureTier;
   pinned: boolean;
+  keepWarm: boolean;
   firstRequestedAt: string;
   lastRequestedAt: string;
   lastRosterRefreshAt: string | null;
@@ -79,15 +80,17 @@ export async function setCountryStatus(
   const now = nowIso();
   await ensurePinnedCountries(db, config);
   const configuredTier = getConfiguredCountryFeatureTier(config, normalized) ?? "indexed";
+  const keepWarm = status === "warm";
   await exec(
     db,
-    `insert into country_registry (country, status, feature_tier, pinned, first_requested_at, last_requested_at, updated_at)
-     values (?, ?, ?, ?, ?, ?, ?)
+    `insert into country_registry (country, status, feature_tier, pinned, keep_warm, first_requested_at, last_requested_at, updated_at)
+     values (?, ?, ?, ?, ?, ?, ?, ?)
      on conflict(country) do update set
        status = excluded.status,
+       keep_warm = excluded.keep_warm,
        last_requested_at = case when excluded.status = 'paused' then country_registry.last_requested_at else excluded.last_requested_at end,
        updated_at = excluded.updated_at`,
-    [normalized, status, configuredTier, config.trackedCountries.includes(normalized) ? 1 : 0, now, now, now],
+    [normalized, status, configuredTier, config.trackedCountries.includes(normalized) ? 1 : 0, keepWarm ? 1 : 0, now, now, now],
   );
   const row = await getCountryRegistryRow(db, normalized, config);
   if (!row) throw new Error(`Could not update country ${normalized}`);
@@ -243,6 +246,7 @@ async function upsertCountry(db: Db, country: string, options: { pinned: boolean
 function rowToCountryRegistry(row: Record<string, unknown>, config: CountryWarmConfig): CountryRegistryRow {
   const country = String(row.country).toUpperCase();
   const pinned = Number(row.pinned ?? 0) === 1 || config.trackedCountries.includes(country);
+  const keepWarm = Number(row.keep_warm ?? 0) === 1;
   const featureTier = parseCountryFeatureTier(row.feature_tier);
   const lastRequestedAt = String(row.last_requested_at);
   const warmCutoff = Date.now() - config.countryWarmTtlMs;
@@ -253,13 +257,14 @@ function rowToCountryRegistry(row: Record<string, unknown>, config: CountryWarmC
     status: String(row.status ?? "warm") as CountryRegistryStatus,
     featureTier,
     pinned,
+    keepWarm,
     firstRequestedAt: String(row.first_requested_at),
     lastRequestedAt,
     lastRosterRefreshAt: row.last_roster_refresh_at == null ? null : String(row.last_roster_refresh_at),
     lastScoreAt: row.last_score_at == null ? null : String(row.last_score_at),
     activeUsers: 0,
     lastActiveAt: lastRequestedAt,
-    isWarm: pinned || isConfigured || (Number.isFinite(lastRequestedMs) && lastRequestedMs >= warmCutoff),
+    isWarm: pinned || keepWarm || isConfigured || (Number.isFinite(lastRequestedMs) && lastRequestedMs >= warmCutoff),
   };
 }
 
@@ -272,7 +277,7 @@ async function getCountryCodesWithFeature(db: Db, config: CountryWarmConfig, min
   const countries = new Set<string>();
   const rows = (await exec(
     db,
-    `select country, status, feature_tier, pinned, last_requested_at
+    `select country, status, feature_tier, pinned, keep_warm, last_requested_at
      from country_registry
      order by pinned desc, last_requested_at desc`,
   )).rows;

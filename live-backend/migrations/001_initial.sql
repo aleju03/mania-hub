@@ -54,6 +54,7 @@ create table if not exists country_registry (
   status text not null default 'warm',
   feature_tier text not null default 'indexed',
   pinned integer not null default 0,
+  keep_warm integer not null default 0,
   first_requested_at text not null,
   last_requested_at text not null,
   last_roster_refresh_at text,
