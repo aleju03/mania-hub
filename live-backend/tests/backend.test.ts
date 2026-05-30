@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot } from "../src/features/snipes.js";
-import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsSnapshot, recordMapsFarmedScore, refreshUserMapsFarmedScores } from "../src/features/maps.js";
+import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsSnapshot, recordMapsFarmedScore, refreshCountryMaps, refreshUserMapsFarmedScores } from "../src/features/maps.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../src/features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
 import { confirmTopPlay, getTopPlaysSnapshot, TopPlayConfirmationPendingError } from "../src/features/top-plays.js";
@@ -1846,6 +1846,63 @@ describe("live backend", () => {
     const user = (await exec(db, "select maps_farmed_min_pp, maps_farmed_scores_refreshed_at from users where user_id = 101")).rows[0];
     expect(Number(user.maps_farmed_min_pp)).toBe(201);
     expect(String(user.maps_farmed_scores_refreshed_at)).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("builds country maps from the configured roster size", async () => {
+    const { db } = await setup();
+    const [baseScore] = await fixture<OscScore[]>("scores.json");
+    const previousRosterSize = process.env.ROSTER_SIZE;
+    process.env.ROSTER_SIZE = "100";
+    try {
+      const now = "2026-05-12T11:30:00.000Z";
+      for (let rank = 1; rank <= 100; rank++) {
+        const userId = 10_000 + rank;
+        await exec(
+          db,
+          `insert into users (user_id, username, avatar_url, country_code, updated_at)
+           values (?, ?, ?, 'CR', ?)`,
+          [userId, `Player ${rank}`, `https://assets.example/${userId}.png`, now],
+        );
+        await exec(
+          db,
+          `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+           values ('CR', ?, ?, 'test', 1, ?)`,
+          [userId, rank, now],
+        );
+      }
+      const osu = {
+        getUserBestScoresWindow: vi.fn(async (userId: number): Promise<OscScore[]> => userId === 10_100
+          ? [{
+              ...baseScore,
+              id: 50_000,
+              user_id: userId,
+              beatmap_id: 60_000,
+              pp: 650,
+              beatmap: {
+                ...baseScore.beatmap!,
+                id: 60_000,
+                beatmapset_id: 70_000,
+              },
+              beatmapset: {
+                ...baseScore.beatmapset!,
+                id: 70_000,
+                status: "ranked",
+              },
+            }]
+          : []),
+        getUserMostPlayed: vi.fn(async () => []),
+        getUserFavourites: vi.fn(async () => []),
+      };
+
+      const snapshot = await refreshCountryMaps(db, osu, { country: "CR" });
+
+      expect(osu.getUserBestScoresWindow).toHaveBeenCalledTimes(100);
+      expect(osu.getUserBestScoresWindow).toHaveBeenCalledWith(10_100, 200, "job:refresh_country_maps:farmed");
+      expect(snapshot.farmed.some((entry) => entry.players.some((player) => player.id === 10_100))).toBe(true);
+    } finally {
+      if (previousRosterSize == null) delete process.env.ROSTER_SIZE;
+      else process.env.ROSTER_SIZE = previousRosterSize;
+    }
   });
 
   it("splits maps snapshots into core and random sections", async () => {

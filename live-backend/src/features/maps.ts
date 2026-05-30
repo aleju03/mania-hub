@@ -1,4 +1,5 @@
 import type { InValue } from "@libsql/client";
+import { readConfig } from "../config.js";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
@@ -1541,6 +1542,8 @@ export async function recordMapsFarmedScore(
 }
 
 async function getMapsUsers(db: Db, country: string): Promise<MapsUser[]> {
+  const config = readConfig();
+  const rosterSize = Math.max(1, Math.floor(config.rosterSize));
   const rows = (await exec(
     db,
     `select r.user_id, u.username, u.avatar_url
@@ -1548,8 +1551,8 @@ async function getMapsUsers(db: Db, country: string): Promise<MapsUser[]> {
      left join users u on u.user_id = r.user_id
      where r.country = ? and r.is_tracked = 1
      order by r.rank asc
-     limit 50`,
-    [country],
+     limit ?`,
+    [country, rosterSize],
   )).rows;
   return rows.map((row) => ({
     id: Number(row.user_id),
