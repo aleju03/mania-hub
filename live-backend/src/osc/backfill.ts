@@ -44,7 +44,7 @@ export class OscBackfill {
   private readonly limiter: TokenBucketLimiter;
 
   constructor(
-    private readonly config: Pick<Config, "oscBaseUrl" | "oscJsonTargetPerMinute" | "oscBackfillMaxAgeMs" | "oscBackfillPageLimit" | "oscBackfillMaxPages">,
+    private readonly config: Pick<Config, "oscBaseUrl" | "oscJsonTargetPerMinute" | "oscBackfillMaxAgeMs" | "oscBackfillPageLimit" | "oscBackfillMaxPages"> & Partial<Pick<Config, "oscGlobalBackfillPageLimit">>,
     private readonly fetchImpl: typeof fetch = fetch,
   ) {
     this.limiter = new TokenBucketLimiter(config.oscJsonTargetPerMinute);
@@ -66,7 +66,9 @@ export class OscBackfill {
     if (country && payload.epoch != null && await isCatchupCancelled(db, country, payload.epoch)) {
       return { fetched: 0, inserted: 0, skipped: 0, after, nextAfter: null, hasMore: false, country };
     }
-    const pageLimit = country ? Math.min(this.config.oscBackfillPageLimit, COUNTRY_CATCHUP_PAGE_LIMIT) : this.config.oscBackfillPageLimit;
+    const pageLimit = country
+      ? Math.min(this.config.oscBackfillPageLimit, COUNTRY_CATCHUP_PAGE_LIMIT)
+      : Math.min(this.config.oscBackfillPageLimit, this.config.oscGlobalBackfillPageLimit ?? 100);
     const url = new URL("/api/scores", this.config.oscBaseUrl);
     url.searchParams.set("mode", "mania");
     url.searchParams.set("limit", String(pageLimit));
@@ -122,9 +124,9 @@ export class OscBackfill {
   }
 
   private async resolveAfter(db: Db, payloadAfter: number | undefined): Promise<number> {
-    if (Number.isFinite(payloadAfter) && Number(payloadAfter) > 0) return Number(payloadAfter);
-    const storedAfter = await this.getStoredBackfillAfter(db);
     const boundedAfter = Date.now() - this.config.oscBackfillMaxAgeMs;
+    if (Number.isFinite(payloadAfter) && Number(payloadAfter) > 0) return Math.max(Number(payloadAfter), boundedAfter);
+    const storedAfter = await this.getStoredBackfillAfter(db);
     return Math.max(storedAfter, boundedAfter);
   }
 

@@ -43,9 +43,16 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     intervalMs: 750,
   },
   {
+    // Keep global backfill separate and slow so socket outages can be repaired
+    // without letting JSON catch-up crowd out interactive enrichment jobs.
+    name: "osc-backfill",
+    jobTypes: ["osc_backfill"],
+    claimLimit: 1,
+    intervalMs: 10_000,
+  },
+  {
     // Reserve one slot for admin-triggered country catch-up without increasing
-    // total worker pressure versus the old single fast lane. Global backfill is
-    // intentionally excluded because it can generate enough writes to stall HTTP.
+    // pressure on the fast lane.
     name: "osc-country-catchup",
     jobTypes: ["osc_country_catchup"],
     claimLimit: 1,

@@ -36,7 +36,11 @@ export async function createApp() {
   const ingestor = new ScoreIngestor(db, queue, events, config);
   const abuse = new AbuseGuard();
   const countryClients = new CountryClientTracker();
-  const osc = new OscSocketClient(config, ingestor);
+  const osc = new OscSocketClient(
+    config,
+    ingestor,
+    config.enableOscBackfill ? () => enqueueOscBackfill(queue, db, config) : undefined,
+  );
   if (config.enableStartupRosterRefresh && osu.hasCredentials()) {
     await enqueueRosterRefreshes(queue, await getIndexedCountryCodes(db, config));
   }

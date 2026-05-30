@@ -703,6 +703,8 @@ describe("live backend", () => {
   });
 
   it("runs queued oSC backfill one page at a time and schedules the next page", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T00:05:00.000Z"));
     const { db, queue, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
     await exec(
@@ -729,6 +731,8 @@ describe("live backend", () => {
   });
 
   it("requeues completed oSC backfill cursor jobs on a new catch-up chain", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T00:05:00.000Z"));
     const { db, queue, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
     const nextAfter = new Date("2026-05-12T00:03:00.000Z").getTime() + 1;
@@ -778,7 +782,31 @@ describe("live backend", () => {
     expect(JSON.parse(String(row.payload_json)).after).toBe(oldGapCursor);
   });
 
+  it("bounds stale oSC backfill payloads to the configured max age", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-30T12:00:00.000Z"));
+    const { db, queue, ingestor } = await setup();
+    let requestedAfter = "";
+    const fetchMock = vi.fn(async (url: URL) => {
+      requestedAfter = url.searchParams.get("after") ?? "";
+      return new Response(JSON.stringify({ scores: [], meta: { has_more: false } }), { status: 200 });
+    });
+    const backfill = new OscBackfill({
+      oscBaseUrl: "https://osc.example",
+      oscJsonTargetPerMinute: 60,
+      oscBackfillMaxAgeMs: 60 * 60 * 1000,
+      oscBackfillPageLimit: 2,
+      oscBackfillMaxPages: 2,
+    }, fetchMock as never);
+
+    await backfill.runPage(db, queue, ingestor, { after: new Date("2026-05-27T12:00:00.000Z").getTime(), pagesRemaining: 1 });
+
+    expect(Number(requestedAfter)).toBe(new Date("2026-05-30T11:00:00.000Z").getTime());
+  });
+
   it("stores a contiguous oSC backfill cursor after each page", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T00:05:00.000Z"));
     const { db, queue, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
     const nextAfter = new Date("2026-05-12T00:03:00.000Z").getTime() + 1;
