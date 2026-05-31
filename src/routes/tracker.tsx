@@ -833,8 +833,8 @@ function ScoresPage() {
                 ))}
               </div>
               {/* Desktop: vertical sidebar */}
-              <div className="hidden lg:flex flex-col items-center gap-2 flex-shrink-0 pt-1">
-                <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-1">Playing</span>
+              <div className="hidden lg:flex sticky top-[76px] max-h-[calc(100svh_-_196px)] self-start flex-col items-center gap-2 flex-shrink-0 overflow-y-auto overscroll-contain pr-1 pt-1 pb-1 [scrollbar-gutter:stable]">
+                <span className="shrink-0 text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-1">Playing</span>
                 {activePlayers.map((player) => (
                   <button
                     key={player.id}
@@ -843,7 +843,7 @@ function ScoresPage() {
                       event.preventDefault();
                     }}
                     aria-pressed={selectedPlayerIdSet.has(player.id)}
-                    className="cursor-pointer group relative"
+                    className="cursor-pointer group relative shrink-0"
                     title={`${player.username} - click to filter`}
                   >
                     <div className={`ring-2 rounded-full transition-all ${
