@@ -2318,6 +2318,96 @@ describe("live backend", () => {
     expect(favTop.playerCount).toBe(2);
   });
 
+  it("preserves truncated global farmed counts when applying live overlay rows", async () => {
+    const { db, queue } = await setup();
+    const refreshedAt = "2026-05-12T12:00:00.000Z";
+    const overlayAt = "2026-05-12T12:05:00.000Z";
+    const previewPlayers = Array.from({ length: 80 }, (_, index) => ({
+      id: 10_000 + index,
+      mods: [],
+      pp: 500 - index,
+      scoreUrl: null,
+      playedAt: refreshedAt,
+    }));
+    const covers = JSON.stringify({ card: "https://assets.example/card.jpg", cover: "https://assets.example/cover.jpg" });
+    await exec(
+      db,
+      `insert into maps_beatmapsets
+         (beatmapset_id, title, artist, creator, status, covers_json, global_play_count, global_favourite_count, preview_url, bpm, mania_keys_json, patterns_json, updated_at)
+       values (10, 'Global Set', 'Artist', 'Mapper', 'ranked', ?, 1, 1, '', 180, '[4]', '[]', ?)`,
+      [covers, refreshedAt],
+    );
+    await exec(
+      db,
+      `insert into maps_beatmaps
+         (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, total_length, version, url, updated_at)
+       values (11, 10, 'mania', 'ranked', 4, 5.5, 180, 120, '[4K] Global', 'https://osu.ppy.sh/beatmaps/11', ?)`,
+      [refreshedAt],
+    );
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, updated_at)
+       values (999, 'Overlay Player', 'https://assets.example/999.png', 'CR', ?)`,
+      [overlayAt],
+    );
+    await exec(
+      db,
+      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
+       values ('GLOBAL', ?, ?, ?)`,
+      [
+        JSON.stringify({
+          schemaVersion: 2,
+          farmed: [{ beatmapId: 11, playerCount: 300, avgPp: 360, maxPp: 500, players: previewPlayers }],
+          mostPlayed: [],
+          favourites: [],
+          favouritesByPlayer: [],
+          beatmapsetsPool: [],
+          generatedAt: refreshedAt,
+          farmedGeneratedAt: refreshedAt,
+          favouritesGeneratedAt: refreshedAt,
+        }),
+        refreshedAt,
+        refreshedAt,
+      ],
+    );
+    await exec(
+      db,
+      `insert into country_maps_farmed_scores
+       (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at)
+       values ('CR', 999, 11, 9001, 550, ?, '[]', 'https://osu.ppy.sh/scores/9001', ?, ?, ?)`,
+      [
+        JSON.stringify({
+          id: 9001,
+          user_id: 999,
+          ruleset_id: 3,
+          pp: 550,
+          mods: [],
+          passed: true,
+          beatmap_id: 11,
+          beatmap: { id: 11, beatmapset_id: 10, mode: "mania", status: "ranked", cs: 4, difficulty_rating: 5.5, bpm: 180, total_length: 120, version: "[4K] Global", url: "https://osu.ppy.sh/beatmaps/11" },
+          beatmapset: { id: 10, title: "Global Set", artist: "Artist", creator: "Mapper", status: "ranked", covers: JSON.parse(covers) },
+          user: { id: 999, username: "Overlay Player", avatar_url: "https://assets.example/999.png", country_code: "CR" },
+          ended_at: overlayAt,
+          created_at: overlayAt,
+        }),
+        overlayAt,
+        overlayAt,
+        overlayAt,
+      ],
+    );
+
+    const page = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, {
+      tab: "farmed", page: 0, pageSize: 24, key: "all", beatmapSort: "players", farmedSort: "players", dir: "desc", status: "all", pp: 0, mod: "all", q: "",
+    });
+
+    const item = page.value?.items[0] as { beatmapId: number; playerCount: number; players: unknown[]; avgPp: number; maxPp: number };
+    expect(item.beatmapId).toBe(11);
+    expect(item.playerCount).toBe(300);
+    expect(item.players).toHaveLength(81);
+    expect(item.avgPp).toBe(360);
+    expect(item.maxPp).toBe(550);
+  });
+
   it("paginates and searches the map detail player list", async () => {
     const { db } = await setup();
     const now = "2026-05-12T12:00:00.000Z";

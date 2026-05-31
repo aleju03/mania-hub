@@ -2556,7 +2556,14 @@ async function applyMapsFarmedOverlay(
   }
 
   const farmed = [...byBeatmap.values()].flatMap((entry) => {
+    const hadTruncatedAggregate = entry.playerCount > entry.players.length;
+    const aggregatePlayerCount = entry.playerCount;
+    const aggregateAvgPp = entry.avgPp;
     finalizeFarmedEntry(entry);
+    if (hadTruncatedAggregate) {
+      entry.playerCount = Math.max(aggregatePlayerCount, entry.players.length);
+      entry.avgPp = aggregateAvgPp;
+    }
     if (entry.playerCount < 2 && entry.maxPp < FARMED_SINGLE_PLAYER_PP_MIN) return [];
     return [entry];
   });
