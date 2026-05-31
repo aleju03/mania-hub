@@ -356,6 +356,10 @@ export interface MapsDetailsPlayer {
   id: number;
   username: string;
   avatarUrl: string;
+  // 1-based position on the full ordered board (pp for farmed, count for
+  // popular), independent of any search filter. Set when the page is served so
+  // a searched-for player shows their true standing, not 1..n within matches.
+  rank?: number;
   pp?: number;
   count?: number;
   mods?: string[];
@@ -444,7 +448,10 @@ export async function getMapsPlayersSnapshot(
 
   const all = await getFullMapsDetailsPlayers(db, normalized, kind, safeId);
   const q = query.q.trim().toLowerCase();
-  const matched = q ? all.filter((player) => player.username.toLowerCase().includes(q)) : all;
+  // Stamp each player with its rank on the full ordered board before filtering,
+  // so a search that surfaces a few players still reports their true standing.
+  const ranked = all.map((player, i) => ({ ...player, rank: i + 1 }));
+  const matched = q ? ranked.filter((player) => player.username.toLowerCase().includes(q)) : ranked;
   const start = page * pageSize;
   return {
     kind,

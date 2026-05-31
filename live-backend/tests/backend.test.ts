@@ -2534,7 +2534,12 @@ describe("live backend", () => {
     expect(searched.total).toBe(60);
     expect(searched.matched).toBe(1);
     expect(searched.players).toHaveLength(1);
-    expect(searched.players[0]).toMatchObject({ username: "Needle" });
+    // Needle is the 37th player by play count, so the search keeps its true
+    // board rank rather than collapsing to 1 within the single match.
+    expect(searched.players[0]).toMatchObject({ username: "Needle", rank: 37 });
+    // First page carries contiguous ranks from the top of the board.
+    expect(firstPage.players[0].rank).toBe(1);
+    expect(secondPage.players[0].rank).toBe(51);
   });
 
   it("ships a lean random pool and serves full set records on demand", async () => {

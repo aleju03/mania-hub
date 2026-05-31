@@ -1,5 +1,5 @@
 import { createFileRoute, stripSearchParams, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useDeferredValue } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -3320,7 +3320,6 @@ function MapDetailsModal({
 
   useEffect(() => {
     if (!details) return;
-    setBodyLockActive(true);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -3330,7 +3329,17 @@ function MapDetailsModal({
     };
   }, [details, onClose]);
 
-  useEffect(() => {
+  // Engage the lock synchronously (before paint) the moment the modal opens, so
+  // the scrollbar is already gone and its gutter compensated on the very first
+  // frame. Doing this in a post-paint effect let the modal paint once at the
+  // pre-lock centre and then jump right as the scrollbar vanished, which read as
+  // a slide-in. Unlocking stays deferred to onExitComplete so the page doesn't
+  // reflow under the exit animation.
+  useLayoutEffect(() => {
+    if (details) setBodyLockActive(true);
+  }, [details]);
+
+  useLayoutEffect(() => {
     if (!bodyLockActive) return;
     const prevOverflow = document.body.style.overflow;
     const prevPaddingRight = document.body.style.paddingRight;
@@ -3360,7 +3369,7 @@ function MapDetailsModal({
       {details && (
         <motion.div
           key="map-details"
-          className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-6"
+          className="fixed inset-0 z-[120] flex items-center justify-center py-3 pl-3 sm:py-6 sm:pl-6 pr-[calc(0.75rem+var(--modal-scrollbar-compensation,0px))] sm:pr-[calc(1.5rem+var(--modal-scrollbar-compensation,0px))]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -3682,6 +3691,7 @@ function toFarmedDetailPlayers(players: LiveMapsDetailsPlayer[]): MapsFarmedPlay
     pp: player.pp ?? 0,
     scoreUrl: player.scoreUrl ?? null,
     playedAt: player.playedAt ?? null,
+    rank: player.rank,
   }));
 }
 
@@ -3691,6 +3701,7 @@ function toPopularDetailPlayers(players: LiveMapsDetailsPlayer[]): MapsPlayerEnt
     username: player.username,
     avatarUrl: player.avatarUrl,
     count: player.count ?? 0,
+    rank: player.rank,
   }));
 }
 
@@ -3806,10 +3817,36 @@ function useMapsDetailsPlayers({
   };
 }
 
+// A list longer than this defers its first render by one frame (see below) so a
+// heavy open does not block the modal appearing. Below it, the cost is small
+// enough that rendering inline avoids a needless placeholder flash.
+const MODAL_DEFER_ROW_THRESHOLD = 24;
+
+// Placeholder rows shown while the modal's player list defers or loads. Mirrors
+// PlayerRow's shape (rank · avatar · name · meta for list mode, avatar · name
+// for the favourite grid) so the swap to real rows lands in place. Varied name
+// widths keep it from reading as a repeating pattern.
+const MAPS_SKELETON_NAME_WIDTHS = ["w-28", "w-20", "w-24", "w-16", "w-28", "w-20", "w-24", "w-16", "w-20"];
+
+function MapsPlayerListSkeleton({ grid = false, count }: { grid?: boolean; count: number }) {
+  return (
+    <>
+      {Array.from({ length: count }, (_, i) => (
+        <div key={i} className="flex items-center gap-2.5 px-2.5 py-1.5">
+          {!grid && <Skeleton className="h-2.5 w-4 shrink-0" />}
+          <Skeleton className="h-[26px] w-[26px] rounded-full shrink-0" />
+          <Skeleton className={`h-3 ${MAPS_SKELETON_NAME_WIDTHS[i % MAPS_SKELETON_NAME_WIDTHS.length]}`} />
+          {!grid && <Skeleton className="ml-auto h-3.5 w-10 shrink-0" />}
+        </div>
+      ))}
+    </>
+  );
+}
+
 // Player list for the beatmap detail modal. With a `control` it runs in
 // server-paginated mode (50 per request, server-side search, infinite scroll);
 // without one it searches the already-loaded preview client-side.
-function ModalPlayerList<T extends { id: number; username: string }>({
+function ModalPlayerList<T extends { id: number; username: string; rank?: number }>({
   title,
   players,
   total,
@@ -3835,7 +3872,13 @@ function ModalPlayerList<T extends { id: number; username: string }>({
     () => players.filter((player) => !hiddenUserIds.has(player.id)),
     [players, hiddenUserIds],
   );
-  const rankById = useMemo(() => new Map(visible.map((player, i) => [player.id, i + 1])), [visible]);
+  // Prefer the server's board rank (set in server-paginated mode) so a searched
+  // player keeps its true standing among all players; fall back to list position
+  // for client-side mode, where `visible` is the full unfiltered list anyway.
+  const rankById = useMemo(
+    () => new Map(visible.map((player, i) => [player.id, player.rank ?? i + 1])),
+    [visible],
+  );
   const rows = useMemo(
     () => (!serverMode && q ? visible.filter((player) => player.username.toLowerCase().includes(q)) : visible),
     [visible, q, serverMode],
@@ -3848,6 +3891,22 @@ function ModalPlayerList<T extends { id: number; username: string }>({
     const el = scrollRef.current;
     if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 160) control.loadMore();
   }, [control]);
+
+  // Render the modal shell on the open commit and let a large row list mount on
+  // the next frame, so clicking a map feels instant. Lists at or under the
+  // threshold start ready and render inline (no placeholder flash).
+  const [rowsReady, setRowsReady] = useState(() => rows.length <= MODAL_DEFER_ROW_THRESHOLD);
+  useEffect(() => {
+    if (rowsReady) return;
+    const id = requestAnimationFrame(() => setRowsReady(true));
+    return () => cancelAnimationFrame(id);
+  }, [rowsReady]);
+
+  // While deferring, or while the server's first page is still loading, hold the
+  // scroll area at its full height so the modal opens at its final size and fills
+  // in, instead of opening short and growing as rows arrive. Both cases resolve
+  // to a list taller than this, so there is no later shrink.
+  const reserveSpace = !rowsReady || (serverMode && control.loading && rows.length === 0);
 
   return (
     <div>
@@ -3868,17 +3927,19 @@ function ModalPlayerList<T extends { id: number; username: string }>({
       <div
         ref={scrollRef}
         onScroll={serverMode ? onScroll : undefined}
-        className={`rounded-xl bg-osu-b4 ring-1 ring-osu-b3/55 p-1 max-h-[280px] overflow-y-auto ${grid ? "grid grid-cols-1 min-[390px]:grid-cols-2 sm:grid-cols-3 gap-1" : ""}`}
+        className={`rounded-xl bg-osu-b4 ring-1 ring-osu-b3/55 p-1 max-h-[280px] overflow-y-auto ${reserveSpace ? "min-h-[280px]" : ""} ${grid ? "grid grid-cols-1 min-[390px]:grid-cols-2 sm:grid-cols-3 gap-1" : ""}`}
       >
-        {rows.length > 0 ? (
+        {!rowsReady ? (
+          <MapsPlayerListSkeleton grid={grid} count={grid ? 9 : 8} />
+        ) : rows.length > 0 ? (
           rows.map((player) => renderRow(player, rankById.get(player.id) ?? 0))
         ) : serverMode && control.loading ? (
-          <div className="px-3 py-4 text-center text-[11px] text-osu-f1 col-span-full">Loading...</div>
+          <MapsPlayerListSkeleton grid={grid} count={grid ? 9 : 8} />
         ) : (
           <div className="px-3 py-4 text-center text-[11px] text-osu-f1 col-span-full">No players found</div>
         )}
         {serverMode && control.loadingMore && rows.length > 0 && (
-          <div className="px-3 py-2 text-center text-[10px] text-osu-f1 col-span-full">Loading more...</div>
+          <MapsPlayerListSkeleton grid={grid} count={grid ? 3 : 2} />
         )}
       </div>
     </div>
@@ -3893,8 +3954,15 @@ function FarmedDetails({ entry, country }: { entry: MapsFarmedEntry; country: st
     id: entry.beatmapId,
     enabled,
   });
+  // In server-paginated mode the up-to-80 preview is about to be replaced by the
+  // backend's first page, so skip rendering it in the modal-open commit; the
+  // list shows its loading state until the real (ranked) page lands. Client mode
+  // has no fetch coming, so it keeps rendering the full preview it already holds.
   const sortedPlayers = useMemo(
-    () => [...(enabled && loadedOnce ? toFarmedDetailPlayers(serverPlayers) : entry.players)].sort((a, b) => b.pp - a.pp),
+    () =>
+      enabled && !loadedOnce
+        ? []
+        : [...(enabled ? toFarmedDetailPlayers(serverPlayers) : entry.players)].sort((a, b) => b.pp - a.pp),
     [enabled, loadedOnce, serverPlayers, entry.players],
   );
   const totalPlayers = enabled && loadedOnce ? total : entry.playerCount;
@@ -3956,7 +4024,10 @@ function PopularDetails({ entry, country }: { entry: MapsAggregatedBeatmap; coun
     enabled,
   });
   const sortedPlayers = useMemo(
-    () => [...(enabled && loadedOnce ? toPopularDetailPlayers(serverPlayers) : entry.players)].sort((a, b) => b.count - a.count),
+    () =>
+      enabled && !loadedOnce
+        ? []
+        : [...(enabled ? toPopularDetailPlayers(serverPlayers) : entry.players)].sort((a, b) => b.count - a.count),
     [enabled, loadedOnce, serverPlayers, entry.players],
   );
   const totalPlayers = enabled && loadedOnce ? total : entry.playerCount;
@@ -4003,7 +4074,7 @@ function FavouriteDetails({ entry, country }: { entry: MapsAggregatedFavourite; 
     id: entry.beatmapsetId,
     enabled,
   });
-  const visiblePlayers = enabled && loadedOnce ? toFavouriteDetailPlayers(serverPlayers) : entry.players;
+  const visiblePlayers = enabled ? (loadedOnce ? toFavouriteDetailPlayers(serverPlayers) : []) : entry.players;
   const totalPlayers = enabled && loadedOnce ? total : entry.playerCount;
   return (
     <>

@@ -74,6 +74,12 @@ const EMPTY_POPOFFS: LeanHomePopoff[] = [];
 const HOME_RANKING_SKELETON_MOBILE_COUNT = 5;
 const HOME_RANKING_SKELETON_DESKTOP_COUNT = 10;
 const HOME_GLOBAL_RANKINGS_FETCH_COUNT = 50;
+// Module-scoped cache for Global's "Top players" board. Without it, navigating
+// away from Home and back remounts this route, resets the local state to null
+// (skeleton), and refetches every time even though the board barely changes.
+// Survives in-session navigation; resets on a full reload. Reuses the rankings
+// TTL for the refresh window.
+let globalTopPlayersCache: { data: LiveGlobalRankingEntry[]; fetchedAt: number } | null = null;
 const HOME_RECENT_SCORES_SKELETON_COUNT = 2;
 const HOME_RECENT_SCORES_PLAYER_COUNT = 50;
 const HOME_POPOFFS_PLAYER_COUNT = 10;
@@ -231,7 +237,7 @@ function HomePage() {
   const addFeedScores = useAppStore((state) => state.addFeedScores);
   const markFeedScoresFetched = useAppStore((state) => state.markFeedScoresFetched);
   const [rankingsError, setRankingsError] = useState<string | null>(null);
-  const [globalTopPlayers, setGlobalTopPlayers] = useState<LiveGlobalRankingEntry[] | null>(null);
+  const [globalTopPlayers, setGlobalTopPlayers] = useState<LiveGlobalRankingEntry[] | null>(globalTopPlayersCache?.data ?? null);
   const [loadingScores, setLoadingScores] = useState(recentScores.length === 0);
   const [loadingPopoffs, setLoadingPopoffs] = useState(popoffs.length === 0);
   const countryName = getCountryName(selectedCountry);
@@ -308,10 +314,19 @@ function HomePage() {
   // Rankings page), instead of a single country's leaderboard.
   useEffect(() => {
     if (!selectedIsGlobal) return;
+    // Serve the cached board immediately; only hit the network when it's missing
+    // or past the TTL. Keep showing the cached board while refreshing so the card
+    // never flips back to a skeleton on revisits.
+    const fresh = globalTopPlayersCache && !isCacheStale(globalTopPlayersCache.fetchedAt, CLIENT_CACHE_TTL.rankings);
+    if (globalTopPlayersCache) setGlobalTopPlayers(globalTopPlayersCache.data);
+    if (fresh) return;
     let cancelled = false;
     fetchLiveGlobalRankings(HOME_GLOBAL_RANKINGS_FETCH_COUNT)
-      .then((snapshot) => { if (!cancelled) setGlobalTopPlayers(snapshot.ranking); })
-      .catch(() => { if (!cancelled) setGlobalTopPlayers([]); });
+      .then((snapshot) => {
+        globalTopPlayersCache = { data: snapshot.ranking, fetchedAt: Date.now() };
+        if (!cancelled) setGlobalTopPlayers(snapshot.ranking);
+      })
+      .catch(() => { if (!cancelled) setGlobalTopPlayers((prev) => prev ?? []); });
     return () => { cancelled = true; };
   }, [selectedIsGlobal]);
 

@@ -360,6 +360,8 @@ export interface MapsPlayerEntry {
   username: string;
   avatarUrl: string;
   count: number;
+  // 1-based rank on the full board; only set for server-paginated lists.
+  rank?: number;
 }
 
 export interface MapsAggregatedBeatmap {
@@ -400,6 +402,8 @@ export interface MapsFarmedPlayer {
   pp: number;
   scoreUrl: string | null;
   playedAt: string | null;
+  // 1-based rank on the full board; only set for server-paginated lists.
+  rank?: number;
 }
 
 export interface MapsFarmedEntry {

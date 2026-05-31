@@ -722,8 +722,13 @@ function ScoresPage() {
 
       {warming && <CountryWarming country={selectedCountry} />}
 
+      {/* overflow-clip (not hidden) clips the triangle backdrop without creating
+          a scroll container, so the sticky active-player rail inside resolves
+          against the viewport. With overflow-hidden the rail stuck relative to
+          this box and the "Playing" header snapped from too-high to its resting
+          spot as the section height settled during the async load. */}
       {!warming && (
-      <div className="relative overflow-hidden bg-osu-b5">
+      <div className="relative overflow-clip bg-osu-b5">
       <OsuTriangleBackdrop />
       <div className="relative z-10 bg-osu-d5/90 border-b border-osu-b3/30 backdrop-blur-[1px]">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-0">

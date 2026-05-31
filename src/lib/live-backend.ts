@@ -104,6 +104,8 @@ export interface LiveMapsDetailsPlayer {
   id: number;
   username: string;
   avatarUrl: string;
+  // 1-based rank on the full board, independent of the active search filter.
+  rank?: number;
   pp?: number;
   count?: number;
   mods?: string[];
