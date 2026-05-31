@@ -62,8 +62,6 @@ const RANGE_MS: Record<TimeRange, number> = {
 
 const PAGE_SIZE = 15;
 const PP_GAIN_SKELETON_COUNT = 6;
-// The Global pp-gained rail would otherwise list every gainer worldwide.
-const GLOBAL_PP_GAINS_RAIL_LIMIT = 24;
 const DEFAULT_TOP_PLAYS_SEARCH: TopPlaysSearch = {
   range: "7d",
   country: undefined,
@@ -571,10 +569,30 @@ function PopOffsPage() {
       .filter(([, info]) => info.totalGain >= 0.05)
       .sort((a, b) => b[1].totalGain - a[1].totalGain)
       .map(([id, info]) => ({ id, ...info }));
-    // Global pools hundreds of gainers, which turns the rail into an avatar
-    // wall. Cap it to the biggest movers so it stays a tidy sidebar.
-    return selectedIsGlobal ? ranked.slice(0, GLOBAL_PP_GAINS_RAIL_LIMIT) : ranked;
-  }, [rangedPopoffs, selectedIsGlobal]);
+    return ranked;
+  }, [rangedPopoffs]);
+
+  const ppGainsRailRef = useRef<HTMLDivElement | null>(null);
+  const [ppGainsRailFade, setPpGainsRailFade] = useState<{ top: boolean; bottom: boolean }>({ top: false, bottom: false });
+  const updatePpGainsRailFade = useCallback(() => {
+    const el = ppGainsRailRef.current;
+    if (!el) return;
+    const top = el.scrollTop > 4;
+    const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 4;
+    setPpGainsRailFade((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
+  }, []);
+  useEffect(() => {
+    updatePpGainsRailFade();
+    window.addEventListener("resize", updatePpGainsRailFade);
+    return () => window.removeEventListener("resize", updatePpGainsRailFade);
+  }, [playerPpGains.length, updatePpGainsRailFade]);
+  const ppGainsRailMaskClass = ppGainsRailFade.top && ppGainsRailFade.bottom
+    ? "tracker-rail--tb"
+    : ppGainsRailFade.top
+      ? "tracker-rail--t"
+      : ppGainsRailFade.bottom
+        ? "tracker-rail--b"
+        : "";
 
   const showPpGainsRail = playerPpGains.length > 0 || (!liveBackendEnabled && (loadingPlayers || loading));
 
@@ -724,24 +742,21 @@ function PopOffsPage() {
                   ))
                 )}
               </div>
-              {/* Desktop: vertical sidebar */}
-              <div className="hidden lg:flex flex-shrink-0 pt-1 gap-3 min-w-[86px]">
+              {/* Desktop: vertical sidebar, three columns, edge-faded internal scroll */}
+              <div className="hidden lg:flex sticky top-[76px] max-h-[calc(100svh_-_196px)] self-start flex-col flex-shrink-0 min-w-[128px]">
                 {playerPpGains.length > 0 ? (
-                  (() => {
-                    const maxPerCol = 8;
-                    const numCols = Math.ceil(playerPpGains.length / maxPerCol);
-                    const perCol = Math.ceil(playerPpGains.length / numCols);
-                    const cols: typeof playerPpGains[] = [];
-                    for (let i = 0; i < playerPpGains.length; i += perCol) {
-                      cols.push(playerPpGains.slice(i, i + perCol));
-                    }
-                    return cols.map((col, ci) => (
-                      <div key={ci} className="flex flex-col items-center gap-2">
-                        {ci === 0 && (
-                          <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-1">PP Gained</span>
-                        )}
-                        {ci > 0 && <div className="mb-1 h-[14px]" />}
-                        {col.map((player) => (
+                  <>
+                    <div className="flex items-baseline justify-between gap-2 mb-2 px-0.5">
+                      <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">PP Gained</span>
+                      <span className="text-[9px] tabular-nums text-osu-f1/70 font-semibold">{playerPpGains.length}</span>
+                    </div>
+                    <div
+                      ref={ppGainsRailRef}
+                      onScroll={updatePpGainsRailFade}
+                      className={`min-h-0 overflow-y-auto overscroll-contain scrollbar-hide ${ppGainsRailMaskClass}`}
+                    >
+                      <div className="grid grid-cols-3 gap-x-2 gap-y-1.5 place-items-center px-0.5 py-1">
+                        {playerPpGains.map((player) => (
                           <button
                             key={player.id}
                             onClick={() => togglePlayerFilter(player.id)}
@@ -749,7 +764,7 @@ function PopOffsPage() {
                               event.preventDefault();
                             }}
                             aria-pressed={selectedPlayerIdSet.has(player.id)}
-                            className="cursor-pointer group relative flex flex-col items-center gap-0.5"
+                            className="cursor-pointer group relative flex flex-col items-center gap-0.5 shrink-0"
                             title={`${player.username}: +${formatPpGain(player.totalGain)}pp - click to filter`}
                           >
                             <div className={`ring-2 rounded-full transition-all ${
@@ -765,23 +780,22 @@ function PopOffsPage() {
                           </button>
                         ))}
                       </div>
-                    ));
-                  })()
+                    </div>
+                  </>
                 ) : (
-                  Array.from({ length: 2 }).map((_, ci) => (
-                    <div key={ci} className="flex flex-col items-center gap-2">
-                      {ci === 0 && (
-                        <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-1">PP Gained</span>
-                      )}
-                      {ci > 0 && <div className="mb-1 h-[14px]" />}
-                      {Array.from({ length: PP_GAIN_SKELETON_COUNT / 2 }).map((__, i) => (
+                  <>
+                    <div className="flex items-baseline justify-between gap-2 mb-2 px-0.5">
+                      <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">PP Gained</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-x-2 gap-y-1.5 place-items-center px-0.5 py-1">
+                      {Array.from({ length: PP_GAIN_SKELETON_COUNT }).map((_, i) => (
                         <div key={i} className="flex flex-col items-center gap-1">
                           <Skeleton className="w-8 h-8 rounded-full" />
                           <Skeleton className="h-2.5 w-8" />
                         </div>
                       ))}
                     </div>
-                  ))
+                  </>
                 )}
               </div>
             </>
