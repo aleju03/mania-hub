@@ -580,6 +580,69 @@ describe("live backend", () => {
     expect(Number((await exec(db, "select count(*) as count from score_events where source = 'osu_scores_fallback'")).rows[0].count)).toBe(2);
   });
 
+  it("does not fan osu scores fallback rows into per-user recent polling", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-30T12:00:00.000Z"));
+    const { db, ingestor } = await setup(["CR"]);
+    const [baseScore] = await fixture<OscScore[]>("scores.json");
+    const score = {
+      ...baseScore,
+      created_at: "2026-05-30T11:59:00.000Z",
+      ended_at: "2026-05-30T11:59:00.000Z",
+    };
+    const config = {
+      oscSocketStaleMs: 10 * 60_000,
+      enableOsuScoresFallback: true,
+      osuScoresFallbackIntervalMs: 10_000,
+      trackedCountries: ["CR"],
+      prewarmCountries: [],
+      mapsWarmCountries: [],
+      countryWarmTtlMs: 24 * 60 * 60 * 1000,
+    };
+    const osu = {
+      getScores: vi.fn(async () => ({ scores: [score], cursor_string: "cursor:fresh" })),
+    };
+
+    const result = await runScoresFallbackPage(db, config, osu, ingestor, {
+      now: Date.now(),
+      oscStatus: {
+        connected: true,
+        lastBatchAt: "2026-05-30T11:00:00.000Z",
+        lastError: null,
+        stale: true,
+      },
+    });
+
+    expect(result).toMatchObject({ ran: true, fetched: 1, candidates: 1, inserted: 1 });
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'reconcile_user_recent_scores'")).rows[0].count)).toBe(0);
+  });
+
+  it("dedupes maps-farmed refresh jobs per country user", async () => {
+    const { db, ingestor } = await setup(["CR"]);
+    const [baseScore] = await fixture<OscScore[]>("scores.json");
+    const secondScore: OscScore = {
+      ...baseScore,
+      id: 9003,
+      beatmap_id: 503,
+      beatmap: {
+        ...baseScore.beatmap!,
+        id: 503,
+        beatmapset_id: 53,
+      },
+      beatmapset: {
+        ...baseScore.beatmapset!,
+        id: 53,
+      },
+    };
+
+    await ingestor.ingestBatch([baseScore, secondScore], "osu_scores_fallback", { enqueueRecentReconcile: false });
+
+    const rows = (await exec(db, "select dedupe_key, payload_json from jobs where type = 'refresh_user_maps_farmed_scores'")).rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].dedupe_key).toBe("maps-farmed:CR:101");
+    expect(JSON.parse(String(rows[0].payload_json)).scoreId).toBe("9003");
+  });
+
   it("reconciles id-zero graveyard recent scores once and fans them out by tracked country", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-12T00:05:00.000Z"));
@@ -633,6 +696,41 @@ describe("live backend", () => {
     expect(countries.map((row) => `${row.country}:${row.count}`)).toEqual(["CR:1", "US:1"]);
     expect((await events.replay("CR", 0)).some((event) => event.type === "tracker_score")).toBe(true);
     expect((await events.replay("US", 0)).some((event) => event.type === "tracker_score")).toBe(true);
+  });
+
+  it("does not keep recent polling alive from osu recent rows alone", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T00:05:00.000Z"));
+    const { db, queue, events, ingestor } = await setup(["CR"]);
+    const [recentScore] = await fixture<OscScore[]>("scores.json");
+    await queue.enqueue("reconcile_user_recent_scores", "recent:user:101", { userId: 101 }, { priority: 100 });
+    const osu = { getUserRecentScores: vi.fn(async () => [{ ...recentScore, ended_at: "2026-05-12T00:04:00.000Z", created_at: "2026-05-12T00:04:00.000Z" }]) };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    expect(Number((await exec(db, "select count(*) as count from jobs where dedupe_key like 'recent:user:101:next:%'")).rows[0].count)).toBe(0);
+  });
+
+  it("keeps recent polling alive while raw oSC rows are active", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T00:05:00.000Z"));
+    const { db, queue, events, ingestor } = await setup(["CR"]);
+    const [score] = await fixture<OscScore[]>("scores.json");
+    await exec(
+      db,
+      `insert into score_events
+       (score_id, score_identity, legacy_score_id, user_id, country, beatmap_id, ruleset_id, score_json, pp, total_score, accuracy, rank, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
+       values (?, ?, null, ?, 'CR', ?, 3, ?, ?, ?, ?, ?, 1, 0, 0, 0, ?, ?, 'osc_socket')`,
+      [score.id, "official:9001", score.user_id, score.beatmap_id ?? score.beatmap?.id ?? 501, JSON.stringify(score), score.pp, score.total_score ?? score.score, score.accuracy, score.rank, "2026-05-12T00:04:00.000Z", new Date().toISOString()],
+    );
+    await queue.enqueue("reconcile_user_recent_scores", "recent:user:101", { userId: 101 }, { priority: 100 });
+    const osu = { getUserRecentScores: vi.fn(async () => []) };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    expect(Number((await exec(db, "select count(*) as count from jobs where dedupe_key like 'recent:user:101:next:%'")).rows[0].count)).toBe(1);
   });
 
   it("resolves id-zero API recent scores from the osu! web recent endpoint", async () => {
@@ -1426,6 +1524,31 @@ describe("live backend", () => {
     await expect(confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" }))
       .rejects.toBeInstanceOf(TopPlayConfirmationPendingError);
     expect(Number((await exec(db, "select count(*) as count from top_play_events")).rows[0].count)).toBe(0);
+  });
+
+  it("backs off pending top-play confirmation jobs", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T00:05:00.000Z"));
+    const { db, queue, events, ingestor } = await setup();
+    const [score] = await fixture<OscScore[]>("scores.json");
+    await exec(
+      db,
+      `insert into score_events
+       (score_id, score_identity, legacy_score_id, user_id, country, beatmap_id, ruleset_id, score_json, pp, total_score, accuracy, rank, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
+       values (?, ?, null, ?, 'CR', ?, 3, ?, ?, ?, ?, ?, 1, 0, 0, 0, ?, ?, 'osc_socket')`,
+      [score.id, "official:9001", score.user_id, score.beatmap_id ?? score.beatmap?.id ?? 501, JSON.stringify(score), score.pp, score.total_score ?? score.score, score.accuracy, score.rank, score.ended_at ?? score.created_at ?? "", new Date().toISOString()],
+    );
+    await queue.enqueue("refresh_user_top_scores", "top:test:pending", { userId: 101, scoreId: 9001, country: "CR" }, { priority: 100 });
+    const osu = {
+      getUserBestScoresWindow: vi.fn(async () => []),
+    };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    const row = (await exec(db, "select status, run_after from jobs where dedupe_key = 'top:test:pending'")).rows[0];
+    expect(row.status).toBe("failed");
+    expect(new Date(String(row.run_after)).getTime() - Date.now()).toBe(2 * 60_000);
   });
 
   it("calculates top-play pp gain from the previous same-beatmap best", async () => {

@@ -80,7 +80,9 @@ export async function runScoresFallbackPage(
   const nextCursorString = response.cursor_string ?? cursorString;
   if (nextCursorString) await setStoredCursorString(db, nextCursorString, now);
   const candidateScores = await filterCandidateScores(db, config, scores);
-  const ingestResult = await ingestor.ingestBatch(candidateScores, FALLBACK_SOURCE);
+  const ingestResult = await ingestor.ingestBatch(candidateScores, FALLBACK_SOURCE, {
+    enqueueRecentReconcile: false,
+  });
   return recordResult(db, {
     ran: true,
     reason: null,

@@ -277,9 +277,9 @@ export async function maybeEnqueueMapsFarmedRefresh(
   const scoreKey = getMapsFarmedScoreDedupeKey(score);
   await queue.enqueue(
     "refresh_user_maps_farmed_scores",
-    `maps-farmed:${normalized}:${score.user_id}:${scoreKey}`,
+    `maps-farmed:${normalized}:${score.user_id}`,
     { country: normalized, userId: score.user_id, scoreId: scoreKey },
-    { priority: MAPS_FARMED_REFRESH_PRIORITY },
+    { priority: MAPS_FARMED_REFRESH_PRIORITY, replaceDone: true },
   );
 }
 

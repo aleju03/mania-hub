@@ -5,7 +5,7 @@ import { exec, json, parseJson } from "./db.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { MapsRosterNotReadyError, enqueueGlobalMapsRefresh, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
 import { updateSnipeProjection } from "./features/snipes.js";
-import { confirmTopPlay } from "./features/top-plays.js";
+import { confirmTopPlay, TopPlayConfirmationPendingError } from "./features/top-plays.js";
 import { getHydratedScoresForMetadata } from "./features/tracker.js";
 import type { ClaimOptions, Job, JobQueue } from "./jobs/queue.js";
 import type { LiveEventLog } from "./live/event-log.js";
@@ -409,7 +409,7 @@ export class WorkerRunner {
     const cutoff = new Date(Date.now() - 40 * 60_000).toISOString();
     const row = (await exec(
       this.db,
-      "select 1 from score_events where user_id = ? and ended_at >= ? limit 1",
+      "select 1 from score_events where user_id = ? and ended_at >= ? and source like 'osc_%' limit 1",
       [userId, cutoff],
     )).rows[0];
     return !!row;
@@ -510,6 +510,7 @@ function getRetryDelayMs(type: string, attempts: number, error: unknown): number
   if (error instanceof OsuApiError && error.status === 429) {
     return Math.max(error.retryAfterMs ?? 60_000, 60_000);
   }
+  if (error instanceof TopPlayConfirmationPendingError) return 2 * 60_000;
   const nextAttempt = Math.max(1, attempts + 1);
   const base = type === "refresh_user_top_scores"
     ? 15_000

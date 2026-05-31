@@ -26,14 +26,16 @@ export async function createApp() {
   const events = new LiveEventLog(db);
   await deferMapsRefreshesWaitingForRoster(db);
   await ensurePinnedCountries(db, config);
-  const osu = new OsuApiClient(config, fetch, (entry) => {
+  const logOsuCall = (entry: { caller: string; path: string; startedAt: number }) => {
     void logApiCall(db, {
       provider: "osu",
       caller: entry.caller,
       path: entry.path,
       startedAt: new Date(entry.startedAt).toISOString(),
     }).catch(() => {});
-  });
+  };
+  const osu = new OsuApiClient(config, fetch, logOsuCall);
+  const scoresFallbackOsu = new OsuApiClient(getScoresFallbackOsuConfig(config), fetch, logOsuCall);
   const ingestor = new ScoreIngestor(db, queue, events, config);
   const abuse = new AbuseGuard();
   const countryClients = new CountryClientTracker();
@@ -70,7 +72,7 @@ export async function createApp() {
       res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
     }
   });
-  return { server, db, queue, events, osu, osc, worker, ingestor, config, countryClients };
+  return { server, db, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -88,11 +90,22 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     app.osc.start().catch((error) => console.warn("[osc] socket failed", error));
   }
   if (app.config.enableWorkers && app.config.enableOsuScoresFallback && app.osu.hasCredentials()) {
-    startScoresFallbackScheduler(app.db, app.config, app.osu, app.ingestor, () => app.osc.status());
+    startScoresFallbackScheduler(app.db, app.config, app.scoresFallbackOsu, app.ingestor, () => app.osc.status());
   }
   app.server.listen(app.config.port, () => {
     console.log(`[live-backend] listening on ${app.config.livePublicOrigin} (port ${app.config.port})`);
   });
+}
+
+function getScoresFallbackOsuConfig(config: ReturnType<typeof readConfig>): Pick<ReturnType<typeof readConfig>, "osuClientId" | "osuClientSecret" | "osuApiTargetPerMinute" | "osuApiHardPerMinute"> {
+  const intervalMs = Math.max(10_000, config.osuScoresFallbackIntervalMs);
+  const targetPerMinute = Math.max(1, Math.ceil(60_000 / intervalMs));
+  return {
+    osuClientId: config.osuClientId,
+    osuClientSecret: config.osuClientSecret,
+    osuApiTargetPerMinute: targetPerMinute,
+    osuApiHardPerMinute: Math.max(targetPerMinute + 2, targetPerMinute * 2),
+  };
 }
 
 function startRosterScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue, config: ReturnType<typeof readConfig>): void {
