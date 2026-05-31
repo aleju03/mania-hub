@@ -12,7 +12,7 @@ import { CountryClientTracker } from "./live/country-clients.js";
 import { handleSse } from "./live/sse.js";
 import { enqueueOscBackfill } from "./osc/backfill.js";
 import { OscSocketClient } from "./osc/client.js";
-import { startRecentScoresFallbackScheduler } from "./osc/recent-fallback.js";
+import { startScoresFallbackScheduler } from "./osc/scores-fallback.js";
 import { OsuApiClient } from "./osu/client.js";
 import { enqueueRosterRefreshes } from "./rosters/country-rosters.js";
 import { startRetentionScheduler } from "./retention.js";
@@ -87,8 +87,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (app.config.enableOscSocket) {
     app.osc.start().catch((error) => console.warn("[osc] socket failed", error));
   }
-  if (app.config.enableWorkers && app.config.enableOsuRecentFallback && app.osu.hasCredentials()) {
-    startRecentScoresFallbackScheduler(app.db, app.queue, app.config, () => app.osc.status(), app.countryClients);
+  if (app.config.enableWorkers && app.config.enableOsuScoresFallback && app.osu.hasCredentials()) {
+    startScoresFallbackScheduler(app.db, app.config, app.osu, app.ingestor, () => app.osc.status());
   }
   app.server.listen(app.config.port, () => {
     console.log(`[live-backend] listening on ${app.config.livePublicOrigin} (port ${app.config.port})`);

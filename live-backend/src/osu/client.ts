@@ -20,6 +20,11 @@ type LimiterOptions = {
   interactiveBurstCapacity?: number;
 };
 
+export interface OsuScoresResponse {
+  scores?: OscScore[];
+  cursor_string?: string | null;
+}
+
 export class TokenBucketLimiter {
   private starts: number[] = [];
   private recent: Array<{ startedAt: number; caller: string; path: string }> = [];
@@ -322,6 +327,12 @@ export class OsuApiClient {
       });
       return apiScores;
     }
+  }
+
+  async getScores(ruleset = "mania", cursorString?: string | null, caller = "unknown"): Promise<OsuScoresResponse> {
+    const params = new URLSearchParams({ ruleset });
+    if (cursorString) params.set("cursor_string", cursorString);
+    return this.getJson(`/scores?${params.toString()}`, caller);
   }
 
   async getUserMostPlayed(userId: number, caller = "unknown"): Promise<unknown[]> {
