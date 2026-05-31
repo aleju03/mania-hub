@@ -30,6 +30,13 @@ export const AVATAR_ACCENT_CLIENT_TTL = 24 * 60 * 60 * 1000;
 export const AVATAR_ACCENT_FAILURE_TTL = 5 * 60 * 1000;
 export const TRACKER_PP_GAIN_CLIENT_TTL = 10 * 60 * 1000;
 export const TRACKER_FEED_SCORE_LIMIT = 500;
+// The in-memory feed holds up to TRACKER_FEED_SCORE_LIMIT, but only this many
+// (newest-first) are persisted per country. 500 scores/country bloated the
+// localStorage blob past the ~5MB quota, so live-feed writes silently failed
+// and the cached feed froze at the last set that fit (you'd see the same stale
+// scores on every reload). A small slice still gives an instant first paint;
+// the live snapshot backfills the rest within ~1s.
+export const TRACKER_FEED_PERSIST_LIMIT = 60;
 export const TOP_PLAYS_RANGE_STORAGE_KEY = "mania-hub-top-plays-range-v1";
 export const SNIPES_FILTERS_STORAGE_KEY = "mania-hub-snipes-filters-v1";
 export const DEFAULT_THEME_HUE = 333;
@@ -326,6 +333,19 @@ function warnStorageIssue(action: string, error: unknown): void {
   console.warn(`[store] ${action} failed: ${message}`);
 }
 
+// localStorage quota errors surface under a few names/codes across browsers
+// (Chrome/Edge "QuotaExceededError" code 22, Firefox "NS_ERROR_DOM_QUOTA_REACHED"
+// code 1014). Older WebKit also threw plain code 22.
+function isQuotaExceededError(error: unknown): boolean {
+  if (!(error instanceof DOMException)) return false;
+  return (
+    error.name === "QuotaExceededError" ||
+    error.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+    error.code === 22 ||
+    error.code === 1014
+  );
+}
+
 function readTopPlaysRangeByCountry(): CountryRecord<TopPlaysRange> {
   if (typeof window === "undefined") return {};
 
@@ -435,7 +455,20 @@ const storage = typeof window !== "undefined"
               localStorage.setItem(name, value);
             }
           } catch (error) {
-            warnStorageIssue(`write "${name}"`, error);
+            if (isQuotaExceededError(error) && value !== null) {
+              // Over quota. Drop the stale value first so we never keep serving
+              // a frozen cache, then retry — the freed space usually fits the
+              // new (now-smaller) blob. If even that fails, the key stays evicted
+              // and the next load starts fresh instead of stuck on old data.
+              try {
+                localStorage.removeItem(name);
+                localStorage.setItem(name, value);
+              } catch (retryError) {
+                warnStorageIssue(`write "${name}" (evicted, still over quota)`, retryError);
+              }
+            } else {
+              warnStorageIssue(`write "${name}"`, error);
+            }
           }
         }
       };
@@ -1050,7 +1083,12 @@ export const useAppStore = create<AppState>()(
         popoffsFetchedAtByCountry: state.popoffsFetchedAtByCountry,
         popoffsWindowByCountry: state.popoffsWindowByCountry,
         trackerPpGainsByCountry: state.trackerPpGainsByCountry,
-        feedScoresByCountry: state.feedScoresByCountry,
+        feedScoresByCountry: Object.fromEntries(
+          Object.entries(state.feedScoresByCountry).map(([country, scores]) => [
+            country,
+            scores.length > TRACKER_FEED_PERSIST_LIMIT ? scores.slice(0, TRACKER_FEED_PERSIST_LIMIT) : scores,
+          ]),
+        ),
         feedScoresFetchedAtByCountry: state.feedScoresFetchedAtByCountry,
         // mapsDataByCountry and snipesByCountry are intentionally NOT
         // persisted. They can balloon past the ~5MB localStorage quota
@@ -1058,8 +1096,9 @@ export const useAppStore = create<AppState>()(
         // pool alone is ~1-2MB per country; the snipes log is up to
         // 500 entries × ~1KB per country). The server cache serves them
         // in <100ms on hydration so the round-trip is cheap.
-        // feedScoresByCountry IS persisted: addFeedScores caps it at a
-        // bounded tracker history size, so it stays well under quota.
+        // feedScoresByCountry IS persisted, but trimmed to TRACKER_FEED_PERSIST_LIMIT
+        // (newest-first) above so the blob stays small. The full in-memory feed
+        // (up to TRACKER_FEED_SCORE_LIMIT) is only for the current session.
         trackedUserIdsByCountry: state.trackedUserIdsByCountry,
         trackedUserIdsFetchedAtByCountry: state.trackedUserIdsFetchedAtByCountry,
         pollIndexByCountry: state.pollIndexByCountry,
