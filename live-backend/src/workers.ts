@@ -228,7 +228,7 @@ export class WorkerRunner {
       return;
     }
     if (job.type === "reconcile_user_recent_scores") {
-      await this.reconcileUserRecentScores(job.payload as { userId: number });
+      await this.reconcileUserRecentScores(job.payload as { userId: number; source?: string; processLeaderboardFeatures?: boolean });
       return;
     }
     if (job.type === "refresh_country_roster") {
@@ -366,12 +366,14 @@ export class WorkerRunner {
     }
   }
 
-  private async reconcileUserRecentScores(payload: { userId: number }): Promise<void> {
+  private async reconcileUserRecentScores(payload: { userId: number; source?: string; processLeaderboardFeatures?: boolean }): Promise<void> {
     const userId = Number(payload.userId);
     if (!Number.isFinite(userId) || userId <= 0) return;
+    const source = payload.source === "osu_recent_fallback" ? "osu_recent_fallback" : "osu_recent";
+    const caller = source === "osu_recent_fallback" ? "job:osu_recent_fallback" : "job:reconcile_user_recent_scores";
     let recentScores: OscScore[];
     try {
-      recentScores = await this.osu.getUserRecentScores(userId, "job:reconcile_user_recent_scores");
+      recentScores = await this.osu.getUserRecentScores(userId, caller);
     } catch (error) {
       if (error instanceof OsuApiError && error.status === 404) {
         logInfo("reconcile_user_recent_scores_missing", { user_id: userId, path: error.path });
@@ -382,9 +384,9 @@ export class WorkerRunner {
     const scores = recentScores
       .filter((score) => score.passed)
       .map((score) => ({ ...score, ruleset_id: score.ruleset_id ?? 3 }));
-    await this.ingestor.ingestBatch(scores, "osu_recent", {
+    await this.ingestor.ingestBatch(scores, source, {
       enqueueRecentReconcile: false,
-      processLeaderboardFeatures: false,
+      processLeaderboardFeatures: payload.processLeaderboardFeatures === true,
     });
     if (await this.isUserActive(userId)) {
       const runAfter = new Date(Date.now() + 2 * 60_000);

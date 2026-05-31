@@ -68,6 +68,11 @@ export interface Config {
   enableScheduledRefreshes: boolean;
   enableOscBackfill: boolean;
   enableOscSocket: boolean;
+  enableOsuRecentFallback: boolean;
+  osuRecentFallbackIntervalMs: number;
+  osuRecentFallbackUsersPerMinute: number;
+  osuRecentFallbackCountriesPerTick: number;
+  osuRecentFallbackMaxPending: number;
 }
 
 function readInt(name: string, fallback: number): number {
@@ -192,5 +197,13 @@ export function readConfig(): Config {
     enableScheduledRefreshes: readBool("ENABLE_SCHEDULED_REFRESHES", true),
     enableOscBackfill: readBool("ENABLE_OSC_BACKFILL", true),
     enableOscSocket: readBool("ENABLE_OSC_SOCKET", true),
+    enableOsuRecentFallback: readBool("ENABLE_OSU_RECENT_FALLBACK", true),
+    osuRecentFallbackIntervalMs: readInt("OSU_RECENT_FALLBACK_INTERVAL_MS", 60_000),
+    osuRecentFallbackUsersPerMinute: readInt(
+      "OSU_RECENT_FALLBACK_USERS_PER_MINUTE",
+      Math.max(6, Math.min(30, Math.floor(readInt("OSU_API_TARGET_PER_MINUTE", 45) * 0.75))),
+    ),
+    osuRecentFallbackCountriesPerTick: readInt("OSU_RECENT_FALLBACK_COUNTRIES_PER_TICK", 6),
+    osuRecentFallbackMaxPending: readInt("OSU_RECENT_FALLBACK_MAX_PENDING", 180),
   };
 }

@@ -14,6 +14,7 @@ import { routeHttp, sendJson } from "../src/http/snapshots.js";
 import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { handleSse } from "../src/live/sse.js";
 import { cancelOscCountryCatchup, enqueueOscCountryCatchup, OscBackfill } from "../src/osc/backfill.js";
+import { enqueueRecentScoresFallbackBatch, shouldRunRecentScoresFallback } from "../src/osc/recent-fallback.js";
 import { refreshCountryRoster } from "../src/rosters/country-rosters.js";
 import { activateCountry, canSeedSnipesForCountry, deleteCountryData, getActiveCountryCodes, getIndexedCountryCodes, getMapsWarmCountryCodes, setCountryFeatureTier, setCountryPaused, setCountryStatus, touchCountryRequest } from "../src/countries.js";
 import { CountryClientTracker } from "../src/live/country-clients.js";
@@ -509,6 +510,83 @@ describe("live backend", () => {
     const rows = (await exec(db, "select type, dedupe_key from jobs where type = 'reconcile_user_recent_scores'")).rows;
     expect(rows).toHaveLength(1);
     expect(rows[0].dedupe_key).toBe("recent:user:101");
+  });
+
+  it("only runs the direct osu recent fallback when oSC intake is stale", () => {
+    const now = new Date("2026-05-30T12:00:00.000Z").getTime();
+
+    expect(shouldRunRecentScoresFallback({
+      connected: true,
+      lastBatchAt: "2026-05-30T11:59:00.000Z",
+      lastError: null,
+      stale: false,
+    }, 10 * 60_000, now)).toBe(false);
+    expect(shouldRunRecentScoresFallback({
+      connected: true,
+      lastBatchAt: "2026-05-30T11:00:00.000Z",
+      lastError: null,
+      stale: false,
+    }, 10 * 60_000, now)).toBe(true);
+    expect(shouldRunRecentScoresFallback({
+      connected: true,
+      lastBatchAt: "2026-05-30T11:59:00.000Z",
+      lastError: null,
+      stale: true,
+    }, 10 * 60_000, now)).toBe(true);
+  });
+
+  it("queues direct osu recent fallback jobs for stale oSC, prioritizing countries with open pages", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-30T12:00:00.000Z"));
+    const { db, queue } = await setup(["CR"]);
+    const now = Date.now();
+    const config = {
+      trackedCountries: ["CR"],
+      prewarmCountries: [],
+      mapsWarmCountries: [],
+      countryWarmTtlMs: 24 * 60 * 60 * 1000,
+      rosterRefreshIntervalMs: 24 * 60 * 60 * 1000,
+      oscSocketStaleMs: 10 * 60_000,
+      enableOsuRecentFallback: true,
+      osuRecentFallbackIntervalMs: 60_000,
+      osuRecentFallbackUsersPerMinute: 12,
+      osuRecentFallbackCountriesPerTick: 2,
+      osuRecentFallbackMaxPending: 100,
+    };
+    await activateCountry(db, queue, config, "KR");
+    for (let i = 0; i < 10; i++) {
+      await exec(
+        db,
+        "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values (?, ?, ?, 'test', 1, ?)",
+        ["CR", 1000 + i, i + 1, new Date(now).toISOString()],
+      );
+      await exec(
+        db,
+        "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values (?, ?, ?, 'test', 1, ?)",
+        ["KR", 2000 + i, i + 1, new Date(now).toISOString()],
+      );
+    }
+
+    const result = await enqueueRecentScoresFallbackBatch(db, queue, config, {
+      now,
+      oscStatus: {
+        connected: true,
+        lastBatchAt: "2026-05-30T11:00:00.000Z",
+        lastError: null,
+        stale: true,
+      },
+      countryClients: [{ country: "KR", activeUsers: 1, lastActiveAt: new Date(now).toISOString() }],
+    });
+
+    expect(result).toMatchObject({ ran: true, enqueued: 12 });
+    const rows = (await exec(
+      db,
+      "select payload_json from jobs where type = 'reconcile_user_recent_scores' order by id",
+    )).rows;
+    const userIds = rows.map((row) => JSON.parse(String(row.payload_json)).userId as number);
+    expect(userIds.filter((userId) => userId >= 2000)).toHaveLength(9);
+    expect(userIds.filter((userId) => userId >= 1000 && userId < 2000)).toHaveLength(3);
+    expect(JSON.parse(String((await exec(db, "select value_json from live_meta where key = 'osu_recent_fallback_cursor:KR'")).rows[0].value_json))).toBe(9);
   });
 
   it("reconciles id-zero graveyard recent scores once and fans them out by tracked country", async () => {

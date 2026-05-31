@@ -39,6 +39,7 @@ type OscScoresResponse = OscScore[] | {
 const COUNTRY_CATCHUP_OVERLAP_MS = 5 * 60_000;
 const COUNTRY_CATCHUP_PAGE_LIMIT = 25;
 const COUNTRY_CATCHUP_PAGE_DELAY_MS = 5_000;
+const OSC_JSON_TIMEOUT_MS = 15_000;
 
 export class OscBackfill {
   private readonly limiter: TokenBucketLimiter;
@@ -75,15 +76,21 @@ export class OscBackfill {
     if (after > 0) url.searchParams.set("after", String(after));
     const responseBody = await this.limiter.schedule("osc_json_backfill", "/api/scores", async () => {
       const startedAt = new Date().toISOString();
-      const response = await this.fetchImpl(url);
-      if (!response.ok) throw new Error(`oSC JSON ${response.status}`);
-      await logApiCall(db, {
-        provider: "osc",
-        caller: "job:osc_backfill",
-        path: `${url.pathname}${url.search}`,
-        startedAt,
-      }).catch(() => {});
-      return response.json() as Promise<OscScoresResponse>;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), OSC_JSON_TIMEOUT_MS);
+      try {
+        const response = await this.fetchImpl(url, { signal: controller.signal });
+        if (!response.ok) throw new Error(`oSC JSON ${response.status}`);
+        await logApiCall(db, {
+          provider: "osc",
+          caller: "job:osc_backfill",
+          path: `${url.pathname}${url.search}`,
+          startedAt,
+        }).catch(() => {});
+        return response.json() as Promise<OscScoresResponse>;
+      } finally {
+        clearTimeout(timeout);
+      }
     });
     const scores = normalizeScores(responseBody);
     const result = await ingestor.ingestBatch(scores, "osc_json", country ? { countryAllowlist: [country] } : {});
