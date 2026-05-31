@@ -195,6 +195,6 @@ export function readConfig(): Config {
     enableOscBackfill: readBool("ENABLE_OSC_BACKFILL", true),
     enableOscSocket: readBool("ENABLE_OSC_SOCKET", true),
     enableOsuScoresFallback: readBool("ENABLE_OSU_SCORES_FALLBACK", readBool("ENABLE_OSU_RECENT_FALLBACK", true)),
-    osuScoresFallbackIntervalMs: readInt("OSU_SCORES_FALLBACK_INTERVAL_MS", readInt("OSU_RECENT_FALLBACK_INTERVAL_MS", 5_000)),
+    osuScoresFallbackIntervalMs: readInt("OSU_SCORES_FALLBACK_INTERVAL_MS", readInt("OSU_RECENT_FALLBACK_INTERVAL_MS", 10_000)),
   };
 }

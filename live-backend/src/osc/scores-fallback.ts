@@ -43,7 +43,7 @@ export function startScoresFallbackScheduler(
   oscStatus: () => OscStatus,
 ): () => void {
   let stopped = false;
-  const intervalMs = Math.max(5_000, config.osuScoresFallbackIntervalMs);
+  const intervalMs = Math.max(10_000, config.osuScoresFallbackIntervalMs);
   const tick = async () => {
     if (stopped) return;
     await runScoresFallbackPage(db, config, osu, ingestor, {
@@ -53,7 +53,7 @@ export function startScoresFallbackScheduler(
     });
     if (!stopped) setTimeout(tick, intervalMs).unref();
   };
-  setTimeout(tick, Math.min(5_000, intervalMs)).unref();
+  setTimeout(tick, Math.min(10_000, intervalMs)).unref();
   return () => {
     stopped = true;
   };
