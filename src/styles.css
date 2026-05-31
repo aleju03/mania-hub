@@ -111,6 +111,20 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 ::-webkit-scrollbar-thumb { background: var(--color-osu-b2); border-radius: 4px; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+/* Soft edge fades for the tracker active-player rail (applied only when that
+   edge has more avatars scrolled out of view, so it never cuts off hard). */
+.tracker-rail--t {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 100%);
+          mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 100%);
+}
+.tracker-rail--b {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 22px), transparent 100%);
+          mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 22px), transparent 100%);
+}
+.tracker-rail--tb {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 calc(100% - 22px), transparent 100%);
+          mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 calc(100% - 22px), transparent 100%);
+}
 .replay-score-scroll {
   -ms-overflow-style: none;
   scrollbar-width: none;

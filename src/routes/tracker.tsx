@@ -42,6 +42,37 @@ import { useCountryWarming } from "../lib/use-country-warming";
 const TRACKER_SNAPSHOT_LOADER_TIMEOUT_MS = 2500;
 const TRACKER_PAGE_SIZE = 45;
 const TRACKER_LIVE_SNAPSHOT_LIMIT = 500;
+const DEV_ACTIVE_PLAYER_SIMULATION_COUNT = 200;
+
+type ActivePlayerRailInfo = {
+  username: string;
+  avatar_url: string;
+  latestTime: number;
+  simulated?: boolean;
+};
+
+type ActivePlayerRailItem = ActivePlayerRailInfo & {
+  id: number;
+};
+
+function makeDevAvatarUrl(index: number): string {
+  const hue = (index * 47) % 360;
+  const accentHue = (hue + 44) % 360;
+  const label = String((index % 99) + 1);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="hsl(${hue} 58% 28%)"/><circle cx="45" cy="18" r="20" fill="hsl(${accentHue} 90% 66%)" opacity=".75"/><circle cx="20" cy="46" r="22" fill="hsl(${hue} 78% 72%)" opacity=".62"/><text x="32" y="38" text-anchor="middle" font-family="Arial,sans-serif" font-size="20" font-weight="700" fill="white">${label}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+function makeDevActivePlayers(count: number): ActivePlayerRailItem[] {
+  const now = Date.now();
+  return Array.from({ length: count }, (_, index) => ({
+    id: -9_000_000 - index,
+    username: `sim player ${index + 1}`,
+    avatar_url: makeDevAvatarUrl(index),
+    latestTime: now - index * 1000,
+    simulated: true,
+  }));
+}
 
 async function withSnapshotLoaderBudget<T>(snapshotPromise: Promise<T>): Promise<T | null> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -171,6 +202,7 @@ function ScoresPage() {
   const [initialRefreshDone, setInitialRefreshDone] = useState(false);
   const [initialFetching, setInitialFetching] = useState(false);
   const [polling, setPolling] = useState(false);
+  const [simulateHighTraffic, setSimulateHighTraffic] = useState(false);
   const [timeTick, setTimeTick] = useState(0);
   const refreshing = initialFetching || polling;
   const initialFetchInFlightRef = useRef(false);
@@ -556,7 +588,7 @@ function ScoresPage() {
 
   const activePlayers = useMemo(() => {
     const activeCutoff = Date.now() - 40 * 60 * 1000;
-    const seen = new Map<number, { username: string; avatar_url: string; latestTime: number }>();
+    const seen = new Map<number, ActivePlayerRailInfo>();
     for (const score of feedScores) {
       const timeMs = getScoreTimeMs(score);
       if (timeMs < activeCutoff || !score.user) continue;
@@ -570,10 +602,41 @@ function ScoresPage() {
         });
       }
     }
-    return [...seen.entries()]
+    const realPlayers = [...seen.entries()]
       .sort((a, b) => b[1].latestTime - a[1].latestTime)
       .map(([id, info]) => ({ id, ...info }));
-  }, [feedScores, hiddenUserIds]);
+    if (!import.meta.env.DEV || !simulateHighTraffic || realPlayers.length >= DEV_ACTIVE_PLAYER_SIMULATION_COUNT) {
+      return realPlayers;
+    }
+    return [
+      ...realPlayers,
+      ...makeDevActivePlayers(DEV_ACTIVE_PLAYER_SIMULATION_COUNT - realPlayers.length),
+    ];
+  }, [feedScores, hiddenUserIds, simulateHighTraffic]);
+
+  // Desktop active-player rail scrolls internally; fade the edge(s) that have
+  // hidden avatars so the list never cuts off abruptly (and hide the scrollbar).
+  const activeRailRef = useRef<HTMLDivElement | null>(null);
+  const [railFade, setRailFade] = useState<{ top: boolean; bottom: boolean }>({ top: false, bottom: false });
+  const updateRailFade = useCallback(() => {
+    const el = activeRailRef.current;
+    if (!el) return;
+    const top = el.scrollTop > 4;
+    const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 4;
+    setRailFade((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
+  }, []);
+  useEffect(() => {
+    updateRailFade();
+    window.addEventListener("resize", updateRailFade);
+    return () => window.removeEventListener("resize", updateRailFade);
+  }, [activePlayers.length, updateRailFade]);
+  const railMaskClass = railFade.top && railFade.bottom
+    ? "tracker-rail--tb"
+    : railFade.top
+      ? "tracker-rail--t"
+      : railFade.bottom
+        ? "tracker-rail--b"
+        : "";
 
   const filters: { id: ScoreFilter; label: string }[] = [
     { id: "all", label: "All" },
@@ -622,6 +685,20 @@ function ScoresPage() {
         title={`${countryName} mania tracker`}
         right={
           <div className="flex items-center gap-2">
+            {import.meta.env.DEV && (
+              <button
+                type="button"
+                onClick={() => setSimulateHighTraffic((enabled) => !enabled)}
+                className={`rounded-lg border px-2 py-1 text-[10px] font-semibold transition-colors ${
+                  simulateHighTraffic
+                    ? "border-osu-yellow/40 bg-osu-yellow/15 text-osu-yellow"
+                    : "border-osu-pink/25 bg-osu-pink/10 text-osu-pink-light hover:bg-osu-pink/20"
+                }`}
+                title="Toggle simulated high-traffic active players"
+              >
+                {simulateHighTraffic ? "Sim 200 on" : "Sim 200"}
+              </button>
+            )}
             {loadingPlayers || refreshing ? (
               <>
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
@@ -814,13 +891,16 @@ function ScoresPage() {
                 {activePlayers.map((player) => (
                   <button
                     key={player.id}
-                    onClick={() => togglePlayerFilter(player.id)}
+                    onClick={() => {
+                      if (player.simulated) return;
+                      togglePlayerFilter(player.id);
+                    }}
                     onContextMenu={(event) => {
                       event.preventDefault();
                     }}
-                    aria-pressed={selectedPlayerIdSet.has(player.id)}
+                    aria-pressed={!player.simulated && selectedPlayerIdSet.has(player.id)}
                     className="cursor-pointer group relative flex-shrink-0"
-                    title={`${player.username} - click to filter`}
+                    title={player.simulated ? `${player.username} - simulated dev traffic` : `${player.username} - click to filter`}
                   >
                     <div className={`ring-2 ring-inset rounded-full transition-all ${
                       selectedPlayerIdSet.has(player.id)
@@ -832,29 +912,43 @@ function ScoresPage() {
                   </button>
                 ))}
               </div>
-              {/* Desktop: vertical sidebar */}
-              <div className="hidden lg:flex sticky top-[76px] max-h-[calc(100svh_-_196px)] self-start flex-col items-center gap-2 flex-shrink-0 overflow-y-auto overscroll-contain pr-1 pt-1 pb-1 [scrollbar-gutter:stable]">
-                <span className="shrink-0 text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-1">Playing</span>
-                {activePlayers.map((player) => (
-                  <button
-                    key={player.id}
-                    onClick={() => togglePlayerFilter(player.id)}
-                    onContextMenu={(event) => {
-                      event.preventDefault();
-                    }}
-                    aria-pressed={selectedPlayerIdSet.has(player.id)}
-                    className="cursor-pointer group relative shrink-0"
-                    title={`${player.username} - click to filter`}
-                  >
-                    <div className={`ring-2 rounded-full transition-all ${
-                      selectedPlayerIdSet.has(player.id)
-                        ? "ring-osu-pink shadow-[0_0_0_3px_rgba(255,102,171,0.18)]"
-                        : "ring-osu-pink/40 group-hover:ring-osu-pink"
-                    }`}>
-                      <Avatar url={player.avatar_url} size={32} />
-                    </div>
-                  </button>
-                ))}
+              {/* Desktop: vertical sidebar, two columns, edge-faded internal scroll */}
+              <div className="hidden lg:flex sticky top-[76px] max-h-[calc(100svh_-_196px)] self-start flex-col flex-shrink-0">
+                <div className="flex items-baseline justify-between gap-2 mb-2 px-0.5">
+                  <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Playing</span>
+                  <span className="text-[9px] tabular-nums text-osu-f1/70 font-semibold">{activePlayers.length}</span>
+                </div>
+                <div
+                  ref={activeRailRef}
+                  onScroll={updateRailFade}
+                  className={`min-h-0 overflow-y-auto overscroll-contain scrollbar-hide ${railMaskClass}`}
+                >
+                  <div className="grid grid-cols-2 gap-2 place-items-center px-0.5 pb-1">
+                    {activePlayers.map((player) => (
+                      <button
+                        key={player.id}
+                        onClick={() => {
+                          if (player.simulated) return;
+                          togglePlayerFilter(player.id);
+                        }}
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                        }}
+                        aria-pressed={!player.simulated && selectedPlayerIdSet.has(player.id)}
+                        className="cursor-pointer group relative shrink-0"
+                        title={player.simulated ? `${player.username} - simulated dev traffic` : `${player.username} - click to filter`}
+                      >
+                        <div className={`ring-2 rounded-full transition-all ${
+                          selectedPlayerIdSet.has(player.id)
+                            ? "ring-osu-pink shadow-[0_0_0_3px_rgba(255,102,171,0.18)]"
+                            : "ring-osu-pink/40 group-hover:ring-osu-pink"
+                        }`}>
+                          <Avatar url={player.avatar_url} size={32} />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </>
           )}
