@@ -545,6 +545,10 @@ describe("live backend", () => {
       oscSocketStaleMs: 10 * 60_000,
       enableOsuScoresFallback: true,
       osuScoresFallbackIntervalMs: 5_000,
+      trackedCountries: ["CR"],
+      prewarmCountries: [],
+      mapsWarmCountries: [],
+      countryWarmTtlMs: 24 * 60 * 60 * 1000,
     };
     await exec(
       db,
@@ -570,7 +574,7 @@ describe("live backend", () => {
       },
     });
 
-    expect(result).toMatchObject({ ran: true, fetched: 2, inserted: 2, skipped: 0, nextCursorString: "cursor:next" });
+    expect(result).toMatchObject({ ran: true, fetched: 2, candidates: 2, inserted: 2, skipped: 0, nextCursorString: "cursor:next" });
     expect(JSON.parse(String((await exec(db, "select value_json from live_meta where key = 'osu_scores_fallback_cursor_string'")).rows[0].value_json))).toBe("cursor:next");
     expect(Number((await exec(db, "select count(*) as count from score_events where source = 'osu_scores_fallback'")).rows[0].count)).toBe(2);
   });

@@ -1,4 +1,5 @@
 import type { Config } from "../config.js";
+import { getActiveCountryCodes } from "../countries.js";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import type { ScoreIngestor } from "../ingest/score-ingestor.js";
@@ -13,13 +14,20 @@ const FALLBACK_SOURCE = "osu_scores_fallback";
 
 type ScoresFallbackConfig = Pick<
   Config,
-  "oscSocketStaleMs" | "enableOsuScoresFallback" | "osuScoresFallbackIntervalMs"
+  | "oscSocketStaleMs"
+  | "enableOsuScoresFallback"
+  | "osuScoresFallbackIntervalMs"
+  | "trackedCountries"
+  | "prewarmCountries"
+  | "mapsWarmCountries"
+  | "countryWarmTtlMs"
 >;
 
 export interface ScoresFallbackResult {
   ran: boolean;
   reason: string | null;
   fetched: number;
+  candidates: number;
   inserted: number;
   skipped: number;
   cursorString: string | null;
@@ -69,13 +77,15 @@ export async function runScoresFallbackPage(
 
   const response = await osu.getScores("mania", cursorString, FALLBACK_CALLER);
   const scores = normalizeScores(response.scores ?? []);
-  const ingestResult = await ingestor.ingestBatch(scores, FALLBACK_SOURCE);
   const nextCursorString = response.cursor_string ?? cursorString;
   if (nextCursorString) await setStoredCursorString(db, nextCursorString, now);
+  const candidateScores = await filterCandidateScores(db, config, scores);
+  const ingestResult = await ingestor.ingestBatch(candidateScores, FALLBACK_SOURCE);
   return recordResult(db, {
     ran: true,
     reason: null,
     fetched: scores.length,
+    candidates: candidateScores.length,
     inserted: ingestResult.inserted,
     skipped: ingestResult.skipped,
     cursorString,
@@ -93,6 +103,35 @@ export function shouldRunScoresFallback(status: OscStatus, staleMs: number, now 
 
 function normalizeScores(scores: OscScore[]): OscScore[] {
   return scores.map((score) => ({ ...score, ruleset_id: score.ruleset_id ?? 3 }));
+}
+
+async function filterCandidateScores(db: Db, config: ScoresFallbackConfig, scores: OscScore[]): Promise<OscScore[]> {
+  if (scores.length === 0) return [];
+  const activeCountries = new Set((await getActiveCountryCodes(db, config)).map((country) => country.toUpperCase()));
+  if (activeCountries.size === 0) return [];
+  const scoreUserIds = [...new Set(scores
+    .map((score) => Number(score.user_id))
+    .filter((userId) => Number.isFinite(userId) && userId > 0))];
+  const rosterUserIds = new Set<number>();
+  for (const chunk of chunks(scoreUserIds, 500)) {
+    const countryArgs = [...activeCountries];
+    const rows = (await exec(
+      db,
+      `select distinct user_id
+       from country_rosters
+       where is_tracked = 1
+         and country in (${countryArgs.map(() => "?").join(", ")})
+         and user_id in (${chunk.map(() => "?").join(", ")})`,
+      [...countryArgs, ...chunk],
+    )).rows;
+    for (const row of rows) rosterUserIds.add(Number(row.user_id));
+  }
+  return scores.filter((score) => {
+    const userId = Number(score.user_id);
+    if (Number.isFinite(userId) && rosterUserIds.has(userId)) return true;
+    const userCountry = score.user?.country_code?.toUpperCase();
+    return !!userCountry && activeCountries.has(userCountry);
+  });
 }
 
 async function getStoredCursorString(db: Db): Promise<string | null> {
@@ -122,6 +161,7 @@ function emptyResult(reason: string, cursorString: string | null): ScoresFallbac
     ran: false,
     reason,
     fetched: 0,
+    candidates: 0,
     inserted: 0,
     skipped: 0,
     cursorString,
@@ -144,4 +184,12 @@ function parseTime(value: unknown): number {
   if (typeof value !== "string") return Number.NaN;
   const time = new Date(value).getTime();
   return Number.isFinite(time) ? time : Number.NaN;
+}
+
+function chunks<T>(values: T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    result.push(values.slice(index, index + size));
+  }
+  return result;
 }
