@@ -1,5 +1,25 @@
 export const DEFAULT_COUNTRY_CODE = "CR";
 
+// "Global" is a synthetic scope, not a real country: it aggregates every tracked
+// country into one view. It deliberately stays out of COUNTRY_OPTIONS (the
+// searchable country list) and is surfaced as a pinned entry by the selector.
+export const GLOBAL_SCOPE_CODE = "GLOBAL";
+export const GLOBAL_SCOPE_NAME = "Global";
+
+export function isGlobalScope(code?: string | null): boolean {
+  return code?.trim().toUpperCase() === GLOBAL_SCOPE_CODE;
+}
+
+export function normalizeCountryScope(code?: string | null): string {
+  const normalized = code?.trim().toUpperCase();
+  if (normalized === GLOBAL_SCOPE_CODE) return GLOBAL_SCOPE_CODE;
+  return normalizeCountryCode(normalized);
+}
+
+export function isSupportedCountryScope(code?: string | null): boolean {
+  return isGlobalScope(code) || isSupportedCountryCode(code);
+}
+
 const RAW_COUNTRY_OPTIONS = [
   { code: "AD", name: "Andorra" },
   { code: "AE", name: "United Arab Emirates" },
@@ -235,11 +255,13 @@ export function isSupportedCountryCode(code?: string | null): boolean {
 }
 
 export function getCountryName(code?: string | null): string {
+  if (isGlobalScope(code)) return GLOBAL_SCOPE_NAME;
   const normalized = normalizeCountryCode(code);
   return COUNTRY_NAME_BY_CODE.get(normalized) ?? normalized;
 }
 
 export function getCountryFlagEmoji(code?: string | null): string {
+  if (isGlobalScope(code)) return "\u{1F30D}";
   const normalized = normalizeCountryCode(code);
   return String.fromCodePoint(
     ...normalized
@@ -248,7 +270,12 @@ export function getCountryFlagEmoji(code?: string | null): string {
   );
 }
 
+// The globe motif osu! itself uses for global rankings. Doubles as the "flag"
+// for the Global scope wherever a flag image is rendered generically.
+export const GLOBAL_SCOPE_ICON_URL = "/images/icons/rankings.svg";
+
 export function getCountryFlagUrl(code?: string | null): string {
+  if (isGlobalScope(code)) return GLOBAL_SCOPE_ICON_URL;
   const normalized = normalizeCountryCode(code);
   return `https://osu.ppy.sh/images/flags/${normalized}.png`;
 }
@@ -280,7 +307,8 @@ const FLAG_GRADIENTS: Record<string, string> = {
   CL: "linear-gradient(#0039a6, #0039a6) top left / 50% 50% no-repeat, linear-gradient(180deg, #fff 50%, #d52b1e 50%)",
   PE: "linear-gradient(90deg, #d91023 33%, #fff 33%, #fff 67%, #d91023 67%)",
   JP: "radial-gradient(circle, #bc002d 30%, #fff 30%)",
-  KR: "linear-gradient(180deg, #fff 30%, #cd2e3a 50%, #0047a0 70%, #fff 70%)",
+  // KR is intentionally absent: the taegeuk + trigrams can't be approximated by
+  // a stripe gradient, so it falls back to the real flag image.
   TH: "linear-gradient(180deg, #ed1c24 17%, #fff 17%, #fff 33%, #241d4f 33%, #241d4f 67%, #fff 67%, #fff 83%, #ed1c24 83%)",
   ID: "linear-gradient(180deg, #ce1126 50%, #fff 50%)",
   PH: "linear-gradient(180deg, #0038a8 50%, #ce1126 50%)",
@@ -313,6 +341,7 @@ const FLAG_GRADIENTS: Record<string, string> = {
 };
 
 export function getCountryFlagGradient(code?: string | null): string | null {
+  if (isGlobalScope(code)) return null;
   const normalized = normalizeCountryCode(code);
   return FLAG_GRADIENTS[normalized] ?? null;
 }

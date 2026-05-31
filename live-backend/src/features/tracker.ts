@@ -1,9 +1,13 @@
+import { isGlobalCountry } from "../countries.js";
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import { toLeanTrackerScore } from "../shared/score.js";
 import type { LeanTrackerScore, OscScore, OsuBeatmap, OsuBeatmapset, ScoreUser } from "../shared/types.js";
 
 export async function getTrackerSnapshot(db: Db, country: string, limit: number): Promise<{ country: string; scores: LeanTrackerScore[]; gains: Record<number, number>; fetchedAt: number }> {
+  // Global aggregates every tracked country (only tracked countries ever land
+  // rows in score_events, so dropping the country filter is exactly the union).
+  const global = isGlobalCountry(country);
   const rows = (await exec(
     db,
     `select
@@ -28,20 +32,21 @@ export async function getTrackerSnapshot(db: Db, country: string, limit: number)
      left join users u on u.user_id = se.user_id
      left join beatmaps b on b.beatmap_id = se.beatmap_id
      left join beatmapsets bs on bs.beatmapset_id = b.beatmapset_id
-     where se.country = ? and se.passed = 1
+     where ${global ? "" : "se.country = ? and "}se.passed = 1
      order by se.ended_at desc
      limit ?`,
-    [country, limit],
+    global ? [limit] : [country, limit],
   )).rows;
   const scores = rows
     .map((row) => hydrateScoreMetadata(row, parseJson<OscScore | null>(row.score_json, null)))
     .filter((score): score is OscScore => !!score?.beatmap && !!score.beatmapset && !!score.user)
     .map(toLeanTrackerScore);
+  const scoreIdPlaceholders = scores.map(() => "?").join(",") || "null";
   const gainRows = (await exec(
     db,
     `select score_id, pp_gain from top_play_events
-     where country = ? and score_id in (${scores.map(() => "?").join(",") || "null"})`,
-    [country, ...scores.map((score) => score.id)],
+     where ${global ? "" : "country = ? and "}score_id in (${scoreIdPlaceholders})`,
+    global ? scores.map((score) => score.id) : [country, ...scores.map((score) => score.id)],
   )).rows;
   const gains = Object.fromEntries(gainRows.map((row) => [Number(row.score_id), Number(row.pp_gain)]));
   return { country, scores, gains, fetchedAt: Date.now() };

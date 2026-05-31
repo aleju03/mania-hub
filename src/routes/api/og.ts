@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { createElement as h } from "react";
 import type { ReactNode } from "react";
 import { getCachedUser, getRankings, getCountryMapsFavourites, getScore } from "../../lib/osu";
-import { getCountryName, isSupportedCountryCode } from "../../lib/country";
+import { getCountryName, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
 import { getAssetOrigin } from "../../lib/origin";
 import { getDisplayedRank, getManiaJudgementCounts, getModAcronyms } from "../../lib/score";
 import type { OsuCovers, OsuScore } from "../../lib/types";
@@ -2303,7 +2303,9 @@ export const Route = createFileRoute("/api/og")({
         const kind = url.searchParams.get("kind");
         const rawCountry = url.searchParams.get("country");
         const country = rawCountry?.trim().toUpperCase();
-        const countryValid = country && isSupportedCountryCode(country);
+        // Global is not a real country, so it has no flag/scoreboard OG layout;
+        // let it fall through to the default branded card.
+        const countryValid = country && isSupportedCountryCode(country) && !isGlobalScope(country);
 
         // Player route. Username in URL, data comes from osu! API.
         if (kind === "player") {

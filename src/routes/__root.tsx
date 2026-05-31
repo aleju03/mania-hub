@@ -210,7 +210,41 @@ export const Route = createRootRoute({
   component: RootLayout,
   shellComponent: RootDocument,
   notFoundComponent: NotFoundPage,
+  errorComponent: RootErrorComponent,
 });
+
+function RootErrorComponent({ error }: { error: Error }) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 py-24 text-center">
+      <div className="text-5xl font-bold text-white">Something broke</div>
+      <div className="max-w-md text-sm text-osu-f1">
+        The page hit an unexpected error and couldn't finish rendering. Reloading usually
+        clears it. If it keeps happening, try disabling browser extensions.
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="rounded-md bg-osu-pink/20 px-4 py-2 text-xs font-semibold text-white hover:bg-osu-pink/30 transition-colors"
+        >
+          Reload page
+        </button>
+        <Link
+          to="/"
+          search={{ country: undefined }}
+          className="rounded-md px-4 py-2 text-xs font-semibold text-osu-f1 hover:text-white transition-colors"
+        >
+          Go home
+        </Link>
+      </div>
+      {import.meta.env.DEV && error?.message ? (
+        <pre className="mt-2 max-w-full overflow-x-auto rounded-md bg-black/30 px-3 py-2 text-left text-[10px] text-osu-pink-light/60">
+          {error.message}
+        </pre>
+      ) : null}
+    </div>
+  );
+}
 
 function NotFoundPage() {
   return (

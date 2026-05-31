@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { getRankings, getCountryRecentScores, getTrackerLiveSnapshot, getTrackerSnapshot } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
-import { getCountryName } from "../lib/country";
+import { getCountryFlagUrl, getCountryName, isGlobalScope } from "../lib/country";
 import { formatAccuracy, formatTimeAgo, formatPP, formatNumber, formatPpGain } from "../lib/format";
 import {
   getBeatmapUrl,
@@ -118,6 +118,7 @@ function scoreMatchesMissFilter(score: LeanTrackerScore, missFilter: MissFilter)
 
 const EMPTY_IDS: number[] = [];
 const EMPTY_SCORES: LeanTrackerScore[] = [];
+const EMPTY_KEY_SET: ReadonlySet<string> = new Set<string>();
 const EMPTY_SCORE_GAINS: Record<number, { fetchedAt: number; value: number }> = {};
 
 function getTrackerUserBatch(
@@ -141,6 +142,7 @@ function ScoresPage() {
   const page = searchPage ?? 0;
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = country ?? fallbackCountry;
+  const selectedIsGlobal = isGlobalScope(selectedCountry);
   const loaderData = Route.useLoaderData();
   const snapshot = loaderData?.country === selectedCountry ? loaderData : null;
   const cachedRankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
@@ -876,6 +878,7 @@ function ScoresPage() {
                   expandedKey={expandedKey}
                   onToggle={handleToggleExpand}
                   ppGainByScoreId={ppGainByScoreId}
+                  showCountryFlag={selectedIsGlobal}
                 />
                 <Pagination
                   page={currentPage}
@@ -923,6 +926,7 @@ function VirtualScoreList({
   expandedKey,
   onToggle,
   ppGainByScoreId,
+  showCountryFlag,
 }: {
   listKey: string;
   scores: LeanTrackerScore[];
@@ -930,6 +934,7 @@ function VirtualScoreList({
   expandedKey: string | null;
   onToggle: (key: string) => void;
   ppGainByScoreId: Record<number, number>;
+  showCountryFlag: boolean;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
   const scrollMargin = parentRef.current?.offsetTop ?? 0;
@@ -947,6 +952,32 @@ function VirtualScoreList({
   // Score detail expansion is a click-driven resize in visible rows; scroll
   // correction here causes one-frame jumps while the accordion swaps rows.
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = ignoreVirtualizerScrollCorrection;
+
+  // Track which score keys we've already shown so only scores that are genuinely
+  // new to the feed get the entrance cue. Rows that mount because the user
+  // scrolled them into view are already "seen" and stay still. A null seen-set
+  // means first paint; a listKey change (filter/page swap) resets it so the
+  // whole new slice arrives without animating.
+  const seenKeysRef = useRef<Set<string> | null>(null);
+  const prevListKeyRef = useRef(listKey);
+  const isResetRender = prevListKeyRef.current !== listKey;
+  const animatedKeys = useMemo(() => {
+    const seen = seenKeysRef.current;
+    if (isResetRender || seen === null) return EMPTY_KEY_SET;
+    const fresh = new Set<string>();
+    for (const score of scores) {
+      const key = getScoreIdentity(score);
+      if (!seen.has(key)) fresh.add(key);
+    }
+    return fresh;
+  }, [scores, isResetRender]);
+
+  useEffect(() => {
+    const seen = isResetRender || seenKeysRef.current === null ? new Set<string>() : seenKeysRef.current;
+    for (const score of scores) seen.add(getScoreIdentity(score));
+    seenKeysRef.current = seen;
+    prevListKeyRef.current = listKey;
+  }, [scores, listKey, isResetRender]);
 
   const items = virtualizer.getVirtualItems();
 
@@ -985,6 +1016,8 @@ function VirtualScoreList({
               approxPpGain={ppGainByScoreId[score.id] ?? null}
               expanded={expandedKey === scoreKey}
               onToggle={onToggle}
+              showCountryFlag={showCountryFlag}
+              isNew={animatedKeys.has(scoreKey)}
             />
           </div>
         );
@@ -1000,6 +1033,8 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   approxPpGain,
   expanded,
   onToggle,
+  showCountryFlag,
+  isNew,
 }: {
   score: LeanTrackerScore;
   scoreKey: string;
@@ -1007,6 +1042,8 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   approxPpGain: number | null;
   expanded: boolean;
   onToggle: (key: string) => void;
+  showCountryFlag: boolean;
+  isNew: boolean;
 }) {
   const navigate = useNavigate();
 
@@ -1021,7 +1058,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
   const showPpGain = approxPpGain != null && approxPpGain >= 0.05;
 
   return (
-    <div className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
+    <div className={`rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden${isNew ? " score-enter" : ""}`}>
       <div
         className="flex items-center gap-2 sm:gap-3 py-3 px-3 sm:px-4 hover:bg-osu-b3/50 transition-colors duration-[120ms] cursor-pointer"
         onClick={() => onToggle(scoreKey)}
@@ -1043,19 +1080,30 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               {score.user?.username ? (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    window.location.href = `/player/${encodeURIComponent(score.user.username)}`;
-                  }}
-                  className="cursor-pointer"
-                >
-                  <UsernameText
-                    username={score.user.username}
-                    avatarUrl={score.user?.avatar_url}
-                    className="text-sm font-semibold"
-                  />
-                </button>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.location.href = `/player/${encodeURIComponent(score.user.username)}`;
+                                }}
+                                className="cursor-pointer min-w-0"
+                              >
+                                <UsernameText
+                                  username={score.user.username}
+                                  avatarUrl={score.user?.avatar_url}
+                                  className="text-sm font-semibold truncate"
+                                />
+                              </button>
+                              {showCountryFlag && score.user.country_code ? (
+                                <img
+                                  src={getCountryFlagUrl(score.user.country_code)}
+                                  alt={score.user.country_code}
+                                  title={getCountryName(score.user.country_code)}
+                                  className="w-[18px] h-3 rounded-[1px] object-cover flex-shrink-0"
+                                  loading="lazy"
+                                />
+                              ) : null}
+                            </div>
               ) : (
                 <UsernameText
                   username="Unknown"

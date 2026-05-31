@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { activateLiveCountry, isLiveBackendConfigured, type LiveCountryActivation, type LiveCountryFeature, type LiveCountryFeatureTier } from "./live-backend";
-import { normalizeCountryCode } from "./country";
+import { normalizeCountryScope } from "./country";
 
 const POLL_INTERVAL_MS = 6_000;
 const COUNTRY_TIER_CACHE_KEY = "mania-hub-country-feature-tiers-v1";
@@ -15,13 +15,13 @@ const warmingCache = readWarmingCache();
 const activationRequests = new Map<string, Promise<LiveCountryActivation | null>>();
 
 export function getCachedCountryTier(country: string): LiveCountryFeatureTier | null {
-  return tierCache.get(normalizeCountryCode(country)) ?? null;
+  return tierCache.get(normalizeCountryScope(country)) ?? null;
 }
 
 export function seedCountryTierCache(countries: LiveCountryFeature[] | null | undefined): void {
   if (!countries?.length) return;
   for (const entry of countries) {
-    tierCache.set(normalizeCountryCode(entry.country), entry.featureTier);
+    tierCache.set(normalizeCountryScope(entry.country), entry.featureTier);
   }
   writeTierCache(tierCache);
 }
@@ -47,7 +47,7 @@ export interface CountryWarmingState {
  * treat it as a no-op fallback.
  */
 export function useCountryWarming(country: string): CountryWarmingState {
-  const normalizedCountry = normalizeCountryCode(country);
+  const normalizedCountry = normalizeCountryScope(country);
   const liveBackendEnabled = isLiveBackendConfigured();
   const [warming, setWarmingState] = useState(() => liveBackendEnabled && warmingCache.has(normalizedCountry));
   const [checking, setChecking] = useState(liveBackendEnabled);
@@ -104,7 +104,7 @@ export function useCountryWarming(country: string): CountryWarmingState {
 }
 
 function activateLiveCountryOnce(country: string): Promise<LiveCountryActivation | null> {
-  const normalizedCountry = normalizeCountryCode(country);
+  const normalizedCountry = normalizeCountryScope(country);
   const existing = activationRequests.get(normalizedCountry);
   if (existing) return existing;
   const request = activateLiveCountry(normalizedCountry)
@@ -122,7 +122,7 @@ function readTierCache(): Map<string, LiveCountryFeatureTier> {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return entries;
     for (const [country, tier] of Object.entries(parsed)) {
-      if (isCountryFeatureTier(tier)) entries.set(normalizeCountryCode(country), tier);
+      if (isCountryFeatureTier(tier)) entries.set(normalizeCountryScope(country), tier);
     }
   } catch {
     // Best-effort cache only; activation will repair it.
@@ -148,7 +148,7 @@ function readWarmingCache(): Set<string> {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return entries;
     for (const country of parsed) {
-      if (typeof country === "string") entries.add(normalizeCountryCode(country));
+      if (typeof country === "string") entries.add(normalizeCountryScope(country));
     }
   } catch {
     // Best-effort cache only; activation polling will repair it.
@@ -157,7 +157,7 @@ function readWarmingCache(): Set<string> {
 }
 
 function setCachedCountryWarming(country: string, warming: boolean): void {
-  const normalizedCountry = normalizeCountryCode(country);
+  const normalizedCountry = normalizeCountryScope(country);
   if (warming) warmingCache.add(normalizedCountry);
   else warmingCache.delete(normalizedCountry);
   if (typeof window === "undefined") return;

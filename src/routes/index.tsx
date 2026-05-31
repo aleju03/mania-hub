@@ -3,11 +3,11 @@ import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { getHomePopoffs, getHomeRecentScores, getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
-import { getCountryName } from "../lib/country";
+import { getCountryFlagUrl, getCountryName, isGlobalScope } from "../lib/country";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
 import { getModDisplayList, getScoreDisplayValues, getScoreTimestamp } from "../lib/score";
-import { fetchLiveTopPlaysSnapshot, fetchLiveTrackerSnapshot, isLiveBackendConfigured } from "../lib/live-backend";
+import { fetchLiveGlobalRankings, fetchLiveTopPlaysSnapshot, fetchLiveTrackerSnapshot, isLiveBackendConfigured, type LiveGlobalRankingEntry } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
 import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
@@ -73,6 +73,7 @@ const EMPTY_TRACKER_SCORES: LeanTrackerScore[] = [];
 const EMPTY_POPOFFS: LeanHomePopoff[] = [];
 const HOME_RANKING_SKELETON_MOBILE_COUNT = 5;
 const HOME_RANKING_SKELETON_DESKTOP_COUNT = 10;
+const HOME_GLOBAL_RANKINGS_FETCH_COUNT = 50;
 const HOME_RECENT_SCORES_SKELETON_COUNT = 2;
 const HOME_RECENT_SCORES_PLAYER_COUNT = 50;
 const HOME_POPOFFS_PLAYER_COUNT = 10;
@@ -211,6 +212,7 @@ function HomePage() {
   const { country } = Route.useSearch();
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = country ?? fallbackCountry;
+  const selectedIsGlobal = isGlobalScope(selectedCountry);
   const rankings = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const recentScores = useAppStore((state) => state.homeRecentScoresByCountry[selectedCountry]) ?? EMPTY_SCORES;
@@ -229,6 +231,7 @@ function HomePage() {
   const addFeedScores = useAppStore((state) => state.addFeedScores);
   const markFeedScoresFetched = useAppStore((state) => state.markFeedScoresFetched);
   const [rankingsError, setRankingsError] = useState<string | null>(null);
+  const [globalTopPlayers, setGlobalTopPlayers] = useState<LiveGlobalRankingEntry[] | null>(null);
   const [loadingScores, setLoadingScores] = useState(recentScores.length === 0);
   const [loadingPopoffs, setLoadingPopoffs] = useState(popoffs.length === 0);
   const countryName = getCountryName(selectedCountry);
@@ -252,6 +255,14 @@ function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
+    // Global has no single-country leaderboard; its live sections (recent
+    // scores, popoffs) load from the aggregated live snapshots instead.
+    if (selectedIsGlobal) {
+      setRankingsError(null);
+      return () => {
+        cancelled = true;
+      };
+    }
     const shouldRefreshRankings = !rankings || isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings);
 
     if (!shouldRefreshRankings) {
@@ -292,6 +303,17 @@ function HomePage() {
     if (!rankings) return;
     seedPlayerShellsFromRankingEntries(rankings.ranking, 1);
   }, [rankings]);
+
+  // Global's left panel shows the combined top players (the same board as the
+  // Rankings page), instead of a single country's leaderboard.
+  useEffect(() => {
+    if (!selectedIsGlobal) return;
+    let cancelled = false;
+    fetchLiveGlobalRankings(HOME_GLOBAL_RANKINGS_FETCH_COUNT)
+      .then((snapshot) => { if (!cancelled) setGlobalTopPlayers(snapshot.ranking); })
+      .catch(() => { if (!cancelled) setGlobalTopPlayers([]); });
+    return () => { cancelled = true; };
+  }, [selectedIsGlobal]);
 
   useEffect(() => {
     let cancelled = false;
@@ -445,8 +467,14 @@ function HomePage() {
     () => (rankings?.ranking ?? []).filter((entry) => !hiddenUserIds.has(entry.user.id)),
     [rankings, hiddenUserIds],
   );
+  const visibleGlobalTopPlayers = useMemo(
+    () => (globalTopPlayers ?? []).filter((entry) => !hiddenUserIds.has(entry.user.id)),
+    [globalTopPlayers, hiddenUserIds],
+  );
   const topPlayersMobile = visibleRanking.slice(0, 5);
   const topPlayersDesktop = visibleRanking.slice(0, 10);
+  const globalTopPlayersMobile = visibleGlobalTopPlayers.slice(0, HOME_RANKING_SKELETON_MOBILE_COUNT);
+  const globalTopPlayersDesktop = visibleGlobalTopPlayers.slice(0, HOME_RANKING_SKELETON_DESKTOP_COUNT);
   const featuredPopoffs = useMemo(
     () => selectFeaturedHomePopoffs(popoffs.filter((p) => !hiddenUserIds.has(p.score.user.id))),
     [popoffs, hiddenUserIds],
@@ -457,6 +485,24 @@ function HomePage() {
       trackerFeedScores.filter((s) => !hiddenUserIds.has(s.user_id)),
     ),
     [recentScores, trackerFeedScores, hiddenUserIds],
+  );
+  const GlobalRankingRow = ({ entry }: { entry: LiveGlobalRankingEntry }) => (
+    <div
+      className="flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3/50 transition-colors cursor-pointer"
+      onClick={() => navigate({ to: "/player/$username", params: { username: entry.user.username } })}
+    >
+      <span className="text-sm font-bold text-osu-f1 w-6 text-center tabular-nums">#{entry.rank}</span>
+      <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} />
+      <UsernameText username={entry.user.username} avatarUrl={entry.user.avatar_url} className="text-sm font-medium flex-1 truncate" />
+      <img
+        src={getCountryFlagUrl(entry.user.country_code)}
+        alt={entry.user.country_code}
+        title={getCountryName(entry.user.country_code)}
+        className="w-[18px] h-3 rounded-[1px] object-cover flex-shrink-0"
+        loading="lazy"
+      />
+      <span className="text-xs font-bold text-right tabular-nums">{formatNumber(Math.round(entry.pp))}pp</span>
+    </div>
   );
 
   return (
@@ -476,7 +522,7 @@ function HomePage() {
         <div className="max-w-[1200px] mx-auto text-center">
           <div className="flex items-center justify-center gap-3">
             <span className="mode-icon text-osu-pink text-3xl sm:text-5xl">{"\ue802"}</span>
-            <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight" style={{ fontFamily: "Torus" }}>mania <span className="text-osu-pink">{selectedCountry}</span></h1>
+            <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight" style={{ fontFamily: "Torus" }}>mania <span className="text-osu-pink">{selectedIsGlobal ? "Global" : selectedCountry}</span></h1>
           </div>
         </div>
       </section>
@@ -485,12 +531,41 @@ function HomePage() {
 
       {!warming && (
       <div className="relative max-w-[1200px] mx-auto px-4 sm:px-5 pb-8 grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-4">
-        {/* CR Top 5 */}
+        {/* Country Top players (or Global note) */}
         <section className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-osu-b3/20">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Rankings</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">{selectedIsGlobal ? "Top players" : "Rankings"}</h2>
             <Link to="/rankings" search={{ page: 1, country: selectedCountry }} className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors">view all</Link>
           </div>
+          {selectedIsGlobal ? (
+            <div className="divide-y divide-osu-b3/15">
+              {globalTopPlayers == null ? (
+                <>
+                  <div className="lg:hidden">
+                    {Array.from({ length: HOME_RANKING_SKELETON_MOBILE_COUNT }).map((_, i) => <RankingRowSkeleton key={i} />)}
+                  </div>
+                  <div className="hidden lg:block">
+                    {Array.from({ length: HOME_RANKING_SKELETON_DESKTOP_COUNT }).map((_, i) => <RankingRowSkeleton key={i} />)}
+                  </div>
+                </>
+              ) : visibleGlobalTopPlayers.length > 0 ? (
+                <>
+                  <div className="lg:hidden">
+                    {globalTopPlayersMobile.map((entry) => (
+                      <GlobalRankingRow key={entry.user.id} entry={entry} />
+                    ))}
+                  </div>
+                  <div className="hidden lg:block">
+                    {globalTopPlayersDesktop.map((entry) => (
+                      <GlobalRankingRow key={entry.user.id} entry={entry} />
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="px-4 py-6 text-center text-xs text-osu-f1">No ranked players yet.</div>
+              )}
+            </div>
+          ) : (
           <div className="divide-y divide-osu-b3/15">
             {rankingsError ? (
               <div className="px-4 py-6 text-center text-xs text-osu-f1">{rankingsError}</div>
@@ -550,6 +625,7 @@ function HomePage() {
               </>
             )}
           </div>
+          )}
         </section>
 
         <div className="flex flex-col gap-4">

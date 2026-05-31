@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { normalizeCountryCode } from "./country";
+import { normalizeCountryScope } from "./country";
 
 function setFaviconHref(href: string, type = "image/png"): void {
   if (typeof document === "undefined") return;
@@ -23,7 +23,7 @@ function setFaviconHref(href: string, type = "image/png"): void {
 
 export function useDynamicFavicon(countryCode: string | null | undefined): void {
   useEffect(() => {
-    const code = normalizeCountryCode(countryCode);
+    const code = normalizeCountryScope(countryCode);
     setFaviconHref(`/api/favicon?code=${code}&v=2`);
   }, [countryCode]);
 }

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import sharp from "sharp";
-import { getCountryFlagGradient, normalizeCountryCode } from "#/lib/country";
+import { getCountryFlagGradient, isGlobalScope, normalizeCountryScope } from "#/lib/country";
 
 const ICON_SIZE = 64;
 const ARROW_SIZE = Math.round(ICON_SIZE * 0.62);
@@ -126,10 +126,29 @@ async function composeIcon(code: string): Promise<Buffer> {
     .toBuffer();
 }
 
+// The Global scope has no flag; render osu!'s global-rankings globe motif on a
+// pink circle so the tab icon still reads as "Global".
+function composeGlobalIcon(): Promise<Buffer> {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${ICON_SIZE}" height="${ICON_SIZE}">
+    <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3a1726"/><stop offset="100%" stop-color="#16161b"/>
+    </linearGradient></defs>
+    <circle cx="32" cy="32" r="32" fill="url(#bg)"/>
+    <g fill="none" stroke="#ff66ab" stroke-linecap="round">
+      <circle cx="32" cy="32" r="17" stroke-width="3"/>
+      <ellipse cx="32" cy="32" rx="7.5" ry="17" stroke-width="2.6"/>
+      <line x1="15" y1="32" x2="49" y2="32" stroke-width="3"/>
+      <line x1="18" y1="23.5" x2="46" y2="23.5" stroke-width="2.4"/>
+      <line x1="18" y1="40.5" x2="46" y2="40.5" stroke-width="2.4"/>
+    </g>
+  </svg>`;
+  return sharp(Buffer.from(svg)).png().toBuffer();
+}
+
 function getIcon(code: string): Promise<Buffer> {
   const cached = iconCache.get(code);
   if (cached) return cached;
-  const promise = composeIcon(code);
+  const promise = isGlobalScope(code) ? composeGlobalIcon() : composeIcon(code);
   iconCache.set(code, promise);
   promise.catch(() => {
     iconCache.delete(code);
@@ -142,7 +161,7 @@ export const Route = createFileRoute("/api/favicon")({
     handlers: {
       GET: async ({ request }) => {
         const url = new URL(request.url);
-        const code = normalizeCountryCode(url.searchParams.get("code"));
+        const code = normalizeCountryScope(url.searchParams.get("code"));
         try {
           const buffer = await getIcon(code);
           return new Response(buffer as unknown as BodyInit, {

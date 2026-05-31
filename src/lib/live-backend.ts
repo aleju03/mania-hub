@@ -8,6 +8,7 @@ import type {
   MapsAggregatedBeatmap,
   MapsAggregatedFavourite,
   MapsFarmedEntry,
+  MapsFavouriteBeatmapset,
   OsuScore,
   OsuUser,
   SnipeEvent,
@@ -96,6 +97,31 @@ export interface LiveMapsPageSnapshot {
   isStale: boolean;
   refreshQueued: boolean;
 }
+
+export type LiveMapsPlayersKind = "farmed" | "popular" | "favourite";
+
+export interface LiveMapsDetailsPlayer {
+  id: number;
+  username: string;
+  avatarUrl: string;
+  pp?: number;
+  count?: number;
+  mods?: string[];
+  scoreUrl?: string | null;
+  playedAt?: string | null;
+}
+
+export interface LiveMapsPlayersSnapshot {
+  kind: LiveMapsPlayersKind;
+  id: number;
+  total: number;
+  matched: number;
+  page: number;
+  pageSize: number;
+  players: LiveMapsDetailsPlayer[];
+}
+
+export const LIVE_MAPS_PLAYERS_PAGE_SIZE = 50;
 
 export interface LiveDanEstimateRequest {
   beatmapId: number;
@@ -202,7 +228,8 @@ function normalizeAdminPath(input: unknown): string {
   }
   if (url.pathname === "/api/admin/refresh-maps") {
     const country = url.searchParams.get("country");
-    if (country && /^[A-Za-z]{2}$/.test(country)) return `/api/admin/refresh-maps?country=${country.toUpperCase()}`;
+    // Global is a valid maps scope (it merges every country's snapshot).
+    if (country && /^([A-Za-z]{2}|GLOBAL)$/i.test(country)) return `/api/admin/refresh-maps?country=${country.toUpperCase()}`;
   }
   if (url.pathname === "/api/admin/set-country-tier") {
     const country = url.searchParams.get("country");
@@ -463,6 +490,154 @@ export async function fetchLiveMapsPageSnapshot(
   });
   if (params.q.trim()) query.set("q", params.q.trim());
   return fetchLiveJson(`/api/snapshots/maps-page?${query.toString()}`);
+}
+
+export async function fetchLiveMapsPlayersSnapshot(
+  country: string,
+  kind: LiveMapsPlayersKind,
+  id: number,
+  options: { page?: number; pageSize?: number; q?: string } = {},
+): Promise<LiveMapsPlayersSnapshot> {
+  const query = new URLSearchParams({ country, kind, id: String(id) });
+  query.set("page", String(Math.max(0, options.page ?? 0)));
+  query.set("pageSize", String(options.pageSize ?? LIVE_MAPS_PLAYERS_PAGE_SIZE));
+  const q = options.q?.trim();
+  if (q) query.set("q", q);
+  return fetchLiveJson(`/api/snapshots/maps-players?${query.toString()}`);
+}
+
+// Full per-set metadata (covers, per-difficulty list, preview audio) for the
+// Random tab, fetched on demand since the pool snapshot now ships lean entries.
+export async function fetchLiveMapsBeatmapsets(
+  country: string,
+  ids: number[],
+): Promise<MapsFavouriteBeatmapset[]> {
+  const cleanIds = [...new Set(ids)].filter((id) => Number.isFinite(id) && id > 0);
+  if (cleanIds.length === 0) return [];
+  const query = new URLSearchParams({ country, ids: cleanIds.join(",") });
+  const result = await fetchLiveJson<{ beatmapsets: MapsFavouriteBeatmapset[] }>(
+    `/api/snapshots/maps-set?${query.toString()}`,
+  );
+  return result.beatmapsets ?? [];
+}
+
+export interface LiveGlobalRankingEntry {
+  rank: number;
+  user: { id: number; username: string; avatar_url: string; cover_url: string; country_code: string };
+  pp: number;
+  global_rank: number | null;
+  country_rank: number | null;
+  hit_accuracy: number;
+  play_count: number;
+  ranked_score: number;
+  grade_counts: {
+    ss: number;
+    ssh: number;
+    s: number;
+    sh: number;
+    a: number;
+  };
+  global_change: number | null;
+  country_change: number | null;
+}
+
+export interface LiveGlobalRankingsSnapshot {
+  ranking: LiveGlobalRankingEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+  fetchedAt: number;
+}
+
+export interface LiveGlobalRankingsParams {
+  page?: number;
+  pageSize?: number;
+  sort?: string;
+  dir?: "asc" | "desc";
+}
+
+// The combined leaderboard across every tracked country's roster, ranked by pp.
+export async function fetchLiveGlobalRankings(options: number | LiveGlobalRankingsParams = 100): Promise<LiveGlobalRankingsSnapshot> {
+  const params = typeof options === "number" ? { page: 1, pageSize: options } : options;
+  const query = new URLSearchParams({
+    page: String(Math.max(1, Math.floor(params.page ?? 1))),
+    pageSize: String(Math.max(1, Math.min(50, Math.floor(params.pageSize ?? 50)))),
+    sort: params.sort ?? "rank",
+    dir: params.dir === "asc" ? "asc" : "desc",
+  });
+  const snapshot = await fetchLiveJson<Record<string, unknown>>(
+    `/api/snapshots/global-rankings?${query.toString()}`,
+  );
+  const ranking = Array.isArray(snapshot.ranking)
+    ? snapshot.ranking.map(normalizeLiveGlobalRankingEntry)
+    : [];
+  return {
+    ranking,
+    total: readFiniteNumber(snapshot.total) ?? ranking.length,
+    page: readPositiveInteger(snapshot.page) ?? params.page ?? 1,
+    pageSize: readPositiveInteger(snapshot.pageSize) ?? params.pageSize ?? ranking.length,
+    fetchedAt: readFiniteNumber(snapshot.fetchedAt) ?? Date.now(),
+  };
+}
+
+function normalizeLiveGlobalRankingEntry(value: unknown, index: number): LiveGlobalRankingEntry {
+  const entry = readRecord(value) ?? {};
+  const user = readRecord(entry.user) ?? {};
+  const grades = readRecord(entry.grade_counts) ?? {};
+  return {
+    rank: readPositiveInteger(entry.rank) ?? index + 1,
+    user: {
+      id: readPositiveInteger(user.id) ?? 0,
+      username: readString(user.username),
+      avatar_url: readString(user.avatar_url),
+      cover_url: readString(user.cover_url),
+      country_code: readString(user.country_code),
+    },
+    pp: readFiniteNumber(entry.pp) ?? 0,
+    global_rank: readPositiveInteger(entry.global_rank),
+    country_rank: readPositiveInteger(entry.country_rank),
+    hit_accuracy: readFiniteNumber(entry.hit_accuracy) ?? 0,
+    play_count: readNonNegativeInteger(entry.play_count) ?? 0,
+    ranked_score: readNonNegativeInteger(entry.ranked_score) ?? 0,
+    grade_counts: {
+      ss: readNonNegativeInteger(grades.ss) ?? 0,
+      ssh: readNonNegativeInteger(grades.ssh) ?? 0,
+      s: readNonNegativeInteger(grades.s) ?? 0,
+      sh: readNonNegativeInteger(grades.sh) ?? 0,
+      a: readNonNegativeInteger(grades.a) ?? 0,
+    },
+    global_change: readFiniteNumber(entry.global_change),
+    country_change: readFiniteNumber(entry.country_change),
+  };
+}
+
+function readRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function readString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+function readFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : null;
+  }
+  return null;
+}
+
+function readNonNegativeInteger(value: unknown): number | null {
+  const numberValue = readFiniteNumber(value);
+  return numberValue != null && Number.isInteger(numberValue) && numberValue >= 0 ? numberValue : null;
+}
+
+function readPositiveInteger(value: unknown): number | null {
+  const numberValue = readFiniteNumber(value);
+  return numberValue != null && Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
 }
 
 export async function fetchLiveRankDeltas(country: string, userIds: number[]): Promise<LiveRankDeltaSnapshot> {

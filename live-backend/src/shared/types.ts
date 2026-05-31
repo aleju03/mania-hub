@@ -105,7 +105,7 @@ export interface LeanTrackerScore extends Required<Pick<OscScore, "id" | "user_i
 }
 
 export interface CountryTopPlay {
-  user: { id: number; username: string; avatar_url: string };
+  user: { id: number; username: string; avatar_url: string; country_code?: string };
   score: OscScore;
   pp: number;
   weightedPP: number;

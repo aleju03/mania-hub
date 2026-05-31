@@ -141,6 +141,16 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 }
 .cards-enter { animation: cards-in 200ms ease-out; }
 
+/* Entrance cue for a brand-new score arriving in the live tracker feed: a gentle
+   fade + small settle into place, so the eye catches the new row instead of the
+   whole list silently jumping down under it. Only applied to rows that are new
+   to the data, never to rows that mount from scrolling. */
+@keyframes score-in {
+  0%   { opacity: 0; transform: translateY(-4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.score-enter { animation: score-in 240ms ease-out; }
+
 @keyframes indeterminate {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(300%); }
@@ -282,6 +292,7 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 }
 @media (prefers-reduced-motion: reduce) {
   .peak-rank-tier { animation: none !important; }
+  .score-enter { animation: none !important; }
 }
 
 /* BBCode-rendered profile "me" section from osu! API */

@@ -55,13 +55,16 @@ import { REPLAY_SKIN_SETTINGS_CHANGE_EVENT, readReplaySkinSettings } from "../li
 import type { ReplaySkinSettings } from "../lib/replay-skin";
 import { useAuth } from "../lib/auth-context";
 import {
+  fetchLiveMapsBeatmapsets,
   fetchLiveMapsPageSnapshot,
+  fetchLiveMapsPlayersSnapshot,
   fetchLiveMapsSnapshot,
   isLiveBackendConfigured,
   openLiveEventSource,
   runLiveBackendAdminAction,
 } from "../lib/live-backend";
-import type { LiveMapsBrowseTab, LiveMapsPageValue } from "../lib/live-backend";
+import { LIVE_MAPS_PLAYERS_PAGE_SIZE } from "../lib/live-backend";
+import type { LiveMapsBrowseTab, LiveMapsDetailsPlayer, LiveMapsPageValue, LiveMapsPlayersKind } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
@@ -1667,8 +1670,13 @@ function MapsPage() {
   const isLoading = loadingPlayers || (liveBackendPaged ? liveMapsPagePending : loadingMaps) || currentMapsSectionLoading;
 
   // ── Random tab: pick a random top-50 player and a single random favourite ──
+  // The pool ships lean entries, so a pick records the chosen set id and the
+  // full record (covers + per-difficulty list + preview audio) is fetched on
+  // demand, cached, and prefetched a few ahead so rerolls stay snappy.
   const [randomPlayer, setRandomPlayer] = useState<MapsPlayerFavourites | null>(null);
+  const [pickedSetId, setPickedSetId] = useState<number | null>(null);
   const [randomBeatmapset, setRandomBeatmapset] = useState<MapsFavouriteBeatmapset | null>(null);
+  const fullSetCacheRef = useRef<Map<number, MapsFavouriteBeatmapset>>(new Map());
   const lastRandomKeyRef = useRef<string | null>(null);
   // Sliding windows used when "avoid repeats" is on (see reshuffleRandom).
   const recentRandomPlayerIdsRef = useRef<number[]>([]);
@@ -1782,6 +1790,10 @@ function MapsPage() {
     }
     return pairs;
   }, [visibleMapsData, randomStatus, randomKey, randomPatternCanonical, rStars, rStarsMax, tab]);
+  const randomUniqueBeatmapsetCount = useMemo(
+    () => new Set(randomPool.map((pair) => pair.beatmapset.id)).size,
+    [randomPool],
+  );
 
   // Group eligible pairs by player so sampling can be uniform per-player
   // rather than per-pair (players with more favourites would otherwise win).
@@ -1802,16 +1814,28 @@ function MapsPage() {
       .slice(0, 12);
   }, [devRandomForceQuery, isDevMode, randomPool, tab]);
 
+  // Prefetch + cache full set records so most rerolls resolve instantly.
+  const warmRandomSetCache = useCallback((ids: number[]) => {
+    if (!liveBackendEnabled) return;
+    const need = [...new Set(ids)]
+      .filter((id) => Number.isFinite(id) && id > 0 && !fullSetCacheRef.current.has(id))
+      .slice(0, 10);
+    if (need.length === 0) return;
+    fetchLiveMapsBeatmapsets(selectedCountry, need)
+      .then((sets) => { for (const set of sets) fullSetCacheRef.current.set(set.id, set); })
+      .catch(() => undefined);
+  }, [liveBackendEnabled, selectedCountry]);
+
   const forceDevRandomPick = useCallback((pair: { player: MapsPlayerFavourites; beatmapset: MapsFavouriteBeatmapset }) => {
     setRandomPlayer(pair.player);
-    setRandomBeatmapset(pair.beatmapset);
+    setPickedSetId(pair.beatmapset.id);
     setDevRandomForceOpen(false);
   }, []);
 
   const reshuffleRandom = useCallback(() => {
     if (randomPlayerGroups.length === 0) {
       setRandomPlayer(null);
-      setRandomBeatmapset(null);
+      setPickedSetId(null);
       return;
     }
     const recentPlayers = rAvoidRepeats ? new Set(recentRandomPlayerIdsRef.current) : null;
@@ -1855,8 +1879,53 @@ function MapsPage() {
     }
 
     setRandomPlayer(pickedPlayer);
-    setRandomBeatmapset(pickedBeatmapset);
-  }, [randomPlayerGroups, randomPool, rWeight, rAvoidRepeats]);
+    setPickedSetId(pickedBeatmapset.id);
+    // Warm a few upcoming candidates so the next rerolls don't wait on a fetch.
+    if (randomPool.length > 1) {
+      const sample: number[] = [];
+      for (let i = 0; i < 6; i++) {
+        sample.push(randomPool[Math.floor(Math.random() * randomPool.length)].beatmapset.id);
+      }
+      warmRandomSetCache(sample);
+    }
+  }, [randomPlayerGroups, randomPool, rWeight, rAvoidRepeats, warmRandomSetCache]);
+
+  // Resolve the picked set's full record (covers + per-difficulty list + preview
+  // audio) on demand. Cached and prefetched entries resolve synchronously; the
+  // non-live fallback path already ships full pool entries, so use them as-is.
+  useEffect(() => {
+    if (pickedSetId == null) {
+      setRandomBeatmapset(null);
+      return;
+    }
+    const poolSet = visibleMapsData?.beatmapsetsPool?.[pickedSetId] ?? null;
+    if (poolSet && poolSet.maniaBeatmaps.length > 0) {
+      setRandomBeatmapset(poolSet);
+      return;
+    }
+    const cached = fullSetCacheRef.current.get(pickedSetId);
+    if (cached) {
+      setRandomBeatmapset(cached);
+      return;
+    }
+    if (!liveBackendEnabled) {
+      setRandomBeatmapset(poolSet);
+      return;
+    }
+    let cancelled = false;
+    setRandomBeatmapset(null);
+    fetchLiveMapsBeatmapsets(selectedCountry, [pickedSetId])
+      .then((sets) => {
+        if (cancelled) return;
+        const full = sets.find((set) => set.id === pickedSetId) ?? null;
+        if (full) fullSetCacheRef.current.set(pickedSetId, full);
+        setRandomBeatmapset(full ?? poolSet);
+      })
+      .catch(() => {
+        if (!cancelled) setRandomBeatmapset(poolSet);
+      });
+    return () => { cancelled = true; };
+  }, [pickedSetId, liveBackendEnabled, selectedCountry, visibleMapsData]);
 
   // Only reshuffle on first entry to the tab or when the underlying data
   // changes (country switch / rebuild). Filter changes never auto-reroll —
@@ -1866,8 +1935,8 @@ function MapsPage() {
     const dataKey = `${selectedCountry}:${mapsData.favouritesGeneratedAt}`;
     const dataChanged = lastRandomKeyRef.current !== dataKey;
     lastRandomKeyRef.current = dataKey;
-    if (dataChanged || !randomBeatmapset) reshuffleRandom();
-  }, [tab, selectedCountry, mapsData, reshuffleRandom, randomBeatmapset]);
+    if (dataChanged || pickedSetId == null) reshuffleRandom();
+  }, [tab, selectedCountry, mapsData, reshuffleRandom, pickedSetId]);
 
   const hasActiveFilters =
     tab === "random"
@@ -1966,7 +2035,9 @@ function MapsPage() {
             )}
             {showMapsSummary && mapsUpdatedAt && (
               <span className="text-[10px] text-osu-f1">
-                {tab === "random" ? randomPool.length : currentTotal} maps &middot; updated {formatTimeAgo(mapsUpdatedAt)}
+                {tab === "random"
+                  ? `${formatNumber(randomPool.length)} possible picks · ${formatNumber(randomUniqueBeatmapsetCount)} unique sets`
+                  : `${formatNumber(currentTotal)} maps`} &middot; updated {formatTimeAgo(mapsUpdatedAt)}
               </span>
             )}
             {canUseAdminFeatures && !isLoading && !error && (mapsData || currentLiveMapsPage) && (
@@ -2077,7 +2148,7 @@ function MapsPage() {
             </button>
             {tab === "random" && (
               <span className="text-[10px] text-osu-f1">
-                {randomPool.length} {randomPool.length === 1 ? "match" : "matches"}
+                {formatNumber(randomPool.length)} {randomPool.length === 1 ? "pick" : "possible picks"}
               </span>
             )}
           </div>
@@ -2191,7 +2262,7 @@ function MapsPage() {
                   </FilterGroup>
 
                   <span className="hidden sm:inline text-[10px] text-osu-f1">
-                    {randomPool.length} {randomPool.length === 1 ? "match" : "matches"}
+                    {formatNumber(randomPool.length)} {randomPool.length === 1 ? "pick" : "possible picks"}
                   </span>
                 </>
               )}
@@ -2454,7 +2525,7 @@ function MapsPage() {
                 </div>
               ) : null}
 
-              {randomPlayer && randomBeatmapset ? (
+              {randomPlayer ? (
                 <>
                   <div className="flex flex-row items-center justify-between gap-3">
                     <button
@@ -2568,9 +2639,13 @@ function MapsPage() {
                       )}
                     </div>
                   </div>
-                  <div key={`random-${randomPlayer.id}-${randomBeatmapset.id}`} className="cards-enter">
-                    <RandomCard bm={randomBeatmapset} />
-                  </div>
+                  {randomBeatmapset ? (
+                    <div key={`random-${randomPlayer.id}-${pickedSetId}`} className="cards-enter">
+                      <RandomCard bm={randomBeatmapset} />
+                    </div>
+                  ) : (
+                    <RandomCardSkeleton />
+                  )}
                 </>
               ) : (
                 <div className="text-center py-16 text-osu-f1 text-sm">
@@ -2675,60 +2750,66 @@ function RandomPickLoadingSkeleton() {
         </div>
       </div>
 
-      <div className="relative w-[640px] max-w-full">
-        <div className="overflow-hidden rounded-2xl border border-osu-b3/20 bg-osu-b4">
-          <div className="relative h-[220px] bg-osu-b6">
-            <Skeleton className="h-full w-full rounded-none" />
-            <Skeleton className="absolute left-3 top-3 h-5 w-12 rounded-full" />
-            <div className="absolute right-3 top-3 flex gap-1">
-              <Skeleton className="h-5 w-7" />
-              <Skeleton className="h-5 w-20" />
-            </div>
-            <div className="absolute bottom-3 left-4 right-4 space-y-1.5">
-              <Skeleton className="h-5 w-1/2" />
-              <Skeleton className="h-3.5 w-1/3" />
-            </div>
+      <RandomCardSkeleton />
+    </div>
+  );
+}
+
+function RandomCardSkeleton() {
+  return (
+    <div className="relative w-[640px] max-w-full">
+      <div className="overflow-hidden rounded-2xl border border-osu-b3/20 bg-osu-b4">
+        <div className="relative h-[220px] bg-osu-b6">
+          <Skeleton className="h-full w-full rounded-none" />
+          <Skeleton className="absolute left-3 top-3 h-5 w-12 rounded-full" />
+          <div className="absolute right-3 top-3 flex gap-1">
+            <Skeleton className="h-5 w-7" />
+            <Skeleton className="h-5 w-20" />
           </div>
-
-          <div className="space-y-3 px-4 py-3">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div className="min-w-0 space-y-1.5">
-                <Skeleton className="h-3 w-40" />
-                <Skeleton className="h-2.5 w-24" />
-              </div>
-              <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-start">
-                <Skeleton className="h-4 w-14" />
-                <Skeleton className="h-4 w-16" />
-                <Skeleton className="hidden h-7 w-16 rounded-full sm:block" />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-1.5">
-              <Skeleton className="h-5 w-8 rounded-full" />
-              <Skeleton className="h-5 w-14 rounded-full" />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-2.5 w-6" />
-              <Skeleton className="h-8 flex-1" />
-              <Skeleton className="h-7 w-12" />
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <Skeleton className="h-8 w-8 rounded-full shrink-0" />
-              <Skeleton className="h-1 flex-1 min-w-[160px] rounded-full" />
-              <Skeleton className="h-2.5 w-16" />
-              <Skeleton className="h-5 w-5" />
-              <Skeleton className="h-1 w-12 rounded-full" />
-            </div>
+          <div className="absolute bottom-3 left-4 right-4 space-y-1.5">
+            <Skeleton className="h-5 w-1/2" />
+            <Skeleton className="h-3.5 w-1/3" />
           </div>
         </div>
 
-        <div
-          className="relative mt-4 min-h-[420px] overflow-visible md:absolute md:left-[calc(100%_+_24px)] md:top-[-52px] md:mt-0 md:h-[calc(100%+52px)] md:w-[300px] md:min-h-[calc(100%+52px)]"
-        >
-          <Skeleton className="absolute left-1/2 top-1/2 h-8 w-28 -translate-x-1/2 -translate-y-1/2 md:left-[150px]" />
+        <div className="space-y-3 px-4 py-3">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="min-w-0 space-y-1.5">
+              <Skeleton className="h-3 w-40" />
+              <Skeleton className="h-2.5 w-24" />
+            </div>
+            <div className="flex w-full items-center justify-between gap-4 sm:w-auto sm:justify-start">
+              <Skeleton className="h-4 w-14" />
+              <Skeleton className="h-4 w-16" />
+              <Skeleton className="hidden h-7 w-16 rounded-full sm:block" />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            <Skeleton className="h-5 w-8 rounded-full" />
+            <Skeleton className="h-5 w-14 rounded-full" />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-2.5 w-6" />
+            <Skeleton className="h-8 flex-1" />
+            <Skeleton className="h-7 w-12" />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+            <Skeleton className="h-1 flex-1 min-w-[160px] rounded-full" />
+            <Skeleton className="h-2.5 w-16" />
+            <Skeleton className="h-5 w-5" />
+            <Skeleton className="h-1 w-12 rounded-full" />
+          </div>
         </div>
+      </div>
+
+      <div
+        className="relative mt-4 min-h-[420px] overflow-visible md:absolute md:left-[calc(100%_+_24px)] md:top-[-52px] md:mt-0 md:h-[calc(100%+52px)] md:w-[300px] md:min-h-[calc(100%+52px)]"
+      >
+        <Skeleton className="absolute left-1/2 top-1/2 h-8 w-28 -translate-x-1/2 -translate-y-1/2 md:left-[150px]" />
       </div>
     </div>
   );
@@ -3336,7 +3417,6 @@ function MapDetailsContent({
       ? `https://osu.ppy.sh/beatmapsets/${setId}`
       : `https://osu.ppy.sh/beatmapsets/${setId}#mania/${details.map.beatmapId}`;
   const osuDirectUrl = `osu://dl/${setId}`;
-
   const dominantMod =
     details.kind === "farmed" ? getDominantSpeedMod(details.map.players) : null;
   const dominantModFile =
@@ -3487,9 +3567,15 @@ function MapDetailsContent({
       </div>
 
       <div className="overflow-y-auto flex-1 min-h-0 bg-osu-b5 px-5 py-4 sm:px-6 space-y-4">
-        {details.kind === "farmed" && <FarmedDetails entry={details.map} />}
-        {details.kind === "popular" && <PopularDetails entry={details.map} />}
-        {details.kind === "favourite" && <FavouriteDetails entry={details.fav} country={country} />}
+        {details.kind === "farmed" && (
+          <FarmedDetails key={`farmed:${details.map.beatmapId}`} entry={details.map} country={country} />
+        )}
+        {details.kind === "popular" && (
+          <PopularDetails key={`popular:${details.map.beatmapId}`} entry={details.map} country={country} />
+        )}
+        {details.kind === "favourite" && (
+          <FavouriteDetails key={`favourite:${details.fav.beatmapsetId}`} entry={details.fav} country={country} />
+        )}
       </div>
 
       <div className="shrink-0 border-t border-osu-b3/40 px-4 py-3 flex items-center gap-2 bg-osu-b4/95">
@@ -3557,14 +3643,6 @@ function StatRow({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SectionHeader({ title, count }: { title: string; count: number }) {
-  return (
-    <div className="flex items-baseline gap-2 mb-1.5 px-1">
-      <h3 className="text-[10px] uppercase tracking-wider font-bold text-osu-f1">{title}</h3>
-      <span className="text-[10px] text-osu-f1/70 tabular-nums">{count}</span>
-    </div>
-  );
-}
 
 function PlayerRow({
   rank,
@@ -3593,119 +3671,360 @@ function PlayerRow({
   );
 }
 
-function FarmedDetails({ entry }: { entry: MapsFarmedEntry }) {
-  const sortedPlayers = useMemo(
-    () => [...entry.players].sort((a, b) => b.pp - a.pp),
-    [entry.players],
+function toFarmedDetailPlayers(players: LiveMapsDetailsPlayer[]): MapsFarmedPlayer[] {
+  return players.map((player) => ({
+    id: player.id,
+    username: player.username,
+    avatarUrl: player.avatarUrl,
+    mods: player.mods ?? [],
+    pp: player.pp ?? 0,
+    scoreUrl: player.scoreUrl ?? null,
+    playedAt: player.playedAt ?? null,
+  }));
+}
+
+function toPopularDetailPlayers(players: LiveMapsDetailsPlayer[]): MapsPlayerEntry[] {
+  return players.map((player) => ({
+    id: player.id,
+    username: player.username,
+    avatarUrl: player.avatarUrl,
+    count: player.count ?? 0,
+  }));
+}
+
+function toFavouriteDetailPlayers(players: LiveMapsDetailsPlayer[]): Array<{ id: number; username: string; avatarUrl: string }> {
+  return players.map((player) => ({
+    id: player.id,
+    username: player.username,
+    avatarUrl: player.avatarUrl,
+  }));
+}
+
+const MAPS_DETAILS_PAGE_SIZE = LIVE_MAPS_PLAYERS_PAGE_SIZE;
+
+interface MapsPlayerListControl {
+  query: string;
+  setQuery: (value: string) => void;
+  matched: number;
+  loading: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
+  loadMore: () => void;
+}
+
+// Loads a map's player list one page (50) at a time from the live backend,
+// with server-side search, so a 1k+ player map never ships or renders in one
+// shot. Only engaged when the map has more players than the preview already
+// holds; otherwise the modal searches the preview client-side.
+function useMapsDetailsPlayers({
+  country,
+  kind,
+  id,
+  enabled,
+}: {
+  country: string;
+  kind: LiveMapsPlayersKind;
+  id: number;
+  enabled: boolean;
+}): { players: LiveMapsDetailsPlayer[]; loadedOnce: boolean; total: number; control: MapsPlayerListControl } {
+  const [players, setPlayers] = useState<LiveMapsDetailsPlayer[]>([]);
+  const [total, setTotal] = useState(0);
+  const [matched, setMatched] = useState(0);
+  const [page, setPage] = useState(0);
+  const [loadedOnce, setLoadedOnce] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  // Bumped on every page-0 reload so an in-flight loadMore from a previous
+  // query/page can detect it is stale and drop its (now mismatched) results.
+  const requestSeq = useRef(0);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 250);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  // First page + every search change reloads from page 0.
+  useEffect(() => {
+    if (!enabled) return;
+    const seq = ++requestSeq.current;
+    setLoading(true);
+    fetchLiveMapsPlayersSnapshot(country, kind, id, { page: 0, pageSize: MAPS_DETAILS_PAGE_SIZE, q: debouncedQuery })
+      .then((snapshot) => {
+        if (requestSeq.current !== seq) return;
+        setPlayers(snapshot.players);
+        setTotal(snapshot.total);
+        setMatched(snapshot.matched);
+        setPage(0);
+        setLoadedOnce(true);
+      })
+      .catch(() => {
+        if (requestSeq.current === seq) setLoadedOnce(true);
+      })
+      .finally(() => {
+        if (requestSeq.current === seq) setLoading(false);
+      });
+  }, [enabled, country, kind, id, debouncedQuery]);
+
+  const loadMore = useCallback(() => {
+    if (!enabled || loading || loadingMore) return;
+    const nextPage = page + 1;
+    if (nextPage * MAPS_DETAILS_PAGE_SIZE >= matched) return;
+    const seq = requestSeq.current;
+    setLoadingMore(true);
+    fetchLiveMapsPlayersSnapshot(country, kind, id, { page: nextPage, pageSize: MAPS_DETAILS_PAGE_SIZE, q: debouncedQuery })
+      .then((snapshot) => {
+        if (requestSeq.current !== seq) return;
+        setPlayers((prev) => {
+          const seen = new Set(prev.map((player) => player.id));
+          return [...prev, ...snapshot.players.filter((player) => !seen.has(player.id))];
+        });
+        setTotal(snapshot.total);
+        setMatched(snapshot.matched);
+        setPage(nextPage);
+      })
+      .catch(() => undefined)
+      .finally(() => setLoadingMore(false));
+  }, [enabled, loading, loadingMore, page, matched, country, kind, id, debouncedQuery]);
+
+  return {
+    players,
+    loadedOnce,
+    total,
+    control: {
+      query,
+      setQuery,
+      matched,
+      loading,
+      loadingMore,
+      hasMore: enabled && (page + 1) * MAPS_DETAILS_PAGE_SIZE < matched,
+      loadMore,
+    },
+  };
+}
+
+// Player list for the beatmap detail modal. With a `control` it runs in
+// server-paginated mode (50 per request, server-side search, infinite scroll);
+// without one it searches the already-loaded preview client-side.
+function ModalPlayerList<T extends { id: number; username: string }>({
+  title,
+  players,
+  total,
+  control,
+  grid = false,
+  renderRow,
+}: {
+  title: string;
+  players: T[];
+  total: number;
+  control?: MapsPlayerListControl;
+  grid?: boolean;
+  renderRow: (player: T, rank: number) => React.ReactNode;
+}) {
+  const hiddenUserIds = useHiddenUserIds();
+  const serverMode = control != null;
+  const [clientQuery, setClientQuery] = useState("");
+  const query = serverMode ? control.query : clientQuery;
+  const setQuery = serverMode ? control.setQuery : setClientQuery;
+  const q = query.trim().toLowerCase();
+
+  const visible = useMemo(
+    () => players.filter((player) => !hiddenUserIds.has(player.id)),
+    [players, hiddenUserIds],
   );
+  const rankById = useMemo(() => new Map(visible.map((player, i) => [player.id, i + 1])), [visible]);
+  const rows = useMemo(
+    () => (!serverMode && q ? visible.filter((player) => player.username.toLowerCase().includes(q)) : visible),
+    [visible, q, serverMode],
+  );
+  const matched = serverMode ? control.matched : rows.length;
+
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const onScroll = useCallback(() => {
+    if (!control?.hasMore || control.loadingMore) return;
+    const el = scrollRef.current;
+    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 160) control.loadMore();
+  }, [control]);
+
+  return (
+    <div>
+      <div className="flex items-baseline gap-2 mb-1.5 px-1">
+        <h3 className="text-[10px] uppercase tracking-wider font-bold text-osu-f1">{title}</h3>
+        <span className="text-[10px] text-osu-f1/70 tabular-nums">
+          {q ? `${formatNumber(matched)} of ${formatNumber(total)}` : formatNumber(total)}
+        </span>
+      </div>
+      {total > 12 && (
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search player..."
+          className="mb-1.5 w-full rounded-lg bg-osu-b4 border border-osu-b3/40 px-3 py-1.5 text-[11px] text-osu-c1 placeholder:text-osu-f1 focus:border-osu-h1/40 focus:outline-none transition-colors"
+        />
+      )}
+      <div
+        ref={scrollRef}
+        onScroll={serverMode ? onScroll : undefined}
+        className={`rounded-xl bg-osu-b4 ring-1 ring-osu-b3/55 p-1 max-h-[280px] overflow-y-auto ${grid ? "grid grid-cols-1 min-[390px]:grid-cols-2 sm:grid-cols-3 gap-1" : ""}`}
+      >
+        {rows.length > 0 ? (
+          rows.map((player) => renderRow(player, rankById.get(player.id) ?? 0))
+        ) : serverMode && control.loading ? (
+          <div className="px-3 py-4 text-center text-[11px] text-osu-f1 col-span-full">Loading...</div>
+        ) : (
+          <div className="px-3 py-4 text-center text-[11px] text-osu-f1 col-span-full">No players found</div>
+        )}
+        {serverMode && control.loadingMore && rows.length > 0 && (
+          <div className="px-3 py-2 text-center text-[10px] text-osu-f1 col-span-full">Loading more...</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FarmedDetails({ entry, country }: { entry: MapsFarmedEntry; country: string }) {
+  const enabled = isLiveBackendConfigured() && entry.players.length < entry.playerCount;
+  const { players: serverPlayers, loadedOnce, total, control } = useMapsDetailsPlayers({
+    country,
+    kind: "farmed",
+    id: entry.beatmapId,
+    enabled,
+  });
+  const sortedPlayers = useMemo(
+    () => [...(enabled && loadedOnce ? toFarmedDetailPlayers(serverPlayers) : entry.players)].sort((a, b) => b.pp - a.pp),
+    [enabled, loadedOnce, serverPlayers, entry.players],
+  );
+  const totalPlayers = enabled && loadedOnce ? total : entry.playerCount;
 
   return (
     <>
       <StatRow>
-        <StatItem label="players" value={String(entry.playerCount)} accent="blue" />
+        <StatItem label="players" value={formatNumber(totalPlayers)} accent="blue" />
         <StatItem label="avg pp" value={`~${Math.round(entry.avgPp)}`} accent="pink" />
         <StatItem label="max pp" value={Math.round(entry.maxPp).toString()} accent="pink" />
       </StatRow>
 
-      <div>
-        <SectionHeader title="Farmed by" count={sortedPlayers.length} />
-        <div className="rounded-xl bg-osu-b4 ring-1 ring-osu-b3/55 p-1 max-h-[280px] overflow-y-auto">
-          {sortedPlayers.map((p, i) => (
-            <PlayerRow
-              key={p.id}
-              rank={i + 1}
-              player={p}
-              onClick={() => {
-                const url = p.scoreUrl || `https://osu.ppy.sh/users/${p.id}/mania`;
-                window.open(url, "_blank", "noopener,noreferrer");
-              }}
-              meta={
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {p.mods?.length ? (
-                    <div className="flex items-center gap-0.5">
-                      {p.mods.map((mod) => (
-                        <span key={mod} className="inline-flex origin-center scale-[0.42] -mx-1.5">
-                          <ModBadge mod={mod} />
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
-                  {p.pp ? (
-                    <span className="inline-flex items-baseline gap-0.5 text-osu-pink tabular-nums" style={{ fontFamily: "Torus" }}>
-                      <span className="text-[12px] font-bold">{Math.round(p.pp)}</span>
-                      <span className="text-[8px] text-osu-pink/70 font-bold uppercase">pp</span>
-                    </span>
-                  ) : null}
-                </div>
-              }
-            />
-          ))}
-        </div>
-      </div>
+      <ModalPlayerList
+        title="Farmed by"
+        players={sortedPlayers}
+        total={totalPlayers}
+        control={enabled ? control : undefined}
+        renderRow={(p, rank) => (
+          <PlayerRow
+            key={p.id}
+            rank={rank}
+            player={p}
+            onClick={() => {
+              const url = p.scoreUrl || `https://osu.ppy.sh/users/${p.id}/mania`;
+              window.open(url, "_blank", "noopener,noreferrer");
+            }}
+            meta={
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {p.mods?.length ? (
+                  <div className="flex items-center gap-0.5">
+                    {p.mods.map((mod) => (
+                      <span key={mod} className="inline-flex origin-center scale-[0.42] -mx-1.5">
+                        <ModBadge mod={mod} />
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                {p.pp ? (
+                  <span className="inline-flex items-baseline gap-0.5 text-osu-pink tabular-nums" style={{ fontFamily: "Torus" }}>
+                    <span className="text-[12px] font-bold">{Math.round(p.pp)}</span>
+                    <span className="text-[8px] text-osu-pink/70 font-bold uppercase">pp</span>
+                  </span>
+                ) : null}
+              </div>
+            }
+          />
+        )}
+      />
     </>
   );
 }
 
-function PopularDetails({ entry }: { entry: MapsAggregatedBeatmap }) {
+function PopularDetails({ entry, country }: { entry: MapsAggregatedBeatmap; country: string }) {
+  const enabled = isLiveBackendConfigured() && entry.players.length < entry.playerCount;
+  const { players: serverPlayers, loadedOnce, total, control } = useMapsDetailsPlayers({
+    country,
+    kind: "popular",
+    id: entry.beatmapId,
+    enabled,
+  });
   const sortedPlayers = useMemo(
-    () => [...entry.players].sort((a, b) => b.count - a.count),
-    [entry.players],
+    () => [...(enabled && loadedOnce ? toPopularDetailPlayers(serverPlayers) : entry.players)].sort((a, b) => b.count - a.count),
+    [enabled, loadedOnce, serverPlayers, entry.players],
   );
+  const totalPlayers = enabled && loadedOnce ? total : entry.playerCount;
 
   return (
     <>
       <StatRow>
         <StatItem label="total plays" value={formatNumber(entry.totalPlays)} accent="pink" />
-        <StatItem label="players" value={String(entry.playerCount)} accent="blue" />
+        <StatItem label="players" value={formatNumber(totalPlayers)} accent="blue" />
         <StatItem label="global plays" value={formatNumber(entry.globalPlayCount)} />
       </StatRow>
 
-      <div>
-        <SectionHeader title="Most played by" count={sortedPlayers.length} />
-        <div className="rounded-xl bg-osu-b4 ring-1 ring-osu-b3/55 p-1 max-h-[280px] overflow-y-auto">
-          {sortedPlayers.map((p, i) => (
-            <PlayerRow
-              key={p.id}
-              rank={i + 1}
-              player={p}
-              onClick={() => window.open(`https://osu.ppy.sh/users/${p.id}/mania`, "_blank", "noopener,noreferrer")}
-              meta={
-                p.count ? (
-                  <span className="inline-flex items-baseline gap-0.5 text-osu-pink tabular-nums" style={{ fontFamily: "Torus" }}>
-                    <span className="text-[12px] font-bold">{formatNumber(p.count)}</span>
-                    <span className="text-[8px] text-osu-pink/70 font-bold lowercase">x</span>
-                  </span>
-                ) : null
-              }
-            />
-          ))}
-        </div>
-      </div>
+      <ModalPlayerList
+        title="Most played by"
+        players={sortedPlayers}
+        total={totalPlayers}
+        control={enabled ? control : undefined}
+        renderRow={(p, rank) => (
+          <PlayerRow
+            key={p.id}
+            rank={rank}
+            player={p}
+            onClick={() => window.open(`https://osu.ppy.sh/users/${p.id}/mania`, "_blank", "noopener,noreferrer")}
+            meta={
+              p.count ? (
+                <span className="inline-flex items-baseline gap-0.5 text-osu-pink tabular-nums" style={{ fontFamily: "Torus" }}>
+                  <span className="text-[12px] font-bold">{formatNumber(p.count)}</span>
+                  <span className="text-[8px] text-osu-pink/70 font-bold lowercase">x</span>
+                </span>
+              ) : null
+            }
+          />
+        )}
+      />
     </>
   );
 }
 
 function FavouriteDetails({ entry, country }: { entry: MapsAggregatedFavourite; country: string }) {
+  const enabled = isLiveBackendConfigured() && entry.players.length < entry.playerCount;
+  const { players: serverPlayers, loadedOnce, total, control } = useMapsDetailsPlayers({
+    country,
+    kind: "favourite",
+    id: entry.beatmapsetId,
+    enabled,
+  });
+  const visiblePlayers = enabled && loadedOnce ? toFavouriteDetailPlayers(serverPlayers) : entry.players;
+  const totalPlayers = enabled && loadedOnce ? total : entry.playerCount;
   return (
     <>
       <StatRow>
-        <StatItem label={`${country.toLowerCase()} favs`} value={String(entry.playerCount)} accent="pink" />
+        <StatItem label={`${country.toLowerCase()} favs`} value={formatNumber(totalPlayers)} accent="pink" />
         <StatItem label="global favs" value={formatNumber(entry.globalFavouriteCount)} />
         <StatItem label="global plays" value={formatNumber(entry.globalPlayCount)} />
       </StatRow>
 
-      <div>
-        <SectionHeader title="Favourited by" count={entry.players.length} />
-        <div className="grid grid-cols-1 min-[390px]:grid-cols-2 sm:grid-cols-3 gap-1 rounded-xl bg-osu-b4 ring-1 ring-osu-b3/55 p-1 max-h-[280px] overflow-y-auto">
-          {entry.players.map((p) => (
-            <PlayerRow
-              key={p.id}
-              player={p}
-              onClick={() => window.open(`https://osu.ppy.sh/users/${p.id}/mania`, "_blank", "noopener,noreferrer")}
-            />
-          ))}
-        </div>
-      </div>
+      <ModalPlayerList
+        title="Favourited by"
+        players={visiblePlayers}
+        total={totalPlayers}
+        control={enabled ? control : undefined}
+        grid
+        renderRow={(p) => (
+          <PlayerRow
+            key={p.id}
+            player={p}
+            onClick={() => window.open(`https://osu.ppy.sh/users/${p.id}/mania`, "_blank", "noopener,noreferrer")}
+          />
+        )}
+      />
     </>
   );
 }

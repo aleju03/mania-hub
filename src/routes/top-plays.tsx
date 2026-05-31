@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getCountryPopoffs, getPartialTopPlays, getRankings, getTopPlaysRefreshStatus } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
-import { getCountryName } from "../lib/country";
+import { getCountryFlagUrl, getCountryName, isGlobalScope } from "../lib/country";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPpGain } from "../lib/format";
 import { getBeatmapUrl, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModDisplayList, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
@@ -62,6 +62,8 @@ const RANGE_MS: Record<TimeRange, number> = {
 
 const PAGE_SIZE = 15;
 const PP_GAIN_SKELETON_COUNT = 6;
+// The Global pp-gained rail would otherwise list every gainer worldwide.
+const GLOBAL_PP_GAINS_RAIL_LIMIT = 24;
 const DEFAULT_TOP_PLAYS_SEARCH: TopPlaysSearch = {
   range: "7d",
   country: undefined,
@@ -148,6 +150,7 @@ function PopOffsPage() {
     refreshingRef.current = refreshing;
   }, [refreshing]);
   const countryName = getCountryName(selectedCountry);
+  const selectedIsGlobal = isGlobalScope(selectedCountry);
   const liveBackendEnabled = isLiveBackendConfigured();
   const { warming } = useCountryWarming(selectedCountry);
 
@@ -564,11 +567,14 @@ function PopOffsPage() {
         });
       }
     }
-    return [...byUser.entries()]
+    const ranked = [...byUser.entries()]
       .filter(([, info]) => info.totalGain >= 0.05)
       .sort((a, b) => b[1].totalGain - a[1].totalGain)
       .map(([id, info]) => ({ id, ...info }));
-  }, [rangedPopoffs]);
+    // Global pools hundreds of gainers, which turns the rail into an avatar
+    // wall. Cap it to the biggest movers so it stays a tidy sidebar.
+    return selectedIsGlobal ? ranked.slice(0, GLOBAL_PP_GAINS_RAIL_LIMIT) : ranked;
+  }, [rangedPopoffs, selectedIsGlobal]);
 
   const showPpGainsRail = playerPpGains.length > 0 || (!liveBackendEnabled && (loadingPlayers || loading));
 
@@ -887,20 +893,29 @@ function PopOffsPage() {
                       <div className="flex-1 min-w-0">
                         {/* Row 1: Username + time (mobile) */}
                         <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 navigate({ to: "/player/$username", params: { username: p.user.username } });
                               }}
-                              className="cursor-pointer"
+                              className="cursor-pointer min-w-0"
                             >
                               <UsernameText
                                 username={p.user.username}
                                 avatarUrl={p.user.avatar_url}
-                                className="text-sm font-semibold"
+                                className="text-sm font-semibold truncate"
                               />
                             </button>
+                            {selectedIsGlobal && p.user.country_code ? (
+                              <img
+                                src={getCountryFlagUrl(p.user.country_code)}
+                                alt={p.user.country_code}
+                                title={getCountryName(p.user.country_code)}
+                                className="w-[18px] h-3 rounded-[1px] object-cover flex-shrink-0"
+                                loading="lazy"
+                              />
+                            ) : null}
                           </div>
                           <span className="text-[10px] text-osu-f1 flex-shrink-0 sm:hidden">{formatTimeAgo(p.time)}</span>
                         </div>

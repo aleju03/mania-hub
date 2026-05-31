@@ -3,7 +3,7 @@ import { readConfig } from "./config.js";
 import { canSeedSnipesForCountry } from "./countries.js";
 import { exec, json, parseJson } from "./db.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
-import { MapsRosterNotReadyError, refreshCountryMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
+import { MapsRosterNotReadyError, enqueueGlobalMapsRefresh, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
 import { updateSnipeProjection } from "./features/snipes.js";
 import { confirmTopPlay } from "./features/top-plays.js";
 import { getHydratedScoresForMetadata } from "./features/tracker.js";
@@ -60,7 +60,7 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
   },
   {
     name: "maps-refresh",
-    jobTypes: ["refresh_country_maps"],
+    jobTypes: ["refresh_country_maps", "refresh_global_maps"],
     claimLimit: 1,
     intervalMs: 1_000,
   },
@@ -238,6 +238,11 @@ export class WorkerRunner {
     }
     if (job.type === "refresh_country_maps") {
       await refreshCountryMaps(this.db, this.osu, job.payload as { country: string });
+      await enqueueGlobalMapsRefresh(this.queue, { priority: 15, replaceDone: true });
+      return;
+    }
+    if (job.type === "refresh_global_maps") {
+      await refreshGlobalMaps(this.db);
       return;
     }
     if (job.type === "compute_dan_estimate") {

@@ -51,8 +51,10 @@ interface ReplayBrowseViewProps {
     id: number;
     username: string;
     avatar_url: string;
-    cover_url: string;
-    global_rank: number;
+    // Optional: a freshly-seen player may have no stored cover, and global_rank
+    // can be missing too.
+    cover_url?: string;
+    global_rank?: number;
   }[];
   onOpenPlayerScore: (score: OsuScore) => void;
   beatmapQuery: string;
@@ -903,7 +905,9 @@ function PlayerSuggestions({
             <img src={avatarImageSrc(player.avatar_url, player.id)} alt="" className="relative w-14 h-14 rounded-full flex-shrink-0 object-cover ring-2 ring-white/10" loading="lazy" />
             <div className="relative flex-1 min-w-0">
               <div className="text-base font-semibold text-white truncate">{player.username}</div>
-              <div className="mt-1 text-xs text-osu-f1">#{player.global_rank.toLocaleString()}</div>
+              {player.global_rank != null && (
+                <div className="mt-1 text-xs text-osu-f1">#{player.global_rank.toLocaleString()}</div>
+              )}
             </div>
           </motion.button>
         ))}

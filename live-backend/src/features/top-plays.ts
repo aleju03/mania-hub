@@ -1,3 +1,4 @@
+import { isGlobalCountry } from "../countries.js";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
@@ -56,7 +57,7 @@ export async function confirmTopPlay(
   const ppGain = await calculateTopPlayPpGain(osu, bestScores, score);
   await upsertTopPlayUser(db, score.user, refreshedAt);
   const event: CountryTopPlay = {
-    user: { id: score.user_id, username: score.user.username, avatar_url: score.user.avatar_url },
+    user: { id: score.user_id, username: score.user.username, avatar_url: score.user.avatar_url, country_code: score.user.country_code },
     score,
     pp: score.pp,
     weightedPP: calculateWeightedPp(score.pp, confirmedIndex),
@@ -227,15 +228,17 @@ function getPreviousBeatmapBestScore(scores: OscScore[], target: OscScore): OscS
 export async function getTopPlaysSnapshot(db: Db, country: string, window: string): Promise<{ popoffs: CountryTopPlay[]; scannedAt: number; window: string }> {
   const windowMs = window === "24h" ? 86_400_000 : window === "3d" ? 259_200_000 : window === "30d" ? 2_592_000_000 : 604_800_000;
   const cutoff = new Date(Date.now() - windowMs).toISOString();
+  // Global aggregates every tracked country's detected top plays.
+  const global = isGlobalCountry(country);
   const rows = (await exec(
     db,
-    `select e.payload_json, u.username, u.avatar_url
+    `select e.payload_json, u.username, u.avatar_url, u.country_code
      from top_play_events e
      left join users u on u.user_id = e.user_id
-     where e.country = ? and e.detected_at >= ?
+     where ${global ? "" : "e.country = ? and "}e.detected_at >= ?
      order by e.pp desc, e.detected_at desc
      limit 200`,
-    [country, cutoff],
+    global ? [cutoff] : [country, cutoff],
   )).rows;
   return {
     popoffs: rows.map(hydrateTopPlayEvent),
@@ -248,18 +251,21 @@ function hydrateTopPlayEvent(row: Record<string, unknown>): CountryTopPlay {
   const event = parseJson<CountryTopPlay>(row.payload_json, {} as CountryTopPlay);
   const username = row.username == null ? "" : String(row.username);
   const avatarUrl = row.avatar_url == null ? "" : String(row.avatar_url);
+  const countryCode = row.country_code == null ? "" : String(row.country_code);
   if (!event.user || (!username && !avatarUrl)) return event;
 
   const user = {
     ...event.user,
     username: username || event.user.username,
     avatar_url: avatarUrl || event.user.avatar_url,
+    country_code: countryCode || event.user.country_code,
   };
   const scoreUser = event.score?.user
     ? {
         ...event.score.user,
         username: user.username,
         avatar_url: user.avatar_url,
+        country_code: user.country_code || event.score.user.country_code,
       }
     : event.score?.user;
   return {

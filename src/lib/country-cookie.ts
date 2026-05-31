@@ -1,4 +1,4 @@
-import { DEFAULT_COUNTRY_CODE, isSupportedCountryCode, normalizeCountryCode } from "./country";
+import { DEFAULT_COUNTRY_CODE, isSupportedCountryCode, normalizeCountryScope } from "./country";
 
 export const COUNTRY_COOKIE_NAME = "mania-hub-country";
 export const COUNTRY_AUTO_COOKIE_NAME = "mania-hub-country-auto";
@@ -31,7 +31,7 @@ export function hasAutoCountryCookieHeader(cookieHeader: string | null | undefin
 export function parseCountryCookieValue(raw: string | null | undefined): string | null {
   if (!raw) return null;
   try {
-    return normalizeCountryCode(decodeURIComponent(raw));
+    return normalizeCountryScope(decodeURIComponent(raw));
   } catch {
     return null;
   }
@@ -49,7 +49,7 @@ export function readAutoCountryCookieClient(): boolean {
 
 export function writeCountryCookieClient(country: string, options?: { auto?: boolean }): void {
   if (typeof document === "undefined") return;
-  const normalized = normalizeCountryCode(country);
+  const normalized = normalizeCountryScope(country);
   document.cookie = `${COUNTRY_COOKIE_NAME}=${encodeURIComponent(normalized)}; Path=/; Max-Age=${COUNTRY_COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`;
   if (options?.auto) {
     document.cookie = `${COUNTRY_AUTO_COOKIE_NAME}=1; Path=/; Max-Age=${COUNTRY_COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`;

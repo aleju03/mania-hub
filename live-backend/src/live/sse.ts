@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { touchCountryRequest } from "../countries.js";
+import { isGlobalCountry, touchCountryRequest } from "../countries.js";
 import { normalizeCountryParam } from "../http/abuse-guard.js";
 import { activatePublicCountry, sendRateLimited, type HttpContext } from "../http/snapshots.js";
 import type { LiveEvent } from "../shared/types.js";
@@ -29,6 +29,9 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
     return true;
   }
   const observeOnly = url.searchParams.get("observe") === "1";
+  // Global is a synthetic aggregate: fan in every country's events, and never
+  // touch a roster/registry or per-country client counter for it.
+  const global = isGlobalCountry(country);
   const opened = ctx.abuse?.openSse(req, ctx.config);
   if (opened && !opened.allowed) {
     sendRateLimited(req, res, ctx, opened);
@@ -43,7 +46,7 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
         releaseSse?.();
         return true;
       }
-      releaseCountryClient = ctx.countryClients?.open(country) ?? null;
+      releaseCountryClient = (global ? null : ctx.countryClients?.open(country)) ?? null;
     }
   } catch (error) {
     releaseCountryClient?.();
@@ -59,11 +62,11 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
   const lastEventId = Number(cursor ?? 0);
   writeEvent(res, { type: "hello", sequence: Number.isFinite(lastEventId) && lastEventId > 0 ? lastEventId : await ctx.events.latestSequence(), payload: { country, status: "connected" } });
   if (cursor != null && Number.isFinite(lastEventId)) {
-    const replay = await ctx.events.replay(country, lastEventId, 100);
+    const replay = await ctx.events.replay(global ? null : country, lastEventId, 100);
     for (const event of replay) writeEvent(res, event);
   }
   const unsubscribe = ctx.events.subscribe((event) => {
-    if (event.country != null && event.country !== country) return;
+    if (!global && event.country != null && event.country !== country) return;
     writeEvent(res, event);
   });
   let lastCountryTouchAt = Date.now();
@@ -74,7 +77,7 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
   const heartbeat = setInterval(() => {
     writeEvent(res, { type: "heartbeat", sequence: Date.now(), payload: { t: Date.now() } });
     const now = Date.now();
-    if (!observeOnly && now - lastCountryTouchAt >= countryTouchIntervalMs) {
+    if (!observeOnly && !global && now - lastCountryTouchAt >= countryTouchIntervalMs) {
       lastCountryTouchAt = now;
       void touchCountryRequest(ctx.db, country).catch(() => undefined);
     }

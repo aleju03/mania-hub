@@ -1,8 +1,9 @@
-import { createFileRoute, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
+import { Globe } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getCountrySnipes, getPartialSnipeEvents, getSnipesScanStatus } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
-import { getCountryName } from "../lib/country";
+import { getCountryName, isGlobalScope } from "../lib/country";
 import { formatAccuracy, formatNumber, formatPP, formatTimeAgo } from "../lib/format";
 import { PageHeader } from "../components/layout/PageHeader";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
@@ -125,6 +126,7 @@ function SnipesPage() {
   const refreshInProgressRef = useRef(false);
   const hasRestoredRememberedFiltersRef = useRef(false);
   const liveBackendEnabled = isLiveBackendConfigured();
+  const selectedIsGlobal = isGlobalScope(selectedCountry);
   const { warming, featureTier } = useCountryWarming(selectedCountry);
   // Country is below the snipes tier: the backend won't seed/update snipe
   // boards for it, so there is nothing live to wait for here.
@@ -207,7 +209,7 @@ function SnipesPage() {
   }, [liveBackendEnabled, scanStartedAt, selectedCountry, setSnipes]);
 
   useEffect(() => {
-    if (!liveBackendEnabled) return;
+    if (!liveBackendEnabled || selectedIsGlobal) return;
     let cancelled = false;
     const requestedCountry = selectedCountry;
     fetchLiveSnipesSnapshot(requestedCountry)
@@ -226,10 +228,10 @@ function SnipesPage() {
     return () => {
       cancelled = true;
     };
-  }, [liveBackendEnabled, selectedCountry, setSnipes, snipes.length]);
+  }, [liveBackendEnabled, selectedCountry, selectedIsGlobal, setSnipes, snipes.length]);
 
   useEffect(() => {
-    if (!liveBackendEnabled) return;
+    if (!liveBackendEnabled || selectedIsGlobal) return;
     const source = openLiveEventSource(selectedCountry);
     if (!source) return;
     source.addEventListener("snipe", (event) => {
@@ -247,7 +249,7 @@ function SnipesPage() {
       setScanStartedAt(null);
     });
     return () => source.close();
-  }, [liveBackendEnabled, selectedCountry, setSnipes, snipes]);
+  }, [liveBackendEnabled, selectedCountry, selectedIsGlobal, setSnipes, snipes]);
 
   const searchRef = useRef(search);
   searchRef.current = search;
@@ -347,6 +349,7 @@ function SnipesPage() {
   // result. We don't cancel on cleanup — strict-mode double-mounting would
   // otherwise drop the only inflight fetch and leave us stuck loading.
   useEffect(() => {
+    if (selectedIsGlobal) return;
     if (liveBackendEnabled) return;
     if (fetchingRef.current) return;
     const stale = isCacheStale(snipesFetchedAt, CLIENT_CACHE_TTL.snipes);
@@ -404,7 +407,7 @@ function SnipesPage() {
         }
         fetchingRef.current = false;
       });
-  }, [liveBackendEnabled, selectedCountry, snipesFetchedAt, snipes.length, scanStartedAt, setSnipes]);
+  }, [liveBackendEnabled, selectedCountry, selectedIsGlobal, snipesFetchedAt, snipes.length, scanStartedAt, setSnipes]);
 
   // ── Filter + sort ──────────────────────────────────────────────────────
   const visibleSnipes = useMemo(() => {
@@ -493,6 +496,37 @@ function SnipesPage() {
   const resetFilters = () => {
     updateSearch({ ...DEFAULT_SNIPES_SEARCH, country: search.country });
   };
+
+  // Snipes are inherently per-country (a snipe is one country's player passing
+  // another). The Global aggregate has no such notion, so point readers to Maps.
+  if (selectedIsGlobal) {
+    return (
+      <div className="flex-1">
+        <PageHeader iconSrc="/images/icons/sniper.webp" title="Global mania snipes" />
+        <div className="relative max-w-[1200px] mx-auto px-4 sm:px-5 py-12 sm:py-20">
+          <div className="mx-auto max-w-md rounded-xl border border-osu-b3/30 bg-osu-b4/80 px-6 py-10 text-center backdrop-blur-sm">
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-osu-pink/15 text-osu-pink-light">
+              <Globe className="h-6 w-6" strokeWidth={2.2} />
+            </span>
+            <p className="mt-5 text-sm font-medium text-osu-c2">Snipes don't apply to Global</p>
+            <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">
+              A snipe is one country's player overtaking another on a board, so it
+              only makes sense within a single country. Pick a country to see its
+              snipes, or explore the combined Maps view.
+            </p>
+            <Link
+              to="/maps"
+              search={{ country: selectedCountry, page: 0 } as never}
+              className="mt-5 inline-flex items-center gap-1.5 rounded-lg bg-osu-pink/20 px-3.5 py-2 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/30 hover:text-white"
+            >
+              <Globe className="h-3.5 w-3.5" strokeWidth={2.4} />
+              Explore Global maps
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1">

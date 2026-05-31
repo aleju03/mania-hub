@@ -2,7 +2,7 @@ import { useContext, useMemo, useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { getAvatarAccentStoreKey } from "./lib/avatar-accent";
-import { DEFAULT_COUNTRY_CODE, normalizeCountryCode } from "./lib/country";
+import { DEFAULT_COUNTRY_CODE, normalizeCountryScope } from "./lib/country";
 import { InitialCountryContext } from "./lib/country-context";
 import { readAutoCountryCookieClient, readCountryCookieClient, writeCountryCookieClient } from "./lib/country-cookie";
 import { getScoreIdentity, getScoreTimeMs } from "./lib/score";
@@ -380,7 +380,7 @@ function readSnipesFiltersByCountry(): CountryRecord<SnipesFilters> {
       if (!filters || typeof filters !== "object" || Array.isArray(filters)) continue;
       const candidate = filters as Partial<SnipesFilters>;
       if (!isSnipesRange(candidate.range) || !isSnipesKeyFilter(candidate.keys)) continue;
-      result[normalizeCountryCode(country)] = {
+      result[normalizeCountryScope(country)] = {
         range: candidate.range,
         keys: candidate.keys,
       };
@@ -529,7 +529,7 @@ export const useAppStore = create<AppState>()(
       trackedUserIdsFetchedAtByCountry: {},
       pollIndexByCountry: {},
       setSelectedCountry: (country) => {
-        const normalized = normalizeCountryCode(country);
+        const normalized = normalizeCountryScope(country);
         writeCountryCookieClient(normalized);
         set({ selectedCountry: normalized });
       },
@@ -589,7 +589,7 @@ export const useAppStore = create<AppState>()(
         }),
       setRankings: (country, rankings) =>
         set((state) => {
-          const normalizedCountry = normalizeCountryCode(country);
+          const normalizedCountry = normalizeCountryScope(country);
           return {
             rankingsByCountry: {
               ...state.rankingsByCountry,
@@ -616,7 +616,7 @@ export const useAppStore = create<AppState>()(
         }),
       setHomeRecentScores: (country, scores) =>
         set((state) => {
-          const normalizedCountry = normalizeCountryCode(country);
+          const normalizedCountry = normalizeCountryScope(country);
           return {
             homeRecentScoresByCountry: {
               ...state.homeRecentScoresByCountry,
@@ -630,7 +630,7 @@ export const useAppStore = create<AppState>()(
         }),
       setHomePopoffs: (country, popoffs) =>
         set((state) => {
-          const normalizedCountry = normalizeCountryCode(country);
+          const normalizedCountry = normalizeCountryScope(country);
           return {
             homePopoffsByCountry: {
               ...state.homePopoffsByCountry,
@@ -644,7 +644,7 @@ export const useAppStore = create<AppState>()(
         }),
       setTopPlaysRange: (country, range) =>
         set((state) => {
-          const normalizedCountry = normalizeCountryCode(country);
+          const normalizedCountry = normalizeCountryScope(country);
           const nextTopPlaysRangeByCountry = {
             ...state.topPlaysRangeByCountry,
             [normalizedCountry]: range,
@@ -658,7 +658,7 @@ export const useAppStore = create<AppState>()(
         }),
       setSnipesFilters: (country, filters) =>
         set((state) => {
-          const normalizedCountry = normalizeCountryCode(country);
+          const normalizedCountry = normalizeCountryScope(country);
           const previous = state.snipesFiltersByCountry[normalizedCountry];
           if (
             previous?.keys === filters.keys &&
@@ -679,7 +679,7 @@ export const useAppStore = create<AppState>()(
         }),
       setPopoffs: (country, popoffs, window) =>
         set((state) => {
-          const normalizedCountry = normalizeCountryCode(country);
+          const normalizedCountry = normalizeCountryScope(country);
           return {
             popoffsByCountry: {
               ...state.popoffsByCountry,
@@ -697,7 +697,7 @@ export const useAppStore = create<AppState>()(
         }),
       setMapsData: (country, data) =>
         set((state) => {
-          const normalizedCountry = normalizeCountryCode(country);
+          const normalizedCountry = normalizeCountryScope(country);
           return {
             mapsDataByCountry: {
               ...state.mapsDataByCountry,
@@ -711,7 +711,7 @@ export const useAppStore = create<AppState>()(
         }),
       setSnipes: (country, events, scannedAt) =>
         set((state) => {
-          const normalizedCountry = normalizeCountryCode(country);
+          const normalizedCountry = normalizeCountryScope(country);
           return {
             snipesByCountry: {
               ...state.snipesByCountry,
@@ -725,7 +725,7 @@ export const useAppStore = create<AppState>()(
         }),
       addFeedScores: (country, scores) =>
         set((state) => {
-          const normalizedCountry = normalizeCountryCode(country);
+          const normalizedCountry = normalizeCountryScope(country);
           const currentScores = state.feedScoresByCountry[normalizedCountry] ?? [];
           const seen = new Set<string>();
           const merged = [...scores, ...currentScores]
@@ -751,7 +751,7 @@ export const useAppStore = create<AppState>()(
         }),
       markFeedScoresFetched: (country) =>
         set((state) => {
-          const normalizedCountry = normalizeCountryCode(country);
+          const normalizedCountry = normalizeCountryScope(country);
           return {
             feedScoresFetchedAtByCountry: {
               ...state.feedScoresFetchedAtByCountry,
@@ -761,7 +761,7 @@ export const useAppStore = create<AppState>()(
         }),
       setTrackerPpGains: (country, gains, fetchedAt = Date.now()) =>
         set((state) => {
-          const normalizedCountry = normalizeCountryCode(country);
+          const normalizedCountry = normalizeCountryScope(country);
           const currentEntries = state.trackerPpGainsByCountry[normalizedCountry] ?? {};
           const mergedEntries = {
             ...currentEntries,
@@ -786,7 +786,7 @@ export const useAppStore = create<AppState>()(
         }),
       setTrackedUserIds: (country, ids) =>
         set((state) => {
-          const normalizedCountry = normalizeCountryCode(country);
+          const normalizedCountry = normalizeCountryScope(country);
           return {
             trackedUserIdsByCountry: {
               ...state.trackedUserIdsByCountry,
@@ -804,7 +804,7 @@ export const useAppStore = create<AppState>()(
         }),
       nextPollIndex: (country) =>
         set((state) => {
-          const normalizedCountry = normalizeCountryCode(country);
+          const normalizedCountry = normalizeCountryScope(country);
           return {
             pollIndexByCountry: {
               ...state.pollIndexByCountry,
@@ -814,7 +814,7 @@ export const useAppStore = create<AppState>()(
         }),
       resetPollIndex: (country) =>
         set((state) => {
-          const normalizedCountry = normalizeCountryCode(country);
+          const normalizedCountry = normalizeCountryScope(country);
           return {
             pollIndexByCountry: {
               ...state.pollIndexByCountry,
@@ -836,7 +836,7 @@ export const useAppStore = create<AppState>()(
           : {};
         const hasPersistedSelectedCountry = typeof nextState.selectedCountry === "string";
         const persistedSelectedCountry = hasPersistedSelectedCountry
-          ? normalizeCountryCode(nextState.selectedCountry)
+          ? normalizeCountryScope(nextState.selectedCountry)
           : null;
         // The country cookie is the source of truth on first load: it's what
         // the server used to render the SSR HTML. The exception is the

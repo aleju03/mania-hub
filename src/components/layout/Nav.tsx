@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { LogIn, LogOut, Settings } from "lucide-react";
+import { Globe, LogIn, LogOut, Settings } from "lucide-react";
 import { SearchInput } from "../ui/SearchInput";
 import { Avatar } from "../ui/Avatar";
 import { CountrySelector } from "./CountrySelector";
@@ -11,7 +11,7 @@ import { useAuth } from "../../lib/auth-context";
 import { searchUsers } from "../../lib/osu";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
 import { readCountryFromSearchStr } from "../../lib/country-search";
-import { getCountryFlagGradient, getCountryFlagUrl } from "../../lib/country";
+import { getCountryFlagGradient, getCountryFlagUrl, isGlobalScope } from "../../lib/country";
 import { isLiveBackendConfigured } from "../../lib/live-backend";
 import { useCountryWarming } from "../../lib/use-country-warming";
 import { useDynamicFavicon } from "../../lib/favicon";
@@ -125,6 +125,7 @@ export function Nav() {
     };
   }, [current?.id]);
 
+  const selectedIsGlobal = isGlobalScope(selectedCountry);
   const flagBackground = getCountryFlagGradient(selectedCountry)
     ?? `url(${getCountryFlagUrl(selectedCountry)}) center/cover no-repeat`;
 
@@ -209,6 +210,13 @@ export function Nav() {
     setSelectedCountry(country);
     setMenuOpen(false);
 
+    // Snipes is not a Global surface (Global is not a country). Switching to
+    // Global from /snipes moves the reader to Maps, the headline Global view.
+    if (isGlobalScope(country) && location.pathname === "/snipes") {
+      navigate({ to: "/maps", search: preserveSearchWithCountryOnFirstPage(country), replace: true });
+      return;
+    }
+
     if (location.pathname === "/") {
       navigate({ to: "/", search: { country }, replace: true });
       return;
@@ -291,39 +299,47 @@ export function Nav() {
           >
             <Link to="/" search={{ country: selectedCountry }} preload="intent" draggable={false} className="flex items-center gap-2">
               <div className="relative w-9 h-9 rounded-full shadow-md ring-1 ring-white/15 overflow-hidden transition-all duration-300">
-                {/* Dimmed flag base */}
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    background: flagBackground,
-                    filter: "brightness(0.45) saturate(0.75)",
-                  }}
-                />
-                {/* Bright flag clipped to arrow shape (clipping mask + outer glow) */}
-                <div
-                  className="absolute inset-0"
-                  style={{
-                    background: flagBackground,
-                    maskImage: "url(/images/notes/arrow-left-pink.png)",
-                    WebkitMaskImage: "url(/images/notes/arrow-left-pink.png)",
-                    maskSize: "62%",
-                    WebkitMaskSize: "62%",
-                    maskRepeat: "no-repeat",
-                    WebkitMaskRepeat: "no-repeat",
-                    maskPosition: "center",
-                    WebkitMaskPosition: "center",
-                    transform: "scaleX(-1)",
-                    filter: [
-                      "brightness(1.4)",
-                      "saturate(1.45)",
-                      "drop-shadow(1.5px 0 0 rgba(0,0,0,0.95))",
-                      "drop-shadow(-1.5px 0 0 rgba(0,0,0,0.95))",
-                      "drop-shadow(0 1.5px 0 rgba(0,0,0,0.95))",
-                      "drop-shadow(0 -1.5px 0 rgba(0,0,0,0.95))",
-                      "drop-shadow(0 0 4px rgba(255,255,255,0.45))",
-                    ].join(" "),
-                  }}
-                />
+                {selectedIsGlobal ? (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-osu-pink/35 to-osu-b6">
+                    <Globe className="h-5 w-5 text-osu-pink-light" strokeWidth={2.2} />
+                  </div>
+                ) : (
+                  <>
+                    {/* Dimmed flag base */}
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        background: flagBackground,
+                        filter: "brightness(0.45) saturate(0.75)",
+                      }}
+                    />
+                    {/* Bright flag clipped to arrow shape (clipping mask + outer glow) */}
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        background: flagBackground,
+                        maskImage: "url(/images/notes/arrow-left-pink.png)",
+                        WebkitMaskImage: "url(/images/notes/arrow-left-pink.png)",
+                        maskSize: "62%",
+                        WebkitMaskSize: "62%",
+                        maskRepeat: "no-repeat",
+                        WebkitMaskRepeat: "no-repeat",
+                        maskPosition: "center",
+                        WebkitMaskPosition: "center",
+                        transform: "scaleX(-1)",
+                        filter: [
+                          "brightness(1.4)",
+                          "saturate(1.45)",
+                          "drop-shadow(1.5px 0 0 rgba(0,0,0,0.95))",
+                          "drop-shadow(-1.5px 0 0 rgba(0,0,0,0.95))",
+                          "drop-shadow(0 1.5px 0 rgba(0,0,0,0.95))",
+                          "drop-shadow(0 -1.5px 0 rgba(0,0,0,0.95))",
+                          "drop-shadow(0 0 4px rgba(255,255,255,0.45))",
+                        ].join(" "),
+                      }}
+                    />
+                  </>
+                )}
               </div>
               <span className="mode-icon text-osu-pink text-lg" title="mania">{"\ue802"}</span>
             </Link>
@@ -481,7 +497,7 @@ export function Nav() {
               <span>Login</span>
             </a>
           ) : null}
-          <CountrySelector className="w-52" selectedCountry={selectedCountry} onSelect={handleCountrySelect} />
+          <CountrySelector className="w-52" selectedCountry={selectedCountry} onSelect={handleCountrySelect} showGlobal={liveBackendConfigured} />
           <SearchInput
             className="w-52"
             placeholder="find player..."
@@ -597,7 +613,7 @@ export function Nav() {
               </div>
 
               <div className="border-t border-osu-b3/30 px-4 py-3 space-y-2">
-                <CountrySelector className="w-full" selectedCountry={selectedCountry} onSelect={handleCountrySelect} />
+                <CountrySelector className="w-full" selectedCountry={selectedCountry} onSelect={handleCountrySelect} showGlobal={liveBackendConfigured} />
                 <ThemePicker variant="mobile" />
                 {auth.viewer ? (
                   <a

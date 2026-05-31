@@ -7,6 +7,15 @@ import { nowIso } from "./shared/score.js";
 export type CountryRegistryStatus = "active" | "warm" | "paused";
 export type CountryFeatureTier = "indexed" | "maps_warm" | "live" | "snipes";
 
+// "GLOBAL" is a synthetic scope that aggregates every tracked country. It is
+// never stored in country_registry/country_rosters and must be handled before
+// any per-country roster logic runs.
+export const GLOBAL_COUNTRY_CODE = "GLOBAL";
+
+export function isGlobalCountry(country: string | null | undefined): boolean {
+  return country?.trim().toUpperCase() === GLOBAL_COUNTRY_CODE;
+}
+
 export interface CountryRegistryRow {
   country: string;
   status: CountryRegistryStatus;

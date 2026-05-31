@@ -2,11 +2,12 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { brotliCompress, constants as zlibConstants, gzip } from "node:zlib";
 import type { Config } from "../config.js";
 import { handleBeatmapAudioRequest } from "../audio/http.js";
-import { activateCountry, deleteCountryData, getCountryRegistry, isCountryFeatureAtLeast, setCountryFeatureTier, setCountryPaused, setCountryStatus, type CountryFeatureTier, type CountryRegistryStatus } from "../countries.js";
+import { activateCountry, deleteCountryData, getCountryRegistry, GLOBAL_COUNTRY_CODE, isCountryFeatureAtLeast, isGlobalCountry, setCountryFeatureTier, setCountryPaused, setCountryStatus, type CountryFeatureTier, type CountryRegistryStatus } from "../countries.js";
 import type { Db } from "../db.js";
 import { dbHealth, exec, parseJson } from "../db.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
-import { enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsSnapshot, getMapsSnapshotMeta, type MapsPageQuery } from "../features/maps.js";
+import { getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
+import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery } from "../features/maps.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
@@ -206,6 +207,37 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     await handleMapsSnapshot(req, res, ctx, country, section);
     return true;
   }
+  if (url.pathname === "/api/snapshots/maps-players") {
+    if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
+    const kind = parseMapsPlayersKind(url.searchParams.get("kind"));
+    const id = clampInteger(url.searchParams.get("id"), 1, Number.MAX_SAFE_INTEGER, 0);
+    if (!kind || id <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_maps_players_request" });
+      return true;
+    }
+    const playersQuery: MapsPlayersPageQuery = {
+      page: clampInteger(url.searchParams.get("page"), 0, 100_000, 0),
+      pageSize: clampInteger(url.searchParams.get("pageSize"), 1, MAPS_PLAYERS_MAX_PAGE_SIZE, MAPS_PLAYERS_MAX_PAGE_SIZE),
+      q: (url.searchParams.get("q") ?? "").slice(0, 100),
+    };
+    res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
+    sendJson(req, res, ctx, 200, await getMapsPlayersSnapshot(ctx.db, country, kind, id, playersQuery));
+    return true;
+  }
+  if (url.pathname === "/api/snapshots/maps-set") {
+    if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
+    const ids = parseUserIds(url.searchParams.get("ids"));
+    // Set metadata only changes on the (roughly weekly) maps rebuild, so it can
+    // cache far longer than the live tabs.
+    res.setHeader("cache-control", "public, max-age=600, stale-while-revalidate=1800");
+    sendJson(req, res, ctx, 200, { beatmapsets: await getMapsRandomBeatmapsets(ctx.db, ids) });
+    return true;
+  }
+  if (url.pathname === "/api/snapshots/global-rankings") {
+    res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
+    sendJson(req, res, ctx, 200, await getGlobalRankingsSnapshot(ctx.db, parseGlobalRankingsQuery(url.searchParams)));
+    return true;
+  }
   if (url.pathname === "/api/snapshots/rank-deltas") {
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     sendJson(req, res, ctx, 200, await getRankDeltaSnapshot(ctx.db, country, parseUserIds(url.searchParams.get("userIds"))));
@@ -280,7 +312,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/events") {
     if (!await activatePublicCountry(req, res, ctx, country)) return true;
     const since = Number(url.searchParams.get("since") ?? 0);
-    sendJson(req, res, ctx, 200, { events: await ctx.events.replay(country, Number.isFinite(since) ? since : 0, 500) });
+    sendJson(req, res, ctx, 200, { events: await ctx.events.replay(isGlobalCountry(country) ? null : country, Number.isFinite(since) ? since : 0, 500) });
     return true;
   }
   if (url.pathname === "/api/replay-video-job") {
@@ -363,6 +395,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
+    if (isGlobalCountry(country)) {
+      sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
+      return true;
+    }
     await enqueueRosterRefreshes(ctx.queue, [country]);
     sendJson(req, res, ctx, 200, { ok: true, country });
     return true;
@@ -372,6 +408,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
+    if (isGlobalCountry(country)) {
+      sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
+      return true;
+    }
     const paused = url.pathname === "/api/admin/pause-country";
     sendJson(req, res, ctx, 200, { ok: true, country: await setCountryPaused(ctx.db, ctx.config, country, paused) });
     return true;
@@ -379,6 +419,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/admin/set-country-status") {
     if (!isAdmin(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (isGlobalCountry(country)) {
+      sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
       return true;
     }
     const status = parseCountryStatusParam(url.searchParams.get("status"));
@@ -392,6 +436,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/admin/set-country-tier") {
     if (!isAdmin(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (isGlobalCountry(country)) {
+      sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
       return true;
     }
     const tier = parseCountryFeatureTierParam(url.searchParams.get("tier"));
@@ -412,6 +460,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
+    if (isGlobalCountry(country)) {
+      sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
+      return true;
+    }
     sendJson(req, res, ctx, 200, { ok: true, country, deleted: await deleteCountryData(ctx.db, country) });
     return true;
   }
@@ -429,6 +481,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
+    if (isGlobalCountry(country)) {
+      sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
+      return true;
+    }
     await setCountryStatus(ctx.db, ctx.config, country, "active");
     await enqueueRosterRefreshes(ctx.queue, [country]);
     const queued = await enqueueOscCountryCatchup(ctx.queue, ctx.db, ctx.config, country);
@@ -438,6 +494,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/admin/cancel-catch-up-country") {
     if (!isAdmin(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (isGlobalCountry(country)) {
+      sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
       return true;
     }
     sendJson(req, res, ctx, 200, { ok: true, ...await cancelOscCountryCatchup(ctx.db, country) });
@@ -726,6 +786,26 @@ export async function activatePublicCountry(
   ctx: HttpContext,
   country: string,
 ): Promise<Awaited<ReturnType<typeof activateCountry>> | null> {
+  if (isGlobalCountry(country)) {
+    // Global is a synthetic aggregate: keep its merged maps snapshot fresh but
+    // never build a roster or registry row for it.
+    await enqueueGlobalMapsRefreshIfDue(ctx.db, ctx.queue, ctx.config.mapsRefreshIntervalMs, { priority: 15 });
+    const now = new Date().toISOString();
+    return {
+      country: GLOBAL_COUNTRY_CODE,
+      status: "active",
+      featureTier: "maps_warm",
+      pinned: true,
+      keepWarm: true,
+      firstRequestedAt: now,
+      lastRequestedAt: now,
+      lastRosterRefreshAt: now,
+      lastScoreAt: null,
+      activeUsers: 0,
+      lastActiveAt: now,
+      isWarm: true,
+    };
+  }
   const registered = await isCountryRegistered(ctx.db, country);
   if (!isAdmin(req, ctx) && ctx.abuse && !registered) {
     const minute = ctx.abuse.check(req, ctx.config, "countryActivate");
@@ -795,7 +875,11 @@ function routeUsesCountry(pathname: string): boolean {
     || pathname.startsWith("/api/snapshots/")
     || pathname === "/api/admin/refresh-roster"
     || pathname === "/api/admin/refresh-maps"
+    || pathname === "/api/admin/pause-country"
+    || pathname === "/api/admin/resume-country"
     || pathname === "/api/admin/catch-up-country"
+    || pathname === "/api/admin/cancel-catch-up-country"
+    || pathname === "/api/admin/delete-country"
     || pathname === "/api/admin/set-country-status"
     || pathname === "/api/admin/set-country-tier";
 }
@@ -1007,6 +1091,37 @@ function parseMapsPageQuery(params: URLSearchParams): MapsPageQuery {
   };
 }
 
+function parseMapsPlayersKind(raw: string | null): MapsPlayersKind | null {
+  return raw === "farmed" || raw === "popular" || raw === "favourite" ? raw : null;
+}
+
+function parseGlobalRankingsQuery(params: URLSearchParams): {
+  page: number;
+  pageSize: number;
+  sort: GlobalRankingsSort;
+  dir: "asc" | "desc";
+} {
+  const rawSort = params.get("sort");
+  const sort: GlobalRankingsSort =
+    rawSort === "player" ||
+    rawSort === "7d" ||
+    rawSort === "cr7d" ||
+    rawSort === "accuracy" ||
+    rawSort === "playcount" ||
+    rawSort === "pp" ||
+    rawSort === "ss" ||
+    rawSort === "s" ||
+    rawSort === "a"
+      ? rawSort
+      : "rank";
+  return {
+    page: clampInteger(params.get("page"), 1, 10_000, 1),
+    pageSize: clampInteger(params.get("pageSize") ?? params.get("limit"), 1, 50, 50),
+    sort,
+    dir: params.get("dir") === "asc" ? "asc" : "desc",
+  };
+}
+
 async function handleMapsPageSnapshot(
   req: IncomingMessage,
   res: ServerResponse,
@@ -1019,6 +1134,7 @@ async function handleMapsPageSnapshot(
 
   const meta = await getMapsSnapshotMeta(ctx.db, country);
   const farmedOverlayKey = query.tab === "farmed" ? meta.farmedOverlayUpdatedAt ?? "" : "";
+  const sourceRefreshKey = meta.sourceRefreshedAt ?? "";
   const cacheKey = meta.refreshedAt
     ? [
         country.toUpperCase(),
@@ -1034,6 +1150,7 @@ async function handleMapsPageSnapshot(
         query.mod,
         query.q,
         meta.refreshedAt,
+        sourceRefreshKey,
         farmedOverlayKey,
       ].join("|")
     : null;
@@ -1080,8 +1197,9 @@ async function handleMapsSnapshot(
   // which is itself the expensive payload_json parse/hydrate/slice path.
   const meta = await getMapsSnapshotMeta(ctx.db, country);
   const farmedOverlayKey = section === "core" ? meta.farmedOverlayUpdatedAt ?? "" : "";
+  const sourceRefreshKey = meta.sourceRefreshedAt ?? "";
   const cacheKey = meta.refreshedAt
-    ? `${country.toUpperCase()}|${section}|${encoding ?? "identity"}|${meta.refreshedAt}|${farmedOverlayKey}`
+    ? `${country.toUpperCase()}|${section}|${encoding ?? "identity"}|${meta.refreshedAt}|${sourceRefreshKey}|${farmedOverlayKey}`
     : null;
 
   if (cacheKey) {

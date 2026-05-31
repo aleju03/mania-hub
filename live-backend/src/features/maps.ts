@@ -1,5 +1,6 @@
 import type { InValue } from "@libsql/client";
 import { readConfig } from "../config.js";
+import { GLOBAL_COUNTRY_CODE, isGlobalCountry } from "../countries.js";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
@@ -211,12 +212,48 @@ type RawBeatmapPlaycount = {
 
 export async function enqueueMapsRefresh(queue: JobQueue, country: string, options: { priority?: number; replaceDone?: boolean } = {}): Promise<void> {
   const normalized = country.toUpperCase();
+  if (isGlobalCountry(normalized)) {
+    await enqueueGlobalMapsRefresh(queue, options);
+    return;
+  }
   await queue.enqueue(
     "refresh_country_maps",
     `maps:${normalized}`,
     { country: normalized },
     { priority: options.priority ?? MAPS_REFRESH_PRIORITY, replaceDone: options.replaceDone ?? true },
   );
+}
+
+// The Global maps aggregate is rebuilt by merging every country's stored
+// snapshot, so it gets its own job type (no roster fetch). It still shares the
+// `maps:GLOBAL` dedupe key so hasActiveMapsRefresh(db, "GLOBAL") works.
+export async function enqueueGlobalMapsRefresh(queue: JobQueue, options: { priority?: number; replaceDone?: boolean } = {}): Promise<void> {
+  await queue.enqueue(
+    "refresh_global_maps",
+    `maps:${GLOBAL_COUNTRY_CODE}`,
+    {},
+    { priority: options.priority ?? MAPS_REFRESH_PRIORITY, replaceDone: options.replaceDone ?? true },
+  );
+}
+
+export async function enqueueGlobalMapsRefreshIfDue(
+  db: Db,
+  queue: JobQueue,
+  maxAgeMs: number,
+  options: { priority?: number; replaceDone?: boolean } = {},
+): Promise<boolean> {
+  const meta = await getMapsSnapshotMeta(db, GLOBAL_COUNTRY_CODE);
+  const refreshedMs = meta.refreshedAt ? new Date(meta.refreshedAt).getTime() : 0;
+  const sourceRefreshedAt = meta.sourceRefreshedAt;
+  const sourceRefreshedMs = sourceRefreshedAt ? new Date(sourceRefreshedAt).getTime() : 0;
+  const isBehindSource = Number.isFinite(sourceRefreshedMs)
+    && sourceRefreshedMs > 0
+    && (!Number.isFinite(refreshedMs) || sourceRefreshedMs > refreshedMs);
+  const isStale = !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs || isBehindSource;
+  if (!isStale) return false;
+  if (await hasActiveMapsRefresh(db, GLOBAL_COUNTRY_CODE)) return true;
+  await enqueueGlobalMapsRefresh(queue, options);
+  return true;
 }
 
 export async function maybeEnqueueMapsFarmedRefresh(
@@ -313,6 +350,37 @@ export interface MapsPageValue {
   favouritesGeneratedAt: string;
 }
 
+export type MapsPlayersKind = "farmed" | "popular" | "favourite";
+
+export interface MapsDetailsPlayer {
+  id: number;
+  username: string;
+  avatarUrl: string;
+  pp?: number;
+  count?: number;
+  mods?: string[];
+  scoreUrl?: string | null;
+  playedAt?: string | null;
+}
+
+export interface MapsPlayersValue {
+  kind: MapsPlayersKind;
+  id: number;
+  total: number;
+  matched: number;
+  page: number;
+  pageSize: number;
+  players: MapsDetailsPlayer[];
+}
+
+export interface MapsPlayersPageQuery {
+  page: number;
+  pageSize: number;
+  q: string;
+}
+
+export const MAPS_PLAYERS_MAX_PAGE_SIZE = 50;
+
 export async function getMapsSnapshot(
   db: Db,
   queue: JobQueue,
@@ -361,6 +429,83 @@ export async function getMapsPageSnapshot(
   };
 }
 
+export async function getMapsPlayersSnapshot(
+  db: Db,
+  country: string,
+  kind: MapsPlayersKind,
+  id: number,
+  query: MapsPlayersPageQuery = { page: 0, pageSize: MAPS_PLAYERS_MAX_PAGE_SIZE, q: "" },
+): Promise<MapsPlayersValue> {
+  const normalized = country.toUpperCase();
+  const safeId = Number.isSafeInteger(id) && id > 0 ? id : 0;
+  const page = Math.max(0, Math.floor(query.page) || 0);
+  const pageSize = Math.max(1, Math.min(MAPS_PLAYERS_MAX_PAGE_SIZE, Math.floor(query.pageSize) || MAPS_PLAYERS_MAX_PAGE_SIZE));
+  if (safeId === 0) return { kind, id: safeId, total: 0, matched: 0, page, pageSize, players: [] };
+
+  const all = await getFullMapsDetailsPlayers(db, normalized, kind, safeId);
+  const q = query.q.trim().toLowerCase();
+  const matched = q ? all.filter((player) => player.username.toLowerCase().includes(q)) : all;
+  const start = page * pageSize;
+  return {
+    kind,
+    id: safeId,
+    total: all.length,
+    matched: matched.length,
+    page,
+    pageSize,
+    players: matched.slice(start, start + pageSize),
+  };
+}
+
+// The full player list for one map is assembled from every country's stored
+// snapshot (and the farmed-score rows), which is expensive to parse. Modal
+// pagination/search re-hits the same map repeatedly, so the assembled list is
+// cached for a short window (matching the HTTP cache-control) under a bounded
+// LRU so paging through a 1k+ player map never re-parses all snapshots.
+interface CachedMapsDetailsPlayers {
+  players: MapsDetailsPlayer[];
+  expiresAt: number;
+}
+
+const MAPS_DETAILS_PLAYERS_CACHE_TTL_MS = 60_000;
+const MAPS_DETAILS_PLAYERS_CACHE_MAX_ENTRIES = 48;
+// Per-Db cache so the entries never leak across databases (one process holds a
+// single Db in production; tests spin up a fresh Db each).
+const mapsDetailsPlayersCache = new WeakMap<Db, Map<string, CachedMapsDetailsPlayers>>();
+
+async function getFullMapsDetailsPlayers(
+  db: Db,
+  country: string,
+  kind: MapsPlayersKind,
+  id: number,
+): Promise<MapsDetailsPlayer[]> {
+  let cache = mapsDetailsPlayersCache.get(db);
+  if (!cache) mapsDetailsPlayersCache.set(db, (cache = new Map()));
+  const cacheKey = `${country}:${kind}:${id}`;
+  const now = Date.now();
+  const cached = cache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    cache.delete(cacheKey);
+    cache.set(cacheKey, cached);
+    return cached.players;
+  }
+
+  const players = kind === "farmed"
+    ? mergeFarmedDetailsPlayers(
+        await readMapsDetailsPlayersFromSnapshots(db, country, kind, id),
+        await readFarmedDetailsPlayersFromScores(db, country, id),
+      )
+    : await readMapsDetailsPlayersFromSnapshots(db, country, kind, id);
+
+  cache.set(cacheKey, { players, expiresAt: now + MAPS_DETAILS_PLAYERS_CACHE_TTL_MS });
+  while (cache.size > MAPS_DETAILS_PLAYERS_CACHE_MAX_ENTRIES) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey === undefined) break;
+    cache.delete(oldestKey);
+  }
+  return players;
+}
+
 /**
  * Timestamp-only read of a country's maps snapshot row — no payload_json parse
  * or user hydration. The HTTP layer uses refreshedAt to key its response cache
@@ -369,17 +514,23 @@ export async function getMapsPageSnapshot(
 export async function getMapsSnapshotMeta(
   db: Db,
   country: string,
-): Promise<{ generatedAt: string | null; refreshedAt: string | null; farmedOverlayUpdatedAt: string | null }> {
+): Promise<{ generatedAt: string | null; refreshedAt: string | null; sourceRefreshedAt: string | null; farmedOverlayUpdatedAt: string | null }> {
   const normalized = country.toUpperCase();
   const row = (await exec(
     db,
     "select generated_at, refreshed_at from country_maps_snapshots where country = ?",
     [normalized],
   )).rows[0];
-  const farmedOverlayUpdatedAt = await readMapsFarmedOverlayUpdatedAt(db, normalized);
+  const sourceRefreshedAt = isGlobalCountry(normalized)
+    ? await readLatestCountryMapsSourceRefreshedAt(db)
+    : null;
+  const farmedOverlayUpdatedAt = isGlobalCountry(normalized)
+    ? await readGlobalMapsFarmedOverlayUpdatedAt(db)
+    : await readMapsFarmedOverlayUpdatedAt(db, normalized);
   return {
     generatedAt: row?.generated_at == null ? null : String(row.generated_at),
     refreshedAt: row?.refreshed_at == null ? null : String(row.refreshed_at),
+    sourceRefreshedAt,
     farmedOverlayUpdatedAt,
   };
 }
@@ -392,7 +543,14 @@ export async function getMapsSnapshotMeta(
 function sliceMapsSnapshotSection(value: CountryMapsData | null, section: MapsSnapshotSection): CountryMapsData | null {
   if (!value) return value;
   if (section === "random") {
-    return { ...value, farmed: [], mostPlayed: [], favourites: [] };
+    // The Random tab only needs each set's filter/label fields here; the heavy
+    // covers, per-difficulty list and preview audio are fetched per pick via
+    // getMapsRandomBeatmapsets, so strip them to keep this payload small.
+    const beatmapsetsPool: Record<number, MapsFavouriteBeatmapset> = {};
+    for (const [id, set] of Object.entries(value.beatmapsetsPool)) {
+      beatmapsetsPool[Number(id)] = { ...set, covers: {}, maniaBeatmaps: [], previewUrl: "" };
+    }
+    return { ...value, farmed: [], mostPlayed: [], favourites: [], beatmapsetsPool };
   }
   return { ...value, beatmapsetsPool: {} };
 }
@@ -653,36 +811,7 @@ async function hydrateCompactMapsSnapshot(db: Db, value: StoredCountryMapsData):
   const beatmapsetsPool = Object.fromEntries(value.beatmapsetsPool.flatMap((id): Array<[number, MapsFavouriteBeatmapset]> => {
     const beatmapset = beatmapsets.get(id);
     if (!beatmapset) return [];
-    const maniaBeatmaps = (poolBeatmapsBySet.get(id) ?? [])
-      .map((beatmap) => ({
-        id: beatmap.beatmapId,
-        version: beatmap.version,
-        difficultyRating: beatmap.difficultyRating,
-        totalLength: beatmap.totalLength,
-        cs: beatmap.cs,
-      }))
-      .sort((a, b) => b.difficultyRating - a.difficultyRating);
-    const stars = maniaBeatmaps.map((beatmap) => beatmap.difficultyRating).filter((star) => Number.isFinite(star));
-    const maniaKeys = beatmapset.maniaKeys.length > 0
-      ? beatmapset.maniaKeys
-      : [...new Set(maniaBeatmaps.map((beatmap) => beatmap.cs).filter((key) => Number.isFinite(key)))].sort((a, b) => a - b);
-    return [[id, {
-      id,
-      title: beatmapset.title,
-      artist: beatmapset.artist,
-      creator: beatmapset.creator,
-      covers: beatmapset.covers,
-      status: beatmapset.status,
-      globalPlayCount: beatmapset.globalPlayCount,
-      globalFavouriteCount: beatmapset.globalFavouriteCount,
-      previewUrl: beatmapset.previewUrl,
-      maniaKeys,
-      maniaBeatmaps,
-      starMin: stars.length ? Math.min(...stars) : 0,
-      starMax: stars.length ? Math.max(...stars) : 0,
-      bpm: beatmapset.bpm,
-      patterns: beatmapset.patterns,
-    }]];
+    return [[id, buildPoolBeatmapset(id, beatmapset, poolBeatmapsBySet.get(id) ?? [])]];
   }));
 
   return hydrateMapsSnapshotUsers(db, {
@@ -710,6 +839,80 @@ function isUsableStoredMapsData(value: StoredCountryMapsData): boolean {
     value.favouritesByPlayer.length > 0 ||
     value.beatmapsetsPool.length > 0
   );
+}
+
+// The Random card only renders osu!'s `list`/`card` thumbnail and the `cover`
+// hero, so the per-set payload drops the other five cover variants.
+const MAPS_RANDOM_COVER_VARIANTS = ["cover", "card", "list"] as const;
+function trimMapsCovers(covers: Record<string, string | undefined>): Record<string, string | undefined> {
+  const trimmed: Record<string, string | undefined> = {};
+  for (const variant of MAPS_RANDOM_COVER_VARIANTS) {
+    if (covers[variant]) trimmed[variant] = covers[variant];
+  }
+  return trimmed;
+}
+
+// Builds the full Random-pool entry for a beatmapset (per-difficulty list, key
+// counts, star range). Shared by the snapshot hydrate path and the on-demand
+// per-set endpoint; the latter passes trimCovers so only the used art ships.
+function buildPoolBeatmapset(
+  id: number,
+  beatmapset: MapsBeatmapsetMetadata,
+  poolBeatmaps: MapsBeatmapMetadata[],
+  options: { trimCovers?: boolean } = {},
+): MapsFavouriteBeatmapset {
+  const maniaBeatmaps = poolBeatmaps
+    .map((beatmap) => ({
+      id: beatmap.beatmapId,
+      version: beatmap.version,
+      difficultyRating: beatmap.difficultyRating,
+      totalLength: beatmap.totalLength,
+      cs: beatmap.cs,
+    }))
+    .sort((a, b) => b.difficultyRating - a.difficultyRating);
+  const stars = maniaBeatmaps.map((beatmap) => beatmap.difficultyRating).filter((star) => Number.isFinite(star));
+  const maniaKeys = beatmapset.maniaKeys.length > 0
+    ? beatmapset.maniaKeys
+    : [...new Set(maniaBeatmaps.map((beatmap) => beatmap.cs).filter((key) => Number.isFinite(key)))].sort((a, b) => a - b);
+  return {
+    id,
+    title: beatmapset.title,
+    artist: beatmapset.artist,
+    creator: beatmapset.creator,
+    covers: options.trimCovers ? trimMapsCovers(beatmapset.covers) : beatmapset.covers,
+    status: beatmapset.status,
+    globalPlayCount: beatmapset.globalPlayCount,
+    globalFavouriteCount: beatmapset.globalFavouriteCount,
+    previewUrl: beatmapset.previewUrl,
+    maniaKeys,
+    maniaBeatmaps,
+    starMin: stars.length ? Math.min(...stars) : 0,
+    starMax: stars.length ? Math.max(...stars) : 0,
+    bpm: beatmapset.bpm,
+    patterns: beatmapset.patterns,
+  };
+}
+
+export const MAPS_RANDOM_SET_MAX_IDS = 24;
+
+// On-demand hydration for the Random tab: the pool snapshot ships lean entries
+// (no covers / per-difficulty list / preview audio), and the client fetches the
+// full record only for the set it lands on (plus a small prefetch batch).
+export async function getMapsRandomBeatmapsets(db: Db, ids: number[]): Promise<MapsFavouriteBeatmapset[]> {
+  const cleanIds = [...new Set(ids)].filter((id) => Number.isSafeInteger(id) && id > 0).slice(0, MAPS_RANDOM_SET_MAX_IDS);
+  if (cleanIds.length === 0) return [];
+  const beatmapsets = await readMapsBeatmapsetsByIds(db, cleanIds);
+  const poolBeatmaps = await readMapsBeatmapsByBeatmapsetIds(db, cleanIds);
+  const beatmapsBySet = new Map<number, MapsBeatmapMetadata[]>();
+  for (const beatmap of poolBeatmaps) {
+    const list = beatmapsBySet.get(beatmap.beatmapsetId) ?? [];
+    list.push(beatmap);
+    beatmapsBySet.set(beatmap.beatmapsetId, list);
+  }
+  return cleanIds.flatMap((id) => {
+    const beatmapset = beatmapsets.get(id);
+    return beatmapset ? [buildPoolBeatmapset(id, beatmapset, beatmapsBySet.get(id) ?? [], { trimCovers: true })] : [];
+  });
 }
 
 async function hydrateMapsPageValue(
@@ -944,6 +1147,128 @@ async function readMapsUserDisplayByIds(
   ]));
 }
 
+async function readFarmedDetailsPlayersFromScores(db: Db, country: string, beatmapId: number): Promise<MapsDetailsPlayer[]> {
+  const global = isGlobalCountry(country);
+  const rows = (await exec(
+    db,
+    `select s.user_id, s.pp, s.mods_json, s.score_url, s.played_at, u.username, u.avatar_url
+     from country_maps_farmed_scores s
+     left join users u on u.user_id = s.user_id
+     where ${global ? "s.country != ?" : "s.country = ?"} and s.beatmap_id = ?
+     order by s.pp desc`,
+    [global ? GLOBAL_COUNTRY_CODE : country, beatmapId],
+  )).rows;
+
+  const byUser = new Map<number, MapsDetailsPlayer>();
+  for (const row of rows) {
+    const userId = Number(row.user_id);
+    const pp = Number(row.pp ?? 0);
+    if (!Number.isSafeInteger(userId) || userId <= 0 || !Number.isFinite(pp) || pp <= 0) continue;
+    const current = byUser.get(userId);
+    if (current?.pp != null && current.pp >= pp) continue;
+    byUser.set(userId, {
+      id: userId,
+      username: String(row.username ?? `User ${userId}`),
+      avatarUrl: String(row.avatar_url ?? ""),
+      pp,
+      mods: parseJson<string[]>(row.mods_json, []),
+      scoreUrl: row.score_url == null ? null : String(row.score_url),
+      playedAt: row.played_at == null ? null : String(row.played_at),
+    });
+  }
+
+  return [...byUser.values()].sort((a, b) => (b.pp ?? 0) - (a.pp ?? 0));
+}
+
+function mergeFarmedDetailsPlayers(...groups: MapsDetailsPlayer[][]): MapsDetailsPlayer[] {
+  const byUser = new Map<number, MapsDetailsPlayer>();
+  for (const group of groups) {
+    for (const player of group) {
+      const current = byUser.get(player.id);
+      if (current?.pp != null && player.pp != null && current.pp >= player.pp) continue;
+      byUser.set(player.id, player);
+    }
+  }
+  return [...byUser.values()].sort((a, b) => (b.pp ?? 0) - (a.pp ?? 0));
+}
+
+async function readMapsDetailsPlayersFromSnapshots(
+  db: Db,
+  country: string,
+  kind: MapsPlayersKind,
+  id: number,
+): Promise<MapsDetailsPlayer[]> {
+  const rows = (await exec(
+    db,
+    `select payload_json
+     from country_maps_snapshots
+     where ${isGlobalCountry(country) ? "country != ?" : "country = ?"}`,
+    [isGlobalCountry(country) ? GLOBAL_COUNTRY_CODE : country],
+  )).rows;
+
+  const byUser = new Map<number, MapsDetailsPlayer>();
+  for (const row of rows) {
+    const stored = toStoredCountryMapsData(parseJson<unknown>(row.payload_json, null));
+    if (!stored) continue;
+
+    if (kind === "farmed") {
+      const entry = stored.farmed.find((candidate) => candidate.beatmapId === id);
+      if (!entry) continue;
+      for (const player of entry.players) {
+        const current = byUser.get(player.id);
+        if (current?.pp != null && current.pp >= player.pp) continue;
+        byUser.set(player.id, {
+          id: player.id,
+          username: "",
+          avatarUrl: "",
+          pp: player.pp,
+          mods: [...player.mods],
+          scoreUrl: player.scoreUrl,
+          playedAt: player.playedAt,
+        });
+      }
+      continue;
+    }
+
+    if (kind === "popular") {
+      const entry = stored.mostPlayed.find((candidate) => candidate.beatmapId === id);
+      if (!entry) continue;
+      for (const player of entry.players) {
+        const current = byUser.get(player.id);
+        byUser.set(player.id, {
+          id: player.id,
+          username: "",
+          avatarUrl: "",
+          count: (current?.count ?? 0) + player.count,
+        });
+      }
+      continue;
+    }
+
+    const entry = stored.favourites.find((candidate) => candidate.beatmapsetId === id);
+    if (!entry) continue;
+    for (const player of entry.players) {
+      if (byUser.has(player.id)) continue;
+      byUser.set(player.id, { id: player.id, username: "", avatarUrl: "" });
+    }
+  }
+
+  const players = [...byUser.values()];
+  await hydrateMapsDetailsPlayers(db, players);
+  if (kind === "farmed") return players.sort((a, b) => (b.pp ?? 0) - (a.pp ?? 0));
+  if (kind === "popular") return players.sort((a, b) => (b.count ?? 0) - (a.count ?? 0));
+  return players.sort((a, b) => a.username.localeCompare(b.username));
+}
+
+async function hydrateMapsDetailsPlayers(db: Db, players: MapsDetailsPlayer[]): Promise<void> {
+  const users = await readMapsUserDisplayByIds(db, players.map((player) => player.id));
+  for (const player of players) {
+    const user = users.get(player.id);
+    player.username = user?.username || player.username || `User ${player.id}`;
+    player.avatarUrl = user?.avatarUrl || player.avatarUrl || "";
+  }
+}
+
 function filterSortMapsPageItems(value: CountryMapsData, query: MapsPageQuery): MapsPageItem[] {
   if (query.tab === "farmed") return filterSortFarmedMaps(value.farmed, query);
   if (query.tab === "popular") return filterSortMostPlayedMaps(value.mostPlayed, query);
@@ -1119,6 +1444,173 @@ export async function refreshCountryMaps(
   assertUsableMapsData(value, users.length);
   await persistMapsSnapshot(db, country, value);
   return value;
+}
+
+// The merged Global snapshot keeps every distinct farmed/popular/favourite map
+// (a few thousand each across all countries) so the tab totals are real. The
+// per-map player list remains a page preview; full modal player lists are read
+// on demand from compact per-country snapshots / farmed-score rows.
+const GLOBAL_MAPS_PLAYERS_PER_ENTRY = 80;
+
+// Rebuilds the synthetic GLOBAL maps snapshot by merging every country's stored
+// snapshot. Works entirely on the compact (ID-only) stored form: the beatmap,
+// beatmapset and user display rows the read path hydrates from were already
+// written by each country's own refresh, so no osu! API calls are needed.
+export async function refreshGlobalMaps(db: Db): Promise<CountryMapsData> {
+  const rows = (await exec(
+    db,
+    "select payload_json from country_maps_snapshots where country != ?",
+    [GLOBAL_COUNTRY_CODE],
+  )).rows;
+
+  const farmedByBeatmap = new Map<number, Map<number, StoredMapsFarmedPlayer>>();
+  const mostPlayedByBeatmap = new Map<number, Map<number, StoredMapsCountPlayer>>();
+  const favouritesByBeatmapset = new Map<number, Set<number>>();
+  const favouritesByPlayerSets = new Map<number, Set<number>>();
+  const pool = new Set<number>();
+
+  for (const row of rows) {
+    const stored = toStoredCountryMapsData(parseJson<unknown>(row.payload_json, null));
+    if (!stored) continue;
+    for (const entry of stored.farmed) {
+      let players = farmedByBeatmap.get(entry.beatmapId);
+      if (!players) farmedByBeatmap.set(entry.beatmapId, (players = new Map()));
+      for (const player of entry.players) {
+        const existing = players.get(player.id);
+        if (!existing || player.pp > existing.pp) players.set(player.id, player);
+      }
+    }
+    for (const entry of stored.mostPlayed) {
+      let players = mostPlayedByBeatmap.get(entry.beatmapId);
+      if (!players) mostPlayedByBeatmap.set(entry.beatmapId, (players = new Map()));
+      for (const player of entry.players) {
+        const existing = players.get(player.id);
+        if (existing) existing.count += player.count;
+        else players.set(player.id, { id: player.id, count: player.count });
+      }
+    }
+    for (const entry of stored.favourites) {
+      let set = favouritesByBeatmapset.get(entry.beatmapsetId);
+      if (!set) favouritesByBeatmapset.set(entry.beatmapsetId, (set = new Set()));
+      for (const player of entry.players) set.add(player.id);
+    }
+    for (const player of stored.favouritesByPlayer) {
+      let set = favouritesByPlayerSets.get(player.id);
+      if (!set) favouritesByPlayerSets.set(player.id, (set = new Set()));
+      for (const id of player.beatmapsetIds) set.add(id);
+    }
+    for (const id of stored.beatmapsetsPool) pool.add(id);
+  }
+
+  // Farmed scores also live in a compact row table as players refresh over
+  // time. Merge those in so Global farmed counts are not limited to whatever
+  // was present in the last per-country snapshot.
+  const farmedScoreRows = (await exec(
+    db,
+    `select beatmap_id, user_id, pp, mods_json, score_url, played_at
+     from country_maps_farmed_scores
+     where country != ?`,
+    [GLOBAL_COUNTRY_CODE],
+  )).rows;
+  for (const row of farmedScoreRows) {
+    const beatmapId = Number(row.beatmap_id);
+    const userId = Number(row.user_id);
+    const pp = Number(row.pp ?? 0);
+    if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0 || !Number.isSafeInteger(userId) || userId <= 0 || !Number.isFinite(pp) || pp <= 0) {
+      continue;
+    }
+    let players = farmedByBeatmap.get(beatmapId);
+    if (!players) farmedByBeatmap.set(beatmapId, (players = new Map()));
+    const player: StoredMapsFarmedPlayer = {
+      id: userId,
+      pp,
+      mods: parseJson<string[]>(row.mods_json, []),
+      scoreUrl: row.score_url == null ? null : String(row.score_url),
+      playedAt: row.played_at == null ? null : String(row.played_at),
+    };
+    const existing = players.get(userId);
+    if (!existing || player.pp > existing.pp || (player.pp === existing.pp && (player.playedAt ?? "") > (existing.playedAt ?? ""))) {
+      players.set(userId, player);
+    }
+  }
+
+  const farmed = [...farmedByBeatmap.entries()]
+    .flatMap(([beatmapId, playerMap]): StoredCountryMapsData["farmed"] => {
+      const players = [...playerMap.values()].sort((a, b) => b.pp - a.pp);
+      const maxPp = players.reduce((max, player) => Math.max(max, player.pp), 0);
+      if (players.length < 2 && maxPp < FARMED_SINGLE_PLAYER_PP_MIN) return [];
+      const avgPp = players.reduce((sum, player) => sum + player.pp, 0) / players.length;
+      return [{
+        beatmapId,
+        playerCount: players.length,
+        avgPp,
+        maxPp,
+        players: players.slice(0, GLOBAL_MAPS_PLAYERS_PER_ENTRY),
+      }];
+    })
+    .sort((a, b) => b.playerCount - a.playerCount || b.avgPp - a.avgPp);
+
+  const mostPlayed = [...mostPlayedByBeatmap.entries()]
+    .map(([beatmapId, playerMap]): StoredCountryMapsData["mostPlayed"][number] => {
+      const players = [...playerMap.values()].sort((a, b) => b.count - a.count);
+      return {
+        beatmapId,
+        totalPlays: players.reduce((sum, player) => sum + player.count, 0),
+        playerCount: players.length,
+        players: players.slice(0, GLOBAL_MAPS_PLAYERS_PER_ENTRY),
+      };
+    })
+    .sort((a, b) => b.playerCount - a.playerCount || b.totalPlays - a.totalPlays);
+
+  const favourites = [...favouritesByBeatmapset.entries()]
+    .map(([beatmapsetId, set]): StoredCountryMapsData["favourites"][number] => ({
+      beatmapsetId,
+      playerCount: set.size,
+      players: [...set].slice(0, GLOBAL_MAPS_PLAYERS_PER_ENTRY).map((id) => ({ id })),
+    }))
+    .sort((a, b) => b.playerCount - a.playerCount);
+
+  const favouritesByPlayer = [...favouritesByPlayerSets.entries()]
+    .map(([id, set]) => ({ id, beatmapsetIds: [...set] }))
+    .filter((player) => player.beatmapsetIds.length > 0)
+    .sort((a, b) => b.beatmapsetIds.length - a.beatmapsetIds.length);
+
+  // Keep the most-favourited sets first so the Random tab pool stays dense,
+  // while still keeping every eligible set in the compact stored pool.
+  const beatmapsetsPool = [...pool]
+    .sort((a, b) => (favouritesByBeatmapset.get(b)?.size ?? 0) - (favouritesByBeatmapset.get(a)?.size ?? 0));
+
+  const generatedAt = nowIso();
+  const stored: StoredCountryMapsData = {
+    schemaVersion: 2,
+    farmed,
+    mostPlayed,
+    favourites,
+    favouritesByPlayer,
+    beatmapsetsPool,
+    generatedAt,
+    farmedGeneratedAt: generatedAt,
+    favouritesGeneratedAt: generatedAt,
+  };
+
+  const refreshedAt = nowIso();
+  await exec(
+    db,
+    `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
+     values (?, ?, ?, ?)
+     on conflict(country) do update set payload_json = excluded.payload_json, generated_at = excluded.generated_at, refreshed_at = excluded.refreshed_at`,
+    [GLOBAL_COUNTRY_CODE, json(stored), generatedAt, refreshedAt],
+  );
+
+  return hydrateCompactMapsSnapshot(db, stored);
+}
+
+// Normalises a stored maps payload (compact schema v2 or the legacy hydrated
+// shape) into the compact form the Global merge operates on.
+function toStoredCountryMapsData(parsed: unknown): StoredCountryMapsData | null {
+  if (isStoredCountryMapsData(parsed)) return parsed;
+  if (isCountryMapsDataShape(parsed)) return compactMapsSnapshotForStorage(parsed);
+  return null;
 }
 
 async function persistMapsSnapshot(db: Db, country: string, value: CountryMapsData): Promise<void> {
@@ -1693,8 +2185,7 @@ async function buildCountryFavourites(
   for (const entry of mpMap.values()) entry.players.sort((a, b) => b.count - a.count);
   const mostPlayed = [...mpMap.values()]
     .filter((entry) => entry.playerCount >= 2)
-    .sort((a, b) => b.playerCount - a.playerCount || b.totalPlays - a.totalPlays)
-    .slice(0, 200);
+    .sort((a, b) => b.playerCount - a.playerCount || b.totalPlays - a.totalPlays);
 
   const favMap = new Map<number, MapsAggregatedFavourite>();
   const beatmapsetsPool: Record<number, MapsFavouriteBeatmapset> = {};
@@ -1769,8 +2260,7 @@ async function buildCountryFavourites(
 
   const favourites = [...favMap.values()]
     .filter((entry) => entry.playerCount >= 2)
-    .sort((a, b) => b.playerCount - a.playerCount || b.globalFavouriteCount - a.globalFavouriteCount)
-    .slice(0, 100);
+    .sort((a, b) => b.playerCount - a.playerCount || b.globalFavouriteCount - a.globalFavouriteCount);
 
   return { mostPlayed, favourites, favouritesByPlayer, beatmapsetsPool, generatedAt: nowIso() };
 }
@@ -2006,6 +2496,7 @@ async function applyMapsFarmedOverlay(
   refreshedAt: string | null,
 ): Promise<CountryMapsData> {
   if (!refreshedAt) return value;
+  const global = isGlobalCountry(country);
   const rows = (await exec(
     db,
     `select
@@ -2041,9 +2532,9 @@ async function applyMapsFarmedOverlay(
      left join users u on u.user_id = s.user_id
      left join beatmaps b on b.beatmap_id = s.beatmap_id
      left join beatmapsets bs on bs.beatmapset_id = b.beatmapset_id
-     where s.country = ? and s.updated_at > ?
+     where ${global ? "s.country != ?" : "s.country = ?"} and s.updated_at > ?
      order by s.updated_at asc`,
-    [country, refreshedAt],
+    [global ? GLOBAL_COUNTRY_CODE : country, refreshedAt],
   )).rows;
   if (rows.length === 0) return value;
 
@@ -2290,6 +2781,29 @@ async function readMapsFarmedOverlayUpdatedAt(db: Db, country: string): Promise<
   const row = (await exec(db, "select value_json from live_meta where key = ?", [mapsFarmedOverlayMetaKey(country)])).rows[0];
   const parsed = parseJson<string | null>(row?.value_json, null);
   return typeof parsed === "string" && parsed ? parsed : null;
+}
+
+async function readLatestCountryMapsSourceRefreshedAt(db: Db): Promise<string | null> {
+  const row = (await exec(
+    db,
+    "select max(refreshed_at) as refreshed_at from country_maps_snapshots where country != ?",
+    [GLOBAL_COUNTRY_CODE],
+  )).rows[0];
+  return row?.refreshed_at == null ? null : String(row.refreshed_at);
+}
+
+async function readGlobalMapsFarmedOverlayUpdatedAt(db: Db): Promise<string | null> {
+  const rows = (await exec(
+    db,
+    "select value_json from live_meta where key like ? and key != ?",
+    [`${MAPS_FARMED_OVERLAY_META_PREFIX}%`, mapsFarmedOverlayMetaKey(GLOBAL_COUNTRY_CODE)],
+  )).rows;
+  let latest: string | null = null;
+  for (const row of rows) {
+    const value = parseJson<string | null>(row.value_json, null);
+    if (typeof value === "string" && value && (!latest || value > latest)) latest = value;
+  }
+  return latest;
 }
 
 async function touchMapsFarmedOverlay(db: Db, country: string, updatedAt: string): Promise<void> {

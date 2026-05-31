@@ -6,7 +6,7 @@ import { routeHttp, sendNotFound } from "./http/snapshots.js";
 import { ScoreIngestor } from "./ingest/score-ingestor.js";
 import { JobQueue } from "./jobs/queue.js";
 import { LiveEventLog } from "./live/event-log.js";
-import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefreshIfDue } from "./features/maps.js";
+import { deferMapsRefreshesWaitingForRoster, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefreshIfDue } from "./features/maps.js";
 import { AbuseGuard } from "./http/abuse-guard.js";
 import { CountryClientTracker } from "./live/country-clients.js";
 import { handleSse } from "./live/sse.js";
@@ -111,6 +111,11 @@ function startMapsScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: Job
     const countries = await getMapsWarmCountryCodes(db, config);
     await Promise.all(countries.map((country) => enqueueMapsRefreshIfDue(db, queue, country, config.mapsRefreshIntervalMs))).catch((error) => {
       console.warn("[maps] scheduled refresh failed", error);
+    });
+    // Rebuild the Global aggregate after the per-country snapshots so it merges
+    // their freshest data. It depends only on stored snapshots, no osu! calls.
+    await enqueueGlobalMapsRefreshIfDue(db, queue, config.mapsRefreshIntervalMs).catch((error) => {
+      console.warn("[maps] scheduled global refresh failed", error);
     });
     setTimeout(tick, config.mapsRefreshIntervalMs).unref();
   };

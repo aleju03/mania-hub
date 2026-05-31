@@ -40,7 +40,8 @@ import {
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
 import { extractReplayScoreIdFromFilename, parseUploadedReplayBuffer } from "../lib/replay-upload";
 import { startProgressPoll } from "../lib/progress-poll";
-import { getLiveBackendUrl } from "../lib/live-backend";
+import { fetchLiveGlobalRankings, getLiveBackendUrl, isLiveBackendConfigured, type LiveGlobalRankingEntry } from "../lib/live-backend";
+import { isGlobalScope } from "../lib/country";
 import { useAuth } from "../lib/auth-context";
 import {
   normalizeReplayBackgroundDim,
@@ -453,6 +454,8 @@ function ReplayPage() {
   const cachedRankings = useAppStore((s) => s.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((s) => s.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const setRankings = useAppStore((s) => s.setRankings);
+  const selectedIsGlobal = isGlobalScope(selectedCountry);
+  const [globalSuggestions, setGlobalSuggestions] = useState<LiveGlobalRankingEntry[] | null>(null);
   const [replay, setReplay] = useState<ServerReplay | null>(null);
   const [beatmap, setBeatmap] = useState<ManiaBeatmap | null>(null);
   const [scoreInfo, setScoreInfo] = useState<OsuScore | null>(null);
@@ -830,7 +833,7 @@ function ReplayPage() {
 
   // Fetch country rankings to power the player suggestions grid (cached in store).
   useEffect(() => {
-    if (browseMode !== "player") return;
+    if (browseMode !== "player" || selectedIsGlobal) return;
     const stale = !cachedRankings || isCacheStale(rankingsFetchedAt, CLIENT_CACHE_TTL.rankings);
     if (!stale) return;
     let cancelled = false;
@@ -841,21 +844,46 @@ function ReplayPage() {
       })
       .catch(() => { /* suggestions are non-critical */ });
     return () => { cancelled = true; };
-  }, [browseMode, cachedRankings, rankingsFetchedAt, selectedCountry, setRankings]);
+  }, [browseMode, cachedRankings, rankingsFetchedAt, selectedCountry, setRankings, selectedIsGlobal]);
+
+  // Global: suggestions come from the combined top-players board instead.
+  useEffect(() => {
+    if (browseMode !== "player" || !selectedIsGlobal || !isLiveBackendConfigured()) return;
+    let cancelled = false;
+    fetchLiveGlobalRankings(48)
+      .then((snapshot) => { if (!cancelled) setGlobalSuggestions(snapshot.ranking); })
+      .catch(() => { if (!cancelled) setGlobalSuggestions([]); });
+    return () => { cancelled = true; };
+  }, [browseMode, selectedIsGlobal]);
 
   const suggestionPlayers = useMemo(
-    () => (cachedRankings?.ranking ?? [])
-      .filter((entry) => entry.user.is_active !== false)
-      .filter((entry) => !hiddenUserIds.has(entry.user.id))
-      .slice(0, 24)
-      .map((entry) => ({
-        id: entry.user.id,
-        username: entry.user.username,
-        avatar_url: entry.user.avatar_url,
-        cover_url: entry.user.cover_url,
-        global_rank: entry.global_rank,
-      })),
-    [cachedRankings, hiddenUserIds],
+    () => {
+      if (selectedIsGlobal) {
+        // Global: the top 24 tracked players worldwide (by pp).
+        return (globalSuggestions ?? [])
+          .filter((entry) => !hiddenUserIds.has(entry.user.id))
+          .slice(0, 24)
+          .map((entry) => ({
+            id: entry.user.id,
+            username: entry.user.username,
+            avatar_url: entry.user.avatar_url,
+            cover_url: entry.user.cover_url || undefined,
+            global_rank: entry.global_rank ?? undefined,
+          }));
+      }
+      return (cachedRankings?.ranking ?? [])
+        .filter((entry) => entry.user.is_active !== false)
+        .filter((entry) => !hiddenUserIds.has(entry.user.id))
+        .slice(0, 24)
+        .map((entry) => ({
+          id: entry.user.id,
+          username: entry.user.username,
+          avatar_url: entry.user.avatar_url,
+          cover_url: entry.user.cover_url,
+          global_rank: entry.global_rank,
+        }));
+    },
+    [cachedRankings, hiddenUserIds, selectedIsGlobal, globalSuggestions],
   );
 
   // Auto-load player scores when arriving via URL with ?player=
@@ -913,6 +941,7 @@ function ReplayPage() {
   }, [normalizedPlayerParam, playerParam, scoreId, loadedPlayerParam, loadPlayerScores]);
 
   const loadBeatmapScorePage = async (bm: OsuBeatmap, nextPage: number) => {
+    const scoreCountry = selectedIsGlobal ? undefined : selectedCountry;
     const requestId = beatmapScoreRequestRef.current + 1;
     beatmapScoreRequestRef.current = requestId;
     setSelectedDiffId(bm.id);
@@ -922,7 +951,7 @@ function ReplayPage() {
     setPartialBeatmapScores([]);
     setBeatmapScoreLookupStatus(null);
     try {
-      const res = await getBeatmapScores({ data: { beatmapId: bm.id, country: selectedCountry, page: nextPage } });
+      const res = await getBeatmapScores({ data: { beatmapId: bm.id, country: scoreCountry, page: nextPage } });
       if (beatmapScoreRequestRef.current !== requestId) return;
       setRawBeatmapScores((current) => nextPage > 1 ? mergeScoresById(current, res.scores) : res.scores);
     } catch {
@@ -953,10 +982,11 @@ function ReplayPage() {
     let cancelled = false;
     const requestId = beatmapScoreRequestRef.current;
     const poll = async () => {
+      const scoreCountry = selectedIsGlobal ? undefined : selectedCountry;
       try {
         const [status, partial] = await Promise.all([
-          getBeatmapScoreLookupStatus({ data: { beatmapId: selectedDiffId, country: selectedCountry, page: beatmapScorePage } }),
-          getPartialBeatmapScores({ data: { beatmapId: selectedDiffId, country: selectedCountry, page: beatmapScorePage } }),
+          getBeatmapScoreLookupStatus({ data: { beatmapId: selectedDiffId, country: scoreCountry, page: beatmapScorePage } }),
+          getPartialBeatmapScores({ data: { beatmapId: selectedDiffId, country: scoreCountry, page: beatmapScorePage } }),
         ]);
         if (cancelled || beatmapScoreRequestRef.current !== requestId) return;
         setBeatmapScoreLookupStatus(status);
@@ -973,7 +1003,7 @@ function ReplayPage() {
       cancelled = true;
       stopPolling();
     };
-  }, [beatmapScorePage, loadingBeatmapScores, selectedDiffId, selectedCountry]);
+  }, [beatmapScorePage, loadingBeatmapScores, selectedDiffId, selectedCountry, selectedIsGlobal]);
 
   const handleClearReplay = () => {
     setReplay(null);

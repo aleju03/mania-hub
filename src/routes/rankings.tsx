@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, useMemo, useSyncExternalStore } from "reac
 import type { MouseEvent } from "react";
 import { getRankings, getUsersRankHistory } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
-import { getCountryName } from "../lib/country";
+import { getCountryFlagUrl, getCountryName, isGlobalScope } from "../lib/country";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { formatNumber, formatAccuracy } from "../lib/format";
 import { getCrRankChanges, getGlobalRankChange } from "../lib/rankings";
@@ -16,10 +16,16 @@ import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse } from "../lib/types";
 import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import { pageSeo } from "../lib/seo";
-import { fetchLiveRankDeltas, isLiveBackendConfigured, type LiveRankDelta } from "../lib/live-backend";
+import { fetchLiveGlobalRankings, fetchLiveRankDeltas, isLiveBackendConfigured, type LiveGlobalRankingEntry, type LiveRankDelta } from "../lib/live-backend";
 import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
 
 type SortField = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "ss" | "s" | "a";
+const GLOBAL_RANKINGS_PAGE_SIZE = 50;
+
+function parseRankingsPage(value: unknown): number {
+  const page = Number(value ?? 1);
+  return Number.isInteger(page) && page > 0 ? Math.min(page, 10_000) : 1;
+}
 
 function getPlayerPath(username: string): string {
   return `/player/${encodeURIComponent(username)}`;
@@ -53,7 +59,7 @@ function useIsDesktop(): boolean {
 
 export const Route = createFileRoute("/rankings")({
   validateSearch: (search: Record<string, unknown>) => ({
-    page: search.page === 2 || search.page === "2" ? 2 : 1,
+    page: parseRankingsPage(search.page),
     country: parseCountrySearchParam(search.country),
   }),
   head: ({ match }) => {
@@ -64,7 +70,7 @@ export const Route = createFileRoute("/rankings")({
       description: countryName
         ? `Top osu!mania players in ${countryName}`
         : "osu!mania country rankings",
-      path: withSearchParams("/rankings", { page: match.search.page === 2 ? 2 : undefined, country }),
+      path: withSearchParams("/rankings", { page: match.search.page > 1 ? match.search.page : undefined, country }),
       origin: match.context.origin,
       imageCountry: country,
       imageKind: "rankings",
@@ -105,6 +111,37 @@ function RankingsPage() {
   const hasNextPage = totalPlayers > 50;
   const liveBackendEnabled = isLiveBackendConfigured();
   const { warming } = useCountryWarming(selectedCountry);
+  const selectedIsGlobal = isGlobalScope(selectedCountry);
+  const [globalRankings, setGlobalRankings] = useState<LiveGlobalRankingEntry[] | null>(null);
+  const [globalRankingsTotal, setGlobalRankingsTotal] = useState(0);
+  const [globalRankingsLoading, setGlobalRankingsLoading] = useState(false);
+  const globalTotalPages = Math.max(1, Math.ceil(globalRankingsTotal / GLOBAL_RANKINGS_PAGE_SIZE));
+
+  useEffect(() => {
+    if (!selectedIsGlobal) return;
+    let cancelled = false;
+    setGlobalRankings(null);
+    setGlobalRankingsLoading(true);
+    fetchLiveGlobalRankings({
+      page,
+      pageSize: GLOBAL_RANKINGS_PAGE_SIZE,
+      sort: sortBy === "pp" ? "rank" : sortBy,
+      dir: sortDir,
+    })
+      .then((snapshot) => {
+        if (cancelled) return;
+        setGlobalRankings(snapshot.ranking);
+        setGlobalRankingsTotal(snapshot.total);
+      })
+      .catch(() => {
+        if (!cancelled) setGlobalRankings([]);
+      })
+      .finally(() => {
+        if (!cancelled) setGlobalRankingsLoading(false);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, selectedIsGlobal, sortBy, sortDir]);
 
   useEffect(() => {
     setPageTwoData(null);
@@ -116,10 +153,26 @@ function RankingsPage() {
   }, [selectedCountry]);
 
   useEffect(() => {
+    if (!selectedIsGlobal || sortBy !== "pp") return;
+    setSortBy("rank");
+    setSortDir("desc");
+  }, [selectedIsGlobal, sortBy]);
+
+  useEffect(() => {
+    if (!selectedIsGlobal || globalRankingsTotal === 0 || page <= globalTotalPages) return;
+    navigate({ to: "/rankings", search: { page: globalTotalPages, country: selectedCountry }, replace: true });
+  }, [globalRankingsTotal, globalTotalPages, navigate, page, selectedCountry, selectedIsGlobal]);
+
+  useEffect(() => {
     if (page === 2 && totalPlayers > 0 && !hasNextPage) {
       navigate({ to: "/rankings", search: { page: 1, country: selectedCountry }, replace: true });
     }
   }, [hasNextPage, navigate, page, selectedCountry, totalPlayers]);
+
+  useEffect(() => {
+    if (selectedIsGlobal || page <= 2) return;
+    navigate({ to: "/rankings", search: { page: 2, country: selectedCountry }, replace: true });
+  }, [navigate, page, selectedCountry, selectedIsGlobal]);
 
   useEffect(() => {
     if (!pageData) return;
@@ -128,6 +181,11 @@ function RankingsPage() {
 
   useEffect(() => {
     let cancelled = false;
+    // Global has no single-country leaderboard to fetch from the osu! API.
+    if (isGlobalScope(selectedCountry)) {
+      setRankingsLoading(false);
+      return () => { cancelled = true; };
+    }
     const knownTotal = cachedPageOneData?.total ?? null;
 
     if (page === 2 && knownTotal !== null && knownTotal <= 50) {
@@ -333,6 +391,13 @@ function RankingsPage() {
     });
   }, [pageData, page, sortBy, sortDir, rankHistories, liveRankDeltas, countryRankChanges, liveCountryRankChanges, hiddenUserIds]);
 
+  const visibleGlobalRankings = useMemo(
+    () => (globalRankings ?? [])
+      .map((entry) => ({ entry, originalRank: entry.rank }))
+      .filter(({ entry }) => !hiddenUserIds.has(entry.user.id)),
+    [globalRankings, hiddenUserIds],
+  );
+
   const handleSort = (field: SortField) => {
     if (sortBy === field) {
       if (sortDir === "desc") setSortDir("asc");
@@ -341,7 +406,290 @@ function RankingsPage() {
       setSortBy(field);
       setSortDir("desc");
     }
+    if (selectedIsGlobal && page !== 1) {
+      navigate({ to: "/rankings", search: { page: 1, country: selectedCountry }, replace: true });
+    }
   };
+
+  if (selectedIsGlobal) {
+    return (
+      <div className="flex-1">
+        <PageHeader
+          iconSrc="/images/icons/rankings.svg"
+          title="Global mania rankings"
+          right={
+            globalRankingsTotal > 0 ? (
+              <span className="text-[10px] text-osu-f1">{formatNumber(globalRankingsTotal)} tracked players</span>
+            ) : null
+          }
+        />
+        <div className="bg-osu-b5">
+          <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5">
+            {!isDesktop && (
+            <>
+            <div className="flex items-center gap-1.5 pb-3 overflow-x-auto scrollbar-hide">
+              {([
+                { field: "rank" as SortField, label: "#" },
+                { field: "player" as SortField, label: "Player" },
+                { field: "7d" as SortField, label: "7d" },
+                { field: "cr7d" as SortField, label: "7d Country" },
+                { field: "accuracy" as SortField, label: "Acc" },
+                { field: "playcount" as SortField, label: "Plays" },
+              ]).map(({ field, label }) => {
+                const active = sortBy === field;
+                return (
+                  <button
+                    key={field}
+                    onClick={() => handleSort(field)}
+                    className={`flex-shrink-0 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                      active
+                        ? "bg-osu-pink/20 text-osu-pink-light"
+                        : "bg-osu-b4/60 text-osu-f1 hover:bg-osu-b4"
+                    }`}
+                  >
+                    {label}
+                    {active && <span className="ml-0.5 text-[8px]">{sortDir === "desc" ? "▼" : "▲"}</span>}
+                  </button>
+                );
+              })}
+              {([
+                { field: "ss" as SortField, img: "/images/badges/score-ranks-v2019/GradeSmall-SS.svg", alt: "SS" },
+                { field: "s" as SortField, img: "/images/badges/score-ranks-v2019/GradeSmall-S.svg", alt: "S" },
+                { field: "a" as SortField, img: "/images/badges/score-ranks-v2019/GradeSmall-A.svg", alt: "A" },
+              ]).map(({ field, img, alt }) => {
+                const active = sortBy === field;
+                return (
+                  <button
+                    key={field}
+                    onClick={() => handleSort(field)}
+                    className={`flex-shrink-0 px-2 py-1 rounded-md transition-colors cursor-pointer ${
+                      active
+                        ? "bg-osu-pink/20"
+                        : "bg-osu-b4/60 hover:bg-osu-b4"
+                    }`}
+                  >
+                    <div className="flex items-center gap-0.5">
+                      <img src={img} alt={alt} width={18} height={18} className={`transition-opacity ${active ? "opacity-100" : "opacity-60"}`} />
+                      {active && <span className="text-osu-pink text-[8px]">{sortDir === "desc" ? "▼" : "▲"}</span>}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="space-y-2">
+              {(globalRankings == null || globalRankingsLoading) && visibleGlobalRankings.length === 0 ? (
+                Array.from({ length: 10 }).map((_, i) => (
+                  <div key={i} className="space-y-2 rounded-lg bg-osu-b4/50 p-3">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="w-8 h-4" />
+                      <Skeleton className="w-9 h-9 rounded-full" />
+                      <Skeleton className="h-4 flex-1" />
+                    </div>
+                    <div className="flex gap-2">
+                      <Skeleton className="h-3 flex-1" />
+                      <Skeleton className="h-3 w-14" />
+                    </div>
+                  </div>
+                ))
+              ) : visibleGlobalRankings.length > 0 ? (
+                visibleGlobalRankings.map(({ entry, originalRank }) => {
+                  const sortedValue = (() => {
+                    switch (sortBy) {
+                      case "playcount":
+                        return <>{formatNumber(entry.play_count)} plays</>;
+                      case "accuracy":
+                        return <>{formatAccuracy(entry.hit_accuracy / 100)}</>;
+                      case "ss":
+                        return <div className="flex items-center gap-1">
+                          <img src="/images/badges/score-ranks-v2019/GradeSmall-SS.svg" alt="SS" width={16} height={16} />
+                          <span>{entry.grade_counts.ss + entry.grade_counts.ssh}</span>
+                        </div>;
+                      case "s":
+                        return <div className="flex items-center gap-1">
+                          <img src="/images/badges/score-ranks-v2019/GradeSmall-S.svg" alt="S" width={16} height={16} />
+                          <span>{entry.grade_counts.s + entry.grade_counts.sh}</span>
+                        </div>;
+                      case "a":
+                        return <div className="flex items-center gap-1">
+                          <img src="/images/badges/score-ranks-v2019/GradeSmall-A.svg" alt="A" width={16} height={16} />
+                          <span>{entry.grade_counts.a}</span>
+                        </div>;
+                      default:
+                        return <>{formatNumber(Math.round(entry.pp))}pp</>;
+                    }
+                  })();
+
+                  return (
+                    <Link
+                      key={entry.user.id}
+                      to="/player/$username"
+                      params={{ username: entry.user.username }}
+                      className="block rounded-lg bg-osu-b4/50 p-3 cursor-pointer hover:bg-osu-b4 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-bold text-osu-f1 w-8">#{originalRank}</span>
+                        <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={36} />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <UsernameText
+                              username={entry.user.username}
+                              avatarUrl={entry.user.avatar_url}
+                              className="text-sm font-semibold truncate"
+                            />
+                            <img
+                              src={getCountryFlagUrl(entry.user.country_code)}
+                              alt={entry.user.country_code}
+                              title={getCountryName(entry.user.country_code)}
+                              className="w-[18px] h-3 rounded-[1px] object-cover flex-shrink-0"
+                              loading="lazy"
+                            />
+                          </div>
+                          <div className="flex items-center gap-3 mt-0.5 text-[11px] text-osu-f1">
+                            <span>{formatAccuracy(entry.hit_accuracy / 100)}</span>
+                            <RankDeltaLabel label="7d" change={entry.global_change} />
+                            <RankDeltaLabel label={entry.user.country_code} change={entry.country_change} />
+                          </div>
+                        </div>
+                        <span className="text-sm font-bold text-right flex-shrink-0">{sortedValue}</span>
+                      </div>
+                    </Link>
+                  );
+                })
+              ) : (
+                <div className="px-4 py-10 text-center text-xs text-osu-f1">No ranked players yet.</div>
+              )}
+            </div>
+            </>
+            )}
+
+            {isDesktop && (
+            <div className="rounded-xl overflow-hidden border border-osu-b3/30">
+              <table className="w-full table-fixed">
+                <colgroup>
+                  <col className="w-[5%]" />
+                  <col />
+                  <col className="w-[11%]" />
+                  <col className="w-[9%]" />
+                  <col className="w-[10%]" />
+                  <col className="w-[11%]" />
+                  <col className="w-[7%]" />
+                  <col className="w-[5%]" />
+                  <col className="w-[5%]" />
+                  <col className="w-[5%]" />
+                </colgroup>
+                <thead>
+                  <tr className="bg-osu-b4 text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">
+                    <th className="py-2.5 px-3 text-left w-12">#</th>
+                    <SortableHeader field="player" label="Player" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="left" />
+                    <SortableHeader field="7d" label="7d Global" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-32" />
+                    <SortableHeader field="cr7d" label="7d Country" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="center" className="w-24" />
+                    <SortableHeader field="accuracy" label="Accuracy" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
+                    <SortableHeader field="playcount" label="Play Count" activeSort={sortBy} sortDir={sortDir} onSort={handleSort} align="right" />
+                    <th className="py-2.5 px-3 text-right">PP</th>
+                    <SortableGradeHeader field="ss" activeSort={sortBy} sortDir={sortDir} onSort={handleSort}
+                      img="/images/badges/score-ranks-v2019/GradeSmall-SS.svg" alt="SS" />
+                    <SortableGradeHeader field="s" activeSort={sortBy} sortDir={sortDir} onSort={handleSort}
+                      img="/images/badges/score-ranks-v2019/GradeSmall-S.svg" alt="S" />
+                    <SortableGradeHeader field="a" activeSort={sortBy} sortDir={sortDir} onSort={handleSort}
+                      img="/images/badges/score-ranks-v2019/GradeSmall-A.svg" alt="A" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {(globalRankings == null || globalRankingsLoading) && visibleGlobalRankings.length === 0 ? (
+                    Array.from({ length: 10 }).map((_, i) => (
+                      <tr key={i} className="border-t border-osu-b3/20">
+                        <td colSpan={10} className="px-3 py-1.5">
+                          <RankingRowSkeleton />
+                        </td>
+                      </tr>
+                    ))
+                  ) : visibleGlobalRankings.length > 0 ? (
+                    visibleGlobalRankings.map(({ entry, originalRank }, i) => (
+                      <tr
+                        key={entry.user.id}
+                        className="border-t border-osu-b3/20 hover:bg-osu-b4/80 transition-colors duration-[120ms] cursor-pointer"
+                        style={{ background: i % 2 ? "rgba(255,255,255,0.015)" : "transparent" }}
+                        onClick={() => navigate({ to: "/player/$username", params: { username: entry.user.username } })}
+                        onAuxClick={(event) => handlePlayerAuxClick(event, entry.user.username)}
+                      >
+                        <td className="py-2.5 px-3 text-sm font-bold text-osu-f1">#{originalRank}</td>
+                        <td className="py-2.5 px-3">
+                          <Link
+                            to="/player/$username"
+                            params={{ username: entry.user.username }}
+                            className="flex items-center gap-3 min-w-0"
+                          >
+                            <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} />
+                            <UsernameText
+                              username={entry.user.username}
+                              avatarUrl={entry.user.avatar_url}
+                              className="text-sm font-medium truncate min-w-0"
+                            />
+                            <img
+                              src={getCountryFlagUrl(entry.user.country_code)}
+                              alt={entry.user.country_code}
+                              title={getCountryName(entry.user.country_code)}
+                              className="w-[18px] h-3 rounded-[1px] object-cover flex-shrink-0"
+                              loading="lazy"
+                            />
+                          </Link>
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <GlobalRankCell history={undefined} rankChange={entry.global_change} loaded />
+                        </td>
+                        <td className="py-2.5 px-3">
+                          <CRRankCell change={entry.country_change} loaded />
+                        </td>
+                        <td className="py-2.5 px-3 text-sm text-osu-l2 text-right">{formatAccuracy(entry.hit_accuracy / 100)}</td>
+                        <td className="py-2.5 px-3 text-sm text-osu-f1 text-right">{formatNumber(entry.play_count)}</td>
+                        <td className="py-2.5 px-3 text-sm font-bold text-right">{formatNumber(Math.round(entry.pp))}</td>
+                        <td className={`py-2.5 px-3 text-xs text-center ${sortBy === "ss" ? "text-white font-semibold" : "text-osu-f1"}`}>
+                          {entry.grade_counts.ss + entry.grade_counts.ssh}
+                        </td>
+                        <td className={`py-2.5 px-3 text-xs text-center ${sortBy === "s" ? "text-white font-semibold" : "text-osu-f1"}`}>
+                          {entry.grade_counts.s + entry.grade_counts.sh}
+                        </td>
+                        <td className={`py-2.5 px-3 text-xs text-center ${sortBy === "a" ? "text-white font-semibold" : "text-osu-f1"}`}>
+                          {entry.grade_counts.a}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={10} className="px-4 py-10 text-center text-xs text-osu-f1">No ranked players yet.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            )}
+            {globalTotalPages > 1 && (
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
+                <button
+                  onClick={() => navigate({ to: "/rankings", search: { page: Math.max(1, page - 1), country: selectedCountry } })}
+                  disabled={page <= 1 || globalRankingsLoading}
+                  className="px-4 py-2 rounded-lg bg-osu-b4 text-xs font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Previous
+                </button>
+                <span className="text-[11px] text-osu-f1 tabular-nums">
+                  Page {formatNumber(page)} of {formatNumber(globalTotalPages)}
+                </span>
+                <button
+                  onClick={() => navigate({ to: "/rankings", search: { page: Math.min(globalTotalPages, page + 1), country: selectedCountry } })}
+                  disabled={page >= globalTotalPages || globalRankingsLoading}
+                  className="px-4 py-2 rounded-lg bg-osu-b4 text-xs font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  Next
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1">
@@ -550,7 +898,19 @@ function RankingsPage() {
 
           {isDesktop && (
           <div className="rounded-xl overflow-hidden border border-osu-b3/30">
-            <table className="w-full">
+            <table className="w-full table-fixed">
+              <colgroup>
+                <col className="w-[5%]" />
+                <col />
+                <col className="w-[11%]" />
+                <col className="w-[7%]" />
+                <col className="w-[10%]" />
+                <col className="w-[11%]" />
+                <col className="w-[7%]" />
+                <col className="w-[5%]" />
+                <col className="w-[5%]" />
+                <col className="w-[5%]" />
+              </colgroup>
               <thead>
                 <tr className="bg-osu-b4 text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">
                   <th className="py-2.5 px-3 text-left w-12">#</th>
@@ -603,13 +963,13 @@ function RankingsPage() {
                             to="/player/$username"
                             params={{ username: entry.user.username }}
                             onClick={() => seedPlayerShellFromRankingEntry(entry, originalRank)}
-                            className="flex items-center gap-3"
+                            className="flex items-center gap-3 min-w-0"
                           >
                             <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} online={entry.user.is_online} />
                             <UsernameText
                               username={entry.user.username}
                               avatarUrl={entry.user.avatar_url}
-                              className="text-sm font-medium"
+                              className="text-sm font-medium truncate min-w-0"
                             />
                           </Link>
                         </td>
@@ -742,6 +1102,15 @@ function CRRankCell({ change, loaded }: { change: number | null; loaded: boolean
     <div className={`text-center text-[11px] font-semibold ${change > 0 ? "text-osu-green" : "text-osu-red"}`}>
       {change > 0 ? `+${change}` : change}
     </div>
+  );
+}
+
+function RankDeltaLabel({ label, change }: { label: string; change: number | null }) {
+  if (change === null || change === 0) return <span>{label} -</span>;
+  return (
+    <span className={`font-semibold ${change > 0 ? "text-osu-green" : "text-osu-red"}`}>
+      {label} {change > 0 ? `+${formatNumber(change)}` : formatNumber(change)}
+    </span>
   );
 }
 

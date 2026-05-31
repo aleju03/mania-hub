@@ -1,11 +1,11 @@
-import { isSupportedCountryCode } from "./country";
+import { isSupportedCountryScope } from "./country";
 
 export const COUNTRY_SEARCH_PARAM = "country";
 
 export function parseCountrySearchParam(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const normalized = value.trim().toUpperCase();
-  return isSupportedCountryCode(normalized) ? normalized : undefined;
+  return isSupportedCountryScope(normalized) ? normalized : undefined;
 }
 
 export function readCountryFromSearchStr(searchStr: string): string | undefined {

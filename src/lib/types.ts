@@ -632,7 +632,7 @@ export interface SnipesScanStatus {
 }
 
 export interface CountryTopPlay {
-  user: { id: number; username: string; avatar_url: string };
+  user: { id: number; username: string; avatar_url: string; country_code?: string };
   score: OsuScore;
   pp: number;
   weightedPP: number;
