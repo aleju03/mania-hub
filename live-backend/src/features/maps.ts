@@ -1446,12 +1446,6 @@ export async function refreshCountryMaps(
   return value;
 }
 
-// The merged Global snapshot keeps every distinct farmed/popular/favourite map
-// (a few thousand each across all countries) so the tab totals are real. The
-// per-map player list remains a page preview; full modal player lists are read
-// on demand from compact per-country snapshots / farmed-score rows.
-const GLOBAL_MAPS_PLAYERS_PER_ENTRY = 80;
-
 // Rebuilds the synthetic GLOBAL maps snapshot by merging every country's stored
 // snapshot. Works entirely on the compact (ID-only) stored form: the beatmap,
 // beatmapset and user display rows the read path hydrates from were already
@@ -1545,7 +1539,7 @@ export async function refreshGlobalMaps(db: Db): Promise<CountryMapsData> {
         playerCount: players.length,
         avgPp,
         maxPp,
-        players: players.slice(0, GLOBAL_MAPS_PLAYERS_PER_ENTRY),
+        players,
       }];
     })
     .sort((a, b) => b.playerCount - a.playerCount || b.avgPp - a.avgPp);
@@ -1557,7 +1551,7 @@ export async function refreshGlobalMaps(db: Db): Promise<CountryMapsData> {
         beatmapId,
         totalPlays: players.reduce((sum, player) => sum + player.count, 0),
         playerCount: players.length,
-        players: players.slice(0, GLOBAL_MAPS_PLAYERS_PER_ENTRY),
+        players,
       };
     })
     .sort((a, b) => b.playerCount - a.playerCount || b.totalPlays - a.totalPlays);
@@ -1566,7 +1560,7 @@ export async function refreshGlobalMaps(db: Db): Promise<CountryMapsData> {
     .map(([beatmapsetId, set]): StoredCountryMapsData["favourites"][number] => ({
       beatmapsetId,
       playerCount: set.size,
-      players: [...set].slice(0, GLOBAL_MAPS_PLAYERS_PER_ENTRY).map((id) => ({ id })),
+      players: [...set].map((id) => ({ id })),
     }))
     .sort((a, b) => b.playerCount - a.playerCount);
 

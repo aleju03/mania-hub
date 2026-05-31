@@ -2408,6 +2408,72 @@ describe("live backend", () => {
     expect(item.maxPp).toBe(550);
   });
 
+  it("stores full global map player lists when merging country snapshots", async () => {
+    const { db } = await setup();
+    const now = "2026-05-12T12:10:00.000Z";
+    await exec(
+      db,
+      `insert into maps_beatmapsets
+         (beatmapset_id, title, artist, creator, status, covers_json, global_play_count, global_favourite_count, preview_url, bpm, mania_keys_json, patterns_json, updated_at)
+       values (10, 'Uncapped Set', 'Artist', 'Mapper', 'ranked', '{}', 1, 1, '', 180, '[4]', '[]', ?)`,
+      [now],
+    );
+    await exec(
+      db,
+      `insert into maps_beatmaps
+         (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, total_length, version, url, updated_at)
+       values (11, 10, 'mania', 'ranked', 4, 5.5, 180, 120, '[4K] Uncapped', 'https://osu.ppy.sh/beatmaps/11', ?)`,
+      [now],
+    );
+    const players = Array.from({ length: 90 }, (_, index) => ({
+      id: 20_000 + index,
+      mods: [],
+      pp: 500 - index,
+      scoreUrl: null,
+      playedAt: now,
+    }));
+    const insertSnapshot = async (country: string, slice: typeof players) => {
+      await exec(
+        db,
+        `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
+         values (?, ?, ?, ?)`,
+        [
+          country,
+          JSON.stringify({
+            schemaVersion: 2,
+            farmed: [{ beatmapId: 11, playerCount: slice.length, avgPp: 400, maxPp: 500, players: slice }],
+            mostPlayed: [{ beatmapId: 11, totalPlays: slice.length, playerCount: slice.length, players: slice.map((player) => ({ id: player.id, count: 1 })) }],
+            favourites: [{ beatmapsetId: 10, playerCount: slice.length, players: slice.map((player) => ({ id: player.id })) }],
+            favouritesByPlayer: [],
+            beatmapsetsPool: [10],
+            generatedAt: now,
+            farmedGeneratedAt: now,
+            favouritesGeneratedAt: now,
+          }),
+          now,
+          now,
+        ],
+      );
+    };
+    await insertSnapshot("CR", players.slice(0, 45));
+    await insertSnapshot("MX", players.slice(45));
+
+    await refreshGlobalMaps(db);
+
+    const row = (await exec(db, "select payload_json from country_maps_snapshots where country = 'GLOBAL'")).rows[0];
+    const payload = JSON.parse(String(row.payload_json)) as {
+      farmed: Array<{ playerCount: number; players: unknown[] }>;
+      mostPlayed: Array<{ playerCount: number; players: unknown[] }>;
+      favourites: Array<{ playerCount: number; players: unknown[] }>;
+    };
+    expect(payload.farmed[0].playerCount).toBe(90);
+    expect(payload.farmed[0].players).toHaveLength(90);
+    expect(payload.mostPlayed[0].playerCount).toBe(90);
+    expect(payload.mostPlayed[0].players).toHaveLength(90);
+    expect(payload.favourites[0].playerCount).toBe(90);
+    expect(payload.favourites[0].players).toHaveLength(90);
+  });
+
   it("paginates and searches the map detail player list", async () => {
     const { db } = await setup();
     const now = "2026-05-12T12:00:00.000Z";
