@@ -2798,10 +2798,12 @@ function RandomCardSkeleton() {
 
           <div className="flex flex-wrap items-center gap-2">
             <Skeleton className="h-8 w-8 rounded-full shrink-0" />
-            <Skeleton className="h-1 flex-1 min-w-[160px] rounded-full" />
-            <Skeleton className="h-2.5 w-16" />
-            <Skeleton className="h-5 w-5" />
-            <Skeleton className="h-1 w-12 rounded-full" />
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <Skeleton className="h-1 flex-1 rounded-full" />
+              <Skeleton className="h-2.5 w-16 shrink-0" />
+            </div>
+            <Skeleton className="h-5 w-5 shrink-0" />
+            <Skeleton className="h-1 w-12 rounded-full shrink-0" />
           </div>
         </div>
       </div>
