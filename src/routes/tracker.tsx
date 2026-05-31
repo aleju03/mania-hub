@@ -928,7 +928,7 @@ function ScoresPage() {
                   onScroll={updateRailFade}
                   className={`min-h-0 overflow-y-auto overscroll-contain scrollbar-hide ${railMaskClass}`}
                 >
-                  <div className="grid grid-cols-2 gap-2 place-items-center px-0.5 pb-1">
+                  <div className="grid grid-cols-2 gap-2 place-items-center px-0.5 py-1">
                     {activePlayers.map((player) => (
                       <button
                         key={player.id}
