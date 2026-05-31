@@ -2408,21 +2408,21 @@ describe("live backend", () => {
     expect(item.maxPp).toBe(550);
   });
 
-  it("stores full global map player lists when merging country snapshots", async () => {
+  it("stores global map preview player lists while keeping aggregate counts", async () => {
     const { db } = await setup();
     const now = "2026-05-12T12:10:00.000Z";
     await exec(
       db,
       `insert into maps_beatmapsets
          (beatmapset_id, title, artist, creator, status, covers_json, global_play_count, global_favourite_count, preview_url, bpm, mania_keys_json, patterns_json, updated_at)
-       values (10, 'Uncapped Set', 'Artist', 'Mapper', 'ranked', '{}', 1, 1, '', 180, '[4]', '[]', ?)`,
+       values (10, 'Preview Set', 'Artist', 'Mapper', 'ranked', '{}', 1, 1, '', 180, '[4]', '[]', ?)`,
       [now],
     );
     await exec(
       db,
       `insert into maps_beatmaps
          (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, total_length, version, url, updated_at)
-       values (11, 10, 'mania', 'ranked', 4, 5.5, 180, 120, '[4K] Uncapped', 'https://osu.ppy.sh/beatmaps/11', ?)`,
+       values (11, 10, 'mania', 'ranked', 4, 5.5, 180, 120, '[4K] Preview', 'https://osu.ppy.sh/beatmaps/11', ?)`,
       [now],
     );
     const players = Array.from({ length: 90 }, (_, index) => ({
@@ -2467,11 +2467,11 @@ describe("live backend", () => {
       favourites: Array<{ playerCount: number; players: unknown[] }>;
     };
     expect(payload.farmed[0].playerCount).toBe(90);
-    expect(payload.farmed[0].players).toHaveLength(90);
+    expect(payload.farmed[0].players).toHaveLength(80);
     expect(payload.mostPlayed[0].playerCount).toBe(90);
-    expect(payload.mostPlayed[0].players).toHaveLength(90);
+    expect(payload.mostPlayed[0].players).toHaveLength(80);
     expect(payload.favourites[0].playerCount).toBe(90);
-    expect(payload.favourites[0].players).toHaveLength(90);
+    expect(payload.favourites[0].players).toHaveLength(80);
   });
 
   it("paginates and searches the map detail player list", async () => {
