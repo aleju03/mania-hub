@@ -18,6 +18,9 @@ import { formatNumber, formatTimeAgo } from "../../lib/format";
 import { getCountryFlagUrl, getCountryName } from "../../lib/country";
 
 type ConnectionState = "idle" | "connecting" | "open" | "error";
+type StatusTone = "good" | "warn" | "bad" | "neutral";
+
+const OSC_FEED_STALE_MS = 10 * 60 * 1000;
 
 interface LiveBackendStatus {
   ok: boolean;
@@ -829,6 +832,8 @@ function LiveBackendPage() {
     };
   }, [activeTab, countryCode]);
 
+  const oscFeed = getOscFeedStatus(status);
+
   return (
     <div className="flex-1">
       <LiveBackendHeader
@@ -882,10 +887,10 @@ function LiveBackendPage() {
                 icon={<Database className="h-4 w-4" />}
               />
               <KpiCard
-                label="oSC socket"
-                value={status?.osc.connected ? "connected" : "closed"}
-                hint={status?.osc.lastBatchAt ? `batch ${formatTimeAgo(status.osc.lastBatchAt)}` : "waiting for batch"}
-                tone={status?.osc.connected ? "good" : "warn"}
+                label="oSC feed"
+                value={oscFeed.value}
+                hint={oscFeed.hint}
+                tone={oscFeed.tone}
                 icon={<Radio className="h-4 w-4" />}
               />
               <KpiCard
@@ -2101,7 +2106,7 @@ function KpiCard({
   label: string;
   value: string;
   hint: string;
-  tone: "good" | "warn" | "bad" | "neutral";
+  tone: StatusTone;
   icon: React.ReactNode;
 }) {
   const toneClass = {
@@ -2195,14 +2200,36 @@ function formatStorageHint(status: LiveBackendStatus | null): string {
   return `${formatBytes(total)} / ${formatBytes(storage.maxBytes)}`;
 }
 
+function getOscFeedStatus(status: LiveBackendStatus | null): { value: string; hint: string; tone: StatusTone; batchTone: StatusTone } {
+  if (!status) return { value: "unknown", hint: "status not loaded", tone: "neutral", batchTone: "neutral" };
+
+  if (status.osc.lastBatchAt) {
+    const lastBatchMs = Date.parse(status.osc.lastBatchAt);
+    const batchHint = `batch ${formatTimeAgo(status.osc.lastBatchAt)}`;
+    if (Number.isFinite(lastBatchMs) && Date.now() - lastBatchMs <= OSC_FEED_STALE_MS) {
+      return { value: "receiving", hint: batchHint, tone: "good", batchTone: "good" };
+    }
+    return { value: "stale", hint: batchHint, tone: "bad", batchTone: "bad" };
+  }
+
+  if (status.osc.connected) {
+    return { value: "no batches", hint: "socket connected; feed idle", tone: "bad", batchTone: "bad" };
+  }
+
+  return { value: "closed", hint: "socket transport closed", tone: "bad", batchTone: "bad" };
+}
+
 function StatusCard({ status, connectionState, country }: { status: LiveBackendStatus | null; connectionState: ConnectionState; country: string }) {
   const roster = status?.roster?.find((entry) => entry.country === country);
+  const oscFeed = getOscFeedStatus(status);
   return (
     <SectionCard title="Process status" subtitle="Health, readiness, socket, and roster">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <DetailRow label="SSE client" value={connectionState} tone={connectionState === "open" ? "good" : "warn"} />
         <DetailRow label="Last live event" value={status?.lastEventAt ? formatTimeAgo(status.lastEventAt) : "none"} />
-        <DetailRow label="Last oSC batch" value={status?.osc.lastBatchAt ? formatTimeAgo(status.osc.lastBatchAt) : "none"} />
+        <DetailRow label="oSC feed" value={oscFeed.hint} tone={oscFeed.tone} />
+        <DetailRow label="oSC transport" value={status?.osc.connected ? "connected" : "closed"} tone={status?.osc.connected ? "neutral" : "warn"} />
+        <DetailRow label="Last oSC batch" value={status?.osc.lastBatchAt ? formatTimeAgo(status.osc.lastBatchAt) : "none"} tone={oscFeed.batchTone} />
         <DetailRow label="oSC error" value={status?.osc.lastError ?? "none"} tone={status?.osc.lastError ? "bad" : "good"} />
         <DetailRow label={`${country} roster`} value={roster ? `${formatNumber(roster.users)} users` : "not loaded"} tone={roster ? "good" : "warn"} />
         <DetailRow label="Roster refreshed" value={roster?.refreshedAt ? formatTimeAgo(roster.refreshedAt) : "never"} tone={roster?.refreshedAt ? "good" : "warn"} />
@@ -2936,7 +2963,7 @@ function formatJobPayload(payload: unknown): string {
   }
 }
 
-function DetailRow({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "good" | "warn" | "bad" | "neutral" }) {
+function DetailRow({ label, value, tone = "neutral" }: { label: string; value: string; tone?: StatusTone }) {
   const dot = {
     good: "bg-osu-green-light",
     warn: "bg-osu-yellow",
