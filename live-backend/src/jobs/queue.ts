@@ -19,10 +19,29 @@ export interface ClaimOptions {
   types?: string[];
 }
 
+const QUEUE_TARGET_DEPTH = 100;
+const QUEUE_SOFT_PRESSURE_DEPTH = 80;
+
+const SHEDDABLE_TYPES = [
+  "refresh_user_maps_farmed_scores",
+  "refresh_country_maps",
+  "refresh_global_maps",
+  "seed_snipe_board",
+  "refresh_country_roster",
+  "osc_backfill",
+  "osc_country_catchup",
+];
+
+const ACTIVE_TYPE_CAPS: Record<string, number> = {
+  refresh_user_top_scores: 80,
+  reconcile_user_recent_scores: 10,
+};
+
 export class JobQueue {
   constructor(private readonly db: Db) {}
 
   async enqueue(type: string, dedupeKey: string, payload: unknown, options: { priority?: number; runAfter?: Date; replaceDone?: boolean } = {}): Promise<void> {
+    if (await this.shouldSkipForPressure(type)) return;
     const now = nowIso();
     await exec(
       this.db,
@@ -39,6 +58,7 @@ export class JobQueue {
        where jobs.status in ('queued', 'failed') or (? and jobs.status = 'done')`,
       [type, dedupeKey, options.priority ?? 0, (options.runAfter ?? new Date()).toISOString(), json(payload), now, now, options.replaceDone ? 1 : 0],
     );
+    await this.shedPressure();
   }
 
   async claim(workerId: string, limit = 1, options: ClaimOptions = {}): Promise<Job[]> {
@@ -91,8 +111,37 @@ export class JobQueue {
   }
 
   async depth(): Promise<number> {
-    const row = (await exec(this.db, "select count(*) as count from jobs where status in ('queued', 'failed', 'running')")).rows[0];
-    return Number(row?.count ?? 0);
+    return activeDepth(this.db);
+  }
+
+  async pressure(): Promise<{ depth: number; targetDepth: number; softDepth: number; shedding: boolean; sheddableTypes: string[]; typeCaps: Record<string, number> }> {
+    const depth = await this.depth();
+    return {
+      depth,
+      targetDepth: QUEUE_TARGET_DEPTH,
+      softDepth: QUEUE_SOFT_PRESSURE_DEPTH,
+      shedding: depth >= QUEUE_SOFT_PRESSURE_DEPTH,
+      sheddableTypes: SHEDDABLE_TYPES,
+      typeCaps: ACTIVE_TYPE_CAPS,
+    };
+  }
+
+  async shedPressure(targetDepth = QUEUE_TARGET_DEPTH): Promise<number> {
+    let deleted = 0;
+    let depth = await this.depth();
+    if (depth <= targetDepth) return 0;
+
+    deleted += await this.deleteQueuedOrFailedByTypes(SHEDDABLE_TYPES, depth - targetDepth);
+    depth = await this.depth();
+    if (depth <= targetDepth) return deleted;
+
+    for (const [type, keep] of Object.entries(ACTIVE_TYPE_CAPS)) {
+      deleted += await this.trimQueuedOrFailedType(type, keep);
+      depth = await this.depth();
+      if (depth <= targetDepth) return deleted;
+    }
+
+    return deleted;
   }
 
   async summary(): Promise<Array<{ status: string; type: string; count: number; oldestRunAfter: string | null; newestError: string | null }>> {
@@ -132,6 +181,66 @@ export class JobQueue {
       : await exec(this.db, "delete from jobs where status = 'failed'");
     return Number(result.rowsAffected ?? 0);
   }
+
+  private async shouldSkipForPressure(type: string): Promise<boolean> {
+    const depth = await this.depth();
+    if (depth >= QUEUE_SOFT_PRESSURE_DEPTH && SHEDDABLE_TYPES.includes(type)) return true;
+
+    const cap = ACTIVE_TYPE_CAPS[type];
+    if (cap == null || depth < QUEUE_TARGET_DEPTH) return false;
+    const activeOfType = await activeDepth(this.db, type);
+    return activeOfType >= cap;
+  }
+
+  private async deleteQueuedOrFailedByTypes(types: string[], limit: number): Promise<number> {
+    if (limit <= 0 || types.length === 0) return 0;
+    const result = await exec(
+      this.db,
+      `delete from jobs
+       where id in (
+         select id
+         from jobs
+         where status in ('queued', 'failed')
+           and type in (${types.map(() => "?").join(", ")})
+         order by priority asc, run_after desc, updated_at asc, id asc
+         limit ?
+       )`,
+      [...types, Math.max(0, Math.floor(limit))],
+    );
+    return Number(result.rowsAffected ?? 0);
+  }
+
+  private async trimQueuedOrFailedType(type: string, keep: number): Promise<number> {
+    const activeOfType = await activeDepth(this.db, type);
+    const excess = activeOfType - keep;
+    if (excess <= 0) return 0;
+    const result = await exec(
+      this.db,
+      `delete from jobs
+       where id in (
+         select id
+         from jobs
+         where status in ('queued', 'failed')
+           and type = ?
+         order by
+           case when status = 'failed' then 0 else 1 end asc,
+           priority asc,
+           run_after desc,
+           updated_at asc,
+           id asc
+         limit ?
+       )`,
+      [type, excess],
+    );
+    return Number(result.rowsAffected ?? 0);
+  }
+}
+
+async function activeDepth(db: Db, type?: string): Promise<number> {
+  const row = type == null
+    ? (await exec(db, "select count(*) as count from jobs where status in ('queued', 'failed', 'running')")).rows[0]
+    : (await exec(db, "select count(*) as count from jobs where status in ('queued', 'failed', 'running') and type = ?", [type])).rows[0];
+  return Number(row?.count ?? 0);
 }
 
 function buildTypeFilter(types: string[] | undefined): { sql: string; args: string[] } {

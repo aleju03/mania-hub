@@ -665,6 +665,7 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
     osc: ctx.oscStatus(),
     lastEventAt: last,
     queueDepth: await ctx.queue.depth(),
+    queuePressure: await ctx.queue.pressure(),
     queueSummary: await ctx.queue.summary(),
     roster: await rosterSummary(ctx.db),
     rate: ctx.osu.limiter.state(),

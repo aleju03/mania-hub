@@ -373,6 +373,63 @@ describe("live backend", () => {
     expect(failedRow?.newestError).toBe("current failure");
   });
 
+  it("skips sheddable jobs when queue pressure is high", async () => {
+    const { db, queue } = await setup();
+    for (let index = 0; index < 80; index += 1) {
+      await queue.enqueue("refresh_user_top_scores", `top:pressure:${index}`, { userId: index + 1, scoreId: 10_000 + index, country: "CR" });
+    }
+
+    await queue.enqueue("refresh_user_maps_farmed_scores", "maps-farmed:CR:101", { country: "CR", userId: 101 });
+
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_user_maps_farmed_scores'")).rows[0].count)).toBe(0);
+    expect(await queue.depth()).toBe(80);
+  });
+
+  it("sheds queued low-priority work when critical jobs arrive above target depth", async () => {
+    const { db, queue } = await setup();
+    const now = new Date().toISOString();
+    for (let index = 0; index < 120; index += 1) {
+      await exec(
+        db,
+        `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
+         values ('refresh_user_maps_farmed_scores', ?, 'queued', 35, ?, 0, '{}', ?, ?)`,
+        [`maps-farmed:CR:${index}`, now, now, now],
+      );
+    }
+
+    await queue.enqueue("enrich_user", "user:101", { userId: 101 }, { priority: 100 });
+
+    expect(await queue.depth()).toBe(100);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'enrich_user'")).rows[0].count)).toBe(1);
+  });
+
+  it("caps noisy top-play and recent-reconcile backlogs during emergency pressure", async () => {
+    const { db, queue } = await setup();
+    const now = new Date().toISOString();
+    for (let index = 0; index < 120; index += 1) {
+      await exec(
+        db,
+        `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
+         values ('refresh_user_top_scores', ?, 'queued', 50, ?, 0, '{}', ?, ?)`,
+        [`top:pressure:${index}`, now, now, now],
+      );
+    }
+    for (let index = 0; index < 30; index += 1) {
+      await exec(
+        db,
+        `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
+         values ('reconcile_user_recent_scores', ?, 'queued', 70, ?, 0, '{}', ?, ?)`,
+        [`recent:user:${index}`, now, now, now],
+      );
+    }
+
+    await queue.shedPressure();
+
+    expect(await queue.depth()).toBe(90);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_user_top_scores'")).rows[0].count)).toBe(80);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'reconcile_user_recent_scores'")).rows[0].count)).toBe(10);
+  });
+
   it("creates enrichment jobs for unknown metadata on known tracked roster users", async () => {
     const { db, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");

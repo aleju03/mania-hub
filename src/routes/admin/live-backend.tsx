@@ -40,6 +40,14 @@ interface LiveBackendStatus {
   };
   lastEventAt: string | null;
   queueDepth: number;
+  queuePressure?: {
+    depth: number;
+    targetDepth: number;
+    softDepth: number;
+    shedding: boolean;
+    sheddableTypes: string[];
+    typeCaps: Record<string, number>;
+  };
   queueSummary?: Array<{
     status: string;
     type: string;
@@ -925,8 +933,8 @@ function LiveBackendPage() {
               <KpiCard
                 label="Queue"
                 value={status?.queueDepth == null ? "—" : formatNumber(status.queueDepth)}
-                hint="queued / running jobs"
-                tone={(status?.queueDepth ?? 0) > 1000 ? "warn" : "neutral"}
+                hint={status?.queuePressure ? `target ${formatNumber(status.queuePressure.targetDepth)}, shed at ${formatNumber(status.queuePressure.softDepth)}` : "queued / running jobs"}
+                tone={status?.queuePressure?.shedding ? "warn" : "neutral"}
                 icon={<Activity className="h-4 w-4" />}
               />
               <KpiCard

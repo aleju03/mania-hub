@@ -23,6 +23,7 @@ export async function createApp() {
   const db = await createDb(config);
   await migrate(db);
   const queue = new JobQueue(db);
+  await queue.shedPressure();
   const events = new LiveEventLog(db);
   await deferMapsRefreshesWaitingForRoster(db);
   await ensurePinnedCountries(db, config);
