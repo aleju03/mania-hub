@@ -2,7 +2,7 @@ import { useContext, useMemo, useSyncExternalStore } from "react";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { getAvatarAccentStoreKey } from "./lib/avatar-accent";
-import { DEFAULT_COUNTRY_CODE, normalizeCountryScope } from "./lib/country";
+import { DEFAULT_INITIAL_SCOPE, normalizeCountryScope } from "./lib/country";
 import { InitialCountryContext } from "./lib/country-context";
 import { readAutoCountryCookieClient, readCountryCookieClient, writeCountryCookieClient } from "./lib/country-cookie";
 import { getScoreIdentity, getScoreTimeMs } from "./lib/score";
@@ -532,7 +532,7 @@ const initialClientHiddenUsers = readHiddenUsersFromStorage();
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
-      selectedCountry: initialClientCountry ?? DEFAULT_COUNTRY_CODE,
+      selectedCountry: initialClientCountry ?? DEFAULT_INITIAL_SCOPE,
       themeHue: initialClientThemeHue ?? DEFAULT_THEME_HUE,
       themeSaturation: initialClientThemeSat ?? DEFAULT_THEME_SAT,
       showDanEstimates: false,
@@ -881,9 +881,9 @@ export const useAppStore = create<AppState>()(
         const selectedCountry = cookieCountry && !(autoCountryCookie && persistedSelectedCountry)
           ? cookieCountry
           : (persistedSelectedCountry
-            ?? (currentState.selectedCountry !== DEFAULT_COUNTRY_CODE
+            ?? (currentState.selectedCountry !== DEFAULT_INITIAL_SCOPE
               ? currentState.selectedCountry
-              : DEFAULT_COUNTRY_CODE));
+              : DEFAULT_INITIAL_SCOPE));
         const persistedPopoffsByCountry =
           nextState.popoffsByCountry && typeof nextState.popoffsByCountry === "object"
             ? nextState.popoffsByCountry

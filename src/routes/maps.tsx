@@ -118,6 +118,9 @@ const FARMED_SINGLE_PLAYER_PP_MIN = 500;
 const RECENT_BIAS = 0.1;
 const RECENT_PLAYER_HISTORY = 2;
 const RECENT_BEATMAP_HISTORY = 5;
+// How many upcoming picks to decide ahead of time and prefetch, so rerolls
+// resolve from cache instead of waiting on a network round-trip each time.
+const REROLL_LOOKAHEAD = 10;
 const RANDOM_PICK_SETTINGS_STORAGE_KEY = "mania-hub-maps-random-pick-settings-v1";
 const SEARCH_URL_DEBOUNCE_MS = 250;
 const RANDOM_FULL_SET_CACHE_MAX_ENTRIES = 512;
@@ -1692,7 +1695,13 @@ function MapsPage() {
   const fullSetCacheRef = useRef<Map<number, MapsFavouriteBeatmapset>>(randomFullSetSessionCache);
   const randomPickRequestIdRef = useRef(0);
   const lastRandomKeyRef = useRef<string | null>(null);
-  // Sliding windows used when "avoid repeats" is on (see reshuffleRandom).
+  // Pre-decided upcoming picks, warmed ahead of time so rerolls resolve from
+  // cache. See refillPendingPicks / reshuffleRandom.
+  const pendingPicksRef = useRef<Array<{ player: MapsPlayerFavourites; beatmapset: MapsFavouriteBeatmapset }>>([]);
+  // Full-set fetches currently in flight, keyed by set id, so a pick can ride
+  // along on a warm request already running instead of firing a duplicate.
+  const inflightSetFetchRef = useRef<Map<number, Promise<MapsFavouriteBeatmapset | null>>>(new Map());
+  // Sliding windows used when "avoid repeats" is on (see drawRandomPick).
   const recentRandomPlayerIdsRef = useRef<number[]>([]);
   const recentRandomBeatmapIdsRef = useRef<number[]>([]);
   const [rerollMenuOpen, setRerollMenuOpen] = useState(false);
@@ -1733,6 +1742,8 @@ function MapsPage() {
     lastRandomKeyRef.current = null;
     recentRandomPlayerIdsRef.current = [];
     recentRandomBeatmapIdsRef.current = [];
+    pendingPicksRef.current = [];
+    inflightSetFetchRef.current.clear();
     setRandomPlayer(null);
     setPickedSetId(null);
     setRandomBeatmapset(null);
@@ -1839,16 +1850,27 @@ function MapsPage() {
       .slice(0, 12);
   }, [devRandomForceQuery, isDevMode, randomPool, tab]);
 
-  // Prefetch + cache full set records so most rerolls resolve instantly.
+  // Prefetch full set records (covers + per-difficulty list + preview audio) in
+  // a single batch and track each as in-flight, so a pick that lands before the
+  // batch resolves can await it instead of firing a duplicate request.
   const warmRandomSetCache = useCallback((ids: number[]) => {
     if (!liveBackendEnabled) return;
-    const need = [...new Set(ids)]
-      .filter((id) => Number.isFinite(id) && id > 0 && !fullSetCacheRef.current.has(id))
-      .slice(0, 10);
+    const need = [...new Set(ids)].filter(
+      (id) => Number.isFinite(id) && id > 0 && !fullSetCacheRef.current.has(id) && !inflightSetFetchRef.current.has(id),
+    );
     if (need.length === 0) return;
-    fetchLiveMapsBeatmapsets(selectedCountry, need)
-      .then((sets) => { for (const set of sets) rememberRandomFullSet(set); })
-      .catch(() => undefined);
+    const batch = fetchLiveMapsBeatmapsets(selectedCountry, need)
+      .then((sets) => {
+        for (const set of sets) rememberRandomFullSet(set);
+        return sets;
+      })
+      .catch(() => [] as MapsFavouriteBeatmapset[]);
+    for (const id of need) {
+      const tracked = batch
+        .then((sets) => sets.find((set) => set.id === id) ?? fullSetCacheRef.current.get(id) ?? null)
+        .finally(() => inflightSetFetchRef.current.delete(id));
+      inflightSetFetchRef.current.set(id, tracked);
+    }
   }, [liveBackendEnabled, selectedCountry]);
 
   // Show the lean pick immediately, then replace it with the full card metadata
@@ -1883,17 +1905,20 @@ function MapsPage() {
       return;
     }
 
+    // Show the lean pick immediately; finish once the full record lands. Reuse a
+    // warm fetch already in flight for this set rather than starting a new one.
     setRandomPlayer(player);
     setPickedSetId(setId);
     setRandomBeatmapset(poolSet);
     setRandomPickResolving(true);
-    fetchLiveMapsBeatmapsets(selectedCountry, [setId])
-      .then((sets) => {
+    const pending =
+      inflightSetFetchRef.current.get(setId) ??
+      fetchLiveMapsBeatmapsets(selectedCountry, [setId]).then((sets) => {
         const full = sets.find((set) => set.id === setId) ?? null;
         if (full) rememberRandomFullSet(full);
-        applyPick(full);
-      })
-      .catch(() => applyPick(poolSet));
+        return full;
+      });
+    pending.then((full) => applyPick(full)).catch(() => applyPick(poolSet));
   }, [liveBackendEnabled, selectedCountry]);
 
   const forceDevRandomPick = useCallback((pair: { player: MapsPlayerFavourites; beatmapset: MapsFavouriteBeatmapset }) => {
@@ -1901,15 +1926,11 @@ function MapsPage() {
     setDevRandomForceOpen(false);
   }, [commitRandomPick]);
 
-  const reshuffleRandom = useCallback(() => {
-    if (randomPlayerGroups.length === 0) {
-      randomPickRequestIdRef.current += 1;
-      setRandomPlayer(null);
-      setPickedSetId(null);
-      setRandomBeatmapset(null);
-      setRandomPickResolving(false);
-      return;
-    }
+  // Draw a single pick using the current weighting, advancing the avoid-repeats
+  // windows so consecutive draws (including pre-decided queued ones) don't
+  // repeat. Returns null when there's nothing eligible to pick.
+  const drawRandomPick = useCallback(() => {
+    if (randomPlayerGroups.length === 0) return null;
     const recentPlayers = rAvoidRepeats ? new Set(recentRandomPlayerIdsRef.current) : null;
     const recentMaps = rAvoidRepeats ? new Set(recentRandomBeatmapIdsRef.current) : null;
 
@@ -1950,16 +1971,46 @@ function MapsPage() {
       recentRandomBeatmapIdsRef.current = nextMaps;
     }
 
-    commitRandomPick(pickedPlayer, pickedBeatmapset);
-    // Warm a few upcoming candidates so the next rerolls don't wait on a fetch.
-    if (randomPool.length > 1) {
-      const sample: number[] = [];
-      for (let i = 0; i < 6; i++) {
-        sample.push(randomPool[Math.floor(Math.random() * randomPool.length)].beatmapset.id);
-      }
-      warmRandomSetCache(sample);
+    return { player: pickedPlayer, beatmapset: pickedBeatmapset };
+  }, [randomPlayerGroups, randomPool, rWeight, rAvoidRepeats]);
+
+  // Keep the lookahead queue topped up and prefetch its sets, so the next
+  // several rerolls hit warm cache instead of waiting on a fetch.
+  const refillPendingPicks = useCallback(() => {
+    const queue = pendingPicksRef.current;
+    let guard = 0;
+    while (queue.length < REROLL_LOOKAHEAD && guard++ < REROLL_LOOKAHEAD * 4) {
+      const pick = drawRandomPick();
+      if (!pick) break;
+      queue.push(pick);
     }
-  }, [randomPlayerGroups, randomPool, rWeight, rAvoidRepeats, commitRandomPick, warmRandomSetCache]);
+    if (queue.length > 0) warmRandomSetCache(queue.map((p) => p.beatmapset.id));
+  }, [drawRandomPick, warmRandomSetCache]);
+
+  const reshuffleRandom = useCallback(() => {
+    if (randomPlayerGroups.length === 0) {
+      randomPickRequestIdRef.current += 1;
+      pendingPicksRef.current = [];
+      setRandomPlayer(null);
+      setPickedSetId(null);
+      setRandomBeatmapset(null);
+      setRandomPickResolving(false);
+      return;
+    }
+    // Serve the next pre-decided pick (already warmed); the very first one after
+    // entering or changing filters falls through to an immediate draw.
+    if (pendingPicksRef.current.length === 0) refillPendingPicks();
+    const next = pendingPicksRef.current.shift();
+    if (!next) return;
+    commitRandomPick(next.player, next.beatmapset);
+    refillPendingPicks();
+  }, [randomPlayerGroups, refillPendingPicks, commitRandomPick]);
+
+  // Filter / data / weighting changes invalidate the pre-decided queue: the
+  // queued picks may no longer be eligible or were drawn under the old weights.
+  useEffect(() => {
+    pendingPicksRef.current = [];
+  }, [randomPool, rWeight, rAvoidRepeats]);
 
   // Only reshuffle on first entry to the tab or when the underlying data
   // changes (country switch / rebuild). Filter changes never auto-reroll —

@@ -6,6 +6,13 @@ export const DEFAULT_COUNTRY_CODE = "CR";
 export const GLOBAL_SCOPE_CODE = "GLOBAL";
 export const GLOBAL_SCOPE_NAME = "Global";
 
+// The scope a visitor lands on when we have no better signal (no cookie, no
+// trackable geo-IP country, backend offline). Global aggregates every tracked
+// country, so it is never empty regardless of which countries are live.
+// Distinct from DEFAULT_COUNTRY_CODE, which is the default for the searchable
+// single-country list, not the initial landing view.
+export const DEFAULT_INITIAL_SCOPE = GLOBAL_SCOPE_CODE;
+
 export function isGlobalScope(code?: string | null): boolean {
   return code?.trim().toUpperCase() === GLOBAL_SCOPE_CODE;
 }

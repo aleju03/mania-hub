@@ -1,4 +1,4 @@
-import { DEFAULT_COUNTRY_CODE, isSupportedCountryCode, normalizeCountryScope } from "./country";
+import { GLOBAL_SCOPE_CODE, isGlobalScope, isSupportedCountryCode, normalizeCountryScope } from "./country";
 
 export const COUNTRY_COOKIE_NAME = "mania-hub-country";
 export const COUNTRY_AUTO_COOKIE_NAME = "mania-hub-country-auto";
@@ -63,6 +63,40 @@ export function resolveDetectedCountry(country: string | null | undefined): stri
   return normalized && isSupportedCountryCode(normalized) ? normalized : null;
 }
 
-export function resolveInitialCountry(cookieValue: string | null, detectedCountry?: string | null): string {
-  return cookieValue ?? resolveDetectedCountry(detectedCountry) ?? DEFAULT_COUNTRY_CODE;
+// A country is only worth routing to automatically when the live backend
+// actually tracks it. `available` is the set of tracked country codes; when it
+// is null we couldn't reach the backend and treat availability as unknown.
+function isAvailableCountry(code: string | null | undefined, available: ReadonlySet<string> | null): boolean {
+  if (!code) return false;
+  if (isGlobalScope(code)) return true;
+  // Unknown availability (backend offline) deliberately routes to Global
+  // instead of trusting an ISO code we have no data for.
+  if (!available) return false;
+  return available.has(code.trim().toUpperCase());
+}
+
+// Resolve the scope a visitor should land on. A manual pick (cookie without the
+// `-auto` flag) is always honoured. An auto-detected cookie or a fresh geo-IP
+// hit is only used when that country is currently available, otherwise we fall
+// back to Global so nobody is stranded on an empty single-country view.
+export function resolveInitialCountry(
+  cookieValue: string | null,
+  detectedCountry?: string | null,
+  options?: { available?: ReadonlySet<string> | null; cookieIsAuto?: boolean },
+): string {
+  const available = options?.available ?? null;
+
+  if (cookieValue) {
+    const manualPick = !options?.cookieIsAuto;
+    if (manualPick || isAvailableCountry(cookieValue, available)) {
+      return cookieValue;
+    }
+  }
+
+  const detected = resolveDetectedCountry(detectedCountry);
+  if (detected && isAvailableCountry(detected, available)) {
+    return detected;
+  }
+
+  return GLOBAL_SCOPE_CODE;
 }

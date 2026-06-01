@@ -11,7 +11,9 @@ import {
   COUNTRY_AUTO_COOKIE_NAME,
   COUNTRY_COOKIE_MAX_AGE_SECONDS,
   COUNTRY_COOKIE_NAME,
+  hasAutoCountryCookieHeader,
   parseCountryCookieHeader,
+  readAutoCountryCookieClient,
   readCountryCookieClient,
   resolveDetectedCountry,
   resolveInitialCountry,
@@ -47,13 +49,38 @@ function getRequestCountry(): string | null {
   return null;
 }
 
-const getInitialCountry = createServerFn({ method: "GET" }).handler(() => {
-  const countryCookie = parseCountryCookieHeader(getRequest().headers.get("cookie"));
-  if (countryCookie) return countryCookie;
+// The set of country codes the live backend actually tracks. We only auto-route
+// a visitor to a single-country view when its country is in this set; everything
+// else (untracked countries, no geo signal, backend offline) lands on Global.
+// Returns null when the backend is unreachable so availability stays "unknown".
+async function getAvailableCountrySet(): Promise<ReadonlySet<string> | null> {
+  const bootstrap = await fetchLiveBackendBootstrap();
+  if (!bootstrap.countryFeatures) return null;
+  return new Set(bootstrap.countryFeatures.countries.map((entry) => entry.country.toUpperCase()));
+}
 
+const getInitialCountry = createServerFn({ method: "GET" }).handler(async () => {
+  const cookieHeader = getRequest().headers.get("cookie");
+  const countryCookie = parseCountryCookieHeader(cookieHeader);
+  const cookieIsAuto = hasAutoCountryCookieHeader(cookieHeader);
+
+  // A country the visitor explicitly picked is always honoured without needing
+  // to consult the backend, which keeps the common returning-visitor path fast.
+  if (countryCookie && !cookieIsAuto) return countryCookie;
+
+  const available = await getAvailableCountrySet();
   const detectedCountry = getRequestCountry();
-  if (detectedCountry) {
-    setCookie(COUNTRY_COOKIE_NAME, detectedCountry, {
+  const resolved = resolveInitialCountry(countryCookie, detectedCountry, {
+    available,
+    cookieIsAuto,
+  });
+
+  // Persist the resolved scope so subsequent requests (and the client store) see
+  // it. Global is written too, so a stale auto cookie that pointed at a now
+  // untracked country gets corrected. The `-auto` marker stays set: the visitor
+  // can still override with a manual pick later.
+  if (resolved !== countryCookie) {
+    setCookie(COUNTRY_COOKIE_NAME, resolved, {
       path: "/",
       maxAge: COUNTRY_COOKIE_MAX_AGE_SECONDS,
       sameSite: "lax",
@@ -65,7 +92,7 @@ const getInitialCountry = createServerFn({ method: "GET" }).handler(() => {
     });
   }
 
-  return resolveInitialCountry(countryCookie, detectedCountry);
+  return resolved;
 });
 
 type RootSlowContext = {
@@ -142,16 +169,31 @@ function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
   return typeof (value as Promise<T>).then === "function";
 }
 
+function availableCountrySetFromContext(context: RootSlowContext): ReadonlySet<string> | null {
+  if (!context.countryFeatures) return null;
+  return new Set(context.countryFeatures.countries.map((entry) => entry.country.toUpperCase()));
+}
+
+function resolveClientInitialCountry(context: RootSlowContext): string {
+  return resolveInitialCountry(readCountryCookieClient(), null, {
+    available: availableCountrySetFromContext(context),
+    cookieIsAuto: readAutoCountryCookieClient(),
+  });
+}
+
 function getClientRootContext(): RootRouteContext | Promise<RootRouteContext> {
-  const initialCountry = resolveInitialCountry(readCountryCookieClient());
   const origin = window.location.origin;
   const slowContext = readClientRootSlowContext();
 
   if (isPromiseLike(slowContext)) {
-    return slowContext.then((context) => ({ initialCountry, origin, ...context }));
+    return slowContext.then((context) => ({
+      initialCountry: resolveClientInitialCountry(context),
+      origin,
+      ...context,
+    }));
   }
 
-  return { initialCountry, origin, ...slowContext };
+  return { initialCountry: resolveClientInitialCountry(slowContext), origin, ...slowContext };
 }
 
 async function getServerRootContext(): Promise<RootRouteContext> {
