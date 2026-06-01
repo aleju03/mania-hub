@@ -82,6 +82,9 @@ export async function runScoresFallbackPage(
   const candidateScores = await filterCandidateScores(db, config, scores);
   const ingestResult = await ingestor.ingestBatch(candidateScores, FALLBACK_SOURCE, {
     enqueueRecentReconcile: false,
+    processTopPlayFeatures: true,
+    processMapsFarmedFeatures: false,
+    processSnipeFeatures: false,
   });
   return recordResult(db, {
     ran: true,

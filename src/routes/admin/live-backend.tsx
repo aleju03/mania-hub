@@ -79,7 +79,9 @@ interface LiveBackendStatus {
   }>;
   rate: {
     hardPerMinute: number;
+    targetPerMinute?: number;
     usedLastMinute: number;
+    pending?: number;
     byCaller?: Array<{ caller: string; count: number }>;
     byPath?: Array<{ path: string; count: number }>;
   };
@@ -833,6 +835,7 @@ function LiveBackendPage() {
   }, [activeTab, countryCode]);
 
   const oscFeed = getOscFeedStatus(status);
+  const osuRateTarget = status?.rate.targetPerMinute ?? status?.rate.hardPerMinute ?? 0;
 
   return (
     <div className="flex-1">
@@ -902,9 +905,9 @@ function LiveBackendPage() {
               />
               <KpiCard
                 label="osu! rate"
-                value={status ? `${status.rate.usedLastMinute}/${status.rate.hardPerMinute}` : "—"}
-                hint="calls in last minute"
-                tone={status && status.rate.usedLastMinute >= status.rate.hardPerMinute ? "warn" : "neutral"}
+                value={status ? `${status.rate.usedLastMinute}/${osuRateTarget}` : "—"}
+                hint={status ? `${status.rate.hardPerMinute} hard ceiling${status.rate.pending ? `, ${status.rate.pending} pending` : ""}` : "calls in last minute"}
+                tone={status && osuRateTarget > 0 && status.rate.usedLastMinute >= osuRateTarget ? "warn" : "neutral"}
                 icon={<Signal className="h-4 w-4" />}
               />
             </div>

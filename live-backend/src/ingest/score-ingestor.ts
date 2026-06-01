@@ -15,6 +15,9 @@ import { logInfo } from "../logger.js";
 export interface ScoreIngestOptions {
   enqueueRecentReconcile?: boolean;
   processLeaderboardFeatures?: boolean;
+  processTopPlayFeatures?: boolean;
+  processMapsFarmedFeatures?: boolean;
+  processSnipeFeatures?: boolean;
   countryAllowlist?: string[];
 }
 
@@ -47,6 +50,9 @@ export class ScoreIngestor {
   async ingestScore(score: OscScore, source = "osc_socket", options: ScoreIngestOptions = {}): Promise<boolean> {
     const enqueueRecentReconcile = options.enqueueRecentReconcile ?? source !== "osu_recent";
     const processLeaderboardFeatures = options.processLeaderboardFeatures ?? source !== "osu_recent";
+    const processTopPlayFeatures = options.processTopPlayFeatures ?? processLeaderboardFeatures;
+    const processMapsFarmedFeatures = options.processMapsFarmedFeatures ?? processLeaderboardFeatures;
+    const processSnipeFeatures = options.processSnipeFeatures ?? processLeaderboardFeatures;
     if (score.ruleset_id != null && score.ruleset_id !== 3) return false;
     const scoreId = Number(score.id);
     const beatmapId = Number(score.beatmap_id ?? score.beatmap?.id);
@@ -138,14 +144,18 @@ export class ScoreIngestor {
     if (canUseOsuApi && enqueueRecentReconcile) {
       await this.enqueueRecentReconcileIfDue(score);
     }
-    if (canUseOsuApi && processLeaderboardFeatures) {
+    if (canUseOsuApi && (processTopPlayFeatures || processMapsFarmedFeatures)) {
       for (const country of countries) {
-        await maybeEnqueueTopPlayRefresh(this.db, this.queue, country, score, this.config.topPlayMarginPp);
-        await maybeEnqueueMapsFarmedRefresh(this.db, this.queue, country, score, this.config.topPlayMarginPp);
+        if (processTopPlayFeatures) {
+          await maybeEnqueueTopPlayRefresh(this.db, this.queue, country, score, this.config.topPlayMarginPp);
+        }
+        if (processMapsFarmedFeatures) {
+          await maybeEnqueueMapsFarmedRefresh(this.db, this.queue, country, score, this.config.topPlayMarginPp);
+        }
       }
     }
     if (!score.beatmap || !score.beatmapset || !score.user) return true;
-    if (processLeaderboardFeatures) {
+    if (processSnipeFeatures) {
       for (const country of countries) {
         if (!await canSeedSnipesForCountry(this.db, this.config, country)) continue;
         if (canUseOsuApi && await this.enqueueSnipeSeedIfNeeded(country, score)) continue;
