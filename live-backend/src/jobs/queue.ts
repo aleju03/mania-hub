@@ -2,7 +2,7 @@ import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import { nowIso } from "../shared/score.js";
 
-export type JobStatus = "queued" | "running" | "done" | "failed";
+export type JobStatus = "queued" | "running" | "done" | "failed" | "deferred_pressure";
 
 export interface Job<T = unknown> {
   id: number;
@@ -21,6 +21,8 @@ export interface ClaimOptions {
 
 const QUEUE_TARGET_DEPTH = 100;
 const QUEUE_SOFT_PRESSURE_DEPTH = 80;
+const QUEUE_RECOVERY_DEPTH = 60;
+const PRESSURE_DEFER_MS = 30 * 60_000;
 
 const SHEDDABLE_TYPES = [
   "refresh_user_maps_farmed_scores",
@@ -41,22 +43,35 @@ export class JobQueue {
   constructor(private readonly db: Db) {}
 
   async enqueue(type: string, dedupeKey: string, payload: unknown, options: { priority?: number; runAfter?: Date; replaceDone?: boolean } = {}): Promise<void> {
-    if (await this.shouldSkipForPressure(type)) return;
+    const pressureStatus = await this.pressureStatusFor(type);
     const now = nowIso();
+    const status = pressureStatus.defer ? "deferred_pressure" : "queued";
+    const runAfter = pressureStatus.defer ? new Date(Date.now() + PRESSURE_DEFER_MS) : options.runAfter ?? new Date();
     await exec(
       this.db,
-      `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
-       values (?, ?, 'queued', ?, ?, 0, ?, ?, ?)
+      `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at, last_error)
+       values (?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
        on conflict(dedupe_key) do update set
-         status = 'queued',
+         status = excluded.status,
          priority = max(priority, excluded.priority),
          run_after = min(run_after, excluded.run_after),
          attempts = case when jobs.status = 'done' then 0 else jobs.attempts end,
          payload_json = excluded.payload_json,
-         last_error = case when jobs.status = 'done' then null else jobs.last_error end,
+         last_error = case when jobs.status = 'done' then excluded.last_error else coalesce(jobs.last_error, excluded.last_error) end,
          updated_at = excluded.updated_at
-       where jobs.status in ('queued', 'failed') or (? and jobs.status = 'done')`,
-      [type, dedupeKey, options.priority ?? 0, (options.runAfter ?? new Date()).toISOString(), json(payload), now, now, options.replaceDone ? 1 : 0],
+       where jobs.status in ('queued', 'failed', 'deferred_pressure') or (? and jobs.status = 'done')`,
+      [
+        type,
+        dedupeKey,
+        status,
+        options.priority ?? 0,
+        runAfter.toISOString(),
+        json(payload),
+        now,
+        now,
+        pressureStatus.reason,
+        options.replaceDone ? 1 : 0,
+      ],
     );
     await this.shedPressure();
   }
@@ -114,12 +129,15 @@ export class JobQueue {
     return activeDepth(this.db);
   }
 
-  async pressure(): Promise<{ depth: number; targetDepth: number; softDepth: number; shedding: boolean; sheddableTypes: string[]; typeCaps: Record<string, number> }> {
+  async pressure(): Promise<{ depth: number; deferred: number; targetDepth: number; softDepth: number; recoveryDepth: number; shedding: boolean; sheddableTypes: string[]; typeCaps: Record<string, number> }> {
     const depth = await this.depth();
+    const deferred = await deferredDepth(this.db);
     return {
       depth,
+      deferred,
       targetDepth: QUEUE_TARGET_DEPTH,
       softDepth: QUEUE_SOFT_PRESSURE_DEPTH,
+      recoveryDepth: QUEUE_RECOVERY_DEPTH,
       shedding: depth >= QUEUE_SOFT_PRESSURE_DEPTH,
       sheddableTypes: SHEDDABLE_TYPES,
       typeCaps: ACTIVE_TYPE_CAPS,
@@ -127,21 +145,25 @@ export class JobQueue {
   }
 
   async shedPressure(targetDepth = QUEUE_TARGET_DEPTH): Promise<number> {
-    let deleted = 0;
+    let deferred = 0;
     let depth = await this.depth();
+    if (depth < QUEUE_RECOVERY_DEPTH) {
+      await this.reactivateDeferred(QUEUE_RECOVERY_DEPTH - depth);
+      depth = await this.depth();
+    }
     if (depth <= targetDepth) return 0;
 
-    deleted += await this.deleteQueuedOrFailedByTypes(SHEDDABLE_TYPES, depth - targetDepth);
+    deferred += await this.deferQueuedOrFailedByTypes(SHEDDABLE_TYPES, depth - targetDepth);
     depth = await this.depth();
-    if (depth <= targetDepth) return deleted;
+    if (depth <= targetDepth) return deferred;
 
     for (const [type, keep] of Object.entries(ACTIVE_TYPE_CAPS)) {
-      deleted += await this.trimQueuedOrFailedType(type, keep);
+      deferred += await this.deferQueuedOrFailedType(type, keep);
       depth = await this.depth();
-      if (depth <= targetDepth) return deleted;
+      if (depth <= targetDepth) return deferred;
     }
 
-    return deleted;
+    return deferred;
   }
 
   async summary(): Promise<Array<{ status: string; type: string; count: number; oldestRunAfter: string | null; newestError: string | null }>> {
@@ -182,21 +204,32 @@ export class JobQueue {
     return Number(result.rowsAffected ?? 0);
   }
 
-  private async shouldSkipForPressure(type: string): Promise<boolean> {
+  private async pressureStatusFor(type: string): Promise<{ defer: boolean; reason: string | null }> {
     const depth = await this.depth();
-    if (depth >= QUEUE_SOFT_PRESSURE_DEPTH && SHEDDABLE_TYPES.includes(type)) return true;
+    if (depth >= QUEUE_SOFT_PRESSURE_DEPTH && SHEDDABLE_TYPES.includes(type)) {
+      return { defer: true, reason: `deferred by queue pressure (${depth}/${QUEUE_TARGET_DEPTH})` };
+    }
 
     const cap = ACTIVE_TYPE_CAPS[type];
-    if (cap == null || depth < QUEUE_TARGET_DEPTH) return false;
+    if (cap == null || depth < QUEUE_TARGET_DEPTH) return { defer: false, reason: null };
     const activeOfType = await activeDepth(this.db, type);
-    return activeOfType >= cap;
+    if (activeOfType >= cap) {
+      return { defer: true, reason: `deferred by ${type} cap (${activeOfType}/${cap})` };
+    }
+    return { defer: false, reason: null };
   }
 
-  private async deleteQueuedOrFailedByTypes(types: string[], limit: number): Promise<number> {
+  private async deferQueuedOrFailedByTypes(types: string[], limit: number): Promise<number> {
     if (limit <= 0 || types.length === 0) return 0;
     const result = await exec(
       this.db,
-      `delete from jobs
+      `update jobs
+       set status = 'deferred_pressure',
+           locked_by = null,
+           locked_until = null,
+           run_after = ?,
+           last_error = ?,
+           updated_at = ?
        where id in (
          select id
          from jobs
@@ -205,18 +238,30 @@ export class JobQueue {
          order by priority asc, run_after desc, updated_at asc, id asc
          limit ?
        )`,
-      [...types, Math.max(0, Math.floor(limit))],
+      [
+        new Date(Date.now() + PRESSURE_DEFER_MS).toISOString(),
+        `deferred by queue pressure`,
+        nowIso(),
+        ...types,
+        Math.max(0, Math.floor(limit)),
+      ],
     );
     return Number(result.rowsAffected ?? 0);
   }
 
-  private async trimQueuedOrFailedType(type: string, keep: number): Promise<number> {
+  private async deferQueuedOrFailedType(type: string, keep: number): Promise<number> {
     const activeOfType = await activeDepth(this.db, type);
     const excess = activeOfType - keep;
     if (excess <= 0) return 0;
     const result = await exec(
       this.db,
-      `delete from jobs
+      `update jobs
+       set status = 'deferred_pressure',
+           locked_by = null,
+           locked_until = null,
+           run_after = ?,
+           last_error = ?,
+           updated_at = ?
        where id in (
          select id
          from jobs
@@ -230,7 +275,33 @@ export class JobQueue {
            id asc
          limit ?
        )`,
-      [type, excess],
+      [
+        new Date(Date.now() + PRESSURE_DEFER_MS).toISOString(),
+        `deferred by ${type} cap`,
+        nowIso(),
+        type,
+        excess,
+      ],
+    );
+    return Number(result.rowsAffected ?? 0);
+  }
+
+  private async reactivateDeferred(limit: number): Promise<number> {
+    if (limit <= 0) return 0;
+    const result = await exec(
+      this.db,
+      `update jobs
+       set status = 'queued',
+           last_error = null,
+           updated_at = ?
+       where id in (
+         select id
+         from jobs
+         where status = 'deferred_pressure'
+         order by priority desc, run_after asc, updated_at asc, id asc
+         limit ?
+       )`,
+      [nowIso(), Math.max(0, Math.floor(limit))],
     );
     return Number(result.rowsAffected ?? 0);
   }
@@ -240,6 +311,11 @@ async function activeDepth(db: Db, type?: string): Promise<number> {
   const row = type == null
     ? (await exec(db, "select count(*) as count from jobs where status in ('queued', 'failed', 'running')")).rows[0]
     : (await exec(db, "select count(*) as count from jobs where status in ('queued', 'failed', 'running') and type = ?", [type])).rows[0];
+  return Number(row?.count ?? 0);
+}
+
+async function deferredDepth(db: Db): Promise<number> {
+  const row = (await exec(db, "select count(*) as count from jobs where status = 'deferred_pressure'")).rows[0];
   return Number(row?.count ?? 0);
 }
 

@@ -373,7 +373,7 @@ describe("live backend", () => {
     expect(failedRow?.newestError).toBe("current failure");
   });
 
-  it("skips sheddable jobs when queue pressure is high", async () => {
+  it("parks sheddable jobs when queue pressure is high", async () => {
     const { db, queue } = await setup();
     for (let index = 0; index < 80; index += 1) {
       await queue.enqueue("refresh_user_top_scores", `top:pressure:${index}`, { userId: index + 1, scoreId: 10_000 + index, country: "CR" });
@@ -381,11 +381,12 @@ describe("live backend", () => {
 
     await queue.enqueue("refresh_user_maps_farmed_scores", "maps-farmed:CR:101", { country: "CR", userId: 101 });
 
-    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_user_maps_farmed_scores'")).rows[0].count)).toBe(0);
+    const parked = (await exec(db, "select status from jobs where type = 'refresh_user_maps_farmed_scores'")).rows[0];
+    expect(parked.status).toBe("deferred_pressure");
     expect(await queue.depth()).toBe(80);
   });
 
-  it("sheds queued low-priority work when critical jobs arrive above target depth", async () => {
+  it("parks queued low-priority work when critical jobs arrive above target depth", async () => {
     const { db, queue } = await setup();
     const now = new Date().toISOString();
     for (let index = 0; index < 120; index += 1) {
@@ -401,9 +402,10 @@ describe("live backend", () => {
 
     expect(await queue.depth()).toBe(100);
     expect(Number((await exec(db, "select count(*) as count from jobs where type = 'enrich_user'")).rows[0].count)).toBe(1);
+    expect(Number((await exec(db, "select count(*) as count from jobs where status = 'deferred_pressure'")).rows[0].count)).toBe(21);
   });
 
-  it("caps noisy top-play and recent-reconcile backlogs during emergency pressure", async () => {
+  it("parks excess noisy top-play and recent-reconcile backlogs during emergency pressure", async () => {
     const { db, queue } = await setup();
     const now = new Date().toISOString();
     for (let index = 0; index < 120; index += 1) {
@@ -426,8 +428,27 @@ describe("live backend", () => {
     await queue.shedPressure();
 
     expect(await queue.depth()).toBe(90);
-    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_user_top_scores'")).rows[0].count)).toBe(80);
-    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'reconcile_user_recent_scores'")).rows[0].count)).toBe(10);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_user_top_scores' and status in ('queued', 'failed', 'running')")).rows[0].count)).toBe(80);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'reconcile_user_recent_scores' and status in ('queued', 'failed', 'running')")).rows[0].count)).toBe(10);
+    expect(Number((await exec(db, "select count(*) as count from jobs where status = 'deferred_pressure'")).rows[0].count)).toBe(60);
+  });
+
+  it("reactivates parked pressure jobs when active queue is calm", async () => {
+    const { db, queue } = await setup();
+    const now = new Date().toISOString();
+    for (let index = 0; index < 5; index += 1) {
+      await exec(
+        db,
+        `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
+         values ('refresh_user_maps_farmed_scores', ?, 'deferred_pressure', 35, ?, 0, '{}', ?, ?)`,
+        [`maps-farmed:CR:${index}`, now, now, now],
+      );
+    }
+
+    await queue.shedPressure();
+
+    expect(await queue.depth()).toBe(5);
+    expect(Number((await exec(db, "select count(*) as count from jobs where status = 'deferred_pressure'")).rows[0].count)).toBe(0);
   });
 
   it("creates enrichment jobs for unknown metadata on known tracked roster users", async () => {
