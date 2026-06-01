@@ -86,15 +86,6 @@ function isPrimarySiteHost(host: string): boolean {
   return PRIMARY_SITE_HOSTS.includes(host);
 }
 
-// True on local dev, Vercel preview deploys, tunnels and any non-production
-// host; false only on the canonical production domain. Used to gate dev-only
-// features so they stay off mania-tracker.com but show on preview domains.
-export function isDevPreviewHost(origin: string): boolean {
-  const host = originHost(origin);
-  if (!host) return false; // unknown origin -> treat as production, hide dev-only features
-  return !isPrimarySiteHost(host);
-}
-
 function getAllowedRequestOrigin(request: Request): string | null {
   const forwardedHost = normalizeHost(request.headers.get("x-forwarded-host"));
   const hostHeader = normalizeHost(request.headers.get("host"));

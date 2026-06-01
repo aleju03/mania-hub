@@ -41,7 +41,7 @@ function preserveSearchWithCountryOnFirstPage(country: string) {
   return ((prev: Record<string, unknown>) => ({ ...prev, country, page: 0 })) as never;
 }
 
-export function Nav({ devPreview = false }: { devPreview?: boolean }) {
+export function Nav() {
   const location = useLocation();
   const navigate = useNavigate();
   const auth = useAuth();
@@ -70,10 +70,10 @@ export function Nav({ devPreview = false }: { devPreview?: boolean }) {
   // only once the tier is known to be "snipes" — while the tier is still
   // unknown (first-ever visit) the tab stays hidden rather than flashing in.
   const showSnipesLink = !liveBackendConfigured || selectedCountryFeatureTier === "snipes";
-  // Farm Helper is dev-only for now: hidden on production, shown on preview/dev hosts.
+  // Farm Helper is dev-only for now, gated like the other dev tools.
   const visibleLinks = links.filter((link) => {
     if (link.id === "snipes" && !showSnipesLink) return false;
-    if (link.id === "farm-helper" && !devPreview) return false;
+    if (link.id === "farm-helper" && !devMode) return false;
     return true;
   });
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");

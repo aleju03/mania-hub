@@ -19,7 +19,7 @@ import { Avatar } from "../components/ui/Avatar";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { Pagination } from "../components/ui/Pagination";
 import { useAuth } from "../lib/auth-context";
-import { isDevPreviewHost } from "../lib/origin";
+import { canUseDevFeatures } from "../lib/auth-shared";
 
 const PAGE_SIZE = 12;
 
@@ -48,9 +48,9 @@ const searchPlayers = async (q: string) => {
 };
 
 export const Route = createFileRoute("/farm-helper")({
-  // Dev-only for now: block direct access on production, allow preview/dev hosts.
+  // Dev-only for now: gated like the admin/dev routes (og-preview, dan-classifier).
   beforeLoad: ({ context }) => {
-    if (!isDevPreviewHost(context.origin)) throw notFound();
+    if (!canUseDevFeatures(context.auth)) throw notFound();
   },
   validateSearch: (search: Record<string, unknown>): FarmHelperSearch => ({
     user: typeof search.user === "string" && search.user.trim() ? search.user.trim().slice(0, 60) : undefined,

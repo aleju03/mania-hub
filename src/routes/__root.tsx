@@ -17,7 +17,7 @@ import {
   resolveInitialCountry,
 } from "../lib/country-cookie";
 import { PostHogProvider } from "../lib/posthog-provider";
-import { getCanonicalOrigin, isDevPreviewHost } from "../lib/origin";
+import { getCanonicalOrigin } from "../lib/origin";
 import { DEFAULT_DESCRIPTION, SITE_NAME, websiteJsonLd } from "../lib/seo";
 import { fetchLiveBackendBootstrap } from "../lib/live-backend";
 import type { LiveBackendStatus, LiveCountryFeaturesSnapshot } from "../lib/live-backend";
@@ -263,7 +263,7 @@ function NotFoundPage() {
 }
 
 function RootLayout() {
-  const { auth, initialCountry, backendStatus, countryFeatures, origin } = Route.useRouteContext();
+  const { auth, initialCountry, backendStatus, countryFeatures } = Route.useRouteContext();
   seedClientRootSlowContext({ auth, backendStatus, countryFeatures });
   seedCountryTierCache(countryFeatures?.countries);
   return (
@@ -276,7 +276,7 @@ function RootLayout() {
             </main>
           ) : (
             <>
-              <Nav devPreview={isDevPreviewHost(origin)} />
+              <Nav />
               <RouteLoadingBar />
               <main className="flex-1 pt-[60px]">
                 <Outlet />
