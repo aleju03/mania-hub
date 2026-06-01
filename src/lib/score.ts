@@ -1,4 +1,4 @@
-import type { LeanTrackerScore, OsuMod, OsuScore, OsuScoreStatistics } from "./types";
+import type { LeanTrackerScore, OsuBeatmap, OsuMod, OsuScore, OsuScoreStatistics } from "./types";
 
 const PP_WEIGHT_DECAY = 0.95;
 const MAX_WEIGHTED_PP_SCORES = 100;
@@ -36,12 +36,55 @@ const MOD_RATE_DEFAULTS: Record<string, number> = {
   HT: 0.75,
   DC: 0.75,
 };
+const MANIA_KEY_MOD_COUNTS: Record<string, number> = {
+  "1K": 1,
+  "2K": 2,
+  "3K": 3,
+  "4K": 4,
+  "5K": 5,
+  "6K": 6,
+  "7K": 7,
+  "8K": 8,
+  "9K": 9,
+  "10K": 10,
+};
 const RATE_EPSILON = 0.0001;
 
 export interface ModDisplay {
   acronym: string;
   /** Custom speed_change when the player picked a non-default rate (lazer only). */
   rate?: number;
+}
+
+export function getBeatmapKeyCount(beatmap: Pick<OsuBeatmap, "cs"> | null | undefined): number | null {
+  const keys = Number(beatmap?.cs);
+  if (!Number.isFinite(keys) || keys <= 0) return null;
+  return Number.isInteger(keys) ? keys : Math.ceil(keys);
+}
+
+export function getBeatmapKeymodeLabel(
+  beatmap: (Pick<OsuBeatmap, "cs"> & Partial<Pick<OsuBeatmap, "convert">>) | null | undefined,
+): string | null {
+  const keys = getBeatmapKeyCount(beatmap);
+  if (keys == null) return null;
+  return `${keys}K${beatmap?.convert ? " convert" : ""}`;
+}
+
+export function getManiaKeyModCount(mods: OsuMod[] | undefined): number | null {
+  for (const acronym of getModAcronyms(mods, false)) {
+    const keyCount = MANIA_KEY_MOD_COUNTS[acronym.toUpperCase()];
+    if (keyCount != null) return keyCount;
+  }
+  return null;
+}
+
+export function getEffectiveManiaKeyCount(
+  beatmap: (Pick<OsuBeatmap, "cs" | "mode"> & Partial<Pick<OsuBeatmap, "convert">>) | null | undefined,
+  mods: OsuMod[] | undefined,
+): number | null {
+  const keyModCount = getManiaKeyModCount(mods);
+  if (keyModCount != null && beatmap?.mode !== "mania") return keyModCount;
+  return getBeatmapKeyCount(beatmap);
 }
 
 /** Effective speed multiplier for a score's mods. Returns the lazer custom
@@ -98,6 +141,7 @@ export function getModDisplayList(mods: OsuMod[] | undefined, excludeCl = true):
     const acronym = typeof m === "string" ? m : (m as any)?.acronym ?? "";
     if (!acronym) continue;
     if (excludeCl && acronym === "CL") continue;
+    if (acronym === "CO") continue;
     const rateSetting = typeof m === "object" ? Number((m as any)?.settings?.speed_change) : NaN;
     const defaultRate = MOD_RATE_DEFAULTS[acronym];
     if (Number.isFinite(rateSetting) && defaultRate !== undefined && rateSetting !== defaultRate) {

@@ -17,6 +17,7 @@ import { Route as ReplayRouteImport } from './routes/replay'
 import { Route as RankingsRouteImport } from './routes/rankings'
 import { Route as MapsRouteImport } from './routes/maps'
 import { Route as LegalRouteImport } from './routes/legal'
+import { Route as FarmHelperRouteImport } from './routes/farm-helper'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
 import { Route as ApiSyncRouteImport } from './routes/api/sync'
@@ -75,6 +76,11 @@ const MapsRoute = MapsRouteImport.update({
 const LegalRoute = LegalRouteImport.update({
   id: '/legal',
   path: '/legal',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FarmHelperRoute = FarmHelperRouteImport.update({
+  id: '/farm-helper',
+  path: '/farm-helper',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -175,6 +181,7 @@ const ApiAuthOsuCallbackRoute = ApiAuthOsuCallbackRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/farm-helper': typeof FarmHelperRoute
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
   '/rankings': typeof RankingsRoute
@@ -204,6 +211,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/farm-helper': typeof FarmHelperRoute
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
   '/rankings': typeof RankingsRoute
@@ -234,6 +242,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/farm-helper': typeof FarmHelperRoute
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
   '/rankings': typeof RankingsRoute
@@ -265,6 +274,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/farm-helper'
     | '/legal'
     | '/maps'
     | '/rankings'
@@ -294,6 +304,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/farm-helper'
     | '/legal'
     | '/maps'
     | '/rankings'
@@ -323,6 +334,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/farm-helper'
     | '/legal'
     | '/maps'
     | '/rankings'
@@ -353,6 +365,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  FarmHelperRoute: typeof FarmHelperRoute
   LegalRoute: typeof LegalRoute
   MapsRoute: typeof MapsRoute
   RankingsRoute: typeof RankingsRoute
@@ -436,6 +449,13 @@ declare module '@tanstack/react-router' {
       path: '/legal'
       fullPath: '/legal'
       preLoaderRoute: typeof LegalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/farm-helper': {
+      id: '/farm-helper'
+      path: '/farm-helper'
+      fullPath: '/farm-helper'
+      preLoaderRoute: typeof FarmHelperRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -588,6 +608,7 @@ const ApiAuthOsuRouteWithChildren = ApiAuthOsuRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  FarmHelperRoute: FarmHelperRoute,
   LegalRoute: LegalRoute,
   MapsRoute: MapsRoute,
   RankingsRoute: RankingsRoute,

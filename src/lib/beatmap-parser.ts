@@ -35,6 +35,10 @@ export interface ManiaBeatmap {
   scrollVelocities: ManiaScrollVelocity[];
 }
 
+export interface ParseManiaBeatmapOptions {
+  keyCount?: number | null;
+}
+
 type TimingPoint = { time: number; beatLength: number };
 type ParsedControlPoint =
   | { kind: "timing"; order: number; time: number; beatLength: number }
@@ -42,6 +46,11 @@ type ParsedControlPoint =
 
 const DEFAULT_BEAT_LENGTH = 1000;
 const SCROLL_MULTIPLIER_EPSILON = 1e-4;
+
+function normalizeKeyCount(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 4;
+  return Math.max(1, Math.min(18, Number.isInteger(value) ? value : Math.ceil(value)));
+}
 
 function getMostCommonBeatLength(timingPoints: TimingPoint[], lastObjectTime: number): number {
   if (timingPoints.length === 0) return DEFAULT_BEAT_LENGTH;
@@ -120,7 +129,7 @@ function buildManiaScrollVelocities(
   return output;
 }
 
-export function parseManiaBeatmap(content: string): ManiaBeatmap {
+export function parseManiaBeatmap(content: string, options: ParseManiaBeatmapOptions = {}): ManiaBeatmap {
   const lines = content.split("\n").map((l) => l.trim());
 
   let title = "";
@@ -208,9 +217,10 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
         const x = parseInt(parts[0], 10);
         const time = parseInt(parts[2], 10);
         const type = parseInt(parts[3], 10);
+        const keyCount = normalizeKeyCount(options.keyCount ?? circleSize);
 
         // In mania, column is determined by x position: column = floor(x * keyCount / 512)
-        const column = Math.floor((x * circleSize) / 512);
+        const column = Math.floor((x * keyCount) / 512);
 
         // Check if it's a hold note (type bit 7 = 128)
         const isHold = (type & 128) !== 0;
@@ -222,7 +232,7 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
           endTime = parseInt(extras[0], 10) || time;
         }
 
-        notes.push({ column: Math.min(column, circleSize - 1), time, endTime, isHold });
+        notes.push({ column: Math.min(column, keyCount - 1), time, endTime, isHold });
       }
     }
   }
@@ -241,7 +251,7 @@ export function parseManiaBeatmap(content: string): ManiaBeatmap {
     artist,
     version,
     creator,
-    keyCount: Math.round(circleSize),
+    keyCount: normalizeKeyCount(options.keyCount ?? circleSize),
     od: overallDifficulty,
     bpm,
     notes: sortedNotes,

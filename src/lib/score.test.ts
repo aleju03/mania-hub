@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateReplacementPpGain, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getManiaJudgementCounts, getScoreDisplayValues, getStableScaleManiaAccuracy, hasCustomRateMod, isLazerScore } from "./score";
+import { calculateReplacementPpGain, getBeatmapKeyCount, getBeatmapKeymodeLabel, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getEffectiveManiaKeyCount, getManiaJudgementCounts, getManiaKeyModCount, getModDisplayList, getScoreDisplayValues, getStableScaleManiaAccuracy, hasCustomRateMod, isLazerScore } from "./score";
 import type { OsuScore } from "./types";
 
 function createScore(overrides: Partial<OsuScore>): OsuScore {
@@ -59,6 +59,25 @@ describe("isLazerScore", () => {
       legacy_total_score: 0,
       type: "score_best_mania",
     }))).toBe(false);
+  });
+});
+
+describe("score display helpers", () => {
+  it("normalizes fractional beatmap CS for keymode labels and marks converts", () => {
+    expect(getBeatmapKeyCount({ cs: 3.3 })).toBe(4);
+    expect(getBeatmapKeyCount({ cs: 3.5 })).toBe(4);
+    expect(getBeatmapKeymodeLabel({ cs: 3.3, convert: true })).toBe("4K convert");
+    expect(getBeatmapKeymodeLabel({ cs: 7, convert: false })).toBe("7K");
+  });
+
+  it("omits convert from rendered mod badges", () => {
+    expect(getModDisplayList([{ acronym: "CO" }, { acronym: "HD" }])).toEqual([{ acronym: "HD" }]);
+  });
+
+  it("uses xK mods only for converted mania key counts", () => {
+    expect(getManiaKeyModCount([{ acronym: "4K" }])).toBe(4);
+    expect(getEffectiveManiaKeyCount({ cs: 7, mode: "osu" }, [{ acronym: "4K" }])).toBe(4);
+    expect(getEffectiveManiaKeyCount({ cs: 7, mode: "mania" }, [{ acronym: "4K" }])).toBe(7);
   });
 });
 

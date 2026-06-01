@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { LoaderCircle, Maximize2, Minimize2, Pause, Play } from "lucide-react";
 import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum } from "../lib/osu";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
-import { getScoreDisplayValues, getScoreRate, modShiftsPitchWithRate, scoreHasReplay } from "../lib/score";
+import { getEffectiveManiaKeyCount, getScoreDisplayValues, getScoreRate, modShiftsPitchWithRate, scoreHasReplay } from "../lib/score";
 import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import { PageHeader } from "../components/layout/PageHeader";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
@@ -544,8 +544,9 @@ function ReplayPage() {
         });
       }
 
-      // Fetch replay with key count from score API, and beatmap file in parallel
-      const keyCount = score?.beatmap?.cs ? Math.round(score.beatmap.cs) : undefined;
+      // Fetch replay with the effective key count from score API, and beatmap file in parallel.
+      // xK mods only apply to converted beatmaps, matching osu!lazer's ManiaKeyMod converter hook.
+      const keyCount = score?.beatmap ? getEffectiveManiaKeyCount(score.beatmap, score.mods) ?? undefined : undefined;
       const [parsed, bmResult] = await Promise.all([
         getReplayParsed({ data: { scoreId: sid, mode: "mania", keyCount } }),
         score?.beatmap?.id
@@ -557,11 +558,11 @@ function ReplayPage() {
         header: parsed.header,
         frames: unpackReplayFrames(parsed.framesPacked),
         lifeBarFrames: parsed.lifeBarFrames ?? [],
-        keyCount: parsed.keyCount,
+        keyCount: keyCount ?? parsed.keyCount,
         stableScrollSpeedScale: parsed.stableScrollSpeedScale,
       });
       if (bmResult) {
-        setBeatmap(parseCachedManiaBeatmap(score?.beatmap?.id ?? 0, bmResult.content));
+        setBeatmap(parseCachedManiaBeatmap(score?.beatmap?.id ?? 0, bmResult.content, { keyCount }));
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load replay");
@@ -689,10 +690,6 @@ function ReplayPage() {
     }
 
     const beatmapMeta = await lookupBeatmapByChecksum({ data: { checksum } });
-    if (beatmapMeta.mode !== "mania") {
-      throw new Error("The matching beatmap is not an osu!mania difficulty.");
-    }
-
     const beatmapsetId = beatmapMeta.beatmapset_id ?? beatmapMeta.beatmapset?.id;
     const fallbackScoreId = extractReplayScoreIdFromFilename(options.filename);
     const scoreId = uploaded.scoreId ?? fallbackScoreId;
@@ -702,13 +699,15 @@ function ReplayPage() {
         ? getScore({ data: { scoreId, mode: "mania" } }).catch(() => null)
         : Promise.resolve(null),
     ]);
+    const uploadedMods = uploadedScore?.mods ?? uploaded.mods;
+    const effectiveKeyCount = getEffectiveManiaKeyCount(beatmapMeta, uploadedMods) ?? uploaded.replay.keyCount;
     setReplay({
       ...uploaded.replay,
-      keyCount: Math.round(beatmapMeta.cs || uploaded.replay.keyCount),
+      keyCount: effectiveKeyCount,
     });
-    setBeatmap(parseCachedManiaBeatmap(beatmapMeta.id, bmResult.content));
+    setBeatmap(parseCachedManiaBeatmap(beatmapMeta.id, bmResult.content, { keyCount: effectiveKeyCount }));
     setScoreInfo(uploadedScore);
-    setUploadedReplayMods(uploadedScore?.mods ?? uploaded.mods);
+    setUploadedReplayMods(uploadedMods);
     setUploadedBeatmapsetId(beatmapsetId);
     setUploadedReplayShareUrl(options.shareUrl);
     setLoadedUploadId(options.uploadId);

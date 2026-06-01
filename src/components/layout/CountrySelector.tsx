@@ -9,6 +9,8 @@ import {
   getCountryFlagUrl,
   isGlobalScope,
 } from "../../lib/country";
+import type { LiveCountryFeatureTier } from "../../lib/live-backend";
+import { getCachedCountryTier } from "../../lib/use-country-warming";
 
 interface CountrySelectorProps {
   selectedCountry: string;
@@ -20,10 +22,10 @@ interface CountrySelectorProps {
 }
 
 // Renders the scope's flag, or the globe motif for the Global scope.
-function ScopeIcon({ code }: { code: string }) {
+function ScopeIcon({ code, muted = false }: { code: string; muted?: boolean }) {
   if (isGlobalScope(code)) {
     return (
-      <span className="flex w-[22px] h-[15px] flex-shrink-0 items-center justify-center rounded-[2px] bg-osu-pink/25 text-osu-pink-light">
+      <span className={`flex w-[22px] h-[15px] flex-shrink-0 items-center justify-center rounded-[2px] bg-osu-pink/25 text-osu-pink-light ${muted ? "opacity-60 saturate-75" : ""}`}>
         <Globe className="h-[12px] w-[12px]" strokeWidth={2.4} />
       </span>
     );
@@ -32,10 +34,22 @@ function ScopeIcon({ code }: { code: string }) {
     <img
       src={getCountryFlagUrl(code)}
       alt=""
-      className="w-[22px] h-[15px] object-cover rounded-[2px] flex-shrink-0"
+      className={`w-[22px] h-[15px] object-cover rounded-[2px] flex-shrink-0 ${muted ? "opacity-50 saturate-75" : ""}`}
       loading="lazy"
     />
   );
+}
+
+type CountryOption = (typeof COUNTRY_OPTIONS)[number];
+type PickerOption = CountryOption | { code: typeof GLOBAL_SCOPE_CODE; name: typeof GLOBAL_SCOPE_NAME };
+type PickerItem =
+  | { type: "option"; option: PickerOption; muted: boolean }
+  | { type: "separator"; id: string };
+
+const GLOBAL_OPTION = { code: GLOBAL_SCOPE_CODE, name: GLOBAL_SCOPE_NAME } as const;
+
+function isTrackedCountryTier(tier: LiveCountryFeatureTier | null): boolean {
+  return tier === "live" || tier === "snipes";
 }
 
 export function CountrySelector({
@@ -50,18 +64,36 @@ export function CountrySelector({
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const globalOption = { code: GLOBAL_SCOPE_CODE, name: GLOBAL_SCOPE_NAME };
-
-  const filtered = useMemo(() => {
-    const pinned = showGlobal ? [globalOption] : [];
-    if (!search) return [...pinned, ...COUNTRY_OPTIONS];
-    const q = search.toLowerCase();
-    const matchesGlobal = GLOBAL_SCOPE_NAME.toLowerCase().includes(q) || GLOBAL_SCOPE_CODE.toLowerCase().includes(q);
-    const countries = COUNTRY_OPTIONS.filter(
-      (c) => c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q),
+  const pickerItems = useMemo<PickerItem[]>(() => {
+    const q = search.trim().toLowerCase();
+    const countryTiers = new Map(COUNTRY_OPTIONS.map((country) => [country.code, getCachedCountryTier(country.code)]));
+    const hasTrackedCountries = showGlobal && COUNTRY_OPTIONS.some((country) => isTrackedCountryTier(countryTiers.get(country.code) ?? null));
+    const matchesCountry = (country: CountryOption) => (
+      !q || country.name.toLowerCase().includes(q) || country.code.toLowerCase().includes(q)
     );
-    return matchesGlobal ? [...pinned, ...countries] : countries;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const matchesGlobal = !q || GLOBAL_SCOPE_NAME.toLowerCase().includes(q) || GLOBAL_SCOPE_CODE.toLowerCase().includes(q);
+    const countries = COUNTRY_OPTIONS.filter(matchesCountry);
+    const trackedCountries = showGlobal
+      ? countries.filter((country) => isTrackedCountryTier(countryTiers.get(country.code) ?? null))
+      : [];
+    const trackedCountryCodes = new Set(trackedCountries.map((country) => country.code));
+    const offeredCountries = countries.filter((country) => !trackedCountryCodes.has(country.code));
+    const items: PickerItem[] = [];
+
+    if (showGlobal && matchesGlobal) {
+      items.push({ type: "option", option: GLOBAL_OPTION, muted: false });
+    }
+    for (const country of trackedCountries) {
+      items.push({ type: "option", option: country, muted: false });
+    }
+    if (trackedCountries.length > 0 && offeredCountries.length > 0) {
+      items.push({ type: "separator", id: "offered-countries" });
+    }
+    for (const country of offeredCountries) {
+      items.push({ type: "option", option: country, muted: hasTrackedCountries });
+    }
+
+    return items;
   }, [search, showGlobal]);
 
   // Close on click outside
@@ -152,29 +184,47 @@ export function CountrySelector({
 
             {/* Country list */}
             <div ref={listRef} className="max-h-[240px] overflow-y-auto overscroll-contain">
-              {filtered.length > 0 ? (
-                filtered.map((c) => (
-                  <button
-                    key={c.code}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      handleSelect(c.code);
-                    }}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors duration-[80ms] cursor-pointer ${
-                      c.code === selectedCountry
-                        ? "bg-osu-pink/15 text-white"
-                        : "text-osu-l2 hover:bg-osu-b3/50 hover:text-white"
-                    } ${c.code === GLOBAL_SCOPE_CODE ? "border-b border-osu-b3/30" : ""}`}
-                  >
-                    <ScopeIcon code={c.code} />
-                    <span className="text-[11px] font-medium truncate">{c.name}</span>
-                    {c.code === selectedCountry && (
-                      <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 text-osu-pink ml-auto flex-shrink-0">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                  </button>
-                ))
+              {pickerItems.length > 0 ? (
+                pickerItems.map((item) => {
+                  if (item.type === "separator") {
+                    return (
+                      <div key={item.id} className="mx-3 my-1.5 flex items-center gap-2" aria-hidden="true">
+                        <span className="h-px flex-1 bg-osu-b3/35" />
+                        <span className="text-[9px] font-semibold uppercase text-osu-f1/70">Untracked countries</span>
+                        <span className="h-px flex-1 bg-osu-b3/35" />
+                      </div>
+                    );
+                  }
+
+                  const c = item.option;
+                  const selected = c.code === selectedCountry;
+                  const muted = item.muted && !selected;
+
+                  return (
+                    <button
+                      key={c.code}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleSelect(c.code);
+                      }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors duration-[80ms] cursor-pointer ${
+                        selected
+                          ? "bg-osu-pink/15 text-white"
+                          : muted
+                            ? "text-osu-f1/70 hover:bg-osu-b3/35 hover:text-osu-l2"
+                            : "text-osu-l2 hover:bg-osu-b3/50 hover:text-white"
+                      }`}
+                    >
+                      <ScopeIcon code={c.code} muted={muted} />
+                      <span className={`text-[11px] font-medium truncate ${muted ? "opacity-80" : ""}`}>{c.name}</span>
+                      {selected && (
+                        <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 text-osu-pink ml-auto flex-shrink-0">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </button>
+                  );
+                })
               ) : (
                 <div className="px-3 py-4 text-center text-[11px] text-osu-f1">No countries found</div>
               )}

@@ -244,6 +244,7 @@ export interface LeanHomeScore {
   title: string;
   version: string;
   keyCount: number;
+  keymodeLabel?: string;
   beatmapsetId?: number;
   user: {
     id: number;
@@ -273,10 +274,8 @@ export interface LeanTrackerScore {
   rank: string;
   statistics: OsuScoreStatistics;
   pp: number | null;
-  beatmap: Pick<
-    OsuBeatmap,
-    "id" | "beatmapset_id" | "difficulty_rating" | "mode" | "cs" | "bpm" | "max_combo" | "version" | "url"
-  >;
+  beatmap: Pick<OsuBeatmap, "id" | "beatmapset_id" | "difficulty_rating" | "mode" | "cs" | "bpm" | "max_combo" | "version" | "url">
+    & Partial<Pick<OsuBeatmap, "convert">>;
   beatmapset: Pick<OsuBeatmapset, "id" | "title" | "artist" | "covers">;
   user: {
     id: number;

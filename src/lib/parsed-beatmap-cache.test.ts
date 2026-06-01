@@ -39,4 +39,15 @@ describe("parseCachedManiaBeatmap", () => {
     expect(second).not.toBe(first);
     expect(second.keyCount).toBe(7);
   });
+
+  it("caches replay key-count overrides separately", () => {
+    clearParsedBeatmapCache();
+    const fourKey = parseCachedManiaBeatmap(1, BEATMAP_CONTENT, { keyCount: 4 });
+    const sevenKey = parseCachedManiaBeatmap(1, BEATMAP_CONTENT, { keyCount: 7 });
+    const fourKeyAgain = parseCachedManiaBeatmap(1, BEATMAP_CONTENT, { keyCount: 4 });
+
+    expect(fourKey.keyCount).toBe(4);
+    expect(sevenKey.keyCount).toBe(7);
+    expect(fourKeyAgain).toBe(fourKey);
+  });
 });

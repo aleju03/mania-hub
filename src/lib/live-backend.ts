@@ -412,6 +412,85 @@ export async function fetchLiveTrackerSnapshot(country: string, limit = 100, opt
   return fetchLiveJson(`/api/snapshots/tracker?${query.toString()}`);
 }
 
+export type LiveFarmHelperReason = "missing" | "improve" | "stale";
+export type LiveFarmHelperKeyMode = "4k" | "7k" | "any";
+
+export interface LiveFarmHelperPeer {
+  userId: number;
+  username: string;
+  avatarUrl: string;
+  pp: number;
+}
+
+export interface LiveFarmHelperRec {
+  beatmapId: number;
+  beatmapsetId: number;
+  title: string;
+  artist: string;
+  creator: string;
+  version: string;
+  cover: string;
+  status: string;
+  stars: number;
+  keys: number;
+  bpm: number;
+  lengthSec: number;
+  reason: LiveFarmHelperReason;
+  estimatedPpGain: number;
+  benchmarkPp: number;
+  subjectPp: number | null;
+  subjectPlayedAt: string | null;
+  peerCount: number;
+  peerFraction: number;
+  peerPpMedian: number;
+  peerPpP75: number;
+  topPeers: LiveFarmHelperPeer[];
+  scoreUrl: string | null;
+  mapUrl: string;
+  rankScore: number;
+}
+
+export interface LiveFarmHelperSnapshot {
+  status: "ready";
+  userId: number;
+  username: string;
+  avatarUrl: string;
+  pp: number;
+  keyMode: LiveFarmHelperKeyMode;
+  peerBand: { mode: string; count: number; minPp: number; maxPp: number };
+  totalPotentialPp: number;
+  recs: LiveFarmHelperRec[];
+  generatedAt: string;
+}
+
+export async function fetchLiveFarmHelperSnapshot(
+  userKey: string,
+  params?: { keyMode?: LiveFarmHelperKeyMode; limit?: number },
+): Promise<LiveFarmHelperSnapshot> {
+  const query = new URLSearchParams({ user: userKey });
+  if (params?.keyMode) query.set("key", params.keyMode);
+  if (params?.limit != null) query.set("limit", String(params.limit));
+  return fetchLiveJson(`/api/snapshots/farm-helper?${query.toString()}`);
+}
+
+export interface LiveFarmHelperFarmer {
+  userId: number;
+  username: string;
+  avatarUrl: string;
+  pp: number;
+}
+
+export interface LiveFarmHelperFarmers {
+  beatmapId: number;
+  total: number;
+  farmers: LiveFarmHelperFarmer[];
+}
+
+export async function fetchLiveFarmHelperFarmers(userKey: string, beatmapId: number): Promise<LiveFarmHelperFarmers> {
+  const query = new URLSearchParams({ user: userKey, beatmap: String(beatmapId) });
+  return fetchLiveJson(`/api/snapshots/farm-helper-farmers?${query.toString()}`);
+}
+
 export interface LiveCountryActivation {
   ok: boolean;
   // True while the country has no roster projection yet, so every country

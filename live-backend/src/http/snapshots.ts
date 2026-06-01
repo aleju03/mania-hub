@@ -6,6 +6,7 @@ import { activateCountry, deleteCountryData, getCountryRegistry, GLOBAL_COUNTRY_
 import type { Db } from "../db.js";
 import { dbHealth, exec, parseJson } from "../db.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
+import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, type FarmHelperKeyMode } from "../features/farm-helper.js";
 import { getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
 import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery } from "../features/maps.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../features/player-profiles.js";
@@ -236,6 +237,56 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/snapshots/global-rankings") {
     res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
     sendJson(req, res, ctx, 200, await getGlobalRankingsSnapshot(ctx.db, parseGlobalRankingsQuery(url.searchParams)));
+    return true;
+  }
+  if (url.pathname === "/api/snapshots/farm-helper") {
+    // Global tool: no country activation. The osu! best-scores fetch for an
+    // unknown subject is the costly part, so it shares the costly bucket.
+    const userKey = (url.searchParams.get("user") ?? "").trim();
+    if (!userKey) {
+      sendJson(req, res, ctx, 400, { error: "missing_user" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    try {
+      const snapshot = await getFarmHelperSnapshot(ctx.db, ctx.osu, userKey, {
+        keyMode: parseFarmHelperKeyMode(url.searchParams.get("key")),
+        limit: clampInteger(url.searchParams.get("limit"), 1, 100, 60),
+      });
+      res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
+      sendJson(req, res, ctx, 200, snapshot);
+    } catch (error) {
+      if (error instanceof FarmHelperUserNotFoundError) {
+        sendJson(req, res, ctx, 404, { error: "user_not_found" });
+        return true;
+      }
+      throw error;
+    }
+    return true;
+  }
+  if (url.pathname === "/api/snapshots/farm-helper-farmers") {
+    const userKey = (url.searchParams.get("user") ?? "").trim();
+    const beatmapId = clampInteger(url.searchParams.get("beatmap"), 1, 2_000_000_000, 0);
+    if (!userKey) {
+      sendJson(req, res, ctx, 400, { error: "missing_user" });
+      return true;
+    }
+    if (!beatmapId) {
+      sendJson(req, res, ctx, 400, { error: "missing_beatmap" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    try {
+      const result = await getFarmHelperFarmers(ctx.db, ctx.osu, userKey, beatmapId);
+      res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
+      sendJson(req, res, ctx, 200, result);
+    } catch (error) {
+      if (error instanceof FarmHelperUserNotFoundError) {
+        sendJson(req, res, ctx, 404, { error: "user_not_found" });
+        return true;
+      }
+      throw error;
+    }
     return true;
   }
   if (url.pathname === "/api/snapshots/rank-deltas") {
@@ -1093,6 +1144,10 @@ function parseMapsPageQuery(params: URLSearchParams): MapsPageQuery {
 
 function parseMapsPlayersKind(raw: string | null): MapsPlayersKind | null {
   return raw === "farmed" || raw === "popular" || raw === "favourite" ? raw : null;
+}
+
+function parseFarmHelperKeyMode(raw: string | null): FarmHelperKeyMode | undefined {
+  return raw === "4k" || raw === "7k" || raw === "any" ? raw : undefined;
 }
 
 function parseGlobalRankingsQuery(params: URLSearchParams): {

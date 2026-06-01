@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  COUNTRY_OPTIONS,
   GLOBAL_SCOPE_CODE,
   GLOBAL_SCOPE_ICON_URL,
   getCountryFlagGradient,
@@ -32,6 +33,12 @@ describe("country scope helpers", () => {
     expect(normalizeCountryCode("cr")).toBe("CR");
     expect(normalizeCountryCode("zz")).toBe("CR"); // unknown falls back to default
     expect(getCountryName("CR")).toBe("Costa Rica");
+  });
+
+  it("sorts country options alphabetically without pinning the default country", () => {
+    const names = COUNTRY_OPTIONS.map((country) => country.name);
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)));
+    expect(COUNTRY_OPTIONS[0].code).not.toBe("CR");
   });
 
   it("uses the globe motif as the Global flag and has no stripe gradient", () => {

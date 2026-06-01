@@ -6,7 +6,7 @@ import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryFlagUrl, getCountryName, isGlobalScope } from "../lib/country";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
-import { getModDisplayList, getScoreDisplayValues, getScoreTimestamp } from "../lib/score";
+import { getBeatmapKeyCount, getBeatmapKeymodeLabel, getModDisplayList, getScoreDisplayValues, getScoreTimestamp } from "../lib/score";
 import { fetchLiveGlobalRankings, fetchLiveTopPlaysSnapshot, fetchLiveTrackerSnapshot, isLiveBackendConfigured, type LiveGlobalRankingEntry } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
 import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
@@ -74,6 +74,7 @@ const EMPTY_POPOFFS: LeanHomePopoff[] = [];
 const HOME_RANKING_SKELETON_MOBILE_COUNT = 5;
 const HOME_RANKING_SKELETON_DESKTOP_COUNT = 10;
 const HOME_GLOBAL_RANKINGS_FETCH_COUNT = 50;
+const HOME_GLOBAL_RANKINGS_STORAGE_KEY = "mania-hub-home-global-rankings-v1";
 // Module-scoped cache for Global's "Top players" board. Without it, navigating
 // away from Home and back remounts this route, resets the local state to null
 // (skeleton), and refetches every time even though the board barely changes.
@@ -83,6 +84,76 @@ let globalTopPlayersCache: { data: LiveGlobalRankingEntry[]; fetchedAt: number }
 const HOME_RECENT_SCORES_SKELETON_COUNT = 2;
 const HOME_RECENT_SCORES_PLAYER_COUNT = 50;
 const HOME_POPOFFS_PLAYER_COUNT = 10;
+
+function isStoredGlobalRankingEntry(value: unknown): value is LiveGlobalRankingEntry {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const entry = value as LiveGlobalRankingEntry;
+  const user = entry.user;
+  return Number.isFinite(entry.rank) &&
+    Number.isFinite(entry.pp) &&
+    !!user &&
+    typeof user === "object" &&
+    Number.isFinite(user.id) &&
+    typeof user.username === "string" &&
+    typeof user.avatar_url === "string" &&
+    typeof user.country_code === "string";
+}
+
+function readStoredGlobalTopPlayers(): { data: LiveGlobalRankingEntry[]; fetchedAt: number } | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(HOME_GLOBAL_RANKINGS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { data?: unknown; fetchedAt?: unknown };
+    const fetchedAt = Number(parsed.fetchedAt);
+    if (!Number.isFinite(fetchedAt) || !Array.isArray(parsed.data)) return null;
+    const data = parsed.data.filter(isStoredGlobalRankingEntry);
+    return data.length > 0 ? { data, fetchedAt } : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredGlobalTopPlayers(data: LiveGlobalRankingEntry[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      HOME_GLOBAL_RANKINGS_STORAGE_KEY,
+      JSON.stringify({ data, fetchedAt: Date.now() }),
+    );
+  } catch {
+    // Non-critical paint cache; the in-memory cache still covers this session.
+  }
+}
+
+// Defined at module scope (not inside HomePage) so the component keeps a stable
+// identity across HomePage re-renders. Inline definitions get a fresh function
+// each render, which React treats as a new type and remounts, replaying the
+// fade-in animation every time another fetch resolves.
+function GlobalRankingRow({ entry, index, delayStep }: { entry: LiveGlobalRankingEntry; index: number; delayStep: number }) {
+  const navigate = useNavigate();
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ delay: index * delayStep }}
+      className="flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3/50 transition-colors cursor-pointer"
+      onClick={() => navigate({ to: "/player/$username", params: { username: entry.user.username } })}
+    >
+      <span className="text-sm font-bold text-osu-f1 w-6 text-center tabular-nums">#{entry.rank}</span>
+      <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} />
+      <UsernameText username={entry.user.username} avatarUrl={entry.user.avatar_url} className="text-sm font-medium flex-1 truncate" />
+      <img
+        src={getCountryFlagUrl(entry.user.country_code)}
+        alt={entry.user.country_code}
+        title={getCountryName(entry.user.country_code)}
+        className="w-[18px] h-3 rounded-[1px] object-cover flex-shrink-0"
+        loading="lazy"
+      />
+      <span className="text-xs font-bold text-right tabular-nums">{formatNumber(Math.round(entry.pp))}pp</span>
+    </motion.div>
+  );
+}
 
 function getHomeScoreTimeMs(score: LeanHomeScore): number {
   return new Date(score.timestamp).getTime() || 0;
@@ -100,7 +171,8 @@ function trackerScoreToHomeScore(score: LeanTrackerScore): LeanHomeScore {
     timestamp: getScoreTimestamp(score),
     title: score.beatmapset.title,
     version: score.beatmap.version,
-    keyCount: Number(score.beatmap.cs) || 0,
+    keyCount: getBeatmapKeyCount(score.beatmap) ?? 0,
+    keymodeLabel: getBeatmapKeymodeLabel(score.beatmap) ?? "",
     beatmapsetId: score.beatmapset.id,
     user: {
       id: score.user.id,
@@ -129,7 +201,8 @@ function countryTopPlayToHomePopoff(play: CountryTopPlay): LeanHomePopoff | null
       timestamp: getScoreTimestamp(score) || play.time,
       title: score.beatmapset.title,
       version: score.beatmap.version,
-      keyCount: Number(score.beatmap.cs) || 0,
+      keyCount: getBeatmapKeyCount(score.beatmap) ?? 0,
+      keymodeLabel: getBeatmapKeymodeLabel(score.beatmap) ?? "",
       beatmapsetId: score.beatmapset.id,
       user: {
         id: play.user.id,
@@ -317,6 +390,7 @@ function HomePage() {
     // Serve the cached board immediately; only hit the network when it's missing
     // or past the TTL. Keep showing the cached board while refreshing so the card
     // never flips back to a skeleton on revisits.
+    if (!globalTopPlayersCache) globalTopPlayersCache = readStoredGlobalTopPlayers();
     const fresh = globalTopPlayersCache && !isCacheStale(globalTopPlayersCache.fetchedAt, CLIENT_CACHE_TTL.rankings);
     if (globalTopPlayersCache) setGlobalTopPlayers(globalTopPlayersCache.data);
     if (fresh) return;
@@ -324,6 +398,7 @@ function HomePage() {
     fetchLiveGlobalRankings(HOME_GLOBAL_RANKINGS_FETCH_COUNT)
       .then((snapshot) => {
         globalTopPlayersCache = { data: snapshot.ranking, fetchedAt: Date.now() };
+        writeStoredGlobalTopPlayers(snapshot.ranking);
         if (!cancelled) setGlobalTopPlayers(snapshot.ranking);
       })
       .catch(() => { if (!cancelled) setGlobalTopPlayers((prev) => prev ?? []); });
@@ -501,24 +576,6 @@ function HomePage() {
     ),
     [recentScores, trackerFeedScores, hiddenUserIds],
   );
-  const GlobalRankingRow = ({ entry }: { entry: LiveGlobalRankingEntry }) => (
-    <div
-      className="flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3/50 transition-colors cursor-pointer"
-      onClick={() => navigate({ to: "/player/$username", params: { username: entry.user.username } })}
-    >
-      <span className="text-sm font-bold text-osu-f1 w-6 text-center tabular-nums">#{entry.rank}</span>
-      <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} />
-      <UsernameText username={entry.user.username} avatarUrl={entry.user.avatar_url} className="text-sm font-medium flex-1 truncate" />
-      <img
-        src={getCountryFlagUrl(entry.user.country_code)}
-        alt={entry.user.country_code}
-        title={getCountryName(entry.user.country_code)}
-        className="w-[18px] h-3 rounded-[1px] object-cover flex-shrink-0"
-        loading="lazy"
-      />
-      <span className="text-xs font-bold text-right tabular-nums">{formatNumber(Math.round(entry.pp))}pp</span>
-    </div>
-  );
 
   return (
     <div className="flex-1 relative overflow-hidden min-h-[calc(100vh-60px)]">
@@ -566,13 +623,13 @@ function HomePage() {
               ) : visibleGlobalTopPlayers.length > 0 ? (
                 <>
                   <div className="lg:hidden">
-                    {globalTopPlayersMobile.map((entry) => (
-                      <GlobalRankingRow key={entry.user.id} entry={entry} />
+                    {globalTopPlayersMobile.map((entry, i) => (
+                      <GlobalRankingRow key={entry.user.id} entry={entry} index={i} delayStep={0.04} />
                     ))}
                   </div>
                   <div className="hidden lg:block">
-                    {globalTopPlayersDesktop.map((entry) => (
-                      <GlobalRankingRow key={entry.user.id} entry={entry} />
+                    {globalTopPlayersDesktop.map((entry, i) => (
+                      <GlobalRankingRow key={entry.user.id} entry={entry} index={i} delayStep={0.035} />
                     ))}
                   </div>
                 </>
@@ -763,7 +820,7 @@ function HomePage() {
                       <span className="text-osu-f1">on</span> {s.title}
                     </div>
                     <div className="mt-0.5 text-[10px] text-osu-f1 min-w-0 truncate">
-                        [{s.version}] {s.keyCount > 0 && `${s.keyCount}K`} &middot; {formatTimeAgo(s.timestamp)}
+                        [{s.version}] {s.keymodeLabel || (s.keyCount > 0 ? `${s.keyCount}K` : "")} &middot; {formatTimeAgo(s.timestamp)}
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">

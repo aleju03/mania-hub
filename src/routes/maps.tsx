@@ -120,6 +120,7 @@ const RECENT_PLAYER_HISTORY = 2;
 const RECENT_BEATMAP_HISTORY = 5;
 const RANDOM_PICK_SETTINGS_STORAGE_KEY = "mania-hub-maps-random-pick-settings-v1";
 const SEARCH_URL_DEBOUNCE_MS = 250;
+const RANDOM_FULL_SET_CACHE_MAX_ENTRIES = 512;
 const LIVE_MAPS_PAGE_CACHE_MAX_ENTRIES = 48;
 
 function beatmapStatusBadgeClass(status: string): string {
@@ -185,6 +186,17 @@ type RandomPickSettings = Pick<MapsSearch, "rWeight" | "rAvoidRepeats">;
 type LiveMapsPageState = LiveMapsPageValue & { requestKey: string };
 const liveMapsPageSessionCache = new Map<string, LiveMapsPageState>();
 const liveMapsPageTotalSessionCache = new Map<string, number>();
+const randomFullSetSessionCache = new Map<number, MapsFavouriteBeatmapset>();
+
+function rememberRandomFullSet(set: MapsFavouriteBeatmapset): void {
+  randomFullSetSessionCache.delete(set.id);
+  randomFullSetSessionCache.set(set.id, set);
+  while (randomFullSetSessionCache.size > RANDOM_FULL_SET_CACHE_MAX_ENTRIES) {
+    const oldestKey = randomFullSetSessionCache.keys().next().value;
+    if (oldestKey === undefined) break;
+    randomFullSetSessionCache.delete(oldestKey);
+  }
+}
 
 function readRandomPickSettings(): Partial<RandomPickSettings> {
   if (typeof window === "undefined") return {};
@@ -1676,7 +1688,9 @@ function MapsPage() {
   const [randomPlayer, setRandomPlayer] = useState<MapsPlayerFavourites | null>(null);
   const [pickedSetId, setPickedSetId] = useState<number | null>(null);
   const [randomBeatmapset, setRandomBeatmapset] = useState<MapsFavouriteBeatmapset | null>(null);
-  const fullSetCacheRef = useRef<Map<number, MapsFavouriteBeatmapset>>(new Map());
+  const [randomPickResolving, setRandomPickResolving] = useState(false);
+  const fullSetCacheRef = useRef<Map<number, MapsFavouriteBeatmapset>>(randomFullSetSessionCache);
+  const randomPickRequestIdRef = useRef(0);
   const lastRandomKeyRef = useRef<string | null>(null);
   // Sliding windows used when "avoid repeats" is on (see reshuffleRandom).
   const recentRandomPlayerIdsRef = useRef<number[]>([]);
@@ -1713,6 +1727,17 @@ function MapsPage() {
       setDevRandomForceOpen(false);
     }
   }, [devRandomForceQuery, tab]);
+
+  useEffect(() => {
+    randomPickRequestIdRef.current += 1;
+    lastRandomKeyRef.current = null;
+    recentRandomPlayerIdsRef.current = [];
+    recentRandomBeatmapIdsRef.current = [];
+    setRandomPlayer(null);
+    setPickedSetId(null);
+    setRandomBeatmapset(null);
+    setRandomPickResolving(false);
+  }, [selectedCountry]);
 
   // ── Mobile collapsible filter panel (shared across tabs) ────────────────
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -1822,20 +1847,67 @@ function MapsPage() {
       .slice(0, 10);
     if (need.length === 0) return;
     fetchLiveMapsBeatmapsets(selectedCountry, need)
-      .then((sets) => { for (const set of sets) fullSetCacheRef.current.set(set.id, set); })
+      .then((sets) => { for (const set of sets) rememberRandomFullSet(set); })
       .catch(() => undefined);
   }, [liveBackendEnabled, selectedCountry]);
 
+  // Show the lean pick immediately, then replace it with the full card metadata
+  // once covers, preview audio, and difficulty data arrive.
+  const commitRandomPick = useCallback((player: MapsPlayerFavourites, poolSet: MapsFavouriteBeatmapset) => {
+    const setId = poolSet.id;
+    const requestId = randomPickRequestIdRef.current + 1;
+    randomPickRequestIdRef.current = requestId;
+
+    const applyPick = (beatmapset: MapsFavouriteBeatmapset | null) => {
+      if (randomPickRequestIdRef.current !== requestId) return;
+      setRandomPlayer(player);
+      setPickedSetId(setId);
+      setRandomBeatmapset(beatmapset ?? poolSet);
+      setRandomPickResolving(false);
+    };
+
+    if (poolSet.maniaBeatmaps.length > 0) {
+      rememberRandomFullSet(poolSet);
+      applyPick(poolSet);
+      return;
+    }
+
+    const cached = fullSetCacheRef.current.get(setId);
+    if (cached) {
+      applyPick(cached);
+      return;
+    }
+
+    if (!liveBackendEnabled) {
+      applyPick(poolSet);
+      return;
+    }
+
+    setRandomPlayer(player);
+    setPickedSetId(setId);
+    setRandomBeatmapset(poolSet);
+    setRandomPickResolving(true);
+    fetchLiveMapsBeatmapsets(selectedCountry, [setId])
+      .then((sets) => {
+        const full = sets.find((set) => set.id === setId) ?? null;
+        if (full) rememberRandomFullSet(full);
+        applyPick(full);
+      })
+      .catch(() => applyPick(poolSet));
+  }, [liveBackendEnabled, selectedCountry]);
+
   const forceDevRandomPick = useCallback((pair: { player: MapsPlayerFavourites; beatmapset: MapsFavouriteBeatmapset }) => {
-    setRandomPlayer(pair.player);
-    setPickedSetId(pair.beatmapset.id);
+    commitRandomPick(pair.player, pair.beatmapset);
     setDevRandomForceOpen(false);
-  }, []);
+  }, [commitRandomPick]);
 
   const reshuffleRandom = useCallback(() => {
     if (randomPlayerGroups.length === 0) {
+      randomPickRequestIdRef.current += 1;
       setRandomPlayer(null);
       setPickedSetId(null);
+      setRandomBeatmapset(null);
+      setRandomPickResolving(false);
       return;
     }
     const recentPlayers = rAvoidRepeats ? new Set(recentRandomPlayerIdsRef.current) : null;
@@ -1878,8 +1950,7 @@ function MapsPage() {
       recentRandomBeatmapIdsRef.current = nextMaps;
     }
 
-    setRandomPlayer(pickedPlayer);
-    setPickedSetId(pickedBeatmapset.id);
+    commitRandomPick(pickedPlayer, pickedBeatmapset);
     // Warm a few upcoming candidates so the next rerolls don't wait on a fetch.
     if (randomPool.length > 1) {
       const sample: number[] = [];
@@ -1888,44 +1959,7 @@ function MapsPage() {
       }
       warmRandomSetCache(sample);
     }
-  }, [randomPlayerGroups, randomPool, rWeight, rAvoidRepeats, warmRandomSetCache]);
-
-  // Resolve the picked set's full record (covers + per-difficulty list + preview
-  // audio) on demand. Cached and prefetched entries resolve synchronously; the
-  // non-live fallback path already ships full pool entries, so use them as-is.
-  useEffect(() => {
-    if (pickedSetId == null) {
-      setRandomBeatmapset(null);
-      return;
-    }
-    const poolSet = visibleMapsData?.beatmapsetsPool?.[pickedSetId] ?? null;
-    if (poolSet && poolSet.maniaBeatmaps.length > 0) {
-      setRandomBeatmapset(poolSet);
-      return;
-    }
-    const cached = fullSetCacheRef.current.get(pickedSetId);
-    if (cached) {
-      setRandomBeatmapset(cached);
-      return;
-    }
-    if (!liveBackendEnabled) {
-      setRandomBeatmapset(poolSet);
-      return;
-    }
-    let cancelled = false;
-    setRandomBeatmapset(null);
-    fetchLiveMapsBeatmapsets(selectedCountry, [pickedSetId])
-      .then((sets) => {
-        if (cancelled) return;
-        const full = sets.find((set) => set.id === pickedSetId) ?? null;
-        if (full) fullSetCacheRef.current.set(pickedSetId, full);
-        setRandomBeatmapset(full ?? poolSet);
-      })
-      .catch(() => {
-        if (!cancelled) setRandomBeatmapset(poolSet);
-      });
-    return () => { cancelled = true; };
-  }, [pickedSetId, liveBackendEnabled, selectedCountry, visibleMapsData]);
+  }, [randomPlayerGroups, randomPool, rWeight, rAvoidRepeats, commitRandomPick, warmRandomSetCache]);
 
   // Only reshuffle on first entry to the tab or when the underlying data
   // changes (country switch / rebuild). Filter changes never auto-reroll —
@@ -2641,12 +2675,17 @@ function MapsPage() {
                   </div>
                   {randomBeatmapset ? (
                     <div key={`random-${randomPlayer.id}-${pickedSetId}`} className="cards-enter">
-                      <RandomCard bm={randomBeatmapset} />
+                      <RandomCard
+                        bm={randomBeatmapset}
+                        hydrating={randomPickResolving && randomBeatmapset.id === pickedSetId && randomBeatmapset.maniaBeatmaps.length === 0}
+                      />
                     </div>
                   ) : (
                     <RandomCardSkeleton />
                   )}
                 </>
+              ) : randomPickResolving || randomPool.length > 0 ? (
+                <RandomPickLoadingSkeleton />
               ) : (
                 <div className="text-center py-16 text-osu-f1 text-sm">
                   {hasActiveFilters
@@ -4752,8 +4791,9 @@ function DifficultyPicker({
   );
 }
 
-function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
+function RandomCard({ bm, hydrating = false }: { bm: MapsFavouriteBeatmapset; hydrating?: boolean }) {
   const url = `https://osu.ppy.sh/beatmapsets/${bm.id}`;
+  const coverUrl = bm.covers.cover ?? bm.covers.card ?? bm.covers["list@2x"] ?? bm.covers.list ?? "";
   const keys = bm.maniaKeys ?? [];
   const patterns = (bm.patterns ?? []).slice(0, 5);
   const starLabel = formatStars(bm);
@@ -4860,16 +4900,49 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     && (replayAudioMode === "selected-file" || Boolean(previewBeatmap?.audioFilename));
 
   // Some beatmapsets have no background image — the cover URL 404s. Track load
-  // failure so we can swap in a deterministic gradient fallback.
-  const [coverBroken, setCoverBroken] = useState(false);
-  const [coverLoaded, setCoverLoaded] = useState(false);
+  // failure per URL so a late metadata refresh cannot hide an already-loaded cover.
+  // The card remounts on every reroll, so a freshly rendered <img> whose cover
+  // is already in the browser cache can finish loading before React attaches its
+  // onLoad handler (load/error don't bubble, so there's no delegation to catch
+  // it) - the cover then stays hidden and the dark fallback shows on top of an
+  // image that actually loaded. Preload through a detached Image() whose handlers
+  // are wired up before src, which is immune to that race (same approach the map
+  // modal uses).
+  const [decodedCover, setDecodedCover] = useState<string | null>(null);
+  useEffect(() => {
+    if (coverUrl === "") {
+      setDecodedCover(null);
+      return;
+    }
+    let cancelled = false;
+    setDecodedCover(null);
+
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => {
+      const decode = typeof image.decode === "function" ? image.decode() : Promise.resolve();
+      decode
+        .catch(() => undefined)
+        .then(() => {
+          if (!cancelled) setDecodedCover(coverUrl);
+        });
+    };
+    image.onerror = () => {
+      if (!cancelled) setDecodedCover(coverUrl);
+    };
+    image.src = coverUrl;
+
+    return () => {
+      cancelled = true;
+    };
+  }, [coverUrl]);
+  const coverReady = coverUrl !== "" && decodedCover === coverUrl;
+
   useEffect(() => {
     previewPlaybackTokenRef.current += 1;
     replayPlaybackTokenRef.current += 1;
     resetAudioElement(audioRef.current);
     resetAudioElement(replayAudioRef.current);
-    setCoverBroken(false);
-    setCoverLoaded(false);
     setSelectedBeatmapId(getDefaultRandomBeatmapId(maniaBeatmaps));
     setReplayPreviewRequested(false);
     setIsReplayPreviewPlaying(false);
@@ -4982,7 +5055,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
     if (replayAudioRef.current) replayAudioRef.current.volume = volume;
-  }, [volume]);
+  }, [previewUrl, replayAudioUrl, volume]);
 
   useEffect(() => {
     if (!isPreviewPlaying) return;
@@ -5126,6 +5199,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         // Let the browser start from its current buffered position if seeking is not ready.
       }
       setCurrentTime(resumeTime);
+      audio.volume = volume;
       audio.playbackRate = 1;
       setAudioPreservesPitch(audio, true);
       await audio.play();
@@ -5148,7 +5222,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
         setIsPreviewPlaying(false);
       }
     }
-  }, [currentTime, duration, isPreviewPlaying, previewUrl, resetReplayPreview]);
+  }, [currentTime, duration, isPreviewPlaying, previewUrl, resetReplayPreview, volume]);
 
   const startReplayPreviewAudio = useCallback(async (token: number) => {
     const audio = replayAudioRef.current;
@@ -5379,6 +5453,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       startedAtMs: performance.now(),
       playbackRate: getReplayAudioPlaybackRate(audio, replayAudioPlaybackRate),
     };
+    audio.volume = volume;
     void audio.play()
       .then(() => {
         if (replayAudioRef.current !== audio || requestedAudioModeRef.current !== "replay") return;
@@ -5387,7 +5462,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       .catch(() => {
         replayAudioClockAnchorRef.current = null;
       });
-  }, [getReplayChartPlaybackMs, isReplayPreviewPlaying, replayAudioPlaybackRate]);
+  }, [getReplayChartPlaybackMs, isReplayPreviewPlaying, replayAudioPlaybackRate, volume]);
 
   const startReplayPreview = useCallback(() => {
     const audio = replayAudioRef.current;
@@ -5408,6 +5483,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       } catch {
         // The audio element may still be resolving its source on mobile.
       }
+      audio.volume = volume;
       audio.playbackRate = replayAudioPlaybackRate;
       setAudioPreservesPitch(audio, replayAudioMode !== "set-preview");
     }
@@ -5418,7 +5494,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
     if (previewBeatmap && isReplayPreviewReady) {
       void startReplayPreviewAudio(token);
     }
-  }, [clearReplayPreviewEndTimer, isReplayPreviewReady, pausePreviewAudio, previewBeatmap, replayAudioMode, replayAudioPlaybackRate, replayChartStartMs, replayPreviewStartSeconds, startReplayPreviewAudio]);
+  }, [clearReplayPreviewEndTimer, isReplayPreviewReady, pausePreviewAudio, previewBeatmap, replayAudioMode, replayAudioPlaybackRate, replayChartStartMs, replayPreviewStartSeconds, startReplayPreviewAudio, volume]);
 
   useEffect(() => {
     if (replayPreviewRequested && previewBeatmap && isReplayPreviewReady && !replayPreviewLoading && replayAudioStartPendingRef.current) {
@@ -5429,6 +5505,8 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const applyVolume = useCallback((v: number) => {
     const clamped = Math.min(1, Math.max(0, v));
     setVolume(clamped);
+    if (audioRef.current) audioRef.current.volume = clamped;
+    if (replayAudioRef.current) replayAudioRef.current.volume = clamped;
     if (clamped > 0) lastNonZeroVolumeRef.current = clamped;
     try {
       window.localStorage.setItem(PREVIEW_VOLUME_STORAGE_KEY, String(clamped));
@@ -5477,16 +5555,18 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       <div className="rounded-2xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/40 transition-colors">
         <a href={url} target="_blank" rel="noreferrer" className="block relative rounded-t-2xl overflow-hidden">
         <div className="relative w-full h-[220px] bg-osu-b6 overflow-hidden">
-          {!coverBroken && (
-            <img
-              src={bm.covers.cover}
-              alt=""
-              className={`w-full h-full object-cover transition-opacity duration-500 ${coverLoaded ? "opacity-100" : "opacity-0"}`}
-              loading="lazy"
-              onLoad={() => setCoverLoaded(true)}
-              onError={() => setCoverBroken(true)}
+          {coverUrl && (
+            <div
+              className={`absolute inset-0 bg-cover bg-center transition-opacity duration-500 ${coverReady ? "opacity-100" : "opacity-0"}`}
+              style={coverReady ? { backgroundImage: `url("${coverUrl.replace(/"/g, '\\"')}")` } : undefined}
+              aria-hidden="true"
             />
           )}
+          {hydrating ? (
+            <div className="absolute right-3 bottom-3 grid h-7 w-7 place-items-center rounded-md border border-white/15 bg-black/45 backdrop-blur-sm">
+              <div className="h-3.5 w-3.5 rounded-full border-2 border-white/25 border-t-osu-pink-light animate-spin" />
+            </div>
+          ) : null}
         </div>
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
         <BeatmapStatusBadge status={bm.status} className="absolute top-3 left-3" />
@@ -5664,7 +5744,10 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
               ref={audioRef}
               src={previewUrl}
               preload="metadata"
-              onLoadedMetadata={(e) => setDuration(e.currentTarget.duration || 0)}
+              onLoadedMetadata={(e) => {
+                e.currentTarget.volume = volume;
+                setDuration(e.currentTarget.duration || 0);
+              }}
               onTimeUpdate={(e) => {
                 const audio = e.currentTarget;
                 if (requestedAudioModeRef.current !== "audio") return;
@@ -5691,8 +5774,14 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
                 ref={replayAudioRef}
                 src={replayAudioUrl}
                 preload={replayAudioMode === "set-preview" ? "metadata" : "none"}
-                onCanPlay={() => setReplayAudioLoading(false)}
-                onPlaying={() => setReplayAudioLoading(false)}
+                onCanPlay={(e) => {
+                  e.currentTarget.volume = volume;
+                  setReplayAudioLoading(false);
+                }}
+                onPlaying={(e) => {
+                  e.currentTarget.volume = volume;
+                  setReplayAudioLoading(false);
+                }}
                 onTimeUpdate={(e) => {
                   const audio = e.currentTarget;
                   const maxSeconds = replayAudioStartSecondsRef.current + ((replayPreviewWindowMs / 1000) * replayAudioPlaybackRate);
@@ -5783,23 +5872,29 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
             </div>
           </div>
         ) : null}
-        <button
-          type="button"
-          onClick={startReplayPreview}
-          className={`absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-md border border-osu-f1/35 bg-osu-b5/70 px-3 py-1.5 text-[11px] font-semibold text-osu-l2 backdrop-blur-sm transition-all duration-200 hover:border-osu-l2/70 hover:bg-osu-b4/80 hover:text-white cursor-pointer md:left-[150px] ${
-            replayPreviewRequested && !isReplayPreviewEnding ? "pointer-events-none opacity-0 scale-95" : "opacity-100 scale-100"
-          }`}
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            className="h-3 w-3"
-            aria-hidden
+        {selectedBeatmap ? (
+          <button
+            type="button"
+            onClick={startReplayPreview}
+            className={`absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-md border border-osu-f1/35 bg-osu-b5/70 px-3 py-1.5 text-[11px] font-semibold text-osu-l2 backdrop-blur-sm transition-all duration-200 hover:border-osu-l2/70 hover:bg-osu-b4/80 hover:text-white cursor-pointer md:left-[150px] ${
+              replayPreviewRequested && !isReplayPreviewEnding ? "pointer-events-none opacity-0 scale-95" : "opacity-100 scale-100"
+            }`}
           >
-            <path d="M8 5v14l11-7z" />
-          </svg>
-          <span>chart preview</span>
-        </button>
+            <svg
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              className="h-3 w-3"
+              aria-hidden
+            >
+              <path d="M8 5v14l11-7z" />
+            </svg>
+            <span>chart preview</span>
+          </button>
+        ) : hydrating ? (
+          <div className="absolute left-1/2 top-1/2 z-20 grid h-8 w-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-md border border-osu-b3/40 bg-osu-b5/65 shadow-lg shadow-black/20 backdrop-blur-[1px] md:left-[150px]">
+            <div className="h-4 w-4 rounded-full border-2 border-osu-f1/25 border-t-osu-pink/90 animate-spin" />
+          </div>
+        ) : null}
         {replayPreviewError ? (
           <div className="absolute inset-x-3 top-3 rounded-md bg-black/60 px-2 py-1 text-[10px] text-rose-300">
             {replayPreviewError}

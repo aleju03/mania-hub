@@ -1,18 +1,27 @@
-import { parseManiaBeatmap, type ManiaBeatmap } from "./beatmap-parser";
+import { parseManiaBeatmap, type ManiaBeatmap, type ParseManiaBeatmapOptions } from "./beatmap-parser";
 
 const MAX_PARSED_BEATMAPS = 50;
-const parsedBeatmapCache = new Map<number, { content: string; beatmap: ManiaBeatmap }>();
+const parsedBeatmapCache = new Map<string, { content: string; beatmap: ManiaBeatmap }>();
 
-export function parseCachedManiaBeatmap(beatmapId: number, content: string): ManiaBeatmap {
-  const cached = parsedBeatmapCache.get(beatmapId);
+function getCacheKey(beatmapId: number, options: ParseManiaBeatmapOptions): string {
+  return `${beatmapId}:${options.keyCount ?? "default"}`;
+}
+
+export function parseCachedManiaBeatmap(
+  beatmapId: number,
+  content: string,
+  options: ParseManiaBeatmapOptions = {},
+): ManiaBeatmap {
+  const cacheKey = getCacheKey(beatmapId, options);
+  const cached = parsedBeatmapCache.get(cacheKey);
   if (cached?.content === content) {
-    parsedBeatmapCache.delete(beatmapId);
-    parsedBeatmapCache.set(beatmapId, cached);
+    parsedBeatmapCache.delete(cacheKey);
+    parsedBeatmapCache.set(cacheKey, cached);
     return cached.beatmap;
   }
 
-  const beatmap = parseManiaBeatmap(content);
-  parsedBeatmapCache.set(beatmapId, { content, beatmap });
+  const beatmap = parseManiaBeatmap(content, options);
+  parsedBeatmapCache.set(cacheKey, { content, beatmap });
 
   while (parsedBeatmapCache.size > MAX_PARSED_BEATMAPS) {
     const oldestKey = parsedBeatmapCache.keys().next().value;

@@ -7,6 +7,8 @@ import { getCountryFlagUrl, getCountryName, isGlobalScope } from "../lib/country
 import { formatAccuracy, formatTimeAgo, formatPP, formatNumber, formatPpGain } from "../lib/format";
 import {
   getBeatmapUrl,
+  getBeatmapKeyCount,
+  getBeatmapKeymodeLabel,
   getDisplayedAccuracy,
   getDisplayedRank,
   getDisplayedTotalScore,
@@ -131,7 +133,7 @@ type MissFilter = "all" | "fc" | "fc_choke";
 
 function scoreMatchesKeyFilter(score: LeanTrackerScore, keyFilter: KeyFilter): boolean {
   if (keyFilter === "all") return true;
-  const keys = score.beatmap?.cs;
+  const keys = getBeatmapKeyCount(score.beatmap);
   if (keys == null) return false;
   return keyFilter === "4k" ? keys === 4 : keys !== 4;
 }
@@ -1146,7 +1148,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
 }) {
   const navigate = useNavigate();
 
-  const keys = score.beatmap?.cs;
+  const keymodeLabel = getBeatmapKeymodeLabel(score.beatmap);
   const totalScore = getDisplayedTotalScore(score);
   const beatmapUrl = getBeatmapUrl(score);
   const scoreUrl = getScoreUrl(score);
@@ -1232,9 +1234,9 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
               )}
               <span className="text-[10px] text-osu-f1 truncate">[{score.beatmap?.version}]</span>
             </div>
-            {keys && (
+            {keymodeLabel && (
               <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
-                {keys}K
+                {keymodeLabel}
               </span>
             )}
             <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>

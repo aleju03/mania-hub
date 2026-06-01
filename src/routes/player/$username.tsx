@@ -21,6 +21,8 @@ import {
 } from "../../lib/format";
 import {
   getBeatmapUrl,
+  getBeatmapKeyCount,
+  getBeatmapKeymodeLabel,
   getModAcronyms,
   getModDisplayList,
   getScoreDisplayValues,
@@ -185,13 +187,14 @@ function getModFilterGroup(key: string): readonly string[] | null {
 
 function matchesKeyFilter(score: OsuScore, keyFilter: KeyFilter): boolean {
   if (keyFilter === "all") return true;
-  return score.beatmap?.cs === Number(keyFilter.replace("k", ""));
+  return getBeatmapKeyCount(score.beatmap) === Number(keyFilter.replace("k", ""));
 }
 
 function getAvailableKeyModes(scores: OsuScore[]): string[] {
   const keys = new Set<number>();
   for (const score of scores) {
-    if (score.beatmap?.cs != null) keys.add(score.beatmap.cs);
+    const keyCount = getBeatmapKeyCount(score.beatmap);
+    if (keyCount != null) keys.add(keyCount);
   }
   return Array.from(keys).sort((a, b) => a - b).map((k) => `${k}k`);
 }
@@ -2446,7 +2449,7 @@ function ScoreThumbnail({ score }: { score: OsuScore }) {
 }
 
 function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
-  const keys = score.beatmap?.cs;
+  const keymodeLabel = getBeatmapKeymodeLabel(score.beatmap);
   const linkUrl = getScoreUrl(score) ?? getBeatmapUrl(score);
   const canReplay = scoreHasReplay(score);
   const display = getScoreDisplayValues(score);
@@ -2464,9 +2467,9 @@ function ScoreRow({ score, position }: { score: OsuScore; position: number }) {
           <span className="text-[10px] text-osu-f1 truncate hidden sm:inline">
             [{score.beatmap?.version}]
           </span>
-          {keys && (
+          {keymodeLabel && (
             <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
-              {keys}K
+              {keymodeLabel}
             </span>
           )}
           <span className="hidden sm:inline flex-shrink-0"><DanBadge score={score} /></span>

@@ -232,8 +232,6 @@ const RAW_COUNTRY_OPTIONS = [
 ] as const;
 
 export const COUNTRY_OPTIONS = [...RAW_COUNTRY_OPTIONS].sort((a, b) => {
-  if (a.code === DEFAULT_COUNTRY_CODE) return -1;
-  if (b.code === DEFAULT_COUNTRY_CODE) return 1;
   return a.name.localeCompare(b.name);
 });
 

@@ -343,6 +343,7 @@ create index if not exists idx_country_maps_snapshots_refreshed on country_maps_
 create index if not exists idx_maps_beatmaps_beatmapset on maps_beatmaps(beatmapset_id);
 create index if not exists idx_country_maps_farmed_scores_country_updated on country_maps_farmed_scores(country, updated_at desc);
 create index if not exists idx_country_maps_farmed_scores_country_beatmap on country_maps_farmed_scores(country, beatmap_id);
+create index if not exists idx_country_maps_farmed_scores_user on country_maps_farmed_scores(user_id, beatmap_id, pp);
 create index if not exists idx_replay_video_exports_status_time on replay_video_exports(status, updated_at desc);
 create index if not exists idx_dan_estimates_updated on dan_estimates(updated_at desc);
 create index if not exists idx_jobs_ready on jobs(status, run_after, priority desc);

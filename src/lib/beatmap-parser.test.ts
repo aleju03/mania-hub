@@ -139,4 +139,44 @@ CircleSize:4
     expect(beatmap.backgroundFilename).toBe("bg.jpg");
     expect(beatmap.breakPeriods).toEqual([{ startTime: 1234, endTime: 5678 }]);
   });
+
+  it("applies key-count overrides for converted replay charts", () => {
+    const beatmap = parseManiaBeatmap(`
+osu file format v14
+
+[General]
+Mode:0
+
+[Metadata]
+Title:Convert
+Artist:Tester
+Creator:Mapper
+Version:Default 7K
+
+[Difficulty]
+CircleSize:6.5
+
+[HitObjects]
+0,192,1000,1,0,0:0:0:0:
+511,192,1500,1,0,0:0:0:0:
+`, { keyCount: 4 });
+
+    expect(beatmap.keyCount).toBe(4);
+    expect(beatmap.notes.map((note) => note.column)).toEqual([0, 3]);
+  });
+
+  it("normalizes fractional key counts without fractional note columns", () => {
+    const beatmap = parseManiaBeatmap(`
+osu file format v14
+
+[Difficulty]
+CircleSize:3.3
+
+[HitObjects]
+511,192,1000,1,0,0:0:0:0:
+`);
+
+    expect(beatmap.keyCount).toBe(4);
+    expect(beatmap.notes[0].column).toBe(3);
+  });
 });

@@ -25,6 +25,7 @@ export interface OsuBeatmap {
   mode: string;
   status?: string;
   cs: number;
+  convert?: boolean;
   bpm: number;
   max_combo?: number;
   version: string;
@@ -93,7 +94,7 @@ export interface LeanTrackerScore extends Required<Pick<OscScore, "id" | "user_i
   total_score?: number;
   classic_total_score?: number;
   legacy_total_score?: number;
-  beatmap: Pick<OsuBeatmap, "id" | "beatmapset_id" | "difficulty_rating" | "mode" | "cs" | "bpm" | "max_combo" | "version" | "url">;
+  beatmap: Pick<OsuBeatmap, "id" | "beatmapset_id" | "difficulty_rating" | "mode" | "cs" | "bpm" | "max_combo" | "version" | "url" | "convert">;
   beatmapset: Pick<OsuBeatmapset, "id" | "title" | "artist" | "covers">;
   user: ScoreUser;
   created_at?: string;

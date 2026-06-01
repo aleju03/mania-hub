@@ -391,6 +391,7 @@ function toLeanTrackerScore(score: OsuScore): LeanTrackerScore {
       difficulty_rating: score.beatmap.difficulty_rating,
       mode: score.beatmap.mode,
       cs: score.beatmap.cs,
+      convert: score.beatmap.convert,
       bpm: score.beatmap.bpm,
       max_combo: score.beatmap.max_combo,
       version: score.beatmap.version,

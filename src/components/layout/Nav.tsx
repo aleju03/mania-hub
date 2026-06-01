@@ -22,6 +22,7 @@ const links = [
   { id: "tracker", to: "/tracker", label: "tracker" },
   { id: "top-plays", to: "/top-plays", label: "top plays" },
   { id: "maps", to: "/maps", label: "maps" },
+  { id: "farm-helper", to: "/farm-helper", label: "farm helper" },
   { id: "replay", to: "/replay", label: "replay" },
   { id: "snipes", to: "/snipes", label: "snipes" },
 ] as const;
@@ -40,7 +41,7 @@ function preserveSearchWithCountryOnFirstPage(country: string) {
   return ((prev: Record<string, unknown>) => ({ ...prev, country, page: 0 })) as never;
 }
 
-export function Nav() {
+export function Nav({ devPreview = false }: { devPreview?: boolean }) {
   const location = useLocation();
   const navigate = useNavigate();
   const auth = useAuth();
@@ -69,7 +70,12 @@ export function Nav() {
   // only once the tier is known to be "snipes" — while the tier is still
   // unknown (first-ever visit) the tab stays hidden rather than flashing in.
   const showSnipesLink = !liveBackendConfigured || selectedCountryFeatureTier === "snipes";
-  const visibleLinks = showSnipesLink ? links : links.filter((link) => link.id !== "snipes");
+  // Farm Helper is dev-only for now: hidden on production, shown on preview/dev hosts.
+  const visibleLinks = links.filter((link) => {
+    if (link.id === "snipes" && !showSnipesLink) return false;
+    if (link.id === "farm-helper" && !devPreview) return false;
+    return true;
+  });
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
   const snipesFilters = useAppStore((state) => state.snipesFiltersByCountry[selectedCountry] ?? DEFAULT_SNIPES_FILTERS);
   const hydrated = useHasHydrated();
@@ -242,6 +248,10 @@ export function Nav() {
     // because other routes also use `page` with different expectations.
     if (location.pathname === "/snipes") {
       navigate({ to: "/snipes", search: preserveSearchWithCountry(country), replace: true });
+      return;
+    }
+    if (location.pathname === "/farm-helper") {
+      // Farm Helper is global; changing country only updates the app shell.
       return;
     }
     if (location.pathname === "/maps") {

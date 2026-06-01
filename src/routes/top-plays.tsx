@@ -5,7 +5,7 @@ import { getCountryPopoffs, getPartialTopPlays, getRankings, getTopPlaysRefreshS
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryFlagUrl, getCountryName, isGlobalScope } from "../lib/country";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPpGain } from "../lib/format";
-import { getBeatmapUrl, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModDisplayList, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
+import { getBeatmapUrl, getBeatmapKeymodeLabel, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModDisplayList, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageTabs } from "../components/layout/PageTabs";
@@ -864,6 +864,7 @@ function PopOffsPage() {
                   const lazer = isLazerScore(p.score);
                   const accColorClass = lazer ? "text-osu-pink-light" : "text-osu-l2";
                   const judgementStats = getManiaJudgementStats(p.score);
+                  const keymodeLabel = getBeatmapKeymodeLabel(p.score.beatmap);
                   return (
                   <motion.div
                     key={`${p.user.id}-${p.score.id}`}
@@ -954,6 +955,11 @@ function PopOffsPage() {
                           <span className="text-[10px] text-osu-f1 truncate">
                             [{p.score.beatmap?.version}]
                           </span>
+                          {keymodeLabel && (
+                            <span className="px-1 py-0.5 rounded text-[8px] font-bold bg-osu-b3/50 text-osu-yellow flex-shrink-0">
+                              {keymodeLabel}
+                            </span>
+                          )}
                           <span className="hidden sm:inline flex-shrink-0"><DanBadge score={p.score} /></span>
                         </div>
                         {/* Row 3 (mobile): Mods left, accuracy right */}
