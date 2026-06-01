@@ -85,6 +85,24 @@ interface LiveBackendStatus {
     byCaller?: Array<{ caller: string; count: number }>;
     byPath?: Array<{ path: string; count: number }>;
   };
+  scoresFallback?: {
+    enabled: boolean;
+    intervalMs: number;
+    updatedAt: string | null;
+    cursorUpdatedAt: string | null;
+    hasCursor: boolean;
+    result: {
+      ran: boolean;
+      reason: string | null;
+      fetched: number;
+      candidates: number;
+      inserted: number;
+      skipped: number;
+      cursorString: string | null;
+      nextCursorString: string | null;
+      latestEndedAt: string | null;
+    } | null;
+  };
   abuse?: {
     windows: number;
     sseTotal: number;
@@ -835,6 +853,7 @@ function LiveBackendPage() {
   }, [activeTab, countryCode]);
 
   const oscFeed = getOscFeedStatus(status);
+  const fallbackFeed = getScoresFallbackStatus(status);
   const osuRateTarget = status?.rate.targetPerMinute ?? status?.rate.hardPerMinute ?? 0;
 
   return (
@@ -874,7 +893,7 @@ function LiveBackendPage() {
           {error ? <ErrorBanner message={error} /> : null}
 
           <Section title="Health" subtitle="Is the backend up and ingesting?">
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
               <KpiCard
                 label="Backend"
                 value={status?.ok ? "online" : "offline"}
@@ -895,6 +914,13 @@ function LiveBackendPage() {
                 hint={oscFeed.hint}
                 tone={oscFeed.tone}
                 icon={<Radio className="h-4 w-4" />}
+              />
+              <KpiCard
+                label="Fallback"
+                value={fallbackFeed.value}
+                hint={fallbackFeed.hint}
+                tone={fallbackFeed.tone}
+                icon={<RefreshCw className="h-4 w-4" />}
               />
               <KpiCard
                 label="Queue"
@@ -2222,9 +2248,36 @@ function getOscFeedStatus(status: LiveBackendStatus | null): { value: string; hi
   return { value: "closed", hint: "socket transport closed", tone: "bad", batchTone: "bad" };
 }
 
+function getScoresFallbackStatus(status: LiveBackendStatus | null): { value: string; hint: string; tone: StatusTone } {
+  const fallback = status?.scoresFallback;
+  if (!fallback) return { value: "unknown", hint: "status not loaded", tone: "neutral" };
+  if (!fallback.enabled) return { value: "off", hint: "disabled by config", tone: "neutral" };
+  if (!fallback.updatedAt || !fallback.result) return { value: "waiting", hint: `every ${formatFallbackInterval(fallback.intervalMs)}`, tone: "neutral" };
+  const result = fallback.result;
+  const age = formatTimeAgo(fallback.updatedAt);
+  if (!result.ran) {
+    const reason = result.reason === "osc_fresh" ? "oSC fresh" : result.reason ?? "skipped";
+    return { value: "standby", hint: `${reason}, checked ${age}`, tone: "neutral" };
+  }
+  return {
+    value: "polling",
+    hint: `${formatNumber(result.fetched)} fetched, ${formatNumber(result.candidates)} candidates, ${formatNumber(result.inserted)} inserted ${age}`,
+    tone: "warn",
+  };
+}
+
+function formatFallbackInterval(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "configured interval";
+  if (ms % 60_000 === 0) return `${Math.round(ms / 60_000)}m`;
+  if (ms % 1000 === 0) return `${Math.round(ms / 1000)}s`;
+  return `${formatNumber(ms)}ms`;
+}
+
 function StatusCard({ status, connectionState, country }: { status: LiveBackendStatus | null; connectionState: ConnectionState; country: string }) {
   const roster = status?.roster?.find((entry) => entry.country === country);
   const oscFeed = getOscFeedStatus(status);
+  const fallbackFeed = getScoresFallbackStatus(status);
+  const fallbackResult = status?.scoresFallback?.result;
   return (
     <SectionCard title="Process status" subtitle="Health, readiness, socket, and roster">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -2234,6 +2287,9 @@ function StatusCard({ status, connectionState, country }: { status: LiveBackendS
         <DetailRow label="oSC transport" value={status?.osc.connected ? "connected" : "closed"} tone={status?.osc.connected ? "neutral" : "warn"} />
         <DetailRow label="Last oSC batch" value={status?.osc.lastBatchAt ? formatTimeAgo(status.osc.lastBatchAt) : "none"} tone={oscFeed.batchTone} />
         <DetailRow label="oSC error" value={status?.osc.lastError ?? "none"} tone={status?.osc.lastError ? "bad" : "good"} />
+        <DetailRow label="Fallback poller" value={fallbackFeed.hint} tone={fallbackFeed.tone} />
+        <DetailRow label="Fallback last run" value={status?.scoresFallback?.updatedAt ? formatTimeAgo(status.scoresFallback.updatedAt) : "never"} />
+        <DetailRow label="Fallback result" value={fallbackResult?.ran ? `${formatNumber(fallbackResult.fetched)} fetched / ${formatNumber(fallbackResult.candidates)} candidates / ${formatNumber(fallbackResult.inserted)} inserted` : fallbackResult?.reason ?? "none"} />
         <DetailRow label={`${country} roster`} value={roster ? `${formatNumber(roster.users)} users` : "not loaded"} tone={roster ? "good" : "warn"} />
         <DetailRow label="Roster refreshed" value={roster?.refreshedAt ? formatTimeAgo(roster.refreshedAt) : "never"} tone={roster?.refreshedAt ? "good" : "warn"} />
         <DetailRow label="Workers" value={status?.worker?.paused ? "paused" : "running"} tone={status?.worker?.paused ? "warn" : "good"} />

@@ -668,11 +668,25 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
     queueSummary: await ctx.queue.summary(),
     roster: await rosterSummary(ctx.db),
     rate: ctx.osu.limiter.state(),
+    scoresFallback: await scoresFallbackStatus(ctx),
     abuse: ctx.abuse?.state() ?? null,
     apiCallHistory: await apiCallHistory(ctx.db),
     countries: await countryRegistryStatus(ctx),
     catchup: await countryCatchupStatus(ctx),
     worker: options.includeWorkerActivity ? worker : publicWorkerStatus(worker),
+  };
+}
+
+async function scoresFallbackStatus(ctx: HttpContext) {
+  const resultRow = (await exec(ctx.db, "select value_json, updated_at from live_meta where key = 'osu_scores_fallback_last_result'")).rows[0];
+  const cursorRow = (await exec(ctx.db, "select value_json, updated_at from live_meta where key = 'osu_scores_fallback_cursor_string'")).rows[0];
+  return {
+    enabled: ctx.config.enableOsuScoresFallback,
+    intervalMs: ctx.config.osuScoresFallbackIntervalMs,
+    updatedAt: resultRow?.updated_at == null ? null : String(resultRow.updated_at),
+    result: parseJson(resultRow?.value_json, null),
+    cursorUpdatedAt: cursorRow?.updated_at == null ? null : String(cursorRow.updated_at),
+    hasCursor: cursorRow?.value_json != null,
   };
 }
 
