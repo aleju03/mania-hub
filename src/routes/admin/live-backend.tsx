@@ -3201,18 +3201,40 @@ function GuardMetric({
 function QueueSummaryCard({ status }: { status: LiveBackendStatus | null }) {
   const depth = status?.queueDepth ?? 0;
   const rows = status?.queueSummary ?? [];
+  const activeRows = rows.filter((row) => row.status !== "deferred_pressure");
+  const parkedRows = rows.filter((row) => row.status === "deferred_pressure");
+  const parked = status?.queuePressure?.deferred ?? parkedRows.reduce((sum, row) => sum + row.count, 0);
+  const pressure = status?.queuePressure;
   return (
     <SectionCard title="Job queue" subtitle="Counts by type and status">
       <div className="space-y-3">
-        <div className="rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2 flex items-center gap-3">
-          <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Active depth</div>
-          <div className="ml-auto text-xl font-bold text-white">{formatNumber(depth)}</div>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2">
+            <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Active depth</div>
+            <div className="mt-1 text-xl font-bold text-white">{formatNumber(depth)}</div>
+            <div className="mt-1 text-[10px] text-osu-f1 truncate">
+              {pressure ? `target ${formatNumber(pressure.targetDepth)}, recover below ${formatNumber(pressure.recoveryDepth ?? 60)}` : "queued / running / failed"}
+            </div>
+          </div>
+          <div className={`rounded-md border px-3 py-2 ${parked > 0 ? "bg-osu-yellow/10 border-osu-yellow/25" : "bg-osu-b5/60 border-osu-b3/20"}`}>
+            <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Parked</div>
+            <div className={parked > 0 ? "mt-1 text-xl font-bold text-osu-yellow" : "mt-1 text-xl font-bold text-white"}>{formatNumber(parked)}</div>
+            <div className="mt-1 text-[10px] text-osu-f1 truncate">saved for later, not deleted</div>
+          </div>
         </div>
+        {parkedRows.length > 0 ? (
+          <div>
+            <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold mb-2">Parked jobs</div>
+            <div className="space-y-1.5 max-h-[150px] overflow-auto pr-1">
+              {parkedRows.map((row) => <QueueSummaryRow key={`${row.status}:${row.type}`} row={row} />)}
+            </div>
+          </div>
+        ) : null}
         <div className="space-y-1.5 max-h-[360px] overflow-auto pr-1">
-          {rows.length === 0 ? (
+          {activeRows.length === 0 ? (
             <div className="text-[11px] text-osu-f1 py-3">No jobs recorded.</div>
           ) : (
-            rows.map((row) => <QueueSummaryRow key={`${row.status}:${row.type}`} row={row} />)
+            activeRows.map((row) => <QueueSummaryRow key={`${row.status}:${row.type}`} row={row} />)
           )}
         </div>
       </div>
@@ -3340,7 +3362,9 @@ function QueueSummaryRow({ row }: { row: NonNullable<LiveBackendStatus["queueSum
       ? "text-osu-red-light"
       : row.status === "running"
         ? "text-osu-yellow"
-        : "text-osu-c2";
+        : row.status === "deferred_pressure"
+          ? "text-osu-yellow"
+          : "text-osu-c2";
   return (
     <div className="rounded-md bg-osu-b5/60 border border-osu-b3/20 px-2.5 py-2">
       <div className="flex items-center gap-2">
