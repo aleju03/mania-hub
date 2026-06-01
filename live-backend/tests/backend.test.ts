@@ -695,7 +695,7 @@ describe("live backend", () => {
     expect(Number((await exec(db, "select count(*) as count from jobs where type = 'reconcile_user_recent_scores'")).rows[0].count)).toBe(0);
   });
 
-  it("only fans osu scores fallback rows into top-play refresh jobs", async () => {
+  it("fans osu scores fallback rows into leaderboard feature jobs", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-30T12:00:00.000Z"));
     const { db, ingestor } = await setup(["CR"]);
@@ -725,7 +725,9 @@ describe("live backend", () => {
 
     expect(result).toMatchObject({ ran: true, fetched: 1, candidates: 1, inserted: 1 });
     expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_user_top_scores'")).rows[0].count)).toBe(1);
-    expect(Number((await exec(db, "select count(*) as count from jobs where type in ('refresh_user_maps_farmed_scores', 'seed_snipe_board')")).rows[0].count)).toBe(0);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_user_maps_farmed_scores'")).rows[0].count)).toBe(1);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'seed_snipe_board'")).rows[0].count)).toBe(1);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'reconcile_user_recent_scores'")).rows[0].count)).toBe(0);
   });
 
   it("dedupes maps-farmed refresh jobs per country user", async () => {
