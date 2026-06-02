@@ -1452,7 +1452,7 @@ describe("live backend", () => {
     expect(cached?.isStale).toBe(true);
   });
 
-  it("refreshes stale profile user stats without refetching the best-score snapshot", async () => {
+  it("serves stale profile user stats immediately and refreshes them in the background", async () => {
     const { db } = await setup();
     const best = await fixture<OscScore[]>("top-best.json");
     const getUserByKey = vi.fn(async () => ({
@@ -1481,14 +1481,21 @@ describe("live backend", () => {
     const snapshot = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
 
     expect(snapshot.user).toMatchObject({
+      avatar_url: "https://assets.example/sniper.png",
+      page: null,
+      statistics: expect.objectContaining({ global_rank: 100, play_count: 10 }),
+    });
+    expect(getUserByKey).toHaveBeenCalledTimes(1);
+    expect(getUserBestScoresWindow).toHaveBeenCalledTimes(1);
+
+    await vi.waitFor(() => expect(getUser).toHaveBeenCalledTimes(1));
+    const refreshed = await getCachedPlayerProfileSnapshot(db, "Sniper");
+    expect(refreshed?.user).toMatchObject({
       avatar_url: "https://assets.example/sniper-new.png",
       page: null,
       statistics: expect.objectContaining({ global_rank: 90, play_count: 20 }),
     });
-    expect(snapshot.fetchedAt).not.toBe(snapshot.userFetchedAt);
-    expect(getUserByKey).toHaveBeenCalledTimes(1);
-    expect(getUser).toHaveBeenCalledTimes(1);
-    expect(getUserBestScoresWindow).toHaveBeenCalledTimes(1);
+    expect(refreshed?.fetchedAt).not.toBe(refreshed?.userFetchedAt);
   });
 
   it("projects confirmed live top plays into cached player snapshots without same-map duplicates", async () => {
@@ -1603,6 +1610,11 @@ describe("live backend", () => {
       [liveTop.id, liveTop.pp, liveTop.pp, JSON.stringify({ user: { id: 101, username: "Sniper", avatar_url: "https://assets.example/sniper.png" }, score: liveTop, pp: liveTop.pp, weightedPP: liveTop.pp, ppGain: 50, time: liveTop.ended_at }), eventDetectedAt],
     );
 
+    const firstServed = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    expect(firstServed.bestScores.map((score) => score.id)).toContain(9001);
+    expect(firstServed.projection.appliedTopPlayEvents).toBe(1);
+
+    await vi.waitFor(() => expect(getUser).toHaveBeenCalledTimes(1));
     const snapshot = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
 
     expect(snapshot.bestScores.map((score) => score.id)).toContain(9001);

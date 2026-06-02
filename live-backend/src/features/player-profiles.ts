@@ -99,21 +99,14 @@ export async function getPlayerProfileSnapshot(
 ): Promise<PlayerProfileSnapshot> {
   const key = normalizeProfileKey(rawKey);
   const row = await getStoredProfileSnapshot(db, key);
-  if (row && !isExpired(row.fetched_at, PROFILE_SNAPSHOT_TTL_MS)) {
-    return buildServedSnapshot(db, await refreshProfileUserIfDue(db, osu, row), false);
-  }
-
   if (row) {
-    try {
-      return buildServedSnapshot(db, await fetchAndStoreProfileSnapshot(db, osu, key), false);
-    } catch (error) {
-      await exec(db, "update profile_snapshots set refresh_error = ?, updated_at = ? where user_id = ?", [
-        error instanceof Error ? error.message : String(error),
-        nowIso(),
-        row.user_id,
-      ]);
+    const snapshotExpired = isExpired(row.fetched_at, PROFILE_SNAPSHOT_TTL_MS);
+    if (snapshotExpired) {
+      refreshProfileSnapshotInBackground(db, osu, key, row);
       return buildServedSnapshot(db, row, true);
     }
+    refreshProfileUserInBackground(db, osu, row);
+    return buildServedSnapshot(db, row, false);
   }
 
   return buildServedSnapshot(db, await fetchAndStoreProfileSnapshot(db, osu, key), false);
@@ -262,6 +255,29 @@ async function fetchAndStoreProfileSnapshot(
   const row = await getStoredProfileSnapshot(db, usernameKey);
   if (!row) throw new Error("Failed to store profile snapshot");
   return row;
+}
+
+function refreshProfileSnapshotInBackground(
+  db: Db,
+  osu: Pick<OsuApiClient, "getUserByKey" | "getUserBestScoresWindow">,
+  key: string,
+  row: ProfileSnapshotRow,
+): void {
+  void fetchAndStoreProfileSnapshot(db, osu, key).catch(async (error) => {
+    await exec(db, "update profile_snapshots set refresh_error = ?, updated_at = ? where user_id = ?", [
+      error instanceof Error ? error.message : String(error),
+      nowIso(),
+      row.user_id,
+    ]);
+  });
+}
+
+function refreshProfileUserInBackground(
+  db: Db,
+  osu: Pick<OsuApiClient, "getUser">,
+  row: ProfileSnapshotRow,
+): void {
+  void refreshProfileUserIfDue(db, osu, row);
 }
 
 async function refreshProfileUserIfDue(
