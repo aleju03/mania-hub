@@ -32,7 +32,7 @@ import { TrackerRowSkeleton } from "../components/ui/LoadingSkeleton";
 import { Pagination } from "../components/ui/Pagination";
 import { getManiaJudgementStats } from "../components/ui/ManiaJudgementStats";
 import { UsernameText } from "../components/ui/UsernameText";
-import { TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
+import { TRACKER_FEED_SCORE_LIMIT, TRACKER_PP_GAIN_CLIENT_TTL, useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import type { LeanTrackerScore } from "../lib/types";
 import { parseCountrySearchParam } from "../lib/country-search";
 import { getReplaySearch } from "../lib/replay-navigation";
@@ -692,6 +692,7 @@ function ScoresPage() {
       : "Click to filter by FC, then FC chokes";
   const listKey = `${filter}:${gradeFilter}:${keyFilter}:${missFilter}`;
   const liveStatusLabel = liveBackendEnabled ? "Live updates on" : "Live polling";
+  const scoreWindowLabel = liveBackendEnabled ? `${TRACKER_FEED_SCORE_LIMIT}-score window` : `${feedScores.length} scores`;
   const totalPages = Math.max(1, Math.ceil(filtered.length / TRACKER_PAGE_SIZE));
   const currentPage = Math.min(page, totalPages - 1);
   const paginatedScores = useMemo(
@@ -737,7 +738,7 @@ function ScoresPage() {
               <>
                 <div className="w-2 h-2 rounded-full bg-osu-green animate-pulse" />
                 <span className="text-[10px] text-osu-f1">
-                  {liveStatusLabel} {"\u00b7"} {feedScores.length} scores
+                  {liveStatusLabel} {"\u00b7"} {scoreWindowLabel}
                 </span>
               </>
             )}

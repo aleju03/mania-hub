@@ -7,7 +7,7 @@ import { getCountryFlagUrl, getCountryName, isGlobalScope } from "../lib/country
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
 import { getBeatmapKeyCount, getBeatmapKeymodeLabel, getModDisplayList, getScoreDisplayValues, getScoreTimestamp } from "../lib/score";
-import { fetchLiveGlobalRankings, fetchLiveTopPlaysSnapshot, fetchLiveTrackerSnapshot, isLiveBackendConfigured, type LiveGlobalRankingEntry } from "../lib/live-backend";
+import { fetchLiveGlobalRankings, fetchLiveTopPlaysSnapshot, fetchLiveTrackerSnapshot, isLiveBackendConfigured, openLiveEventSource, type LiveGlobalRankingEntry } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
 import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
@@ -83,6 +83,7 @@ const HOME_GLOBAL_RANKINGS_STORAGE_KEY = "mania-hub-home-global-rankings-v1";
 let globalTopPlayersCache: { data: LiveGlobalRankingEntry[]; fetchedAt: number } | null = null;
 const HOME_RECENT_SCORES_SKELETON_COUNT = 2;
 const HOME_RECENT_SCORES_PLAYER_COUNT = 50;
+const HOME_LIVE_RECENT_SNAPSHOT_LIMIT = 20;
 const HOME_POPOFFS_PLAYER_COUNT = 10;
 
 function isStoredGlobalRankingEntry(value: unknown): value is LiveGlobalRankingEntry {
@@ -419,7 +420,7 @@ function HomePage() {
 
     if (liveBackendEnabled) {
       setLoadingScores(recentScores.length === 0);
-      fetchLiveTrackerSnapshot(selectedCountry, 100)
+      fetchLiveTrackerSnapshot(selectedCountry, HOME_LIVE_RECENT_SNAPSHOT_LIMIT)
         .then((snapshot) => {
           if (cancelled) return;
           const passedScores = snapshot.scores.filter((score) => getScoreDisplayValues(score).passed);
@@ -477,6 +478,21 @@ function HomePage() {
     markFeedScoresFetched,
     liveBackendEnabled,
   ]);
+
+  useEffect(() => {
+    if (!liveBackendEnabled) return;
+    const source = openLiveEventSource(selectedCountry);
+    if (!source) return;
+    source.addEventListener("tracker_score", (event) => {
+      const score = JSON.parse(event.data) as LeanTrackerScore;
+      if (!getScoreDisplayValues(score).passed) return;
+      addFeedScores(selectedCountry, [score]);
+      const current = useAppStore.getState().homeRecentScoresByCountry[selectedCountry] ?? EMPTY_SCORES;
+      setHomeRecentScores(selectedCountry, mergeHomeRecentScores(current, [score]));
+      setLoadingScores(false);
+    });
+    return () => source.close();
+  }, [addFeedScores, liveBackendEnabled, selectedCountry, setHomeRecentScores]);
 
   useEffect(() => {
     let cancelled = false;
