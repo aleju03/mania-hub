@@ -285,9 +285,21 @@ export const fetchLiveBackendAdminStatus = createServerFn({ method: "GET" })
       headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
     }
     const query = data.country ? `?country=${encodeURIComponent(data.country)}` : "";
-    let response = await fetch(`${base}/api/admin/status${query}`, { headers });
-    if (response.status === 404) {
-      response = await fetch(`${base}/api/status`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS);
+    let response: Response;
+    try {
+      response = await fetch(`${base}/api/admin/status${query}`, { headers, signal: controller.signal });
+      if (response.status === 404) {
+        response = await fetch(`${base}/api/status`, { signal: controller.signal });
+      }
+    } catch (err) {
+      if (isAbortError(err)) {
+        throw new Error(`Live backend admin status timed out after ${Math.round(LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS / 1000)}s.`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
     }
     const body = await response.json() as any;
     if (!response.ok) {
@@ -306,6 +318,7 @@ export interface LiveBackendBootstrap {
   countryFeatures: LiveCountryFeaturesSnapshot | null;
 }
 
+const LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS = 15_000;
 const LIVE_BACKEND_BOOTSTRAP_TIMEOUT_MS = 1_000;
 
 export const fetchLiveBackendBootstrap = createServerFn({ method: "GET" })

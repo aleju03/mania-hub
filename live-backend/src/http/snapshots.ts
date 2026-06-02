@@ -35,6 +35,12 @@ import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
 import { enqueueRosterRefreshes } from "../rosters/country-rosters.js";
 import { getLocalDbStorage, runRetention } from "../retention.js";
 
+const HIDDEN_ADMIN_WORKER_LANE_NAMES = new Set([
+  "dan-estimates",
+  "replay-video-render",
+  "replay-video-finalize",
+]);
+
 export interface HttpContext {
   db: Db;
   queue: JobQueue;
@@ -680,7 +686,7 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
     apiCallHistory: await apiCallHistory(ctx.db),
     countries: await countryRegistryStatus(ctx),
     catchup: await countryCatchupStatus(ctx),
-    worker: options.includeWorkerActivity ? worker : publicWorkerStatus(worker),
+    worker: options.includeWorkerActivity ? adminWorkerStatus(worker) : publicWorkerStatus(worker),
     ...(snapshotStats ? { snapshotStats } : {}),
   };
 }
@@ -841,13 +847,35 @@ async function countryFeaturesBody(ctx: HttpContext) {
   };
 }
 
-function publicWorkerStatus(worker: ReturnType<NonNullable<HttpContext["workerStatus"]>> | null) {
+type WorkerStatus = ReturnType<NonNullable<HttpContext["workerStatus"]>>;
+
+function visibleWorkerLanes(worker: WorkerStatus | null) {
+  return worker?.lanes?.filter((lane) => !HIDDEN_ADMIN_WORKER_LANE_NAMES.has(lane.name));
+}
+
+function adminWorkerStatus(worker: WorkerStatus | null) {
   if (!worker) return null;
   return {
     paused: worker.paused,
     stopped: worker.stopped,
     workerId: worker.workerId,
-    lanes: worker.lanes?.map((lane) => ({
+    lanes: visibleWorkerLanes(worker)?.map((lane) => ({
+      name: lane.name,
+      claimLimit: lane.claimLimit,
+      intervalMs: lane.intervalMs,
+      jobTypes: lane.jobTypes,
+      activeJobs: lane.activeJobs,
+    })),
+  };
+}
+
+function publicWorkerStatus(worker: WorkerStatus | null) {
+  if (!worker) return null;
+  return {
+    paused: worker.paused,
+    stopped: worker.stopped,
+    workerId: worker.workerId,
+    lanes: visibleWorkerLanes(worker)?.map((lane) => ({
       name: lane.name,
       claimLimit: lane.claimLimit,
       intervalMs: lane.intervalMs,

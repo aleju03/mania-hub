@@ -728,11 +728,14 @@ function LiveBackendPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [actionBusy, setActionBusy] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+  const loadInFlightCountryRef = useRef<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
 
   const countryCode = useMemo(() => country.trim().toUpperCase().slice(0, 2) || DEFAULT_COUNTRY, [country]);
 
   const load = useCallback(async (quiet = false): Promise<void> => {
+    if (quiet && loadInFlightCountryRef.current === countryCode) return;
+    loadInFlightCountryRef.current = countryCode;
     const requestId = ++requestIdRef.current;
     if (!quiet) setRefreshing(true);
     try {
@@ -745,7 +748,10 @@ function LiveBackendPage() {
       if (requestId !== requestIdRef.current) return;
       setError(err instanceof Error ? err.message : "Could not reach live backend.");
     } finally {
-      if (requestId === requestIdRef.current) setRefreshing(false);
+      if (requestId === requestIdRef.current) {
+        loadInFlightCountryRef.current = null;
+        setRefreshing(false);
+      }
     }
   }, [countryCode]);
 
@@ -863,6 +869,7 @@ function LiveBackendPage() {
   const oscFeed = getOscFeedStatus(status);
   const fallbackFeed = getScoresFallbackStatus(status);
   const osuRateTarget = status?.rate.targetPerMinute ?? status?.rate.hardPerMinute ?? 0;
+  const statusLoaded = status !== null;
 
   return (
     <div className="flex-1">
@@ -904,16 +911,16 @@ function LiveBackendPage() {
             <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
               <KpiCard
                 label="Backend"
-                value={status?.ok ? "online" : "offline"}
+                value={statusLoaded ? status.ok ? "online" : "offline" : "loading"}
                 hint={backendUrl ?? "not configured"}
-                tone={status?.ok ? "good" : "bad"}
+                tone={statusLoaded ? status.ok ? "good" : "bad" : "neutral"}
                 icon={<Server className="h-4 w-4" />}
               />
               <KpiCard
                 label="Database"
-                value={status?.db ? "ready" : "down"}
+                value={statusLoaded ? status.db ? "ready" : "down" : "loading"}
                 hint={formatStorageHint(status)}
-                tone={status?.storage?.overLimit ? "bad" : status?.db ? "good" : "bad"}
+                tone={statusLoaded ? status.storage?.overLimit ? "bad" : status.db ? "good" : "bad" : "neutral"}
                 icon={<Database className="h-4 w-4" />}
               />
               <KpiCard
