@@ -86,6 +86,7 @@ const HOME_RECENT_SCORES_SKELETON_COUNT = 2;
 const HOME_RECENT_SCORES_PLAYER_COUNT = 50;
 const HOME_LIVE_RECENT_SNAPSHOT_LIMIT = 20;
 const HOME_POPOFFS_PLAYER_COUNT = 10;
+const HOME_POPOFFS_CACHE_LIMIT = 200;
 
 function isStoredGlobalRankingEntry(value: unknown): value is LiveGlobalRankingEntry {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -271,6 +272,16 @@ function dedupeHomePopoffs(popoffs: LeanHomePopoff[]): LeanHomePopoff[] {
     seenCharts.add(key);
     return true;
   });
+}
+
+function getHomePopoffTimeMs(popoff: LeanHomePopoff): number {
+  return new Date(popoff.score.timestamp).getTime() || 0;
+}
+
+function mergeHomePopoffs(popoffs: LeanHomePopoff[], incoming: LeanHomePopoff[]): LeanHomePopoff[] {
+  return dedupeHomePopoffs([...incoming, ...popoffs])
+    .sort((a, b) => (b.score.pp ?? 0) - (a.score.pp ?? 0) || getHomePopoffTimeMs(b) - getHomePopoffTimeMs(a))
+    .slice(0, HOME_POPOFFS_CACHE_LIMIT);
 }
 
 function getHomePopoffUserKey(popoff: LeanHomePopoff): string {
@@ -506,8 +517,16 @@ function HomePage() {
       setHomeRecentScores(selectedCountry, mergeHomeRecentScores(current, [score]));
       setLoadingScores(false);
     });
+    source.addEventListener("top_play", (event) => {
+      const play = JSON.parse(event.data) as CountryTopPlay;
+      const popoff = countryTopPlayToHomePopoff(play);
+      if (!popoff) return;
+      const current = useAppStore.getState().homePopoffsByCountry[selectedCountry] ?? EMPTY_POPOFFS;
+      setHomePopoffs(selectedCountry, mergeHomePopoffs(current, [popoff]));
+      setLoadingPopoffs(false);
+    });
     return () => source.close();
-  }, [addFeedScores, liveBackendEnabled, selectedCountry, setHomeRecentScores]);
+  }, [addFeedScores, liveBackendEnabled, selectedCountry, setHomePopoffs, setHomeRecentScores]);
 
   useEffect(() => {
     let cancelled = false;
