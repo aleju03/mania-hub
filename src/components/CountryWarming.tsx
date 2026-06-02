@@ -1,4 +1,5 @@
-import { getCountryFlagUrl, getCountryName } from "../lib/country";
+import { getCountryName } from "../lib/country";
+import { CountryFlag } from "./ui/CountryFlag";
 
 /**
  * Shown on every country-scoped surface when the live backend has never seen
@@ -11,11 +12,7 @@ export function CountryWarming({ country }: { country: string }) {
   return (
     <div className="relative max-w-[1200px] mx-auto px-4 sm:px-5 py-12 sm:py-20">
       <div className="mx-auto max-w-md rounded-xl border border-osu-b3/30 bg-osu-b4/80 px-6 py-10 text-center backdrop-blur-sm">
-          <img
-            src={getCountryFlagUrl(country)}
-            alt={name}
-            className="mx-auto h-8 w-auto rounded-sm shadow-sm"
-          />
+          <CountryFlag code={country} size="lg" className="mx-auto shadow-sm" />
           <p className="mt-5 text-sm font-medium text-osu-c2">
             {name} added to queue, come back later :)
           </p>

@@ -16,6 +16,7 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { SearchInput } from "../components/ui/SearchInput";
 import { Avatar } from "../components/ui/Avatar";
+import { CountryFlag } from "../components/ui/CountryFlag";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { Pagination } from "../components/ui/Pagination";
 import { useAuth } from "../lib/auth-context";
@@ -254,11 +255,7 @@ function PlayerPicker({ viewer, onPick }: { viewer: ReturnType<typeof useAuth>["
           <div className="flex min-w-0 items-center gap-2">
             <span className="truncate text-lg font-bold text-osu-c1">{viewer.username}</span>
             {viewer.countryCode ? (
-              <img
-                src={`https://osu.ppy.sh/images/flags/${viewer.countryCode}.png`}
-                alt=""
-                className="h-[12px] w-[18px] shrink-0 rounded-[2px] object-cover"
-              />
+              <CountryFlag code={viewer.countryCode} size="sm" decorative />
             ) : null}
             <span className="rounded-full bg-osu-pink/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-osu-pink">
               you

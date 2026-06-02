@@ -3,13 +3,14 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getCountryPopoffs, getPartialTopPlays, getRankings, getTopPlaysRefreshStatus } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
-import { getCountryFlagUrl, getCountryName, isGlobalScope } from "../lib/country";
+import { getCountryName, isGlobalScope } from "../lib/country";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPpGain } from "../lib/format";
 import { getBeatmapUrl, getBeatmapKeyCount, getBeatmapKeymodeLabel, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModDisplayList, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
+import { CountryFlag } from "../components/ui/CountryFlag";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
 import { DanBadge } from "../components/ui/DanBadge";
@@ -967,13 +968,7 @@ function PopOffsPage() {
                               />
                             </button>
                             {selectedIsGlobal && p.user.country_code ? (
-                              <img
-                                src={getCountryFlagUrl(p.user.country_code)}
-                                alt={p.user.country_code}
-                                title={getCountryName(p.user.country_code)}
-                                className="w-[18px] h-3 rounded-[1px] object-cover flex-shrink-0"
-                                loading="lazy"
-                              />
+                              <CountryFlag code={p.user.country_code} size="sm" />
                             ) : null}
                           </div>
                           <span className="text-[10px] text-osu-f1 flex-shrink-0 sm:hidden">{formatTimeAgo(p.time)}</span>

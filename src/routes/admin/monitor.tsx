@@ -3,8 +3,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { requireAdminAccess } from "../../lib/auth";
-import { getCountryFlagUrl, getCountryName } from "../../lib/country";
+import { getCountryName } from "../../lib/country";
 import { formatNumber } from "../../lib/format";
+import { CountryFlag } from "../../components/ui/CountryFlag";
 
 interface TopRouteRow {
   path: string;
@@ -726,14 +727,9 @@ function RecentEventsCard({ rows }: { rows: RecentEventRow[] }) {
                 <span className={`w-1 self-stretch rounded-full flex-shrink-0 ${color?.dot ?? "bg-osu-b3/40"}`} />
                 <span className="text-osu-f1 font-mono w-20 flex-shrink-0">{when}</span>
                 {row.country ? (
-                  <img
-                    src={getCountryFlagUrl(row.country)}
-                    alt={row.country}
-                    className="w-[14px] h-[10px] object-cover rounded-[1px] flex-shrink-0"
-                    loading="lazy"
-                  />
+                  <CountryFlag code={row.country} size="xs" />
                 ) : (
-                  <span className="w-[14px] h-[10px] rounded-[1px] bg-osu-b3/40 flex-shrink-0" />
+                  <span className="h-[10px] w-[15px] rounded-[1px] bg-osu-b3/40 flex-shrink-0" />
                 )}
                 <span className="text-osu-c2 truncate flex-1">{label}</span>
                 <span
@@ -781,12 +777,7 @@ function CountriesCard({
                   style={{ width: `${pct}%` }}
                 />
                 <div className="relative px-3 py-2 flex items-center gap-2.5">
-                  <img
-                    src={getCountryFlagUrl(code)}
-                    alt={code}
-                    className="w-[18px] h-[12px] object-cover rounded-[1px] flex-shrink-0"
-                    loading="lazy"
-                  />
+                  <CountryFlag code={code} size="sm" />
                   <span className="text-[11px] text-osu-c2 flex-1 truncate">
                     {getCountryName(code) || code}
                   </span>

@@ -6,6 +6,7 @@ import { ArrowDown, ArrowUp, Loader2, Pencil, RotateCcw, Search, Volume1, Volume
 import { PageHeader } from "../layout/PageHeader";
 import { PageTabs } from "../layout/PageTabs";
 import { Avatar } from "../ui/Avatar";
+import { CountryFlag } from "../ui/CountryFlag";
 import { ReplaySkinSettingsModal } from "../replay/ReplaySkinSettingsModal";
 import { searchUsers } from "../../lib/osu";
 import { HIDDEN_USERS_LIMIT } from "../../store";
@@ -374,27 +375,6 @@ function ViewerPanel({
   );
 }
 
-// Flag straight from osu!'s own flag images, keyed by the raw country code so
-// players from any country render correctly — not just the tracked ones. osu!
-// serves XX.png as the "?" placeholder for users with no country, which also
-// doubles as the fallback for any code it doesn't recognise.
-function CountryFlag({ countryCode }: { countryCode: string }) {
-  const code = countryCode.trim().toUpperCase() || "XX";
-  return (
-    <img
-      src={`https://osu.ppy.sh/images/flags/${code}.png`}
-      alt={code === "XX" ? "Unknown country" : code}
-      title={code === "XX" ? "Unknown country" : code}
-      className="h-[15px] w-[21px] shrink-0 rounded-[2px] object-cover"
-      loading="lazy"
-      onError={(event) => {
-        const fallback = "https://osu.ppy.sh/images/flags/XX.png";
-        if (event.currentTarget.src !== fallback) event.currentTarget.src = fallback;
-      }}
-    />
-  );
-}
-
 function HiddenPlayersPanel() {
   const hiddenUsers = useAppStore((state) => state.hiddenUsers);
   const addHiddenUser = useAppStore((state) => state.addHiddenUser);
@@ -495,7 +475,7 @@ function HiddenPlayersPanel() {
                   return (
                     <li key={user.id} className="flex items-center gap-3 px-3 py-2">
                       <Avatar url={user.avatarUrl} userId={user.id} size={32} />
-                      <CountryFlag countryCode={user.countryCode} />
+                      <CountryFlag code={user.countryCode} size="md" />
                       <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-osu-l1">
                         {user.username}
                       </span>
@@ -534,7 +514,7 @@ function HiddenPlayersPanel() {
                 className="flex items-center gap-3 rounded-lg border border-osu-b3/40 bg-osu-b5/40 px-3 py-2"
               >
                 <Avatar url={user.avatarUrl} userId={user.id} size={32} />
-                <CountryFlag countryCode={user.countryCode} />
+                <CountryFlag code={user.countryCode} size="md" />
                 <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-osu-l1">
                   {user.username}
                 </span>

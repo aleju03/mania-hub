@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { avatarImageSrc } from "./Avatar";
+import { CountryFlag } from "./CountryFlag";
 
 interface SearchResult {
   id: number;
@@ -124,11 +125,7 @@ export function SearchInput({
                   loading="lazy"
                 />
                 <span className="text-sm font-medium text-white">{u.username}</span>
-                <img
-                  src={`https://osu.ppy.sh/images/flags/${u.country_code}.png`}
-                  alt={u.country_code}
-                  className="w-[20px] h-[14px] object-cover rounded-[2px] ml-auto"
-                />
+                <CountryFlag code={u.country_code} size="sm" className="ml-auto" />
               </button>
             ))}
           </motion.div>

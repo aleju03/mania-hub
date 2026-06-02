@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { getHomePopoffs, getHomeRecentScores, getRankings } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
-import { getCountryFlagUrl, getCountryName, isGlobalScope } from "../lib/country";
+import { getCountryName, isGlobalScope } from "../lib/country";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPP } from "../lib/format";
 import { getBeatmapKeyCount, getBeatmapKeymodeLabel, getModDisplayList, getScoreDisplayValues, getScoreTimestamp } from "../lib/score";
@@ -12,6 +12,7 @@ import { CountryWarming } from "../components/CountryWarming";
 import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { Avatar } from "../components/ui/Avatar";
+import { CountryFlag } from "../components/ui/CountryFlag";
 import { GradeImg } from "../components/ui/GradeImg";
 import { ModBadge } from "../components/ui/ModBadge";
 import { RankingRowSkeleton, ScoreRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
@@ -159,17 +160,13 @@ function GlobalRankingRow({ entry, index, delayStep }: { entry: LiveGlobalRankin
         navigate({ to: "/player/$username", params: { username: entry.user.username } });
       }}
     >
-      <span className="text-sm font-bold text-osu-f1 w-6 text-center tabular-nums">#{entry.rank}</span>
+      <span className="w-6 shrink-0 text-center text-sm font-bold text-osu-f1 tabular-nums">#{entry.rank}</span>
       <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} />
-      <UsernameText username={entry.user.username} avatarUrl={entry.user.avatar_url} className="text-sm font-medium flex-1 truncate" />
-      <img
-        src={getCountryFlagUrl(entry.user.country_code)}
-        alt={entry.user.country_code}
-        title={getCountryName(entry.user.country_code)}
-        className="w-[18px] h-3 rounded-[1px] object-cover flex-shrink-0"
-        loading="lazy"
-      />
-      <span className="text-xs font-bold text-right tabular-nums">{formatNumber(Math.round(entry.pp))}pp</span>
+      <UsernameText username={entry.user.username} avatarUrl={entry.user.avatar_url} className="min-w-0 flex-1 truncate text-sm font-medium" />
+      <span className="flex w-[22px] shrink-0 justify-center">
+        <CountryFlag code={entry.user.country_code} size="sm" />
+      </span>
+      <span className="w-14 shrink-0 text-right text-xs font-bold tabular-nums">{formatNumber(Math.round(entry.pp))}pp</span>
     </motion.div>
   );
 }

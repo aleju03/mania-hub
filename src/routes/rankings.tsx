@@ -3,11 +3,12 @@ import { useEffect, useRef, useState, useMemo, useSyncExternalStore } from "reac
 import type { MouseEvent } from "react";
 import { getRankings, getUsersRankHistory } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
-import { getCountryFlagUrl, getCountryName, isGlobalScope } from "../lib/country";
+import { getCountryName, isGlobalScope } from "../lib/country";
 import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
 import { formatNumber, formatAccuracy } from "../lib/format";
 import { getCrRankChanges, getGlobalRankChange } from "../lib/rankings";
 import { Avatar } from "../components/ui/Avatar";
+import { CountryFlag } from "../components/ui/CountryFlag";
 import { PageHeader } from "../components/layout/PageHeader";
 import { CountryWarming } from "../components/CountryWarming";
 import { useCountryWarming } from "../lib/use-country-warming";
@@ -537,13 +538,7 @@ function RankingsPage() {
                               avatarUrl={entry.user.avatar_url}
                               className="text-sm font-semibold truncate"
                             />
-                            <img
-                              src={getCountryFlagUrl(entry.user.country_code)}
-                              alt={entry.user.country_code}
-                              title={getCountryName(entry.user.country_code)}
-                              className="w-[18px] h-3 rounded-[1px] object-cover flex-shrink-0"
-                              loading="lazy"
-                            />
+                            <CountryFlag code={entry.user.country_code} size="sm" />
                           </div>
                           <div className="flex items-center gap-3 mt-0.5 text-[11px] text-osu-f1">
                             <span>{formatAccuracy(entry.hit_accuracy / 100)}</span>
@@ -626,13 +621,7 @@ function RankingsPage() {
                               avatarUrl={entry.user.avatar_url}
                               className="text-sm font-medium truncate min-w-0"
                             />
-                            <img
-                              src={getCountryFlagUrl(entry.user.country_code)}
-                              alt={entry.user.country_code}
-                              title={getCountryName(entry.user.country_code)}
-                              className="w-[18px] h-3 rounded-[1px] object-cover flex-shrink-0"
-                              loading="lazy"
-                            />
+                            <CountryFlag code={entry.user.country_code} size="sm" />
                           </Link>
                         </td>
                         <td className="py-2.5 px-3">

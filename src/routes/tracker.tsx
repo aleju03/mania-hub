@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useMemo, memo, useRef } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { getRankings, getCountryRecentScores, getTrackerLiveSnapshot, getTrackerSnapshot } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
-import { getCountryFlagUrl, getCountryName, isGlobalScope } from "../lib/country";
+import { getCountryName, isGlobalScope } from "../lib/country";
 import { formatAccuracy, formatTimeAgo, formatPP, formatNumber, formatPpGain } from "../lib/format";
 import {
   getBeatmapUrl,
@@ -23,6 +23,7 @@ import {
 } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
+import { CountryFlag } from "../components/ui/CountryFlag";
 
 import { Avatar } from "../components/ui/Avatar";
 import { GradeImg } from "../components/ui/GradeImg";
@@ -1233,13 +1234,7 @@ const ScoreFeedItem = memo(function ScoreFeedItem({
                                 />
                               </button>
                               {showCountryFlag && score.user.country_code ? (
-                                <img
-                                  src={getCountryFlagUrl(score.user.country_code)}
-                                  alt={score.user.country_code}
-                                  title={getCountryName(score.user.country_code)}
-                                  className="w-[18px] h-3 rounded-[1px] object-cover flex-shrink-0"
-                                  loading="lazy"
-                                />
+                                <CountryFlag code={score.user.country_code} size="sm" />
                               ) : null}
                             </div>
               ) : (

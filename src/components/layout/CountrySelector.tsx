@@ -1,16 +1,15 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, Globe } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import {
   COUNTRY_OPTIONS,
   GLOBAL_SCOPE_CODE,
   GLOBAL_SCOPE_NAME,
   getCountryName,
-  getCountryFlagUrl,
-  isGlobalScope,
 } from "../../lib/country";
 import type { LiveCountryFeatureTier } from "../../lib/live-backend";
 import { getCachedCountryTier } from "../../lib/use-country-warming";
+import { CountryFlag } from "../ui/CountryFlag";
 
 interface CountrySelectorProps {
   selectedCountry: string;
@@ -19,25 +18,6 @@ interface CountrySelectorProps {
   // The Global aggregate is only meaningful when the live backend is wired up,
   // so the nav opts in based on that.
   showGlobal?: boolean;
-}
-
-// Renders the scope's flag, or the globe motif for the Global scope.
-function ScopeIcon({ code, muted = false }: { code: string; muted?: boolean }) {
-  if (isGlobalScope(code)) {
-    return (
-      <span className={`flex w-[22px] h-[15px] flex-shrink-0 items-center justify-center rounded-[2px] bg-osu-pink/25 text-osu-pink-light ${muted ? "opacity-60 saturate-75" : ""}`}>
-        <Globe className="h-[12px] w-[12px]" strokeWidth={2.4} />
-      </span>
-    );
-  }
-  return (
-    <img
-      src={getCountryFlagUrl(code)}
-      alt=""
-      className={`w-[22px] h-[15px] object-cover rounded-[2px] flex-shrink-0 ${muted ? "opacity-50 saturate-75" : ""}`}
-      loading="lazy"
-    />
-  );
 }
 
 type CountryOption = (typeof COUNTRY_OPTIONS)[number];
@@ -157,7 +137,7 @@ export function CountrySelector({
         aria-label="Select country"
         aria-expanded={open}
       >
-        <ScopeIcon code={selectedCountry} />
+        <CountryFlag code={selectedCountry} size="md" decorative />
         <span className="text-[11px] font-semibold truncate flex-1 text-left">
           {getCountryName(selectedCountry)}
         </span>
@@ -241,7 +221,7 @@ export function CountrySelector({
                   }`;
                   const content = (
                     <>
-                      <ScopeIcon code={c.code} muted={muted} />
+                      <CountryFlag code={c.code} size="md" muted={muted} decorative />
                       <span className={`text-[11px] font-medium truncate ${muted ? "opacity-80" : ""}`}>{c.name}</span>
                       {selected && (
                         <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 text-osu-pink ml-auto flex-shrink-0">

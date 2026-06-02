@@ -12,7 +12,8 @@ import {
   type LiveEventName,
 } from "../../lib/live-backend";
 import { formatNumber, formatTimeAgo } from "../../lib/format";
-import { getCountryFlagUrl, getCountryName } from "../../lib/country";
+import { getCountryName } from "../../lib/country";
+import { CountryFlag } from "../../components/ui/CountryFlag";
 
 type ConnectionState = "idle" | "connecting" | "open" | "error";
 type StatusTone = "good" | "warn" | "bad" | "neutral";
@@ -1629,9 +1630,9 @@ function AnalyticsRecentEventsCard({
                 <span className={`w-1 self-stretch rounded-full flex-shrink-0 ${color?.dot ?? "bg-osu-b3/40"}`} />
                 <span className="text-osu-f1 font-mono w-20 flex-shrink-0">{row.timestamp || "—"}</span>
                 {row.country ? (
-                  <img src={getCountryFlagUrl(row.country)} alt={row.country} className="w-[14px] h-[10px] object-cover rounded-[1px] flex-shrink-0" loading="lazy" />
+                  <CountryFlag code={row.country} size="xs" />
                 ) : (
-                  <span className="w-[14px] h-[10px] rounded-[1px] bg-osu-b3/40 flex-shrink-0" />
+                  <span className="h-[10px] w-[15px] rounded-[1px] bg-osu-b3/40 flex-shrink-0" />
                 )}
                 <AnalyticsVisitorDeviceIcon deviceKind={row.deviceKind} />
                 <span className="text-osu-c2 truncate flex-1">{formatAnalyticsRecentEventLabel(row)}</span>
@@ -1697,11 +1698,7 @@ function AnalyticsCountryFilter({
         }`}
       >
         {country ? (
-          <img
-            src={getCountryFlagUrl(country)}
-            alt=""
-            className="h-[10px] w-[14px] flex-shrink-0 rounded-[1px] object-cover"
-          />
+          <CountryFlag code={country} size="xs" decorative />
         ) : null}
         <span className="truncate">{activeName ?? "All countries"}</span>
         <ChevronDown className={`h-3 w-3 flex-shrink-0 text-osu-f1 transition-transform duration-150 ${open ? "rotate-180" : ""}`} />
@@ -1761,14 +1758,9 @@ function AnalyticsCountryOption({
       }`}
     >
       {code ? (
-        <img
-          src={getCountryFlagUrl(code)}
-          alt=""
-          className="h-[10px] w-[14px] flex-shrink-0 rounded-[1px] object-cover"
-          loading="lazy"
-        />
+        <CountryFlag code={code} size="xs" decorative />
       ) : (
-        <span className="h-[10px] w-[14px] flex-shrink-0" />
+        <span className="h-[10px] w-[15px] flex-shrink-0" />
       )}
       <span className="flex-1 truncate text-[11px] font-medium">{label}</span>
       {count != null ? (
@@ -1794,7 +1786,7 @@ function AnalyticsCountriesCard({ title, subtitle, rows }: { title: string; subt
               <div key={code} className="relative rounded-md bg-osu-b5/60 border border-osu-b3/20 overflow-hidden">
                 <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-osu-blue/20 to-osu-blue/5" style={{ width: `${pct}%` }} />
                 <div className="relative px-3 py-2 flex items-center gap-2.5">
-                  <img src={getCountryFlagUrl(code)} alt={code} className="w-[18px] h-[12px] object-cover rounded-[1px] flex-shrink-0" loading="lazy" />
+                  <CountryFlag code={code} size="sm" />
                   <span className="text-[11px] text-osu-c2 flex-1 truncate">{getCountryName(code) || code}</span>
                   <span className="text-[11px] font-bold text-white flex-shrink-0">{formatNumber(row.count)}</span>
                 </div>
@@ -1811,13 +1803,7 @@ function AnalyticsInlineCountryFlag({ country }: { country: string | null }) {
   const code = country?.trim().toUpperCase().slice(0, 2);
   if (!code) return null;
   return (
-    <img
-      src={getCountryFlagUrl(code)}
-      alt={code}
-      title={getCountryName(code) || code}
-      className="inline-block h-[10px] w-[14px] flex-shrink-0 rounded-[1px] object-cover align-middle"
-      loading="lazy"
-    />
+    <CountryFlag code={code} size="xs" />
   );
 }
 
@@ -2911,12 +2897,7 @@ function CountryRow({
   return (
     <div className="rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2">
       <div className="flex items-center gap-2.5">
-        <img
-          src={getCountryFlagUrl(entry.country)}
-          alt={entry.country}
-          className="h-4 w-6 rounded-sm object-cover flex-shrink-0"
-          loading="lazy"
-        />
+        <CountryFlag code={entry.country} size="md" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] font-bold text-white truncate">{getCountryName(entry.country)}</span>
