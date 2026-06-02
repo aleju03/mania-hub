@@ -223,7 +223,11 @@ export class WorkerRunner {
       return;
     }
     if (job.type === "osc_backfill" || job.type === "osc_country_catchup") {
-      const result = await this.backfill.runPage(this.db, this.queue, this.ingestor, job.payload as never);
+      const payload = job.payload as Record<string, unknown>;
+      const result = await this.backfill.runPage(this.db, this.queue, this.ingestor, {
+        ...payload,
+        ...(job.type === "osc_backfill" && job.dedupeKey === "osc-backfill:startup" && payload.freshStart !== false ? { freshStart: true } : {}),
+      } as never);
       await this.events.append("status", null, { type: job.type, ...result }, `${job.type}:${job.id}:${job.attempts}`);
       return;
     }

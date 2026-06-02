@@ -9,6 +9,7 @@ import type { OscStatus } from "./client.js";
 
 const FALLBACK_CURSOR_KEY = "osu_scores_fallback_cursor_string";
 const FALLBACK_RESULT_KEY = "osu_scores_fallback_last_result";
+const FALLBACK_CANDIDATE_SEEN_UNTIL_KEY = "osu_scores_fallback_candidate_seen_until_ms";
 const FALLBACK_CALLER = "osu_scores_fallback";
 const FALLBACK_SOURCE = "osu_scores_fallback";
 
@@ -33,6 +34,7 @@ export interface ScoresFallbackResult {
   cursorString: string | null;
   nextCursorString: string | null;
   latestEndedAt: string | null;
+  latestCandidateEndedAt: string | null;
 }
 
 export function startScoresFallbackScheduler(
@@ -80,12 +82,14 @@ export async function runScoresFallbackPage(
   const nextCursorString = response.cursor_string ?? cursorString;
   if (nextCursorString) await setStoredCursorString(db, nextCursorString, now);
   const candidateScores = await filterCandidateScores(db, config, scores);
+  const latestCandidateEndedAt = getLatestEndedAt(candidateScores);
   const ingestResult = await ingestor.ingestBatch(candidateScores, FALLBACK_SOURCE, {
     enqueueRecentReconcile: false,
     processTopPlayFeatures: true,
     processMapsFarmedFeatures: true,
     processSnipeFeatures: true,
   });
+  await advanceCandidateSeenUntil(db, latestCandidateEndedAt, now);
   return recordResult(db, {
     ran: true,
     reason: null,
@@ -96,6 +100,7 @@ export async function runScoresFallbackPage(
     cursorString,
     nextCursorString,
     latestEndedAt: getLatestEndedAt(scores),
+    latestCandidateEndedAt,
   }, now);
 }
 
@@ -152,6 +157,19 @@ async function setStoredCursorString(db: Db, cursorString: string, now: number):
   ]);
 }
 
+async function advanceCandidateSeenUntil(db: Db, latestCandidateEndedAt: string | null, now: number): Promise<void> {
+  const next = parseTime(latestCandidateEndedAt);
+  if (!Number.isFinite(next)) return;
+  const row = (await exec(db, "select value_json from live_meta where key = ?", [FALLBACK_CANDIDATE_SEEN_UNTIL_KEY])).rows[0];
+  const current = parseJson<number>(row?.value_json, 0);
+  if (Number.isFinite(current) && current >= next) return;
+  await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)", [
+    FALLBACK_CANDIDATE_SEEN_UNTIL_KEY,
+    json(next),
+    new Date(now).toISOString(),
+  ]);
+}
+
 async function recordResult(db: Db, result: ScoresFallbackResult, now: number): Promise<ScoresFallbackResult> {
   await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)", [
     FALLBACK_RESULT_KEY,
@@ -172,6 +190,7 @@ function emptyResult(reason: string, cursorString: string | null): ScoresFallbac
     cursorString,
     nextCursorString: cursorString,
     latestEndedAt: null,
+    latestCandidateEndedAt: null,
   };
 }
 

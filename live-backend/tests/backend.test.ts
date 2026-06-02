@@ -655,6 +655,7 @@ describe("live backend", () => {
 
     expect(result).toMatchObject({ ran: true, fetched: 2, candidates: 2, inserted: 2, skipped: 0, nextCursorString: "cursor:next" });
     expect(JSON.parse(String((await exec(db, "select value_json from live_meta where key = 'osu_scores_fallback_cursor_string'")).rows[0].value_json))).toBe("cursor:next");
+    expect(JSON.parse(String((await exec(db, "select value_json from live_meta where key = 'osu_scores_fallback_candidate_seen_until_ms'")).rows[0].value_json))).toBe(new Date("2026-05-12T00:03:00.000Z").getTime());
     expect(Number((await exec(db, "select count(*) as count from score_events where source = 'osu_scores_fallback'")).rows[0].count)).toBe(2);
   });
 
@@ -1095,6 +1096,62 @@ describe("live backend", () => {
 
     const row = (await exec(db, "select payload_json from jobs where dedupe_key = 'osc-backfill:startup'")).rows[0];
     expect(JSON.parse(String(row.payload_json)).after).toBe(oldGapCursor);
+  });
+
+  it("starts oSC backfill from the fallback-covered score time when fallback handled the gap", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-30T12:00:00.000Z"));
+    const { db, queue } = await setup();
+    const oldBackfillCursor = new Date("2026-05-30T02:00:00.000Z").getTime();
+    const fallbackCoveredUntil = new Date("2026-05-30T11:55:00.000Z").getTime();
+    await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values ('osc_backfill_cursor_ms', ?, ?)", [
+      JSON.stringify(oldBackfillCursor),
+      "2026-05-30T02:00:00.000Z",
+    ]);
+    await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values ('osu_scores_fallback_candidate_seen_until_ms', ?, ?)", [
+      JSON.stringify(fallbackCoveredUntil),
+      "2026-05-30T11:55:00.000Z",
+    ]);
+    const backfill = new OscBackfill({
+      oscBaseUrl: "https://osc.example",
+      oscJsonTargetPerMinute: 60,
+      oscBackfillMaxAgeMs: 24 * 60 * 60 * 1000,
+      oscBackfillPageLimit: 2,
+      oscBackfillMaxPages: 2,
+    });
+
+    await backfill.enqueueStartup(queue, db);
+
+    const row = (await exec(db, "select payload_json from jobs where dedupe_key = 'osc-backfill:startup'")).rows[0];
+    expect(JSON.parse(String(row.payload_json))).toMatchObject({ after: fallbackCoveredUntil, freshStart: true });
+  });
+
+  it("re-resolves queued startup oSC backfill jobs against fallback progress when they run", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-30T12:00:00.000Z"));
+    const { db, queue, ingestor } = await setup();
+    const queuedBeforeFallback = new Date("2026-05-30T02:00:00.000Z").getTime();
+    const fallbackCoveredUntil = new Date("2026-05-30T11:55:00.000Z").getTime();
+    let requestedAfter = "";
+    await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values ('osu_scores_fallback_candidate_seen_until_ms', ?, ?)", [
+      JSON.stringify(fallbackCoveredUntil),
+      "2026-05-30T11:55:00.000Z",
+    ]);
+    const fetchMock = vi.fn(async (url: URL) => {
+      requestedAfter = url.searchParams.get("after") ?? "";
+      return new Response(JSON.stringify({ scores: [], meta: { has_more: false } }), { status: 200 });
+    });
+    const backfill = new OscBackfill({
+      oscBaseUrl: "https://osc.example",
+      oscJsonTargetPerMinute: 60,
+      oscBackfillMaxAgeMs: 24 * 60 * 60 * 1000,
+      oscBackfillPageLimit: 2,
+      oscBackfillMaxPages: 2,
+    }, fetchMock as never);
+
+    await backfill.runPage(db, queue, ingestor, { after: queuedBeforeFallback, pagesRemaining: 1, freshStart: true });
+
+    expect(Number(requestedAfter)).toBe(fallbackCoveredUntil);
   });
 
   it("bounds stale oSC backfill payloads to the configured max age", async () => {

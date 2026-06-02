@@ -10,6 +10,9 @@ export interface OscBackfillPayload {
   after?: number;
   pagesRemaining?: number;
   country?: string;
+  // Startup/stale-recovery jobs may sit in the queue while another source
+  // catches up. Resolve their lower bound again when they actually run.
+  freshStart?: boolean;
   // Identifies a country catch-up chain. A page only runs/re-enqueues while its
   // epoch matches the stored one; cancelling bumps the stored epoch so in-flight
   // pages stop re-spawning the chain.
@@ -40,6 +43,7 @@ const COUNTRY_CATCHUP_OVERLAP_MS = 5 * 60_000;
 const COUNTRY_CATCHUP_PAGE_LIMIT = 25;
 const COUNTRY_CATCHUP_PAGE_DELAY_MS = 5_000;
 const OSC_JSON_TIMEOUT_MS = 15_000;
+const FALLBACK_CANDIDATE_SEEN_UNTIL_KEY = "osu_scores_fallback_candidate_seen_until_ms";
 
 export class OscBackfill {
   private readonly limiter: TokenBucketLimiter;
@@ -56,14 +60,14 @@ export class OscBackfill {
     await queue.enqueue(
       "osc_backfill",
       "osc-backfill:startup",
-      { after, pagesRemaining: this.config.oscBackfillMaxPages } satisfies OscBackfillPayload,
+      { after, pagesRemaining: this.config.oscBackfillMaxPages, freshStart: true } satisfies OscBackfillPayload,
       { priority: 5, replaceDone: true },
     );
   }
 
   async runPage(db: Db, queue: JobQueue, ingestor: ScoreIngestor, payload: OscBackfillPayload = {}): Promise<OscBackfillResult> {
-    const after = await this.resolveAfter(db, payload.after);
     const country = normalizeCountryPayload(payload.country);
+    const after = await this.resolveAfter(db, payload.after, { freshStart: !country && payload.freshStart === true });
     if (country && payload.epoch != null && await isCatchupCancelled(db, country, payload.epoch)) {
       return { fetched: 0, inserted: 0, skipped: 0, after, nextAfter: null, hasMore: false, country };
     }
@@ -130,28 +134,34 @@ export class OscBackfill {
     return { fetched: scores.length, inserted: result.inserted, skipped: result.skipped, after, nextAfter, hasMore, ...(country ? { country } : {}) };
   }
 
-  private async resolveAfter(db: Db, payloadAfter: number | undefined): Promise<number> {
+  private async resolveAfter(db: Db, payloadAfter: number | undefined, options: { freshStart?: boolean } = {}): Promise<number> {
     const boundedAfter = Date.now() - this.config.oscBackfillMaxAgeMs;
-    if (Number.isFinite(payloadAfter) && Number(payloadAfter) > 0) return Math.max(Number(payloadAfter), boundedAfter);
+    if (!options.freshStart && Number.isFinite(payloadAfter) && Number(payloadAfter) > 0) return Math.max(Number(payloadAfter), boundedAfter);
     const storedAfter = await this.getStoredBackfillAfter(db);
-    return Math.max(storedAfter, boundedAfter);
+    const queuedAfter = Number.isFinite(payloadAfter) && Number(payloadAfter) > 0 ? Number(payloadAfter) : 0;
+    return Math.max(storedAfter, queuedAfter, boundedAfter);
   }
 
   private async getStoredBackfillAfter(db: Db): Promise<number> {
     const rows = (await exec(
       db,
-      "select key, value_json from live_meta where key in ('osc_backfill_cursor_ms', 'osc_backfill_last_result', 'osc_last_seen_ms')",
+      "select key, value_json from live_meta where key in ('osc_backfill_cursor_ms', 'osc_backfill_last_result', 'osc_last_seen_ms', ?)",
+      [FALLBACK_CANDIDATE_SEEN_UNTIL_KEY],
     )).rows;
     const byKey = new Map(rows.map((row) => [String(row.key), row.value_json]));
     const cursor = parseJson<number>(byKey.get("osc_backfill_cursor_ms"), 0);
-    if (Number.isFinite(cursor) && cursor > 0) return cursor;
-
     const lastResult = parseJson<Partial<OscBackfillResult>>(byKey.get("osc_backfill_last_result"), {});
     const lastResultAfter = Number(lastResult.nextAfter);
-    if (lastResult.hasMore && Number.isFinite(lastResultAfter) && lastResultAfter > 0) return lastResultAfter;
-
+    if (lastResult.hasMore && Number.isFinite(lastResultAfter) && lastResultAfter > 0) {
+      return Math.max(Number.isFinite(cursor) ? cursor : 0, lastResultAfter);
+    }
     const liveLastSeen = parseJson<number>(byKey.get("osc_last_seen_ms"), 0);
-    return Number.isFinite(liveLastSeen) && liveLastSeen > 0 ? liveLastSeen : 0;
+    const fallbackSeen = parseJson<number>(byKey.get(FALLBACK_CANDIDATE_SEEN_UNTIL_KEY), 0);
+    return Math.max(
+      Number.isFinite(cursor) ? cursor : 0,
+      Number.isFinite(liveLastSeen) ? liveLastSeen : 0,
+      Number.isFinite(fallbackSeen) ? fallbackSeen : 0,
+    );
   }
 
   private pageDelayMs(): number {
