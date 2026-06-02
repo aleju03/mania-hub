@@ -1,6 +1,6 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { Activity, Check, ChevronDown, Crosshair, Database, HelpCircle, History, Monitor, Pause, Play, Radio, RefreshCw, Server, Signal, Smartphone, Trash2, UserRound, Wifi, WifiOff, X } from "lucide-react";
+import { Activity, Check, ChevronDown, ChevronRight, Crosshair, Database, HelpCircle, History, Monitor, Pause, Play, Radio, RefreshCw, Server, Signal, Smartphone, Trash2, UserRound, Wifi, WifiOff, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { requireAdminAccess } from "../../lib/auth";
@@ -949,15 +949,8 @@ function LiveBackendPage() {
             </div>
           </Section>
 
-          <Section title="Status" subtitle="Process, socket, roster, and country snapshots">
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-              <div className="lg:col-span-3 flex">
-                <StatusCard status={status} connectionState={connectionState} country={countryCode} />
-              </div>
-              <div className="lg:col-span-2 flex">
-                <SnapshotCard snapshots={snapshots} country={countryCode} />
-              </div>
-            </div>
+          <Section title="Status" subtitle="Process, ingest, roster, and country snapshots">
+            <StatusCard status={status} connectionState={connectionState} country={countryCode} snapshots={snapshots} />
           </Section>
 
           <Section title="Countries" subtitle="Which countries the backend is currently tracking">
@@ -2193,15 +2186,85 @@ function SectionCard({
   );
 }
 
-function SnapshotCard({ snapshots, country }: { snapshots: SnapshotStats; country: string }) {
+const TONE_RANK: Record<StatusTone, number> = { neutral: 0, good: 1, warn: 2, bad: 3 };
+
+function worstTone(...tones: StatusTone[]): StatusTone {
+  return tones.reduce<StatusTone>((worst, tone) => (TONE_RANK[tone] > TONE_RANK[worst] ? tone : worst), "neutral");
+}
+
+function toneDotClass(tone: StatusTone): string {
+  return { good: "bg-osu-green-light", warn: "bg-osu-yellow", bad: "bg-osu-red-light", neutral: "bg-osu-b3" }[tone];
+}
+
+interface StatusStat {
+  label: string;
+  value: string;
+  tone?: StatusTone;
+}
+
+function MiniStat({ label, value, tone = "neutral" }: StatusStat) {
   return (
-    <SectionCard title="Snapshots" subtitle={`${country} REST surfaces`}>
-      <div className="space-y-2">
-        <SnapshotRow label="Tracker" value={snapshots.trackerScores} fetchedAt={snapshots.trackerFetchedAt} suffix="scores" />
-        <SnapshotRow label="Top plays" value={snapshots.topPlays} fetchedAt={snapshots.topPlaysFetchedAt} suffix="events" />
-        <SnapshotRow label="Snipes" value={snapshots.snipes} fetchedAt={snapshots.snipesFetchedAt} suffix="events" />
+    <div className="flex min-w-0 items-center gap-1.5">
+      <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${toneDotClass(tone)}`} />
+      <span className="flex-shrink-0 text-[9px] font-semibold uppercase tracking-wider text-osu-f1">{label}</span>
+      <span className="truncate text-[10px] text-osu-c2">{value}</span>
+    </div>
+  );
+}
+
+// One process-status group: a status dot, title, and a few key stats shown
+// inline (so the important info is visible at a glance). Clicking the card
+// opens a modal with the full detail rows for that group.
+function StatusGroupCard({ title, tone, stats, onOpen }: { title: string; tone: StatusTone; stats: StatusStat[]; onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full flex-col gap-1.5 self-start rounded-md border border-osu-b3/20 bg-osu-b5/50 px-3 py-2 text-left transition-colors duration-[120ms] hover:border-osu-b3/45 hover:bg-osu-b4/30 cursor-pointer"
+    >
+      <div className="flex items-center gap-2">
+        <span className={`h-2 w-2 flex-shrink-0 rounded-full ${toneDotClass(tone)}`} />
+        <span className="min-w-0 flex-1 truncate text-[10px] font-semibold uppercase tracking-wider text-osu-c2">{title}</span>
+        <span className="flex-shrink-0 text-[9px] uppercase tracking-wider text-osu-f1">more</span>
+        <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-osu-f1" />
       </div>
-    </SectionCard>
+      <div className="space-y-1 pl-4">
+        {stats.map((stat) => (
+          <MiniStat key={stat.label} label={stat.label} value={stat.value} tone={stat.tone} />
+        ))}
+      </div>
+    </button>
+  );
+}
+
+function StatusGroupModal({ title, tone, onClose, children }: { title: string; tone: StatusTone; onClose: () => void; children: React.ReactNode }) {
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/65 px-4" onClick={onClose}>
+      <div
+        className="w-full max-w-[460px] overflow-hidden rounded-lg border border-osu-b3/40 bg-osu-b5 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 border-b border-osu-b3/20 px-4 pt-3 pb-2">
+          <span className={`block h-2 w-2 flex-shrink-0 rounded-full ${toneDotClass(tone)}`} />
+          <div className="min-w-0 flex-1 text-[11px] font-semibold uppercase tracking-wider text-osu-c2">{title}</div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-osu-b3/30 bg-osu-b4/60 px-2.5 py-1 text-[11px] text-osu-l2 transition-colors duration-[120ms] hover:bg-osu-b3/60 hover:text-white cursor-pointer"
+          >
+            Close
+          </button>
+        </div>
+        <div className="max-h-[70vh] space-y-1.5 overflow-y-auto p-3">{children}</div>
+      </div>
+    </div>
   );
 }
 
@@ -2258,53 +2321,188 @@ function getOscFeedStatus(status: LiveBackendStatus | null): { value: string; hi
   return { value: "closed", hint: "socket transport closed", tone: "bad", batchTone: "bad" };
 }
 
-function getScoresFallbackStatus(status: LiveBackendStatus | null): { value: string; hint: string; tone: StatusTone } {
+// The fallback poller has its own budget: it polls at most once per
+// `intervalMs` (floored at 10s, so 6/min by default) and only while the oSC
+// feed is stale. We surface it as a `used/target` bucket like osu! rate, where
+// `used` is how many polls its caller actually made in the last minute.
+const SCORES_FALLBACK_CALLER = "osu_scores_fallback";
+
+interface ScoresFallbackView {
+  value: string;
+  hint: string;
+  tone: StatusTone;
+  used: number;
+  target: number;
+  enabled: boolean;
+  polling: boolean;
+}
+
+function getScoresFallbackStatus(status: LiveBackendStatus | null): ScoresFallbackView {
   const fallback = status?.scoresFallback;
-  if (!fallback) return { value: "unknown", hint: "status not loaded", tone: "neutral" };
-  if (!fallback.enabled) return { value: "off", hint: "disabled by config", tone: "neutral" };
-  if (!fallback.updatedAt || !fallback.result) return { value: "waiting", hint: `every ${formatFallbackInterval(fallback.intervalMs)}`, tone: "neutral" };
+  if (!fallback) {
+    return { value: "—", hint: "status not loaded", tone: "neutral", used: 0, target: 0, enabled: false, polling: false };
+  }
+  const used = status?.rate.byCaller?.find((entry) => entry.caller === SCORES_FALLBACK_CALLER)?.count ?? 0;
+  const target = Math.max(1, Math.round(60_000 / Math.max(10_000, fallback.intervalMs)));
+  if (!fallback.enabled) {
+    return { value: "off", hint: "disabled by config", tone: "neutral", used, target, enabled: false, polling: false };
+  }
+  const bucket = `${formatNumber(used)}/${formatNumber(target)}`;
   const result = fallback.result;
-  const age = formatTimeAgo(fallback.updatedAt);
+  if (!fallback.updatedAt || !result) {
+    return { value: bucket, hint: `polls up to ${formatNumber(target)}/min`, tone: "neutral", used, target, enabled: true, polling: false };
+  }
   if (!result.ran) {
-    const reason = result.reason === "osc_fresh" ? "oSC fresh" : result.reason ?? "skipped";
-    return { value: "standby", hint: `${reason}, checked ${age}`, tone: "neutral" };
+    const reason = result.reason === "osc_fresh" ? "oSC fresh, on standby" : `${result.reason ?? "idle"}, on standby`;
+    return { value: bucket, hint: reason, tone: "neutral", used, target, enabled: true, polling: false };
   }
   return {
-    value: "polling",
-    hint: `${formatNumber(result.fetched)} fetched, ${formatNumber(result.candidates)} candidates, ${formatNumber(result.inserted)} inserted ${age}`,
+    value: bucket,
+    hint: `polling, ${formatNumber(result.inserted)} new ${formatTimeAgo(fallback.updatedAt)}`,
     tone: "warn",
+    used,
+    target,
+    enabled: true,
+    polling: true,
   };
 }
 
-function formatFallbackInterval(ms: number): string {
-  if (!Number.isFinite(ms) || ms <= 0) return "configured interval";
-  if (ms % 60_000 === 0) return `${Math.round(ms / 60_000)}m`;
-  if (ms % 1000 === 0) return `${Math.round(ms / 1000)}s`;
-  return `${formatNumber(ms)}ms`;
-}
-
-function StatusCard({ status, connectionState, country }: { status: LiveBackendStatus | null; connectionState: ConnectionState; country: string }) {
+function StatusCard({ status, connectionState, country, snapshots }: { status: LiveBackendStatus | null; connectionState: ConnectionState; country: string; snapshots: SnapshotStats }) {
+  const [openKey, setOpenKey] = useState<string | null>(null);
   const roster = status?.roster?.find((entry) => entry.country === country);
   const oscFeed = getOscFeedStatus(status);
-  const fallbackFeed = getScoresFallbackStatus(status);
+  const fallback = getScoresFallbackStatus(status);
   const fallbackResult = status?.scoresFallback?.result;
+  const fallbackRanResult = fallbackResult?.ran ? fallbackResult : null;
+
+  const sseTone: StatusTone = connectionState === "open" ? "good" : "warn";
+  const workersTone: StatusTone = status?.worker?.paused ? "warn" : "good";
+  const transportTone: StatusTone = status?.osc.connected ? "good" : "warn";
+  const errorTone: StatusTone = status?.osc.lastError ? "bad" : "good";
+  const rosterTone: StatusTone = roster ? "good" : "warn";
+
+  const batchAgo = status?.osc.lastBatchAt ? formatTimeAgo(status.osc.lastBatchAt) : "no batch";
+  const fallbackUpdated = status?.scoresFallback?.updatedAt ? formatTimeAgo(status.scoresFallback.updatedAt) : "never";
+
+  const groups: Array<{ key: string; title: string; tone: StatusTone; stats: StatusStat[]; detail: React.ReactNode }> = [
+    {
+      key: "serving",
+      title: "Serving",
+      tone: worstTone(sseTone, workersTone),
+      stats: [
+        { label: "SSE", value: connectionState, tone: sseTone },
+        { label: "Workers", value: status?.worker?.paused ? "paused" : "running", tone: workersTone },
+      ],
+      detail: (
+        <>
+          <DetailRow label="SSE client" value={connectionState} tone={sseTone} />
+          <DetailRow label="Last live event" value={status?.lastEventAt ? formatTimeAgo(status.lastEventAt) : "none"} />
+          <DetailRow label="Workers" value={status?.worker?.paused ? "paused" : "running"} tone={workersTone} />
+          <DetailRow label="Worker id" value={status?.worker?.workerId ?? "unknown"} />
+        </>
+      ),
+    },
+    {
+      key: "osc",
+      title: "oSC feed",
+      tone: oscFeed.tone,
+      stats: [
+        { label: "Status", value: oscFeed.value, tone: oscFeed.tone },
+        { label: "Last batch", value: batchAgo, tone: oscFeed.batchTone },
+      ],
+      detail: (
+        <>
+          <DetailRow label="Transport" value={status?.osc.connected ? "connected" : "closed"} tone={transportTone} />
+          <DetailRow label="Last batch" value={status?.osc.lastBatchAt ? formatTimeAgo(status.osc.lastBatchAt) : "none"} tone={oscFeed.batchTone} />
+          <DetailRow label="Error" value={status?.osc.lastError ?? "none"} tone={errorTone} />
+        </>
+      ),
+    },
+    {
+      key: "fallback",
+      title: "Fallback poller",
+      tone: fallback.tone,
+      stats: [
+        { label: "Budget", value: fallback.enabled ? `${fallback.value} per min` : "off", tone: fallback.polling ? "warn" : "neutral" },
+        fallback.polling
+          ? { label: "New saved", value: formatNumber(fallbackRanResult?.inserted ?? 0), tone: (fallbackRanResult?.inserted ?? 0) > 0 ? "good" : "neutral" }
+          : { label: "State", value: fallback.enabled ? "standby" : "disabled" },
+      ],
+      detail: (
+        <>
+          <div className="rounded-md bg-osu-b4/30 px-3 py-2 text-[10px] leading-relaxed text-osu-f1">
+            Backup score poller. Runs only while the oSC feed is stale: each poll pulls the latest osu! mania scores, keeps the ones from tracked countries, then saves any that are new.
+          </div>
+          <DetailRow label="Poll budget" value={`${formatNumber(fallback.used)} / ${formatNumber(fallback.target)} per min`} tone={fallback.polling ? "warn" : "neutral"} />
+          <DetailRow label="Last run" value={fallbackUpdated} />
+          {fallbackRanResult ? (
+            <>
+              <DetailRow label="Scanned from osu!" value={`${formatNumber(fallbackRanResult.fetched)} scores`} />
+              <DetailRow label="In tracked countries" value={formatNumber(fallbackRanResult.candidates)} />
+              <DetailRow label="New, saved to DB" value={formatNumber(fallbackRanResult.inserted)} tone={fallbackRanResult.inserted > 0 ? "good" : "neutral"} />
+            </>
+          ) : (
+            <DetailRow label="State" value={fallback.enabled ? "on standby (oSC feed is fresh)" : "disabled by config"} />
+          )}
+        </>
+      ),
+    },
+    {
+      key: "roster",
+      title: "Roster",
+      tone: rosterTone,
+      stats: [
+        { label: country, value: roster ? `${formatNumber(roster.users)} users` : "not loaded", tone: rosterTone },
+        { label: "Refreshed", value: roster?.refreshedAt ? formatTimeAgo(roster.refreshedAt) : "never", tone: roster?.refreshedAt ? "good" : "warn" },
+      ],
+      detail: (
+        <>
+          <DetailRow label={`${country} roster`} value={roster ? `${formatNumber(roster.users)} users` : "not loaded"} tone={rosterTone} />
+          <DetailRow label="Roster refreshed" value={roster?.refreshedAt ? formatTimeAgo(roster.refreshedAt) : "never"} tone={roster?.refreshedAt ? "good" : "warn"} />
+        </>
+      ),
+    },
+    {
+      key: "snapshots",
+      title: "Snapshots",
+      tone: "neutral",
+      stats: [
+        { label: "Tracker", value: snapshots.trackerScores == null ? "—" : `${formatNumber(snapshots.trackerScores)} scores` },
+        { label: "Top plays", value: snapshots.topPlays == null ? "—" : `${formatNumber(snapshots.topPlays)} events` },
+        { label: "Snipes", value: snapshots.snipes == null ? "—" : `${formatNumber(snapshots.snipes)} events` },
+      ],
+      detail: (
+        <>
+          <div className="rounded-md bg-osu-b4/30 px-3 py-2 text-[10px] leading-relaxed text-osu-f1">
+            Row counts the {country} REST snapshot endpoints return on page entry. Tracker and snipes sit at their fetch caps, so steady numbers are expected.
+          </div>
+          <SnapshotRow label="Tracker" value={snapshots.trackerScores} fetchedAt={snapshots.trackerFetchedAt} suffix="scores" />
+          <SnapshotRow label="Top plays" value={snapshots.topPlays} fetchedAt={snapshots.topPlaysFetchedAt} suffix="events" />
+          <SnapshotRow label="Snipes" value={snapshots.snipes} fetchedAt={snapshots.snipesFetchedAt} suffix="events" />
+        </>
+      ),
+    },
+  ];
+  const openGroup = groups.find((group) => group.key === openKey) ?? null;
+
   return (
-    <SectionCard title="Process status" subtitle="Health, readiness, socket, and roster">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <DetailRow label="SSE client" value={connectionState} tone={connectionState === "open" ? "good" : "warn"} />
-        <DetailRow label="Last live event" value={status?.lastEventAt ? formatTimeAgo(status.lastEventAt) : "none"} />
-        <DetailRow label="oSC feed" value={oscFeed.hint} tone={oscFeed.tone} />
-        <DetailRow label="oSC transport" value={status?.osc.connected ? "connected" : "closed"} tone={status?.osc.connected ? "neutral" : "warn"} />
-        <DetailRow label="Last oSC batch" value={status?.osc.lastBatchAt ? formatTimeAgo(status.osc.lastBatchAt) : "none"} tone={oscFeed.batchTone} />
-        <DetailRow label="oSC error" value={status?.osc.lastError ?? "none"} tone={status?.osc.lastError ? "bad" : "good"} />
-        <DetailRow label="Fallback poller" value={fallbackFeed.hint} tone={fallbackFeed.tone} />
-        <DetailRow label="Fallback last run" value={status?.scoresFallback?.updatedAt ? formatTimeAgo(status.scoresFallback.updatedAt) : "never"} />
-        <DetailRow label="Fallback result" value={fallbackResult?.ran ? `${formatNumber(fallbackResult.fetched)} fetched / ${formatNumber(fallbackResult.candidates)} candidates / ${formatNumber(fallbackResult.inserted)} inserted` : fallbackResult?.reason ?? "none"} />
-        <DetailRow label={`${country} roster`} value={roster ? `${formatNumber(roster.users)} users` : "not loaded"} tone={roster ? "good" : "warn"} />
-        <DetailRow label="Roster refreshed" value={roster?.refreshedAt ? formatTimeAgo(roster.refreshedAt) : "never"} tone={roster?.refreshedAt ? "good" : "warn"} />
-        <DetailRow label="Workers" value={status?.worker?.paused ? "paused" : "running"} tone={status?.worker?.paused ? "warn" : "good"} />
-        <DetailRow label="Worker id" value={status?.worker?.workerId ?? "unknown"} />
+    <SectionCard title="Process status" subtitle="Key stats per area; click a group for the full detail.">
+      <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-2">
+        {groups.map((group) => (
+          <StatusGroupCard
+            key={group.key}
+            title={group.title}
+            tone={group.tone}
+            stats={group.stats}
+            onOpen={() => setOpenKey(group.key)}
+          />
+        ))}
       </div>
+      {openGroup ? (
+        <StatusGroupModal title={openGroup.title} tone={openGroup.tone} onClose={() => setOpenKey(null)}>
+          {openGroup.detail}
+        </StatusGroupModal>
+      ) : null}
     </SectionCard>
   );
 }
@@ -2439,6 +2637,7 @@ function CountriesCard({
   const [statusFilters, setStatusFilters] = useState<Record<CountryDisplayStatus, boolean>>(DEFAULT_COUNTRY_STATUS_FILTERS);
   const [tierFilters, setTierFilters] = useState<Record<CountryFeatureTier, boolean>>(DEFAULT_COUNTRY_TIER_FILTERS);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+  const [showTierHelp, setShowTierHelp] = useState(false);
   const countries = status?.countries ?? [];
 
   useEffect(() => {
@@ -2596,24 +2795,34 @@ function CountriesCard({
           </div>
         </div>
       </div>
-      <div className="mb-3 rounded-md border border-osu-b3/25 bg-osu-b5/40 px-2.5 py-2">
-        <div className="text-[9px] font-semibold uppercase tracking-wider text-osu-f1">
+      <div className="mb-3 rounded-md border border-osu-b3/25 bg-osu-b5/40">
+        <button
+          type="button"
+          onClick={() => setShowTierHelp((value) => !value)}
+          aria-expanded={showTierHelp}
+          className="flex w-full items-center gap-1.5 px-2.5 py-2 text-left text-[9px] font-semibold uppercase tracking-wider text-osu-f1 transition-colors duration-[120ms] hover:text-osu-l2 cursor-pointer"
+        >
           What the tiers mean (each builds on the one before it)
-        </div>
-        <div className="mt-1.5 grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
-          {COUNTRY_TIER_OPTIONS.map((tier) => (
-            <div key={tier.value} className="flex items-center gap-1.5 text-[10px] text-osu-f1">
-              <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${tier.dot}`} />
-              <span className={`font-semibold uppercase tracking-wider ${tier.tone}`}>{tier.label}</span>
-              <span className="text-osu-f1/70">{tier.blurb}</span>
-            </div>
-          ))}
-        </div>
+          <ChevronDown className={`ml-auto h-3 w-3 flex-shrink-0 transition-transform duration-150 ${showTierHelp ? "rotate-180" : ""}`} />
+        </button>
+        {showTierHelp ? (
+          <div className="grid grid-cols-1 gap-x-4 gap-y-1 px-2.5 pb-2 sm:grid-cols-2">
+            {COUNTRY_TIER_OPTIONS.map((tier) => (
+              <div key={tier.value} className="flex items-center gap-1.5 text-[10px] text-osu-f1">
+                <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${tier.dot}`} />
+                <span className={`font-semibold uppercase tracking-wider ${tier.tone}`}>{tier.label}</span>
+                <span className="text-osu-f1/70">{tier.blurb}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
       {sorted.length === 0 ? (
         <div className="text-[11px] text-osu-f1">{countries.length === 0 ? "No countries registered." : "No countries match these filters."}</div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        // Cap the list height so the long country grid scrolls inside the card
+        // instead of pushing the rest of the page (Workers, Activity) way down.
+        <div className="grid max-h-[600px] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
           {sorted.map((entry) => (
             <CountryRow
               key={entry.country}
