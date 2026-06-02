@@ -101,6 +101,12 @@ interface LiveBackendStatus {
     updatedAt: string | null;
     cursorUpdatedAt: string | null;
     hasCursor: boolean;
+    rate?: {
+      usedLastMinute: number;
+      targetPerMinute: number;
+      hardPerMinute: number;
+      pending: number;
+    } | null;
     result: {
       ran: boolean;
       reason: string | null;
@@ -2321,12 +2327,10 @@ function getOscFeedStatus(status: LiveBackendStatus | null): { value: string; hi
   return { value: "closed", hint: "socket transport closed", tone: "bad", batchTone: "bad" };
 }
 
-// The fallback poller has its own budget: it polls at most once per
-// `intervalMs` (floored at 10s, so 6/min by default) and only while the oSC
-// feed is stale. We surface it as a `used/target` bucket like osu! rate, where
-// `used` is how many polls its caller actually made in the last minute.
-const SCORES_FALLBACK_CALLER = "osu_scores_fallback";
-
+// The fallback poller runs on its own osu! client with a dedicated rate limiter
+// (separate bucket from the main `rate`), polling at most once per `intervalMs`
+// (floored at 10s, so 6/min by default) and only while the oSC feed is stale.
+// `used`/`target` come straight from that limiter, reported in `scoresFallback.rate`.
 interface ScoresFallbackView {
   value: string;
   hint: string;
@@ -2342,8 +2346,8 @@ function getScoresFallbackStatus(status: LiveBackendStatus | null): ScoresFallba
   if (!fallback) {
     return { value: "—", hint: "status not loaded", tone: "neutral", used: 0, target: 0, enabled: false, polling: false };
   }
-  const used = status?.rate.byCaller?.find((entry) => entry.caller === SCORES_FALLBACK_CALLER)?.count ?? 0;
-  const target = Math.max(1, Math.round(60_000 / Math.max(10_000, fallback.intervalMs)));
+  const used = fallback.rate?.usedLastMinute ?? 0;
+  const target = fallback.rate?.targetPerMinute ?? Math.max(1, Math.round(60_000 / Math.max(10_000, fallback.intervalMs)));
   if (!fallback.enabled) {
     return { value: "off", hint: "disabled by config", tone: "neutral", used, target, enabled: false, polling: false };
   }

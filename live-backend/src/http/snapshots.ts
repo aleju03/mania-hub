@@ -43,6 +43,9 @@ export interface HttpContext {
   abuse?: AbuseGuard;
   countryClients?: CountryClientTracker;
   osu: OsuApiClient;
+  // Separate osu! client (and limiter) the scores fallback poller runs on, so
+  // its own rate bucket can be surfaced. Optional: not every context wires it.
+  scoresFallbackOsu?: OsuApiClient;
   oscStatus: () => OscStatus;
   workerStatus?: () => {
     paused: boolean;
@@ -681,6 +684,10 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
 async function scoresFallbackStatus(ctx: HttpContext) {
   const resultRow = (await exec(ctx.db, "select value_json, updated_at from live_meta where key = 'osu_scores_fallback_last_result'")).rows[0];
   const cursorRow = (await exec(ctx.db, "select value_json, updated_at from live_meta where key = 'osu_scores_fallback_cursor_string'")).rows[0];
+  // The fallback poller runs on its own osu! client, so its limiter is a bucket
+  // separate from the main one shown in `rate`. Surface used/target/pending here
+  // so the admin panel can show the fallback's real polling rate.
+  const limiterState = ctx.scoresFallbackOsu?.limiter.state();
   return {
     enabled: ctx.config.enableOsuScoresFallback,
     intervalMs: ctx.config.osuScoresFallbackIntervalMs,
@@ -688,6 +695,14 @@ async function scoresFallbackStatus(ctx: HttpContext) {
     result: parseJson(resultRow?.value_json, null),
     cursorUpdatedAt: cursorRow?.updated_at == null ? null : String(cursorRow.updated_at),
     hasCursor: cursorRow?.value_json != null,
+    rate: limiterState
+      ? {
+          usedLastMinute: limiterState.usedLastMinute,
+          targetPerMinute: limiterState.targetPerMinute,
+          hardPerMinute: limiterState.hardPerMinute,
+          pending: limiterState.pending,
+        }
+      : null,
   };
 }
 

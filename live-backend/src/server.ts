@@ -57,6 +57,7 @@ export async function createApp() {
     abuse,
     countryClients,
     osu,
+    scoresFallbackOsu,
     oscStatus: () => osc.status(),
     workerStatus: () => worker.status(),
     pauseWorkers: () => worker.pause(),
