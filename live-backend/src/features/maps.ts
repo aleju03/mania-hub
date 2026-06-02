@@ -395,7 +395,9 @@ export async function getMapsSnapshot(
   section: MapsSnapshotSection = "core",
 ): Promise<{ value: CountryMapsData | null; generatedAt: string | null; refreshedAt: string | null; isStale: boolean; refreshQueued: boolean }> {
   const normalized = country.toUpperCase();
-  const snapshot = await readMapsSnapshot(db, normalized, maxAgeMs);
+  const snapshot = section === "random"
+    ? await readMapsRandomSnapshot(db, normalized, maxAgeMs)
+    : await readMapsSnapshot(db, normalized, maxAgeMs);
   const value = section === "core" && snapshot.value
     ? await applyMapsFarmedOverlay(db, normalized, snapshot.value, snapshot.refreshedAt)
     : snapshot.value;
@@ -404,7 +406,7 @@ export async function getMapsSnapshot(
     await enqueueMapsRefresh(queue, normalized);
     refreshQueued = true;
   }
-  return { ...snapshot, value: sliceMapsSnapshotSection(value, section), refreshQueued };
+  return { ...snapshot, value: section === "random" ? value : sliceMapsSnapshotSection(value, section), refreshQueued };
 }
 
 export async function getMapsPageSnapshot(
@@ -585,6 +587,21 @@ async function readMapsSnapshot(
   };
 }
 
+async function readMapsRandomSnapshot(
+  db: Db,
+  country: string,
+  maxAgeMs: number,
+): Promise<{ value: CountryMapsData | null; generatedAt: string | null; refreshedAt: string | null; isStale: boolean }> {
+  const raw = await readRawMapsSnapshot(db, country, maxAgeMs);
+  const value = raw.parsed ? await hydrateMapsRandomSnapshotSection(db, raw.parsed) : null;
+  return {
+    value,
+    generatedAt: raw.generatedAt,
+    refreshedAt: raw.refreshedAt,
+    isStale: raw.isStale,
+  };
+}
+
 async function readRawMapsSnapshot(
   db: Db,
   country: string,
@@ -617,6 +634,43 @@ async function hydrateStoredMapsSnapshot(db: Db, parsed: unknown): Promise<Count
   }
   if (!isCountryMapsDataShape(parsed)) return null;
   return hydrateMapsSnapshotUsers(db, parsed);
+}
+
+async function hydrateMapsRandomSnapshotSection(
+  db: Db,
+  parsed: StoredCountryMapsData | CountryMapsData,
+): Promise<CountryMapsData | null> {
+  if (!isStoredCountryMapsData(parsed)) {
+    return sliceMapsSnapshotSection(await hydrateMapsSnapshotUsers(db, parsed), "random");
+  }
+
+  const pool = await readMapsRandomPoolByBeatmapsetIds(db, parsed.beatmapsetsPool);
+  const favouritesByPlayer = parsed.favouritesByPlayer.map((player) => ({
+    id: player.id,
+    username: "",
+    avatarUrl: "",
+    beatmapsetIds: player.beatmapsetIds,
+  }));
+  const users = await readMapsUserDisplayByIds(db, favouritesByPlayer.map((player) => player.id));
+  for (const player of favouritesByPlayer) {
+    const user = users.get(player.id);
+    if (user?.username) player.username = user.username;
+    if (user?.avatarUrl) player.avatarUrl = user.avatarUrl;
+  }
+
+  return {
+    farmed: [],
+    mostPlayed: [],
+    favourites: [],
+    favouritesByPlayer,
+    beatmapsetsPool: Object.fromEntries(parsed.beatmapsetsPool.flatMap((id): Array<[number, MapsFavouriteBeatmapset]> => {
+      const beatmapset = pool.get(id);
+      return beatmapset ? [[id, beatmapset]] : [];
+    })),
+    generatedAt: parsed.generatedAt,
+    farmedGeneratedAt: parsed.farmedGeneratedAt,
+    favouritesGeneratedAt: parsed.favouritesGeneratedAt,
+  };
 }
 
 function isCountryMapsDataShape(value: unknown): value is CountryMapsData {
@@ -1950,14 +2004,76 @@ async function readMapsBeatmapsetsByIds(db: Db, ids: number[]): Promise<Map<numb
   }));
 }
 
-async function selectRowsByIntegerSet(db: Db, sqlPrefix: string, values: number[]): Promise<Record<string, unknown>[]> {
+async function readMapsRandomPoolByBeatmapsetIds(db: Db, ids: number[]): Promise<Map<number, MapsFavouriteBeatmapset>> {
+  const rows = await selectRowsByIntegerSet(
+    db,
+    `select
+       bs.beatmapset_id,
+       bs.title,
+       bs.artist,
+       bs.creator,
+       bs.status,
+       bs.global_play_count,
+       bs.global_favourite_count,
+       bs.bpm,
+       bs.mania_keys_json,
+       bs.patterns_json,
+       min(b.difficulty_rating) as star_min,
+       max(b.difficulty_rating) as star_max,
+       group_concat(distinct b.cs) as key_values
+     from maps_beatmapsets bs
+     left join maps_beatmaps b on b.beatmapset_id = bs.beatmapset_id
+     where bs.beatmapset_id in`,
+    ids,
+    `group by
+       bs.beatmapset_id,
+       bs.title,
+       bs.artist,
+       bs.creator,
+       bs.status,
+       bs.global_play_count,
+       bs.global_favourite_count,
+       bs.bpm,
+       bs.mania_keys_json,
+       bs.patterns_json`,
+  );
+  return new Map(rows.map((row) => {
+    const id = Number(row.beatmapset_id);
+    const storedKeys = parseJson<number[]>(row.mania_keys_json, []);
+    const aggregateKeys = String(row.key_values ?? "")
+      .split(",")
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value > 0)
+      .sort((a, b) => a - b);
+    const beatmapset: MapsFavouriteBeatmapset = {
+      id,
+      title: String(row.title ?? ""),
+      artist: String(row.artist ?? ""),
+      creator: String(row.creator ?? ""),
+      covers: {},
+      status: String(row.status ?? ""),
+      globalPlayCount: Number(row.global_play_count ?? 0),
+      globalFavouriteCount: Number(row.global_favourite_count ?? 0),
+      previewUrl: "",
+      maniaKeys: storedKeys.length > 0 ? storedKeys : [...new Set(aggregateKeys)],
+      maniaBeatmaps: [],
+      starMin: Number(row.star_min ?? 0),
+      starMax: Number(row.star_max ?? 0),
+      bpm: Number(row.bpm ?? 0),
+      patterns: parseJson<string[]>(row.patterns_json, []),
+    };
+    return [id, beatmapset];
+  }));
+}
+
+async function selectRowsByIntegerSet(db: Db, sqlPrefix: string, values: number[], sqlSuffix = ""): Promise<Record<string, unknown>[]> {
   const ids = [...new Set(values.filter((value) => Number.isSafeInteger(value) && value > 0))];
   const rows: Record<string, unknown>[] = [];
   for (let index = 0; index < ids.length; index += 900) {
     const chunk = ids.slice(index, index + 900);
     if (chunk.length === 0) continue;
     const placeholders = chunk.map(() => "?").join(",");
-    rows.push(...(await exec(db, `${sqlPrefix} (${placeholders})`, chunk)).rows);
+    rows.push(...(await exec(db, `${sqlPrefix} (${placeholders}) ${sqlSuffix}`, chunk)).rows);
   }
   return rows;
 }
