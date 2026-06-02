@@ -593,25 +593,26 @@ describe("live backend", () => {
 
   it("only runs the direct osu scores fallback when oSC intake is stale", () => {
     const now = new Date("2026-05-30T12:00:00.000Z").getTime();
+    const staleMs = 90_000;
 
     expect(shouldRunScoresFallback({
       connected: true,
-      lastBatchAt: "2026-05-30T11:59:00.000Z",
+      lastBatchAt: "2026-05-30T11:58:45.000Z",
       lastError: null,
       stale: false,
-    }, 10 * 60_000, now)).toBe(false);
+    }, staleMs, now)).toBe(false);
     expect(shouldRunScoresFallback({
       connected: true,
-      lastBatchAt: "2026-05-30T11:00:00.000Z",
+      lastBatchAt: "2026-05-30T11:58:29.000Z",
       lastError: null,
       stale: false,
-    }, 10 * 60_000, now)).toBe(true);
+    }, staleMs, now)).toBe(true);
     expect(shouldRunScoresFallback({
       connected: true,
       lastBatchAt: "2026-05-30T11:59:00.000Z",
       lastError: null,
       stale: true,
-    }, 10 * 60_000, now)).toBe(true);
+    }, staleMs, now)).toBe(true);
   });
 
   it("ingests the global mania osu scores fallback and stores its cursor", async () => {

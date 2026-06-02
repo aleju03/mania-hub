@@ -155,7 +155,7 @@ export function readConfig(): Config {
     osuApiHardPerMinute: readInt("OSU_API_HARD_PER_MINUTE", 60),
     oscJsonTargetPerMinute: readInt("OSC_JSON_TARGET_PER_MINUTE", 30),
     oscGlobalBackfillPageLimit: Math.min(readInt("OSC_GLOBAL_BACKFILL_PAGE_LIMIT", 100), 1000),
-    oscSocketStaleMs: readInt("OSC_SOCKET_STALE_MS", 10 * 60 * 1000),
+    oscSocketStaleMs: readInt("OSC_SOCKET_STALE_MS", 90 * 1000),
     oscSocketWatchdogIntervalMs: readInt("OSC_SOCKET_WATCHDOG_INTERVAL_MS", 60 * 1000),
     topPlayMarginPp: readInt("TOP_PLAY_MARGIN_PP", 5),
     rosterRefreshIntervalMs: readInt("ROSTER_REFRESH_INTERVAL_MS", 6 * 60 * 60 * 1000),
