@@ -17,7 +17,7 @@ import { ModBadge } from "../components/ui/ModBadge";
 import { RankingRowSkeleton, ScoreRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { ManiaRain } from "../components/home/ManiaRain";
 import { UsernameText } from "../components/ui/UsernameText";
-import type { RankingsResponse, LeanHomeScore, LeanHomePopoff, LeanTrackerScore, CountryTopPlay } from "../lib/types";
+import type { RankingsResponse, LeanHomeScore, LeanHomePopoff, LeanTrackerScore, CountryTopPlay, LeanRankingEntry } from "../lib/types";
 import { useAppStore, useHasHydrated, useHiddenUserIds, useSelectedCountry } from "../store";
 import { DEFAULT_DESCRIPTION, pageSeo, SITE_NAME } from "../lib/seo";
 import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
@@ -133,13 +133,31 @@ function writeStoredGlobalTopPlayers(data: LiveGlobalRankingEntry[]): void {
 // fade-in animation every time another fetch resolves.
 function GlobalRankingRow({ entry, index, delayStep }: { entry: LiveGlobalRankingEntry; index: number; delayStep: number }) {
   const navigate = useNavigate();
+  const seedPlayerShell = () => {
+    const rankingEntry: LeanRankingEntry = {
+      user: {
+        ...entry.user,
+        is_online: false,
+      },
+      hit_accuracy: entry.hit_accuracy,
+      play_count: entry.play_count,
+      pp: entry.pp,
+      global_rank: entry.global_rank ?? entry.rank,
+      ranked_score: entry.ranked_score,
+      grade_counts: entry.grade_counts,
+    };
+    seedPlayerShellFromRankingEntry(rankingEntry, entry.country_rank);
+  };
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ delay: index * delayStep }}
       className="flex items-center gap-3 px-4 py-2.5 hover:bg-osu-b3/50 transition-colors cursor-pointer"
-      onClick={() => navigate({ to: "/player/$username", params: { username: entry.user.username } })}
+      onClick={() => {
+        seedPlayerShell();
+        navigate({ to: "/player/$username", params: { username: entry.user.username } });
+      }}
     >
       <span className="text-sm font-bold text-osu-f1 w-6 text-center tabular-nums">#{entry.rank}</span>
       <Avatar url={entry.user.avatar_url} userId={entry.user.id} size={30} />
