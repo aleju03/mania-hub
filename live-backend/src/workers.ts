@@ -410,7 +410,7 @@ export class WorkerRunner {
   }
 
   private async isUserActive(userId: number): Promise<boolean> {
-    const cutoff = new Date(Date.now() - 40 * 60_000).toISOString();
+    const cutoff = new Date(Date.now() - 30 * 60_000).toISOString();
     const row = (await exec(
       this.db,
       "select 1 from score_events where user_id = ? and ended_at >= ? and source like 'osc_%' limit 1",

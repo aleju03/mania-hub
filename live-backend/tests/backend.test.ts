@@ -660,7 +660,7 @@ describe("live backend", () => {
     expect(Number((await exec(db, "select count(*) as count from score_events where source = 'osu_scores_fallback'")).rows[0].count)).toBe(2);
   });
 
-  it("does not fan osu scores fallback rows into per-user recent polling", async () => {
+  it("fans osu scores fallback rows into per-user recent polling", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-30T12:00:00.000Z"));
     const { db, ingestor } = await setup(["CR"]);
@@ -694,7 +694,9 @@ describe("live backend", () => {
     });
 
     expect(result).toMatchObject({ ran: true, fetched: 1, candidates: 1, inserted: 1 });
-    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'reconcile_user_recent_scores'")).rows[0].count)).toBe(0);
+    const rows = (await exec(db, "select dedupe_key from jobs where type = 'reconcile_user_recent_scores'")).rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].dedupe_key).toBe("recent:user:101");
   });
 
   it("fans osu scores fallback rows into leaderboard feature jobs", async () => {

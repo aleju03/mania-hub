@@ -223,7 +223,7 @@ export class ScoreIngestor {
 
   private async enqueueRecentReconcileIfDue(score: OscScore): Promise<void> {
     const scoreTime = new Date(score.ended_at ?? score.created_at ?? 0).getTime();
-    if (!Number.isFinite(scoreTime) || Date.now() - scoreTime > 40 * 60_000) return;
+    if (!Number.isFinite(scoreTime) || Date.now() - scoreTime > 30 * 60_000) return;
     const userId = score.user_id;
     const dedupeKey = `recent:user:${userId}`;
     const pending = (await exec(
