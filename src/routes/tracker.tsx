@@ -683,6 +683,15 @@ function ScoresPage() {
     setMissFilter((current) => current === "all" ? "fc" : current === "fc" ? "fc_choke" : "all");
     updateTrackerSearch({ page: 0 });
   };
+  const hasActiveScoreFilters = selectedPlayerIds.length > 0
+    || filter !== "all"
+    || gradeFilter !== "all"
+    || keyFilter !== "all"
+    || missFilter !== "all";
+  useEffect(() => {
+    if (!liveBackendEnabled || !hasActiveScoreFilters || feedScores.length >= TRACKER_FEED_SCORE_LIMIT) return;
+    void reconcileLiveSnapshot(selectedCountry, { force: true, limit: TRACKER_FEED_SCORE_LIMIT });
+  }, [feedScores.length, hasActiveScoreFilters, liveBackendEnabled, reconcileLiveSnapshot, selectedCountry]);
   const missButtonLabel = missFilter === "fc_choke" ? "Choke" : "FC";
   const mobileMissButtonLabel = missFilter === "fc_choke" ? "Ch" : "FC";
   const missButtonTitle = missFilter === "fc"
@@ -693,7 +702,11 @@ function ScoresPage() {
   const listKey = `${filter}:${gradeFilter}:${keyFilter}:${missFilter}`;
   const liveStatusLabel = liveBackendEnabled ? "Live updates on" : "Live polling";
   const scoreWindowLabel = liveBackendEnabled ? `${TRACKER_FEED_SCORE_LIMIT}-score window` : `${feedScores.length} scores`;
-  const totalPages = Math.max(1, Math.ceil(filtered.length / TRACKER_PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(
+    liveBackendEnabled && !hasActiveScoreFilters
+      ? TRACKER_FEED_SCORE_LIMIT / TRACKER_PAGE_SIZE
+      : filtered.length / TRACKER_PAGE_SIZE,
+  ));
   const currentPage = Math.min(page, totalPages - 1);
   const paginatedScores = useMemo(
     () => filtered.slice(currentPage * TRACKER_PAGE_SIZE, (currentPage + 1) * TRACKER_PAGE_SIZE),
