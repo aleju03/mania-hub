@@ -213,17 +213,20 @@ export function toLeanTrackerScore(score: OscScore): LeanTrackerScore {
   if (!score.beatmap || !score.beatmapset || !score.user) {
     throw new Error(`score ${score.id} is missing display metadata`);
   }
+  const covers: LeanTrackerScore["beatmapset"]["covers"] = {};
+  if (score.beatmapset.covers.cover) covers.cover = score.beatmapset.covers.cover;
+  if (score.beatmapset.covers["cover@2x"]) covers["cover@2x"] = score.beatmapset.covers["cover@2x"];
   return {
     id: score.id,
-    legacy_score_id: score.legacy_score_id,
+    legacy_score_id: score.legacy_score_id ?? undefined,
     user_id: score.user_id,
     accuracy: score.accuracy,
     beatmap_id: score.beatmap_id ?? score.beatmap.id,
     mods: score.mods,
     score: score.score,
     total_score: score.total_score,
-    classic_total_score: score.classic_total_score,
-    legacy_total_score: score.legacy_total_score,
+    classic_total_score: score.classic_total_score === score.total_score ? undefined : score.classic_total_score,
+    legacy_total_score: score.legacy_total_score && score.legacy_total_score > 0 ? score.legacy_total_score : undefined,
     max_combo: score.max_combo,
     passed: score.passed,
     rank: score.rank,
@@ -234,13 +237,13 @@ export function toLeanTrackerScore(score: OscScore): LeanTrackerScore {
       id: score.beatmapset.id,
       title: score.beatmapset.title,
       artist: score.beatmapset.artist,
-      covers: score.beatmapset.covers,
+      covers,
     },
     user: score.user,
     created_at: score.created_at,
     started_at: score.started_at,
     ended_at: score.ended_at,
-    replay: score.replay,
+    replay: score.replay === score.has_replay ? undefined : score.replay,
     has_replay: score.has_replay,
     type: score.type,
   };

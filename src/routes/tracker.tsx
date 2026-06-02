@@ -43,7 +43,10 @@ import { useCountryWarming } from "../lib/use-country-warming";
 
 const TRACKER_SNAPSHOT_LOADER_TIMEOUT_MS = 2500;
 const TRACKER_PAGE_SIZE = 45;
-const TRACKER_LIVE_SNAPSHOT_LIMIT = 500;
+const TRACKER_LIVE_MIN_SNAPSHOT_LIMIT = TRACKER_PAGE_SIZE * 2;
+const TRACKER_LIVE_RECONCILE_LIMIT = 60;
+const TRACKER_LIVE_MAX_SNAPSHOT_LIMIT = 500;
+const TRACKER_LIVE_RECONCILE_MIN_INTERVAL_MS = 2 * 60_000;
 const DEV_ACTIVE_PLAYER_SIMULATION_COUNT = 200;
 
 type ActivePlayerRailInfo = {
@@ -74,6 +77,14 @@ function makeDevActivePlayers(count: number): ActivePlayerRailItem[] {
     latestTime: now - index * 1000,
     simulated: true,
   }));
+}
+
+function getLiveTrackerSnapshotLimitForPage(page: number): number {
+  const neededForVisiblePage = (Math.max(0, page) + 1) * TRACKER_PAGE_SIZE;
+  return Math.min(
+    TRACKER_LIVE_MAX_SNAPSHOT_LIMIT,
+    Math.max(TRACKER_LIVE_MIN_SNAPSHOT_LIMIT, neededForVisiblePage + TRACKER_PAGE_SIZE),
+  );
 }
 
 async function withSnapshotLoaderBudget<T>(snapshotPromise: Promise<T>): Promise<T | null> {
@@ -209,6 +220,8 @@ function ScoresPage() {
   const refreshing = initialFetching || polling;
   const initialFetchInFlightRef = useRef(false);
   const pollInFlightRef = useRef(false);
+  const liveSnapshotInFlightRef = useRef(false);
+  const lastLiveSnapshotAtRef = useRef(0);
   const pollRequestIdRef = useRef(0);
   const appliedSnapshotKeyRef = useRef<string | null>(null);
   const liveBackendEnabled = isLiveBackendConfigured();
@@ -255,52 +268,60 @@ function ScoresPage() {
     return () => window.clearInterval(id);
   }, []);
 
-  const reconcileLiveSnapshot = useCallback(async (requestedCountry: string) => {
-    const liveSnapshot = await fetchLiveTrackerSnapshot(requestedCountry, TRACKER_LIVE_SNAPSHOT_LIMIT);
-    if (requestedCountry !== selectedCountry) return;
-    const passedScores = liveSnapshot.scores.filter(isDisplayedPassed);
-    if (passedScores.length > 0) addFeedScores(requestedCountry, passedScores);
-    if (Object.keys(liveSnapshot.gains).length > 0) {
-      setTrackerPpGains(requestedCountry, liveSnapshot.gains, liveSnapshot.fetchedAt);
+  const reconcileLiveSnapshot = useCallback(async (
+    requestedCountry: string,
+    options: { force?: boolean; limit?: number } = {},
+  ) => {
+    const now = Date.now();
+    if (!options.force && now - lastLiveSnapshotAtRef.current < TRACKER_LIVE_RECONCILE_MIN_INTERVAL_MS) return;
+    if (liveSnapshotInFlightRef.current) return;
+
+    liveSnapshotInFlightRef.current = true;
+    try {
+      const liveSnapshot = await fetchLiveTrackerSnapshot(requestedCountry, options.limit ?? TRACKER_LIVE_RECONCILE_LIMIT);
+      if (requestedCountry !== selectedCountry) return;
+      lastLiveSnapshotAtRef.current = Date.now();
+      const passedScores = liveSnapshot.scores.filter(isDisplayedPassed);
+      if (passedScores.length > 0) addFeedScores(requestedCountry, passedScores);
+      if (Object.keys(liveSnapshot.gains).length > 0) {
+        setTrackerPpGains(requestedCountry, liveSnapshot.gains, liveSnapshot.fetchedAt);
+      }
+      markFeedScoresFetched(requestedCountry);
+      setInitialLoaded(true);
+      setInitialRefreshDone(true);
+      setInitialFetching(false);
+      setLoadingPlayers(false);
+    } finally {
+      liveSnapshotInFlightRef.current = false;
     }
-    markFeedScoresFetched(requestedCountry);
-    setInitialLoaded(true);
-    setInitialRefreshDone(true);
-    setInitialFetching(false);
-    setLoadingPlayers(false);
   }, [addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains]);
 
   useEffect(() => {
     if (!liveBackendEnabled) return;
     let cancelled = false;
     const requestedCountry = selectedCountry;
-    const run = () => {
-      reconcileLiveSnapshot(requestedCountry).catch(() => {
+    const run = (options: { force?: boolean; limit?: number } = {}) => {
+      reconcileLiveSnapshot(requestedCountry, options).catch(() => {
         // The existing server-function path below remains the fallback.
       });
     };
-    run();
-    const intervalId = window.setInterval(() => {
-      if (!cancelled && document.visibilityState === "visible") run();
-    }, 30_000);
+    run({ force: true, limit: getLiveTrackerSnapshotLimitForPage(page) });
     const onVisibility = () => {
-      if (!cancelled && document.visibilityState === "visible") run();
+      if (!cancelled && document.visibilityState === "visible") {
+        run({ limit: TRACKER_LIVE_RECONCILE_LIMIT });
+      }
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [liveBackendEnabled, reconcileLiveSnapshot, selectedCountry]);
+  }, [liveBackendEnabled, page, reconcileLiveSnapshot, selectedCountry]);
 
   useEffect(() => {
     if (!liveBackendEnabled) return;
     const source = openLiveEventSource(selectedCountry);
     if (!source) return;
-    source.addEventListener("hello", () => {
-      void reconcileLiveSnapshot(selectedCountry);
-    });
     source.addEventListener("tracker_score", (event) => {
       const score = JSON.parse(event.data) as LeanTrackerScore;
       if (isDisplayedPassed(score)) addFeedScores(selectedCountry, [score]);
@@ -324,6 +345,8 @@ function ScoresPage() {
     setPolling(false);
     initialFetchInFlightRef.current = false;
     pollInFlightRef.current = false;
+    liveSnapshotInFlightRef.current = false;
+    lastLiveSnapshotAtRef.current = 0;
     pollRequestIdRef.current += 1;
     setExpandedKey(null);
     setSelectedPlayerIds([]);

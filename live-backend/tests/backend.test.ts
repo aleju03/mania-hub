@@ -1280,6 +1280,8 @@ describe("live backend", () => {
     const snapshot = await getTrackerSnapshot(db, "CR", 10);
     expect(snapshot.scores).toHaveLength(1);
     expect(snapshot.scores[0].user.username).toBe("Sniper");
+    expect(Object.keys(snapshot.scores[0].beatmapset.covers)).toEqual(["cover"]);
+    expect(snapshot.scores[0].replay).toBeUndefined();
     const missed = await events.replay("CR", 0);
     expect(missed.some((event) => event.type === "tracker_score")).toBe(true);
   });
@@ -3284,6 +3286,26 @@ describe("live backend", () => {
     expect(writes.join("")).toContain("event: tracker_score");
     await vi.advanceTimersByTimeAsync(15_000);
     expect(writes.join("")).toContain("event: heartbeat");
+    req.emit("close");
+  });
+
+  it("opens Global SSE without activating synthetic country work", async () => {
+    const { db, queue, events } = await setup();
+    const enqueueSpy = vi.spyOn(queue, "enqueue");
+    const req = mockReq("GET", "/api/live?country=GLOBAL", { "x-real-ip": "203.0.113.41" });
+    const res = mockRes();
+
+    await handleSse(req, res.res, {
+      db,
+      queue,
+      events,
+      config: baseConfig(),
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0 }) } },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never);
+
+    expect(res.res.writeHead).toHaveBeenCalledWith(200, expect.objectContaining({ "content-type": "text/event-stream; charset=utf-8" }));
+    expect(enqueueSpy).not.toHaveBeenCalled();
     req.emit("close");
   });
 

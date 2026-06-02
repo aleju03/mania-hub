@@ -40,13 +40,13 @@ export async function handleSse(req: IncomingMessage, res: ServerResponse, ctx: 
   const releaseSse = opened?.allowed ? opened.release : null;
   let releaseCountryClient: (() => void) | null = null;
   try {
-    if (!observeOnly) {
+    if (!observeOnly && !global) {
       const activated = await activatePublicCountry(req, res, ctx, country);
       if (!activated) {
         releaseSse?.();
         return true;
       }
-      releaseCountryClient = (global ? null : ctx.countryClients?.open(country)) ?? null;
+      releaseCountryClient = ctx.countryClients?.open(country) ?? null;
     }
   } catch (error) {
     releaseCountryClient?.();
