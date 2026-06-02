@@ -22,6 +22,7 @@ import type { RankingsResponse, LeanHomeScore, LeanHomePopoff, LeanTrackerScore,
 import { useAppStore, useHasHydrated, useHiddenUserIds, useSelectedCountry } from "../store";
 import { DEFAULT_DESCRIPTION, pageSeo, SITE_NAME } from "../lib/seo";
 import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
+import { readGlobalTopPlayersCache, readGlobalTopPlayersMemoryCache, writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
 
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -75,59 +76,11 @@ const EMPTY_POPOFFS: LeanHomePopoff[] = [];
 const HOME_RANKING_SKELETON_MOBILE_COUNT = 5;
 const HOME_RANKING_SKELETON_DESKTOP_COUNT = 10;
 const HOME_GLOBAL_RANKINGS_FETCH_COUNT = 50;
-const HOME_GLOBAL_RANKINGS_STORAGE_KEY = "mania-hub-home-global-rankings-v1";
-// Module-scoped cache for Global's "Top players" board. Without it, navigating
-// away from Home and back remounts this route, resets the local state to null
-// (skeleton), and refetches every time even though the board barely changes.
-// Survives in-session navigation; resets on a full reload. Reuses the rankings
-// TTL for the refresh window.
-let globalTopPlayersCache: { data: LiveGlobalRankingEntry[]; fetchedAt: number } | null = null;
 const HOME_RECENT_SCORES_SKELETON_COUNT = 2;
 const HOME_RECENT_SCORES_PLAYER_COUNT = 50;
 const HOME_LIVE_RECENT_SNAPSHOT_LIMIT = 20;
 const HOME_POPOFFS_PLAYER_COUNT = 10;
 const HOME_POPOFFS_CACHE_LIMIT = 200;
-
-function isStoredGlobalRankingEntry(value: unknown): value is LiveGlobalRankingEntry {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const entry = value as LiveGlobalRankingEntry;
-  const user = entry.user;
-  return Number.isFinite(entry.rank) &&
-    Number.isFinite(entry.pp) &&
-    !!user &&
-    typeof user === "object" &&
-    Number.isFinite(user.id) &&
-    typeof user.username === "string" &&
-    typeof user.avatar_url === "string" &&
-    typeof user.country_code === "string";
-}
-
-function readStoredGlobalTopPlayers(): { data: LiveGlobalRankingEntry[]; fetchedAt: number } | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(HOME_GLOBAL_RANKINGS_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { data?: unknown; fetchedAt?: unknown };
-    const fetchedAt = Number(parsed.fetchedAt);
-    if (!Number.isFinite(fetchedAt) || !Array.isArray(parsed.data)) return null;
-    const data = parsed.data.filter(isStoredGlobalRankingEntry);
-    return data.length > 0 ? { data, fetchedAt } : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeStoredGlobalTopPlayers(data: LiveGlobalRankingEntry[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(
-      HOME_GLOBAL_RANKINGS_STORAGE_KEY,
-      JSON.stringify({ data, fetchedAt: Date.now() }),
-    );
-  } catch {
-    // Non-critical paint cache; the in-memory cache still covers this session.
-  }
-}
 
 // Defined at module scope (not inside HomePage) so the component keeps a stable
 // identity across HomePage re-renders. Inline definitions get a fresh function
@@ -337,7 +290,9 @@ function HomePage() {
   const addFeedScores = useAppStore((state) => state.addFeedScores);
   const markFeedScoresFetched = useAppStore((state) => state.markFeedScoresFetched);
   const [rankingsError, setRankingsError] = useState<string | null>(null);
-  const [globalTopPlayers, setGlobalTopPlayers] = useState<LiveGlobalRankingEntry[] | null>(globalTopPlayersCache?.data ?? null);
+  const [globalTopPlayers, setGlobalTopPlayers] = useState<LiveGlobalRankingEntry[] | null>(
+    () => readGlobalTopPlayersMemoryCache()?.data ?? null,
+  );
   const [loadingScores, setLoadingScores] = useState(recentScores.length === 0);
   const [loadingPopoffs, setLoadingPopoffs] = useState(popoffs.length === 0);
   const countryName = getCountryName(selectedCountry);
@@ -417,15 +372,14 @@ function HomePage() {
     // Serve the cached board immediately; only hit the network when it's missing
     // or past the TTL. Keep showing the cached board while refreshing so the card
     // never flips back to a skeleton on revisits.
-    if (!globalTopPlayersCache) globalTopPlayersCache = readStoredGlobalTopPlayers();
-    const fresh = globalTopPlayersCache && !isCacheStale(globalTopPlayersCache.fetchedAt, CLIENT_CACHE_TTL.rankings);
-    if (globalTopPlayersCache) setGlobalTopPlayers(globalTopPlayersCache.data);
+    const cached = readGlobalTopPlayersCache();
+    const fresh = cached && !isCacheStale(cached.fetchedAt, CLIENT_CACHE_TTL.rankings);
+    if (cached) setGlobalTopPlayers(cached.data);
     if (fresh) return;
     let cancelled = false;
     fetchLiveGlobalRankings(HOME_GLOBAL_RANKINGS_FETCH_COUNT)
       .then((snapshot) => {
-        globalTopPlayersCache = { data: snapshot.ranking, fetchedAt: Date.now() };
-        writeStoredGlobalTopPlayers(snapshot.ranking);
+        writeGlobalTopPlayersCache(snapshot.ranking);
         if (!cancelled) setGlobalTopPlayers(snapshot.ranking);
       })
       .catch(() => { if (!cancelled) setGlobalTopPlayers((prev) => prev ?? []); });

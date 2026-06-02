@@ -19,6 +19,7 @@ import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
 import { pageSeo } from "../lib/seo";
 import { fetchLiveGlobalRankings, fetchLiveRankDeltas, isLiveBackendConfigured, type LiveGlobalRankingEntry, type LiveRankDelta } from "../lib/live-backend";
 import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
+import { writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
 
 type SortField = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "ss" | "s" | "a";
 const GLOBAL_RANKINGS_PAGE_SIZE = 50;
@@ -131,6 +132,9 @@ function RankingsPage() {
     })
       .then((snapshot) => {
         if (cancelled) return;
+        if (page === 1 && sortBy === "rank" && sortDir === "desc") {
+          writeGlobalTopPlayersCache(snapshot.ranking, snapshot.fetchedAt);
+        }
         setGlobalRankings(snapshot.ranking);
         setGlobalRankingsTotal(snapshot.total);
       })

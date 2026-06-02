@@ -43,6 +43,7 @@ import { startProgressPoll } from "../lib/progress-poll";
 import { fetchLiveGlobalRankings, getLiveBackendUrl, isLiveBackendConfigured, type LiveGlobalRankingEntry } from "../lib/live-backend";
 import { isGlobalScope } from "../lib/country";
 import { useAuth } from "../lib/auth-context";
+import { readGlobalTopPlayersCache, readGlobalTopPlayersMemoryCache, writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
 import {
   normalizeReplayBackgroundDim,
   normalizeReplayInputColor,
@@ -455,7 +456,9 @@ function ReplayPage() {
   const rankingsFetchedAt = useAppStore((s) => s.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const setRankings = useAppStore((s) => s.setRankings);
   const selectedIsGlobal = isGlobalScope(selectedCountry);
-  const [globalSuggestions, setGlobalSuggestions] = useState<LiveGlobalRankingEntry[] | null>(null);
+  const [globalSuggestions, setGlobalSuggestions] = useState<LiveGlobalRankingEntry[] | null>(
+    () => readGlobalTopPlayersMemoryCache()?.data ?? null,
+  );
   const [replay, setReplay] = useState<ServerReplay | null>(null);
   const [beatmap, setBeatmap] = useState<ManiaBeatmap | null>(null);
   const [scoreInfo, setScoreInfo] = useState<OsuScore | null>(null);
@@ -848,10 +851,18 @@ function ReplayPage() {
   // Global: suggestions come from the combined top-players board instead.
   useEffect(() => {
     if (browseMode !== "player" || !selectedIsGlobal || !isLiveBackendConfigured()) return;
+    const cached = readGlobalTopPlayersCache();
+    const fresh = cached && !isCacheStale(cached.fetchedAt, CLIENT_CACHE_TTL.rankings);
+    if (cached) setGlobalSuggestions(cached.data);
+    if (fresh) return;
+
     let cancelled = false;
     fetchLiveGlobalRankings(48)
-      .then((snapshot) => { if (!cancelled) setGlobalSuggestions(snapshot.ranking); })
-      .catch(() => { if (!cancelled) setGlobalSuggestions([]); });
+      .then((snapshot) => {
+        writeGlobalTopPlayersCache(snapshot.ranking);
+        if (!cancelled) setGlobalSuggestions(snapshot.ranking);
+      })
+      .catch(() => { if (!cancelled) setGlobalSuggestions((prev) => prev ?? []); });
     return () => { cancelled = true; };
   }, [browseMode, selectedIsGlobal]);
 
