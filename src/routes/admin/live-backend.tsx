@@ -278,6 +278,11 @@ const ANALYTICS_RANGE_PRESETS = [1, 3, 6, 12, 24, 168, 720] as const;
 const ANALYTICS_CACHE_FRESH_MS = 30_000;
 const ANALYTICS_COLD_RESPONSE_BUDGET_MS = 1_500;
 const POSTHOG_QUERY_TIMEOUT_MS = 30_000;
+const HIDDEN_WORKER_LANE_NAMES = new Set([
+  "dan-estimates",
+  "replay-video-render",
+  "replay-video-finalize",
+]);
 
 const LEGACY_ANALYTICS_RANGE_HOURS: Record<string, AnalyticsRange> = {
   "1h": 1,
@@ -979,7 +984,7 @@ function LiveBackendPage() {
             />
           </Section>
 
-          {(status?.worker?.lanes?.length ?? 0) > 0 ? (
+          {getVisibleWorkerLanes(status).length > 0 ? (
             <Section title="Workers" subtitle="What each lane is processing right now">
               <WorkerLanesCard status={status} />
             </Section>
@@ -3148,7 +3153,7 @@ function getCountryDisplayStatus(entry: CountryEntry): CountryDisplayStatus {
 }
 
 function WorkerLanesCard({ status }: { status: LiveBackendStatus | null }) {
-  const workerLanes = status?.worker?.lanes ?? [];
+  const workerLanes = getVisibleWorkerLanes(status);
   const activeJobCount = workerLanes.reduce((total, lane) => total + (lane.activeJobs?.length ?? 0), 0);
   return (
     <SectionCard
@@ -3162,6 +3167,10 @@ function WorkerLanesCard({ status }: { status: LiveBackendStatus | null }) {
       </div>
     </SectionCard>
   );
+}
+
+function getVisibleWorkerLanes(status: LiveBackendStatus | null) {
+  return (status?.worker?.lanes ?? []).filter((lane) => !HIDDEN_WORKER_LANE_NAMES.has(lane.name));
 }
 
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
