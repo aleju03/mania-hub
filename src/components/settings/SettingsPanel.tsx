@@ -39,7 +39,6 @@ import {
 import type { ReplaySkinSettings, ReplaySkinStyle } from "../../lib/replay-skin";
 import type { ReplayOverlaySettings } from "../../lib/replay-overlays";
 import { useAppStore } from "../../store";
-import { useAuth } from "../../lib/auth-context";
 
 const MANIA_ARROW_ICON_STYLE: CSSProperties = {
   WebkitMask: "url('/images/notes/mania-arrow-right.svg') center / contain no-repeat",
@@ -66,11 +65,10 @@ const STYLE_LABELS: Record<ReplaySkinStyle, string> = {
   arrows: "Arrows",
 };
 
-type TabId = "skin" | "viewer" | "dans" | "hidden";
+type TabId = "skin" | "viewer" | "hidden";
 const TABS: { id: TabId; label: string }[] = [
   { id: "skin", label: "skin & layout" },
   { id: "viewer", label: "playback" },
-  { id: "dans", label: "dans" },
   { id: "hidden", label: "hidden players" },
 ];
 
@@ -89,19 +87,6 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   const [overlaySettings, setOverlaySettings] = useState(readReplayOverlaySettings);
   const [skinSettingsOpen, setSkinSettingsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("skin");
-  const showDanEstimates = useAppStore((state) => state.showDanEstimates);
-  const setShowDanEstimates = useAppStore((state) => state.setShowDanEstimates);
-  const canUseDanEstimates = useAuth().canUseDevFeatures;
-  const visibleTabs = useMemo(
-    () => canUseDanEstimates ? TABS : TABS.filter((tab) => tab.id !== "dans"),
-    [canUseDanEstimates],
-  );
-
-  useEffect(() => {
-    if (!canUseDanEstimates && activeTab === "dans") {
-      setActiveTab("skin");
-    }
-  }, [activeTab, canUseDanEstimates]);
 
   const saveSkinSettings = (settings: ReplaySkinSettings) => {
     const normalized = normalizeReplaySkinSettings(settings);
@@ -132,7 +117,6 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
     writeReplaySkinSettings(DEFAULT_REPLAY_SKIN_SETTINGS);
     setOverlaySettings(DEFAULT_REPLAY_OVERLAY_SETTINGS);
     writeReplayOverlaySettings(DEFAULT_REPLAY_OVERLAY_SETTINGS);
-    setShowDanEstimates(false);
   };
 
   const resetButton = (
@@ -177,13 +161,6 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
           }}
         />
       ) : null}
-      {activeTab === "dans" ? (
-        <DansPanel
-          showDanEstimates={showDanEstimates}
-          onShowDanEstimatesChange={setShowDanEstimates}
-          canUseDanEstimates={canUseDanEstimates}
-        />
-      ) : null}
       {activeTab === "hidden" ? <HiddenPlayersPanel /> : null}
     </>
   );
@@ -221,7 +198,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
             </button>
           ) : null}
         </div>
-        <PageTabs items={visibleTabs} value={activeTab} onChange={setActiveTab} />
+        <PageTabs items={TABS} value={activeTab} onChange={setActiveTab} />
         <div className="flex-1 overflow-y-auto">
           <div className="px-3 py-5 sm:px-5 sm:py-6 space-y-6">{body}</div>
         </div>
@@ -233,7 +210,7 @@ export function SettingsPanel({ variant = "page", onClose }: SettingsPanelProps)
   return (
     <div className="flex-1">
       <PageHeader iconSrc="/images/icons/settings.svg" title="settings" right={resetButton} />
-      <PageTabs items={visibleTabs} value={activeTab} onChange={setActiveTab} />
+      <PageTabs items={TABS} value={activeTab} onChange={setActiveTab} />
       <div className="bg-osu-b5 min-h-[80vh]">
         <div className="mx-auto max-w-[900px] px-3 py-6 sm:px-5 sm:py-8 space-y-6">{body}</div>
       </div>
@@ -393,29 +370,6 @@ function ViewerPanel({
           />
         </div>
       </PanelGroup>
-    </div>
-  );
-}
-
-function DansPanel({
-  showDanEstimates,
-  onShowDanEstimatesChange,
-  canUseDanEstimates,
-}: {
-  showDanEstimates: boolean;
-  onShowDanEstimatesChange: (checked: boolean) => void;
-  canUseDanEstimates: boolean;
-}) {
-  return (
-    <div className="space-y-6">
-      <ToggleRow
-        label="Show dan estimates"
-        description="If you care about Dans"
-        checked={canUseDanEstimates && showDanEstimates}
-        disabled={!canUseDanEstimates}
-        wipWhenDisabled
-        onChange={onShowDanEstimatesChange}
-      />
     </div>
   );
 }
@@ -775,65 +729,6 @@ function PercentSlider({
         }}
       />
       {hint ? <p className="text-[11px] text-osu-f1">{hint}</p> : null}
-    </div>
-  );
-}
-
-function ToggleRow({
-  label,
-  description,
-  checked,
-  disabled = false,
-  wipWhenDisabled = false,
-  onChange,
-}: {
-  label: string;
-  description?: string;
-  checked: boolean;
-  disabled?: boolean;
-  wipWhenDisabled?: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <div
-      className={`flex items-center justify-between gap-3 rounded-lg border px-4 py-3 transition-colors ${
-        disabled
-          ? "border-osu-b3/30 bg-osu-b5/30 opacity-50"
-          : checked
-            ? "border-osu-pink/30 bg-osu-pink/5"
-            : "border-osu-b3/40 bg-osu-b5/40 hover:border-osu-b3/60"
-      }`}
-    >
-      <div className="min-w-0">
-        <div className="text-sm font-semibold text-osu-l1">{label}</div>
-        {description ? (
-          <div className="mt-0.5 text-[11px] text-osu-f1">{description}</div>
-        ) : null}
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {disabled && wipWhenDisabled ? (
-          <span className="rounded-sm border border-osu-b3/60 bg-osu-b5/60 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-osu-f1">
-            WIP
-          </span>
-        ) : null}
-        <button
-          type="button"
-          disabled={disabled}
-          role="switch"
-          aria-checked={checked}
-          aria-disabled={disabled}
-          onClick={() => onChange(!checked)}
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border p-0.5 transition-colors disabled:cursor-default ${
-            checked ? "border-osu-pink bg-osu-pink" : "border-osu-b3/60 bg-osu-b5/80"
-          }`}
-        >
-          <span
-            className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
-              checked ? "translate-x-4" : "translate-x-0"
-            }`}
-          />
-        </button>
-      </div>
     </div>
   );
 }
