@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Globe } from "lucide-react";
+import { ChevronDown, Globe } from "lucide-react";
 import {
   COUNTRY_OPTIONS,
   GLOBAL_SCOPE_CODE,
@@ -43,8 +43,8 @@ function ScopeIcon({ code, muted = false }: { code: string; muted?: boolean }) {
 type CountryOption = (typeof COUNTRY_OPTIONS)[number];
 type PickerOption = CountryOption | { code: typeof GLOBAL_SCOPE_CODE; name: typeof GLOBAL_SCOPE_NAME };
 type PickerItem =
-  | { type: "option"; option: PickerOption; muted: boolean }
-  | { type: "separator"; id: string };
+  | { type: "option"; option: PickerOption; selectable: boolean; muted: boolean }
+  | { type: "separator"; id: string; count: number; expanded: boolean };
 
 const GLOBAL_OPTION = { code: GLOBAL_SCOPE_CODE, name: GLOBAL_SCOPE_NAME } as const;
 
@@ -60,12 +60,14 @@ export function CountrySelector({
 }: CountrySelectorProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [notTrackedOpen, setNotTrackedOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const pickerItems = useMemo<PickerItem[]>(() => {
     const q = search.trim().toLowerCase();
+    const searching = q.length > 0;
     const countryTiers = new Map(COUNTRY_OPTIONS.map((country) => [country.code, getCachedCountryTier(country.code)]));
     const hasTrackedCountries = showGlobal && COUNTRY_OPTIONS.some((country) => isTrackedCountryTier(countryTiers.get(country.code) ?? null));
     const matchesCountry = (country: CountryOption) => (
@@ -81,20 +83,22 @@ export function CountrySelector({
     const items: PickerItem[] = [];
 
     if (showGlobal && matchesGlobal) {
-      items.push({ type: "option", option: GLOBAL_OPTION, muted: false });
+      items.push({ type: "option", option: GLOBAL_OPTION, selectable: true, muted: false });
     }
     for (const country of trackedCountries) {
-      items.push({ type: "option", option: country, muted: false });
+      items.push({ type: "option", option: country, selectable: true, muted: false });
     }
     if (trackedCountries.length > 0 && offeredCountries.length > 0) {
-      items.push({ type: "separator", id: "offered-countries" });
+      items.push({ type: "separator", id: "offered-countries", count: offeredCountries.length, expanded: notTrackedOpen || searching });
     }
-    for (const country of offeredCountries) {
-      items.push({ type: "option", option: country, muted: hasTrackedCountries });
+    if (!hasTrackedCountries || notTrackedOpen || searching) {
+      for (const country of offeredCountries) {
+        items.push({ type: "option", option: country, selectable: !hasTrackedCountries, muted: hasTrackedCountries });
+      }
     }
 
     return items;
-  }, [search, showGlobal]);
+  }, [notTrackedOpen, search, showGlobal]);
 
   // Close on click outside
   useEffect(() => {
@@ -103,6 +107,7 @@ export function CountrySelector({
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setOpen(false);
         setSearch("");
+        setNotTrackedOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
@@ -116,6 +121,7 @@ export function CountrySelector({
       if (e.key === "Escape") {
         setOpen(false);
         setSearch("");
+        setNotTrackedOpen(false);
       }
     };
     document.addEventListener("keydown", handler);
@@ -133,13 +139,20 @@ export function CountrySelector({
     onSelect(code);
     setOpen(false);
     setSearch("");
+    setNotTrackedOpen(false);
   };
 
   return (
     <div ref={ref} className={`relative ${className}`}>
       {/* Trigger button */}
       <button
-        onClick={() => setOpen(!open)}
+        onClick={() => {
+          setOpen(!open);
+          if (open) {
+            setSearch("");
+            setNotTrackedOpen(false);
+          }
+        }}
         className="w-full flex items-center gap-2.5 rounded-lg border border-osu-b3/30 bg-osu-b4/60 px-2.5 py-1.5 text-osu-l2 hover:border-osu-b3/60 hover:bg-osu-b4/80 transition-colors duration-[120ms] cursor-pointer"
         aria-label="Select country"
         aria-expanded={open}
@@ -188,17 +201,69 @@ export function CountrySelector({
                 pickerItems.map((item) => {
                   if (item.type === "separator") {
                     return (
-                      <div key={item.id} className="mx-3 my-1.5 flex items-center gap-2" aria-hidden="true">
+                      <button
+                        key={item.id}
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                        }}
+                        onClick={() => {
+                          if (!search.trim()) setNotTrackedOpen((value) => !value);
+                        }}
+                        className={`w-full flex items-center gap-2 px-3 py-1.5 text-[9px] font-semibold uppercase text-osu-f1/70 transition-colors duration-[80ms] ${
+                          search.trim() ? "cursor-default" : "hover:text-osu-l2 cursor-pointer"
+                        }`}
+                        aria-expanded={item.expanded}
+                      >
                         <span className="h-px flex-1 bg-osu-b3/35" />
-                        <span className="text-[9px] font-semibold uppercase text-osu-f1/70">Untracked countries</span>
+                        <span className="whitespace-nowrap">Not tracked yet</span>
+                        <span className="flex-shrink-0 text-osu-f1/45">{item.count}</span>
+                        <ChevronDown
+                          className={`h-3 w-3 flex-shrink-0 transition-transform duration-150 ${item.expanded ? "rotate-180" : ""}`}
+                          strokeWidth={2.4}
+                          aria-hidden="true"
+                        />
                         <span className="h-px flex-1 bg-osu-b3/35" />
-                      </div>
+                      </button>
                     );
                   }
 
                   const c = item.option;
                   const selected = c.code === selectedCountry;
                   const muted = item.muted && !selected;
+                  const selectable = item.selectable;
+                  const rowClassName = `w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors duration-[80ms] ${
+                    selected
+                      ? "bg-osu-pink/15 text-white"
+                      : muted
+                        ? "text-osu-f1/55 cursor-default"
+                        : "text-osu-l2 hover:bg-osu-b3/50 hover:text-white cursor-pointer"
+                  }`;
+                  const content = (
+                    <>
+                      <ScopeIcon code={c.code} muted={muted} />
+                      <span className={`text-[11px] font-medium truncate ${muted ? "opacity-80" : ""}`}>{c.name}</span>
+                      {selected && (
+                        <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 text-osu-pink ml-auto flex-shrink-0">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </>
+                  );
+
+                  if (!selectable) {
+                    return (
+                      <div
+                        key={c.code}
+                        className={rowClassName}
+                        role="option"
+                        aria-disabled="true"
+                        aria-selected={selected}
+                      >
+                        {content}
+                      </div>
+                    );
+                  }
 
                   return (
                     <button
@@ -207,21 +272,9 @@ export function CountrySelector({
                         e.preventDefault();
                         handleSelect(c.code);
                       }}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors duration-[80ms] cursor-pointer ${
-                        selected
-                          ? "bg-osu-pink/15 text-white"
-                          : muted
-                            ? "text-osu-f1/70 hover:bg-osu-b3/35 hover:text-osu-l2"
-                            : "text-osu-l2 hover:bg-osu-b3/50 hover:text-white"
-                      }`}
+                      className={rowClassName}
                     >
-                      <ScopeIcon code={c.code} muted={muted} />
-                      <span className={`text-[11px] font-medium truncate ${muted ? "opacity-80" : ""}`}>{c.name}</span>
-                      {selected && (
-                        <svg viewBox="0 0 20 20" fill="currentColor" className="w-3.5 h-3.5 text-osu-pink ml-auto flex-shrink-0">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      )}
+                      {content}
                     </button>
                   );
                 })
