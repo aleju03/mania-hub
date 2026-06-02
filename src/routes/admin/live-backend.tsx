@@ -6,9 +6,6 @@ import { canUseAdminFeatures } from "../../lib/auth-shared";
 import { requireAdminAccess } from "../../lib/auth";
 import {
   fetchLiveBackendAdminStatus,
-  fetchLiveSnipesSnapshot,
-  fetchLiveTopPlaysSnapshot,
-  fetchLiveTrackerSnapshot,
   getLiveBackendUrl,
   openLiveEventSource,
   runLiveBackendAdminAction,
@@ -148,6 +145,7 @@ interface LiveBackendStatus {
       }>;
     }>;
   } | null;
+  snapshotStats?: SnapshotStats;
 }
 
 interface SnapshotStats {
@@ -733,22 +731,10 @@ function LiveBackendPage() {
     const requestId = ++requestIdRef.current;
     if (!quiet) setRefreshing(true);
     try {
-      const [nextStatus, tracker, topPlays, snipes] = await Promise.all([
-        fetchLiveBackendAdminStatus() as Promise<LiveBackendStatus>,
-        fetchLiveTrackerSnapshot(countryCode, 100, { observe: true }),
-        fetchLiveTopPlaysSnapshot(countryCode, "7d", { observe: true }),
-        fetchLiveSnipesSnapshot(countryCode, 500, { observe: true }),
-      ]);
+      const nextStatus = await fetchLiveBackendAdminStatus({ data: { country: countryCode } }) as LiveBackendStatus;
       if (requestId !== requestIdRef.current) return;
       setStatus(nextStatus);
-      setSnapshots({
-        trackerScores: tracker.scores.length,
-        trackerFetchedAt: tracker.fetchedAt,
-        topPlays: topPlays.popoffs.length,
-        topPlaysFetchedAt: topPlays.scannedAt,
-        snipes: snipes.events.length,
-        snipesFetchedAt: snipes.scannedAt,
-      });
+      if (nextStatus.snapshotStats) setSnapshots(nextStatus.snapshotStats);
       setError(null);
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
@@ -765,15 +751,16 @@ function LiveBackendPage() {
   const refreshStatus = useCallback(async (): Promise<string | null> => {
     const requestId = ++requestIdRef.current;
     try {
-      const nextStatus = await fetchLiveBackendAdminStatus() as LiveBackendStatus;
+      const nextStatus = await fetchLiveBackendAdminStatus({ data: { country: countryCode } }) as LiveBackendStatus;
       if (requestId !== requestIdRef.current) return null;
       setStatus(nextStatus);
+      if (nextStatus.snapshotStats) setSnapshots(nextStatus.snapshotStats);
       return null;
     } catch (err) {
       if (requestId !== requestIdRef.current) return null;
       return err instanceof Error ? err.message : "Could not reach live backend.";
     }
-  }, []);
+  }, [countryCode]);
 
   // `optimistic` patches local state before the request returns so the UI
   // updates instantly; `refreshStatus` then reconciles (and reverts a bad

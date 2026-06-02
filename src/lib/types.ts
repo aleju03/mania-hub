@@ -422,6 +422,7 @@ export interface MapsFarmedEntry {
   players: MapsFarmedPlayer[];
   avgPp: number;
   maxPp: number;
+  dominantMod?: "DT" | "HT" | null;
 }
 
 export interface MapsFavouriteBeatmapset {

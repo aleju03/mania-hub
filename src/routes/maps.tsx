@@ -1164,7 +1164,7 @@ function MapsPage() {
             setLoadingMaps(true);
             setMapsFirstBuild(snapshot.generatedAt == null);
           }
-          if (!cancelled && (snapshot.isStale || snapshot.refreshQueued)) {
+          if (!cancelled && !snapshot.value && (snapshot.isStale || snapshot.refreshQueued)) {
             pollTimer = setTimeout(loadPage, 5_000);
           }
         })
@@ -1256,7 +1256,7 @@ function MapsPage() {
             setLoadingMaps(true);
             setMapsFirstBuild(snapshot.generatedAt == null);
           }
-          if (!cancelled && (snapshot.isStale || snapshot.refreshQueued)) {
+          if (!cancelled && !snapshot.value && (snapshot.isStale || snapshot.refreshQueued)) {
             pollTimer = setTimeout(loadRandomPool, 5_000);
           }
         })
@@ -1592,13 +1592,9 @@ function MapsPage() {
         .map((entry) => {
           const players = entry.players.filter((p) => !hiddenUserIds.has(p.id));
           if (players.length === entry.players.length) return entry;
-          if (players.length === 0) return null;
           return {
             ...entry,
             players,
-            playerCount: players.length,
-            avgPp: players.reduce((sum, p) => sum + p.pp, 0) / players.length,
-            maxPp: Math.max(...players.map((p) => p.pp), 0),
           };
         })
         .filter((entry): entry is MapsFarmedEntry => entry !== null);
@@ -1609,12 +1605,9 @@ function MapsPage() {
         .map((entry) => {
           const players = entry.players.filter((p) => !hiddenUserIds.has(p.id));
           if (players.length === entry.players.length) return entry;
-          if (players.length === 0) return null;
           return {
             ...entry,
             players,
-            playerCount: players.length,
-            totalPlays: players.reduce((sum, p) => sum + p.count, 0),
           };
         })
         .filter((entry): entry is MapsAggregatedBeatmap => entry !== null);
@@ -1624,8 +1617,7 @@ function MapsPage() {
       .map((entry) => {
         const players = entry.players.filter((p) => !hiddenUserIds.has(p.id));
         if (players.length === entry.players.length) return entry;
-        if (players.length === 0) return null;
-        return { ...entry, players, playerCount: players.length };
+        return { ...entry, players };
       })
       .filter((entry): entry is MapsAggregatedFavourite => entry !== null);
   }, [currentLiveMapsPage, hiddenUserIds]);
@@ -2728,7 +2720,6 @@ function MapsPage() {
                     <div key={`random-${randomPlayer.id}-${pickedSetId}`} className="cards-enter">
                       <RandomCard
                         bm={randomBeatmapset}
-                        hydrating={randomPickResolving && randomBeatmapset.id === pickedSetId && randomBeatmapset.maniaBeatmaps.length === 0}
                       />
                     </div>
                   ) : (
@@ -3306,17 +3297,24 @@ function MiniModIcon({ mod, size = 10 }: { mod: string; size?: number }) {
 
 function PlayerAvatars({
   players,
+  totalCount,
   onPlayerClick,
+  onMoreClick,
   renderMeta,
 }: {
   players: Array<{ id: number; username: string; avatarUrl: string; pp?: number; count?: number; mods?: string[]; scoreUrl?: string | null }>;
+  totalCount?: number;
   onPlayerClick: (player: { id: number; username: string; avatarUrl: string; pp?: number; count?: number; mods?: string[]; scoreUrl?: string | null }) => void;
+  onMoreClick?: () => void;
   renderMeta?: (p: { pp?: number; count?: number; mods?: string[] }) => React.ReactNode;
 }) {
   const [showPopover, setShowPopover] = useState(false);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const visible = players.slice(0, VISIBLE_AVATARS);
-  const overflow = players.length - VISIBLE_AVATARS;
+  const total = Math.max(totalCount ?? players.length, players.length);
+  const overflow = total - VISIBLE_AVATARS;
+  const hiddenPreviewPlayers = players.slice(VISIBLE_AVATARS);
+  const hasUnloadedPlayers = total > players.length;
 
   const openPopover = () => {
     if (closeTimerRef.current) {
@@ -3362,16 +3360,21 @@ function PlayerAvatars({
           onMouseEnter={openPopover}
           onMouseLeave={closePopoverSoon}
         >
-          <span className="text-[8px] text-osu-f1 ml-0.5 cursor-default hover:text-osu-l2 transition-colors">
+          <button
+            type="button"
+            onClick={onMoreClick}
+            className="text-[8px] text-osu-f1 ml-0.5 cursor-pointer hover:text-osu-l2 transition-colors"
+            title="All players"
+          >
             +{overflow}
-          </span>
+          </button>
           {showPopover && (
             <div
               className="absolute bottom-full left-0 mb-1.5 p-1.5 rounded-lg bg-osu-b3 border border-osu-b3/60 shadow-xl z-50 min-w-[160px] max-h-[220px] overflow-y-auto"
               onMouseEnter={openPopover}
               onMouseLeave={closePopoverSoon}
             >
-              {players.slice(VISIBLE_AVATARS).map((p) => (
+              {hiddenPreviewPlayers.map((p) => (
                 <button
                   key={p.id}
                   onClick={() => onPlayerClick(p)}
@@ -3382,6 +3385,15 @@ function PlayerAvatars({
                   {renderMeta?.(p)}
                 </button>
               ))}
+              {hasUnloadedPlayers && onMoreClick ? (
+                <button
+                  type="button"
+                  onClick={onMoreClick}
+                  className="mt-1 w-full rounded border border-osu-b3/50 bg-osu-b4/70 px-2 py-1 text-center text-[10px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b4 hover:text-white cursor-pointer"
+                >
+                  All players
+                </button>
+              ) : null}
             </div>
           )}
         </div>
@@ -3519,7 +3531,7 @@ function MapDetailsContent({
       : `https://osu.ppy.sh/beatmapsets/${setId}#mania/${details.map.beatmapId}`;
   const osuDirectUrl = `osu://dl/${setId}`;
   const dominantMod =
-    details.kind === "farmed" ? getDominantSpeedMod(details.map.players) : null;
+    details.kind === "farmed" ? details.map.dominantMod ?? getDominantSpeedMod(details.map.players) : null;
   const dominantModFile =
     dominantMod === "DT" ? "double-time" : dominantMod === "HT" ? "half-time" : null;
   const dominantModColor = dominantMod === "DT" ? "#ff6666" : "#b3d944";
@@ -4203,7 +4215,7 @@ function FarmedCard({
   onPlayerClick: (u: string) => void;
   onOpenDetails: () => void;
 }) {
-  const dominantMod = getDominantSpeedMod(map.players);
+  const dominantMod = map.dominantMod ?? getDominantSpeedMod(map.players);
   const dominantModFile = dominantMod === "DT" ? "double-time" : dominantMod === "HT" ? "half-time" : null;
   const dominantModColor = dominantMod === "DT" ? "#ff6666" : "#b3d944";
 
@@ -4277,6 +4289,8 @@ function FarmedCard({
 
         <PlayerAvatars
           players={map.players}
+          totalCount={map.playerCount}
+          onMoreClick={onOpenDetails}
           onPlayerClick={(player) => {
             if (player.scoreUrl) {
               window.open(player.scoreUrl, "_blank", "noopener,noreferrer");
@@ -4357,6 +4371,8 @@ function MostPlayedCard({
 
         <PlayerAvatars
           players={map.players}
+          totalCount={map.playerCount}
+          onMoreClick={onOpenDetails}
           onPlayerClick={(player) => onPlayerClick(player.username)}
           renderMeta={(p) => (p as MapsPlayerEntry).count ? (
             <span className="text-[9px] text-osu-pink whitespace-nowrap">
@@ -4412,7 +4428,12 @@ function FavouriteCard({
           </div>
         </div>
 
-        <PlayerAvatars players={fav.players} onPlayerClick={(player) => onPlayerClick(player.username)} />
+        <PlayerAvatars
+          players={fav.players}
+          totalCount={fav.playerCount}
+          onMoreClick={onOpenDetails}
+          onPlayerClick={(player) => onPlayerClick(player.username)}
+        />
       </div>
     </div>
   );
@@ -4842,7 +4863,7 @@ function DifficultyPicker({
   );
 }
 
-function RandomCard({ bm, hydrating = false }: { bm: MapsFavouriteBeatmapset; hydrating?: boolean }) {
+function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
   const url = `https://osu.ppy.sh/beatmapsets/${bm.id}`;
   const coverUrl = bm.covers.cover ?? bm.covers.card ?? bm.covers["list@2x"] ?? bm.covers.list ?? "";
   const keys = bm.maniaKeys ?? [];
@@ -5613,11 +5634,6 @@ function RandomCard({ bm, hydrating = false }: { bm: MapsFavouriteBeatmapset; hy
               aria-hidden="true"
             />
           )}
-          {hydrating ? (
-            <div className="absolute right-3 bottom-3 grid h-7 w-7 place-items-center rounded-md border border-white/15 bg-black/45 backdrop-blur-sm">
-              <div className="h-3.5 w-3.5 rounded-full border-2 border-white/25 border-t-osu-pink-light animate-spin" />
-            </div>
-          ) : null}
         </div>
         <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
         <BeatmapStatusBadge status={bm.status} className="absolute top-3 left-3" />
@@ -5941,10 +5957,6 @@ function RandomCard({ bm, hydrating = false }: { bm: MapsFavouriteBeatmapset; hy
             </svg>
             <span>chart preview</span>
           </button>
-        ) : hydrating ? (
-          <div className="absolute left-1/2 top-1/2 z-20 grid h-8 w-8 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-md border border-osu-b3/40 bg-osu-b5/65 shadow-lg shadow-black/20 backdrop-blur-[1px] md:left-[150px]">
-            <div className="h-4 w-4 rounded-full border-2 border-osu-f1/25 border-t-osu-pink/90 animate-spin" />
-          </div>
         ) : null}
         {replayPreviewError ? (
           <div className="absolute inset-x-3 top-3 rounded-md bg-black/60 px-2 py-1 text-[10px] text-rose-300">

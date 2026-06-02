@@ -441,6 +441,80 @@ export async function getCachedReplayEndpointKind(scoreId: number): Promise<Repl
   }
 }
 
+// ----- Rendered OG image cache -----------------------------------------------
+// OG cards (`/api/og`) are produced by Satori + resvg rasterization, the most
+// CPU-heavy work on the Vercel side (multiple seconds per image). The CDN caches
+// each URL for a day, but every miss/revalidation re-rasterizes from scratch. We
+// persist the rendered PNG in R2 keyed by the card identity plus the server's OG
+// version so a miss becomes a cheap object read instead of a full re-render.
+// These objects are deliberately kept out of the LRU/size accounting used for
+// beatmap assets and replays.
+const OG_IMAGE_CACHE_PREFIX = `${REPLAY_CACHE_PREFIX}og/`;
+const OG_IMAGE_CONTENT_TYPE = "image/png";
+const DEFAULT_OG_IMAGE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function getOgImageCacheTtlMs(): number {
+  const raw = process.env.OG_R2_CACHE_TTL_MS;
+  const parsed = raw ? Number(raw) : DEFAULT_OG_IMAGE_CACHE_TTL_MS;
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_OG_IMAGE_CACHE_TTL_MS;
+  return Math.floor(parsed);
+}
+
+function getOgImageStorageKey(cacheKey: string): string {
+  const hash = crypto.createHash("sha256").update(cacheKey).digest("hex").slice(0, 32);
+  return `${OG_IMAGE_CACHE_PREFIX}${hash}.png`;
+}
+
+export async function getCachedOgImage(cacheKey: string): Promise<Buffer | null> {
+  const r2 = getClient();
+  if (!r2) return null;
+
+  const storageKey = getOgImageStorageKey(cacheKey);
+  assertReplayCacheKey(storageKey);
+
+  try {
+    const head = await r2.send(new HeadObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: storageKey,
+    }));
+    const lastModified = head.LastModified ? head.LastModified.getTime() : 0;
+    // Treat aged entries as a miss so the caller re-renders and overwrites,
+    // keeping the card's stats roughly as fresh as the CDN's daily TTL.
+    if (!lastModified || Date.now() - lastModified > getOgImageCacheTtlMs()) {
+      return null;
+    }
+
+    const object = await r2.send(new GetObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: storageKey,
+    }));
+    const buffer = await readObjectBody(object.Body);
+    return buffer.length > 0 ? buffer : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function putOgImage(cacheKey: string, buffer: Buffer): Promise<void> {
+  const r2 = getClient();
+  if (!r2 || buffer.length === 0) return;
+
+  const storageKey = getOgImageStorageKey(cacheKey);
+  assertReplayCacheKey(storageKey);
+
+  try {
+    await r2.send(new PutObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: storageKey,
+      Body: buffer,
+      ContentType: OG_IMAGE_CONTENT_TYPE,
+      CacheControl: "public, max-age=86400, immutable",
+    }));
+  } catch {
+    // Best-effort: a failed store just means the next miss re-renders.
+  }
+}
+
 export async function getUploadedReplay(id: string): Promise<UploadedReplay | null> {
   const r2 = getClient();
   if (!r2) return null;

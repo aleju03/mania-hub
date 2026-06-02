@@ -272,7 +272,11 @@ export const runLiveBackendAdminAction = createServerFn({ method: "POST" })
   });
 
 export const fetchLiveBackendAdminStatus = createServerFn({ method: "GET" })
-  .handler(async (): Promise<any> => {
+  .inputValidator((data: { country?: unknown } | undefined) => {
+    const rawCountry = typeof data?.country === "string" ? data.country.trim().toUpperCase() : "";
+    return { country: /^([A-Z]{2}|GLOBAL)$/.test(rawCountry) ? rawCountry : null };
+  })
+  .handler(async ({ data }): Promise<any> => {
     await requireAdminAccess("Live backend admin status");
     const base = getServerLiveBackendUrl();
     if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
@@ -280,7 +284,8 @@ export const fetchLiveBackendAdminStatus = createServerFn({ method: "GET" })
     if (process.env.LIVE_ADMIN_TOKEN) {
       headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
     }
-    let response = await fetch(`${base}/api/admin/status`, { headers });
+    const query = data.country ? `?country=${encodeURIComponent(data.country)}` : "";
+    let response = await fetch(`${base}/api/admin/status${query}`, { headers });
     if (response.status === 404) {
       response = await fetch(`${base}/api/status`);
     }

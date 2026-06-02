@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { activateLiveCountry, isLiveBackendConfigured, type LiveCountryActivation, type LiveCountryFeature, type LiveCountryFeatureTier } from "./live-backend";
-import { normalizeCountryScope } from "./country";
+import { isGlobalScope, normalizeCountryScope } from "./country";
 
 const POLL_INTERVAL_MS = 6_000;
 const COUNTRY_TIER_CACHE_KEY = "mania-hub-country-feature-tiers-v1";
@@ -65,6 +65,14 @@ export function useCountryWarming(country: string): CountryWarmingState {
       setWarming(false);
       setChecking(false);
       setFeatureTier(null);
+      return;
+    }
+    if (isGlobalScope(normalizedCountry)) {
+      tierCache.set(normalizedCountry, "maps_warm");
+      writeTierCache(tierCache);
+      setWarming(false);
+      setChecking(false);
+      setFeatureTier("maps_warm");
       return;
     }
 

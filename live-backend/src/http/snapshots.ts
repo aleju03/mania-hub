@@ -164,7 +164,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
       return true;
     }
-    sendJson(req, res, ctx, 200, await statusBody(ctx, { includeWorkerActivity: true }));
+    sendJson(req, res, ctx, 200, await statusBody(ctx, { includeWorkerActivity: true, snapshotCountry: country }));
     return true;
   }
   if (url.pathname === "/api/countries/activate") {
@@ -657,10 +657,13 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   return false;
 }
 
-async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: boolean } = {}) {
+async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: boolean; snapshotCountry?: string } = {}) {
   const db = await dbHealth(ctx.db);
   const last = (await exec(ctx.db, "select max(created_at) as created_at from live_event_log")).rows[0]?.created_at ?? null;
   const worker = ctx.workerStatus?.() ?? null;
+  const snapshotStats = options.snapshotCountry
+    ? await adminSnapshotStats(ctx.db, options.snapshotCountry)
+    : undefined;
   return {
     ok: db,
     db,
@@ -678,6 +681,61 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
     countries: await countryRegistryStatus(ctx),
     catchup: await countryCatchupStatus(ctx),
     worker: options.includeWorkerActivity ? worker : publicWorkerStatus(worker),
+    ...(snapshotStats ? { snapshotStats } : {}),
+  };
+}
+
+async function adminSnapshotStats(db: Db, country: string) {
+  const normalized = country.toUpperCase();
+  const global = isGlobalCountry(normalized);
+  const now = Date.now();
+  const topPlaysCutoff = new Date(now - 7 * 24 * 60 * 60_000).toISOString();
+  const [tracker, topPlays, snipes] = await Promise.all([
+    exec(
+      db,
+      `select count(*) as count
+       from (
+         select 1
+         from score_events
+         where ${global ? "" : "country = ? and "}passed = 1
+         order by ended_at desc
+         limit 100
+       )`,
+      global ? [] : [normalized],
+    ),
+    exec(
+      db,
+      `select count(*) as count
+       from (
+         select 1
+         from top_play_events
+         where ${global ? "" : "country = ? and "}detected_at >= ?
+         order by pp desc, detected_at desc
+         limit 200
+       )`,
+      global ? [topPlaysCutoff] : [normalized, topPlaysCutoff],
+    ),
+    exec(
+      db,
+      `select count(*) as count
+       from (
+         select 1
+         from snipe_events
+         where ${global ? "1 = 1" : "country = ?"}
+         order by detected_at desc
+         limit 500
+       )`,
+      global ? [] : [normalized],
+    ),
+  ]);
+
+  return {
+    trackerScores: Number(tracker.rows[0]?.count ?? 0),
+    trackerFetchedAt: now,
+    topPlays: Number(topPlays.rows[0]?.count ?? 0),
+    topPlaysFetchedAt: now,
+    snipes: Number(snipes.rows[0]?.count ?? 0),
+    snipesFetchedAt: now,
   };
 }
 
@@ -1216,6 +1274,7 @@ async function handleMapsPageSnapshot(
 ): Promise<void> {
   const now = Date.now();
   pruneMapsPageResponseCache(now);
+  const encoding = negotiateEncoding(req);
 
   const meta = await getMapsSnapshotMeta(ctx.db, country);
   const farmedOverlayKey = query.tab === "farmed" ? meta.farmedOverlayUpdatedAt ?? "" : "";
@@ -1237,6 +1296,7 @@ async function handleMapsPageSnapshot(
         meta.refreshedAt,
         sourceRefreshKey,
         farmedOverlayKey,
+        encoding ?? "identity",
       ].join("|")
     : null;
 
@@ -1250,21 +1310,12 @@ async function handleMapsPageSnapshot(
 
   const snapshot = await getMapsPageSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs, query);
   const status = snapshot.value ? 200 : 202;
-  const prepared = prepareIdentityJsonResponse(status, snapshot);
+  const prepared = await prepareJsonResponse(status, snapshot, encoding);
   writePreparedJson(req, res, ctx, prepared);
 
   if (cacheKey && status === 200 && snapshot.value) {
     mapsPageResponseCache.set(cacheKey, { ...prepared, storedAt: now });
   }
-}
-
-function prepareIdentityJsonResponse(status: number, body: unknown): PreparedJsonResponse {
-  return {
-    status,
-    encoding: null,
-    vary: false,
-    body: Buffer.from(JSON.stringify(body), "utf8"),
-  };
 }
 
 async function handleMapsSnapshot(

@@ -18,12 +18,15 @@ type PendingLimiterCall<T = unknown> = {
 
 type LimiterOptions = {
   interactiveBurstCapacity?: number;
+  maxPendingCalls?: number;
 };
 
 export interface OsuScoresResponse {
   scores?: OscScore[];
   cursor_string?: string | null;
 }
+
+const DEFAULT_MAX_PENDING_CALLS = 500;
 
 export class TokenBucketLimiter {
   private starts: number[] = [];
@@ -34,6 +37,7 @@ export class TokenBucketLimiter {
   private sequence = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private readonly interactiveBurstCapacity: number;
+  private readonly maxPendingCalls: number;
   private interactiveBurstTokens: number;
   private interactiveBurstUpdatedAt = Date.now();
 
@@ -44,11 +48,15 @@ export class TokenBucketLimiter {
     options: LimiterOptions = {},
   ) {
     this.interactiveBurstCapacity = Math.max(0, Math.floor(options.interactiveBurstCapacity ?? 0));
+    this.maxPendingCalls = Math.max(1, Math.floor(options.maxPendingCalls ?? DEFAULT_MAX_PENDING_CALLS));
     this.interactiveBurstTokens = this.interactiveBurstCapacity;
   }
 
   async schedule<T>(caller: string, path: string, fn: () => Promise<T>): Promise<T> {
     const lane = classifyLimiterLane(caller, path);
+    if (this.pending.length >= this.maxPendingCalls) {
+      throw new Error(`osu! API limiter queue is full (${this.pending.length}/${this.maxPendingCalls})`);
+    }
     return new Promise<T>((resolve, reject) => {
       this.pending.push({
         caller,
@@ -175,6 +183,7 @@ export class TokenBucketLimiter {
     return {
       hardPerMinute: this.hardPerMinute,
       targetPerMinute: this.targetPerMinute,
+      maxPending: this.maxPendingCalls,
       usedLastMinute: this.starts.length,
       interactiveBurstCapacity: this.interactiveBurstCapacity,
       interactiveBurstTokens: Math.floor(this.interactiveBurstTokens),

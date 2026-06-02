@@ -1,11 +1,14 @@
 import { ImageResponse } from "@vercel/og";
 import { createFileRoute } from "@tanstack/react-router";
+import { waitUntil } from "@vercel/functions";
 import { createElement as h } from "react";
 import type { ReactNode } from "react";
 import { getCachedUser, getRankings, getCountryMapsFavourites, getScore } from "../../lib/osu";
 import { getCountryName, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
 import { getAssetOrigin } from "../../lib/origin";
 import { getDisplayedRank, getManiaJudgementCounts, getModAcronyms } from "../../lib/score";
+import { getCachedOgImage, putOgImage } from "../../lib/r2-cache";
+import { OG_IMAGE_VERSION } from "../../lib/seo";
 import type { OsuCovers, OsuScore } from "../../lib/types";
 
 const WIDTH = 1200;
@@ -47,6 +50,57 @@ function getFont(request: Request, fileName: string): Promise<ArrayBuffer> {
 }
 
 const OG_CACHE_HEADER = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800";
+
+// Rasterizing an OG card (Satori + resvg) is the most CPU-heavy work on the
+// Vercel side, multiple seconds per image. The CDN caches each URL for a day,
+// but every miss/revalidation re-renders from scratch. We back that with an R2
+// cache keyed by the card identity and server-owned OG version so a miss becomes
+// a fast object read. Request query params must not expand R2 key cardinality.
+
+function ogImageResponse(buffer: Buffer): Response {
+  return new Response(buffer as unknown as BodyInit, {
+    status: 200,
+    headers: {
+      "Content-Type": "image/png",
+      "Content-Length": String(buffer.length),
+      "Cache-Control": OG_CACHE_HEADER,
+    },
+  });
+}
+
+function scheduleOgStore(cacheKey: string, buffer: Buffer): void {
+  const store = putOgImage(cacheKey, buffer);
+  try {
+    waitUntil(store);
+  } catch {
+    // Not in a Vercel function context (e.g. local dev). putOgImage swallows
+    // its own errors, so letting it run detached is safe.
+    void store;
+  }
+}
+
+async function serveOg(cacheKey: string, render: () => Promise<Response>): Promise<Response> {
+  const cached = await getCachedOgImage(cacheKey);
+  if (cached) return ogImageResponse(cached);
+
+  const response = await render();
+  if (!response.ok) return response;
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  scheduleOgStore(cacheKey, buffer);
+  return ogImageResponse(buffer);
+}
+
+class OgFallbackError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "OgFallbackError";
+  }
+}
+
+function isOgFallbackError(error: unknown): error is OgFallbackError {
+  return error instanceof OgFallbackError;
+}
 
 async function loadOgFonts(request: Request): Promise<[ArrayBuffer, ArrayBuffer]> {
   return Promise.all([
@@ -198,8 +252,9 @@ async function renderMapsOg(request: Request, country: string): Promise<Response
   const pool = favSection.value.beatmapsetsPool;
   const sets = pool ? Object.values(pool) : [];
   if (sets.length === 0) {
-    // No maps data for this country: fall through to the scoreboard layout.
-    return renderCountryOg(request, country, `${getCountryName(country) || country} maps`);
+    // No maps data for this country: fall through to the scoreboard layout
+    // without storing that fallback under the maps-specific R2 key.
+    throw new OgFallbackError(`no maps data for ${country}`);
   }
 
   const rng = mulberry32(hashString(country));
@@ -2306,13 +2361,17 @@ export const Route = createFileRoute("/api/og")({
         // Global is not a real country, so it has no flag/scoreboard OG layout;
         // let it fall through to the default branded card.
         const countryValid = country && isSupportedCountryCode(country) && !isGlobalScope(country);
+        const version = OG_IMAGE_VERSION;
 
         // Player route. Username in URL, data comes from osu! API.
         if (kind === "player") {
           const username = url.searchParams.get("username");
           if (!username) return new Response("Missing username", { status: 400 });
           try {
-            return await renderPlayerOg(request, username);
+            return await serveOg(
+              `player:${username.trim().toLowerCase()}:v${version}`,
+              () => renderPlayerOg(request, username),
+            );
           } catch (err) {
             console.warn("[og] player render failed, falling back", err);
           }
@@ -2323,7 +2382,10 @@ export const Route = createFileRoute("/api/og")({
           const scoreId = Number(url.searchParams.get("scoreId"));
           if (Number.isFinite(scoreId) && scoreId > 0) {
             try {
-              return await renderReplayOg(request, scoreId);
+              return await serveOg(
+                `replay:${scoreId}:v${version}`,
+                () => renderReplayOg(request, scoreId),
+              );
             } catch (err) {
               console.warn("[og] replay render failed, falling back", err);
             }
@@ -2335,15 +2397,17 @@ export const Route = createFileRoute("/api/og")({
         if (countryValid) {
           if (kind === "maps") {
             try {
-              return await renderMapsOg(request, country);
+              return await serveOg(`maps:${country}:v${version}`, () => renderMapsOg(request, country));
             } catch (err) {
-              console.warn("[og] maps render failed, falling back", err);
+              if (!isOgFallbackError(err)) {
+                console.warn("[og] maps render failed, falling back", err);
+              }
             }
           }
 
           if (kind === "home") {
             try {
-              return await renderHomeOg(request, country);
+              return await serveOg(`home:${country}:v${version}`, () => renderHomeOg(request, country));
             } catch (err) {
               console.warn("[og] home render failed, falling back", err);
             }
@@ -2351,19 +2415,16 @@ export const Route = createFileRoute("/api/og")({
 
           if (kind === "rankings") {
             try {
-              return await renderRankingsOg(request, country);
+              return await serveOg(`rankings:${country}:v${version}`, () => renderRankingsOg(request, country));
             } catch (err) {
               console.warn("[og] rankings render failed, falling back", err);
             }
           }
 
           // No recognized kind — generic country scoreboard fallback.
+          const fallbackTitle = url.searchParams.get("title") ?? "";
           try {
-            return await renderCountryOg(
-              request,
-              country,
-              url.searchParams.get("title") ?? "",
-            );
+            return await renderCountryOg(request, country, fallbackTitle);
           } catch (err) {
             console.warn("[og] country render failed, falling back", err);
           }
@@ -2373,7 +2434,7 @@ export const Route = createFileRoute("/api/og")({
         // (no country, no recognised kind). Falls back to the
         // title-only minimal layout on error.
         try {
-          return await renderDefaultPolaroidOg(request);
+          return await serveOg(`default:v${version}`, () => renderDefaultPolaroidOg(request));
         } catch (err) {
           console.warn("[og] default polaroid render failed, falling back", err);
         }

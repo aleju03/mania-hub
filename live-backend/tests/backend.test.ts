@@ -1284,6 +1284,42 @@ describe("live backend", () => {
     expect(missed.some((event) => event.type === "tracker_score")).toBe(true);
   });
 
+  it("serves admin snapshot counts without downloading snapshot bodies", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    await ingestor.ingestBatch([scores[0]]);
+    await exec(
+      db,
+      `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
+       values ('CR', 8001, 101, 100, 95, 20, '{}', ?)`,
+      [new Date().toISOString()],
+    );
+    await exec(
+      db,
+      `insert into snipe_events (country, beatmap_id, lane_key, score_id, sniper_id, victim_id, board_rank, payload_json, detected_at)
+       values ('CR', 1, 'classic:nm', 9001, 101, 102, 1, '{}', ?)`,
+      [new Date().toISOString()],
+    );
+
+    const response = mockRes();
+    await routeHttp(mockReq("GET", "/api/admin/status?country=CR"), response.res, {
+      db,
+      queue,
+      events,
+      config: baseConfig({ nodeEnv: "development", databaseUrl: `file:${join(dir, "test.db")}` }),
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0 }) } },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never);
+
+    const body = JSON.parse(response.writes.join("")) as { snapshotStats?: Record<string, number> };
+    expect(response.res.statusCode).toBe(200);
+    expect(body.snapshotStats).toMatchObject({
+      trackerScores: 1,
+      topPlays: 1,
+      snipes: 1,
+    });
+  });
+
   it("aggregates tracker and top-play snapshots across countries for Global", async () => {
     const { db, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
@@ -1961,6 +1997,29 @@ describe("live backend", () => {
     expect(calls).toEqual(["bulk-1", "interactive", "bulk-2"]);
   });
 
+  it("rejects osu! calls when the limiter queue is full", async () => {
+    vi.useFakeTimers();
+    const limiter = new TokenBucketLimiter(1, 1, undefined, { maxPendingCalls: 1 });
+    const calls: string[] = [];
+
+    const running = limiter.schedule("test", "/running", async () => {
+      calls.push("running");
+      return true;
+    });
+    const queued = limiter.schedule("test", "/queued", async () => {
+      calls.push("queued");
+      return true;
+    });
+
+    await expect(limiter.schedule("test", "/rejected", async () => true)).rejects.toThrow("queue is full");
+    expect(limiter.state().pending).toBe(1);
+    expect(limiter.state().maxPending).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(60_001);
+    await Promise.all([running, queued]);
+    expect(calls).toEqual(["running", "queued"]);
+  });
+
   it("allows a small burst for interactive osu! profile calls", async () => {
     vi.useFakeTimers();
     const limiter = new TokenBucketLimiter(60, 45, undefined, { interactiveBurstCapacity: 4 });
@@ -2570,10 +2629,11 @@ describe("live backend", () => {
       tab: "farmed", page: 0, pageSize: 24, key: "all", beatmapSort: "players", farmedSort: "players", dir: "desc", status: "all", pp: 0, mod: "all", q: "",
     });
 
-    const item = page.value?.items[0] as { beatmapId: number; playerCount: number; players: unknown[]; avgPp: number; maxPp: number };
+    const item = page.value?.items[0] as { beatmapId: number; playerCount: number; players: Array<{ id: number }>; avgPp: number; maxPp: number };
     expect(item.beatmapId).toBe(11);
     expect(item.playerCount).toBe(300);
-    expect(item.players).toHaveLength(81);
+    expect(item.players).toHaveLength(8);
+    expect(item.players[0]).toMatchObject({ id: 999 });
     expect(item.avgPp).toBe(360);
     expect(item.maxPp).toBe(550);
   });
@@ -2800,11 +2860,18 @@ describe("live backend", () => {
   it("serves maps browse tabs as paginated lightweight pages", async () => {
     const { db, queue, events } = await setup();
     const now = "2026-05-12T12:00:00.000Z";
-    for (const user of [
-      [101, "Alpha"],
-      [102, "Bravo"],
-      [103, "Charlie"],
-    ] as const) {
+    const users: Array<[number, string]> = Array.from({ length: 12 }, (_, index) => [
+      101 + index,
+      ["Alpha", "Bravo", "Charlie"][index] ?? `User ${index + 1}`,
+    ]);
+    const farmedPlayers = users.map(([id], index) => ({
+      id,
+      mods: index < 7 ? ["DT"] : [],
+      pp: 500 - index,
+      scoreUrl: null,
+      playedAt: now,
+    }));
+    for (const user of users) {
       await exec(
         db,
         `insert into users (user_id, username, avatar_url, country_code, updated_at)
@@ -2836,7 +2903,7 @@ describe("live backend", () => {
         JSON.stringify({
           schemaVersion: 2,
           farmed: [
-            { beatmapId: 11, playerCount: 3, avgPp: 300, maxPp: 330, players: [{ id: 101, mods: [], pp: 330, scoreUrl: null, playedAt: now }, { id: 102, mods: [], pp: 300, scoreUrl: null, playedAt: now }, { id: 103, mods: [], pp: 270, scoreUrl: null, playedAt: now }] },
+            { beatmapId: 11, playerCount: farmedPlayers.length, avgPp: 494.5, maxPp: 500, players: farmedPlayers },
             { beatmapId: 21, playerCount: 2, avgPp: 410, maxPp: 420, players: [{ id: 101, mods: [], pp: 420, scoreUrl: null, playedAt: now }, { id: 102, mods: [], pp: 400, scoreUrl: null, playedAt: now }] },
             { beatmapId: 31, playerCount: 1, avgPp: 550, maxPp: 550, players: [{ id: 103, mods: ["DT"], pp: 550, scoreUrl: null, playedAt: now }] },
           ],
@@ -2874,7 +2941,7 @@ describe("live backend", () => {
 
     const response = mockRes();
     await routeHttp(
-      mockReq("GET", "/api/snapshots/maps-page?country=CR&tab=farmed&page=0&pageSize=2", { "accept-encoding": "br" }),
+      mockReq("GET", "/api/snapshots/maps-page?country=CR&tab=farmed&page=0&pageSize=2"),
       response.res,
       {
         db,
@@ -2891,6 +2958,13 @@ describe("live backend", () => {
     expect(response.headers["content-encoding"]).toBeUndefined();
     expect(body.value.total).toBe(3);
     expect(body.value.items).toHaveLength(2);
+    const firstItem = body.value.items[0] as { playerCount: number; players: unknown[]; dominantMod?: string | null };
+    expect(firstItem.playerCount).toBe(12);
+    expect(firstItem.players).toHaveLength(8);
+    expect(firstItem.dominantMod).toBe("DT");
+    const details = await getMapsPlayersSnapshot(db, "CR", "farmed", 11);
+    expect(details.total).toBe(12);
+    expect(details.players).toHaveLength(12);
   });
 
   it("defers maps refreshes without marking them failed while the roster is missing", async () => {

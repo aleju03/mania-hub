@@ -91,6 +91,7 @@ interface MapsFarmedEntry {
   }>;
   avgPp: number;
   maxPp: number;
+  dominantMod?: "DT" | "HT" | null;
 }
 
 interface MapsFavouriteBeatmapset {
@@ -384,6 +385,7 @@ export interface MapsPlayersPageQuery {
 }
 
 export const MAPS_PLAYERS_MAX_PAGE_SIZE = 50;
+const MAPS_PAGE_PREVIEW_PLAYERS = 8;
 
 export async function getMapsSnapshot(
   db: Db,
@@ -942,7 +944,7 @@ async function hydrateMapsPageValue(
     value = await applyMapsFarmedOverlay(db, country, value, refreshedAt);
   }
   const allItems = filterSortMapsPageItems(value, query);
-  const items = await hydrateMapsPageItemUsers(db, allItems.slice(page * pageSize, page * pageSize + pageSize));
+  const items = limitMapsPagePreviewPlayers(await hydrateMapsPageItemUsers(db, allItems.slice(page * pageSize, page * pageSize + pageSize)));
   return {
     tab: query.tab,
     page,
@@ -1001,7 +1003,7 @@ async function hydrateCompactMapsPageValue(
   }
 
   const allItems = filterSortMapsPageItems(value, query);
-  const items = await hydrateMapsPageItemUsers(db, allItems.slice(query.page * query.pageSize, query.page * query.pageSize + query.pageSize));
+  const items = limitMapsPagePreviewPlayers(await hydrateMapsPageItemUsers(db, allItems.slice(query.page * query.pageSize, query.page * query.pageSize + query.pageSize)));
   return {
     tab: query.tab,
     page: query.page,
@@ -1114,6 +1116,20 @@ async function hydrateCompactFavouriteEntries(
 }
 
 type MapsPageItem = MapsFarmedEntry | MapsAggregatedBeatmap | MapsAggregatedFavourite;
+
+function limitMapsPagePreviewPlayers<T extends MapsPageItem>(items: T[]): T[] {
+  return items.map((item) => {
+    const players = item.players.slice(0, MAPS_PAGE_PREVIEW_PLAYERS);
+    if ("avgPp" in item) {
+      return {
+        ...item,
+        dominantMod: item.dominantMod ?? getDominantMapsSpeedMod(item.players),
+        players,
+      };
+    }
+    return { ...item, players };
+  }) as T[];
+}
 
 async function hydrateMapsPageItemUsers<T extends MapsPageItem>(db: Db, items: T[]): Promise<T[]> {
   const ids = new Set<number>();
