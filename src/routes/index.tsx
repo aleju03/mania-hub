@@ -723,7 +723,7 @@ function HomePage() {
             <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Recent Top Plays</h2>
             <Link
               to="/top-plays"
-              search={{ range: hydrated ? topPlaysRange : "7d", country: selectedCountry, sort: "recent", dir: "desc" }}
+              search={{ range: hydrated ? topPlaysRange : "7d", country: selectedCountry, sort: "recent", dir: "desc", keys: "all" }}
               className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors"
             >
               view all

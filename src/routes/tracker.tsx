@@ -139,7 +139,7 @@ export const Route = createFileRoute("/tracker")({
 
 type ScoreFilter = "all" | "ranked";
 type GradeFilter = "all" | "SS" | "S" | "A" | "B";
-type KeyFilter = "all" | "4k" | "7k";
+type KeyFilter = "all" | "4k" | "other";
 type MissFilter = "all" | "fc" | "fc_choke";
 
 function scoreMatchesKeyFilter(score: LeanTrackerScore, keyFilter: KeyFilter): boolean {
@@ -677,7 +677,7 @@ function ScoresPage() {
   const keymodes: { id: KeyFilter; label: string }[] = [
     { id: "all", label: "Any" },
     { id: "4k", label: "4K" },
-    { id: "7k", label: "7K" },
+    { id: "other", label: "≠4K" },
   ];
   const cycleMissFilter = () => {
     setMissFilter((current) => current === "all" ? "fc" : current === "fc" ? "fc_choke" : "all");
@@ -820,7 +820,7 @@ function ScoresPage() {
               <button
                 key={item.id}
                 onClick={() => { setKeyFilter(item.id); updateTrackerSearch({ page: 0 }); }}
-                title="Filter by keymode"
+                title={item.id === "other" ? "Show non-4K scores" : "Filter by keymode"}
                 className={`px-2.5 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] border-b-2 tabular-nums ${
                   keyFilter === item.id
                     ? "text-osu-c1 border-osu-h1"

@@ -5,7 +5,7 @@ import { getCountryPopoffs, getPartialTopPlays, getRankings, getTopPlaysRefreshS
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryFlagUrl, getCountryName, isGlobalScope } from "../lib/country";
 import { formatNumber, formatAccuracy, formatTimeAgo, formatPpGain } from "../lib/format";
-import { getBeatmapUrl, getBeatmapKeymodeLabel, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModDisplayList, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
+import { getBeatmapUrl, getBeatmapKeyCount, getBeatmapKeymodeLabel, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModDisplayList, getScoreUrl, isLazerScore, scoreHasReplay } from "../lib/score";
 import { PageHeader } from "../components/layout/PageHeader";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { PageTabs } from "../components/layout/PageTabs";
@@ -33,6 +33,7 @@ type PopOff = CountryTopPlay;
 type TimeRange = TopPlaysRange;
 type SortMode = "recent" | "pp" | "gain";
 type SortDirection = "desc" | "asc";
+type KeyFilter = "all" | "4k" | "other";
 
 const RANGE_WIDTH: Record<TimeRange, number> = {
   "24h": 0,
@@ -51,6 +52,7 @@ type TopPlaysSearch = {
   country: string | undefined;
   sort: SortMode;
   dir: SortDirection;
+  keys: KeyFilter;
 };
 
 const RANGE_MS: Record<TimeRange, number> = {
@@ -67,11 +69,19 @@ const DEFAULT_TOP_PLAYS_SEARCH: TopPlaysSearch = {
   country: undefined,
   sort: "recent",
   dir: "desc",
+  keys: "all",
 };
 
 function hasPopoffsInRange(popoffs: PopOff[], range: TimeRange): boolean {
   const now = Date.now();
   return popoffs.some((popoff) => now - new Date(popoff.time).getTime() < RANGE_MS[range]);
+}
+
+function popoffMatchesKeyFilter(popoff: PopOff, keyFilter: KeyFilter): boolean {
+  if (keyFilter === "all") return true;
+  const keys = getBeatmapKeyCount(popoff.score.beatmap);
+  if (keys == null) return false;
+  return keyFilter === "4k" ? keys === 4 : keys !== 4;
 }
 
 export const Route = createFileRoute("/top-plays")({
@@ -102,6 +112,10 @@ export const Route = createFileRoute("/top-plays")({
         ? search.sort
         : DEFAULT_TOP_PLAYS_SEARCH.sort,
     dir: search.dir === "asc" || search.dir === "desc" ? search.dir : DEFAULT_TOP_PLAYS_SEARCH.dir,
+    keys:
+      search.keys === "all" || search.keys === "4k" || search.keys === "other"
+        ? search.keys
+        : DEFAULT_TOP_PLAYS_SEARCH.keys,
   }),
   component: PopOffsPage,
 });
@@ -109,7 +123,7 @@ export const Route = createFileRoute("/top-plays")({
 const EMPTY_POPOFFS: CachedPopoff[] = [];
 
 function PopOffsPage() {
-  const { range, country, sort, dir } = Route.useSearch();
+  const { range, country, sort, dir, keys } = Route.useSearch();
   const location = useLocation();
   const navigate = useNavigate();
   const fallbackCountry = useSelectedCountry();
@@ -179,11 +193,11 @@ function PopOffsPage() {
 
     navigate({
       to: "/top-plays",
-      search: { range: rememberedRange, country, sort, dir },
+      search: { range: rememberedRange, country, sort, dir, keys },
       replace: true,
       resetScroll: false,
     });
-  }, [country, location.searchStr, navigate, range, rememberedRange, sort, dir]);
+  }, [country, location.searchStr, navigate, range, rememberedRange, sort, dir, keys]);
 
   useEffect(() => {
     if (rememberedRange === range) return;
@@ -521,9 +535,10 @@ function PopOffsPage() {
     const playerFiltered = selectedPlayerIds.length > 0
       ? rangedPopoffs.filter((popoff) => selectedPlayerIdSet.has(popoff.user.id))
       : rangedPopoffs;
+    const keyFiltered = playerFiltered.filter((popoff) => popoffMatchesKeyFilter(popoff, keys));
 
     const flip = dir === "asc" ? -1 : 1;
-    return [...playerFiltered].sort((a, b) => {
+    return [...keyFiltered].sort((a, b) => {
       if (sort === "pp") {
         if (b.pp !== a.pp) return (b.pp - a.pp) * flip;
       } else if (sort === "gain") {
@@ -536,7 +551,7 @@ function PopOffsPage() {
 
       return new Date(b.time).getTime() - new Date(a.time).getTime();
     });
-  }, [rangedPopoffs, selectedPlayerIdSet, selectedPlayerIds.length, sort, dir]);
+  }, [rangedPopoffs, selectedPlayerIdSet, selectedPlayerIds.length, keys, sort, dir]);
 
   const liveSnapshotKey = `${selectedCountry}:${range}:${popoffsFetchedAt ?? "none"}:${popoffsWindow ?? "none"}`;
   const waitingForLiveSnapshot =
@@ -615,6 +630,11 @@ function PopOffsPage() {
     { id: "7d", label: "7 days" },
     { id: "30d", label: "30 days" },
   ];
+  const keymodes: { id: KeyFilter; label: string }[] = [
+    { id: "all", label: "Any" },
+    { id: "4k", label: "4K" },
+    { id: "other", label: "≠4K" },
+  ];
 
   return (
     <div className="flex-1">
@@ -653,7 +673,7 @@ function PopOffsPage() {
             setTopPlaysRange(selectedCountry, nextRange);
             navigate({
               to: "/top-plays",
-              search: { range: nextRange, country, sort, dir },
+              search: { range: nextRange, country, sort, dir, keys },
               replace: true,
               resetScroll: false,
             });
@@ -674,7 +694,31 @@ function PopOffsPage() {
               </button>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex rounded-lg overflow-hidden border border-osu-b3/30">
+              {keymodes.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    navigate({
+                      to: "/top-plays",
+                      search: { range, country, sort, dir, keys: item.id },
+                      replace: true,
+                      resetScroll: false,
+                    });
+                    setPage(0);
+                  }}
+                  title={item.id === "other" ? "Show non-4K plays" : "Filter by keymode"}
+                  className={`px-2.5 py-1.5 text-[11px] font-medium cursor-pointer transition-colors duration-[120ms] tabular-nums ${
+                    keys === item.id
+                      ? "bg-osu-b3 text-osu-l2"
+                      : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
             {([
               ["recent", "Recent"],
               ["pp", "PP"],
@@ -688,7 +732,7 @@ function PopOffsPage() {
                   const nextDir: SortDirection = sort === id ? (dir === "desc" ? "asc" : "desc") : "desc";
                   navigate({
                     to: "/top-plays",
-                    search: { range, country, sort: id, dir: nextDir },
+                    search: { range, country, sort: id, dir: nextDir, keys },
                     replace: true,
                     resetScroll: false,
                   });

@@ -234,7 +234,7 @@ export function Nav() {
     if (location.pathname === "/top-plays") {
       navigate({
         to: "/top-plays",
-        search: { country, range: topPlaysRangeForLink, sort: "recent", dir: "desc" },
+        search: { country, range: topPlaysRangeForLink, sort: "recent", dir: "desc", keys: "all" },
         replace: true,
       });
       return;
