@@ -22,7 +22,7 @@ import { CountryClientTracker } from "../src/live/country-clients.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { LiveEventLog } from "../src/live/event-log.js";
-import { OsuApiClient, TokenBucketLimiter } from "../src/osu/client.js";
+import { OsuApiClient, OsuApiError, TokenBucketLimiter } from "../src/osu/client.js";
 import { WorkerRunner } from "../src/workers.js";
 import type { OscScore } from "../src/shared/types.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -2312,6 +2312,29 @@ describe("live backend", () => {
     const user = (await exec(db, "select maps_farmed_min_pp, maps_farmed_scores_refreshed_at from users where user_id = 101")).rows[0];
     expect(Number(user.maps_farmed_min_pp)).toBe(201);
     expect(String(user.maps_farmed_scores_refreshed_at)).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("treats missing users as a terminal maps farmed refresh", async () => {
+    const { db } = await setup();
+    const now = "2026-05-12T11:00:00.000Z";
+    await exec(
+      db,
+      `insert into country_maps_farmed_scores
+         (country, user_id, beatmap_id, score_id, pp, score_json, detected_at, updated_at)
+       values ('CR', 39728876, 123, 456, 500, '{}', ?, ?)`,
+      [now, now],
+    );
+    const osu = {
+      getUserBestScoresWindow: vi.fn(async () => {
+        throw new OsuApiError(404, "/users/39728876/scores/best?mode=mania&limit=100&offset=0");
+      }),
+    };
+
+    const result = await refreshUserMapsFarmedScores(db, osu, { country: "CR", userId: 39728876 });
+
+    expect(result).toMatchObject({ country: "CR", userId: 39728876, scoreCount: 0 });
+    expect(Number((await exec(db, "select count(*) as count from country_maps_farmed_scores where country = 'CR' and user_id = 39728876")).rows[0].count)).toBe(0);
+    expect((await exec(db, "select value_json from live_meta where key = 'maps_farmed_overlay_updated_at:CR'")).rows[0]?.value_json).toBeTruthy();
   });
 
   it("builds country maps from the configured roster size", async () => {

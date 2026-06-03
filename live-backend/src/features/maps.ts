@@ -2117,7 +2117,15 @@ export async function refreshUserMapsFarmedScores(
   payload: { country: string; userId: number },
 ): Promise<{ country: string; userId: number; scoreCount: number; updatedAt: string }> {
   const country = payload.country.toUpperCase();
-  const bestScores = await osu.getUserBestScoresWindow(payload.userId, MAPS_FARMED_SCORE_WINDOW, "job:refresh_user_maps_farmed_scores");
+  let bestScores: OscScore[];
+  try {
+    bestScores = await osu.getUserBestScoresWindow(payload.userId, MAPS_FARMED_SCORE_WINDOW, "job:refresh_user_maps_farmed_scores");
+  } catch (error) {
+    if (!(error instanceof OsuApiError && error.status === 404)) throw error;
+    const updatedAt = nowIso();
+    await replaceUserMapsFarmedOverlay(db, country, payload.userId, [], updatedAt);
+    return { country, userId: payload.userId, scoreCount: 0, updatedAt };
+  }
   const updatedAt = nowIso();
   await updateUserMapsFarmedThreshold(db, payload.userId, bestScores, updatedAt);
   await persistMapsFarmedScoreDisplayMetadata(db, bestScores, updatedAt);
