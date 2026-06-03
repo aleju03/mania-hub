@@ -18,7 +18,7 @@ import { CountryFlag } from "../../components/ui/CountryFlag";
 type ConnectionState = "idle" | "connecting" | "open" | "error";
 type StatusTone = "good" | "warn" | "bad" | "neutral";
 
-const OSC_FEED_STALE_MS = 10 * 60 * 1000;
+const OSC_FEED_STALE_MS = 30 * 1000;
 
 interface LiveBackendStatus {
   ok: boolean;
@@ -35,6 +35,7 @@ interface LiveBackendStatus {
     connected: boolean;
     lastBatchAt: string | null;
     lastError: string | null;
+    stale?: boolean;
   };
   lastEventAt: string | null;
   queueDepth: number;
@@ -2299,7 +2300,7 @@ function getOscFeedStatus(status: LiveBackendStatus | null): { value: string; hi
   if (status.osc.lastBatchAt) {
     const lastBatchMs = Date.parse(status.osc.lastBatchAt);
     const batchHint = `batch ${formatTimeAgo(status.osc.lastBatchAt)}`;
-    if (Number.isFinite(lastBatchMs) && Date.now() - lastBatchMs <= OSC_FEED_STALE_MS) {
+    if (!status.osc.stale && Number.isFinite(lastBatchMs) && Date.now() - lastBatchMs <= OSC_FEED_STALE_MS) {
       return { value: "receiving", hint: batchHint, tone: "good", batchTone: "good" };
     }
     return { value: "stale", hint: batchHint, tone: "bad", batchTone: "bad" };
