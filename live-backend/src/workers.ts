@@ -38,7 +38,7 @@ interface WorkerActiveJob {
 const DEFAULT_WORKER_LANES: WorkerLane[] = [
   {
     name: "fast",
-    jobTypes: ["refresh_user_top_scores", "refresh_user_maps_farmed_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "reconcile_user_recent_scores"],
+    jobTypes: ["refresh_user_top_scores", "refresh_country_roster", "enrich_user", "enrich_beatmap", "reconcile_user_recent_scores"],
     claimLimit: 3,
     intervalMs: 750,
   },
@@ -60,7 +60,7 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
   },
   {
     name: "maps-refresh",
-    jobTypes: ["refresh_country_maps", "refresh_global_maps"],
+    jobTypes: ["refresh_user_maps_farmed_scores", "refresh_country_maps", "refresh_global_maps"],
     claimLimit: 1,
     intervalMs: 1_000,
   },
@@ -131,6 +131,9 @@ export class WorkerRunner {
 
   private async runLaneOnce(lane: WorkerLane): Promise<void> {
     if (this.paused) return;
+    if (lane.name === "maps-refresh" && lane.jobTypes && await this.queue.hasRunnableOutsideTypes(lane.jobTypes)) {
+      return;
+    }
     const laneWorkerId = `${this.workerId}:${lane.name}`;
     const jobs = await this.claimJobs(laneWorkerId, lane.claimLimit, { types: lane.jobTypes });
     await this.runJobs(laneWorkerId, jobs, lane.name);

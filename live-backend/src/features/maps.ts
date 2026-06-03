@@ -9,8 +9,8 @@ import { getModAcronyms, getScoreIdentity, getScoreTimestamp, nowIso } from "../
 import type { OscScore } from "../shared/types.js";
 import { refreshFarmHelperKeyStatsForUser } from "./farm-helper-key-stats.js";
 
-const MAPS_REFRESH_PRIORITY = 20;
-const MAPS_FARMED_REFRESH_PRIORITY = 35;
+const MAPS_REFRESH_PRIORITY = -100;
+const MAPS_FARMED_REFRESH_PRIORITY = -100;
 const MAPS_FETCH_CONCURRENCY = 2;
 const MAPS_FARMED_SCORE_WINDOW = 200;
 const FARMED_SINGLE_PLAYER_PP_MIN = 500;
@@ -222,7 +222,7 @@ export async function enqueueMapsRefresh(queue: JobQueue, country: string, optio
     "refresh_country_maps",
     `maps:${normalized}`,
     { country: normalized },
-    { priority: options.priority ?? MAPS_REFRESH_PRIORITY, replaceDone: options.replaceDone ?? true },
+    { priority: mapsPriority(options.priority, MAPS_REFRESH_PRIORITY), replaceDone: options.replaceDone ?? true },
   );
 }
 
@@ -234,7 +234,7 @@ export async function enqueueGlobalMapsRefresh(queue: JobQueue, options: { prior
     "refresh_global_maps",
     `maps:${GLOBAL_COUNTRY_CODE}`,
     {},
-    { priority: options.priority ?? MAPS_REFRESH_PRIORITY, replaceDone: options.replaceDone ?? true },
+    { priority: mapsPriority(options.priority, MAPS_REFRESH_PRIORITY), replaceDone: options.replaceDone ?? true },
   );
 }
 
@@ -283,6 +283,10 @@ export async function maybeEnqueueMapsFarmedRefresh(
     { country: normalized, userId: score.user_id, scoreId: scoreKey },
     { priority: MAPS_FARMED_REFRESH_PRIORITY, replaceDone: true },
   );
+}
+
+function mapsPriority(priority: number | undefined, fallback: number): number {
+  return Math.min(priority ?? fallback, fallback);
 }
 
 export async function enqueueMapsRefreshIfDue(

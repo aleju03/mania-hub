@@ -104,6 +104,23 @@ export class JobQueue {
     return jobs;
   }
 
+  async hasRunnableOutsideTypes(types: string[]): Promise<boolean> {
+    if (types.length === 0) return false;
+    const now = nowIso();
+    const placeholders = types.map(() => "?").join(", ");
+    const row = (await exec(
+      this.db,
+      `select 1 as runnable
+       from jobs
+       where status in ('queued', 'failed')
+         and run_after <= ?
+         and type not in (${placeholders})
+       limit 1`,
+      [now, ...types],
+    )).rows[0];
+    return !!row;
+  }
+
   async complete(id: number): Promise<void> {
     await exec(this.db, "update jobs set status = 'done', locked_by = null, locked_until = null, last_error = null, updated_at = ? where id = ?", [nowIso(), id]);
   }

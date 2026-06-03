@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot } from "../src/features/snipes.js";
-import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "../src/features/maps.js";
+import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "../src/features/maps.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../src/features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
 import { confirmTopPlay, getTopPlaysSnapshot, TopPlayConfirmationPendingError } from "../src/features/top-plays.js";
@@ -411,6 +411,30 @@ describe("live backend", () => {
     const parked = (await exec(db, "select status from jobs where type = 'refresh_user_maps_farmed_scores'")).rows[0];
     expect(parked.status).toBe("deferred_pressure");
     expect(await queue.depth()).toBe(80);
+  });
+
+  it("keeps maps refresh priority below other backend jobs even for explicit refreshes", async () => {
+    const { db, queue } = await setup();
+
+    await enqueueMapsRefresh(queue, "CR", { priority: 90, replaceDone: true });
+    await queue.enqueue("enrich_user", "user:101", { userId: 101 });
+
+    const mapsJob = (await exec(db, "select priority from jobs where type = 'refresh_country_maps'")).rows[0];
+    expect(Number(mapsJob.priority)).toBeLessThan(0);
+
+    const claimed = await queue.claim("test-worker", 2);
+    expect(claimed.map((job) => job.type)).toEqual(["enrich_user", "refresh_country_maps"]);
+  });
+
+  it("reports ready non-maps work so the maps worker lane can yield", async () => {
+    const { queue } = await setup();
+    const mapsTypes = ["refresh_user_maps_farmed_scores", "refresh_country_maps", "refresh_global_maps"];
+
+    await enqueueMapsRefresh(queue, "CR");
+    expect(await queue.hasRunnableOutsideTypes(mapsTypes)).toBe(false);
+
+    await queue.enqueue("enrich_user", "user:101", { userId: 101 });
+    expect(await queue.hasRunnableOutsideTypes(mapsTypes)).toBe(true);
   });
 
   it("parks queued low-priority work when critical jobs arrive above target depth", async () => {
