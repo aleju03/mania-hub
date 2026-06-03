@@ -110,6 +110,33 @@ function baseConfig(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function topPlayPayload(options: {
+  scoreId: number;
+  userId: number;
+  username: string;
+  country: string;
+  pp: number;
+  ppGain: number;
+  time: string;
+  keys: number;
+}): string {
+  return JSON.stringify({
+    user: { id: options.userId, username: options.username, avatar_url: "", country_code: options.country },
+    score: {
+      id: options.scoreId,
+      user_id: options.userId,
+      pp: options.pp,
+      mods: [],
+      beatmap: { id: options.scoreId, beatmapset_id: options.scoreId, cs: options.keys, mode: "mania", version: `${options.keys}K` },
+      beatmapset: { id: options.scoreId, title: "Test Map", artist: "Test", covers: {} },
+    },
+    pp: options.pp,
+    weightedPP: options.pp * 0.95,
+    ppGain: options.ppGain,
+    time: options.time,
+  });
+}
+
 beforeEach(() => {
   vi.useRealTimers();
 });
@@ -1353,6 +1380,66 @@ describe("live backend", () => {
     expect((await getTopPlaysSnapshot(db, "GLOBAL", "7d")).popoffs).toHaveLength(2);
   });
 
+  it("applies global top-play sort and key filters before the snapshot limit", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-01-02T12:00:00.000Z"));
+    const { db } = await setup(["CR", "US"]);
+    const olderTime = "2026-01-02T10:00:00.000Z";
+    const recentTime = "2026-01-02T11:59:00.000Z";
+
+    for (let i = 0; i < 205; i += 1) {
+      await exec(
+        db,
+        `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
+         values ('US', ?, ?, ?, ?, 1, ?, ?)`,
+        [
+          10_000 + i,
+          20_000 + i,
+          1000 + i,
+          (1000 + i) * 0.95,
+          topPlayPayload({
+            scoreId: 10_000 + i,
+            userId: 20_000 + i,
+            username: `HighPP${i}`,
+            country: "US",
+            pp: 1000 + i,
+            ppGain: 1,
+            time: olderTime,
+            keys: 7,
+          }),
+          olderTime,
+        ],
+      );
+    }
+    await exec(
+      db,
+      `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
+       values ('CR', 9001, 101, 280, 266, 36.9, ?, ?)`,
+      [
+        topPlayPayload({
+          scoreId: 9001,
+          userId: 101,
+          username: "lolomgwhat",
+          country: "CR",
+          pp: 280,
+          ppGain: 36.9,
+          time: recentTime,
+          keys: 4,
+        }),
+        recentTime,
+      ],
+    );
+
+    const ppSnapshot = await getTopPlaysSnapshot(db, "GLOBAL", "24h");
+    expect(ppSnapshot.popoffs.some((play) => play.score.id === 9001)).toBe(false);
+
+    const recentSnapshot = await getTopPlaysSnapshot(db, "GLOBAL", "24h", { sort: "recent" });
+    expect(recentSnapshot.popoffs[0].score.id).toBe(9001);
+
+    const keyFilteredSnapshot = await getTopPlaysSnapshot(db, "GLOBAL", "24h", { sort: "recent", keys: "4k" });
+    expect(keyFilteredSnapshot.popoffs.map((play) => play.score.id)).toEqual([9001]);
+  });
+
   it("emits top play only after best-score confirmation", async () => {
     const { db, events, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");
@@ -2288,6 +2375,8 @@ describe("live backend", () => {
     const bestScores = Array.from({ length: 200 }, (_, index): OscScore => ({
       ...baseScore,
       id: 20_000 + index,
+      user: undefined,
+      user_id: undefined as unknown as number,
       beatmap_id: 10_000 + index,
       pp: 400 - index,
       beatmap: {

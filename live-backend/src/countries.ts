@@ -149,7 +149,10 @@ export async function deleteCountryData(db: Db, country: string): Promise<Record
   await deleteFrom("country_maps_snapshots");
   await deleteFrom("country_maps_farmed_scores");
   await deleteFrom("live_event_log");
-  deleted.live_meta = Number((await exec(db, "delete from live_meta where key = ?", [`maps_farmed_overlay_updated_at:${normalized}`])).rowsAffected ?? 0);
+  deleted.farm_helper_user_key_stats = Number((await exec(db, "delete from farm_helper_user_key_stats")).rowsAffected ?? 0);
+  const mapsMetaDeleted = Number((await exec(db, "delete from live_meta where key = ?", [`maps_farmed_overlay_updated_at:${normalized}`])).rowsAffected ?? 0);
+  const keyStatsMetaDeleted = Number((await exec(db, "delete from live_meta where key like 'farm_helper_key_stats_seeded:%'")).rowsAffected ?? 0);
+  deleted.live_meta = mapsMetaDeleted + keyStatsMetaDeleted;
 
   const jobCountryJson = `%"country":"${normalized}"%`;
   deleted.jobs = Number((await exec(

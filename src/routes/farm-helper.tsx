@@ -2,6 +2,7 @@ import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-ro
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { ExternalLink, Users, Target, TrendingUp, History, ArrowRight, X } from "lucide-react";
 import {
   fetchLiveFarmHelperFarmers,
   fetchLiveFarmHelperSnapshot,
@@ -13,19 +14,21 @@ import {
 } from "../lib/live-backend";
 import { searchUsers } from "../lib/osu";
 import { PageHeader } from "../components/layout/PageHeader";
-import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { SearchInput } from "../components/ui/SearchInput";
 import { Avatar } from "../components/ui/Avatar";
 import { CountryFlag } from "../components/ui/CountryFlag";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { Pagination } from "../components/ui/Pagination";
+import { ModBadge } from "../components/ui/ModBadge";
+import { UsernameText } from "../components/ui/UsernameText";
 import { useAuth } from "../lib/auth-context";
 import { canUseDevFeatures } from "../lib/auth-shared";
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 10;
 
 type ReasonFilter = "all" | "missing" | "improve" | "stale";
-type SortMode = "gain" | "popularity" | "difficulty";
+type SortMode = "gain" | "popularity" | "players" | "difficulty";
+type SortDirection = "asc" | "desc";
 
 interface FarmHelperSearch {
   user?: string;
@@ -34,6 +37,10 @@ interface FarmHelperSearch {
 
 function parseKeyMode(value: unknown): LiveFarmHelperKeyMode | undefined {
   return value === "4k" || value === "7k" || value === "any" ? value : undefined;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 const searchPlayers = async (q: string) => {
@@ -63,7 +70,7 @@ export const Route = createFileRoute("/farm-helper")({
       {
         name: "description",
         content:
-          "Personalised farm map recommendations: maps players at your skill level farm that you're missing, plus stale PBs worth re-running for pp.",
+          "Personalised farm map recommendations: maps players at your skill level farm that you're missing, plus old PBs worth re-running for pp.",
       },
     ],
   }),
@@ -71,9 +78,9 @@ export const Route = createFileRoute("/farm-helper")({
 });
 
 const REASON_META: Record<LiveFarmHelperRec["reason"], { label: string; accent: string; text: string }> = {
-  missing: { label: "not farmed", accent: "bg-osu-blue", text: "text-osu-blue" },
-  improve: { label: "beatable", accent: "bg-osu-green-light", text: "text-osu-green-light" },
-  stale: { label: "stale pb", accent: "bg-osu-yellow", text: "text-osu-yellow" },
+  missing: { label: "missing", accent: "bg-osu-blue", text: "text-osu-blue" },
+  improve: { label: "improve", accent: "bg-osu-green-light", text: "text-osu-green-light" },
+  stale: { label: "old pb", accent: "bg-osu-yellow", text: "text-osu-yellow" },
 };
 
 function FarmHelperPage() {
@@ -87,16 +94,17 @@ function FarmHelperPage() {
   const [error, setError] = useState<string | null>(null);
   const [reasonFilter, setReasonFilter] = useState<ReasonFilter>("all");
   const [sortMode, setSortMode] = useState<SortMode>("gain");
+  const [sortDir, setSortDir] = useState<SortDirection>("desc");
 
   const subjectKey = search.user ?? null;
-  const keyMode = search.key;
+  const keyMode: LiveFarmHelperKeyMode = search.key ?? "any";
 
   const setSubject = (key: string | null) => {
-    navigate({ to: "/farm-helper", search: { user: key ?? undefined, key: keyMode }, replace: false });
+    navigate({ to: "/farm-helper", search: { user: key ?? undefined, key: keyMode === "any" ? undefined : keyMode }, replace: false });
   };
 
-  const setKeyMode = (next: LiveFarmHelperKeyMode | undefined) => {
-    navigate({ to: "/farm-helper", search: { user: subjectKey ?? undefined, key: next }, replace: true });
+  const setKeyMode = (next: LiveFarmHelperKeyMode) => {
+    navigate({ to: "/farm-helper", search: { user: subjectKey ?? undefined, key: next === "any" ? undefined : next }, replace: true });
   };
 
   useEffect(() => {
@@ -105,9 +113,10 @@ function FarmHelperPage() {
       return;
     }
     let cancelled = false;
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
-    fetchLiveFarmHelperSnapshot(subjectKey, keyMode ? { keyMode } : undefined)
+    fetchLiveFarmHelperSnapshot(subjectKey, { keyMode, signal: controller.signal })
       .then((data) => {
         if (cancelled) return;
         setSnapshot(data);
@@ -115,6 +124,7 @@ function FarmHelperPage() {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
+        if (isAbortError(err)) return;
         setSnapshot(null);
         const message = err instanceof Error ? err.message : String(err);
         setError(message.includes("404") ? "not-found" : "failed");
@@ -124,6 +134,7 @@ function FarmHelperPage() {
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [liveEnabled, subjectKey, keyMode]);
 
@@ -135,16 +146,26 @@ function FarmHelperPage() {
     if (!snapshot) return [];
     const filtered = reasonFilter === "all" ? snapshot.recs : snapshot.recs.filter((rec) => rec.reason === reasonFilter);
     const sorted = [...filtered];
-    if (sortMode === "gain") sorted.sort((a, b) => b.estimatedPpGain - a.estimatedPpGain);
-    else if (sortMode === "popularity") sorted.sort((a, b) => b.peerFraction - a.peerFraction);
-    else sorted.sort((a, b) => b.stars - a.stars);
+    const direction = sortDir === "desc" ? 1 : -1;
+    sorted.sort((a, b) => {
+      const byGain = b.estimatedPpGain - a.estimatedPpGain;
+      const byFit = b.peerFraction - a.peerFraction;
+      const byPlayers = b.peerCount - a.peerCount;
+      const byStars = b.stars - a.stars;
+      const bySelected =
+        sortMode === "gain" ? byGain
+          : sortMode === "popularity" ? byFit
+            : sortMode === "players" ? byPlayers
+              : byStars;
+      return (bySelected || byGain || byFit || byPlayers || byStars) * direction;
+    });
     return sorted;
-  }, [snapshot, reasonFilter, sortMode]);
+  }, [snapshot, reasonFilter, sortMode, sortDir]);
 
   // Reset to the first page whenever the result set changes underneath us.
   useEffect(() => {
     setPage(0);
-  }, [subjectKey, keyMode, reasonFilter, sortMode]);
+  }, [subjectKey, keyMode, reasonFilter, sortMode, sortDir]);
 
   const pageCount = Math.ceil(recs.length / PAGE_SIZE);
   const safePage = Math.min(page, Math.max(0, pageCount - 1));
@@ -156,12 +177,21 @@ function FarmHelperPage() {
   };
 
   return (
-    <div className="relative min-h-screen">
-      <OsuTriangleBackdrop />
-      <div className="relative z-10">
-        <PageHeader iconSrc="/images/icons/rankings.svg" title="farm helper" />
+    <div className="relative flex min-h-screen flex-col">
+      <div className="relative z-10 flex flex-1 flex-col bg-osu-b5">
+        <PageHeader
+          iconSrc="/images/icons/rankings.svg"
+          title="Global mania farm helper"
+          right={
+            snapshot ? (
+              <span className="text-[11px] font-medium text-osu-f1">
+                {peerBandCoverageLabel(snapshot)}
+              </span>
+            ) : null
+          }
+        />
 
-        <div className="mx-auto max-w-[1200px] px-4 py-6 sm:px-5">
+        <div className="mx-auto max-w-[1280px] px-4 py-5 sm:px-5">
           {!liveEnabled ? (
             <EmptyNotice
               eyebrow="unavailable"
@@ -187,41 +217,54 @@ function FarmHelperPage() {
               action={<ChangeSubjectButton onPick={setSubject} />}
             />
           ) : snapshot ? (
-            <div className="space-y-4">
-              <SubjectHero snapshot={snapshot} onPick={setSubject} />
-              <div ref={listRef} className="scroll-mt-4 space-y-4">
-                <Filters
-                  keyMode={snapshot.keyMode}
-                  requestedKeyMode={keyMode}
-                  onKeyMode={setKeyMode}
-                  reasonFilter={reasonFilter}
-                  onReason={setReasonFilter}
-                  sortMode={sortMode}
-                  onSort={setSortMode}
-                  counts={countReasons(snapshot.recs)}
-                />
-                {recs.length === 0 ? (
-                  <EmptyNotice
-                    eyebrow="all caught up"
-                    title="Nothing left to farm at your level"
-                    body="No farm maps match this filter. Try widening the key mode or clearing the reason filter."
-                  />
-                ) : (
-                  <>
-                    <div className="space-y-2">
-                      {pageRecs.map((rec, index) => (
+            <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+              <TargetPanel snapshot={snapshot} onChangePlayer={() => setSubject(null)} />
+
+              <div ref={listRef} className="min-w-0 scroll-mt-4">
+                <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
+                  <div className="flex flex-col gap-3 border-b border-osu-b3/20 px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
+                    <div className="shrink-0">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">recommendations</div>
+                      <div className="mt-0.5 text-sm font-semibold text-osu-c1">
+                        {formatPp(recs.length)} map{recs.length === 1 ? "" : "s"}
+                        <span className="font-normal text-osu-f1"> · +{formatPp(totalGain(recs))}pp on the table</span>
+                      </div>
+                    </div>
+                    <Filters
+                      requestedKeyMode={keyMode}
+                      onKeyMode={setKeyMode}
+                      reasonFilter={reasonFilter}
+                      onReason={setReasonFilter}
+                      sortMode={sortMode}
+                      sortDir={sortDir}
+                      onSort={(next) => {
+                        setSortDir(sortMode === next ? (sortDir === "desc" ? "asc" : "desc") : "desc");
+                        setSortMode(next);
+                      }}
+                      counts={countReasons(snapshot.recs)}
+                    />
+                  </div>
+
+                  {recs.length === 0 ? (
+                    <EmptyNotice
+                      eyebrow="all caught up"
+                      title="Nothing left to farm at your level"
+                      body="No farm maps match this filter. Try widening the key mode or clearing the reason filter."
+                    />
+                  ) : (
+                    <div className="divide-y divide-osu-b3/20">
+                      {pageRecs.map((rec) => (
                         <RecRow
-                          key={rec.beatmapId}
+                          key={`${rec.beatmapId}:${rec.speedBucket}`}
                           rec={rec}
-                          rank={safePage * PAGE_SIZE + index + 1}
-                          index={index}
                           onShowFarmers={() => setFarmersFor(rec)}
                         />
                       ))}
                     </div>
-                    <Pagination page={safePage} totalPages={pageCount} onPageChange={goToPage} />
-                  </>
-                )}
+                  )}
+                </div>
+
+                <Pagination page={safePage} totalPages={pageCount} onPageChange={goToPage} />
               </div>
             </div>
           ) : null}
@@ -238,58 +281,122 @@ function FarmHelperPage() {
 }
 
 function PlayerPicker({ viewer, onPick }: { viewer: ReturnType<typeof useAuth>["viewer"]; onPick: (key: string) => void }) {
-  const recents = useMemo(() => {
+  const [recents, setRecents] = useState<RecentPlayer[]>([]);
+  const viewerId = viewer?.id;
+
+  useLayoutEffect(() => {
     const list = readRecentPlayers();
-    return viewer ? list.filter((p) => p.userId !== viewer.id) : list;
-  }, [viewer]);
+    setRecents(viewerId ? list.filter((p) => p.userId !== viewerId) : list);
+  }, [viewerId]);
+
+  const removeRecent = (userId: number) => {
+    removeRecentPlayer(userId);
+    setRecents((prev) => prev.filter((p) => p.userId !== userId));
+  };
 
   return (
-    <div className="mx-auto max-w-xl space-y-3">
+    <div className="mx-auto flex min-h-[60vh] max-w-md flex-col justify-center py-10 text-center">
       {viewer ? (
-        <button
-          type="button"
-          onClick={() => onPick(String(viewer.id))}
-          className="flex w-full items-center gap-3.5 rounded-xl border border-osu-pink/30 bg-osu-pink/10 px-4 py-4 text-left transition-colors hover:bg-osu-pink/15"
-        >
-          <Avatar url={viewer.avatarUrl} userId={viewer.id} size={48} />
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-lg font-bold text-osu-c1">{viewer.username}</span>
-            {viewer.countryCode ? (
-              <CountryFlag code={viewer.countryCode} size="sm" decorative />
-            ) : null}
-            <span className="rounded-full bg-osu-pink/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-osu-pink">
-              you
-            </span>
+        <div className="flex flex-col items-center">
+          <button
+            type="button"
+            onClick={() => onPick(String(viewer.id))}
+            aria-label={`Plan ${viewer.username}'s farm`}
+            className="inline-flex rounded-full ring-2 ring-osu-pink/30 transition-shadow hover:ring-osu-pink/60"
+          >
+            <Avatar url={viewer.avatarUrl} userId={viewer.id} size={88} />
+          </button>
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <h2 className="text-xl font-bold text-osu-c1">Hey, {viewer.username}</h2>
+            {viewer.countryCode ? <CountryFlag code={viewer.countryCode} size="sm" decorative /> : null}
           </div>
-          <span className="ml-auto shrink-0 text-sm font-semibold text-osu-pink">plan my farm &rarr;</span>
-        </button>
-      ) : null}
+          <p className="mt-1 text-sm text-osu-f1">Ready to find your next farm?</p>
+          <button
+            type="button"
+            onClick={() => onPick(String(viewer.id))}
+            className="group mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-osu-pink px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-osu-pink-light"
+          >
+            Plan my farm
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+          </button>
 
-      <SearchInput
-        onSearch={searchPlayers}
-        onSelect={(user) => onPick(user.username)}
-        placeholder={viewer ? "or search another player..." : "search a player..."}
-      />
+          <div className="mt-8 flex w-full items-center gap-3">
+            <span className="h-px flex-1 bg-osu-b3/30" />
+            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-osu-f1">
+              or look up someone else
+            </span>
+            <span className="h-px flex-1 bg-osu-b3/30" />
+          </div>
+        </div>
+      ) : (
+        <div>
+          <h2 className="text-xl font-bold text-osu-c1">Find your next farm</h2>
+          <p className="mt-1 text-sm text-osu-f1">Maps worth farming, based on players near your pp.</p>
+        </div>
+      )}
+
+      <div className={viewer ? "mt-4" : "mt-6"}>
+        <SearchInput onSearch={searchPlayers} onSelect={(user) => onPick(user.username)} placeholder="search a player..." />
+      </div>
 
       {recents.length > 0 ? (
-        <div className="pt-1">
-          <div className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wider text-osu-f1">recent</div>
-          <div className="space-y-1.5">
+        <div className="mt-3">
+          <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-osu-f1">recent</div>
+          <div className="flex flex-wrap justify-center gap-1.5">
             {recents.map((player) => (
-              <button
+              <div
                 key={player.userId}
-                type="button"
-                onClick={() => onPick(player.username)}
-                className="flex w-full items-center gap-2.5 rounded-lg border border-osu-b3/20 bg-osu-b4 px-3 py-2 text-left transition-colors hover:bg-osu-b3/50"
+                className="flex items-center rounded-lg border border-osu-b3/30 bg-osu-b4 pl-1.5 pr-1 transition-colors duration-150 hover:border-osu-pink/40 hover:bg-osu-b3"
               >
-                <Avatar url={player.avatarUrl} userId={player.userId} size={30} />
-                <span className="min-w-0 flex-1 truncate text-sm font-medium text-osu-c1">{player.username}</span>
-                <span className="shrink-0 text-[11px] text-osu-f1">&rarr;</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => onPick(player.username)}
+                  className="flex items-center gap-2 py-1.5 pr-1"
+                >
+                  <Avatar url={player.avatarUrl} userId={player.userId} size={24} />
+                  <span className="max-w-[120px] truncate text-[13px] font-medium text-osu-c1">{player.username}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeRecent(player.userId)}
+                  aria-label={`Remove ${player.username} from recent`}
+                  className="flex h-5 w-5 shrink-0 items-center justify-center text-osu-f1 transition-colors hover:text-osu-c1"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
             ))}
           </div>
         </div>
       ) : null}
+
+      <div className="mx-auto mt-10 flex max-w-xs flex-col gap-2 text-left">
+        <PickerLegend
+          icon={<Target className="h-3.5 w-3.5 shrink-0 text-osu-blue" />}
+          label="missing"
+          body="players like you farm it, you don't"
+        />
+        <PickerLegend
+          icon={<TrendingUp className="h-3.5 w-3.5 shrink-0 text-osu-green-light" />}
+          label="improve"
+          body="your score is below theirs"
+        />
+        <PickerLegend
+          icon={<History className="h-3.5 w-3.5 shrink-0 text-osu-yellow" />}
+          label="old pb"
+          body="old pbs worth replaying for pp"
+        />
+      </div>
+    </div>
+  );
+}
+
+function PickerLegend({ icon, label, body }: { icon: ReactNode; label: string; body: string }) {
+  return (
+    <div className="flex items-center gap-2 text-[11px]">
+      {icon}
+      <span className="w-16 shrink-0 font-bold uppercase tracking-wide text-osu-c1">{label}</span>
+      <span className="text-osu-f1">{body}</span>
     </div>
   );
 }
@@ -331,33 +438,80 @@ function recordRecentPlayer(player: RecentPlayer): void {
   }
 }
 
-function SubjectHero({ snapshot, onPick }: { snapshot: LiveFarmHelperSnapshot; onPick: (key: string) => void }) {
+function removeRecentPlayer(userId: number): void {
+  if (typeof window === "undefined") return;
+  try {
+    const existing = readRecentPlayers().filter((p) => p.userId !== userId);
+    window.localStorage.setItem(RECENT_KEY, JSON.stringify(existing));
+  } catch {
+    /* ignore */
+  }
+}
+
+function TargetPanel({
+  snapshot,
+  onChangePlayer,
+}: {
+  snapshot: LiveFarmHelperSnapshot;
+  onChangePlayer: () => void;
+}) {
+  const mapCount = snapshot.recs.length;
+  const biggest = maxGain(snapshot.recs);
   return (
-    <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
-      <div className="flex flex-wrap items-center gap-3 px-4 py-3.5 sm:px-5">
-        <Avatar url={snapshot.avatarUrl} userId={snapshot.userId} size={46} />
-        <div className="min-w-0">
-          <Link
-            to="/player/$username"
-            params={{ username: snapshot.username }}
-            className="text-base font-bold text-osu-c1 hover:text-osu-pink"
-          >
-            {snapshot.username}
-          </Link>
-          <div className="text-[12px] text-osu-f1">
-            {formatPp(snapshot.pp)}pp · vs {snapshot.peerBand.count} rivals around your pp
+    <aside className="space-y-3">
+      <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
+        <div className="relative overflow-hidden">
+          {snapshot.coverUrl ? (
+            <>
+              <div
+                className="absolute inset-0 bg-cover bg-center"
+                style={{ backgroundImage: `url(${snapshot.coverUrl})` }}
+                aria-hidden="true"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-osu-b4 via-osu-b4/85 to-osu-b4/55" aria-hidden="true" />
+            </>
+          ) : null}
+          <div className="relative flex items-center gap-3 p-4">
+            <span className="inline-flex shrink-0 rounded-full ring-2 ring-white/10">
+              <Avatar url={snapshot.avatarUrl} userId={snapshot.userId} size={52} />
+            </span>
+            <div className="min-w-0">
+              <Link
+                to="/player/$username"
+                params={{ username: snapshot.username }}
+                className="block truncate text-base font-bold text-osu-pink hover:brightness-110"
+              >
+                <UsernameText username={snapshot.username} avatarUrl={snapshot.avatarUrl} />
+              </Link>
+              <div className="text-[12px] font-semibold tabular-nums text-osu-c1">{formatPp(snapshot.pp)}pp</div>
+              <div className="text-[11px] text-osu-f1">{peerBandRangeLabel(snapshot)}</div>
+            </div>
           </div>
         </div>
-        <div className="ml-auto">
-          <ChangeSubjectButton onPick={onPick} />
+
+        <div className="border-t border-osu-b3/20 px-4 py-4">
+          <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">potential pp gain</div>
+          <div className="mt-1 text-3xl font-black leading-none tabular-nums text-osu-pink">
+            +{formatPp(snapshot.totalPotentialPp)}
+            <span className="ml-1 text-base font-bold text-osu-pink/70">pp</span>
+          </div>
+          {mapCount > 0 ? (
+            <div className="mt-2 text-[11px] text-osu-f1">
+              across {formatPp(mapCount)} map{mapCount === 1 ? "" : "s"}
+              {biggest > 0 ? ` · biggest +${formatPp(biggest)}pp` : ""}
+            </div>
+          ) : null}
         </div>
       </div>
-      <div className="grid grid-cols-3 divide-x divide-osu-b3/20 border-t border-osu-b3/20">
-        <HeroStat label="potential pp" value={`+${formatPp(snapshot.totalPotentialPp)}`} accent />
-        <HeroStat label="farm maps" value={String(snapshot.recs.length)} />
-        <HeroStat label="biggest gain" value={`+${formatPp(maxGain(snapshot.recs))}`} accent />
-      </div>
-    </div>
+
+      <button
+        type="button"
+        onClick={onChangePlayer}
+        className="w-full rounded-xl border border-osu-b3/20 bg-osu-b4 px-3 py-2.5 text-xs font-medium text-osu-l2 transition-colors hover:bg-osu-b3"
+      >
+        change player
+      </button>
+    </aside>
   );
 }
 
@@ -365,20 +519,44 @@ function maxGain(recs: LiveFarmHelperRec[]): number {
   return recs.reduce((max, rec) => Math.max(max, rec.estimatedPpGain), 0);
 }
 
-function HeroStat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className="px-4 py-3 sm:px-5">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-osu-f1">{label}</div>
-      <div className={`mt-0.5 text-xl font-bold tabular-nums ${accent ? "text-osu-pink" : "text-osu-c1"}`}>{value}</div>
-    </div>
-  );
+function totalGain(recs: LiveFarmHelperRec[]): number {
+  return recs.reduce((sum, rec) => sum + Math.max(0, rec.estimatedPpGain), 0);
+}
+
+function peerBandCoverageLabel(snapshot: LiveFarmHelperSnapshot): string {
+  const { count, farmDataCount } = snapshot.peerBand;
+  if (count > 0 && farmDataCount > 0 && farmDataCount < count) {
+    return `farm data from ${formatPp(farmDataCount)} of ${formatPp(count)} nearby players`;
+  }
+  if (count > 0 && farmDataCount === 0) {
+    return `no farm data among ${formatPp(count)} nearby players`;
+  }
+  return `compared with ${formatPp(count)} nearby players`;
+}
+
+function peerBandRangeLabel(snapshot: LiveFarmHelperSnapshot): string {
+  const { count, minPp, maxPp } = snapshot.peerBand;
+  if (count <= 0 || minPp <= 0 || maxPp <= 0) return "no pp range";
+  if (Math.round(minPp) === Math.round(maxPp)) return `compared to ${formatCompactPp(minPp)} pp`;
+  return `compared to ${formatCompactPp(minPp)}-${formatCompactPp(maxPp)} pp`;
 }
 
 function ChangeSubjectButton({ onPick }: { onPick: (key: string) => void }) {
   const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
   if (open) {
     return (
-      <div className="w-full max-w-xs">
+      <div ref={ref} className="w-full">
         <SearchInput onSearch={searchPlayers} onSelect={(user) => onPick(user.username)} placeholder="search a player..." />
       </div>
     );
@@ -387,7 +565,7 @@ function ChangeSubjectButton({ onPick }: { onPick: (key: string) => void }) {
     <button
       type="button"
       onClick={() => setOpen(true)}
-      className="rounded-lg bg-osu-b3/60 px-3 py-2 text-xs font-medium text-osu-l2 transition-colors hover:bg-osu-b3"
+      className="w-full rounded-lg bg-osu-b3/60 px-3 py-2 text-xs font-medium text-osu-l2 transition-colors hover:bg-osu-b3"
     >
       change player
     </button>
@@ -395,53 +573,81 @@ function ChangeSubjectButton({ onPick }: { onPick: (key: string) => void }) {
 }
 
 function Filters({
-  keyMode,
   requestedKeyMode,
   onKeyMode,
   reasonFilter,
   onReason,
   sortMode,
+  sortDir,
   onSort,
   counts,
 }: {
-  keyMode: LiveFarmHelperKeyMode;
-  requestedKeyMode: LiveFarmHelperKeyMode | undefined;
-  onKeyMode: (next: LiveFarmHelperKeyMode | undefined) => void;
+  requestedKeyMode: LiveFarmHelperKeyMode;
+  onKeyMode: (next: LiveFarmHelperKeyMode) => void;
   reasonFilter: ReasonFilter;
   onReason: (next: ReasonFilter) => void;
   sortMode: SortMode;
+  sortDir: SortDirection;
   onSort: (next: SortMode) => void;
   counts: Record<ReasonFilter, number>;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
       <ChipGroup label="keys">
-        {(["4k", "7k", "any"] as const).map((mode) => (
-          <Chip key={mode} active={(requestedKeyMode ?? keyMode) === mode} onClick={() => onKeyMode(mode)}>
-            {mode}
-          </Chip>
-        ))}
+        <div className="flex overflow-hidden rounded-lg border border-osu-b3/30">
+          {(["any", "4k", "7k"] as const).map((mode) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => onKeyMode(mode)}
+              className={`px-2.5 py-1.5 text-[11px] font-medium uppercase tabular-nums transition-colors duration-[120ms] ${
+                requestedKeyMode === mode
+                  ? "bg-osu-b3 text-osu-l2"
+                  : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
+              }`}
+            >
+              {mode}
+            </button>
+          ))}
+        </div>
       </ChipGroup>
       <ChipGroup label="show">
-        {(["all", "missing", "improve", "stale"] as const).map((reason) => (
-          <Chip key={reason} active={reasonFilter === reason} onClick={() => onReason(reason)}>
-            {reason}
-            <span className={`ml-1 ${reasonFilter === reason ? "text-osu-b6/55" : "text-osu-f1"}`}>{counts[reason]}</span>
-          </Chip>
-        ))}
+        <SegmentedControl>
+          {(["all", "missing", "improve", "stale"] as const).map((reason) => (
+            <SegmentButton key={reason} active={reasonFilter === reason} onClick={() => onReason(reason)}>
+              {reason === "stale" ? "old" : reason}
+              <span className={`tabular-nums ${reasonFilter === reason ? "text-osu-pink-light/70" : "text-osu-f1/70"}`}>
+                {counts[reason]}
+              </span>
+            </SegmentButton>
+          ))}
+        </SegmentedControl>
       </ChipGroup>
       <ChipGroup label="sort">
-        {(
-          [
-            ["gain", "pp gain"],
-            ["popularity", "popularity"],
-            ["difficulty", "difficulty"],
-          ] as const
-        ).map(([value, label]) => (
-          <Chip key={value} active={sortMode === value} onClick={() => onSort(value)}>
-            {label}
-          </Chip>
-        ))}
+        <SegmentedControl>
+          {(
+            [
+              ["gain", "gain"],
+              ["popularity", "fit"],
+              ["players", "players"],
+              ["difficulty", "stars"],
+            ] as const
+          ).map(([value, label]) => (
+            <SegmentButton
+              key={value}
+              active={sortMode === value}
+              onClick={() => onSort(value)}
+              title={sortMode === value ? (sortDir === "desc" ? "Click to sort ascending" : "Click to sort descending") : undefined}
+            >
+              {label}
+              {sortMode === value ? (
+                <span aria-hidden className="text-[10px] leading-none opacity-90">
+                  {sortDir === "desc" ? "↓" : "↑"}
+                </span>
+              ) : null}
+            </SegmentButton>
+          ))}
+        </SegmentedControl>
       </ChipGroup>
     </div>
   );
@@ -449,20 +655,42 @@ function Filters({
 
 function ChipGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-osu-f1">{label}</span>
-      <div className="flex items-center gap-1.5">{children}</div>
+    <div className="flex items-center gap-1.5">
+      <span className="text-[9px] font-bold uppercase tracking-wider text-osu-f1/70">{label}</span>
+      <div className="flex items-center">{children}</div>
     </div>
   );
 }
 
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+function SegmentedControl({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex overflow-hidden rounded-lg border border-osu-b3/30 bg-osu-b4/50">
+      {children}
+    </div>
+  );
+}
+
+function SegmentButton({
+  active,
+  onClick,
+  title,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  title?: string;
+  children: ReactNode;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors ${
-        active ? "bg-osu-h1 text-osu-b6" : "bg-osu-b4 text-osu-l2 hover:bg-osu-b3"
+      aria-pressed={active}
+      title={title}
+      className={`inline-flex items-center gap-1 border-r border-osu-b3/25 px-2.5 py-1.5 text-[11px] font-medium transition-colors duration-[120ms] last:border-r-0 ${
+        active
+          ? "bg-osu-pink/15 text-osu-pink-light"
+          : "text-osu-f1 hover:bg-osu-b3/70 hover:text-osu-l2"
       }`}
     >
       {children}
@@ -472,100 +700,101 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
 
 function RecRow({
   rec,
-  rank,
-  index,
   onShowFarmers,
 }: {
   rec: LiveFarmHelperRec;
-  rank: number;
-  index: number;
   onShowFarmers: () => void;
 }) {
   const meta = REASON_META[rec.reason];
   const bar = comparisonBar(rec);
+  const fit = confidence(rec);
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.15, delay: Math.min(index, 12) * 0.02 }}
-      className="relative overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4 transition-colors hover:bg-osu-b3/40"
-    >
+    <div className="relative bg-osu-b4 transition-colors hover:bg-osu-b3/35">
       <span className={`absolute inset-y-0 left-0 w-[3px] ${meta.accent}`} />
-      <div className="flex gap-3 p-3 pl-4 sm:gap-4 sm:p-3.5 sm:pl-5">
+      <div className="grid gap-3 p-2.5 pl-4 md:grid-cols-[56px_minmax(0,1fr)_118px] md:items-center md:gap-3.5 md:p-3 md:pl-5">
         <a
           href={rec.mapUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="relative h-14 w-20 shrink-0 overflow-hidden rounded-lg bg-osu-b6 sm:h-16 sm:w-28"
+          className="h-14 w-full overflow-hidden rounded-md bg-osu-b6 md:h-[56px]"
         >
           {rec.cover ? <img src={rec.cover} alt="" loading="lazy" className="h-full w-full object-cover" /> : null}
-          <span className="absolute left-1 top-1 rounded bg-black/55 px-1 text-[10px] font-bold tabular-nums text-white">
-            #{rank}
-          </span>
         </a>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className={`text-[10px] font-bold uppercase tracking-wider ${meta.text}`}>{meta.label}</span>
-                <span className="rounded bg-osu-b6/70 px-1.5 py-0.5 text-[10px] font-bold text-osu-l2">{rec.keys}K</span>
-                <span className="text-[11px] font-semibold tabular-nums text-osu-yellow">{rec.stars.toFixed(2)}★</span>
-              </div>
-              <a
-                href={rec.mapUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-1 block truncate text-sm font-semibold text-osu-c1 hover:text-osu-pink"
-              >
-                {rec.title}
-                <span className="font-normal text-osu-f1"> [{rec.version}]</span>
-              </a>
-              <div className="truncate text-[12px] text-osu-f1">
-                {rec.artist} · mapped by {rec.creator}
-                {rec.bpm ? ` · ${Math.round(rec.bpm)} bpm` : ""}
-                {rec.lengthSec ? ` · ${formatLength(rec.lengthSec)}` : ""}
-              </div>
-            </div>
-            <div className="shrink-0 text-right">
-              <div className="text-lg font-bold leading-none tabular-nums text-osu-pink sm:text-xl">
-                +{formatPp(rec.estimatedPpGain)}
-                <span className="text-xs font-semibold text-osu-pink/70">pp</span>
-              </div>
-              <div className="mt-1 text-[10px] text-osu-f1">est. gain</div>
-            </div>
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center justify-start gap-1.5">
+            <a
+              href={rec.mapUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="min-w-0 max-w-full truncate text-[14px] font-bold text-osu-c1 hover:text-osu-pink"
+            >
+              {rec.title}
+              <span className="font-medium text-osu-f1"> [{rec.version}]</span>
+            </a>
+            <ModList mods={rec.recommendedMods ?? []} size={0.62} className="max-w-[120px]" />
+          </div>
+          <div className="flex flex-wrap items-center gap-x-2 text-[11px] leading-tight">
+            <span className={`font-bold uppercase tracking-wide ${meta.text}`}>{farmStatusLabel(rec)}</span>
+            <span className="tabular-nums text-osu-yellow">★{rec.stars.toFixed(2)}</span>
+            <span className="tabular-nums text-osu-green-light">{fit}% fit</span>
+            <span className="min-w-0 truncate text-osu-f1">
+              {rec.artist} · {rec.creator}
+              {rec.bpm ? ` · ${Math.round(rec.bpm)} bpm` : ""}
+              {rec.lengthSec ? ` · ${formatLength(rec.lengthSec)}` : ""}
+            </span>
           </div>
 
-          <div className="mt-2.5 max-w-md">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-osu-l2">{bar.left}</span>
-              <span className="text-osu-f1">{bar.right}</span>
+          <div className="mt-1.5 flex items-end gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2 text-[11px]">
+                <span className="truncate text-osu-l2">{bar.left}</span>
+                <span className="shrink-0 text-osu-f1">{bar.right}</span>
+              </div>
+              <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-osu-b6">
+                <div className={`h-full rounded-full ${meta.accent}`} style={{ width: `${bar.pct}%` }} />
+              </div>
             </div>
-            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-osu-b6">
-              <div className={`h-full rounded-full ${meta.accent}`} style={{ width: `${bar.pct}%` }} />
-            </div>
+            <PeerList rec={rec} onShowFarmers={onShowFarmers} />
           </div>
+        </div>
 
-          <PeerList rec={rec} onShowFarmers={onShowFarmers} />
+        <div className="flex items-center justify-between gap-2 md:flex-col md:items-end md:justify-center md:gap-1.5">
+          <div className="md:text-right">
+            <div className="text-xl font-black leading-none tabular-nums text-osu-pink">
+              +{formatPp(rec.estimatedPpGain)}
+              <span className="text-xs font-bold text-osu-pink/70">pp</span>
+            </div>
+            <div className="mt-1 text-[10px] text-osu-f1">{formatPp(rec.benchmarkPp)}pp benchmark</div>
+          </div>
+          <a
+            href={rec.mapUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-osu-b6/70 text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-osu-c1"
+            aria-label="Open map"
+            title="Open map"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
 function PeerList({ rec, onShowFarmers }: { rec: LiveFarmHelperRec; onShowFarmers: () => void }) {
   const shown = rec.topPeers.slice(0, 3);
   if (shown.length === 0) return null;
-  const overflow = rec.peerCount - shown.length;
-  const names = shown.map((peer) => peer.username || `#${peer.userId}`).join(", ");
+  const overflow = Math.max(0, rec.peerCount - shown.length);
   return (
     <button
       type="button"
       onClick={onShowFarmers}
-      className="group/farmers mt-2.5 -ml-1.5 flex items-center gap-2 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-osu-b3/50"
+      className="group/farmers flex items-center gap-1.5 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-osu-b3/50"
       title="See everyone who farmed this"
     >
-      <span className="shrink-0 text-[11px] text-osu-f1">farmed by</span>
+      <Users className="h-3.5 w-3.5 shrink-0 text-osu-f1" />
       <div className="flex shrink-0 -space-x-1.5">
         {shown.map((peer) => (
           <span key={peer.userId} className="inline-flex rounded-full ring-2 ring-osu-b4">
@@ -573,25 +802,93 @@ function PeerList({ rec, onShowFarmers }: { rec: LiveFarmHelperRec; onShowFarmer
           </span>
         ))}
       </div>
-      <span className="min-w-0 truncate text-[11px] font-medium text-osu-l2">
-        {names}
-        {overflow > 0 ? <span className="text-osu-f1"> +{overflow} more</span> : null}
-      </span>
-      <span className="ml-0.5 shrink-0 text-[11px] font-semibold text-osu-pink/80 group-hover/farmers:text-osu-pink">
-        view &rsaquo;
+      <span className="shrink-0 text-[11px] font-semibold text-osu-l2">
+        {rec.peerCount}
+        {overflow > 0 ? <span className="text-osu-f1"> players</span> : null}
       </span>
     </button>
   );
 }
 
+function farmStatusLabel(rec: LiveFarmHelperRec): string {
+  if (rec.reason === "missing") return rec.peerFraction >= 0.45 ? "common pick" : "missing";
+  if (rec.reason === "stale") return "old pb";
+  if (rec.estimatedPpGain >= 70) return "large gap";
+  return "improve";
+}
+
+function confidence(rec: LiveFarmHelperRec): number {
+  const peerScore = clampPct(rec.peerFraction * 100);
+  const reasonBoost = rec.reason === "missing" ? 14 : rec.reason === "improve" ? 7 : 0;
+  const difficultyPenalty = Math.max(0, rec.stars - 6) * 5;
+  return Math.round(clampPct(peerScore + reasonBoost - difficultyPenalty));
+}
+
 function LoadingState() {
   return (
-    <div className="space-y-4">
-      <Skeleton className="h-[120px] w-full rounded-xl" />
-      <div className="space-y-2">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-28 w-full rounded-xl" />
-        ))}
+    <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+      <aside className="space-y-3">
+        <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
+          <div className="flex items-center gap-3 p-4">
+            <Skeleton className="h-[52px] w-[52px] shrink-0 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-3 w-14" />
+              <Skeleton className="h-2.5 w-20" />
+            </div>
+          </div>
+          <div className="space-y-2 border-t border-osu-b3/20 px-4 py-4">
+            <Skeleton className="h-2.5 w-24" />
+            <Skeleton className="h-7 w-28" />
+            <Skeleton className="h-2.5 w-36" />
+          </div>
+        </div>
+        <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-3">
+          <Skeleton className="h-8 w-full rounded-lg" />
+        </div>
+      </aside>
+
+      <div className="min-w-0">
+        <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
+          <div className="flex items-center justify-between gap-3 border-b border-osu-b3/20 px-4 py-3">
+            <div className="space-y-1.5">
+              <Skeleton className="h-2.5 w-20" />
+              <Skeleton className="h-4 w-44" />
+            </div>
+            <div className="hidden gap-1.5 sm:flex">
+              <Skeleton className="h-7 w-28 rounded-lg" />
+              <Skeleton className="h-7 w-44 rounded-lg" />
+            </div>
+          </div>
+          <div className="divide-y divide-osu-b3/20">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <RecRowSkeleton key={i} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RecRowSkeleton() {
+  return (
+    <div className="grid gap-3 p-2.5 pl-4 md:grid-cols-[56px_minmax(0,1fr)_118px] md:items-center md:gap-3.5 md:p-3 md:pl-5">
+      <Skeleton className="h-14 w-full rounded-md md:h-[56px]" />
+      <div className="min-w-0 space-y-2">
+        <Skeleton className="h-3.5 w-2/3" />
+        <Skeleton className="h-3 w-1/2" />
+        <div className="flex items-center gap-3 pt-0.5">
+          <Skeleton className="h-1 flex-1 rounded-full" />
+          <Skeleton className="h-4 w-16 rounded" />
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-2 md:flex-col md:items-end md:gap-1.5">
+        <div className="space-y-1.5 md:flex md:flex-col md:items-end">
+          <Skeleton className="h-5 w-14" />
+          <Skeleton className="h-2.5 w-20" />
+        </div>
+        <Skeleton className="h-7 w-7 rounded-lg" />
       </div>
     </div>
   );
@@ -633,35 +930,40 @@ function FarmersModal({
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState("");
+  const [scrollLocked, setScrollLocked] = useState(false);
   const beatmapId = rec?.beatmapId ?? null;
+  const speedBucket = rec?.speedBucket;
 
   useEffect(() => {
     if (!open || beatmapId == null || !userKey) return;
     let cancelled = false;
+    const controller = new AbortController();
     setLoading(true);
     setFailed(false);
     setFarmers([]);
     setTotal(0);
     setQuery("");
-    fetchLiveFarmHelperFarmers(userKey, beatmapId)
+    fetchLiveFarmHelperFarmers(userKey, beatmapId, speedBucket, { signal: controller.signal })
       .then((data) => {
         if (cancelled) return;
         setFarmers(data.farmers);
         setTotal(data.total);
       })
       .catch(() => {
-        if (!cancelled) setFailed(true);
+        if (!cancelled && !controller.signal.aborted) setFailed(true);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [open, beatmapId, userKey]);
+  }, [open, beatmapId, speedBucket, userKey]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
+    setScrollLocked(true);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -670,20 +972,27 @@ function FarmersModal({
   }, [open, onClose]);
 
   useLayoutEffect(() => {
-    if (!open) return;
+    if (!scrollLocked) return;
     const prevOverflow = document.body.style.overflow;
     const prevPad = document.body.style.paddingRight;
+    const prevScrollbarCompensation = document.documentElement.style.getPropertyValue("--modal-scrollbar-compensation");
     const scrollbar = window.innerWidth - document.documentElement.clientWidth;
     document.body.style.overflow = "hidden";
     if (scrollbar > 0) {
       const current = parseFloat(window.getComputedStyle(document.body).paddingRight) || 0;
       document.body.style.paddingRight = `${current + scrollbar}px`;
+      document.documentElement.style.setProperty("--modal-scrollbar-compensation", `${scrollbar}px`);
     }
     return () => {
       document.body.style.overflow = prevOverflow;
       document.body.style.paddingRight = prevPad;
+      if (prevScrollbarCompensation) {
+        document.documentElement.style.setProperty("--modal-scrollbar-compensation", prevScrollbarCompensation);
+      } else {
+        document.documentElement.style.removeProperty("--modal-scrollbar-compensation");
+      }
     };
-  }, [open]);
+  }, [scrollLocked]);
 
   if (typeof document === "undefined") return null;
 
@@ -691,10 +1000,10 @@ function FarmersModal({
   const visible = q ? farmers.filter((f) => f.username.toLowerCase().includes(q)) : farmers;
 
   return createPortal(
-    <AnimatePresence>
+    <AnimatePresence onExitComplete={() => setScrollLocked(false)}>
       {open && rec ? (
         <motion.div
-          className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-6"
+          className="fixed inset-0 z-[120] flex items-center justify-center py-3 pl-3 pr-[calc(0.75rem+var(--modal-scrollbar-compensation,0px))] sm:py-6 sm:pl-6 sm:pr-[calc(1.5rem+var(--modal-scrollbar-compensation,0px))]"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -702,13 +1011,13 @@ function FarmersModal({
         >
           <div className="absolute inset-0 bg-black/80" onClick={onClose} />
           <motion.div
-            className="relative z-10 flex max-h-[calc(100vh-1.5rem)] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-osu-b5 shadow-2xl ring-1 ring-white/10 sm:max-h-[calc(100vh-3rem)]"
+            className="relative z-10 flex h-[min(34rem,calc(100vh-1.5rem))] w-full max-w-[360px] flex-col overflow-hidden rounded-xl bg-osu-b5 shadow-2xl ring-1 ring-white/10 sm:h-[min(34rem,calc(100vh-3rem))]"
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.12, ease: "easeOut" }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="relative shrink-0 overflow-hidden border-b border-osu-b3/30 p-4">
+            <div className="relative shrink-0 overflow-hidden border-b border-osu-b3/30 px-3 py-3">
               {rec.cover ? (
                 <div
                   className="absolute inset-0 bg-cover bg-center opacity-[0.12]"
@@ -719,7 +1028,7 @@ function FarmersModal({
               <div className="relative flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-osu-f1">who farms this</div>
-                  <div className="mt-0.5 truncate text-sm font-bold text-osu-c1">{rec.title}</div>
+                  <div className="mt-0.5 truncate text-[13px] font-bold text-osu-c1">{rec.title}</div>
                   <div className="truncate text-[11px] text-osu-f1">
                     [{rec.version}] · {rec.keys}K · {rec.stars.toFixed(2)}★
                   </div>
@@ -727,7 +1036,7 @@ function FarmersModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="shrink-0 rounded-lg bg-osu-b3/60 px-2 py-1 text-xs text-osu-l2 transition-colors hover:bg-osu-b3"
+                  className="shrink-0 rounded-lg bg-osu-b3/60 px-2 py-1 text-[11px] text-osu-l2 transition-colors hover:bg-osu-b3"
                   aria-label="Close"
                 >
                   ✕
@@ -735,57 +1044,62 @@ function FarmersModal({
               </div>
             </div>
 
-            {total > 8 ? (
-              <div className="shrink-0 px-4 pt-3">
+            <div className="h-[42px] shrink-0 px-3 pt-2.5">
+              {loading || total > 8 ? (
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="search player..."
-                  className="w-full rounded-lg border border-osu-b3/40 bg-osu-b4 px-3 py-1.5 text-[12px] text-osu-c1 placeholder:text-osu-f1 transition-colors focus:border-osu-h1/40 focus:outline-none"
+                  disabled={loading}
+                  className="w-full rounded-lg border border-osu-b3/40 bg-osu-b4 px-3 py-1.5 text-[11px] text-osu-c1 placeholder:text-osu-f1 transition-colors focus:border-osu-h1/40 focus:outline-none"
                 />
-              </div>
-            ) : null}
+              ) : null}
+            </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
               {loading ? (
                 <div className="space-y-1.5">
-                  {Array.from({ length: 8 }).map((_, i) => (
-                    <Skeleton key={i} className="h-10 rounded-lg" />
+                  {Array.from({ length: 7 }).map((_, i) => (
+                    <Skeleton key={i} className="h-9 rounded-lg" />
                   ))}
                 </div>
               ) : failed ? (
                 <div className="py-10 text-center text-sm text-osu-f1">Couldn't load the farmer list. Try again.</div>
               ) : visible.length === 0 ? (
                 <div className="py-10 text-center text-sm text-osu-f1">
-                  {q ? "No players match." : "No rivals have farmed this yet."}
+                  {q ? "No players match." : "No nearby players have farmed this yet."}
                 </div>
               ) : (
                 <div className="space-y-1">
-                  {visible.map((farmer) => (
-                    <Link
-                      key={farmer.userId}
-                      to="/player/$username"
-                      params={{ username: farmer.username || String(farmer.userId) }}
-                      className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-osu-b3/50"
-                    >
-                      <span className="w-6 shrink-0 text-right text-[11px] font-semibold tabular-nums text-osu-f1">
-                        #{farmers.indexOf(farmer) + 1}
-                      </span>
-                      <Avatar url={farmer.avatarUrl} userId={farmer.userId} size={28} />
-                      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-osu-c1">
-                        {farmer.username || `#${farmer.userId}`}
-                      </span>
-                      <span className="shrink-0 text-[12px] font-semibold tabular-nums text-osu-l2">{formatPp(farmer.pp)}pp</span>
-                    </Link>
-                  ))}
+                  {visible.map((farmer) => {
+                    const rank = farmers.findIndex((candidate) => candidate.userId === farmer.userId) + 1;
+                    return (
+                      <Link
+                        key={farmer.userId}
+                        to="/player/$username"
+                        params={{ username: farmer.username || String(farmer.userId) }}
+                        className="flex items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-osu-b3/50"
+                      >
+                        <span className="w-6 shrink-0 text-right text-[11px] font-semibold tabular-nums text-osu-f1">
+                          #{rank}
+                        </span>
+                        <Avatar url={farmer.avatarUrl} userId={farmer.userId} size={24} />
+                        <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-osu-c1">
+                          {farmer.username || `#${farmer.userId}`}
+                        </span>
+                        <ModList mods={farmer.mods ?? []} className="max-w-[112px]" />
+                        <span className="shrink-0 text-[11px] font-semibold tabular-nums text-osu-l2">{formatPp(farmer.pp)}pp</span>
+                      </Link>
+                    );
+                  })}
                 </div>
               )}
             </div>
 
-            <div className="shrink-0 border-t border-osu-b3/30 px-4 py-2 text-[11px] text-osu-f1">
+            <div className="shrink-0 border-t border-osu-b3/30 px-3 py-2 text-[10px] text-osu-f1">
               {loading
                 ? "loading..."
-                : `${formatPp(total)} rival${total === 1 ? "" : "s"} farmed this${
+                : `${formatPp(total)} player${total === 1 ? "" : "s"} farmed this${
                     farmers.length < total ? ` · showing top ${farmers.length}` : ""
                   }`}
             </div>
@@ -797,11 +1111,22 @@ function FarmersModal({
   );
 }
 
+function ModList({ mods, size = 0.58, className = "" }: { mods: string[]; size?: number; className?: string }) {
+  if (mods.length === 0) return null;
+  return (
+    <div className={`flex shrink-0 items-center justify-end gap-0.5 overflow-hidden ${className}`}>
+      {mods.map((mod) => (
+        <ModBadge key={mod} mod={mod} size={size} />
+      ))}
+    </div>
+  );
+}
+
 function comparisonBar(rec: LiveFarmHelperRec): { left: string; right: string; pct: number } {
   if (rec.reason === "missing") {
     const pct = Math.round(rec.peerFraction * 100);
     return {
-      left: `${pct}% of rivals farm this`,
+      left: `${pct}% of sampled nearby players farm this`,
       right: `they hit ${formatPp(rec.peerPpMedian)}pp`,
       pct: clampPct(pct),
     };
@@ -812,13 +1137,13 @@ function comparisonBar(rec: LiveFarmHelperRec): { left: string; right: string; p
   if (rec.reason === "stale") {
     return {
       left: `your ${formatPp(subjectPp)}pp · ${formatAge(rec.subjectPlayedAt)} old`,
-      right: `rivals reach ${formatPp(target)}pp`,
+      right: `sample reaches ${formatPp(target)}pp`,
       pct,
     };
   }
   return {
     left: `your ${formatPp(subjectPp)}pp`,
-    right: `rivals hit ${formatPp(target)}pp`,
+    right: `sample hits ${formatPp(target)}pp`,
     pct,
   };
 }
@@ -836,6 +1161,11 @@ function countReasons(recs: LiveFarmHelperRec[]): Record<ReasonFilter, number> {
 
 function formatPp(value: number): string {
   return Math.round(value).toLocaleString("en-US");
+}
+
+function formatCompactPp(value: number): string {
+  if (value >= 1000) return `${(value / 1000).toFixed(value >= 10_000 ? 1 : 2).replace(/\.0+$/, "")}k`;
+  return formatPp(value);
 }
 
 function formatLength(seconds: number): string {

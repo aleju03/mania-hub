@@ -49,6 +49,9 @@ create index if not exists idx_country_rank_snapshots_lookup
 create index if not exists idx_country_rank_snapshots_captured
   on country_rank_snapshots(captured_at);
 
+create index if not exists idx_users_pp
+  on users(pp);
+
 create table if not exists country_registry (
   country text primary key,
   status text not null default 'warm',
@@ -246,6 +249,16 @@ create table if not exists country_maps_farmed_scores (
   primary key (country, user_id, beatmap_id)
 );
 
+create table if not exists farm_helper_user_key_stats (
+  key_count integer not null,
+  user_id integer not null,
+  weighted_pp real not null,
+  score_count integer not null,
+  source_updated_at text not null,
+  updated_at text not null,
+  primary key (key_count, user_id)
+);
+
 create table if not exists replay_video_exports (
   id text primary key,
   score_id integer,
@@ -344,6 +357,9 @@ create index if not exists idx_maps_beatmaps_beatmapset on maps_beatmaps(beatmap
 create index if not exists idx_country_maps_farmed_scores_country_updated on country_maps_farmed_scores(country, updated_at desc);
 create index if not exists idx_country_maps_farmed_scores_country_beatmap on country_maps_farmed_scores(country, beatmap_id);
 create index if not exists idx_country_maps_farmed_scores_user on country_maps_farmed_scores(user_id, beatmap_id, pp);
+create index if not exists idx_country_maps_farmed_scores_beatmap_user on country_maps_farmed_scores(beatmap_id, user_id, pp desc);
+create index if not exists idx_farm_helper_user_key_stats_weighted on farm_helper_user_key_stats(key_count, weighted_pp);
+create index if not exists idx_farm_helper_user_key_stats_user on farm_helper_user_key_stats(user_id);
 create index if not exists idx_replay_video_exports_status_time on replay_video_exports(status, updated_at desc);
 create index if not exists idx_dan_estimates_updated on dan_estimates(updated_at desc);
 create index if not exists idx_jobs_ready on jobs(status, run_after, priority desc);

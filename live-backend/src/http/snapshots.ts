@@ -7,12 +7,13 @@ import type { Db } from "../db.js";
 import { dbHealth, exec, parseJson } from "../db.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
 import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, type FarmHelperKeyMode } from "../features/farm-helper.js";
+import type { ScoreSpeedBucket } from "../shared/score.js";
 import { getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
 import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery } from "../features/maps.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
-import { getTopPlaysSnapshot } from "../features/top-plays.js";
+import { getTopPlaysSnapshot, type TopPlaysSnapshotOptions } from "../features/top-plays.js";
 import { getTrackerSnapshot } from "../features/tracker.js";
 import { type AbuseBucket, type AbuseGuard, normalizeCountryParam, type RateLimitResult } from "./abuse-guard.js";
 import type { JobQueue } from "../jobs/queue.js";
@@ -198,7 +199,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   }
   if (url.pathname === "/api/snapshots/top-plays") {
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
-    sendJson(req, res, ctx, 200, await getTopPlaysSnapshot(ctx.db, country, url.searchParams.get("window") ?? "7d"));
+    sendJson(req, res, ctx, 200, await getTopPlaysSnapshot(ctx.db, country, url.searchParams.get("window") ?? "7d", parseTopPlaysSnapshotQuery(url.searchParams)));
     return true;
   }
   if (url.pathname === "/api/snapshots/snipes") {
@@ -286,7 +287,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     if (!checkRate(req, res, ctx, "publicCostly")) return true;
     try {
-      const result = await getFarmHelperFarmers(ctx.db, ctx.osu, userKey, beatmapId);
+      const result = await getFarmHelperFarmers(ctx.db, ctx.osu, userKey, beatmapId, parseFarmHelperSpeedBucket(url.searchParams.get("speed")));
       res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
       sendJson(req, res, ctx, 200, result);
     } catch (error) {
@@ -643,6 +644,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       "top_play_events",
       "snipe_events",
       "country_maps_snapshots",
+      "farm_helper_user_key_stats",
       "replay_video_exports",
       "dan_estimates",
       "live_event_log",
@@ -1264,6 +1266,20 @@ function parseMapsPlayersKind(raw: string | null): MapsPlayersKind | null {
 
 function parseFarmHelperKeyMode(raw: string | null): FarmHelperKeyMode | undefined {
   return raw === "4k" || raw === "7k" || raw === "any" ? raw : undefined;
+}
+
+function parseFarmHelperSpeedBucket(raw: string | null): ScoreSpeedBucket | undefined {
+  return raw === "ht" || raw === "normal" || raw === "dt" ? raw : undefined;
+}
+
+function parseTopPlaysSnapshotQuery(params: URLSearchParams): TopPlaysSnapshotOptions {
+  const rawSort = params.get("sort");
+  const rawKeys = params.get("keys");
+  return {
+    sort: rawSort === "recent" || rawSort === "pp" || rawSort === "gain" ? rawSort : undefined,
+    dir: params.get("dir") === "asc" ? "asc" : "desc",
+    keys: rawKeys === "4k" || rawKeys === "other" ? rawKeys : "all",
+  };
 }
 
 function parseGlobalRankingsQuery(params: URLSearchParams): {

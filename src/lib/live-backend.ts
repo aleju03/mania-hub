@@ -50,6 +50,10 @@ export interface LiveTopPlaysSnapshot {
   window: "24h" | "3d" | "7d" | "30d";
 }
 
+export type LiveTopPlaysSort = "recent" | "pp" | "gain";
+export type LiveTopPlaysDirection = "asc" | "desc";
+export type LiveTopPlaysKeyFilter = "all" | "4k" | "other";
+
 export interface LiveSnipesSnapshot {
   events: SnipeEvent[];
   scannedAt: number;
@@ -318,7 +322,7 @@ export interface LiveBackendBootstrap {
   countryFeatures: LiveCountryFeaturesSnapshot | null;
 }
 
-const LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS = 15_000;
+const LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS = 30_000;
 const LIVE_BACKEND_BOOTSTRAP_TIMEOUT_MS = 1_000;
 
 export const fetchLiveBackendBootstrap = createServerFn({ method: "GET" })
@@ -432,6 +436,7 @@ export async function fetchLiveTrackerSnapshot(country: string, limit = 100, opt
 
 export type LiveFarmHelperReason = "missing" | "improve" | "stale";
 export type LiveFarmHelperKeyMode = "4k" | "7k" | "any";
+export type LiveFarmHelperSpeedBucket = "ht" | "normal" | "dt";
 
 export interface LiveFarmHelperPeer {
   userId: number;
@@ -442,6 +447,8 @@ export interface LiveFarmHelperPeer {
 
 export interface LiveFarmHelperRec {
   beatmapId: number;
+  speedBucket: LiveFarmHelperSpeedBucket;
+  recommendedMods?: string[];
   beatmapsetId: number;
   title: string;
   artist: string;
@@ -459,6 +466,7 @@ export interface LiveFarmHelperRec {
   subjectPp: number | null;
   subjectPlayedAt: string | null;
   peerCount: number;
+  peerSampleSize: number;
   peerFraction: number;
   peerPpMedian: number;
   peerPpP75: number;
@@ -473,9 +481,10 @@ export interface LiveFarmHelperSnapshot {
   userId: number;
   username: string;
   avatarUrl: string;
+  coverUrl: string;
   pp: number;
   keyMode: LiveFarmHelperKeyMode;
-  peerBand: { mode: string; count: number; minPp: number; maxPp: number };
+  peerBand: { mode: string; count: number; farmDataCount: number; minPp: number; maxPp: number };
   totalPotentialPp: number;
   recs: LiveFarmHelperRec[];
   generatedAt: string;
@@ -483,12 +492,12 @@ export interface LiveFarmHelperSnapshot {
 
 export async function fetchLiveFarmHelperSnapshot(
   userKey: string,
-  params?: { keyMode?: LiveFarmHelperKeyMode; limit?: number },
+  params?: { keyMode?: LiveFarmHelperKeyMode; limit?: number; signal?: AbortSignal },
 ): Promise<LiveFarmHelperSnapshot> {
   const query = new URLSearchParams({ user: userKey });
   if (params?.keyMode) query.set("key", params.keyMode);
   if (params?.limit != null) query.set("limit", String(params.limit));
-  return fetchLiveJson(`/api/snapshots/farm-helper?${query.toString()}`);
+  return fetchLiveJson(`/api/snapshots/farm-helper?${query.toString()}`, params?.signal ? { signal: params.signal } : undefined);
 }
 
 export interface LiveFarmHelperFarmer {
@@ -496,6 +505,7 @@ export interface LiveFarmHelperFarmer {
   username: string;
   avatarUrl: string;
   pp: number;
+  mods?: string[];
 }
 
 export interface LiveFarmHelperFarmers {
@@ -504,9 +514,15 @@ export interface LiveFarmHelperFarmers {
   farmers: LiveFarmHelperFarmer[];
 }
 
-export async function fetchLiveFarmHelperFarmers(userKey: string, beatmapId: number): Promise<LiveFarmHelperFarmers> {
+export async function fetchLiveFarmHelperFarmers(
+  userKey: string,
+  beatmapId: number,
+  speedBucket?: LiveFarmHelperSpeedBucket,
+  options?: { signal?: AbortSignal },
+): Promise<LiveFarmHelperFarmers> {
   const query = new URLSearchParams({ user: userKey, beatmap: String(beatmapId) });
-  return fetchLiveJson(`/api/snapshots/farm-helper-farmers?${query.toString()}`);
+  if (speedBucket) query.set("speed", speedBucket);
+  return fetchLiveJson(`/api/snapshots/farm-helper-farmers?${query.toString()}`, options?.signal ? { signal: options.signal } : undefined);
 }
 
 export interface LiveCountryActivation {
@@ -549,9 +565,21 @@ export async function activateLiveCountry(country: string): Promise<LiveCountryA
   }
 }
 
-export async function fetchLiveTopPlaysSnapshot(country: string, window: LiveTopPlaysSnapshot["window"], options?: { observe?: boolean }): Promise<LiveTopPlaysSnapshot> {
+export async function fetchLiveTopPlaysSnapshot(
+  country: string,
+  window: LiveTopPlaysSnapshot["window"],
+  options?: {
+    observe?: boolean;
+    sort?: LiveTopPlaysSort;
+    dir?: LiveTopPlaysDirection;
+    keys?: LiveTopPlaysKeyFilter;
+  },
+): Promise<LiveTopPlaysSnapshot> {
   const query = new URLSearchParams({ country, window });
   if (options?.observe) query.set("observe", "1");
+  if (options?.sort) query.set("sort", options.sort);
+  if (options?.dir) query.set("dir", options.dir);
+  if (options?.keys) query.set("keys", options.keys);
   return fetchLiveJson(`/api/snapshots/top-plays?${query.toString()}`);
 }
 

@@ -7,6 +7,7 @@ import type { JobQueue } from "../jobs/queue.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { getModAcronyms, getScoreIdentity, getScoreTimestamp, nowIso } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
+import { refreshFarmHelperKeyStatsForUser } from "./farm-helper-key-stats.js";
 
 const MAPS_REFRESH_PRIORITY = 20;
 const MAPS_FARMED_REFRESH_PRIORITY = 35;
@@ -2127,10 +2128,10 @@ export async function refreshUserMapsFarmedScores(
     return { country, userId: payload.userId, scoreCount: 0, updatedAt };
   }
   const updatedAt = nowIso();
-  await updateUserMapsFarmedThreshold(db, payload.userId, bestScores, updatedAt);
+  const rows = buildMapsFarmedOverlayRows(country, bestScores, updatedAt, payload.userId);
   await persistMapsFarmedScoreDisplayMetadata(db, bestScores, updatedAt);
-  const rows = buildMapsFarmedOverlayRows(country, bestScores, updatedAt);
   await replaceUserMapsFarmedOverlay(db, country, payload.userId, rows, updatedAt);
+  await updateUserMapsFarmedThreshold(db, payload.userId, bestScores, updatedAt);
   return { country, userId: payload.userId, scoreCount: rows.length, updatedAt };
 }
 
@@ -2175,6 +2176,7 @@ export async function recordMapsFarmedScore(
     ],
   );
   if (Number(result.rowsAffected ?? 0) === 0) return null;
+  await refreshFarmHelperKeyStatsForUser(db, row.userId, updatedAt);
   await touchMapsFarmedOverlay(db, row.country, updatedAt);
   return { country: row.country, userId: row.userId, beatmapId: row.beatmapId, updatedAt };
 }
@@ -2460,10 +2462,12 @@ interface MapsFarmedOverlayWriteRow {
   updatedAt: string;
 }
 
-function buildMapsFarmedOverlayRows(country: string, scores: OscScore[], updatedAt: string): MapsFarmedOverlayWriteRow[] {
+function buildMapsFarmedOverlayRows(country: string, scores: OscScore[], updatedAt: string, fallbackUserId?: number): MapsFarmedOverlayWriteRow[] {
   const rows = new Map<string, MapsFarmedOverlayWriteRow>();
   for (const score of scores) {
     if (!isPotentialFarmedScore(score)) continue;
+    const userId = Number(score.user_id ?? score.user?.id ?? fallbackUserId);
+    if (!Number.isSafeInteger(userId) || userId <= 0) continue;
     const beatmapId = Number(score.beatmap_id ?? score.beatmap?.id);
     if (!Number.isFinite(beatmapId) || beatmapId <= 0) continue;
     const scoreId = getMapsFarmedDisplayScoreId(score);
@@ -2471,10 +2475,10 @@ function buildMapsFarmedOverlayRows(country: string, scores: OscScore[], updated
     const pp = Number(score.pp);
     const detectedAt = getScoreTimestamp(score) || updatedAt;
     const playedAt = getScoreTimestamp(score) || null;
-    const key = `${country}:${score.user_id}:${beatmapId}`;
+    const key = `${country}:${userId}:${beatmapId}`;
     const candidate = {
       country,
-      userId: score.user_id,
+      userId,
       beatmapId,
       scoreId,
       pp,
@@ -2532,6 +2536,7 @@ async function replaceUserMapsFarmedOverlay(
     );
   }
   if (rows.length > 0 || Number(deleted.rowsAffected ?? 0) > 0) {
+    await refreshFarmHelperKeyStatsForUser(db, userId, updatedAt);
     await touchMapsFarmedOverlay(db, country, updatedAt);
   }
 }

@@ -156,6 +156,7 @@ function PopOffsPage() {
   const hasRestoredRememberedRangeRef = useRef(false);
   const sawRefreshActivityRef = useRef(false);
   const finalizingRefreshRef = useRef(false);
+  const fetchedLiveSnapshotKeysRef = useRef(new Set<string>());
   // Read inside fetchAll to skip a re-entry when setCachedPopoffs's store update
   // makes the cache look fresh again mid-scan and would otherwise reset the spinner.
   const refreshingRef = useRef(false);
@@ -276,13 +277,14 @@ function PopOffsPage() {
 
   useEffect(() => {
     if (!liveBackendEnabled) return;
-    const snapshotKey = `${selectedCountry}:${range}:${popoffsFetchedAt ?? "none"}:${popoffsWindow ?? "none"}`;
-    if (!shouldRefreshTopPlays({
+    const snapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}`;
+    const cacheNeedsRefresh = shouldRefreshTopPlays({
       fetchedAt: popoffsFetchedAt,
       cachedWindow: popoffsWindow,
       selectedRange: range,
       cacheTtlMs: CLIENT_CACHE_TTL.popoffs,
-    })) {
+    });
+    if (!cacheNeedsRefresh && fetchedLiveSnapshotKeysRef.current.has(snapshotKey)) {
       setLoading(false);
       setRefreshing(false);
       setScanStartedAt(null);
@@ -297,13 +299,14 @@ function PopOffsPage() {
     setRefreshing(hasVisibleCache);
     setScanStartedAt(null);
 
-    fetchLiveTopPlaysSnapshot(requestedCountry, range)
+    fetchLiveTopPlaysSnapshot(requestedCountry, range, { sort, dir, keys })
       .then((snapshot) => {
         if (cancelled || currentCountryRef.current !== requestedCountry) return;
+        fetchedLiveSnapshotKeysRef.current.add(snapshotKey);
         // Merge with the existing cache so narrower-window events fetched
-        // earlier survive a wider refetch. The backend caps snapshots at
-        // 200 rows ordered by pp, so a 30d snapshot can crowd out lower-pp
-        // events that the prior 24h snapshot had — replacing would lose them.
+        // earlier survive a wider refetch. The backend caps snapshots at 200
+        // rows for the current query, so replacing would lose candidates from
+        // previously fetched sorts/windows.
         const cachedPopoffs = useAppStore.getState().popoffsByCountry[requestedCountry] ?? [];
         const cachedWindow = useAppStore.getState().popoffsWindowByCountry[requestedCountry] ?? null;
         setCachedPopoffs(
@@ -325,7 +328,7 @@ function PopOffsPage() {
     return () => {
       cancelled = true;
     };
-  }, [liveBackendEnabled, mergePopoffs, popoffsFetchedAt, popoffsWindow, range, selectedCountry, setCachedPopoffs]);
+  }, [dir, keys, liveBackendEnabled, mergePopoffs, popoffsFetchedAt, popoffsWindow, range, selectedCountry, setCachedPopoffs, sort]);
 
   useEffect(() => {
     if (!liveBackendEnabled) return;
@@ -554,16 +557,18 @@ function PopOffsPage() {
     });
   }, [rangedPopoffs, selectedPlayerIdSet, selectedPlayerIds.length, keys, sort, dir]);
 
-  const liveSnapshotKey = `${selectedCountry}:${range}:${popoffsFetchedAt ?? "none"}:${popoffsWindow ?? "none"}`;
-  const waitingForLiveSnapshot =
-    liveBackendEnabled &&
-    settledLiveSnapshotKey !== liveSnapshotKey &&
+  const liveSnapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}`;
+  const liveSnapshotNeeded =
     shouldRefreshTopPlays({
       fetchedAt: popoffsFetchedAt,
       cachedWindow: popoffsWindow,
       selectedRange: range,
       cacheTtlMs: CLIENT_CACHE_TTL.popoffs,
-    });
+    }) || !fetchedLiveSnapshotKeysRef.current.has(liveSnapshotKey);
+  const waitingForLiveSnapshot =
+    liveBackendEnabled &&
+    settledLiveSnapshotKey !== liveSnapshotKey &&
+    liveSnapshotNeeded;
   const showingInitialLiveSnapshot = waitingForLiveSnapshot && filtered.length === 0;
 
   const playerPpGains = useMemo(() => {

@@ -1,9 +1,10 @@
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
 import { getPlayerProfileSnapshot } from "./player-profiles.js";
-import { calculateWeightedPpTotal, nowIso } from "../shared/score.js";
+import { calculateWeightedPpTotal, getModAcronyms, getScoreSpeedBucket, nowIso, type ScoreSpeedBucket } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
+import { queryFarmHelperKeyPeersByDistance, queryFarmHelperKeyPeersWithinBand, type FarmHelperKeyCount } from "./farm-helper-key-stats.js";
 
 // Farm Helper recommends maps a player should farm, ranked by estimated pp gain.
 // The peer pool is GLOBAL: we compare the subject against same-pp players across
@@ -25,6 +26,8 @@ export interface FarmHelperPeer {
 
 export interface FarmHelperRec {
   beatmapId: number;
+  speedBucket: ScoreSpeedBucket;
+  recommendedMods: string[];
   beatmapsetId: number;
   title: string;
   artist: string;
@@ -42,6 +45,7 @@ export interface FarmHelperRec {
   subjectPp: number | null;
   subjectPlayedAt: string | null;
   peerCount: number;
+  peerSampleSize: number;
   peerFraction: number;
   peerPpMedian: number;
   peerPpP75: number;
@@ -56,9 +60,10 @@ export interface FarmHelperSnapshot {
   userId: number;
   username: string;
   avatarUrl: string;
+  coverUrl: string;
   pp: number;
   keyMode: FarmHelperKeyMode;
-  peerBand: { mode: string; count: number; minPp: number; maxPp: number };
+  peerBand: { mode: string; count: number; farmDataCount: number; minPp: number; maxPp: number };
   totalPotentialPp: number;
   recs: FarmHelperRec[];
   generatedAt: string;
@@ -78,8 +83,8 @@ export class FarmHelperUserNotFoundError extends Error {
 
 const DEFAULT_LIMIT = 60;
 const MAX_LIMIT = 100;
-const MAX_PEERS = 250;
 const MIN_PEERS = 12;
+const MIN_KEYMODE_PROXY_SCORES = 8;
 const PEER_MIN_COUNT = 3;
 const PEER_MIN_FRACTION = 0.12;
 const IMPROVE_MARGIN_PP = 8;
@@ -88,17 +93,31 @@ const STALE_ACTIVE_MS = 180 * 86_400_000;
 const FIT_SAMPLE_SIZE = 50;
 const STAR_BUFFER = 0.5;
 const TOP_PEERS_PER_REC = 4;
+const MODE_TOP_PP_HEADROOM = 1.04;
+const MISSING_MAP_BENCHMARK_QUANTILE = 0.4;
+const PLAYED_MAP_BENCHMARK_STEP = 0.06;
+const PLAYED_MAP_MIN_STEP_PP = 30;
+const MIN_VISIBLE_GAIN_PP = 1;
 
 const CACHE_TTL_MS = 5 * 60_000;
 const CACHE_MAX_ENTRIES = 64;
+const PEER_BAND_CACHE_TTL_MS = 5 * 60_000;
+const PEER_BAND_CACHE_MAX_ENTRIES = 256;
 
 interface CachedFarmHelper {
   snapshot: FarmHelperSnapshot;
   expiresAt: number;
 }
 
+interface CachedPeerBand {
+  peers: Array<{ userId: number; pp: number }>;
+  mode: string;
+  expiresAt: number;
+}
+
 // Per-Db cache (one Db per process in prod; tests get a fresh Db each).
 const farmHelperCache = new WeakMap<Db, Map<string, CachedFarmHelper>>();
+const peerBandCache = new WeakMap<Db, Map<string, CachedPeerBand>>();
 
 type ProfileOsuClient = Pick<OsuApiClient, "getUser" | "getUserByKey" | "getUserBestScoresWindow">;
 
@@ -106,13 +125,21 @@ interface SubjectMapScore {
   pp: number;
   endedAt: string | null;
   scoreId: number;
+  speedBucket: ScoreSpeedBucket;
 }
 
 interface CandidateAgg {
   beatmapId: number;
+  speedBucket: ScoreSpeedBucket;
   pps: number[];
   peers: Array<{ userId: number; pp: number }>;
+  modCombos: Map<string, { mods: string[]; count: number; ppTotal: number }>;
   latestUpdatedMs: number;
+}
+
+interface PeerFarmedAggregation {
+  byBeatmap: Map<string, CandidateAgg>;
+  farmDataPeerCount: number;
 }
 
 interface BeatmapMeta {
@@ -142,7 +169,7 @@ export async function getFarmHelperSnapshot(
   rawKey: string,
   params: FarmHelperParams = {},
 ): Promise<FarmHelperSnapshot> {
-  const requestedKeyMode = params.keyMode ?? "auto";
+  const requestedKeyMode = params.keyMode ?? "any";
   const limit = clampLimit(params.limit);
 
   const profile = await resolveProfile(db, osu, rawKey);
@@ -154,6 +181,7 @@ export async function getFarmHelperSnapshot(
   const subjectPp = numberOr(statistics.pp, 0);
   const username = String(user.username ?? rawKey);
   const avatarUrl = String(user.avatar_url ?? "");
+  const coverUrl = String(user.cover_url ?? asRecord(user.cover).url ?? "");
 
   const cache = getCache(db);
   const cacheKey = `${userId}:${requestedKeyMode}:${limit}`;
@@ -169,6 +197,7 @@ export async function getFarmHelperSnapshot(
     userId,
     username,
     avatarUrl,
+    coverUrl,
     subjectPp,
     requestedKeyMode,
     limit,
@@ -199,50 +228,52 @@ async function buildSnapshot(
     userId: number;
     username: string;
     avatarUrl: string;
+    coverUrl: string;
     subjectPp: number;
-    requestedKeyMode: FarmHelperKeyMode | "auto";
+    requestedKeyMode: FarmHelperKeyMode;
     limit: number;
   },
 ): Promise<FarmHelperSnapshot> {
   const generatedAt = nowIso();
   // Per-beatmap best pp the subject already has in their top plays, and the flat
   // pp list used as the baseline for net-weighted-pp gain estimation.
-  const subjectByBeatmap = new Map<number, SubjectMapScore>();
+  const subjectByBeatmap = new Map<string, SubjectMapScore>();
   const baselineEntries: Array<{ pp: number; beatmapId: number }> = [];
-  const fitStars: number[] = [];
-  let keys4 = 0;
-  let keys7 = 0;
   let subjectTopPp = 0;
 
   const rankedScores = [...bestScores]
     .filter((score) => typeof score.pp === "number" && score.pp > 0)
     .sort((a, b) => (b.pp ?? 0) - (a.pp ?? 0));
 
-  rankedScores.forEach((score, index) => {
+  rankedScores.forEach((score) => {
     const pp = score.pp as number;
     const beatmapId = score.beatmap_id ?? score.beatmap?.id ?? 0;
     if (pp > subjectTopPp) subjectTopPp = pp;
     if (beatmapId > 0) {
       baselineEntries.push({ pp, beatmapId });
-      const existing = subjectByBeatmap.get(beatmapId);
+      const speedBucket = getScoreSpeedBucket(getModAcronyms(score.mods));
+      const subjectKey = farmHelperLaneKey(beatmapId, speedBucket);
+      const existing = subjectByBeatmap.get(subjectKey);
       if (!existing || pp > existing.pp) {
-        subjectByBeatmap.set(beatmapId, { pp, endedAt: score.ended_at ?? null, scoreId: score.id });
-      }
-      if (index < FIT_SAMPLE_SIZE) {
-        const stars = numberOr(score.beatmap?.difficulty_rating, 0);
-        if (stars > 0) fitStars.push(stars);
-        const k = Math.round(numberOr(score.beatmap?.cs, 0));
-        if (k === 4) keys4 += 1;
-        else if (k === 7) keys7 += 1;
+        subjectByBeatmap.set(subjectKey, { pp, endedAt: score.ended_at ?? null, scoreId: score.id, speedBucket });
       }
     }
   });
 
   const baselineTotal = calculateWeightedPpTotal(baselineEntries);
-  const keyMode: FarmHelperKeyMode = ctx.requestedKeyMode === "auto"
-    ? (keys7 > keys4 ? "7k" : "4k")
-    : ctx.requestedKeyMode;
+  const keyMode = ctx.requestedKeyMode;
+  const subjectModeStats = calculateSubjectKeyModeStats(rankedScores, keyMode);
+  const subjectBenchmarkCap = subjectModeStats.topPp > 0
+    ? subjectModeStats.topPp * MODE_TOP_PP_HEADROOM
+    : subjectTopPp > 0
+      ? subjectTopPp * MODE_TOP_PP_HEADROOM
+      : Infinity;
 
+  const fitStars = rankedScores
+    .filter((score) => scoreMatchesKeyMode(score, keyMode))
+    .slice(0, FIT_SAMPLE_SIZE)
+    .map((score) => numberOr(score.beatmap?.difficulty_rating, 0))
+    .filter((stars) => stars > 0);
   fitStars.sort((a, b) => a - b);
   const hasFit = fitStars.length >= 5;
   const starLo = hasFit ? quantile(fitStars, 0.1) : 0;
@@ -251,11 +282,12 @@ async function buildSnapshot(
   const starSpread = hasFit ? Math.max(1.5, starHi - starLo) : 1.5;
 
   // --- Peers: nearest-by-pp players across all countries, then band-filter ---
-  const { peers, mode: peerMode } = await selectPeerBand(db, ctx.userId, ctx.subjectPp);
+  const { peers, mode: peerMode } = await selectPeerBand(db, ctx.userId, ctx.subjectPp, keyMode, subjectModeStats.weightedPp);
 
   const emptyBand = {
     mode: peerMode,
     count: peers.length,
+    farmDataCount: 0,
     minPp: peers.length ? Math.min(...peers.map((p) => p.pp)) : 0,
     maxPp: peers.length ? Math.max(...peers.map((p) => p.pp)) : 0,
   };
@@ -264,6 +296,7 @@ async function buildSnapshot(
     userId: ctx.userId,
     username: ctx.username,
     avatarUrl: ctx.avatarUrl,
+    coverUrl: ctx.coverUrl,
     pp: ctx.subjectPp,
     keyMode,
     peerBand: emptyBand,
@@ -275,16 +308,21 @@ async function buildSnapshot(
 
   // --- Candidate aggregation from peers' farmed maps ---
   const peerIds = peers.map((p) => p.userId);
-  const peerSetSize = peers.length;
-  const aggByBeatmap = await aggregatePeerFarmedMaps(db, peerIds);
+  const peerFarmed = await aggregatePeerFarmedMaps(db, peerIds);
+  const peerSampleSize = peerFarmed.farmDataPeerCount;
+  const coveredSnapshot: FarmHelperSnapshot = {
+    ...baseSnapshot,
+    peerBand: { ...baseSnapshot.peerBand, farmDataCount: peerSampleSize },
+  };
+  if (peerSampleSize === 0) return coveredSnapshot;
 
   const candidates: CandidateAgg[] = [];
-  for (const agg of aggByBeatmap.values()) {
+  for (const agg of peerFarmed.byBeatmap.values()) {
     if (agg.peers.length < PEER_MIN_COUNT) continue;
-    if (agg.peers.length / peerSetSize < PEER_MIN_FRACTION) continue;
+    if (agg.peers.length / peerSampleSize < PEER_MIN_FRACTION) continue;
     candidates.push(agg);
   }
-  if (candidates.length === 0) return baseSnapshot;
+  if (candidates.length === 0) return coveredSnapshot;
 
   const beatmapIds = candidates.map((c) => c.beatmapId);
   const beatmapMeta = await readBeatmapMeta(db, beatmapIds);
@@ -301,31 +339,32 @@ async function buildSnapshot(
 
     const median = quantile(agg.pps, 0.5);
     const p75 = quantile(agg.pps, 0.75);
-    const cap = subjectTopPp > 0 ? subjectTopPp * 0.98 : Infinity;
-    const subject = subjectByBeatmap.get(agg.beatmapId) ?? null;
+    const cap = subjectBenchmarkCap;
+    const subject = subjectByBeatmap.get(farmHelperLaneKey(agg.beatmapId, agg.speedBucket)) ?? null;
 
     let reason: FarmHelperReason;
     let benchmark: number;
     if (!subject) {
       reason = "missing";
-      benchmark = Math.min(median, cap);
+      benchmark = Math.min(quantile(agg.pps, MISSING_MAP_BENCHMARK_QUANTILE), cap);
     } else if (median - subject.pp > IMPROVE_MARGIN_PP) {
       reason = "improve";
-      benchmark = Math.min(median, cap);
+      benchmark = Math.min(median, cap, nextPlayedMapBenchmark(subject.pp));
     } else if (
       isStale(subject.endedAt)
       && agg.latestUpdatedMs > Date.now() - STALE_ACTIVE_MS
       && Math.min(p75, cap) - subject.pp > IMPROVE_MARGIN_PP
     ) {
       reason = "stale";
-      benchmark = Math.min(p75, cap);
+      benchmark = Math.min(p75, cap, nextPlayedMapBenchmark(subject.pp));
     } else {
       continue;
     }
 
     if (!Number.isFinite(benchmark) || benchmark <= 0) continue;
+    if (subject && benchmark - subject.pp <= IMPROVE_MARGIN_PP) continue;
     const estimatedPpGain = estimateGain(baselineEntries, baselineTotal, agg.beatmapId, benchmark);
-    if (estimatedPpGain <= 0.05) continue;
+    if (estimatedPpGain < MIN_VISIBLE_GAIN_PP) continue;
 
     const setMeta = beatmapsetMeta.get(meta.beatmapsetId);
     const difficultyFit = hasFit ? clamp01(1 - Math.abs(meta.stars - starMid) / starSpread) : 0.5;
@@ -333,6 +372,8 @@ async function buildSnapshot(
 
     scored.push({
       beatmapId: agg.beatmapId,
+      speedBucket: agg.speedBucket,
+      recommendedMods: getRecommendedMods(agg),
       beatmapsetId: meta.beatmapsetId,
       title: setMeta?.title ?? "",
       artist: setMeta?.artist ?? "",
@@ -350,7 +391,8 @@ async function buildSnapshot(
       subjectPp: subject ? round2(subject.pp) : null,
       subjectPlayedAt: subject?.endedAt ?? null,
       peerCount: agg.peers.length,
-      peerFraction: round2(agg.peers.length / peerSetSize),
+      peerSampleSize,
+      peerFraction: round2(agg.peers.length / peerSampleSize),
       peerPpMedian: round2(median),
       peerPpP75: round2(p75),
       topPeers: agg.peers
@@ -366,7 +408,7 @@ async function buildSnapshot(
     });
   }
 
-  if (scored.length === 0) return baseSnapshot;
+  if (scored.length === 0) return coveredSnapshot;
 
   const maxGain = Math.max(...scored.map((r) => r.estimatedPpGain), 1);
   for (const rec of scored) {
@@ -388,13 +430,32 @@ async function buildSnapshot(
   await hydrateTopPeers(db, top);
 
   return {
-    ...baseSnapshot,
+    ...coveredSnapshot,
     totalPotentialPp: round2(top.reduce((sum, rec) => sum + rec.estimatedPpGain, 0)),
     recs: top,
   };
 }
 
-async function queryNearestPeers(
+async function queryPeersWithinPpBand(
+  db: Db,
+  userId: number,
+  subjectPp: number,
+  band: number,
+): Promise<Array<{ userId: number; pp: number }>> {
+  const minPp = Math.max(0, subjectPp - band);
+  const maxPp = subjectPp + band;
+  const rows = (await exec(
+    db,
+    `select user_id, pp from users
+     where pp is not null and pp > 0 and user_id != ?
+       and pp between ? and ?
+     order by abs(pp - ?) asc`,
+    [userId, minPp, maxPp, subjectPp],
+  )).rows;
+  return rows.map((row) => ({ userId: Number(row.user_id), pp: Number(row.pp) }));
+}
+
+async function queryPeersByPpDistance(
   db: Db,
   userId: number,
   subjectPp: number,
@@ -403,35 +464,90 @@ async function queryNearestPeers(
     db,
     `select user_id, pp from users
      where pp is not null and pp > 0 and user_id != ?
-     order by abs(pp - ?) asc
-     limit ?`,
-    [userId, subjectPp, MAX_PEERS],
+     order by abs(pp - ?) asc`,
+    [userId, subjectPp],
   )).rows;
   return rows.map((row) => ({ userId: Number(row.user_id), pp: Number(row.pp) }));
 }
 
-// The same-pp comparison cohort: nearest players by pp across all countries,
-// progressively widening the band until we have enough to compare against.
-// Shared by the snapshot build and the per-map farmers lookup so both agree on
-// exactly which players count as the subject's peers.
+// The same-pp comparison cohort: all players in the relevant pp band across all
+// countries, progressively widening the band only when the cohort is too thin.
+// The full peer cohort stays server-side; HTTP responses only include counts,
+// recommendation summaries, and tiny top-peer previews.
 async function selectPeerBand(
   db: Db,
   userId: number,
   subjectPp: number,
+  keyMode: FarmHelperKeyMode,
+  subjectModePp: number,
 ): Promise<{ peers: Array<{ userId: number; pp: number }>; mode: string }> {
-  const nearest = await queryNearestPeers(db, userId, subjectPp);
+  const cache = getPeerBandCache(db);
+  const cacheKey = `${userId}:${roundCacheNumber(subjectPp)}:${keyMode}:${roundCacheNumber(subjectModePp)}`;
+  const now = Date.now();
+  const cached = cache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    cache.delete(cacheKey);
+    cache.set(cacheKey, cached);
+    return { peers: cached.peers.slice(), mode: cached.mode };
+  }
+
+  const selected = await computePeerBand(db, userId, subjectPp, keyMode, subjectModePp);
+  cache.set(cacheKey, { peers: selected.peers.slice(), mode: selected.mode, expiresAt: now + PEER_BAND_CACHE_TTL_MS });
+  while (cache.size > PEER_BAND_CACHE_MAX_ENTRIES) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
+  return selected;
+}
+
+async function computePeerBand(
+  db: Db,
+  userId: number,
+  subjectPp: number,
+  keyMode: FarmHelperKeyMode,
+  subjectModePp: number,
+): Promise<{ peers: Array<{ userId: number; pp: number }>; mode: string }> {
+  if (keyMode !== "any" && subjectModePp > 0) {
+    const keyModePeers = await selectKeyModePeerBand(db, userId, subjectPp, keyMode, subjectModePp);
+    if (keyModePeers) return keyModePeers;
+  }
+
   const band = Math.max(400, subjectPp * 0.08);
-  let peers = nearest.filter((p) => Math.abs(p.pp - subjectPp) <= band);
+  let peers = await queryPeersWithinPpBand(db, userId, subjectPp, band);
   let mode = "pp_band";
   if (peers.length < MIN_PEERS) {
-    peers = nearest.filter((p) => Math.abs(p.pp - subjectPp) <= band * 2);
+    peers = await queryPeersWithinPpBand(db, userId, subjectPp, band * 2);
     mode = "pp_band_wide";
   }
   if (peers.length < MIN_PEERS) {
-    peers = nearest;
+    peers = await queryPeersByPpDistance(db, userId, subjectPp);
     mode = "nearest";
   }
   return { peers, mode };
+}
+
+async function selectKeyModePeerBand(
+  db: Db,
+  userId: number,
+  _subjectPp: number,
+  keyMode: Exclude<FarmHelperKeyMode, "any">,
+  subjectModePp: number,
+): Promise<{ peers: Array<{ userId: number; pp: number }>; mode: string } | null> {
+  const keyCount = keyModeToKeys(keyMode) as FarmHelperKeyCount;
+  const band = Math.max(300, subjectModePp * 0.08);
+  let peers = await queryFarmHelperKeyPeersWithinBand(db, keyCount, userId, subjectModePp, band, MIN_KEYMODE_PROXY_SCORES);
+  let mode = `${keyMode}_pp_proxy`;
+  if (peers.length < MIN_PEERS) {
+    peers = await queryFarmHelperKeyPeersWithinBand(db, keyCount, userId, subjectModePp, band * 2, MIN_KEYMODE_PROXY_SCORES);
+    mode = `${keyMode}_pp_proxy_wide`;
+  }
+  if (peers.length < MIN_PEERS) {
+    peers = await queryFarmHelperKeyPeersByDistance(db, keyCount, userId, subjectModePp, MIN_KEYMODE_PROXY_SCORES);
+    mode = `${keyMode}_nearest`;
+  }
+  if (peers.length < MIN_PEERS) return null;
+  return { peers: peers.map(({ userId, pp }) => ({ userId, pp })), mode };
 }
 
 export interface FarmHelperFarmer {
@@ -439,6 +555,7 @@ export interface FarmHelperFarmer {
   username: string;
   avatarUrl: string;
   pp: number;
+  mods: string[];
 }
 
 export interface FarmHelperFarmersResult {
@@ -458,6 +575,7 @@ export async function getFarmHelperFarmers(
   osu: ProfileOsuClient,
   rawKey: string,
   beatmapId: number,
+  speedBucket?: ScoreSpeedBucket,
 ): Promise<FarmHelperFarmersResult> {
   const profile = await resolveProfile(db, osu, rawKey);
   const user = profile.user;
@@ -466,25 +584,34 @@ export async function getFarmHelperFarmers(
   if (!Number.isInteger(beatmapId) || beatmapId <= 0) return { beatmapId, total: 0, farmers: [] };
 
   const subjectPp = numberOr(asRecord(user.statistics).pp, 0);
-  const { peers } = await selectPeerBand(db, userId, subjectPp);
+  const beatmap = (await readBeatmapMeta(db, [beatmapId])).get(beatmapId);
+  const keyMode: FarmHelperKeyMode = beatmap?.keys === 7 ? "7k" : beatmap?.keys === 4 ? "4k" : "any";
+  const lane = speedBucket ?? inferSubjectSpeedBucket(profile.bestScores, beatmapId);
+  const rankedScores = [...profile.bestScores]
+    .filter((score) => typeof score.pp === "number" && score.pp > 0)
+    .sort((a, b) => (b.pp ?? 0) - (a.pp ?? 0));
+  const subjectModeStats = calculateSubjectKeyModeStats(rankedScores, keyMode);
+  const { peers } = await selectPeerBand(db, userId, subjectPp, keyMode, subjectModeStats.weightedPp);
   if (peers.length === 0) return { beatmapId, total: 0, farmers: [] };
 
   const peerIds = peers.map((p) => p.userId);
-  const farmersRaw: Array<{ userId: number; pp: number }> = [];
+  const farmersRaw: Array<{ userId: number; pp: number; mods: string[] }> = [];
   for (let i = 0; i < peerIds.length; i += 900) {
     const chunk = peerIds.slice(i, i + 900);
     if (chunk.length === 0) continue;
     const placeholders = chunk.map(() => "?").join(",");
     const rows = (await exec(
       db,
-      `select user_id, pp from country_maps_farmed_scores
+      `select user_id, pp, mods_json from country_maps_farmed_scores
        where beatmap_id = ? and user_id in (${placeholders})`,
       [beatmapId, ...chunk],
     )).rows;
     for (const row of rows) {
+      const mods = parseJson<string[]>(row.mods_json, []);
+      if (lane && getScoreSpeedBucket(mods) !== lane) continue;
       const pp = Number(row.pp);
       if (!Number.isFinite(pp) || pp <= 0) continue;
-      farmersRaw.push({ userId: Number(row.user_id), pp });
+      farmersRaw.push({ userId: Number(row.user_id), pp, mods });
     }
   }
 
@@ -500,40 +627,53 @@ export async function getFarmHelperFarmers(
       username: row ? String(row.username ?? "") : "",
       avatarUrl: row ? String(row.avatar_url ?? "") : "",
       pp: round2(f.pp),
+      mods: f.mods,
     };
   });
   return { beatmapId, total, farmers };
 }
 
-async function aggregatePeerFarmedMaps(db: Db, peerIds: number[]): Promise<Map<number, CandidateAgg>> {
-  const byBeatmap = new Map<number, CandidateAgg>();
+async function aggregatePeerFarmedMaps(db: Db, peerIds: number[]): Promise<PeerFarmedAggregation> {
+  const byBeatmap = new Map<string, CandidateAgg>();
+  const farmDataPeerIds = new Set<number>();
   for (let i = 0; i < peerIds.length; i += 900) {
     const chunk = peerIds.slice(i, i + 900);
     if (chunk.length === 0) continue;
     const placeholders = chunk.map(() => "?").join(",");
     const rows = (await exec(
       db,
-      `select beatmap_id, user_id, pp, updated_at
+      `select beatmap_id, user_id, pp, mods_json, updated_at
        from country_maps_farmed_scores
        where user_id in (${placeholders})`,
       chunk,
     )).rows;
     for (const row of rows) {
+      const userId = Number(row.user_id);
       const beatmapId = Number(row.beatmap_id);
       const pp = Number(row.pp);
+      if (!Number.isSafeInteger(userId) || userId <= 0) continue;
       if (!Number.isFinite(pp) || pp <= 0) continue;
-      let agg = byBeatmap.get(beatmapId);
+      farmDataPeerIds.add(userId);
+      const mods = normalizeStoredMods(parseJson<string[]>(row.mods_json, []));
+      const speedBucket = getScoreSpeedBucket(mods);
+      const key = farmHelperLaneKey(beatmapId, speedBucket);
+      let agg = byBeatmap.get(key);
       if (!agg) {
-        agg = { beatmapId, pps: [], peers: [], latestUpdatedMs: 0 };
-        byBeatmap.set(beatmapId, agg);
+        agg = { beatmapId, speedBucket, pps: [], peers: [], modCombos: new Map(), latestUpdatedMs: 0 };
+        byBeatmap.set(key, agg);
       }
       agg.pps.push(pp);
-      agg.peers.push({ userId: Number(row.user_id), pp });
+      agg.peers.push({ userId, pp });
+      const modKey = mods.join(",");
+      const modCombo = agg.modCombos.get(modKey) ?? { mods, count: 0, ppTotal: 0 };
+      modCombo.count += 1;
+      modCombo.ppTotal += pp;
+      agg.modCombos.set(modKey, modCombo);
       const updatedMs = row.updated_at == null ? 0 : Date.parse(String(row.updated_at));
       if (Number.isFinite(updatedMs) && updatedMs > agg.latestUpdatedMs) agg.latestUpdatedMs = updatedMs;
     }
   }
-  return byBeatmap;
+  return { byBeatmap, farmDataPeerCount: farmDataPeerIds.size };
 }
 
 async function readBeatmapMeta(db: Db, ids: number[]): Promise<Map<number, BeatmapMeta>> {
@@ -654,6 +794,66 @@ function estimateGain(
   return Math.max(0, calculateWeightedPpTotal(hypothetical) - baselineTotal);
 }
 
+function getRecommendedMods(agg: CandidateAgg): string[] {
+  const best = [...agg.modCombos.values()]
+    .sort((a, b) => b.count - a.count || (b.ppTotal / b.count) - (a.ppTotal / a.count))[0];
+  return best?.mods ?? [];
+}
+
+function calculateSubjectKeyModeStats(scores: OscScore[], keyMode: FarmHelperKeyMode): { weightedPp: number; topPp: number; scoreCount: number } {
+  const filtered = scores.filter((score) => scoreMatchesKeyMode(score, keyMode));
+  return {
+    weightedPp: calculateWeightedPpTotal(filtered),
+    topPp: filtered.reduce((max, score) => Math.max(max, score.pp ?? 0), 0),
+    scoreCount: filtered.length,
+  };
+}
+
+function scoreMatchesKeyMode(score: OscScore, keyMode: FarmHelperKeyMode): boolean {
+  if (keyMode === "any") return true;
+  return getScoreKeys(score) === keyModeToKeys(keyMode);
+}
+
+function getScoreKeys(score: OscScore): number {
+  return Math.round(numberOr(score.beatmap?.cs, 0));
+}
+
+function keyModeToKeys(keyMode: Exclude<FarmHelperKeyMode, "any">): number {
+  return keyMode === "7k" ? 7 : 4;
+}
+
+function nextPlayedMapBenchmark(subjectPp: number): number {
+  return subjectPp + Math.max(PLAYED_MAP_MIN_STEP_PP, subjectPp * PLAYED_MAP_BENCHMARK_STEP);
+}
+
+function inferSubjectSpeedBucket(scores: OscScore[], beatmapId: number): ScoreSpeedBucket | undefined {
+  const best = scores
+    .filter((score) => Number(score.beatmap_id ?? score.beatmap?.id) === beatmapId && typeof score.pp === "number" && score.pp > 0)
+    .sort((a, b) => (b.pp ?? 0) - (a.pp ?? 0))[0];
+  return best ? getScoreSpeedBucket(getModAcronyms(best.mods)) : undefined;
+}
+
+function farmHelperLaneKey(beatmapId: number, speedBucket: ScoreSpeedBucket): string {
+  return `${beatmapId}:${speedBucket}`;
+}
+
+const MOD_DISPLAY_ORDER = [
+  "NF", "EZ", "HD", "HR", "SD", "PF", "DT", "NC", "HT", "DC", "FI", "FL", "MR", "RD", "CO", "SV2",
+];
+
+function normalizeStoredMods(mods: string[]): string[] {
+  return mods
+    .filter((mod): mod is string => typeof mod === "string" && mod.length > 0 && mod !== "CL")
+    .sort((a, b) => {
+      const aIndex = MOD_DISPLAY_ORDER.indexOf(a);
+      const bIndex = MOD_DISPLAY_ORDER.indexOf(b);
+      if (aIndex === -1 && bIndex === -1) return a.localeCompare(b);
+      if (aIndex === -1) return 1;
+      if (bIndex === -1) return -1;
+      return aIndex - bIndex;
+    });
+}
+
 function isStale(endedAt: string | null): boolean {
   if (!endedAt) return false;
   const ms = Date.parse(endedAt);
@@ -697,4 +897,14 @@ function getCache(db: Db): Map<string, CachedFarmHelper> {
   let cache = farmHelperCache.get(db);
   if (!cache) farmHelperCache.set(db, (cache = new Map()));
   return cache;
+}
+
+function getPeerBandCache(db: Db): Map<string, CachedPeerBand> {
+  let cache = peerBandCache.get(db);
+  if (!cache) peerBandCache.set(db, (cache = new Map()));
+  return cache;
+}
+
+function roundCacheNumber(value: number): number {
+  return Number.isFinite(value) ? Math.round(value * 100) / 100 : 0;
 }

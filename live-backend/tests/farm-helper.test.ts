@@ -6,7 +6,7 @@ import { createDb, exec, migrate, type Db } from "../src/db.js";
 import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot } from "../src/features/farm-helper.js";
 import { calculateWeightedPpTotal, nowIso } from "../src/shared/score.js";
 import { OsuApiError, type OsuApiClient } from "../src/osu/client.js";
-import type { OscScore } from "../src/shared/types.js";
+import type { OscScore, OsuMod } from "../src/shared/types.js";
 
 let dir = "";
 let db: Db;
@@ -27,12 +27,12 @@ afterEach(async () => {
   if (dir) await rm(dir, { recursive: true, force: true });
 });
 
-function subjectScore(beatmapId: number, pp: number, endedAt: string): OscScore {
+function subjectScore(beatmapId: number, pp: number, endedAt: string, keys = 4, stars = 5, mods: string[] = []): OscScore {
   return {
     id: beatmapId,
     user_id: SUBJECT_ID,
     accuracy: 0.99,
-    mods: [],
+    mods: mods.map((acronym): OsuMod => ({ acronym })),
     score: 1_000_000,
     max_combo: 1000,
     passed: true,
@@ -43,9 +43,9 @@ function subjectScore(beatmapId: number, pp: number, endedAt: string): OscScore 
     beatmap: {
       id: beatmapId,
       beatmapset_id: beatmapId + 100,
-      difficulty_rating: 5,
+      difficulty_rating: stars,
       mode: "mania",
-      cs: 4,
+      cs: keys,
       bpm: 180,
       version: "Insane",
       url: `https://osu.ppy.sh/b/${beatmapId}`,
@@ -68,13 +68,13 @@ function buildSubjectBestScores(): OscScore[] {
   return scores;
 }
 
-function makeOsuStub(bestScores: OscScore[]): Pick<OsuApiClient, "getUser" | "getUserByKey" | "getUserBestScoresWindow"> {
+function makeOsuStub(bestScores: OscScore[], pp = SUBJECT_PP): Pick<OsuApiClient, "getUser" | "getUserByKey" | "getUserBestScoresWindow"> {
   const user = {
     id: SUBJECT_ID,
     username: "Subject",
     avatar_url: "https://a.ppy.sh/1",
     country_code: "CR",
-    statistics: { pp: SUBJECT_PP },
+    statistics: { pp },
   };
   return {
     getUser: async () => user,
@@ -85,38 +85,38 @@ function makeOsuStub(bestScores: OscScore[]): Pick<OsuApiClient, "getUser" | "ge
 
 let nextScoreId = 1;
 
-async function insertUser(id: number, pp: number, country: string): Promise<void> {
+async function insertUser(id: number, pp: number, country: string, username = `Peer${id}`): Promise<void> {
   await exec(
     db,
     "insert into users (user_id, username, avatar_url, country_code, pp, updated_at) values (?, ?, ?, ?, ?, ?)",
-    [id, `Peer${id}`, `https://a.ppy.sh/${id}`, country, pp, nowIso()],
+    [id, username, `https://a.ppy.sh/${id}`, country, pp, nowIso()],
   );
 }
 
-async function insertFarmed(country: string, userId: number, beatmapId: number, pp: number, updatedAt: string): Promise<void> {
+async function insertFarmed(country: string, userId: number, beatmapId: number, pp: number, updatedAt: string, mods: string[] = []): Promise<void> {
   await exec(
     db,
     `insert into country_maps_farmed_scores
        (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at)
-     values (?, ?, ?, ?, ?, '{}', null, null, ?, ?, ?)`,
-    [country, userId, beatmapId, nextScoreId++, pp, updatedAt, updatedAt, updatedAt],
+     values (?, ?, ?, ?, ?, '{}', ?, null, ?, ?, ?)`,
+    [country, userId, beatmapId, nextScoreId++, pp, JSON.stringify(mods), updatedAt, updatedAt, updatedAt],
   );
 }
 
-async function insertBeatmapMeta(beatmapId: number): Promise<void> {
+async function insertBeatmapMeta(beatmapId: number, keys = 4, stars = 5): Promise<void> {
   const setId = beatmapId + 100;
   const now = nowIso();
   await exec(
     db,
     `insert into maps_beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, total_length, version, url, updated_at)
-     values (?, ?, 'mania', 'ranked', 4, 5, 180, 120, 'Insane', ?, ?)`,
-    [beatmapId, setId, `https://osu.ppy.sh/b/${beatmapId}`, now],
+     values (?, ?, 'mania', 'ranked', ?, ?, 180, 120, 'Insane', ?, ?)`,
+    [beatmapId, setId, keys, stars, `https://osu.ppy.sh/b/${beatmapId}`, now],
   );
   await exec(
     db,
     `insert into maps_beatmapsets (beatmapset_id, title, artist, creator, status, covers_json, global_play_count, global_favourite_count, preview_url, bpm, mania_keys_json, patterns_json, updated_at)
-     values (?, ?, 'Artist', 'Mapper', 'ranked', ?, 1000, 10, '', 180, '[4]', '[]', ?)`,
-    [setId, `Map ${beatmapId}`, JSON.stringify({ list: `cover-${beatmapId}` }), now],
+     values (?, ?, 'Artist', 'Mapper', 'ranked', ?, 1000, 10, '', 180, ?, '[]', ?)`,
+    [setId, `Map ${beatmapId}`, JSON.stringify({ list: `cover-${beatmapId}` }), JSON.stringify([keys]), now],
   );
 }
 
@@ -154,8 +154,9 @@ describe("farm helper", () => {
 
     expect(snapshot.status).toBe("ready");
     expect(snapshot.userId).toBe(SUBJECT_ID);
-    expect(snapshot.keyMode).toBe("4k");
+    expect(snapshot.keyMode).toBe("any");
     expect(snapshot.peerBand.count).toBe(15);
+    expect(snapshot.peerBand.farmDataCount).toBe(15);
     expect(snapshot.recs.length).toBe(3);
 
     const byBeatmap = new Map(snapshot.recs.map((rec) => [rec.beatmapId, rec]));
@@ -164,6 +165,7 @@ describe("farm helper", () => {
     expect(missing?.reason).toBe("missing");
     expect(missing?.subjectPp).toBeNull();
     expect(missing?.peerCount).toBe(15);
+    expect(missing?.peerSampleSize).toBe(15);
 
     const improve = byBeatmap.get(BM_IMPROVE);
     expect(improve?.reason).toBe("improve");
@@ -207,6 +209,119 @@ describe("farm helper", () => {
     expect(result.farmers[0].avatarUrl).toContain("a.ppy.sh");
   });
 
+  it("does not hide missing maps behind bottom-quartile peer scores", async () => {
+    const bestScores = buildSubjectBestScores();
+    const recent = nowIso();
+    const targetBeatmap = 50;
+
+    await insertBeatmapMeta(targetBeatmap);
+    for (let i = 0; i < 15; i += 1) {
+      const id = 700 + i;
+      await insertUser(id, SUBJECT_PP, "CR", `SpreadPeer${i}`);
+      await insertFarmed("CR", id, targetBeatmap, i < 5 ? 500 : 700, recent);
+    }
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === targetBeatmap);
+
+    expect(rec?.reason).toBe("missing");
+    expect(rec?.benchmarkPp).toBeGreaterThan(500);
+    expect(rec?.estimatedPpGain).toBeGreaterThan(1);
+  });
+
+  it("uses every player in the pp band instead of capping at 250 peers", async () => {
+    const bestScores = buildSubjectBestScores();
+    const recent = nowIso();
+    const targetBeatmap = 60;
+
+    await insertBeatmapMeta(targetBeatmap);
+    for (let i = 0; i < 264; i += 1) {
+      await insertUser(1000 + i, SUBJECT_PP + i, "CR", `ClosePeer${i}`);
+    }
+    for (let i = 0; i < 36; i += 1) {
+      const id = 2000 + i;
+      await insertUser(id, SUBJECT_PP + 300 + i, "US", `OuterPeer${i}`);
+      await insertFarmed("US", id, targetBeatmap, 620, recent);
+    }
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { keyMode: "any" });
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === targetBeatmap);
+
+    expect(snapshot.peerBand.mode).toBe("pp_band");
+    expect(snapshot.peerBand.count).toBe(300);
+    expect(snapshot.peerBand.farmDataCount).toBe(36);
+    expect(rec?.reason).toBe("missing");
+    expect(rec?.peerCount).toBe(36);
+    expect(rec?.peerSampleSize).toBe(36);
+    expect(rec?.peerFraction).toBe(1);
+  });
+
+  it("scores Any-mode farm overlap against peers with farm data", async () => {
+    const bestScores = buildSubjectBestScores();
+    const recent = nowIso();
+    const targetBeatmap = 65;
+    const fillerBeatmap = 66;
+
+    await insertBeatmapMeta(targetBeatmap);
+    await insertBeatmapMeta(fillerBeatmap);
+    for (let i = 0; i < 39; i += 1) {
+      await insertUser(5000 + i, SUBJECT_PP + i, "CR", `NoDataPeer${i}`);
+    }
+    for (let i = 0; i < 8; i += 1) {
+      const id = 6000 + i;
+      await insertUser(id, SUBJECT_PP + 100 + i, "US", `DataPeer${i}`);
+      await insertFarmed("US", id, i < 4 ? targetBeatmap : fillerBeatmap, 620, recent);
+    }
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { keyMode: "any" });
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === targetBeatmap);
+
+    expect(snapshot.peerBand.count).toBe(47);
+    expect(snapshot.peerBand.farmDataCount).toBe(8);
+    expect(rec?.reason).toBe("missing");
+    expect(rec?.peerCount).toBe(4);
+    expect(rec?.peerSampleSize).toBe(8);
+    expect(rec?.peerFraction).toBe(0.5);
+  });
+
+  it("uses every key-mode peer instead of capping the proxy cohort at 250", async () => {
+    const recent = nowIso();
+    const targetBeatmap = 70;
+    const supportBeatmaps = Array.from({ length: 8 }, (_, i) => 7000 + i);
+    const supportPps = [900, 850, 840, 830, 820, 810, 800, 790];
+    const bestScores = supportBeatmaps.map((beatmapId, index) => subjectScore(beatmapId, supportPps[index] ?? 0, recent, 4, 5));
+
+    await insertBeatmapMeta(targetBeatmap, 4, 5);
+    for (const beatmapId of supportBeatmaps) await insertBeatmapMeta(beatmapId, 4, 5);
+
+    for (let i = 0; i < 264; i += 1) {
+      const id = 3000 + i;
+      await insertUser(id, SUBJECT_PP + i, "CR", `KeyClosePeer${i}`);
+      for (let j = 0; j < supportBeatmaps.length; j += 1) {
+        await insertFarmed("CR", id, supportBeatmaps[j], supportPps[j] ?? 0, recent);
+      }
+    }
+    for (let i = 0; i < 36; i += 1) {
+      const id = 4000 + i;
+      await insertUser(id, SUBJECT_PP + 300 + i, "US", `KeyOuterPeer${i}`);
+      for (let j = 0; j < supportBeatmaps.length; j += 1) {
+        await insertFarmed("US", id, supportBeatmaps[j], supportPps[j] ?? 0, recent);
+      }
+      await insertFarmed("US", id, targetBeatmap, 620, recent);
+    }
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { keyMode: "4k" });
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === targetBeatmap);
+
+    expect(snapshot.peerBand.mode).toBe("4k_pp_proxy");
+    expect(snapshot.peerBand.count).toBe(300);
+    expect(snapshot.peerBand.farmDataCount).toBe(300);
+    expect(rec?.reason).toBe("missing");
+    expect(rec?.peerCount).toBe(36);
+    expect(rec?.peerSampleSize).toBe(300);
+    expect(rec?.peerFraction).toBe(0.12);
+  });
+
   it("returns an empty farmer list for a map nobody farmed", async () => {
     const bestScores = buildSubjectBestScores();
     await seedPeers();
@@ -222,6 +337,93 @@ describe("farm helper", () => {
 
     const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { keyMode: "7k" });
     expect(snapshot.recs.length).toBe(0);
+  });
+
+  it("uses key-mode strength instead of total pp for mixed-mode peer selection", async () => {
+    const recent = nowIso();
+    const targetBeatmap = 30;
+    const supportBeatmaps = Array.from({ length: 8 }, (_, i) => 3000 + i);
+    const bestScores: OscScore[] = [
+      subjectScore(2999, 700, recent, 4, 8),
+      subjectScore(targetBeatmap, 400, recent, 4, 8.5),
+      ...supportBeatmaps.map((beatmapId, index) => subjectScore(beatmapId, 500 - index * 5, recent, 4, 7.8)),
+    ];
+
+    await insertBeatmapMeta(targetBeatmap, 4, 8.5);
+    await insertBeatmapMeta(2999, 4, 8);
+    for (const beatmapId of supportBeatmaps) await insertBeatmapMeta(beatmapId, 4, 7.8);
+
+    for (let i = 0; i < 12; i += 1) {
+      const id = 300 + i;
+      await insertUser(id, 13_000, "CR", `KeyPeer${i}`);
+      await insertFarmed("CR", id, targetBeatmap, 520, recent);
+      for (const beatmapId of supportBeatmaps) await insertFarmed("CR", id, beatmapId, 500 - i, recent);
+    }
+
+    for (let i = 0; i < 12; i += 1) {
+      const id = 400 + i;
+      await insertUser(id, 15_000, "US", `Specialist${i}`);
+      await insertFarmed("US", id, targetBeatmap, 900, recent);
+      for (const beatmapId of supportBeatmaps) await insertFarmed("US", id, beatmapId, 900 - i, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 15_000);
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "4k" });
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === targetBeatmap);
+
+    expect(snapshot.peerBand.mode).toMatch(/^4k_pp_proxy/);
+    expect(rec?.peerCount).toBe(12);
+    expect(rec?.benchmarkPp).toBe(430);
+    expect(rec?.topPeers.every((peer) => peer.username.startsWith("KeyPeer"))).toBe(true);
+    expect(rec?.topPeers.some((peer) => peer.username.startsWith("Specialist"))).toBe(false);
+
+    const farmers = await getFarmHelperFarmers(db, osu, "Subject", targetBeatmap);
+    expect(farmers.total).toBe(12);
+    expect(farmers.farmers.every((peer) => peer.username.startsWith("KeyPeer"))).toBe(true);
+  });
+
+  it("does not compare halftime subject scores against nomod farm scores", async () => {
+    const recent = nowIso();
+    const targetBeatmap = 40;
+    const supportBeatmaps = Array.from({ length: 8 }, (_, i) => 4000 + i);
+    const bestScores: OscScore[] = [
+      subjectScore(3999, 700, recent, 7, 8),
+      subjectScore(targetBeatmap, 500, recent, 7, 8.2, ["HT"]),
+      ...supportBeatmaps.map((beatmapId, index) => subjectScore(beatmapId, 520 - index * 5, recent, 7, 7.9)),
+    ];
+
+    await insertBeatmapMeta(targetBeatmap, 7, 8.2);
+    await insertBeatmapMeta(3999, 7, 8);
+    for (const beatmapId of supportBeatmaps) await insertBeatmapMeta(beatmapId, 7, 7.9);
+
+    for (let i = 0; i < 12; i += 1) {
+      const id = 500 + i;
+      await insertUser(id, 14_000, "CR", `HtPeer${i}`);
+      await insertFarmed("CR", id, targetBeatmap, 540, recent, ["HT"]);
+      for (const beatmapId of supportBeatmaps) await insertFarmed("CR", id, beatmapId, 520 - i, recent);
+    }
+
+    for (let i = 0; i < 12; i += 1) {
+      const id = 600 + i;
+      await insertUser(id, 14_000, "US", `NmSpecialist${i}`);
+      await insertFarmed("US", id, targetBeatmap, 950, recent);
+      for (const beatmapId of supportBeatmaps) await insertFarmed("US", id, beatmapId, 900 - i, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 14_000);
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "7k" });
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === targetBeatmap && candidate.speedBucket === "ht");
+
+    expect(rec?.peerCount).toBe(12);
+    expect(rec?.benchmarkPp).toBe(530);
+    expect(rec?.recommendedMods).toEqual(["HT"]);
+    expect(rec?.topPeers.every((peer) => peer.username.startsWith("HtPeer"))).toBe(true);
+    expect(snapshot.recs.some((candidate) => candidate.beatmapId === targetBeatmap && candidate.speedBucket === "normal")).toBe(false);
+
+    const farmers = await getFarmHelperFarmers(db, osu, "Subject", targetBeatmap, "ht");
+    expect(farmers.total).toBe(12);
+    expect(farmers.farmers.every((peer) => peer.username.startsWith("HtPeer"))).toBe(true);
+    expect(farmers.farmers.every((peer) => peer.mods.includes("HT"))).toBe(true);
   });
 
   it("throws when the user cannot be resolved", async () => {
