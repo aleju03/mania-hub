@@ -11,6 +11,7 @@ import type { LiveEventLog } from "../live/event-log.js";
 import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, getScoreIdentity, isLazerScore, nowIso, scoreHasPublicLeaderboard, scoreHasReplay } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 import { logInfo } from "../logger.js";
+import { isUserKnownInactive } from "../users.js";
 
 export interface ScoreIngestOptions {
   enqueueRecentReconcile?: boolean;
@@ -135,16 +136,17 @@ export class ScoreIngestor {
     if (inserted === 0) return false;
     if (source.startsWith("osc_")) await this.updateOscCursor(score, receivedAt);
     const canUseOsuApi = this.canUseOsuApi();
-    if (canUseOsuApi && !score.user) {
+    const userKnownInactive = await isUserKnownInactive(this.db, score.user_id);
+    if (canUseOsuApi && !userKnownInactive && !score.user) {
       await this.queue.enqueue("enrich_user", `user:${score.user_id}`, { userId: score.user_id }, { priority: 100 });
     }
     if (canUseOsuApi && (!score.beatmap || !score.beatmapset)) {
       await this.queue.enqueue("enrich_beatmap", `beatmap:${beatmapId}`, { beatmapId }, { priority: 90 });
     }
-    if (canUseOsuApi && enqueueRecentReconcile) {
+    if (canUseOsuApi && !userKnownInactive && enqueueRecentReconcile) {
       await this.enqueueRecentReconcileIfDue(score);
     }
-    if (canUseOsuApi && (processTopPlayFeatures || processMapsFarmedFeatures)) {
+    if (canUseOsuApi && !userKnownInactive && (processTopPlayFeatures || processMapsFarmedFeatures)) {
       for (const country of countries) {
         if (processTopPlayFeatures) {
           await maybeEnqueueTopPlayRefresh(this.db, this.queue, country, score, this.config.topPlayMarginPp);

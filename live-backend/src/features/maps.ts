@@ -7,6 +7,7 @@ import type { JobQueue } from "../jobs/queue.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { getModAcronyms, getScoreIdentity, getScoreTimestamp, nowIso } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
+import { markUserMissing } from "../users.js";
 import { refreshFarmHelperKeyStatsForUser } from "./farm-helper-key-stats.js";
 
 const MAPS_REFRESH_PRIORITY = -100;
@@ -2127,6 +2128,7 @@ export async function refreshUserMapsFarmedScores(
     bestScores = await osu.getUserBestScoresWindow(payload.userId, MAPS_FARMED_SCORE_WINDOW, "job:refresh_user_maps_farmed_scores");
   } catch (error) {
     if (!(error instanceof OsuApiError && error.status === 404)) throw error;
+    await markUserMissing(db, payload.userId, `refresh_user_maps_farmed_scores: ${error.message}`);
     const updatedAt = nowIso();
     await replaceUserMapsFarmedOverlay(db, country, payload.userId, [], updatedAt);
     return { country, userId: payload.userId, scoreCount: 0, updatedAt };

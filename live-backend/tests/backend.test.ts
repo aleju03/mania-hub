@@ -518,6 +518,41 @@ describe("live backend", () => {
     expect(jobs.map((row) => row.type)).toContain("refresh_user_top_scores");
   });
 
+  it("does not enqueue user-scoped osu jobs for known missing users", async () => {
+    const { db, ingestor } = await setup();
+    const [score] = await fixture<OscScore[]>("scores.json");
+    await exec(db, "insert into users (user_id, username, avatar_url, country_code, is_active, updated_at) values (?, 'Gone', '', 'CR', 0, ?)", [score.user_id, new Date().toISOString()]);
+    await exec(db, "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('CR', ?, 1, 'test', 1, ?)", [score.user_id, new Date().toISOString()]);
+
+    await ingestor.ingestBatch([{ ...score, user: undefined }], "osc_socket");
+
+    expect(Number((await exec(db, "select count(*) as count from jobs where type in ('enrich_user', 'refresh_user_top_scores', 'reconcile_user_recent_scores', 'refresh_user_maps_farmed_scores')")).rows[0].count)).toBe(0);
+  });
+
+  it("treats missing user enrichment as terminal and clears pending user jobs", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const userId = 39_887_489;
+    await exec(db, "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('NL', ?, 1, 'test', 1, ?)", [userId, new Date().toISOString()]);
+    await queue.enqueue("enrich_user", `user:${userId}`, { userId }, { priority: 100 });
+    await queue.enqueue("refresh_user_top_scores", `top:${userId}:1`, { userId, scoreId: 1, country: "NL" }, { runAfter: new Date(Date.now() + 60_000) });
+    await queue.enqueue("reconcile_user_recent_scores", `recent:user:${userId}`, { userId }, { runAfter: new Date(Date.now() + 60_000) });
+    const osu = {
+      getUser: vi.fn(async () => {
+        throw new OsuApiError(404, `/users/${userId}/mania`);
+      }),
+    };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    const user = (await exec(db, "select is_active, profile_json from users where user_id = ?", [userId])).rows[0];
+    expect(Number(user.is_active)).toBe(0);
+    expect(JSON.parse(String(user.profile_json)).missing).toBe(true);
+    expect(Number((await exec(db, "select is_tracked from country_rosters where user_id = ?", [userId])).rows[0].is_tracked)).toBe(0);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'enrich_user' and status = 'done' and payload_json = ?", [JSON.stringify({ userId })])).rows[0].count)).toBe(1);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type in ('refresh_user_top_scores', 'reconcile_user_recent_scores') and payload_json like ?", [`%"userId":${userId}%`])).rows[0].count)).toBe(0);
+  });
+
   it("refreshes country rosters as the current top ranked users", async () => {
     const { db } = await setup();
     const now = new Date().toISOString();
@@ -1885,6 +1920,25 @@ describe("live backend", () => {
     expect(new Date(String(row.run_after)).getTime() - Date.now()).toBe(2 * 60_000);
   });
 
+  it("treats missing users during top-play confirmation as terminal", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const userId = 39_887_489;
+    await queue.enqueue("refresh_user_top_scores", `top:${userId}:660363424`, { userId, scoreId: 660363424, country: "NL" }, { priority: 100 });
+    const osu = {
+      getUserBestScoresWindow: vi.fn(async () => {
+        throw new OsuApiError(404, `/users/${userId}/scores/best?mode=mania&limit=100&offset=0`);
+      }),
+    };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    const row = (await exec(db, "select status, last_error from jobs where dedupe_key = ?", [`top:${userId}:660363424`])).rows[0];
+    expect(row.status).toBe("done");
+    expect(row.last_error).toBeNull();
+    expect(Number((await exec(db, "select is_active from users where user_id = ?", [userId])).rows[0].is_active)).toBe(0);
+  });
+
   it("calculates top-play pp gain from the previous same-beatmap best", async () => {
     const { db, events } = await setup();
     const baseBest = (await fixture<OscScore[]>("top-best.json"))[0];
@@ -2447,6 +2501,7 @@ describe("live backend", () => {
 
     expect(result).toMatchObject({ country: "CR", userId: 39728876, scoreCount: 0 });
     expect(Number((await exec(db, "select count(*) as count from country_maps_farmed_scores where country = 'CR' and user_id = 39728876")).rows[0].count)).toBe(0);
+    expect(Number((await exec(db, "select is_active from users where user_id = 39728876")).rows[0].is_active)).toBe(0);
     expect((await exec(db, "select value_json from live_meta where key = 'maps_farmed_overlay_updated_at:CR'")).rows[0]?.value_json).toBeTruthy();
   });
 

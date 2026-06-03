@@ -18,6 +18,7 @@ import { refreshCountryRoster } from "./rosters/country-rosters.js";
 import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModAcronyms, getScoreIdentity, getScoreTimestamp, isLazerScore, nowIso, scoreHasReplay } from "./shared/score.js";
 import { errorContext, logInfo, logWarn } from "./logger.js";
 import type { OscScore } from "./shared/types.js";
+import { markUserMissing } from "./users.js";
 
 interface WorkerLane {
   name: string;
@@ -166,6 +167,7 @@ export class WorkerRunner {
       logInfo("job_done", { job_id: job.id, type: job.type, lane, worker_id: workerId });
       await this.events.append("job_status", null, { id: job.id, type: job.type, status: "done" }, `job:${job.id}:done:${job.attempts}`);
     } catch (error) {
+      if (await this.handleMissingUserJob(workerId, job, lane, error)) return;
       if (error instanceof MapsRosterNotReadyError) {
         const retryDelayMs = getRetryDelayMs(job.type, job.attempts, error);
         await this.queue.defer(job.id, retryDelayMs);
@@ -305,6 +307,26 @@ export class WorkerRunner {
       return;
     }
     throw new Error(`Unknown job type: ${job.type}`);
+  }
+
+  private async handleMissingUserJob(workerId: string, job: Job, lane: string, error: unknown): Promise<boolean> {
+    if (!(error instanceof OsuApiError) || error.status !== 404 || !error.path.startsWith("/users/")) return false;
+    const userId = Number((job.payload as { userId?: unknown }).userId);
+    if (!Number.isInteger(userId) || userId <= 0) return false;
+    const result = await markUserMissing(this.db, userId, `${job.type}: ${error.message}`);
+    await this.queue.complete(job.id);
+    logInfo("job_user_missing", {
+      job_id: job.id,
+      type: job.type,
+      lane,
+      worker_id: workerId,
+      user_id: userId,
+      path: error.path,
+      untracked_rosters: result.untrackedRosters,
+      deleted_jobs: result.deletedJobs,
+    });
+    await this.events.append("job_status", null, { id: job.id, type: job.type, status: "done", reason: "user_missing" }, `job:${job.id}:missing:${job.attempts}`);
+    return true;
   }
 
   private async upsertBeatmap(raw: Record<string, unknown>, beatmapId: number): Promise<void> {
