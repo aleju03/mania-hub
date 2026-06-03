@@ -192,7 +192,7 @@ export function readConfig(): Config {
     enableWorkers: readBool("ENABLE_WORKERS", true),
     enableStartupRosterRefresh: readBool("ENABLE_STARTUP_ROSTER_REFRESH", true),
     enableScheduledRefreshes: readBool("ENABLE_SCHEDULED_REFRESHES", true),
-    enableOscBackfill: readBool("ENABLE_OSC_BACKFILL", true),
+    enableOscBackfill: readBool("ENABLE_OSC_BACKFILL", false),
     enableOscSocket: readBool("ENABLE_OSC_SOCKET", true),
     enableOsuScoresFallback: readBool("ENABLE_OSU_SCORES_FALLBACK", readBool("ENABLE_OSU_RECENT_FALLBACK", true)),
     osuScoresFallbackIntervalMs: readInt("OSU_SCORES_FALLBACK_INTERVAL_MS", readInt("OSU_RECENT_FALLBACK_INTERVAL_MS", 10_000)),
