@@ -9,7 +9,9 @@ import type { OsuApiClient } from "../osu/client.js";
 import { recordMapsFarmedScore } from "./maps.js";
 
 const TOP_PLAY_CONFIRMATION_PENDING_MS = 30 * 60_000;
-const TOP_PLAYS_SNAPSHOT_LIMIT = 200;
+const TOP_PLAYS_DEFAULT_PAGE_SIZE = 200;
+const TOP_PLAYS_MAX_PAGE_SIZE = 200;
+const TOP_PLAYS_PP_GAIN_LIMIT = 500;
 const TOP_PLAY_TIME_EXPR = "coalesce(case when json_valid(e.payload_json) then json_extract(e.payload_json, '$.time') end, e.detected_at)";
 const TOP_PLAY_KEY_COUNT_EXPR = "cast(case when json_valid(e.payload_json) then json_extract(e.payload_json, '$.score.beatmap.cs') end as real)";
 
@@ -21,6 +23,18 @@ export interface TopPlaysSnapshotOptions {
   sort?: TopPlaysSnapshotSort;
   dir?: TopPlaysSnapshotDirection;
   keys?: TopPlaysSnapshotKeyFilter;
+  page?: number;
+  pageSize?: number;
+  includePpGains?: boolean;
+  userIds?: number[];
+}
+
+export interface TopPlaysPpGainSummary {
+  id: number;
+  username: string;
+  avatar_url: string;
+  country_code?: string;
+  totalGain: number;
 }
 
 export class TopPlayConfirmationPendingError extends Error {
@@ -238,9 +252,12 @@ function getPreviousBeatmapBestScore(scores: OscScore[], target: OscScore): OscS
   return olderScores[0];
 }
 
-export async function getTopPlaysSnapshot(db: Db, country: string, window: string, options: TopPlaysSnapshotOptions = {}): Promise<{ popoffs: CountryTopPlay[]; scannedAt: number; window: string }> {
+export async function getTopPlaysSnapshot(db: Db, country: string, window: string, options: TopPlaysSnapshotOptions = {}): Promise<{ popoffs: CountryTopPlay[]; scannedAt: number; window: string; total: number; page: number; pageSize: number; ppGains?: TopPlaysPpGainSummary[] }> {
   const windowMs = window === "24h" ? 86_400_000 : window === "3d" ? 259_200_000 : window === "30d" ? 2_592_000_000 : 604_800_000;
   const cutoff = new Date(Date.now() - windowMs).toISOString();
+  const page = Math.max(1, Math.floor(options.page ?? 1));
+  const pageSize = Math.max(1, Math.min(TOP_PLAYS_MAX_PAGE_SIZE, Math.floor(options.pageSize ?? TOP_PLAYS_DEFAULT_PAGE_SIZE)));
+  const offset = (page - 1) * pageSize;
   // Global aggregates every tracked country's detected top plays.
   const global = isGlobalCountry(country);
   const where = global ? ["e.detected_at >= ?"] : ["e.country = ?", "e.detected_at >= ?"];
@@ -250,21 +267,67 @@ export async function getTopPlaysSnapshot(db: Db, country: string, window: strin
   } else if (options.keys === "other") {
     where.push(`${TOP_PLAY_KEY_COUNT_EXPR} is not null`, `${TOP_PLAY_KEY_COUNT_EXPR} != 4`);
   }
+  const userIds = (options.userIds ?? [])
+    .map((id) => Math.floor(Number(id)))
+    .filter((id) => Number.isFinite(id) && id > 0);
+  if (userIds.length > 0) {
+    where.push(`e.user_id in (${userIds.map(() => "?").join(",")})`);
+    args.push(...userIds);
+  }
+  const whereSql = where.join(" and ");
+  const totalRows = (await exec(
+    db,
+    `select count(*) as count
+     from top_play_events e
+     where ${whereSql}`,
+    args,
+  )).rows;
   const rows = (await exec(
     db,
     `select e.payload_json, u.username, u.avatar_url, u.country_code
      from top_play_events e
      left join users u on u.user_id = e.user_id
-     where ${where.join(" and ")}
+     where ${whereSql}
      order by ${topPlaysSnapshotOrderBy(options)}
-     limit ${TOP_PLAYS_SNAPSHOT_LIMIT}`,
-    args,
+     limit ? offset ?`,
+    [...args, pageSize, offset],
   )).rows;
   return {
     popoffs: rows.map(hydrateTopPlayEvent),
     scannedAt: Date.now(),
     window,
+    total: Number(totalRows[0]?.count ?? 0),
+    page,
+    pageSize,
+    ppGains: options.includePpGains ? await getTopPlaysPpGains(db, country, cutoff, options) : undefined,
   };
+}
+
+async function getTopPlaysPpGains(db: Db, country: string, cutoff: string, options: TopPlaysSnapshotOptions): Promise<TopPlaysPpGainSummary[]> {
+  const global = isGlobalCountry(country);
+  const where = global ? ["e.detected_at >= ?", "e.pp_gain >= 0.05"] : ["e.country = ?", "e.detected_at >= ?", "e.pp_gain >= 0.05"];
+  const args: Array<string | number> = global ? [cutoff] : [country, cutoff];
+  if (options.keys === "4k") {
+    where.push(`${TOP_PLAY_KEY_COUNT_EXPR} = 4`);
+  } else if (options.keys === "other") {
+    where.push(`${TOP_PLAY_KEY_COUNT_EXPR} is not null`, `${TOP_PLAY_KEY_COUNT_EXPR} != 4`);
+  }
+  const rows = (await exec(
+    db,
+    `select e.user_id, sum(e.pp_gain) as total_gain, max(e.payload_json) as payload_json,
+            u.username, u.avatar_url, u.country_code
+     from top_play_events e
+     left join users u on u.user_id = e.user_id
+     where ${where.join(" and ")}
+     group by e.user_id
+     having total_gain >= 0.05
+     order by total_gain desc
+     limit ${TOP_PLAYS_PP_GAIN_LIMIT}`,
+    args,
+  )).rows;
+  return rows
+    .map((row) => hydrateTopPlayPpGain(row))
+    .filter((entry): entry is TopPlaysPpGainSummary => entry !== null);
 }
 
 function topPlaysSnapshotOrderBy(options: TopPlaysSnapshotOptions): string {
@@ -305,5 +368,22 @@ function hydrateTopPlayEvent(row: Record<string, unknown>): CountryTopPlay {
     ...event,
     user,
     score: scoreUser ? { ...event.score, user: scoreUser } : event.score,
+  };
+}
+
+function hydrateTopPlayPpGain(row: Record<string, unknown>): TopPlaysPpGainSummary | null {
+  const event = parseJson<CountryTopPlay>(row.payload_json, {} as CountryTopPlay);
+  const id = Number(row.user_id ?? event.user?.id);
+  const totalGain = Number(row.total_gain ?? 0);
+  if (!Number.isFinite(id) || id <= 0 || !Number.isFinite(totalGain) || totalGain < 0.05) return null;
+  const username = row.username == null ? "" : String(row.username);
+  const avatarUrl = row.avatar_url == null ? "" : String(row.avatar_url);
+  const countryCode = row.country_code == null ? "" : String(row.country_code);
+  return {
+    id,
+    username: username || event.user?.username || "",
+    avatar_url: avatarUrl || event.user?.avatar_url || "",
+    country_code: countryCode || event.user?.country_code,
+    totalGain,
   };
 }

@@ -24,7 +24,7 @@ import { parseCountrySearchParam } from "../lib/country-search";
 import { hasTopPlaysCache, shouldRefreshTopPlays } from "../lib/top-plays-cache";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { startProgressPoll } from "../lib/progress-poll";
-import { fetchLiveTopPlaysSnapshot, isLiveBackendConfigured, openLiveEventSource } from "../lib/live-backend";
+import { fetchLiveTopPlaysSnapshot, isLiveBackendConfigured, openLiveEventSource, type LiveTopPlaysPpGain } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
 import { LiveDataEmptyState } from "../components/LiveDataEmptyState";
 import { useCountryWarming } from "../lib/use-country-warming";
@@ -152,11 +152,14 @@ function PopOffsPage() {
   const [refreshStatus, setRefreshStatus] = useState<TopPlaysRefreshStatus | null>(null);
   const [partialPopoffs, setPartialPopoffs] = useState<PopOff[]>([]);
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<number[]>([]);
+  const [livePagePopoffs, setLivePagePopoffs] = useState<PopOff[]>([]);
+  const [liveTotal, setLiveTotal] = useState(0);
+  const [livePpGains, setLivePpGains] = useState<LiveTopPlaysPpGain[]>([]);
   const [settledLiveSnapshotKey, setSettledLiveSnapshotKey] = useState<string | null>(null);
   const hasRestoredRememberedRangeRef = useRef(false);
   const sawRefreshActivityRef = useRef(false);
   const finalizingRefreshRef = useRef(false);
-  const fetchedLiveSnapshotKeysRef = useRef(new Set<string>());
+  const currentLiveSnapshotKeyRef = useRef<string | null>(null);
   // Read inside fetchAll to skip a re-entry when setCachedPopoffs's store update
   // makes the cache look fresh again mid-scan and would otherwise reset the spinner.
   const refreshingRef = useRef(false);
@@ -179,7 +182,11 @@ function PopOffsPage() {
     setRefreshStatus(null);
     setPartialPopoffs([]);
     setSelectedPlayerIds([]);
+    setLivePagePopoffs([]);
+    setLiveTotal(0);
+    setLivePpGains([]);
     setSettledLiveSnapshotKey(null);
+    currentLiveSnapshotKeyRef.current = null;
     fetchingRef.current = false;
     sawRefreshActivityRef.current = false;
     finalizingRefreshRef.current = false;
@@ -277,14 +284,15 @@ function PopOffsPage() {
 
   useEffect(() => {
     if (!liveBackendEnabled) return;
-    const snapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}`;
+    const selectedPlayersKey = selectedPlayerIds.join(",");
+    const snapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}:${page}:${selectedPlayersKey}`;
     const cacheNeedsRefresh = shouldRefreshTopPlays({
       fetchedAt: popoffsFetchedAt,
       cachedWindow: popoffsWindow,
       selectedRange: range,
       cacheTtlMs: CLIENT_CACHE_TTL.popoffs,
     });
-    if (!cacheNeedsRefresh && fetchedLiveSnapshotKeysRef.current.has(snapshotKey)) {
+    if (!cacheNeedsRefresh && currentLiveSnapshotKeyRef.current === snapshotKey) {
       setLoading(false);
       setRefreshing(false);
       setScanStartedAt(null);
@@ -294,19 +302,26 @@ function PopOffsPage() {
     let cancelled = false;
     const requestedCountry = selectedCountry;
     const currentPopoffs = useAppStore.getState().popoffsByCountry[requestedCountry] ?? [];
-    const hasVisibleCache = hasPopoffsInRange(currentPopoffs, range);
+    const hasVisibleCache = livePagePopoffs.length > 0 || hasPopoffsInRange(currentPopoffs, range);
     setLoading(!hasVisibleCache);
     setRefreshing(hasVisibleCache);
     setScanStartedAt(null);
 
-    fetchLiveTopPlaysSnapshot(requestedCountry, range, { sort, dir, keys })
+    fetchLiveTopPlaysSnapshot(requestedCountry, range, {
+      sort,
+      dir,
+      keys,
+      page: page + 1,
+      pageSize: PAGE_SIZE,
+      includePpGains: true,
+      userIds: selectedPlayerIds,
+    })
       .then((snapshot) => {
         if (cancelled || currentCountryRef.current !== requestedCountry) return;
-        fetchedLiveSnapshotKeysRef.current.add(snapshotKey);
-        // Merge with the existing cache so narrower-window events fetched
-        // earlier survive a wider refetch. The backend caps snapshots at 200
-        // rows for the current query, so replacing would lose candidates from
-        // previously fetched sorts/windows.
+        currentLiveSnapshotKeyRef.current = snapshotKey;
+        setLivePagePopoffs(snapshot.popoffs);
+        setLiveTotal(snapshot.total ?? snapshot.popoffs.length);
+        setLivePpGains(snapshot.ppGains ?? []);
         const cachedPopoffs = useAppStore.getState().popoffsByCountry[requestedCountry] ?? [];
         const cachedWindow = useAppStore.getState().popoffsWindowByCountry[requestedCountry] ?? null;
         setCachedPopoffs(
@@ -328,7 +343,7 @@ function PopOffsPage() {
     return () => {
       cancelled = true;
     };
-  }, [dir, keys, liveBackendEnabled, mergePopoffs, popoffsFetchedAt, popoffsWindow, range, selectedCountry, setCachedPopoffs, sort]);
+  }, [dir, keys, liveBackendEnabled, livePagePopoffs.length, mergePopoffs, page, popoffsFetchedAt, popoffsWindow, range, selectedCountry, selectedPlayerIds, setCachedPopoffs, sort]);
 
   useEffect(() => {
     if (!liveBackendEnabled) return;
@@ -528,14 +543,19 @@ function PopOffsPage() {
 
   // Filter by time range
   const rangedPopoffs = useMemo(() => {
+    if (liveBackendEnabled) {
+      return livePagePopoffs.filter((popoff) => !hiddenUserIds.has(popoff.user.id));
+    }
     return livePopoffs.filter((popoff) => {
       if (hiddenUserIds.has(popoff.user.id)) return false;
       const age = Date.now() - new Date(popoff.time).getTime();
       return age < RANGE_MS[range];
     });
-  }, [livePopoffs, range, hiddenUserIds]);
+  }, [hiddenUserIds, liveBackendEnabled, livePagePopoffs, livePopoffs, range]);
 
   const filtered = useMemo(() => {
+    if (liveBackendEnabled) return rangedPopoffs;
+
     const playerFiltered = selectedPlayerIds.length > 0
       ? rangedPopoffs.filter((popoff) => selectedPlayerIdSet.has(popoff.user.id))
       : rangedPopoffs;
@@ -555,16 +575,16 @@ function PopOffsPage() {
 
       return new Date(b.time).getTime() - new Date(a.time).getTime();
     });
-  }, [rangedPopoffs, selectedPlayerIdSet, selectedPlayerIds.length, keys, sort, dir]);
+  }, [dir, keys, liveBackendEnabled, rangedPopoffs, selectedPlayerIdSet, selectedPlayerIds.length, sort]);
 
-  const liveSnapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}`;
+  const liveSnapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}:${page}:${selectedPlayerIds.join(",")}`;
   const liveSnapshotNeeded =
     shouldRefreshTopPlays({
       fetchedAt: popoffsFetchedAt,
       cachedWindow: popoffsWindow,
       selectedRange: range,
       cacheTtlMs: CLIENT_CACHE_TTL.popoffs,
-    }) || !fetchedLiveSnapshotKeysRef.current.has(liveSnapshotKey);
+    }) || currentLiveSnapshotKeyRef.current !== liveSnapshotKey;
   const waitingForLiveSnapshot =
     liveBackendEnabled &&
     settledLiveSnapshotKey !== liveSnapshotKey &&
@@ -572,6 +592,12 @@ function PopOffsPage() {
   const showingInitialLiveSnapshot = waitingForLiveSnapshot && filtered.length === 0;
 
   const playerPpGains = useMemo(() => {
+    if (liveBackendEnabled && livePpGains.length > 0) {
+      return livePpGains
+        .filter((player) => !hiddenUserIds.has(player.id) && player.totalGain >= 0.05)
+        .sort((a, b) => b.totalGain - a.totalGain);
+    }
+
     const byUser = new Map<number, { username: string; avatar_url: string; totalGain: number }>();
     for (const p of rangedPopoffs) {
       if (!p.ppGain) continue;
@@ -591,7 +617,7 @@ function PopOffsPage() {
       .sort((a, b) => b[1].totalGain - a[1].totalGain)
       .map(([id, info]) => ({ id, ...info }));
     return ranked;
-  }, [rangedPopoffs]);
+  }, [hiddenUserIds, liveBackendEnabled, livePpGains, rangedPopoffs]);
 
   const ppGainsRailRef = useRef<HTMLDivElement | null>(null);
   const [ppGainsRailFade, setPpGainsRailFade] = useState<{ top: boolean; bottom: boolean }>({ top: false, bottom: false });
@@ -618,8 +644,9 @@ function PopOffsPage() {
   const showPpGainsRail = playerPpGains.length > 0 || (!liveBackendEnabled && (loadingPlayers || loading));
 
   // Paginate
-  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
-  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const totalCount = liveBackendEnabled ? liveTotal : filtered.length;
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const paginated = liveBackendEnabled ? filtered : filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const loadingLabel = loadingPlayers || (!liveBackendEnabled && players.length === 0)
     ? "Loading players..."
     : hasCachedPopoffs
@@ -659,7 +686,7 @@ function PopOffsPage() {
             )}
             {!loadingPlayers && !refreshing && !loading && !playersError && (
               <span className="text-[10px] text-osu-f1">
-                {filtered.length} top plays found
+                {totalCount} top plays found
               </span>
             )}
           </div>

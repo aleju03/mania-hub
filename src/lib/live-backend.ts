@@ -48,11 +48,23 @@ export interface LiveTopPlaysSnapshot {
   popoffs: CountryTopPlay[];
   scannedAt: number;
   window: "24h" | "3d" | "7d" | "30d";
+  total?: number;
+  page?: number;
+  pageSize?: number;
+  ppGains?: LiveTopPlaysPpGain[];
 }
 
 export type LiveTopPlaysSort = "recent" | "pp" | "gain";
 export type LiveTopPlaysDirection = "asc" | "desc";
 export type LiveTopPlaysKeyFilter = "all" | "4k" | "other";
+
+export interface LiveTopPlaysPpGain {
+  id: number;
+  username: string;
+  avatar_url: string;
+  country_code?: string;
+  totalGain: number;
+}
 
 export interface LiveSnipesSnapshot {
   events: SnipeEvent[];
@@ -573,6 +585,10 @@ export async function fetchLiveTopPlaysSnapshot(
     sort?: LiveTopPlaysSort;
     dir?: LiveTopPlaysDirection;
     keys?: LiveTopPlaysKeyFilter;
+    page?: number;
+    pageSize?: number;
+    includePpGains?: boolean;
+    userIds?: number[];
   },
 ): Promise<LiveTopPlaysSnapshot> {
   const query = new URLSearchParams({ country, window });
@@ -580,6 +596,10 @@ export async function fetchLiveTopPlaysSnapshot(
   if (options?.sort) query.set("sort", options.sort);
   if (options?.dir) query.set("dir", options.dir);
   if (options?.keys) query.set("keys", options.keys);
+  if (options?.page != null) query.set("page", String(options.page));
+  if (options?.pageSize != null) query.set("pageSize", String(options.pageSize));
+  if (options?.includePpGains) query.set("includePpGains", "1");
+  if (options?.userIds && options.userIds.length > 0) query.set("userIds", options.userIds.join(","));
   return fetchLiveJson(`/api/snapshots/top-plays?${query.toString()}`);
 }
 

@@ -1490,7 +1490,15 @@ describe("live backend", () => {
     );
 
     const ppSnapshot = await getTopPlaysSnapshot(db, "GLOBAL", "24h");
+    expect(ppSnapshot.total).toBe(206);
     expect(ppSnapshot.popoffs.some((play) => play.score.id === 9001)).toBe(false);
+
+    const pagedSnapshot = await getTopPlaysSnapshot(db, "GLOBAL", "24h", { sort: "pp", page: 14, pageSize: 15, includePpGains: true });
+    expect(pagedSnapshot.total).toBe(206);
+    expect(pagedSnapshot.page).toBe(14);
+    expect(pagedSnapshot.pageSize).toBe(15);
+    expect(pagedSnapshot.popoffs.some((play) => play.score.id === 9001)).toBe(true);
+    expect(pagedSnapshot.ppGains?.[0]).toMatchObject({ id: 101, totalGain: 36.9 });
 
     const recentSnapshot = await getTopPlaysSnapshot(db, "GLOBAL", "24h", { sort: "recent" });
     expect(recentSnapshot.popoffs[0].score.id).toBe(9001);

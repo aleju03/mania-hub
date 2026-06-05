@@ -1279,6 +1279,10 @@ function parseTopPlaysSnapshotQuery(params: URLSearchParams): TopPlaysSnapshotOp
     sort: rawSort === "recent" || rawSort === "pp" || rawSort === "gain" ? rawSort : undefined,
     dir: params.get("dir") === "asc" ? "asc" : "desc",
     keys: rawKeys === "4k" || rawKeys === "other" ? rawKeys : "all",
+    page: clampInteger(params.get("page"), 1, 10_000, 1),
+    pageSize: clampInteger(params.get("pageSize") ?? params.get("limit"), 1, 200, 200),
+    includePpGains: params.get("includePpGains") === "1",
+    userIds: parseUserIds(params.get("userIds")),
   };
 }
 
