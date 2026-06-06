@@ -79,6 +79,28 @@ export interface LiveMapsSnapshot {
   refreshedAt: string | null;
   isStale: boolean;
   refreshQueued: boolean;
+  progress: LiveMapsRefreshProgress | null;
+}
+
+export type LiveMapsRefreshProgressStatus = "queued" | "running" | "done" | "failed";
+export type LiveMapsRefreshProgressStage = "queued" | "fetching" | "persisting" | "done" | "failed";
+
+export interface LiveMapsRefreshProgress {
+  country: string;
+  status: LiveMapsRefreshProgressStatus;
+  stage: LiveMapsRefreshProgressStage;
+  percent: number;
+  completedUnits: number;
+  totalUnits: number;
+  farmedCompleted: number;
+  farmedTotal: number;
+  favouritesCompleted: number;
+  favouritesTotal: number;
+  message: string;
+  startedAt: string;
+  updatedAt: string;
+  finishedAt: string | null;
+  error: string | null;
 }
 
 export type LiveMapsBrowseTab = "farmed" | "popular" | "favourites";
@@ -114,6 +136,11 @@ export interface LiveMapsPageSnapshot {
   refreshedAt: string | null;
   isStale: boolean;
   refreshQueued: boolean;
+  progress: LiveMapsRefreshProgress | null;
+}
+
+export interface LiveMapsProgressSnapshot {
+  progress: LiveMapsRefreshProgress | null;
 }
 
 export type LiveMapsPlayersKind = "farmed" | "popular" | "favourite";
@@ -640,6 +667,11 @@ export async function fetchLiveMapsPageSnapshot(
   });
   if (params.q.trim()) query.set("q", params.q.trim());
   return fetchLiveJson(`/api/snapshots/maps-page?${query.toString()}`);
+}
+
+export async function fetchLiveMapsProgress(country: string): Promise<LiveMapsProgressSnapshot> {
+  const query = new URLSearchParams({ country, observe: "1" });
+  return fetchLiveJson(`/api/snapshots/maps-progress?${query.toString()}`);
 }
 
 export async function fetchLiveMapsPlayersSnapshot(

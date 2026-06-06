@@ -17,6 +17,8 @@ const MAPS_FARMED_SCORE_WINDOW = 200;
 const FARMED_SINGLE_PLAYER_PP_MIN = 500;
 const USER_FAVOURITES_MAX_PAGES = 10;
 const MAPS_FARMED_OVERLAY_META_PREFIX = "maps_farmed_overlay_updated_at:";
+const MAPS_REFRESH_PROGRESS_META_PREFIX = "maps_refresh_progress:";
+const MAPS_REFRESH_PROGRESS_WRITE_INTERVAL_MS = 1_000;
 
 export class MapsRosterNotReadyError extends Error {
   constructor(readonly country: string) {
@@ -177,6 +179,36 @@ interface CountryMapsFavouritesSection {
   beatmapsetsPool: Record<number, MapsFavouriteBeatmapset>;
   generatedAt: string;
 }
+
+type MapsRefreshProgressStatus = "queued" | "running" | "done" | "failed";
+type MapsRefreshProgressStage = "queued" | "fetching" | "persisting" | "done" | "failed";
+
+export interface MapsRefreshProgress {
+  country: string;
+  status: MapsRefreshProgressStatus;
+  stage: MapsRefreshProgressStage;
+  percent: number;
+  completedUnits: number;
+  totalUnits: number;
+  farmedCompleted: number;
+  farmedTotal: number;
+  favouritesCompleted: number;
+  favouritesTotal: number;
+  message: string;
+  startedAt: string;
+  updatedAt: string;
+  finishedAt: string | null;
+  error: string | null;
+}
+
+type MapsSnapshotResponse<T> = {
+  value: T | null;
+  generatedAt: string | null;
+  refreshedAt: string | null;
+  isStale: boolean;
+  refreshQueued: boolean;
+  progress: MapsRefreshProgress | null;
+};
 
 type RawBeatmap = {
   id?: number;
@@ -399,7 +431,7 @@ export async function getMapsSnapshot(
   country: string,
   maxAgeMs: number,
   section: MapsSnapshotSection = "core",
-): Promise<{ value: CountryMapsData | null; generatedAt: string | null; refreshedAt: string | null; isStale: boolean; refreshQueued: boolean }> {
+): Promise<MapsSnapshotResponse<CountryMapsData>> {
   const normalized = country.toUpperCase();
   const snapshot = section === "random"
     ? await readMapsRandomSnapshot(db, normalized, maxAgeMs)
@@ -412,7 +444,8 @@ export async function getMapsSnapshot(
     await enqueueMapsRefresh(queue, normalized);
     refreshQueued = true;
   }
-  return { ...snapshot, value: section === "random" ? value : sliceMapsSnapshotSection(value, section), refreshQueued };
+  const progress = refreshQueued ? await readActiveMapsRefreshProgress(db, normalized) : null;
+  return { ...snapshot, value: section === "random" ? value : sliceMapsSnapshotSection(value, section), refreshQueued, progress };
 }
 
 export async function getMapsPageSnapshot(
@@ -421,7 +454,7 @@ export async function getMapsPageSnapshot(
   country: string,
   maxAgeMs: number,
   query: MapsPageQuery,
-): Promise<{ value: MapsPageValue | null; generatedAt: string | null; refreshedAt: string | null; isStale: boolean; refreshQueued: boolean }> {
+): Promise<MapsSnapshotResponse<MapsPageValue>> {
   const normalized = country.toUpperCase();
   const snapshot = await readRawMapsSnapshot(db, normalized, maxAgeMs);
   let refreshQueued = await hasActiveMapsRefresh(db, normalized);
@@ -440,7 +473,15 @@ export async function getMapsPageSnapshot(
     refreshedAt: snapshot.refreshedAt,
     isStale: snapshot.isStale,
     refreshQueued,
+    progress: refreshQueued ? await readActiveMapsRefreshProgress(db, normalized) : null,
   };
+}
+
+export async function getMapsRefreshProgress(
+  db: Db,
+  country: string,
+): Promise<{ progress: MapsRefreshProgress | null }> {
+  return { progress: await readActiveMapsRefreshProgress(db, country.toUpperCase()) };
 }
 
 export async function getMapsPlayersSnapshot(
@@ -1487,6 +1528,210 @@ async function hasActiveMapsRefresh(db: Db, country: string): Promise<boolean> {
   return !!row;
 }
 
+async function readActiveMapsRefreshProgress(db: Db, country: string): Promise<MapsRefreshProgress | null> {
+  const normalized = country.toUpperCase();
+  const stored = await readStoredMapsRefreshProgress(db, normalized);
+  const now = nowIso();
+  const job = (await exec(
+    db,
+    `select status, run_after, updated_at, last_error
+     from jobs
+     where dedupe_key = ?
+       and (status in ('queued', 'running') or (status = 'failed' and run_after > ?))
+     order by updated_at desc
+     limit 1`,
+    [`maps:${normalized}`, now],
+  )).rows[0];
+  if (!job) return stored?.status === "running" || stored?.status === "queued" ? stored : null;
+  if (stored && stored.status !== "done" && stored.status !== "failed") return stored;
+
+  const updatedAt = String(job.updated_at ?? now);
+  const failedRetry = String(job.status) === "failed";
+  return {
+    country: normalized,
+    status: String(job.status) === "running" ? "running" : "queued",
+    stage: "queued",
+    percent: 0,
+    completedUnits: 0,
+    totalUnits: 0,
+    farmedCompleted: 0,
+    farmedTotal: 0,
+    favouritesCompleted: 0,
+    favouritesTotal: 0,
+    message: failedRetry ? "Waiting to retry maps build..." : "Queued maps build...",
+    startedAt: updatedAt,
+    updatedAt,
+    finishedAt: null,
+    error: failedRetry && job.last_error != null ? String(job.last_error) : null,
+  };
+}
+
+async function readStoredMapsRefreshProgress(db: Db, country: string): Promise<MapsRefreshProgress | null> {
+  const row = (await exec(db, "select value_json from live_meta where key = ?", [mapsRefreshProgressMetaKey(country)])).rows[0];
+  return normalizeMapsRefreshProgress(parseJson<unknown>(row?.value_json, null), country);
+}
+
+function normalizeMapsRefreshProgress(value: unknown, country: string): MapsRefreshProgress | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const candidate = value as Partial<MapsRefreshProgress>;
+  const status = candidate.status;
+  const stage = candidate.stage;
+  if (status !== "queued" && status !== "running" && status !== "done" && status !== "failed") return null;
+  if (stage !== "queued" && stage !== "fetching" && stage !== "persisting" && stage !== "done" && stage !== "failed") return null;
+  const totalUnits = safeProgressNumber(candidate.totalUnits);
+  const completedUnits = Math.min(totalUnits, safeProgressNumber(candidate.completedUnits));
+  const updatedAt = typeof candidate.updatedAt === "string" && candidate.updatedAt ? candidate.updatedAt : nowIso();
+  const startedAt = typeof candidate.startedAt === "string" && candidate.startedAt ? candidate.startedAt : updatedAt;
+  return {
+    country: country.toUpperCase(),
+    status,
+    stage,
+    percent: Math.max(0, Math.min(100, Number(candidate.percent ?? 0))),
+    completedUnits,
+    totalUnits,
+    farmedCompleted: safeProgressNumber(candidate.farmedCompleted),
+    farmedTotal: safeProgressNumber(candidate.farmedTotal),
+    favouritesCompleted: safeProgressNumber(candidate.favouritesCompleted),
+    favouritesTotal: safeProgressNumber(candidate.favouritesTotal),
+    message: typeof candidate.message === "string" && candidate.message ? candidate.message : "Building maps...",
+    startedAt,
+    updatedAt,
+    finishedAt: typeof candidate.finishedAt === "string" && candidate.finishedAt ? candidate.finishedAt : null,
+    error: typeof candidate.error === "string" && candidate.error ? candidate.error : null,
+  };
+}
+
+function safeProgressNumber(value: unknown): number {
+  const number = Number(value ?? 0);
+  return Number.isFinite(number) && number > 0 ? Math.floor(number) : 0;
+}
+
+async function writeMapsRefreshProgress(db: Db, progress: MapsRefreshProgress): Promise<void> {
+  await exec(
+    db,
+    `insert into live_meta (key, value_json, updated_at)
+     values (?, ?, ?)
+     on conflict(key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at`,
+    [mapsRefreshProgressMetaKey(progress.country), json(progress), progress.updatedAt],
+  );
+}
+
+function mapsRefreshProgressMetaKey(country: string): string {
+  return `${MAPS_REFRESH_PROGRESS_META_PREFIX}${country.toUpperCase()}`;
+}
+
+class MapsRefreshProgressReporter {
+  private status: MapsRefreshProgressStatus = "running";
+  private stage: MapsRefreshProgressStage = "fetching";
+  private farmedCompleted = 0;
+  private favouritesCompleted = 0;
+  private readonly startedAt = nowIso();
+  private finishedAt: string | null = null;
+  private error: string | null = null;
+  private lastWriteMs = 0;
+  private lastPercent = 0;
+  private writeChain = Promise.resolve();
+
+  constructor(
+    private readonly db: Db,
+    private readonly country: string,
+    private readonly totalUsers: number,
+  ) {}
+
+  start(): Promise<void> {
+    return this.write(true);
+  }
+
+  markUserDone(section: "farmed" | "favourites"): Promise<void> {
+    if (section === "farmed") {
+      this.farmedCompleted = Math.min(this.totalUsers, this.farmedCompleted + 1);
+    } else {
+      this.favouritesCompleted = Math.min(this.totalUsers, this.favouritesCompleted + 1);
+    }
+    return this.write(false);
+  }
+
+  markSectionDone(section: "farmed" | "favourites"): Promise<void> {
+    if (section === "farmed") this.farmedCompleted = this.totalUsers;
+    else this.favouritesCompleted = this.totalUsers;
+    return this.write(true);
+  }
+
+  markPersisting(): Promise<void> {
+    this.stage = "persisting";
+    return this.write(true);
+  }
+
+  markDone(): Promise<void> {
+    this.status = "done";
+    this.stage = "done";
+    this.farmedCompleted = this.totalUsers;
+    this.favouritesCompleted = this.totalUsers;
+    this.finishedAt = nowIso();
+    this.error = null;
+    return this.write(true);
+  }
+
+  markFailed(error: unknown): Promise<void> {
+    this.status = "failed";
+    this.stage = "failed";
+    this.finishedAt = nowIso();
+    this.error = error instanceof Error ? error.message : String(error);
+    return this.write(true);
+  }
+
+  private write(force: boolean): Promise<void> {
+    const nowMs = Date.now();
+    if (!force && nowMs - this.lastWriteMs < MAPS_REFRESH_PROGRESS_WRITE_INTERVAL_MS) {
+      return Promise.resolve();
+    }
+    this.lastWriteMs = nowMs;
+    const snapshot = this.snapshot();
+    this.writeChain = this.writeChain
+      .catch(() => {})
+      .then(() => writeMapsRefreshProgress(this.db, snapshot))
+      .catch(() => {});
+    return this.writeChain;
+  }
+
+  private snapshot(): MapsRefreshProgress {
+    const totalUnits = this.totalUsers * 2;
+    const completedUnits = Math.min(totalUnits, this.farmedCompleted + this.favouritesCompleted);
+    let percent = totalUnits > 0 ? (completedUnits / totalUnits) * 96 : 0;
+    if (this.stage === "persisting") percent = Math.max(percent, 98);
+    if (this.status === "done") percent = 100;
+    if (this.status === "failed") percent = this.lastPercent;
+    percent = Math.max(this.lastPercent, Math.min(100, percent));
+    this.lastPercent = percent;
+    return {
+      country: this.country.toUpperCase(),
+      status: this.status,
+      stage: this.stage,
+      percent,
+      completedUnits,
+      totalUnits,
+      farmedCompleted: this.farmedCompleted,
+      farmedTotal: this.totalUsers,
+      favouritesCompleted: this.favouritesCompleted,
+      favouritesTotal: this.totalUsers,
+      message: this.message(),
+      startedAt: this.startedAt,
+      updatedAt: nowIso(),
+      finishedAt: this.finishedAt,
+      error: this.error,
+    };
+  }
+
+  private message(): string {
+    if (this.status === "done") return "Maps ready.";
+    if (this.status === "failed") return "Maps build failed.";
+    if (this.stage === "persisting") return "Saving maps...";
+    if (this.farmedCompleted >= this.totalUsers && this.favouritesCompleted < this.totalUsers) return "Loading favorites...";
+    if (this.favouritesCompleted >= this.totalUsers && this.farmedCompleted < this.totalUsers) return "Loading top scores...";
+    return "Building maps...";
+  }
+}
+
 export async function refreshCountryMaps(
   db: Db,
   osu: Pick<OsuApiClient, "getUserBestScoresWindow" | "getUserMostPlayed" | "getUserFavourites">,
@@ -1495,6 +1740,8 @@ export async function refreshCountryMaps(
   const country = payload.country.toUpperCase();
   const users = await getMapsUsers(db, country);
   if (users.length === 0) throw new MapsRosterNotReadyError(country);
+  const progress = new MapsRefreshProgressReporter(db, country, users.length);
+  await progress.start();
   const emptyGeneratedAt = nowIso();
   let latestFarmed: CountryMapsFarmedSection = { farmed: [], generatedAt: emptyGeneratedAt };
   let latestFavourites: CountryMapsFavouritesSection = {
@@ -1511,22 +1758,31 @@ export async function refreshCountryMaps(
     return persistChain;
   };
 
-  const farmedPromise = buildCountryFarmed(db, osu, users).then(async (section) => {
-    latestFarmed = section;
-    await persistLatest();
-    return section;
-  });
-  const favouritesPromise = buildCountryFavourites(osu, users).then(async (section) => {
-    latestFavourites = section;
-    await persistLatest();
-    return section;
-  });
+  try {
+    const farmedPromise = buildCountryFarmed(db, osu, users, progress).then(async (section) => {
+      latestFarmed = section;
+      await progress.markSectionDone("farmed");
+      await persistLatest();
+      return section;
+    });
+    const favouritesPromise = buildCountryFavourites(osu, users, progress).then(async (section) => {
+      latestFavourites = section;
+      await progress.markSectionDone("favourites");
+      await persistLatest();
+      return section;
+    });
 
-  const [farmedSection, favSection] = await Promise.all([farmedPromise, favouritesPromise]);
-  const value = composeCountryMapsData(farmedSection, favSection);
-  assertUsableMapsData(value, users.length);
-  await persistMapsSnapshot(db, country, value);
-  return value;
+    const [farmedSection, favSection] = await Promise.all([farmedPromise, favouritesPromise]);
+    await progress.markPersisting();
+    const value = composeCountryMapsData(farmedSection, favSection);
+    assertUsableMapsData(value, users.length);
+    await persistMapsSnapshot(db, country, value);
+    await progress.markDone();
+    return value;
+  } catch (error) {
+    await progress.markFailed(error);
+    throw error;
+  }
 }
 
 // Global keeps real aggregate counts but stores only enough per-map players for
@@ -2211,14 +2467,19 @@ async function buildCountryFarmed(
   db: Db,
   osu: Pick<OsuApiClient, "getUserBestScoresWindow">,
   users: MapsUser[],
+  progress?: MapsRefreshProgressReporter,
 ): Promise<CountryMapsFarmedSection> {
   const userResults = await mapWithConcurrency(users, MAPS_FETCH_CONCURRENCY, async (user) => {
-    const bestScores = await osu.getUserBestScoresWindow(user.id, 200, "job:refresh_country_maps:farmed")
-      .catch((error) => {
-        throwIfMapsRefreshShouldAbort(error);
-        return [] as OscScore[];
-      });
-    return { user, bestScores };
+    try {
+      const bestScores = await osu.getUserBestScoresWindow(user.id, 200, "job:refresh_country_maps:farmed")
+        .catch((error) => {
+          throwIfMapsRefreshShouldAbort(error);
+          return [] as OscScore[];
+        });
+      return { user, bestScores };
+    } finally {
+      await progress?.markUserDone("farmed");
+    }
   });
   const generatedAt = nowIso();
   await Promise.all(userResults.map(({ user, bestScores }) => updateUserMapsFarmedThreshold(db, user.id, bestScores, generatedAt)));
@@ -2284,23 +2545,28 @@ async function buildCountryFarmed(
 async function buildCountryFavourites(
   osu: Pick<OsuApiClient, "getUserMostPlayed" | "getUserFavourites">,
   users: MapsUser[],
+  progress?: MapsRefreshProgressReporter,
 ): Promise<CountryMapsFavouritesSection> {
   const userResults = await mapWithConcurrency(users, MAPS_FETCH_CONCURRENCY, async (user) => {
-    const [mostPlayed, favourites] = await Promise.all([
-      osu.getUserMostPlayed(user.id, "job:refresh_country_maps:most_played")
-        .then((rows) => rows as RawBeatmapPlaycount[])
-        .catch((error) => {
-          throwIfMapsRefreshShouldAbort(error);
-          return [] as RawBeatmapPlaycount[];
-        }),
-      osu.getUserFavourites(user.id, USER_FAVOURITES_MAX_PAGES, "job:refresh_country_maps:favourites")
-        .then((rows) => rows as RawBeatmapset[])
-        .catch((error) => {
-          throwIfMapsRefreshShouldAbort(error);
-          return [] as RawBeatmapset[];
-        }),
-    ]);
-    return { user, mostPlayed, favourites };
+    try {
+      const [mostPlayed, favourites] = await Promise.all([
+        osu.getUserMostPlayed(user.id, "job:refresh_country_maps:most_played")
+          .then((rows) => rows as RawBeatmapPlaycount[])
+          .catch((error) => {
+            throwIfMapsRefreshShouldAbort(error);
+            return [] as RawBeatmapPlaycount[];
+          }),
+        osu.getUserFavourites(user.id, USER_FAVOURITES_MAX_PAGES, "job:refresh_country_maps:favourites")
+          .then((rows) => rows as RawBeatmapset[])
+          .catch((error) => {
+            throwIfMapsRefreshShouldAbort(error);
+            return [] as RawBeatmapset[];
+          }),
+      ]);
+      return { user, mostPlayed, favourites };
+    } finally {
+      await progress?.markUserDone("favourites");
+    }
   });
 
   const mpMap = new Map<number, MapsAggregatedBeatmap>();

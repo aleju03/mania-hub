@@ -9,7 +9,7 @@ import { getDanEstimateBatch } from "../features/dan-estimates.js";
 import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, type FarmHelperKeyMode } from "../features/farm-helper.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
 import { getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
-import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery } from "../features/maps.js";
+import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery } from "../features/maps.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
@@ -216,6 +216,11 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/snapshots/snipes") {
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     sendJson(req, res, ctx, 200, await getSnipesSnapshot(ctx.db, country, clampLimit(url.searchParams.get("limit"), 500, 1000)));
+    return true;
+  }
+  if (url.pathname === "/api/snapshots/maps-progress") {
+    if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
+    sendJson(req, res, ctx, 200, await getMapsRefreshProgress(ctx.db, country));
     return true;
   }
   if (url.pathname === "/api/snapshots/maps-page") {
@@ -1372,7 +1377,7 @@ async function handleMapsPageSnapshot(
   const prepared = await prepareJsonResponse(status, snapshot, encoding);
   writePreparedJson(req, res, ctx, prepared);
 
-  if (cacheKey && status === 200 && snapshot.value) {
+  if (cacheKey && status === 200 && snapshot.value && !snapshot.refreshQueued) {
     mapsPageResponseCache.set(cacheKey, { ...prepared, storedAt: now });
   }
 }
@@ -1412,7 +1417,7 @@ async function handleMapsSnapshot(
 
   // Only cache populated 200s — never the cold "still building" 202/null state,
   // whose body changes the moment the first real snapshot lands.
-  if (cacheKey && status === 200 && snapshot.value) {
+  if (cacheKey && status === 200 && snapshot.value && !snapshot.refreshQueued) {
     mapsResponseCache.set(cacheKey, { ...prepared, storedAt: now });
   }
 }

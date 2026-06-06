@@ -16,9 +16,49 @@ export function minGate(...values: number[]): number {
 
 export function quantile(values: number[], q: number): number {
   if (!values.length) return 0;
+  const index = quantileIndex(values.length, q);
+  const copy = [...values];
+  return quickselect(copy, index);
+}
+
+export function quantiles(values: number[], qs: number[]): number[] {
+  if (!values.length) return qs.map(() => 0);
   const sorted = [...values].sort((a, b) => a - b);
-  const index = Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * q)));
-  return sorted[index];
+  return qs.map((q) => sorted[quantileIndex(sorted.length, q)]);
+}
+
+function quantileIndex(length: number, q: number): number {
+  return Math.min(length - 1, Math.max(0, Math.floor((length - 1) * q)));
+}
+
+function quickselect(values: number[], target: number): number {
+  let left = 0;
+  let right = values.length - 1;
+
+  while (left < right) {
+    const pivotIndex = partition(values, left, right, Math.floor((left + right) / 2));
+    if (target === pivotIndex) return values[target];
+    if (target < pivotIndex) right = pivotIndex - 1;
+    else left = pivotIndex + 1;
+  }
+
+  return values[left];
+}
+
+function partition(values: number[], left: number, right: number, pivotIndex: number): number {
+  const pivotValue = values[pivotIndex];
+  [values[pivotIndex], values[right]] = [values[right], values[pivotIndex]];
+  let storeIndex = left;
+
+  for (let index = left; index < right; index++) {
+    if (values[index] < pivotValue) {
+      [values[storeIndex], values[index]] = [values[index], values[storeIndex]];
+      storeIndex++;
+    }
+  }
+
+  [values[right], values[storeIndex]] = [values[storeIndex], values[right]];
+  return storeIndex;
 }
 
 export function countInWindow(times: number[], windowMs: number): number {

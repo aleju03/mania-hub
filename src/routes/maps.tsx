@@ -58,13 +58,14 @@ import {
   fetchLiveMapsBeatmapsets,
   fetchLiveMapsPageSnapshot,
   fetchLiveMapsPlayersSnapshot,
+  fetchLiveMapsProgress,
   fetchLiveMapsSnapshot,
   isLiveBackendConfigured,
   openLiveEventSource,
   runLiveBackendAdminAction,
 } from "../lib/live-backend";
 import { LIVE_MAPS_PLAYERS_PAGE_SIZE } from "../lib/live-backend";
-import type { LiveMapsBrowseTab, LiveMapsDetailsPlayer, LiveMapsPageValue, LiveMapsPlayersKind } from "../lib/live-backend";
+import type { LiveMapsBrowseTab, LiveMapsDetailsPlayer, LiveMapsPageValue, LiveMapsPlayersKind, LiveMapsRefreshProgress } from "../lib/live-backend";
 import { CountryWarming } from "../components/CountryWarming";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
@@ -236,6 +237,15 @@ function writeRandomPickSettings(patch: Partial<RandomPickSettings>): void {
   } catch (error) {
     console.warn("[maps] failed to write random pick settings", error);
   }
+}
+
+function formatLiveMapsProgress(progress: LiveMapsRefreshProgress): string {
+  const percent = Math.max(0, Math.min(100, Math.round(progress.percent)));
+  if (progress.status === "queued") return `${progress.message || "Queued maps build..."} (${percent}%)`;
+  if (progress.status === "failed") return "Maps build failed.";
+  if (progress.stage === "done" || progress.status === "done") return "Maps ready.";
+  const message = progress.message || (progress.stage === "persisting" ? "Saving maps..." : "Building maps...");
+  return `${message} (${percent}%)`;
 }
 
 const RANDOM_STATUS_OPTIONS = ["ranked", "loved", "graveyard", "other"] as const;
@@ -953,6 +963,7 @@ function MapsPage() {
   const [rebuildQuery, setRebuildQuery] = useState("");
   const [liveMapsAttempted, setLiveMapsAttempted] = useState(false);
   const [liveMapsRefreshing, setLiveMapsRefreshing] = useState(false);
+  const [liveMapsProgress, setLiveMapsProgress] = useState<LiveMapsRefreshProgress | null>(null);
   const [liveMapsPage, setLiveMapsPage] = useState<LiveMapsPageState | null>(null);
   const liveMapsPageCacheRef = useRef<Map<string, LiveMapsPageState>>(liveMapsPageSessionCache);
   const liveMapsPageTotalCacheRef = useRef<Map<string, number>>(liveMapsPageTotalSessionCache);
@@ -1115,6 +1126,7 @@ function MapsPage() {
     setError(null);
     setLiveMapsAttempted(false);
     setLiveMapsRefreshing(false);
+    setLiveMapsProgress(null);
     setLiveMapsPage(null);
     fetchingMapsRef.current = false;
   }, [selectedCountry, liveBackendEnabled]);
@@ -1142,6 +1154,7 @@ function MapsPage() {
 
     setLiveMapsAttempted(false);
     setMapsFirstBuild(false);
+    setLiveMapsProgress(null);
     let cancelled = false;
     const cachedPage = liveMapsPageCacheRef.current.get(liveMapsPageRequestKey) ?? null;
     setLoadingMaps(!cachedPage);
@@ -1153,6 +1166,7 @@ function MapsPage() {
         .then((snapshot) => {
           if (cancelled) return;
           setLiveMapsRefreshing(snapshot.isStale || snapshot.refreshQueued);
+          setLiveMapsProgress(snapshot.progress ?? null);
           if (snapshot.value) {
             rememberLiveMapsPage({ ...snapshot.value, requestKey: liveMapsPageRequestKey });
             setLoadedSections(2);
@@ -1171,6 +1185,7 @@ function MapsPage() {
         .catch(() => {
           if (!cancelled) {
             setLoadingMaps(false);
+            setLiveMapsProgress(null);
             if (!cachedPage) setError("Couldn't load maps data. Try again later.");
           }
           if (!cancelled) setLiveMapsRefreshing(false);
@@ -1206,6 +1221,7 @@ function MapsPage() {
             liveMapsPageCacheRef.current.clear();
             rememberLiveMapsPage({ ...snapshot.value, requestKey: liveMapsPageRequestKey });
             setLiveMapsRefreshing(snapshot.isStale || snapshot.refreshQueued);
+            setLiveMapsProgress(snapshot.progress ?? null);
           })
           .catch(() => {});
       }, 750);
@@ -1233,6 +1249,7 @@ function MapsPage() {
     if (randomPoolReady) {
       setLoadingMaps(false);
       setLoadedSections(2);
+      setLiveMapsProgress(null);
       return;
     }
 
@@ -1240,12 +1257,14 @@ function MapsPage() {
     let pollTimer: ReturnType<typeof setTimeout> | null = null;
     setLoadingMaps(true);
     setLoadedSections(0);
+    setLiveMapsProgress(null);
 
     const loadRandomPool = () => {
       fetchLiveMapsSnapshot(selectedCountry, "random")
         .then((snapshot) => {
           if (cancelled) return;
           setLiveMapsRefreshing(snapshot.isStale || snapshot.refreshQueued);
+          setLiveMapsProgress(snapshot.progress ?? null);
           if (snapshot.value && hasValidMapsDataShape(snapshot.value)) {
             setMapsData(selectedCountry, snapshot.value);
             setLoadedSections(2);
@@ -1264,6 +1283,7 @@ function MapsPage() {
           if (!cancelled) {
             setLoadingMaps(false);
             setLiveMapsRefreshing(false);
+            setLiveMapsProgress(null);
             setError("Couldn't load maps data. Try again later.");
           }
         })
@@ -1676,6 +1696,25 @@ function MapsPage() {
 
   const isLoading = loadingPlayers || (liveBackendPaged ? liveMapsPagePending : loadingMaps) || currentMapsSectionLoading;
 
+  useEffect(() => {
+    if (!liveBackendEnabled || !isLoading || loadingPlayers) return;
+
+    let cancelled = false;
+    const loadProgress = () => {
+      fetchLiveMapsProgress(selectedCountry)
+        .then((snapshot) => {
+          if (!cancelled && snapshot.progress) setLiveMapsProgress(snapshot.progress);
+        })
+        .catch(() => {});
+    };
+    loadProgress();
+    const id = window.setInterval(loadProgress, 2_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [isLoading, liveBackendEnabled, loadingPlayers, selectedCountry]);
+
   // ── Random tab: pick a random top-50 player and a single random favourite ──
   // The pool ships lean entries, so a pick records the chosen set id and the
   // full record (covers + per-difficulty list + preview audio) is fetched on
@@ -2040,11 +2079,13 @@ function MapsPage() {
         await runLiveBackendAdminAction({ data: { path: `/api/admin/refresh-maps?country=${selectedCountry}` } });
         if (tab === "random") {
           const snapshot = await fetchLiveMapsSnapshot(selectedCountry, "random");
+          setLiveMapsProgress(snapshot.progress ?? null);
           if (snapshot.value && hasValidMapsDataShape(snapshot.value)) {
             setMapsData(selectedCountry, snapshot.value);
           }
         } else if (liveMapsPageParams && liveMapsPageRequestKey) {
           const snapshot = await fetchLiveMapsPageSnapshot(selectedCountry, liveMapsPageParams);
+          setLiveMapsProgress(snapshot.progress ?? null);
           if (snapshot.value) {
             liveMapsPageCacheRef.current.clear();
             rememberLiveMapsPage({ ...snapshot.value, requestKey: liveMapsPageRequestKey });
@@ -2088,6 +2129,20 @@ function MapsPage() {
       : liveBackendPaged
         ? !!currentLiveMapsPage
         : !!mapsData);
+  const liveMapsProgressLabel =
+    liveBackendEnabled && liveMapsProgress && (liveMapsProgress.status === "queued" || liveMapsProgress.status === "running")
+      ? formatLiveMapsProgress(liveMapsProgress)
+      : null;
+  const mapsLoadingLabel = loadingPlayers
+    ? "Loading players..."
+    : currentMapsSectionLoading
+      ? `Loading ${currentMapsSectionLabel}...`
+      : liveMapsProgressLabel
+        ?? (mapsFirstBuild
+          ? "Building maps..."
+          : liveBackendEnabled
+            ? (liveMapsRefreshing ? "Refreshing maps..." : "Loading maps...")
+            : `Loading maps... (${Math.round(smoothProgress)}%)`);
 
   return (
     <div className="flex-1">
@@ -2100,13 +2155,7 @@ function MapsPage() {
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
                 <span className="text-[10px] text-osu-f1 tabular-nums">
-                  {loadingPlayers
-                    ? "Loading players..."
-                    : currentMapsSectionLoading
-                      ? `Loading ${currentMapsSectionLabel}...`
-                      : mapsFirstBuild
-                      ? "Building maps..."
-                      : `Loading maps... (${Math.round(smoothProgress)}%)`}
+                  {mapsLoadingLabel}
                 </span>
               </div>
             )}

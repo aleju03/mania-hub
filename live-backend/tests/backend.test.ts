@@ -2576,6 +2576,91 @@ describe("live backend", () => {
     }
   });
 
+  it("reports queued progress for cold maps snapshots", async () => {
+    const { db, queue } = await setup();
+
+    const snapshot = await getMapsPageSnapshot(db, queue, "CR", 7 * 24 * 60 * 60 * 1000, {
+      tab: "farmed",
+      page: 0,
+      pageSize: 24,
+      key: "all",
+      beatmapSort: "players",
+      farmedSort: "players",
+      dir: "desc",
+      status: "all",
+      pp: 0,
+      mod: "all",
+      q: "",
+    });
+
+    expect(snapshot.value).toBeNull();
+    expect(snapshot.refreshQueued).toBe(true);
+    expect(snapshot.progress).toMatchObject({
+      country: "CR",
+      status: "queued",
+      stage: "queued",
+      percent: 0,
+      message: "Queued maps build...",
+    });
+  });
+
+  it("stores completed maps refresh progress with processed user counts", async () => {
+    const { db } = await setup();
+    const now = "2026-05-12T11:30:00.000Z";
+    for (let rank = 1; rank <= 2; rank++) {
+      const userId = 20_000 + rank;
+      await exec(
+        db,
+        `insert into users (user_id, username, avatar_url, country_code, updated_at)
+         values (?, ?, ?, 'CR', ?)`,
+        [userId, `Progress Player ${rank}`, `https://assets.example/${userId}.png`, now],
+      );
+      await exec(
+        db,
+        `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+         values ('CR', ?, ?, 'test', 1, ?)`,
+        [userId, rank, now],
+      );
+    }
+    const favouriteSet = {
+      id: 80_000,
+      title: "Progress Set",
+      artist: "Progress Artist",
+      creator: "Progress Mapper",
+      covers: {},
+      status: "ranked",
+      play_count: 50,
+      favourite_count: 10,
+      preview_url: "",
+      bpm: 180,
+      tags: "stream",
+      beatmaps: [{ id: 80_001, mode: "mania", cs: 4, difficulty_rating: 5.5, total_length: 120, version: "4K" }],
+    };
+    const osu = {
+      getUserBestScoresWindow: vi.fn(async () => []),
+      getUserMostPlayed: vi.fn(async () => []),
+      getUserFavourites: vi.fn(async () => [favouriteSet]),
+    };
+
+    await refreshCountryMaps(db, osu, { country: "CR" });
+
+    const row = (await exec(db, "select value_json from live_meta where key = 'maps_refresh_progress:CR'")).rows[0];
+    const progress = JSON.parse(String(row.value_json));
+    expect(progress).toMatchObject({
+      country: "CR",
+      status: "done",
+      stage: "done",
+      percent: 100,
+      completedUnits: 4,
+      totalUnits: 4,
+      farmedCompleted: 2,
+      farmedTotal: 2,
+      favouritesCompleted: 2,
+      favouritesTotal: 2,
+      message: "Maps ready.",
+    });
+  });
+
   it("splits maps snapshots into core and random sections", async () => {
     const { db, queue } = await setup();
     const now = new Date().toISOString();

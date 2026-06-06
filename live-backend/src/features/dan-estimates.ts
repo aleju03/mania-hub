@@ -2,7 +2,7 @@ import type { Db } from "../db.js";
 import { exec } from "../db.js";
 import { DAN_ESTIMATE_CACHE_VERSION } from "../dan/dan-estimator/cache-version.js";
 import { estimateDan } from "../dan/dan-estimator.js";
-import { parseManiaBeatmap } from "../dan/beatmap-parser.js";
+import { parseManiaBeatmap, type ManiaBeatmap } from "../dan/beatmap-parser.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { logWarn } from "../logger.js";
 import type { OsuApiClient } from "../osu/client.js";
@@ -13,6 +13,10 @@ const INLINE_DAN_ESTIMATE_LIMIT = 6;
 const INLINE_DAN_ESTIMATE_CONCURRENCY = 2;
 const MIN_RATE_PERCENT = 50;
 const MAX_RATE_PERCENT = 200;
+const MAX_PARSED_DAN_BEATMAPS = 100;
+
+const parsedDanBeatmapCache = new Map<number, ManiaBeatmap>();
+const parsedDanBeatmapInflight = new Map<number, Promise<ManiaBeatmap>>();
 
 export interface LeanDanEstimate {
   label: string;
@@ -156,8 +160,7 @@ async function computeAndStoreDanEstimate(
   if (cached.found) return cached.value;
 
   const starRating = request.starRating ?? await readBeatmapStarRating(db, request.beatmapId);
-  const osuFile = await osu.getBeatmapFile(request.beatmapId, caller);
-  const map = parseManiaBeatmap(osuFile);
+  const map = await getParsedDanBeatmap(osu, request.beatmapId, caller);
   if (map.keyCount !== 4) {
     await storeUnsupportedDanEstimate(db, request);
     return null;
@@ -213,6 +216,39 @@ async function computeAndStoreDanEstimate(
   );
 
   return lean;
+}
+
+async function getParsedDanBeatmap(osu: OsuApiClient, beatmapId: number, caller: string): Promise<ManiaBeatmap> {
+  const cached = parsedDanBeatmapCache.get(beatmapId);
+  if (cached) {
+    parsedDanBeatmapCache.delete(beatmapId);
+    parsedDanBeatmapCache.set(beatmapId, cached);
+    return cached;
+  }
+
+  const inflight = parsedDanBeatmapInflight.get(beatmapId);
+  if (inflight) return inflight;
+
+  const promise = (async () => {
+    const osuFile = await osu.getBeatmapFile(beatmapId, caller);
+    const map = parseManiaBeatmap(osuFile);
+    parsedDanBeatmapCache.set(beatmapId, map);
+
+    while (parsedDanBeatmapCache.size > MAX_PARSED_DAN_BEATMAPS) {
+      const oldestKey = parsedDanBeatmapCache.keys().next().value;
+      if (oldestKey === undefined) break;
+      parsedDanBeatmapCache.delete(oldestKey);
+    }
+
+    return map;
+  })();
+
+  parsedDanBeatmapInflight.set(beatmapId, promise);
+  try {
+    return await promise;
+  } finally {
+    parsedDanBeatmapInflight.delete(beatmapId);
+  }
 }
 
 async function readCachedDanEstimate(db: Db, request: NormalizedDanEstimateRequest): Promise<CachedDanEstimate> {

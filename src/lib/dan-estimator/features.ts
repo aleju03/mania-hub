@@ -6,18 +6,22 @@ import {
   bucketValues,
   countInWindow,
   quantile,
+  quantiles,
   raoQuadraticEntropyLog,
   strainSpikiness,
 } from "./math";
 
 function getRatedNotes(map: ManiaBeatmap, rate: number): ManiaNote[] {
-  return map.notes
-    .filter((note) => note.column >= 0 && note.column < map.keyCount)
-    .map((note) => rate === 1 ? note : {
+  const notes: ManiaNote[] = [];
+  for (const note of map.notes) {
+    if (note.column < 0 || note.column >= map.keyCount) continue;
+    notes.push(rate === 1 ? note : {
       ...note,
       time: note.time / rate,
       endTime: note.endTime / rate,
     });
+  }
+  return notes;
 }
 
 function groupNotesByTime(notes: ManiaNote[]): Array<[number, ManiaNote[]]> {
@@ -40,14 +44,17 @@ function bitCount(value: number): number {
   return count;
 }
 
-function ngramRepeatRatio(values: Array<number | string>, size: number): number {
+function numericNgramRepeatRatio(values: number[], size: number, base: number): number {
   if (values.length < size + 1) return 0;
 
-  const seen = new Set<string>();
+  const seen = new Set<number>();
   let repeated = 0;
   let total = 0;
   for (let index = 0; index <= values.length - size; index++) {
-    const key = values.slice(index, index + size).join(",");
+    let key = 0;
+    for (let offset = 0; offset < size; offset++) {
+      key = key * base + values[index + offset];
+    }
     if (seen.has(key)) repeated++;
     else seen.add(key);
     total++;
@@ -93,7 +100,38 @@ function sampledWindowNps(noteTimes: number[], windowMs: number, durationMs: num
 export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, rate: number): DanFeatureExtractionResult {
   const notes = getRatedNotes(map, rate);
   const warnings: string[] = [];
-  const noteTimes = notes.map((note) => note.time).sort((a, b) => a - b);
+  const noteTimes: number[] = [];
+  const releaseTimes: number[] = [];
+  const holdDurations: number[] = [];
+  const holdEvents: Array<{ time: number; delta: number }> = [];
+  let holdNoteCount = 0;
+  let totalHoldMs = 0;
+  let noteTimesSorted = true;
+  let releaseTimesSorted = true;
+  let previousNoteTime = -Infinity;
+  let previousReleaseTime = -Infinity;
+
+  for (const note of notes) {
+    if (note.time < previousNoteTime) noteTimesSorted = false;
+    previousNoteTime = note.time;
+    noteTimes.push(note.time);
+
+    if (note.isHold) {
+      holdNoteCount++;
+      if (note.endTime > note.time) {
+        const holdDuration = note.endTime - note.time;
+        holdDurations.push(holdDuration);
+        totalHoldMs += holdDuration;
+        if (note.endTime < previousReleaseTime) releaseTimesSorted = false;
+        previousReleaseTime = note.endTime;
+        releaseTimes.push(note.endTime);
+        holdEvents.push({ time: note.time, delta: 1 }, { time: note.endTime, delta: -1 });
+      }
+    }
+  }
+
+  if (!noteTimesSorted) noteTimes.sort((a, b) => a - b);
+  if (!releaseTimesSorted) releaseTimes.sort((a, b) => a - b);
   const durationMs = Math.max(input.totalLength ? (input.totalLength * 1000) / rate : 0, map.totalLength / rate, noteTimes.at(-1) ?? 0);
 
   if (notes.length < 50 || durationMs <= 0) {
@@ -101,11 +139,7 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
   }
 
   const orderedRows = groupNotesByTime(notes);
-  const chordRows = orderedRows.filter(([, rowNotes]) => rowNotes.length >= 2).length;
-  const twoNoteChordRows = orderedRows.filter(([, rowNotes]) => rowNotes.length === 2).length;
-  const holdRatio = notes.length ? notes.filter((note) => note.isHold).length / notes.length : 0;
-  const chordRatio = orderedRows.length ? chordRows / orderedRows.length : 0;
-  const twoNoteChordRatio = orderedRows.length ? twoNoteChordRows / orderedRows.length : 0;
+  const holdRatio = notes.length ? holdNoteCount / notes.length : 0;
 
   const lastByColumn = Array.from({ length: Math.max(1, map.keyCount) }, () => -Infinity);
   const jackValues: number[] = [];
@@ -116,13 +150,17 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
   const rowIntervals: number[] = [];
   const rowRates: number[] = [];
   const columnIntervals: number[] = [];
+  const columnRates: number[] = [];
   const tailIntervals: number[] = [];
+  const tailRates: number[] = [];
   const columnCounts = Array.from({ length: Math.max(1, map.keyCount) }, () => 0);
-  const holdNotes = notes.filter((note) => note.isHold && note.endTime > note.time);
-  const holdDurations = holdNotes.map((note) => note.endTime - note.time);
-  const releaseTimes = holdNotes.map((note) => note.endTime).sort((a, b) => a - b);
-  const holdRows = orderedRows.filter(([, rowNotes]) => rowNotes.some((note) => note.isHold));
-  const lnChordRows = holdRows.filter(([, rowNotes]) => rowNotes.length >= 2).length;
+  let chordRows = 0;
+  let twoNoteChordRows = 0;
+  let holdRows = 0;
+  let lnChordRows = 0;
+  let longGapCount = 0;
+  let longGapMs = 0;
+  let fastRowCount = 0;
   let directionChanges = 0;
   let previousColumn: number | null = null;
   let previousDirection = 0;
@@ -135,10 +173,28 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
   let alternatingRowPatterns = 0;
   let rowPatternChangeSum = 0;
   const rowMasks: number[] = [];
+  const rowSignatures: number[] = [];
+  const rowMaskBase = Math.max(32, 2 ** Math.max(1, map.keyCount) + 1);
+  const rowSignatureBase = rowMaskBase * 256;
 
   for (const [time, rowNotes] of orderedRows) {
-    const columns = rowNotes.map((note) => note.column).sort((a, b) => a - b);
-    const rowMask = columns.reduce((mask, column) => mask | (1 << column), 0);
+    const columns: number[] = [];
+    let rowMask = 0;
+    let rowHasHold = false;
+    for (const note of rowNotes) {
+      columns.push(note.column);
+      rowMask |= 1 << note.column;
+      if (note.isHold) rowHasHold = true;
+    }
+    columns.sort((a, b) => a - b);
+
+    if (columns.length >= 2) chordRows++;
+    if (columns.length === 2) twoNoteChordRows++;
+    if (rowHasHold) {
+      holdRows++;
+      if (columns.length >= 2) lnChordRows++;
+    }
+
     rowMasks.push(rowMask);
     if (previousRowMask != null) {
       if (rowMask === previousRowMask) repeatedRowPatterns++;
@@ -151,16 +207,26 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
       columnCounts[column]++;
     }
     if (previousChordSize && previousChordSize !== columns.length) chordSizeChanges++;
+    let intervalBucket = 0;
     if (previousRowTime != null) {
       const rowDelta = time - previousRowTime;
+      if (rowDelta >= 2500) {
+        longGapCount++;
+        longGapMs += rowDelta;
+      }
       if (rowDelta > 0 && rowDelta < 1200) {
         rowIntervals.push(rowDelta);
         rowRates.push(1000 / rowDelta);
         rowDensities.push((columns.length * 1000) / rowDelta);
         rowDensityWeights.push(Math.max(1, rowDelta));
         if (columns.length === 2) jumpstreamValues.push(Math.min(60, (columns.length * 1000) / rowDelta));
+        if (rowDelta <= 80) fastRowCount++;
+        intervalBucket = Math.round(rowDelta / 5);
+      } else {
+        intervalBucket = -1;
       }
     }
+    rowSignatures.push(rowMask * 256 + intervalBucket + 1);
     previousChordSize = columns.length;
     previousRowTime = time;
 
@@ -171,11 +237,19 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
       }
       if (sameDelta > 0 && sameDelta < 1600) {
         columnIntervals.push(sameDelta);
+        columnRates.push(1000 / sameDelta);
       }
 
-      for (const neighbor of [column - 1, column + 1]) {
-        if (neighbor < 0 || neighbor >= map.keyCount) continue;
-        const delta = time - lastByColumn[neighbor];
+      const leftNeighbor = column - 1;
+      if (leftNeighbor >= 0) {
+        const delta = time - lastByColumn[leftNeighbor];
+        if (delta > 0 && delta < 260) {
+          streamValues.push((260 - delta) / 35);
+        }
+      }
+      const rightNeighbor = column + 1;
+      if (rightNeighbor < map.keyCount) {
+        const delta = time - lastByColumn[rightNeighbor];
         if (delta > 0 && delta < 260) {
           streamValues.push((260 - delta) / 35);
         }
@@ -195,24 +269,21 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
     const tailDelta = releaseTimes[i] - releaseTimes[i - 1];
     if (tailDelta > 0 && tailDelta < 1600) {
       tailIntervals.push(tailDelta);
+      tailRates.push(1000 / tailDelta);
     }
   }
 
+  const chordRatio = orderedRows.length ? chordRows / orderedRows.length : 0;
+  const twoNoteChordRatio = orderedRows.length ? twoNoteChordRows / orderedRows.length : 0;
   const peakNps1s = countInWindow(noteTimes, 1000);
   const peakNps5s = countInWindow(noteTimes, 5000) / 5;
   const nps5sSamples = sampledWindowNps(noteTimes, 5000, durationMs);
-  const nps5sP50 = quantile(nps5sSamples, 0.5);
-  const nps5sP90 = quantile(nps5sSamples, 0.9);
-  const nps5sP95 = quantile(nps5sSamples, 0.95);
+  const [nps5sP50, nps5sP90, nps5sP95] = quantiles(nps5sSamples, [0.5, 0.9, 0.95]);
   const sustainedNps10s = countInWindow(noteTimes, 10000) / 10;
   const sustainedNps30s = countInWindow(noteTimes, 30000) / 30;
   const sustainedNps60s = countInWindow(noteTimes, 60000) / 60;
   const noteSpanMs = noteTimes.length >= 2 ? Math.max(1, noteTimes[noteTimes.length - 1] - noteTimes[0]) : durationMs;
   const activeNps = notes.length / Math.max(1, noteSpanMs / 1000);
-  const longGaps = orderedRows.slice(1)
-    .map(([time], index) => time - orderedRows[index][0])
-    .filter((gap) => gap >= 2500);
-  const longGapMs = longGaps.reduce((sum, gap) => sum + gap, 0);
   const longGapRatio = durationMs > 0 ? longGapMs / durationMs : 0;
   const jackPressure = quantile(jackValues, 0.92);
   const streamPressure = quantile(streamValues, 0.9);
@@ -220,24 +291,15 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
   const burstDensity = quantile(rowDensities, 0.9);
   const rowBurstPressure = quantile(rowRates, 0.9);
   const fastRowRatio = rowIntervals.length
-    ? rowIntervals.filter((interval) => interval <= 80).length / rowIntervals.length
+    ? fastRowCount / rowIntervals.length
     : 0;
   const rowIntervalEntropy = bucketEntropy(rowIntervals, 5);
   const rowPatternEntropy = bucketEntropy(rowMasks, 1);
   const rowPatternVariety = rowMasks.length
     ? new Set(rowMasks).size / Math.min(rowMasks.length, 2 ** Math.max(1, map.keyCount))
     : 0;
-  const rowSignatures = orderedRows.map(([time], index) => {
-    const previousTime = orderedRows[index - 1]?.[0];
-    const intervalBucket = previousTime == null
-      ? 0
-      : time - previousTime > 0 && time - previousTime < 1200
-        ? Math.round((time - previousTime) / 5)
-        : -1;
-    return `${rowMasks[index]}:${intervalBucket}`;
-  });
-  const rowMotifRepeatRatio = ngramRepeatRatio(rowMasks, 4);
-  const rhythmMotifRepeatRatio = ngramRepeatRatio(rowSignatures, 4);
+  const rowMotifRepeatRatio = numericNgramRepeatRatio(rowMasks, 4, rowMaskBase);
+  const rhythmMotifRepeatRatio = numericNgramRepeatRatio(rowSignatures, 4, rowSignatureBase);
   const adjacentMotifRepeatRatio = adjacentNgramRepeatRatio(rowSignatures, 4);
   const repeatedRowPatternRatio = orderedRows.length > 1 ? repeatedRowPatterns / (orderedRows.length - 1) : 0;
   const alternatingRowPatternRatio = orderedRows.length > 2 ? alternatingRowPatterns / (orderedRows.length - 2) : 0;
@@ -251,19 +313,15 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
   const columnImbalance = averageColumnCount > 0
     ? columnCounts.reduce((sum, count) => sum + Math.abs(count - averageColumnCount), 0) / (columnCounts.length * averageColumnCount)
     : 0;
-  const anchorPressure = columnImbalance * (0.5 + Math.min(1.5, jackPressure / 150)) + Math.max(0, quantile(columnIntervals.map((interval) => 1000 / interval), 0.9) - 7) * 0.04;
+  const anchorPressure = columnImbalance * (0.5 + Math.min(1.5, jackPressure / 150)) + Math.max(0, quantile(columnRates, 0.9) - 7) * 0.04;
   const lnReleasePressure = releaseTimes.length
-    ? countInWindow(releaseTimes, 5000) / 5 + quantile(tailIntervals.map((interval) => 1000 / interval), 0.9) * 0.15
+    ? countInWindow(releaseTimes, 5000) / 5 + quantile(tailRates, 0.9) * 0.15
     : 0;
-  const totalHoldMs = holdDurations.reduce((sum, duration) => sum + duration, 0);
   const lnDensity = durationMs > 0 ? totalHoldMs / (durationMs * Math.max(1, map.keyCount)) : 0;
-  const lnChordPressure = holdRows.length ? lnChordRows / holdRows.length : 0;
+  const lnChordPressure = holdRows ? lnChordRows / holdRows : 0;
   const lnHoldDurationAvg = average(holdDurations);
   const lnHoldDurationP90 = quantile(holdDurations, 0.9);
-  const holdEvents = holdNotes.flatMap((note) => [
-    { time: note.time, delta: 1 },
-    { time: note.endTime, delta: -1 },
-  ]).sort((left, right) => left.time - right.time || right.delta - left.delta);
+  holdEvents.sort((left, right) => left.time - right.time || right.delta - left.delta);
   let activeHolds = 0;
   let activeHoldPeak = 0;
   let activeHoldArea = 0;
@@ -305,7 +363,7 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
       sustainedNps60s,
       activeNps,
       longGapRatio,
-      longGapCount: longGaps.length,
+      longGapCount,
       jackPressure,
       streamPressure,
       jumpstreamPressure,
