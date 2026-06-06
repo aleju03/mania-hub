@@ -30,6 +30,10 @@ interface NormalSkillSrAdjustment {
   boost: number;
 }
 
+function getRatingFamily(family: DanPrimaryFamily): DanPrimaryFamily {
+  return family === "jumpstream" ? "handstream" : family;
+}
+
 function estimateNormalSkillSrAdjustment(
   metrics: DanFeatureMetrics,
   starRating: number,
@@ -57,6 +61,14 @@ function estimateNormalSkillSrAdjustment(
     && metrics.peakNps5s <= 27.8
     && starRating <= 5.8
     ? 0.55
+    : 0;
+  const repeatedCompactJumpstreamCompression = family === "jumpstream"
+    && metrics.holdRatio < 0.08
+    && metrics.chordRatio >= 0.32
+    && metrics.chordRatio <= 0.56
+    && metrics.rhythmMotifRepeatRatio >= 0.6
+    && starRating <= 6.35
+    ? 0.75
     : 0;
   const repeatedCompactHandstreamCompression = family === "handstream"
     && metrics.holdRatio < 0.08
@@ -110,6 +122,7 @@ function estimateNormalSkillSrAdjustment(
   const baseCompression = Math.max(
     compactMidChordTechDrillCompression,
     repeatedLowChordStreamCompression,
+    repeatedCompactJumpstreamCompression,
     repeatedCompactHandstreamCompression,
     lowMidChordjackOvercallCompression,
     lowSustainTechValleyCompression,
@@ -382,12 +395,13 @@ function estimateNormalSkillSrAdjustment(
     && metrics.adjacentMotifRepeatRatio >= 0.08
     ? 1
     : 0;
-  const steadyLowRateJumpstreamFloorBoost = family === "stream"
+  const steadyLowRateJumpstreamFloorBoost = family === "jumpstream"
     && starRating <= 4.7
     && metrics.noteCount >= 3600
     && metrics.noteCount <= 5000
     && metrics.chordRatio >= 0.42
     && metrics.chordRatio <= 0.52
+    && metrics.twoNoteChordRatio >= 0.2
     && metrics.holdRatio < 0.03
     && metrics.jackPressure < 130
     && metrics.peakNps5s <= 21
@@ -477,19 +491,20 @@ export function estimateDan(map: ManiaBeatmap, input: DanEstimateInput = {}): Da
   }
   const familyChoice = chooseSkillFamily(skillScores, metrics);
   const skillFamily = familyChoice.family;
+  const ratingFamily = getRatingFamily(skillFamily);
   const isCourse = isDanCourse(input, orderedRows, durationMs, notes.length);
   const family = isCourse ? "dan" : skillFamily;
   const unadjustedEstimatedSr = isCourse
-    ? estimateDanCourseSr(metrics, starRating, skillScores[skillFamily])
-    : skillScores[skillFamily];
+    ? estimateDanCourseSr(metrics, starRating, skillScores[ratingFamily])
+    : skillScores[ratingFamily];
   const normalSkillSrAdjustment = isCourse
     ? { compression: 0, boost: 0 }
-    : estimateNormalSkillSrAdjustment(metrics, starRating, skillFamily, unadjustedEstimatedSr, rate);
+    : estimateNormalSkillSrAdjustment(metrics, starRating, ratingFamily, unadjustedEstimatedSr, rate);
   const estimatedSr = Math.max(
     0,
     unadjustedEstimatedSr - normalSkillSrAdjustment.compression + normalSkillSrAdjustment.boost,
   );
-  const rawDan = srToRawDan(estimatedSr, skillFamily, { calibrate: !isCourse });
+  const rawDan = srToRawDan(estimatedSr, ratingFamily, { calibrate: !isCourse });
   const parsed = parseDan(rawDan);
   const confidence = Math.max(
     0.15,

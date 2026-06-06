@@ -1,1 +1,1 @@
-export const DAN_ESTIMATE_CACHE_VERSION = 5;
+export const DAN_ESTIMATE_CACHE_VERSION = 6;

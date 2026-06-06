@@ -1,6 +1,6 @@
 import type { ManiaNote } from "../beatmap-parser.js";
 
-export type DanSkillFamily = "jack" | "stream" | "handstream" | "stamina" | "chordjack" | "tech" | "ln" | "dan";
+export type DanSkillFamily = "jack" | "stream" | "jumpstream" | "handstream" | "stamina" | "chordjack" | "tech" | "ln" | "dan";
 export type DanPrimaryFamily = Exclude<DanSkillFamily, "ln" | "dan">;
 
 export interface DanEstimateInput {
@@ -30,6 +30,7 @@ export interface DanFeatureMetrics {
   noteCount: number;
   holdRatio: number;
   chordRatio: number;
+  twoNoteChordRatio: number;
   peakNps1s: number;
   peakNps5s: number;
   nps5sP50: number;
@@ -43,6 +44,7 @@ export interface DanFeatureMetrics {
   longGapCount: number;
   jackPressure: number;
   streamPressure: number;
+  jumpstreamPressure: number;
   chordjackPressure: number;
   techPressure: number;
   rowBurstPressure: number;

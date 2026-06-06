@@ -102,12 +102,15 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
 
   const orderedRows = groupNotesByTime(notes);
   const chordRows = orderedRows.filter(([, rowNotes]) => rowNotes.length >= 2).length;
+  const twoNoteChordRows = orderedRows.filter(([, rowNotes]) => rowNotes.length === 2).length;
   const holdRatio = notes.length ? notes.filter((note) => note.isHold).length / notes.length : 0;
   const chordRatio = orderedRows.length ? chordRows / orderedRows.length : 0;
+  const twoNoteChordRatio = orderedRows.length ? twoNoteChordRows / orderedRows.length : 0;
 
   const lastByColumn = Array.from({ length: Math.max(1, map.keyCount) }, () => -Infinity);
   const jackValues: number[] = [];
   const streamValues: number[] = [];
+  const jumpstreamValues: number[] = [];
   const rowDensities: number[] = [];
   const rowDensityWeights: number[] = [];
   const rowIntervals: number[] = [];
@@ -155,6 +158,7 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
         rowRates.push(1000 / rowDelta);
         rowDensities.push((columns.length * 1000) / rowDelta);
         rowDensityWeights.push(Math.max(1, rowDelta));
+        if (columns.length === 2) jumpstreamValues.push(Math.min(60, (columns.length * 1000) / rowDelta));
       }
     }
     previousChordSize = columns.length;
@@ -212,6 +216,7 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
   const longGapRatio = durationMs > 0 ? longGapMs / durationMs : 0;
   const jackPressure = quantile(jackValues, 0.92);
   const streamPressure = quantile(streamValues, 0.9);
+  const jumpstreamPressure = quantile(jumpstreamValues, 0.9);
   const burstDensity = quantile(rowDensities, 0.9);
   const rowBurstPressure = quantile(rowRates, 0.9);
   const fastRowRatio = rowIntervals.length
@@ -289,6 +294,7 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
       noteCount: notes.length,
       holdRatio,
       chordRatio,
+      twoNoteChordRatio,
       peakNps1s,
       peakNps5s,
       nps5sP50,
@@ -302,6 +308,7 @@ export function extractDanFeatures(map: ManiaBeatmap, input: DanEstimateInput, r
       longGapCount: longGaps.length,
       jackPressure,
       streamPressure,
+      jumpstreamPressure,
       chordjackPressure,
       techPressure,
       rowBurstPressure,

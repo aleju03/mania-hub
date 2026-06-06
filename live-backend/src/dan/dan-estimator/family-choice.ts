@@ -1,6 +1,6 @@
 import type { DanFamilyChoiceDebug, DanFeatureMetrics, DanPrimaryFamily, DanSkillFamily } from "./types.js";
 
-const PRIMARY_FAMILIES: DanPrimaryFamily[] = ["jack", "stream", "handstream", "stamina", "chordjack", "tech"];
+const RATING_FAMILIES: DanPrimaryFamily[] = ["jack", "stream", "handstream", "stamina", "chordjack", "tech"];
 
 export interface DanFamilyChoiceResult {
   family: DanPrimaryFamily;
@@ -50,11 +50,12 @@ const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
   },
   {
     id: "steady-low-rate-jumpstream",
-    family: "stream",
+    family: "jumpstream",
     applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 3600
       && metrics.noteCount <= 5000
       && metrics.chordRatio >= 0.42
       && metrics.chordRatio <= 0.52
+      && metrics.twoNoteChordRatio >= 0.2
       && metrics.holdRatio < 0.03
       && metrics.jackPressure < 130
       && metrics.peakNps5s <= 21
@@ -62,7 +63,36 @@ const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
       && metrics.activeNps <= 16.5
       && metrics.rowBurstPressure <= 14
       && metrics.rhythmMotifRepeatRatio >= 0.55
-      && skillScores.stream >= topScore - 0.5,
+      && skillScores.jumpstream >= topScore - 0.65,
+  },
+  {
+    id: "compact-jumpstream",
+    family: "jumpstream",
+    applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 1500
+      && metrics.noteCount <= 3800
+      && metrics.chordRatio >= 0.3
+      && metrics.chordRatio <= 0.56
+      && metrics.twoNoteChordRatio >= 0.18
+      && metrics.holdRatio < 0.12
+      && metrics.jackPressure < 165
+      && metrics.jumpstreamPressure >= 16
+      && metrics.sustainedNps10s >= 18
+      && metrics.peakNps5s >= 20
+      && metrics.chordSizeChangeRate >= 0.3
+      && skillScores.jumpstream >= topScore - 0.55,
+  },
+  {
+    id: "sustained-jumpstream",
+    family: "jumpstream",
+    applies: ({ metrics, skillScores, topScore }) => metrics.noteCount >= 2800
+      && metrics.chordRatio >= 0.3
+      && metrics.chordRatio <= 0.58
+      && metrics.twoNoteChordRatio >= 0.18
+      && metrics.holdRatio < 0.08
+      && metrics.jackPressure < 155
+      && metrics.sustainedNps10s >= 23
+      && metrics.sustainedPressureRatio >= 0.72
+      && skillScores.jumpstream >= topScore - 0.8,
   },
   {
     id: "mid-chord-speedjack",
@@ -404,7 +434,7 @@ const FAMILY_CHOICE_RULES: DanFamilyChoiceRule[] = [
 ];
 
 export function chooseSkillFamily(skillScores: Record<DanSkillFamily, number>, metrics: DanFeatureMetrics): DanFamilyChoiceResult {
-  const ranked = PRIMARY_FAMILIES
+  const ranked = RATING_FAMILIES
     .map((family) => [family, skillScores[family]] as [DanPrimaryFamily, number])
     .sort((a, b) => b[1] - a[1]);
   const [topFamily, topScore] = ranked[0];

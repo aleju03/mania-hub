@@ -639,14 +639,27 @@ function buildMetrics(map: ManiaBeatmap, rate: number): DanEstimate["metrics"] {
   const orderedRows = [...rows.entries()].sort((a, b) => a[0] - b[0]);
   const noteTimes = notes.map((note) => note.time).sort((a, b) => a - b);
   const chordRows = orderedRows.filter(([, rowNotes]) => rowNotes.length >= 2).length;
+  const twoNoteChordRows = orderedRows.filter(([, rowNotes]) => rowNotes.length === 2).length;
   const holdRatio = notes.length ? notes.filter((note) => note.isHold).length / notes.length : 0;
   const chordRatio = orderedRows.length ? chordRows / orderedRows.length : 0;
+  const twoNoteChordRatio = orderedRows.length ? twoNoteChordRows / orderedRows.length : 0;
   const lastByColumn = Array.from({ length: Math.max(1, map.keyCount) }, () => -Infinity);
   const jackValues: number[] = [];
   const streamValues: number[] = [];
+  const jumpstreamValues: number[] = [];
+  let previousRowTime: number | null = null;
 
   for (const [time, rowNotes] of orderedRows) {
-    for (const column of rowNotes.map((note) => note.column).sort((a, b) => a - b)) {
+    const columns = rowNotes.map((note) => note.column).sort((a, b) => a - b);
+    if (previousRowTime != null) {
+      const rowDelta = time - previousRowTime;
+      if (rowDelta > 0 && rowDelta < 1200 && columns.length === 2) {
+        jumpstreamValues.push(Math.min(60, (columns.length * 1000) / rowDelta));
+      }
+    }
+    previousRowTime = time;
+
+    for (const column of columns) {
       const sameDelta = time - lastByColumn[column];
       if (sameDelta > 0 && sameDelta < 1000) jackValues.push(Math.min(230, 15000 / sameDelta));
       for (const neighbor of [column - 1, column + 1]) {
@@ -672,12 +685,14 @@ function buildMetrics(map: ManiaBeatmap, rate: number): DanEstimate["metrics"] {
   const activeNps = durationMs > 0 ? notes.length / (durationMs / 1000) : 0;
   const jackPressure = quantile(jackValues, 0.92);
   const streamPressure = quantile(streamValues, 0.9);
+  const jumpstreamPressure = quantile(jumpstreamValues, 0.9);
 
   return {
     keyCount: map.keyCount,
     noteCount: notes.length,
     holdRatio,
     chordRatio,
+    twoNoteChordRatio,
     peakNps1s: countInWindow(noteTimes, 1000),
     peakNps5s,
     nps5sP50: peakNps5s,
@@ -691,6 +706,7 @@ function buildMetrics(map: ManiaBeatmap, rate: number): DanEstimate["metrics"] {
     longGapCount: 0,
     jackPressure,
     streamPressure,
+    jumpstreamPressure,
     chordjackPressure: jackPressure * (0.28 + chordRatio * 1.35),
     techPressure: 0,
     rowBurstPressure: 0,
@@ -778,6 +794,7 @@ export function estimateDanielDan(map: ManiaBeatmap, input: DanEstimateInput = {
   const skillScores: Record<DanSkillFamily, number> = {
     jack: factorAverages["Same-Column Pressure"],
     stream: factorAverages["Pressing Intensity"],
+    jumpstream: factorAverages["Pressing Intensity"] * Math.min(1, 0.5 + metrics.twoNoteChordRatio),
     handstream: 0,
     stamina: result.sr,
     chordjack: factorAverages["Cross-Column Pressure"],
