@@ -167,6 +167,8 @@ interface StoredCountryMapsData {
   favouritesGeneratedAt: string;
 }
 
+type StoredMapsFarmedEntry = StoredCountryMapsData["farmed"][number];
+
 interface CountryMapsFarmedSection {
   farmed: MapsFarmedEntry[];
   generatedAt: string;
@@ -1065,6 +1067,10 @@ async function hydrateCompactMapsPageValue(
   query: MapsPageQuery,
   refreshedAt: string | null,
 ): Promise<MapsPageValue> {
+  if (await canUseCompactFarmedPageFastPath(db, country, query, refreshedAt)) {
+    return hydrateCompactFarmedPageFastPath(db, parsed, query);
+  }
+
   let value: CountryMapsData;
 
   if (query.tab === "farmed") {
@@ -1114,6 +1120,50 @@ async function hydrateCompactMapsPageValue(
     generatedAt: value.generatedAt,
     farmedGeneratedAt: value.farmedGeneratedAt,
     favouritesGeneratedAt: value.favouritesGeneratedAt,
+  };
+}
+
+async function canUseCompactFarmedPageFastPath(
+  db: Db,
+  country: string,
+  query: MapsPageQuery,
+  refreshedAt: string | null,
+): Promise<boolean> {
+  if (query.tab !== "farmed") return false;
+  if (query.q.trim()) return false;
+  if (query.key !== "all") return false;
+  if (query.farmedSort === "stars") return false;
+  if (!refreshedAt) return true;
+
+  const overlayUpdatedAt = isGlobalCountry(country)
+    ? await readGlobalMapsFarmedOverlayUpdatedAt(db)
+    : await readMapsFarmedOverlayUpdatedAt(db, country);
+  if (!overlayUpdatedAt) {
+    const rowsUpdatedAt = isGlobalCountry(country)
+      ? await readGlobalMapsFarmedOverlayRowsUpdatedAt(db)
+      : await readMapsFarmedOverlayRowsUpdatedAt(db, country);
+    return !rowsUpdatedAt || rowsUpdatedAt <= refreshedAt;
+  }
+  return overlayUpdatedAt <= refreshedAt;
+}
+
+async function hydrateCompactFarmedPageFastPath(
+  db: Db,
+  parsed: StoredCountryMapsData,
+  query: MapsPageQuery,
+): Promise<MapsPageValue> {
+  const allItems = filterSortStoredFarmedMaps(parsed.farmed, query);
+  const pageItems = allItems.slice(query.page * query.pageSize, query.page * query.pageSize + query.pageSize);
+  const items = limitMapsPagePreviewPlayers(await hydrateMapsPageItemUsers(db, await hydrateCompactFarmedEntries(db, pageItems)));
+  return {
+    tab: query.tab,
+    page: query.page,
+    pageSize: query.pageSize,
+    total: allItems.length,
+    items,
+    generatedAt: parsed.generatedAt,
+    farmedGeneratedAt: parsed.farmedGeneratedAt,
+    favouritesGeneratedAt: parsed.favouritesGeneratedAt,
   };
 }
 
@@ -1437,6 +1487,46 @@ function filterSortFarmedMaps(items: MapsFarmedEntry[], query: MapsPageQuery): M
     });
 }
 
+function filterSortStoredFarmedMaps(items: StoredMapsFarmedEntry[], query: MapsPageQuery): StoredMapsFarmedEntry[] {
+  return items
+    .map((entry) => {
+      if (query.pp <= 0) return entry;
+      const players = entry.players.filter((player) => Number(player.pp ?? 0) >= query.pp);
+      const maxPp = Math.max(...players.map((player) => Number(player.pp ?? 0)), 0);
+      if (players.length < 2 && maxPp < FARMED_SINGLE_PLAYER_PP_MIN) return null;
+      return {
+        ...entry,
+        players,
+        playerCount: players.length,
+        avgPp: players.length > 0
+          ? players.reduce((sum, player) => sum + Number(player.pp ?? 0), 0) / players.length
+          : 0,
+        maxPp,
+      };
+    })
+    .filter((entry): entry is StoredMapsFarmedEntry => {
+      if (!entry) return false;
+      if (query.mod === "all") return true;
+      const dominant = getDominantStoredMapsSpeedMod(entry.players);
+      if (query.mod === "dt") return dominant === "DT";
+      if (query.mod === "ht") return dominant === "HT";
+      return dominant === null;
+    })
+    .sort((a, b) => {
+      const flip = query.dir === "asc" ? -1 : 1;
+      const aPlayerCount = Number(a.playerCount ?? a.players.length);
+      const bPlayerCount = Number(b.playerCount ?? b.players.length);
+      const aAvgPp = Number(a.avgPp ?? 0);
+      const bAvgPp = Number(b.avgPp ?? 0);
+      const aMaxPp = Number(a.maxPp ?? 0);
+      const bMaxPp = Number(b.maxPp ?? 0);
+      if (query.farmedSort === "players") return (bPlayerCount - aPlayerCount) * flip || bAvgPp - aAvgPp;
+      if (query.farmedSort === "avg-pp") return (bAvgPp - aAvgPp) * flip;
+      if (query.farmedSort === "max-pp") return (bMaxPp - aMaxPp) * flip;
+      return (getLatestStoredFarmedPlayTime(b) - getLatestStoredFarmedPlayTime(a)) * flip || bPlayerCount - aPlayerCount || bAvgPp - aAvgPp;
+    });
+}
+
 function filterSortMostPlayedMaps(items: MapsAggregatedBeatmap[], query: MapsPageQuery): MapsAggregatedBeatmap[] {
   return items
     .filter((entry) =>
@@ -1495,6 +1585,13 @@ function getLatestFarmedPlayTime(entry: MapsFarmedEntry): number {
   }, 0);
 }
 
+function getLatestStoredFarmedPlayTime(entry: StoredMapsFarmedEntry): number {
+  return entry.players.reduce((latest, player) => {
+    const time = new Date(player.playedAt ?? 0).getTime();
+    return Number.isFinite(time) ? Math.max(latest, time) : latest;
+  }, 0);
+}
+
 function getDominantMapsSpeedMod(players: MapsFarmedEntry["players"]): "DT" | "HT" | null {
   if (players.length === 0) return null;
   let dtCount = 0;
@@ -1509,6 +1606,25 @@ function getDominantMapsSpeedMod(players: MapsFarmedEntry["players"]): "DT" | "H
   if (dtCount >= htCount) return dtCount > players.length / 2 ? "DT" : null;
   if (htCount > players.length / 2) {
     const topPlayer = players.reduce((best, player) => (player.pp > best.pp ? player : best), players[0]);
+    if ((topPlayer.mods ?? []).includes("HT")) return "HT";
+  }
+  return null;
+}
+
+function getDominantStoredMapsSpeedMod(players: StoredMapsFarmedPlayer[]): "DT" | "HT" | null {
+  if (players.length === 0) return null;
+  let dtCount = 0;
+  let htCount = 0;
+  for (const player of players) {
+    const mods = player.mods ?? [];
+    if (mods.includes("DT") || mods.includes("NC")) dtCount++;
+    else if (mods.includes("HT")) htCount++;
+  }
+
+  if (dtCount === 0 && htCount === 0) return null;
+  if (dtCount >= htCount) return dtCount > players.length / 2 ? "DT" : null;
+  if (htCount > players.length / 2) {
+    const topPlayer = players.reduce((best, player) => (Number(player.pp ?? 0) > Number(best.pp ?? 0) ? player : best), players[0]);
     if ((topPlayer.mods ?? []).includes("HT")) return "HT";
   }
   return null;
@@ -3213,6 +3329,15 @@ async function readMapsFarmedOverlayUpdatedAt(db: Db, country: string): Promise<
   return typeof parsed === "string" && parsed ? parsed : null;
 }
 
+async function readMapsFarmedOverlayRowsUpdatedAt(db: Db, country: string): Promise<string | null> {
+  const row = (await exec(
+    db,
+    "select max(updated_at) as updated_at from country_maps_farmed_scores where country = ?",
+    [country],
+  )).rows[0];
+  return row?.updated_at == null ? null : String(row.updated_at);
+}
+
 async function readLatestCountryMapsSourceRefreshedAt(db: Db): Promise<string | null> {
   const row = (await exec(
     db,
@@ -3234,6 +3359,15 @@ async function readGlobalMapsFarmedOverlayUpdatedAt(db: Db): Promise<string | nu
     if (typeof value === "string" && value && (!latest || value > latest)) latest = value;
   }
   return latest;
+}
+
+async function readGlobalMapsFarmedOverlayRowsUpdatedAt(db: Db): Promise<string | null> {
+  const row = (await exec(
+    db,
+    "select max(updated_at) as updated_at from country_maps_farmed_scores where country != ?",
+    [GLOBAL_COUNTRY_CODE],
+  )).rows[0];
+  return row?.updated_at == null ? null : String(row.updated_at);
 }
 
 async function touchMapsFarmedOverlay(db: Db, country: string, updatedAt: string): Promise<void> {

@@ -3167,6 +3167,8 @@ describe("live backend", () => {
   it("serves maps browse tabs as paginated lightweight pages", async () => {
     const { db, queue, events } = await setup();
     const now = "2026-05-12T12:00:00.000Z";
+    const older = "2026-05-12T11:00:00.000Z";
+    const newer = "2026-05-12T13:00:00.000Z";
     const users: Array<[number, string]> = Array.from({ length: 12 }, (_, index) => [
       101 + index,
       ["Alpha", "Bravo", "Charlie"][index] ?? `User ${index + 1}`,
@@ -3211,8 +3213,8 @@ describe("live backend", () => {
           schemaVersion: 2,
           farmed: [
             { beatmapId: 11, playerCount: farmedPlayers.length, avgPp: 494.5, maxPp: 500, players: farmedPlayers },
-            { beatmapId: 21, playerCount: 2, avgPp: 410, maxPp: 420, players: [{ id: 101, mods: [], pp: 420, scoreUrl: null, playedAt: now }, { id: 102, mods: [], pp: 400, scoreUrl: null, playedAt: now }] },
-            { beatmapId: 31, playerCount: 1, avgPp: 550, maxPp: 550, players: [{ id: 103, mods: ["DT"], pp: 550, scoreUrl: null, playedAt: now }] },
+            { beatmapId: 21, playerCount: 2, avgPp: 410, maxPp: 420, players: [{ id: 101, mods: [], pp: 420, scoreUrl: null, playedAt: older }, { id: 102, mods: [], pp: 400, scoreUrl: null, playedAt: older }] },
+            { beatmapId: 31, playerCount: 1, avgPp: 550, maxPp: 550, players: [{ id: 103, mods: ["DT"], pp: 550, scoreUrl: null, playedAt: newer }] },
           ],
           mostPlayed: [],
           favourites: [],
@@ -3245,6 +3247,23 @@ describe("live backend", () => {
     expect(page.value?.items).toHaveLength(1);
     expect(page.value?.items[0]).toMatchObject({ beatmapId: 31, title: "Set 30" });
     expect(page.value?.items[0].players[0]).toMatchObject({ username: "Charlie" });
+
+    const recentPage = await getMapsPageSnapshot(db, queue, "CR", 7 * 24 * 60 * 60 * 1000, {
+      tab: "farmed",
+      page: 1,
+      pageSize: 1,
+      key: "all",
+      beatmapSort: "players",
+      farmedSort: "recent",
+      dir: "desc",
+      status: "all",
+      pp: 0,
+      mod: "all",
+      q: "",
+    });
+
+    expect(recentPage.value?.total).toBe(3);
+    expect(recentPage.value?.items[0]).toMatchObject({ beatmapId: 11, title: "Set 10" });
 
     const response = mockRes();
     await routeHttp(
