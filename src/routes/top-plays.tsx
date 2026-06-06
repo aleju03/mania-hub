@@ -1,6 +1,6 @@
 import { createFileRoute, stripSearchParams, useLocation, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { getCountryPopoffs, getPartialTopPlays, getRankings, getTopPlaysRefreshStatus } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
 import { getCountryName, isGlobalScope } from "../lib/country";
@@ -122,6 +122,11 @@ export const Route = createFileRoute("/top-plays")({
 });
 
 const EMPTY_POPOFFS: CachedPopoff[] = [];
+const EMPTY_POPOFF_KEY_SET: ReadonlySet<string> = new Set<string>();
+
+function getPopoffKey(popoff: PopOff): string {
+  return `${popoff.user.id}-${popoff.score.id}`;
+}
 
 function PopOffsPage() {
   const { range, country, sort, dir, keys } = Route.useSearch();
@@ -160,6 +165,8 @@ function PopOffsPage() {
   const sawRefreshActivityRef = useRef(false);
   const finalizingRefreshRef = useRef(false);
   const currentLiveSnapshotKeyRef = useRef<string | null>(null);
+  const seenPopoffKeysRef = useRef<Set<string> | null>(null);
+  const prevPopoffListKeyRef = useRef<string | null>(null);
   // Read inside fetchAll to skip a re-entry when setCachedPopoffs's store update
   // makes the cache look fresh again mid-scan and would otherwise reset the spinner.
   const refreshingRef = useRef(false);
@@ -187,6 +194,8 @@ function PopOffsPage() {
     setLivePpGains([]);
     setSettledLiveSnapshotKey(null);
     currentLiveSnapshotKeyRef.current = null;
+    seenPopoffKeysRef.current = null;
+    prevPopoffListKeyRef.current = null;
     fetchingRef.current = false;
     sawRefreshActivityRef.current = false;
     finalizingRefreshRef.current = false;
@@ -303,6 +312,7 @@ function PopOffsPage() {
     const requestedCountry = selectedCountry;
     const currentPopoffs = useAppStore.getState().popoffsByCountry[requestedCountry] ?? [];
     const hasVisibleCache = livePagePopoffs.length > 0 || hasPopoffsInRange(currentPopoffs, range);
+    setSettledLiveSnapshotKey(null);
     setLoading(!hasVisibleCache);
     setRefreshing(hasVisibleCache);
     setScanStartedAt(null);
@@ -577,7 +587,8 @@ function PopOffsPage() {
     });
   }, [dir, keys, liveBackendEnabled, rangedPopoffs, selectedPlayerIdSet, selectedPlayerIds.length, sort]);
 
-  const liveSnapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}:${page}:${selectedPlayerIds.join(",")}`;
+  const selectedPlayersKey = selectedPlayerIds.join(",");
+  const liveSnapshotKey = `${selectedCountry}:${range}:${sort}:${dir}:${keys}:${page}:${selectedPlayersKey}`;
   const liveSnapshotNeeded =
     shouldRefreshTopPlays({
       fetchedAt: popoffsFetchedAt,
@@ -589,7 +600,12 @@ function PopOffsPage() {
     liveBackendEnabled &&
     settledLiveSnapshotKey !== liveSnapshotKey &&
     liveSnapshotNeeded;
+  const waitingForLivePageSnapshot =
+    liveBackendEnabled &&
+    settledLiveSnapshotKey !== liveSnapshotKey &&
+    currentLiveSnapshotKeyRef.current !== liveSnapshotKey;
   const showingInitialLiveSnapshot = waitingForLiveSnapshot && filtered.length === 0;
+  const showingLivePageTransition = waitingForLivePageSnapshot && filtered.length > 0;
 
   const playerPpGains = useMemo(() => {
     if (liveBackendEnabled && livePpGains.length > 0) {
@@ -646,16 +662,44 @@ function PopOffsPage() {
   // Paginate
   const totalCount = liveBackendEnabled ? liveTotal : filtered.length;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
-  const paginated = liveBackendEnabled ? filtered : filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const paginated = useMemo(
+    () => liveBackendEnabled ? filtered : filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [filtered, liveBackendEnabled, page],
+  );
+  const popoffListKey = liveSnapshotKey;
+  const isPopoffListResetRender = prevPopoffListKeyRef.current !== popoffListKey;
+  const animatedPopoffKeys = useMemo(() => {
+    const seen = seenPopoffKeysRef.current;
+    if (showingInitialLiveSnapshot || showingLivePageTransition || isPopoffListResetRender || seen === null) {
+      return EMPTY_POPOFF_KEY_SET;
+    }
+    const fresh = new Set<string>();
+    for (const popoff of paginated) {
+      const key = getPopoffKey(popoff);
+      if (!seen.has(key)) fresh.add(key);
+    }
+    return fresh;
+  }, [isPopoffListResetRender, paginated, showingInitialLiveSnapshot, showingLivePageTransition]);
+  useEffect(() => {
+    if (showingInitialLiveSnapshot || showingLivePageTransition) return;
+    const seen = isPopoffListResetRender || seenPopoffKeysRef.current === null ? new Set<string>() : seenPopoffKeysRef.current;
+    for (const popoff of paginated) seen.add(getPopoffKey(popoff));
+    seenPopoffKeysRef.current = seen;
+    prevPopoffListKeyRef.current = popoffListKey;
+  }, [isPopoffListResetRender, paginated, popoffListKey, showingInitialLiveSnapshot, showingLivePageTransition]);
   const loadingLabel = loadingPlayers || (!liveBackendEnabled && players.length === 0)
     ? "Loading players..."
     : hasCachedPopoffs
       ? "Refreshing..."
       : "Loading top plays...";
   const scanProgressLabel =
-    refreshStatus && refreshStatus.total > 0
+    showingLivePageTransition
+      ? "Loading page..."
+      : refreshStatus && refreshStatus.total > 0
       ? `Refreshing... ${Math.min(99, Math.round((refreshStatus.current / refreshStatus.total) * 100))}%`
       : loadingLabel;
+  const showTopPlaysSkeletons = !playersError
+    && (loadingPlayers || showingInitialLiveSnapshot || showingLivePageTransition || (loading && paginated.length === 0));
 
   const ranges: { id: TimeRange; label: string }[] = [
     { id: "24h", label: "24 hours" },
@@ -676,7 +720,7 @@ function PopOffsPage() {
         title={`${countryName} mania top plays`}
         right={
           <div className="flex items-center gap-2">
-            {(loadingPlayers || refreshing || showingInitialLiveSnapshot) && !playersError && (
+            {(loadingPlayers || refreshing || showingInitialLiveSnapshot || showingLivePageTransition) && !playersError && (
               <div className="flex items-center gap-1.5">
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
                 <span className="text-[10px] text-osu-f1 tabular-nums">
@@ -684,7 +728,7 @@ function PopOffsPage() {
                 </span>
               </div>
             )}
-            {!loadingPlayers && !refreshing && !loading && !playersError && (
+            {!loadingPlayers && !refreshing && !loading && !showingInitialLiveSnapshot && !showingLivePageTransition && !playersError && (
               <span className="text-[10px] text-osu-f1">
                 {totalCount} top plays found
               </span>
@@ -885,7 +929,7 @@ function PopOffsPage() {
           )}
 
           {/* Loading skeletons on initial load */}
-          {!playersError && (loadingPlayers || loading || showingInitialLiveSnapshot) && (
+          {showTopPlaysSkeletons && (
             <div className="space-y-2">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden">
@@ -934,20 +978,20 @@ function PopOffsPage() {
           )}
 
           {/* Results */}
-          {!playersError && paginated.length > 0 && (
+          {!playersError && paginated.length > 0 && !showingInitialLiveSnapshot && !showingLivePageTransition && (
             <div className="space-y-2">
-              <AnimatePresence initial={false}>
-                {paginated.map((p: PopOff) => {
+              {paginated.map((p: PopOff) => {
                   const lazer = isLazerScore(p.score);
                   const accColorClass = lazer ? "text-osu-pink-light" : "text-osu-l2";
                   const judgementStats = getManiaJudgementStats(p.score);
                   const keymodeLabel = getBeatmapKeymodeLabel(p.score.beatmap);
+                  const popoffKey = getPopoffKey(p);
+                  const shouldAnimate = animatedPopoffKeys.has(popoffKey);
                   return (
                   <motion.div
-                    key={`${p.user.id}-${p.score.id}`}
-                    initial={{ opacity: 0, y: -10 }}
+                    key={popoffKey}
+                    initial={shouldAnimate ? { opacity: 0, y: -10 } : false}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
                     transition={{ duration: 0.15 }}
                     className="rounded-xl bg-osu-b4 border border-osu-b3/20 overflow-hidden"
                   >
@@ -1133,11 +1177,10 @@ function PopOffsPage() {
                   </motion.div>
                   );
                 })}
-              </AnimatePresence>
             </div>
           )}
 
-          {!playersError && !loadingPlayers && !loading && !showingInitialLiveSnapshot && filtered.length === 0 && (
+          {!playersError && !loadingPlayers && !loading && !showingInitialLiveSnapshot && !showingLivePageTransition && filtered.length === 0 && (
             liveBackendEnabled ? (
               <LiveDataEmptyState country={selectedCountry} kind="top-plays" />
             ) : (

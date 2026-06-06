@@ -187,6 +187,8 @@ function ScoresPage() {
   const page = searchPage ?? 0;
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = country ?? fallbackCountry;
+  const selectedCountryRef = useRef(selectedCountry);
+  selectedCountryRef.current = selectedCountry;
   const selectedIsGlobal = isGlobalScope(selectedCountry);
   const loaderData = Route.useLoaderData();
   const snapshot = loaderData?.country === selectedCountry ? loaderData : null;
@@ -218,10 +220,14 @@ function ScoresPage() {
   const [polling, setPolling] = useState(false);
   const [simulateHighTraffic, setSimulateHighTraffic] = useState(false);
   const [timeTick, setTimeTick] = useState(0);
-  const refreshing = initialFetching || polling;
+  const [liveSnapshotLoading, setLiveSnapshotLoading] = useState(false);
+  const [liveTrackerTotal, setLiveTrackerTotal] = useState<number | null>(null);
+  const refreshing = initialFetching || polling || liveSnapshotLoading;
   const initialFetchInFlightRef = useRef(false);
   const pollInFlightRef = useRef(false);
   const liveSnapshotInFlightRef = useRef(false);
+  const liveSnapshotInFlightLimitRef = useRef(0);
+  const queuedLiveSnapshotLimitRef = useRef<number | null>(null);
   const lastLiveSnapshotAtRef = useRef(0);
   const pollRequestIdRef = useRef(0);
   const appliedSnapshotKeyRef = useRef<string | null>(null);
@@ -274,14 +280,25 @@ function ScoresPage() {
     options: { force?: boolean; limit?: number } = {},
   ) => {
     const now = Date.now();
+    const requestedLimit = options.limit ?? TRACKER_LIVE_RECONCILE_LIMIT;
     if (!options.force && now - lastLiveSnapshotAtRef.current < TRACKER_LIVE_RECONCILE_MIN_INTERVAL_MS) return;
-    if (liveSnapshotInFlightRef.current) return;
+    if (liveSnapshotInFlightRef.current) {
+      if (options.force || requestedLimit > liveSnapshotInFlightLimitRef.current) {
+        queuedLiveSnapshotLimitRef.current = Math.max(queuedLiveSnapshotLimitRef.current ?? 0, requestedLimit);
+      }
+      return;
+    }
 
     liveSnapshotInFlightRef.current = true;
+    liveSnapshotInFlightLimitRef.current = requestedLimit;
+    setLiveSnapshotLoading(true);
     try {
-      const liveSnapshot = await fetchLiveTrackerSnapshot(requestedCountry, options.limit ?? TRACKER_LIVE_RECONCILE_LIMIT);
-      if (requestedCountry !== selectedCountry) return;
+      const liveSnapshot = await fetchLiveTrackerSnapshot(requestedCountry, requestedLimit);
+      if (requestedCountry !== selectedCountryRef.current) return;
       lastLiveSnapshotAtRef.current = Date.now();
+      if (Number.isFinite(liveSnapshot.total)) {
+        setLiveTrackerTotal(Math.min(TRACKER_FEED_SCORE_LIMIT, Math.max(0, Math.floor(liveSnapshot.total ?? 0))));
+      }
       const passedScores = liveSnapshot.scores.filter(isDisplayedPassed);
       if (passedScores.length > 0) addFeedScores(requestedCountry, passedScores);
       if (Object.keys(liveSnapshot.gains).length > 0) {
@@ -294,8 +311,16 @@ function ScoresPage() {
       setLoadingPlayers(false);
     } finally {
       liveSnapshotInFlightRef.current = false;
+      liveSnapshotInFlightLimitRef.current = 0;
+      const queuedLimit = queuedLiveSnapshotLimitRef.current;
+      queuedLiveSnapshotLimitRef.current = null;
+      if (queuedLimit != null && requestedCountry === selectedCountryRef.current) {
+        void reconcileLiveSnapshot(requestedCountry, { force: true, limit: queuedLimit });
+      } else {
+        setLiveSnapshotLoading(false);
+      }
     }
-  }, [addFeedScores, markFeedScoresFetched, selectedCountry, setTrackerPpGains]);
+  }, [addFeedScores, markFeedScoresFetched, setTrackerPpGains]);
 
   useEffect(() => {
     if (!liveBackendEnabled) return;
@@ -347,7 +372,11 @@ function ScoresPage() {
     initialFetchInFlightRef.current = false;
     pollInFlightRef.current = false;
     liveSnapshotInFlightRef.current = false;
+    liveSnapshotInFlightLimitRef.current = 0;
+    queuedLiveSnapshotLimitRef.current = null;
     lastLiveSnapshotAtRef.current = 0;
+    setLiveSnapshotLoading(false);
+    setLiveTrackerTotal(null);
     pollRequestIdRef.current += 1;
     setExpandedKey(null);
     setSelectedPlayerIds([]);
@@ -688,7 +717,8 @@ function ScoresPage() {
     || filter !== "all"
     || gradeFilter !== "all"
     || keyFilter !== "all"
-    || missFilter !== "all";
+    || missFilter !== "all"
+    || hiddenUserIds.size > 0;
   useEffect(() => {
     if (!liveBackendEnabled || !hasActiveScoreFilters || feedScores.length >= TRACKER_FEED_SCORE_LIMIT) return;
     void reconcileLiveSnapshot(selectedCountry, { force: true, limit: TRACKER_FEED_SCORE_LIMIT });
@@ -701,18 +731,28 @@ function ScoresPage() {
       ? "Showing FC chokes (1 miss) - click to clear"
       : "Click to filter by FC, then FC chokes";
   const listKey = `${filter}:${gradeFilter}:${keyFilter}:${missFilter}`;
-  const liveStatusLabel = liveBackendEnabled ? "Live updates on" : "Live polling";
-  const scoreWindowLabel = liveBackendEnabled ? `${TRACKER_FEED_SCORE_LIMIT}-score window` : `${feedScores.length} scores`;
+  const liveTrackerAvailableCount = liveTrackerTotal == null
+    ? TRACKER_FEED_SCORE_LIMIT
+    : Math.min(TRACKER_FEED_SCORE_LIMIT, liveTrackerTotal);
+  const trackerWindowCount = liveBackendEnabled && !hasActiveScoreFilters
+    ? Math.max(filtered.length, liveTrackerAvailableCount)
+    : filtered.length;
   const totalPages = Math.max(1, Math.ceil(
-    liveBackendEnabled && !hasActiveScoreFilters
-      ? TRACKER_FEED_SCORE_LIMIT / TRACKER_PAGE_SIZE
-      : filtered.length / TRACKER_PAGE_SIZE,
+    trackerWindowCount / TRACKER_PAGE_SIZE,
   ));
   const currentPage = Math.min(page, totalPages - 1);
+  const requiredScoreCountForPage = liveBackendEnabled && !hasActiveScoreFilters
+    ? Math.min((currentPage + 1) * TRACKER_PAGE_SIZE, trackerWindowCount)
+    : 0;
+  const showingLivePageSkeletons = liveBackendEnabled
+    && !hasActiveScoreFilters
+    && filtered.length < requiredScoreCountForPage;
   const paginatedScores = useMemo(
     () => filtered.slice(currentPage * TRACKER_PAGE_SIZE, (currentPage + 1) * TRACKER_PAGE_SIZE),
     [currentPage, filtered],
   );
+  const liveStatusLabel = liveBackendEnabled ? "Live updates on" : "Live polling";
+  const scoreWindowLabel = liveBackendEnabled ? `${formatNumber(trackerWindowCount)} scores` : `${formatNumber(feedScores.length)} scores`;
 
   useEffect(() => {
     if (page !== currentPage) updateTrackerSearch({ page: currentPage });
@@ -739,7 +779,7 @@ function ScoresPage() {
                 {simulateHighTraffic ? "Sim 200 on" : "Sim 200"}
               </button>
             )}
-            {loadingPlayers || refreshing ? (
+            {loadingPlayers || refreshing || showingLivePageSkeletons ? (
               <>
                 <div className="w-3 h-3 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
                 <span className="text-[10px] text-osu-f1 tabular-nums">
@@ -1002,12 +1042,21 @@ function ScoresPage() {
               <div className="text-center py-16 text-osu-f1 text-sm">
                 {playersError}
               </div>
-            ) : loadingPlayers || (!initialLoaded && feedScores.length === 0) ? (
-              <div className="space-y-2">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <TrackerRowSkeleton key={i} />
-                ))}
-              </div>
+            ) : loadingPlayers || (!initialLoaded && feedScores.length === 0) || showingLivePageSkeletons ? (
+              <>
+                <div className="space-y-2">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <TrackerRowSkeleton key={i} />
+                  ))}
+                </div>
+                {showingLivePageSkeletons && (
+                  <Pagination
+                    page={currentPage}
+                    totalPages={totalPages}
+                    onPageChange={(nextPage) => updateTrackerSearch({ page: nextPage })}
+                  />
+                )}
+              </>
             ) : (
               <>
                 <VirtualScoreList

@@ -4,10 +4,17 @@ import { exec, parseJson } from "../db.js";
 import { toLeanTrackerScore } from "../shared/score.js";
 import type { LeanTrackerScore, OscScore, OsuBeatmap, OsuBeatmapset, ScoreUser } from "../shared/types.js";
 
-export async function getTrackerSnapshot(db: Db, country: string, limit: number): Promise<{ country: string; scores: LeanTrackerScore[]; gains: Record<number, number>; fetchedAt: number }> {
+export async function getTrackerSnapshot(db: Db, country: string, limit: number): Promise<{ country: string; scores: LeanTrackerScore[]; gains: Record<number, number>; fetchedAt: number; total: number }> {
   // Global aggregates every tracked country (only tracked countries ever land
   // rows in score_events, so dropping the country filter is exactly the union).
   const global = isGlobalCountry(country);
+  const totalRows = (await exec(
+    db,
+    `select count(*) as count
+     from score_events se
+     where ${global ? "" : "se.country = ? and "}se.passed = 1`,
+    global ? [] : [country],
+  )).rows;
   const rows = (await exec(
     db,
     `select
@@ -49,7 +56,7 @@ export async function getTrackerSnapshot(db: Db, country: string, limit: number)
     global ? scores.map((score) => score.id) : [country, ...scores.map((score) => score.id)],
   )).rows;
   const gains = Object.fromEntries(gainRows.map((row) => [Number(row.score_id), Number(row.pp_gain)]));
-  return { country, scores, gains, fetchedAt: Date.now() };
+  return { country, scores, gains, fetchedAt: Date.now(), total: Number(totalRows[0]?.count ?? scores.length) };
 }
 
 export async function getTrackerScoreById(db: Db, scoreId: number): Promise<{ country: string; score: LeanTrackerScore } | null> {

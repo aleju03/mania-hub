@@ -42,6 +42,7 @@ export interface LiveTrackerSnapshot {
   scores: LeanTrackerScore[];
   gains: Record<number, number>;
   fetchedAt: number;
+  total?: number;
 }
 
 export interface LiveTopPlaysSnapshot {
