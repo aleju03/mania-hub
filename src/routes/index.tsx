@@ -81,6 +81,7 @@ const HOME_RECENT_SCORES_PLAYER_COUNT = 50;
 const HOME_LIVE_RECENT_SNAPSHOT_LIMIT = 20;
 const HOME_POPOFFS_PLAYER_COUNT = 10;
 const HOME_POPOFFS_CACHE_LIMIT = 200;
+const HOME_GLOBAL_POPOFFS_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 // Defined at module scope (not inside HomePage) so the component keeps a stable
 // identity across HomePage re-renders. Inline definitions get a fresh function
@@ -231,6 +232,15 @@ function getHomePopoffTimeMs(popoff: LeanHomePopoff): number {
   return new Date(popoff.score.timestamp).getTime() || 0;
 }
 
+function isHomeGlobalPopoffRecent(popoff: LeanHomePopoff, now = Date.now()): boolean {
+  const timestamp = getHomePopoffTimeMs(popoff);
+  return timestamp > 0 && now - timestamp <= HOME_GLOBAL_POPOFFS_WINDOW_MS;
+}
+
+function filterHomeGlobalPopoffs(popoffs: LeanHomePopoff[], now = Date.now()): LeanHomePopoff[] {
+  return popoffs.filter((popoff) => isHomeGlobalPopoffRecent(popoff, now));
+}
+
 function mergeHomePopoffs(popoffs: LeanHomePopoff[], incoming: LeanHomePopoff[]): LeanHomePopoff[] {
   return dedupeHomePopoffs([...incoming, ...popoffs])
     .sort((a, b) => (b.score.pp ?? 0) - (a.score.pp ?? 0) || getHomePopoffTimeMs(b) - getHomePopoffTimeMs(a))
@@ -296,6 +306,7 @@ function HomePage() {
   const [loadingScores, setLoadingScores] = useState(recentScores.length === 0);
   const [loadingPopoffs, setLoadingPopoffs] = useState(popoffs.length === 0);
   const countryName = getCountryName(selectedCountry);
+  const homeTopPlaysRange = selectedIsGlobal ? "24h" : hydrated ? topPlaysRange : "7d";
   const homeActivePlayers = rankings?.ranking
     .filter((entry) => entry.user.is_active !== false)
     .map((entry) => ({
@@ -476,16 +487,18 @@ function HomePage() {
       const popoff = countryTopPlayToHomePopoff(play);
       if (!popoff) return;
       const current = useAppStore.getState().homePopoffsByCountry[selectedCountry] ?? EMPTY_POPOFFS;
-      setHomePopoffs(selectedCountry, mergeHomePopoffs(current, [popoff]));
+      const merged = mergeHomePopoffs(current, [popoff]);
+      setHomePopoffs(selectedCountry, selectedIsGlobal ? filterHomeGlobalPopoffs(merged) : merged);
       setLoadingPopoffs(false);
     });
     return () => source.close();
-  }, [addFeedScores, liveBackendEnabled, selectedCountry, setHomePopoffs, setHomeRecentScores]);
+  }, [addFeedScores, liveBackendEnabled, selectedCountry, selectedIsGlobal, setHomePopoffs, setHomeRecentScores]);
 
   useEffect(() => {
     let cancelled = false;
+    const cachedGlobalPopoffsIncludeOld = selectedIsGlobal && popoffs.some((popoff) => !isHomeGlobalPopoffRecent(popoff));
     const shouldRefreshPopoffs =
-      !popoffsFetchedAt || isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.homePopoffs);
+      !popoffsFetchedAt || isCacheStale(popoffsFetchedAt, CLIENT_CACHE_TTL.homePopoffs) || cachedGlobalPopoffsIncludeOld;
 
     if (!shouldRefreshPopoffs) {
       setLoadingPopoffs(false);
@@ -496,16 +509,17 @@ function HomePage() {
 
     if (liveBackendEnabled) {
       setLoadingPopoffs(popoffs.length === 0);
-      fetchLiveTopPlaysSnapshot(selectedCountry, "7d")
+      fetchLiveTopPlaysSnapshot(selectedCountry, selectedIsGlobal ? "24h" : "7d")
         .then((snapshot) => {
           if (cancelled) return;
+          const nextPopoffs = dedupeHomePopoffs(
+            snapshot.popoffs
+              .map(countryTopPlayToHomePopoff)
+              .filter((play): play is LeanHomePopoff => play !== null),
+          );
           setHomePopoffs(
             selectedCountry,
-            dedupeHomePopoffs(
-              snapshot.popoffs
-                .map(countryTopPlayToHomePopoff)
-                .filter((play): play is LeanHomePopoff => play !== null),
-            ),
+            selectedIsGlobal ? filterHomeGlobalPopoffs(nextPopoffs) : nextPopoffs,
           );
         })
         .catch(() => {
@@ -553,6 +567,7 @@ function HomePage() {
     homePopoffsEffectPlayersKey,
     homeEffectsRankingsError,
     selectedCountry,
+    selectedIsGlobal,
     setHomePopoffs,
     liveBackendEnabled,
   ]);
@@ -570,8 +585,11 @@ function HomePage() {
   const globalTopPlayersMobile = visibleGlobalTopPlayers.slice(0, HOME_RANKING_SKELETON_MOBILE_COUNT);
   const globalTopPlayersDesktop = visibleGlobalTopPlayers.slice(0, HOME_RANKING_SKELETON_DESKTOP_COUNT);
   const featuredPopoffs = useMemo(
-    () => selectFeaturedHomePopoffs(popoffs.filter((p) => !hiddenUserIds.has(p.score.user.id))),
-    [popoffs, hiddenUserIds],
+    () => {
+      const scopedPopoffs = selectedIsGlobal ? filterHomeGlobalPopoffs(popoffs) : popoffs;
+      return selectFeaturedHomePopoffs(scopedPopoffs.filter((p) => !hiddenUserIds.has(p.score.user.id)));
+    },
+    [popoffs, hiddenUserIds, selectedIsGlobal],
   );
   const displayedRecentScores = useMemo(
     () => mergeHomeRecentScores(
@@ -711,7 +729,7 @@ function HomePage() {
             <h2 className="text-xs font-semibold uppercase tracking-wider text-osu-f1">Recent Top Plays</h2>
             <Link
               to="/top-plays"
-              search={{ range: hydrated ? topPlaysRange : "7d", country: selectedCountry, sort: "recent", dir: "desc", keys: "all" }}
+              search={{ range: homeTopPlaysRange, country: selectedCountry, sort: "recent", dir: "desc", keys: "all" }}
               className="text-[10px] text-osu-pink hover:text-osu-pink-light transition-colors"
             >
               view all
