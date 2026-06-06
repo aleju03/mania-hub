@@ -4,7 +4,7 @@ import { exec, parseJson } from "../db.js";
 import { toLeanTrackerScore } from "../shared/score.js";
 import type { LeanTrackerScore, OscScore, OsuBeatmap, OsuBeatmapset, ScoreUser } from "../shared/types.js";
 
-export async function getTrackerSnapshot(db: Db, country: string, limit: number): Promise<{ country: string; scores: LeanTrackerScore[]; gains: Record<number, number>; fetchedAt: number; total: number }> {
+export async function getTrackerSnapshot(db: Db, country: string, limit: number, offset = 0): Promise<{ country: string; scores: LeanTrackerScore[]; gains: Record<number, number>; fetchedAt: number; total: number; offset: number }> {
   // Global aggregates every tracked country (only tracked countries ever land
   // rows in score_events, so dropping the country filter is exactly the union).
   const global = isGlobalCountry(country);
@@ -41,8 +41,8 @@ export async function getTrackerSnapshot(db: Db, country: string, limit: number)
      left join beatmapsets bs on bs.beatmapset_id = b.beatmapset_id
      where ${global ? "" : "se.country = ? and "}se.passed = 1
      order by se.ended_at desc
-     limit ?`,
-    global ? [limit] : [country, limit],
+     limit ? offset ?`,
+    global ? [limit, offset] : [country, limit, offset],
   )).rows;
   const scores = rows
     .map((row) => hydrateScoreMetadata(row, parseJson<OscScore | null>(row.score_json, null)))
@@ -56,7 +56,7 @@ export async function getTrackerSnapshot(db: Db, country: string, limit: number)
     global ? scores.map((score) => score.id) : [country, ...scores.map((score) => score.id)],
   )).rows;
   const gains = Object.fromEntries(gainRows.map((row) => [Number(row.score_id), Number(row.pp_gain)]));
-  return { country, scores, gains, fetchedAt: Date.now(), total: Number(totalRows[0]?.count ?? scores.length) };
+  return { country, scores, gains, fetchedAt: Date.now(), total: Number(totalRows[0]?.count ?? scores.length), offset };
 }
 
 export async function getTrackerScoreById(db: Db, scoreId: number): Promise<{ country: string; score: LeanTrackerScore } | null> {

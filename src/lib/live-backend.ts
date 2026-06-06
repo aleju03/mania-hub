@@ -43,6 +43,7 @@ export interface LiveTrackerSnapshot {
   gains: Record<number, number>;
   fetchedAt: number;
   total?: number;
+  offset?: number;
 }
 
 export interface LiveTopPlaysSnapshot {
@@ -441,9 +442,10 @@ export async function fetchLivePlayerAboutDirect(userId: number): Promise<LivePl
   return fetchLiveJson(`/api/profiles/${userId}/about`);
 }
 
-export async function fetchLiveTrackerSnapshot(country: string, limit = 100, options?: { observe?: boolean }): Promise<LiveTrackerSnapshot> {
+export async function fetchLiveTrackerSnapshot(country: string, limit = 100, options?: { observe?: boolean; offset?: number }): Promise<LiveTrackerSnapshot> {
   const query = new URLSearchParams({ country, limit: String(limit) });
   if (options?.observe) query.set("observe", "1");
+  if (options?.offset != null) query.set("offset", String(options.offset));
   return fetchLiveJson(`/api/snapshots/tracker?${query.toString()}`);
 }
 

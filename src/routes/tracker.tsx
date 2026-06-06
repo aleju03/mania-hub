@@ -46,7 +46,6 @@ const TRACKER_SNAPSHOT_LOADER_TIMEOUT_MS = 2500;
 const TRACKER_PAGE_SIZE = 45;
 const TRACKER_LIVE_MIN_SNAPSHOT_LIMIT = TRACKER_PAGE_SIZE * 2;
 const TRACKER_LIVE_RECONCILE_LIMIT = 60;
-const TRACKER_LIVE_MAX_SNAPSHOT_LIMIT = 500;
 const TRACKER_LIVE_RECONCILE_MIN_INTERVAL_MS = 2 * 60_000;
 const DEV_ACTIVE_PLAYER_SIMULATION_COUNT = 200;
 
@@ -78,14 +77,6 @@ function makeDevActivePlayers(count: number): ActivePlayerRailItem[] {
     latestTime: now - index * 1000,
     simulated: true,
   }));
-}
-
-function getLiveTrackerSnapshotLimitForPage(page: number): number {
-  const neededForVisiblePage = (Math.max(0, page) + 1) * TRACKER_PAGE_SIZE;
-  return Math.min(
-    TRACKER_LIVE_MAX_SNAPSHOT_LIMIT,
-    Math.max(TRACKER_LIVE_MIN_SNAPSHOT_LIMIT, neededForVisiblePage + TRACKER_PAGE_SIZE),
-  );
 }
 
 async function withSnapshotLoaderBudget<T>(snapshotPromise: Promise<T>): Promise<T | null> {
@@ -222,12 +213,16 @@ function ScoresPage() {
   const [timeTick, setTimeTick] = useState(0);
   const [liveSnapshotLoading, setLiveSnapshotLoading] = useState(false);
   const [liveTrackerTotal, setLiveTrackerTotal] = useState<number | null>(null);
-  const refreshing = initialFetching || polling || liveSnapshotLoading;
+  const [livePageScores, setLivePageScores] = useState<LeanTrackerScore[]>([]);
+  const [livePageSnapshotKey, setLivePageSnapshotKey] = useState<string | null>(null);
+  const [livePageLoading, setLivePageLoading] = useState(false);
+  const refreshing = initialFetching || polling || liveSnapshotLoading || livePageLoading;
   const initialFetchInFlightRef = useRef(false);
   const pollInFlightRef = useRef(false);
   const liveSnapshotInFlightRef = useRef(false);
   const liveSnapshotInFlightLimitRef = useRef(0);
   const queuedLiveSnapshotLimitRef = useRef<number | null>(null);
+  const livePageRequestIdRef = useRef(0);
   const lastLiveSnapshotAtRef = useRef(0);
   const pollRequestIdRef = useRef(0);
   const appliedSnapshotKeyRef = useRef<string | null>(null);
@@ -331,7 +326,7 @@ function ScoresPage() {
         // The existing server-function path below remains the fallback.
       });
     };
-    run({ force: true, limit: getLiveTrackerSnapshotLimitForPage(page) });
+    run({ force: true, limit: TRACKER_LIVE_MIN_SNAPSHOT_LIMIT });
     const onVisibility = () => {
       if (!cancelled && document.visibilityState === "visible") {
         run({ limit: TRACKER_LIVE_RECONCILE_LIMIT });
@@ -342,7 +337,7 @@ function ScoresPage() {
       cancelled = true;
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [liveBackendEnabled, page, reconcileLiveSnapshot, selectedCountry]);
+  }, [liveBackendEnabled, reconcileLiveSnapshot, selectedCountry]);
 
   useEffect(() => {
     if (!liveBackendEnabled) return;
@@ -377,6 +372,10 @@ function ScoresPage() {
     lastLiveSnapshotAtRef.current = 0;
     setLiveSnapshotLoading(false);
     setLiveTrackerTotal(null);
+    setLivePageScores([]);
+    setLivePageSnapshotKey(null);
+    setLivePageLoading(false);
+    livePageRequestIdRef.current += 1;
     pollRequestIdRef.current += 1;
     setExpandedKey(null);
     setSelectedPlayerIds([]);
@@ -744,15 +743,81 @@ function ScoresPage() {
   const requiredScoreCountForPage = liveBackendEnabled && !hasActiveScoreFilters
     ? Math.min((currentPage + 1) * TRACKER_PAGE_SIZE, trackerWindowCount)
     : 0;
-  const showingLivePageSkeletons = liveBackendEnabled
+  const livePageOffset = currentPage * TRACKER_PAGE_SIZE;
+  const expectedLivePageSize = Math.max(0, Math.min(TRACKER_PAGE_SIZE, trackerWindowCount - livePageOffset));
+  const expectedLivePageEnd = livePageOffset + expectedLivePageSize;
+  const needsLivePageSnapshot = liveBackendEnabled
     && !hasActiveScoreFilters
+    && currentPage > 0
     && filtered.length < requiredScoreCountForPage;
+  const currentLivePageSnapshotKey = `${selectedCountry}:${livePageOffset}:${expectedLivePageSize}`;
+  const hasLivePageSnapshot = needsLivePageSnapshot
+    && livePageSnapshotKey === currentLivePageSnapshotKey
+    && livePageScores.length >= expectedLivePageSize;
+  const showingLivePageSkeletons = needsLivePageSnapshot
+    ? !hasLivePageSnapshot
+    : liveBackendEnabled && !hasActiveScoreFilters && filtered.length < requiredScoreCountForPage;
   const paginatedScores = useMemo(
-    () => filtered.slice(currentPage * TRACKER_PAGE_SIZE, (currentPage + 1) * TRACKER_PAGE_SIZE),
-    [currentPage, filtered],
+    () => hasLivePageSnapshot
+      ? livePageScores.slice(0, expectedLivePageSize)
+      : filtered.slice(livePageOffset, expectedLivePageEnd),
+    [expectedLivePageEnd, expectedLivePageSize, filtered, hasLivePageSnapshot, livePageOffset, livePageScores],
   );
   const liveStatusLabel = liveBackendEnabled ? "Live updates on" : "Live polling";
   const scoreWindowLabel = liveBackendEnabled ? `${formatNumber(trackerWindowCount)} scores` : `${formatNumber(feedScores.length)} scores`;
+
+  useEffect(() => {
+    if (!needsLivePageSnapshot) {
+      setLivePageLoading(false);
+      if (currentPage === 0 || hasActiveScoreFilters || !liveBackendEnabled) {
+        setLivePageScores([]);
+        setLivePageSnapshotKey(null);
+      }
+      return;
+    }
+    if (hasLivePageSnapshot || expectedLivePageSize === 0) {
+      setLivePageLoading(false);
+      return;
+    }
+
+    const requestId = ++livePageRequestIdRef.current;
+    const requestedCountry = selectedCountry;
+    const requestedKey = currentLivePageSnapshotKey;
+    setLivePageLoading(true);
+    fetchLiveTrackerSnapshot(requestedCountry, expectedLivePageSize, { offset: livePageOffset })
+      .then((snapshot) => {
+        if (livePageRequestIdRef.current !== requestId || requestedCountry !== selectedCountryRef.current) return;
+        if (Number.isFinite(snapshot.total)) {
+          setLiveTrackerTotal(Math.min(TRACKER_FEED_SCORE_LIMIT, Math.max(0, Math.floor(snapshot.total ?? 0))));
+        }
+        const passedScores = snapshot.scores.filter(isDisplayedPassed);
+        setLivePageScores(passedScores);
+        setLivePageSnapshotKey(requestedKey);
+        if (Object.keys(snapshot.gains).length > 0) {
+          setTrackerPpGains(requestedCountry, snapshot.gains, snapshot.fetchedAt);
+        }
+      })
+      .catch(() => {
+        if (livePageRequestIdRef.current === requestId) {
+          setLivePageScores([]);
+          setLivePageSnapshotKey(requestedKey);
+        }
+      })
+      .finally(() => {
+        if (livePageRequestIdRef.current === requestId) setLivePageLoading(false);
+      });
+  }, [
+    currentLivePageSnapshotKey,
+    currentPage,
+    expectedLivePageSize,
+    hasActiveScoreFilters,
+    hasLivePageSnapshot,
+    liveBackendEnabled,
+    livePageOffset,
+    needsLivePageSnapshot,
+    selectedCountry,
+    setTrackerPpGains,
+  ]);
 
   useEffect(() => {
     if (page !== currentPage) updateTrackerSearch({ page: currentPage });

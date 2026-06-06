@@ -1424,7 +1424,13 @@ describe("live backend", () => {
     );
 
     expect((await getTrackerSnapshot(db, "CR", 10)).scores).toHaveLength(1);
-    expect((await getTrackerSnapshot(db, "GLOBAL", 10)).scores).toHaveLength(2);
+    const globalSnapshot = await getTrackerSnapshot(db, "GLOBAL", 10);
+    expect(globalSnapshot.scores).toHaveLength(2);
+    expect(globalSnapshot.total).toBe(2);
+    const offsetSnapshot = await getTrackerSnapshot(db, "GLOBAL", 1, 1);
+    expect(offsetSnapshot.scores).toHaveLength(1);
+    expect(offsetSnapshot.total).toBe(2);
+    expect(offsetSnapshot.offset).toBe(1);
 
     const detectedAt = new Date().toISOString();
     for (const [country, scoreId] of [["CR", 8001], ["US", 8002]] as const) {

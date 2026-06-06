@@ -194,7 +194,18 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   }
   if (url.pathname === "/api/snapshots/tracker") {
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
-    sendJson(req, res, ctx, 200, await getTrackerSnapshot(ctx.db, country, clampLimit(url.searchParams.get("limit"), 100, 500)));
+    sendJson(
+      req,
+      res,
+      ctx,
+      200,
+      await getTrackerSnapshot(
+        ctx.db,
+        country,
+        clampLimit(url.searchParams.get("limit"), 100, 500),
+        clampInteger(url.searchParams.get("offset"), 0, 500, 0),
+      ),
+    );
     return true;
   }
   if (url.pathname === "/api/snapshots/top-plays") {
