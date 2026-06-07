@@ -336,13 +336,13 @@ function PlayerPicker({ viewer, onPick }: { viewer: ReturnType<typeof useAuth>["
         </div>
       ) : (
         <div>
-          <h2 className="text-xl font-bold text-osu-c1">Find your next farm</h2>
+          <h2 className="text-xl font-bold text-osu-c1">Ranked Map Finder</h2>
           <p className="mt-1 text-sm text-osu-f1">Maps worth farming, based on players near your pp.</p>
         </div>
       )}
 
       <div className={viewer ? "mt-4" : "mt-6"}>
-        <SearchInput onSearch={searchPlayers} onSelect={(user) => onPick(user.username)} placeholder="search a player..." />
+        <SearchInput onSearch={searchPlayers} onSelect={(user) => onPick(user.username)} placeholder="enter your user..." />
       </div>
 
       {recents.length > 0 ? (
