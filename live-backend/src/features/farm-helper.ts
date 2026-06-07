@@ -15,6 +15,7 @@ import { queryFarmHelperKeyPeersByDistance, queryFarmHelperKeyPeersWithinBand, t
 // player, tracked or not.
 
 export type FarmHelperKeyMode = "4k" | "7k" | "any";
+type ConcreteFarmHelperKeyMode = Exclude<FarmHelperKeyMode, "any">;
 export type FarmHelperReason = "missing" | "improve" | "stale";
 
 export interface FarmHelperPeer {
@@ -99,6 +100,8 @@ const MISSING_MAP_BENCHMARK_QUANTILE = 0.4;
 const PLAYED_MAP_BENCHMARK_STEP = 0.06;
 const PLAYED_MAP_MIN_STEP_PP = 30;
 const MIN_VISIBLE_GAIN_PP = 1;
+const ANY_PRIMARY_MODE_RATIO = 0.85;
+const FARM_HELPER_CONCRETE_KEY_MODES = ["4k", "7k"] as const satisfies readonly ConcreteFarmHelperKeyMode[];
 
 const CACHE_TTL_MS = 5 * 60_000;
 const CACHE_MAX_ENTRIES = 64;
@@ -275,7 +278,13 @@ async function buildSnapshot(
   const subjectModeStatsByKey = {
     "4k": keyMode === "4k" ? subjectModeStats : calculateSubjectKeyModeStats(rankedScores, "4k"),
     "7k": keyMode === "7k" ? subjectModeStats : calculateSubjectKeyModeStats(rankedScores, "7k"),
-  } satisfies Record<"4k" | "7k", ReturnType<typeof calculateSubjectKeyModeStats>>;
+  } satisfies Record<ConcreteFarmHelperKeyMode, ReturnType<typeof calculateSubjectKeyModeStats>>;
+  const anyPrimaryKeyModes = keyMode === "any"
+    ? getAnyPrimaryKeyModes(subjectModeStatsByKey, ctx.subjectVariantPps)
+    : new Set<ConcreteFarmHelperKeyMode>();
+  const anyOffKeySupport = keyMode === "any"
+    ? await collectAnyOffKeyCandidateSupport(db, ctx, subjectModeStatsByKey, anyPrimaryKeyModes)
+    : null;
 
   const fitStars = rankedScores
     .filter((score) => scoreMatchesKeyMode(score, keyMode))
@@ -350,13 +359,22 @@ async function buildSnapshot(
     const median = quantile(agg.pps, 0.5);
     const p75 = quantile(agg.pps, 0.75);
     const candidateKeyMode = beatmapKeyMode(meta.keys);
+    const candidateLaneKey = farmHelperLaneKey(agg.beatmapId, agg.speedBucket);
+    if (
+      keyMode === "any"
+      && candidateKeyMode
+      && !anyPrimaryKeyModes.has(candidateKeyMode)
+      && !anyOffKeySupport?.get(candidateKeyMode)?.has(candidateLaneKey)
+    ) {
+      continue;
+    }
     const cap = keyMode === "any" && candidateKeyMode
-      ? getModeBenchmarkCap(
+      ? getModeBenchmarkCapFromEvidence(
           subjectModeStatsByKey[candidateKeyMode],
           ctx.subjectVariantPps[candidateKeyMode] ?? null,
-          subjectTopPp,
         )
       : subjectBenchmarkCap;
+    if (cap == null) continue;
     const subject = subjectByBeatmap.get(farmHelperLaneKey(agg.beatmapId, agg.speedBucket)) ?? null;
 
     let reason: FarmHelperReason;
@@ -556,7 +574,7 @@ async function computePeerBand(
 async function selectKeyModePeerBand(
   db: Db,
   userId: number,
-  keyMode: Exclude<FarmHelperKeyMode, "any">,
+  keyMode: ConcreteFarmHelperKeyMode,
   subjectModePp: number,
 ): Promise<{ peers: Array<{ userId: number; pp: number }>; mode: string }> {
   const keyCount = keyModeToKeys(keyMode) as FarmHelperKeyCount;
@@ -702,6 +720,48 @@ async function aggregatePeerFarmedMaps(db: Db, peerIds: number[]): Promise<PeerF
   return { byBeatmap, farmDataPeerCount: farmDataPeerIds.size };
 }
 
+async function collectAnyOffKeyCandidateSupport(
+  db: Db,
+  ctx: {
+    userId: number;
+    subjectPp: number;
+    subjectVariantPps: Partial<Record<ConcreteFarmHelperKeyMode, number>>;
+  },
+  subjectModeStatsByKey: Record<ConcreteFarmHelperKeyMode, { weightedPp: number; topPp: number; scoreCount: number }>,
+  primaryModes: Set<ConcreteFarmHelperKeyMode>,
+): Promise<Map<ConcreteFarmHelperKeyMode, Set<string>>> {
+  const support = new Map<ConcreteFarmHelperKeyMode, Set<string>>();
+  for (const mode of FARM_HELPER_CONCRETE_KEY_MODES) {
+    if (primaryModes.has(mode)) continue;
+    const subjectModePp = ctx.subjectVariantPps[mode] ?? subjectModeStatsByKey[mode].weightedPp;
+    if (!Number.isFinite(subjectModePp) || subjectModePp <= 0) continue;
+
+    const { peers } = await selectPeerBand(db, ctx.userId, ctx.subjectPp, mode, subjectModePp, { strictKeyMode: true });
+    if (peers.length === 0) continue;
+
+    const peerFarmed = await aggregatePeerFarmedMaps(db, peers.map((peer) => peer.userId));
+    const peerSampleSize = peerFarmed.farmDataPeerCount;
+    if (peerSampleSize === 0) continue;
+
+    const candidates = [...peerFarmed.byBeatmap.values()].filter((agg) => (
+      agg.peers.length >= PEER_MIN_COUNT
+      && agg.peers.length / peerSampleSize >= PEER_MIN_FRACTION
+    ));
+    if (candidates.length === 0) continue;
+
+    const beatmapMeta = await readBeatmapMeta(db, candidates.map((agg) => agg.beatmapId));
+    const modeKeys = keyModeToKeys(mode);
+    const supported = new Set<string>();
+    for (const agg of candidates) {
+      const meta = beatmapMeta.get(agg.beatmapId);
+      if (!meta || meta.keys !== modeKeys) continue;
+      supported.add(farmHelperLaneKey(agg.beatmapId, agg.speedBucket));
+    }
+    if (supported.size > 0) support.set(mode, supported);
+  }
+  return support;
+}
+
 async function readBeatmapMeta(db: Db, ids: number[]): Promise<Map<number, BeatmapMeta>> {
   const result = new Map<number, BeatmapMeta>();
   // Prefer the enriched maps_beatmaps table; fall back to raw beatmaps.
@@ -776,7 +836,7 @@ function toBeatmapsetMeta(row: Record<string, unknown>): BeatmapsetMeta {
     artist: String(row.artist ?? ""),
     creator: String(row.creator ?? ""),
     status: String(row.status ?? ""),
-    cover: covers["list@2x"] ?? covers.list ?? covers["cover@2x"] ?? covers.cover ?? covers.card ?? "",
+    cover: covers["cover@2x"] ?? covers.cover ?? covers["card@2x"] ?? covers.card ?? covers["slimcover@2x"] ?? covers.slimcover ?? covers["list@2x"] ?? covers.list ?? "",
   };
 }
 
@@ -856,17 +916,38 @@ function getVariantPp(variantPps: Partial<Record<"4k" | "7k", number>>, keyMode:
   return variantPps[keyMode] ?? null;
 }
 
-function getModeBenchmarkCap(
+function getAnyPrimaryKeyModes(
+  statsByKey: Record<ConcreteFarmHelperKeyMode, { weightedPp: number }>,
+  variantPps: Partial<Record<ConcreteFarmHelperKeyMode, number>>,
+): Set<ConcreteFarmHelperKeyMode> {
+  const modePps = FARM_HELPER_CONCRETE_KEY_MODES.map((mode) => ({
+    mode,
+    pp: variantPps[mode] ?? statsByKey[mode].weightedPp,
+  })).filter(({ pp }) => Number.isFinite(pp) && pp > 0);
+  const maxPp = modePps.reduce((max, entry) => Math.max(max, entry.pp), 0);
+  if (maxPp <= 0) return new Set();
+  return new Set(modePps.filter((entry) => entry.pp >= maxPp * ANY_PRIMARY_MODE_RATIO).map((entry) => entry.mode));
+}
+
+function getModeBenchmarkCapFromEvidence(
   stats: { topPp: number },
   variantPp: number | null | undefined,
-  fallbackTopPp: number,
-): number {
+): number | null {
   const topCap = stats.topPp > 0 ? stats.topPp * MODE_TOP_PP_HEADROOM : 0;
   const variantCap = variantPp && variantPp > 0
     ? variantPp * MODE_WEIGHTED_PP_BENCHMARK_CAP_RATIO * MODE_TOP_PP_HEADROOM
     : 0;
   const modeCap = Math.max(topCap, variantCap);
-  if (modeCap > 0) return modeCap;
+  return modeCap > 0 ? modeCap : null;
+}
+
+function getModeBenchmarkCap(
+  stats: { topPp: number },
+  variantPp: number | null | undefined,
+  fallbackTopPp: number,
+): number {
+  const modeCap = getModeBenchmarkCapFromEvidence(stats, variantPp);
+  if (modeCap != null) return modeCap;
   return fallbackTopPp > 0 ? fallbackTopPp * MODE_TOP_PP_HEADROOM : Infinity;
 }
 

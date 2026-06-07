@@ -392,6 +392,41 @@ describe("farm helper", () => {
     expect(snapshot.recs.some((rec) => rec.beatmapId === tooHard7kBeatmap)).toBe(false);
   });
 
+  it("does not let Any use overall peers for unsupported off-primary key recommendations", async () => {
+    const recent = nowIso();
+    const unsupported7kBeatmap = 78;
+    const supportBeatmaps = Array.from({ length: 8 }, (_, i) => 7800 + i);
+    const supportPps = [700, 660, 630, 600, 570, 540, 510, 480];
+    const bestScores = [
+      ...buildSubjectBestScores(),
+      ...supportBeatmaps.map((beatmapId, index) => subjectScore(beatmapId, Math.max(260, (supportPps[index] ?? 0) - 250), recent, 7, 5)),
+    ];
+
+    await insertBeatmapMeta(unsupported7kBeatmap, 7, 5.5);
+    for (const beatmapId of supportBeatmaps) await insertBeatmapMeta(beatmapId, 7, 5);
+
+    for (let i = 0; i < 15; i += 1) {
+      const id = 7200 + i;
+      await insertUser(id, SUBJECT_PP + i, "CR", `Overall7kPeer${i}`);
+      await insertFarmed("CR", id, unsupported7kBeatmap, 620, recent);
+    }
+
+    for (let i = 0; i < 15; i += 1) {
+      const id = 7300 + i;
+      await insertUser(id, 11_000 + i, "US", `Key7kPeer${i}`);
+      for (let j = 0; j < supportBeatmaps.length; j += 1) {
+        await insertFarmed("US", id, supportBeatmaps[j], (supportPps[j] ?? 0) - i, recent);
+      }
+    }
+
+    const osu = makeOsuStub(bestScores, SUBJECT_PP, { "4k": 5_000, "7k": 4_000 });
+    const anySnapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "any" });
+    const keySnapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "7k" });
+
+    expect(anySnapshot.recs.some((rec) => rec.beatmapId === unsupported7kBeatmap)).toBe(false);
+    expect(keySnapshot.recs.some((rec) => rec.beatmapId === unsupported7kBeatmap)).toBe(false);
+  });
+
   it("uses official key-mode variant pp when selecting explicit key-mode peers", async () => {
     const recent = nowIso();
     const targetBeatmap = 80;

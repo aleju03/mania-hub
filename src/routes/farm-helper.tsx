@@ -217,17 +217,18 @@ function FarmHelperPage() {
 
               <div ref={listRef} className="min-w-0 scroll-mt-4">
                 <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
-                  <div className="flex flex-col gap-3 border-b border-osu-b3/20 px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="shrink-0">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">recommendations</div>
-                      <div className="mt-0.5 text-sm font-semibold text-osu-c1">
-                        {formatPp(recs.length)} map{recs.length === 1 ? "" : "s"}
-                        <span className="font-normal text-osu-f1"> · +{formatPp(totalGain(recs))}pp on the table</span>
+                  <div className="border-b border-osu-b3/20 px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">recommendations</div>
+                        <div className="mt-0.5 text-sm font-semibold text-osu-c1">
+                          {formatPp(recs.length)} map{recs.length === 1 ? "" : "s"}
+                          <span className="font-normal text-osu-f1"> · +{formatPp(totalGain(recs))}pp on the table</span>
+                        </div>
                       </div>
+                      <KeyModeControl requestedKeyMode={keyMode} onKeyMode={setKeyMode} />
                     </div>
                     <Filters
-                      requestedKeyMode={keyMode}
-                      onKeyMode={setKeyMode}
                       reasonFilter={reasonFilter}
                       onReason={setReasonFilter}
                       sortMode={sortMode}
@@ -566,8 +567,6 @@ function ChangeSubjectButton({ onPick }: { onPick: (key: string) => void }) {
 }
 
 function Filters({
-  requestedKeyMode,
-  onKeyMode,
   reasonFilter,
   onReason,
   sortMode,
@@ -575,8 +574,6 @@ function Filters({
   onSort,
   counts,
 }: {
-  requestedKeyMode: LiveFarmHelperKeyMode;
-  onKeyMode: (next: LiveFarmHelperKeyMode) => void;
   reasonFilter: ReasonFilter;
   onReason: (next: ReasonFilter) => void;
   sortMode: SortMode;
@@ -585,25 +582,7 @@ function Filters({
   counts: Record<ReasonFilter, number>;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-      <ChipGroup label="keys">
-        <div className="flex overflow-hidden rounded-lg border border-osu-b3/30">
-          {(["any", "4k", "7k"] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => onKeyMode(mode)}
-              className={`px-2.5 py-1.5 text-[11px] font-medium uppercase tabular-nums transition-colors duration-[120ms] ${
-                requestedKeyMode === mode
-                  ? "bg-osu-b3 text-osu-l2"
-                  : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
-              }`}
-            >
-              {mode}
-            </button>
-          ))}
-        </div>
-      </ChipGroup>
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
       <ChipGroup label="show">
         <SegmentedControl>
           {(["all", "missing", "improve", "stale"] as const).map((reason) => (
@@ -642,6 +621,34 @@ function Filters({
           ))}
         </SegmentedControl>
       </ChipGroup>
+    </div>
+  );
+}
+
+function KeyModeControl({
+  requestedKeyMode,
+  onKeyMode,
+}: {
+  requestedKeyMode: LiveFarmHelperKeyMode;
+  onKeyMode: (next: LiveFarmHelperKeyMode) => void;
+}) {
+  return (
+    <div className="flex shrink-0 overflow-hidden rounded-lg border border-osu-b3/30" role="group" aria-label="Key mode">
+      {(["any", "4k", "7k"] as const).map((mode) => (
+        <button
+          key={mode}
+          type="button"
+          onClick={() => onKeyMode(mode)}
+          aria-pressed={requestedKeyMode === mode}
+          className={`px-2.5 py-1.5 text-[11px] font-medium uppercase tabular-nums transition-colors duration-[120ms] ${
+            requestedKeyMode === mode
+              ? "bg-osu-b3 text-osu-l2"
+              : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
+          }`}
+        >
+          {mode}
+        </button>
+      ))}
     </div>
   );
 }
@@ -902,13 +909,19 @@ function LoadingState() {
 
       <div className="min-w-0">
         <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
-          <div className="flex flex-col gap-3 border-b border-osu-b3/20 px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="shrink-0 space-y-1.5">
-              <Skeleton className="h-2.5 w-24" />
-              <Skeleton className="h-4 w-64 max-w-full" />
+          <div className="border-b border-osu-b3/20 px-4 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 space-y-1.5">
+                <Skeleton className="h-2.5 w-24" />
+                <Skeleton className="h-4 w-64 max-w-full" />
+              </div>
+              <div className="flex overflow-hidden rounded-lg border border-osu-b3/30 bg-osu-b4/50">
+                <Skeleton className="h-7 w-12 rounded-none border-r border-osu-b3/25" />
+                <Skeleton className="h-7 w-10 rounded-none border-r border-osu-b3/25" />
+                <Skeleton className="h-7 w-10 rounded-none" />
+              </div>
             </div>
-            <div className="hidden flex-wrap items-center gap-x-3 gap-y-2 sm:flex">
-              <FilterGroupSkeleton labelWidth="w-8" buttonWidths={["w-12", "w-10", "w-10"]} />
+            <div className="mt-3 hidden flex-wrap items-center gap-x-3 gap-y-2 sm:flex">
               <FilterGroupSkeleton labelWidth="w-8" buttonWidths={["w-14", "w-20", "w-20", "w-14"]} />
               <FilterGroupSkeleton labelWidth="w-7" buttonWidths={["w-14", "w-10", "w-16", "w-12"]} />
             </div>
