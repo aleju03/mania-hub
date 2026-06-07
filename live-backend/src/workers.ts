@@ -8,6 +8,7 @@ import { updateSnipeProjection } from "./features/snipes.js";
 import { confirmTopPlay, TopPlayConfirmationPendingError } from "./features/top-plays.js";
 import { getHydratedScoresForMetadata } from "./features/tracker.js";
 import type { ClaimOptions, Job, JobQueue } from "./jobs/queue.js";
+import { hasPendingRecentReconcileJob, RECENT_RECONCILE_JOB_TYPE } from "./jobs/recent-reconcile.js";
 import type { LiveEventLog } from "./live/event-log.js";
 import { OsuApiError, type OsuApiClient } from "./osu/client.js";
 import { OscBackfill } from "./osc/backfill.js";
@@ -235,7 +236,7 @@ export class WorkerRunner {
       return;
     }
     if (job.type === "reconcile_user_recent_scores") {
-      await this.reconcileUserRecentScores(job.payload as { userId: number; source?: string; processLeaderboardFeatures?: boolean });
+      await this.reconcileUserRecentScores(job.payload as { userId: number; source?: string; processLeaderboardFeatures?: boolean }, job.id);
       return;
     }
     if (job.type === "refresh_country_roster") {
@@ -398,7 +399,7 @@ export class WorkerRunner {
     }
   }
 
-  private async reconcileUserRecentScores(payload: { userId: number; source?: string; processLeaderboardFeatures?: boolean }): Promise<void> {
+  private async reconcileUserRecentScores(payload: { userId: number; source?: string; processLeaderboardFeatures?: boolean }, currentJobId?: number): Promise<void> {
     const userId = Number(payload.userId);
     if (!Number.isFinite(userId) || userId <= 0) return;
     const source = payload.source === "osu_recent_fallback" ? "osu_recent_fallback" : "osu_recent";
@@ -421,10 +422,14 @@ export class WorkerRunner {
       processLeaderboardFeatures: payload.processLeaderboardFeatures === true,
     });
     if (await this.isUserActive(userId)) {
+      if (await hasPendingRecentReconcileJob(this.db, userId, {
+        excludeJobId: currentJobId,
+        statuses: ["queued", "failed", "deferred_pressure"],
+      })) return;
       const runAfter = new Date(Date.now() + 2 * 60_000);
       const bucket = Math.floor(runAfter.getTime() / (2 * 60_000));
       await this.queue.enqueue(
-        "reconcile_user_recent_scores",
+        RECENT_RECONCILE_JOB_TYPE,
         `recent:user:${userId}:next:${bucket}`,
         { userId },
         { priority: 25, runAfter },

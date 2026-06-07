@@ -708,6 +708,26 @@ describe("live backend", () => {
     expect(rows[0].dedupe_key).toBe("recent:user:101");
   });
 
+  it("does not enqueue duplicate recent reconciliation while one is pressure-deferred", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T00:05:00.000Z"));
+    const { db, ingestor } = await setup();
+    const [score] = await fixture<OscScore[]>("scores.json");
+    const now = new Date().toISOString();
+    await exec(
+      db,
+      `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at, last_error)
+       values ('reconcile_user_recent_scores', 'recent:user:101:next:123', 'deferred_pressure', 25, ?, 0, '{"userId":101}', ?, ?, 'deferred by reconcile_user_recent_scores cap')`,
+      [now, now, now],
+    );
+
+    await ingestor.ingestBatch([{ ...score, id: 9101, ended_at: "2026-05-12T00:04:00.000Z", created_at: "2026-05-12T00:04:00.000Z" }]);
+
+    const rows = (await exec(db, "select dedupe_key from jobs where type = 'reconcile_user_recent_scores'")).rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].dedupe_key).toBe("recent:user:101:next:123");
+  });
+
   it("only runs the direct osu scores fallback when oSC intake is stale", () => {
     const now = new Date("2026-05-30T12:00:00.000Z").getTime();
     const staleMs = 90_000;
@@ -965,6 +985,35 @@ describe("live backend", () => {
     await worker.runOnce();
 
     expect(Number((await exec(db, "select count(*) as count from jobs where dedupe_key like 'recent:user:101:next:%'")).rows[0].count)).toBe(1);
+  });
+
+  it("does not self-schedule duplicate recent polling while another job is pressure-deferred", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T00:05:00.000Z"));
+    const { db, queue, events, ingestor } = await setup(["CR"]);
+    const [score] = await fixture<OscScore[]>("scores.json");
+    const now = new Date().toISOString();
+    await exec(
+      db,
+      `insert into score_events
+       (score_id, score_identity, legacy_score_id, user_id, country, beatmap_id, ruleset_id, score_json, pp, total_score, accuracy, rank, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
+       values (?, ?, null, ?, 'CR', ?, 3, ?, ?, ?, ?, ?, 1, 0, 0, 0, ?, ?, 'osc_socket')`,
+      [score.id, "official:9001", score.user_id, score.beatmap_id ?? score.beatmap?.id ?? 501, JSON.stringify(score), score.pp, score.total_score ?? score.score, score.accuracy, score.rank, "2026-05-12T00:04:00.000Z", now],
+    );
+    await queue.enqueue("reconcile_user_recent_scores", "recent:user:101", { userId: 101 }, { priority: 100 });
+    await exec(
+      db,
+      `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at, last_error)
+       values ('reconcile_user_recent_scores', 'recent:user:101:next:123', 'deferred_pressure', 25, ?, 0, '{"userId":101}', ?, ?, 'deferred by reconcile_user_recent_scores cap')`,
+      [now, now, now],
+    );
+    const osu = { getUserRecentScores: vi.fn(async () => []) };
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+
+    await worker.runOnce();
+
+    const rows = (await exec(db, "select dedupe_key from jobs where type = 'reconcile_user_recent_scores' order by dedupe_key")).rows;
+    expect(rows.map((row) => row.dedupe_key)).toEqual(["recent:user:101", "recent:user:101:next:123"]);
   });
 
   it("resolves id-zero API recent scores from the osu! web recent endpoint", async () => {

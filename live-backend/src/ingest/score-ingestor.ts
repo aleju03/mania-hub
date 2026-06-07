@@ -7,6 +7,7 @@ import { updateSnipeProjection } from "../features/snipes.js";
 import { maybeEnqueueTopPlayRefresh } from "../features/top-plays.js";
 import { getTrackerScoreByIdentity } from "../features/tracker.js";
 import type { JobQueue } from "../jobs/queue.js";
+import { hasPendingRecentReconcileJob, RECENT_RECONCILE_JOB_TYPE } from "../jobs/recent-reconcile.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, getScoreIdentity, isLazerScore, nowIso, scoreHasPublicLeaderboard, scoreHasReplay } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
@@ -228,12 +229,7 @@ export class ScoreIngestor {
     if (!Number.isFinite(scoreTime) || Date.now() - scoreTime > 30 * 60_000) return;
     const userId = score.user_id;
     const dedupeKey = `recent:user:${userId}`;
-    const pending = (await exec(
-      this.db,
-      "select 1 from jobs where type = 'reconcile_user_recent_scores' and payload_json = ? and status in ('queued', 'failed', 'running') limit 1",
-      [json({ userId })],
-    )).rows[0];
-    if (pending) return;
+    if (await hasPendingRecentReconcileJob(this.db, userId)) return;
     const row = (await exec(
       this.db,
       "select status, updated_at from jobs where dedupe_key = ?",
@@ -242,7 +238,7 @@ export class ScoreIngestor {
     if (row && String(row.status) !== "done") return;
     const updatedAt = row?.updated_at == null ? 0 : new Date(String(row.updated_at)).getTime();
     if (Number.isFinite(updatedAt) && Date.now() - updatedAt < 2 * 60_000) return;
-    await this.queue.enqueue("reconcile_user_recent_scores", dedupeKey, { userId }, { priority: 70, replaceDone: true });
+    await this.queue.enqueue(RECENT_RECONCILE_JOB_TYPE, dedupeKey, { userId }, { priority: 70, replaceDone: true });
   }
 
   private async getTrackedCountries(score: OscScore, countryAllowlist?: string[]): Promise<string[]> {
