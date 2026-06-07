@@ -426,15 +426,27 @@ describe("live backend", () => {
     expect(claimed.map((job) => job.type)).toEqual(["enrich_user", "refresh_country_maps"]);
   });
 
-  it("reports ready non-maps work so the maps worker lane can yield", async () => {
-    const { queue } = await setup();
-    const mapsTypes = ["refresh_user_maps_farmed_scores", "refresh_country_maps", "refresh_global_maps"];
+  it("lets the maps refresh lane run while other backend work is queued", async () => {
+    const { db, queue, events, ingestor } = await setup();
 
-    await enqueueMapsRefresh(queue, "CR");
-    expect(await queue.hasRunnableOutsideTypes(mapsTypes)).toBe(false);
-
+    await enqueueMapsRefresh(queue, "GLOBAL");
     await queue.enqueue("enrich_user", "user:101", { userId: 101 });
-    expect(await queue.hasRunnableOutsideTypes(mapsTypes)).toBe(true);
+
+    const worker = new WorkerRunner(db, queue, events, {} as never, ingestor, "test-worker");
+    await (worker as unknown as {
+      runLaneOnce: (lane: { name: string; jobTypes: string[]; claimLimit: number; intervalMs: number }) => Promise<void>;
+    }).runLaneOnce({
+      name: "maps-refresh",
+      jobTypes: ["refresh_user_maps_farmed_scores", "refresh_country_maps", "refresh_global_maps"],
+      claimLimit: 1,
+      intervalMs: 1_000,
+    });
+
+    const jobs = (await exec(db, "select type, status from jobs order by type")).rows;
+    expect(jobs).toEqual([
+      { type: "enrich_user", status: "queued" },
+      { type: "refresh_global_maps", status: "done" },
+    ]);
   });
 
   it("parks queued low-priority work when critical jobs arrive above target depth", async () => {

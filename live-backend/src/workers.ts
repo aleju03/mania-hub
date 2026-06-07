@@ -132,9 +132,6 @@ export class WorkerRunner {
 
   private async runLaneOnce(lane: WorkerLane): Promise<void> {
     if (this.paused) return;
-    if (lane.name === "maps-refresh" && lane.jobTypes && await this.queue.hasRunnableOutsideTypes(lane.jobTypes)) {
-      return;
-    }
     const laneWorkerId = `${this.workerId}:${lane.name}`;
     const jobs = await this.claimJobs(laneWorkerId, lane.claimLimit, { types: lane.jobTypes });
     await this.runJobs(laneWorkerId, jobs, lane.name);
