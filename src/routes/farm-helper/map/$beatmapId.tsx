@@ -10,6 +10,7 @@ import { PageHeader } from "../../../components/layout/PageHeader";
 import { Skeleton } from "../../../components/ui/LoadingSkeleton";
 import { ChartPreviewPanel } from "../../../components/maps/ChartPreviewPanel";
 import type { LiveFarmHelperKeyMode, LiveFarmHelperReason, LiveFarmHelperSpeedBucket } from "../../../lib/live-backend";
+import { pageSeo } from "../../../lib/seo";
 
 type FarmMapContext = {
   beatmapsetId?: number;
@@ -85,14 +86,12 @@ const SPEED_RATES: Record<LiveFarmHelperSpeedBucket, number> = {
 const FARM_MAP_CONTEXT_KEY_PREFIX = "mania-hub-farm-helper-map-context-v1:";
 
 export const Route = createFileRoute("/farm-helper/map/$beatmapId")({
-  head: () => ({
-    meta: [
-      { title: "Farm map detail - Mania Hub" },
-      {
-        name: "description",
-        content: "osu!mania farm map detail with difficulty metrics, radar chart, density timeline, and chart preview.",
-      },
-    ],
+  head: ({ match }) => pageSeo({
+    title: "Farm Map Detail",
+    description: "osu!mania farm map detail with difficulty metrics, radar chart, density timeline, and chart preview.",
+    path: `/farm-helper/map/${match.params.beatmapId}`,
+    origin: match.context.origin,
+    imageKind: "farm-helper",
   }),
   component: FarmMapDetailPage,
 });

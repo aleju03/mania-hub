@@ -22,6 +22,7 @@ import { Pagination } from "../components/ui/Pagination";
 import { ModBadge } from "../components/ui/ModBadge";
 import { UsernameText } from "../components/ui/UsernameText";
 import { useAuth } from "../lib/auth-context";
+import { pageSeo } from "../lib/seo";
 
 const PAGE_SIZE = 10;
 
@@ -59,14 +60,12 @@ export const Route = createFileRoute("/farm-helper")({
     user: typeof search.user === "string" && search.user.trim() ? search.user.trim().slice(0, 60) : undefined,
     key: parseKeyMode(search.key),
   }),
-  head: () => ({
-    meta: [
-      { title: "Farm Helper" },
-      {
-        name: "description",
-        content: "Farm Helper",
-      },
-    ],
+  head: ({ match }) => pageSeo({
+    title: "Farm Helper",
+    description: "Find osu!mania farm maps worth playing, based on nearby players, missing clears, improvable scores, and old PBs.",
+    path: "/farm-helper",
+    origin: match.context.origin,
+    imageKind: "farm-helper",
   }),
   component: FarmHelperLayout,
 });
