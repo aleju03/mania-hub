@@ -1614,6 +1614,62 @@ describe("live backend", () => {
     expect(await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" })).toBe(false);
   });
 
+  it("preserves full user statistics when confirmed top-play score users are partial", async () => {
+    const { db, events } = await setup();
+    const now = new Date().toISOString();
+    const profile = {
+      id: 101,
+      username: "Old Sniper",
+      avatar_url: "https://assets.example/old-sniper.png",
+      country_code: "CR",
+      statistics: {
+        pp: 1234,
+        global_rank: 100,
+        country_rank: 1,
+        hit_accuracy: 98.76,
+        play_count: 42,
+        ranked_score: 987654321,
+        grade_counts: { ss: 2, ssh: 1, s: 8, sh: 3, a: 13 },
+      },
+    };
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, is_active, pp, global_rank, country_rank, profile_json, updated_at)
+       values (101, 'Old Sniper', 'https://assets.example/old-sniper.png', 'CR', 1, 1234, 100, 1, ?, ?)`,
+      [JSON.stringify(profile), now],
+    );
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values ('CR', 101, 1, 'osu_rankings', 1, ?)`,
+      [now],
+    );
+    const best = await fixture<OscScore[]>("top-best.json");
+    const osu = {
+      getBeatmapUserScoresAll: async (_beatmapId: number, _userId: number, _caller?: string) => [],
+      getUserBestScores: async (_userId: number, _caller?: string) => best,
+    };
+
+    await expect(confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" })).resolves.toBe(true);
+
+    const userRow = (await exec(db, "select username, avatar_url, profile_json from users where user_id = 101")).rows[0];
+    const storedProfile = JSON.parse(String(userRow.profile_json));
+    expect(userRow.username).toBe("Sniper");
+    expect(storedProfile).toMatchObject({
+      username: "Sniper",
+      avatar_url: "https://assets.example/sniper.png",
+      statistics: profile.statistics,
+    });
+
+    const global = await getGlobalRankingsSnapshot(db, { pageSize: 1 });
+    expect(global.ranking[0]).toMatchObject({
+      hit_accuracy: 98.76,
+      play_count: 42,
+      ranked_score: 987654321,
+      grade_counts: { ss: 2, ssh: 1, s: 8, sh: 3, a: 13 },
+    });
+  });
+
   it("caches player profile snapshots and serves subsequent visits without osu calls", async () => {
     const { db } = await setup();
     const best = await fixture<OscScore[]>("top-best.json");
@@ -2890,9 +2946,49 @@ describe("live backend", () => {
 
     const ascending = await getGlobalRankingsSnapshot(db, { pageSize: 50, sort: "accuracy", dir: "asc" });
     const descending = await getGlobalRankingsSnapshot(db, { pageSize: 50, sort: "accuracy", dir: "desc" });
+    const missing = descending.ranking.find((r) => r.user.username === "Missing");
 
     expect(ascending.ranking.map((r) => r.user.username)).toEqual(["LowerReal", "HigherReal", "Missing"]);
     expect(descending.ranking.map((r) => r.user.username)).toEqual(["HigherReal", "LowerReal", "Missing"]);
+    expect(missing).toMatchObject({
+      hit_accuracy: null,
+      play_count: null,
+      ranked_score: null,
+      grade_counts: null,
+    });
+  });
+
+  it("queues a roster repair when Global rankings contain incomplete user stats", async () => {
+    const { db, queue, events } = await setup();
+    const now = new Date().toISOString();
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, is_active, pp, global_rank, country_rank, profile_json, updated_at)
+       values (101, 'Partial', 'https://assets.example/101.png', 'CR', 1, 1234, 100, 1, ?, ?)`,
+      [JSON.stringify({ id: 101, username: "Partial", avatar_url: "https://assets.example/101.png", country_code: "CR" }), now],
+    );
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values ('CR', 101, 1, 'osu_rankings', 1, ?)`,
+      [now],
+    );
+
+    const response = mockRes();
+    await routeHttp(mockReq("GET", "/api/snapshots/global-rankings?pageSize=50"), response.res, {
+      db,
+      queue,
+      events,
+      config: baseConfig(),
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0, byCaller: [], byPath: [] }) } },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never);
+
+    const body = JSON.parse(response.writes.join(""));
+    expect(body.ranking[0]).toMatchObject({ user: { username: "Partial" }, play_count: null, grade_counts: null });
+    const job = (await exec(db, "select type, status, payload_json from jobs where dedupe_key = 'roster:CR'")).rows[0];
+    expect(job).toMatchObject({ type: "refresh_country_roster", status: "queued" });
+    expect(JSON.parse(String(job.payload_json))).toEqual({ country: "CR" });
   });
 
   it("merges per-country maps snapshots into the Global aggregate", async () => {

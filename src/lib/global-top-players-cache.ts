@@ -1,6 +1,6 @@
 import type { LiveGlobalRankingEntry } from "./live-backend";
 
-const GLOBAL_TOP_PLAYERS_STORAGE_KEY = "mania-hub-home-global-rankings-v1";
+const GLOBAL_TOP_PLAYERS_STORAGE_KEY = "mania-hub-home-global-rankings-v2";
 
 export type GlobalTopPlayersCache = {
   data: LiveGlobalRankingEntry[];

@@ -709,16 +709,16 @@ export interface LiveGlobalRankingEntry {
   pp: number;
   global_rank: number | null;
   country_rank: number | null;
-  hit_accuracy: number;
-  play_count: number;
-  ranked_score: number;
+  hit_accuracy: number | null;
+  play_count: number | null;
+  ranked_score: number | null;
   grade_counts: {
     ss: number;
     ssh: number;
     s: number;
     sh: number;
     a: number;
-  };
+  } | null;
   global_change: number | null;
   country_change: number | null;
 }
@@ -765,7 +765,7 @@ export async function fetchLiveGlobalRankings(options: number | LiveGlobalRankin
 function normalizeLiveGlobalRankingEntry(value: unknown, index: number): LiveGlobalRankingEntry {
   const entry = readRecord(value) ?? {};
   const user = readRecord(entry.user) ?? {};
-  const grades = readRecord(entry.grade_counts) ?? {};
+  const grades = readRecord(entry.grade_counts);
   return {
     rank: readPositiveInteger(entry.rank) ?? index + 1,
     user: {
@@ -778,16 +778,18 @@ function normalizeLiveGlobalRankingEntry(value: unknown, index: number): LiveGlo
     pp: readFiniteNumber(entry.pp) ?? 0,
     global_rank: readPositiveInteger(entry.global_rank),
     country_rank: readPositiveInteger(entry.country_rank),
-    hit_accuracy: readFiniteNumber(entry.hit_accuracy) ?? 0,
-    play_count: readNonNegativeInteger(entry.play_count) ?? 0,
-    ranked_score: readNonNegativeInteger(entry.ranked_score) ?? 0,
-    grade_counts: {
-      ss: readNonNegativeInteger(grades.ss) ?? 0,
-      ssh: readNonNegativeInteger(grades.ssh) ?? 0,
-      s: readNonNegativeInteger(grades.s) ?? 0,
-      sh: readNonNegativeInteger(grades.sh) ?? 0,
-      a: readNonNegativeInteger(grades.a) ?? 0,
-    },
+    hit_accuracy: readFiniteNumber(entry.hit_accuracy),
+    play_count: readNonNegativeInteger(entry.play_count),
+    ranked_score: readNonNegativeInteger(entry.ranked_score),
+    grade_counts: grades
+      ? {
+        ss: readNonNegativeInteger(grades.ss) ?? 0,
+        ssh: readNonNegativeInteger(grades.ssh) ?? 0,
+        s: readNonNegativeInteger(grades.s) ?? 0,
+        sh: readNonNegativeInteger(grades.sh) ?? 0,
+        a: readNonNegativeInteger(grades.a) ?? 0,
+      }
+      : null,
     global_change: readFiniteNumber(entry.global_change),
     country_change: readFiniteNumber(entry.country_change),
   };

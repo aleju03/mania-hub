@@ -34,8 +34,28 @@ function getPlayerPath(username: string): string {
   return `/player/${encodeURIComponent(username)}`;
 }
 
-function formatKnownAccuracy(percent: number): string {
+type LiveGlobalGradeCounts = NonNullable<LiveGlobalRankingEntry["grade_counts"]>;
+
+function formatKnownAccuracy(percent: number | null | undefined): string {
+  if (percent == null) return "-";
   return Number.isFinite(percent) && percent > 0 ? formatAccuracy(percent / 100) : "-";
+}
+
+function formatKnownCount(value: number | null | undefined): string {
+  return value != null && Number.isFinite(value) ? formatNumber(value) : "-";
+}
+
+function formatKnownPlayCount(value: number | null | undefined): string {
+  const formatted = formatKnownCount(value);
+  return formatted === "-" ? formatted : `${formatted} plays`;
+}
+
+function getGlobalGradeTotal(
+  counts: LiveGlobalRankingEntry["grade_counts"],
+  keys: Array<keyof LiveGlobalGradeCounts>,
+): number | null {
+  if (!counts) return null;
+  return keys.reduce((sum, key) => sum + counts[key], 0);
 }
 
 function handlePlayerAuxClick(event: MouseEvent<HTMLElement>, username: string): void {
@@ -507,23 +527,23 @@ function RankingsPage() {
                   const sortedValue = (() => {
                     switch (sortBy) {
                       case "playcount":
-                        return <>{formatNumber(entry.play_count)} plays</>;
+                        return <>{formatKnownPlayCount(entry.play_count)}</>;
                       case "accuracy":
                         return <>{formatKnownAccuracy(entry.hit_accuracy)}</>;
                       case "ss":
                         return <div className="flex items-center gap-1">
                           <img src="/images/badges/score-ranks-v2019/GradeSmall-SS.svg" alt="SS" width={16} height={16} />
-                          <span>{entry.grade_counts.ss + entry.grade_counts.ssh}</span>
+                          <span>{formatKnownCount(getGlobalGradeTotal(entry.grade_counts, ["ss", "ssh"]))}</span>
                         </div>;
                       case "s":
                         return <div className="flex items-center gap-1">
                           <img src="/images/badges/score-ranks-v2019/GradeSmall-S.svg" alt="S" width={16} height={16} />
-                          <span>{entry.grade_counts.s + entry.grade_counts.sh}</span>
+                          <span>{formatKnownCount(getGlobalGradeTotal(entry.grade_counts, ["s", "sh"]))}</span>
                         </div>;
                       case "a":
                         return <div className="flex items-center gap-1">
                           <img src="/images/badges/score-ranks-v2019/GradeSmall-A.svg" alt="A" width={16} height={16} />
-                          <span>{entry.grade_counts.a}</span>
+                          <span>{formatKnownCount(getGlobalGradeTotal(entry.grade_counts, ["a"]))}</span>
                         </div>;
                       default:
                         return <>{formatNumber(Math.round(entry.pp))}pp</>;
@@ -640,16 +660,16 @@ function RankingsPage() {
                           <CRRankCell change={entry.country_change} loaded />
                         </td>
                         <td className="py-2.5 px-3 text-sm text-osu-l2 text-right">{formatKnownAccuracy(entry.hit_accuracy)}</td>
-                        <td className="py-2.5 px-3 text-sm text-osu-f1 text-right">{formatNumber(entry.play_count)}</td>
+                        <td className="py-2.5 px-3 text-sm text-osu-f1 text-right">{formatKnownCount(entry.play_count)}</td>
                         <td className="py-2.5 px-3 text-sm font-bold text-right">{formatNumber(Math.round(entry.pp))}</td>
                         <td className={`py-2.5 px-3 text-xs text-center ${sortBy === "ss" ? "text-white font-semibold" : "text-osu-f1"}`}>
-                          {entry.grade_counts.ss + entry.grade_counts.ssh}
+                          {formatKnownCount(getGlobalGradeTotal(entry.grade_counts, ["ss", "ssh"]))}
                         </td>
                         <td className={`py-2.5 px-3 text-xs text-center ${sortBy === "s" ? "text-white font-semibold" : "text-osu-f1"}`}>
-                          {entry.grade_counts.s + entry.grade_counts.sh}
+                          {formatKnownCount(getGlobalGradeTotal(entry.grade_counts, ["s", "sh"]))}
                         </td>
                         <td className={`py-2.5 px-3 text-xs text-center ${sortBy === "a" ? "text-white font-semibold" : "text-osu-f1"}`}>
-                          {entry.grade_counts.a}
+                          {formatKnownCount(getGlobalGradeTotal(entry.grade_counts, ["a"]))}
                         </td>
                       </tr>
                     ))

@@ -90,6 +90,14 @@ const HOME_GLOBAL_POPOFFS_WINDOW_MS = 24 * 60 * 60 * 1000;
 function GlobalRankingRow({ entry, index, delayStep }: { entry: LiveGlobalRankingEntry; index: number; delayStep: number }) {
   const navigate = useNavigate();
   const seedPlayerShell = () => {
+    if (
+      entry.hit_accuracy == null ||
+      entry.play_count == null ||
+      entry.ranked_score == null ||
+      entry.grade_counts == null
+    ) {
+      return;
+    }
     const rankingEntry: LeanRankingEntry = {
       user: {
         ...entry.user,

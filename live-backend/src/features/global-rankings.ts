@@ -1,5 +1,6 @@
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
+import type { JobQueue } from "../jobs/queue.js";
 
 const SNAPSHOT_TARGET_TOLERANCE_MS = 36 * 60 * 60 * 1000;
 const GLOBAL_RANKINGS_MAX_PAGE_SIZE = 50;
@@ -24,10 +25,10 @@ export interface GlobalRankingEntry {
   pp: number;
   global_rank: number | null;
   country_rank: number | null;
-  hit_accuracy: number;
-  play_count: number;
-  ranked_score: number;
-  grade_counts: GradeCounts;
+  hit_accuracy: number | null;
+  play_count: number | null;
+  ranked_score: number | null;
+  grade_counts: GradeCounts | null;
   global_change: number | null;
   country_change: number | null;
 }
@@ -99,6 +100,21 @@ export async function getGlobalRankingsSnapshot(db: Db, query: GlobalRankingsQue
   };
 }
 
+export async function enqueueGlobalRankingStatRepairs(queue: JobQueue, entries: GlobalRankingEntry[]): Promise<string[]> {
+  const countries = [...new Set(
+    entries
+      .filter(hasIncompleteStats)
+      .map((entry) => entry.user.country_code.trim().toUpperCase())
+      .filter((country) => /^[A-Z]{2}$/.test(country)),
+  )];
+
+  for (const country of countries) {
+    await queue.enqueue("refresh_country_roster", `roster:${country}`, { country }, { priority: 85, replaceDone: true });
+  }
+
+  return countries;
+}
+
 function sortGlobalRankingEntries(
   entries: GlobalRankingEntry[],
   sort: GlobalRankingsSort,
@@ -122,17 +138,24 @@ function sortGlobalRankingEntries(
       case "accuracy":
         return compareAccuracy(a, b, dir);
       case "playcount":
-        return (b.play_count - a.play_count) * flip || a.rank - b.rank;
+        return compareNullableMetric(a, b, (entry) => entry.play_count, dir);
       case "ss":
-        return ((b.grade_counts.ss + b.grade_counts.ssh) - (a.grade_counts.ss + a.grade_counts.ssh)) * flip || a.rank - b.rank;
+        return compareNullableMetric(a, b, (entry) => gradeCountTotal(entry.grade_counts, ["ss", "ssh"]), dir);
       case "s":
-        return ((b.grade_counts.s + b.grade_counts.sh) - (a.grade_counts.s + a.grade_counts.sh)) * flip || a.rank - b.rank;
+        return compareNullableMetric(a, b, (entry) => gradeCountTotal(entry.grade_counts, ["s", "sh"]), dir);
       case "a":
-        return (b.grade_counts.a - a.grade_counts.a) * flip || a.rank - b.rank;
+        return compareNullableMetric(a, b, (entry) => gradeCountTotal(entry.grade_counts, ["a"]), dir);
       default:
         return a.rank - b.rank;
     }
   });
+}
+
+function hasIncompleteStats(entry: GlobalRankingEntry): boolean {
+  return entry.hit_accuracy == null ||
+    entry.play_count == null ||
+    entry.ranked_score == null ||
+    entry.grade_counts == null;
 }
 
 function compareAccuracy(
@@ -145,20 +168,43 @@ function compareAccuracy(
   if (aHasAccuracy !== bHasAccuracy) return aHasAccuracy ? -1 : 1;
   if (!aHasAccuracy || !bHasAccuracy) return a.rank - b.rank;
 
+  const aAccuracy = a.hit_accuracy ?? 0;
+  const bAccuracy = b.hit_accuracy ?? 0;
   const diff = dir === "desc"
-    ? b.hit_accuracy - a.hit_accuracy
-    : a.hit_accuracy - b.hit_accuracy;
+    ? bAccuracy - aAccuracy
+    : aAccuracy - bAccuracy;
   return diff || a.rank - b.rank;
 }
 
-function hasKnownAccuracy(value: number): boolean {
-  return Number.isFinite(value) && value > 0;
+function compareNullableMetric<T extends Pick<GlobalRankingEntry, "rank">>(
+  a: T,
+  b: T,
+  getValue: (entry: T) => number | null,
+  dir: GlobalRankingsSortDirection,
+): number {
+  const aValue = getValue(a);
+  const bValue = getValue(b);
+  const aKnown = aValue != null && Number.isFinite(aValue);
+  const bKnown = bValue != null && Number.isFinite(bValue);
+  if (aKnown !== bKnown) return aKnown ? -1 : 1;
+  if (!aKnown || !bKnown) return a.rank - b.rank;
+
+  const diff = dir === "desc" ? bValue - aValue : aValue - bValue;
+  return diff || a.rank - b.rank;
+}
+
+function hasKnownAccuracy(value: number | null): boolean {
+  return value != null && Number.isFinite(value) && value > 0;
+}
+
+function gradeCountTotal(counts: GradeCounts | null, keys: Array<keyof GradeCounts>): number | null {
+  if (!counts) return null;
+  return keys.reduce((sum, key) => sum + counts[key], 0);
 }
 
 function buildGlobalRankingEntry(row: Record<string, unknown>, rank: number): Omit<GlobalRankingEntry, "global_change" | "country_change"> {
   const profile = parseJson<Record<string, unknown>>(row.profile_json, {});
   const stats = readRecord(profile.statistics);
-  const gradeCounts = readRecord(stats?.grade_counts);
   const cover = readRecord(profile.cover);
   const coverUrl = typeof cover?.url === "string"
     ? cover.url
@@ -177,16 +223,10 @@ function buildGlobalRankingEntry(row: Record<string, unknown>, rank: number): Om
     pp: readNumber(row.pp) ?? readNumber(stats?.pp) ?? 0,
     global_rank: readPositiveInteger(row.global_rank) ?? readPositiveInteger(stats?.global_rank),
     country_rank: readPositiveInteger(row.country_rank) ?? readPositiveInteger(stats?.country_rank),
-    hit_accuracy: readNumber(stats?.hit_accuracy) ?? 0,
-    play_count: readInteger(stats?.play_count) ?? 0,
-    ranked_score: readInteger(stats?.ranked_score) ?? 0,
-    grade_counts: {
-      ss: readInteger(gradeCounts?.ss) ?? 0,
-      ssh: readInteger(gradeCounts?.ssh) ?? 0,
-      s: readInteger(gradeCounts?.s) ?? 0,
-      sh: readInteger(gradeCounts?.sh) ?? 0,
-      a: readInteger(gradeCounts?.a) ?? 0,
-    },
+    hit_accuracy: readNumber(stats?.hit_accuracy),
+    play_count: readNonNegativeInteger(stats?.play_count),
+    ranked_score: readNonNegativeInteger(stats?.ranked_score),
+    grade_counts: readGradeCounts(stats?.grade_counts),
   };
 }
 
@@ -271,7 +311,24 @@ function readInteger(value: unknown): number | null {
   return numberValue != null && Number.isInteger(numberValue) ? numberValue : null;
 }
 
+function readNonNegativeInteger(value: unknown): number | null {
+  const numberValue = readInteger(value);
+  return numberValue != null && numberValue >= 0 ? numberValue : null;
+}
+
 function readPositiveInteger(value: unknown): number | null {
   const numberValue = readInteger(value);
   return numberValue != null && numberValue > 0 ? numberValue : null;
+}
+
+function readGradeCounts(value: unknown): GradeCounts | null {
+  const gradeCounts = readRecord(value);
+  if (!gradeCounts) return null;
+  return {
+    ss: readNonNegativeInteger(gradeCounts.ss) ?? 0,
+    ssh: readNonNegativeInteger(gradeCounts.ssh) ?? 0,
+    s: readNonNegativeInteger(gradeCounts.s) ?? 0,
+    sh: readNonNegativeInteger(gradeCounts.sh) ?? 0,
+    a: readNonNegativeInteger(gradeCounts.a) ?? 0,
+  };
 }

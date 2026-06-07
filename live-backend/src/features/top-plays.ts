@@ -129,8 +129,20 @@ async function upsertTopPlayUser(db: Db, user: ScoreUser, updatedAt: string): Pr
      on conflict(user_id) do update set
        username = excluded.username,
        avatar_url = excluded.avatar_url,
-       country_code = excluded.country_code,
-       profile_json = excluded.profile_json,
+       country_code = coalesce(excluded.country_code, users.country_code),
+       profile_json = case
+         when json_valid(users.profile_json)
+          and json_type(users.profile_json, '$.statistics') is not null
+          and not (json_valid(excluded.profile_json) and json_type(excluded.profile_json, '$.statistics') is not null)
+         then json_set(
+           users.profile_json,
+           '$.id', excluded.user_id,
+           '$.username', excluded.username,
+           '$.avatar_url', excluded.avatar_url,
+           '$.country_code', coalesce(excluded.country_code, users.country_code)
+         )
+         else excluded.profile_json
+       end,
        updated_at = excluded.updated_at`,
     [user.id, user.username, user.avatar_url, user.country_code, json(user), updatedAt],
   );
