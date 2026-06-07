@@ -1154,6 +1154,7 @@ function MapsPage() {
 
     setLiveMapsAttempted(false);
     setMapsFirstBuild(false);
+    setLiveMapsRefreshing(false);
     setLiveMapsProgress(null);
     let cancelled = false;
     const cachedPage = liveMapsPageCacheRef.current.get(liveMapsPageRequestKey) ?? null;
@@ -2130,9 +2131,13 @@ function MapsPage() {
         ? !!currentLiveMapsPage
         : !!mapsData);
   const liveMapsProgressLabel =
-    liveBackendEnabled && liveMapsProgress && (liveMapsProgress.status === "queued" || liveMapsProgress.status === "running")
+    liveBackendEnabled &&
+    liveMapsProgress &&
+    (liveMapsProgress.status === "queued" || liveMapsProgress.status === "running") &&
+    (mapsFirstBuild || currentMapsSectionLoading || (!liveBackendPaged && loadingMaps && !mapsData))
       ? formatLiveMapsProgress(liveMapsProgress)
       : null;
+  const liveMapsPageSliceLoading = liveBackendPaged && liveMapsPagePending && !mapsFirstBuild;
   const mapsLoadingLabel = loadingPlayers
     ? "Loading players..."
     : currentMapsSectionLoading
@@ -2141,7 +2146,7 @@ function MapsPage() {
         ?? (mapsFirstBuild
           ? "Building maps..."
           : liveBackendEnabled
-            ? (liveMapsRefreshing ? "Refreshing maps..." : "Loading maps...")
+            ? (liveMapsRefreshing && !liveMapsPageSliceLoading ? "Refreshing maps..." : "Loading maps...")
             : `Loading maps... (${Math.round(smoothProgress)}%)`);
 
   return (
