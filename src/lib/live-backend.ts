@@ -206,9 +206,10 @@ export interface LivePlayerProfileSnapshot {
   isStale: boolean;
   projection: {
     appliedTopPlayEvents: number;
+    appliedRecentScores: number;
     projectedPp: number | null;
     basePp: number | null;
-    provenanceByScoreId: Record<number, "osu_snapshot" | "live_top_play_event">;
+    provenanceByScoreId: Record<number, "osu_snapshot" | "live_top_play_event" | "profile_recent_score">;
   };
 }
 
