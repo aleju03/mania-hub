@@ -425,7 +425,7 @@ export interface MapsPlayersPageQuery {
 }
 
 export const MAPS_PLAYERS_MAX_PAGE_SIZE = 50;
-const MAPS_PAGE_PREVIEW_PLAYERS = 8;
+const MAPS_PAGE_PREVIEW_PLAYERS = 4;
 
 export async function getMapsSnapshot(
   db: Db,
@@ -1130,9 +1130,6 @@ async function canUseCompactFarmedPageFastPath(
   refreshedAt: string | null,
 ): Promise<boolean> {
   if (query.tab !== "farmed") return false;
-  if (query.q.trim()) return false;
-  if (query.key !== "all") return false;
-  if (query.farmedSort === "stars") return false;
   if (!refreshedAt) return true;
 
   const overlayUpdatedAt = isGlobalCountry(country)
@@ -1152,7 +1149,7 @@ async function hydrateCompactFarmedPageFastPath(
   parsed: StoredCountryMapsData,
   query: MapsPageQuery,
 ): Promise<MapsPageValue> {
-  const allItems = filterSortStoredFarmedMaps(parsed.farmed, query);
+  const allItems = await filterSortStoredFarmedMapsForPage(db, parsed.farmed, query);
   const pageItems = allItems.slice(query.page * query.pageSize, query.page * query.pageSize + query.pageSize);
   const items = limitMapsPagePreviewPlayers(await hydrateMapsPageItemUsers(db, await hydrateCompactFarmedEntries(db, pageItems)));
   return {
@@ -1271,15 +1268,22 @@ type MapsPageItem = MapsFarmedEntry | MapsAggregatedBeatmap | MapsAggregatedFavo
 function limitMapsPagePreviewPlayers<T extends MapsPageItem>(items: T[]): T[] {
   return items.map((item) => {
     const players = item.players.slice(0, MAPS_PAGE_PREVIEW_PLAYERS);
+    const covers = trimMapsPageCovers(item.covers);
     if ("avgPp" in item) {
       return {
         ...item,
+        covers,
         dominantMod: item.dominantMod ?? getDominantMapsSpeedMod(item.players),
         players,
       };
     }
-    return { ...item, players };
+    return { ...item, covers, players };
   }) as T[];
+}
+
+function trimMapsPageCovers(covers: Record<string, string | undefined>): Record<string, string | undefined> {
+  const card = covers.card ?? covers.cover ?? covers.list ?? covers["list@2x"] ?? "";
+  return card ? { card } : {};
 }
 
 async function hydrateMapsPageItemUsers<T extends MapsPageItem>(db: Db, items: T[]): Promise<T[]> {
@@ -1523,6 +1527,73 @@ function filterSortStoredFarmedMaps(items: StoredMapsFarmedEntry[], query: MapsP
       if (query.farmedSort === "players") return (bPlayerCount - aPlayerCount) * flip || bAvgPp - aAvgPp;
       if (query.farmedSort === "avg-pp") return (bAvgPp - aAvgPp) * flip;
       if (query.farmedSort === "max-pp") return (bMaxPp - aMaxPp) * flip;
+      return (getLatestStoredFarmedPlayTime(b) - getLatestStoredFarmedPlayTime(a)) * flip || bPlayerCount - aPlayerCount || bAvgPp - aAvgPp;
+    });
+}
+
+interface MapsFarmedPageMetadata {
+  beatmapId: number;
+  cs: number;
+  difficultyRating: number;
+  version: string;
+  title: string;
+  artist: string;
+  creator: string;
+}
+
+async function filterSortStoredFarmedMapsForPage(
+  db: Db,
+  items: StoredMapsFarmedEntry[],
+  query: MapsPageQuery,
+): Promise<StoredMapsFarmedEntry[]> {
+  const needsMetadata = query.key !== "all" || query.q.trim() !== "" || query.farmedSort === "stars";
+  if (!needsMetadata) return filterSortStoredFarmedMaps(items, query);
+
+  const metadata = await readMapsFarmedPageMetadataByIds(db, items.map((entry) => entry.beatmapId));
+  return items
+    .map((entry) => {
+      if (query.pp <= 0) return entry;
+      const players = entry.players.filter((player) => Number(player.pp ?? 0) >= query.pp);
+      const maxPp = Math.max(...players.map((player) => Number(player.pp ?? 0)), 0);
+      if (players.length < 2 && maxPp < FARMED_SINGLE_PLAYER_PP_MIN) return null;
+      return {
+        ...entry,
+        players,
+        playerCount: players.length,
+        avgPp: players.length > 0
+          ? players.reduce((sum, player) => sum + Number(player.pp ?? 0), 0) / players.length
+          : 0,
+        maxPp,
+      };
+    })
+    .filter((entry): entry is StoredMapsFarmedEntry => {
+      if (!entry) return false;
+      const meta = metadata.get(entry.beatmapId);
+      if (!meta) return false;
+      if (!matchesMapsKeyFilter(meta.cs, query.key)) return false;
+      if (!matchesMapsSearch(query.q, [meta.title, meta.artist, meta.creator, meta.version])) return false;
+      if (query.mod === "all") return true;
+      const dominant = getDominantStoredMapsSpeedMod(entry.players);
+      if (query.mod === "dt") return dominant === "DT";
+      if (query.mod === "ht") return dominant === "HT";
+      return dominant === null;
+    })
+    .sort((a, b) => {
+      const flip = query.dir === "asc" ? -1 : 1;
+      const aPlayerCount = Number(a.playerCount ?? a.players.length);
+      const bPlayerCount = Number(b.playerCount ?? b.players.length);
+      const aAvgPp = Number(a.avgPp ?? 0);
+      const bAvgPp = Number(b.avgPp ?? 0);
+      const aMaxPp = Number(a.maxPp ?? 0);
+      const bMaxPp = Number(b.maxPp ?? 0);
+      if (query.farmedSort === "players") return (bPlayerCount - aPlayerCount) * flip || bAvgPp - aAvgPp;
+      if (query.farmedSort === "avg-pp") return (bAvgPp - aAvgPp) * flip;
+      if (query.farmedSort === "max-pp") return (bMaxPp - aMaxPp) * flip;
+      if (query.farmedSort === "stars") {
+        const aStars = metadata.get(a.beatmapId)?.difficultyRating ?? 0;
+        const bStars = metadata.get(b.beatmapId)?.difficultyRating ?? 0;
+        return (bStars - aStars) * flip || bPlayerCount - aPlayerCount || bAvgPp - aAvgPp;
+      }
       return (getLatestStoredFarmedPlayTime(b) - getLatestStoredFarmedPlayTime(a)) * flip || bPlayerCount - aPlayerCount || bAvgPp - aAvgPp;
     });
 }
@@ -2366,6 +2437,36 @@ async function readMapsBeatmapsByBeatmapsetIds(db: Db, ids: number[]): Promise<M
     ids,
   );
   return rows.map(rowToMapsBeatmapMetadata);
+}
+
+async function readMapsFarmedPageMetadataByIds(db: Db, ids: number[]): Promise<Map<number, MapsFarmedPageMetadata>> {
+  const rows = await selectRowsByIntegerSet(
+    db,
+    `select
+       b.beatmap_id,
+       b.cs,
+       b.difficulty_rating,
+       b.version,
+       bs.title,
+       bs.artist,
+       bs.creator
+     from maps_beatmaps b
+     left join maps_beatmapsets bs on bs.beatmapset_id = b.beatmapset_id
+     where b.beatmap_id in`,
+    ids,
+  );
+  return new Map(rows.map((row) => {
+    const beatmapId = Number(row.beatmap_id);
+    return [beatmapId, {
+      beatmapId,
+      cs: Number(row.cs ?? 0),
+      difficultyRating: Number(row.difficulty_rating ?? 0),
+      version: String(row.version ?? ""),
+      title: String(row.title ?? ""),
+      artist: String(row.artist ?? ""),
+      creator: String(row.creator ?? ""),
+    }];
+  }));
 }
 
 async function readMapsBeatmapsetsByIds(db: Db, ids: number[]): Promise<Map<number, MapsBeatmapsetMetadata>> {

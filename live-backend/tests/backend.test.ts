@@ -2939,7 +2939,7 @@ describe("live backend", () => {
     const item = page.value?.items[0] as { beatmapId: number; playerCount: number; players: Array<{ id: number }>; avgPp: number; maxPp: number };
     expect(item.beatmapId).toBe(11);
     expect(item.playerCount).toBe(300);
-    expect(item.players).toHaveLength(8);
+    expect(item.players).toHaveLength(4);
     expect(item.players[0]).toMatchObject({ id: 999 });
     expect(item.avgPp).toBe(360);
     expect(item.maxPp).toBe(550);
@@ -3200,8 +3200,8 @@ describe("live backend", () => {
         db,
         `insert into maps_beatmaps
            (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, total_length, version, url, updated_at)
-         values (?, ?, 'mania', 'ranked', 4, ?, 180, ?, ?, ?, ?)`,
-        [id + 1, id, id / 10 + 4, id * 10, `[4K] ${id}`, `https://osu.ppy.sh/beatmaps/${id + 1}`, now],
+         values (?, ?, 'mania', 'ranked', ?, ?, 180, ?, ?, ?, ?)`,
+        [id + 1, id, id === 20 ? 7 : 4, id / 10 + 4, id * 10, `[${id === 20 ? 7 : 4}K] ${id}`, `https://osu.ppy.sh/beatmaps/${id + 1}`, now],
       );
     }
     await exec(
@@ -3265,6 +3265,40 @@ describe("live backend", () => {
     expect(recentPage.value?.total).toBe(3);
     expect(recentPage.value?.items[0]).toMatchObject({ beatmapId: 11, title: "Set 10" });
 
+    const keyPage = await getMapsPageSnapshot(db, queue, "CR", 7 * 24 * 60 * 60 * 1000, {
+      tab: "farmed",
+      page: 0,
+      pageSize: 2,
+      key: "7k",
+      beatmapSort: "players",
+      farmedSort: "players",
+      dir: "desc",
+      status: "all",
+      pp: 0,
+      mod: "all",
+      q: "",
+    });
+
+    expect(keyPage.value?.total).toBe(1);
+    expect(keyPage.value?.items[0]).toMatchObject({ beatmapId: 21, title: "Set 20" });
+
+    const searchPage = await getMapsPageSnapshot(db, queue, "CR", 7 * 24 * 60 * 60 * 1000, {
+      tab: "farmed",
+      page: 0,
+      pageSize: 2,
+      key: "all",
+      beatmapSort: "players",
+      farmedSort: "stars",
+      dir: "desc",
+      status: "all",
+      pp: 0,
+      mod: "all",
+      q: "set 30",
+    });
+
+    expect(searchPage.value?.total).toBe(1);
+    expect(searchPage.value?.items[0]).toMatchObject({ beatmapId: 31, title: "Set 30" });
+
     const response = mockRes();
     await routeHttp(
       mockReq("GET", "/api/snapshots/maps-page?country=CR&tab=farmed&page=0&pageSize=2"),
@@ -3286,7 +3320,7 @@ describe("live backend", () => {
     expect(body.value.items).toHaveLength(2);
     const firstItem = body.value.items[0] as { playerCount: number; players: unknown[]; dominantMod?: string | null };
     expect(firstItem.playerCount).toBe(12);
-    expect(firstItem.players).toHaveLength(8);
+    expect(firstItem.players).toHaveLength(4);
     expect(firstItem.dominantMod).toBe("DT");
     const details = await getMapsPlayersSnapshot(db, "CR", "farmed", 11);
     expect(details.total).toBe(12);

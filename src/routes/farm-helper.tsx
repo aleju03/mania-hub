@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, notFound, useMatches, useNavigate } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -74,7 +74,7 @@ export const Route = createFileRoute("/farm-helper")({
       },
     ],
   }),
-  component: FarmHelperPage,
+  component: FarmHelperLayout,
 });
 
 const REASON_META: Record<LiveFarmHelperRec["reason"], { label: string; accent: string; text: string }> = {
@@ -82,6 +82,15 @@ const REASON_META: Record<LiveFarmHelperRec["reason"], { label: string; accent: 
   improve: { label: "improve", accent: "bg-osu-green-light", text: "text-osu-green-light" },
   stale: { label: "old pb", accent: "bg-osu-yellow", text: "text-osu-yellow" },
 };
+
+const FARM_MAP_CONTEXT_KEY_PREFIX = "mania-hub-farm-helper-map-context-v1:";
+
+function FarmHelperLayout() {
+  const matches = useMatches();
+  const hasChildRoute = matches.some((match) => match.routeId === "/farm-helper/map/$beatmapId");
+  if (hasChildRoute) return <Outlet />;
+  return <FarmHelperPage />;
+}
 
 function FarmHelperPage() {
   const search = Route.useSearch();
@@ -187,11 +196,13 @@ function FarmHelperPage() {
               <span className="text-[11px] font-medium text-osu-f1">
                 {peerBandCoverageLabel(snapshot)}
               </span>
+            ) : loading && subjectKey ? (
+              <Skeleton className="h-3 w-56 max-w-full" />
             ) : null
           }
         />
 
-        <div className="mx-auto max-w-[1280px] px-4 py-5 sm:px-5">
+        <div className="mx-auto w-full max-w-[1280px] px-4 py-5 sm:px-5">
           {!liveEnabled ? (
             <EmptyNotice
               eyebrow="unavailable"
@@ -257,6 +268,8 @@ function FarmHelperPage() {
                         <RecRow
                           key={`${rec.beatmapId}:${rec.speedBucket}`}
                           rec={rec}
+                          userKey={String(snapshot.userId)}
+                          keyMode={keyMode}
                           onShowFarmers={() => setFarmersFor(rec)}
                         />
                       ))}
@@ -374,12 +387,12 @@ function PlayerPicker({ viewer, onPick }: { viewer: ReturnType<typeof useAuth>["
         <PickerLegend
           icon={<Target className="h-3.5 w-3.5 shrink-0 text-osu-blue" />}
           label="missing"
-          body="players like you farm it, you don't"
+          body="popular with nearby players"
         />
         <PickerLegend
           icon={<TrendingUp className="h-3.5 w-3.5 shrink-0 text-osu-green-light" />}
           label="improve"
-          body="your score is below theirs"
+          body="room to gain from your score"
         />
         <PickerLegend
           icon={<History className="h-3.5 w-3.5 shrink-0 text-osu-yellow" />}
@@ -700,38 +713,70 @@ function SegmentButton({
 
 function RecRow({
   rec,
+  userKey,
+  keyMode,
   onShowFarmers,
 }: {
   rec: LiveFarmHelperRec;
+  userKey: string;
+  keyMode: LiveFarmHelperKeyMode;
   onShowFarmers: () => void;
 }) {
   const meta = REASON_META[rec.reason];
   const bar = comparisonBar(rec);
   const fit = confidence(rec);
+  const navigate = useNavigate();
+  const detailContext = {
+    userKey,
+    keyMode,
+    speed: rec.speedBucket,
+    reason: rec.reason,
+    gain: Math.round(rec.estimatedPpGain * 10) / 10,
+    benchmark: Math.round(rec.benchmarkPp * 10) / 10,
+    subjectPp: rec.subjectPp == null ? undefined : Math.round(rec.subjectPp * 10) / 10,
+    peerCount: rec.peerCount,
+    peerSampleSize: rec.peerSampleSize,
+    peerFraction: Math.round(rec.peerFraction * 1000) / 1000,
+    median: Math.round(rec.peerPpMedian * 10) / 10,
+    p75: Math.round(rec.peerPpP75 * 10) / 10,
+    playedAt: rec.subjectPlayedAt ?? undefined,
+  };
+  const rememberContext = () => {
+    writeFarmMapContext(rec.beatmapId, detailContext);
+  };
+  const openDetails = () => {
+    rememberContext();
+    void navigate({
+      to: "/farm-helper/map/$beatmapId",
+      params: { beatmapId: String(rec.beatmapId) },
+    });
+  };
   return (
-    <div className="relative bg-osu-b4 transition-colors hover:bg-osu-b3/35">
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={openDetails}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          openDetails();
+        }
+      }}
+      aria-label={`Open details for ${rec.title} [${rec.version}]`}
+      className="group relative cursor-pointer bg-osu-b4 transition-colors hover:bg-osu-b3/35 focus:outline-none focus-visible:ring-2 focus-visible:ring-osu-pink/60"
+    >
       <span className={`absolute inset-y-0 left-0 w-[3px] ${meta.accent}`} />
       <div className="grid gap-3 p-2.5 pl-4 md:grid-cols-[56px_minmax(0,1fr)_118px] md:items-center md:gap-3.5 md:p-3 md:pl-5">
-        <a
-          href={rec.mapUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="h-14 w-full overflow-hidden rounded-md bg-osu-b6 md:h-[56px]"
-        >
+        <div className="h-14 w-full overflow-hidden rounded-md bg-osu-b6 md:h-[56px]">
           {rec.cover ? <img src={rec.cover} alt="" loading="lazy" className="h-full w-full object-cover" /> : null}
-        </a>
+        </div>
 
         <div className="min-w-0">
           <div className="flex min-w-0 items-center justify-start gap-1.5">
-            <a
-              href={rec.mapUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="min-w-0 max-w-full truncate text-[14px] font-bold text-osu-c1 hover:text-osu-pink"
-            >
+            <div className="min-w-0 max-w-full truncate text-[14px] font-bold text-osu-c1">
               {rec.title}
               <span className="font-medium text-osu-f1"> [{rec.version}]</span>
-            </a>
+            </div>
             <ModList mods={rec.recommendedMods ?? []} size={0.62} className="max-w-[120px]" />
           </div>
           <div className="flex flex-wrap items-center gap-x-2 text-[11px] leading-tight">
@@ -771,6 +816,7 @@ function RecRow({
             href={rec.mapUrl}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={(event) => event.stopPropagation()}
             className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-osu-b6/70 text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-osu-c1"
             aria-label="Open map"
             title="Open map"
@@ -783,6 +829,15 @@ function RecRow({
   );
 }
 
+function writeFarmMapContext(beatmapId: number, context: Record<string, unknown>): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(`${FARM_MAP_CONTEXT_KEY_PREFIX}${beatmapId}`, JSON.stringify(context));
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
 function PeerList({ rec, onShowFarmers }: { rec: LiveFarmHelperRec; onShowFarmers: () => void }) {
   const shown = rec.topPeers.slice(0, 3);
   if (shown.length === 0) return null;
@@ -790,7 +845,10 @@ function PeerList({ rec, onShowFarmers }: { rec: LiveFarmHelperRec; onShowFarmer
   return (
     <button
       type="button"
-      onClick={onShowFarmers}
+      onClick={(event) => {
+        event.stopPropagation();
+        onShowFarmers();
+      }}
       className="group/farmers flex items-center gap-1.5 rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-osu-b3/50"
       title="See everyone who farmed this"
     >
@@ -826,43 +884,46 @@ function confidence(rec: LiveFarmHelperRec): number {
 
 function LoadingState() {
   return (
-    <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+    <div className="grid w-full gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
       <aside className="space-y-3">
         <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
-          <div className="flex items-center gap-3 p-4">
-            <Skeleton className="h-[52px] w-[52px] shrink-0 rounded-full" />
-            <div className="flex-1 space-y-2">
-              <Skeleton className="h-4 w-24" />
-              <Skeleton className="h-3 w-14" />
-              <Skeleton className="h-2.5 w-20" />
+          <div className="relative overflow-hidden">
+            <Skeleton className="absolute inset-0 rounded-none opacity-50" />
+            <div className="absolute inset-0 bg-gradient-to-t from-osu-b4 via-osu-b4/85 to-osu-b4/55" aria-hidden="true" />
+            <div className="relative flex items-center gap-3 p-4">
+              <Skeleton className="h-[52px] w-[52px] shrink-0 rounded-full" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-4 w-24 max-w-full" />
+                <Skeleton className="h-3 w-14" />
+                <Skeleton className="h-2.5 w-28 max-w-full" />
+              </div>
             </div>
           </div>
           <div className="space-y-2 border-t border-osu-b3/20 px-4 py-4">
-            <Skeleton className="h-2.5 w-24" />
-            <Skeleton className="h-7 w-28" />
-            <Skeleton className="h-2.5 w-36" />
+            <Skeleton className="h-2.5 w-28" />
+            <Skeleton className="h-9 w-32" />
+            <Skeleton className="h-2.5 w-44 max-w-full" />
           </div>
         </div>
-        <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-3">
-          <Skeleton className="h-8 w-full rounded-lg" />
-        </div>
+        <Skeleton className="h-[38px] w-full rounded-xl" />
       </aside>
 
       <div className="min-w-0">
         <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4">
-          <div className="flex items-center justify-between gap-3 border-b border-osu-b3/20 px-4 py-3">
-            <div className="space-y-1.5">
-              <Skeleton className="h-2.5 w-20" />
-              <Skeleton className="h-4 w-44" />
+          <div className="flex flex-col gap-3 border-b border-osu-b3/20 px-4 py-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="shrink-0 space-y-1.5">
+              <Skeleton className="h-2.5 w-24" />
+              <Skeleton className="h-4 w-64 max-w-full" />
             </div>
-            <div className="hidden gap-1.5 sm:flex">
-              <Skeleton className="h-7 w-28 rounded-lg" />
-              <Skeleton className="h-7 w-44 rounded-lg" />
+            <div className="hidden flex-wrap items-center gap-x-3 gap-y-2 sm:flex">
+              <FilterGroupSkeleton labelWidth="w-8" buttonWidths={["w-12", "w-10", "w-10"]} />
+              <FilterGroupSkeleton labelWidth="w-8" buttonWidths={["w-14", "w-20", "w-20", "w-14"]} />
+              <FilterGroupSkeleton labelWidth="w-7" buttonWidths={["w-14", "w-10", "w-16", "w-12"]} />
             </div>
           </div>
           <div className="divide-y divide-osu-b3/20">
             {Array.from({ length: 6 }).map((_, i) => (
-              <RecRowSkeleton key={i} />
+              <RecRowSkeleton key={i} index={i} />
             ))}
           </div>
         </div>
@@ -871,24 +932,58 @@ function LoadingState() {
   );
 }
 
-function RecRowSkeleton() {
+function FilterGroupSkeleton({ labelWidth, buttonWidths }: { labelWidth: string; buttonWidths: string[] }) {
   return (
-    <div className="grid gap-3 p-2.5 pl-4 md:grid-cols-[56px_minmax(0,1fr)_118px] md:items-center md:gap-3.5 md:p-3 md:pl-5">
-      <Skeleton className="h-14 w-full rounded-md md:h-[56px]" />
-      <div className="min-w-0 space-y-2">
-        <Skeleton className="h-3.5 w-2/3" />
-        <Skeleton className="h-3 w-1/2" />
-        <div className="flex items-center gap-3 pt-0.5">
-          <Skeleton className="h-1 flex-1 rounded-full" />
-          <Skeleton className="h-4 w-16 rounded" />
-        </div>
+    <div className="flex items-center gap-1.5">
+      <Skeleton className={`h-2.5 ${labelWidth}`} />
+      <div className="flex overflow-hidden rounded-lg border border-osu-b3/30 bg-osu-b4/50">
+        {buttonWidths.map((width, index) => (
+          <Skeleton key={index} className={`h-7 ${width} rounded-none border-r border-osu-b3/25 last:border-r-0`} />
+        ))}
       </div>
-      <div className="flex items-center justify-between gap-2 md:flex-col md:items-end md:gap-1.5">
-        <div className="space-y-1.5 md:flex md:flex-col md:items-end">
-          <Skeleton className="h-5 w-14" />
-          <Skeleton className="h-2.5 w-20" />
+    </div>
+  );
+}
+
+function RecRowSkeleton({ index }: { index: number }) {
+  const accents = ["bg-osu-yellow", "bg-osu-green-light", "bg-osu-blue"];
+  return (
+    <div className="relative bg-osu-b4">
+      <span className={`absolute inset-y-0 left-0 w-[3px] ${accents[index % accents.length]}`} />
+      <div className="grid gap-3 p-2.5 pl-4 md:grid-cols-[56px_minmax(0,1fr)_118px] md:items-center md:gap-3.5 md:p-3 md:pl-5">
+        <Skeleton className="h-14 w-full rounded-md md:h-[56px]" />
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <Skeleton className="h-3.5 w-80 max-w-[70%]" />
+            <Skeleton className="h-4 w-6 rounded" />
+          </div>
+          <Skeleton className="mt-1.5 h-3 w-[460px] max-w-[80%]" />
+          <div className="mt-1.5 flex items-end gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <Skeleton className="h-2.5 w-24" />
+                <Skeleton className="h-2.5 w-28" />
+              </div>
+              <Skeleton className="mt-1 h-1 w-full rounded-full" />
+            </div>
+            <div className="hidden items-center gap-1.5 md:flex">
+              <Skeleton className="h-3.5 w-3.5 rounded" />
+              <div className="flex -space-x-1.5">
+                <Skeleton className="h-[18px] w-[18px] rounded-full" />
+                <Skeleton className="h-[18px] w-[18px] rounded-full" />
+                <Skeleton className="h-[18px] w-[18px] rounded-full" />
+              </div>
+              <Skeleton className="h-3 w-16" />
+            </div>
+          </div>
         </div>
-        <Skeleton className="h-7 w-7 rounded-lg" />
+        <div className="flex items-center justify-between gap-2 md:flex-col md:items-end md:justify-center md:gap-1.5">
+          <div className="space-y-1.5 md:flex md:flex-col md:items-end">
+            <Skeleton className="h-5 w-14" />
+            <Skeleton className="h-2.5 w-20" />
+          </div>
+          <Skeleton className="h-7 w-7 rounded-lg" />
+        </div>
       </div>
     </div>
   );

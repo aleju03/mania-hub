@@ -34,6 +34,7 @@ import { Route as AdminMonitorRouteImport } from './routes/admin/monitor'
 import { Route as AdminLiveBackendRouteImport } from './routes/admin/live-backend'
 import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
 import { Route as VideosIdFilenameRouteImport } from './routes/videos/$id/$filename'
+import { Route as FarmHelperMapBeatmapIdRouteImport } from './routes/farm-helper/map/$beatmapId'
 import { Route as ApiAuthOsuRouteImport } from './routes/api/auth/osu'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
 import { Route as ApiAuthOsuCallbackRouteImport } from './routes/api/auth/osu/callback'
@@ -163,6 +164,11 @@ const VideosIdFilenameRoute = VideosIdFilenameRouteImport.update({
   path: '/videos/$id/$filename',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FarmHelperMapBeatmapIdRoute = FarmHelperMapBeatmapIdRouteImport.update({
+  id: '/map/$beatmapId',
+  path: '/map/$beatmapId',
+  getParentRoute: () => FarmHelperRoute,
+} as any)
 const ApiAuthOsuRoute = ApiAuthOsuRouteImport.update({
   id: '/api/auth/osu',
   path: '/api/auth/osu',
@@ -181,7 +187,7 @@ const ApiAuthOsuCallbackRoute = ApiAuthOsuCallbackRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/farm-helper': typeof FarmHelperRoute
+  '/farm-helper': typeof FarmHelperRouteWithChildren
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
   '/rankings': typeof RankingsRoute
@@ -206,12 +212,13 @@ export interface FileRoutesByFullPath {
   '/player/$username': typeof PlayerUsernameRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
+  '/farm-helper/map/$beatmapId': typeof FarmHelperMapBeatmapIdRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/farm-helper': typeof FarmHelperRoute
+  '/farm-helper': typeof FarmHelperRouteWithChildren
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
   '/rankings': typeof RankingsRoute
@@ -236,13 +243,14 @@ export interface FileRoutesByTo {
   '/player/$username': typeof PlayerUsernameRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
+  '/farm-helper/map/$beatmapId': typeof FarmHelperMapBeatmapIdRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/farm-helper': typeof FarmHelperRoute
+  '/farm-helper': typeof FarmHelperRouteWithChildren
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
   '/rankings': typeof RankingsRoute
@@ -267,6 +275,7 @@ export interface FileRoutesById {
   '/player/$username': typeof PlayerUsernameRoute
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
+  '/farm-helper/map/$beatmapId': typeof FarmHelperMapBeatmapIdRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
@@ -299,6 +308,7 @@ export interface FileRouteTypes {
     | '/player/$username'
     | '/api/auth/logout'
     | '/api/auth/osu'
+    | '/farm-helper/map/$beatmapId'
     | '/videos/$id/$filename'
     | '/api/auth/osu/callback'
   fileRoutesByTo: FileRoutesByTo
@@ -329,6 +339,7 @@ export interface FileRouteTypes {
     | '/player/$username'
     | '/api/auth/logout'
     | '/api/auth/osu'
+    | '/farm-helper/map/$beatmapId'
     | '/videos/$id/$filename'
     | '/api/auth/osu/callback'
   id:
@@ -359,13 +370,14 @@ export interface FileRouteTypes {
     | '/player/$username'
     | '/api/auth/logout'
     | '/api/auth/osu'
+    | '/farm-helper/map/$beatmapId'
     | '/videos/$id/$filename'
     | '/api/auth/osu/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  FarmHelperRoute: typeof FarmHelperRoute
+  FarmHelperRoute: typeof FarmHelperRouteWithChildren
   LegalRoute: typeof LegalRoute
   MapsRoute: typeof MapsRoute
   RankingsRoute: typeof RankingsRoute
@@ -570,6 +582,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VideosIdFilenameRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/farm-helper/map/$beatmapId': {
+      id: '/farm-helper/map/$beatmapId'
+      path: '/map/$beatmapId'
+      fullPath: '/farm-helper/map/$beatmapId'
+      preLoaderRoute: typeof FarmHelperMapBeatmapIdRouteImport
+      parentRoute: typeof FarmHelperRoute
+    }
     '/api/auth/osu': {
       id: '/api/auth/osu'
       path: '/api/auth/osu'
@@ -594,6 +613,18 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface FarmHelperRouteChildren {
+  FarmHelperMapBeatmapIdRoute: typeof FarmHelperMapBeatmapIdRoute
+}
+
+const FarmHelperRouteChildren: FarmHelperRouteChildren = {
+  FarmHelperMapBeatmapIdRoute: FarmHelperMapBeatmapIdRoute,
+}
+
+const FarmHelperRouteWithChildren = FarmHelperRoute._addFileChildren(
+  FarmHelperRouteChildren,
+)
+
 interface ApiAuthOsuRouteChildren {
   ApiAuthOsuCallbackRoute: typeof ApiAuthOsuCallbackRoute
 }
@@ -608,7 +639,7 @@ const ApiAuthOsuRouteWithChildren = ApiAuthOsuRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  FarmHelperRoute: FarmHelperRoute,
+  FarmHelperRoute: FarmHelperRouteWithChildren,
   LegalRoute: LegalRoute,
   MapsRoute: MapsRoute,
   RankingsRoute: RankingsRoute,
