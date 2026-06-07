@@ -1229,7 +1229,7 @@ function comparisonBar(rec: LiveFarmHelperRec): { left: string; right: string; p
     const pct = Math.round(rec.peerFraction * 100);
     return {
       left: `${pct}% of sampled nearby players farm this`,
-      right: `they hit ${formatPp(rec.peerPpMedian)}pp`,
+      right: `median ${formatPp(rec.peerPpMedian)}pp`,
       pct: clampPct(pct),
     };
   }
@@ -1239,13 +1239,13 @@ function comparisonBar(rec: LiveFarmHelperRec): { left: string; right: string; p
   if (rec.reason === "stale") {
     return {
       left: `your ${formatPp(subjectPp)}pp · ${formatAge(rec.subjectPlayedAt)} old`,
-      right: `sample reaches ${formatPp(target)}pp`,
+      right: `p75 ${formatPp(target)}pp`,
       pct,
     };
   }
   return {
     left: `your ${formatPp(subjectPp)}pp`,
-    right: `sample hits ${formatPp(target)}pp`,
+    right: `median ${formatPp(target)}pp`,
     pct,
   };
 }
