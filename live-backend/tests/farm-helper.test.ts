@@ -68,13 +68,24 @@ function buildSubjectBestScores(): OscScore[] {
   return scores;
 }
 
-function makeOsuStub(bestScores: OscScore[], pp = SUBJECT_PP): Pick<OsuApiClient, "getUser" | "getUserByKey" | "getUserBestScoresWindow"> {
+function makeOsuStub(
+  bestScores: OscScore[],
+  pp = SUBJECT_PP,
+  variantPps: Partial<Record<"4k" | "7k", number>> = {},
+): Pick<OsuApiClient, "getUser" | "getUserByKey" | "getUserBestScoresWindow"> {
+  const variants = Object.entries(variantPps).map(([variant, variantPp]) => ({
+    mode: "mania",
+    variant,
+    pp: variantPp,
+    global_rank: null,
+    country_rank: null,
+  }));
   const user = {
     id: SUBJECT_ID,
     username: "Subject",
     avatar_url: "https://a.ppy.sh/1",
     country_code: "CR",
-    statistics: { pp },
+    statistics: { pp, variants },
   };
   return {
     getUser: async () => user,
@@ -337,6 +348,87 @@ describe("farm helper", () => {
 
     const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { keyMode: "7k" });
     expect(snapshot.recs.length).toBe(0);
+  });
+
+  it("does not fall back to total pp peers for an explicit key-mode request", async () => {
+    const recent = nowIso();
+    const targetBeatmap = 75;
+    const bestScores = buildSubjectBestScores();
+
+    await insertBeatmapMeta(targetBeatmap, 7, 8);
+    for (let i = 0; i < 15; i += 1) {
+      const id = 7000 + i;
+      await insertUser(id, 12_350 + i, "CR", `OverallPeer${i}`);
+      await insertFarmed("CR", id, targetBeatmap, 720, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 12_341, { "4k": 12_341, "7k": 2_535 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "7k" });
+
+    expect(snapshot.peerBand.mode).toBe("7k_nearest");
+    expect(snapshot.peerBand.count).toBe(0);
+    expect(snapshot.recs).toEqual([]);
+  });
+
+  it("does not show off-keymode Any recommendations above the player's key-mode range", async () => {
+    const recent = nowIso();
+    const safe4kBeatmap = 76;
+    const tooHard7kBeatmap = 77;
+    const bestScores = buildSubjectBestScores();
+
+    await insertBeatmapMeta(safe4kBeatmap, 4, 5);
+    await insertBeatmapMeta(tooHard7kBeatmap, 7, 8);
+    for (let i = 0; i < 15; i += 1) {
+      const id = 7100 + i;
+      await insertUser(id, 12_350 + i, "CR", `OverallPeer${i}`);
+      await insertFarmed("CR", id, safe4kBeatmap, 620, recent);
+      await insertFarmed("CR", id, tooHard7kBeatmap, 620, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 12_341, { "4k": 12_341, "7k": 2_535 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "any" });
+
+    expect(snapshot.recs.some((rec) => rec.beatmapId === safe4kBeatmap)).toBe(true);
+    expect(snapshot.recs.some((rec) => rec.beatmapId === tooHard7kBeatmap)).toBe(false);
+  });
+
+  it("uses official key-mode variant pp when selecting explicit key-mode peers", async () => {
+    const recent = nowIso();
+    const targetBeatmap = 80;
+    const supportBeatmaps = Array.from({ length: 8 }, (_, i) => 8000 + i);
+    const subjectSupportPps = [600, 580, 560, 540, 520, 500, 480, 460];
+    const strongSupportPps = [1000, 980, 960, 940, 920, 900, 880, 860];
+    const bestScores = supportBeatmaps.map((beatmapId, index) => subjectScore(beatmapId, subjectSupportPps[index] ?? 0, recent, 7, 8));
+
+    await insertBeatmapMeta(targetBeatmap, 7, 8);
+    for (const beatmapId of supportBeatmaps) await insertBeatmapMeta(beatmapId, 7, 8);
+
+    for (let i = 0; i < 12; i += 1) {
+      const id = 8000 + i;
+      await insertUser(id, 13_000, "CR", `Low7kPeer${i}`);
+      await insertFarmed("CR", id, targetBeatmap, 620, recent);
+      for (let j = 0; j < supportBeatmaps.length; j += 1) {
+        await insertFarmed("CR", id, supportBeatmaps[j], subjectSupportPps[j] ?? 0, recent);
+      }
+    }
+
+    for (let i = 0; i < 12; i += 1) {
+      const id = 9000 + i;
+      await insertUser(id, 15_000, "US", `Strong7kPeer${i}`);
+      await insertFarmed("US", id, targetBeatmap, 950, recent);
+      for (let j = 0; j < supportBeatmaps.length; j += 1) {
+        await insertFarmed("US", id, supportBeatmaps[j], (strongSupportPps[j] ?? 0) - i, recent);
+      }
+    }
+
+    const osu = makeOsuStub(bestScores, 15_000, { "7k": 7_600 });
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "7k" });
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === targetBeatmap);
+
+    expect(snapshot.peerBand.mode).toMatch(/^7k_pp_proxy/);
+    expect(rec?.peerCount).toBe(12);
+    expect(rec?.topPeers.every((peer) => peer.username.startsWith("Strong7kPeer"))).toBe(true);
+    expect(rec?.topPeers.some((peer) => peer.username.startsWith("Low7kPeer"))).toBe(false);
   });
 
   it("uses key-mode strength instead of total pp for mixed-mode peer selection", async () => {
