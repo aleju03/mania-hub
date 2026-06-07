@@ -27,7 +27,6 @@ const PRESSURE_DEFER_MS = 30 * 60_000;
 const SHEDDABLE_TYPES = [
   "refresh_user_maps_farmed_scores",
   "refresh_country_maps",
-  "refresh_global_maps",
   "seed_snipe_board",
   "refresh_country_roster",
   "osc_backfill",

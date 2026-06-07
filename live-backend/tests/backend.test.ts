@@ -413,6 +413,25 @@ describe("live backend", () => {
     expect(await queue.depth()).toBe(80);
   });
 
+  it("keeps global maps refresh runnable during queue pressure", async () => {
+    const { db, queue } = await setup();
+    const now = new Date().toISOString();
+    for (let index = 0; index < 120; index += 1) {
+      await exec(
+        db,
+        `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
+         values ('refresh_user_top_scores', ?, 'queued', 50, ?, 0, '{}', ?, ?)`,
+        [`top:pressure:${index}`, now, now, now],
+      );
+    }
+
+    await queue.enqueue("refresh_global_maps", "maps:GLOBAL", {}, { priority: -100, replaceDone: true });
+
+    const globalJob = (await exec(db, "select status from jobs where type = 'refresh_global_maps'")).rows[0];
+    expect(globalJob.status).toBe("queued");
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'refresh_user_top_scores' and status = 'deferred_pressure'")).rows[0].count)).toBe(40);
+  });
+
   it("keeps maps refresh priority below other backend jobs even for explicit refreshes", async () => {
     const { db, queue } = await setup();
 
