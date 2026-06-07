@@ -4,11 +4,11 @@ import { Check, ClipboardList, Copy, FileSpreadsheet, RotateCcw, Search, UserRou
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseManiaBeatmap } from "../../lib/beatmap-parser";
 import { filterBeatmapSearchResults } from "../../lib/beatmap-search";
-import { estimateDan } from "../../lib/dan-estimator";
+import { analyzeManiaPatterns, estimateDan } from "../../lib/dan-estimator";
 import { estimateDanielDan } from "../../lib/daniel-estimator";
 import { formatNumber } from "../../lib/format";
 import { getBeatmapFile, getBeatmapset, getBeatmapsetForBeatmap, getUser, getUserScoresBestWindow, searchBeatmaps, searchBeatmapsByMappers } from "../../lib/osu";
-import type { DanEstimate } from "../../lib/dan-estimator";
+import type { DanEstimate, ManiaPatternAnalysis } from "../../lib/dan-estimator";
 import type { OsuBeatmap, OsuBeatmapset, OsuScore } from "../../lib/types";
 import { canUseAdminFeatures, canUseDevFeatures } from "../../lib/auth-shared";
 import {
@@ -102,7 +102,7 @@ function topPlayScoresToBeatmapsets(scores: OsuScore[]): OsuBeatmapset[] {
   for (const score of scores) {
     const beatmap = score.beatmap;
     const beatmapset = score.beatmapset;
-    if (!beatmap || !beatmapset || beatmap.mode !== "mania" || beatmap.cs !== 4 || seenBeatmaps.has(beatmap.id)) {
+    if (!beatmap || !beatmapset || beatmap.mode !== "mania" || ![4, 6, 7].includes(Math.round(beatmap.cs)) || seenBeatmaps.has(beatmap.id)) {
       continue;
     }
 
@@ -485,6 +485,25 @@ async function runEstimate(
     : estimateDan(parsed, estimateInput);
 }
 
+async function runPatternAnalysis(
+  beatmapset: OsuBeatmapset,
+  beatmap: OsuBeatmap,
+  rate: number,
+): Promise<ManiaPatternAnalysis> {
+  const file = await getBeatmapFile({ data: { beatmapId: beatmap.id } });
+  const parsed = parseManiaBeatmap(file.content);
+  if (![4, 6, 7].includes(parsed.keyCount)) {
+    throw new Error("Pattern analysis currently supports 4K, 6K, and 7K beatmaps.");
+  }
+  return analyzeManiaPatterns(parsed, {
+    starRating: beatmap.difficulty_rating,
+    totalLength: beatmap.total_length,
+    title: beatmapset.title,
+    version: beatmap.version,
+    rate,
+  });
+}
+
 type DanVariant = "--" | "-" | "" | "+" | "++";
 const DAN_VARIANT_OPTIONS: DanVariant[] = ["--", "-", "", "+", "++"];
 
@@ -519,7 +538,7 @@ async function mapWithConcurrencyClient<T, R>(
 export const Route = createFileRoute("/admin/dan-classifier")({
   head: () => ({
     meta: [
-      { title: "Dan Classifier - dev" },
+      { title: "Pattern Analyzer - dev" },
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
@@ -549,6 +568,7 @@ function DanClassifierPage() {
   const [selectedSet, setSelectedSet] = useState<OsuBeatmapset | null>(null);
   const [selectedBeatmap, setSelectedBeatmap] = useState<OsuBeatmap | null>(null);
   const [estimate, setEstimate] = useState<DanEstimate | null>(null);
+  const [patternAnalysis, setPatternAnalysis] = useState<ManiaPatternAnalysis | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [copiedBeatmapId, setCopiedBeatmapId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -632,18 +652,24 @@ function DanClassifierPage() {
     setSelectedSet(beatmapset);
     setSelectedBeatmap(beatmap);
     setEstimate(null);
+    setPatternAnalysis(null);
     setError(null);
     setAnalysisLoading(true);
 
     try {
-      const result = await runEstimate(beatmapset, beatmap, classifierId, rate);
-      setEstimate(result);
+      if (view === "benchmark") {
+        const result = await runEstimate(beatmapset, beatmap, classifierId, rate);
+        setEstimate(result);
+      } else {
+        const result = await runPatternAnalysis(beatmapset, beatmap, rate);
+        setPatternAnalysis(result);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not analyze this beatmap.");
     } finally {
       setAnalysisLoading(false);
     }
-  }, [classifier, rate]);
+  }, [classifier, rate, view]);
 
   async function loadPlayerTopPlayMaps() {
     const key = playerQuery.trim();
@@ -664,7 +690,7 @@ function DanClassifierPage() {
       setResults(beatmapsets);
       setQuery("");
       if (beatmapsets.length === 0) {
-        setError(`${user.username} has no 4K mania maps in their top plays.`);
+        setError(`${user.username} has no 4K, 6K, or 7K mania maps in their top plays.`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load this player's top plays.");
@@ -690,10 +716,10 @@ function DanClassifierPage() {
             Admin
           </div>
           <h1 className="mt-1 text-2xl sm:text-3xl font-black text-white">
-            Dan Classifier
+            Pattern Analyzer
           </h1>
           <div className="mt-2 text-sm text-osu-f1">
-            Search a mania beatmap, fetch its .osu file, and estimate the dan range from chart pressure.
+            Search a mania beatmap, fetch its .osu file, and classify the main 4K, 6K, or 7K patterns from chart pressure.
           </div>
         </div>
 
@@ -753,26 +779,6 @@ function DanClassifierPage() {
               <div className="text-xs text-osu-f1">x</div>
             </div>
 
-            <div className="mt-3 flex items-center gap-3">
-              <label className="text-[11px] uppercase tracking-wide text-osu-f1 font-bold" htmlFor="dan-classifier">
-                Classifier
-              </label>
-              <select
-                id="dan-classifier"
-                value={classifier}
-                onChange={(event) => {
-                  const next = event.target.value as DanClassifierId;
-                  setClassifier(next);
-                  if (selectedSet && selectedBeatmap) void analyzeBeatmap(selectedSet, selectedBeatmap, next);
-                }}
-                className="w-32 px-3 py-2 rounded-md bg-osu-b5 text-osu-c1 text-xs border border-osu-b3/50 focus:border-osu-h1/40 focus:outline-none"
-              >
-                {DAN_CLASSIFIERS.map((option) => (
-                  <option key={option.id} value={option.id}>{option.label}</option>
-                ))}
-              </select>
-            </div>
-
             <div className="mt-4 rounded-lg border border-osu-b3/30 bg-osu-b5/60 p-3">
               <label className="text-[11px] uppercase tracking-wide text-osu-f1 font-bold" htmlFor="dan-player-top-plays">
                 Player top plays
@@ -806,12 +812,12 @@ function DanClassifierPage() {
                   ) : (
                     <Search className="h-4 w-4" />
                   )}
-                  Load 4K maps
+                  Load 4K/6K/7K maps
                 </button>
               </div>
               {loadedPlayerName && !playerMapsLoading ? (
                 <div className="mt-2 text-[11px] text-osu-f1">
-                  Showing 4K maps from {loadedPlayerName}'s top plays.
+                  Showing 4K/6K/7K maps from {loadedPlayerName}'s top plays.
                 </div>
               ) : null}
             </div>
@@ -920,9 +926,11 @@ function DanClassifierPage() {
           <aside className="min-w-0 rounded-lg border border-osu-b3/30 bg-osu-b4/35 p-4 sm:p-5 lg:sticky lg:top-24">
             <div className="flex items-start justify-between gap-2">
               <div>
-                <div className="text-[11px] uppercase tracking-[0.14em] text-osu-f1 font-bold">Estimate</div>
+                <div className="text-[11px] uppercase tracking-[0.14em] text-osu-f1 font-bold">
+                  {view === "benchmark" ? "Estimate" : "Patterns"}
+                </div>
                 <div className="mt-1 text-[11px] font-bold text-osu-yellow">
-                  {DAN_CLASSIFIERS.find((option) => option.id === classifier)?.label}
+                  {view === "benchmark" ? DAN_CLASSIFIERS.find((option) => option.id === classifier)?.label : "4K / 6K / 7K"}
                 </div>
               </div>
               {view === "benchmark" && selectedBeatmap ? (
@@ -932,6 +940,7 @@ function DanClassifierPage() {
                     setSelectedSet(null);
                     setSelectedBeatmap(null);
                     setEstimate(null);
+                    setPatternAnalysis(null);
                   }}
                   className="cursor-pointer rounded-md border border-osu-b3/40 bg-osu-b5/60 px-2 py-1 text-[10px] text-osu-f1 hover:text-white hover:border-osu-b3 transition-colors"
                   title="Close detail"
@@ -944,6 +953,61 @@ function DanClassifierPage() {
               <div className="mt-8 flex flex-col items-center gap-3 py-10">
                 <div className="w-7 h-7 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
                 <div className="text-sm text-osu-f1">Analyzing .osu file...</div>
+              </div>
+            ) : patternAnalysis && view !== "benchmark" ? (
+              <div className="mt-4 min-w-0">
+                <div className="text-sm text-osu-f1 truncate">{selectedTitle}</div>
+                <div className="mt-4">
+                  <div className="text-3xl font-black leading-none text-white sm:text-4xl">
+                    {patternAnalysis.primary?.label ?? "Unknown"}
+                  </div>
+                  <div className="mt-2 text-sm font-bold text-osu-yellow">
+                    {patternAnalysis.keyCount}K pattern profile
+                  </div>
+                </div>
+
+                <div className="mt-5 grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">
+                  <Metric label="Notes" value={patternAnalysis.metrics.noteCount.toLocaleString()} />
+                  <Metric label="Keys" value={`${patternAnalysis.metrics.keyCount}K`} />
+                  <Metric label="Peak 5s" value={`${patternAnalysis.metrics.peakNps5s.toFixed(1)} n/s`} />
+                  <Metric label="Sustain 10s" value={`${patternAnalysis.metrics.sustainedNps10s.toFixed(1)} n/s`} />
+                  <Metric label="Chords" value={`${Math.round(patternAnalysis.metrics.chordRatio * 100)}%`} />
+                  <Metric label="LNs" value={`${Math.round(patternAnalysis.metrics.holdRatio * 100)}%`} />
+                </div>
+
+                <div className="mt-5 space-y-2">
+                  {patternAnalysis.patterns.map((pattern) => (
+                    <div key={pattern.id}>
+                      <div className="flex justify-between gap-3 text-[11px] font-bold text-osu-f1">
+                        <span>{pattern.label}</span>
+                        <span>{Math.round(pattern.confidence * 100)}%</span>
+                      </div>
+                      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-osu-b5">
+                        <div
+                          className="h-full rounded-full bg-osu-pink"
+                          style={{ width: `${Math.min(100, Math.max(4, pattern.confidence * 100))}%` }}
+                        />
+                      </div>
+                      <div className="mt-1 truncate text-[10px] text-osu-f1/80">{pattern.evidence}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {patternAnalysis.warnings.length > 0 && (
+                  <div className="mt-5 rounded-lg border border-osu-yellow/25 bg-osu-yellow/10 px-3 py-2 text-[11px] text-osu-yellow">
+                    {patternAnalysis.warnings.join(" ")}
+                  </div>
+                )}
+
+                {selectedSet && selectedBeatmap && (
+                  <Link
+                    to="/replay"
+                    search={{ tab: "beatmap" }}
+                    className="mt-5 block text-center px-3 py-2 rounded-lg bg-osu-b5 text-[11px] font-bold text-osu-l2 border border-osu-b3/40 hover:text-white hover:border-osu-b3 transition-colors"
+                  >
+                    Find replays for this map
+                  </Link>
+                )}
               </div>
             ) : estimate ? (
               <div className="mt-4 min-w-0">
@@ -1022,7 +1086,7 @@ function DanClassifierPage() {
               </div>
             ) : (
               <div className="mt-8 py-10 text-center text-sm text-osu-f1">
-                Pick a difficulty to estimate its dan.
+                Pick a difficulty to analyze its patterns.
               </div>
             )}
           </aside>

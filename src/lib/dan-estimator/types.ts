@@ -2,6 +2,21 @@ import type { ManiaNote } from "../beatmap-parser";
 
 export type DanSkillFamily = "jack" | "stream" | "jumpstream" | "handstream" | "stamina" | "chordjack" | "tech" | "ln" | "dan";
 export type DanPrimaryFamily = Exclude<DanSkillFamily, "ln" | "dan">;
+export type ManiaPatternId =
+  | "jack"
+  | "chordjack"
+  | "speedjack"
+  | "handjack"
+  | "tech"
+  | "stream"
+  | "dumpstream"
+  | "jumpstream"
+  | "handstream"
+  | "quadstream"
+  | "delay"
+  | "bracket"
+  | "chordstream"
+  | "ln";
 
 export interface DanEstimateInput {
   starRating?: number;
@@ -107,6 +122,23 @@ export interface DanFeatureExtractionResult {
   noteTimes: number[];
   durationMs: number;
   orderedRows: Array<[number, ManiaNote[]]>;
+  metrics: DanFeatureMetrics;
+  warnings: string[];
+}
+
+export interface ManiaPatternHit {
+  id: ManiaPatternId;
+  label: string;
+  score: number;
+  confidence: number;
+  evidence: string;
+}
+
+export interface ManiaPatternAnalysis {
+  keyCount: number;
+  primary: ManiaPatternHit | null;
+  patterns: ManiaPatternHit[];
+  allPatterns: ManiaPatternHit[];
   metrics: DanFeatureMetrics;
   warnings: string[];
 }

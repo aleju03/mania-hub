@@ -3342,50 +3342,22 @@ function MiniModIcon({ mod, size = 10 }: { mod: string; size?: number }) {
   );
 }
 
-// ── Player overflow popover ────────────────────────────────────────────────
+// ── Player avatars ─────────────────────────────────────────────────────────
 
 function PlayerAvatars({
   players,
   totalCount,
   onPlayerClick,
   onMoreClick,
-  renderMeta,
 }: {
   players: Array<{ id: number; username: string; avatarUrl: string; pp?: number; count?: number; mods?: string[]; scoreUrl?: string | null }>;
   totalCount?: number;
   onPlayerClick: (player: { id: number; username: string; avatarUrl: string; pp?: number; count?: number; mods?: string[]; scoreUrl?: string | null }) => void;
   onMoreClick?: () => void;
-  renderMeta?: (p: { pp?: number; count?: number; mods?: string[] }) => React.ReactNode;
 }) {
-  const [showPopover, setShowPopover] = useState(false);
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const visible = players.slice(0, VISIBLE_AVATARS);
   const total = Math.max(totalCount ?? players.length, players.length);
   const overflow = total - VISIBLE_AVATARS;
-  const hiddenPreviewPlayers = players.slice(VISIBLE_AVATARS);
-  const hasUnloadedPlayers = total > players.length;
-
-  const openPopover = () => {
-    if (closeTimerRef.current) {
-      clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-    setShowPopover(true);
-  };
-
-  const closePopoverSoon = () => {
-    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-    closeTimerRef.current = setTimeout(() => {
-      setShowPopover(false);
-      closeTimerRef.current = null;
-    }, 120);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-    };
-  }, []);
 
   return (
     <div className="flex items-center gap-0.5 mt-1.5">
@@ -3404,48 +3376,14 @@ function PlayerAvatars({
         );
       })}
       {overflow > 0 && (
-        <div
-          className="relative"
-          onMouseEnter={openPopover}
-          onMouseLeave={closePopoverSoon}
+        <button
+          type="button"
+          onClick={onMoreClick}
+          className="text-[8px] text-osu-f1 ml-0.5 cursor-pointer hover:text-osu-l2 transition-colors"
+          title="All players"
         >
-          <button
-            type="button"
-            onClick={onMoreClick}
-            className="text-[8px] text-osu-f1 ml-0.5 cursor-pointer hover:text-osu-l2 transition-colors"
-            title="All players"
-          >
-            +{overflow}
-          </button>
-          {showPopover && (
-            <div
-              className="absolute bottom-full left-0 mb-1.5 p-1.5 rounded-lg bg-osu-b3 border border-osu-b3/60 shadow-xl z-50 min-w-[160px] max-h-[220px] overflow-y-auto"
-              onMouseEnter={openPopover}
-              onMouseLeave={closePopoverSoon}
-            >
-              {hiddenPreviewPlayers.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => onPlayerClick(p)}
-                  className="flex items-center gap-2 w-full py-1 px-1.5 rounded hover:bg-osu-b4 cursor-pointer transition-colors text-left"
-                >
-                  <Avatar url={p.avatarUrl} size={16} />
-                  <div className="min-w-0 flex-1 text-[10px] text-osu-l2 truncate">{p.username}</div>
-                  {renderMeta?.(p)}
-                </button>
-              ))}
-              {hasUnloadedPlayers && onMoreClick ? (
-                <button
-                  type="button"
-                  onClick={onMoreClick}
-                  className="mt-1 w-full rounded border border-osu-b3/50 bg-osu-b4/70 px-2 py-1 text-center text-[10px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b4 hover:text-white cursor-pointer"
-                >
-                  All players
-                </button>
-              ) : null}
-            </div>
-          )}
-        </div>
+          +{overflow}
+        </button>
       )}
     </div>
   );
@@ -3496,8 +3434,10 @@ function MapDetailsModal({
     const prevPaddingRight = document.body.style.paddingRight;
     const prevScrollbarCompensation = document.documentElement.style.getPropertyValue("--modal-scrollbar-compensation");
     const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    const hasStableScrollbarGutter =
+      typeof CSS !== "undefined" && CSS.supports?.("scrollbar-gutter", "stable");
     document.body.style.overflow = "hidden";
-    if (scrollbarWidth > 0) {
+    if (scrollbarWidth > 0 && !hasStableScrollbarGutter) {
       const currentPaddingRight = parseFloat(window.getComputedStyle(document.body).paddingRight) || 0;
       document.body.style.paddingRight = `${currentPaddingRight + scrollbarWidth}px`;
       document.documentElement.style.setProperty("--modal-scrollbar-compensation", `${scrollbarWidth}px`);
@@ -3809,11 +3749,13 @@ function StatRow({ children }: { children: React.ReactNode }) {
 function PlayerRow({
   rank,
   player,
+  sublabel,
   meta,
   onClick,
 }: {
   rank?: number;
   player: { id: number; username: string; avatarUrl: string };
+  sublabel?: React.ReactNode;
   meta?: React.ReactNode;
   onClick: () => void;
 }) {
@@ -3827,7 +3769,14 @@ function PlayerRow({
         <span className="w-5 text-center text-[10px] text-osu-f1 tabular-nums">{rank}</span>
       )}
       <Avatar url={player.avatarUrl} size={26} />
-      <div className="text-[12px] text-osu-l2 group-hover:text-white truncate flex-1 transition-colors">{player.username}</div>
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <span className="truncate text-[12px] text-osu-l2 transition-colors group-hover:text-white">{player.username}</span>
+          {sublabel ? (
+            <span className="shrink-0 text-[10px] text-osu-f1/75">{sublabel}</span>
+          ) : null}
+        </div>
+      </div>
       {meta}
     </button>
   );
@@ -4136,6 +4085,7 @@ function FarmedDetails({ entry, country }: { entry: MapsFarmedEntry; country: st
             key={p.id}
             rank={rank}
             player={p}
+            sublabel={p.playedAt ? formatTimeAgo(p.playedAt) : undefined}
             onClick={() => {
               const url = p.scoreUrl || `https://osu.ppy.sh/users/${p.id}/mania`;
               window.open(url, "_blank", "noopener,noreferrer");
@@ -4347,20 +4297,6 @@ function FarmedCard({
             }
             onPlayerClick(player.username);
           }}
-          renderMeta={(p) => (
-            <div className="ml-auto flex items-center gap-1 flex-shrink-0">
-              {p.mods?.map((mod) => (
-                <span key={mod} className="inline-flex origin-center scale-[0.34] -mx-2">
-                  <ModBadge mod={mod} />
-                </span>
-              ))}
-              {(p as MapsFarmedPlayer).pp ? (
-                <span className="text-[9px] text-osu-pink whitespace-nowrap">
-                  {Math.round((p as MapsFarmedPlayer).pp)}pp
-                </span>
-              ) : null}
-            </div>
-          )}
         />
       </div>
     </div>
@@ -4423,11 +4359,6 @@ function MostPlayedCard({
           totalCount={map.playerCount}
           onMoreClick={onOpenDetails}
           onPlayerClick={(player) => onPlayerClick(player.username)}
-          renderMeta={(p) => (p as MapsPlayerEntry).count ? (
-            <span className="text-[9px] text-osu-pink whitespace-nowrap">
-              {formatNumber((p as MapsPlayerEntry).count)}x
-            </span>
-          ) : null}
         />
       </div>
     </div>

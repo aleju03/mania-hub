@@ -1072,8 +1072,10 @@ function FarmersModal({
     const prevPad = document.body.style.paddingRight;
     const prevScrollbarCompensation = document.documentElement.style.getPropertyValue("--modal-scrollbar-compensation");
     const scrollbar = window.innerWidth - document.documentElement.clientWidth;
+    const hasStableScrollbarGutter =
+      typeof CSS !== "undefined" && CSS.supports?.("scrollbar-gutter", "stable");
     document.body.style.overflow = "hidden";
-    if (scrollbar > 0) {
+    if (scrollbar > 0 && !hasStableScrollbarGutter) {
       const current = parseFloat(window.getComputedStyle(document.body).paddingRight) || 0;
       document.body.style.paddingRight = `${current + scrollbar}px`;
       document.documentElement.style.setProperty("--modal-scrollbar-compensation", `${scrollbar}px`);
