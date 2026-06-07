@@ -237,6 +237,8 @@ export class ManiaReplayRenderer {
   private textPool: Text[] = [];
   private textPoolCursor = 0;
   private textMeasureContext: CanvasRenderingContext2D | null = null;
+  private textFontRevision = 0;
+  private comboTextLayer = new Container();
   private skinSpriteLayer = new Container();
   private skinSpritePool: Sprite[] = [];
   private skinSpritePoolCursor = 0;
@@ -531,8 +533,22 @@ export class ManiaReplayRenderer {
     this.totalDuration = Math.max(this.totalDuration, lastJudgementTime);
 
     this.measureCanvas();
+    this.installTextFontInvalidation();
     this.initPromise = this.initPixi();
     this.installOverlayPointerHandlers();
+  }
+
+  private installTextFontInvalidation() {
+    if (typeof document === "undefined" || !document.fonts?.ready) return;
+    void document.fonts.ready.then(() => {
+      if (this.destroyed) return;
+      this.textFontRevision++;
+      for (const label of this.textPool as Array<Text & { __sig?: string }>) {
+        label.__sig = undefined;
+        label.text = "";
+      }
+      if (!this._isPlaying) this.render();
+    });
   }
 
   private async initPixi() {
@@ -560,6 +576,7 @@ export class ManiaReplayRenderer {
     app.stage.addChild(this.graphics);
     app.stage.addChild(this.skinSpriteLayer);
     app.stage.addChild(this.textLayer);
+    app.stage.addChild(this.comboTextLayer);
     this.rebuildBackgroundSprites();
     this.prewarmSkinTextures();
     this.resize();
@@ -2895,19 +2912,72 @@ export class ManiaReplayRenderer {
     comboFont: ReplayComboFontStyle,
     animation: { scaleX: number; scaleY: number; alpha: number; color: string },
   ) {
-    this.addText(text, centerX, centerY, {
-      fontSize,
-      fill: animation.color,
-      alpha: animation.alpha * 0.85,
-      fontFamily: comboFont.family,
-      fontWeight: comboFont.weight,
-      fontStyle: comboFont.style,
-      anchorX: 0.5,
-      anchorY: 0.5,
-      scaleX: animation.scaleX,
-      scaleY: animation.scaleY,
-      tabularNums: true,
+    const fontWeight = comboFont.weight;
+    const fontStyle = comboFont.style;
+    const fontFamily = comboFont.family;
+    const digitAdvance = Math.max(
+      ...Array.from({ length: 10 }, (_, digit) => (
+        this.measureTextWidth(String(digit), fontSize, fontWeight, fontStyle, fontFamily)
+      )),
+    );
+    const charAdvances = Array.from(text).map((char) => (
+      char >= "0" && char <= "9"
+        ? digitAdvance
+        : Math.max(digitAdvance, this.measureTextWidth(char, fontSize, fontWeight, fontStyle, fontFamily))
+    ));
+    const totalWidth = charAdvances.reduce((sum, width) => sum + width, 0);
+    let x = centerX - totalWidth / 2;
+
+    Array.from(text).forEach((char, index) => {
+      const advance = charAdvances[index];
+      this.addComboText(char, x + advance / 2, centerY, {
+        fontSize,
+        fill: animation.color,
+        alpha: animation.alpha * 0.85,
+        fontFamily,
+        fontWeight,
+        fontStyle,
+        anchorX: 0.5,
+        anchorY: 0.5,
+        scaleX: animation.scaleX,
+        scaleY: animation.scaleY,
+      });
+      x += advance;
     });
+  }
+
+  private addComboText(
+    text: string,
+    x: number,
+    y: number,
+    options: {
+      fontSize: number;
+      fill: string;
+      alpha: number;
+      fontFamily: string;
+      fontWeight: ReplayComboFontStyle["weight"];
+      fontStyle?: "normal" | "italic";
+      anchorX: number;
+      anchorY: number;
+      scaleX: number;
+      scaleY: number;
+    },
+  ) {
+    const label = new Text({
+      text,
+      style: {
+        fontFamily: options.fontFamily,
+        fontSize: options.fontSize,
+        fontWeight: options.fontWeight,
+        fontStyle: options.fontStyle ?? "normal",
+        fill: options.fill,
+      },
+    });
+    label.anchor.set(options.anchorX, options.anchorY);
+    label.position.set(x, y);
+    label.alpha = options.alpha;
+    label.scale.set(options.scaleX, options.scaleY);
+    this.comboTextLayer.addChild(label);
   }
 
   private getComboAnimationState(): { value: number; scaleX: number; scaleY: number; alpha: number; color: string; tint: number } | null {
@@ -3224,12 +3294,19 @@ export class ManiaReplayRenderer {
       const height = this.getHudAssetHeight(asset, fallbackHeight, layout);
       return { width: this.getAssetWidthForHeight(asset, height, fallbackHeight * 0.7), height };
     });
+    const tabularDigitWidths = combo.digits
+      .filter((asset): asset is ReplaySkinImageAsset => Boolean(asset))
+      .map((asset) => {
+        const height = this.getHudAssetHeight(asset, fallbackHeight, layout);
+        return this.getAssetWidthForHeight(asset, height, fallbackHeight * 0.7);
+      });
     const overlap = combo.overlap * (layout.h / 480);
-    const totalWidth = sizes.reduce((sum, size, index) => sum + size.width - (index > 0 ? overlap : 0), 0);
+    const cellWidth = Math.max(...sizes.map((size) => size.width), ...tabularDigitWidths);
+    const totalWidth = (cellWidth * sizes.length) - (overlap * Math.max(0, sizes.length - 1));
     let x = centerX - totalWidth / 2;
     glyphs.forEach((asset, index) => {
       const size = sizes[index];
-      const glyphCenterX = x + size.width / 2;
+      const glyphCenterX = x + cellWidth / 2;
       if (asset) this.drawSkinImage(
         asset,
         glyphCenterX,
@@ -3241,7 +3318,7 @@ export class ManiaReplayRenderer {
         animation.alpha * 0.9,
         animation.tint,
       );
-      x += size.width - overlap;
+      x += cellWidth - overlap;
     });
     return true;
   }
@@ -3655,13 +3732,12 @@ export class ManiaReplayRenderer {
 
     this.textPoolCursor++;
     if (!label.visible) label.visible = true;
-    if (label.text !== text) label.text = text;
 
     const fontFamily = options.fontFamily ?? "Torus, sans-serif";
     const fontWeight = options.fontWeight ?? "400";
     const fontStyle = options.fontStyle ?? "normal";
     const fontVariantNumeric = options.tabularNums ? "tabular-nums" : "normal";
-    const sig = `${options.fontSize}|${fontFamily}|${fontWeight}|${fontStyle}|${fontVariantNumeric}|${options.fill}`;
+    const sig = `${this.textFontRevision}|${options.fontSize}|${fontFamily}|${fontWeight}|${fontStyle}|${fontVariantNumeric}|${options.fill}`;
     if (label.__sig !== sig) {
       label.style.fontFamily = fontFamily;
       label.style.fontSize = options.fontSize;
@@ -3671,6 +3747,7 @@ export class ManiaReplayRenderer {
       label.style.fill = options.fill;
       label.__sig = sig;
     }
+    if (label.text !== text) label.text = text;
 
     if (label.x !== x) label.x = x;
     if (label.y !== y) label.y = y;
@@ -3798,6 +3875,7 @@ export class ManiaReplayRenderer {
 
   private beginTextFrame() {
     this.textPoolCursor = 0;
+    this.clearComboTextLayer();
   }
 
   private finishTextFrame() {
@@ -3808,6 +3886,11 @@ export class ManiaReplayRenderer {
 
   private clearTextLayer() {
     const children = this.textLayer.removeChildren();
+    for (const child of children) child.destroy();
+  }
+
+  private clearComboTextLayer() {
+    const children = this.comboTextLayer.removeChildren();
     for (const child of children) child.destroy();
   }
 
@@ -3948,6 +4031,7 @@ export class ManiaReplayRenderer {
     const destroyApp = () => {
       if (!this.app) return;
       this.clearTextLayer();
+      this.clearComboTextLayer();
       this.clearSkinSprites();
       for (const gradient of this.receptorBeamGradients.values()) gradient.destroy();
       this.receptorBeamGradients.clear();

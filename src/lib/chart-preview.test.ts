@@ -59,6 +59,27 @@ describe("chart preview helpers", () => {
     expect(frames.every((frame) => frame.time <= RANDOM_REPLAY_PREVIEW_MS)).toBe(true);
   });
 
+  it("does not clamp already-active long notes into fake preview-start notes", () => {
+    const beatmap: ManiaBeatmap = {
+      ...baseBeatmap,
+      previewTime: 5_000,
+      notes: [
+        { column: 0, time: 4_000, endTime: 5_000, isHold: true },
+        { column: 1, time: 4_500, endTime: 6_200, isHold: true },
+        { column: 2, time: 5_250, endTime: 6_000, isHold: true },
+      ],
+    };
+
+    const notes = getPreviewNotes(beatmap);
+    const frames = buildAutoplayFrames(notes, beatmap.keyCount);
+
+    expect(notes).toEqual([
+      { column: 2, time: 250, endTime: 1_000, isHold: true },
+    ]);
+    expect(frames[0]).toEqual({ time: 0, keyState: 0 });
+    expect(frames[1]).toEqual({ time: 250, keyState: 4 });
+  });
+
   it("falls back past missing reference preview times", () => {
     expect(pickPreviewStartTime(-1, 54_744)).toBe(54_744);
     expect(pickPreviewStartTime(0, 54_744)).toBe(54_744);

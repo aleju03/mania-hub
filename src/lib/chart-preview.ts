@@ -154,7 +154,7 @@ export function getPreviewNotes(
   const playbackEnd = window + RANDOM_REPLAY_PREVIEW_LOOKAHEAD_MS;
 
   const notes = beatmap.notes
-    .filter((note) => note.endTime >= start && note.time <= visualEnd)
+    .filter((note) => note.time >= start && note.time <= visualEnd)
     .map((note) => ({
       ...note,
       time: Math.max(0, (note.time - start) / scale),

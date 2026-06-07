@@ -105,13 +105,32 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("showHealthBar: false");
   });
 
-  it("renders fallback combo text as one label to keep digits visually consistent", () => {
+  it("renders fallback combo digits in fixed slots to keep digits from pushing each other", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
     expect(source).toContain("this.renderTabularComboText(text, playfieldCenterX, comboY, fontSize, comboFont, state);");
-    expect(source).toContain("this.addText(text, centerX, centerY, {");
-    expect(source).toContain("tabularNums: true,");
+    expect(source).toContain("const digitAdvance = Math.max(");
+    expect(source).toContain("this.measureTextWidth(String(digit), fontSize, fontWeight, fontStyle, fontFamily)");
+    expect(source).toContain("private comboTextLayer = new Container();");
+    expect(source).toContain("app.stage.addChild(this.comboTextLayer);");
+    expect(source).toContain("this.addComboText(char, x + advance / 2, centerY, {");
+    expect(source).toContain("this.clearComboTextLayer();");
     expect(source).toContain("if (!glyphs.every((glyph): glyph is ReplaySkinImageAsset => Boolean(glyph))) return false;");
+    expect(source).toContain("const tabularDigitWidths = combo.digits");
+    expect(source).toContain("const cellWidth = Math.max(...sizes.map((size) => size.width), ...tabularDigitWidths);");
+    expect(source).toContain("const glyphCenterX = x + cellWidth / 2;");
+  });
+
+  it("invalidates pooled text after web fonts finish loading", () => {
+    const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
+
+    expect(source).toContain("private textFontRevision = 0;");
+    expect(source).toContain("this.installTextFontInvalidation();");
+    expect(source).toContain("void document.fonts.ready.then(() => {");
+    expect(source).toContain("this.textFontRevision++;");
+    expect(source).toContain("label.__sig = undefined;");
+    expect(source).toContain("label.text = \"\";");
+    expect(source).toContain("const sig = `${this.textFontRevision}|");
   });
 
   it("uses the saved replay skin for chart previews", () => {
