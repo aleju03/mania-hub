@@ -713,6 +713,7 @@ function RecRow({
   const bar = comparisonBar(rec);
   const fit = confidence(rec);
   const navigate = useNavigate();
+  const desktopCover = rec.listCover || rec.cover;
   const detailContext = {
     beatmapsetId: rec.beatmapsetId,
     title: rec.title,
@@ -767,7 +768,12 @@ function RecRow({
       <span className={`absolute inset-y-0 left-0 w-[3px] ${meta.accent}`} />
       <div className="grid gap-3 p-2.5 pl-4 md:grid-cols-[56px_minmax(0,1fr)_118px] md:items-center md:gap-3.5 md:p-3 md:pl-5">
         <div className="h-14 w-full overflow-hidden rounded-md bg-osu-b6 md:h-[56px]">
-          {rec.cover ? <img src={rec.cover} alt="" loading="lazy" className="h-full w-full object-cover" /> : null}
+          {rec.cover ? (
+            <picture className="block h-full w-full">
+              {desktopCover ? <source media="(min-width: 768px)" srcSet={desktopCover} /> : null}
+              <img src={rec.cover} alt="" loading="lazy" className="h-full w-full object-cover" />
+            </picture>
+          ) : null}
         </div>
 
         <div className="min-w-0">

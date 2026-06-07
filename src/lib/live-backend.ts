@@ -498,6 +498,7 @@ export interface LiveFarmHelperRec {
   creator: string;
   version: string;
   cover: string;
+  listCover?: string;
   status: string;
   stars: number;
   keys: number;

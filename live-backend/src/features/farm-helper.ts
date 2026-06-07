@@ -35,6 +35,7 @@ export interface FarmHelperRec {
   creator: string;
   version: string;
   cover: string;
+  listCover: string;
   status: string;
   stars: number;
   keys: number;
@@ -165,6 +166,7 @@ interface BeatmapsetMeta {
   creator: string;
   status: string;
   cover: string;
+  listCover: string;
 }
 
 export async function getFarmHelperSnapshot(
@@ -417,6 +419,7 @@ async function buildSnapshot(
       creator: setMeta?.creator ?? "",
       version: meta.version,
       cover: setMeta?.cover ?? "",
+      listCover: setMeta?.listCover ?? setMeta?.cover ?? "",
       status: setMeta?.status || meta.status,
       stars: meta.stars,
       keys: meta.keys,
@@ -837,6 +840,7 @@ function toBeatmapsetMeta(row: Record<string, unknown>): BeatmapsetMeta {
     creator: String(row.creator ?? ""),
     status: String(row.status ?? ""),
     cover: covers["cover@2x"] ?? covers.cover ?? covers["card@2x"] ?? covers.card ?? covers["slimcover@2x"] ?? covers.slimcover ?? covers["list@2x"] ?? covers.list ?? "",
+    listCover: covers["list@2x"] ?? covers.list ?? covers["card@2x"] ?? covers.card ?? covers["cover@2x"] ?? covers.cover ?? "",
   };
 }
 
