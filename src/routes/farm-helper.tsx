@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Outlet, notFound, useMatches, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useMatches, useNavigate } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -22,7 +22,6 @@ import { Pagination } from "../components/ui/Pagination";
 import { ModBadge } from "../components/ui/ModBadge";
 import { UsernameText } from "../components/ui/UsernameText";
 import { useAuth } from "../lib/auth-context";
-import { canUseDevFeatures } from "../lib/auth-shared";
 
 const PAGE_SIZE = 10;
 
@@ -56,10 +55,6 @@ const searchPlayers = async (q: string) => {
 };
 
 export const Route = createFileRoute("/farm-helper")({
-  // Dev-only for now: gated like the admin/dev routes (og-preview, dan-classifier).
-  beforeLoad: ({ context }) => {
-    if (!canUseDevFeatures(context.auth)) throw notFound();
-  },
   validateSearch: (search: Record<string, unknown>): FarmHelperSearch => ({
     user: typeof search.user === "string" && search.user.trim() ? search.user.trim().slice(0, 60) : undefined,
     key: parseKeyMode(search.key),
@@ -191,15 +186,6 @@ function FarmHelperPage() {
         <PageHeader
           iconSrc="/images/icons/rankings.svg"
           title="Global mania farm helper"
-          right={
-            snapshot ? (
-              <span className="text-[11px] font-medium text-osu-f1">
-                {peerBandCoverageLabel(snapshot)}
-              </span>
-            ) : loading && subjectKey ? (
-              <Skeleton className="h-3 w-56 max-w-full" />
-            ) : null
-          }
         />
 
         <div className="mx-auto w-full max-w-[1280px] px-4 py-5 sm:px-5">
@@ -277,7 +263,14 @@ function FarmHelperPage() {
                   )}
                 </div>
 
-                <Pagination page={safePage} totalPages={pageCount} onPageChange={goToPage} />
+                {pageCount > 1 ? (
+                  <div
+                    className="sticky bottom-0 z-10 -mx-4 mt-6 border-t border-osu-b3/30 bg-osu-b5/90 px-4 py-2 backdrop-blur-sm after:absolute after:left-0 after:right-0 after:top-full after:h-4 after:bg-osu-b5/90 after:backdrop-blur-sm after:content-[''] sm:-mx-5 sm:px-5 [&>div]:!mt-0 relative"
+                    style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))" }}
+                  >
+                    <Pagination page={safePage} totalPages={pageCount} onPageChange={goToPage} />
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -534,17 +527,6 @@ function maxGain(recs: LiveFarmHelperRec[]): number {
 
 function totalGain(recs: LiveFarmHelperRec[]): number {
   return recs.reduce((sum, rec) => sum + Math.max(0, rec.estimatedPpGain), 0);
-}
-
-function peerBandCoverageLabel(snapshot: LiveFarmHelperSnapshot): string {
-  const { count, farmDataCount } = snapshot.peerBand;
-  if (count > 0 && farmDataCount > 0 && farmDataCount < count) {
-    return `farm data from ${formatPp(farmDataCount)} of ${formatPp(count)} nearby players`;
-  }
-  if (count > 0 && farmDataCount === 0) {
-    return `no farm data among ${formatPp(count)} nearby players`;
-  }
-  return `compared with ${formatPp(count)} nearby players`;
 }
 
 function peerBandRangeLabel(snapshot: LiveFarmHelperSnapshot): string {

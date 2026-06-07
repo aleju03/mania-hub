@@ -70,10 +70,8 @@ export function Nav() {
   // only once the tier is known to be "snipes" — while the tier is still
   // unknown (first-ever visit) the tab stays hidden rather than flashing in.
   const showSnipesLink = !liveBackendConfigured || selectedCountryFeatureTier === "snipes";
-  // Farm Helper is dev-only for now, gated like the other dev tools.
   const visibleLinks = links.filter((link) => {
     if (link.id === "snipes" && !showSnipesLink) return false;
-    if (link.id === "farm-helper" && !devMode) return false;
     return true;
   });
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");

@@ -1,4 +1,4 @@
-import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Activity, ArrowLeft, BarChart3, Clock3, ExternalLink, Gauge, Keyboard, Music2, Star, Target } from "lucide-react";
 import { getBeatmapPatternAnalysis, getBeatmapsetForBeatmap, type BeatmapPatternAnalysisResponse } from "../../../lib/osu";
@@ -6,7 +6,6 @@ import type { MapsFavouriteBeatmapset, OsuBeatmap, OsuBeatmapset } from "../../.
 import { detectManiaPatterns, MANIA_PATTERN_LABELS } from "../../../lib/mania-patterns";
 import { MANIA_PATTERN_ANALYZER_LABELS, type ManiaPatternAnalysis, type ManiaPatternId } from "../../../lib/dan-estimator";
 import { formatDuration, formatNumber } from "../../../lib/format";
-import { canUseDevFeatures } from "../../../lib/auth-shared";
 import { PageHeader } from "../../../components/layout/PageHeader";
 import { Skeleton } from "../../../components/ui/LoadingSkeleton";
 import { ChartPreviewPanel } from "../../../components/maps/ChartPreviewPanel";
@@ -86,9 +85,6 @@ const SPEED_RATES: Record<LiveFarmHelperSpeedBucket, number> = {
 const FARM_MAP_CONTEXT_KEY_PREFIX = "mania-hub-farm-helper-map-context-v1:";
 
 export const Route = createFileRoute("/farm-helper/map/$beatmapId")({
-  beforeLoad: ({ context }) => {
-    if (!canUseDevFeatures(context.auth)) throw notFound();
-  },
   head: () => ({
     meta: [
       { title: "Farm map detail - Mania Hub" },
@@ -195,6 +191,8 @@ function FarmMapDetailPage() {
   const osuUrl = selectedBeatmap?.url ?? (beatmapset ? `https://osu.ppy.sh/beatmapsets/${beatmapset.id}#mania/${selectedBeatmapId ?? beatmapId}` : `https://osu.ppy.sh/beatmaps/${beatmapId}`);
   const coverUrl = beatmapset?.covers["cover@2x"] ?? beatmapset?.covers.cover ?? beatmapset?.covers.card ?? "";
   const cardUrl = beatmapset?.covers.card ?? beatmapset?.covers.list ?? coverUrl;
+  const heroImageUrl = farmContext?.cover ?? cardUrl;
+  const heroBackdropUrl = coverUrl || farmContext?.cover || cardUrl;
   const hasFarmContext = Boolean(farmContext && (
     farmContext.gain != null ||
     farmContext.benchmark != null ||
@@ -238,17 +236,17 @@ function FarmMapDetailPage() {
         ) : beatmapset && selectedBeatmap ? (
           <div className="space-y-4">
             <section className="relative overflow-hidden rounded-lg border border-osu-b3/25 bg-osu-b4">
-              {coverUrl ? (
+              {heroBackdropUrl ? (
                 <div
                   className="absolute inset-0 bg-cover bg-center opacity-20"
-                  style={{ backgroundImage: `url("${coverUrl.replace(/"/g, '\\"')}")` }}
+                  style={{ backgroundImage: `url("${heroBackdropUrl.replace(/"/g, '\\"')}")` }}
                   aria-hidden="true"
                 />
               ) : null}
               <div className="absolute inset-0 bg-gradient-to-r from-osu-b4 via-osu-b4/92 to-osu-b5/78" aria-hidden="true" />
               <div className="relative grid gap-4 p-4 lg:grid-cols-[180px_minmax(0,1fr)_240px] lg:p-5">
                 <div className="h-32 overflow-hidden rounded-md bg-osu-b6 lg:h-44">
-                  {cardUrl ? <img src={cardUrl} alt="" className="h-full w-full object-cover" /> : null}
+                  {heroImageUrl ? <img src={heroImageUrl} alt="" className="h-full w-full object-cover" /> : null}
                 </div>
                 <div className="min-w-0 self-center">
                   <div className="mb-2 flex flex-wrap items-center gap-1.5">
@@ -781,7 +779,15 @@ function DetailSkeleton({ farmContext, farmRate }: { farmContext: FarmMapContext
               ) : (
                 <Skeleton className="h-9 w-full rounded-md" />
               )}
-              <Skeleton className="hidden h-9 w-full rounded-md lg:block" />
+              {farmContext?.beatmapsetId ? (
+                <a
+                  href={`osu://dl/${farmContext.beatmapsetId}`}
+                  className="hidden items-center justify-center gap-2 rounded-md bg-osu-b6/80 px-3 py-2 text-[12px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-white lg:inline-flex"
+                >
+                  <Music2 className="h-3.5 w-3.5" />
+                  <span>open in osu! client</span>
+                </a>
+              ) : null}
             </div>
           </div>
         </section>

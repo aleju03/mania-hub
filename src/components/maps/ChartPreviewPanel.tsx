@@ -89,6 +89,9 @@ export function ChartPreviewPanel({
   const [volume, setVolume] = useState(readStoredPreviewVolume);
   const lastNonZeroVolumeRef = useRef(volume > 0 ? volume : DEFAULT_PREVIEW_VOLUME);
   const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
+  const [scrollSpeedInput, setScrollSpeedInput] = useState(() => String(readReplayScrollSpeed()));
+  const [editingScrollSpeed, setEditingScrollSpeed] = useState(false);
+  const cancelScrollSpeedCommitRef = useRef(false);
   const [previewBeatmap, setPreviewBeatmap] = useState<ManiaBeatmap | null>(null);
   const [chartStartMs, setChartStartMs] = useState(0);
   const [chartPlaybackMs, setChartPlaybackMs] = useState(0);
@@ -304,6 +307,10 @@ export function ChartPreviewPanel({
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
   }, [audioUrl, volume]);
+
+  useEffect(() => {
+    if (!editingScrollSpeed) setScrollSpeedInput(String(scrollSpeed));
+  }, [editingScrollSpeed, scrollSpeed]);
 
   useEffect(() => {
     const refreshScrollSpeed = () => setScrollSpeed(readReplayScrollSpeed());
@@ -595,6 +602,27 @@ export function ChartPreviewPanel({
     writeReplayScrollSpeed(normalized);
   }, []);
 
+  const commitScrollSpeedInput = useCallback(() => {
+    if (cancelScrollSpeedCommitRef.current) {
+      cancelScrollSpeedCommitRef.current = false;
+      setScrollSpeedInput(String(scrollSpeed));
+      setEditingScrollSpeed(false);
+      return;
+    }
+
+    const parsed = Number(scrollSpeedInput.trim());
+    if (!Number.isFinite(parsed)) {
+      setScrollSpeedInput(String(scrollSpeed));
+      setEditingScrollSpeed(false);
+      return;
+    }
+
+    const next = normalizeReplayScrollSpeed(parsed);
+    setScrollSpeedInput(String(next));
+    setEditingScrollSpeed(false);
+    if (next !== scrollSpeed) applyScrollSpeed(next);
+  }, [applyScrollSpeed, scrollSpeed, scrollSpeedInput]);
+
   const paused = requested && ready && audioReadyRef.current && !playing && !ending && !audioLoading && !error;
   const preparing = requested && !ending && !playing && !paused && !audioLoading && !error;
   const canToggle = requested && !ending && !audioLoading && (playing || ready);
@@ -691,7 +719,7 @@ export function ChartPreviewPanel({
         <div className="min-w-0 truncate text-[11px] font-semibold text-osu-l2">
           {selectedBeatmap ? (
             <>
-              <span className="text-osu-yellow">{selectedBeatmap.difficultyRating.toFixed(2)} stars</span>
+              <span className="text-osu-yellow">{selectedBeatmap.difficultyRating.toFixed(2)} ★</span>
               <span className="text-osu-f1"> / {Math.round(selectedBeatmap.cs)}K / {selectedBeatmap.version}</span>
             </>
           ) : (
@@ -711,7 +739,25 @@ export function ChartPreviewPanel({
               aria-label="Chart preview scroll speed"
               className="h-1 w-16 shrink-0 cursor-pointer appearance-none rounded-full bg-osu-b3 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-yellow"
             />
-            <span className="w-5 text-right text-[10px] tabular-nums text-osu-l2">{scrollSpeed}</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={scrollSpeedInput}
+              aria-label="Chart preview scroll speed value"
+              onFocus={() => setEditingScrollSpeed(true)}
+              onChange={(event) => setScrollSpeedInput(event.target.value.replace(/[^\d]/g, "").slice(0, 2))}
+              onBlur={commitScrollSpeedInput}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") event.currentTarget.blur();
+                if (event.key === "Escape") {
+                  cancelScrollSpeedCommitRef.current = true;
+                  setScrollSpeedInput(String(scrollSpeed));
+                  setEditingScrollSpeed(false);
+                  event.currentTarget.blur();
+                }
+              }}
+              className="h-5 w-6 rounded bg-transparent text-center text-[10px] font-semibold tabular-nums text-osu-l2 outline-none transition-colors focus:bg-osu-b3/70 focus:text-white focus:ring-1 focus:ring-osu-yellow/40"
+            />
           </div>
           {requested && !ending ? (
             <button
