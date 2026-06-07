@@ -1239,7 +1239,7 @@ function comparisonBar(rec: LiveFarmHelperRec): { left: string; right: string; p
   if (rec.reason === "stale") {
     return {
       left: `your ${formatPp(subjectPp)}pp · ${formatAge(rec.subjectPlayedAt)} old`,
-      right: `p75 ${formatPp(target)}pp`,
+      right: `top 25% ${formatPp(target)}pp`,
       pct,
     };
   }
