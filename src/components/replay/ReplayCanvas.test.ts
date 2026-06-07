@@ -105,12 +105,13 @@ describe("ManiaReplayRenderer initialization", () => {
     expect(source).toContain("showHealthBar: false");
   });
 
-  it("keeps combo digits on fixed-width advances", () => {
+  it("renders fallback combo text as one label to keep digits visually consistent", () => {
     const source = fs.readFileSync(path.resolve(__dirname, "ReplayCanvas.ts"), "utf8");
 
-    expect(source).toContain("private measureTabularDigitAdvance(");
     expect(source).toContain("this.renderTabularComboText(text, playfieldCenterX, comboY, fontSize, comboFont, state);");
-    expect(source).toContain("const totalWidth = advance * text.length;");
+    expect(source).toContain("this.addText(text, centerX, centerY, {");
+    expect(source).toContain("tabularNums: true,");
+    expect(source).toContain("if (!glyphs.every((glyph): glyph is ReplaySkinImageAsset => Boolean(glyph))) return false;");
   });
 
   it("uses the saved replay skin for chart previews", () => {

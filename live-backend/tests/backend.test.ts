@@ -2814,6 +2814,38 @@ describe("live backend", () => {
     expect(snapshot.ranking[0].user.country_code).toBe("KR");
   });
 
+  it("keeps missing accuracies below real accuracies when sorting Global rankings", async () => {
+    const { db } = await setup();
+    const now = new Date().toISOString();
+    const seed = async (id: number, name: string, pp: number, hitAccuracy: number | null) => {
+      const profileJson = hitAccuracy == null
+        ? JSON.stringify({ id, username: name, statistics: { pp } })
+        : JSON.stringify({ id, username: name, statistics: { pp, hit_accuracy: hitAccuracy } });
+      await exec(
+        db,
+        `insert into users (user_id, username, avatar_url, country_code, pp, global_rank, country_rank, profile_json, updated_at)
+         values (?, ?, ?, 'CR', ?, ?, 1, ?, ?)`,
+        [id, name, `https://assets.example/${id}.png`, pp, id, profileJson, now],
+      );
+      await exec(
+        db,
+        `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+         values ('CR', ?, 1, 'test', 1, ?)`,
+        [id, now],
+      );
+    };
+
+    await seed(1, "Missing", 29000, null);
+    await seed(2, "LowerReal", 28000, 95.5);
+    await seed(3, "HigherReal", 27000, 97.5);
+
+    const ascending = await getGlobalRankingsSnapshot(db, { pageSize: 50, sort: "accuracy", dir: "asc" });
+    const descending = await getGlobalRankingsSnapshot(db, { pageSize: 50, sort: "accuracy", dir: "desc" });
+
+    expect(ascending.ranking.map((r) => r.user.username)).toEqual(["LowerReal", "HigherReal", "Missing"]);
+    expect(descending.ranking.map((r) => r.user.username)).toEqual(["HigherReal", "LowerReal", "Missing"]);
+  });
+
   it("merges per-country maps snapshots into the Global aggregate", async () => {
     const { db, queue } = await setup();
     const now = "2026-05-12T12:00:00.000Z";

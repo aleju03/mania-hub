@@ -120,7 +120,7 @@ function sortGlobalRankingEntries(
       case "cr7d":
         return ((b.country_change ?? -99999) - (a.country_change ?? -99999)) * flip || a.rank - b.rank;
       case "accuracy":
-        return (b.hit_accuracy - a.hit_accuracy) * flip || a.rank - b.rank;
+        return compareAccuracy(a, b, dir);
       case "playcount":
         return (b.play_count - a.play_count) * flip || a.rank - b.rank;
       case "ss":
@@ -133,6 +133,26 @@ function sortGlobalRankingEntries(
         return a.rank - b.rank;
     }
   });
+}
+
+function compareAccuracy(
+  a: Pick<GlobalRankingEntry, "hit_accuracy" | "rank">,
+  b: Pick<GlobalRankingEntry, "hit_accuracy" | "rank">,
+  dir: GlobalRankingsSortDirection,
+): number {
+  const aHasAccuracy = hasKnownAccuracy(a.hit_accuracy);
+  const bHasAccuracy = hasKnownAccuracy(b.hit_accuracy);
+  if (aHasAccuracy !== bHasAccuracy) return aHasAccuracy ? -1 : 1;
+  if (!aHasAccuracy || !bHasAccuracy) return a.rank - b.rank;
+
+  const diff = dir === "desc"
+    ? b.hit_accuracy - a.hit_accuracy
+    : a.hit_accuracy - b.hit_accuracy;
+  return diff || a.rank - b.rank;
+}
+
+function hasKnownAccuracy(value: number): boolean {
+  return Number.isFinite(value) && value > 0;
 }
 
 function buildGlobalRankingEntry(row: Record<string, unknown>, rank: number): Omit<GlobalRankingEntry, "global_change" | "country_change"> {

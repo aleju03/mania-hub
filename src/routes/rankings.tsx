@@ -11,6 +11,7 @@ import { Avatar } from "../components/ui/Avatar";
 import { CountryFlag } from "../components/ui/CountryFlag";
 import { PageHeader } from "../components/layout/PageHeader";
 import { CountryWarming } from "../components/CountryWarming";
+import { Pagination } from "../components/ui/Pagination";
 import { useCountryWarming } from "../lib/use-country-warming";
 import { RankingRowSkeleton, Skeleton } from "../components/ui/LoadingSkeleton";
 import { UsernameText } from "../components/ui/UsernameText";
@@ -31,6 +32,10 @@ function parseRankingsPage(value: unknown): number {
 
 function getPlayerPath(username: string): string {
   return `/player/${encodeURIComponent(username)}`;
+}
+
+function formatKnownAccuracy(percent: number): string {
+  return Number.isFinite(percent) && percent > 0 ? formatAccuracy(percent / 100) : "-";
 }
 
 function handlePlayerAuxClick(event: MouseEvent<HTMLElement>, username: string): void {
@@ -504,7 +509,7 @@ function RankingsPage() {
                       case "playcount":
                         return <>{formatNumber(entry.play_count)} plays</>;
                       case "accuracy":
-                        return <>{formatAccuracy(entry.hit_accuracy / 100)}</>;
+                        return <>{formatKnownAccuracy(entry.hit_accuracy)}</>;
                       case "ss":
                         return <div className="flex items-center gap-1">
                           <img src="/images/badges/score-ranks-v2019/GradeSmall-SS.svg" alt="SS" width={16} height={16} />
@@ -545,7 +550,7 @@ function RankingsPage() {
                             <CountryFlag code={entry.user.country_code} size="sm" />
                           </div>
                           <div className="flex items-center gap-3 mt-0.5 text-[11px] text-osu-f1">
-                            <span>{formatAccuracy(entry.hit_accuracy / 100)}</span>
+                            <span>{formatKnownAccuracy(entry.hit_accuracy)}</span>
                             <RankDeltaLabel label="7d" change={entry.global_change} />
                             <RankDeltaLabel label={entry.user.country_code} change={entry.country_change} />
                           </div>
@@ -634,7 +639,7 @@ function RankingsPage() {
                         <td className="py-2.5 px-3">
                           <CRRankCell change={entry.country_change} loaded />
                         </td>
-                        <td className="py-2.5 px-3 text-sm text-osu-l2 text-right">{formatAccuracy(entry.hit_accuracy / 100)}</td>
+                        <td className="py-2.5 px-3 text-sm text-osu-l2 text-right">{formatKnownAccuracy(entry.hit_accuracy)}</td>
                         <td className="py-2.5 px-3 text-sm text-osu-f1 text-right">{formatNumber(entry.play_count)}</td>
                         <td className="py-2.5 px-3 text-sm font-bold text-right">{formatNumber(Math.round(entry.pp))}</td>
                         <td className={`py-2.5 px-3 text-xs text-center ${sortBy === "ss" ? "text-white font-semibold" : "text-osu-f1"}`}>
@@ -658,25 +663,14 @@ function RankingsPage() {
             </div>
             )}
             {globalTotalPages > 1 && (
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
-                <button
-                  onClick={() => navigate({ to: "/rankings", search: { page: Math.max(1, page - 1), country: selectedCountry } })}
-                  disabled={page <= 1 || globalRankingsLoading}
-                  className="px-4 py-2 rounded-lg bg-osu-b4 text-xs font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                >
-                  Previous
-                </button>
-                <span className="text-[11px] text-osu-f1 tabular-nums">
-                  Page {formatNumber(page)} of {formatNumber(globalTotalPages)}
-                </span>
-                <button
-                  onClick={() => navigate({ to: "/rankings", search: { page: Math.min(globalTotalPages, page + 1), country: selectedCountry } })}
-                  disabled={page >= globalTotalPages || globalRankingsLoading}
-                  className="px-4 py-2 rounded-lg bg-osu-b4 text-xs font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-                >
-                  Next
-                </button>
-              </div>
+              <Pagination
+                page={Math.min(Math.max(page, 1), globalTotalPages) - 1}
+                totalPages={globalTotalPages}
+                onPageChange={(nextPage) => {
+                  if (globalRankingsLoading) return;
+                  navigate({ to: "/rankings", search: { page: nextPage + 1, country: selectedCountry } });
+                }}
+              />
             )}
           </div>
         </div>

@@ -2481,19 +2481,6 @@ export class ManiaReplayRenderer {
     return context.measureText(text).width;
   }
 
-  private measureTabularDigitAdvance(
-    fontSize: number,
-    fontWeight: ReplayComboFontStyle["weight"] | "400" | "700" = "400",
-    fontStyle: "normal" | "italic" = "normal",
-    fontFamily = "Torus, sans-serif",
-  ): number {
-    let advance = 0;
-    for (let digit = 0; digit <= 9; digit++) {
-      advance = Math.max(advance, this.measureTextWidth(String(digit), fontSize, fontWeight, fontStyle, fontFamily));
-    }
-    return advance || fontSize * 0.58;
-  }
-
   private getTextOverlayWidth(
     text: string,
     fontSize: number,
@@ -2908,23 +2895,18 @@ export class ManiaReplayRenderer {
     comboFont: ReplayComboFontStyle,
     animation: { scaleX: number; scaleY: number; alpha: number; color: string },
   ) {
-    const advance = this.measureTabularDigitAdvance(fontSize, comboFont.weight, comboFont.style, comboFont.family);
-    const totalWidth = advance * text.length;
-    const startX = centerX - totalWidth / 2 + advance / 2;
-
-    Array.from(text).forEach((char, index) => {
-      this.addText(char, centerX + (startX + advance * index - centerX) * animation.scaleX, centerY, {
-        fontSize,
-        fill: animation.color,
-        alpha: animation.alpha * 0.85,
-        fontFamily: comboFont.family,
-        fontWeight: comboFont.weight,
-        fontStyle: comboFont.style,
-        anchorX: 0.5,
-        anchorY: 0.5,
-        scaleX: animation.scaleX,
-        scaleY: animation.scaleY,
-      });
+    this.addText(text, centerX, centerY, {
+      fontSize,
+      fill: animation.color,
+      alpha: animation.alpha * 0.85,
+      fontFamily: comboFont.family,
+      fontWeight: comboFont.weight,
+      fontStyle: comboFont.style,
+      anchorX: 0.5,
+      anchorY: 0.5,
+      scaleX: animation.scaleX,
+      scaleY: animation.scaleY,
+      tabularNums: true,
     });
   }
 
@@ -3235,12 +3217,10 @@ export class ManiaReplayRenderer {
       if (char.toLowerCase() === "x") return combo.x ?? null;
       return null;
     });
-    if (!glyphs.some(Boolean)) return false;
+    if (!glyphs.every((glyph): glyph is ReplaySkinImageAsset => Boolean(glyph))) return false;
 
     const fallbackHeight = Math.max(22, layout.h * 0.05);
-    const comboFont = getReplayComboFontStyle(this.skinSettings.comboFontSet);
     const sizes = glyphs.map((asset) => {
-      if (!asset) return { width: fallbackHeight * 0.45, height: fallbackHeight };
       const height = this.getHudAssetHeight(asset, fallbackHeight, layout);
       return { width: this.getAssetWidthForHeight(asset, height, fallbackHeight * 0.7), height };
     });
@@ -3261,20 +3241,6 @@ export class ManiaReplayRenderer {
         animation.alpha * 0.9,
         animation.tint,
       );
-      else {
-        this.addText(text[index], glyphCenterX, centerY, {
-          fontSize: fallbackHeight,
-          fill: animation.color,
-          alpha: animation.alpha * 0.85,
-          fontFamily: comboFont.family,
-          fontWeight: comboFont.weight,
-          fontStyle: comboFont.style,
-          anchorX: 0.5,
-          anchorY: 0.5,
-          scaleX: animation.scaleX,
-          scaleY: animation.scaleY,
-        });
-      }
       x += size.width - overlap;
     });
     return true;
@@ -3666,6 +3632,7 @@ export class ManiaReplayRenderer {
       fontFamily?: string;
       fontWeight?: ReplayComboFontStyle["weight"] | "400" | "700";
       fontStyle?: "normal" | "italic";
+      tabularNums?: boolean;
       anchorX?: number;
       anchorY?: number;
       scaleX?: number;
@@ -3693,12 +3660,14 @@ export class ManiaReplayRenderer {
     const fontFamily = options.fontFamily ?? "Torus, sans-serif";
     const fontWeight = options.fontWeight ?? "400";
     const fontStyle = options.fontStyle ?? "normal";
-    const sig = `${options.fontSize}|${fontFamily}|${fontWeight}|${fontStyle}|${options.fill}`;
+    const fontVariantNumeric = options.tabularNums ? "tabular-nums" : "normal";
+    const sig = `${options.fontSize}|${fontFamily}|${fontWeight}|${fontStyle}|${fontVariantNumeric}|${options.fill}`;
     if (label.__sig !== sig) {
       label.style.fontFamily = fontFamily;
       label.style.fontSize = options.fontSize;
       label.style.fontWeight = fontWeight;
       label.style.fontStyle = fontStyle;
+      (label.style as Text["style"] & { fontVariantNumeric?: string }).fontVariantNumeric = fontVariantNumeric;
       label.style.fill = options.fill;
       label.__sig = sig;
     }

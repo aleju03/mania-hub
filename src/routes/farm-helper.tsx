@@ -727,6 +727,18 @@ function RecRow({
   const fit = confidence(rec);
   const navigate = useNavigate();
   const detailContext = {
+    beatmapsetId: rec.beatmapsetId,
+    title: rec.title,
+    artist: rec.artist,
+    creator: rec.creator,
+    version: rec.version,
+    cover: rec.cover,
+    status: rec.status,
+    stars: rec.stars,
+    keys: rec.keys,
+    bpm: rec.bpm,
+    lengthSec: rec.lengthSec,
+    mapUrl: rec.mapUrl,
     userKey,
     keyMode,
     speed: rec.speedBucket,

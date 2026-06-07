@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { Loader2, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { Gauge, Loader2, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { getBeatmapFile } from "../../lib/osu";
 import { getBeatmapAudioUrl } from "../../lib/audio-url";
 import { parseCachedManiaBeatmap } from "../../lib/parsed-beatmap-cache";
-import { REPLAY_SCROLL_SPEED_CHANGE_EVENT, readReplayScrollSpeed } from "../../lib/replay-scroll-speed";
+import { REPLAY_SCROLL_SPEED_CHANGE_EVENT, normalizeReplayScrollSpeed, readReplayScrollSpeed, writeReplayScrollSpeed } from "../../lib/replay-scroll-speed";
 import { REPLAY_SKIN_SETTINGS_CHANGE_EVENT, readReplaySkinSettings, type ReplaySkinSettings } from "../../lib/replay-skin";
 import type { ManiaBeatmap, ManiaNote, ManiaScrollVelocity } from "../../lib/beatmap-parser";
 import type { MapsFavouriteBeatmapset, ReplayFrame } from "../../lib/types";
@@ -66,11 +66,15 @@ interface PreviewRendererLike {
 export function ChartPreviewPanel({
   beatmapset,
   selectedBeatmapId,
+  playbackRate = 1,
   className = "",
+  flatBackdrop = false,
 }: {
   beatmapset: MapsFavouriteBeatmapset;
   selectedBeatmapId: number | null;
+  playbackRate?: number;
   className?: string;
+  flatBackdrop?: boolean;
 }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioStartSecondsRef = useRef(0);
@@ -84,12 +88,14 @@ export function ChartPreviewPanel({
 
   const [volume, setVolume] = useState(readStoredPreviewVolume);
   const lastNonZeroVolumeRef = useRef(volume > 0 ? volume : DEFAULT_PREVIEW_VOLUME);
+  const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
   const [previewBeatmap, setPreviewBeatmap] = useState<ManiaBeatmap | null>(null);
   const [chartStartMs, setChartStartMs] = useState(0);
   const [chartPlaybackMs, setChartPlaybackMs] = useState(0);
   const [chartTimeScale, setChartTimeScale] = useState(1);
   const [audioMode, setAudioMode] = useState<ReplayAudioMode>("set-preview");
   const [chartScrub, setChartScrub] = useState<{ ms: number; nonce: number } | null>(null);
+  const [seekRevision, setSeekRevision] = useState(0);
   const [requested, setRequested] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [ending, setEnding] = useState(false);
@@ -109,14 +115,21 @@ export function ChartPreviewPanel({
   const audioBeatmapsetId = previewBeatmap?.beatmapsetId ?? metadataBeatmapsetId;
   const meaningfulBeatmaps = useMemo(() => maniaBeatmaps.filter((beatmap) => beatmap.difficultyRating >= 0.5), [maniaBeatmaps]);
   const selectedDifficultyRate = parseSelectedDifficultyRate(selectedBeatmap, meaningfulBeatmaps);
+  const previewPlaybackRate = normalizePreviewPlaybackRate(playbackRate);
   const usesSetPreviewForAudio = useMemo(() => shouldUseSetPreviewForReplayAudio(maniaBeatmaps), [maniaBeatmaps]);
   const timedRateVariant = useMemo(() => isLikelyTimedRateVariantSet(maniaBeatmaps), [maniaBeatmaps]);
   const fullAudioUrl = previewBeatmap?.audioFilename
     ? getBeatmapAudioUrl(audioBeatmapsetId, previewBeatmap.audioFilename)
     : null;
   const audioUrl = audioMode === "set-preview" ? previewUrl : fullAudioUrl;
-  const audioPlaybackRate = audioMode === "set-preview" ? selectedDifficultyRate : 1;
-  const clockRateDivisor = audioMode === "set-preview" ? selectedDifficultyRate : 1;
+  const audioPlaybackRate = (audioMode === "set-preview" ? selectedDifficultyRate : 1) * previewPlaybackRate;
+  const clockRateDivisor = audioPlaybackRate;
+  const preserveAudioPitch = Math.abs(audioPlaybackRate - 1) < 0.001;
+  const applyAudioPlaybackSettings = useCallback((audio: HTMLAudioElement) => {
+    audio.volume = volume;
+    audio.playbackRate = audioPlaybackRate;
+    setAudioPreservesPitch(audio, preserveAudioPitch);
+  }, [audioPlaybackRate, preserveAudioPitch, volume]);
   const audioStartSeconds = audioMode === "selected-file" ? Math.max(0, chartStartMs / 1000) : 0;
   const chartLengthMs = useMemo(() => {
     if (!previewBeatmap?.notes.length) return 0;
@@ -138,6 +151,12 @@ export function ChartPreviewPanel({
     );
   const canScrub = chartLengthMs > RANDOM_REPLAY_PREVIEW_MS
     && (audioMode === "selected-file" || Boolean(previewBeatmap?.audioFilename));
+  const previewKeyCount = previewBeatmap?.keyCount ?? Math.round(selectedBeatmap?.cs ?? 0);
+  const previewCanvasWidth = previewKeyCount >= 7
+    ? 460
+    : previewKeyCount >= 6
+    ? 390
+    : 300;
 
   const clearPreviewEndTimer = useCallback(() => {
     if (previewEndTimerRef.current) {
@@ -165,6 +184,7 @@ export function ChartPreviewPanel({
     setChartTimeScale(1);
     setAudioMode("set-preview");
     setChartScrub(null);
+    setSeekRevision(0);
     setError(null);
     resetAudioElement(audioRef.current);
   }, [clearPreviewEndTimer]);
@@ -243,12 +263,12 @@ export function ChartPreviewPanel({
           const nextStartMs = Math.min(Math.max(0, scrubMs), maxStart);
           setChartStartMs(nextStartMs);
           setChartPlaybackMs(nextStartMs);
-          setChartTimeScale(1);
+          setChartTimeScale(previewPlaybackRate);
           setAudioMode("selected-file");
         } else {
           setChartStartMs(plan.startTimeMs);
           setChartPlaybackMs(plan.startTimeMs);
-          setChartTimeScale(plan.timeScale);
+          setChartTimeScale(plan.timeScale * previewPlaybackRate);
           setAudioMode(
             plan.audioMode === "set-preview" && !timedRateVariant && plan.beatmap.audioFilename
               ? "selected-file"
@@ -273,6 +293,7 @@ export function ChartPreviewPanel({
     chartScrub,
     maniaBeatmaps,
     metadataBeatmapsetId,
+    previewPlaybackRate,
     requested,
     selectedBeatmap,
     selectedDifficultyRate,
@@ -283,6 +304,18 @@ export function ChartPreviewPanel({
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
   }, [audioUrl, volume]);
+
+  useEffect(() => {
+    const refreshScrollSpeed = () => setScrollSpeed(readReplayScrollSpeed());
+    window.addEventListener("storage", refreshScrollSpeed);
+    window.addEventListener(REPLAY_SCROLL_SPEED_CHANGE_EVENT, refreshScrollSpeed);
+    window.addEventListener("focus", refreshScrollSpeed);
+    return () => {
+      window.removeEventListener("storage", refreshScrollSpeed);
+      window.removeEventListener(REPLAY_SCROLL_SPEED_CHANGE_EVENT, refreshScrollSpeed);
+      window.removeEventListener("focus", refreshScrollSpeed);
+    };
+  }, []);
 
   const finishPreview = useCallback(() => {
     if (previewEndTimerRef.current) return;
@@ -333,9 +366,7 @@ export function ChartPreviewPanel({
     setError(null);
     audioStartSecondsRef.current = audioStartSeconds;
     audio.pause();
-    audio.volume = volume;
-    audio.playbackRate = audioPlaybackRate;
-    setAudioPreservesPitch(audio, audioMode !== "set-preview");
+    applyAudioPlaybackSettings(audio);
 
     try {
       setAudioLoading(audioMode === "selected-file");
@@ -390,7 +421,7 @@ export function ChartPreviewPanel({
         setPlaying(false);
       }
     }
-  }, [audioMode, audioPlaybackRate, audioStartSeconds, audioUrl, volume]);
+  }, [applyAudioPlaybackSettings, audioPlaybackRate, audioStartSeconds, audioUrl, volume]);
 
   const getChartPlaybackMs = useCallback(() => {
     const baseMs = Math.max(0, chartStartMs);
@@ -472,9 +503,7 @@ export function ChartPreviewPanel({
       } catch {
         // Best effort while the source is resolving.
       }
-      audio.volume = volume;
-      audio.playbackRate = audioPlaybackRate;
-      setAudioPreservesPitch(audio, audioMode !== "set-preview");
+      applyAudioPlaybackSettings(audio);
     }
     audioStartSecondsRef.current = audioStartSeconds;
     setChartPlaybackMs(chartStartMs);
@@ -483,7 +512,7 @@ export function ChartPreviewPanel({
     if (previewBeatmap && ready) {
       void startPreviewAudio(token);
     }
-  }, [audioMode, audioPlaybackRate, audioStartSeconds, chartStartMs, clearPreviewEndTimer, previewBeatmap, ready, startPreviewAudio, volume]);
+  }, [applyAudioPlaybackSettings, audioPlaybackRate, audioStartSeconds, chartStartMs, clearPreviewEndTimer, previewBeatmap, ready, startPreviewAudio]);
 
   useEffect(() => {
     if (requested && previewBeatmap && ready && !previewLoading && audioStartPendingRef.current) {
@@ -493,8 +522,7 @@ export function ChartPreviewPanel({
 
   const seekChart = useCallback((targetMs: number) => {
     clearPreviewEndTimer();
-    const token = playbackTokenRef.current + 1;
-    playbackTokenRef.current = token;
+    playbackTokenRef.current += 1;
     audioReadyRef.current = false;
     audioStartPendingRef.current = true;
     audioClockSampleRef.current = null;
@@ -511,8 +539,8 @@ export function ChartPreviewPanel({
       ms: nextMs,
       nonce: (prev?.nonce ?? 0) + 1,
     }));
-    if (previewBeatmap && ready) void startPreviewAudio(token);
-  }, [clearPreviewEndTimer, previewBeatmap, ready, startPreviewAudio]);
+    setSeekRevision((revision) => revision + 1);
+  }, [clearPreviewEndTimer]);
 
   const togglePlayback = useCallback(() => {
     const audio = audioRef.current;
@@ -530,7 +558,7 @@ export function ChartPreviewPanel({
       startedAtMs: performance.now(),
       playbackRate: getReplayAudioPlaybackRate(audio, audioPlaybackRate),
     };
-    audio.volume = volume;
+    applyAudioPlaybackSettings(audio);
     void audio.play()
       .then(() => {
         if (audioRef.current !== audio) return;
@@ -539,7 +567,7 @@ export function ChartPreviewPanel({
       .catch(() => {
         audioClockAnchorRef.current = null;
       });
-  }, [audioPlaybackRate, getChartPlaybackMs, playing, volume]);
+  }, [applyAudioPlaybackSettings, audioPlaybackRate, getChartPlaybackMs, playing]);
 
   const markReady = useCallback(() => {
     setReady(true);
@@ -561,12 +589,18 @@ export function ChartPreviewPanel({
     applyVolume(volume > 0 ? 0 : lastNonZeroVolumeRef.current || DEFAULT_PREVIEW_VOLUME);
   }, [applyVolume, volume]);
 
+  const applyScrollSpeed = useCallback((value: number) => {
+    const normalized = normalizeReplayScrollSpeed(value);
+    setScrollSpeed(normalized);
+    writeReplayScrollSpeed(normalized);
+  }, []);
+
   const paused = requested && ready && audioReadyRef.current && !playing && !ending && !audioLoading && !error;
   const preparing = requested && !ending && !playing && !paused && !audioLoading && !error;
   const canToggle = requested && !ending && !audioLoading && (playing || ready);
 
   return (
-    <div className={`relative min-h-[460px] overflow-hidden rounded-xl border border-osu-b3/30 bg-osu-b6 ${className}`}>
+    <div className={`relative min-h-[360px] overflow-hidden rounded-xl border ${flatBackdrop ? "border-transparent bg-transparent" : "border-osu-b3/30 bg-osu-b6"} ${className}`}>
       <div
         onClick={canToggle ? togglePlayback : undefined}
         className={`absolute inset-x-0 top-0 transition-opacity duration-200 ${
@@ -585,13 +619,21 @@ export function ChartPreviewPanel({
             isPlaying={playing}
             resetWhenIdle={!requested || ending}
             getClock={getClock}
+            scrollSpeed={scrollSpeed}
+            canvasWidth={previewCanvasWidth}
+            readySignal={seekRevision}
             onReady={markReady}
             onEnded={finishPreview}
           />
         ) : null}
       </div>
 
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,102,170,0.12),transparent_36%),linear-gradient(180deg,rgba(21,24,42,0.35),rgba(7,9,18,0.76))]" aria-hidden="true" />
+      {!flatBackdrop ? (
+        <div
+          className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,102,170,0.12),transparent_36%),linear-gradient(180deg,rgba(21,24,42,0.35),rgba(7,9,18,0.76))]"
+          aria-hidden="true"
+        />
+      ) : null}
 
       {audioLoading ? (
         <div className="absolute inset-0 z-30 grid place-items-center bg-osu-b5/45 backdrop-blur-[1px]">
@@ -631,12 +673,21 @@ export function ChartPreviewPanel({
       ) : null}
 
       {requested && !ending && canScrub ? (
-        <div className="absolute inset-x-4 bottom-10 z-30">
-          <ChartPreviewTimeline positionMs={chartPlaybackMs} lengthMs={chartLengthMs} density={density} onSeek={seekChart} />
+        <div
+          className="absolute bottom-10 left-1/2 z-30 w-full max-w-[calc(100%-2rem)] -translate-x-1/2"
+          style={{ width: `${previewCanvasWidth}px` }}
+        >
+          <ChartPreviewTimeline
+            positionMs={chartPlaybackMs}
+            lengthMs={chartLengthMs}
+            displayRate={chartTimeScale}
+            density={density}
+            onSeek={seekChart}
+          />
         </div>
       ) : null}
 
-      <div className="absolute inset-x-0 bottom-0 z-30 flex min-h-10 items-center justify-between gap-3 border-t border-white/10 bg-osu-b5/80 px-3 py-2 backdrop-blur-md">
+      <div className={`absolute inset-x-0 bottom-0 z-30 flex min-h-10 items-center justify-between gap-3 border-t px-3 py-2 ${flatBackdrop ? "border-transparent bg-transparent" : "border-white/10 bg-osu-b5/80 backdrop-blur-md"}`}>
         <div className="min-w-0 truncate text-[11px] font-semibold text-osu-l2">
           {selectedBeatmap ? (
             <>
@@ -648,14 +699,35 @@ export function ChartPreviewPanel({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {requested && ready ? (
+          <div className="flex items-center gap-1.5 rounded-md bg-osu-b6/35 px-1.5 py-1 text-osu-f1" title="Scroll speed">
+            <Gauge className="h-3.5 w-3.5 shrink-0" />
+            <input
+              type="range"
+              min={1}
+              max={40}
+              step={1}
+              value={scrollSpeed}
+              onChange={(e) => applyScrollSpeed(Number(e.target.value))}
+              aria-label="Chart preview scroll speed"
+              className="h-1 w-16 shrink-0 cursor-pointer appearance-none rounded-full bg-osu-b3 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-yellow"
+            />
+            <span className="w-5 text-right text-[10px] tabular-nums text-osu-l2">{scrollSpeed}</span>
+          </div>
+          {requested && !ending ? (
             <button
               type="button"
               onClick={togglePlayback}
+              disabled={!canToggle}
               aria-label={playing ? "Pause chart preview" : "Resume chart preview"}
-              className="grid h-7 w-7 place-items-center rounded-md bg-osu-b3/80 text-osu-l2 transition-colors hover:bg-osu-b2 hover:text-white"
+              className="grid h-7 w-7 place-items-center rounded-md bg-osu-b3/80 text-osu-l2 transition-colors hover:bg-osu-b2 hover:text-white disabled:cursor-default disabled:opacity-70 disabled:hover:bg-osu-b3/80 disabled:hover:text-osu-l2"
             >
-              {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5 fill-current" />}
+              {!canToggle ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-osu-pink" />
+              ) : playing ? (
+                <Pause className="h-3.5 w-3.5" />
+              ) : (
+                <Play className="h-3.5 w-3.5 fill-current" />
+              )}
             </button>
           ) : null}
           <button
@@ -691,11 +763,11 @@ export function ChartPreviewPanel({
           src={audioUrl}
           preload={audioMode === "set-preview" ? "metadata" : "none"}
           onCanPlay={(e) => {
-            e.currentTarget.volume = volume;
+            applyAudioPlaybackSettings(e.currentTarget);
             setAudioLoading(false);
           }}
           onPlaying={(e) => {
-            e.currentTarget.volume = volume;
+            applyAudioPlaybackSettings(e.currentTarget);
             setAudioLoading(false);
           }}
           onTimeUpdate={(e) => {
@@ -722,17 +794,21 @@ export function ChartPreviewPanel({
 function ChartPreviewTimeline({
   positionMs,
   lengthMs,
+  displayRate,
   density,
   onSeek,
 }: {
   positionMs: number;
   lengthMs: number;
+  displayRate: number;
   density: number[];
   onSeek: (targetMs: number) => void;
 }) {
   const trackRef = useRef<HTMLDivElement | null>(null);
+  const labelRate = Math.max(0.1, displayRate);
   const maxStartMs = Math.max(0, lengthMs - 2_000);
   const [dragMs, setDragMs] = useState<number | null>(null);
+  const [hovering, setHovering] = useState(false);
   const activeMs = dragMs ?? Math.min(positionMs, maxStartMs);
   const ratio = maxStartMs > 0 ? Math.min(1, Math.max(0, activeMs / maxStartMs)) : 0;
 
@@ -765,8 +841,8 @@ function ChartPreviewTimeline({
 
   return (
     <div className="group flex items-center gap-2">
-      <span className="shrink-0 text-[9px] tabular-nums text-osu-f1/70">
-        {formatDuration(Math.floor(activeMs / 1000))}
+      <span className="w-9 shrink-0 text-right text-[9px] tabular-nums text-osu-f1/70">
+        {formatDuration(Math.floor(activeMs / labelRate / 1000))}
       </span>
       <div
         ref={trackRef}
@@ -774,9 +850,14 @@ function ChartPreviewTimeline({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={() => setDragMs(null)}
-        className="group/density relative flex h-4 flex-1 cursor-pointer touch-none select-none items-center"
+        onPointerEnter={() => setHovering(true)}
+        onPointerLeave={() => {
+          setHovering(false);
+          if (dragMs == null) setDragMs(null);
+        }}
+        className="group/density relative flex h-5 flex-1 cursor-pointer touch-none select-none items-center"
       >
-        <ChartDensityHeatmap density={density} />
+        <ChartDensityHeatmap density={density} visible={hovering || dragging} />
         <div className="absolute inset-x-0 h-px rounded-full bg-osu-f1/25" />
         <div
           className={`absolute left-0 h-px rounded-full transition-colors ${dragging ? "bg-osu-pink/80" : "bg-osu-f1/50 group-hover:bg-osu-pink/70"}`}
@@ -787,14 +868,14 @@ function ChartPreviewTimeline({
           style={{ left: `${ratio * 100}%` }}
         />
       </div>
-      <span className="shrink-0 text-[9px] tabular-nums text-osu-f1/70">
-        {formatDuration(Math.floor(lengthMs / 1000))}
+      <span className="w-9 shrink-0 text-left text-[9px] tabular-nums text-osu-f1/70">
+        {formatDuration(Math.floor(lengthMs / labelRate / 1000))}
       </span>
     </div>
   );
 }
 
-function ChartDensityHeatmap({ density }: { density: number[] }) {
+function ChartDensityHeatmap({ density, visible }: { density: number[]; visible: boolean }) {
   const rawGradientId = useId();
   const gradientId = `chart-density-${rawGradientId.replace(/:/g, "")}`;
   const n = density.length;
@@ -823,13 +904,15 @@ function ChartDensityHeatmap({ density }: { density: number[] }) {
     <svg
       viewBox={`0 0 ${width} ${height}`}
       preserveAspectRatio="none"
-      className="pointer-events-none absolute inset-x-0 bottom-full h-8 w-full text-osu-pink opacity-0 transition-opacity duration-200 group-hover/density:opacity-100"
+      className={`pointer-events-none absolute inset-x-0 bottom-full z-10 h-5 w-full text-osu-pink transition-opacity duration-150 ${
+        visible ? "opacity-100" : "opacity-0"
+      }`}
       aria-hidden="true"
     >
       <defs>
         <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="currentColor" stopOpacity="0.72" />
-          <stop offset="45%" stopColor="currentColor" stopOpacity="0.14" />
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.45" />
+          <stop offset="45%" stopColor="currentColor" stopOpacity="0.08" />
           <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
         </linearGradient>
       </defs>
@@ -838,7 +921,7 @@ function ChartDensityHeatmap({ density }: { density: number[] }) {
         d={topD}
         fill="none"
         stroke="currentColor"
-        strokeWidth={1.5}
+        strokeWidth={1.25}
         strokeLinejoin="round"
         strokeLinecap="round"
         vectorEffect="non-scaling-stroke"
@@ -855,6 +938,9 @@ function ChartPreviewRenderer({
   isPlaying,
   resetWhenIdle,
   getClock,
+  scrollSpeed,
+  canvasWidth,
+  readySignal,
   onReady,
   onEnded,
 }: {
@@ -865,6 +951,9 @@ function ChartPreviewRenderer({
   isPlaying: boolean;
   resetWhenIdle: boolean;
   getClock: () => { time: number; stalled: boolean } | null;
+  scrollSpeed: number;
+  canvasWidth: number;
+  readySignal: number;
   onReady: () => void;
   onEnded: () => void;
 }) {
@@ -872,8 +961,7 @@ function ChartPreviewRenderer({
   const rendererRef = useRef<PreviewRendererLike | null>(null);
   const isPlayingRef = useRef(isPlaying);
   const getClockRef = useRef(getClock);
-  const scrollSpeedRef = useRef(readReplayScrollSpeed());
-  const [scrollSpeed, setScrollSpeed] = useState(readReplayScrollSpeed);
+  const scrollSpeedRef = useRef(scrollSpeed);
   const [skinSettings, setSkinSettings] = useState(readReplaySkinSettings);
   const [canvasReady, setCanvasReady] = useState(false);
   const initialCombo = useMemo(() => beatmap ? getPreviewInitialCombo(beatmap, startTimeMs) : 0, [beatmap, startTimeMs]);
@@ -891,16 +979,13 @@ function ChartPreviewRenderer({
 
   useEffect(() => {
     const refreshSharedReplaySettings = () => {
-      setScrollSpeed(readReplayScrollSpeed());
       setSkinSettings(readReplaySkinSettings());
     };
     window.addEventListener("storage", refreshSharedReplaySettings);
-    window.addEventListener(REPLAY_SCROLL_SPEED_CHANGE_EVENT, refreshSharedReplaySettings);
     window.addEventListener(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
     window.addEventListener("focus", refreshSharedReplaySettings);
     return () => {
       window.removeEventListener("storage", refreshSharedReplaySettings);
-      window.removeEventListener(REPLAY_SCROLL_SPEED_CHANGE_EVENT, refreshSharedReplaySettings);
       window.removeEventListener(REPLAY_SKIN_SETTINGS_CHANGE_EVENT, refreshSharedReplaySettings);
       window.removeEventListener("focus", refreshSharedReplaySettings);
     };
@@ -978,6 +1063,10 @@ function ChartPreviewRenderer({
   }, [beatmap, canvasReady, frames, initialCombo, notes, onReady, scrollVelocities]);
 
   useEffect(() => {
+    if (canvasReady && rendererRef.current) onReady();
+  }, [canvasReady, onReady, readySignal]);
+
+  useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer) return;
     if (isPlaying) renderer.play();
@@ -999,7 +1088,10 @@ function ChartPreviewRenderer({
   }, [isPlaying, onEnded]);
 
   return (
-    <div className="absolute inset-0">
+    <div
+      className="absolute inset-y-0 left-1/2 w-full max-w-full -translate-x-1/2"
+      style={{ width: `${canvasWidth}px` }}
+    >
       <canvas
         ref={canvasRef}
         className={`relative z-10 h-full w-full transition-opacity duration-75 ${canvasReady ? "opacity-100" : "opacity-0"}`}
@@ -1445,6 +1537,11 @@ function shouldUseSetPreviewForReplayAudio(beatmaps: ManiaBeatmapEntry[]): boole
 function isLikelyTimedRateVariantSet(beatmaps: ManiaBeatmapEntry[]): boolean {
   const meaningfulBeatmaps = beatmaps.filter((beatmap) => beatmap.difficultyRating >= 0.5);
   return isLikelyRateVariantSet(meaningfulBeatmaps) || isLikelyBracketBpmVariantSet(meaningfulBeatmaps);
+}
+
+function normalizePreviewPlaybackRate(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(2, Math.max(0.5, value));
 }
 
 function parseSelectedDifficultyRate(selected: ManiaBeatmapEntry | null, beatmaps: ManiaBeatmapEntry[]): number {
