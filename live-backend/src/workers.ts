@@ -3,7 +3,7 @@ import { readConfig } from "./config.js";
 import { canSeedSnipesForCountry } from "./countries.js";
 import { exec, json, parseJson } from "./db.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
-import { MapsRosterNotReadyError, enqueueGlobalMapsRefresh, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
+import { MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsFarmedRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
 import { updateSnipeProjection } from "./features/snipes.js";
 import { confirmTopPlay, TopPlayConfirmationPendingError } from "./features/top-plays.js";
 import { getHydratedScoresForMetadata } from "./features/tracker.js";
@@ -219,6 +219,7 @@ export class WorkerRunner {
     }
     if (job.type === "refresh_user_maps_farmed_scores") {
       const result = await refreshUserMapsFarmedScores(this.db, this.osu, job.payload as { userId: number; country: string });
+      await enqueueGlobalMapsRefresh(this.queue, { priority: 15, replaceDone: true, runAfter: globalMapsFarmedRefreshRunAfter() });
       await this.events.append(
         "maps_farmed_update",
         result.country,

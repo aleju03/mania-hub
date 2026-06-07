@@ -16,6 +16,7 @@ const MAPS_FETCH_CONCURRENCY = 2;
 const MAPS_FARMED_SCORE_WINDOW = 200;
 const FARMED_SINGLE_PLAYER_PP_MIN = 500;
 const USER_FAVOURITES_MAX_PAGES = 10;
+const GLOBAL_MAPS_FARMED_REFRESH_DEBOUNCE_MS = 10 * 60_000;
 const MAPS_FARMED_OVERLAY_META_PREFIX = "maps_farmed_overlay_updated_at:";
 const MAPS_REFRESH_PROGRESS_META_PREFIX = "maps_refresh_progress:";
 const MAPS_REFRESH_PROGRESS_WRITE_INTERVAL_MS = 1_000;
@@ -247,7 +248,7 @@ type RawBeatmapPlaycount = {
   beatmapset?: RawBeatmapset;
 };
 
-export async function enqueueMapsRefresh(queue: JobQueue, country: string, options: { priority?: number; replaceDone?: boolean } = {}): Promise<void> {
+export async function enqueueMapsRefresh(queue: JobQueue, country: string, options: { priority?: number; replaceDone?: boolean; runAfter?: Date } = {}): Promise<void> {
   const normalized = country.toUpperCase();
   if (isGlobalCountry(normalized)) {
     await enqueueGlobalMapsRefresh(queue, options);
@@ -257,20 +258,24 @@ export async function enqueueMapsRefresh(queue: JobQueue, country: string, optio
     "refresh_country_maps",
     `maps:${normalized}`,
     { country: normalized },
-    { priority: mapsPriority(options.priority, MAPS_REFRESH_PRIORITY), replaceDone: options.replaceDone ?? true },
+    { priority: mapsPriority(options.priority, MAPS_REFRESH_PRIORITY), replaceDone: options.replaceDone ?? true, runAfter: options.runAfter },
   );
 }
 
 // The Global maps aggregate is rebuilt by merging every country's stored
 // snapshot, so it gets its own job type (no roster fetch). It still shares the
 // `maps:GLOBAL` dedupe key so hasActiveMapsRefresh(db, "GLOBAL") works.
-export async function enqueueGlobalMapsRefresh(queue: JobQueue, options: { priority?: number; replaceDone?: boolean } = {}): Promise<void> {
+export async function enqueueGlobalMapsRefresh(queue: JobQueue, options: { priority?: number; replaceDone?: boolean; runAfter?: Date } = {}): Promise<void> {
   await queue.enqueue(
     "refresh_global_maps",
     `maps:${GLOBAL_COUNTRY_CODE}`,
     {},
-    { priority: mapsPriority(options.priority, MAPS_REFRESH_PRIORITY), replaceDone: options.replaceDone ?? true },
+    { priority: mapsPriority(options.priority, MAPS_REFRESH_PRIORITY), replaceDone: options.replaceDone ?? true, runAfter: options.runAfter },
   );
+}
+
+export function globalMapsFarmedRefreshRunAfter(now = Date.now()): Date {
+  return new Date(now + GLOBAL_MAPS_FARMED_REFRESH_DEBOUNCE_MS);
 }
 
 export async function enqueueGlobalMapsRefreshIfDue(
@@ -281,13 +286,10 @@ export async function enqueueGlobalMapsRefreshIfDue(
 ): Promise<boolean> {
   const meta = await getMapsSnapshotMeta(db, GLOBAL_COUNTRY_CODE);
   const refreshedMs = meta.refreshedAt ? new Date(meta.refreshedAt).getTime() : 0;
-  const sourceRefreshedAt = meta.sourceRefreshedAt;
-  const sourceRefreshedMs = sourceRefreshedAt ? new Date(sourceRefreshedAt).getTime() : 0;
-  const isBehindSource = Number.isFinite(sourceRefreshedMs)
-    && sourceRefreshedMs > 0
-    && (!Number.isFinite(refreshedMs) || sourceRefreshedMs > refreshedMs);
+  const isBehindSource = isIsoAfter(meta.sourceRefreshedAt, meta.refreshedAt);
+  const isBehindFarmedOverlay = isIsoAfter(meta.farmedOverlayUpdatedAt, meta.refreshedAt);
   const isStale = !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs || isBehindSource;
-  if (!isStale) return false;
+  if (!isStale && !isBehindFarmedOverlay) return false;
   if (await hasActiveMapsRefresh(db, GLOBAL_COUNTRY_CODE)) return true;
   await enqueueGlobalMapsRefresh(queue, options);
   return true;
@@ -438,7 +440,7 @@ export async function getMapsSnapshot(
   const snapshot = section === "random"
     ? await readMapsRandomSnapshot(db, normalized, maxAgeMs)
     : await readMapsSnapshot(db, normalized, maxAgeMs);
-  const value = section === "core" && snapshot.value
+  const value = section === "core" && snapshot.value && !isGlobalCountry(normalized)
     ? await applyMapsFarmedOverlay(db, normalized, snapshot.value, snapshot.refreshedAt)
     : snapshot.value;
   let refreshQueued = await hasActiveMapsRefresh(db, normalized);
@@ -668,7 +670,10 @@ async function readRawMapsSnapshot(
   const usable = isStoredCountryMapsData(parsed)
     ? isUsableStoredMapsData(parsed)
     : isCountryMapsDataShape(parsed) && isUsableMapsData(parsed);
-  const isStale = !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs || (!!row && !usable);
+  const globalStale = isGlobalCountry(normalized)
+    ? await isGlobalMapsSnapshotBehindSources(db, refreshedAt)
+    : false;
+  const isStale = !Number.isFinite(refreshedMs) || Date.now() - refreshedMs > maxAgeMs || (!!row && !usable) || globalStale;
   return {
     parsed: usable && (isStoredCountryMapsData(parsed) || isCountryMapsDataShape(parsed)) ? parsed : null,
     generatedAt: row?.generated_at == null ? null : String(row.generated_at),
@@ -1043,7 +1048,7 @@ async function hydrateMapsPageValue(
   }
 
   let value = await hydrateMapsSnapshotUsers(db, parsed);
-  if (query.tab === "farmed") {
+  if (query.tab === "farmed" && !isGlobalCountry(country)) {
     value = await applyMapsFarmedOverlay(db, country, value, refreshedAt);
   }
   const allItems = filterSortMapsPageItems(value, query);
@@ -1131,6 +1136,7 @@ async function canUseCompactFarmedPageFastPath(
 ): Promise<boolean> {
   if (query.tab !== "farmed") return false;
   if (!refreshedAt) return true;
+  if (isGlobalCountry(country)) return true;
 
   const overlayUpdatedAt = isGlobalCountry(country)
     ? await readGlobalMapsFarmedOverlayUpdatedAt(db)
@@ -3446,6 +3452,19 @@ async function readLatestCountryMapsSourceRefreshedAt(db: Db): Promise<string | 
     [GLOBAL_COUNTRY_CODE],
   )).rows[0];
   return row?.refreshed_at == null ? null : String(row.refreshed_at);
+}
+
+async function isGlobalMapsSnapshotBehindSources(db: Db, refreshedAt: string | null): Promise<boolean> {
+  return (
+    isIsoAfter(await readLatestCountryMapsSourceRefreshedAt(db), refreshedAt) ||
+    isIsoAfter(await readGlobalMapsFarmedOverlayUpdatedAt(db), refreshedAt)
+  );
+}
+
+function isIsoAfter(candidate: string | null | undefined, baseline: string | null | undefined): boolean {
+  if (!candidate) return false;
+  if (!baseline) return true;
+  return candidate > baseline;
 }
 
 async function readGlobalMapsFarmedOverlayUpdatedAt(db: Db): Promise<string | null> {

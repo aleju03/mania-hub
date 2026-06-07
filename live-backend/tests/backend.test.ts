@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot } from "../src/features/snipes.js";
-import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "../src/features/maps.js";
+import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, globalMapsFarmedRefreshRunAfter, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "../src/features/maps.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../src/features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
 import { confirmTopPlay, getTopPlaysSnapshot, TopPlayConfirmationPendingError } from "../src/features/top-plays.js";
@@ -2495,6 +2495,25 @@ describe("live backend", () => {
     expect(String(user.maps_farmed_scores_refreshed_at)).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
+  it("queues a global maps rebuild after a player farmed overlay refresh", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-12T11:00:00.000Z"));
+    const { db, queue, events, ingestor } = await setup();
+    const [score] = await fixture<OscScore[]>("scores.json");
+    const osu = {
+      getUserBestScoresWindow: vi.fn(async () => [{ ...score, pp: 550 }]),
+    };
+    await queue.enqueue("refresh_user_maps_farmed_scores", "maps-farmed:CR:101", { country: "CR", userId: 101 });
+
+    const worker = new WorkerRunner(db, queue, events, osu as never, ingestor, "test-worker");
+    await worker.runOnce();
+
+    expect(Number((await exec(db, "select count(*) as count from country_maps_farmed_scores where country = 'CR' and user_id = 101")).rows[0].count)).toBe(1);
+    const job = (await exec(db, "select type, dedupe_key, status, run_after from jobs where type = 'refresh_global_maps'")).rows[0];
+    expect(job).toMatchObject({ type: "refresh_global_maps", dedupe_key: "maps:GLOBAL", status: "queued" });
+    expect(String(job.run_after)).toBe(globalMapsFarmedRefreshRunAfter().toISOString());
+  });
+
   it("treats missing users as a terminal maps farmed refresh", async () => {
     const { db } = await setup();
     const now = "2026-05-12T11:00:00.000Z";
@@ -2854,7 +2873,7 @@ describe("live backend", () => {
     expect(favTop.playerCount).toBe(2);
   });
 
-  it("preserves truncated global farmed counts when applying live overlay rows", async () => {
+  it("preserves truncated country farmed counts when applying live overlay rows", async () => {
     const { db, queue } = await setup();
     const refreshedAt = "2026-05-12T12:00:00.000Z";
     const overlayAt = "2026-05-12T12:05:00.000Z";
@@ -2889,7 +2908,7 @@ describe("live backend", () => {
     await exec(
       db,
       `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
-       values ('GLOBAL', ?, ?, ?)`,
+       values ('CR', ?, ?, ?)`,
       [
         JSON.stringify({
           schemaVersion: 2,
@@ -2932,7 +2951,7 @@ describe("live backend", () => {
       ],
     );
 
-    const page = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, {
+    const page = await getMapsPageSnapshot(db, queue, "CR", 7 * 24 * 60 * 60 * 1000, {
       tab: "farmed", page: 0, pageSize: 24, key: "all", beatmapSort: "players", farmedSort: "players", dir: "desc", status: "all", pp: 0, mod: "all", q: "",
     });
 
@@ -2943,6 +2962,87 @@ describe("live backend", () => {
     expect(item.players[0]).toMatchObject({ id: 999 });
     expect(item.avgPp).toBe(360);
     expect(item.maxPp).toBe(550);
+  });
+
+  it("serves global farmed pages from the materialized aggregate while queueing stale overlay refreshes", async () => {
+    const { db, queue } = await setup();
+    const refreshedAt = "2026-05-12T12:00:00.000Z";
+    const overlayAt = "2026-05-12T12:05:00.000Z";
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, updated_at)
+       values (101, 'Alpha', 'https://assets.example/101.png', 'CR', ?),
+              (102, 'Bravo', 'https://assets.example/102.png', 'CR', ?),
+              (999, 'Overlay Player', 'https://assets.example/999.png', 'CR', ?)`,
+      [refreshedAt, refreshedAt, overlayAt],
+    );
+    await exec(
+      db,
+      `insert into maps_beatmapsets
+         (beatmapset_id, title, artist, creator, status, covers_json, global_play_count, global_favourite_count, preview_url, bpm, mania_keys_json, patterns_json, updated_at)
+       values (10, 'Global Set', 'Artist', 'Mapper', 'ranked', '{"card":"https://assets.example/card.jpg"}', 1, 1, '', 180, '[4]', '[]', ?)`,
+      [refreshedAt],
+    );
+    await exec(
+      db,
+      `insert into maps_beatmaps
+         (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, total_length, version, url, updated_at)
+       values (11, 10, 'mania', 'ranked', 4, 5.5, 180, 120, '[4K] Global', 'https://osu.ppy.sh/beatmaps/11', ?)`,
+      [refreshedAt],
+    );
+    await exec(
+      db,
+      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
+       values ('GLOBAL', ?, ?, ?)`,
+      [
+        JSON.stringify({
+          schemaVersion: 2,
+          farmed: [{
+            beatmapId: 11,
+            playerCount: 2,
+            avgPp: 300,
+            maxPp: 310,
+            players: [
+              { id: 101, mods: [], pp: 310, scoreUrl: null, playedAt: refreshedAt },
+              { id: 102, mods: [], pp: 290, scoreUrl: null, playedAt: refreshedAt },
+            ],
+          }],
+          mostPlayed: [],
+          favourites: [],
+          favouritesByPlayer: [],
+          beatmapsetsPool: [],
+          generatedAt: refreshedAt,
+          farmedGeneratedAt: refreshedAt,
+          favouritesGeneratedAt: refreshedAt,
+        }),
+        refreshedAt,
+        refreshedAt,
+      ],
+    );
+    await exec(
+      db,
+      `insert into country_maps_farmed_scores
+         (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at)
+       values ('CR', 999, 11, 999, 600, '{}', '[]', null, ?, ?, ?)`,
+      [overlayAt, overlayAt, overlayAt],
+    );
+    await exec(
+      db,
+      `insert into live_meta (key, value_json, updated_at)
+       values ('maps_farmed_overlay_updated_at:CR', ?, ?)`,
+      [JSON.stringify(overlayAt), overlayAt],
+    );
+
+    const page = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, {
+      tab: "farmed", page: 0, pageSize: 24, key: "all", beatmapSort: "players", farmedSort: "players", dir: "desc", status: "all", pp: 0, mod: "all", q: "",
+    });
+
+    const item = page.value?.items[0] as { beatmapId: number; playerCount: number; maxPp: number; players: Array<{ id: number }> };
+    expect(page.refreshQueued).toBe(true);
+    expect(item).toMatchObject({ beatmapId: 11, playerCount: 2, maxPp: 310 });
+    expect(item.players.map((player) => player.id)).toEqual([101, 102]);
+    const job = (await exec(db, "select type, dedupe_key from jobs where type = 'refresh_global_maps'")).rows[0];
+    expect(job).toMatchObject({ type: "refresh_global_maps", dedupe_key: "maps:GLOBAL" });
   });
 
   it("stores global map preview player lists while keeping aggregate counts", async () => {
