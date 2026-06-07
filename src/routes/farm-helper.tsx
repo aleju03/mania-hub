@@ -61,11 +61,10 @@ export const Route = createFileRoute("/farm-helper")({
   }),
   head: () => ({
     meta: [
-      { title: "Farm Helper - Mania Hub" },
+      { title: "Farm Helper" },
       {
         name: "description",
-        content:
-          "Personalised farm map recommendations: maps players at your skill level farm that you're missing, plus old PBs worth re-running for pp.",
+        content: "Farm Helper",
       },
     ],
   }),

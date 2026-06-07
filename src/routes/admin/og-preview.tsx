@@ -71,6 +71,14 @@ const PRESETS: Preset[] = [
     countryAware: true,
   },
   {
+    key: "farm-helper",
+    label: "Farm Helper",
+    kind: "default",
+    title: "Farm Helper",
+    subtitle: "Farm Helper",
+    path: "/farm-helper",
+  },
+  {
     key: "player",
     label: "Player",
     kind: "player",
