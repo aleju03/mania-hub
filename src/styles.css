@@ -49,6 +49,10 @@
 
 :root { --theme-hue: 333; --theme-sat: 1; }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 @theme inline {
   --font-sans: "Torus", "Inter", "Helvetica Neue", Tahoma, Arial, sans-serif;
   --color-osu-b6: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(10% - 8% * (1 - var(--theme-sat)))); --color-osu-b5: hsl(var(--theme-hue), calc(10% * var(--theme-sat)), calc(15% - 8% * (1 - var(--theme-sat))));
