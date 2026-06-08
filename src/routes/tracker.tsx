@@ -47,6 +47,7 @@ const TRACKER_PAGE_SIZE = 45;
 const TRACKER_LIVE_MIN_SNAPSHOT_LIMIT = TRACKER_PAGE_SIZE * 2;
 const TRACKER_LIVE_RECONCILE_LIMIT = 60;
 const TRACKER_LIVE_RECONCILE_MIN_INTERVAL_MS = 2 * 60_000;
+const TRACKER_GLOBAL_WINDOW_HOURS = 24;
 const DEV_ACTIVE_PLAYER_SIMULATION_COUNT = 200;
 
 type ActivePlayerRailInfo = {
@@ -150,6 +151,15 @@ function scoreMatchesMissFilter(score: LeanTrackerScore, missFilter: MissFilter)
   if (missFilter === "all") return true;
   const misses = getScoreMissCount(score);
   return missFilter === "fc" ? misses === 0 : misses === 1;
+}
+
+function getLiveTrackerSnapshotOptions(country: string, options: { offset?: number } = {}): { offset?: number; hours?: number } {
+  return isGlobalScope(country) ? { ...options, hours: TRACKER_GLOBAL_WINDOW_HOURS } : options;
+}
+
+function getLiveTrackerTotal(country: string, total: number | null | undefined): number {
+  const normalizedTotal = Math.max(0, Math.floor(total ?? 0));
+  return isGlobalScope(country) ? normalizedTotal : Math.min(TRACKER_FEED_SCORE_LIMIT, normalizedTotal);
 }
 
 const EMPTY_IDS: number[] = [];
@@ -288,11 +298,11 @@ function ScoresPage() {
     liveSnapshotInFlightLimitRef.current = requestedLimit;
     setLiveSnapshotLoading(true);
     try {
-      const liveSnapshot = await fetchLiveTrackerSnapshot(requestedCountry, requestedLimit);
+      const liveSnapshot = await fetchLiveTrackerSnapshot(requestedCountry, requestedLimit, getLiveTrackerSnapshotOptions(requestedCountry));
       if (requestedCountry !== selectedCountryRef.current) return;
       lastLiveSnapshotAtRef.current = Date.now();
       if (Number.isFinite(liveSnapshot.total)) {
-        setLiveTrackerTotal(Math.min(TRACKER_FEED_SCORE_LIMIT, Math.max(0, Math.floor(liveSnapshot.total ?? 0))));
+        setLiveTrackerTotal(getLiveTrackerTotal(requestedCountry, liveSnapshot.total));
       }
       const passedScores = liveSnapshot.scores.filter(isDisplayedPassed);
       if (passedScores.length > 0) addFeedScores(requestedCountry, passedScores);
@@ -731,8 +741,8 @@ function ScoresPage() {
       : "Click to filter by FC, then FC chokes";
   const listKey = `${filter}:${gradeFilter}:${keyFilter}:${missFilter}`;
   const liveTrackerAvailableCount = liveTrackerTotal == null
-    ? TRACKER_FEED_SCORE_LIMIT
-    : Math.min(TRACKER_FEED_SCORE_LIMIT, liveTrackerTotal);
+    ? (selectedIsGlobal ? filtered.length : TRACKER_FEED_SCORE_LIMIT)
+    : getLiveTrackerTotal(selectedCountry, liveTrackerTotal);
   const trackerWindowCount = liveBackendEnabled && !hasActiveScoreFilters
     ? Math.max(filtered.length, liveTrackerAvailableCount)
     : filtered.length;
@@ -764,7 +774,11 @@ function ScoresPage() {
     [expectedLivePageEnd, expectedLivePageSize, filtered, hasLivePageSnapshot, livePageOffset, livePageScores],
   );
   const liveStatusLabel = liveBackendEnabled ? "Live updates on" : "Live polling";
-  const scoreWindowLabel = liveBackendEnabled ? `${formatNumber(trackerWindowCount)} scores` : `${formatNumber(feedScores.length)} scores`;
+  const scoreWindowLabel = liveBackendEnabled && selectedIsGlobal
+    ? `Last 24h \u00b7 ${formatNumber(trackerWindowCount)} scores`
+    : liveBackendEnabled
+      ? `${formatNumber(trackerWindowCount)} scores`
+      : `${formatNumber(feedScores.length)} scores`;
 
   useEffect(() => {
     if (!needsLivePageSnapshot) {
@@ -784,11 +798,11 @@ function ScoresPage() {
     const requestedCountry = selectedCountry;
     const requestedKey = currentLivePageSnapshotKey;
     setLivePageLoading(true);
-    fetchLiveTrackerSnapshot(requestedCountry, expectedLivePageSize, { offset: livePageOffset })
+    fetchLiveTrackerSnapshot(requestedCountry, expectedLivePageSize, getLiveTrackerSnapshotOptions(requestedCountry, { offset: livePageOffset }))
       .then((snapshot) => {
         if (livePageRequestIdRef.current !== requestId || requestedCountry !== selectedCountryRef.current) return;
         if (Number.isFinite(snapshot.total)) {
-          setLiveTrackerTotal(Math.min(TRACKER_FEED_SCORE_LIMIT, Math.max(0, Math.floor(snapshot.total ?? 0))));
+          setLiveTrackerTotal(getLiveTrackerTotal(requestedCountry, snapshot.total));
         }
         const passedScores = snapshot.scores.filter(isDisplayedPassed);
         setLivePageScores(passedScores);

@@ -470,10 +470,11 @@ export async function fetchLivePlayerAboutDirect(userId: number): Promise<LivePl
   return fetchLiveJson(`/api/profiles/${userId}/about`);
 }
 
-export async function fetchLiveTrackerSnapshot(country: string, limit = 100, options?: { observe?: boolean; offset?: number }): Promise<LiveTrackerSnapshot> {
+export async function fetchLiveTrackerSnapshot(country: string, limit = 100, options?: { observe?: boolean; offset?: number; hours?: number }): Promise<LiveTrackerSnapshot> {
   const query = new URLSearchParams({ country, limit: String(limit) });
   if (options?.observe) query.set("observe", "1");
   if (options?.offset != null) query.set("offset", String(options.offset));
+  if (options?.hours != null) query.set("hours", String(options.hours));
   return fetchLiveJson(`/api/snapshots/tracker?${query.toString()}`);
 }
 

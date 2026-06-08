@@ -4,16 +4,37 @@ import { exec, parseJson } from "../db.js";
 import { toLeanTrackerScore } from "../shared/score.js";
 import type { LeanTrackerScore, OscScore, OsuBeatmap, OsuBeatmapset, ScoreUser } from "../shared/types.js";
 
-export async function getTrackerSnapshot(db: Db, country: string, limit: number, offset = 0): Promise<{ country: string; scores: LeanTrackerScore[]; gains: Record<number, number>; fetchedAt: number; total: number; offset: number }> {
+export interface TrackerSnapshotOptions {
+  since?: string;
+}
+
+export async function getTrackerSnapshot(
+  db: Db,
+  country: string,
+  limit: number,
+  offset = 0,
+  options: TrackerSnapshotOptions = {},
+): Promise<{ country: string; scores: LeanTrackerScore[]; gains: Record<number, number>; fetchedAt: number; total: number; offset: number }> {
   // Global aggregates every tracked country (only tracked countries ever land
   // rows in score_events, so dropping the country filter is exactly the union).
   const global = isGlobalCountry(country);
+  const clauses = ["se.passed = 1"];
+  const args: Array<string | number> = [];
+  if (!global) {
+    clauses.push("se.country = ?");
+    args.push(country);
+  }
+  if (global && options.since) {
+    clauses.push("se.ended_at >= ?");
+    args.push(options.since);
+  }
+  const whereSql = clauses.join(" and ");
   const totalRows = (await exec(
     db,
     `select count(*) as count
      from score_events se
-     where ${global ? "" : "se.country = ? and "}se.passed = 1`,
-    global ? [] : [country],
+     where ${whereSql}`,
+    args,
   )).rows;
   const rows = (await exec(
     db,
@@ -39,10 +60,10 @@ export async function getTrackerSnapshot(db: Db, country: string, limit: number,
      left join users u on u.user_id = se.user_id
      left join beatmaps b on b.beatmap_id = se.beatmap_id
      left join beatmapsets bs on bs.beatmapset_id = b.beatmapset_id
-     where ${global ? "" : "se.country = ? and "}se.passed = 1
+     where ${whereSql}
      order by se.ended_at desc
      limit ? offset ?`,
-    global ? [limit, offset] : [country, limit, offset],
+    [...args, limit, offset],
   )).rows;
   const scores = rows
     .map((row) => hydrateScoreMetadata(row, parseJson<OscScore | null>(row.score_json, null)))

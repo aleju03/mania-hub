@@ -1511,6 +1511,17 @@ describe("live backend", () => {
     expect(offsetSnapshot.scores).toHaveLength(1);
     expect(offsetSnapshot.total).toBe(2);
     expect(offsetSnapshot.offset).toBe(1);
+    await exec(
+      db,
+      `insert into score_events (score_id, score_identity, user_id, country, beatmap_id, ruleset_id, score_json, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
+       select 9200, 'global-old', user_id, 'MX', beatmap_id, ruleset_id, score_json, passed, processed, is_lazer, has_replay, '2026-05-10T00:00:00.000Z', received_at, source
+       from score_events where country = 'CR' limit 1`,
+    );
+    const windowedGlobalSnapshot = await getTrackerSnapshot(db, "GLOBAL", 10, 0, { since: "2026-05-12T00:01:00.000Z" });
+    expect(windowedGlobalSnapshot.scores).toHaveLength(2);
+    expect(windowedGlobalSnapshot.total).toBe(2);
+    const countrySnapshotIgnoresGlobalWindow = await getTrackerSnapshot(db, "CR", 10, 0, { since: "2026-05-12T00:03:00.000Z" });
+    expect(countrySnapshotIgnoresGlobalWindow.scores).toHaveLength(1);
 
     const detectedAt = new Date().toISOString();
     for (const [country, scoreId] of [["CR", 8001], ["US", 8002]] as const) {

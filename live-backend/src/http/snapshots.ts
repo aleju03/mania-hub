@@ -194,6 +194,9 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   }
   if (url.pathname === "/api/snapshots/tracker") {
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
+    const global = isGlobalCountry(country);
+    const windowHours = global ? clampInteger(url.searchParams.get("hours"), 1, 24 * 30, 0) : 0;
+    const since = windowHours > 0 ? new Date(Date.now() - windowHours * 60 * 60 * 1000).toISOString() : undefined;
     sendJson(
       req,
       res,
@@ -203,7 +206,8 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         ctx.db,
         country,
         clampLimit(url.searchParams.get("limit"), 100, 500),
-        clampInteger(url.searchParams.get("offset"), 0, 500, 0),
+        clampInteger(url.searchParams.get("offset"), 0, global && since ? Number.MAX_SAFE_INTEGER : 500, 0),
+        { since },
       ),
     );
     return true;
