@@ -234,6 +234,7 @@ function ScoresPage() {
   const queuedLiveSnapshotLimitRef = useRef<number | null>(null);
   const livePageRequestIdRef = useRef(0);
   const lastLiveSnapshotAtRef = useRef(0);
+  const knownLiveScoreIdentitiesRef = useRef<Set<string>>(new Set());
   const pollRequestIdRef = useRef(0);
   const appliedSnapshotKeyRef = useRef<string | null>(null);
   const liveBackendEnabled = isLiveBackendConfigured();
@@ -279,6 +280,12 @@ function ScoresPage() {
     const id = window.setInterval(() => setTimeTick((value) => value + 1), 30_000);
     return () => window.clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    for (const score of feedScores) {
+      knownLiveScoreIdentitiesRef.current.add(getScoreIdentity(score));
+    }
+  }, [feedScores]);
 
   const reconcileLiveSnapshot = useCallback(async (
     requestedCountry: string,
@@ -355,7 +362,17 @@ function ScoresPage() {
     if (!source) return;
     source.addEventListener("tracker_score", (event) => {
       const score = JSON.parse(event.data) as LeanTrackerScore;
-      if (isDisplayedPassed(score)) addFeedScores(selectedCountry, [score]);
+      if (!isDisplayedPassed(score)) return;
+      const identity = getScoreIdentity(score);
+      const alreadyKnown = knownLiveScoreIdentitiesRef.current.has(identity);
+      knownLiveScoreIdentitiesRef.current.add(identity);
+      addFeedScores(selectedCountry, [score]);
+      if (!alreadyKnown) {
+        setLiveTrackerTotal((current) => {
+          if (current == null) return current;
+          return getLiveTrackerTotal(selectedCountry, current + 1);
+        });
+      }
     });
     source.addEventListener("score_gain", (event) => {
       const data = JSON.parse(event.data) as { scoreId?: number; ppGain?: number };
@@ -387,6 +404,7 @@ function ScoresPage() {
     setLivePageLoading(false);
     livePageRequestIdRef.current += 1;
     pollRequestIdRef.current += 1;
+    knownLiveScoreIdentitiesRef.current = new Set();
     setExpandedKey(null);
     setSelectedPlayerIds([]);
     resetPollIndex(selectedCountry);
@@ -775,7 +793,9 @@ function ScoresPage() {
   );
   const liveStatusLabel = liveBackendEnabled ? "Live updates on" : "Live polling";
   const scoreWindowLabel = liveBackendEnabled && selectedIsGlobal
-    ? `Last 24h \u00b7 ${formatNumber(trackerWindowCount)} scores`
+    ? liveTrackerTotal == null
+      ? "Last 24h"
+      : `Last 24h \u00b7 ${formatNumber(trackerWindowCount)} scores`
     : liveBackendEnabled
       ? `${formatNumber(trackerWindowCount)} scores`
       : `${formatNumber(feedScores.length)} scores`;
