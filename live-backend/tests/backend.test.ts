@@ -3254,7 +3254,7 @@ describe("live backend", () => {
   });
 
   it("stores global map preview player lists while keeping aggregate counts", async () => {
-    const { db } = await setup();
+    const { db, queue } = await setup();
     const now = "2026-05-12T12:10:00.000Z";
     await exec(
       db,
@@ -3317,6 +3317,14 @@ describe("live backend", () => {
     expect(payload.mostPlayed[0].players).toHaveLength(80);
     expect(payload.favourites[0].playerCount).toBe(90);
     expect(payload.favourites[0].players).toHaveLength(80);
+
+    const filteredPage = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, {
+      tab: "farmed", page: 0, pageSize: 24, key: "all", beatmapSort: "players", farmedSort: "players", dir: "desc", status: "all", pp: 420, mod: "all", q: "",
+    });
+    const filteredTop = filteredPage.value?.items[0] as { beatmapId: number; playerCount: number; players: unknown[] };
+    expect(filteredTop.beatmapId).toBe(11);
+    expect(filteredTop.playerCount).toBe(81);
+    expect(filteredTop.players).toHaveLength(4);
   });
 
   it("paginates and searches the map detail player list", async () => {

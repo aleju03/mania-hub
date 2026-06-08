@@ -1072,6 +1072,10 @@ async function hydrateCompactMapsPageValue(
   query: MapsPageQuery,
   refreshedAt: string | null,
 ): Promise<MapsPageValue> {
+  if (query.tab === "farmed" && isGlobalCountry(country) && (query.pp > 0 || query.mod !== "all")) {
+    return hydrateGlobalCompactFarmedFilteredPageValue(db, parsed, query);
+  }
+
   if (await canUseCompactFarmedPageFastPath(db, country, query, refreshedAt)) {
     return hydrateCompactFarmedPageFastPath(db, parsed, query);
   }
@@ -1168,6 +1172,117 @@ async function hydrateCompactFarmedPageFastPath(
     farmedGeneratedAt: parsed.farmedGeneratedAt,
     favouritesGeneratedAt: parsed.favouritesGeneratedAt,
   };
+}
+
+async function hydrateGlobalCompactFarmedFilteredPageValue(
+  db: Db,
+  parsed: StoredCountryMapsData,
+  query: MapsPageQuery,
+): Promise<MapsPageValue> {
+  const sourceEntries = await readGlobalFarmedEntriesForFilteredPage(db, parsed.farmed);
+  const allItems = await filterSortStoredFarmedMapsForPage(db, sourceEntries, query);
+  const pageItems = allItems.slice(query.page * query.pageSize, query.page * query.pageSize + query.pageSize);
+  const items = limitMapsPagePreviewPlayers(await hydrateMapsPageItemUsers(db, await hydrateCompactFarmedEntries(db, pageItems)));
+  return {
+    tab: query.tab,
+    page: query.page,
+    pageSize: query.pageSize,
+    total: allItems.length,
+    items,
+    generatedAt: parsed.generatedAt,
+    farmedGeneratedAt: parsed.farmedGeneratedAt,
+    favouritesGeneratedAt: parsed.favouritesGeneratedAt,
+  };
+}
+
+async function readGlobalFarmedEntriesForFilteredPage(
+  db: Db,
+  fallbackEntries: StoredCountryMapsData["farmed"],
+): Promise<StoredMapsFarmedEntry[]> {
+  const byBeatmap = new Map<number, Map<number, StoredMapsFarmedPlayer>>();
+
+  for (const entry of fallbackEntries) {
+    mergeStoredFarmedEntryPlayers(byBeatmap, entry.beatmapId, entry.players);
+  }
+
+  const snapshotRows = (await exec(
+    db,
+    `select payload_json
+     from country_maps_snapshots
+     where country != ?`,
+    [GLOBAL_COUNTRY_CODE],
+  )).rows;
+  for (const row of snapshotRows) {
+    const stored = toStoredCountryMapsData(parseJson<unknown>(row.payload_json, null));
+    if (!stored) continue;
+    for (const entry of stored.farmed) {
+      mergeStoredFarmedEntryPlayers(byBeatmap, entry.beatmapId, entry.players);
+    }
+  }
+
+  const scoreRows = (await exec(
+    db,
+    `select beatmap_id, user_id, pp, mods_json, score_url, played_at
+     from country_maps_farmed_scores
+     where country != ?`,
+    [GLOBAL_COUNTRY_CODE],
+  )).rows;
+  for (const row of scoreRows) {
+    const beatmapId = Number(row.beatmap_id);
+    const userId = Number(row.user_id);
+    const pp = Number(row.pp ?? 0);
+    if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0 || !Number.isSafeInteger(userId) || userId <= 0 || !Number.isFinite(pp) || pp <= 0) {
+      continue;
+    }
+    mergeStoredFarmedEntryPlayers(byBeatmap, beatmapId, [{
+      id: userId,
+      pp,
+      mods: parseJson<string[]>(row.mods_json, []),
+      scoreUrl: row.score_url == null ? null : String(row.score_url),
+      playedAt: row.played_at == null ? null : String(row.played_at),
+    }]);
+  }
+
+  return [...byBeatmap.entries()]
+    .flatMap(([beatmapId, playerMap]): StoredMapsFarmedEntry[] => {
+      const players = [...playerMap.values()].sort((a, b) => b.pp - a.pp);
+      const maxPp = players.reduce((max, player) => Math.max(max, player.pp), 0);
+      if (players.length < 2 && maxPp < FARMED_SINGLE_PLAYER_PP_MIN) return [];
+      return [{
+        beatmapId,
+        playerCount: players.length,
+        avgPp: players.reduce((sum, player) => sum + player.pp, 0) / players.length,
+        maxPp,
+        players,
+      }];
+    });
+}
+
+function mergeStoredFarmedEntryPlayers(
+  byBeatmap: Map<number, Map<number, StoredMapsFarmedPlayer>>,
+  beatmapId: number,
+  incomingPlayers: StoredMapsFarmedPlayer[],
+): void {
+  if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) return;
+  let players = byBeatmap.get(beatmapId);
+  if (!players) byBeatmap.set(beatmapId, (players = new Map()));
+
+  for (const incoming of incomingPlayers) {
+    const userId = Number(incoming.id);
+    const pp = Number(incoming.pp ?? 0);
+    if (!Number.isSafeInteger(userId) || userId <= 0 || !Number.isFinite(pp) || pp <= 0) continue;
+    const player: StoredMapsFarmedPlayer = {
+      id: userId,
+      pp,
+      mods: Array.isArray(incoming.mods) ? incoming.mods : [],
+      scoreUrl: incoming.scoreUrl ?? null,
+      playedAt: incoming.playedAt ?? null,
+    };
+    const existing = players.get(userId);
+    if (!existing || player.pp > existing.pp || (player.pp === existing.pp && (player.playedAt ?? "") > (existing.playedAt ?? ""))) {
+      players.set(userId, player);
+    }
+  }
 }
 
 async function hydrateCompactFarmedEntries(
