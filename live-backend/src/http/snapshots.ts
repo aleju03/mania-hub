@@ -14,7 +14,7 @@ import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapsho
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
 import { getTopPlaysSnapshot, type TopPlaysSnapshotOptions } from "../features/top-plays.js";
-import { getTrackerSnapshot } from "../features/tracker.js";
+import { getTrackerSnapshot, type TrackerSnapshotFilters } from "../features/tracker.js";
 import { type AbuseBucket, type AbuseGuard, normalizeCountryParam, type RateLimitResult } from "./abuse-guard.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { CountryClientTracker } from "../live/country-clients.js";
@@ -207,7 +207,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         country,
         clampLimit(url.searchParams.get("limit"), 100, 500),
         clampInteger(url.searchParams.get("offset"), 0, global && since ? Number.MAX_SAFE_INTEGER : 500, 0),
-        { since },
+        { since, filters: parseTrackerSnapshotFilters(url.searchParams) },
       ),
     );
     return true;
@@ -1497,6 +1497,19 @@ function clampLimit(raw: string | null, fallback: number, max: number): number {
 function clampInteger(raw: string | null, min: number, max: number, fallback: number): number {
   const value = Number(raw ?? fallback);
   return Number.isFinite(value) ? Math.max(min, Math.min(max, Math.floor(value))) : fallback;
+}
+
+function parseTrackerSnapshotFilters(params: URLSearchParams): TrackerSnapshotFilters {
+  const score = params.get("scoreFilter");
+  const grade = params.get("grade");
+  const key = params.get("key");
+  const miss = params.get("miss");
+  return {
+    score: score === "ranked" ? "ranked" : undefined,
+    grade: grade === "SS" || grade === "S" || grade === "A" || grade === "B" ? grade : undefined,
+    key: key === "4k" || key === "other" ? key : undefined,
+    miss: miss === "fc" || miss === "fc_choke" ? miss : undefined,
+  };
 }
 
 function parseUserIds(raw: string | null): number[] {

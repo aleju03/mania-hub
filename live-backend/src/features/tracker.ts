@@ -1,11 +1,19 @@
 import { isGlobalCountry } from "../countries.js";
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
-import { toLeanTrackerScore } from "../shared/score.js";
+import { getDisplayedRank, toLeanTrackerScore } from "../shared/score.js";
 import type { LeanTrackerScore, OscScore, OsuBeatmap, OsuBeatmapset, ScoreUser } from "../shared/types.js";
+
+export interface TrackerSnapshotFilters {
+  score?: "ranked";
+  grade?: "SS" | "S" | "A" | "B";
+  key?: "4k" | "other";
+  miss?: "fc" | "fc_choke";
+}
 
 export interface TrackerSnapshotOptions {
   since?: string;
+  filters?: TrackerSnapshotFilters;
 }
 
 export async function getTrackerSnapshot(
@@ -29,6 +37,25 @@ export async function getTrackerSnapshot(
     args.push(options.since);
   }
   const whereSql = clauses.join(" and ");
+  const filteredSnapshot = hasTrackerSnapshotFilters(options.filters);
+  if (filteredSnapshot) {
+    const rows = (await exec(
+      db,
+      `${trackerScoreSelectSql()}
+       where ${whereSql}
+       order by se.ended_at desc`,
+      args,
+    )).rows;
+    const allScores = rows
+      .map((row) => hydrateScoreMetadata(row, parseJson<OscScore | null>(row.score_json, null)))
+      .filter((score): score is OscScore => !!score?.beatmap && !!score.beatmapset && !!score.user)
+      .map(toLeanTrackerScore)
+      .filter((score) => scoreMatchesTrackerSnapshotFilters(score, options.filters));
+    const scores = allScores.slice(offset, offset + limit);
+    const gains = await getTrackerScoreGains(db, global, country, scores);
+    return { country, scores, gains, fetchedAt: Date.now(), total: allScores.length, offset };
+  }
+
   const totalRows = (await exec(
     db,
     `select count(*) as count
@@ -69,6 +96,11 @@ export async function getTrackerSnapshot(
     .map((row) => hydrateScoreMetadata(row, parseJson<OscScore | null>(row.score_json, null)))
     .filter((score): score is OscScore => !!score?.beatmap && !!score.beatmapset && !!score.user)
     .map(toLeanTrackerScore);
+  const gains = await getTrackerScoreGains(db, global, country, scores);
+  return { country, scores, gains, fetchedAt: Date.now(), total: Number(totalRows[0]?.count ?? scores.length), offset };
+}
+
+async function getTrackerScoreGains(db: Db, global: boolean, country: string, scores: LeanTrackerScore[]): Promise<Record<number, number>> {
   const scoreIdPlaceholders = scores.map(() => "?").join(",") || "null";
   const gainRows = (await exec(
     db,
@@ -76,8 +108,45 @@ export async function getTrackerSnapshot(
      where ${global ? "" : "country = ? and "}score_id in (${scoreIdPlaceholders})`,
     global ? scores.map((score) => score.id) : [country, ...scores.map((score) => score.id)],
   )).rows;
-  const gains = Object.fromEntries(gainRows.map((row) => [Number(row.score_id), Number(row.pp_gain)]));
-  return { country, scores, gains, fetchedAt: Date.now(), total: Number(totalRows[0]?.count ?? scores.length), offset };
+  return Object.fromEntries(gainRows.map((row) => [Number(row.score_id), Number(row.pp_gain)]));
+}
+
+function hasTrackerSnapshotFilters(filters: TrackerSnapshotFilters | undefined): boolean {
+  return !!filters?.score || !!filters?.grade || !!filters?.key || !!filters?.miss;
+}
+
+function getScoreMissCount(score: LeanTrackerScore): number {
+  const stats = score.statistics ?? {};
+  return stats.count_miss ?? stats.miss ?? 0;
+}
+
+function getBeatmapKeyCount(score: LeanTrackerScore): number | null {
+  const keys = Number(score.beatmap?.cs);
+  if (!Number.isFinite(keys) || keys <= 0) return null;
+  return Number.isInteger(keys) ? keys : Math.ceil(keys);
+}
+
+function scoreMatchesTrackerSnapshotFilters(score: LeanTrackerScore, filters: TrackerSnapshotFilters | undefined): boolean {
+  if (!filters) return true;
+  if (filters.score === "ranked" && !(score.pp != null && score.pp > 0)) return false;
+  if (filters.key) {
+    const keys = getBeatmapKeyCount(score);
+    if (keys == null) return false;
+    if (filters.key === "4k" && keys !== 4) return false;
+    if (filters.key === "other" && keys === 4) return false;
+  }
+  if (filters.miss) {
+    const misses = getScoreMissCount(score);
+    if (filters.miss === "fc" && misses !== 0) return false;
+    if (filters.miss === "fc_choke" && misses !== 1) return false;
+  }
+  if (filters.grade) {
+    const rank = getDisplayedRank(score);
+    if (filters.grade === "SS" && !["SS", "SSH", "X", "XH"].includes(rank)) return false;
+    if (filters.grade === "S" && !["S", "SH"].includes(rank)) return false;
+    if (filters.grade !== "SS" && filters.grade !== "S" && rank !== filters.grade) return false;
+  }
+  return true;
 }
 
 export async function getTrackerScoreById(db: Db, scoreId: number): Promise<{ country: string; score: LeanTrackerScore } | null> {

@@ -134,6 +134,12 @@ type ScoreFilter = "all" | "ranked";
 type GradeFilter = "all" | "SS" | "S" | "A" | "B";
 type KeyFilter = "all" | "4k" | "other";
 type MissFilter = "all" | "fc" | "fc_choke";
+type TrackerBackendFilterOptions = {
+  scoreFilter?: "ranked";
+  grade?: Exclude<GradeFilter, "all">;
+  key?: Exclude<KeyFilter, "all">;
+  miss?: Exclude<MissFilter, "all">;
+};
 
 function scoreMatchesKeyFilter(score: LeanTrackerScore, keyFilter: KeyFilter): boolean {
   if (keyFilter === "all") return true;
@@ -153,7 +159,33 @@ function scoreMatchesMissFilter(score: LeanTrackerScore, missFilter: MissFilter)
   return missFilter === "fc" ? misses === 0 : misses === 1;
 }
 
-function getLiveTrackerSnapshotOptions(country: string, options: { offset?: number } = {}): { offset?: number; hours?: number } {
+function scoreMatchesTrackerFilters(
+  score: LeanTrackerScore,
+  filters: { filter: ScoreFilter; gradeFilter: GradeFilter; keyFilter: KeyFilter; missFilter: MissFilter },
+): boolean {
+  if (!isDisplayedPassed(score)) return false;
+  if (!scoreMatchesKeyFilter(score, filters.keyFilter)) return false;
+  if (!scoreMatchesMissFilter(score, filters.missFilter)) return false;
+  if (filters.filter === "ranked") return score.pp != null && score.pp > 0;
+  if (filters.gradeFilter !== "all") {
+    const rank = getDisplayedRank(score);
+    if (filters.gradeFilter === "SS") return ["SS", "SSH", "X", "XH"].includes(rank);
+    if (filters.gradeFilter === "S") return ["S", "SH"].includes(rank);
+    return rank === filters.gradeFilter;
+  }
+  return true;
+}
+
+function getBackendTrackerFilters(filters: { filter: ScoreFilter; gradeFilter: GradeFilter; keyFilter: KeyFilter; missFilter: MissFilter }): TrackerBackendFilterOptions {
+  return {
+    scoreFilter: filters.filter === "ranked" ? "ranked" : undefined,
+    grade: filters.gradeFilter === "all" ? undefined : filters.gradeFilter,
+    key: filters.keyFilter === "all" ? undefined : filters.keyFilter,
+    miss: filters.missFilter === "all" ? undefined : filters.missFilter,
+  };
+}
+
+function getLiveTrackerSnapshotOptions(country: string, options: { offset?: number; filters?: TrackerBackendFilterOptions } = {}): { offset?: number; hours?: number; filters?: TrackerBackendFilterOptions } {
   return isGlobalScope(country) ? { ...options, hours: TRACKER_GLOBAL_WINDOW_HOURS } : options;
 }
 
@@ -226,13 +258,18 @@ function ScoresPage() {
   const [livePageScores, setLivePageScores] = useState<LeanTrackerScore[]>([]);
   const [livePageSnapshotKey, setLivePageSnapshotKey] = useState<string | null>(null);
   const [livePageLoading, setLivePageLoading] = useState(false);
-  const refreshing = initialFetching || polling || liveSnapshotLoading || livePageLoading;
+  const [liveFilteredTotal, setLiveFilteredTotal] = useState<number | null>(null);
+  const [liveFilteredScores, setLiveFilteredScores] = useState<LeanTrackerScore[]>([]);
+  const [liveFilteredSnapshotKey, setLiveFilteredSnapshotKey] = useState<string | null>(null);
+  const [liveFilteredLoading, setLiveFilteredLoading] = useState(false);
+  const refreshing = initialFetching || polling || liveSnapshotLoading || livePageLoading || liveFilteredLoading;
   const initialFetchInFlightRef = useRef(false);
   const pollInFlightRef = useRef(false);
   const liveSnapshotInFlightRef = useRef(false);
   const liveSnapshotInFlightLimitRef = useRef(0);
   const queuedLiveSnapshotLimitRef = useRef<number | null>(null);
   const livePageRequestIdRef = useRef(0);
+  const liveFilteredRequestIdRef = useRef(0);
   const lastLiveSnapshotAtRef = useRef(0);
   const knownLiveScoreIdentitiesRef = useRef<Set<string>>(new Set());
   const pollRequestIdRef = useRef(0);
@@ -246,6 +283,21 @@ function ScoresPage() {
   const trackerPpGainEntries = useAppStore((state) => state.trackerPpGainsByCountry[selectedCountry] ?? EMPTY_SCORE_GAINS);
   const setTrackerPpGains = useAppStore((state) => state.setTrackerPpGains);
   const countryName = getCountryName(selectedCountry);
+  const hasActiveScoreFilters = selectedPlayerIds.length > 0
+    || filter !== "all"
+    || gradeFilter !== "all"
+    || keyFilter !== "all"
+    || missFilter !== "all"
+    || hiddenUserIds.size > 0;
+  const hasBackendScoreFilters = filter !== "all"
+    || gradeFilter !== "all"
+    || keyFilter !== "all"
+    || missFilter !== "all";
+  const useLiveBackendFilteredScores = liveBackendEnabled
+    && selectedIsGlobal
+    && hasBackendScoreFilters
+    && selectedPlayerIds.length === 0
+    && hiddenUserIds.size === 0;
   const trackerUsers = useMemo(
     () => rankings?.ranking
       .filter((entry: { user: { is_active?: boolean } }) => entry.user.is_active !== false)
@@ -372,6 +424,10 @@ function ScoresPage() {
           if (current == null) return current;
           return getLiveTrackerTotal(selectedCountry, current + 1);
         });
+        if (useLiveBackendFilteredScores && scoreMatchesTrackerFilters(score, { filter, gradeFilter, keyFilter, missFilter })) {
+          setLiveFilteredTotal((current) => current == null ? current : current + 1);
+          setLiveFilteredScores((current) => page === 0 ? [score, ...current].slice(0, TRACKER_PAGE_SIZE) : current);
+        }
       }
     });
     source.addEventListener("score_gain", (event) => {
@@ -381,7 +437,7 @@ function ScoresPage() {
       }
     });
     return () => source.close();
-  }, [addFeedScores, liveBackendEnabled, reconcileLiveSnapshot, selectedCountry, setTrackerPpGains]);
+  }, [addFeedScores, filter, gradeFilter, keyFilter, liveBackendEnabled, missFilter, page, reconcileLiveSnapshot, selectedCountry, setTrackerPpGains, useLiveBackendFilteredScores]);
 
   useEffect(() => {
     setUserIds(trackedUserIds);
@@ -403,6 +459,11 @@ function ScoresPage() {
     setLivePageSnapshotKey(null);
     setLivePageLoading(false);
     livePageRequestIdRef.current += 1;
+    setLiveFilteredTotal(null);
+    setLiveFilteredScores([]);
+    setLiveFilteredSnapshotKey(null);
+    setLiveFilteredLoading(false);
+    liveFilteredRequestIdRef.current += 1;
     pollRequestIdRef.current += 1;
     knownLiveScoreIdentitiesRef.current = new Set();
     setExpandedKey(null);
@@ -648,23 +709,7 @@ function ScoresPage() {
 
     return playerFiltered.filter((score: LeanTrackerScore) => {
       if (hiddenUserIds.has(score.user_id)) return false;
-      if (!isDisplayedPassed(score)) return false;
-      if (!scoreMatchesKeyFilter(score, keyFilter)) return false;
-      if (!scoreMatchesMissFilter(score, missFilter)) return false;
-      switch (filter) {
-        case "ranked":
-          return score.pp != null && score.pp > 0;
-        default:
-          break;
-      }
-      if (gradeFilter !== "all") {
-        const rank = getDisplayedRank(score);
-        // SS includes XH/X/SS/SSH, S includes SH/S
-        if (gradeFilter === "SS") return ["SS", "SSH", "X", "XH"].includes(rank);
-        if (gradeFilter === "S") return ["S", "SH"].includes(rank);
-        return rank === gradeFilter;
-      }
-      return true;
+      return scoreMatchesTrackerFilters(score, { filter, gradeFilter, keyFilter, missFilter });
     });
   }, [feedScores, filter, gradeFilter, keyFilter, missFilter, selectedPlayerIdSet, selectedPlayerIds.length, hiddenUserIds]);
 
@@ -740,16 +785,10 @@ function ScoresPage() {
     setMissFilter((current) => current === "all" ? "fc" : current === "fc" ? "fc_choke" : "all");
     updateTrackerSearch({ page: 0 });
   };
-  const hasActiveScoreFilters = selectedPlayerIds.length > 0
-    || filter !== "all"
-    || gradeFilter !== "all"
-    || keyFilter !== "all"
-    || missFilter !== "all"
-    || hiddenUserIds.size > 0;
   useEffect(() => {
-    if (!liveBackendEnabled || !hasActiveScoreFilters || feedScores.length >= TRACKER_FEED_SCORE_LIMIT) return;
+    if (!liveBackendEnabled || !hasActiveScoreFilters || useLiveBackendFilteredScores || feedScores.length >= TRACKER_FEED_SCORE_LIMIT) return;
     void reconcileLiveSnapshot(selectedCountry, { force: true, limit: TRACKER_FEED_SCORE_LIMIT });
-  }, [feedScores.length, hasActiveScoreFilters, liveBackendEnabled, reconcileLiveSnapshot, selectedCountry]);
+  }, [feedScores.length, hasActiveScoreFilters, liveBackendEnabled, reconcileLiveSnapshot, selectedCountry, useLiveBackendFilteredScores]);
   const missButtonLabel = missFilter === "fc_choke" ? "Choke" : "FC";
   const mobileMissButtonLabel = missFilter === "fc_choke" ? "Ch" : "FC";
   const missButtonTitle = missFilter === "fc"
@@ -761,7 +800,9 @@ function ScoresPage() {
   const liveTrackerAvailableCount = liveTrackerTotal == null
     ? (selectedIsGlobal ? filtered.length : TRACKER_FEED_SCORE_LIMIT)
     : getLiveTrackerTotal(selectedCountry, liveTrackerTotal);
-  const trackerWindowCount = liveBackendEnabled && !hasActiveScoreFilters
+  const trackerWindowCount = useLiveBackendFilteredScores
+    ? (liveFilteredTotal ?? 0)
+    : liveBackendEnabled && !hasActiveScoreFilters
     ? Math.max(filtered.length, liveTrackerAvailableCount)
     : filtered.length;
   const totalPages = Math.max(1, Math.ceil(
@@ -772,33 +813,110 @@ function ScoresPage() {
     ? Math.min((currentPage + 1) * TRACKER_PAGE_SIZE, trackerWindowCount)
     : 0;
   const livePageOffset = currentPage * TRACKER_PAGE_SIZE;
-  const expectedLivePageSize = Math.max(0, Math.min(TRACKER_PAGE_SIZE, trackerWindowCount - livePageOffset));
+  const expectedLivePageSize = useLiveBackendFilteredScores && liveFilteredTotal == null
+    ? TRACKER_PAGE_SIZE
+    : Math.max(0, Math.min(TRACKER_PAGE_SIZE, trackerWindowCount - livePageOffset));
   const expectedLivePageEnd = livePageOffset + expectedLivePageSize;
   const needsLivePageSnapshot = liveBackendEnabled
     && !hasActiveScoreFilters
     && currentPage > 0
     && filtered.length < requiredScoreCountForPage;
   const currentLivePageSnapshotKey = `${selectedCountry}:${livePageOffset}:${expectedLivePageSize}`;
+  const backendTrackerFilters = getBackendTrackerFilters({ filter, gradeFilter, keyFilter, missFilter });
+  const currentLiveFilteredSnapshotKey = `${selectedCountry}:${livePageOffset}:${expectedLivePageSize}:${filter}:${gradeFilter}:${keyFilter}:${missFilter}`;
   const hasLivePageSnapshot = needsLivePageSnapshot
     && livePageSnapshotKey === currentLivePageSnapshotKey
     && livePageScores.length >= expectedLivePageSize;
+  const hasLiveFilteredSnapshot = useLiveBackendFilteredScores
+    && liveFilteredSnapshotKey === currentLiveFilteredSnapshotKey
+    && liveFilteredScores.length >= expectedLivePageSize;
   const showingLivePageSkeletons = needsLivePageSnapshot
     ? !hasLivePageSnapshot
-    : liveBackendEnabled && !hasActiveScoreFilters && filtered.length < requiredScoreCountForPage;
+    : useLiveBackendFilteredScores
+      ? !hasLiveFilteredSnapshot
+      : liveBackendEnabled && !hasActiveScoreFilters && filtered.length < requiredScoreCountForPage;
   const paginatedScores = useMemo(
-    () => hasLivePageSnapshot
+    () => hasLiveFilteredSnapshot
+      ? liveFilteredScores.slice(0, expectedLivePageSize)
+      : hasLivePageSnapshot
       ? livePageScores.slice(0, expectedLivePageSize)
       : filtered.slice(livePageOffset, expectedLivePageEnd),
-    [expectedLivePageEnd, expectedLivePageSize, filtered, hasLivePageSnapshot, livePageOffset, livePageScores],
+    [expectedLivePageEnd, expectedLivePageSize, filtered, hasLiveFilteredSnapshot, hasLivePageSnapshot, liveFilteredScores, livePageOffset, livePageScores],
   );
   const liveStatusLabel = liveBackendEnabled ? "Live updates on" : "Live polling";
   const scoreWindowLabel = liveBackendEnabled && selectedIsGlobal
-    ? liveTrackerTotal == null
+    ? liveTrackerTotal == null && !useLiveBackendFilteredScores
       ? "Last 24h"
       : `Last 24h \u00b7 ${formatNumber(trackerWindowCount)} scores`
     : liveBackendEnabled
       ? `${formatNumber(trackerWindowCount)} scores`
       : `${formatNumber(feedScores.length)} scores`;
+
+  useEffect(() => {
+    if (!useLiveBackendFilteredScores) {
+      setLiveFilteredTotal(null);
+      setLiveFilteredScores([]);
+      setLiveFilteredSnapshotKey(null);
+      setLiveFilteredLoading(false);
+      liveFilteredRequestIdRef.current += 1;
+      return;
+    }
+    if (expectedLivePageSize === 0 && liveFilteredTotal != null) {
+      setLiveFilteredScores([]);
+      setLiveFilteredSnapshotKey(currentLiveFilteredSnapshotKey);
+      setLiveFilteredLoading(false);
+      return;
+    }
+    if (hasLiveFilteredSnapshot) {
+      setLiveFilteredLoading(false);
+      return;
+    }
+
+    const requestId = ++liveFilteredRequestIdRef.current;
+    const requestedCountry = selectedCountry;
+    const requestedKey = currentLiveFilteredSnapshotKey;
+    setLiveFilteredLoading(true);
+    fetchLiveTrackerSnapshot(
+      requestedCountry,
+      Math.max(1, expectedLivePageSize || TRACKER_PAGE_SIZE),
+      getLiveTrackerSnapshotOptions(requestedCountry, {
+        offset: livePageOffset,
+        filters: backendTrackerFilters,
+      }),
+    )
+      .then((snapshot) => {
+        if (liveFilteredRequestIdRef.current !== requestId || requestedCountry !== selectedCountryRef.current) return;
+        setLiveFilteredTotal(getLiveTrackerTotal(requestedCountry, snapshot.total ?? snapshot.scores.length));
+        const passedScores = snapshot.scores.filter(isDisplayedPassed);
+        setLiveFilteredScores(passedScores);
+        setLiveFilteredSnapshotKey(requestedKey);
+        if (Object.keys(snapshot.gains).length > 0) {
+          setTrackerPpGains(requestedCountry, snapshot.gains, snapshot.fetchedAt);
+        }
+      })
+      .catch(() => {
+        if (liveFilteredRequestIdRef.current === requestId) {
+          setLiveFilteredScores([]);
+          setLiveFilteredSnapshotKey(requestedKey);
+        }
+      })
+      .finally(() => {
+        if (liveFilteredRequestIdRef.current === requestId) setLiveFilteredLoading(false);
+      });
+  }, [
+    currentLiveFilteredSnapshotKey,
+    expectedLivePageSize,
+    filter,
+    gradeFilter,
+    hasLiveFilteredSnapshot,
+    keyFilter,
+    liveFilteredTotal,
+    livePageOffset,
+    missFilter,
+    selectedCountry,
+    setTrackerPpGains,
+    useLiveBackendFilteredScores,
+  ]);
 
   useEffect(() => {
     if (!needsLivePageSnapshot) {

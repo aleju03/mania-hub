@@ -1522,6 +1522,18 @@ describe("live backend", () => {
     expect(windowedGlobalSnapshot.total).toBe(2);
     const countrySnapshotIgnoresGlobalWindow = await getTrackerSnapshot(db, "CR", 10, 0, { since: "2026-05-12T00:03:00.000Z" });
     expect(countrySnapshotIgnoresGlobalWindow.scores).toHaveLength(1);
+    await exec(
+      db,
+      `insert into score_events (score_id, score_identity, user_id, country, beatmap_id, ruleset_id, score_json, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
+       select 9300, 'global-choke', user_id, 'MX', beatmap_id, ruleset_id, json_set(score_json, '$.statistics.count_miss', 1), passed, processed, is_lazer, has_replay, '2026-05-12T00:05:00.000Z', received_at, source
+       from score_events where country = 'CR' limit 1`,
+    );
+    const chokeSnapshot = await getTrackerSnapshot(db, "GLOBAL", 10, 0, {
+      since: "2026-05-12T00:01:00.000Z",
+      filters: { miss: "fc_choke" },
+    });
+    expect(chokeSnapshot.scores).toHaveLength(1);
+    expect(chokeSnapshot.total).toBe(1);
 
     const detectedAt = new Date().toISOString();
     for (const [country, scoreId] of [["CR", 8001], ["US", 8002]] as const) {

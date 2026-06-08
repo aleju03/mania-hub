@@ -470,11 +470,26 @@ export async function fetchLivePlayerAboutDirect(userId: number): Promise<LivePl
   return fetchLiveJson(`/api/profiles/${userId}/about`);
 }
 
-export async function fetchLiveTrackerSnapshot(country: string, limit = 100, options?: { observe?: boolean; offset?: number; hours?: number }): Promise<LiveTrackerSnapshot> {
+export interface LiveTrackerSnapshotFilters {
+  scoreFilter?: "ranked";
+  grade?: "SS" | "S" | "A" | "B";
+  key?: "4k" | "other";
+  miss?: "fc" | "fc_choke";
+}
+
+export async function fetchLiveTrackerSnapshot(
+  country: string,
+  limit = 100,
+  options?: { observe?: boolean; offset?: number; hours?: number; filters?: LiveTrackerSnapshotFilters },
+): Promise<LiveTrackerSnapshot> {
   const query = new URLSearchParams({ country, limit: String(limit) });
   if (options?.observe) query.set("observe", "1");
   if (options?.offset != null) query.set("offset", String(options.offset));
   if (options?.hours != null) query.set("hours", String(options.hours));
+  if (options?.filters?.scoreFilter) query.set("scoreFilter", options.filters.scoreFilter);
+  if (options?.filters?.grade) query.set("grade", options.filters.grade);
+  if (options?.filters?.key) query.set("key", options.filters.key);
+  if (options?.filters?.miss) query.set("miss", options.filters.miss);
   return fetchLiveJson(`/api/snapshots/tracker?${query.toString()}`);
 }
 
