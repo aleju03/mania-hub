@@ -480,7 +480,7 @@ export interface LiveTrackerSnapshotFilters {
 export async function fetchLiveTrackerSnapshot(
   country: string,
   limit = 100,
-  options?: { observe?: boolean; offset?: number; hours?: number; filters?: LiveTrackerSnapshotFilters },
+  options?: { observe?: boolean; offset?: number; hours?: number; filters?: LiveTrackerSnapshotFilters; sort?: "recent" | "stars"; sortDirection?: "asc" | "desc" },
 ): Promise<LiveTrackerSnapshot> {
   const query = new URLSearchParams({ country, limit: String(limit) });
   if (options?.observe) query.set("observe", "1");
@@ -490,6 +490,8 @@ export async function fetchLiveTrackerSnapshot(
   if (options?.filters?.grade) query.set("grade", options.filters.grade);
   if (options?.filters?.key) query.set("key", options.filters.key);
   if (options?.filters?.miss) query.set("miss", options.filters.miss);
+  if (options?.sort && options.sort !== "recent") query.set("sort", options.sort);
+  if (options?.sortDirection && options.sortDirection !== "desc") query.set("sortDirection", options.sortDirection);
   return fetchLiveJson(`/api/snapshots/tracker?${query.toString()}`);
 }
 

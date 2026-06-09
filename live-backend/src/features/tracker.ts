@@ -1,7 +1,7 @@
 import { isGlobalCountry } from "../countries.js";
 import type { Db } from "../db.js";
 import { exec, parseJson } from "../db.js";
-import { getDisplayedRank, toLeanTrackerScore } from "../shared/score.js";
+import { getDisplayedRank, getScoreTimestamp, toLeanTrackerScore } from "../shared/score.js";
 import type { LeanTrackerScore, OscScore, OsuBeatmap, OsuBeatmapset, ScoreUser } from "../shared/types.js";
 
 export interface TrackerSnapshotFilters {
@@ -14,6 +14,8 @@ export interface TrackerSnapshotFilters {
 export interface TrackerSnapshotOptions {
   since?: string;
   filters?: TrackerSnapshotFilters;
+  sort?: "recent" | "stars";
+  sortDirection?: "asc" | "desc";
 }
 
 export async function getTrackerSnapshot(
@@ -38,6 +40,8 @@ export async function getTrackerSnapshot(
   }
   const whereSql = clauses.join(" and ");
   const filteredSnapshot = hasTrackerSnapshotFilters(options.filters);
+  const sort = options.sort ?? "recent";
+  const sortDirection = options.sortDirection ?? "desc";
   if (filteredSnapshot) {
     const rows = (await exec(
       db,
@@ -50,7 +54,8 @@ export async function getTrackerSnapshot(
       .map((row) => hydrateScoreMetadata(row, parseJson<OscScore | null>(row.score_json, null)))
       .filter((score): score is OscScore => !!score?.beatmap && !!score.beatmapset && !!score.user)
       .map(toLeanTrackerScore)
-      .filter((score) => scoreMatchesTrackerSnapshotFilters(score, options.filters));
+      .filter((score) => scoreMatchesTrackerSnapshotFilters(score, options.filters))
+      .sort((a, b) => compareTrackerScores(a, b, sort, sortDirection));
     const scores = allScores.slice(offset, offset + limit);
     const gains = await getTrackerScoreGains(db, global, country, scores);
     return { country, scores, gains, fetchedAt: Date.now(), total: allScores.length, offset };
@@ -88,7 +93,7 @@ export async function getTrackerSnapshot(
      left join beatmaps b on b.beatmap_id = se.beatmap_id
      left join beatmapsets bs on bs.beatmapset_id = b.beatmapset_id
      where ${whereSql}
-     order by se.ended_at desc
+     order by ${getTrackerSnapshotOrderSql(sort, sortDirection)}
      limit ? offset ?`,
     [...args, limit, offset],
   )).rows;
@@ -98,6 +103,30 @@ export async function getTrackerSnapshot(
     .map(toLeanTrackerScore);
   const gains = await getTrackerScoreGains(db, global, country, scores);
   return { country, scores, gains, fetchedAt: Date.now(), total: Number(totalRows[0]?.count ?? scores.length), offset };
+}
+
+function compareTrackerScores(a: LeanTrackerScore, b: LeanTrackerScore, sort: "recent" | "stars", direction: "asc" | "desc"): number {
+  if (sort === "stars") {
+    const starDelta = direction === "asc"
+      ? (a.beatmap?.difficulty_rating ?? Number.MAX_SAFE_INTEGER) - (b.beatmap?.difficulty_rating ?? Number.MAX_SAFE_INTEGER)
+      : (b.beatmap?.difficulty_rating ?? -1) - (a.beatmap?.difficulty_rating ?? -1);
+    if (starDelta !== 0) return starDelta;
+  }
+  return getTrackerScoreTimeMs(b) - getTrackerScoreTimeMs(a);
+}
+
+function getTrackerSnapshotOrderSql(sort: "recent" | "stars", direction: "asc" | "desc"): string {
+  if (sort === "stars") {
+    return direction === "asc"
+      ? "coalesce(b.difficulty_rating, 999999) asc, se.ended_at desc"
+      : "coalesce(b.difficulty_rating, -1) desc, se.ended_at desc";
+  }
+  return "se.ended_at desc";
+}
+
+function getTrackerScoreTimeMs(score: LeanTrackerScore): number {
+  const time = Date.parse(getScoreTimestamp(score));
+  return Number.isFinite(time) ? time : 0;
 }
 
 async function getTrackerScoreGains(db: Db, global: boolean, country: string, scores: LeanTrackerScore[]): Promise<Record<number, number>> {
