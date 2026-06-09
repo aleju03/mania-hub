@@ -39,10 +39,10 @@ export async function getTrackerSnapshot(
     args.push(options.since);
   }
   const whereSql = clauses.join(" and ");
-  const filteredSnapshot = hasTrackerSnapshotFilters(options.filters);
   const sort = options.sort ?? "recent";
   const sortDirection = options.sortDirection ?? "desc";
-  if (filteredSnapshot) {
+  const needsHydratedSnapshot = hasTrackerSnapshotFilters(options.filters) || sort === "stars";
+  if (needsHydratedSnapshot) {
     const rows = (await exec(
       db,
       `${trackerScoreSelectSql()}

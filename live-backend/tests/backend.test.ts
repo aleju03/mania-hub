@@ -1455,6 +1455,88 @@ describe("live backend", () => {
     expect(missed.some((event) => event.type === "tracker_score")).toBe(true);
   });
 
+  it("fills star-sorted tracker pages after dropping non-displayable rows", async () => {
+    const { db } = await setup();
+    const [baseScore] = await fixture<OscScore[]>("scores.json");
+    const now = "2026-05-12T00:10:00.000Z";
+    const insertScoreEvent = async (score: OscScore) => {
+      await exec(
+        db,
+        `insert into score_events
+         (score_id, score_identity, user_id, country, beatmap_id, ruleset_id, score_json, pp, total_score, accuracy, rank, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
+         values (?, ?, ?, 'CR', ?, 3, ?, ?, ?, ?, ?, 1, 0, 1, 0, ?, ?, 'test')`,
+        [
+          score.id,
+          `test:${score.id}`,
+          score.user_id,
+          score.beatmap_id ?? score.id,
+          JSON.stringify(score),
+          score.pp,
+          score.total_score ?? score.score,
+          score.accuracy,
+          score.rank,
+          score.ended_at ?? now,
+          now,
+        ],
+      );
+    };
+    const validScore = (id: number, difficulty: number): OscScore => ({
+      ...baseScore,
+      id,
+      user_id: id,
+      beatmap_id: id,
+      ended_at: `2026-05-12T00:${String(10 + difficulty).padStart(2, "0")}:00.000Z`,
+      created_at: `2026-05-12T00:${String(10 + difficulty).padStart(2, "0")}:00.000Z`,
+      beatmap: {
+        ...baseScore.beatmap!,
+        id,
+        beatmapset_id: id,
+        difficulty_rating: difficulty,
+        version: `${difficulty} star`,
+      },
+      beatmapset: {
+        ...baseScore.beatmapset!,
+        id,
+        title: `Valid ${id}`,
+      },
+      user: {
+        ...baseScore.user!,
+        id,
+        username: `Valid ${id}`,
+      },
+    });
+    const invalidScore = (id: number): OscScore => {
+      const score = validScore(id, id - 9499);
+      delete score.beatmap;
+      delete score.beatmapset;
+      delete score.user;
+      return score;
+    };
+
+    for (const id of [9500, 9501]) {
+      await exec(
+        db,
+        `insert into beatmapsets (beatmapset_id, title, artist, covers_json, updated_at)
+         values (?, ?, 'Fixture Artist', '{}', ?)`,
+        [id, `Invalid ${id}`, now],
+      );
+      await exec(
+        db,
+        `insert into beatmaps (beatmap_id, beatmapset_id, mode, cs, difficulty_rating, bpm, version, url, updated_at)
+         values (?, ?, 'mania', 4, ?, 180, 'Invalid', ?, ?)`,
+        [id, id, id - 9499, `https://osu.ppy.sh/beatmaps/${id}`, now],
+      );
+      await insertScoreEvent(invalidScore(id));
+    }
+    await insertScoreEvent(validScore(9601, 3));
+    await insertScoreEvent(validScore(9602, 4));
+
+    const snapshot = await getTrackerSnapshot(db, "CR", 2, 0, { sort: "stars", sortDirection: "asc" });
+
+    expect(snapshot.scores.map((score) => score.id)).toEqual([9601, 9602]);
+    expect(snapshot.total).toBe(2);
+  });
+
   it("serves admin snapshot counts without downloading snapshot bodies", async () => {
     const { db, queue, events, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");

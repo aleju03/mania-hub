@@ -908,11 +908,9 @@ function ScoresPage() {
   const backendTrackerFilters = getBackendTrackerFilters({ filter, gradeFilter, keyFilter, missFilter });
   const currentLiveFilteredSnapshotKey = `${selectedCountry}:${livePageOffset}:${expectedLivePageSize}:${filter}:${gradeFilter}:${keyFilter}:${missFilter}:${trackerSort}:${trackerSortDirection}`;
   const hasLivePageSnapshot = needsLivePageSnapshot
-    && livePageSnapshotKey === currentLivePageSnapshotKey
-    && livePageScores.length >= expectedLivePageSize;
+    && livePageSnapshotKey === currentLivePageSnapshotKey;
   const hasLiveFilteredSnapshot = useLiveBackendFilteredScores
-    && liveFilteredSnapshotKey === currentLiveFilteredSnapshotKey
-    && liveFilteredScores.length >= expectedLivePageSize;
+    && liveFilteredSnapshotKey === currentLiveFilteredSnapshotKey;
   const showingLivePageSkeletons = needsLivePageSnapshot
     ? !hasLivePageSnapshot
     : useLiveBackendFilteredScores
