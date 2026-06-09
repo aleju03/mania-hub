@@ -207,7 +207,12 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         country,
         clampLimit(url.searchParams.get("limit"), 100, 500),
         clampInteger(url.searchParams.get("offset"), 0, global && since ? Number.MAX_SAFE_INTEGER : 500, 0),
-        { since, filters: parseTrackerSnapshotFilters(url.searchParams) },
+        {
+          since,
+          filters: parseTrackerSnapshotFilters(url.searchParams),
+          sort: parseTrackerSnapshotSort(url.searchParams),
+          sortDirection: parseTrackerSnapshotSortDirection(url.searchParams),
+        },
       ),
     );
     return true;
@@ -1510,6 +1515,14 @@ function parseTrackerSnapshotFilters(params: URLSearchParams): TrackerSnapshotFi
     key: key === "4k" || key === "other" ? key : undefined,
     miss: miss === "fc" || miss === "fc_choke" ? miss : undefined,
   };
+}
+
+function parseTrackerSnapshotSort(params: URLSearchParams): "recent" | "stars" {
+  return params.get("sort") === "stars" ? "stars" : "recent";
+}
+
+function parseTrackerSnapshotSortDirection(params: URLSearchParams): "asc" | "desc" {
+  return params.get("sortDirection") === "asc" ? "asc" : "desc";
 }
 
 function parseUserIds(raw: string | null): number[] {

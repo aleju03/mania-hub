@@ -1,4 +1,4 @@
-import { getCountryName } from "../lib/country";
+import { getCountryName, isGlobalScope } from "../lib/country";
 
 type LiveEmptyKind = "scores" | "top-plays";
 
@@ -26,7 +26,11 @@ export function LiveDataEmptyState({
 }) {
   const copy = COPY[kind];
   const name = getCountryName(country);
-  const eyebrow = copy.eyebrow(name);
+  const globalScores = kind === "scores" && isGlobalScope(country);
+  const eyebrow = globalScores ? "Global tracker is ready" : copy.eyebrow(name);
+  const body = globalScores
+    ? "The live feed is connected. New plays will start showing up as players submit them."
+    : copy.body;
 
   return (
     <div className={`mx-auto max-w-md text-center ${compact ? "px-4 py-6" : "px-4 py-16"}`}>
@@ -34,7 +38,7 @@ export function LiveDataEmptyState({
         <div className="text-xs font-semibold text-osu-l2">{eyebrow}</div>
       ) : null}
       <div className="mt-1 text-sm font-bold text-white">{copy.title}</div>
-      <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">{copy.body}</p>
+      <p className="mt-2 text-[12px] leading-relaxed text-osu-f1">{body}</p>
     </div>
   );
 }

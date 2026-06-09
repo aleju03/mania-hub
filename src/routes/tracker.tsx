@@ -134,6 +134,8 @@ type ScoreFilter = "all" | "ranked";
 type GradeFilter = "all" | "SS" | "S" | "A" | "B";
 type KeyFilter = "all" | "4k" | "other";
 type MissFilter = "all" | "fc" | "fc_choke";
+type TrackerSort = "recent" | "stars";
+type TrackerSortDirection = "asc" | "desc";
 type TrackerBackendFilterOptions = {
   scoreFilter?: "ranked";
   grade?: Exclude<GradeFilter, "all">;
@@ -185,7 +187,26 @@ function getBackendTrackerFilters(filters: { filter: ScoreFilter; gradeFilter: G
   };
 }
 
-function getLiveTrackerSnapshotOptions(country: string, options: { offset?: number; filters?: TrackerBackendFilterOptions } = {}): { offset?: number; hours?: number; filters?: TrackerBackendFilterOptions } {
+function getStarRating(score: LeanTrackerScore): number {
+  return score.beatmap?.difficulty_rating ?? -1;
+}
+
+function compareTrackerScores(a: LeanTrackerScore, b: LeanTrackerScore, sort: TrackerSort, direction: TrackerSortDirection): number {
+  if (sort === "stars") {
+    const starDelta = direction === "asc"
+      ? (a.beatmap?.difficulty_rating ?? Number.MAX_SAFE_INTEGER) - (b.beatmap?.difficulty_rating ?? Number.MAX_SAFE_INTEGER)
+      : getStarRating(b) - getStarRating(a);
+    if (starDelta !== 0) return starDelta;
+  }
+  return getScoreTimeMs(b) - getScoreTimeMs(a);
+}
+
+function sortTrackerScores(scores: LeanTrackerScore[], sort: TrackerSort, direction: TrackerSortDirection): LeanTrackerScore[] {
+  if (sort === "recent") return scores;
+  return [...scores].sort((a, b) => compareTrackerScores(a, b, sort, direction));
+}
+
+function getLiveTrackerSnapshotOptions(country: string, options: { offset?: number; filters?: TrackerBackendFilterOptions; sort?: TrackerSort; sortDirection?: TrackerSortDirection } = {}): { offset?: number; hours?: number; filters?: TrackerBackendFilterOptions; sort?: TrackerSort; sortDirection?: TrackerSortDirection } {
   return isGlobalScope(country) ? { ...options, hours: TRACKER_GLOBAL_WINDOW_HOURS } : options;
 }
 
@@ -246,8 +267,14 @@ function ScoresPage() {
   const [gradeFilter, setGradeFilter] = useState<GradeFilter>("all");
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
   const [missFilter, setMissFilter] = useState<MissFilter>("all");
+  const [trackerSort, setTrackerSort] = useState<TrackerSort>("recent");
+  const [trackerSortDirection, setTrackerSortDirection] = useState<TrackerSortDirection>("desc");
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<number[]>([]);
   const [initialLoaded, setInitialLoaded] = useState(feedScores.length > 0 || !!feedScoresFetchedAt || !!snapshot);
+  const initialLoadedCountryRef = useRef(selectedCountry);
+  const initialLoadedForSelectedCountry = initialLoadedCountryRef.current === selectedCountry
+    ? initialLoaded
+    : feedScores.length > 0 || !!feedScoresFetchedAt || !!snapshot;
   const [initialRefreshDone, setInitialRefreshDone] = useState(false);
   const [initialFetching, setInitialFetching] = useState(false);
   const [polling, setPolling] = useState(false);
@@ -294,8 +321,7 @@ function ScoresPage() {
     || keyFilter !== "all"
     || missFilter !== "all";
   const useLiveBackendFilteredScores = liveBackendEnabled
-    && selectedIsGlobal
-    && hasBackendScoreFilters
+    && ((selectedIsGlobal && hasBackendScoreFilters) || trackerSort !== "recent")
     && selectedPlayerIds.length === 0
     && hiddenUserIds.size === 0;
   const trackerUsers = useMemo(
@@ -321,6 +347,7 @@ function ScoresPage() {
     setUserIds(snapshot.userIds);
     setLoadingPlayers(false);
     setPlayersError(null);
+    initialLoadedCountryRef.current = selectedCountry;
     setInitialLoaded(true);
     if (snapshot.scores.length > 0) addFeedScores(selectedCountry, snapshot.scores);
     if (Object.keys(snapshot.gains).length > 0) {
@@ -369,6 +396,7 @@ function ScoresPage() {
         setTrackerPpGains(requestedCountry, liveSnapshot.gains, liveSnapshot.fetchedAt);
       }
       markFeedScoresFetched(requestedCountry);
+      initialLoadedCountryRef.current = requestedCountry;
       setInitialLoaded(true);
       setInitialRefreshDone(true);
       setInitialFetching(false);
@@ -426,7 +454,7 @@ function ScoresPage() {
         });
         if (useLiveBackendFilteredScores && scoreMatchesTrackerFilters(score, { filter, gradeFilter, keyFilter, missFilter })) {
           setLiveFilteredTotal((current) => current == null ? current : current + 1);
-          setLiveFilteredScores((current) => page === 0 ? [score, ...current].slice(0, TRACKER_PAGE_SIZE) : current);
+          setLiveFilteredScores((current) => page === 0 ? sortTrackerScores([score, ...current], trackerSort, trackerSortDirection).slice(0, TRACKER_PAGE_SIZE) : current);
         }
       }
     });
@@ -437,9 +465,10 @@ function ScoresPage() {
       }
     });
     return () => source.close();
-  }, [addFeedScores, filter, gradeFilter, keyFilter, liveBackendEnabled, missFilter, page, reconcileLiveSnapshot, selectedCountry, setTrackerPpGains, useLiveBackendFilteredScores]);
+  }, [addFeedScores, filter, gradeFilter, keyFilter, liveBackendEnabled, missFilter, page, reconcileLiveSnapshot, selectedCountry, setTrackerPpGains, trackerSort, trackerSortDirection, useLiveBackendFilteredScores]);
 
   useEffect(() => {
+    initialLoadedCountryRef.current = selectedCountry;
     setUserIds(trackedUserIds);
     setLoadingPlayers(trackedUserIds.length === 0 && !rankings);
     setPlayersError(null);
@@ -529,10 +558,11 @@ function ScoresPage() {
   }, [rankings, rankingsFetchedAt, selectedCountry, liveBackendEnabled]);
 
   useEffect(() => {
-    if (initialLoaded || feedScores.length > 0) {
+    if (feedScores.length > 0 || !!feedScoresFetchedAt || !!snapshot) {
+      initialLoadedCountryRef.current = selectedCountry;
       setInitialLoaded(true);
     }
-  }, [feedScores.length, initialLoaded]);
+  }, [feedScores.length, feedScoresFetchedAt, selectedCountry, snapshot]);
 
   useEffect(() => {
     if (liveBackendEnabled) {
@@ -549,12 +579,14 @@ function ScoresPage() {
     const shouldRefresh = feedIsStale || shouldBackfillSeededSnapshot;
 
     if (!shouldRefresh) {
+      initialLoadedCountryRef.current = selectedCountry;
       setInitialLoaded(true);
       setInitialRefreshDone(true);
       return;
     }
 
     if (feedScores.length > 0) {
+      initialLoadedCountryRef.current = selectedCountry;
       setInitialLoaded(true);
     }
 
@@ -588,6 +620,7 @@ function ScoresPage() {
           if (cancelled) return;
           if (result.scores.length > 0) addFeedScores(requestedCountry, result.scores);
           if (Object.keys(result.gains).length > 0) setTrackerPpGains(requestedCountry, result.gains);
+          initialLoadedCountryRef.current = requestedCountry;
           setInitialLoaded(true);
         } catch { /* continue */ }
       };
@@ -657,7 +690,7 @@ function ScoresPage() {
 
   useEffect(() => {
     setExpandedKey(null);
-  }, [filter, gradeFilter, keyFilter, missFilter]);
+  }, [filter, gradeFilter, keyFilter, missFilter, trackerSort, trackerSortDirection]);
 
   const ppGainByScoreId = useMemo(
     () => Object.fromEntries(
@@ -707,11 +740,12 @@ function ScoresPage() {
       ? feedScores.filter((score: LeanTrackerScore) => selectedPlayerIdSet.has(score.user_id))
       : feedScores;
 
-    return playerFiltered.filter((score: LeanTrackerScore) => {
+    const nextFiltered = playerFiltered.filter((score: LeanTrackerScore) => {
       if (hiddenUserIds.has(score.user_id)) return false;
       return scoreMatchesTrackerFilters(score, { filter, gradeFilter, keyFilter, missFilter });
     });
-  }, [feedScores, filter, gradeFilter, keyFilter, missFilter, selectedPlayerIdSet, selectedPlayerIds.length, hiddenUserIds]);
+    return sortTrackerScores(nextFiltered, trackerSort, trackerSortDirection);
+  }, [feedScores, filter, gradeFilter, keyFilter, missFilter, selectedPlayerIdSet, selectedPlayerIds.length, hiddenUserIds, trackerSort, trackerSortDirection]);
 
   const activePlayers = useMemo(() => {
     const activeCutoff = Date.now() - 40 * 60 * 1000;
@@ -781,8 +815,24 @@ function ScoresPage() {
     { id: "4k", label: "4K" },
     { id: "other", label: "≠4K" },
   ];
-  const cycleMissFilter = () => {
-    setMissFilter((current) => current === "all" ? "fc" : current === "fc" ? "fc_choke" : "all");
+  const cycleStarSort = (direction: 1 | -1 = 1) => {
+    const states: Array<{ sort: TrackerSort; direction: TrackerSortDirection }> = [
+      { sort: "recent", direction: "desc" },
+      { sort: "stars", direction: "desc" },
+      { sort: "stars", direction: "asc" },
+    ];
+    const currentIndex = states.findIndex((state) => state.sort === trackerSort && state.direction === trackerSortDirection);
+    const next = states[(currentIndex + direction + states.length) % states.length] ?? states[0];
+    setTrackerSort(next.sort);
+    setTrackerSortDirection(next.direction);
+    updateTrackerSearch({ page: 0 });
+  };
+  const cycleMissFilter = (direction: 1 | -1 = 1) => {
+    const states: MissFilter[] = ["all", "fc", "fc_choke"];
+    setMissFilter((current) => {
+      const currentIndex = states.indexOf(current);
+      return states[(currentIndex + direction + states.length) % states.length] ?? "all";
+    });
     updateTrackerSearch({ page: 0 });
   };
   useEffect(() => {
@@ -792,11 +842,16 @@ function ScoresPage() {
   const missButtonLabel = missFilter === "fc_choke" ? "Choke" : "FC";
   const mobileMissButtonLabel = missFilter === "fc_choke" ? "Ch" : "FC";
   const missButtonTitle = missFilter === "fc"
-    ? "Showing full combos (0 misses) - click for FC chokes"
+    ? "Showing full combos (0 misses) - left click for FC chokes, right click to clear"
     : missFilter === "fc_choke"
-      ? "Showing FC chokes (1 miss) - click to clear"
-      : "Click to filter by FC, then FC chokes";
-  const listKey = `${filter}:${gradeFilter}:${keyFilter}:${missFilter}`;
+      ? "Showing FC chokes (1 miss) - left click to clear, right click for FCs"
+      : "Left click for FCs, right click for FC chokes";
+  const starSortTitle = trackerSort === "stars"
+    ? trackerSortDirection === "desc"
+      ? "Sorting highest star rating first - left click for ascending, right click to clear"
+      : "Sorting lowest star rating first - left click to clear, right click for descending"
+    : "Left click for highest star rating first, right click for lowest first";
+  const listKey = `${filter}:${gradeFilter}:${keyFilter}:${missFilter}:${trackerSort}:${trackerSortDirection}`;
   const liveTrackerAvailableCount = liveTrackerTotal == null
     ? (selectedIsGlobal ? filtered.length : TRACKER_FEED_SCORE_LIMIT)
     : getLiveTrackerTotal(selectedCountry, liveTrackerTotal);
@@ -823,7 +878,7 @@ function ScoresPage() {
     && filtered.length < requiredScoreCountForPage;
   const currentLivePageSnapshotKey = `${selectedCountry}:${livePageOffset}:${expectedLivePageSize}`;
   const backendTrackerFilters = getBackendTrackerFilters({ filter, gradeFilter, keyFilter, missFilter });
-  const currentLiveFilteredSnapshotKey = `${selectedCountry}:${livePageOffset}:${expectedLivePageSize}:${filter}:${gradeFilter}:${keyFilter}:${missFilter}`;
+  const currentLiveFilteredSnapshotKey = `${selectedCountry}:${livePageOffset}:${expectedLivePageSize}:${filter}:${gradeFilter}:${keyFilter}:${missFilter}:${trackerSort}:${trackerSortDirection}`;
   const hasLivePageSnapshot = needsLivePageSnapshot
     && livePageSnapshotKey === currentLivePageSnapshotKey
     && livePageScores.length >= expectedLivePageSize;
@@ -882,12 +937,14 @@ function ScoresPage() {
       getLiveTrackerSnapshotOptions(requestedCountry, {
         offset: livePageOffset,
         filters: backendTrackerFilters,
+        sort: trackerSort,
+        sortDirection: trackerSortDirection,
       }),
     )
       .then((snapshot) => {
         if (liveFilteredRequestIdRef.current !== requestId || requestedCountry !== selectedCountryRef.current) return;
         setLiveFilteredTotal(getLiveTrackerTotal(requestedCountry, snapshot.total ?? snapshot.scores.length));
-        const passedScores = snapshot.scores.filter(isDisplayedPassed);
+        const passedScores = sortTrackerScores(snapshot.scores.filter(isDisplayedPassed), trackerSort, trackerSortDirection);
         setLiveFilteredScores(passedScores);
         setLiveFilteredSnapshotKey(requestedKey);
         if (Object.keys(snapshot.gains).length > 0) {
@@ -915,6 +972,8 @@ function ScoresPage() {
     missFilter,
     selectedCountry,
     setTrackerPpGains,
+    trackerSort,
+    trackerSortDirection,
     useLiveBackendFilteredScores,
   ]);
 
@@ -975,13 +1034,32 @@ function ScoresPage() {
     if (page !== currentPage) updateTrackerSearch({ page: currentPage });
   }, [currentPage, page, updateTrackerSearch]);
 
+  const mobileHeaderKeymodeControls = (
+    <div className="flex rounded-lg overflow-hidden border border-osu-b3/30 shrink-0 sm:hidden">
+      {keymodes.map((item) => (
+        <button
+          key={item.id}
+          onClick={() => { setKeyFilter(item.id); updateTrackerSearch({ page: 0 }); }}
+          title={item.id === "other" ? "Show non-4K scores" : "Filter by keymode"}
+          className={`px-2 py-1 text-[10px] font-semibold cursor-pointer transition-colors duration-[120ms] tabular-nums ${
+            keyFilter === item.id
+              ? "bg-osu-b3 text-osu-l2"
+              : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
+          }`}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div className="flex-1">
       <PageHeader
         iconSrc="/images/icons/news.svg"
         title={`${countryName} mania tracker`}
         right={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {import.meta.env.DEV && (
               <button
                 type="button"
@@ -1013,6 +1091,7 @@ function ScoresPage() {
                 </span>
               </>
             )}
+            {mobileHeaderKeymodeControls}
           </div>
         }
       />
@@ -1090,7 +1169,11 @@ function ScoresPage() {
             ))}
             <div className="w-px h-5 bg-osu-b3/40 mx-2" />
             <button
-              onClick={cycleMissFilter}
+              onClick={() => cycleMissFilter(1)}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                cycleMissFilter(-1);
+              }}
               title={missButtonTitle}
               className={`px-3 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] border-b-2 ${
                 missFilter === "fc"
@@ -1101,6 +1184,22 @@ function ScoresPage() {
               }`}
             >
               {missButtonLabel}
+            </button>
+            <div className="w-px h-5 bg-osu-b3/40 mx-2" />
+            <button
+              onClick={() => cycleStarSort(1)}
+              onContextMenu={(event) => {
+                event.preventDefault();
+                cycleStarSort(-1);
+              }}
+              title={starSortTitle}
+              className={`px-3 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] border-b-2 ${
+                trackerSort === "stars"
+                  ? "text-osu-c1 border-osu-h1"
+                  : "text-osu-f1 border-transparent hover:text-osu-l2"
+              }`}
+            >
+              Stars{trackerSort === "stars" ? (trackerSortDirection === "desc" ? " ↓" : " ↑") : ""}
             </button>
           </div>
           {/* Mobile: compact single row */}
@@ -1129,7 +1228,11 @@ function ScoresPage() {
                   </button>
                 ))}
                 <button
-                  onClick={cycleMissFilter}
+                  onClick={() => cycleMissFilter(1)}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    cycleMissFilter(-1);
+                  }}
                   title={missButtonTitle}
                   className={`w-8 py-1.5 text-[11px] font-medium cursor-pointer transition-colors duration-[120ms] ${
                     missFilter === "fc"
@@ -1163,21 +1266,21 @@ function ScoresPage() {
                   </button>
                 ))}
               </div>
-              <div className="flex rounded-lg overflow-hidden border border-osu-b3/30 flex-shrink-0">
-                {keymodes.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => { setKeyFilter(item.id); updateTrackerSearch({ page: 0 }); }}
-                    className={`px-1.5 py-1.5 text-[11px] font-medium cursor-pointer transition-colors duration-[120ms] tabular-nums ${
-                      keyFilter === item.id
-                        ? "bg-osu-b3 text-osu-l2"
-                        : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
-                    }`}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
+              <button
+                onClick={() => cycleStarSort(1)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  cycleStarSort(-1);
+                }}
+                title={starSortTitle}
+                className={`flex-shrink-0 rounded-lg border border-osu-b3/30 px-2 py-1.5 text-[11px] font-medium cursor-pointer transition-colors duration-[120ms] ${
+                  trackerSort === "stars"
+                    ? "bg-osu-b3 text-osu-l2"
+                    : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
+                }`}
+              >
+                Stars{trackerSort === "stars" ? (trackerSortDirection === "desc" ? " ↓" : " ↑") : ""}
+              </button>
             </div>
           </div>
         </div>
@@ -1259,7 +1362,7 @@ function ScoresPage() {
               <div className="text-center py-16 text-osu-f1 text-sm">
                 {playersError}
               </div>
-            ) : loadingPlayers || (!initialLoaded && feedScores.length === 0) || showingLivePageSkeletons ? (
+            ) : loadingPlayers || (!initialLoadedForSelectedCountry && feedScores.length === 0) || showingLivePageSkeletons ? (
               <>
                 <div className="space-y-2">
                   {Array.from({ length: 6 }).map((_, i) => (
