@@ -1,5 +1,5 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   getUser,
@@ -74,9 +74,86 @@ const TUNG_TUNG_SAHUR_GLOW_COLORS = ["#38d9ff", "#ff3f57", "#8bff3f", "#b45cff",
 const TUNG_TUNG_SAHUR_BASE_REST = { y: 0, scaleY: 1 };
 const TUNG_TUNG_SAHUR_TOP_REST = { x: -3.25, y: 4, scaleY: 1, filter: "brightness(1)" };
 const TUNG_TUNG_SAHUR_ACTUATION_MS = 49;
-type PlayerTab = "best" | "recent" | "card" | "about";
+export type PlayerTab = "best" | "recent" | "card" | "about" | "activity";
+type ActivityDay = {
+  date: string;
+  scoreCount: number;
+  sessionCount: number;
+  level: 0 | 1 | 2 | 3 | 4;
+  maps: ActivityPlayedMap[];
+};
 
-type PlayerLoaderData = {
+type ActivityPlayedMap = {
+  key: string;
+  title: string;
+  artist: string;
+  version: string;
+  coverUrl: string | null;
+  plays: number;
+  accuracy: number | null;
+  pp: number | null;
+  keyCount: number | null;
+};
+
+type ActivityWeek = {
+  key: string;
+  days: (ActivityDay | null)[];
+};
+
+type ActivitySummary = {
+  days: ActivityDay[];
+  weeks: ActivityWeek[];
+  totalScores: number;
+  activeDays: number;
+  currentStreak: number;
+  typicalSession: number;
+};
+
+const SHOW_ACTIVITY_TAB = import.meta.env.VITE_DEV_MODE === "1";
+const PLAYER_TABS: PlayerTab[] = ["best", "recent", "about", "card", "activity"];
+const ENABLED_PLAYER_TABS = SHOW_ACTIVITY_TAB
+  ? PLAYER_TABS
+  : PLAYER_TABS.filter((tab) => tab !== "activity");
+const ACTIVITY_EMPTY_CELL_CLASS = "bg-osu-b4/45 border-osu-b3/25";
+
+function isPlayerTabEnabled(tab: PlayerTab): boolean {
+  return tab !== "activity" || SHOW_ACTIVITY_TAB;
+}
+
+function normalizePlayerTab(tab: PlayerTab): PlayerTab {
+  return isPlayerTabEnabled(tab) ? tab : "best";
+}
+
+function getPlayerTabLabel(tab: PlayerTab): string {
+  if (tab === "best") return "Best Performance";
+  if (tab === "recent") return "Recent Plays";
+  if (tab === "card") return "Maniacard";
+  if (tab === "activity") return "Activity";
+  return "About";
+}
+
+function getPlayerTabSlug(tab: PlayerTab): string | null {
+  if (tab === "best") return null;
+  if (tab === "card") return "maniacard";
+  return tab;
+}
+
+function getPlayerTabPath(username: string, tab: PlayerTab): string {
+  const encodedUsername = encodeURIComponent(username);
+  const slug = getPlayerTabSlug(normalizePlayerTab(tab));
+  return slug ? `/player/${encodedUsername}/${slug}` : `/player/${encodedUsername}`;
+}
+
+function getPlayerTabFromPathname(pathname: string): PlayerTab {
+  const tabSlug = pathname.split("/").filter(Boolean)[2];
+  if (tabSlug === "recent") return "recent";
+  if (tabSlug === "about") return "about";
+  if (tabSlug === "maniacard") return "card";
+  if (tabSlug === "activity") return normalizePlayerTab("activity");
+  return "best";
+}
+
+export type PlayerLoaderData = {
   cachedSnapshot: LivePlayerProfileSnapshot | null;
 };
 
@@ -93,35 +170,53 @@ function withProfileLoaderBudget<T>(promise: Promise<T>, timeoutMs: number): Pro
   ]);
 }
 
+export async function loadPlayerRouteData(username: string): Promise<PlayerLoaderData> {
+  try {
+    return {
+      cachedSnapshot: await withProfileLoaderBudget(
+        fetchLivePlayerCachedProfileSnapshot({ data: { key: username } }),
+        PROFILE_CACHED_SNAPSHOT_LOADER_TIMEOUT_MS,
+      ),
+    };
+  } catch {
+    return { cachedSnapshot: null };
+  }
+}
+
+export function buildPlayerRouteHead({
+  username,
+  origin,
+  tab,
+}: {
+  username: string;
+  origin: string;
+  tab?: PlayerTab;
+}) {
+  const normalizedTab = normalizePlayerTab(tab ?? "best");
+  const suffix = normalizedTab !== "best" ? ` ${getPlayerTabLabel(normalizedTab)}` : "";
+  const path = getPlayerTabPath(username, normalizedTab);
+  return pageSeo({
+    title: `${username}${suffix}`,
+    description: `${username}'s osu!mania stats.`,
+    path,
+    origin,
+    image: playerOgImagePath(username),
+    type: "profile",
+  });
+}
+
 export const Route = createFileRoute("/player/$username")({
-  loader: async ({ params }): Promise<PlayerLoaderData> => {
-    try {
-      return {
-        cachedSnapshot: await withProfileLoaderBudget(
-          fetchLivePlayerCachedProfileSnapshot({ data: { key: params.username } }),
-          PROFILE_CACHED_SNAPSHOT_LOADER_TIMEOUT_MS,
-        ),
-      };
-    } catch {
-      return { cachedSnapshot: null };
-    }
-  },
+  loader: async ({ params }) => loadPlayerRouteData(params.username),
   head: ({ params, match }) =>
-    pageSeo({
-      title: `${params.username}`,
-      description: `${params.username}'s osu!mania stats.`,
-      path: `/player/${encodeURIComponent(params.username)}`,
-      origin: match.context.origin,
-      image: playerOgImagePath(params.username),
-      type: "profile",
-    }),
-  component: PlayerPage,
+    buildPlayerRouteHead({ username: params.username, origin: match.context.origin }),
+  component: PlayerDefaultRoute,
 });
 
 type KeyFilter = "all" | string;
 export type ModFilterMode = "include" | "exclude";
 type ModFilterState = Record<string, ModFilterMode>;
 type BestSort = "pp" | "newest" | "oldest";
+type BestAgeSort = Exclude<BestSort, "pp">;
 
 // Synthetic chip used to filter for scores submitted without any mods.
 const NO_MOD_KEY = "NM";
@@ -308,6 +403,35 @@ function dedupeScores(scores: OsuScore[]): OsuScore[] {
   }
 
   return unique;
+}
+
+function getScoreListSignature(scores: OsuScore[]): string {
+  return scores
+    .map((score) => [
+      getScoreIdentity(score),
+      score.pp ?? "",
+      score.accuracy ?? "",
+      getScoreTimeMs(score),
+    ].join(":"))
+    .join("|");
+}
+
+function scoreListsAreEquivalent(a: OsuScore[], b: OsuScore[]): boolean {
+  return a.length === b.length && getScoreListSignature(a) === getScoreListSignature(b);
+}
+
+function profileUsersAreEquivalent(a: OsuUser | null, b: OsuUser): boolean {
+  if (!a) return false;
+  return (
+    a.id === b.id &&
+    a.username === b.username &&
+    a.avatar_url === b.avatar_url &&
+    a.country_code === b.country_code &&
+    a.statistics?.pp === b.statistics?.pp &&
+    a.statistics?.play_count === b.statistics?.play_count &&
+    a.statistics?.global_rank === b.statistics?.global_rank &&
+    a.statistics?.country_rank === b.statistics?.country_rank
+  );
 }
 
 function loadUserCached(username: string): Promise<OsuUser> {
@@ -514,9 +638,23 @@ function loadUserBestWindowCached(userId: number): Promise<OsuScore[]> {
   return request;
 }
 
-function PlayerPage() {
+function PlayerDefaultRoute() {
   const { username } = Route.useParams();
   const loaderData = Route.useLoaderData();
+  const location = useLocation();
+  return <PlayerProfilePage username={username} loaderData={loaderData} initialTab={getPlayerTabFromPathname(location.pathname)} />;
+}
+
+export function PlayerProfilePage({
+  username,
+  loaderData,
+  initialTab,
+}: {
+  username: string;
+  loaderData: PlayerLoaderData;
+  initialTab: PlayerTab;
+}) {
+  const navigate = useNavigate();
   const loaderSnapshot = loaderData?.cachedSnapshot ?? null;
   const loaderBestScores = useMemo(
     () => loaderSnapshot ? dedupeScores(loaderSnapshot.bestScores) : [],
@@ -538,10 +676,11 @@ function PlayerPage() {
   const [recentError, setRecentError] = useState<string | null>(null);
   const [aboutError, setAboutError] = useState<string | null>(null);
   const [insightsError, setInsightsError] = useState<string | null>(null);
-  const [tab, setTab] = useState<PlayerTab>("best");
+  const [tab, setTab] = useState<PlayerTab>(() => normalizePlayerTab(initialTab));
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
   const [bestModFilter, setBestModFilter] = useState<ModFilterState>({});
   const [bestSort, setBestSort] = useState<BestSort>("pp");
+  const [bestAgeSort, setBestAgeSort] = useState<BestAgeSort>("newest");
   const [bestWindowLoaded, setBestWindowLoaded] = useState(() => loaderBestScores.length > 0);
   const [waitingForSnapshotBest, setWaitingForSnapshotBest] = useState(() => loaderBestScores.length === 0);
   const [avatarOpen, setAvatarOpen] = useState(false);
@@ -552,6 +691,7 @@ function PlayerPage() {
   const [recentHasMore, setRecentHasMore] = useState(false);
   const [bestVisibleCount, setBestVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const [recentVisibleCount, setRecentVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
+  const tabsRailRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!avatarOpen && !modModalOpen && !bpmModalOpen) return;
@@ -567,6 +707,11 @@ function PlayerPage() {
   }, [avatarOpen, modModalOpen, bpmModalOpen]);
 
   useEffect(() => {
+    const activeTab = tabsRailRef.current?.querySelector<HTMLButtonElement>(`[data-player-tab="${tab}"]`);
+    activeTab?.scrollIntoView({ block: "nearest", inline: "center" });
+  }, [tab]);
+
+  useEffect(() => {
     let cancelled = false;
     let snapshotTimer: number | null = null;
     const hasLoaderBestScores = loaderBestScores.length > 0;
@@ -577,10 +722,11 @@ function PlayerPage() {
     setRecent([]);
     setAboutHtml(null);
     setProfileInsights(hasLoaderBestScores ? calculateUserProfileInsights(loaderBestScores) : null);
-    setTab("best");
+    setTab(normalizePlayerTab(initialTab));
     setKeyFilter("all");
     setBestModFilter({});
     setBestSort("pp");
+    setBestAgeSort("newest");
     setBestWindowLoaded(hasLoaderBestScores);
     setWaitingForSnapshotBest(!hasLoaderBestScores);
     setUserError(null);
@@ -614,13 +760,13 @@ function PlayerPage() {
     const applySnapshot = (result: { user: OsuUser; bestScores: OsuScore[] } | null) => {
       if (cancelled || !result) return;
       snapshotApplied = true;
-      setUser(result.user);
+      setUser((current) => profileUsersAreEquivalent(current, result.user) ? current : result.user);
       setUserError(null);
       setLoadingUser(false);
       setWaitingForSnapshotBest(false);
       if (result.bestScores.length > 0) {
         const dedupedScores = dedupeScores(result.bestScores);
-        setBest(dedupedScores);
+        setBest((current) => scoreListsAreEquivalent(current, dedupedScores) ? current : dedupedScores);
         setBestWindowLoaded(true);
         setBestError(null);
         setProfileInsights(calculateUserProfileInsights(dedupedScores));
@@ -678,7 +824,7 @@ function PlayerPage() {
       cancelled = true;
       if (snapshotTimer) window.clearTimeout(snapshotTimer);
     };
-  }, [loaderBestScores, loaderSnapshot, username]);
+  }, [initialTab, loaderBestScores, loaderSnapshot, username]);
 
   useEffect(() => {
     if (!user || bestWindowLoaded || waitingForSnapshotBest) return;
@@ -696,7 +842,7 @@ function PlayerPage() {
         .then((windowScores) => {
           if (cancelled) return;
           const dedupedScores = dedupeScores(windowScores);
-          setBest(dedupedScores);
+          setBest((current) => scoreListsAreEquivalent(current, dedupedScores) ? current : dedupedScores);
           setBestWindowLoaded(true);
           setBestError(null);
           setProfileInsights(calculateUserProfileInsights(dedupedScores));
@@ -850,8 +996,19 @@ function PlayerPage() {
     });
   }, []);
 
+  const handleTabChange = useCallback((nextTab: PlayerTab) => {
+    const normalizedTab = normalizePlayerTab(nextTab);
+    setTab(normalizedTab);
+    void navigate({ to: getPlayerTabPath(username, normalizedTab), resetScroll: false });
+  }, [navigate, username]);
+
+  const handleBestSortChange = useCallback((nextSort: BestSort) => {
+    setBestSort(nextSort);
+    if (nextSort !== "pp") setBestAgeSort(nextSort);
+  }, []);
+
   if (loadingUser && !user) {
-    return <PlayerPageSkeleton tab={tab} onTabChange={setTab} />;
+    return <PlayerPageSkeleton tab={tab} onTabChange={handleTabChange} />;
   }
 
   if (userError || !user) {
@@ -1440,49 +1597,58 @@ function PlayerPage() {
           </div>
 
           {/* Player tabs */}
-          <div className="mt-5 pt-1 border-t border-osu-b3/30 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex">
-              {((["best", "recent", "about", "card"]) as PlayerTab[]).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTab(t)}
-                  className={`px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] capitalize ${tab === t
-                      ? "text-osu-c1 border-b-2 border-osu-h1"
-                      : "text-osu-f1 hover:text-osu-l2"
-                    }`}
-                >
-                  {t === "best" ? "Best Performance" : t === "recent" ? "Recent Plays" : t === "card" ? "Maniacard" : "About"}
-                </button>
-              ))}
-            </div>
-            {tab !== "about" && tab !== "card" && availableKeyModes.length > 1 && (
-              <div className="flex items-center gap-1 rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-1">
-                {[["all", "All"] as const, ...availableKeyModes.map((k) => [k, k.toUpperCase()] as const)].map(([value, label]) => (
+          <div className="mt-5 pt-1 border-t border-osu-b3/30 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div ref={tabsRailRef} className="-mx-5 overflow-x-auto px-5 scrollbar-hide sm:mx-0 sm:px-0">
+              <div className="flex min-w-max">
+                {ENABLED_PLAYER_TABS.map((t) => (
                   <button
-                    key={value}
-                    onClick={() => setKeyFilter(value)}
-                    className={`px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${keyFilter === value
-                        ? "bg-osu-pink/15 text-osu-pink-light"
-                        : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
+                    key={t}
+                    data-player-tab={t}
+                    onClick={() => handleTabChange(t)}
+                    className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] capitalize ${tab === t
+                        ? "text-osu-c1 border-b-2 border-osu-h1"
+                        : "text-osu-f1 hover:text-osu-l2"
                       }`}
                   >
-                    {label}
+                    {getPlayerTabLabel(t)}
                   </button>
                 ))}
+              </div>
+            </div>
+            {(tab === "best" || tab === "recent") && availableKeyModes.length > 1 && (
+              <div className="hidden lg:block">
+                <KeyModeControl
+                  availableKeyModes={availableKeyModes}
+                  keyFilter={keyFilter}
+                  onChangeKeyFilter={setKeyFilter}
+                />
               </div>
             )}
           </div>
 
           {tab === "best" && bestWindowLoaded && best.length > 0 && (
             <BestScoresControlBar
+              availableKeyModes={availableKeyModes}
+              keyFilter={keyFilter}
+              onChangeKeyFilter={setKeyFilter}
               mods={relevantBestMods}
               modFilter={bestModFilter}
               onCycleMod={cycleBestMod}
               onReverseCycleMod={reverseCycleBestMod}
               onClearMods={() => setBestModFilter({})}
               sort={bestSort}
-              onChangeSort={setBestSort}
+              ageSort={bestAgeSort}
+              onChangeSort={handleBestSortChange}
             />
+          )}
+          {tab === "recent" && availableKeyModes.length > 1 && (
+            <div className="mt-3 lg:hidden">
+              <KeyModeControl
+                availableKeyModes={availableKeyModes}
+                keyFilter={keyFilter}
+                onChangeKeyFilter={setKeyFilter}
+              />
+            </div>
           )}
         </div>
       </div>
@@ -1527,6 +1693,16 @@ function PlayerPage() {
                   loading={!bestWindowLoaded}
                 />
               </motion.div>
+            ) : tab === "activity" ? (
+              <motion.div
+                key="activity"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -4 }}
+                transition={{ duration: 0.14 }}
+              >
+                <PlayerActivityPanel user={user} scores={best} />
+              </motion.div>
             ) : (
               <motion.div
                 key={scoreListState}
@@ -1559,7 +1735,7 @@ function PlayerPage() {
             )}
           </AnimatePresence>
 
-          {tab !== "about" && tab !== "card" && !loadingScores && !scoresError && canShowMore && (
+          {tab !== "about" && tab !== "card" && tab !== "activity" && !loadingScores && !scoresError && canShowMore && (
             <div className="pt-3 flex justify-center">
               <button
                 type="button"
@@ -1812,19 +1988,21 @@ function PlayerPageSkeleton({
         </div>
 
         <div className="mt-5 pt-1 border-t border-osu-b3/30">
-          <div className="flex flex-wrap">
-            {((["best", "recent", "card"]) as PlayerTab[]).map((t) => (
-              <button
-                key={t}
-                onClick={() => onTabChange(t)}
-                className={`px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] capitalize ${tab === t
-                    ? "text-osu-c1 border-b-2 border-osu-h1"
-                    : "text-osu-f1 hover:text-osu-l2"
-                  }`}
-              >
-                {t === "best" ? "Best Performance" : t === "recent" ? "Recent Plays" : "Maniacard"}
-              </button>
-            ))}
+          <div className="-mx-5 overflow-x-auto px-5 scrollbar-hide sm:mx-0 sm:px-0">
+            <div className="flex min-w-max">
+              {ENABLED_PLAYER_TABS.map((t) => (
+                <button
+                  key={t}
+                  onClick={() => onTabChange(t)}
+                  className={`shrink-0 whitespace-nowrap px-4 py-2.5 text-[12px] font-medium cursor-pointer transition-colors duration-[120ms] capitalize ${tab === t
+                      ? "text-osu-c1 border-b-2 border-osu-h1"
+                      : "text-osu-f1 hover:text-osu-l2"
+                    }`}
+                >
+                  {getPlayerTabLabel(t)}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -1836,6 +2014,557 @@ function PlayerPageSkeleton({
       </div>
     </div>
   );
+}
+
+function PlayerActivityPanel({ user, scores }: { user: OsuUser; scores: OsuScore[] }) {
+  const currentYear = new Date().getFullYear();
+  const yearOptions = useMemo(() => Array.from({ length: 5 }, (_, index) => currentYear - index), [currentYear]);
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedDay, setSelectedDay] = useState<ActivityDay | null>(null);
+  const activity = useMemo(() => buildMockActivity(user, selectedYear, scores), [selectedYear, user, scores]);
+  const averageActiveDay = activity.activeDays > 0 ? Math.round(activity.totalScores / activity.activeDays) : 0;
+  const selectedDayDate = selectedDay?.date;
+  const activityGridStyle = useMemo(
+    () => ({ "--activity-weeks": String(activity.weeks.length) }) as CSSProperties,
+    [activity.weeks.length],
+  );
+
+  useEffect(() => {
+    if (!selectedDayDate) return;
+    setSelectedDay(activity.days.find((day) => day.date === selectedDayDate) ?? null);
+  }, [activity, selectedDayDate]);
+
+  return (
+    <>
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_130px]">
+        <section className="min-w-0 px-1 py-2 sm:px-0">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <h2 className="text-xl font-semibold text-white">
+                {formatNumber(activity.totalScores)} plays in {selectedYear}
+              </h2>
+            </div>
+            <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+              <ActivityInlineMetric label="Avg active day" value={formatNumber(averageActiveDay)} detail="plays" />
+              <ActivityInlineMetric label="Streak" value={`${activity.currentStreak}d`} detail="now" />
+            </div>
+          </div>
+
+          <div className="mt-6 sm:mt-7">
+            <div className="flex gap-2">
+              <div className="grid w-8 shrink-0 grid-rows-7 gap-1 pt-5 text-[10px] text-osu-f1">
+                <span />
+                <span className="flex items-center">Mon</span>
+                <span />
+                <span className="flex items-center">Wed</span>
+                <span />
+                <span className="flex items-center">Fri</span>
+                <span />
+              </div>
+              <div className="min-w-0 max-w-full flex-1 overflow-x-auto pb-2 scrollbar-hide sm:overflow-visible sm:pb-0">
+                <div className="w-max sm:w-full">
+                  <ActivityMonthLabels weeks={activity.weeks} gridStyle={activityGridStyle} />
+                  <div
+                    className="activity-heatmap-grid mt-2 grid gap-1"
+                    style={activityGridStyle}
+                  >
+                    {activity.weeks.map((week) => (
+                      <div key={week.key} className="grid min-w-0 grid-rows-7 gap-1">
+                        {week.days.map((day, index) => (
+                          day ? (
+                            day.scoreCount > 0 ? (
+                              <button
+                                key={day.date}
+                                type="button"
+                                title={`${formatFullActivityDate(day.date)}: ${day.scoreCount} plays, ${day.sessionCount} sessions`}
+                                onClick={() => setSelectedDay(day)}
+                                className="aspect-square w-full min-w-0 rounded-[3px] border transition-transform hover:scale-125 hover:ring-2 hover:ring-osu-pink/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-osu-pink/90"
+                                style={getActivityCellStyle(day, activity.typicalSession)}
+                              />
+                            ) : (
+                              <span
+                                key={day.date}
+                                title={`${formatFullActivityDate(day.date)}: no tracked plays`}
+                                className={`aspect-square w-full min-w-0 rounded-[3px] border ${ACTIVITY_EMPTY_CELL_CLASS}`}
+                              />
+                            )
+                          ) : (
+                            <span key={`empty-${index}`} className="aspect-square w-full min-w-0" />
+                          )
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+            <span className="text-[11px] text-osu-f1">
+              Typical session <span className="font-semibold text-osu-l2">{activity.typicalSession} plays</span>
+            </span>
+          </div>
+        </section>
+
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide lg:block lg:space-y-2 lg:overflow-visible">
+          {yearOptions.map((year) => (
+            <button
+              key={year}
+              type="button"
+              onClick={() => {
+                setSelectedYear(year);
+                setSelectedDay(null);
+              }}
+              className={`min-w-24 rounded-lg px-4 py-2 text-left text-sm font-semibold transition-colors lg:w-full ${selectedYear === year
+                  ? "bg-osu-pink text-white"
+                  : "bg-osu-b4/60 text-osu-f1 hover:bg-osu-b3/55 hover:text-osu-l2"
+                }`}
+            >
+              {year}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {selectedDay && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
+            onClick={() => setSelectedDay(null)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.14 }}
+          >
+            <motion.div
+              className="max-h-[calc(100vh-2rem)] w-full max-w-xl overflow-y-auto rounded-xl border border-osu-b3/25 bg-osu-b4 p-5 shadow-[0_18px_70px_rgba(0,0,0,0.55)]"
+              onClick={(event) => event.stopPropagation()}
+              initial={{ opacity: 0, y: 10, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 8, scale: 0.97 }}
+              transition={{ duration: 0.16 }}
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-wide text-osu-pink-light">Activity day</div>
+                  <h3 className="mt-1 text-2xl font-black text-white">{formatFullActivityDate(selectedDay.date)}</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDay(null)}
+                  aria-label="Close activity details"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-osu-f1 hover:bg-osu-b3/50 hover:text-white"
+                >
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <path d="M1 1l12 12M13 1L1 13" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="mt-5 grid grid-cols-2 gap-2">
+                <ActivityDetailMetric label="Plays" value={formatNumber(selectedDay.scoreCount)} />
+                <ActivityDetailMetric label="Sessions" value={formatNumber(selectedDay.sessionCount)} />
+              </div>
+
+              <div className="mt-5 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs font-bold uppercase text-osu-f1">Maps played</div>
+                  <div className="text-[11px] text-osu-f1">{selectedDay.maps.length} shown</div>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {selectedDay.maps.map((map) => (
+                    <ActivityMapRow key={map.key} map={map} />
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-4">
+                <div className="text-xs font-bold uppercase text-osu-f1">Skill readout</div>
+                <div className="mt-3 space-y-2">
+                  {["stream", "jack", "ln"].map((pattern, index) => {
+                    const value = selectedDay.scoreCount > 0
+                      ? clampInt(34 + selectedDay.level * 13 + ((parseLocalDateKey(selectedDay.date).getDate() + index * 11) % 18), 0, 100)
+                      : 0;
+                    return (
+                      <div key={pattern}>
+                        <div className="mb-1 flex justify-between text-[11px]">
+                          <span className="font-semibold capitalize text-osu-l2">{pattern}</span>
+                          <span className="text-osu-f1">{value}%</span>
+                        </div>
+                        <div className="h-1.5 rounded-full bg-osu-b3/35">
+                          <div className="h-full rounded-full bg-osu-pink/80" style={{ width: `${value}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
+function ActivityDetailMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-osu-b3/20 bg-osu-b5/45 px-3 py-2">
+      <div className="text-[10px] font-bold uppercase text-osu-f1">{label}</div>
+      <div className="mt-1 text-xl font-black text-white">{value}</div>
+    </div>
+  );
+}
+
+function ActivityMapRow({ map }: { map: ActivityPlayedMap }) {
+  return (
+    <div className="grid grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-osu-b4/70 p-2">
+      {map.coverUrl ? (
+        <img
+          src={map.coverUrl}
+          alt=""
+          className="h-9 w-12 rounded object-cover"
+          loading="lazy"
+        />
+      ) : (
+        <div className="flex h-9 w-12 items-center justify-center rounded bg-osu-b3/60 text-xs font-black text-osu-l2">
+          {map.title.slice(0, 1).toUpperCase()}
+        </div>
+      )}
+      <div className="min-w-0">
+        <div className="truncate text-sm font-bold text-white">{map.title}</div>
+        <div className="truncate text-[11px] text-osu-f1">
+          {map.artist} [{map.version}]
+        </div>
+        <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-osu-f1">
+          {map.keyCount ? <span>{map.keyCount}K</span> : null}
+          {map.accuracy != null ? <span>{formatAccuracy(map.accuracy)}</span> : null}
+          {map.pp != null ? <span>{formatPP(map.pp)}</span> : null}
+        </div>
+      </div>
+      <div className="text-right">
+        <div className="text-sm font-black text-osu-l2">{formatNumber(map.plays)}</div>
+        <div className="text-[10px] text-osu-f1">{map.plays === 1 ? "play" : "plays"}</div>
+      </div>
+    </div>
+  );
+}
+
+function ActivityInlineMetric({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="min-w-20 border-l border-osu-b3/30 pl-4 first:border-l-0 first:pl-0">
+      <div className="text-[10px] font-bold uppercase text-osu-f1">{label}</div>
+      <div className="text-lg font-black leading-tight text-white">{value}</div>
+      <div className="text-[10px] text-osu-f1">{detail}</div>
+    </div>
+  );
+}
+
+function ActivityMonthLabels({ weeks, gridStyle }: { weeks: ActivityWeek[]; gridStyle: CSSProperties }) {
+  let lastMonth = "";
+  return (
+    <div
+      className="activity-heatmap-grid grid gap-1 text-[10px] text-osu-f1"
+      style={gridStyle}
+    >
+      {weeks.map((week) => {
+        const firstDay = week.days.find((day): day is ActivityDay => day != null);
+        const month = firstDay ? formatActivityMonth(firstDay.date) : "";
+        const label = month && month !== lastMonth ? month : "";
+        if (month) lastMonth = month;
+        return (
+          <span key={week.key} className="min-w-0 whitespace-nowrap">
+            {label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+const FALLBACK_ACTIVITY_MAP_POOL: Omit<ActivityPlayedMap, "plays">[] = [
+  {
+    key: "fallback:oopparts",
+    title: "OOPARTS",
+    artist: "Camellia",
+    version: "[7K] One Last Breath",
+    coverUrl: null,
+    accuracy: 0.9636,
+    pp: 919,
+    keyCount: 7,
+  },
+  {
+    key: "fallback:buzz-cutz",
+    title: "BUZZ CUTZ",
+    artist: "TWC Sound Team",
+    version: "Strike Back Squad",
+    coverUrl: null,
+    accuracy: 0.9656,
+    pp: 894,
+    keyCount: 7,
+  },
+  {
+    key: "fallback:duplicity-shade",
+    title: "Duplicity Shade",
+    artist: "Hyun feat. Sennzai",
+    version: "Metamorphosis",
+    coverUrl: null,
+    accuracy: 0.9585,
+    pp: 870,
+    keyCount: 7,
+  },
+  {
+    key: "fallback:hyouryuu",
+    title: "Hyouryuu Hyourei",
+    artist: "Kou!",
+    version: "[4K] Collider Zero",
+    coverUrl: null,
+    accuracy: 0.9712,
+    pp: 525,
+    keyCount: 4,
+  },
+  {
+    key: "fallback:light-it-up",
+    title: "Light It Up",
+    artist: "Camellia",
+    version: "[4K] Lightning",
+    coverUrl: null,
+    accuracy: 0.9569,
+    pp: 461,
+    keyCount: 4,
+  },
+  {
+    key: "fallback:dehumanise",
+    title: "Dehumanise 2007",
+    artist: "Arkitech",
+    version: "Metaphorical Self-Reference",
+    coverUrl: null,
+    accuracy: 0.9342,
+    pp: 807,
+    keyCount: 7,
+  },
+];
+
+function buildMockActivity(user: OsuUser, year: number, scores: OsuScore[]): ActivitySummary {
+  const today = startOfLocalDay(new Date());
+  const start = new Date(year, 0, 1);
+  const end = new Date(year, 11, 31);
+  const seed = createSeededRandom(((Number(user.id) || 1) * 2654435761 + year * 97) >>> 0);
+  const mapPool = buildActivityMapPool(scores);
+  const playCount = Math.max(0, Number(user.statistics?.play_count ?? 0));
+  const typicalSession = clampInt(Math.round(Math.sqrt(Math.max(playCount, 400)) / 4), 6, 34);
+  const days: ActivityDay[] = [];
+
+  for (let date = startOfLocalDay(start), index = 0; date <= end; date = addLocalDays(date, 1), index++) {
+    const dayOfWeek = date.getDay();
+    const isFuture = date.getTime() > today.getTime();
+    const wave = (Math.sin((index + (Number(user.id) % 23)) / 7) + 1) / 2;
+    const weekendBoost = dayOfWeek === 0 || dayOfWeek === 6 ? 0.08 : 0;
+    const activeChance = 0.22 + wave * 0.32 + weekendBoost;
+    let scoreCount = 0;
+    let sessionCount = 0;
+
+    if (!isFuture && seed() < activeChance) {
+      sessionCount = 1 + (seed() > 0.82 ? 1 : 0) + (seed() > 0.94 ? 1 : 0);
+      const burst = seed() > 0.9 ? 1.45 + seed() * 1.15 : 0;
+      scoreCount = Math.max(1, Math.round((0.35 + seed() * 1.45 + burst) * typicalSession * sessionCount));
+    }
+
+    days.push({
+      date: toDateKey(date),
+      scoreCount,
+      sessionCount,
+      level: getActivityLevel(scoreCount, typicalSession),
+      maps: buildMockActivityMapPlays(
+        scoreCount,
+        mapPool,
+        createSeededRandom((((Number(user.id) || 1) * 2246822519) ^ (year * 3266489917) ^ (index * 668265263)) >>> 0),
+      ),
+    });
+  }
+
+  const weeks = buildActivityWeeks(days);
+  const activeDays = days.filter((day) => day.scoreCount > 0).length;
+  const totalScores = days.reduce((sum, day) => sum + day.scoreCount, 0);
+  let currentStreak = 0;
+  let lastPastIndex = days.length - 1;
+  while (lastPastIndex >= 0 && parseLocalDateKey(days[lastPastIndex].date).getTime() > today.getTime()) {
+    lastPastIndex--;
+  }
+  for (let index = lastPastIndex; index >= 0; index--) {
+    if (days[index].scoreCount === 0) break;
+    currentStreak++;
+  }
+
+  return {
+    days,
+    weeks,
+    totalScores,
+    activeDays,
+    currentStreak,
+    typicalSession,
+  };
+}
+
+function buildActivityMapPool(scores: OsuScore[]): Omit<ActivityPlayedMap, "plays">[] {
+  const seen = new Set<string>();
+  const pool: Omit<ActivityPlayedMap, "plays">[] = [];
+
+  for (const score of scores) {
+    const beatmapset = score.beatmapset;
+    const beatmap = score.beatmap;
+    if (!beatmapset || !beatmap) continue;
+
+    const key = `${beatmapset.id}:${beatmap.id ?? beatmap.version}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    pool.push({
+      key,
+      title: beatmapset.title || "Unknown",
+      artist: beatmapset.artist || "Unknown artist",
+      version: beatmap.version || "Unknown",
+      coverUrl: beatmapset.covers?.list
+        ?? beatmapset.covers?.cover
+        ?? (beatmapset.id ? `/api/background?beatmapsetId=${beatmapset.id}` : null),
+      accuracy: Number.isFinite(score.accuracy) ? score.accuracy : null,
+      pp: score.pp ?? null,
+      keyCount: getBeatmapKeyCount(beatmap),
+    });
+
+    if (pool.length >= 40) break;
+  }
+
+  return pool.length > 0 ? pool : FALLBACK_ACTIVITY_MAP_POOL;
+}
+
+function buildMockActivityMapPlays(
+  scoreCount: number,
+  pool: Omit<ActivityPlayedMap, "plays">[],
+  seed: () => number,
+): ActivityPlayedMap[] {
+  if (scoreCount <= 0) return [];
+
+  const mapCount = clampInt(Math.round(1 + Math.sqrt(scoreCount) / 2 + seed() * 1.4), 1, Math.min(6, pool.length, scoreCount));
+  const startIndex = Math.floor(seed() * pool.length);
+  const maps: ActivityPlayedMap[] = [];
+  let remaining = scoreCount;
+
+  for (let index = 0; index < mapCount; index++) {
+    const source = pool[(startIndex + index) % pool.length]!;
+    const slotsLeft = mapCount - index;
+    const plays = slotsLeft === 1
+      ? remaining
+      : clampInt(
+        Math.round((scoreCount / mapCount) * (0.55 + seed() * 0.9)),
+        1,
+        remaining - (slotsLeft - 1),
+      );
+
+    maps.push({
+      ...source,
+      key: `${source.key}:${index}`,
+      plays,
+    });
+    remaining -= plays;
+  }
+
+  return maps.sort((a, b) => b.plays - a.plays || a.title.localeCompare(b.title));
+}
+
+function buildActivityWeeks(days: ActivityDay[]): ActivityWeek[] {
+  const weeks: ActivityWeek[] = [];
+  let current: (ActivityDay | null)[] = [];
+
+  const leadingBlanks = days[0] ? parseLocalDateKey(days[0].date).getDay() : 0;
+  for (let index = 0; index < leadingBlanks; index++) current.push(null);
+
+  for (const day of days) {
+    current.push(day);
+    if (current.length === 7) {
+      weeks.push({ key: day.date, days: current });
+      current = [];
+    }
+  }
+
+  if (current.length > 0) {
+    const key = current.find((day): day is ActivityDay => day != null)?.date ?? `week-${weeks.length}`;
+    while (current.length < 7) current.push(null);
+    weeks.push({ key, days: current });
+  }
+
+  return weeks;
+}
+
+function getActivityLevel(scoreCount: number, typicalSession: number): 0 | 1 | 2 | 3 | 4 {
+  if (scoreCount <= 0) return 0;
+  if (scoreCount < typicalSession * 0.5) return 1;
+  if (scoreCount < typicalSession) return 2;
+  if (scoreCount < typicalSession * 2) return 3;
+  return 4;
+}
+
+function getActivityCellStyle(day: ActivityDay, typicalSession: number) {
+  const ratio = Math.min(1, day.scoreCount / Math.max(1, typicalSession * 2.4));
+  const eased = Math.sqrt(ratio);
+  const saturation = Math.round(58 + eased * 42);
+  const lightness = Math.round(20 + eased * 55);
+  const alpha = (0.62 + eased * 0.38).toFixed(2);
+  const borderAlpha = (0.08 + eased * 0.22).toFixed(2);
+  return {
+    backgroundColor: `hsl(var(--theme-hue) calc(${saturation}% * var(--theme-sat)) ${lightness}% / ${alpha})`,
+    borderColor: `hsl(var(--theme-hue) calc(100% * var(--theme-sat)) 82% / ${borderAlpha})`,
+    boxShadow: "none",
+  };
+}
+
+function createSeededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+function clampInt(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function startOfLocalDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function addLocalDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function toDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseLocalDateKey(date: string): Date {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(year, (month || 1) - 1, day || 1);
+}
+
+function formatFullActivityDate(date: string): string {
+  return parseLocalDateKey(date).toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatActivityMonth(date: string): string {
+  return parseLocalDateKey(date).toLocaleDateString("en-US", {
+    month: "short",
+  });
 }
 
 function PlayerAboutCard({ html }: { html: string }) {
@@ -1915,27 +2644,35 @@ function PlayerAboutCard({ html }: { html: string }) {
 }
 
 function BestScoresControlBar({
+  availableKeyModes,
+  keyFilter,
+  onChangeKeyFilter,
   mods,
   modFilter,
   onCycleMod,
   onReverseCycleMod,
   onClearMods,
   sort,
+  ageSort,
   onChangeSort,
 }: {
+  availableKeyModes: string[];
+  keyFilter: KeyFilter;
+  onChangeKeyFilter: (keyFilter: KeyFilter) => void;
   mods: string[];
   modFilter: ModFilterState;
   onCycleMod: (mod: string) => void;
   onReverseCycleMod: (mod: string) => void;
   onClearMods: () => void;
   sort: BestSort;
+  ageSort: BestAgeSort;
   onChangeSort: (sort: BestSort) => void;
 }) {
   const hasActiveFilter = Object.keys(modFilter).length > 0;
 
   return (
-    <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-      <div className="flex items-center gap-2 flex-wrap min-w-0">
+    <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+      <div className="order-2 flex items-center gap-2 flex-wrap min-w-0 lg:order-1">
         <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold shrink-0">Mods</span>
         {mods.length === 0 ? (
           <span className="text-[11px] text-osu-f1">No mods in top plays</span>
@@ -1964,27 +2701,91 @@ function BestScoresControlBar({
           </>
         )}
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        <span className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Sort</span>
-        <div className="flex items-center gap-1 rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-1">
-          {([
-            ["pp", "Top PP"],
-            ["newest", "Newest"],
-            ["oldest", "Oldest"],
-          ] as const).map(([value, label]) => (
-            <button
-              key={value}
-              onClick={() => onChangeSort(value)}
-              className={`px-3 py-1.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${sort === value
-                  ? "bg-osu-pink/15 text-osu-pink-light"
-                  : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
-                }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+      <div className="order-1 flex w-full flex-nowrap items-center justify-between gap-2 overflow-x-auto scrollbar-hide lg:order-2 lg:w-auto lg:flex-col lg:items-end lg:justify-start lg:overflow-visible">
+        {availableKeyModes.length > 1 && (
+          <div className="lg:hidden">
+            <KeyModeControl
+              availableKeyModes={availableKeyModes}
+              keyFilter={keyFilter}
+              onChangeKeyFilter={onChangeKeyFilter}
+            />
+          </div>
+        )}
+        <BestSortControl sort={sort} ageSort={ageSort} onChangeSort={onChangeSort} />
       </div>
+    </div>
+  );
+}
+
+function BestSortControl({
+  sort,
+  ageSort,
+  onChangeSort,
+}: {
+  sort: BestSort;
+  ageSort: BestAgeSort;
+  onChangeSort: (sort: BestSort) => void;
+}) {
+  const ageActive = sort === "newest" || sort === "oldest";
+  const ageArrow = ageSort === "oldest" ? "↑" : "↓";
+  const nextAgeSort: BestAgeSort = ageActive
+    ? (ageSort === "newest" ? "oldest" : "newest")
+    : ageSort;
+
+  return (
+    <div className="flex items-center gap-1 shrink-0">
+      <span className="hidden text-[9px] uppercase tracking-wider text-osu-f1 font-semibold sm:inline">Sort</span>
+      <div className="flex items-center gap-0.5 rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-0.5 sm:gap-1 sm:p-1">
+        <button
+          type="button"
+          onClick={() => onChangeSort("pp")}
+          className={`px-2 py-1.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer sm:px-3 sm:text-[11px] ${sort === "pp"
+              ? "bg-osu-pink/15 text-osu-pink-light"
+              : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
+            }`}
+        >
+          <span className="sm:hidden">PP</span>
+          <span className="hidden sm:inline">Top PP</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onChangeSort(nextAgeSort)}
+          title={ageSort === "oldest" ? "Oldest first" : "Newest first"}
+          className={`px-2 py-1.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer sm:px-3 sm:text-[11px] ${ageActive
+              ? "bg-osu-pink/15 text-osu-pink-light"
+              : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
+            }`}
+        >
+          Age {ageArrow}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function KeyModeControl({
+  availableKeyModes,
+  keyFilter,
+  onChangeKeyFilter,
+}: {
+  availableKeyModes: string[];
+  keyFilter: KeyFilter;
+  onChangeKeyFilter: (keyFilter: KeyFilter) => void;
+}) {
+  return (
+    <div className="inline-flex shrink-0 items-center gap-0.5 rounded-lg bg-osu-b4/60 border border-osu-b3/20 p-0.5 sm:gap-1 sm:p-1">
+      {[["all", "All"] as const, ...availableKeyModes.map((k) => [k, k.toUpperCase()] as const)].map(([value, label]) => (
+        <button
+          key={value}
+          onClick={() => onChangeKeyFilter(value)}
+          className={`px-2 py-1.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer sm:px-3 sm:text-[11px] ${keyFilter === value
+              ? "bg-osu-pink/15 text-osu-pink-light"
+              : "text-osu-f1 hover:text-osu-l2 hover:bg-osu-b3/50"
+            }`}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 }

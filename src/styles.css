@@ -115,6 +115,14 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 ::-webkit-scrollbar-thumb { background: var(--color-osu-b2); border-radius: 4px; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.activity-heatmap-grid {
+  grid-template-columns: repeat(var(--activity-weeks), 12px);
+}
+@media (min-width: 640px) {
+  .activity-heatmap-grid {
+    grid-template-columns: repeat(var(--activity-weeks), minmax(0, 1fr));
+  }
+}
 /* Soft edge fades for the tracker active-player rail (applied only when that
    edge has more avatars scrolled out of view, so it never cuts off hard). */
 .tracker-rail--t {

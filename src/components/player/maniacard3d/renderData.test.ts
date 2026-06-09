@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { buildManiaCardRenderData, parseCssRgba, parseGradientStops } from "./renderData";
+import {
+  buildManiaCardRenderData,
+  getManiaCardRenderDataSignature,
+  parseCssRgba,
+  parseGradientStops,
+} from "./renderData";
 import type { OsuScore, OsuUser } from "#/lib/types";
 
 const user = {
@@ -64,6 +69,33 @@ describe("buildManiaCardRenderData", () => {
       status: "empty",
       message: "Need at least one ranked play with full beatmap data to mint a card.",
     });
+  });
+});
+
+describe("getManiaCardRenderDataSignature", () => {
+  test("stays stable when equivalent profile data is rebuilt", () => {
+    const firstScore = score(6.2, 420);
+    const rebuiltScore = {
+      ...firstScore,
+      beatmap: { ...firstScore.beatmap },
+      statistics: { ...firstScore.statistics },
+    } as OsuScore;
+    const rebuiltUser = {
+      ...user,
+      statistics: { ...user.statistics },
+    } as OsuUser;
+
+    const first = buildManiaCardRenderData({ user, scores: [firstScore] });
+    const rebuilt = buildManiaCardRenderData({ user: rebuiltUser, scores: [rebuiltScore] });
+
+    expect(getManiaCardRenderDataSignature(first)).toBe(getManiaCardRenderDataSignature(rebuilt));
+  });
+
+  test("changes when rendered skill data changes", () => {
+    const baseline = buildManiaCardRenderData({ user, scores: [score(6.2, 420)] });
+    const stronger = buildManiaCardRenderData({ user, scores: [score(6.8, 560)] });
+
+    expect(getManiaCardRenderDataSignature(baseline)).not.toBe(getManiaCardRenderDataSignature(stronger));
   });
 });
 

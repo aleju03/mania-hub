@@ -34,6 +34,10 @@ import { Route as AdminMonitorRouteImport } from './routes/admin/monitor'
 import { Route as AdminLiveBackendRouteImport } from './routes/admin/live-backend'
 import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
 import { Route as VideosIdFilenameRouteImport } from './routes/videos/$id/$filename'
+import { Route as PlayerUsernameRecentRouteImport } from './routes/player/$username/recent'
+import { Route as PlayerUsernameManiacardRouteImport } from './routes/player/$username/maniacard'
+import { Route as PlayerUsernameActivityRouteImport } from './routes/player/$username/activity'
+import { Route as PlayerUsernameAboutRouteImport } from './routes/player/$username/about'
 import { Route as FarmHelperMapBeatmapIdRouteImport } from './routes/farm-helper/map/$beatmapId'
 import { Route as ApiAuthOsuRouteImport } from './routes/api/auth/osu'
 import { Route as ApiAuthLogoutRouteImport } from './routes/api/auth/logout'
@@ -164,6 +168,26 @@ const VideosIdFilenameRoute = VideosIdFilenameRouteImport.update({
   path: '/videos/$id/$filename',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PlayerUsernameRecentRoute = PlayerUsernameRecentRouteImport.update({
+  id: '/recent',
+  path: '/recent',
+  getParentRoute: () => PlayerUsernameRoute,
+} as any)
+const PlayerUsernameManiacardRoute = PlayerUsernameManiacardRouteImport.update({
+  id: '/maniacard',
+  path: '/maniacard',
+  getParentRoute: () => PlayerUsernameRoute,
+} as any)
+const PlayerUsernameActivityRoute = PlayerUsernameActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => PlayerUsernameRoute,
+} as any)
+const PlayerUsernameAboutRoute = PlayerUsernameAboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => PlayerUsernameRoute,
+} as any)
 const FarmHelperMapBeatmapIdRoute = FarmHelperMapBeatmapIdRouteImport.update({
   id: '/map/$beatmapId',
   path: '/map/$beatmapId',
@@ -209,10 +233,14 @@ export interface FileRoutesByFullPath {
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
-  '/player/$username': typeof PlayerUsernameRoute
+  '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
   '/farm-helper/map/$beatmapId': typeof FarmHelperMapBeatmapIdRoute
+  '/player/$username/about': typeof PlayerUsernameAboutRoute
+  '/player/$username/activity': typeof PlayerUsernameActivityRoute
+  '/player/$username/maniacard': typeof PlayerUsernameManiacardRoute
+  '/player/$username/recent': typeof PlayerUsernameRecentRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
@@ -240,10 +268,14 @@ export interface FileRoutesByTo {
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
-  '/player/$username': typeof PlayerUsernameRoute
+  '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
   '/farm-helper/map/$beatmapId': typeof FarmHelperMapBeatmapIdRoute
+  '/player/$username/about': typeof PlayerUsernameAboutRoute
+  '/player/$username/activity': typeof PlayerUsernameActivityRoute
+  '/player/$username/maniacard': typeof PlayerUsernameManiacardRoute
+  '/player/$username/recent': typeof PlayerUsernameRecentRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
@@ -272,10 +304,14 @@ export interface FileRoutesById {
   '/api/replay-upload': typeof ApiReplayUploadRoute
   '/api/sitemap': typeof ApiSitemapRoute
   '/api/sync': typeof ApiSyncRoute
-  '/player/$username': typeof PlayerUsernameRoute
+  '/player/$username': typeof PlayerUsernameRouteWithChildren
   '/api/auth/logout': typeof ApiAuthLogoutRoute
   '/api/auth/osu': typeof ApiAuthOsuRouteWithChildren
   '/farm-helper/map/$beatmapId': typeof FarmHelperMapBeatmapIdRoute
+  '/player/$username/about': typeof PlayerUsernameAboutRoute
+  '/player/$username/activity': typeof PlayerUsernameActivityRoute
+  '/player/$username/maniacard': typeof PlayerUsernameManiacardRoute
+  '/player/$username/recent': typeof PlayerUsernameRecentRoute
   '/videos/$id/$filename': typeof VideosIdFilenameRoute
   '/api/auth/osu/callback': typeof ApiAuthOsuCallbackRoute
 }
@@ -309,6 +345,10 @@ export interface FileRouteTypes {
     | '/api/auth/logout'
     | '/api/auth/osu'
     | '/farm-helper/map/$beatmapId'
+    | '/player/$username/about'
+    | '/player/$username/activity'
+    | '/player/$username/maniacard'
+    | '/player/$username/recent'
     | '/videos/$id/$filename'
     | '/api/auth/osu/callback'
   fileRoutesByTo: FileRoutesByTo
@@ -340,6 +380,10 @@ export interface FileRouteTypes {
     | '/api/auth/logout'
     | '/api/auth/osu'
     | '/farm-helper/map/$beatmapId'
+    | '/player/$username/about'
+    | '/player/$username/activity'
+    | '/player/$username/maniacard'
+    | '/player/$username/recent'
     | '/videos/$id/$filename'
     | '/api/auth/osu/callback'
   id:
@@ -371,6 +415,10 @@ export interface FileRouteTypes {
     | '/api/auth/logout'
     | '/api/auth/osu'
     | '/farm-helper/map/$beatmapId'
+    | '/player/$username/about'
+    | '/player/$username/activity'
+    | '/player/$username/maniacard'
+    | '/player/$username/recent'
     | '/videos/$id/$filename'
     | '/api/auth/osu/callback'
   fileRoutesById: FileRoutesById
@@ -399,7 +447,7 @@ export interface RootRouteChildren {
   ApiReplayUploadRoute: typeof ApiReplayUploadRoute
   ApiSitemapRoute: typeof ApiSitemapRoute
   ApiSyncRoute: typeof ApiSyncRoute
-  PlayerUsernameRoute: typeof PlayerUsernameRoute
+  PlayerUsernameRoute: typeof PlayerUsernameRouteWithChildren
   ApiAuthLogoutRoute: typeof ApiAuthLogoutRoute
   ApiAuthOsuRoute: typeof ApiAuthOsuRouteWithChildren
   VideosIdFilenameRoute: typeof VideosIdFilenameRoute
@@ -582,6 +630,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VideosIdFilenameRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/player/$username/recent': {
+      id: '/player/$username/recent'
+      path: '/recent'
+      fullPath: '/player/$username/recent'
+      preLoaderRoute: typeof PlayerUsernameRecentRouteImport
+      parentRoute: typeof PlayerUsernameRoute
+    }
+    '/player/$username/maniacard': {
+      id: '/player/$username/maniacard'
+      path: '/maniacard'
+      fullPath: '/player/$username/maniacard'
+      preLoaderRoute: typeof PlayerUsernameManiacardRouteImport
+      parentRoute: typeof PlayerUsernameRoute
+    }
+    '/player/$username/activity': {
+      id: '/player/$username/activity'
+      path: '/activity'
+      fullPath: '/player/$username/activity'
+      preLoaderRoute: typeof PlayerUsernameActivityRouteImport
+      parentRoute: typeof PlayerUsernameRoute
+    }
+    '/player/$username/about': {
+      id: '/player/$username/about'
+      path: '/about'
+      fullPath: '/player/$username/about'
+      preLoaderRoute: typeof PlayerUsernameAboutRouteImport
+      parentRoute: typeof PlayerUsernameRoute
+    }
     '/farm-helper/map/$beatmapId': {
       id: '/farm-helper/map/$beatmapId'
       path: '/map/$beatmapId'
@@ -625,6 +701,24 @@ const FarmHelperRouteWithChildren = FarmHelperRoute._addFileChildren(
   FarmHelperRouteChildren,
 )
 
+interface PlayerUsernameRouteChildren {
+  PlayerUsernameAboutRoute: typeof PlayerUsernameAboutRoute
+  PlayerUsernameActivityRoute: typeof PlayerUsernameActivityRoute
+  PlayerUsernameManiacardRoute: typeof PlayerUsernameManiacardRoute
+  PlayerUsernameRecentRoute: typeof PlayerUsernameRecentRoute
+}
+
+const PlayerUsernameRouteChildren: PlayerUsernameRouteChildren = {
+  PlayerUsernameAboutRoute: PlayerUsernameAboutRoute,
+  PlayerUsernameActivityRoute: PlayerUsernameActivityRoute,
+  PlayerUsernameManiacardRoute: PlayerUsernameManiacardRoute,
+  PlayerUsernameRecentRoute: PlayerUsernameRecentRoute,
+}
+
+const PlayerUsernameRouteWithChildren = PlayerUsernameRoute._addFileChildren(
+  PlayerUsernameRouteChildren,
+)
+
 interface ApiAuthOsuRouteChildren {
   ApiAuthOsuCallbackRoute: typeof ApiAuthOsuCallbackRoute
 }
@@ -661,7 +755,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiReplayUploadRoute: ApiReplayUploadRoute,
   ApiSitemapRoute: ApiSitemapRoute,
   ApiSyncRoute: ApiSyncRoute,
-  PlayerUsernameRoute: PlayerUsernameRoute,
+  PlayerUsernameRoute: PlayerUsernameRouteWithChildren,
   ApiAuthLogoutRoute: ApiAuthLogoutRoute,
   ApiAuthOsuRoute: ApiAuthOsuRouteWithChildren,
   VideosIdFilenameRoute: VideosIdFilenameRoute,

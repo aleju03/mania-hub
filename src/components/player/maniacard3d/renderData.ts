@@ -8,6 +8,7 @@ import type {
   GradientStop,
   ManiaCardRenderData,
   ManiaCardRenderInput,
+  ManiaCardReadyData,
   RgbaColor,
 } from "./types";
 
@@ -47,6 +48,72 @@ export function buildManiaCardRenderData({ user, scores }: ManiaCardRenderInput)
     glowColor: parseCssRgba(tierStyle.glowColor),
     badgeGradientStops: parseGradientStops(tierStyle.badgeGradient),
   };
+}
+
+export function getManiaCardRenderDataSignature(data: ManiaCardRenderData): string {
+  if (data.status === "empty") return ["empty", data.message].join("|");
+
+  return [
+    "ready",
+    data.user.id,
+    data.user.username,
+    data.user.country_code ?? "",
+    data.avatarUrl,
+    data.tier,
+    data.tierStyle.label,
+    data.tierStyle.edgeFill,
+    data.tierStyle.glowColor,
+    data.tierStyle.badgeGradient,
+    signatureSkills(data),
+    signatureNextTier(data),
+    data.stats.map((stat) => `${stat.label}:${signatureNumber(stat.value)}`).join(","),
+    signatureColor(data.edgeColor),
+    signatureColor(data.glowColor),
+    data.badgeGradientStops.map((stop) => `${stop.color}:${signatureNumber(stop.offset)}`).join(","),
+  ].join("|");
+}
+
+function signatureSkills(data: ManiaCardReadyData): string {
+  const skills = data.skills;
+  return [
+    skills.starAvg,
+    skills.fingerControl,
+    skills.speed,
+    skills.accuracy,
+    skills.stamina,
+    skills.versatility,
+    skills.peak,
+    skills.cardPower,
+    skills.mainKeyMode,
+    skills.sampleSize,
+  ].map(signatureNumber).join(",");
+}
+
+function signatureNextTier(data: ManiaCardReadyData): string {
+  const nextTier = data.nextTier;
+  if (!nextTier) return "";
+  return [
+    nextTier.tier,
+    nextTier.label,
+    nextTier.currentTier,
+    nextTier.currentLabel,
+    signatureNumber(nextTier.threshold),
+    signatureNumber(nextTier.remaining),
+    signatureNumber(nextTier.progress),
+  ].join(":");
+}
+
+function signatureColor(color: RgbaColor): string {
+  return [
+    signatureNumber(color.r),
+    signatureNumber(color.g),
+    signatureNumber(color.b),
+    signatureNumber(color.a),
+  ].join(",");
+}
+
+function signatureNumber(value: number | null | undefined): string {
+  return Number.isFinite(value) ? Number(value).toFixed(6) : "";
 }
 
 export function parseCssRgba(value: string): RgbaColor {
