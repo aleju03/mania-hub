@@ -93,17 +93,35 @@ async function withSnapshotLoaderBudget<T>(snapshotPromise: Promise<T>): Promise
   ]);
 }
 
+function parseTrackerSort(value: unknown): TrackerSort {
+  return value === "stars" ? "stars" : "recent";
+}
+
+function parseTrackerSortDirection(value: unknown): TrackerSortDirection {
+  return value === "asc" ? "asc" : "desc";
+}
+
 export const Route = createFileRoute("/tracker")({
-  validateSearch: (search: Record<string, unknown>) => ({
-    country: parseCountrySearchParam(search.country),
-    page: (() => {
-      const n = Number(search.page);
-      if (!Number.isFinite(n) || n < 0) return undefined;
-      return Math.floor(n);
-    })(),
-  }),
+  validateSearch: (search: Record<string, unknown>) => {
+    const sort = parseTrackerSort(search.sort);
+    const sortDirection = parseTrackerSortDirection(search.sortDirection ?? search.dir);
+    return {
+      country: parseCountrySearchParam(search.country),
+      page: (() => {
+        const n = Number(search.page);
+        if (!Number.isFinite(n) || n < 0) return undefined;
+        return Math.floor(n);
+      })(),
+      ...(sort === "stars"
+        ? {
+            sort,
+            ...(sortDirection === "asc" ? { sortDirection } : {}),
+          }
+        : {}),
+    };
+  },
   search: {
-    middlewares: [stripSearchParams({ page: undefined })],
+    middlewares: [stripSearchParams({ page: undefined, sort: undefined, sortDirection: undefined })],
   },
   loaderDeps: ({ search }) => ({
     country: search.country,
@@ -237,7 +255,9 @@ function getTrackerUserBatch(
 
 function ScoresPage() {
   const navigate = useNavigate();
-  const { country, page: searchPage } = Route.useSearch();
+  const { country, page: searchPage, sort: searchSort, sortDirection: searchSortDirection } = Route.useSearch();
+  const trackerSort: TrackerSort = searchSort ?? "recent";
+  const trackerSortDirection: TrackerSortDirection = trackerSort === "stars" ? (searchSortDirection ?? "desc") : "desc";
   const page = searchPage ?? 0;
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = country ?? fallbackCountry;
@@ -267,8 +287,6 @@ function ScoresPage() {
   const [gradeFilter, setGradeFilter] = useState<GradeFilter>("all");
   const [keyFilter, setKeyFilter] = useState<KeyFilter>("all");
   const [missFilter, setMissFilter] = useState<MissFilter>("all");
-  const [trackerSort, setTrackerSort] = useState<TrackerSort>("recent");
-  const [trackerSortDirection, setTrackerSortDirection] = useState<TrackerSortDirection>("desc");
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<number[]>([]);
   const [initialLoaded, setInitialLoaded] = useState(feedScores.length > 0 || !!feedScoresFetchedAt || !!snapshot);
   const initialLoadedCountryRef = useRef(selectedCountry);
@@ -703,23 +721,35 @@ function ScoresPage() {
 
   const selectedPlayerIdSet = useMemo(() => new Set(selectedPlayerIds), [selectedPlayerIds]);
 
-  const updateTrackerSearch = useCallback((patch: Partial<{ country: string | undefined; page: number | undefined }>) => {
+  const updateTrackerSearch = useCallback((patch: Partial<{ country: string | undefined; page: number | undefined; sort: TrackerSort; sortDirection: TrackerSortDirection }>) => {
     const nextPage = patch.page ?? page;
     const nextCountry = patch.country ?? country;
+    const nextSort = patch.sort ?? trackerSort;
+    const nextSortDirection = nextSort === "stars"
+      ? (patch.sortDirection ?? trackerSortDirection)
+      : "desc";
+    const currentSortDirection = trackerSort === "stars" ? trackerSortDirection : "desc";
     const nextPageParam = nextPage > 0 ? nextPage : undefined;
     const currentPageParam = page > 0 ? page : undefined;
-    if (nextCountry === country && nextPageParam === currentPageParam) return;
+    if (
+      nextCountry === country
+      && nextPageParam === currentPageParam
+      && nextSort === trackerSort
+      && nextSortDirection === currentSortDirection
+    ) return;
 
     navigate({
       to: "/tracker",
       search: {
         country: nextCountry,
         page: nextPageParam,
+        sort: nextSort === "stars" ? nextSort : undefined,
+        sortDirection: nextSort === "stars" && nextSortDirection === "asc" ? nextSortDirection : undefined,
       },
       replace: true,
       resetScroll: false,
     });
-  }, [country, navigate, page]);
+  }, [country, navigate, page, trackerSort, trackerSortDirection]);
 
   const togglePlayerFilter = useCallback((playerId: number) => {
     setSelectedPlayerIds((current) =>
@@ -823,9 +853,7 @@ function ScoresPage() {
     ];
     const currentIndex = states.findIndex((state) => state.sort === trackerSort && state.direction === trackerSortDirection);
     const next = states[(currentIndex + direction + states.length) % states.length] ?? states[0];
-    setTrackerSort(next.sort);
-    setTrackerSortDirection(next.direction);
-    updateTrackerSearch({ page: 0 });
+    updateTrackerSearch({ page: 0, sort: next.sort, sortDirection: next.direction });
   };
   const cycleMissFilter = (direction: 1 | -1 = 1) => {
     const states: MissFilter[] = ["all", "fc", "fc_choke"];
