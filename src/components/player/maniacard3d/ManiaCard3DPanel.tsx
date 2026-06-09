@@ -2,8 +2,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { MANIA_TIER_STYLES, type NextManiaCardTier } from "#/lib/maniacard";
 import { ManiaCardRenderer } from "./ManiaCardRenderer";
-import { buildManiaCardRenderData } from "./renderData";
-import type { ManiaCardPanelProps } from "./types";
+import { buildManiaCardRenderData, getManiaCardRenderDataSignature } from "./renderData";
+import type { ManiaCardPanelProps, ManiaCardReadyData } from "./types";
 
 function useReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -118,12 +118,17 @@ const TIER_FILL_COLOR: Record<string, string> = {
 export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<ManiaCardRenderer | null>(null);
+  const latestReadyDataRef = useRef<ManiaCardReadyData | null>(null);
+  const latestReadySignatureRef = useRef<string | null>(null);
+  const rendererSignatureRef = useRef<string | null>(null);
+  const pendingSignatureRef = useRef<string | null>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
-  const [readyData, setReadyData] = useState<ReturnType<typeof buildManiaCardRenderData> | null>(null);
+  const [readySignature, setReadySignature] = useState<string | null>(null);
   const [ratingModalOpen, setRatingModalOpen] = useState(false);
   const reducedMotion = useReducedMotion();
   const data = useMemo(() => buildManiaCardRenderData({ user, scores }), [user, scores]);
-  const rendererReady = readyData === data;
+  const dataSignature = useMemo(() => getManiaCardRenderDataSignature(data), [data]);
+  const rendererReady = readySignature === dataSignature;
 
   useEffect(() => {
     if (!ratingModalOpen) return;
@@ -135,10 +140,23 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
   }, [ratingModalOpen]);
 
   useEffect(() => {
-    setReadyData(null);
+    if (data.status === "ready") {
+      latestReadyDataRef.current = data;
+      latestReadySignatureRef.current = dataSignature;
+      return;
+    }
+
+    latestReadyDataRef.current = null;
+    latestReadySignatureRef.current = null;
+  }, [data, dataSignature]);
+
+  useEffect(() => {
+    setReadySignature(null);
     if (loading || data.status !== "ready") return;
     const host = hostRef.current;
-    if (!host) return;
+    const initialData = latestReadyDataRef.current;
+    const initialSignature = latestReadySignatureRef.current;
+    if (!host || !initialData || !initialSignature) return;
 
     setRenderError(null);
 
@@ -153,6 +171,8 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
       removeResizeFallback();
       renderer?.dispose();
       if (rendererRef.current === renderer) rendererRef.current = null;
+      rendererSignatureRef.current = null;
+      pendingSignatureRef.current = null;
     };
 
     const cleanup = () => {
@@ -165,14 +185,20 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
       if (!active) return;
 
       try {
+        const scheduledData = latestReadyDataRef.current;
+        const scheduledSignature = latestReadySignatureRef.current;
+        if (!scheduledData || !scheduledSignature) return;
+
+        pendingSignatureRef.current = scheduledSignature;
+        rendererSignatureRef.current = scheduledSignature;
         renderer = new ManiaCardRenderer({
           host,
-          data,
+          data: scheduledData,
           mobile: isMobileViewport(),
           reducedMotion,
           devicePixelRatio: getDevicePixelRatio(),
           onReady: () => {
-            if (active) setReadyData(data);
+            if (active) setReadySignature(pendingSignatureRef.current);
           },
           onError: (error) => {
             if (!active) return;
@@ -198,7 +224,23 @@ export function ManiaCard3DPanel({ user, scores, loading }: ManiaCardPanelProps)
     });
 
     return cleanup;
-  }, [data, loading, reducedMotion]);
+  }, [data.status, loading, reducedMotion]);
+
+  useEffect(() => {
+    if (loading || data.status !== "ready") {
+      setReadySignature(null);
+      return;
+    }
+
+    const renderer = rendererRef.current;
+    if (!renderer || rendererSignatureRef.current === dataSignature) return;
+
+    setRenderError(null);
+    setReadySignature(null);
+    pendingSignatureRef.current = dataSignature;
+    rendererSignatureRef.current = dataSignature;
+    void renderer.setData(data);
+  }, [data, dataSignature, loading]);
 
   if (loading) return <ManiaCard3DLoading />;
 

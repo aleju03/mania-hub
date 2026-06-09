@@ -95,7 +95,7 @@ export class ManiaCardRenderer {
     canvas.style.left = "50%";
     canvas.style.top = "50%";
     canvas.style.transform = "translate(-50%, -50%)";
-    canvas.style.pointerEvents = "auto";
+    canvas.style.pointerEvents = "none";
     this.host.appendChild(canvas);
     // Distance derived from FOV + overscan so the card fills the host's height
     // (not the oversized canvas). Without this the card would appear larger
@@ -238,7 +238,7 @@ export class ManiaCardRenderer {
     };
     this.interaction.dragging = true;
     this.interaction.lastInputAt = performance.now();
-    this.renderer.domElement.setPointerCapture(event.pointerId);
+    this.host.setPointerCapture(event.pointerId);
     this.start();
   };
 
@@ -256,8 +256,8 @@ export class ManiaCardRenderer {
   };
 
   private onPointerUp = (event: PointerEvent) => {
-    if (this.renderer.domElement.hasPointerCapture(event.pointerId)) {
-      this.renderer.domElement.releasePointerCapture(event.pointerId);
+    if (this.host.hasPointerCapture(event.pointerId)) {
+      this.host.releasePointerCapture(event.pointerId);
     }
     this.dragStart = null;
     this.interaction.dragging = false;
@@ -310,17 +310,17 @@ export class ManiaCardRenderer {
   }
 
   private attachPointerEvents() {
-    this.renderer.domElement.addEventListener("pointerdown", this.onPointerDown);
-    this.renderer.domElement.addEventListener("pointermove", this.onPointerMove);
-    this.renderer.domElement.addEventListener("pointerup", this.onPointerUp);
-    this.renderer.domElement.addEventListener("pointercancel", this.onPointerUp);
+    this.host.addEventListener("pointerdown", this.onPointerDown);
+    this.host.addEventListener("pointermove", this.onPointerMove);
+    this.host.addEventListener("pointerup", this.onPointerUp);
+    this.host.addEventListener("pointercancel", this.onPointerUp);
   }
 
   private detachPointerEvents() {
-    this.renderer.domElement.removeEventListener("pointerdown", this.onPointerDown);
-    this.renderer.domElement.removeEventListener("pointermove", this.onPointerMove);
-    this.renderer.domElement.removeEventListener("pointerup", this.onPointerUp);
-    this.renderer.domElement.removeEventListener("pointercancel", this.onPointerUp);
+    this.host.removeEventListener("pointerdown", this.onPointerDown);
+    this.host.removeEventListener("pointermove", this.onPointerMove);
+    this.host.removeEventListener("pointerup", this.onPointerUp);
+    this.host.removeEventListener("pointercancel", this.onPointerUp);
   }
 
   private attachOrientationListener() {
