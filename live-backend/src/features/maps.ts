@@ -1,4 +1,5 @@
 import type { InValue } from "@libsql/client";
+import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import { readConfig } from "../config.js";
 import { GLOBAL_COUNTRY_CODE, isGlobalCountry } from "../countries.js";
 import type { Db } from "../db.js";
@@ -1499,7 +1500,7 @@ async function readMapsDetailsPlayersFromSnapshots(
 ): Promise<MapsDetailsPlayer[]> {
   const rows = (await exec(
     db,
-    `select payload_json
+    `select country, refreshed_at, payload_json
      from country_maps_snapshots
      where ${isGlobalCountry(country) ? "country != ?" : "country = ?"}`,
     [isGlobalCountry(country) ? GLOBAL_COUNTRY_CODE : country],
@@ -1507,7 +1508,8 @@ async function readMapsDetailsPlayersFromSnapshots(
 
   const byUser = new Map<number, MapsDetailsPlayer>();
   for (const row of rows) {
-    const stored = toStoredCountryMapsData(parseJson<unknown>(row.payload_json, null));
+    await yieldToEventLoop();
+    const stored = getStoredSnapshotCached(String(row.country), String(row.refreshed_at ?? ""), row.payload_json);
     if (!stored) continue;
 
     if (kind === "farmed") {
@@ -2105,7 +2107,7 @@ const GLOBAL_MAPS_PLAYERS_PER_ENTRY = 80;
 export async function refreshGlobalMaps(db: Db): Promise<CountryMapsData> {
   const rows = (await exec(
     db,
-    "select payload_json from country_maps_snapshots where country != ?",
+    "select country, refreshed_at, payload_json from country_maps_snapshots where country != ?",
     [GLOBAL_COUNTRY_CODE],
   )).rows;
 
@@ -2116,7 +2118,10 @@ export async function refreshGlobalMaps(db: Db): Promise<CountryMapsData> {
   const pool = new Set<number>();
 
   for (const row of rows) {
-    const stored = toStoredCountryMapsData(parseJson<unknown>(row.payload_json, null));
+    // One country's parse+merge is the unit of synchronous work; yield between
+    // them so HTTP requests can interleave with this aggregation.
+    await yieldToEventLoop();
+    const stored = getStoredSnapshotCached(String(row.country), String(row.refreshed_at ?? ""), row.payload_json);
     if (!stored) continue;
     for (const entry of stored.farmed) {
       let players = farmedByBeatmap.get(entry.beatmapId);
@@ -2158,7 +2163,9 @@ export async function refreshGlobalMaps(db: Db): Promise<CountryMapsData> {
      where country != ?`,
     [GLOBAL_COUNTRY_CODE],
   )).rows;
+  let farmedRowsProcessed = 0;
   for (const row of farmedScoreRows) {
+    if (++farmedRowsProcessed % 2000 === 0) await yieldToEventLoop();
     const beatmapId = Number(row.beatmap_id);
     const userId = Number(row.user_id);
     const pp = Number(row.pp ?? 0);
@@ -2180,6 +2187,9 @@ export async function refreshGlobalMaps(db: Db): Promise<CountryMapsData> {
     }
   }
 
+  // The remaining aggregate/sort blocks are each a solid chunk of CPU; yield
+  // between them to bound how long the event loop is held at a stretch.
+  await yieldToEventLoop();
   const farmed = [...farmedByBeatmap.entries()]
     .flatMap(([beatmapId, playerMap]): StoredCountryMapsData["farmed"] => {
       const players = [...playerMap.values()].sort((a, b) => b.pp - a.pp);
@@ -2196,6 +2206,7 @@ export async function refreshGlobalMaps(db: Db): Promise<CountryMapsData> {
     })
     .sort((a, b) => b.playerCount - a.playerCount || b.avgPp - a.avgPp);
 
+  await yieldToEventLoop();
   const mostPlayed = [...mostPlayedByBeatmap.entries()]
     .map(([beatmapId, playerMap]): StoredCountryMapsData["mostPlayed"][number] => {
       const players = [...playerMap.values()].sort((a, b) => b.count - a.count);
@@ -2208,6 +2219,7 @@ export async function refreshGlobalMaps(db: Db): Promise<CountryMapsData> {
     })
     .sort((a, b) => b.playerCount - a.playerCount || b.totalPlays - a.totalPlays);
 
+  await yieldToEventLoop();
   const favourites = [...favouritesByBeatmapset.entries()]
     .map(([beatmapsetId, set]): StoredCountryMapsData["favourites"][number] => ({
       beatmapsetId,
@@ -2240,6 +2252,8 @@ export async function refreshGlobalMaps(db: Db): Promise<CountryMapsData> {
   };
 
   const refreshedAt = nowIso();
+  // json(stored) serialises the whole global snapshot in one synchronous pass.
+  await yieldToEventLoop();
   await exec(
     db,
     `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at)
@@ -2249,6 +2263,29 @@ export async function refreshGlobalMaps(db: Db): Promise<CountryMapsData> {
   );
 
   return hydrateCompactMapsSnapshot(db, stored);
+}
+
+// The global maps refresh and the per-map players lookup both scan every
+// country's snapshot, and parsing those multi-hundred-KB JSON blobs is
+// synchronous CPU work that blocks the event loop (and with it every HTTP
+// request in flight). Cache the parsed compact form keyed by the row's
+// refreshed_at so a snapshot is parsed once per write instead of once per
+// scan. Cached values are shared between callers: treat them as immutable.
+const STORED_SNAPSHOT_CACHE_MAX_ENTRIES = 64;
+const storedSnapshotCache = new Map<string, { refreshedAt: string; size: number; stored: StoredCountryMapsData | null }>();
+
+function getStoredSnapshotCached(country: string, refreshedAt: string, payloadJson: unknown): StoredCountryMapsData | null {
+  const payload = typeof payloadJson === "string" ? payloadJson : String(payloadJson ?? "");
+  const cached = storedSnapshotCache.get(country);
+  if (cached && cached.refreshedAt === refreshedAt && cached.size === payload.length) return cached.stored;
+  const stored = toStoredCountryMapsData(parseJson<unknown>(payload, null));
+  storedSnapshotCache.delete(country);
+  if (storedSnapshotCache.size >= STORED_SNAPSHOT_CACHE_MAX_ENTRIES) {
+    const oldest = storedSnapshotCache.keys().next().value;
+    if (oldest != null) storedSnapshotCache.delete(oldest);
+  }
+  storedSnapshotCache.set(country, { refreshedAt, size: payload.length, stored });
+  return stored;
 }
 
 // Normalises a stored maps payload (compact schema v2 or the legacy hydrated
@@ -3308,7 +3345,11 @@ async function applyMapsFarmedOverlay(
   }
 
   let farmedGeneratedAt = value.farmedGeneratedAt;
+  let overlayRowsProcessed = 0;
   for (const row of rows) {
+    // Each row may JSON.parse a stored score blob; this runs on the request
+    // path, so yield periodically instead of holding the loop for the batch.
+    if (++overlayRowsProcessed % 500 === 0) await yieldToEventLoop();
     const merged = farmedOverlayRowToEntry(row);
     if (!merged) continue;
     mergeFarmedEntry(byBeatmap, merged.entry, merged.player);
