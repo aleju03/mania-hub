@@ -119,8 +119,10 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
   grid-template-columns: repeat(var(--activity-weeks), 12px);
 }
 @media (min-width: 640px) {
+  /* Cap cells at full-year size (52 columns + 51 gaps) so trimmed ranges
+     keep the same cell size instead of stretching to fill the row. */
   .activity-heatmap-grid {
-    grid-template-columns: repeat(var(--activity-weeks), minmax(0, 1fr));
+    grid-template-columns: repeat(var(--activity-weeks), minmax(0, calc((100% - 51 * 0.25rem) / 52)));
   }
 }
 /* Soft edge fades for the tracker active-player rail (applied only when that

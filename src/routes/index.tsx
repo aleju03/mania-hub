@@ -20,7 +20,7 @@ import { ManiaRain } from "../components/home/ManiaRain";
 import { UsernameText } from "../components/ui/UsernameText";
 import type { RankingsResponse, LeanHomeScore, LeanHomePopoff, LeanTrackerScore, CountryTopPlay, LeanRankingEntry } from "../lib/types";
 import { useAppStore, useHasHydrated, useHiddenUserIds, useSelectedCountry } from "../store";
-import { DEFAULT_DESCRIPTION, pageSeo, SITE_NAME } from "../lib/seo";
+import { DEFAULT_DESCRIPTION, pageSeo } from "../lib/seo";
 import { seedPlayerShellFromRankingEntry, seedPlayerShellsFromRankingEntries } from "../lib/player-shell-cache";
 import { readGlobalTopPlayersCache, readGlobalTopPlayersMemoryCache, writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
 
@@ -32,9 +32,11 @@ export const Route = createFileRoute("/")({
     const country = match.search.country;
     const countryName = country ? getCountryName(country) : null;
     return pageSeo({
-      title: SITE_NAME,
+      // Keyword title: searches are "osu mania tracker" and "o!mania" alone
+      // doesn't string-match "osu mania", so spell it out before the brand.
+      title: "osu!mania rankings & live score tracker",
       description: countryName
-        ? `Top osu!mania players and scores in ${countryName}`
+        ? `Top osu!mania players, live scores, and pp records in ${countryName}`
         : DEFAULT_DESCRIPTION,
       path: withSearchParams("/", { country }),
       origin: match.context.origin,
@@ -626,6 +628,9 @@ function HomePage() {
             <span className="mode-icon text-osu-pink text-3xl sm:text-5xl">{"\ue802"}</span>
             <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight" style={{ fontFamily: "Torus" }}>mania <span className="text-osu-pink">{selectedIsGlobal ? "Global" : selectedCountry}</span></h1>
           </div>
+          <p className="mt-3 text-sm text-osu-f1">
+            Live osu!mania score tracker: country rankings, top plays, snipes, beatmap stats, and replays.
+          </p>
         </div>
       </section>
 

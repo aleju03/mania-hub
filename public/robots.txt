@@ -8,6 +8,5 @@ Disallow: /tracker
 Disallow: /replay
 Disallow: /snipes
 Allow: /
-Crawl-delay: 10
 
 Sitemap: https://mania-tracker.com/sitemap.xml

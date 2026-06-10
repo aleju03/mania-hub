@@ -3,7 +3,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { waitUntil } from "@vercel/functions";
 import { createElement as h } from "react";
 import type { ReactNode } from "react";
-import { getCachedUser, getRankings, getCountryMapsFavourites, getScore } from "../../lib/osu";
+import {
+  getCachedUser,
+  getRankings,
+  getScore,
+  readCountryMapsFavouritesFromCache,
+  readRankingsPageFromCache,
+} from "../../lib/osu";
+import { getServerLiveBackendUrl } from "../../lib/live-backend";
 import { getCountryName, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
 import { getAssetOrigin } from "../../lib/origin";
 import { getDisplayedRank, getManiaJudgementCounts, getModAcronyms } from "../../lib/score";
@@ -190,25 +197,16 @@ function flagImageUrl(country: string): string {
   return `https://flagcdn.com/w640/${country.toLowerCase()}.png`;
 }
 
-async function fetchCountryMapUsers(country: string) {
-  const rankings = await getRankings({ data: { type: "performance", page: 1, country } });
-  const users = rankings.ranking
-    .filter((entry) => entry.user.is_active !== false)
-    .slice(0, 50)
-    .map((entry) => ({
-      id: entry.user.id,
-      username: entry.user.username,
-      avatar_url: entry.user.avatar_url,
-    }));
-  if (users.length === 0) throw new Error(`no ranked players for ${country}`);
-  return users;
-}
-
 /* Maps: full-bleed mosaic of beatmapset covers pulled from the country's
    favourites pool. The pool is country-seeded so the same OG renders
-   stable across requests until the underlying cache rebuilds. If we
+   stable across requests until the underlying data rebuilds. If we
    have no maps data for the country, fall through to the country
-   scoreboard layout. */
+   scoreboard layout.
+
+   The mosaic needs ~18 cover URLs and a pool count, nothing else, and
+   both sources below are plain DB reads. The OG route must never
+   trigger osu! API work: a cold favourites rebuild is 50 users of
+   rate-limited calls, which used to stall this endpoint for minutes. */
 const MAPS_MOSAIC_COLS = 6;
 const MAPS_MOSAIC_ROWS = 3;
 const MAPS_MOSAIC_COUNT = MAPS_MOSAIC_COLS * MAPS_MOSAIC_ROWS;
@@ -244,25 +242,92 @@ function shuffle<T>(arr: T[], rng: () => number): T[] {
   return out;
 }
 
-async function renderMapsOg(request: Request, country: string): Promise<Response> {
-  const users = await fetchCountryMapUsers(country);
-  // Pull the favourites section: the beatmapsetsPool gives us a wide variety
-  // of sets the country actually plays. Warm-cache hit = no osu! API calls.
-  const favSection = await getCountryMapsFavourites({ data: { users } });
-  const pool = favSection.value.beatmapsetsPool;
+type MapsOgPool = { covers: string[]; poolSize: number };
+
+const MAPS_OG_LIVE_FETCH_TIMEOUT_MS = 8_000;
+
+// Primary source: the live backend's stored maps snapshot. One paged read of
+// a maps tab gives covers + total; the backend keeps these fresh on its own
+// refresh schedule for every tracked country. The maps OG reads favourites;
+// the farm helper OG reads farmed.
+async function fetchMapsOgPoolFromLiveBackend(
+  country: string,
+  tab: "favourites" | "farmed" = "favourites",
+): Promise<MapsOgPool | null> {
+  const base = getServerLiveBackendUrl();
+  if (!base) return null;
+  const query = new URLSearchParams({
+    country,
+    tab,
+    pageSize: String(MAPS_MOSAIC_COUNT * 2),
+    // Read-only: don't activate/warm a country just because its OG rendered.
+    observe: "1",
+  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), MAPS_OG_LIVE_FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${base}/api/snapshots/maps-page?${query.toString()}`, {
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+    const snapshot = (await response.json()) as {
+      value: { total: number; items: Array<{ covers?: OsuCovers }> } | null;
+    };
+    const items = snapshot.value?.items ?? [];
+    const covers = items
+      .map((item) => (item.covers ? pickCover(item.covers) : null))
+      .filter((cover): cover is string => !!cover);
+    if (covers.length === 0) return null;
+    return { covers, poolSize: snapshot.value?.total ?? covers.length };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Turso fallback (live backend unconfigured/down or country untracked there):
+// recover the last roster we cached for this country, then look up the
+// favourites blob stored under that exact roster key. Both reads allow stale
+// entries and never rebuild.
+async function fetchMapsOgPoolFromTurso(country: string): Promise<MapsOgPool | null> {
+  const rankings = await readRankingsPageFromCache("performance", 1, country);
+  if (!rankings) return null;
+  const users = rankings.ranking
+    .filter((entry) => entry.user.is_active !== false)
+    .slice(0, 50)
+    .map((entry) => ({
+      id: entry.user.id,
+      username: entry.user.username,
+      avatar_url: entry.user.avatar_url,
+    }));
+  if (users.length === 0) return null;
+  const favSection = await readCountryMapsFavouritesFromCache(users);
+  const pool = favSection?.beatmapsetsPool;
   const sets = pool ? Object.values(pool) : [];
-  if (sets.length === 0) {
+  const covers = sets
+    .map((set) => pickCover(set.covers))
+    .filter((cover): cover is string => !!cover);
+  if (covers.length === 0) return null;
+  return { covers, poolSize: sets.length };
+}
+
+async function renderMapsOg(request: Request, country: string): Promise<Response> {
+  const pool =
+    (await fetchMapsOgPoolFromLiveBackend(country)) ??
+    (await fetchMapsOgPoolFromTurso(country));
+  if (!pool) {
     // No maps data for this country: fall through to the scoreboard layout
     // without storing that fallback under the maps-specific R2 key.
     throw new OgFallbackError(`no maps data for ${country}`);
   }
 
   const rng = mulberry32(hashString(country));
-  const picked = shuffle(sets, rng).slice(0, MAPS_MOSAIC_COUNT);
+  const picked = shuffle(pool.covers, rng).slice(0, MAPS_MOSAIC_COUNT);
   // If the pool is smaller than the grid, repeat (still shuffled) so we
   // always fill the canvas instead of leaving blank cells.
-  while (picked.length < MAPS_MOSAIC_COUNT && sets.length > 0) {
-    picked.push(...shuffle(sets, rng).slice(0, MAPS_MOSAIC_COUNT - picked.length));
+  while (picked.length < MAPS_MOSAIC_COUNT && pool.covers.length > 0) {
+    picked.push(...shuffle(pool.covers, rng).slice(0, MAPS_MOSAIC_COUNT - picked.length));
   }
 
   const [regularFont, heavyFont] = await loadOgFonts(request);
@@ -315,8 +380,7 @@ async function renderMapsOg(request: Request, country: string): Promise<Response
                 },
               },
               Array.from({ length: MAPS_MOSAIC_COLS }, (_, c) => {
-                const set = picked[r * MAPS_MOSAIC_COLS + c];
-                const cover = set ? pickCover(set.covers) : null;
+                const cover = picked[r * MAPS_MOSAIC_COLS + c] ?? null;
                 return h(
                   "div",
                   {
@@ -418,7 +482,7 @@ async function renderMapsOg(request: Request, country: string): Promise<Response
                 h(
                   "div",
                   { key: "pool" },
-                  `${sets.length} community-picked mania maps`,
+                  `${pool.poolSize} community-picked mania maps`,
                 ),
                 h("div", { key: "dot", style: { color: "#5a4a52" } }, "/"),
                 h(
@@ -2257,6 +2321,264 @@ async function renderDefaultPolaroidOg(request: Request): Promise<Response> {
   return response;
 }
 
+/* Farm helper layout: deliberately quieter than the scrapbook cards.
+   Flat surface, no avatar backdrop, no scatter. Left: the pink
+   "farm helper" title sticker. Right: a tidy stack of three paper
+   cards, one per recommendation reason (missing / improve / old pb in
+   the app's accent colours), each with an illustrative pp gain and an
+   abstract title bar standing in for the map name. Reads as "this tool
+   hands you a short list of maps", which is exactly what it does.
+   Behind it all sits a heavily dimmed mosaic of actual farmed-map cover
+   art (the maps snapshot's farmed tab), so the surface has texture
+   without competing with the foreground. The backdrop is optional: with
+   no farmed data the card renders on the flat surface. */
+function farmHelperRecCard(props: {
+  reason: string;
+  reasonColor: string;
+  gain: string;
+  barWidth: number;
+  rotate: number;
+  top: number;
+  left: number;
+  key: string;
+}) {
+  const { reason, reasonColor, gain, barWidth, rotate, top, left, key } = props;
+  return h(
+    "div",
+    {
+      key,
+      style: {
+        position: "absolute",
+        top: `${top}px`,
+        left: `${left}px`,
+        display: "flex",
+        flexDirection: "column",
+        width: "480px",
+        padding: "24px 28px",
+        background: "#f3ece4",
+        boxSizing: "border-box",
+        transform: `rotate(${rotate}deg)`,
+        gap: "16px",
+      },
+    },
+    [
+      h(
+        "div",
+        {
+          key: "row",
+          style: {
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+          },
+        },
+        [
+          h(
+            "div",
+            {
+              key: "chip",
+              style: {
+                display: "flex",
+                padding: "8px 14px",
+                background: reasonColor,
+                color: "#1a1317",
+                fontSize: "28px",
+                fontWeight: 900,
+                lineHeight: "1.0",
+              },
+            },
+            reason,
+          ),
+          h(
+            "div",
+            {
+              key: "gain",
+              style: {
+                marginLeft: "auto",
+                fontSize: "44px",
+                fontWeight: 900,
+                color: "#1a1317",
+                lineHeight: "1.0",
+              },
+            },
+            gain,
+          ),
+        ],
+      ),
+      // Abstract map-title bar: a placeholder shape instead of a fake
+      // beatmap name.
+      h("div", {
+        key: "bar",
+        style: {
+          display: "flex",
+          width: `${barWidth}px`,
+          height: "14px",
+          borderRadius: "7px",
+          background: "#cfc4b8",
+        },
+      }),
+    ],
+  );
+}
+
+async function renderFarmHelperOg(request: Request): Promise<Response> {
+  // Farmed-map covers for the backdrop. The tool itself is global, but
+  // farmed data is per-country; CR (the project's home scene) seeds the
+  // texture. Purely decorative, so a missing pool just means no backdrop.
+  const [[regularFont, heavyFont], pool] = await Promise.all([
+    loadOgFonts(request),
+    fetchMapsOgPoolFromLiveBackend("CR", "farmed"),
+  ]);
+
+  let mosaic: ReactNode = null;
+  if (pool && pool.covers.length > 0) {
+    const rng = mulberry32(hashString("farm-helper"));
+    const picked = shuffle(pool.covers, rng).slice(0, MAPS_MOSAIC_COUNT);
+    while (picked.length < MAPS_MOSAIC_COUNT && pool.covers.length > 0) {
+      picked.push(...shuffle(pool.covers, rng).slice(0, MAPS_MOSAIC_COUNT - picked.length));
+    }
+    mosaic = h(
+      "div",
+      {
+        key: "mosaic",
+        style: {
+          position: "absolute",
+          inset: "0",
+          display: "flex",
+          flexDirection: "column",
+          width: `${WIDTH}px`,
+          height: `${HEIGHT}px`,
+        },
+      },
+      Array.from({ length: MAPS_MOSAIC_ROWS }, (_, r) =>
+        h(
+          "div",
+          {
+            key: `row-${r}`,
+            style: {
+              display: "flex",
+              flexDirection: "row",
+              width: `${WIDTH}px`,
+              height: `${HEIGHT / MAPS_MOSAIC_ROWS}px`,
+            },
+          },
+          Array.from({ length: MAPS_MOSAIC_COLS }, (_, c) => {
+            const cover = picked[r * MAPS_MOSAIC_COLS + c] ?? null;
+            return h(
+              "div",
+              {
+                key: `cell-${r}-${c}`,
+                style: {
+                  display: "flex",
+                  width: `${WIDTH / MAPS_MOSAIC_COLS}px`,
+                  height: `${HEIGHT / MAPS_MOSAIC_ROWS}px`,
+                  overflow: "hidden",
+                },
+              },
+              cover
+                ? h("img", {
+                    src: cover,
+                    style: {
+                      width: `${WIDTH / MAPS_MOSAIC_COLS}px`,
+                      height: `${HEIGHT / MAPS_MOSAIC_ROWS}px`,
+                      objectFit: "cover",
+                      // Low opacity over the dark surface keeps the art
+                      // as texture, not content.
+                      opacity: 0.12,
+                    },
+                  })
+                : null,
+            );
+          }),
+        ),
+      ),
+    );
+  }
+
+  // Reason colours mirror REASON_META in src/routes/farm-helper.tsx
+  // (osu-blue, osu-green-light, osu-yellow).
+  const recs = [
+    { reason: "missing", reasonColor: "#66ccff", gain: "+41pp", barWidth: 300, rotate: -1.4, top: 105, left: 660 },
+    { reason: "improve", reasonColor: "#b3d944", gain: "+24pp", barWidth: 250, rotate: 1.2, top: 253, left: 642 },
+    { reason: "old pb", reasonColor: "#ffcc22", gain: "+18pp", barWidth: 330, rotate: -0.8, top: 401, left: 668 },
+  ];
+
+  const response = new ImageResponse(
+    h(
+      "div",
+      {
+        style: {
+          width: `${WIDTH}px`,
+          height: `${HEIGHT}px`,
+          display: "flex",
+          position: "relative",
+          overflow: "hidden",
+          background: SURFACE_COLOR,
+          fontFamily: '"Torus OG"',
+          color: "#ffffff",
+        },
+      },
+      [
+        // Dimmed farmed-map cover mosaic (when available).
+        mosaic,
+
+        // Title sticker on the left, vertically centred against the
+        // card stack. Sub-line echoes the app's own "+Npp on the table"
+        // header copy.
+        sticker({
+          key: "title",
+          text: "farm helper",
+          subText: "PP ON THE TABLE",
+          fontSize: 76,
+          background: "#ff66aa",
+          color: "#1a1317",
+          paddingX: 32,
+          paddingY: 24,
+          rotate: -2,
+          top: 238,
+          left: 80,
+        }),
+
+        // The recommendation stack.
+        ...recs.map((rec, i) =>
+          farmHelperRecCard({
+            key: `rec-${i}`,
+            reason: rec.reason,
+            reasonColor: rec.reasonColor,
+            gain: rec.gain,
+            barWidth: rec.barWidth,
+            rotate: rec.rotate,
+            top: rec.top,
+            left: rec.left,
+          }),
+        ),
+
+        // Small brand mark, bottom-left corner.
+        sticker({
+          key: "brand",
+          text: "o!mania tracker",
+          fontSize: 16,
+          background: "#f3ece4",
+          color: "#1a1317",
+          paddingX: 10,
+          paddingY: 6,
+          rotate: -2,
+          top: 560,
+          left: 84,
+        }),
+      ],
+    ),
+    {
+      width: WIDTH,
+      height: HEIGHT,
+      fonts: ogFontList(regularFont, heavyFont),
+    },
+  );
+
+  response.headers.set("Cache-Control", OG_CACHE_HEADER);
+  return response;
+}
+
 /* Title-only fallback. Used as a last resort if the polaroid default
    render fails, and for any odd preview-tool presets that pass a raw
    title without a country. The description lives in the HTML <meta>
@@ -2389,6 +2711,16 @@ export const Route = createFileRoute("/api/og")({
             } catch (err) {
               console.warn("[og] replay render failed, falling back", err);
             }
+          }
+        }
+
+        // Farm helper route. Global tool, no country concept; one static
+        // branded card shared by every share of the page.
+        if (kind === "farm-helper") {
+          try {
+            return await serveOg(`farm-helper:v${version}`, () => renderFarmHelperOg(request));
+          } catch (err) {
+            console.warn("[og] farm-helper render failed, falling back", err);
           }
         }
 

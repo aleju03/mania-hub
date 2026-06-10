@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import {
   fetchWithCacheLock,
   getPersistentCacheEntries,
+  getPersistentCacheEntryAllowStale,
   osuFetch
 } from "../api";
 import type { RankingsResponse } from "../types";
@@ -30,11 +31,29 @@ export const getRankings = createServerFn({ method: "GET" })
     return fetchRankingsPage(type, data.page ?? 1, data.country);
   });
 
+// v4: lean ranking users read cover_url from user.cover.url for replay
+// suggestion banners. Bumped so broken v3 entries with undefined banners
+// are refetched.
+function rankingsCacheKey(type: string, page: number, country?: string): string {
+  return `rankings:v4:${type}:${page}:${country ?? ""}`;
+}
+
+// Read-only, stale-allowed view of a cached rankings page. Lets the OG route
+// recover the last-known roster for a country without spending an osu! API
+// call; a miss means the caller falls back, never fetches.
+export async function readRankingsPageFromCache(
+  type: string,
+  page: number,
+  country?: string,
+): Promise<RankingsResponse | null> {
+  const cached = await getPersistentCacheEntryAllowStale<RankingsResponse>(
+    rankingsCacheKey(type, page, country),
+  );
+  return cached.hit ? cached.value : null;
+}
+
 export async function fetchRankingsPage(type: string, page: number, country?: string): Promise<RankingsResponse> {
-  // v4: lean ranking users read cover_url from user.cover.url for replay
-  // suggestion banners. Bumped so broken v3 entries with undefined banners
-  // are refetched.
-  const cacheKey = `rankings:v4:${type}:${page}:${country ?? ""}`;
+  const cacheKey = rankingsCacheKey(type, page, country);
   return fetchWithCacheLock(cacheKey, RANKINGS_CACHE_TTL, async () => {
     const raw = await osuFetch<RawRankingsResponse>(
       `/rankings/mania/${type}`,

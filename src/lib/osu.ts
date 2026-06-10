@@ -41,11 +41,13 @@ export {
   getCountryMapsData,
   getCountryMapsFarmed,
   getCountryMapsFavourites,
+  readCountryMapsFavouritesFromCache,
   rebuildCountryMapsData,
   rebuildCountryMapsFarmed,
   rebuildCountryMapsFavourites,
   rebuildCountryMapsForUser,
 } from "./osu/maps";
+export { readRankingsPageFromCache } from "./osu/rankings";
 export {
   getBeatmapFile,
   getReplayParsed,

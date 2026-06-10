@@ -335,7 +335,7 @@ export function isLiveBackendConfigured(): boolean {
   return getLiveBackendUrl() !== null;
 }
 
-function getServerLiveBackendUrl(): string | null {
+export function getServerLiveBackendUrl(): string | null {
   const value = process.env.LIVE_BACKEND_URL || process.env.VITE_LIVE_BACKEND_URL;
   if (typeof value !== "string" || value.trim() === "") return null;
   return value.replace(/\/+$/, "");

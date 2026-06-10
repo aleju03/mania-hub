@@ -11,6 +11,7 @@ type PresetKind =
   | "rankings"
   | "player"
   | "maps"
+  | "farm-helper"
   | "replay";
 
 type Preset = {
@@ -73,9 +74,9 @@ const PRESETS: Preset[] = [
   {
     key: "farm-helper",
     label: "Farm Helper",
-    kind: "default",
+    kind: "farm-helper",
     title: "Farm Helper",
-    subtitle: "Farm Helper",
+    subtitle: "Find osu!mania farm maps worth playing, based on nearby players, missing clears, improvable scores, and old PBs.",
     path: "/farm-helper",
   },
   {
@@ -198,6 +199,13 @@ function OgPreviewPage() {
       });
       return `/api/og?${params.toString()}`;
     }
+    if (kind === "farm-helper") {
+      const params = new URLSearchParams({
+        kind,
+        t: String(cacheBuster),
+      });
+      return `/api/og?${params.toString()}`;
+    }
     if (kind === "home" || kind === "rankings") {
       const params = new URLSearchParams({
         kind,
@@ -308,6 +316,13 @@ function OgPreviewPage() {
             <span className="text-[10px] text-osu-f1/70">
               mosaic of cover art from the country's favourites pool
             </span>
+          </div>
+        ) : kind === "farm-helper" ? (
+          <div className="text-[11px] text-osu-f1/80 leading-relaxed">
+            Static farm helper card: reason stickers (missing / improve / old pb)
+            in the app's accent colors, pp-gain tags, grade badges, and the
+            global mania top 50 as the dim avatar backdrop. No inputs; title and
+            subtitle here only affect the embed mock below.
           </div>
         ) : (
           <div className="space-y-3">

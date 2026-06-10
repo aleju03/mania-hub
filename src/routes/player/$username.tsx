@@ -1453,9 +1453,16 @@ export function PlayerProfilePage({
                     <img src="/images/icons/supporter.svg" alt="Supporter" className="w-3 h-3 brightness-0 invert" />
                   </span>
                 )}
-                {user.is_online && (
+                {user.is_online ? (
                   <span className="w-2 h-2 rounded-full bg-osu-green" title="Online" />
-                )}
+                ) : user.last_visit ? (
+                  <span
+                    className="text-[11px] text-osu-l2"
+                    title={new Date(user.last_visit).toLocaleString()}
+                  >
+                    Last seen {formatTimeAgo(user.last_visit)}
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>
@@ -2180,13 +2187,9 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
           <div className="mt-6 sm:mt-7">
             <div className="flex gap-2">
               <div className="grid w-8 shrink-0 grid-rows-7 gap-1 pt-5 text-[10px] text-osu-f1">
-                <span />
-                <span className="flex items-center">Mon</span>
-                <span />
-                <span className="flex items-center">Wed</span>
-                <span />
-                <span className="flex items-center">Fri</span>
-                <span />
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                  <span key={day} className="flex items-center">{day}</span>
+                ))}
               </div>
               <div className="min-w-0 max-w-full flex-1 overflow-x-auto pb-2 scrollbar-hide sm:overflow-visible sm:pb-0">
                 <div className="w-max sm:w-full">
@@ -2573,7 +2576,7 @@ function ActivityMonthLabels({ weeks, gridStyle }: { weeks: ActivityWeek[]; grid
 
 function buildActivityFromSnapshot(snapshot: LivePlayerActivitySnapshot | null, year: number): ActivitySummary {
   const today = startOfLocalDay(new Date());
-  const { start, end } = getActivityHeatmapRange(snapshot, year, today);
+  const { start, end } = getActivityHeatmapRange(snapshot, year);
   const activeDays = new Map((snapshot?.days ?? []).map((day) => [day.date, day]));
   const typicalSession = Math.max(1, snapshot?.typicalSession ?? 1);
   const days: ActivityDay[] = [];
@@ -2609,34 +2612,21 @@ function buildActivityFromSnapshot(snapshot: LivePlayerActivitySnapshot | null, 
   };
 }
 
-// Trim months the heatmap has nothing to say about: start at the first active
-// month, and stop at the current month (current year) or last active month
-// (past years) instead of always rendering January through December.
+// Skip the empty months before a player's first tracked play: the heatmap
+// starts at the first active month and always runs through December.
 function getActivityHeatmapRange(
   snapshot: LivePlayerActivitySnapshot | null,
   year: number,
-  today: Date,
 ): { start: Date; end: Date } {
-  const activeDates = (snapshot?.days ?? [])
+  const firstActiveDate = (snapshot?.days ?? [])
     .filter((day) => day.scoreCount > 0)
     .map((day) => day.date)
-    .sort();
-  let start = new Date(year, 0, 1);
-  let end = new Date(year, 11, 31);
-  if (year === today.getFullYear()) {
-    const currentMonthEnd = endOfLocalMonth(today);
-    if (currentMonthEnd < end) end = currentMonthEnd;
-  }
-  if (activeDates.length > 0) {
-    const first = parseLocalDateKey(activeDates[0]);
-    start = new Date(first.getFullYear(), first.getMonth(), 1);
-    const lastMonthEnd = endOfLocalMonth(parseLocalDateKey(activeDates[activeDates.length - 1]));
-    if (year !== today.getFullYear() && lastMonthEnd < end) end = lastMonthEnd;
-    // UTC day keys can run a day ahead of local time at month boundaries.
-    if (lastMonthEnd > end) end = lastMonthEnd;
-  }
-  if (start > end) start = new Date(end.getFullYear(), end.getMonth(), 1);
-  return { start, end };
+    .sort()[0];
+  const first = firstActiveDate ? parseLocalDateKey(firstActiveDate) : new Date(year, 0, 1);
+  return {
+    start: new Date(first.getFullYear(), first.getMonth(), 1),
+    end: new Date(year, 11, 31),
+  };
 }
 
 function normalizeActivityDay(day: Omit<ActivityDay, "level">, typicalSession: number): ActivityDay {
@@ -2860,10 +2850,6 @@ function addLocalDays(date: Date, days: number): Date {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
   return next;
-}
-
-function endOfLocalMonth(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
 }
 
 function toDateKey(date: Date): string {

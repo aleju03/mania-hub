@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, stripSearchParams, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState, useMemo, useSyncExternalStore } from "react";
 import type { MouseEvent } from "react";
 import { getRankings, getUsersRankHistory } from "../lib/osu";
@@ -24,6 +24,13 @@ import { writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
 
 type SortField = "rank" | "player" | "7d" | "cr7d" | "accuracy" | "playcount" | "pp" | "ss" | "s" | "a";
 const GLOBAL_RANKINGS_PAGE_SIZE = 50;
+
+// Without stripping the default page, page=1 gets serialized into the URL
+// and /rankings 307-redirects to /rankings?page=1, which breaks crawling
+// (the sitemap lists /rankings and page 1's canonical points back to it).
+// `page` must be optional in the schema for stripSearchParams to accept it.
+type RankingsSearch = { page?: number; country: string | undefined };
+const RANKINGS_SEARCH_DEFAULTS: Pick<RankingsSearch, "page"> = { page: 1 };
 
 function parseRankingsPage(value: unknown): number {
   const page = Number(value ?? 1);
@@ -85,10 +92,13 @@ function useIsDesktop(): boolean {
 }
 
 export const Route = createFileRoute("/rankings")({
-  validateSearch: (search: Record<string, unknown>) => ({
+  validateSearch: (search: Record<string, unknown>): RankingsSearch => ({
     page: parseRankingsPage(search.page),
     country: parseCountrySearchParam(search.country),
   }),
+  search: {
+    middlewares: [stripSearchParams(RANKINGS_SEARCH_DEFAULTS)],
+  },
   head: ({ match }) => {
     const country = match.search.country;
     const countryName = country ? getCountryName(country) : null;
@@ -97,7 +107,7 @@ export const Route = createFileRoute("/rankings")({
       description: countryName
         ? `Top osu!mania players in ${countryName}`
         : "osu!mania country rankings",
-      path: withSearchParams("/rankings", { page: match.search.page > 1 ? match.search.page : undefined, country }),
+      path: withSearchParams("/rankings", { page: (match.search.page ?? 1) > 1 ? match.search.page : undefined, country }),
       origin: match.context.origin,
       imageCountry: country,
       imageKind: "rankings",
@@ -107,7 +117,7 @@ export const Route = createFileRoute("/rankings")({
 });
 
 function RankingsPage() {
-  const { page, country } = Route.useSearch();
+  const { page = 1, country } = Route.useSearch();
   const navigate = useNavigate();
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = country ?? fallbackCountry;

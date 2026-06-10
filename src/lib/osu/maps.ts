@@ -4,6 +4,7 @@ import {
   deletePersistentCacheEntries,
   fetchWithCacheLock,
   fetchWithStaleAllowed,
+  getPersistentCacheEntryAllowStale,
   osuFetch,
   runCacheRebuild
 } from "../api";
@@ -70,7 +71,7 @@ async function fetchUserFavourites(userId: number): Promise<OsuBeatmapset[]> {
   });
 }
 
-type MapsUser = { id: number; username: string; avatar_url: string };
+export type MapsUser = { id: number; username: string; avatar_url: string };
 
 const MAPS_REBUILD_LOCK_TTL_MS = 60_000;
 const MAPS_ORPHAN_CLEANUP_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -521,6 +522,19 @@ export const getCountryMapsFarmed = createServerFn({ method: "GET" })
       MAPS_REBUILD_LOCK_TTL_MS,
     );
   });
+
+// Read-only lookup of whatever favourites blob is stored for this exact
+// roster, stale included. Never rebuilds: a miss here means the caller (the
+// OG image route) falls back to another layout, and a synchronous rebuild
+// would be 50 users of rate-limited osu! API calls inside that request.
+export async function readCountryMapsFavouritesFromCache(
+  users: MapsUser[],
+): Promise<CountryMapsFavouritesSection | null> {
+  const cached = await getPersistentCacheEntryAllowStale<CountryMapsFavouritesSection>(
+    computeMapsFavouritesCacheKey(users),
+  );
+  return cached.hit ? cached.value : null;
+}
 
 export const getCountryMapsFavourites = createServerFn({ method: "GET" })
   .inputValidator(normalizeMapsUserPayload)

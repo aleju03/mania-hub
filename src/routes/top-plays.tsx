@@ -20,7 +20,8 @@ import { UsernameText } from "../components/ui/UsernameText";
 import { Pagination } from "../components/ui/Pagination";
 import type { CountryTopPlay, RankingsResponse, TopPlaysRefreshStatus } from "../lib/types";
 import { useAppStore, useHiddenUserIds, useSelectedCountry, type CachedPopoff, type TopPlaysRange } from "../store";
-import { parseCountrySearchParam } from "../lib/country-search";
+import { parseCountrySearchParam, withSearchParams } from "../lib/country-search";
+import { pageSeo } from "../lib/seo";
 import { hasTopPlaysCache, shouldRefreshTopPlays } from "../lib/top-plays-cache";
 import { getReplaySearch } from "../lib/replay-navigation";
 import { startProgressPoll } from "../lib/progress-poll";
@@ -89,12 +90,15 @@ export const Route = createFileRoute("/top-plays")({
   head: ({ match }) => {
     const country = match.search.country;
     const countryName = country ? getCountryName(country) : null;
-    return {
-      meta: [
-        { title: countryName ? `Top mania plays in ${countryName}` : "Top mania plays this week" },
-        { name: "description", content: "" },
-      ],
-    };
+    return pageSeo({
+      title: countryName ? `Top mania plays in ${countryName}` : "Top osu!mania plays",
+      description: countryName
+        ? `Recent top osu!mania plays and pp records in ${countryName}.`
+        : "Recent top osu!mania plays and pp records by country.",
+      path: withSearchParams("/top-plays", { country }),
+      origin: match.context.origin,
+      imageCountry: country,
+    });
   },
   search: {
     middlewares: [stripSearchParams(DEFAULT_TOP_PLAYS_SEARCH)],
