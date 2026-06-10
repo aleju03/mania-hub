@@ -9,7 +9,7 @@ import { updateSnipeProjection } from "./features/snipes.js";
 import { confirmTopPlay, TopPlayConfirmationPendingError } from "./features/top-plays.js";
 import { getHydratedScoresForMetadata } from "./features/tracker.js";
 import type { ClaimOptions, Job, JobQueue } from "./jobs/queue.js";
-import { hasPendingRecentReconcileJob, RECENT_RECONCILE_JOB_TYPE } from "./jobs/recent-reconcile.js";
+import { hasPendingRecentReconcileJob, RECENT_RECONCILE_JOB_TYPE, requeueDeferredRecentReconcileJobs } from "./jobs/recent-reconcile.js";
 import type { LiveEventLog } from "./live/event-log.js";
 import { OsuApiError, type OsuApiClient } from "./osu/client.js";
 import { OscBackfill } from "./osc/backfill.js";
@@ -450,9 +450,10 @@ export class WorkerRunner {
       processLeaderboardFeatures: payload.processLeaderboardFeatures === true,
     });
     if (await this.isUserActive(userId)) {
+      if (await requeueDeferredRecentReconcileJobs(this.db, userId) > 0) return;
       if (await hasPendingRecentReconcileJob(this.db, userId, {
         excludeJobId: currentJobId,
-        statuses: ["queued", "failed", "deferred_pressure"],
+        statuses: ["queued", "failed"],
       })) return;
       const runAfter = new Date(Date.now() + 2 * 60_000);
       const bucket = Math.floor(runAfter.getTime() / (2 * 60_000));

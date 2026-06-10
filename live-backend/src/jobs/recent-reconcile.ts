@@ -1,8 +1,39 @@
 import type { Db } from "../db.js";
 import { exec, json } from "../db.js";
+import { nowIso } from "../shared/score.js";
 import type { JobStatus } from "./queue.js";
 
 export const RECENT_RECONCILE_JOB_TYPE = "reconcile_user_recent_scores";
+
+// Pressure-deferred jobs only reactivate when queue depth drops below the
+// recovery threshold, which a busy queue can fail to reach for hours. A fresh
+// score from the user is a stronger signal: revive their parked reconcile so
+// the catch-up chain (which picks up plays oSC does not carry) keeps running.
+export async function requeueDeferredRecentReconcileJobs(db: Db, userId: number): Promise<number> {
+  const safeUserId = Math.floor(userId);
+  if (!Number.isFinite(safeUserId) || safeUserId <= 0) return 0;
+  const now = nowIso();
+  const result = await exec(
+    db,
+    `update jobs
+     set status = 'queued',
+         run_after = ?,
+         last_error = null,
+         updated_at = ?
+     where type = ?
+       and status = 'deferred_pressure'
+       and (payload_json = ? or dedupe_key = ? or dedupe_key like ?)`,
+    [
+      now,
+      now,
+      RECENT_RECONCILE_JOB_TYPE,
+      json({ userId: safeUserId }),
+      `recent:user:${safeUserId}`,
+      `recent:user:${safeUserId}:%`,
+    ],
+  );
+  return Number(result.rowsAffected ?? 0);
+}
 
 export async function hasPendingRecentReconcileJob(
   db: Db,

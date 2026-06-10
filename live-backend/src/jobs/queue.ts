@@ -164,8 +164,11 @@ export class JobQueue {
   async shedPressure(targetDepth = QUEUE_TARGET_DEPTH): Promise<number> {
     let deferred = 0;
     let depth = await this.depth();
-    if (depth < QUEUE_RECOVERY_DEPTH) {
-      await this.reactivateDeferred(QUEUE_RECOVERY_DEPTH - depth);
+    // Drain parked jobs whenever there is headroom below the soft-pressure
+    // line. Waiting for the recovery floor starves the deferred pool when
+    // steady inflow keeps depth hovering between recovery and target.
+    if (depth < QUEUE_SOFT_PRESSURE_DEPTH) {
+      await this.reactivateDeferred(QUEUE_SOFT_PRESSURE_DEPTH - depth);
       depth = await this.depth();
     }
     if (depth <= targetDepth) return 0;
