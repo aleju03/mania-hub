@@ -320,9 +320,6 @@ function PlayerPicker({ viewer, onPick }: { viewer: ReturnType<typeof useAuth>["
               <h2 className="text-2xl font-bold text-osu-c1">Hey, {viewer.username}</h2>
               {viewer.countryCode ? <CountryFlag code={viewer.countryCode} size="sm" decorative /> : null}
             </div>
-            <p className="mt-1.5 text-sm text-osu-f1">
-              Compare yourself to players near your pp and find the maps with the most to gain.
-            </p>
             <button
               type="button"
               onClick={() => onPick(String(viewer.id))}
@@ -341,17 +338,25 @@ function PlayerPicker({ viewer, onPick }: { viewer: ReturnType<typeof useAuth>["
             </div>
           </div>
         ) : (
-          <div>
-            <h2 className="text-3xl font-black leading-tight text-osu-c1">Find your next farm</h2>
-            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-osu-f1 lg:mx-0">
-              Compares you to players near your pp and finds the maps with the most to gain.
-            </p>
+          <div className="text-3xl font-black leading-tight text-osu-c1">
+            <div>maps worth farming</div>
+            <div className="mt-3 flex items-center justify-center gap-3 lg:justify-start">
+              <span>for</span>
+              <SearchInput
+                onSearch={searchPlayers}
+                onSelect={(user) => onPick(user.username)}
+                placeholder="username..."
+                className="w-full max-w-60 font-normal"
+              />
+            </div>
           </div>
         )}
 
-        <div className={`mx-auto w-full max-w-md lg:mx-0 ${viewer ? "mt-4" : "mt-6"}`}>
-          <SearchInput onSearch={searchPlayers} onSelect={(user) => onPick(user.username)} placeholder="enter your username..." />
-        </div>
+        {viewer ? (
+          <div className="mx-auto mt-4 w-full max-w-md lg:mx-0">
+            <SearchInput onSearch={searchPlayers} onSelect={(user) => onPick(user.username)} placeholder="enter a username..." />
+          </div>
+        ) : null}
 
         {recents.length > 0 ? (
           <div className="mt-3">
@@ -385,6 +390,9 @@ function PlayerPicker({ viewer, onPick }: { viewer: ReturnType<typeof useAuth>["
         ) : null}
 
         <div className="mx-auto mt-9 w-fit space-y-2 text-left lg:mx-0">
+          <p className="mb-2.5 text-xs text-osu-f1">
+            based on what players near the same pp are farming:
+          </p>
           <PickerLegend
             icon={<Target className="h-3.5 w-3.5 shrink-0 text-osu-blue" />}
             label="missing"
