@@ -27,6 +27,7 @@ export async function migrate(db: Db): Promise<void> {
   await migrateProfileSnapshots(db);
   await migrateMapsFarmedOverlay(db);
   await migrateApiCallTargets(db);
+  await migratePlayerActivity(db);
 }
 
 export async function dbHealth(db: Db): Promise<boolean> {
@@ -293,5 +294,127 @@ async function migrateApiCallTargets(db: Db): Promise<void> {
   await db.execute(`
     create index if not exists idx_api_call_log_target_time
       on api_call_log(target_id, started_at desc)
+  `);
+}
+
+async function migratePlayerActivity(db: Db): Promise<void> {
+  await db.execute(`
+    create table if not exists beatmap_skill_vectors (
+      beatmap_id integer not null,
+      analysis_version integer not null,
+      status text not null,
+      stream_score real not null default 0,
+      jack_score real not null default 0,
+      bracket_score real not null default 0,
+      ln_score real not null default 0,
+      ln_general_score real not null default 0,
+      ln_release_score real not null default 0,
+      ln_inverse_score real not null default 0,
+      ln_tech_score real not null default 0,
+      error text,
+      computed_at text,
+      updated_at text not null,
+      primary key (beatmap_id, analysis_version)
+    )
+  `);
+  const vectorColumns = (await db.execute("pragma table_info(beatmap_skill_vectors)")).rows.map((row) => String(row.name));
+  if (!vectorColumns.includes("bracket_score")) {
+    await db.execute("alter table beatmap_skill_vectors add column bracket_score real not null default 0");
+  }
+  if (!vectorColumns.includes("ln_general_score")) {
+    await db.execute("alter table beatmap_skill_vectors add column ln_general_score real not null default 0");
+  }
+  if (!vectorColumns.includes("ln_release_score")) {
+    await db.execute("alter table beatmap_skill_vectors add column ln_release_score real not null default 0");
+  }
+  if (!vectorColumns.includes("ln_inverse_score")) {
+    await db.execute("alter table beatmap_skill_vectors add column ln_inverse_score real not null default 0");
+  }
+  if (!vectorColumns.includes("ln_tech_score")) {
+    await db.execute("alter table beatmap_skill_vectors add column ln_tech_score real not null default 0");
+  }
+  await db.execute(`
+    create table if not exists player_activity_score_refs (
+      country text not null,
+      score_identity text not null,
+      user_id integer not null,
+      day text not null,
+      beatmap_id integer not null,
+      passed integer not null,
+      ended_at text not null,
+      created_at text not null,
+      primary key (country, score_identity)
+    )
+  `);
+  const refColumns = (await db.execute("pragma table_info(player_activity_score_refs)")).rows.map((row) => String(row.name));
+  if (!refColumns.includes("passed")) {
+    await db.execute("alter table player_activity_score_refs add column passed integer not null default 1");
+  }
+  await db.execute(`
+    create table if not exists player_activity_days (
+      country text not null,
+      user_id integer not null,
+      day text not null,
+      score_count integer not null default 0,
+      passed_count integer not null default 0,
+      session_count integer not null default 0,
+      first_score_at text,
+      last_score_at text,
+      updated_at text not null,
+      primary key (country, user_id, day)
+    )
+  `);
+  await db.execute(`
+    create table if not exists player_activity_maps (
+      country text not null,
+      user_id integer not null,
+      day text not null,
+      beatmap_id integer not null,
+      play_count integer not null default 0,
+      best_score_id integer,
+      best_pp real,
+      best_accuracy real,
+      best_rank text,
+      first_played_at text,
+      last_played_at text,
+      updated_at text not null,
+      primary key (country, user_id, day, beatmap_id)
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_beatmap_skill_vectors_status_updated
+      on beatmap_skill_vectors(status, updated_at desc)
+  `);
+  await db.execute(`
+    create index if not exists idx_player_activity_refs_user_day
+      on player_activity_score_refs(country, user_id, day, ended_at)
+  `);
+  await db.execute(`
+    create index if not exists idx_player_activity_refs_day
+      on player_activity_score_refs(day)
+  `);
+  await db.execute(`
+    create index if not exists idx_player_activity_days_user_day
+      on player_activity_days(country, user_id, day)
+  `);
+  await db.execute(`
+    create index if not exists idx_player_activity_days_user_year
+      on player_activity_days(country, user_id, substr(day, 1, 4))
+  `);
+  await db.execute(`
+    create index if not exists idx_player_activity_days_day
+      on player_activity_days(day)
+  `);
+  await db.execute(`
+    create index if not exists idx_player_activity_maps_user_day
+      on player_activity_maps(country, user_id, day, play_count desc)
+  `);
+  await db.execute(`
+    create index if not exists idx_player_activity_maps_beatmap
+      on player_activity_maps(beatmap_id)
+  `);
+  await db.execute(`
+    create index if not exists idx_player_activity_maps_day
+      on player_activity_maps(day)
   `);
 }

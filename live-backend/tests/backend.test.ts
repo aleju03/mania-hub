@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot } from "../src/features/snipes.js";
+import { getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../src/features/activity.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, globalMapsFarmedRefreshRunAfter, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "../src/features/maps.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../src/features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
@@ -23,6 +24,7 @@ import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
 import { JobQueue } from "../src/jobs/queue.js";
 import { LiveEventLog } from "../src/live/event-log.js";
 import { OsuApiClient, OsuApiError, TokenBucketLimiter } from "../src/osu/client.js";
+import { runRetention } from "../src/retention.js";
 import { WorkerRunner } from "../src/workers.js";
 import type { OscScore } from "../src/shared/types.js";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -103,6 +105,7 @@ function baseConfig(overrides: Record<string, unknown> = {}) {
     sseMaxConnectionsPerIp: 6,
     sseMaxConnectionsTotal: 500,
     replayVideoRatePerMinute: 2,
+    activityRetentionYears: 2,
     replayVideoPublicEnabled: false,
     replayVideoUploadMaxBytes: 600 * 1024 * 1024,
     mapsRefreshIntervalMs: 7 * 24 * 60 * 60 * 1000,
@@ -154,6 +157,46 @@ describe("live backend", () => {
     expect(await ingestor.ingestBatch(scores)).toEqual({ inserted: 0, skipped: 2 });
     expect(Number((await exec(db, "select count(*) as count from score_events")).rows[0].count)).toBe(1);
     expect(await queue.depth()).toBeGreaterThanOrEqual(1);
+  });
+
+  it("projects tracked player activity by year without double-counting duplicate ingestion", async () => {
+    const { db, queue, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+
+    await ingestor.ingestBatch([scores[0]]);
+    await ingestor.ingestBatch([scores[0]]);
+
+    const snapshot = await getPlayerActivitySnapshot(db, queue, 101, "CR", 2026);
+    expect(snapshot.available).toBe(true);
+    expect(snapshot.country).toBe("CR");
+    expect(snapshot.totalScores).toBe(1);
+    expect(snapshot.activeDays).toBe(1);
+    expect(snapshot.typicalSession).toBe(1);
+    expect(snapshot.days).toHaveLength(1);
+    expect(snapshot.days[0]).toMatchObject({
+      date: "2026-05-12",
+      scoreCount: 1,
+      passedCount: 1,
+      sessionCount: 1,
+      mapCount: 1,
+    });
+    expect(snapshot.days[0].maps).toEqual([]);
+
+    const dayDetail = await getPlayerActivityDayDetail(db, queue, 101, "CR", "2026-05-12");
+    expect(dayDetail).toMatchObject({
+      date: "2026-05-12",
+      scoreCount: 1,
+      sessionCount: 1,
+      mapCount: 1,
+    });
+    expect(dayDetail?.maps[0]).toMatchObject({
+      beatmapId: 501,
+      title: "Fixture Song",
+      artist: "Fixture Artist",
+      version: "Another",
+      plays: 1,
+      keyCount: 4,
+    });
   });
 
   it("keeps paused countries out of ingestion even when they are pinned", async () => {
@@ -293,6 +336,63 @@ describe("live backend", () => {
     }
     expect(Number((await exec(db, "select count(*) as count from country_rosters where country = 'US'")).rows[0].count)).toBe(1);
     expect(Number((await exec(db, "select count(*) as count from jobs where dedupe_key = 'roster:CR'")).rows[0].count)).toBe(0);
+  });
+
+  it("retains activity for the current and previous calendar year", async () => {
+    vi.setSystemTime(new Date("2026-06-10T12:00:00.000Z"));
+    const { db } = await setup(["CR"]);
+    const rows = [
+      { day: "2024-12-31", identity: "old", beatmapId: 4001 },
+      { day: "2025-01-01", identity: "previous", beatmapId: 5001 },
+      { day: "2026-06-10", identity: "current", beatmapId: 6001 },
+    ];
+
+    for (const row of rows) {
+      const at = `${row.day}T12:00:00.000Z`;
+      await exec(
+        db,
+        `insert into player_activity_score_refs
+           (country, score_identity, user_id, day, beatmap_id, passed, ended_at, created_at)
+         values ('CR', ?, 101, ?, ?, 1, ?, ?)`,
+        [row.identity, row.day, row.beatmapId, at, at],
+      );
+      await exec(
+        db,
+        `insert into player_activity_days
+           (country, user_id, day, score_count, passed_count, session_count, first_score_at, last_score_at, updated_at)
+         values ('CR', 101, ?, 1, 1, 1, ?, ?, ?)`,
+        [row.day, at, at, at],
+      );
+      await exec(
+        db,
+        `insert into player_activity_maps
+           (country, user_id, day, beatmap_id, play_count, first_played_at, last_played_at, updated_at)
+         values ('CR', 101, ?, ?, 1, ?, ?, ?)`,
+        [row.day, row.beatmapId, at, at, at],
+      );
+    }
+
+    const deleted = await runRetention(db, {
+      databaseUrl: `file:${join(dir, "test.db")}`,
+      scoreEventRetentionDays: 14,
+      liveEventRetentionDays: 7,
+      doneJobRetentionDays: 2,
+      apiCallLogRetentionDays: 7,
+      replayVideoJobRetentionDays: 2,
+      rankSnapshotRetentionDays: 14,
+      activityRetentionYears: 2,
+      replayVideoWorkDir: join(dir, "replay-video-jobs"),
+      maxLocalDbBytes: Number.MAX_SAFE_INTEGER,
+      targetLocalDbBytes: Number.MAX_SAFE_INTEGER,
+    });
+
+    expect(deleted.activityScoreRefs).toBe(1);
+    expect(deleted.activityMaps).toBe(1);
+    expect(deleted.activityDays).toBe(1);
+    for (const table of ["player_activity_score_refs", "player_activity_days", "player_activity_maps"]) {
+      expect(Number((await exec(db, `select count(*) as count from ${table} where day < '2025-01-01'`)).rows[0].count)).toBe(0);
+      expect(Number((await exec(db, `select count(*) as count from ${table}`)).rows[0].count)).toBe(2);
+    }
   });
 
   it("reports connected page users on country registry status rows", async () => {

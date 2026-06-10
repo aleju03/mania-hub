@@ -221,6 +221,119 @@ export interface LivePlayerProfileSection<T> {
   isStale: boolean;
 }
 
+export interface LivePlayerActivitySkillReadout {
+  stream: number;
+  jack: number;
+  bracket: number;
+  ln: number;
+  lnGeneral: number;
+  lnRelease: number;
+  lnInverse: number;
+  lnTech: number;
+  analyzedPlays: number;
+  totalPlays: number;
+  keyModes: LivePlayerActivityKeyModeSkillReadout[];
+}
+
+export type LivePlayerActivityPrimarySkill =
+  | "stream"
+  | "jack"
+  | "bracket"
+  | "ln"
+  | "lnGeneral"
+  | "lnRelease"
+  | "lnInverse"
+  | "lnTech"
+  | "mixed"
+  | "unknown";
+
+export interface LivePlayerActivitySkillVector {
+  stream: number;
+  jack: number;
+  bracket: number;
+  ln: number;
+  lnGeneral: number;
+  lnRelease: number;
+  lnInverse: number;
+  lnTech: number;
+}
+
+export interface LivePlayerActivityKeyModeSkillReadout extends LivePlayerActivitySkillVector {
+  keyCount: number | null;
+  analyzedPlays: number;
+  totalPlays: number;
+}
+
+export interface LivePlayerActivityMap {
+  key: string;
+  beatmapId: number;
+  beatmapsetId: number | null;
+  title: string;
+  artist: string;
+  version: string;
+  coverUrl: string | null;
+  plays: number;
+  accuracy: number | null;
+  pp: number | null;
+  rank: string | null;
+  keyCount: number | null;
+  skills: LivePlayerActivitySkillVector | null;
+}
+
+export interface LivePlayerActivityTimelineSegment {
+  key: string;
+  sessionIndex: number;
+  startAt: string;
+  endAt: string;
+  playCount: number;
+  keyCount: number | null;
+  primarySkill: LivePlayerActivityPrimarySkill;
+  stream: number;
+  jack: number;
+  bracket: number;
+  ln: number;
+  lnGeneral: number;
+  lnRelease: number;
+  lnInverse: number;
+  lnTech: number;
+}
+
+export interface LivePlayerActivityDay {
+  date: string;
+  scoreCount: number;
+  passedCount: number;
+  sessionCount: number;
+  mapCount: number;
+  maps: LivePlayerActivityMap[];
+  skills: LivePlayerActivitySkillReadout | null;
+  timeline: LivePlayerActivityTimelineSegment[];
+}
+
+export interface LivePlayerActivitySnapshot {
+  available: boolean;
+  isTracked: boolean;
+  userId: number;
+  country: string | null;
+  year: number;
+  availableYears: number[];
+  totalScores: number;
+  activeDays: number;
+  totalSessions: number;
+  typicalSession: number;
+  currentStreak: number;
+  generatedAt: string;
+  days: LivePlayerActivityDay[];
+}
+
+export interface LivePlayerActivityAvailability {
+  available: boolean;
+  isTracked: boolean;
+  userId: number;
+  country: string | null;
+  availableYears: number[];
+  generatedAt: string;
+}
+
 export function getLiveBackendUrl(): string | null {
   const value = import.meta.env.VITE_LIVE_BACKEND_URL || import.meta.env.LIVE_BACKEND_URL;
   if (typeof value !== "string" || value.trim() === "") return null;
@@ -469,6 +582,50 @@ export async function fetchLivePlayerAboutDirect(userId: number): Promise<LivePl
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
   return fetchLiveJson(`/api/profiles/${userId}/about`);
 }
+
+export async function fetchLivePlayerActivityDirect(
+  userId: number,
+  country: string,
+  year: number,
+): Promise<LivePlayerActivitySnapshot> {
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  const query = new URLSearchParams({
+    country: country.trim().toUpperCase(),
+    year: String(Math.floor(year)),
+  });
+  return fetchLiveJson(`/api/profiles/${userId}/activity?${query.toString()}`);
+}
+
+export async function fetchLivePlayerActivityDayDirect(
+  userId: number,
+  country: string,
+  date: string,
+): Promise<LivePlayerActivityDay> {
+  if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Invalid activity date.");
+  const query = new URLSearchParams({
+    country: country.trim().toUpperCase(),
+    date,
+  });
+  return fetchLiveJson(`/api/profiles/${userId}/activity-day?${query.toString()}`);
+}
+
+export const fetchLivePlayerActivityAvailability = createServerFn({ method: "GET" })
+  .inputValidator((data: { userId?: unknown; country?: unknown }) => {
+    const userId = Number(data?.userId);
+    if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
+    const rawCountry = typeof data?.country === "string" ? data.country.trim().toUpperCase() : "GLOBAL";
+    const country = /^([A-Z]{2}|GLOBAL)$/.test(rawCountry) ? rawCountry : "GLOBAL";
+    return { userId, country };
+  })
+  .handler(async ({ data }): Promise<LivePlayerActivityAvailability | null> => {
+    const base = getServerLiveBackendUrl();
+    if (!base) return null;
+    const query = new URLSearchParams({ country: data.country });
+    const response = await fetch(`${base}/api/profiles/${data.userId}/activity-availability?${query.toString()}`);
+    if (!response.ok) throw new Error(`Live backend ${response.status} for profile activity availability`);
+    return response.json() as Promise<LivePlayerActivityAvailability>;
+  });
 
 export interface LiveTrackerSnapshotFilters {
   scoreFilter?: "ranked";

@@ -45,7 +45,7 @@ export async function createApp() {
     ingestor,
     config.enableOscBackfill ? () => enqueueOscBackfill(queue, db, config) : undefined,
   );
-  if (config.enableStartupRosterRefresh && osu.hasCredentials()) {
+  if (config.enableOsuApiJobs && config.enableStartupRosterRefresh && osu.hasCredentials()) {
     await enqueueRosterRefreshes(queue, await getIndexedCountryCodes(db, config));
   }
   const worker = new WorkerRunner(db, queue, events, osu, ingestor);
@@ -80,7 +80,7 @@ export async function createApp() {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const app = await createApp();
   if (app.config.enableWorkers) app.worker.start();
-  if (app.config.enableScheduledRefreshes) {
+  if (app.config.enableScheduledRefreshes && app.config.enableOsuApiJobs) {
     startRosterScheduler(app.db, app.queue, app.config);
     startMapsScheduler(app.db, app.queue, app.config);
   }

@@ -31,6 +31,7 @@ const SHEDDABLE_TYPES = [
   "refresh_country_roster",
   "osc_backfill",
   "osc_country_catchup",
+  "analyze_activity_beatmap",
 ];
 
 const ACTIVE_TYPE_CAPS: Record<string, number> = {

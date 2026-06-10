@@ -279,6 +279,7 @@ const ANALYTICS_RANGE_STEPS = [1, 2, 3, 4, 5, 6, 8, 12, 18, 24, 36, 48, 72, 168,
 const ANALYTICS_RANGE_PRESETS = [1, 3, 6, 12, 24, 168, 720] as const;
 const ANALYTICS_CACHE_FRESH_MS = 30_000;
 const ANALYTICS_COLD_RESPONSE_BUDGET_MS = 1_500;
+const ANALYTICS_ERROR_RETRY_MS = 30_000;
 const POSTHOG_QUERY_TIMEOUT_MS = 30_000;
 const HIDDEN_WORKER_LANE_NAMES = new Set([
   "dan-estimates",
@@ -296,6 +297,8 @@ const LEGACY_ANALYTICS_RANGE_HOURS: Record<string, AnalyticsRange> = {
 const analyticsMonitorCache = new Map<string, {
   data: AnalyticsMonitorData | null;
   promise: Promise<AnalyticsMonitorData> | null;
+  error?: unknown;
+  failedAt?: number;
 }>();
 
 function clampAnalyticsRangeHours(value: number): AnalyticsRange {
@@ -380,13 +383,6 @@ class AnalyticsPostHogQueryError extends Error {
 
 function isAbortError(err: unknown): boolean {
   return err instanceof Error && (err.name === "AbortError" || err.message.toLowerCase().includes("aborted"));
-}
-
-function isTransientAnalyticsQueryError(err: unknown): boolean {
-  if (err instanceof AnalyticsPostHogQueryError) {
-    return err.status == null || err.status === 408 || err.status === 429 || err.status >= 500;
-  }
-  return isAbortError(err);
 }
 
 function normalizeAnalyticsCountryFilter(value: unknown): string | null {
@@ -474,7 +470,7 @@ async function fetchAnalyticsMonitorDataFromPostHog({
   const since = getAnalyticsRangeSql(rangeHours);
   const recentCountryClause = recentCountry ? ` AND properties.$geoip_country_code = '${recentCountry}'` : "";
 
-  async function runQuery(query: string): Promise<unknown[][]> {
+  async function runQuery(label: string, query: string): Promise<unknown[][]> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), POSTHOG_QUERY_TIMEOUT_MS);
     let res: Response;
@@ -490,7 +486,7 @@ async function fetchAnalyticsMonitorDataFromPostHog({
       });
     } catch (err) {
       if (isAbortError(err)) {
-        throw new AnalyticsPostHogQueryError(null, `PostHog query timed out after ${Math.round(POSTHOG_QUERY_TIMEOUT_MS / 1000)}s.`);
+        throw new AnalyticsPostHogQueryError(null, `PostHog "${label}" query timed out after ${Math.round(POSTHOG_QUERY_TIMEOUT_MS / 1000)}s.`);
       }
       throw err;
     } finally {
@@ -498,7 +494,7 @@ async function fetchAnalyticsMonitorDataFromPostHog({
     }
     if (!res.ok) {
       const text = await res.text();
-      throw new AnalyticsPostHogQueryError(res.status, text.slice(0, 400));
+      throw new AnalyticsPostHogQueryError(res.status, `${label}: ${text.slice(0, 400)}`);
     }
     const body = (await res.json()) as { results?: unknown[][] };
     return body.results ?? [];
@@ -519,35 +515,44 @@ async function fetchAnalyticsMonitorDataFromPostHog({
     recentServerErrors,
     bounce,
   ] = await Promise.all([
-    runQuery(`SELECT count(DISTINCT distinct_id) FROM events WHERE timestamp > now() - interval 5 minute`),
-    runQuery(`SELECT count() FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$pathname NOT LIKE '/admin/%'`),
-    runQuery(`SELECT count(DISTINCT distinct_id) FROM events WHERE timestamp > ${since}`),
-    runQuery(`SELECT count() FROM events WHERE timestamp > ${since}`),
+    runQuery("active visitors", `SELECT count(DISTINCT distinct_id) FROM events WHERE timestamp > now() - interval 5 minute`),
+    runQuery("pageviews", `SELECT count() FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$pathname NOT LIKE '/admin/%'`),
+    runQuery("unique visitors", `SELECT count(DISTINCT distinct_id) FROM events WHERE timestamp > ${since}`),
+    runQuery("events", `SELECT count() FROM events WHERE timestamp > ${since}`),
     runQuery(
+      "top routes",
       `SELECT properties.$pathname AS p, count() AS c FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$pathname IS NOT NULL AND properties.$pathname != '/' AND properties.$pathname NOT LIKE '/admin/%' GROUP BY p ORDER BY c DESC LIMIT 10`,
     ),
     runQuery(
+      "recent activity",
       `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id, properties.$screen_width, properties.$viewport_width FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT 30`,
     ),
     runQuery(
+      "physical countries",
       `SELECT properties.$geoip_country_code AS c, count(DISTINCT distinct_id) AS n FROM events WHERE timestamp > ${since} AND properties.$geoip_country_code IS NOT NULL GROUP BY c ORDER BY n DESC LIMIT 20`,
     ),
     runQuery(
+      "top profiles",
       `SELECT properties.profile_username AS u, count() AS n, max(timestamp) AS last_viewed_at, formatDateTime(toTimeZone(max(timestamp), 'America/Costa_Rica'), '%Y-%m-%d %h:%i %p') AS last_viewed_label, argMax(properties.$geoip_country_code, timestamp) AS last_country FROM events WHERE event = '$pageview' AND properties.profile_username IS NOT NULL AND timestamp > ${since} GROUP BY u ORDER BY n DESC, last_viewed_at DESC LIMIT 10`,
     ),
     runQuery(
+      "top replays",
       `SELECT properties.replay_score_id AS score_id, any(properties.replay_title) AS title, any(properties.replay_artist) AS artist, any(properties.replay_difficulty) AS difficulty, any(properties.replay_player) AS player, any(properties.replay_cover_url) AS cover_url, count() AS n, max(timestamp) AS last_viewed_at, formatDateTime(toTimeZone(max(timestamp), 'America/Costa_Rica'), '%Y-%m-%d %h:%i %p') AS last_viewed_label, argMax(properties.$geoip_country_code, timestamp) AS last_country FROM events WHERE event = 'replay_view' AND properties.replay_score_id IS NOT NULL AND timestamp > ${since} GROUP BY score_id ORDER BY n DESC, last_viewed_at DESC LIMIT 10`,
     ),
     runQuery(
+      "top referrers",
       `SELECT properties.$referring_domain AS d, count(DISTINCT distinct_id) AS n FROM events WHERE event = '$pageview' AND timestamp > ${since} AND properties.$referring_domain IS NOT NULL AND properties.$referring_domain NOT IN ('localhost', '127.0.0.1', '::1') AND properties.$referring_domain NOT LIKE '%-aleju03s-projects.vercel.app' GROUP BY d ORDER BY n DESC LIMIT 10`,
     ),
     runQuery(
+      "server errors",
       `SELECT properties.caller AS c, properties.path AS p, properties.status AS s, count() AS n FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} AND properties.caller IS NOT NULL GROUP BY c, p, s ORDER BY n DESC LIMIT 10`,
     ),
     runQuery(
+      "recent server errors",
       `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), properties.caller, properties.path, properties.status, properties.body_preview, properties.attempts, properties.kind, properties.context, properties.rate_per_min, properties.rate_remaining, properties.rate_limit, properties.retry_after FROM events WHERE event = 'osu_api_error' AND timestamp > ${since} AND properties.caller IS NOT NULL ORDER BY timestamp DESC LIMIT 15`,
     ),
     runQuery(
+      "bounce",
       `SELECT countIf(pv_count = 1) AS bounced, count() AS landers FROM (SELECT distinct_id, count() AS pv_count FROM events WHERE event = '$pageview' AND timestamp > ${since} GROUP BY distinct_id HAVING countIf(properties.$pathname = '/') > 0)`,
     ),
   ]);
@@ -647,11 +652,18 @@ const getAnalyticsMonitorData = createServerFn({ method: "POST" })
     const endpoint = `https://us.posthog.com/api/projects/${projectId}/query/`;
     const cacheKey = getAnalyticsCacheKey(data.rangeHours, data.recentCountry);
     const cached = analyticsMonitorCache.get(cacheKey);
-    if (cached?.data && Date.now() - cached.data.fetchedAt <= ANALYTICS_CACHE_FRESH_MS) {
+    const now = Date.now();
+    if (cached?.data && now - cached.data.fetchedAt <= ANALYTICS_CACHE_FRESH_MS) {
       return { ...cached.data, cacheState: "fresh" };
     }
 
     let refreshPromise = cached?.promise ?? null;
+    const failedRecently = cached?.error != null && cached.failedAt != null && now - cached.failedAt <= ANALYTICS_ERROR_RETRY_MS;
+    if (!refreshPromise && failedRecently) {
+      if (cached?.data) return { ...cached.data, cacheState: "stale" };
+      throw cached.error;
+    }
+
     if (!refreshPromise) {
       let nextPromise: Promise<AnalyticsMonitorData>;
       nextPromise = fetchAnalyticsMonitorDataFromPostHog({
@@ -667,7 +679,7 @@ const getAnalyticsMonitorData = createServerFn({ method: "POST" })
         (err) => {
           const latest = analyticsMonitorCache.get(cacheKey);
           if (latest?.promise === nextPromise) {
-            analyticsMonitorCache.set(cacheKey, { data: latest.data, promise: null });
+            analyticsMonitorCache.set(cacheKey, { data: latest.data, promise: null, error: err, failedAt: Date.now() });
           }
           throw err;
         },
@@ -684,9 +696,6 @@ const getAnalyticsMonitorData = createServerFn({ method: "POST" })
     const settled = await settleWithin(refreshPromise, ANALYTICS_COLD_RESPONSE_BUDGET_MS);
     if (settled.status === "resolved") return settled.value;
     if (settled.status === "rejected") {
-      if (isTransientAnalyticsQueryError(settled.reason)) {
-        return createEmptyAnalyticsMonitorData(data.rangeHours, "warming");
-      }
       throw settled.reason;
     }
 

@@ -46,6 +46,7 @@ export interface Config {
   apiCallLogRetentionDays: number;
   replayVideoJobRetentionDays: number;
   rankSnapshotRetentionDays: number;
+  activityRetentionYears: number;
   maxLocalDbBytes: number;
   targetLocalDbBytes: number;
   replayVideoPublicEnabled: boolean;
@@ -64,6 +65,7 @@ export interface Config {
   r2Bucket?: string;
   r2PublicBaseUrl?: string;
   enableWorkers: boolean;
+  enableOsuApiJobs: boolean;
   enableStartupRosterRefresh: boolean;
   enableScheduledRefreshes: boolean;
   enableOscBackfill: boolean;
@@ -172,6 +174,7 @@ export function readConfig(): Config {
     apiCallLogRetentionDays: readInt("API_CALL_LOG_RETENTION_DAYS", 7),
     replayVideoJobRetentionDays: readInt("REPLAY_VIDEO_JOB_RETENTION_DAYS", 2),
     rankSnapshotRetentionDays: readInt("RANK_SNAPSHOT_RETENTION_DAYS", 14),
+    activityRetentionYears: readBoundedInt("ACTIVITY_RETENTION_YEARS", 2, 1, 10),
     maxLocalDbBytes: readInt("MAX_LOCAL_DB_BYTES", 10 * 1024 * 1024 * 1024),
     targetLocalDbBytes: readInt("TARGET_LOCAL_DB_BYTES", 8 * 1024 * 1024 * 1024),
     replayVideoPublicEnabled: readBool("REPLAY_VIDEO_PUBLIC_ENABLED", false),
@@ -190,6 +193,7 @@ export function readConfig(): Config {
     r2Bucket: process.env.R2_BUCKET || undefined,
     r2PublicBaseUrl: process.env.R2_PUBLIC_BASE_URL || process.env.R2_PUBLIC_URL || process.env.CLOUDFLARE_R2_PUBLIC_URL || undefined,
     enableWorkers: readBool("ENABLE_WORKERS", true),
+    enableOsuApiJobs: readBool("ENABLE_OSU_API_JOBS", true),
     enableStartupRosterRefresh: readBool("ENABLE_STARTUP_ROSTER_REFRESH", true),
     enableScheduledRefreshes: readBool("ENABLE_SCHEDULED_REFRESHES", true),
     enableOscBackfill: readBool("ENABLE_OSC_BACKFILL", false),

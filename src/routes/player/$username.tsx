@@ -7,9 +7,18 @@ import {
 } from "../../lib/osu";
 import {
   fetchLivePlayerCachedProfileSnapshot,
+  fetchLivePlayerActivityDirect,
+  fetchLivePlayerActivityDayDirect,
+  fetchLivePlayerActivityAvailability,
   fetchLivePlayerAboutDirect,
   fetchLivePlayerProfileSnapshot,
   fetchLivePlayerRecentScoresDirect,
+  isLiveBackendConfigured,
+  type LivePlayerActivityPrimarySkill,
+  type LivePlayerActivitySnapshot,
+  type LivePlayerActivitySkillReadout,
+  type LivePlayerActivitySkillVector,
+  type LivePlayerActivityTimelineSegment,
   type LivePlayerProfileSnapshot,
 } from "../../lib/live-backend";
 import {
@@ -65,6 +74,7 @@ const PLAYER_RECENT_LIVE_TIMEOUT_MS = 8_000;
 const PROFILE_SNAPSHOT_BEST_GRACE_MS = 450;
 const PROFILE_SNAPSHOT_REFRESH_DEFER_MS = 2500;
 const PROFILE_CACHED_SNAPSHOT_LOADER_TIMEOUT_MS = 650;
+const PROFILE_ACTIVITY_AVAILABILITY_LOADER_TIMEOUT_MS = 350;
 const INITIAL_SCORE_BATCH_SIZE = 5;
 const SHOW_MORE_BATCH_SIZE = 50;
 const BEST_SCORES_WINDOW_SIZE = 200;
@@ -78,13 +88,19 @@ export type PlayerTab = "best" | "recent" | "card" | "about" | "activity";
 type ActivityDay = {
   date: string;
   scoreCount: number;
+  passedCount: number;
   sessionCount: number;
+  mapCount: number;
   level: 0 | 1 | 2 | 3 | 4;
   maps: ActivityPlayedMap[];
+  skills: ActivitySkillReadout | null;
+  timeline: ActivityTimelineSegment[];
 };
 
 type ActivityPlayedMap = {
   key: string;
+  beatmapId: number;
+  beatmapsetId: number | null;
   title: string;
   artist: string;
   version: string;
@@ -92,8 +108,14 @@ type ActivityPlayedMap = {
   plays: number;
   accuracy: number | null;
   pp: number | null;
+  rank: string | null;
   keyCount: number | null;
+  skills: LivePlayerActivitySkillVector | null;
 };
+
+type ActivitySkillReadout = LivePlayerActivitySkillReadout;
+
+type ActivityTimelineSegment = LivePlayerActivityTimelineSegment;
 
 type ActivityWeek = {
   key: string;
@@ -105,23 +127,19 @@ type ActivitySummary = {
   weeks: ActivityWeek[];
   totalScores: number;
   activeDays: number;
+  totalSessions: number;
   currentStreak: number;
   typicalSession: number;
+  availableYears: number[];
 };
 
-const SHOW_ACTIVITY_TAB = import.meta.env.VITE_DEV_MODE === "1";
 const PLAYER_TABS: PlayerTab[] = ["best", "recent", "about", "card", "activity"];
-const ENABLED_PLAYER_TABS = SHOW_ACTIVITY_TAB
-  ? PLAYER_TABS
-  : PLAYER_TABS.filter((tab) => tab !== "activity");
+const DEFAULT_PLAYER_TABS = PLAYER_TABS.filter((tab) => tab !== "activity");
 const ACTIVITY_EMPTY_CELL_CLASS = "bg-osu-b4/45 border-osu-b3/25";
-
-function isPlayerTabEnabled(tab: PlayerTab): boolean {
-  return tab !== "activity" || SHOW_ACTIVITY_TAB;
-}
+const PLAYER_ACTIVITY_COUNTRY_SCOPE = "GLOBAL";
 
 function normalizePlayerTab(tab: PlayerTab): PlayerTab {
-  return isPlayerTabEnabled(tab) ? tab : "best";
+  return tab;
 }
 
 function getPlayerTabLabel(tab: PlayerTab): string {
@@ -155,6 +173,7 @@ function getPlayerTabFromPathname(pathname: string): PlayerTab {
 
 export type PlayerLoaderData = {
   cachedSnapshot: LivePlayerProfileSnapshot | null;
+  cachedActivityAvailable: boolean | null;
 };
 
 function withProfileLoaderBudget<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
@@ -171,15 +190,32 @@ function withProfileLoaderBudget<T>(promise: Promise<T>, timeoutMs: number): Pro
 }
 
 export async function loadPlayerRouteData(username: string): Promise<PlayerLoaderData> {
+  let cachedSnapshot: LivePlayerProfileSnapshot | null = null;
   try {
+    cachedSnapshot = await withProfileLoaderBudget(
+      fetchLivePlayerCachedProfileSnapshot({ data: { key: username } }),
+      PROFILE_CACHED_SNAPSHOT_LOADER_TIMEOUT_MS,
+    );
+  } catch {
+    cachedSnapshot = null;
+  }
+
+  const userId = Number(cachedSnapshot?.user?.id);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    return { cachedSnapshot, cachedActivityAvailable: null };
+  }
+
+  try {
+    const availability = await withProfileLoaderBudget(
+      fetchLivePlayerActivityAvailability({ data: { userId, country: "GLOBAL" } }),
+      PROFILE_ACTIVITY_AVAILABILITY_LOADER_TIMEOUT_MS,
+    );
     return {
-      cachedSnapshot: await withProfileLoaderBudget(
-        fetchLivePlayerCachedProfileSnapshot({ data: { key: username } }),
-        PROFILE_CACHED_SNAPSHOT_LOADER_TIMEOUT_MS,
-      ),
+      cachedSnapshot,
+      cachedActivityAvailable: availability?.available === true ? true : null,
     };
   } catch {
-    return { cachedSnapshot: null };
+    return { cachedSnapshot, cachedActivityAvailable: null };
   }
 }
 
@@ -656,6 +692,7 @@ export function PlayerProfilePage({
 }) {
   const navigate = useNavigate();
   const loaderSnapshot = loaderData?.cachedSnapshot ?? null;
+  const loaderActivityAvailable = loaderData?.cachedActivityAvailable ?? null;
   const loaderBestScores = useMemo(
     () => loaderSnapshot ? dedupeScores(loaderSnapshot.bestScores) : [],
     [loaderSnapshot],
@@ -691,7 +728,12 @@ export function PlayerProfilePage({
   const [recentHasMore, setRecentHasMore] = useState(false);
   const [bestVisibleCount, setBestVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const [recentVisibleCount, setRecentVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
+  const [activityAvailable, setActivityAvailable] = useState<boolean | null>(() => loaderActivityAvailable);
   const tabsRailRef = useRef<HTMLDivElement | null>(null);
+  const enabledPlayerTabs = useMemo(
+    () => activityAvailable || tab === "activity" ? PLAYER_TABS : DEFAULT_PLAYER_TABS,
+    [activityAvailable, tab],
+  );
 
   useEffect(() => {
     if (!avatarOpen && !modModalOpen && !bpmModalOpen) return;
@@ -741,6 +783,7 @@ export function PlayerProfilePage({
     setRecentHasMore(false);
     setBestVisibleCount(INITIAL_SCORE_BATCH_SIZE);
     setRecentVisibleCount(INITIAL_SCORE_BATCH_SIZE);
+    setActivityAvailable(loaderActivityAvailable);
 
     let snapshotApplied = false;
     if (loaderSnapshot?.user) {
@@ -824,7 +867,31 @@ export function PlayerProfilePage({
       cancelled = true;
       if (snapshotTimer) window.clearTimeout(snapshotTimer);
     };
-  }, [initialTab, loaderBestScores, loaderSnapshot, username]);
+  }, [initialTab, loaderActivityAvailable, loaderBestScores, loaderSnapshot, username]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (!isLiveBackendConfigured()) {
+      setActivityAvailable(false);
+      return;
+    }
+
+    let cancelled = false;
+    const year = new Date().getFullYear();
+    fetchLivePlayerActivityDirect(user.id, PLAYER_ACTIVITY_COUNTRY_SCOPE, year)
+      .then((snapshot) => {
+        if (cancelled) return;
+        setActivityAvailable(snapshot.available);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setActivityAvailable(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   useEffect(() => {
     if (!user || bestWindowLoaded || waitingForSnapshotBest) return;
@@ -1001,6 +1068,11 @@ export function PlayerProfilePage({
     setTab(normalizedTab);
     void navigate({ to: getPlayerTabPath(username, normalizedTab), resetScroll: false });
   }, [navigate, username]);
+
+  useEffect(() => {
+    if (tab !== "activity" || activityAvailable !== false) return;
+    handleTabChange("best");
+  }, [activityAvailable, handleTabChange, tab]);
 
   const handleBestSortChange = useCallback((nextSort: BestSort) => {
     setBestSort(nextSort);
@@ -1600,7 +1672,7 @@ export function PlayerProfilePage({
           <div className="mt-5 pt-1 border-t border-osu-b3/30 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div ref={tabsRailRef} className="-mx-5 overflow-x-auto px-5 scrollbar-hide sm:mx-0 sm:px-0">
               <div className="flex min-w-max">
-                {ENABLED_PLAYER_TABS.map((t) => (
+                {enabledPlayerTabs.map((t) => (
                   <button
                     key={t}
                     data-player-tab={t}
@@ -1701,7 +1773,10 @@ export function PlayerProfilePage({
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.14 }}
               >
-                <PlayerActivityPanel user={user} scores={best} />
+                <PlayerActivityPanel
+                  user={user}
+                  onAvailabilityChange={setActivityAvailable}
+                />
               </motion.div>
             ) : (
               <motion.div
@@ -1990,7 +2065,7 @@ function PlayerPageSkeleton({
         <div className="mt-5 pt-1 border-t border-osu-b3/30">
           <div className="-mx-5 overflow-x-auto px-5 scrollbar-hide sm:mx-0 sm:px-0">
             <div className="flex min-w-max">
-              {ENABLED_PLAYER_TABS.map((t) => (
+              {DEFAULT_PLAYER_TABS.map((t) => (
                 <button
                   key={t}
                   onClick={() => onTabChange(t)}
@@ -2016,23 +2091,140 @@ function PlayerPageSkeleton({
   );
 }
 
-function PlayerActivityPanel({ user, scores }: { user: OsuUser; scores: OsuScore[] }) {
+function PlayerActivityPanel({
+  user,
+  onAvailabilityChange,
+}: {
+  user: OsuUser;
+  onAvailabilityChange: (available: boolean) => void;
+}) {
   const currentYear = new Date().getFullYear();
-  const yearOptions = useMemo(() => Array.from({ length: 5 }, (_, index) => currentYear - index), [currentYear]);
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedDay, setSelectedDay] = useState<ActivityDay | null>(null);
-  const activity = useMemo(() => buildMockActivity(user, selectedYear, scores), [selectedYear, user, scores]);
+  const [selectedDayDetail, setSelectedDayDetail] = useState<ActivityDay | null>(null);
+  const [dayDetailLoading, setDayDetailLoading] = useState(false);
+  const [dayDetailError, setDayDetailError] = useState<string | null>(null);
+  const [snapshot, setSnapshot] = useState<LivePlayerActivitySnapshot | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const activity = useMemo(() => buildActivityFromSnapshot(snapshot, selectedYear), [selectedYear, snapshot]);
+  const yearOptions = useMemo(() => {
+    const years = new Set([currentYear, selectedYear, ...activity.availableYears]);
+    return [...years].sort((a, b) => b - a);
+  }, [activity.availableYears, currentYear, selectedYear]);
   const averageActiveDay = activity.activeDays > 0 ? Math.round(activity.totalScores / activity.activeDays) : 0;
   const selectedDayDate = selectedDay?.date;
+  const modalDay = selectedDayDetail?.date === selectedDayDate ? selectedDayDetail : selectedDay;
   const activityGridStyle = useMemo(
     () => ({ "--activity-weeks": String(activity.weeks.length) }) as CSSProperties,
     [activity.weeks.length],
   );
 
   useEffect(() => {
+    if (!isLiveBackendConfigured()) {
+      setLoading(false);
+      setSnapshot(null);
+      setError("Activity is only available when the live backend is configured.");
+      onAvailabilityChange(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+
+    fetchLivePlayerActivityDirect(user.id, PLAYER_ACTIVITY_COUNTRY_SCOPE, selectedYear)
+      .then((nextSnapshot) => {
+        if (cancelled) return;
+        setSnapshot(nextSnapshot);
+        onAvailabilityChange(nextSnapshot.available);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSnapshot(null);
+        setError("Couldn't load Activity right now.");
+        onAvailabilityChange(false);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [onAvailabilityChange, selectedYear, user.id]);
+
+  useEffect(() => {
     if (!selectedDayDate) return;
     setSelectedDay(activity.days.find((day) => day.date === selectedDayDate) ?? null);
   }, [activity, selectedDayDate]);
+
+  useEffect(() => {
+    if (!selectedDayDate) {
+      setSelectedDayDetail(null);
+      setDayDetailLoading(false);
+      setDayDetailError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setSelectedDayDetail(null);
+    setDayDetailLoading(true);
+    setDayDetailError(null);
+
+    fetchLivePlayerActivityDayDirect(user.id, PLAYER_ACTIVITY_COUNTRY_SCOPE, selectedDayDate)
+      .then((day) => {
+        if (cancelled) return;
+        setSelectedDayDetail(normalizeActivityDay(day, activity.typicalSession));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDayDetailError("Couldn't load the full day detail.");
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setDayDetailLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activity.typicalSession, selectedDayDate, user.id]);
+
+  if (loading && !snapshot) {
+    return (
+      <div className="space-y-4 py-2">
+        <div className="flex items-start justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-7 w-44" />
+            <Skeleton className="h-3 w-36" />
+          </div>
+          <Skeleton className="h-10 w-28" />
+        </div>
+        <div className="grid grid-cols-[32px_minmax(0,1fr)] gap-2">
+          <Skeleton className="h-32 w-8" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !snapshot) {
+    return (
+      <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-5 text-center text-sm text-osu-f1">
+        {error}
+      </div>
+    );
+  }
+
+  if (snapshot && !snapshot.available) {
+    return (
+      <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-5 text-center text-sm text-osu-f1">
+        Activity is available for tracked roster players once their live scores start flowing.
+      </div>
+    );
+  }
 
   return (
     <>
@@ -2128,9 +2320,9 @@ function PlayerActivityPanel({ user, scores }: { user: OsuUser; scores: OsuScore
       </div>
 
       <AnimatePresence>
-        {selectedDay && (
+        {modalDay && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 backdrop-blur-sm sm:p-4"
             onClick={() => setSelectedDay(null)}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -2138,17 +2330,17 @@ function PlayerActivityPanel({ user, scores }: { user: OsuUser; scores: OsuScore
             transition={{ duration: 0.14 }}
           >
             <motion.div
-              className="max-h-[calc(100vh-2rem)] w-full max-w-xl overflow-y-auto rounded-xl border border-osu-b3/25 bg-osu-b4 p-5 shadow-[0_18px_70px_rgba(0,0,0,0.55)]"
+              className="flex max-h-[calc(100dvh-1rem)] w-full max-w-[34rem] flex-col overflow-hidden rounded-xl border border-osu-b3/25 bg-osu-b4 p-4 shadow-[0_18px_70px_rgba(0,0,0,0.55)] sm:max-h-[calc(100vh-2rem)] sm:max-w-xl sm:p-5"
               onClick={(event) => event.stopPropagation()}
               initial={{ opacity: 0, y: 10, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 8, scale: 0.97 }}
               transition={{ duration: 0.16 }}
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex shrink-0 items-start justify-between gap-4">
                 <div>
-                  <div className="text-[10px] font-black uppercase tracking-wide text-osu-pink-light">Activity day</div>
-                  <h3 className="mt-1 text-2xl font-black text-white">{formatFullActivityDate(selectedDay.date)}</h3>
+                  <div className="text-[9px] font-black uppercase tracking-wide text-osu-pink-light sm:text-[10px]">Activity day</div>
+                  <h3 className="mt-1 text-xl font-black text-white sm:text-2xl">{formatFullActivityDate(modalDay.date)}</h3>
                 </div>
                 <button
                   type="button"
@@ -2162,42 +2354,64 @@ function PlayerActivityPanel({ user, scores }: { user: OsuUser; scores: OsuScore
                 </button>
               </div>
 
-              <div className="mt-5 grid grid-cols-2 gap-2">
-                <ActivityDetailMetric label="Plays" value={formatNumber(selectedDay.scoreCount)} />
-                <ActivityDetailMetric label="Sessions" value={formatNumber(selectedDay.sessionCount)} />
-              </div>
-
-              <div className="mt-5 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="text-xs font-bold uppercase text-osu-f1">Maps played</div>
-                  <div className="text-[11px] text-osu-f1">{selectedDay.maps.length} shown</div>
+              <div className="min-h-0 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
+                <div className="mt-4 grid grid-cols-2 gap-2 sm:mt-5">
+                  <ActivityDetailMetric label="Plays" value={formatNumber(modalDay.scoreCount)} />
+                  <ActivityDetailMetric label="Sessions" value={formatNumber(modalDay.sessionCount)} />
                 </div>
-                <div className="mt-3 space-y-2">
-                  {selectedDay.maps.map((map) => (
-                    <ActivityMapRow key={map.key} map={map} />
-                  ))}
-                </div>
-              </div>
 
-              <div className="mt-5 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-4">
-                <div className="text-xs font-bold uppercase text-osu-f1">Skill readout</div>
-                <div className="mt-3 space-y-2">
-                  {["stream", "jack", "ln"].map((pattern, index) => {
-                    const value = selectedDay.scoreCount > 0
-                      ? clampInt(34 + selectedDay.level * 13 + ((parseLocalDateKey(selectedDay.date).getDate() + index * 11) % 18), 0, 100)
-                      : 0;
-                    return (
-                      <div key={pattern}>
-                        <div className="mb-1 flex justify-between text-[11px]">
-                          <span className="font-semibold capitalize text-osu-l2">{pattern}</span>
-                          <span className="text-osu-f1">{value}%</span>
-                        </div>
-                        <div className="h-1.5 rounded-full bg-osu-b3/35">
-                          <div className="h-full rounded-full bg-osu-pink/80" style={{ width: `${value}%` }} />
-                        </div>
+                <ActivitySessionFlow day={modalDay} />
+
+                <div className="mt-4 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-3 sm:mt-5 sm:p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-[11px] font-bold uppercase text-osu-f1 sm:text-xs">Maps played</div>
+                    <div className="text-[10px] text-osu-f1 sm:text-[11px]">
+                      {dayDetailLoading
+                        ? "loading"
+                        : modalDay.mapCount > modalDay.maps.length
+                          ? `${modalDay.maps.length} of ${modalDay.mapCount}`
+                          : `${modalDay.maps.length} ${modalDay.maps.length === 1 ? "map" : "maps"}`}
+                    </div>
+                  </div>
+                  <div className="mt-2 max-h-52 space-y-1.5 overflow-y-auto overscroll-contain pr-1 sm:mt-3 sm:max-h-64 sm:space-y-2">
+                    {dayDetailLoading && modalDay.maps.length === 0 ? (
+                      <>
+                        <Skeleton className="h-16 rounded-md" />
+                        <Skeleton className="h-16 rounded-md" />
+                        <Skeleton className="h-16 rounded-md" />
+                      </>
+                    ) : (
+                      modalDay.maps.map((map) => (
+                        <ActivityMapRow key={map.key} map={map} />
+                      ))
+                    )}
+                    {dayDetailError ? (
+                      <div className="rounded-md bg-osu-b4/70 px-3 py-2 text-[11px] text-osu-f1">
+                        {dayDetailError}
                       </div>
-                    );
-                  })}
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-3 sm:mt-5 sm:p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-[11px] font-bold uppercase text-osu-f1 sm:text-xs">Day pattern mix</div>
+                    <div className="text-[10px] text-osu-f1 sm:text-[11px]">by keymode</div>
+                  </div>
+                  {modalDay.skills && modalDay.skills.analyzedPlays > 0 ? (
+                    <ActivityPatternMix skills={modalDay.skills} />
+                  ) : dayDetailLoading ? (
+                    <div className="mt-3 space-y-2">
+                      <Skeleton className="h-3 rounded-full" />
+                      <Skeleton className="h-3 rounded-full" />
+                      <Skeleton className="h-3 rounded-full" />
+                      <Skeleton className="h-3 rounded-full" />
+                    </div>
+                  ) : (
+                    <div className="mt-3 text-[11px] text-osu-f1">
+                      Skill analysis is queued for the maps played on this day.
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -2212,29 +2426,140 @@ function ActivityDetailMetric({ label, value }: { label: string; value: string }
   return (
     <div className="rounded-lg border border-osu-b3/20 bg-osu-b5/45 px-3 py-2">
       <div className="text-[10px] font-bold uppercase text-osu-f1">{label}</div>
-      <div className="mt-1 text-xl font-black text-white">{value}</div>
+      <div className="mt-1 text-lg font-black text-white sm:text-xl">{value}</div>
+    </div>
+  );
+}
+
+function ActivityPatternMix({ skills }: { skills: ActivitySkillReadout }) {
+  const keyModes = skills.keyModes.length > 0
+    ? skills.keyModes
+    : [{
+      keyCount: null,
+      stream: skills.stream,
+      jack: skills.jack,
+      bracket: skills.bracket,
+      ln: skills.ln,
+      lnGeneral: skills.lnGeneral,
+      lnRelease: skills.lnRelease,
+      lnInverse: skills.lnInverse,
+      lnTech: skills.lnTech,
+      analyzedPlays: skills.analyzedPlays,
+      totalPlays: skills.totalPlays,
+    }];
+  return (
+    <div className="mt-3 space-y-3">
+      {keyModes.map((keyMode, index) => (
+        <div key={`${keyMode.keyCount ?? "unknown"}:${index}`} className="rounded-md bg-osu-b4/45 p-2">
+          <div className="mb-2 flex items-center justify-between gap-3 text-[10px]">
+            <span className="font-black text-osu-l2">{formatActivityKeyCount(keyMode.keyCount) ?? "Unknown keys"}</span>
+            <span className="text-osu-f1">
+              {formatNumber(keyMode.analyzedPlays)} {keyMode.analyzedPlays === 1 ? "play" : "plays"}
+            </span>
+          </div>
+          <ActivityPatternBars skills={keyMode} />
+          {keyMode.analyzedPlays < keyMode.totalPlays && (
+            <div className="pt-1 text-[10px] text-osu-f1">
+              {formatNumber(keyMode.analyzedPlays)} of {formatNumber(keyMode.totalPlays)} plays analyzed
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ActivityPatternBars({ skills }: { skills: LivePlayerActivitySkillVector }) {
+  return (
+    <div className="space-y-2">
+      {getActivityPatternEntries(skills).map(({ key, label, value }) => (
+        <div key={key}>
+          <div className="mb-1 flex justify-between text-[11px]">
+            <span className="font-semibold text-osu-l2">{label}</span>
+            <span className="text-osu-f1">{value}%</span>
+          </div>
+          <div className="h-1.5 rounded-full bg-osu-b3/35">
+            <div
+              className="h-full rounded-full"
+              style={{ width: `${value}%`, backgroundColor: getActivitySkillColor(key) }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ActivitySessionFlow({ day }: { day: ActivityDay }) {
+  if (day.timeline.length === 0) return null;
+  const sessions = groupActivityTimelineBySession(day.timeline);
+  const flowLabel = formatActivityKeyFlow(day.timeline);
+  return (
+    <div className="mt-4 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-3 sm:mt-5 sm:p-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-[11px] font-bold uppercase text-osu-f1 sm:text-xs">Session flow</div>
+        <div className="text-[10px] font-semibold text-osu-l2 sm:text-[11px]">{flowLabel}</div>
+      </div>
+      <div className="mt-3 space-y-2">
+        {sessions.map((session) => {
+          const sessionPlays = session.reduce((sum, segment) => sum + segment.playCount, 0);
+          const first = session[0];
+          const last = session[session.length - 1];
+          return (
+            <div key={first.key}>
+              <div className="mb-1 flex items-center justify-between gap-3 text-[10px] text-osu-f1">
+                <span>{formatActivityTime(first.startAt)} - {formatActivityTime(last.endAt)}</span>
+                <span>{formatNumber(sessionPlays)} {sessionPlays === 1 ? "play" : "plays"}</span>
+              </div>
+              <div className="flex h-7 overflow-hidden rounded-md bg-osu-b4/70">
+                {session.map((segment) => (
+                  <div
+                    key={segment.key}
+                    title={formatActivitySegmentTitle(segment)}
+                    className="flex min-w-0 items-center justify-center border-r border-black/20 px-1 last:border-r-0"
+                    style={{
+                      flexBasis: 0,
+                      flexGrow: Math.max(1, segment.playCount),
+                      backgroundColor: getActivityTimelineSegmentColor(segment),
+                    }}
+                  >
+                    <span className="truncate text-[9px] font-black leading-none text-white/95">
+                      {formatActivityTimelineSegmentLabel(segment)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
 function ActivityMapRow({ map }: { map: ActivityPlayedMap }) {
   return (
-    <div className="grid grid-cols-[48px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-osu-b4/70 p-2">
+    <a
+      href={`https://osu.ppy.sh/beatmaps/${map.beatmapId}`}
+      target="_blank"
+      rel="noreferrer"
+      className="grid grid-cols-[42px_minmax(0,1fr)_2.25rem] items-center gap-2 rounded-md bg-osu-b4/70 px-2 py-1.5 transition-colors hover:bg-osu-b3/45 sm:grid-cols-[48px_minmax(0,1fr)_auto] sm:gap-3 sm:rounded-lg sm:p-2"
+    >
       {map.coverUrl ? (
         <img
           src={map.coverUrl}
           alt=""
-          className="h-9 w-12 rounded object-cover"
+          className="h-8 w-[42px] rounded object-cover sm:h-9 sm:w-12"
           loading="lazy"
         />
       ) : (
-        <div className="flex h-9 w-12 items-center justify-center rounded bg-osu-b3/60 text-xs font-black text-osu-l2">
+        <div className="flex h-8 w-[42px] items-center justify-center rounded bg-osu-b3/60 text-xs font-black text-osu-l2 sm:h-9 sm:w-12">
           {map.title.slice(0, 1).toUpperCase()}
         </div>
       )}
       <div className="min-w-0">
-        <div className="truncate text-sm font-bold text-white">{map.title}</div>
-        <div className="truncate text-[11px] text-osu-f1">
+        <div className="truncate text-[13px] font-bold text-white sm:text-sm">{map.title}</div>
+        <div className="truncate text-[10px] text-osu-f1 sm:text-[11px]">
           {map.artist} [{map.version}]
         </div>
         <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[10px] text-osu-f1">
@@ -2242,11 +2567,39 @@ function ActivityMapRow({ map }: { map: ActivityPlayedMap }) {
           {map.accuracy != null ? <span>{formatAccuracy(map.accuracy)}</span> : null}
           {map.pp != null ? <span>{formatPP(map.pp)}</span> : null}
         </div>
+        <ActivityMapPatternPills skills={map.skills} />
       </div>
       <div className="text-right">
-        <div className="text-sm font-black text-osu-l2">{formatNumber(map.plays)}</div>
+        <div className="text-[13px] font-black text-osu-l2 sm:text-sm">{formatNumber(map.plays)}</div>
         <div className="text-[10px] text-osu-f1">{map.plays === 1 ? "play" : "plays"}</div>
       </div>
+    </a>
+  );
+}
+
+function ActivityMapPatternPills({ skills }: { skills: LivePlayerActivitySkillVector | null }) {
+  if (!skills) return null;
+  const primary = getActivityPrimarySkill(skills);
+  const entries = getActivityPatternEntries(skills)
+    .filter(({ value }) => value > 0)
+    .sort((left, right) => right.value - left.value)
+    .slice(0, 5);
+  return (
+    <div className="mt-1 flex flex-wrap gap-1">
+      {entries.map(({ key, shortLabel, value }) => {
+        const active = primary === key || primary === "mixed";
+        return (
+          <span
+            key={key}
+            className={`rounded px-1 py-0.5 text-[9px] font-black leading-none ${active ? "text-white" : "text-osu-f1"}`}
+            style={{
+              backgroundColor: active ? getActivitySkillColor(key) : "rgba(255,255,255,0.06)",
+            }}
+          >
+            {shortLabel} {value}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -2283,194 +2636,50 @@ function ActivityMonthLabels({ weeks, gridStyle }: { weeks: ActivityWeek[]; grid
   );
 }
 
-const FALLBACK_ACTIVITY_MAP_POOL: Omit<ActivityPlayedMap, "plays">[] = [
-  {
-    key: "fallback:oopparts",
-    title: "OOPARTS",
-    artist: "Camellia",
-    version: "[7K] One Last Breath",
-    coverUrl: null,
-    accuracy: 0.9636,
-    pp: 919,
-    keyCount: 7,
-  },
-  {
-    key: "fallback:buzz-cutz",
-    title: "BUZZ CUTZ",
-    artist: "TWC Sound Team",
-    version: "Strike Back Squad",
-    coverUrl: null,
-    accuracy: 0.9656,
-    pp: 894,
-    keyCount: 7,
-  },
-  {
-    key: "fallback:duplicity-shade",
-    title: "Duplicity Shade",
-    artist: "Hyun feat. Sennzai",
-    version: "Metamorphosis",
-    coverUrl: null,
-    accuracy: 0.9585,
-    pp: 870,
-    keyCount: 7,
-  },
-  {
-    key: "fallback:hyouryuu",
-    title: "Hyouryuu Hyourei",
-    artist: "Kou!",
-    version: "[4K] Collider Zero",
-    coverUrl: null,
-    accuracy: 0.9712,
-    pp: 525,
-    keyCount: 4,
-  },
-  {
-    key: "fallback:light-it-up",
-    title: "Light It Up",
-    artist: "Camellia",
-    version: "[4K] Lightning",
-    coverUrl: null,
-    accuracy: 0.9569,
-    pp: 461,
-    keyCount: 4,
-  },
-  {
-    key: "fallback:dehumanise",
-    title: "Dehumanise 2007",
-    artist: "Arkitech",
-    version: "Metaphorical Self-Reference",
-    coverUrl: null,
-    accuracy: 0.9342,
-    pp: 807,
-    keyCount: 7,
-  },
-];
-
-function buildMockActivity(user: OsuUser, year: number, scores: OsuScore[]): ActivitySummary {
+function buildActivityFromSnapshot(snapshot: LivePlayerActivitySnapshot | null, year: number): ActivitySummary {
   const today = startOfLocalDay(new Date());
   const start = new Date(year, 0, 1);
   const end = new Date(year, 11, 31);
-  const seed = createSeededRandom(((Number(user.id) || 1) * 2654435761 + year * 97) >>> 0);
-  const mapPool = buildActivityMapPool(scores);
-  const playCount = Math.max(0, Number(user.statistics?.play_count ?? 0));
-  const typicalSession = clampInt(Math.round(Math.sqrt(Math.max(playCount, 400)) / 4), 6, 34);
+  const activeDays = new Map((snapshot?.days ?? []).map((day) => [day.date, day]));
+  const typicalSession = Math.max(1, snapshot?.typicalSession ?? 1);
   const days: ActivityDay[] = [];
 
-  for (let date = startOfLocalDay(start), index = 0; date <= end; date = addLocalDays(date, 1), index++) {
-    const dayOfWeek = date.getDay();
-    const isFuture = date.getTime() > today.getTime();
-    const wave = (Math.sin((index + (Number(user.id) % 23)) / 7) + 1) / 2;
-    const weekendBoost = dayOfWeek === 0 || dayOfWeek === 6 ? 0.08 : 0;
-    const activeChance = 0.22 + wave * 0.32 + weekendBoost;
-    let scoreCount = 0;
-    let sessionCount = 0;
+  for (let date = startOfLocalDay(start); date <= end; date = addLocalDays(date, 1)) {
+    const dateKey = toDateKey(date);
+    const active = activeDays.get(dateKey);
+    const scoreCount = active?.scoreCount ?? 0;
 
-    if (!isFuture && seed() < activeChance) {
-      sessionCount = 1 + (seed() > 0.82 ? 1 : 0) + (seed() > 0.94 ? 1 : 0);
-      const burst = seed() > 0.9 ? 1.45 + seed() * 1.15 : 0;
-      scoreCount = Math.max(1, Math.round((0.35 + seed() * 1.45 + burst) * typicalSession * sessionCount));
-    }
-
-    days.push({
-      date: toDateKey(date),
+    days.push(normalizeActivityDay({
+      date: dateKey,
       scoreCount,
-      sessionCount,
-      level: getActivityLevel(scoreCount, typicalSession),
-      maps: buildMockActivityMapPlays(
-        scoreCount,
-        mapPool,
-        createSeededRandom((((Number(user.id) || 1) * 2246822519) ^ (year * 3266489917) ^ (index * 668265263)) >>> 0),
-      ),
-    });
+      passedCount: active?.passedCount ?? 0,
+      sessionCount: active?.sessionCount ?? 0,
+      mapCount: active?.mapCount ?? active?.maps.length ?? 0,
+      maps: active?.maps ?? [],
+      skills: active?.skills ?? null,
+      timeline: active?.timeline ?? [],
+    }, typicalSession));
   }
 
   const weeks = buildActivityWeeks(days);
-  const activeDays = days.filter((day) => day.scoreCount > 0).length;
-  const totalScores = days.reduce((sum, day) => sum + day.scoreCount, 0);
-  let currentStreak = 0;
-  let lastPastIndex = days.length - 1;
-  while (lastPastIndex >= 0 && parseLocalDateKey(days[lastPastIndex].date).getTime() > today.getTime()) {
-    lastPastIndex--;
-  }
-  for (let index = lastPastIndex; index >= 0; index--) {
-    if (days[index].scoreCount === 0) break;
-    currentStreak++;
-  }
 
   return {
     days,
     weeks,
-    totalScores,
-    activeDays,
-    currentStreak,
+    totalScores: snapshot?.totalScores ?? 0,
+    activeDays: snapshot?.activeDays ?? 0,
+    totalSessions: snapshot?.totalSessions ?? 0,
+    currentStreak: snapshot?.currentStreak ?? 0,
     typicalSession,
+    availableYears: snapshot?.availableYears ?? [today.getFullYear()],
   };
 }
 
-function buildActivityMapPool(scores: OsuScore[]): Omit<ActivityPlayedMap, "plays">[] {
-  const seen = new Set<string>();
-  const pool: Omit<ActivityPlayedMap, "plays">[] = [];
-
-  for (const score of scores) {
-    const beatmapset = score.beatmapset;
-    const beatmap = score.beatmap;
-    if (!beatmapset || !beatmap) continue;
-
-    const key = `${beatmapset.id}:${beatmap.id ?? beatmap.version}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    pool.push({
-      key,
-      title: beatmapset.title || "Unknown",
-      artist: beatmapset.artist || "Unknown artist",
-      version: beatmap.version || "Unknown",
-      coverUrl: beatmapset.covers?.list
-        ?? beatmapset.covers?.cover
-        ?? (beatmapset.id ? `/api/background?beatmapsetId=${beatmapset.id}` : null),
-      accuracy: Number.isFinite(score.accuracy) ? score.accuracy : null,
-      pp: score.pp ?? null,
-      keyCount: getBeatmapKeyCount(beatmap),
-    });
-
-    if (pool.length >= 40) break;
-  }
-
-  return pool.length > 0 ? pool : FALLBACK_ACTIVITY_MAP_POOL;
-}
-
-function buildMockActivityMapPlays(
-  scoreCount: number,
-  pool: Omit<ActivityPlayedMap, "plays">[],
-  seed: () => number,
-): ActivityPlayedMap[] {
-  if (scoreCount <= 0) return [];
-
-  const mapCount = clampInt(Math.round(1 + Math.sqrt(scoreCount) / 2 + seed() * 1.4), 1, Math.min(6, pool.length, scoreCount));
-  const startIndex = Math.floor(seed() * pool.length);
-  const maps: ActivityPlayedMap[] = [];
-  let remaining = scoreCount;
-
-  for (let index = 0; index < mapCount; index++) {
-    const source = pool[(startIndex + index) % pool.length]!;
-    const slotsLeft = mapCount - index;
-    const plays = slotsLeft === 1
-      ? remaining
-      : clampInt(
-        Math.round((scoreCount / mapCount) * (0.55 + seed() * 0.9)),
-        1,
-        remaining - (slotsLeft - 1),
-      );
-
-    maps.push({
-      ...source,
-      key: `${source.key}:${index}`,
-      plays,
-    });
-    remaining -= plays;
-  }
-
-  return maps.sort((a, b) => b.plays - a.plays || a.title.localeCompare(b.title));
+function normalizeActivityDay(day: Omit<ActivityDay, "level">, typicalSession: number): ActivityDay {
+  return {
+    ...day,
+    level: getActivityLevel(day.scoreCount, typicalSession),
+  };
 }
 
 function buildActivityWeeks(days: ActivityDay[]): ActivityWeek[] {
@@ -2519,16 +2728,157 @@ function getActivityCellStyle(day: ActivityDay, typicalSession: number) {
   };
 }
 
-function createSeededRandom(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state * 1664525 + 1013904223) >>> 0;
-    return state / 4294967296;
-  };
+function groupActivityTimelineBySession(segments: ActivityTimelineSegment[]): ActivityTimelineSegment[][] {
+  const groups = new Map<number, ActivityTimelineSegment[]>();
+  for (const segment of segments) {
+    groups.set(segment.sessionIndex, [...(groups.get(segment.sessionIndex) ?? []), segment]);
+  }
+  return [...groups.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([, session]) => session);
 }
 
-function clampInt(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
+function getActivityPrimarySkill(skills: LivePlayerActivitySkillVector | null): LivePlayerActivityPrimarySkill {
+  if (!skills) return "unknown";
+  const entries = [
+    ["stream", skills.stream],
+    ["jack", skills.jack],
+    ["bracket", skills.bracket],
+    ["ln", skills.ln],
+  ] as const;
+  const sorted = [...entries].sort((a, b) => b[1] - a[1]);
+  if (sorted[0][1] < 0.1) return "unknown";
+  if (sorted[0][1] - sorted[1][1] <= 0.08) return "mixed";
+  if (sorted[0][0] === "ln") return getPrimaryLnActivitySubtype(skills) ?? "ln";
+  return sorted[0][0];
+}
+
+function getPrimaryLnActivitySubtype(skills: LivePlayerActivitySkillVector): LivePlayerActivityPrimarySkill | null {
+  const entries = [
+    ["lnGeneral", skills.lnGeneral],
+    ["lnRelease", skills.lnRelease],
+    ["lnInverse", skills.lnInverse],
+    ["lnTech", skills.lnTech],
+  ] as const;
+  const sorted = [...entries].sort((a, b) => b[1] - a[1]);
+  return sorted[0][1] >= 0.2 ? sorted[0][0] : null;
+}
+
+function getActivityPatternEntries(skills: LivePlayerActivitySkillVector) {
+  const entries = [
+    { key: "stream" as const, label: "Stream", shortLabel: "S", value: Math.round(clamp01(skills.stream) * 100) },
+    { key: "jack" as const, label: "Jack", shortLabel: "J", value: Math.round(clamp01(skills.jack) * 100) },
+    { key: "bracket" as const, label: "Bracket", shortLabel: "B", value: Math.round(clamp01(skills.bracket) * 100) },
+    { key: "ln" as const, label: "LN", shortLabel: "LN", value: Math.round(clamp01(skills.ln) * 100) },
+  ];
+  const lnSubtypes = [
+    { key: "lnGeneral" as const, label: "LN General", shortLabel: "LNG", value: Math.round(clamp01(skills.lnGeneral) * 100) },
+    { key: "lnRelease" as const, label: "LN Release", shortLabel: "LNR", value: Math.round(clamp01(skills.lnRelease) * 100) },
+    { key: "lnInverse" as const, label: "LN Inverse", shortLabel: "LNI", value: Math.round(clamp01(skills.lnInverse) * 100) },
+    { key: "lnTech" as const, label: "LN Tech", shortLabel: "LNT", value: Math.round(clamp01(skills.lnTech) * 100) },
+  ].filter(({ value }) => value >= 5);
+  return [...entries, ...lnSubtypes];
+}
+
+function getActivitySkillColor(skill: LivePlayerActivityPrimarySkill): string {
+  if (skill === "stream") return "#8f6bd8";
+  if (skill === "jack") return "#c66f84";
+  if (skill === "bracket") return "#c59a5c";
+  if (skill === "ln") return "#57aeba";
+  if (skill === "lnGeneral") return "#63bf98";
+  if (skill === "lnRelease") return "#58b7d9";
+  if (skill === "lnInverse") return "#7fbed2";
+  if (skill === "lnTech") return "#9f78df";
+  if (skill === "mixed") return "#83a86f";
+  return "#5f596b";
+}
+
+function getActivityKeyModeColor(keyCount: number | null): string {
+  if (keyCount === 4) return "#57aeba";
+  if (keyCount === 5) return "#c59a5c";
+  if (keyCount === 6) return "#83a86f";
+  if (keyCount === 7) return "#8f6bd8";
+  return "#675f76";
+}
+
+function getActivityTimelineSegmentColor(segment: ActivityTimelineSegment): string {
+  if (segment.primarySkill !== "unknown") return getActivitySkillColor(segment.primarySkill);
+  return getActivityKeyModeColor(segment.keyCount);
+}
+
+function getActivitySkillLabel(skill: LivePlayerActivityPrimarySkill): string {
+  if (skill === "stream") return "Stream";
+  if (skill === "jack") return "Jack";
+  if (skill === "bracket") return "Bracket";
+  if (skill === "ln") return "LN";
+  if (skill === "lnGeneral") return "LN General";
+  if (skill === "lnRelease") return "LN Release";
+  if (skill === "lnInverse") return "LN Inverse";
+  if (skill === "lnTech") return "LN Tech";
+  if (skill === "mixed") return "Hybrid";
+  return "Unknown";
+}
+
+function getActivitySkillShortLabel(skill: LivePlayerActivityPrimarySkill): string {
+  if (skill === "stream") return "S";
+  if (skill === "jack") return "J";
+  if (skill === "bracket") return "B";
+  if (skill === "ln") return "LN";
+  if (skill === "lnGeneral") return "LNG";
+  if (skill === "lnRelease") return "LNR";
+  if (skill === "lnInverse") return "LNI";
+  if (skill === "lnTech") return "LNT";
+  if (skill === "mixed") return "Hyb";
+  return "";
+}
+
+function formatActivityKeyFlow(segments: ActivityTimelineSegment[]): string {
+  const labels = [...new Set(segments
+    .map((segment) => formatActivityKeyCount(segment.keyCount))
+    .filter((label): label is string => label != null))];
+  if (labels.length === 0) return "mixed keys";
+  return labels.join(" / ");
+}
+
+function formatActivityTimelineSegmentLabel(segment: ActivityTimelineSegment): string {
+  const key = formatActivityKeyCount(segment.keyCount);
+  const skill = getActivitySkillShortLabel(segment.primarySkill);
+  return segment.primarySkill === "unknown" ? key ?? "" : [key, skill].filter(Boolean).join(" ");
+}
+
+function formatActivitySegmentTitle(segment: ActivityTimelineSegment): string {
+  const scores = [
+    `S ${Math.round(clamp01(segment.stream) * 100)}%`,
+    `J ${Math.round(clamp01(segment.jack) * 100)}%`,
+    `B ${Math.round(clamp01(segment.bracket) * 100)}%`,
+    `LN ${Math.round(clamp01(segment.ln) * 100)}%`,
+  ].join(" / ");
+  return [
+    `${formatActivityTime(segment.startAt)} - ${formatActivityTime(segment.endAt)}`,
+    `${formatNumber(segment.playCount)} ${segment.playCount === 1 ? "play" : "plays"}`,
+    formatActivityKeyCount(segment.keyCount),
+    getActivitySkillLabel(segment.primarySkill),
+    scores,
+  ].filter(Boolean).join(" • ");
+}
+
+function formatActivityKeyCount(keyCount: number | null): string | null {
+  if (keyCount == null || !Number.isFinite(keyCount) || keyCount <= 0) return null;
+  return `${Math.round(keyCount)}K`;
+}
+
+function formatActivityTime(value: string): string {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "";
+  return date.toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function clamp01(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
 }
 
 function startOfLocalDay(date: Date): Date {

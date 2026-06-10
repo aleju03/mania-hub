@@ -302,6 +302,65 @@ create table if not exists dan_estimates (
   primary key (estimator_version, beatmap_id, rate_percent)
 );
 
+create table if not exists beatmap_skill_vectors (
+  beatmap_id integer not null,
+  analysis_version integer not null,
+  status text not null,
+  stream_score real not null default 0,
+  jack_score real not null default 0,
+  bracket_score real not null default 0,
+  ln_score real not null default 0,
+  ln_general_score real not null default 0,
+  ln_release_score real not null default 0,
+  ln_inverse_score real not null default 0,
+  ln_tech_score real not null default 0,
+  error text,
+  computed_at text,
+  updated_at text not null,
+  primary key (beatmap_id, analysis_version)
+);
+
+create table if not exists player_activity_score_refs (
+  country text not null,
+  score_identity text not null,
+  user_id integer not null,
+  day text not null,
+  beatmap_id integer not null,
+  passed integer not null,
+  ended_at text not null,
+  created_at text not null,
+  primary key (country, score_identity)
+);
+
+create table if not exists player_activity_days (
+  country text not null,
+  user_id integer not null,
+  day text not null,
+  score_count integer not null default 0,
+  passed_count integer not null default 0,
+  session_count integer not null default 0,
+  first_score_at text,
+  last_score_at text,
+  updated_at text not null,
+  primary key (country, user_id, day)
+);
+
+create table if not exists player_activity_maps (
+  country text not null,
+  user_id integer not null,
+  day text not null,
+  beatmap_id integer not null,
+  play_count integer not null default 0,
+  best_score_id integer,
+  best_pp real,
+  best_accuracy real,
+  best_rank text,
+  first_played_at text,
+  last_played_at text,
+  updated_at text not null,
+  primary key (country, user_id, day, beatmap_id)
+);
+
 create table if not exists jobs (
   id integer primary key autoincrement,
   type text not null,
@@ -362,6 +421,15 @@ create index if not exists idx_farm_helper_user_key_stats_weighted on farm_helpe
 create index if not exists idx_farm_helper_user_key_stats_user on farm_helper_user_key_stats(user_id);
 create index if not exists idx_replay_video_exports_status_time on replay_video_exports(status, updated_at desc);
 create index if not exists idx_dan_estimates_updated on dan_estimates(updated_at desc);
+create index if not exists idx_beatmap_skill_vectors_status_updated on beatmap_skill_vectors(status, updated_at desc);
+create index if not exists idx_player_activity_refs_user_day on player_activity_score_refs(country, user_id, day, ended_at);
+create index if not exists idx_player_activity_refs_day on player_activity_score_refs(day);
+create index if not exists idx_player_activity_days_user_day on player_activity_days(country, user_id, day);
+create index if not exists idx_player_activity_days_user_year on player_activity_days(country, user_id, substr(day, 1, 4));
+create index if not exists idx_player_activity_days_day on player_activity_days(day);
+create index if not exists idx_player_activity_maps_user_day on player_activity_maps(country, user_id, day, play_count desc);
+create index if not exists idx_player_activity_maps_beatmap on player_activity_maps(beatmap_id);
+create index if not exists idx_player_activity_maps_day on player_activity_maps(day);
 create index if not exists idx_jobs_ready on jobs(status, run_after, priority desc);
 create index if not exists idx_live_event_country_sequence on live_event_log(country, sequence);
 create index if not exists idx_api_call_log_provider_time on api_call_log(provider, started_at desc);

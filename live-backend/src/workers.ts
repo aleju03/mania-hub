@@ -2,6 +2,7 @@ import type { Db } from "./db.js";
 import { readConfig } from "./config.js";
 import { canSeedSnipesForCountry } from "./countries.js";
 import { exec, json, parseJson } from "./db.js";
+import { computeBeatmapActivitySkillVector } from "./features/activity.js";
 import { computeDanEstimateJob } from "./features/dan-estimates.js";
 import { MapsRosterNotReadyError, enqueueGlobalMapsRefresh, globalMapsFarmedRefreshRunAfter, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "./features/maps.js";
 import { updateSnipeProjection } from "./features/snipes.js";
@@ -73,6 +74,12 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     intervalMs: 1_000,
   },
   {
+    name: "activity-analysis",
+    jobTypes: ["analyze_activity_beatmap"],
+    claimLimit: 1,
+    intervalMs: 1_500,
+  },
+  {
     name: "snipe-seed",
     jobTypes: ["seed_snipe_board"],
     claimLimit: 1,
@@ -91,6 +98,19 @@ const DEFAULT_WORKER_LANES: WorkerLane[] = [
     intervalMs: 1_000,
   },
 ];
+
+const OSU_API_JOB_TYPES = new Set([
+  "refresh_user_top_scores",
+  "refresh_user_maps_farmed_scores",
+  "refresh_country_maps",
+  "refresh_country_roster",
+  "seed_snipe_board",
+  "enrich_user",
+  "enrich_beatmap",
+  "reconcile_user_recent_scores",
+  "compute_dan_estimate",
+  "analyze_activity_beatmap",
+]);
 
 export class WorkerRunner {
   private stopped = false;
@@ -211,6 +231,10 @@ export class WorkerRunner {
   }
 
   private async handle(job: Job): Promise<void> {
+    if (!readConfig().enableOsuApiJobs && OSU_API_JOB_TYPES.has(job.type)) {
+      logInfo("job_skipped_osu_api_disabled", { job_id: job.id, type: job.type });
+      return;
+    }
     if (job.type === "refresh_user_top_scores") {
       await confirmTopPlay(this.db, this.events, this.osu, job.payload as { userId: number; scoreId: number; country: string });
       return;
@@ -255,6 +279,10 @@ export class WorkerRunner {
     }
     if (job.type === "compute_dan_estimate") {
       await computeDanEstimateJob(this.db, this.osu, job.payload);
+      return;
+    }
+    if (job.type === "analyze_activity_beatmap") {
+      await computeBeatmapActivitySkillVector(this.db, this.osu, job.payload as { beatmapId: number });
       return;
     }
     if (job.type === "enrich_user") {
@@ -554,7 +582,7 @@ function getRetryDelayMs(type: string, attempts: number, error: unknown): number
       ? 60_000
     : type === "refresh_country_maps"
       ? 10 * 60_000
-      : type === "compute_dan_estimate"
+      : type === "compute_dan_estimate" || type === "analyze_activity_beatmap"
         ? 5 * 60_000
         : type === "enrich_user"
           ? 60_000

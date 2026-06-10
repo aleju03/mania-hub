@@ -2,6 +2,7 @@ import type { Config } from "../config.js";
 import type { Db } from "../db.js";
 import { exec, json } from "../db.js";
 import { canSeedSnipesForCountry, getActiveCountryCodes, markCountryScoreSeen } from "../countries.js";
+import { recordPlayerActivity, removePlayerActivityScore } from "../features/activity.js";
 import { maybeEnqueueMapsFarmedRefresh } from "../features/maps.js";
 import { updateSnipeProjection } from "../features/snipes.js";
 import { maybeEnqueueTopPlayRefresh } from "../features/top-plays.js";
@@ -123,11 +124,12 @@ export class ScoreIngestor {
           source,
         ],
       );
+      if (result.rowsAffected === 0) continue;
+      inserted++;
+      await recordPlayerActivity(this.db, this.queue, country, score, scoreIdentity);
       if (scoreId > 0) {
         await this.deleteMatchingIdZeroRecentScore(country, score, beatmapId, totalScore, receivedAt);
       }
-      if (result.rowsAffected === 0) continue;
-      inserted++;
       await markCountryScoreSeen(this.db, country);
       const liveScore = await getTrackerScoreByIdentity(this.db, country, scoreIdentity);
       if (liveScore) {
@@ -176,7 +178,19 @@ export class ScoreIngestor {
     receivedAt: string,
   ): Promise<void> {
     if (totalScore == null) return;
-    await exec(
+    const rows = (await exec(
+      this.db,
+      `select score_identity
+       from score_events
+       where country = ?
+         and score_id = 0
+         and user_id = ?
+         and beatmap_id = ?
+         and ended_at = ?
+         and total_score = ?`,
+      [country, score.user_id, beatmapId, score.ended_at ?? score.created_at ?? receivedAt, totalScore],
+    )).rows;
+    const result = await exec(
       this.db,
       `delete from score_events
        where country = ?
@@ -187,6 +201,10 @@ export class ScoreIngestor {
          and total_score = ?`,
       [country, score.user_id, beatmapId, score.ended_at ?? score.created_at ?? receivedAt, totalScore],
     );
+    if (Number(result.rowsAffected ?? 0) === 0) return;
+    for (const row of rows) {
+      await removePlayerActivityScore(this.db, country, String(row.score_identity));
+    }
   }
 
   private async updateOscCursor(score: OscScore, receivedAt: string): Promise<void> {

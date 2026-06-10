@@ -6,7 +6,7 @@ import { edgeCache } from "./server";
 import { parseBoundedInt } from "./validators";
 import type { ManiaBeatmap } from "../beatmap-parser";
 
-const PATTERN_ANALYSIS_CACHE_VERSION = 5;
+const PATTERN_ANALYSIS_CACHE_VERSION = 6;
 const PATTERN_ANALYSIS_CACHE_TTL = 365 * 24 * 60 * 60 * 1000;
 const PATTERN_ANALYSIS_CACHE_LOCK_TTL = 30_000;
 const MIN_ANALYSIS_RATE = 0.5;

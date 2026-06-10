@@ -49,7 +49,7 @@ export async function ensurePinnedCountries(db: Db, config: CountryFeatureConfig
 export async function activateCountry(
   db: Db,
   queue: JobQueue,
-  config: CountryWarmConfig & Pick<Config, "rosterRefreshIntervalMs">,
+  config: CountryWarmConfig & Pick<Config, "rosterRefreshIntervalMs"> & Partial<Pick<Config, "enableOsuApiJobs">>,
   country: string,
 ): Promise<CountryRegistryRow> {
   const normalized = normalizeCountry(country);
@@ -62,7 +62,7 @@ export async function activateCountry(
       ? existing.featureTier
       : maxCountryFeatureTier(configuredTier, config.trackedCountries.includes(normalized) ? "snipes" : "live"),
   });
-  if (await shouldRefreshRoster(db, normalized, config.rosterRefreshIntervalMs)) {
+  if (config.enableOsuApiJobs !== false && await shouldRefreshRoster(db, normalized, config.rosterRefreshIntervalMs)) {
     await queue.enqueue("refresh_country_roster", `roster:${normalized}`, { country: normalized }, { priority: 85, replaceDone: true });
   }
   const row = await getCountryRegistryRow(db, normalized, config);
@@ -148,6 +148,9 @@ export async function deleteCountryData(db: Db, country: string): Promise<Record
   await deleteFrom("snipe_events");
   await deleteFrom("country_maps_snapshots");
   await deleteFrom("country_maps_farmed_scores");
+  await deleteFrom("player_activity_score_refs");
+  await deleteFrom("player_activity_days");
+  await deleteFrom("player_activity_maps");
   await deleteFrom("live_event_log");
   deleted.farm_helper_user_key_stats = Number((await exec(db, "delete from farm_helper_user_key_stats")).rowsAffected ?? 0);
   const mapsMetaDeleted = Number((await exec(db, "delete from live_meta where key in (?, ?)", [`maps_farmed_overlay_updated_at:${normalized}`, `maps_refresh_progress:${normalized}`])).rowsAffected ?? 0);

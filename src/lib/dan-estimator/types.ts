@@ -16,7 +16,11 @@ export type ManiaPatternId =
   | "delay"
   | "bracket"
   | "chordstream"
-  | "ln";
+  | "ln"
+  | "lngeneral"
+  | "lnrelease"
+  | "lninverse"
+  | "lntech";
 
 export interface DanEstimateInput {
   starRating?: number;

@@ -5,6 +5,7 @@ import { handleBeatmapAudioRequest } from "../audio/http.js";
 import { activateCountry, deleteCountryData, getCountryRegistry, GLOBAL_COUNTRY_CODE, isCountryFeatureAtLeast, isGlobalCountry, setCountryFeatureTier, setCountryPaused, setCountryStatus, type CountryFeatureTier, type CountryRegistryStatus } from "../countries.js";
 import type { Db } from "../db.js";
 import { dbHealth, exec, parseJson } from "../db.js";
+import { getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../features/activity.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
 import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, type FarmHelperKeyMode } from "../features/farm-helper.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
@@ -160,6 +161,44 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     if (profileRoute.kind === "recent") {
       if (!checkRate(req, res, ctx, "publicCostly")) return true;
       sendJson(req, res, ctx, 200, await getPlayerRecentScores(ctx.db, ctx.osu, userId));
+      return true;
+    }
+    if (profileRoute.kind === "activity") {
+      sendJson(req, res, ctx, 200, await getPlayerActivitySnapshot(
+        ctx.db,
+        ctx.queue,
+        userId,
+        url.searchParams.get("country") ?? country,
+        clampInteger(url.searchParams.get("year"), 2007, new Date().getUTCFullYear() + 1, new Date().getUTCFullYear()),
+      ));
+      return true;
+    }
+    if (profileRoute.kind === "activity-day") {
+      const day = url.searchParams.get("date") ?? "";
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+        sendJson(req, res, ctx, 400, { error: "invalid_activity_day" });
+        return true;
+      }
+      const detail = await getPlayerActivityDayDetail(
+        ctx.db,
+        ctx.queue,
+        userId,
+        url.searchParams.get("country") ?? country,
+        day,
+      );
+      if (!detail) {
+        sendJson(req, res, ctx, 404, { error: "activity_day_not_found" });
+        return true;
+      }
+      sendJson(req, res, ctx, 200, detail);
+      return true;
+    }
+    if (profileRoute.kind === "activity-availability") {
+      sendJson(req, res, ctx, 200, await getPlayerActivityAvailability(
+        ctx.db,
+        userId,
+        url.searchParams.get("country") ?? country,
+      ));
       return true;
     }
     if (!checkRate(req, res, ctx, "publicCostly")) return true;
@@ -540,8 +579,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     const updated = await setCountryFeatureTier(ctx.db, ctx.config, country, tier);
-    await enqueueRosterRefreshes(ctx.queue, [updated.country]);
-    if (isCountryFeatureAtLeast(updated.featureTier, "maps_warm")) {
+    if (ctx.config.enableOsuApiJobs) {
+      await enqueueRosterRefreshes(ctx.queue, [updated.country]);
+    }
+    if (ctx.config.enableOsuApiJobs && isCountryFeatureAtLeast(updated.featureTier, "maps_warm")) {
       await enqueueMapsRefreshIfDue(ctx.db, ctx.queue, updated.country, ctx.config.mapsRefreshIntervalMs, { priority: 90 });
     }
     sendJson(req, res, ctx, 200, { ok: true, country: updated });
@@ -562,6 +603,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/admin/refresh-maps") {
     if (!isAdmin(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (!ctx.config.enableOsuApiJobs) {
+      sendJson(req, res, ctx, 409, { error: "osu_api_jobs_disabled" });
       return true;
     }
     await enqueueMapsRefresh(ctx.queue, country, { priority: 90, replaceDone: true });
@@ -678,6 +723,10 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       "farm_helper_user_key_stats",
       "replay_video_exports",
       "dan_estimates",
+      "beatmap_skill_vectors",
+      "player_activity_score_refs",
+      "player_activity_days",
+      "player_activity_maps",
       "live_event_log",
       "api_call_log",
       "live_meta",
@@ -1025,7 +1074,7 @@ export async function activatePublicCountry(
     }
   }
   const activated = await activateCountry(ctx.db, ctx.queue, ctx.config, country);
-  if (isCountryFeatureAtLeast(activated.featureTier, "maps_warm")) {
+  if (ctx.config.enableOsuApiJobs && isCountryFeatureAtLeast(activated.featureTier, "maps_warm")) {
     await enqueueMapsRefreshIfDue(ctx.db, ctx.queue, activated.country, ctx.config.mapsRefreshIntervalMs, { priority: 15 });
   }
   return activated;
@@ -1534,8 +1583,8 @@ function parseUserIds(raw: string | null): number[] {
     .slice(0, 100);
 }
 
-function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "about"; key: string } | null {
-  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|about)$/.exec(pathname);
+function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snapshot" | "recent" | "about" | "activity" | "activity-day" | "activity-availability"; key: string } | null {
+  const match = /^\/api\/profiles\/([^/]+)\/(cached-snapshot|snapshot|recent|about|activity|activity-day|activity-availability)$/.exec(pathname);
   if (!match) return null;
   let key: string;
   try {
@@ -1545,7 +1594,7 @@ function parseProfileRoute(pathname: string): { kind: "cached-snapshot" | "snaps
   }
   return {
     key,
-    kind: match[2] as "cached-snapshot" | "snapshot" | "recent" | "about",
+    kind: match[2] as "cached-snapshot" | "snapshot" | "recent" | "about" | "activity" | "activity-day" | "activity-availability",
   };
 }
 

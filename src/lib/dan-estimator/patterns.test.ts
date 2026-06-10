@@ -43,7 +43,44 @@ function makeLnMap(keyCount: number, rows: number[][], intervalMs = 100, holdMs 
   return map;
 }
 
+function makeMixedMap(keyCount: number, rows: Array<Array<number | { column: number; holdMs?: number }>>, intervalMs = 100): ManiaBeatmap {
+  const notes: ManiaNote[] = [];
+  rows.forEach((row, index) => {
+    const time = index * intervalMs;
+    for (const entry of row) {
+      const column = typeof entry === "number" ? entry : entry.column;
+      const holdMs = typeof entry === "number" ? 0 : (entry.holdMs ?? 0);
+      notes.push({
+        column,
+        time,
+        endTime: time + holdMs,
+        isHold: holdMs > 0,
+      });
+    }
+  });
+  return {
+    title: "Synthetic",
+    artist: "Test",
+    version: `${keyCount}K`,
+    creator: "mania-hub",
+    keyCount,
+    od: 8,
+    bpm: 150,
+    notes,
+    totalLength: rows.length * intervalMs,
+    audioFilename: "",
+    previewTime: 0,
+    backgroundFilename: "",
+    breakPeriods: [],
+    scrollVelocities: [],
+  };
+}
+
 function repeatRows(pattern: number[][], times: number): number[][] {
+  return Array.from({ length: times }).flatMap(() => pattern);
+}
+
+function repeatMixedRows<T>(pattern: T[][], times: number): T[][] {
   return Array.from({ length: times }).flatMap(() => pattern);
 }
 
@@ -77,6 +114,10 @@ describe("analyzeManiaPatterns", () => {
       "bracket",
       "chordstream",
       "ln",
+      "lngeneral",
+      "lnrelease",
+      "lninverse",
+      "lntech",
     ]);
   });
 
@@ -89,8 +130,39 @@ describe("analyzeManiaPatterns", () => {
     expect(rice.allPatterns.find((pattern) => pattern.id === "ln")?.score).toBe(0);
     expect(ln.patterns.map((pattern) => pattern.id)).toContain("ln");
     expect(ln.allPatterns.find((pattern) => pattern.id === "ln")?.score).toBeGreaterThan(0.5);
-    expect(denseLn.primary?.id).toBe("ln");
+    expect(denseLn.primary?.id).toMatch(/^ln/);
     expect(denseLn.allPatterns.find((pattern) => pattern.id === "delay")?.score).toBeLessThan(0.2);
+  });
+
+  it("detects 7K LN subtypes", () => {
+    const inverseRows = Array.from({ length: 7 * 36 }, (_, index) => [
+      { column: index % 7, holdMs: 610 },
+    ]);
+    const releaseRows = Array.from({ length: 7 * 36 }, (_, index) => [
+      { column: index % 7, holdMs: 45 },
+      { column: (index + 3) % 7, holdMs: 45 },
+    ]);
+    const generalRows = repeatRows([
+      [0, 2],
+      [1, 3, 5],
+      [2, 4],
+      [0, 5, 6],
+      [1, 4],
+      [2, 3, 6],
+    ], 36).map((columns) => columns.map((column) => ({ column, holdMs: 100 })));
+    const techRows = repeatMixedRows<number | { column: number; holdMs?: number }>([
+      [{ column: 0, holdMs: 110 }, 4],
+      [{ column: 2, holdMs: 55 }, { column: 5, holdMs: 55 }],
+      [{ column: 1, holdMs: 110 }, 6],
+      [{ column: 3, holdMs: 55 }, { column: 4, holdMs: 55 }],
+      [{ column: 0, holdMs: 165 }, { column: 2, holdMs: 165 }, 5],
+      [{ column: 1, holdMs: 55 }, { column: 6, holdMs: 55 }],
+    ], 34);
+
+    expect(analyzeManiaPatterns(makeMixedMap(7, inverseRows, 100)).primary?.id).toBe("lninverse");
+    expect(analyzeManiaPatterns(makeMixedMap(7, releaseRows, 60)).primary?.id).toBe("lnrelease");
+    expect(analyzeManiaPatterns(makeMixedMap(7, generalRows, 100)).primary?.id).toBe("lngeneral");
+    expect(analyzeManiaPatterns(makeMixedMap(7, techRows, 55)).primary?.id).toBe("lntech");
   });
 
   it("detects 4K speedjack and handjack-style chordjack density", () => {

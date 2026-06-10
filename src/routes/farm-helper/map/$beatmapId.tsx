@@ -4,7 +4,7 @@ import { Activity, ArrowLeft, BarChart3, Clock3, ExternalLink, Gauge, Keyboard, 
 import { getBeatmapPatternAnalysis, getBeatmapsetForBeatmap, type BeatmapPatternAnalysisResponse } from "../../../lib/osu";
 import type { MapsFavouriteBeatmapset, OsuBeatmap, OsuBeatmapset } from "../../../lib/types";
 import { detectManiaPatterns, MANIA_PATTERN_LABELS } from "../../../lib/mania-patterns";
-import { MANIA_PATTERN_ANALYZER_LABELS, type ManiaPatternAnalysis, type ManiaPatternId } from "../../../lib/dan-estimator";
+import { MANIA_PATTERN_ANALYZER_LABELS, type ManiaPatternAnalysis, type ManiaPatternHit, type ManiaPatternId } from "../../../lib/dan-estimator";
 import { formatDuration, formatNumber } from "../../../lib/format";
 import { PageHeader } from "../../../components/layout/PageHeader";
 import { Skeleton } from "../../../components/ui/LoadingSkeleton";
@@ -459,6 +459,7 @@ function getFarmSpeedRate(speed: LiveFarmHelperSpeedBucket | undefined): number 
 const FOUR_KEY_RADAR_PATTERNS: ManiaPatternId[] = ["jack", "chordjack", "stream", "jumpstream", "handstream", "ln", "tech"];
 const SEVEN_KEY_RADAR_PATTERNS: ManiaPatternId[] = ["delay", "chordstream", "bracket", "chordjack", "ln", "tech"];
 const GENERIC_RADAR_PATTERNS: ManiaPatternId[] = ["stream", "chordstream", "chordjack", "ln", "tech"];
+const LN_SUBTYPE_PATTERN_IDS: ManiaPatternId[] = ["lngeneral", "lnrelease", "lninverse", "lntech"];
 
 function buildAnalyzerRadar(analysis: ManiaPatternAnalysis): Array<{ label: string; value: number }> {
   const ids = analysis.keyCount === 4
@@ -467,11 +468,24 @@ function buildAnalyzerRadar(analysis: ManiaPatternAnalysis): Array<{ label: stri
       ? SEVEN_KEY_RADAR_PATTERNS
       : GENERIC_RADAR_PATTERNS;
   const byId = new Map(analysis.allPatterns.map((pattern) => [pattern.id, pattern]));
+  const lnSubtype = getBestLnSubtype(analysis);
 
-  return ids.map((id) => ({
-    label: MANIA_PATTERN_ANALYZER_LABELS[id],
-    value: clamp01(byId.get(id)?.score ?? 0),
-  }));
+  return ids.map((id) => {
+    const pattern = id === "ln" && lnSubtype ? lnSubtype : byId.get(id);
+    return {
+      label: id === "ln" && lnSubtype ? lnSubtype.label : MANIA_PATTERN_ANALYZER_LABELS[id],
+      value: clamp01(pattern?.score ?? 0),
+    };
+  });
+}
+
+function getBestLnSubtype(analysis: ManiaPatternAnalysis): ManiaPatternHit | null {
+  if (analysis.keyCount !== 7 || analysis.metrics.holdRatio < 0.12) return null;
+  return LN_SUBTYPE_PATTERN_IDS
+    .map((id) => analysis.allPatterns.find((pattern) => pattern.id === id))
+    .filter((pattern): pattern is NonNullable<typeof pattern> => Boolean(pattern))
+    .filter((pattern) => pattern.score >= 0.2)
+    .sort((left, right) => right.score - left.score)[0] ?? null;
 }
 
 function RadarChart({ axes }: { axes: Array<{ label: string; value: number }> }) {

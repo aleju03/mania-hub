@@ -1,7 +1,7 @@
 import type { ManiaBeatmap, ManiaNote } from "../beatmap-parser";
 import { extractDanFeatures } from "./features";
 import { getInputRate } from "./labels";
-import { clamp01, minGate } from "./math";
+import { clamp01, minGate, quantile } from "./math";
 import type { DanEstimateInput, ManiaPatternAnalysis, ManiaPatternHit, ManiaPatternId } from "./types";
 
 export const MANIA_PATTERN_ANALYZER_LABELS: Record<ManiaPatternId, string> = {
@@ -19,6 +19,10 @@ export const MANIA_PATTERN_ANALYZER_LABELS: Record<ManiaPatternId, string> = {
   bracket: "Bracket",
   chordstream: "Chordstream",
   ln: "LN",
+  lngeneral: "LN General",
+  lnrelease: "LN Release",
+  lninverse: "LN Inverse",
+  lntech: "LN Tech",
 };
 
 export const SUPPORTED_MANIA_PATTERN_IDS: ManiaPatternId[] = [
@@ -36,6 +40,10 @@ export const SUPPORTED_MANIA_PATTERN_IDS: ManiaPatternId[] = [
   "bracket",
   "chordstream",
   "ln",
+  "lngeneral",
+  "lnrelease",
+  "lninverse",
+  "lntech",
 ];
 
 interface RowPatternStats {
@@ -49,6 +57,15 @@ interface RowPatternStats {
   repeatedChordRows: number;
   bracketRows: number;
   averageChordSize: number;
+}
+
+interface LnPatternStats {
+  inverseReleaseRatio: number;
+  sameColumnReleaseGapP50: number;
+  releaseOnlyRatio: number;
+  headTailSwitchRatio: number;
+  mixedRowRatio: number;
+  tapWhileHoldingRatio: number;
 }
 
 function rowColumns(rowNotes: ManiaNote[]): number[] {
@@ -126,6 +143,89 @@ function getRowPatternStats(orderedRows: Array<[number, ManiaNote[]]>, keyCount:
   };
 }
 
+function getLnPatternStats(
+  notes: ManiaNote[],
+  orderedRows: Array<[number, ManiaNote[]]>,
+  keyCount: number,
+): LnPatternStats {
+  const releaseRows = new Map<number, ManiaNote[]>();
+  const headTimes = new Set<number>();
+  const holdEvents: Array<{ time: number; delta: number }> = [];
+  const notesByColumn = Array.from({ length: Math.max(1, keyCount) }, () => [] as ManiaNote[]);
+
+  for (const note of notes) {
+    if (note.column >= 0 && note.column < notesByColumn.length) notesByColumn[note.column].push(note);
+    if (!note.isHold || note.endTime <= note.time) continue;
+
+    const releaseRow = releaseRows.get(note.endTime);
+    if (releaseRow) releaseRow.push(note);
+    else releaseRows.set(note.endTime, [note]);
+    holdEvents.push({ time: note.time, delta: 1 }, { time: note.endTime, delta: -1 });
+  }
+
+  holdEvents.sort((left, right) => left.time - right.time || right.delta - left.delta);
+
+  let mixedRows = 0;
+  let tapWhileHoldingRows = 0;
+  let headTailSwitchRows = 0;
+  let activeHolds = 0;
+  let eventIndex = 0;
+
+  for (const [time, rowNotes] of orderedRows) {
+    headTimes.add(time);
+
+    while (eventIndex < holdEvents.length && holdEvents[eventIndex].time < time) {
+      activeHolds = Math.max(0, activeHolds + holdEvents[eventIndex].delta);
+      eventIndex++;
+    }
+
+    const hasHold = rowNotes.some((note) => note.isHold);
+    const hasTap = rowNotes.some((note) => !note.isHold);
+    if (hasHold && hasTap) mixedRows++;
+    if (hasTap && activeHolds > 0) tapWhileHoldingRows++;
+    if (releaseRows.has(time)) headTailSwitchRows++;
+  }
+
+  let releaseOnlyRows = 0;
+  for (const time of releaseRows.keys()) {
+    if (!headTimes.has(time)) releaseOnlyRows++;
+  }
+
+  const sameColumnGaps: number[] = [];
+  let inverseLikeHolds = 0;
+  let sameColumnNextHolds = 0;
+
+  for (const columnNotes of notesByColumn) {
+    columnNotes.sort((left, right) => left.time - right.time || left.endTime - right.endTime);
+    for (let index = 0; index < columnNotes.length - 1; index++) {
+      const note = columnNotes[index];
+      if (!note.isHold || note.endTime <= note.time) continue;
+
+      const nextNote = columnNotes[index + 1];
+      const gap = nextNote.time - note.endTime;
+      if (gap < 0) continue;
+
+      const holdDuration = Math.max(1, note.endTime - note.time);
+      const gapRatio = gap / holdDuration;
+      sameColumnNextHolds++;
+      sameColumnGaps.push(gap);
+      if (gap <= 120 && gapRatio <= 0.7) inverseLikeHolds++;
+    }
+  }
+
+  const rowCount = Math.max(1, orderedRows.length);
+  const releaseRowCount = releaseRows.size;
+
+  return {
+    inverseReleaseRatio: sameColumnNextHolds ? inverseLikeHolds / sameColumnNextHolds : 0,
+    sameColumnReleaseGapP50: quantile(sameColumnGaps, 0.5),
+    releaseOnlyRatio: releaseRowCount ? releaseOnlyRows / releaseRowCount : 0,
+    headTailSwitchRatio: headTailSwitchRows / rowCount,
+    mixedRowRatio: mixedRows / rowCount,
+    tapWhileHoldingRatio: tapWhileHoldingRows / rowCount,
+  };
+}
+
 function ratio(count: number, total: number): number {
   return total > 0 ? count / total : 0;
 }
@@ -188,19 +288,79 @@ export function analyzeManiaPatterns(map: ManiaBeatmap, input: DanEstimateInput 
   );
   const dataConfidence = clamp01(0.35 + Math.min(0.4, metrics.noteCount / 2500) + Math.min(0.25, stats.rowCount / 900));
   const candidates: ManiaPatternHit[] = [];
+  const lnStats = getLnPatternStats(features.notes, orderedRows, metrics.keyCount);
   const lnScore = Math.max(
     pressure(metrics.holdRatio, 0.03, 0.32),
     minGate(pressure(metrics.lnDensity, 0.02, 0.18), pressure(metrics.lnOverlapPressure, 0.4, 2.4)),
     minGate(pressure(metrics.lnReleasePressure, 1.2, 5.5), pressure(metrics.holdRatio, 0.015, 0.16)),
     minGate(pressure(metrics.lnChordPressure, 0.15, 0.65), pressure(metrics.holdRatio, 0.02, 0.18)),
   );
+  const lnSubtypeGate = metrics.keyCount === 7 ? pressure(lnScore, 0.18, 0.58) : 0;
+  const lnInverseScore = lnSubtypeGate * minGate(
+    pressure(lnStats.inverseReleaseRatio, 0.24, 0.62),
+    pressure(metrics.lnDensity, 0.12, 0.5),
+    Math.max(
+      pressure(metrics.lnOverlapPressure, 1.1, 3.1),
+      pressure(metrics.lnHoldDurationP90, 260, 520),
+    ),
+    clamp01((0.16 - lnStats.mixedRowRatio) / 0.16),
+  );
+  const lnReleaseScore = lnSubtypeGate * minGate(
+    pressure(lnStats.releaseOnlyRatio, 0.48, 0.68),
+    pressure(metrics.lnReleasePressure, 12, 30),
+    clamp01((0.45 - lnStats.inverseReleaseRatio) / 0.32),
+    clamp01((520 - metrics.lnHoldDurationP90) / 260),
+  );
+  const lnTechBurst = Math.max(
+    pressure(metrics.fastRowRatio, 0.18, 0.36),
+    pressure(metrics.rowBurstPressure, 16, 26),
+  );
+  const lnTechCoordination = Math.max(
+    pressure(lnStats.tapWhileHoldingRatio, 0.04, 0.11),
+    pressure(lnStats.headTailSwitchRatio, 0.52, 0.72),
+    pressure(metrics.chordSizeChangeRate, 0.55, 0.78),
+  );
+  const lnTechScore = lnSubtypeGate * minGate(
+    lnTechBurst,
+    lnTechCoordination,
+    Math.max(
+      pressure(metrics.techPressure, 4.2, 8.4),
+      pressure(metrics.rowIntervalEntropy, 2.0, 2.45),
+    ),
+    clamp01((0.6 - lnStats.inverseReleaseRatio) / 0.34),
+    clamp01((0.66 - lnStats.releaseOnlyRatio) / 0.22),
+  );
+  const lnGeneralCoverage = Math.max(
+    minGate(
+      pressure(metrics.holdRatio, 0.35, 0.82),
+      pressure(metrics.lnChordPressure, 0.32, 0.66),
+      pressure(lnStats.headTailSwitchRatio, 0.35, 0.62),
+    ),
+    minGate(
+      pressure(metrics.lnDensity, 0.12, 0.42),
+      pressure(metrics.lnReleasePressure, 8, 24),
+      pressure(chordRatio, 0.28, 0.62),
+    ),
+  );
+  const lnSpecialtyScore = Math.max(lnInverseScore, lnReleaseScore, lnTechScore);
+  const lnGeneralScore = lnSubtypeGate
+    * lnGeneralCoverage
+    * (0.35 + 0.65 * clamp01((0.78 - lnSpecialtyScore) / 0.38));
 
   candidates.push(hit(
     "ln",
-    lnScore,
+    metrics.keyCount === 7 ? lnScore * 0.62 : lnScore,
     dataConfidence,
     `${compactPercent(metrics.holdRatio)} holds, release pressure ${metrics.lnReleasePressure.toFixed(1)}`,
   ));
+  if (metrics.keyCount === 7) {
+    candidates.push(
+      hit("lngeneral", lnGeneralScore, dataConfidence, `${compactPercent(metrics.lnChordPressure)} LN chord rows, ${compactPercent(lnStats.headTailSwitchRatio)} head/tail switches`),
+      hit("lnrelease", lnReleaseScore, dataConfidence, `${compactPercent(lnStats.releaseOnlyRatio)} release-only rows, release pressure ${metrics.lnReleasePressure.toFixed(1)}`),
+      hit("lninverse", lnInverseScore, dataConfidence, `${compactPercent(lnStats.inverseReleaseRatio)} short same-column release gaps, p50 gap ${Math.round(lnStats.sameColumnReleaseGapP50)}ms`),
+      hit("lntech", lnTechScore, dataConfidence, `${compactPercent(lnStats.tapWhileHoldingRatio)} tap-with-hold rows, burst pressure ${metrics.rowBurstPressure.toFixed(1)}`),
+    );
+  }
 
   if (metrics.keyCount === 4) {
     const jackScore = Math.max(
@@ -246,6 +406,7 @@ export function analyzeManiaPatterns(map: ManiaBeatmap, input: DanEstimateInput 
     );
   } else if (metrics.keyCount === 6 || metrics.keyCount === 7) {
     const nonLnFlowGate = clamp01((0.3 - metrics.holdRatio) / 0.22);
+    const nonLnPatternGate = clamp01((0.68 - metrics.holdRatio) / 0.56);
     const wideChordstream = Math.max(
       chordstreamGate,
       minGate(pressure(chordRatio, 0.2, 0.62), pressure(metrics.chordSizeChangeRate, 0.18, 0.52)),
@@ -265,20 +426,20 @@ export function analyzeManiaPatterns(map: ManiaBeatmap, input: DanEstimateInput 
     );
     candidates.push(
       hit("delay", delayScore, dataConfidence, `${metrics.keyCount}K dense broken-stream flow, entropy ${metrics.rowIntervalEntropy.toFixed(1)}`),
-      hit("chordjack", Math.max(
+      hit("chordjack", nonLnPatternGate * Math.max(
         chordjackBase,
         minGate(pressure(chordRatio, 0.34, 0.72), pressure(repeatedChordRatio, 0.04, 0.22)),
       ), dataConfidence, `${compactPercent(chordRatio)} chord rows, ${compactPercent(repeatedChordRatio)} repeated chord rows`),
-      hit("tech", Math.max(
+      hit("tech", nonLnPatternGate * Math.max(
         techScore,
         wideChordstream * minGate(pressure(metrics.rowPatternChangeRate, 0.38, 0.72), pressure(metrics.fastRowRatio, 0.08, 0.36)),
       ), dataConfidence, `chord changes ${compactPercent(metrics.chordSizeChangeRate)}, tech pressure ${metrics.techPressure.toFixed(1)}`),
-      hit("bracket", minGate(
+      hit("bracket", nonLnPatternGate * minGate(
         pressure(bracketRatio, 0.035, 0.18),
         pressure(chordRatio, 0.28, 0.62),
         pressure(stats.averageChordSize, 2.4, 4),
       ), dataConfidence, `${compactPercent(bracketRatio)} bracket-like dense chord rows`),
-      hit("chordstream", wideChordstream * clamp01((165 - metrics.jackPressure) / 130), dataConfidence, `${compactPercent(chordRatio)} chord rows mixed into stream`),
+      hit("chordstream", nonLnPatternGate * wideChordstream * clamp01((165 - metrics.jackPressure) / 130), dataConfidence, `${compactPercent(chordRatio)} chord rows mixed into stream`),
     );
   } else {
     candidates.push(
