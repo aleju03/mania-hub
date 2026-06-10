@@ -432,46 +432,46 @@ interface PreviewRec {
   pct: number;
 }
 
-// Real ranked mania sets so the covers resolve; the numbers are illustrative.
+// Lifted from a real snapshot for a ~4,250pp 4K player so the numbers are plausible.
 const PREVIEW_RECS: PreviewRec[] = [
   {
     reason: "missing",
-    title: "Runengon",
-    version: "4K Lenfried's Insane",
-    artist: "antiPLUR",
-    creator: "Raveille",
-    stars: 4.29,
-    cover: "https://assets.ppy.sh/beatmaps/971561/covers/list.jpg",
-    gain: 34,
-    barLeft: "61% of sampled nearby players farm this",
-    barRight: "median 213pp",
-    pct: 61,
+    title: "Galaxy Collapse",
+    version: "4K Ayase vs Ferdi's Galactic Annihilation",
+    artist: "Kurokotei",
+    creator: "SuzumeAyase",
+    stars: 5.84,
+    cover: "https://assets.ppy.sh/beatmaps/2474975/covers/list.jpg",
+    gain: 71,
+    barLeft: "32% of sampled nearby players farm this",
+    barRight: "median 274pp",
+    pct: 32,
   },
   {
     reason: "improve",
-    title: "unravel (TV edit)",
-    version: "4K Marirose's Insane",
-    artist: "TK from Ling tosite sigure",
-    creator: "Desperate-kun",
-    stars: 3.66,
-    cover: "https://assets.ppy.sh/beatmaps/206887/covers/list.jpg",
-    gain: 22,
-    barLeft: "your 174pp",
-    barRight: "median 196pp",
-    pct: 89,
+    title: "Triumph & Regret",
+    version: "4K Regret",
+    artist: "typeMARS",
+    creator: "[ A v a l o n ]",
+    stars: 5.48,
+    cover: "https://assets.ppy.sh/beatmaps/347650/covers/list.jpg",
+    gain: 30,
+    barLeft: "your 232pp",
+    barRight: "median 274pp",
+    pct: 85,
   },
   {
     reason: "stale",
-    title: "If You Can't Hang",
-    version: "4K puxtu's MX",
-    artist: "Sleeping With Sirens",
-    creator: "pishifat",
-    stars: 3.97,
-    cover: "https://assets.ppy.sh/beatmaps/409025/covers/list.jpg",
-    gain: 17,
-    barLeft: "your 168pp · 14mo old",
-    barRight: "top 25% 189pp",
-    pct: 85,
+    title: "MALIGNANT",
+    version: "4K Proboscidea",
+    artist: "a crowd of rebellion",
+    creator: "Nathalia-",
+    stars: 4.95,
+    cover: "https://assets.ppy.sh/beatmaps/1556170/covers/list.jpg",
+    gain: 18,
+    barLeft: "your 204pp · 16mo old",
+    barRight: "top 25% 225pp",
+    pct: 91,
   },
 ];
 
@@ -499,7 +499,7 @@ function PickerPreviewCard() {
         </div>
       </div>
       <p className="mt-2.5 text-center text-[11px] text-osu-f1 lg:text-right">
-        what a plan looks like for a 4,200pp player
+        what it finds for a 4,200pp player
       </p>
     </div>
   );
