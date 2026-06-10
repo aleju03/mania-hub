@@ -15,6 +15,7 @@ import { Route as SnipesRouteImport } from './routes/snipes'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ReplayRouteImport } from './routes/replay'
 import { Route as RankingsRouteImport } from './routes/rankings'
+import { Route as PacksRouteImport } from './routes/packs'
 import { Route as MapsRouteImport } from './routes/maps'
 import { Route as LegalRouteImport } from './routes/legal'
 import { Route as FarmHelperRouteImport } from './routes/farm-helper'
@@ -71,6 +72,11 @@ const ReplayRoute = ReplayRouteImport.update({
 const RankingsRoute = RankingsRouteImport.update({
   id: '/rankings',
   path: '/rankings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PacksRoute = PacksRouteImport.update({
+  id: '/packs',
+  path: '/packs',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MapsRoute = MapsRouteImport.update({
@@ -214,6 +220,7 @@ export interface FileRoutesByFullPath {
   '/farm-helper': typeof FarmHelperRouteWithChildren
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
+  '/packs': typeof PacksRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
   '/settings': typeof SettingsRoute
@@ -249,6 +256,7 @@ export interface FileRoutesByTo {
   '/farm-helper': typeof FarmHelperRouteWithChildren
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
+  '/packs': typeof PacksRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
   '/settings': typeof SettingsRoute
@@ -285,6 +293,7 @@ export interface FileRoutesById {
   '/farm-helper': typeof FarmHelperRouteWithChildren
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
+  '/packs': typeof PacksRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
   '/settings': typeof SettingsRoute
@@ -322,6 +331,7 @@ export interface FileRouteTypes {
     | '/farm-helper'
     | '/legal'
     | '/maps'
+    | '/packs'
     | '/rankings'
     | '/replay'
     | '/settings'
@@ -357,6 +367,7 @@ export interface FileRouteTypes {
     | '/farm-helper'
     | '/legal'
     | '/maps'
+    | '/packs'
     | '/rankings'
     | '/replay'
     | '/settings'
@@ -392,6 +403,7 @@ export interface FileRouteTypes {
     | '/farm-helper'
     | '/legal'
     | '/maps'
+    | '/packs'
     | '/rankings'
     | '/replay'
     | '/settings'
@@ -428,6 +440,7 @@ export interface RootRouteChildren {
   FarmHelperRoute: typeof FarmHelperRouteWithChildren
   LegalRoute: typeof LegalRoute
   MapsRoute: typeof MapsRoute
+  PacksRoute: typeof PacksRoute
   RankingsRoute: typeof RankingsRoute
   ReplayRoute: typeof ReplayRoute
   SettingsRoute: typeof SettingsRoute
@@ -495,6 +508,13 @@ declare module '@tanstack/react-router' {
       path: '/rankings'
       fullPath: '/rankings'
       preLoaderRoute: typeof RankingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/packs': {
+      id: '/packs'
+      path: '/packs'
+      fullPath: '/packs'
+      preLoaderRoute: typeof PacksRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/maps': {
@@ -736,6 +756,7 @@ const rootRouteChildren: RootRouteChildren = {
   FarmHelperRoute: FarmHelperRouteWithChildren,
   LegalRoute: LegalRoute,
   MapsRoute: MapsRoute,
+  PacksRoute: PacksRoute,
   RankingsRoute: RankingsRoute,
   ReplayRoute: ReplayRoute,
   SettingsRoute: SettingsRoute,

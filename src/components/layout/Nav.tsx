@@ -15,6 +15,7 @@ import { getCountryFlagGradient, getCountryFlagUrl, isGlobalScope } from "../../
 import { isLiveBackendConfigured } from "../../lib/live-backend";
 import { useCountryWarming } from "../../lib/use-country-warming";
 import { useDynamicFavicon } from "../../lib/favicon";
+import { isPacksFeatureEnabled } from "../../lib/feature-flags";
 
 const links = [
   { id: "home", to: "/", label: "home" },
@@ -25,6 +26,7 @@ const links = [
   { id: "farm-helper", to: "/farm-helper", label: "farm helper" },
   { id: "replay", to: "/replay", label: "replay" },
   { id: "snipes", to: "/snipes", label: "snipes" },
+  { id: "packs", to: "/packs", label: "packs" },
 ] as const;
 
 /* Nav links to /maps and /snipes target routes whose validateSearch has
@@ -72,6 +74,7 @@ export function Nav() {
   const showSnipesLink = !liveBackendConfigured || selectedCountryFeatureTier === "snipes";
   const visibleLinks = links.filter((link) => {
     if (link.id === "snipes" && !showSnipesLink) return false;
+    if (link.id === "packs" && !isPacksFeatureEnabled()) return false;
     return true;
   });
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");

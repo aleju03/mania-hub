@@ -1,9 +1,12 @@
 import {
   AmbientLight,
+  CanvasTexture,
   Group,
+  LinearFilter,
   Mesh,
   PerspectiveCamera,
   Scene,
+  SRGBColorSpace,
   WebGLRenderer,
 } from "three";
 import type { Object3D } from "three";
@@ -20,7 +23,7 @@ import {
   type InteractionState,
   type Rotation2D,
 } from "./interactions";
-import { resolveQualityProfile, type QualityProfile } from "./layout";
+import { clamp, resolveQualityProfile, type QualityProfile } from "./layout";
 import type { ManiaCardReadyData } from "./types";
 import { CARD_WORLD_HEIGHT } from "./cardGeometry";
 
@@ -41,8 +44,27 @@ export interface ManiaCardRendererOptions {
   mobile: boolean;
   reducedMotion: boolean;
   devicePixelRatio: number;
+  // Start with the card back facing the camera; playRevealFlip() spins it
+  // front-side-out. Used by the pack opening reveal.
+  startFaceDown?: boolean;
   onReady?: () => void;
   onError?: (error: unknown) => void;
+}
+
+interface IntroFlipAnimation {
+  fromDeg: number;
+  startTime: number | null;
+  durationMs: number;
+  resolve: () => void;
+}
+
+// easeOutBack with a softened overshoot so the card snaps a few degrees past
+// front-facing and settles, instead of wobbling.
+function easeOutBackSoft(t: number) {
+  const c1 = 1.10158;
+  const c3 = c1 + 1;
+  const u = t - 1;
+  return 1 + c3 * u * u * u + c1 * u * u;
 }
 
 export class ManiaCardRenderer {
@@ -68,8 +90,14 @@ export class ManiaCardRenderer {
   private orientationAttached = false;
   private orientationPermissionRequested = false;
   private readyEmitted = false;
+  private introRotationDeg = 0;
+  private introAnim: IntroFlipAnimation | null = null;
+  private backMesh: Mesh | null = null;
+  private backOverrideCanvas: HTMLCanvasElement | null = null;
+  private backOverrideTexture: CanvasTexture | null = null;
 
   constructor(options: ManiaCardRendererOptions) {
+    if (options.startFaceDown) this.introRotationDeg = 180;
     this.host = options.host;
     this.mobile = options.mobile;
     this.onReady = options.onReady;
@@ -134,15 +162,74 @@ export class ManiaCardRenderer {
     const front = new Mesh(createCardFaceGeometry(), createFaceMaterial(textures.frontTexture));
     front.position.z = FACE_Z_OFFSET;
 
-    const back = new Mesh(createCardFaceGeometry(), createFaceMaterial(textures.backTexture));
+    const back = new Mesh(createCardFaceGeometry(), createFaceMaterial(this.resolveBackTexture(textures)));
     back.position.z = -FACE_Z_OFFSET;
     back.rotation.y = Math.PI;
+    this.backMesh = back;
 
     this.overlay = new Mesh(createCardFaceGeometry(), createOverlayMaterial(data, textures.layout));
     this.overlay.position.z = OVERLAY_Z_OFFSET;
 
     this.group.add(body, front, back, this.overlay);
     this.start();
+  }
+
+  // Replaces the card-back art with an external canvas. The pack reveal uses
+  // a tier-neutral back so the face-down card never spoils the pull. Pass
+  // null to restore the card's own tier-styled back.
+  setBackOverride(canvas: HTMLCanvasElement | null) {
+    if (this.backOverrideCanvas === canvas) return;
+    this.backOverrideCanvas = canvas;
+    this.backOverrideTexture?.dispose();
+    this.backOverrideTexture = null;
+    if (this.backMesh && this.textures) {
+      const material = this.backMesh.material;
+      if (material && !Array.isArray(material)) material.dispose();
+      this.backMesh.material = createFaceMaterial(this.resolveBackTexture(this.textures));
+      this.start();
+    }
+  }
+
+  private resolveBackTexture(textures: CardTextureSet) {
+    if (!this.backOverrideCanvas) return textures.backTexture;
+    if (!this.backOverrideTexture) {
+      const texture = new CanvasTexture(this.backOverrideCanvas);
+      texture.colorSpace = SRGBColorSpace;
+      texture.minFilter = LinearFilter;
+      texture.magFilter = LinearFilter;
+      texture.needsUpdate = true;
+      this.backOverrideTexture = texture;
+    }
+    return this.backOverrideTexture;
+  }
+
+  // Re-arms the face-down pose for the next reveal when a single renderer is
+  // reused across cards. Call before setData so the new card never flashes
+  // front-side-out.
+  setFaceDown() {
+    this.finishIntroAnim();
+    this.introRotationDeg = 180;
+    this.start();
+  }
+
+  playRevealFlip(durationMs = 950): Promise<void> {
+    if (this.disposed || this.introRotationDeg === 0) return Promise.resolve();
+    this.finishIntroAnim();
+    return new Promise((resolve) => {
+      this.introAnim = {
+        fromDeg: this.introRotationDeg,
+        startTime: null,
+        durationMs: Math.max(1, durationMs),
+        resolve,
+      };
+      this.start();
+    });
+  }
+
+  private finishIntroAnim() {
+    const pending = this.introAnim;
+    this.introAnim = null;
+    pending?.resolve();
   }
 
   resize() {
@@ -160,6 +247,7 @@ export class ManiaCardRenderer {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    this.finishIntroAnim();
     this.dataRequestId += 1;
     if (this.frameId !== null) cancelAnimationFrame(this.frameId);
     this.detachPointerEvents();
@@ -168,6 +256,8 @@ export class ManiaCardRenderer {
       this.orientationAttached = false;
     }
     this.textures?.dispose();
+    this.backOverrideTexture?.dispose();
+    this.backOverrideTexture = null;
     this.group.traverse((object: Object3D) => {
       const mesh = object as Mesh;
       if (mesh.geometry) mesh.geometry.dispose();
@@ -179,6 +269,7 @@ export class ManiaCardRenderer {
   }
 
   private clearGroup() {
+    this.backMesh = null;
     while (this.group.children.length > 0) {
       const child = this.group.children[0];
       if (!child) continue;
@@ -201,9 +292,30 @@ export class ManiaCardRenderer {
   }
 
   private tick(time: number) {
+    if (this.introAnim) {
+      const anim = this.introAnim;
+      if (anim.startTime === null) anim.startTime = time;
+      const progress = Math.min(1, ((time - anim.startTime) * 1000) / anim.durationMs);
+      const eased = easeOutBackSoft(progress);
+      this.introRotationDeg = anim.fromDeg * (1 - eased);
+      // Sweep the foil light across the face while the card turns so the
+      // reveal lands with a glint instead of a flat frame.
+      this.interaction.light = {
+        x: clamp(0.85 - eased * 0.7, 0.08, 0.92),
+        y: 0.35,
+      };
+      if (progress >= 1) {
+        this.introRotationDeg = 0;
+        this.introAnim = null;
+        this.interaction.light = pointerToLight(this.interaction.rotation);
+        anim.resolve();
+      }
+    }
+
     const frontFacingOffset = this.interaction.flipped ? Math.PI : 0;
     this.group.rotation.x = (this.interaction.rotation.x * Math.PI) / 180;
-    this.group.rotation.y = frontFacingOffset + (this.interaction.rotation.y * Math.PI) / 180;
+    this.group.rotation.y =
+      frontFacingOffset + ((this.interaction.rotation.y + this.introRotationDeg) * Math.PI) / 180;
 
     if (this.overlay?.material && "uniforms" in this.overlay.material) {
       const uniforms = this.overlay.material.uniforms as any;
@@ -282,6 +394,7 @@ export class ManiaCardRenderer {
   };
 
   private shouldKeepAnimating() {
+    if (this.introAnim) return true;
     if (this.quality.idleMotion === "continuous") return true;
     if (this.interaction.dragging) return true;
     const inputAge = performance.now() - this.interaction.lastInputAt;

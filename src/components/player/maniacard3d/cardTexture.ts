@@ -1170,7 +1170,7 @@ function drawUsernamePixelTrail(context: CanvasRenderingContext2D, x: number, y:
   }
 }
 
-function drawManiaGlyph(
+export function drawManiaGlyph(
   context: CanvasRenderingContext2D,
   x: number,
   y: number,

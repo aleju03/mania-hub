@@ -101,6 +101,7 @@ declare module "three" {
   }
 
   export class CanvasTexture extends Texture {
+    image: HTMLCanvasElement;
     minFilter: unknown;
     magFilter: unknown;
     colorSpace: unknown;
