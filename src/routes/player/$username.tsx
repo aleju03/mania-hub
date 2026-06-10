@@ -72,7 +72,11 @@ const PLAYER_ABOUT_LIVE_TIMEOUT_MS = 8_000;
 const PLAYER_RECENT_LIVE_TIMEOUT_MS = 8_000;
 const PROFILE_SNAPSHOT_BEST_GRACE_MS = 450;
 const PROFILE_SNAPSHOT_REFRESH_DEFER_MS = 2500;
-const PROFILE_CACHED_SNAPSHOT_LOADER_TIMEOUT_MS = 650;
+// With SSR pinned next to the backend (fra1 <-> Nuremberg, ~5ms RTT) the happy
+// path is ~50ms; this budget exists to absorb backend event-loop stalls, which
+// run ~0.5-1.5s. Waiting one out beats serving a skeleton: a miss costs the
+// visitor a multi-second client-side refetch instead.
+const PROFILE_CACHED_SNAPSHOT_LOADER_TIMEOUT_MS = 1_200;
 const INITIAL_SCORE_BATCH_SIZE = 5;
 const SHOW_MORE_BATCH_SIZE = 50;
 const BEST_SCORES_WINDOW_SIZE = 200;
@@ -283,11 +287,22 @@ function withProfileLoaderBudget<T>(promise: Promise<T>, timeoutMs: number): Pro
   ]);
 }
 
+// SSR fetches to the live backend occasionally fail instantly when a kept-alive
+// socket was closed by the proxy between requests; a fresh connection almost
+// always succeeds, so one immediate retry turns those misses into hits.
+async function fetchCachedSnapshotWithRetry(username: string): Promise<LivePlayerProfileSnapshot | null> {
+  try {
+    return await fetchLivePlayerCachedProfileSnapshot({ data: { key: username } });
+  } catch {
+    return fetchLivePlayerCachedProfileSnapshot({ data: { key: username } });
+  }
+}
+
 export async function loadPlayerRouteData(username: string): Promise<PlayerLoaderData> {
   let cachedSnapshot: LivePlayerProfileSnapshot | null = null;
   try {
     cachedSnapshot = await withProfileLoaderBudget(
-      fetchLivePlayerCachedProfileSnapshot({ data: { key: username } }),
+      fetchCachedSnapshotWithRetry(username),
       PROFILE_CACHED_SNAPSHOT_LOADER_TIMEOUT_MS,
     );
   } catch {
