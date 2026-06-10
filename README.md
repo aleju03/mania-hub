@@ -4,7 +4,7 @@
   <h1>Mania Tracker</h1>
 
   <p>
-    A community hub for osu!mania: country rankings, live score tracking, player profiles, top plays, maps, snipes, and a replay viewer.
+    osu!mania country rankings, live score tracking, top plays, maps, snipes, farm picks, player profiles, and a replay viewer.
   </p>
 
   <p>
@@ -21,18 +21,31 @@
 
 ![Mania Tracker home dashboard](docs/assets/home-dashboard.png)
 
-Pick any country and see what's going on in its osu!mania scene: who's climbing the rankings, who just popped off, what maps everyone's farming, who got sniped.
+Pick a country (or the global scope) and see what's going on in its osu!mania scene: who's climbing the rankings, who just popped off, what maps everyone's farming, who got sniped. Countries aren't hardcoded; visiting one starts tracking it, and a synthetic global scope aggregates everything.
 
 ## Features
 
 | Feature | What it does |
 | --- | --- |
-| Country rankings | Browse osu!mania players by country, with 7-day rank movement. |
-| Live tracker | Recent score feed across tracked players, with mods, accuracy, and beatmap context. |
-| Player profiles | Summaries, recent plays, top plays, grades, and mania-specific stats. |
-| Top plays | Country popoffs and high-PP scores across time windows. |
-| Maps | Most farmed, most played, and favourited maps for the selected country. |
-| Snipes | First-place takeovers on country-ranked maps. |
-| Replay viewer | Parse and render mania replays with custom skin and navigation controls. |
+| Rankings | Country and global osu!mania rankings with 7-day rank movement. |
+| Live tracker | Real-time score feed across tracked players, streamed to the browser over SSE. |
+| Top plays | Scores confirmed to have entered a player's top plays, with the PP they gained. |
+| Maps | Most farmed maps per country, plus a global rollup. |
+| Snipes | First-place takeovers on per-map country leaderboards. |
+| Farm helper | PP-gain recommendations built by comparing a player's top 200 against peers at similar PP. |
+| Player profiles | Stats, recent plays, per-skill activity history, dan estimate, and a 3D mania card. |
+| Replay viewer | Parse and render `.osr` replays with custom skins, overlays, and MP4 video export. |
+| Dan estimates | Algorithmic dan and LN dan classification for charts, no curated lists. |
 
 ![Replay viewer](docs/assets/replay-viewer.png)
+
+## How it works
+
+Two cooperating parts:
+
+- **Frontend** (`src/`): TanStack Start + React 19, SSR via Nitro, deployed on Vercel. File-based routes, one Zustand store persisted to localStorage, Tailwind CSS v4.
+- **Live backend** (`live-backend/`): always-on Node service that ingests osu! scores from [Kayla's oSC feed](https://osc.kaysting.dev) with an osu! API fallback, keeps durable SQLite projections, runs a DB-backed job queue (enrichment, rosters, snipe boards, dan estimates, activity analysis, replay video rendering), and pushes deltas to browsers over SSE.
+
+Browsers fetch a snapshot on page entry and subscribe to `/api/live` for updates; reconnects replay missed events via `Last-Event-ID`. All authenticated osu! API calls stay server-side behind a token-bucket rate limiter.
+
+`AGENTS.md` has the fuller repository guide.
