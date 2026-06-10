@@ -13,7 +13,7 @@ Surfaces: rankings (country + global), live tracker, top plays, maps, snipes, fa
 
 Countries are dynamic, not hardcoded: the backend keeps a `country_registry` with per-country status (cold -> warm -> active, can pause) and feature tier (`indexed` / `maps_warm` / `live` / `snipes`). Visiting a cold country can activate it (rate-limited). A synthetic `GLOBAL` scope aggregates all tracked countries. Default/home country is `CR`.
 
-Note: `AGENTS.md` is an older guide and lags the code in places (it predates the country registry, farm helper, activity, and backend rate limiting). Trust this file and the source over it.
+See `AGENTS.md` for the fuller repository guide (endpoint lists, per-feature models, job details); this file is the condensed version.
 
 ## Commands
 

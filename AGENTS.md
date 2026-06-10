@@ -2,173 +2,171 @@
 
 ## What This Is
 
-Mania Hub is an osu!mania site with two cooperating parts:
+Mania Hub (mania-tracker.com) is an osu!mania community site with two cooperating parts:
 
-- A TanStack Start + Vite React app in `src/`.
-- An always-on live backend in `live-backend/` that listens to oSC, keeps local projections warm, runs queued work, and streams updates to the frontend.
+- A TanStack Start + Vite React 19 app in `src/`, SSR via Nitro (Vercel target).
+- An always-on live backend in `live-backend/` that listens to Kayla's oSC score feed, keeps durable SQLite projections warm, runs a DB-backed job queue, and streams updates to the frontend over SSE.
 
-The product defaults to Costa Rica but is country-scoped. Core surfaces include rankings, live tracker, top plays, maps, snipes, replay viewer, player profiles, and admin dashboards.
+Surfaces: rankings (country + global), live tracker, top plays, maps, snipes, farm helper, replay viewer with video export, player profiles (about, recent, activity, maniacard), settings, and admin dashboards.
+
+Countries are dynamic. The backend keeps a `country_registry` with per-country status (cold -> warm -> active, pausable) and a feature tier (`indexed`, `maps_warm`, `live`, `snipes`) that gates which projections run. Visiting a cold country can activate it (rate-limited). A synthetic `GLOBAL` scope aggregates all tracked countries. Default/home country is `CR`.
 
 ## Project Structure
 
-Frontend source lives in `src/`. File routes are in `src/routes/`, with the shared shell in `src/routes/__root.tsx`. Do not hand-edit generated `src/routeTree.gen.ts`; let TanStack tooling regenerate it.
+Frontend source lives in `src/`:
 
-Shared UI lives in `src/components/`, with feature folders like `layout/`, `player/`, `replay/`, and `ui/`. Client state is in `src/store.ts`. Server/data utilities are in `src/lib/`.
+- `src/routes/`: file-based routes. Shared shell, auth, country context, theme bootstrap, and live-backend bootstrap live in `src/routes/__root.tsx`. API routes in `src/routes/api/` (OG images, sitemap, audio/avatar/background proxies, replay upload, osu! OAuth, sync polling fallback). Admin pages in `src/routes/admin/`. Files prefixed with `-` are tests, not routes. Do not hand-edit generated `src/routeTree.gen.ts`.
+- `src/components/`: shared UI in feature folders (`layout/`, `home/`, `player/`, `replay/`, `maps/`, `settings/`, `ui/`).
+- `src/store.ts`: the Zustand client store.
+- `src/lib/`: server/data utilities, the osu! API layer, replay modules, dan estimator.
 
-The live backend lives in `live-backend/`. Important areas:
+The live backend lives in `live-backend/`:
 
-- `live-backend/src/server.ts`: HTTP server boot, worker, retention, oSC backfill/socket.
-- `live-backend/src/http/snapshots.ts`: REST snapshots, admin controls, replay video job endpoints.
-- `live-backend/src/ingest/score-ingestor.ts`: oSC score ingestion and projection fanout.
-- `live-backend/src/jobs/queue.ts` and `live-backend/src/workers.ts`: DB-backed job queue and worker handlers.
-- `live-backend/src/features/*`: tracker, top plays, snipes.
-- `live-backend/src/replay-video/*`: queued replay video finalization and R2 upload.
-- `live-backend/migrations/001_initial.sql`: live backend schema.
+- `live-backend/src/server.ts`: boot. Connects the DB, applies migrations, then conditionally starts workers, schedulers, the oSC socket (with watchdog), oSC backfill, the osu! recent-scores fallback poller, retention, and the HTTP server on port 7227.
+- `live-backend/src/ingest/score-ingestor.ts`: score ingestion and projection fanout.
+- `live-backend/src/osc/`: oSC Socket.IO client, JSON backfill, and the osu! API scores fallback poller.
+- `live-backend/src/jobs/queue.ts` and `live-backend/src/workers.ts`: job queue and worker lanes.
+- `live-backend/src/features/`: one module per surface (tracker, top-plays, snipes, maps, farm-helper, farm-helper-key-stats, activity, dan-estimates, global-rankings, rank-snapshots, player-profiles).
+- `live-backend/src/http/snapshots.ts`: REST snapshots, profile endpoints, admin controls, replay video job endpoints. `live-backend/src/http/abuse-guard.ts`: per-IP rate limiting.
+- `live-backend/src/live/`: SSE handler, event log with replay buffer, per-country client tracking.
+- `live-backend/src/replay-video/`: server-side rendering (headless Chrome), finalization, R2 upload.
+- `live-backend/src/dan/`: backend copy of the dan estimator. `live-backend/src/audio/`: beatmap archive download and audio streaming.
+- `live-backend/src/maintenance/`: storage compaction scripts.
+- `live-backend/migrations/001_initial.sql`: schema, applied at boot.
 
-Legacy/shared Turso schema is in `db/schema.sql`. Utility scripts live in `scripts/`. Static assets live in `public/`.
+Legacy/shared Turso schema is in `db/schema.sql`. Utility scripts live in `scripts/` (dan benchmark/analyze, replay capture/validate, cache migrations, plus `scripts/dev/replay-video-job.ts`, the Vite dev middleware fallback for replay video). Static assets live in `public/`.
 
 ## Development Commands
 
-- Frontend: `npm run dev` starts Vite on port `3000`.
-- Live backend: `cd live-backend && npm run dev` starts the backend on port `7227` by default.
-- Root tests: `npm run test`.
-- Root build: `npm run build`.
-- Backend tests: `cd live-backend && npm test`.
-- Backend typecheck/build: `cd live-backend && npx tsc --noEmit` or `npm run build`.
-- oSC smoke: `cd live-backend && npm run smoke:osc`.
-- DB init for old Turso schema: `npm run db:init`.
-- Turso shell: `npm run db:inspect`.
-- Snipes cache reset/migration for old cache paths: `npm run snipes:reset`, `npm run snipes:migrate-cache`.
+The user often keeps local servers running; do not start dev servers or builds unprompted. If asked: frontend is `3000`, live backend is `7227`.
 
-The user often keeps local servers running. If the user explicitly asks you to run the app locally, frontend is `3000` and live backend is `7227`.
+- Frontend dev: `npm run dev`. Build: `npm run build`. Tests: `npm run test`. Typecheck: `npx tsc --noEmit`.
+- Single test: `npx vitest run path/to/file.test.ts` (add `-t "name"` for one case).
+- Live backend dev: `cd live-backend && npm run dev`. Tests: `npm test`. Typecheck: `npx tsc --noEmit`. Tests + build: `npm run verify`.
+- oSC smoke: `cd live-backend && npm run smoke:osc`.
+- Backend DB compaction: `cd live-backend && npm run compact:storage` (full VACUUM/GC) or `npm run compact:maps-farmed` (rebuild maps-farmed overlay).
+- Dan tooling: `npm run dan:benchmark`, `npm run dan:analyze`.
+- Old Turso schema init/shell: `npm run db:init`, `npm run db:inspect`.
 
 ## Live Backend Architecture
 
-The live backend is the source of truth for live Tracker, Top Plays, and Snipes when `VITE_LIVE_BACKEND_URL` is configured.
+The live backend is the source of truth for live surfaces when `VITE_LIVE_BACKEND_URL` is configured. Browsers fetch a snapshot on page entry, then subscribe to SSE for deltas. SSE is one-way backend-to-browser; users never connect to oSC directly.
 
-Flow:
+Ingest flow:
 
-1. Backend connects to Kayla's oSC Socket.IO service and receives recent score batches.
-2. It filters to mania and tracked countries.
-3. Because oSC scores normally include `user_id` but not user country metadata, country detection relies on `country_rosters` plus any enriched user data.
-4. It stores raw recent rows in `score_events`.
-5. It updates durable projections such as tracker rows, `country_beatmap_scores`, `top_play_events`, and `snipe_events`.
-6. It emits SSE events for browser clients.
+1. Scores arrive from three sources: the oSC Socket.IO feed (real-time), oSC JSON backfill (catch-up after downtime), and an osu! API recent-scores fallback poller (safety net, own rate bucket).
+2. Scores are filtered to mania. Country detection uses `country_rosters` plus enriched user data, because oSC payloads do not include country.
+3. Raw rows land in `score_events`; user/beatmap/beatmapset metadata is upserted; projections and follow-up jobs fan out according to the country's feature tier.
+4. The backend emits SSE events (`tracker_score`, `top_play`, `snipe`, `maps_farmed_update`, `job_status`, `status`, heartbeats). Reconnecting clients replay missed events via `Last-Event-ID` against `live_event_log`.
 
-The browser still fetches a snapshot on page entry, then subscribes to SSE for changes. SSE is one-way backend-to-browser. Users do not connect to oSC directly.
+Rosters are warmed from osu! mania performance rankings on a schedule; roster refreshes also capture `country_rank_snapshots` used for 7-day rank deltas.
 
-Default tracked country is `CR`. The backend warms country rosters from osu! mania performance rankings, defaulting to 2 pages / 100 users. Frontend rankings pages do not automatically populate the live backend roster.
+## Queue and Jobs
 
-## Queue And Jobs
+The queue lives in the `jobs` table with priority, dedupe keys, and per-type backoff. Under load it sheds pressure: low-priority job types are auto-deferred (`deferred_pressure`) when queue depth is high and wake when it drains. Workers run in dedicated lanes (fast enrichment, osc-backfill, osc-country-catchup, maps-refresh, dan-estimates, activity-analysis, snipe-seed, replay-video render and finalize).
 
-The live backend queue is stored in the `jobs` table. Workers claim queued/failed jobs and mark them done/failed.
+Job types:
 
-Current job types include:
+- `enrich_user`, `enrich_beatmap`: fetch full metadata from the osu! API.
+- `refresh_country_roster`: refresh a country's roster and rank snapshots from osu! rankings.
+- `refresh_user_top_scores`: confirm a candidate top play and compute PP gain.
+- `reconcile_user_recent_scores`: sync a user's recent scores from the osu! API to fill ingest gaps.
+- `refresh_user_maps_farmed_scores`, `refresh_country_maps`, `refresh_global_maps`: maps-farmed aggregation per user, per country, and globally.
+- `seed_snipe_board`: build the initial board for a beatmap/lane.
+- `analyze_activity_beatmap`: compute skill vectors for player activity.
+- `compute_dan_estimate`: dan rating for a beatmap at a rate.
+- `osc_backfill`, `osc_country_catchup`: oSC JSON catch-up, global and country-scoped.
+- `replay_video_server_render`, `replay_video_export`: server-side render and finalization/upload.
 
-- `refresh_country_roster`
-- `enrich_user`
-- `enrich_beatmap`
-- `refresh_user_top_scores`
-- `seed_snipe_board`
-- `replay_video_export`
+Admin controls are exposed through the frontend at `/admin/live-backend` and backend `/api/admin/*` routes (status, ingest fixtures, roster refresh, pause/resume country, set status/tier, delete country). Be careful with destructive controls.
 
-Backoff differs by job type. Top-play confirmation retries sooner; metadata and snipe seeding can wait longer.
+## Feature Models
 
-Admin controls for local/VPS debugging are exposed through `/admin/live-backend` and backend `/api/admin/*` routes. Be careful with destructive controls such as reset-local-db.
+### Snipes
+Snipes do not require keeping every raw score forever. Each beatmap/lane has a stored board in `country_beatmap_scores` (keyed by country + beatmap + lane + user). A new score is compared to that board; when it overtakes someone the backend writes `snipe_events` and emits an SSE `snipe`. If no board exists yet, `seed_snipe_board` fetches roster users' scores for that beatmap and builds it.
 
-## Snipes Model
+### Top plays
+Detected country top plays live in `top_play_events`. When an incoming score is near the player's known top-play threshold, the backend queues `refresh_user_top_scores`, confirms via the osu! API whether it actually entered the player's top plays (confirmation window ~30min), records the PP gain, then emits `top_play`. Old Turso `country_top_plays` may be imported for history; new detection happens in the backend queue.
 
-The live backend does not need every raw score forever to detect snipes.
+### Maps
+`refresh_user_maps_farmed_scores` pulls a roster user's top 200 and extracts scores that entered their top plays; `refresh_country_maps` aggregates these into `country_maps_snapshots`, and `refresh_global_maps` rolls countries up into a global snapshot. Refresh progress is tracked in `live_meta` and surfaced via `/api/snapshots/maps-progress`.
 
-- `score_events`: recent raw incoming score audit trail.
-- `country_beatmap_scores`: durable current best known score per `country + beatmap + lane + user`.
-- `snipe_events`: durable visible snipe history.
+### Farm helper
+Recommends maps by comparing the subject player's top 200 against a global peer pool at similar PP, using candidates from `country_maps_farmed_scores` across all countries. Per-keymode (4k/7k) weighted PP lives in `farm_helper_user_key_stats`, seeded on first access.
 
-When a new score arrives, the backend compares it to the stored board for that beatmap/lane. If the player moves above someone else, it writes a `snipe_events` row and emits an SSE `snipe` event.
+### Activity
+Per-day player skill vectors (stream, jack, bracket, LN variants and friends) in `player_activity_*` tables, computed by `analyze_activity_beatmap` jobs. The analysis is versioned (`ACTIVITY_SKILL_ANALYSIS_VERSION`) for cache invalidation.
 
-If a beatmap/lane has no stored board yet, the backend queues `seed_snipe_board`, fetches scores for tracked roster users on that beatmap, and builds the initial board.
+### Dan estimates
+`dan_estimates` caches ratings keyed by a cache version from `live-backend/src/dan/`. Small batches are computed inline at request time; larger requests queue `compute_dan_estimate`.
 
-## Top Plays Model
+### Profiles and rankings
+`player-profiles.ts` caches a best-100 snapshot for 24h (projected forward by top-play events) and profile sections (about, recent) for ~2 minutes. `global-rankings.ts` serves a global snapshot from the `users` table with 7-day deltas from `rank-snapshots.ts`.
 
-The live backend stores detected country top plays in `top_play_events`. When a score is near a player's known top-play threshold, the backend queues `refresh_user_top_scores`, fetches that user's best scores from osu!, confirms whether the incoming score is actually in their top plays, then emits a `top_play` event.
+## HTTP Surface
 
-Old Turso `country_top_plays` rows may be imported into `top_play_events` for historical display, but new live detection should happen in the backend queue.
+`/healthz` and `/readyz` are open. Public endpoints: `/api/status`, `/api/countries/features`, `/api/countries/activate`, `/api/snapshots/*` (tracker, top-plays, snipes, maps, maps-page, maps-progress, maps-set, maps-players, global-rankings, farm-helper, farm-helper-farmers, rank-deltas), `/api/profile/*` (snapshot, cached, about, recent, activity), `/api/dan-estimates`, `/api/audio`, `/api/osu/beatmap-file`, `/api/replay-video-job`, and the SSE stream at `/api/live?country=XX`.
+
+All public endpoints are rate-limited per IP by `abuse-guard.ts` with separate buckets (general, costly, dan estimates, country activation, SSE connections with per-IP and total caps, replay video jobs). CORS allows origins from `ALLOWED_ORIGINS`. `/api/admin/*` requires `LIVE_ADMIN_TOKEN`.
 
 ## Replay Video Export
 
-Replay video export now uses the live backend when `VITE_LIVE_BACKEND_URL` is set.
+Two paths, both finishing in the backend queue:
 
-Current flow:
+1. Browser render: WebCodecs encodes the MP4 client-side, then the frontend calls `/api/replay-video-job` (`start` -> `upload-video` -> `finish`).
+2. Server render: the backend queues `replay_video_server_render`, which drives headless Chrome (playwright-core) against the frontend to render the video.
 
-1. Browser renders/encodes the MP4 with WebCodecs.
-2. Frontend calls live backend `/api/replay-video-job?action=start`.
-3. Browser uploads the MP4 with `action=upload-video`.
-4. Frontend calls `action=finish`.
-5. Backend queues `replay_video_export`.
-6. Worker optionally muxes audio with ffmpeg, uploads to R2, stores the final URL in `replay_video_exports`, and the frontend polls `action=status`.
+Either way, `replay_video_export` finalizes: optional ffmpeg audio mux and optimization, upload to R2 (or local path), status in `replay_video_exports`, polled by the frontend via `action=status`. `scripts/dev/replay-video-job.ts` is a local Vite middleware fallback when no live backend URL is configured.
 
-The old Vite dev middleware in `scripts/dev/replay-video-job.ts` remains a local fallback when no live backend URL is configured.
+## Retention and Storage
 
-## Retention And Storage
+The backend uses LibSQL/SQLite (default `live-backend/data/mania-hub-live.db`, WAL mode); `DATABASE_URL` may point to a file or remote. `live-backend/src/retention.ts` runs hourly. Defaults (configurable): `score_events` 14d, `live_event_log` 7d, done `jobs` 2d, `api_call_log` 7d, finished `replay_video_exports` 2d plus temp dir cleanup, rank snapshots 14d, player activity 2y. The DB size is capped (~10GB max; over the cap triggers compaction toward ~8GB).
 
-Live backend cleanup is scheduled by `live-backend/src/retention.ts`, hourly by default.
-
-Default retention:
-
-- `score_events`: 14 days.
-- `live_event_log`: 7 days.
-- completed `jobs`: 2 days.
-- `api_call_log`: 7 days.
-- completed/failed/cancelled `replay_video_exports`: 2 days, plus temp work dir cleanup.
-
-Durable projections like `country_beatmap_scores`, `snipe_events`, `top_play_events`, users, beatmaps, beatmapsets, and country rosters are not part of the short raw-event cleanup.
+Durable projections (`country_beatmap_scores`, `snipe_events`, `top_play_events`, `user_top_scores`, maps snapshots, users, beatmaps, beatmapsets, rosters) are not part of the short raw-event cleanup.
 
 The older Turso cache uses `cache_entries` with TTLs and cache locks. R2/replay/beatmap asset metadata is handled by `src/lib/r2-cache.ts`.
 
 ## Frontend Data Rules
 
-Prefer `src/lib/live-backend.ts` for live backend calls from client routes. Tracker, Top Plays, and Snipes should use live snapshots + SSE when configured, with old server-function/Turso behavior only as fallback.
+Prefer `src/lib/live-backend.ts` for live backend calls from client routes: typed snapshot fetchers, `openLiveEventSource()` for SSE, and the country feature-tier bootstrap. Tracker, Top Plays, Snipes, Maps, and rankings should use live snapshots + SSE when configured, with old server-function/Turso behavior only as fallback. A polling endpoint (`/api/sync`) backs up SSE when it is unavailable.
 
-Keep authenticated osu! API access on the server. Do not put osu! credentials or direct authenticated osu! calls in client components.
+Keep authenticated osu! API access on the server. Do not put osu! credentials or direct authenticated osu! calls in client components. `src/lib/osu.ts` is a facade over domain modules in `src/lib/osu/`.
 
-Client state uses Zustand in `src/store.ts`, usually with `fetchedAt` plus TTL checks from `src/lib/cache.ts`.
+Client state uses Zustand in `src/store.ts`, persisted to localStorage under `mania-hub-cache-v5`; bump the version on breaking shape changes. Data is country-keyed with `fetchedAt` plus TTL checks from `src/lib/cache.ts`. Persistence is debounced with quota-eviction handling; critical preferences (theme, hidden users, avatar accents) live in separate storage keys so they survive quota errors. Check `useHasHydrated()` before trusting persisted state during SSR hydration.
 
-Maps data currently uses persistent cache TTLs: farmed and favourites are weekly. Rebuild is visit-triggered/stale-while-revalidate, not a true cron.
+Maps data uses persistent cache TTLs (farmed and favourites weekly). Rebuilds are visit-triggered/stale-while-revalidate, not a true cron.
+
+OG images are rendered by `src/routes/api/og.ts` (@vercel/og) and cached in R2 behind the `OG_IMAGE_VERSION` constant; bump it when changing OG layouts. Meta and OG URL builders live in `src/lib/seo.ts`; the sitemap is `src/routes/api/sitemap.ts`.
 
 ## Coding Style
 
 Use TypeScript, React function components, two-space indentation, semicolons, and named exports where local style uses them. Prefer existing helpers and patterns over parallel abstractions.
 
-Use `#/*` or `@/*` path aliases for imports from `src/*`; match the nearby style. Backend uses relative imports inside `live-backend/src`.
+Use `#/*` or `@/*` path aliases for imports from `src/*`; match the nearby style. The backend uses relative imports inside `live-backend/src`.
 
-Styling uses Tailwind CSS v4 through `@tailwindcss/vite`, with global styles in `src/styles.css`. Animations use `framer-motion`. Replay rendering uses canvas/Pixi-related modules. 3D card code uses Three.js helpers under `src/components/player/maniacard3d/`.
+Styling uses Tailwind CSS v4 through `@tailwindcss/vite`, with global styles and theme CSS variables in `src/styles.css`. The theme is hue/saturation custom properties applied before hydration; a custom `hover` variant avoids stuck hover states on touch devices. Animations use `framer-motion`. Replay rendering uses canvas/Pixi modules. 3D card code uses Three.js helpers under `src/components/player/maniacard3d/`.
 
-Replay-related logic is split across parser, validation, score input, skin, navigation, scroll speed, judgement, beatmap parsing, canvas rendering, and video export modules. Stable/lazer score differences matter; use existing score utilities rather than duplicating normalization.
+Replay-related logic is split across parser, validation, score input, skin, navigation, scroll speed, judgement, beatmap parsing, canvas rendering, and video export modules; keep changes scoped to the right module. Stable/lazer score differences matter; use existing score utilities rather than duplicating normalization.
 
 Dan and LN dan classification must stay algorithmic. Do not add title, artist, creator, beatmap ID, beatmapset ID, filename, or chart-specific identity shortcuts to force results.
 
+Backend logs are structured JSON via `live-backend/src/logger.ts` (`logInfo`/`logWarn`); use it instead of `console.log`.
+
 ## Testing Guidance
 
-Vitest is the test runner. Tests live beside source files as `*.test.ts` or `*.test.tsx`.
+Vitest is the test runner. Tests live beside source files as `*.test.ts` or `*.test.tsx`, plus the `-`-prefixed files at the top of `src/routes/`.
 
-For live backend changes, run at least:
+For live backend changes, run at least `cd live-backend && npm test` and `npx tsc --noEmit` (or `npm run verify`). For frontend type-sensitive changes, run `npx tsc --noEmit` at the root.
 
-- `cd live-backend && npm test`
-- `cd live-backend && npx tsc --noEmit`
-
-For frontend type-sensitive changes, run:
-
-- `npx tsc --noEmit`
-
-## Security And Config
+## Security and Config
 
 Local secrets belong in `.env` and `live-backend/.env`; do not commit secrets.
 
 Important env vars:
 
 - Root/frontend: `VITE_LIVE_BACKEND_URL`, `LIVE_BACKEND_URL`, `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN`, R2 vars, PostHog vars.
-- Live backend: `PORT`, `DATABASE_URL`, `OSU_CLIENT_ID`, `OSU_CLIENT_SECRET`, `OSC_BASE_URL`, `OSC_SOCKET_PATH`, `TRACKED_COUNTRIES`, `LIVE_PUBLIC_ORIGIN`, `ALLOWED_ORIGINS`, `LIVE_ADMIN_TOKEN`, osu/oSC rate settings, retention settings, roster settings, replay video R2 vars.
+- Live backend (`live-backend/src/config.ts` holds the full ~70-var list with defaults): `PORT`, `DATABASE_URL`, `OSU_CLIENT_ID`, `OSU_CLIENT_SECRET`, `OSC_BASE_URL`, `OSC_SOCKET_PATH`, `TRACKED_COUNTRIES`, `LIVE_PUBLIC_ORIGIN`, `ALLOWED_ORIGINS`, `LIVE_ADMIN_TOKEN`, feature flags (`ENABLE_WORKERS`, `ENABLE_OSC_SOCKET`, `ENABLE_OSC_BACKFILL`, `ENABLE_OSU_SCORES_FALLBACK`, `ENABLE_SCHEDULED_REFRESHES`), osu/oSC rate settings, retention settings, roster settings, replay video settings (R2, ffmpeg, Chrome path).
 
 The live backend defaults to local SQLite at `live-backend/data/mania-hub-live.db`. For production/VPS, configure durable storage and `LIVE_ADMIN_TOKEN`.
 
-osu! API is rate-limited around 60 calls/minute; users reading from our backend are not subject to that osu! limit. Add app-level per-IP limits before public launch for snapshots, SSE abuse, and replay video uploads.
+The osu! API budget is enforced by a token-bucket client in `live-backend/src/osu/client.ts` (~45/min target, 60/min hard limit), with calls logged to `api_call_log`. Route new osu! API calls through this client. Public backend endpoints are already rate-limited per IP via the abuse guard.
