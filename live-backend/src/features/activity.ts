@@ -13,6 +13,8 @@ export const ACTIVITY_SKILL_ANALYSIS_VERSION = 3;
 const ACTIVITY_SESSION_GAP_MS = 45 * 60_000;
 const ACTIVITY_DAY_MAP_LIMIT = 6;
 const ACTIVITY_DAY_DETAIL_MAP_LIMIT = 500;
+const ACTIVITY_ANALYSIS_RUNNING_REQUEUE_MS = 10 * 60_000;
+const ACTIVITY_ANALYSIS_FAILED_RETRY_MS = 5 * 60_000;
 
 interface ActivitySkillVector {
   stream: number;
@@ -570,19 +572,31 @@ async function recomputeActivitySessions(db: Db, country: string, userId: number
 async function enqueueBeatmapSkillAnalysisIfNeeded(db: Db, queue: JobQueue, beatmapId: number): Promise<void> {
   const row = (await exec(
     db,
-    `select status
+    `select status, updated_at
      from beatmap_skill_vectors
      where beatmap_id = ? and analysis_version = ?
      limit 1`,
     [beatmapId, ACTIVITY_SKILL_ANALYSIS_VERSION],
   )).rows[0];
-  if (row && String(row.status) === "ready") return;
+  if (row) {
+    const status = String(row.status);
+    const updatedAt = typeof row.updated_at === "string" ? row.updated_at : "";
+    if (status === "ready") return;
+    if (status === "running" && isRecentActivityAnalysisStatus(updatedAt, ACTIVITY_ANALYSIS_RUNNING_REQUEUE_MS)) return;
+    if (status === "failed" && isRecentActivityAnalysisStatus(updatedAt, ACTIVITY_ANALYSIS_FAILED_RETRY_MS)) return;
+  }
   await queue.enqueue(
     "analyze_activity_beatmap",
     `activity-beatmap:${ACTIVITY_SKILL_ANALYSIS_VERSION}:${beatmapId}`,
     { beatmapId },
     { priority: 5, replaceDone: true },
   );
+}
+
+function isRecentActivityAnalysisStatus(updatedAt: string, cooldownMs: number): boolean {
+  const updatedAtMs = Date.parse(updatedAt);
+  if (!Number.isFinite(updatedAtMs)) return false;
+  return Date.now() - updatedAtMs < cooldownMs;
 }
 
 async function resolveActivityCountry(db: Db, userId: number, requestedCountry: string): Promise<ResolvedActivityCountry> {
