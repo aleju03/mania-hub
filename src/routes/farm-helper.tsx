@@ -14,6 +14,7 @@ import {
 } from "../lib/live-backend";
 import { searchUsers } from "../lib/osu";
 import { PageHeader } from "../components/layout/PageHeader";
+import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { SearchInput } from "../components/ui/SearchInput";
 import { Avatar } from "../components/ui/Avatar";
 import { CountryFlag } from "../components/ui/CountryFlag";
@@ -180,13 +181,15 @@ function FarmHelperPage() {
 
   return (
     <div className="relative flex min-h-screen flex-col">
-      <div className="relative z-10 flex flex-1 flex-col bg-osu-b5">
+      <div className="relative z-10 flex flex-1 flex-col overflow-clip bg-osu-b5">
+        <OsuTriangleBackdrop />
+        <div className="relative z-10 flex flex-1 flex-col">
         <PageHeader
           iconSrc="/images/icons/rankings.svg"
           title="Global mania farm helper"
         />
 
-        <div className="mx-auto w-full max-w-[1280px] px-4 py-5 sm:px-5">
+        <div className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-5 sm:px-5">
           {!liveEnabled ? (
             <EmptyNotice
               eyebrow="unavailable"
@@ -274,6 +277,7 @@ function FarmHelperPage() {
             </div>
           ) : null}
         </div>
+        </div>
       </div>
 
       <FarmersModal
@@ -300,98 +304,106 @@ function PlayerPicker({ viewer, onPick }: { viewer: ReturnType<typeof useAuth>["
   };
 
   return (
-    <div className="mx-auto flex min-h-[60vh] max-w-md flex-col justify-center py-10 text-center">
-      {viewer ? (
-        <div className="flex flex-col items-center">
-          <button
-            type="button"
-            onClick={() => onPick(String(viewer.id))}
-            aria-label={`Plan ${viewer.username}'s farm`}
-            className="inline-flex rounded-full ring-2 ring-osu-pink/30 transition-shadow hover:ring-osu-pink/60"
-          >
-            <Avatar url={viewer.avatarUrl} userId={viewer.id} size={88} />
-          </button>
-          <div className="mt-4 flex items-center justify-center gap-2">
-            <h2 className="text-xl font-bold text-osu-c1">Hey, {viewer.username}</h2>
-            {viewer.countryCode ? <CountryFlag code={viewer.countryCode} size="sm" decorative /> : null}
-          </div>
-          <p className="mt-1 text-sm text-osu-f1">Ready to find your next farm?</p>
-          <button
-            type="button"
-            onClick={() => onPick(String(viewer.id))}
-            className="group mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-osu-pink px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-osu-pink-light"
-          >
-            Plan my farm
-            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-          </button>
+    <div className="mx-auto grid min-h-[70vh] w-full max-w-5xl content-center gap-10 py-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:items-center lg:gap-14">
+      <div className="text-center lg:text-left">
+        {viewer ? (
+          <div className="flex flex-col items-center lg:items-start">
+            <button
+              type="button"
+              onClick={() => onPick(String(viewer.id))}
+              aria-label={`Plan ${viewer.username}'s farm`}
+              className="inline-flex rounded-full ring-2 ring-osu-pink/30 transition-shadow hover:ring-osu-pink/60"
+            >
+              <Avatar url={viewer.avatarUrl} userId={viewer.id} size={72} />
+            </button>
+            <div className="mt-3 flex items-center gap-2">
+              <h2 className="text-2xl font-bold text-osu-c1">Hey, {viewer.username}</h2>
+              {viewer.countryCode ? <CountryFlag code={viewer.countryCode} size="sm" decorative /> : null}
+            </div>
+            <p className="mt-1.5 text-sm text-osu-f1">
+              Compare yourself to players near your pp and find the maps with the most to gain.
+            </p>
+            <button
+              type="button"
+              onClick={() => onPick(String(viewer.id))}
+              className="group mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-osu-pink px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-osu-pink-light"
+            >
+              Plan my farm
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </button>
 
-          <div className="mt-8 flex w-full items-center gap-3">
-            <span className="h-px flex-1 bg-osu-b3/30" />
-            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-osu-f1">
-              or look up someone else
-            </span>
-            <span className="h-px flex-1 bg-osu-b3/30" />
+            <div className="mt-7 flex w-full items-center gap-3">
+              <span className="h-px flex-1 bg-osu-b3/30" />
+              <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-osu-f1">
+                or look up someone else
+              </span>
+              <span className="h-px flex-1 bg-osu-b3/30" />
+            </div>
           </div>
-        </div>
-      ) : (
-        <div>
-          <h2 className="text-xl font-bold text-osu-c1">Ranked Map Finder</h2>
-          <p className="mt-1 text-sm text-osu-f1">Maps worth farming, based on players near your pp.</p>
-        </div>
-      )}
+        ) : (
+          <div>
+            <h2 className="text-3xl font-black leading-tight text-osu-c1">Find your next farm</h2>
+            <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-osu-f1 lg:mx-0">
+              Compares you to players near your pp and finds the maps with the most to gain.
+            </p>
+          </div>
+        )}
 
-      <div className={viewer ? "mt-4" : "mt-6"}>
-        <SearchInput onSearch={searchPlayers} onSelect={(user) => onPick(user.username)} placeholder="enter your user..." />
+        <div className={`mx-auto w-full max-w-md lg:mx-0 ${viewer ? "mt-4" : "mt-6"}`}>
+          <SearchInput onSearch={searchPlayers} onSelect={(user) => onPick(user.username)} placeholder="enter your username..." />
+        </div>
+
+        {recents.length > 0 ? (
+          <div className="mt-3">
+            <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-osu-f1">recent</div>
+            <div className="flex flex-wrap justify-center gap-1.5 lg:justify-start">
+              {recents.map((player) => (
+                <div
+                  key={player.userId}
+                  className="flex items-center rounded-lg border border-osu-b3/30 bg-osu-b4 pl-1.5 pr-1 transition-colors duration-150 hover:border-osu-pink/40 hover:bg-osu-b3"
+                >
+                  <button
+                    type="button"
+                    onClick={() => onPick(player.username)}
+                    className="flex items-center gap-2 py-1.5 pr-1"
+                  >
+                    <Avatar url={player.avatarUrl} userId={player.userId} size={24} />
+                    <span className="max-w-[120px] truncate text-[13px] font-medium text-osu-c1">{player.username}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeRecent(player.userId)}
+                    aria-label={`Remove ${player.username} from recent`}
+                    className="flex h-5 w-5 shrink-0 items-center justify-center text-osu-f1 transition-colors hover:text-osu-c1"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mx-auto mt-9 w-fit space-y-2 text-left lg:mx-0">
+          <PickerLegend
+            icon={<Target className="h-3.5 w-3.5 shrink-0 text-osu-blue" />}
+            label="missing"
+            body="popular nearby, you haven't played it"
+          />
+          <PickerLegend
+            icon={<TrendingUp className="h-3.5 w-3.5 shrink-0 text-osu-green-light" />}
+            label="improve"
+            body="nearby players outscore you"
+          />
+          <PickerLegend
+            icon={<History className="h-3.5 w-3.5 shrink-0 text-osu-yellow" />}
+            label="old pb"
+            body="an old score a fresh run would beat"
+          />
+        </div>
       </div>
 
-      {recents.length > 0 ? (
-        <div className="mt-3">
-          <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-osu-f1">recent</div>
-          <div className="flex flex-wrap justify-center gap-1.5">
-            {recents.map((player) => (
-              <div
-                key={player.userId}
-                className="flex items-center rounded-lg border border-osu-b3/30 bg-osu-b4 pl-1.5 pr-1 transition-colors duration-150 hover:border-osu-pink/40 hover:bg-osu-b3"
-              >
-                <button
-                  type="button"
-                  onClick={() => onPick(player.username)}
-                  className="flex items-center gap-2 py-1.5 pr-1"
-                >
-                  <Avatar url={player.avatarUrl} userId={player.userId} size={24} />
-                  <span className="max-w-[120px] truncate text-[13px] font-medium text-osu-c1">{player.username}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => removeRecent(player.userId)}
-                  aria-label={`Remove ${player.username} from recent`}
-                  className="flex h-5 w-5 shrink-0 items-center justify-center text-osu-f1 transition-colors hover:text-osu-c1"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
-
-      <div className="mx-auto mt-10 flex max-w-xs flex-col gap-2 text-left">
-        <PickerLegend
-          icon={<Target className="h-3.5 w-3.5 shrink-0 text-osu-blue" />}
-          label="missing"
-          body="popular with nearby players"
-        />
-        <PickerLegend
-          icon={<TrendingUp className="h-3.5 w-3.5 shrink-0 text-osu-green-light" />}
-          label="improve"
-          body="room to gain from your score"
-        />
-        <PickerLegend
-          icon={<History className="h-3.5 w-3.5 shrink-0 text-osu-yellow" />}
-          label="old pb"
-          body="old pbs worth replaying for pp"
-        />
-      </div>
+      <PickerPreviewCard />
     </div>
   );
 }
@@ -402,6 +414,135 @@ function PickerLegend({ icon, label, body }: { icon: ReactNode; label: string; b
       {icon}
       <span className="w-16 shrink-0 font-bold uppercase tracking-wide text-osu-c1">{label}</span>
       <span className="text-osu-f1">{body}</span>
+    </div>
+  );
+}
+
+interface PreviewRec {
+  reason: LiveFarmHelperRec["reason"];
+  title: string;
+  version: string;
+  artist: string;
+  creator: string;
+  stars: number;
+  cover: string;
+  gain: number;
+  barLeft: string;
+  barRight: string;
+  pct: number;
+}
+
+// Real ranked mania sets so the covers resolve; the numbers are illustrative.
+const PREVIEW_RECS: PreviewRec[] = [
+  {
+    reason: "missing",
+    title: "Runengon",
+    version: "4K Lenfried's Insane",
+    artist: "antiPLUR",
+    creator: "Raveille",
+    stars: 4.29,
+    cover: "https://assets.ppy.sh/beatmaps/971561/covers/list.jpg",
+    gain: 34,
+    barLeft: "61% of sampled nearby players farm this",
+    barRight: "median 213pp",
+    pct: 61,
+  },
+  {
+    reason: "improve",
+    title: "unravel (TV edit)",
+    version: "4K Marirose's Insane",
+    artist: "TK from Ling tosite sigure",
+    creator: "Desperate-kun",
+    stars: 3.66,
+    cover: "https://assets.ppy.sh/beatmaps/206887/covers/list.jpg",
+    gain: 22,
+    barLeft: "your 174pp",
+    barRight: "median 196pp",
+    pct: 89,
+  },
+  {
+    reason: "stale",
+    title: "If You Can't Hang",
+    version: "4K puxtu's MX",
+    artist: "Sleeping With Sirens",
+    creator: "pishifat",
+    stars: 3.97,
+    cover: "https://assets.ppy.sh/beatmaps/409025/covers/list.jpg",
+    gain: 17,
+    barLeft: "your 168pp · 14mo old",
+    barRight: "top 25% 189pp",
+    pct: 85,
+  },
+];
+
+function PickerPreviewCard() {
+  const totalPreviewGain = PREVIEW_RECS.reduce((sum, rec) => sum + rec.gain, 0);
+  return (
+    <div aria-hidden="true" className="pointer-events-none select-none">
+      <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4 shadow-xl shadow-black/25">
+        <div className="flex items-center justify-between gap-3 border-b border-osu-b3/20 px-4 py-3">
+          <div className="min-w-0">
+            <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">recommendations</div>
+            <div className="mt-0.5 text-sm font-semibold text-osu-c1">
+              {PREVIEW_RECS.length} maps
+              <span className="font-normal text-osu-f1"> · +{totalPreviewGain}pp on the table</span>
+            </div>
+          </div>
+          <span className="shrink-0 rounded-md border border-osu-b3/30 bg-osu-b5/60 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-osu-f1">
+            example
+          </span>
+        </div>
+        <div className="divide-y divide-osu-b3/20">
+          {PREVIEW_RECS.map((rec) => (
+            <PreviewRecRow key={rec.title} rec={rec} />
+          ))}
+        </div>
+      </div>
+      <p className="mt-2.5 text-center text-[11px] text-osu-f1 lg:text-right">
+        what a plan looks like for a 4,200pp player
+      </p>
+    </div>
+  );
+}
+
+function PreviewRecRow({ rec }: { rec: PreviewRec }) {
+  const meta = REASON_META[rec.reason];
+  return (
+    <div className="relative bg-osu-b4">
+      <span className={`absolute inset-y-0 left-0 w-[3px] ${meta.accent}`} />
+      <div className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 p-3 pl-4">
+        <div className="h-11 w-11 overflow-hidden rounded-md bg-osu-b6">
+          <img src={rec.cover} alt="" loading="lazy" className="h-full w-full object-cover" />
+        </div>
+        <div className="min-w-0">
+          <div className="truncate text-[13px] font-bold text-osu-c1">
+            {rec.title}
+            <span className="font-medium text-osu-f1"> [{rec.version}]</span>
+          </div>
+          <div className="flex items-center gap-x-2 text-[11px] leading-tight">
+            <span className={`whitespace-nowrap font-bold uppercase tracking-wide ${meta.text}`}>{meta.label}</span>
+            <span className="tabular-nums text-osu-yellow">★{rec.stars.toFixed(2)}</span>
+            <span className="min-w-0 truncate text-osu-f1">
+              {rec.artist} · {rec.creator}
+            </span>
+          </div>
+          <div className="mt-1.5">
+            <div className="flex items-center justify-between gap-2 text-[10px]">
+              <span className="truncate text-osu-l2">{rec.barLeft}</span>
+              <span className="shrink-0 text-osu-f1">{rec.barRight}</span>
+            </div>
+            <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-osu-b6">
+              <div className={`h-full rounded-full ${meta.accent}`} style={{ width: `${rec.pct}%` }} />
+            </div>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-lg font-black leading-none tabular-nums text-osu-pink">
+            +{rec.gain}
+            <span className="text-[11px] font-bold text-osu-pink/70">pp</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
