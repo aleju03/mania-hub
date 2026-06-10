@@ -628,9 +628,6 @@ function HomePage() {
             <span className="mode-icon text-osu-pink text-3xl sm:text-5xl">{"\ue802"}</span>
             <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight" style={{ fontFamily: "Torus" }}>mania <span className="text-osu-pink">{selectedIsGlobal ? "Global" : selectedCountry}</span></h1>
           </div>
-          <p className="mt-3 text-sm text-osu-f1">
-            Live osu!mania score tracker: country rankings, top plays, snipes, beatmap stats, and replays.
-          </p>
         </div>
       </section>
 
