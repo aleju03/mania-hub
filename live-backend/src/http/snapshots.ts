@@ -139,7 +139,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     if (profileRoute.kind === "cached-snapshot") {
-      const snapshot = await getCachedPlayerProfileSnapshot(ctx.db, profileRoute.key);
+      const snapshot = await getCachedPlayerProfileSnapshot(ctx.db, profileRoute.key, ctx.osu);
       if (!snapshot) {
         sendJson(req, res, ctx, 404, { error: "not_cached" });
         return true;

@@ -117,9 +117,38 @@ export async function getPlayerProfileSnapshot(
   return buildServedSnapshot(db, await fetchAndStoreProfileSnapshot(db, osu, key), false);
 }
 
+// First-ever profile views used to wait for the browser to hydrate and call
+// the live snapshot endpoint before any osu! API work started. When the cached
+// endpoint can only serve a known user with no stored top scores, start the
+// real snapshot fetch in the background so the data is ready (for this visitor
+// and everyone after) by the time the client asks. Guarded to known users only
+// (crawler requests for junk usernames never reach this) and rate-limited per
+// key so repeated misses cannot drain the osu! API budget.
+const FALLBACK_WARM_COOLDOWN_MS = 10 * 60_000;
+const FALLBACK_WARM_MAX_TRACKED_KEYS = 1_000;
+const fallbackWarmLastAttempt = new Map<string, number>();
+
+function warmProfileSnapshotInBackground(
+  db: Db,
+  osu: Pick<OsuApiClient, "getUserByKey" | "getUserBestScoresWindow">,
+  key: string,
+): void {
+  const now = Date.now();
+  const last = fallbackWarmLastAttempt.get(key);
+  if (last != null && now - last < FALLBACK_WARM_COOLDOWN_MS) return;
+  if (fallbackWarmLastAttempt.size >= FALLBACK_WARM_MAX_TRACKED_KEYS) {
+    const oldest = fallbackWarmLastAttempt.keys().next().value;
+    if (oldest != null) fallbackWarmLastAttempt.delete(oldest);
+  }
+  fallbackWarmLastAttempt.delete(key);
+  fallbackWarmLastAttempt.set(key, now);
+  void fetchAndStoreProfileSnapshot(db, osu, key).catch(() => {});
+}
+
 export async function getCachedPlayerProfileSnapshot(
   db: Db,
   rawKey: string,
+  osu?: Pick<OsuApiClient, "getUserByKey" | "getUserBestScoresWindow">,
 ): Promise<PlayerProfileSnapshot | null> {
   const key = normalizeProfileKey(rawKey);
   const row = await getStoredProfileSnapshot(db, key);
@@ -133,6 +162,7 @@ export async function getCachedPlayerProfileSnapshot(
   const fetchedAt = typeof userRow.updated_at === "string" ? userRow.updated_at : nowIso();
   const user = buildCachedProfileUser(userRow);
   const bestScores = await getStoredUserTopScores(db, Number(userRow.user_id));
+  if (osu && bestScores.length === 0) warmProfileSnapshotInBackground(db, osu, key);
   return buildServedSnapshot(db, {
     user_id: Number(userRow.user_id),
     username_key: normalizeProfileKey(String(user.username ?? userRow.username)),

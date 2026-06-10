@@ -74,6 +74,12 @@ export async function createApp() {
       res.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
     }
   });
+  // Caddy fronts this server and reuses upstream connections. Node's default
+  // 5s idle timeout closes sockets the proxy still considers live, which
+  // surfaces as instant ECONNRESET on the next proxied request (seen as
+  // sporadic SSR loader failures). Keep ours above the proxy's idle window.
+  server.keepAliveTimeout = 75_000;
+  server.headersTimeout = 80_000;
   return { server, db, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients };
 }
 
