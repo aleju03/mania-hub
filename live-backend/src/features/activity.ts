@@ -1,51 +1,52 @@
 import type { Db } from "../db.js";
-import { exec, parseJson } from "../db.js";
+import { exec, json, parseJson } from "../db.js";
 import { parseManiaBeatmap, type ManiaNote } from "../dan/beatmap-parser.js";
 import { extractDanFeatures } from "../dan/dan-estimator/features.js";
-import type { DanFeatureMetrics } from "../dan/dan-estimator/types.js";
+import { chooseSkillFamily } from "../dan/dan-estimator/family-choice.js";
+import { estimateFamilyScores } from "../dan/dan-estimator/scoring.js";
+import { DAN_PRIMARY_FAMILIES, type DanFeatureMetrics } from "../dan/dan-estimator/types.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { addDayKeyDays, getCountryTimezone, getZonedDayKey } from "../shared/country-timezones.js";
 import { getDisplayedAccuracy, getDisplayedRank, getScoreTimestamp, nowIso } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 
-export const ACTIVITY_SKILL_ANALYSIS_VERSION = 3;
+export const ACTIVITY_SKILL_ANALYSIS_VERSION = 4;
 
 const ACTIVITY_SESSION_GAP_MS = 45 * 60_000;
 const ACTIVITY_DAY_DETAIL_MAP_LIMIT = 500;
 const ACTIVITY_ANALYSIS_RUNNING_REQUEUE_MS = 10 * 60_000;
 const ACTIVITY_ANALYSIS_FAILED_RETRY_MS = 5 * 60_000;
 
-interface ActivitySkillVector {
-  stream: number;
-  jack: number;
-  bracket: number;
-  ln: number;
-  lnGeneral: number;
-  lnRelease: number;
-  lnInverse: number;
-  lnTech: number;
+// Pattern intensities are a relative mix over the dan estimator's family
+// scores: the strongest family sits at 1 and the rest decay with their score
+// distance, so the mix reads as "what this chart is" rather than raw SR.
+const ACTIVITY_PATTERN_MIX_TEMPERATURE = 0.75;
+const ACTIVITY_LN_PRIMARY_THRESHOLD = 0.6;
+const ACTIVITY_MIN_ANALYZED_NOTES = 24;
+const ACTIVITY_PATTERN_MIN_VALUE = 0.01;
+
+const ACTIVITY_LN_SUBTYPES = ["lnGeneral", "lnRelease", "lnInverse", "lnTech"] as const;
+
+// Pattern ids come from the dan estimator's families plus LN and its 7K
+// subtypes; the record stays open so new estimator families flow through the
+// stored JSON, the HTTP payloads, and the frontend without schema changes.
+export interface ActivityPatternVector {
+  primary: string;
+  patterns: Record<string, number>;
 }
 
-export type PlayerActivityPrimarySkill =
-  | "stream"
-  | "jack"
-  | "bracket"
-  | "ln"
-  | "lnGeneral"
-  | "lnRelease"
-  | "lnInverse"
-  | "lnTech"
-  | "mixed"
-  | "unknown";
+export type PlayerActivityPrimarySkill = string;
 
-export interface PlayerActivityKeyModeSkillReadout extends ActivitySkillVector {
+export interface PlayerActivityKeyModeSkillReadout {
   keyCount: number | null;
+  patterns: Record<string, number>;
   analyzedPlays: number;
   totalPlays: number;
 }
 
-export interface PlayerActivitySkillReadout extends ActivitySkillVector {
+export interface PlayerActivitySkillReadout {
+  patterns: Record<string, number>;
   analyzedPlays: number;
   totalPlays: number;
   keyModes: PlayerActivityKeyModeSkillReadout[];
@@ -64,7 +65,7 @@ export interface PlayerActivityMap {
   pp: number | null;
   rank: string | null;
   keyCount: number | null;
-  skills: ActivitySkillVector | null;
+  skills: ActivityPatternVector | null;
 }
 
 export interface PlayerActivityTimelineSegment {
@@ -75,14 +76,7 @@ export interface PlayerActivityTimelineSegment {
   playCount: number;
   keyCount: number | null;
   primarySkill: PlayerActivityPrimarySkill;
-  stream: number;
-  jack: number;
-  bracket: number;
-  ln: number;
-  lnGeneral: number;
-  lnRelease: number;
-  lnInverse: number;
-  lnTech: number;
+  patterns: Record<string, number>;
 }
 
 export interface PlayerActivityDay {
@@ -437,37 +431,28 @@ export async function computeBeatmapActivitySkillVector(
   try {
     const osuFile = await osu.getBeatmapFile(beatmapId, "job:analyze_activity_beatmap");
     const map = parseManiaBeatmap(osuFile);
-    const vector = getActivitySkillVector(map);
+    const starRating = Number((await exec(
+      db,
+      "select difficulty_rating from beatmaps where beatmap_id = ? limit 1",
+      [beatmapId],
+    )).rows[0]?.difficulty_rating ?? 0);
+    const vector = getActivityPatternVector(map, Number.isFinite(starRating) && starRating > 0 ? starRating : 0);
     const computedAt = nowIso();
     await exec(
       db,
       `insert into beatmap_skill_vectors
-         (beatmap_id, analysis_version, status, stream_score, jack_score, bracket_score, ln_score, ln_general_score, ln_release_score, ln_inverse_score, ln_tech_score, error, computed_at, updated_at)
-       values (?, ?, 'ready', ?, ?, ?, ?, ?, ?, ?, ?, null, ?, ?)
+         (beatmap_id, analysis_version, status, skills_json, error, computed_at, updated_at)
+       values (?, ?, 'ready', ?, null, ?, ?)
        on conflict(beatmap_id, analysis_version) do update set
          status = excluded.status,
-         stream_score = excluded.stream_score,
-         jack_score = excluded.jack_score,
-         bracket_score = excluded.bracket_score,
-         ln_score = excluded.ln_score,
-         ln_general_score = excluded.ln_general_score,
-         ln_release_score = excluded.ln_release_score,
-         ln_inverse_score = excluded.ln_inverse_score,
-         ln_tech_score = excluded.ln_tech_score,
+         skills_json = excluded.skills_json,
          error = excluded.error,
          computed_at = excluded.computed_at,
          updated_at = excluded.updated_at`,
       [
         beatmapId,
         ACTIVITY_SKILL_ANALYSIS_VERSION,
-        vector.stream,
-        vector.jack,
-        vector.bracket,
-        vector.ln,
-        vector.lnGeneral,
-        vector.lnRelease,
-        vector.lnInverse,
-        vector.lnTech,
+        json(vector),
         computedAt,
         computedAt,
       ],
@@ -712,7 +697,7 @@ interface ActivityScoreRef {
 
 interface ActivityDayScoreRow extends ActivityScoreRef {
   keyCount: number | null;
-  skills: ActivitySkillVector | null;
+  skills: ActivityPatternVector | null;
 }
 
 async function getActivityScoreRefs(
@@ -803,14 +788,7 @@ async function getActivityDayScoreRows(
        r.beatmap_id,
        b.cs,
        v.status as skill_status,
-       v.stream_score,
-       v.jack_score,
-       v.bracket_score,
-       v.ln_score,
-       v.ln_general_score,
-       v.ln_release_score,
-       v.ln_inverse_score,
-       v.ln_tech_score
+       v.skills_json
      from player_activity_score_refs r
      left join beatmaps b on b.beatmap_id = r.beatmap_id
      left join beatmap_skill_vectors v
@@ -885,14 +863,7 @@ async function getActivityMapsForLocalDay(
        s.artist,
        s.covers_json,
        v.status as skill_status,
-       v.stream_score,
-       v.jack_score,
-       v.bracket_score,
-       v.ln_score,
-       v.ln_general_score,
-       v.ln_release_score,
-       v.ln_inverse_score,
-       v.ln_tech_score
+       v.skills_json
      from player_activity_maps m
      left join beatmaps b on b.beatmap_id = m.beatmap_id
      left join beatmapsets s on s.beatmapset_id = b.beatmapset_id
@@ -942,62 +913,49 @@ function isBetterActivityMapRow(candidate: Record<string, unknown>, current: Rec
   return candidateAccuracy > currentAccuracy;
 }
 
-interface ActivitySkillSums {
+interface ActivityPatternSums {
   keyCount: number | null;
-  streamSum: number;
-  jackSum: number;
-  bracketSum: number;
-  lnSum: number;
-  lnGeneralSum: number;
-  lnReleaseSum: number;
-  lnInverseSum: number;
-  lnTechSum: number;
+  patternSums: Record<string, number>;
   analyzedPlays: number;
   totalPlays: number;
 }
 
-function emptyActivitySkillSums(keyCount: number | null): ActivitySkillSums {
+function emptyActivitySkillSums(keyCount: number | null): ActivityPatternSums {
   return {
     keyCount,
-    streamSum: 0,
-    jackSum: 0,
-    bracketSum: 0,
-    lnSum: 0,
-    lnGeneralSum: 0,
-    lnReleaseSum: 0,
-    lnInverseSum: 0,
-    lnTechSum: 0,
+    patternSums: {},
     analyzedPlays: 0,
     totalPlays: 0,
   };
 }
 
-function addActivitySkillRow(sums: ActivitySkillSums, row: ActivityDayScoreRow): void {
+function addActivitySkillRow(sums: ActivityPatternSums, row: ActivityDayScoreRow): void {
   sums.totalPlays++;
   if (!row.skills) return;
   sums.analyzedPlays++;
-  sums.streamSum += row.skills.stream;
-  sums.jackSum += row.skills.jack;
-  sums.bracketSum += row.skills.bracket;
-  sums.lnSum += row.skills.ln;
-  sums.lnGeneralSum += row.skills.lnGeneral;
-  sums.lnReleaseSum += row.skills.lnRelease;
-  sums.lnInverseSum += row.skills.lnInverse;
-  sums.lnTechSum += row.skills.lnTech;
+  addPatternSums(sums.patternSums, row.skills.patterns);
 }
 
-function toActivityKeyModeReadout(sums: ActivitySkillSums): PlayerActivityKeyModeSkillReadout {
-  const scale = sums.analyzedPlays > 0 ? 1 / sums.analyzedPlays : 0;
+function addPatternSums(target: Record<string, number>, patterns: Record<string, number>): void {
+  for (const [key, value] of Object.entries(patterns)) {
+    target[key] = (target[key] ?? 0) + value;
+  }
+}
+
+function averagePatternSums(patternSums: Record<string, number>, analyzedPlays: number): Record<string, number> {
+  const scale = analyzedPlays > 0 ? 1 / analyzedPlays : 0;
+  const patterns: Record<string, number> = {};
+  for (const [key, value] of Object.entries(patternSums)) {
+    const average = value * scale;
+    if (average >= ACTIVITY_PATTERN_MIN_VALUE) patterns[key] = average;
+  }
+  return patterns;
+}
+
+function toActivityKeyModeReadout(sums: ActivityPatternSums): PlayerActivityKeyModeSkillReadout {
   return {
     keyCount: sums.keyCount,
-    stream: sums.streamSum * scale,
-    jack: sums.jackSum * scale,
-    bracket: sums.bracketSum * scale,
-    ln: sums.lnSum * scale,
-    lnGeneral: sums.lnGeneralSum * scale,
-    lnRelease: sums.lnReleaseSum * scale,
-    lnInverse: sums.lnInverseSum * scale,
-    lnTech: sums.lnTechSum * scale,
+    patterns: averagePatternSums(sums.patternSums, sums.analyzedPlays),
     analyzedPlays: sums.analyzedPlays,
     totalPlays: sums.totalPlays,
   };
@@ -1006,7 +964,7 @@ function toActivityKeyModeReadout(sums: ActivitySkillSums): PlayerActivityKeyMod
 function buildActivitySkillReadout(rows: ActivityDayScoreRow[]): PlayerActivitySkillReadout | null {
   if (rows.length === 0) return null;
   const total = emptyActivitySkillSums(null);
-  const byKeyMode = new Map<string, ActivitySkillSums>();
+  const byKeyMode = new Map<string, ActivityPatternSums>();
   for (const row of rows) {
     addActivitySkillRow(total, row);
     const key = String(row.keyCount);
@@ -1019,14 +977,7 @@ function buildActivitySkillReadout(rows: ActivityDayScoreRow[]): PlayerActivityS
   }
   const overall = toActivityKeyModeReadout(total);
   return {
-    stream: overall.stream,
-    jack: overall.jack,
-    bracket: overall.bracket,
-    ln: overall.ln,
-    lnGeneral: overall.lnGeneral,
-    lnRelease: overall.lnRelease,
-    lnInverse: overall.lnInverse,
-    lnTech: overall.lnTech,
+    patterns: overall.patterns,
     analyzedPlays: overall.analyzedPlays,
     totalPlays: overall.totalPlays,
     keyModes: [...byKeyMode.values()]
@@ -1067,14 +1018,7 @@ function buildActivityTimeline(day: string, rows: ActivityDayScoreRow[]): Player
         playCount: 0,
         keyCount: row.keyCount,
         primarySkill,
-        streamSum: 0,
-        jackSum: 0,
-        bracketSum: 0,
-        lnSum: 0,
-        lnGeneralSum: 0,
-        lnReleaseSum: 0,
-        lnInverseSum: 0,
-        lnTechSum: 0,
+        patternSums: {},
         analyzedCount: 0,
       };
     }
@@ -1082,14 +1026,7 @@ function buildActivityTimeline(day: string, rows: ActivityDayScoreRow[]): Player
     draft.endAt = row.endedAt;
     draft.playCount++;
     if (row.skills) {
-      draft.streamSum += row.skills.stream;
-      draft.jackSum += row.skills.jack;
-      draft.bracketSum += row.skills.bracket;
-      draft.lnSum += row.skills.ln;
-      draft.lnGeneralSum += row.skills.lnGeneral;
-      draft.lnReleaseSum += row.skills.lnRelease;
-      draft.lnInverseSum += row.skills.lnInverse;
-      draft.lnTechSum += row.skills.lnTech;
+      addPatternSums(draft.patternSums, row.skills.patterns);
       draft.analyzedCount++;
     }
     previousMs = row.endedAtMs;
@@ -1105,19 +1042,11 @@ interface TimelineSegmentDraft {
   playCount: number;
   keyCount: number | null;
   primarySkill: PlayerActivityPrimarySkill;
-  streamSum: number;
-  jackSum: number;
-  bracketSum: number;
-  lnSum: number;
-  lnGeneralSum: number;
-  lnReleaseSum: number;
-  lnInverseSum: number;
-  lnTechSum: number;
+  patternSums: Record<string, number>;
   analyzedCount: number;
 }
 
 function finalizeTimelineDraft(day: string, draft: TimelineSegmentDraft): PlayerActivityTimelineSegment {
-  const divisor = Math.max(1, draft.analyzedCount);
   return {
     key: `${day}:${draft.sessionIndex}:${draft.startAt}:${draft.endAt}`,
     sessionIndex: draft.sessionIndex,
@@ -1126,75 +1055,40 @@ function finalizeTimelineDraft(day: string, draft: TimelineSegmentDraft): Player
     playCount: draft.playCount,
     keyCount: draft.keyCount,
     primarySkill: draft.primarySkill,
-    stream: draft.analyzedCount > 0 ? draft.streamSum / divisor : 0,
-    jack: draft.analyzedCount > 0 ? draft.jackSum / divisor : 0,
-    bracket: draft.analyzedCount > 0 ? draft.bracketSum / divisor : 0,
-    ln: draft.analyzedCount > 0 ? draft.lnSum / divisor : 0,
-    lnGeneral: draft.analyzedCount > 0 ? draft.lnGeneralSum / divisor : 0,
-    lnRelease: draft.analyzedCount > 0 ? draft.lnReleaseSum / divisor : 0,
-    lnInverse: draft.analyzedCount > 0 ? draft.lnInverseSum / divisor : 0,
-    lnTech: draft.analyzedCount > 0 ? draft.lnTechSum / divisor : 0,
+    patterns: averagePatternSums(draft.patternSums, draft.analyzedCount),
   };
 }
 
-function readActivitySkillVector(row: Record<string, unknown>): ActivitySkillVector | null {
+function readActivitySkillVector(row: Record<string, unknown>): ActivityPatternVector | null {
   if (String(row.skill_status ?? "") !== "ready") return null;
-  const stream = Number(row.stream_score);
-  const jack = Number(row.jack_score);
-  const bracket = Number(row.bracket_score);
-  const ln = Number(row.ln_score);
-  const lnGeneral = Number(row.ln_general_score ?? 0);
-  const lnRelease = Number(row.ln_release_score ?? 0);
-  const lnInverse = Number(row.ln_inverse_score ?? 0);
-  const lnTech = Number(row.ln_tech_score ?? 0);
-  if (
-    !Number.isFinite(stream)
-    || !Number.isFinite(jack)
-    || !Number.isFinite(bracket)
-    || !Number.isFinite(ln)
-    || !Number.isFinite(lnGeneral)
-    || !Number.isFinite(lnRelease)
-    || !Number.isFinite(lnInverse)
-    || !Number.isFinite(lnTech)
-  ) {
-    return null;
+  const parsed = parseJson<{ primary?: unknown; patterns?: unknown } | null>(row.skills_json, null);
+  if (!parsed || typeof parsed !== "object") return null;
+  const rawPatterns = parsed.patterns;
+  if (!rawPatterns || typeof rawPatterns !== "object") return null;
+  const patterns: Record<string, number> = {};
+  for (const [key, value] of Object.entries(rawPatterns as Record<string, unknown>)) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric) && numeric > 0) patterns[key] = clamp01(numeric);
   }
-  return {
-    stream: clamp01(stream),
-    jack: clamp01(jack),
-    bracket: clamp01(bracket),
-    ln: clamp01(ln),
-    lnGeneral: clamp01(lnGeneral),
-    lnRelease: clamp01(lnRelease),
-    lnInverse: clamp01(lnInverse),
-    lnTech: clamp01(lnTech),
-  };
+  const primary = typeof parsed.primary === "string" && parsed.primary ? parsed.primary : "unknown";
+  return { primary, patterns };
 }
 
-function getPrimaryActivitySkill(vector: ActivitySkillVector | null): PlayerActivityPrimarySkill {
-  if (!vector) return "unknown";
-  const entries = [
-    ["stream", vector.stream],
-    ["jack", vector.jack],
-    ["bracket", vector.bracket],
-    ["ln", vector.ln],
-  ] as const;
-  const sorted = [...entries].sort((a, b) => b[1] - a[1]);
-  if (sorted[0][1] < 0.1) return "unknown";
-  if (sorted[0][1] - sorted[1][1] <= 0.08) return "mixed";
-  if (sorted[0][0] === "ln") return getPrimaryLnActivitySubtype(vector) ?? "ln";
-  return sorted[0][0];
+function getPrimaryActivitySkill(vector: ActivityPatternVector | null): PlayerActivityPrimarySkill {
+  return vector?.primary ?? "unknown";
 }
 
-function getPrimaryLnActivitySubtype(vector: ActivitySkillVector): PlayerActivityPrimarySkill | null {
-  const entries = [
-    ["lnGeneral", vector.lnGeneral],
-    ["lnRelease", vector.lnRelease],
-    ["lnInverse", vector.lnInverse],
-    ["lnTech", vector.lnTech],
-  ] as const;
-  const sorted = [...entries].sort((a, b) => b[1] - a[1]);
-  return sorted[0][1] >= 0.2 ? sorted[0][0] : null;
+function getPrimaryLnActivitySubtype(patterns: Record<string, number>): string | null {
+  let best: string | null = null;
+  let bestValue = 0.2;
+  for (const key of ACTIVITY_LN_SUBTYPES) {
+    const value = patterns[key] ?? 0;
+    if (value >= bestValue) {
+      best = key;
+      bestValue = value;
+    }
+  }
+  return best;
 }
 
 function getCurrentActivityStreak(days: PlayerActivityDay[], year: number, todayKey: string): number {
@@ -1210,50 +1104,67 @@ function getCurrentActivityStreak(days: PlayerActivityDay[], year: number, today
   return streak;
 }
 
-function getActivitySkillVector(map: ReturnType<typeof parseManiaBeatmap>): ActivitySkillVector {
+function getActivityPatternVector(map: ReturnType<typeof parseManiaBeatmap>, starRating: number): ActivityPatternVector {
   const features = extractDanFeatures(map, {
     totalLength: map.totalLength > 0 ? map.totalLength / 1000 : undefined,
     version: map.version,
   }, 1);
-  const { metrics } = features;
-  const chordGate = clamp01((metrics.chordRatio - 0.35) / 0.35);
-  const bracketScore = clamp01(
-    pressureScore(metrics.chordjackPressure, 240) * 0.45
-    + chordGate * 0.22
-    + clamp01(metrics.chordSizeChangeRate / 0.75) * 0.14
-    + clamp01(metrics.twoNoteChordRatio / 0.5) * 0.1
-    + clamp01(metrics.rowPatternVariety / 0.9) * 0.09,
-  );
-  const chordHeavyStreamPenalty = 1 - bracketScore * 0.45;
-  const chordHeavyJackPenalty = 1 - chordGate * 0.28;
+  const { metrics, durationMs } = features;
+  if (features.notes.length < ACTIVITY_MIN_ANALYZED_NOTES) {
+    return { primary: "unknown", patterns: {} };
+  }
+
+  const { skillScores } = estimateFamilyScores(metrics, starRating, durationMs);
+  const top = Math.max(...DAN_PRIMARY_FAMILIES.map((family) => skillScores[family]));
+  const patterns: Record<string, number> = {};
+  for (const family of DAN_PRIMARY_FAMILIES) {
+    patterns[family] = clamp01(Math.exp(Math.min(0, skillScores[family] - top) / ACTIVITY_PATTERN_MIX_TEMPERATURE));
+  }
+
+  // The estimator scores jumpstream on the handstream scale, so the two tie;
+  // split them by chord-row composition (2-note rows read as jumpstream,
+  // 3+-note rows as handstream).
+  const twoNoteShare = metrics.chordRatio > 0 ? clamp01(metrics.twoNoteChordRatio / metrics.chordRatio) : 0;
+  patterns.jumpstream *= pressure(twoNoteShare, 0.45, 0.85);
+  patterns.handstream *= pressure(1 - twoNoteShare, 0.08, 0.35);
+
+  // LN stays an absolute hold-pressure score: it is an orthogonal axis that
+  // hybrids combine with any of the families above.
   const lnScore = clamp01(
     metrics.holdRatio * 1.25
     + pressureScore(metrics.lnReleasePressure, 30) * 0.28
     + pressureScore(metrics.lnOverlapPressure, 8) * 0.24
     + pressureScore(metrics.lnChordPressure, 1) * 0.18,
   );
-  const lnSubtypeScores = getActivityLnSubtypeScores(features.notes, features.orderedRows, metrics);
-  return {
-    stream: clamp01(
-      (
-        pressureScore(metrics.streamPressure, 8) * 0.42
-        + pressureScore(metrics.jumpstreamPressure, 30) * 0.18
-        + pressureScore(metrics.staminaPressure, 30) * 0.25
-        + pressureScore(metrics.activeNps, 30) * 0.15
-      ) * chordHeavyStreamPenalty,
-    ),
-    jack: clamp01(
-      (
-        pressureScore(metrics.jackPressure, 190) * 0.64
-        + pressureScore(metrics.anchorPressure, 2) * 0.22
-        + clamp01(metrics.repeatedRowPatternRatio / 0.35) * 0.14
-      ) * chordHeavyJackPenalty
-      + pressureScore(metrics.chordjackPressure, 240) * 0.08,
-    ),
-    bracket: bracketScore,
-    ln: lnScore,
-    ...lnSubtypeScores,
-  };
+  patterns.ln = lnScore;
+  Object.assign(patterns, getActivityLnSubtypeScores(features.notes, features.orderedRows, metrics));
+
+  let primary: string = chooseSkillFamily(skillScores, metrics).family;
+  if (primary === "handstream" || primary === "jumpstream") {
+    primary = patterns.jumpstream > patterns.handstream ? "jumpstream" : "handstream";
+  }
+
+  // The family chooser is benchmarked on real charts and can pick a primary
+  // whose raw score trails other families; cap the rejected families just
+  // under the chosen one so the displayed mix agrees with the chart identity.
+  const chosenValue = patterns[primary] ?? 0;
+  if (chosenValue > 0 && chosenValue < 1) {
+    for (const family of DAN_PRIMARY_FAMILIES) {
+      if (family !== primary && patterns[family] > chosenValue) {
+        patterns[family] = Math.min(patterns[family], Math.max(chosenValue, 0.92));
+      }
+    }
+    patterns[primary] = 1;
+  }
+
+  if (lnScore >= ACTIVITY_LN_PRIMARY_THRESHOLD) {
+    primary = getPrimaryLnActivitySubtype(patterns) ?? "ln";
+  }
+
+  for (const [key, value] of Object.entries(patterns)) {
+    if (!(value >= ACTIVITY_PATTERN_MIN_VALUE)) delete patterns[key];
+  }
+  return { primary, patterns };
 }
 
 interface ActivityLnPatternStats {
@@ -1346,7 +1257,7 @@ function getActivityLnSubtypeScores(
   notes: ManiaNote[],
   orderedRows: Array<[number, ManiaNote[]]>,
   metrics: DanFeatureMetrics,
-): Pick<ActivitySkillVector, "lnGeneral" | "lnRelease" | "lnInverse" | "lnTech"> {
+): Record<(typeof ACTIVITY_LN_SUBTYPES)[number], number> {
   if (metrics.keyCount !== 7) {
     return { lnGeneral: 0, lnRelease: 0, lnInverse: 0, lnTech: 0 };
   }

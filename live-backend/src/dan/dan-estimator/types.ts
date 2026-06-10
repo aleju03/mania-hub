@@ -3,6 +3,11 @@ import type { ManiaNote } from "../beatmap-parser.js";
 export type DanSkillFamily = "jack" | "stream" | "jumpstream" | "handstream" | "stamina" | "chordjack" | "tech" | "ln" | "dan";
 export type DanPrimaryFamily = Exclude<DanSkillFamily, "ln" | "dan">;
 
+// Canonical list of pattern families the estimator can score and choose
+// between. Downstream consumers (activity pattern mixes) iterate this instead
+// of hardcoding family names, so new families flow through automatically.
+export const DAN_PRIMARY_FAMILIES: DanPrimaryFamily[] = ["jack", "stream", "jumpstream", "handstream", "stamina", "chordjack", "tech"];
+
 export interface DanEstimateInput {
   starRating?: number;
   totalLength?: number;

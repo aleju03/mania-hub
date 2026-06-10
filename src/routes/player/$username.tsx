@@ -13,6 +13,7 @@ import {
   fetchLivePlayerProfileSnapshotDirect,
   fetchLivePlayerRecentScoresDirect,
   isLiveBackendConfigured,
+  type LivePlayerActivityPatterns,
   type LivePlayerActivityPrimarySkill,
   type LivePlayerActivitySnapshot,
   type LivePlayerActivitySkillReadout,
@@ -2490,14 +2491,7 @@ function ActivityPatternMix({ skills }: { skills: ActivitySkillReadout }) {
     ? skills.keyModes
     : [{
       keyCount: null,
-      stream: skills.stream,
-      jack: skills.jack,
-      bracket: skills.bracket,
-      ln: skills.ln,
-      lnGeneral: skills.lnGeneral,
-      lnRelease: skills.lnRelease,
-      lnInverse: skills.lnInverse,
-      lnTech: skills.lnTech,
+      patterns: skills.patterns,
       analyzedPlays: skills.analyzedPlays,
       totalPlays: skills.totalPlays,
     }];
@@ -2511,7 +2505,7 @@ function ActivityPatternMix({ skills }: { skills: ActivitySkillReadout }) {
               {formatNumber(keyMode.analyzedPlays)} {keyMode.analyzedPlays === 1 ? "play" : "plays"}
             </span>
           </div>
-          <ActivityPatternBars skills={keyMode} keyCount={keyMode.keyCount} />
+          <ActivityPatternBars patterns={keyMode.patterns} keyCount={keyMode.keyCount} />
           {keyMode.analyzedPlays < keyMode.totalPlays && (
             <div className="pt-1 text-[10px] text-osu-f1">
               {formatNumber(keyMode.analyzedPlays)} of {formatNumber(keyMode.totalPlays)} plays analyzed
@@ -2523,10 +2517,10 @@ function ActivityPatternMix({ skills }: { skills: ActivitySkillReadout }) {
   );
 }
 
-function ActivityPatternBars({ skills, keyCount }: { skills: LivePlayerActivitySkillVector; keyCount: number | null }) {
+function ActivityPatternBars({ patterns, keyCount }: { patterns: LivePlayerActivityPatterns; keyCount: number | null }) {
   return (
     <div className="space-y-2">
-      {getActivityPatternEntries(skills, keyCount).map(({ key, label, value }) => (
+      {getActivityPatternEntries(patterns, keyCount).slice(0, 6).map(({ key, label, value }) => (
         <div key={key}>
           <div className="mb-1 flex justify-between text-[11px]">
             <span className="font-semibold text-osu-l2">{label}</span>
@@ -2642,10 +2636,7 @@ function ActivityMapRow({ map }: { map: ActivityPlayedMap }) {
 function ActivityMapPatternPills({ skills, keyCount }: { skills: LivePlayerActivitySkillVector | null; keyCount: number | null }) {
   if (!skills) return null;
   const primary = getActivityPrimarySkill(skills);
-  const entries = getActivityPatternEntries(skills, keyCount)
-    .filter(({ value }) => value > 0)
-    .sort((left, right) => right.value - left.value)
-    .slice(0, 5);
+  const entries = getActivityPatternEntries(skills.patterns, keyCount).slice(0, 5);
   return (
     <div className="mt-1 flex flex-wrap gap-1">
       {entries.map(({ key, shortLabel, value }) => {
@@ -2817,65 +2808,58 @@ function groupActivityTimelineBySession(segments: ActivityTimelineSegment[]): Ac
 }
 
 function getActivityPrimarySkill(skills: LivePlayerActivitySkillVector | null): LivePlayerActivityPrimarySkill {
-  if (!skills) return "unknown";
-  const entries = [
-    ["stream", skills.stream],
-    ["jack", skills.jack],
-    ["bracket", skills.bracket],
-    ["ln", skills.ln],
-  ] as const;
-  const sorted = [...entries].sort((a, b) => b[1] - a[1]);
-  if (sorted[0][1] < 0.1) return "unknown";
-  if (sorted[0][1] - sorted[1][1] <= 0.08) return "mixed";
-  if (sorted[0][0] === "ln") return getPrimaryLnActivitySubtype(skills) ?? "ln";
-  return sorted[0][0];
+  return skills?.primary ?? "unknown";
 }
 
-function getPrimaryLnActivitySubtype(skills: LivePlayerActivitySkillVector): LivePlayerActivityPrimarySkill | null {
-  const entries = [
-    ["lnGeneral", skills.lnGeneral],
-    ["lnRelease", skills.lnRelease],
-    ["lnInverse", skills.lnInverse],
-    ["lnTech", skills.lnTech],
-  ] as const;
-  const sorted = [...entries].sort((a, b) => b[1] - a[1]);
-  return sorted[0][1] >= 0.2 ? sorted[0][0] : null;
+// Pattern ids come from the backend's dan estimator families; unknown ids get
+// a derived label and a palette color so future families render unchanged.
+const ACTIVITY_PATTERN_META: Record<string, { label: string; shortLabel: string; color: string }> = {
+  stream: { label: "Stream", shortLabel: "S", color: "#8f6bd8" },
+  jumpstream: { label: "Jumpstream", shortLabel: "JS", color: "#6f87d8" },
+  handstream: { label: "Handstream", shortLabel: "HS", color: "#b06bc0" },
+  jack: { label: "Jack", shortLabel: "J", color: "#c66f84" },
+  chordjack: { label: "Chordjack", shortLabel: "CJ", color: "#c59a5c" },
+  stamina: { label: "Stamina", shortLabel: "ST", color: "#ad6b5d" },
+  tech: { label: "Tech", shortLabel: "T", color: "#83a86f" },
+  ln: { label: "LN", shortLabel: "LN", color: "#57aeba" },
+  lnGeneral: { label: "LN General", shortLabel: "LNG", color: "#63bf98" },
+  lnRelease: { label: "LN Release", shortLabel: "LNR", color: "#58b7d9" },
+  lnInverse: { label: "LN Inverse", shortLabel: "LNI", color: "#7fbed2" },
+  lnTech: { label: "LN Tech", shortLabel: "LNT", color: "#9f78df" },
+  unknown: { label: "Unknown", shortLabel: "", color: "#5f596b" },
+};
+
+const ACTIVITY_PATTERN_FALLBACK_COLORS = ["#8c7fb8", "#b88a7f", "#7fb89a", "#b8a87f", "#7f9ab8"];
+
+function getActivityPatternMeta(patternId: string, keyCount: number | null): { label: string; shortLabel: string; color: string } {
+  // The estimator's handstream family reads as brackets in 7K+ vocabulary;
+  // the score is the same, only the label follows the keymode.
+  if (patternId === "handstream" && keyCount != null && keyCount >= 7) {
+    return { label: "Bracket", shortLabel: "B", color: ACTIVITY_PATTERN_META.handstream.color };
+  }
+  const meta = ACTIVITY_PATTERN_META[patternId];
+  if (meta) return meta;
+  let hash = 0;
+  for (let index = 0; index < patternId.length; index++) hash = (hash * 31 + patternId.charCodeAt(index)) | 0;
+  return {
+    label: patternId.charAt(0).toUpperCase() + patternId.slice(1),
+    shortLabel: patternId.slice(0, 2).toUpperCase(),
+    color: ACTIVITY_PATTERN_FALLBACK_COLORS[Math.abs(hash) % ACTIVITY_PATTERN_FALLBACK_COLORS.length],
+  };
 }
 
-// Brackets are a 7K concept; the same chord-pressure signal reads as chordjack
-// in lower keymodes, so labels follow the keymode while the score stays shared.
-function isBracketKeyMode(keyCount: number | null): boolean {
-  return keyCount == null || keyCount >= 7;
-}
-
-function getActivityPatternEntries(skills: LivePlayerActivitySkillVector, keyCount: number | null) {
-  const bracket = isBracketKeyMode(keyCount);
-  const entries = [
-    { key: "stream" as const, label: "Stream", shortLabel: "S", value: Math.round(clamp01(skills.stream) * 100) },
-    { key: "jack" as const, label: "Jack", shortLabel: "J", value: Math.round(clamp01(skills.jack) * 100) },
-    { key: "bracket" as const, label: bracket ? "Bracket" : "Chordjack", shortLabel: bracket ? "B" : "CJ", value: Math.round(clamp01(skills.bracket) * 100) },
-    { key: "ln" as const, label: "LN", shortLabel: "LN", value: Math.round(clamp01(skills.ln) * 100) },
-  ];
-  const lnSubtypes = [
-    { key: "lnGeneral" as const, label: "LN General", shortLabel: "LNG", value: Math.round(clamp01(skills.lnGeneral) * 100) },
-    { key: "lnRelease" as const, label: "LN Release", shortLabel: "LNR", value: Math.round(clamp01(skills.lnRelease) * 100) },
-    { key: "lnInverse" as const, label: "LN Inverse", shortLabel: "LNI", value: Math.round(clamp01(skills.lnInverse) * 100) },
-    { key: "lnTech" as const, label: "LN Tech", shortLabel: "LNT", value: Math.round(clamp01(skills.lnTech) * 100) },
-  ].filter(({ value }) => value >= 5);
-  return [...entries, ...lnSubtypes];
+function getActivityPatternEntries(patterns: LivePlayerActivityPatterns | null | undefined, keyCount: number | null) {
+  return Object.entries(patterns ?? {})
+    .map(([key, raw]) => {
+      const meta = getActivityPatternMeta(key, keyCount);
+      return { key, label: meta.label, shortLabel: meta.shortLabel, value: Math.round(clamp01(Number(raw)) * 100) };
+    })
+    .filter(({ value }) => value >= 5)
+    .sort((left, right) => right.value - left.value);
 }
 
 function getActivitySkillColor(skill: LivePlayerActivityPrimarySkill): string {
-  if (skill === "stream") return "#8f6bd8";
-  if (skill === "jack") return "#c66f84";
-  if (skill === "bracket") return "#c59a5c";
-  if (skill === "ln") return "#57aeba";
-  if (skill === "lnGeneral") return "#63bf98";
-  if (skill === "lnRelease") return "#58b7d9";
-  if (skill === "lnInverse") return "#7fbed2";
-  if (skill === "lnTech") return "#9f78df";
-  if (skill === "mixed") return "#83a86f";
-  return "#5f596b";
+  return getActivityPatternMeta(skill, null).color;
 }
 
 function getActivityKeyModeColor(keyCount: number | null): string {
@@ -2892,29 +2876,13 @@ function getActivityTimelineSegmentColor(segment: ActivityTimelineSegment): stri
 }
 
 function getActivitySkillLabel(skill: LivePlayerActivityPrimarySkill, keyCount: number | null): string {
-  if (skill === "stream") return "Stream";
-  if (skill === "jack") return "Jack";
-  if (skill === "bracket") return isBracketKeyMode(keyCount) ? "Bracket" : "Chordjack";
-  if (skill === "ln") return "LN";
-  if (skill === "lnGeneral") return "LN General";
-  if (skill === "lnRelease") return "LN Release";
-  if (skill === "lnInverse") return "LN Inverse";
-  if (skill === "lnTech") return "LN Tech";
   if (skill === "mixed") return "Hybrid";
-  return "Unknown";
+  return getActivityPatternMeta(skill, keyCount).label;
 }
 
 function getActivitySkillShortLabel(skill: LivePlayerActivityPrimarySkill, keyCount: number | null): string {
-  if (skill === "stream") return "S";
-  if (skill === "jack") return "J";
-  if (skill === "bracket") return isBracketKeyMode(keyCount) ? "B" : "CJ";
-  if (skill === "ln") return "LN";
-  if (skill === "lnGeneral") return "LNG";
-  if (skill === "lnRelease") return "LNR";
-  if (skill === "lnInverse") return "LNI";
-  if (skill === "lnTech") return "LNT";
   if (skill === "mixed") return "Hyb";
-  return "";
+  return getActivityPatternMeta(skill, keyCount).shortLabel;
 }
 
 function formatActivityKeyFlow(segments: ActivityTimelineSegment[]): string {
@@ -2932,12 +2900,10 @@ function formatActivityTimelineSegmentLabel(segment: ActivityTimelineSegment): s
 }
 
 function formatActivitySegmentTitle(segment: ActivityTimelineSegment, timeZone: string): string {
-  const scores = [
-    `S ${Math.round(clamp01(segment.stream) * 100)}%`,
-    `J ${Math.round(clamp01(segment.jack) * 100)}%`,
-    `${isBracketKeyMode(segment.keyCount) ? "B" : "CJ"} ${Math.round(clamp01(segment.bracket) * 100)}%`,
-    `LN ${Math.round(clamp01(segment.ln) * 100)}%`,
-  ].join(" / ");
+  const scores = getActivityPatternEntries(segment.patterns, segment.keyCount)
+    .slice(0, 4)
+    .map(({ shortLabel, value }) => `${shortLabel} ${value}%`)
+    .join(" / ");
   return [
     `${formatActivityTime(segment.startAt, timeZone)} - ${formatActivityTime(segment.endAt, timeZone)}`,
     `${formatNumber(segment.playCount)} ${segment.playCount === 1 ? "play" : "plays"}`,

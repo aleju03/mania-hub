@@ -311,6 +311,7 @@ async function migratePlayerActivity(db: Db): Promise<void> {
       ln_release_score real not null default 0,
       ln_inverse_score real not null default 0,
       ln_tech_score real not null default 0,
+      skills_json text,
       error text,
       computed_at text,
       updated_at text not null,
@@ -332,6 +333,9 @@ async function migratePlayerActivity(db: Db): Promise<void> {
   }
   if (!vectorColumns.includes("ln_tech_score")) {
     await db.execute("alter table beatmap_skill_vectors add column ln_tech_score real not null default 0");
+  }
+  if (!vectorColumns.includes("skills_json")) {
+    await db.execute("alter table beatmap_skill_vectors add column skills_json text");
   }
   await db.execute(`
     create table if not exists player_activity_score_refs (

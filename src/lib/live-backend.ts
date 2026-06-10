@@ -221,45 +221,29 @@ export interface LivePlayerProfileSection<T> {
   isStale: boolean;
 }
 
+/** Pattern id -> 0..1 intensity. Ids come from the backend's dan estimator
+ * families (stream, jumpstream, handstream, jack, chordjack, stamina, tech)
+ * plus ln and its 7K subtypes; the record stays open so new backend families
+ * render without frontend changes. */
+export type LivePlayerActivityPatterns = Record<string, number>;
+
 export interface LivePlayerActivitySkillReadout {
-  stream: number;
-  jack: number;
-  bracket: number;
-  ln: number;
-  lnGeneral: number;
-  lnRelease: number;
-  lnInverse: number;
-  lnTech: number;
+  patterns: LivePlayerActivityPatterns;
   analyzedPlays: number;
   totalPlays: number;
   keyModes: LivePlayerActivityKeyModeSkillReadout[];
 }
 
-export type LivePlayerActivityPrimarySkill =
-  | "stream"
-  | "jack"
-  | "bracket"
-  | "ln"
-  | "lnGeneral"
-  | "lnRelease"
-  | "lnInverse"
-  | "lnTech"
-  | "mixed"
-  | "unknown";
+export type LivePlayerActivityPrimarySkill = string;
 
 export interface LivePlayerActivitySkillVector {
-  stream: number;
-  jack: number;
-  bracket: number;
-  ln: number;
-  lnGeneral: number;
-  lnRelease: number;
-  lnInverse: number;
-  lnTech: number;
+  primary: LivePlayerActivityPrimarySkill;
+  patterns: LivePlayerActivityPatterns;
 }
 
-export interface LivePlayerActivityKeyModeSkillReadout extends LivePlayerActivitySkillVector {
+export interface LivePlayerActivityKeyModeSkillReadout {
   keyCount: number | null;
+  patterns: LivePlayerActivityPatterns;
   analyzedPlays: number;
   totalPlays: number;
 }
@@ -288,14 +272,7 @@ export interface LivePlayerActivityTimelineSegment {
   playCount: number;
   keyCount: number | null;
   primarySkill: LivePlayerActivityPrimarySkill;
-  stream: number;
-  jack: number;
-  bracket: number;
-  ln: number;
-  lnGeneral: number;
-  lnRelease: number;
-  lnInverse: number;
-  lnTech: number;
+  patterns: LivePlayerActivityPatterns;
 }
 
 export interface LivePlayerActivityDay {

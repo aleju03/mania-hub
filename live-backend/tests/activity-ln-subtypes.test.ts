@@ -83,11 +83,13 @@ describe("activity LN subtype vectors", () => {
     ], 34);
 
     const release = await analyzeFixture(101, makeOsu(releaseRows, 60));
-    expect(Number(release.ln_release_score)).toBeGreaterThan(0.5);
-    expect(Number(release.ln_release_score)).toBeGreaterThan(Number(release.ln_tech_score));
+    const releasePatterns = JSON.parse(String(release.skills_json)).patterns as Record<string, number>;
+    expect(releasePatterns.lnRelease).toBeGreaterThan(0.5);
+    expect(releasePatterns.lnRelease).toBeGreaterThan(releasePatterns.lnTech ?? 0);
 
     const tech = await analyzeFixture(102, makeOsu(techRows, 55));
-    expect(Number(tech.ln_tech_score)).toBeGreaterThan(0.5);
-    expect(Number(tech.ln_tech_score)).toBeGreaterThan(Number(tech.ln_release_score));
+    const techPatterns = JSON.parse(String(tech.skills_json)).patterns as Record<string, number>;
+    expect(techPatterns.lnTech).toBeGreaterThan(0.5);
+    expect(techPatterns.lnTech).toBeGreaterThan(techPatterns.lnRelease ?? 0);
   });
 });

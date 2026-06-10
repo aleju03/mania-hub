@@ -314,6 +314,7 @@ create table if not exists beatmap_skill_vectors (
   ln_release_score real not null default 0,
   ln_inverse_score real not null default 0,
   ln_tech_score real not null default 0,
+  skills_json text,
   error text,
   computed_at text,
   updated_at text not null,
