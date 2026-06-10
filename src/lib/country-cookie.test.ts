@@ -56,9 +56,24 @@ describe("resolveInitialCountry", () => {
     ).toBe("CR");
   });
 
-  it("treats Global as available so an existing Global cookie sticks", () => {
+  it("keeps an auto Global cookie when there is no usable geo signal", () => {
     expect(
       resolveInitialCountry(GLOBAL_SCOPE_CODE, null, { available, cookieIsAuto: true }),
+    ).toBe(GLOBAL_SCOPE_CODE);
+    expect(
+      resolveInitialCountry(GLOBAL_SCOPE_CODE, "JP", { available, cookieIsAuto: true }),
+    ).toBe(GLOBAL_SCOPE_CODE);
+  });
+
+  it("lets a geo hit that became available win over an auto Global cookie", () => {
+    expect(
+      resolveInitialCountry(GLOBAL_SCOPE_CODE, "US", { available, cookieIsAuto: true }),
+    ).toBe("US");
+  });
+
+  it("still honours a manual Global pick over a geo hit", () => {
+    expect(
+      resolveInitialCountry(GLOBAL_SCOPE_CODE, "US", { available, cookieIsAuto: false }),
     ).toBe(GLOBAL_SCOPE_CODE);
   });
 });

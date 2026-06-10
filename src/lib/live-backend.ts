@@ -357,6 +357,10 @@ function normalizeAdminPath(input: unknown): string {
     const country = url.searchParams.get("country");
     if (country && /^[A-Za-z]{2}$/.test(country)) return `/api/admin/delete-country?country=${country.toUpperCase()}`;
   }
+  if (url.pathname === "/api/admin/add-country") {
+    const country = url.searchParams.get("country");
+    if (country && /^[A-Za-z]{2}$/.test(country)) return `/api/admin/add-country?country=${country.toUpperCase()}`;
+  }
   if (url.pathname === "/api/admin/refresh-maps") {
     const country = url.searchParams.get("country");
     // Global is a valid maps scope (it merges every country's snapshot).
@@ -514,6 +518,37 @@ export const fetchLiveBackendBootstrap = createServerFn({ method: "GET" })
 
 function isAbortError(error: unknown): boolean {
   return !!error && typeof error === "object" && "name" in error && error.name === "AbortError";
+}
+
+const LIVE_BACKEND_ACTIVATE_TIMEOUT_MS = 2_500;
+
+// Registers a geo-detected but never-tracked country on the live backend so a
+// visit from it starts tracking right away (active status, live tier). The
+// visitor's forwarded IP is passed through so the backend's activation rate
+// limits key on the visitor instead of this server. Server-side only.
+export async function activateLiveCountryOnServer(country: string, forwardedFor?: string | null): Promise<boolean> {
+  const base = getServerLiveBackendUrl();
+  if (!base) return false;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), LIVE_BACKEND_ACTIVATE_TIMEOUT_MS);
+  try {
+    const headers: HeadersInit = {};
+    if (forwardedFor) headers["x-forwarded-for"] = forwardedFor;
+    const response = await fetch(`${base}/api/countries/activate?country=${encodeURIComponent(country)}`, {
+      method: "POST",
+      headers,
+      signal: controller.signal,
+    });
+    if (!response.ok) return false;
+    // The memoized bootstrap predates this registration; drop it so the next
+    // request sees the new registry row instead of bouncing back to Global.
+    serverBootstrapCache = null;
+    return true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export const fetchLivePlayerCachedProfileSnapshot = createServerFn({ method: "GET" })

@@ -88,7 +88,12 @@ export function resolveInitialCountry(
 
   if (cookieValue) {
     const manualPick = !options?.cookieIsAuto;
-    if (manualPick || isAvailableCountry(cookieValue, available)) {
+    if (manualPick) return cookieValue;
+    // An auto cookie caches the previous auto decision. A real country that is
+    // still available sticks, but auto-Global only meant "no trackable country
+    // last time" - fall through so a geo hit that is available now (e.g. the
+    // visitor's country got registered since) wins over it.
+    if (!isGlobalScope(cookieValue) && isAvailableCountry(cookieValue, available)) {
       return cookieValue;
     }
   }

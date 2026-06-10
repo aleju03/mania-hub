@@ -999,6 +999,9 @@ function LiveBackendPage() {
                   `/api/admin/cancel-catch-up-country?country=${encodeURIComponent(entry.country)}`,
                 );
               }}
+              onAddCountry={(country) => {
+                void runAdminAction(`add-country-${country}`, `/api/admin/add-country?country=${encodeURIComponent(country)}`);
+              }}
             />
           </Section>
 
@@ -2623,6 +2626,7 @@ function CountriesCard({
   onSetCountryTier,
   onCatchUpCountry,
   onCancelCatchUpCountry,
+  onAddCountry,
 }: {
   status: LiveBackendStatus | null;
   busy: string | null;
@@ -2631,8 +2635,10 @@ function CountriesCard({
   onSetCountryTier: (entry: CountryEntry, tier: CountryFeatureTier) => void;
   onCatchUpCountry: (entry: CountryEntry) => void;
   onCancelCatchUpCountry: (entry: CountryEntry) => void;
+  onAddCountry: (country: string) => void;
 }) {
   const [sortMode, setSortMode] = useState<CountrySortMode>("status");
+  const [addCountryCode, setAddCountryCode] = useState("");
   const [statusFilters, setStatusFilters] = useState<Record<CountryDisplayStatus, boolean>>(DEFAULT_COUNTRY_STATUS_FILTERS);
   const [tierFilters, setTierFilters] = useState<Record<CountryFeatureTier, boolean>>(DEFAULT_COUNTRY_TIER_FILTERS);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
@@ -2775,23 +2781,54 @@ function CountriesCard({
             </div>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1">
-          Sort
-          <div className="flex max-w-full flex-wrap items-center gap-1 rounded-md border border-osu-b3/25 bg-osu-b5/50 p-1">
-            {COUNTRY_SORT_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setSortMode(option.value)}
-                aria-pressed={sortMode === option.value}
-                className={`rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors duration-[120ms] cursor-pointer ${
-                  sortMode === option.value ? "bg-osu-b3/55 text-white" : "text-osu-f1 hover:text-osu-l2"
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
+        <div className="flex flex-col gap-1.5 lg:items-end">
+          <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1">
+            Sort
+            <div className="flex max-w-full flex-wrap items-center gap-1 rounded-md border border-osu-b3/25 bg-osu-b5/50 p-1">
+              {COUNTRY_SORT_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setSortMode(option.value)}
+                  aria-pressed={sortMode === option.value}
+                  className={`rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider transition-colors duration-[120ms] cursor-pointer ${
+                    sortMode === option.value ? "bg-osu-b3/55 text-white" : "text-osu-f1 hover:text-osu-l2"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
+          <form
+            className="flex flex-wrap items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!/^[A-Z]{2}$/.test(addCountryCode)) return;
+              onAddCountry(addCountryCode);
+              setAddCountryCode("");
+            }}
+          >
+            Add
+            <div className="flex items-center gap-1 rounded-md border border-osu-b3/25 bg-osu-b5/50 p-1">
+              <input
+                value={addCountryCode}
+                onChange={(event) => setAddCountryCode(event.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2))}
+                placeholder="EG"
+                maxLength={2}
+                aria-label="Country code to start tracking"
+                className="w-10 rounded bg-transparent px-2 py-1 text-center font-mono text-[10px] text-white placeholder:text-osu-f1/40 focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={!/^[A-Z]{2}$/.test(addCountryCode) || busy?.startsWith("add-country") === true}
+                title="Register this country as active + live and queue its roster"
+                className="rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-osu-f1 transition-colors duration-[120ms] hover:text-osu-l2 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+              >
+                Track
+              </button>
+            </div>
+          </form>
         </div>
       </div>
       <div className="mb-3 rounded-md border border-osu-b3/25 bg-osu-b5/40">

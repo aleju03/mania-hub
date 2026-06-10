@@ -21,7 +21,7 @@ import {
 import { PostHogProvider } from "../lib/posthog-provider";
 import { getCanonicalOrigin } from "../lib/origin";
 import { DEFAULT_DESCRIPTION, SITE_NAME, websiteJsonLd } from "../lib/seo";
-import { fetchLiveBackendBootstrap } from "../lib/live-backend";
+import { activateLiveCountryOnServer, fetchLiveBackendBootstrap } from "../lib/live-backend";
 import type { LiveBackendStatus, LiveCountryFeaturesSnapshot } from "../lib/live-backend";
 import { BackendOfflineScreen } from "../components/BackendOfflineScreen";
 import { seedCountryTierCache } from "../lib/use-country-warming";
@@ -68,8 +68,22 @@ const getInitialCountry = createServerFn({ method: "GET" }).handler(async () => 
   // to consult the backend, which keeps the common returning-visitor path fast.
   if (countryCookie && !cookieIsAuto) return countryCookie;
 
-  const available = await getAvailableCountrySet();
+  let available = await getAvailableCountrySet();
   const detectedCountry = getRequestCountry();
+
+  // First visit from a country the backend has never registered: start
+  // tracking it immediately (active status, live tier) and route the visitor
+  // there; the country-warming flow covers the empty-roster window. Countries
+  // already in the registry, even cold ones, are in `available`, so this only
+  // fires for brand-new ones.
+  if (available && detectedCountry && !available.has(detectedCountry)) {
+    const activated = await activateLiveCountryOnServer(
+      detectedCountry,
+      getRequest().headers.get("x-forwarded-for"),
+    );
+    if (activated) available = new Set([...available, detectedCountry]);
+  }
+
   const resolved = resolveInitialCountry(countryCookie, detectedCountry, {
     available,
     cookieIsAuto,

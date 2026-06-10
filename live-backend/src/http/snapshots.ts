@@ -589,6 +589,22 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 200, { ok: true, country: updated });
     return true;
   }
+  if (url.pathname === "/api/admin/add-country") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (isGlobalCountry(country)) {
+      sendJson(req, res, ctx, 400, { error: "global_is_not_country" });
+      return true;
+    }
+    const added = await activateCountry(ctx.db, ctx.queue, ctx.config, country);
+    if (ctx.config.enableOsuApiJobs && isCountryFeatureAtLeast(added.featureTier, "maps_warm")) {
+      await enqueueMapsRefreshIfDue(ctx.db, ctx.queue, added.country, ctx.config.mapsRefreshIntervalMs, { priority: 15 });
+    }
+    sendJson(req, res, ctx, 200, { ok: true, country: added });
+    return true;
+  }
   if (url.pathname === "/api/admin/delete-country") {
     if (!isAdmin(req, ctx)) {
       sendJson(req, res, ctx, 401, { error: "unauthorized" });
@@ -1130,6 +1146,7 @@ function routeUsesCountry(pathname: string): boolean {
     || pathname === "/api/admin/resume-country"
     || pathname === "/api/admin/catch-up-country"
     || pathname === "/api/admin/cancel-catch-up-country"
+    || pathname === "/api/admin/add-country"
     || pathname === "/api/admin/delete-country"
     || pathname === "/api/admin/set-country-status"
     || pathname === "/api/admin/set-country-tier";
