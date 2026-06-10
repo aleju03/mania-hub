@@ -132,9 +132,10 @@ export async function recordPlayerActivity(
   country: string,
   score: OscScore,
   scoreIdentity: string,
-): Promise<void> {
+  options: { deferSessionRecompute?: boolean } = {},
+): Promise<{ day: string } | null> {
   const activity = readScoreActivityInput(country, score, scoreIdentity);
-  if (!activity) return;
+  if (!activity) return null;
   const now = nowIso();
   const inserted = await exec(
     db,
@@ -152,12 +153,15 @@ export async function recordPlayerActivity(
       now,
     ],
   );
-  if (Number(inserted.rowsAffected ?? 0) === 0) return;
+  if (Number(inserted.rowsAffected ?? 0) === 0) return null;
 
   await upsertActivityDay(db, activity, now);
-  await recomputeActivitySessions(db, activity.country, activity.userId, activity.day);
+  if (!options.deferSessionRecompute) {
+    await recomputeActivitySessions(db, activity.country, activity.userId, activity.day);
+  }
   await upsertActivityMap(db, activity, score, now);
   await enqueueBeatmapSkillAnalysisIfNeeded(db, queue, activity.beatmapId);
+  return { day: activity.day };
 }
 
 export async function removePlayerActivityScore(db: Db, country: string, scoreIdentity: string): Promise<void> {
@@ -203,8 +207,16 @@ export async function removePlayerActivityScore(db: Db, country: string, scoreId
      where country = ? and user_id = ? and day = ? and beatmap_id = ?`,
     [now, normalizedCountry, userId, day, beatmapId],
   );
-  await exec(db, "delete from player_activity_maps where play_count <= 0");
-  await exec(db, "delete from player_activity_days where score_count <= 0");
+  await exec(
+    db,
+    "delete from player_activity_maps where country = ? and user_id = ? and day = ? and beatmap_id = ? and play_count <= 0",
+    [normalizedCountry, userId, day, beatmapId],
+  );
+  await exec(
+    db,
+    "delete from player_activity_days where country = ? and user_id = ? and day = ? and score_count <= 0",
+    [normalizedCountry, userId, day],
+  );
 }
 
 export async function getPlayerActivitySnapshot(
@@ -221,7 +233,7 @@ export async function getPlayerActivitySnapshot(
     return emptyActivitySnapshot(userId, null, year, false, generatedAt);
   }
 
-  await backfillPlayerActivityFromRetainedScores(db, queue, userId, resolved.country, year);
+  await backfillPlayerActivityFromRetainedScores(db, queue, userId, resolved.country);
   const years = await getActivityYears(db, userId, resolved.country);
   const availableYears = years.length > 0 ? years : [year];
   const dayRows = (await exec(
@@ -261,7 +273,7 @@ export async function getPlayerActivitySnapshot(
     activeDays,
     totalSessions,
     typicalSession: getTypicalSession(totalScores, totalSessions, activeDays),
-    currentStreak: await getCurrentActivityStreak(db, userId, resolved.country, year),
+    currentStreak: getCurrentActivityStreak(days, year),
     generatedAt,
     days,
   };
@@ -280,7 +292,7 @@ export async function getPlayerActivityDayDetail(
   const resolved = await resolveActivityCountry(db, userId, requestedCountry);
   if (!resolved.country) return null;
 
-  await backfillPlayerActivityFromRetainedScores(db, queue, userId, resolved.country, year);
+  await backfillPlayerActivityFromRetainedScores(db, queue, userId, resolved.country);
   const row = (await exec(
     db,
     `select day, score_count, passed_count, session_count
@@ -347,22 +359,48 @@ async function backfillPlayerActivityFromRetainedScores(
   queue: JobQueue,
   userId: number,
   country: string,
-  year: number,
 ): Promise<void> {
+  // Live ingestion records activity for every new score, so this only has to
+  // catch up on score_events ingested before the cursor (one-time per player).
+  const cursor = Number((await exec(
+    db,
+    "select last_event_id from player_activity_backfill_cursors where country = ? and user_id = ?",
+    [country, userId],
+  )).rows[0]?.last_event_id ?? 0);
   const rows = (await exec(
     db,
-    `select score_identity, score_json
+    `select id, score_identity, score_json
      from score_events
-     where country = ? and user_id = ? and ended_at >= ? and ended_at <= ?
-     order by ended_at asc
+     where country = ? and user_id = ? and id > ?
+     order by id asc
      limit 2000`,
-    [country, userId, `${year}-01-01`, `${year}-12-31T23:59:59.999Z`],
+    [country, userId, cursor],
   )).rows;
+  if (rows.length === 0) return;
+
+  let lastEventId = cursor;
+  const touchedDays = new Set<string>();
   for (const row of rows) {
+    lastEventId = Math.max(lastEventId, Number(row.id) || 0);
     const score = parseJson<OscScore | null>(row.score_json, null);
     if (!score) continue;
-    await recordPlayerActivity(db, queue, country, score, String(row.score_identity));
+    const recorded = await recordPlayerActivity(db, queue, country, score, String(row.score_identity), {
+      deferSessionRecompute: true,
+    });
+    if (recorded) touchedDays.add(recorded.day);
   }
+  for (const day of touchedDays) {
+    await recomputeActivitySessions(db, country, userId, day);
+  }
+  await exec(
+    db,
+    `insert into player_activity_backfill_cursors (country, user_id, last_event_id, updated_at)
+     values (?, ?, ?, ?)
+     on conflict(country, user_id) do update set
+       last_event_id = excluded.last_event_id,
+       updated_at = excluded.updated_at`,
+    [country, userId, lastEventId, nowIso()],
+  );
 }
 
 async function enqueueMissingActivitySkillAnalyses(
@@ -373,8 +411,20 @@ async function enqueueMissingActivitySkillAnalyses(
   const beatmapIds = [...new Set([...mapsByDay.values()].flatMap((maps) => maps.map((map) => map.beatmapId)))]
     .filter((beatmapId) => Number.isInteger(beatmapId) && beatmapId > 0)
     .slice(0, 300);
+  if (beatmapIds.length === 0) return;
+  const placeholders = beatmapIds.map(() => "?").join(", ");
+  const rows = (await exec(
+    db,
+    `select beatmap_id, status, updated_at
+     from beatmap_skill_vectors
+     where analysis_version = ? and beatmap_id in (${placeholders})`,
+    [ACTIVITY_SKILL_ANALYSIS_VERSION, ...beatmapIds],
+  )).rows;
+  const statusByBeatmapId = new Map(rows.map((row) => [Number(row.beatmap_id), row]));
   for (const beatmapId of beatmapIds) {
-    await enqueueBeatmapSkillAnalysisIfNeeded(db, queue, beatmapId);
+    const row = statusByBeatmapId.get(beatmapId);
+    if (row && shouldSkipActivitySkillAnalysis(row)) continue;
+    await enqueueActivitySkillAnalysis(queue, beatmapId);
   }
 }
 
@@ -578,13 +628,20 @@ async function enqueueBeatmapSkillAnalysisIfNeeded(db: Db, queue: JobQueue, beat
      limit 1`,
     [beatmapId, ACTIVITY_SKILL_ANALYSIS_VERSION],
   )).rows[0];
-  if (row) {
-    const status = String(row.status);
-    const updatedAt = typeof row.updated_at === "string" ? row.updated_at : "";
-    if (status === "ready") return;
-    if (status === "running" && isRecentActivityAnalysisStatus(updatedAt, ACTIVITY_ANALYSIS_RUNNING_REQUEUE_MS)) return;
-    if (status === "failed" && isRecentActivityAnalysisStatus(updatedAt, ACTIVITY_ANALYSIS_FAILED_RETRY_MS)) return;
-  }
+  if (row && shouldSkipActivitySkillAnalysis(row)) return;
+  await enqueueActivitySkillAnalysis(queue, beatmapId);
+}
+
+function shouldSkipActivitySkillAnalysis(row: Record<string, unknown>): boolean {
+  const status = String(row.status);
+  const updatedAt = typeof row.updated_at === "string" ? row.updated_at : "";
+  if (status === "ready") return true;
+  if (status === "running" && isRecentActivityAnalysisStatus(updatedAt, ACTIVITY_ANALYSIS_RUNNING_REQUEUE_MS)) return true;
+  if (status === "failed" && isRecentActivityAnalysisStatus(updatedAt, ACTIVITY_ANALYSIS_FAILED_RETRY_MS)) return true;
+  return false;
+}
+
+async function enqueueActivitySkillAnalysis(queue: JobQueue, beatmapId: number): Promise<void> {
   await queue.enqueue(
     "analyze_activity_beatmap",
     `activity-beatmap:${ACTIVITY_SKILL_ANALYSIS_VERSION}:${beatmapId}`,
@@ -1073,21 +1130,14 @@ function getPrimaryLnActivitySubtype(vector: ActivitySkillVector): PlayerActivit
   return sorted[0][1] >= 0.2 ? sorted[0][0] : null;
 }
 
-async function getCurrentActivityStreak(db: Db, userId: number, country: string, year: number): Promise<number> {
+function getCurrentActivityStreak(days: PlayerActivityDay[], year: number): number {
   const today = new Date();
   const selectedYear = clampYear(year);
   const cursor = selectedYear === today.getUTCFullYear()
     ? new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()))
     : new Date(Date.UTC(selectedYear, 11, 31));
   const start = new Date(Date.UTC(selectedYear, 0, 1));
-  const rows = (await exec(
-    db,
-    `select day
-     from player_activity_days
-     where country = ? and user_id = ? and day >= ? and day <= ? and score_count > 0`,
-    [country, userId, toUtcDateKey(start), toUtcDateKey(cursor)],
-  )).rows;
-  const active = new Set(rows.map((row) => String(row.day)));
+  const active = new Set(days.filter((day) => day.scoreCount > 0).map((day) => day.date));
   let streak = 0;
   for (let day = cursor; day >= start; day = addUtcDays(day, -1)) {
     if (!active.has(toUtcDateKey(day))) break;

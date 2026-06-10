@@ -199,6 +199,29 @@ describe("live backend", () => {
     });
   });
 
+  it("backfills activity from retained score events once and skips already-scanned events", async () => {
+    const { db, queue, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    await ingestor.ingestBatch([scores[0]]);
+
+    // Simulate events that predate the activity feature: wipe projections and the cursor.
+    for (const table of ["player_activity_score_refs", "player_activity_days", "player_activity_maps", "player_activity_backfill_cursors"]) {
+      await exec(db, `delete from ${table}`);
+    }
+
+    const snapshot = await getPlayerActivitySnapshot(db, queue, 101, "CR", 2026);
+    expect(snapshot.totalScores).toBe(1);
+    expect(snapshot.days[0]).toMatchObject({ date: "2026-05-12", scoreCount: 1, sessionCount: 1 });
+
+    const cursor = (await exec(db, "select last_event_id from player_activity_backfill_cursors where country = 'CR' and user_id = 101")).rows[0];
+    expect(Number(cursor?.last_event_id)).toBeGreaterThan(0);
+
+    // With the cursor in place, wiped projections are not rebuilt from old events again.
+    await exec(db, "delete from player_activity_days");
+    const rescan = await getPlayerActivitySnapshot(db, queue, 101, "CR", 2026);
+    expect(rescan.totalScores).toBe(0);
+  });
+
   it("keeps paused countries out of ingestion even when they are pinned", async () => {
     const { db, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");

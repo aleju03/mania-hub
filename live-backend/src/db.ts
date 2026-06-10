@@ -382,6 +382,15 @@ async function migratePlayerActivity(db: Db): Promise<void> {
     )
   `);
   await db.execute(`
+    create table if not exists player_activity_backfill_cursors (
+      country text not null,
+      user_id integer not null,
+      last_event_id integer not null default 0,
+      updated_at text not null,
+      primary key (country, user_id)
+    )
+  `);
+  await db.execute(`
     create index if not exists idx_beatmap_skill_vectors_status_updated
       on beatmap_skill_vectors(status, updated_at desc)
   `);

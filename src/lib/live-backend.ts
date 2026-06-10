@@ -325,15 +325,6 @@ export interface LivePlayerActivitySnapshot {
   days: LivePlayerActivityDay[];
 }
 
-export interface LivePlayerActivityAvailability {
-  available: boolean;
-  isTracked: boolean;
-  userId: number;
-  country: string | null;
-  availableYears: number[];
-  generatedAt: string;
-}
-
 export function getLiveBackendUrl(): string | null {
   const value = import.meta.env.VITE_LIVE_BACKEND_URL || import.meta.env.LIVE_BACKEND_URL;
   if (typeof value !== "string" || value.trim() === "") return null;
@@ -609,23 +600,6 @@ export async function fetchLivePlayerActivityDayDirect(
   });
   return fetchLiveJson(`/api/profiles/${userId}/activity-day?${query.toString()}`);
 }
-
-export const fetchLivePlayerActivityAvailability = createServerFn({ method: "GET" })
-  .inputValidator((data: { userId?: unknown; country?: unknown }) => {
-    const userId = Number(data?.userId);
-    if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
-    const rawCountry = typeof data?.country === "string" ? data.country.trim().toUpperCase() : "GLOBAL";
-    const country = /^([A-Z]{2}|GLOBAL)$/.test(rawCountry) ? rawCountry : "GLOBAL";
-    return { userId, country };
-  })
-  .handler(async ({ data }): Promise<LivePlayerActivityAvailability | null> => {
-    const base = getServerLiveBackendUrl();
-    if (!base) return null;
-    const query = new URLSearchParams({ country: data.country });
-    const response = await fetch(`${base}/api/profiles/${data.userId}/activity-availability?${query.toString()}`);
-    if (!response.ok) throw new Error(`Live backend ${response.status} for profile activity availability`);
-    return response.json() as Promise<LivePlayerActivityAvailability>;
-  });
 
 export interface LiveTrackerSnapshotFilters {
   scoreFilter?: "ranked";

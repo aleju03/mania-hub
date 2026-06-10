@@ -9,7 +9,6 @@ import {
   fetchLivePlayerCachedProfileSnapshot,
   fetchLivePlayerActivityDirect,
   fetchLivePlayerActivityDayDirect,
-  fetchLivePlayerActivityAvailability,
   fetchLivePlayerAboutDirect,
   fetchLivePlayerProfileSnapshot,
   fetchLivePlayerRecentScoresDirect,
@@ -74,7 +73,6 @@ const PLAYER_RECENT_LIVE_TIMEOUT_MS = 8_000;
 const PROFILE_SNAPSHOT_BEST_GRACE_MS = 450;
 const PROFILE_SNAPSHOT_REFRESH_DEFER_MS = 2500;
 const PROFILE_CACHED_SNAPSHOT_LOADER_TIMEOUT_MS = 650;
-const PROFILE_ACTIVITY_AVAILABILITY_LOADER_TIMEOUT_MS = 350;
 const INITIAL_SCORE_BATCH_SIZE = 5;
 const SHOW_MORE_BATCH_SIZE = 50;
 const BEST_SCORES_WINDOW_SIZE = 200;
@@ -134,7 +132,6 @@ type ActivitySummary = {
 };
 
 const PLAYER_TABS: PlayerTab[] = ["best", "recent", "about", "card", "activity"];
-const DEFAULT_PLAYER_TABS = PLAYER_TABS.filter((tab) => tab !== "activity");
 const ACTIVITY_EMPTY_CELL_CLASS = "bg-osu-b4/45 border-osu-b3/25";
 const PLAYER_ACTIVITY_COUNTRY_SCOPE = "GLOBAL";
 
@@ -173,7 +170,6 @@ function getPlayerTabFromPathname(pathname: string): PlayerTab {
 
 export type PlayerLoaderData = {
   cachedSnapshot: LivePlayerProfileSnapshot | null;
-  cachedActivityAvailable: boolean | null;
 };
 
 function withProfileLoaderBudget<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
@@ -200,23 +196,7 @@ export async function loadPlayerRouteData(username: string): Promise<PlayerLoade
     cachedSnapshot = null;
   }
 
-  const userId = Number(cachedSnapshot?.user?.id);
-  if (!Number.isInteger(userId) || userId <= 0) {
-    return { cachedSnapshot, cachedActivityAvailable: null };
-  }
-
-  try {
-    const availability = await withProfileLoaderBudget(
-      fetchLivePlayerActivityAvailability({ data: { userId, country: "GLOBAL" } }),
-      PROFILE_ACTIVITY_AVAILABILITY_LOADER_TIMEOUT_MS,
-    );
-    return {
-      cachedSnapshot,
-      cachedActivityAvailable: availability?.available === true ? true : null,
-    };
-  } catch {
-    return { cachedSnapshot, cachedActivityAvailable: null };
-  }
+  return { cachedSnapshot };
 }
 
 export function buildPlayerRouteHead({
@@ -692,7 +672,6 @@ export function PlayerProfilePage({
 }) {
   const navigate = useNavigate();
   const loaderSnapshot = loaderData?.cachedSnapshot ?? null;
-  const loaderActivityAvailable = loaderData?.cachedActivityAvailable ?? null;
   const loaderBestScores = useMemo(
     () => loaderSnapshot ? dedupeScores(loaderSnapshot.bestScores) : [],
     [loaderSnapshot],
@@ -728,12 +707,7 @@ export function PlayerProfilePage({
   const [recentHasMore, setRecentHasMore] = useState(false);
   const [bestVisibleCount, setBestVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const [recentVisibleCount, setRecentVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
-  const [activityAvailable, setActivityAvailable] = useState<boolean | null>(() => loaderActivityAvailable);
   const tabsRailRef = useRef<HTMLDivElement | null>(null);
-  const enabledPlayerTabs = useMemo(
-    () => activityAvailable || tab === "activity" ? PLAYER_TABS : DEFAULT_PLAYER_TABS,
-    [activityAvailable, tab],
-  );
 
   useEffect(() => {
     if (!avatarOpen && !modModalOpen && !bpmModalOpen) return;
@@ -783,7 +757,6 @@ export function PlayerProfilePage({
     setRecentHasMore(false);
     setBestVisibleCount(INITIAL_SCORE_BATCH_SIZE);
     setRecentVisibleCount(INITIAL_SCORE_BATCH_SIZE);
-    setActivityAvailable(loaderActivityAvailable);
 
     let snapshotApplied = false;
     if (loaderSnapshot?.user) {
@@ -867,31 +840,7 @@ export function PlayerProfilePage({
       cancelled = true;
       if (snapshotTimer) window.clearTimeout(snapshotTimer);
     };
-  }, [initialTab, loaderActivityAvailable, loaderBestScores, loaderSnapshot, username]);
-
-  useEffect(() => {
-    if (!user) return;
-    if (!isLiveBackendConfigured()) {
-      setActivityAvailable(false);
-      return;
-    }
-
-    let cancelled = false;
-    const year = new Date().getFullYear();
-    fetchLivePlayerActivityDirect(user.id, PLAYER_ACTIVITY_COUNTRY_SCOPE, year)
-      .then((snapshot) => {
-        if (cancelled) return;
-        setActivityAvailable(snapshot.available);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setActivityAvailable(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user]);
+  }, [initialTab, loaderBestScores, loaderSnapshot, username]);
 
   useEffect(() => {
     if (!user || bestWindowLoaded || waitingForSnapshotBest) return;
@@ -1068,11 +1017,6 @@ export function PlayerProfilePage({
     setTab(normalizedTab);
     void navigate({ to: getPlayerTabPath(username, normalizedTab), resetScroll: false });
   }, [navigate, username]);
-
-  useEffect(() => {
-    if (tab !== "activity" || activityAvailable !== false) return;
-    handleTabChange("best");
-  }, [activityAvailable, handleTabChange, tab]);
 
   const handleBestSortChange = useCallback((nextSort: BestSort) => {
     setBestSort(nextSort);
@@ -1672,7 +1616,7 @@ export function PlayerProfilePage({
           <div className="mt-5 pt-1 border-t border-osu-b3/30 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div ref={tabsRailRef} className="-mx-5 overflow-x-auto px-5 scrollbar-hide sm:mx-0 sm:px-0">
               <div className="flex min-w-max">
-                {enabledPlayerTabs.map((t) => (
+                {PLAYER_TABS.map((t) => (
                   <button
                     key={t}
                     data-player-tab={t}
@@ -1773,10 +1717,7 @@ export function PlayerProfilePage({
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.14 }}
               >
-                <PlayerActivityPanel
-                  user={user}
-                  onAvailabilityChange={setActivityAvailable}
-                />
+                <PlayerActivityPanel user={user} />
               </motion.div>
             ) : (
               <motion.div
@@ -2065,7 +2006,7 @@ function PlayerPageSkeleton({
         <div className="mt-5 pt-1 border-t border-osu-b3/30">
           <div className="-mx-5 overflow-x-auto px-5 scrollbar-hide sm:mx-0 sm:px-0">
             <div className="flex min-w-max">
-              {DEFAULT_PLAYER_TABS.map((t) => (
+              {PLAYER_TABS.map((t) => (
                 <button
                   key={t}
                   onClick={() => onTabChange(t)}
@@ -2091,13 +2032,7 @@ function PlayerPageSkeleton({
   );
 }
 
-function PlayerActivityPanel({
-  user,
-  onAvailabilityChange,
-}: {
-  user: OsuUser;
-  onAvailabilityChange: (available: boolean) => void;
-}) {
+function PlayerActivityPanel({ user }: { user: OsuUser }) {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedDay, setSelectedDay] = useState<ActivityDay | null>(null);
@@ -2125,7 +2060,6 @@ function PlayerActivityPanel({
       setLoading(false);
       setSnapshot(null);
       setError("Activity is only available when the live backend is configured.");
-      onAvailabilityChange(false);
       return;
     }
 
@@ -2137,13 +2071,11 @@ function PlayerActivityPanel({
       .then((nextSnapshot) => {
         if (cancelled) return;
         setSnapshot(nextSnapshot);
-        onAvailabilityChange(nextSnapshot.available);
       })
       .catch(() => {
         if (cancelled) return;
         setSnapshot(null);
         setError("Couldn't load Activity right now.");
-        onAvailabilityChange(false);
       })
       .finally(() => {
         if (cancelled) return;
@@ -2153,7 +2085,7 @@ function PlayerActivityPanel({
     return () => {
       cancelled = true;
     };
-  }, [onAvailabilityChange, selectedYear, user.id]);
+  }, [selectedYear, user.id]);
 
   useEffect(() => {
     if (!selectedDayDate) return;
@@ -2220,8 +2152,11 @@ function PlayerActivityPanel({
 
   if (snapshot && !snapshot.available) {
     return (
-      <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-5 text-center text-sm text-osu-f1">
-        Activity is available for tracked roster players once their live scores start flowing.
+      <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-6 text-center">
+        <div className="text-sm font-semibold text-osu-l2">No activity data for this player</div>
+        <div className="mt-1.5 text-[13px] text-osu-f1">
+          Plays are only recorded for the top players of each tracked country, and this player isn't currently among them.
+        </div>
       </div>
     );
   }
@@ -2457,7 +2392,7 @@ function ActivityPatternMix({ skills }: { skills: ActivitySkillReadout }) {
               {formatNumber(keyMode.analyzedPlays)} {keyMode.analyzedPlays === 1 ? "play" : "plays"}
             </span>
           </div>
-          <ActivityPatternBars skills={keyMode} />
+          <ActivityPatternBars skills={keyMode} keyCount={keyMode.keyCount} />
           {keyMode.analyzedPlays < keyMode.totalPlays && (
             <div className="pt-1 text-[10px] text-osu-f1">
               {formatNumber(keyMode.analyzedPlays)} of {formatNumber(keyMode.totalPlays)} plays analyzed
@@ -2469,10 +2404,10 @@ function ActivityPatternMix({ skills }: { skills: ActivitySkillReadout }) {
   );
 }
 
-function ActivityPatternBars({ skills }: { skills: LivePlayerActivitySkillVector }) {
+function ActivityPatternBars({ skills, keyCount }: { skills: LivePlayerActivitySkillVector; keyCount: number | null }) {
   return (
     <div className="space-y-2">
-      {getActivityPatternEntries(skills).map(({ key, label, value }) => (
+      {getActivityPatternEntries(skills, keyCount).map(({ key, label, value }) => (
         <div key={key}>
           <div className="mb-1 flex justify-between text-[11px]">
             <span className="font-semibold text-osu-l2">{label}</span>
@@ -2567,7 +2502,7 @@ function ActivityMapRow({ map }: { map: ActivityPlayedMap }) {
           {map.accuracy != null ? <span>{formatAccuracy(map.accuracy)}</span> : null}
           {map.pp != null ? <span>{formatPP(map.pp)}</span> : null}
         </div>
-        <ActivityMapPatternPills skills={map.skills} />
+        <ActivityMapPatternPills skills={map.skills} keyCount={map.keyCount} />
       </div>
       <div className="text-right">
         <div className="text-[13px] font-black text-osu-l2 sm:text-sm">{formatNumber(map.plays)}</div>
@@ -2577,10 +2512,10 @@ function ActivityMapRow({ map }: { map: ActivityPlayedMap }) {
   );
 }
 
-function ActivityMapPatternPills({ skills }: { skills: LivePlayerActivitySkillVector | null }) {
+function ActivityMapPatternPills({ skills, keyCount }: { skills: LivePlayerActivitySkillVector | null; keyCount: number | null }) {
   if (!skills) return null;
   const primary = getActivityPrimarySkill(skills);
-  const entries = getActivityPatternEntries(skills)
+  const entries = getActivityPatternEntries(skills, keyCount)
     .filter(({ value }) => value > 0)
     .sort((left, right) => right.value - left.value)
     .slice(0, 5);
@@ -2638,8 +2573,7 @@ function ActivityMonthLabels({ weeks, gridStyle }: { weeks: ActivityWeek[]; grid
 
 function buildActivityFromSnapshot(snapshot: LivePlayerActivitySnapshot | null, year: number): ActivitySummary {
   const today = startOfLocalDay(new Date());
-  const start = new Date(year, 0, 1);
-  const end = new Date(year, 11, 31);
+  const { start, end } = getActivityHeatmapRange(snapshot, year, today);
   const activeDays = new Map((snapshot?.days ?? []).map((day) => [day.date, day]));
   const typicalSession = Math.max(1, snapshot?.typicalSession ?? 1);
   const days: ActivityDay[] = [];
@@ -2673,6 +2607,36 @@ function buildActivityFromSnapshot(snapshot: LivePlayerActivitySnapshot | null, 
     typicalSession,
     availableYears: snapshot?.availableYears ?? [today.getFullYear()],
   };
+}
+
+// Trim months the heatmap has nothing to say about: start at the first active
+// month, and stop at the current month (current year) or last active month
+// (past years) instead of always rendering January through December.
+function getActivityHeatmapRange(
+  snapshot: LivePlayerActivitySnapshot | null,
+  year: number,
+  today: Date,
+): { start: Date; end: Date } {
+  const activeDates = (snapshot?.days ?? [])
+    .filter((day) => day.scoreCount > 0)
+    .map((day) => day.date)
+    .sort();
+  let start = new Date(year, 0, 1);
+  let end = new Date(year, 11, 31);
+  if (year === today.getFullYear()) {
+    const currentMonthEnd = endOfLocalMonth(today);
+    if (currentMonthEnd < end) end = currentMonthEnd;
+  }
+  if (activeDates.length > 0) {
+    const first = parseLocalDateKey(activeDates[0]);
+    start = new Date(first.getFullYear(), first.getMonth(), 1);
+    const lastMonthEnd = endOfLocalMonth(parseLocalDateKey(activeDates[activeDates.length - 1]));
+    if (year !== today.getFullYear() && lastMonthEnd < end) end = lastMonthEnd;
+    // UTC day keys can run a day ahead of local time at month boundaries.
+    if (lastMonthEnd > end) end = lastMonthEnd;
+  }
+  if (start > end) start = new Date(end.getFullYear(), end.getMonth(), 1);
+  return { start, end };
 }
 
 function normalizeActivityDay(day: Omit<ActivityDay, "level">, typicalSession: number): ActivityDay {
@@ -2764,11 +2728,18 @@ function getPrimaryLnActivitySubtype(skills: LivePlayerActivitySkillVector): Liv
   return sorted[0][1] >= 0.2 ? sorted[0][0] : null;
 }
 
-function getActivityPatternEntries(skills: LivePlayerActivitySkillVector) {
+// Brackets are a 7K concept; the same chord-pressure signal reads as chordjack
+// in lower keymodes, so labels follow the keymode while the score stays shared.
+function isBracketKeyMode(keyCount: number | null): boolean {
+  return keyCount == null || keyCount >= 7;
+}
+
+function getActivityPatternEntries(skills: LivePlayerActivitySkillVector, keyCount: number | null) {
+  const bracket = isBracketKeyMode(keyCount);
   const entries = [
     { key: "stream" as const, label: "Stream", shortLabel: "S", value: Math.round(clamp01(skills.stream) * 100) },
     { key: "jack" as const, label: "Jack", shortLabel: "J", value: Math.round(clamp01(skills.jack) * 100) },
-    { key: "bracket" as const, label: "Bracket", shortLabel: "B", value: Math.round(clamp01(skills.bracket) * 100) },
+    { key: "bracket" as const, label: bracket ? "Bracket" : "Chordjack", shortLabel: bracket ? "B" : "CJ", value: Math.round(clamp01(skills.bracket) * 100) },
     { key: "ln" as const, label: "LN", shortLabel: "LN", value: Math.round(clamp01(skills.ln) * 100) },
   ];
   const lnSubtypes = [
@@ -2806,10 +2777,10 @@ function getActivityTimelineSegmentColor(segment: ActivityTimelineSegment): stri
   return getActivityKeyModeColor(segment.keyCount);
 }
 
-function getActivitySkillLabel(skill: LivePlayerActivityPrimarySkill): string {
+function getActivitySkillLabel(skill: LivePlayerActivityPrimarySkill, keyCount: number | null): string {
   if (skill === "stream") return "Stream";
   if (skill === "jack") return "Jack";
-  if (skill === "bracket") return "Bracket";
+  if (skill === "bracket") return isBracketKeyMode(keyCount) ? "Bracket" : "Chordjack";
   if (skill === "ln") return "LN";
   if (skill === "lnGeneral") return "LN General";
   if (skill === "lnRelease") return "LN Release";
@@ -2819,10 +2790,10 @@ function getActivitySkillLabel(skill: LivePlayerActivityPrimarySkill): string {
   return "Unknown";
 }
 
-function getActivitySkillShortLabel(skill: LivePlayerActivityPrimarySkill): string {
+function getActivitySkillShortLabel(skill: LivePlayerActivityPrimarySkill, keyCount: number | null): string {
   if (skill === "stream") return "S";
   if (skill === "jack") return "J";
-  if (skill === "bracket") return "B";
+  if (skill === "bracket") return isBracketKeyMode(keyCount) ? "B" : "CJ";
   if (skill === "ln") return "LN";
   if (skill === "lnGeneral") return "LNG";
   if (skill === "lnRelease") return "LNR";
@@ -2842,7 +2813,7 @@ function formatActivityKeyFlow(segments: ActivityTimelineSegment[]): string {
 
 function formatActivityTimelineSegmentLabel(segment: ActivityTimelineSegment): string {
   const key = formatActivityKeyCount(segment.keyCount);
-  const skill = getActivitySkillShortLabel(segment.primarySkill);
+  const skill = getActivitySkillShortLabel(segment.primarySkill, segment.keyCount);
   return segment.primarySkill === "unknown" ? key ?? "" : [key, skill].filter(Boolean).join(" ");
 }
 
@@ -2850,14 +2821,14 @@ function formatActivitySegmentTitle(segment: ActivityTimelineSegment): string {
   const scores = [
     `S ${Math.round(clamp01(segment.stream) * 100)}%`,
     `J ${Math.round(clamp01(segment.jack) * 100)}%`,
-    `B ${Math.round(clamp01(segment.bracket) * 100)}%`,
+    `${isBracketKeyMode(segment.keyCount) ? "B" : "CJ"} ${Math.round(clamp01(segment.bracket) * 100)}%`,
     `LN ${Math.round(clamp01(segment.ln) * 100)}%`,
   ].join(" / ");
   return [
     `${formatActivityTime(segment.startAt)} - ${formatActivityTime(segment.endAt)}`,
     `${formatNumber(segment.playCount)} ${segment.playCount === 1 ? "play" : "plays"}`,
     formatActivityKeyCount(segment.keyCount),
-    getActivitySkillLabel(segment.primarySkill),
+    getActivitySkillLabel(segment.primarySkill, segment.keyCount),
     scores,
   ].filter(Boolean).join(" • ");
 }
@@ -2889,6 +2860,10 @@ function addLocalDays(date: Date, days: number): Date {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
   return next;
+}
+
+function endOfLocalMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0);
 }
 
 function toDateKey(date: Date): string {

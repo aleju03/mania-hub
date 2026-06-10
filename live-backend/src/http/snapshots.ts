@@ -727,6 +727,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       "player_activity_score_refs",
       "player_activity_days",
       "player_activity_maps",
+      "player_activity_backfill_cursors",
       "live_event_log",
       "api_call_log",
       "live_meta",

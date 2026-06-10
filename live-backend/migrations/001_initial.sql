@@ -361,6 +361,14 @@ create table if not exists player_activity_maps (
   primary key (country, user_id, day, beatmap_id)
 );
 
+create table if not exists player_activity_backfill_cursors (
+  country text not null,
+  user_id integer not null,
+  last_event_id integer not null default 0,
+  updated_at text not null,
+  primary key (country, user_id)
+);
+
 create table if not exists jobs (
   id integer primary key autoincrement,
   type text not null,
