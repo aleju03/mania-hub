@@ -234,26 +234,27 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/snapshots/tracker") {
     if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
     const global = isGlobalCountry(country);
-    const windowHours = global ? clampInteger(url.searchParams.get("hours"), 1, 24 * 30, 0) : 0;
-    const since = windowHours > 0 ? new Date(Date.now() - windowHours * 60 * 60 * 1000).toISOString() : undefined;
-    sendJson(
-      req,
-      res,
-      ctx,
-      200,
-      await getTrackerSnapshot(
-        ctx.db,
-        country,
-        clampLimit(url.searchParams.get("limit"), 100, 500),
-        clampInteger(url.searchParams.get("offset"), 0, global && since ? Number.MAX_SAFE_INTEGER : 500, 0),
-        {
-          since,
-          filters: parseTrackerSnapshotFilters(url.searchParams),
-          sort: parseTrackerSnapshotSort(url.searchParams),
-          sortDirection: parseTrackerSnapshotSortDirection(url.searchParams),
-        },
-      ),
-    );
+    // Global is always windowed (min 1h): an unwindowed query would scan every
+    // tracked country's score_events on each request.
+    const windowHours = global ? clampInteger(url.searchParams.get("hours"), 1, 24 * 30, 1) : 0;
+    const limit = clampLimit(url.searchParams.get("limit"), 100, 500);
+    const offset = clampInteger(url.searchParams.get("offset"), 0, global ? Number.MAX_SAFE_INTEGER : 500, 0);
+    const filters = parseTrackerSnapshotFilters(url.searchParams);
+    const sort = parseTrackerSnapshotSort(url.searchParams);
+    const sortDirection = parseTrackerSnapshotSortDirection(url.searchParams);
+    const produceSnapshot = () => getTrackerSnapshot(ctx.db, country, limit, offset, {
+      since: windowHours > 0 ? new Date(Date.now() - windowHours * 60 * 60 * 1000).toISOString() : undefined,
+      filters,
+      sort,
+      sortDirection,
+    });
+    const snapshot = global
+      ? await getCachedGlobalTrackerSnapshot(
+          [windowHours, limit, offset, filters.score ?? "", filters.grade ?? "", filters.key ?? "", filters.miss ?? "", sort, sortDirection].join("|"),
+          produceSnapshot,
+        )
+      : await produceSnapshot();
+    sendJson(req, res, ctx, 200, snapshot);
     return true;
   }
   if (url.pathname === "/api/snapshots/top-plays") {
@@ -1289,6 +1290,41 @@ function pruneMapsPageResponseCache(now: number): void {
     if (oldest === undefined) break;
     mapsPageResponseCache.delete(oldest);
   }
+}
+
+// A global tracker snapshot is identical for every visitor but its query spans
+// every tracked country's score_events, so cache results briefly per parameter
+// set. Entries hold the promise itself rather than the resolved value: a burst
+// of identical requests (page loads, SSE reconnects after a deploy) runs the
+// query once and every caller awaits the same computation.
+const TRACKER_GLOBAL_SNAPSHOT_CACHE_TTL_MS = 5_000;
+const TRACKER_GLOBAL_SNAPSHOT_CACHE_MAX_ENTRIES = 64;
+
+type TrackerSnapshotResult = Awaited<ReturnType<typeof getTrackerSnapshot>>;
+
+const trackerGlobalSnapshotCache = new Map<string, { storedAt: number; snapshot: Promise<TrackerSnapshotResult> }>();
+
+function getCachedGlobalTrackerSnapshot(key: string, produce: () => Promise<TrackerSnapshotResult>): Promise<TrackerSnapshotResult> {
+  const now = Date.now();
+  for (const [entryKey, entry] of trackerGlobalSnapshotCache) {
+    if (now - entry.storedAt > TRACKER_GLOBAL_SNAPSHOT_CACHE_TTL_MS) trackerGlobalSnapshotCache.delete(entryKey);
+  }
+  // Map iterates in insertion order, so the first key is the oldest entry.
+  while (trackerGlobalSnapshotCache.size > TRACKER_GLOBAL_SNAPSHOT_CACHE_MAX_ENTRIES) {
+    const oldest = trackerGlobalSnapshotCache.keys().next().value;
+    if (oldest === undefined) break;
+    trackerGlobalSnapshotCache.delete(oldest);
+  }
+  const cached = trackerGlobalSnapshotCache.get(key);
+  if (cached) return cached.snapshot;
+  const snapshot = produce();
+  trackerGlobalSnapshotCache.set(key, { storedAt: now, snapshot });
+  // Failures are never cached; the next request retries. The identity check
+  // keeps a late rejection from evicting a newer entry under the same key.
+  snapshot.catch(() => {
+    if (trackerGlobalSnapshotCache.get(key)?.snapshot === snapshot) trackerGlobalSnapshotCache.delete(key);
+  });
+  return snapshot;
 }
 
 function parseMapsPageQuery(params: URLSearchParams): MapsPageQuery {

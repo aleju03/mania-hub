@@ -85,6 +85,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     startMapsScheduler(app.db, app.queue, app.config);
   }
   startRetentionScheduler(app.db, app.config);
+  startQueuePressureScheduler(app.queue);
   if (app.config.enableOscBackfill) {
     enqueueOscBackfill(app.queue, app.db, app.config).catch((error) => console.warn("[osc] backfill enqueue failed", error));
   }
@@ -108,6 +109,16 @@ function getScoresFallbackOsuConfig(config: ReturnType<typeof readConfig>): Pick
     osuApiTargetPerMinute: targetPerMinute,
     osuApiHardPerMinute: Math.max(targetPerMinute + 2, targetPerMinute * 2),
   };
+}
+
+// Enqueues also trigger shedPressure, but during quiet hours nothing is
+// enqueued, so this tick is what lets parked jobs flow back into the queue.
+function startQueuePressureScheduler(queue: JobQueue): void {
+  const tick = async () => {
+    await queue.shedPressure().catch((error) => console.warn("[queue] pressure rebalance failed", error));
+    setTimeout(tick, 60_000).unref();
+  };
+  setTimeout(tick, 60_000).unref();
 }
 
 function startRosterScheduler(db: Awaited<ReturnType<typeof createDb>>, queue: JobQueue, config: ReturnType<typeof readConfig>): void {

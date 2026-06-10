@@ -251,6 +251,7 @@ export class JobQueue {
          select id
          from jobs
          where status in ('queued', 'failed')
+           and run_after <= ?
            and type in (${types.map(() => "?").join(", ")})
          order by priority asc, run_after desc, updated_at asc, id asc
          limit ?
@@ -258,6 +259,7 @@ export class JobQueue {
       [
         new Date(Date.now() + PRESSURE_DEFER_MS).toISOString(),
         `deferred by queue pressure`,
+        nowIso(),
         nowIso(),
         ...types,
         Math.max(0, Math.floor(limit)),
@@ -283,6 +285,7 @@ export class JobQueue {
          select id
          from jobs
          where status in ('queued', 'failed')
+           and run_after <= ?
            and type = ?
          order by
            case when status = 'failed' then 0 else 1 end asc,
@@ -296,6 +299,7 @@ export class JobQueue {
         new Date(Date.now() + PRESSURE_DEFER_MS).toISOString(),
         `deferred by ${type} cap`,
         nowIso(),
+        nowIso(),
         type,
         excess,
       ],
@@ -305,10 +309,14 @@ export class JobQueue {
 
   private async reactivateDeferred(limit: number): Promise<number> {
     if (limit <= 0) return 0;
+    // run_after is reset so reactivated jobs are runnable immediately and count
+    // toward depth; the parked run_after was only the +30min pressure stamp.
+    const now = nowIso();
     const result = await exec(
       this.db,
       `update jobs
        set status = 'queued',
+           run_after = ?,
            last_error = null,
            updated_at = ?
        where id in (
@@ -318,16 +326,21 @@ export class JobQueue {
          order by priority desc, run_after asc, updated_at asc, id asc
          limit ?
        )`,
-      [nowIso(), Math.max(0, Math.floor(limit))],
+      [now, now, Math.max(0, Math.floor(limit))],
     );
     return Number(result.rowsAffected ?? 0);
   }
 }
 
 async function activeDepth(db: Db, type?: string): Promise<number> {
+  // Jobs scheduled for the future (self-rescheduling reconciles, retry backoffs)
+  // are appointments, not backlog; counting them kept the queue permanently
+  // above the shedding threshold.
+  const now = nowIso();
+  const runnable = "(status = 'running' or (status in ('queued', 'failed') and run_after <= ?))";
   const row = type == null
-    ? (await exec(db, "select count(*) as count from jobs where status in ('queued', 'failed', 'running')")).rows[0]
-    : (await exec(db, "select count(*) as count from jobs where status in ('queued', 'failed', 'running') and type = ?", [type])).rows[0];
+    ? (await exec(db, `select count(*) as count from jobs where ${runnable}`, [now])).rows[0]
+    : (await exec(db, `select count(*) as count from jobs where ${runnable} and type = ?`, [now, type])).rows[0];
   return Number(row?.count ?? 0);
 }
 

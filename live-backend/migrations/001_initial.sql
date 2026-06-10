@@ -415,6 +415,7 @@ create index if not exists idx_score_events_country_time on score_events(country
 create index if not exists idx_country_registry_status_request on country_registry(status, last_requested_at desc);
 create index if not exists idx_score_events_user_time on score_events(user_id, ended_at desc);
 create index if not exists idx_score_events_beatmap_time on score_events(beatmap_id, ended_at desc);
+create index if not exists idx_score_events_passed_time on score_events(ended_at desc) where passed = 1;
 create index if not exists idx_country_beatmap_scores_rank on country_beatmap_scores(country, beatmap_id, lane_key, total_score desc);
 create index if not exists idx_top_play_events_country_time on top_play_events(country, detected_at desc);
 create index if not exists idx_top_play_events_country_pp on top_play_events(country, pp desc, detected_at desc);

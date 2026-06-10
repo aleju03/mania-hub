@@ -18,6 +18,14 @@ export interface TrackerSnapshotOptions {
   sortDirection?: "asc" | "desc";
 }
 
+// Grade/miss/ranked filters live inside score_json, so the hydrated path has
+// to parse rows in JS before it can filter or re-sort them. Cap how many of
+// the most recent rows it may scan: an uncapped filtered request would parse
+// every score_json in the window on the event loop, stalling all other
+// responses. Past the cap, older scores fall out of filtered results and
+// `total` undercounts.
+const HYDRATED_SNAPSHOT_SCAN_LIMIT = 5000;
+
 export async function getTrackerSnapshot(
   db: Db,
   country: string,
@@ -43,12 +51,22 @@ export async function getTrackerSnapshot(
   const sortDirection = options.sortDirection ?? "desc";
   const needsHydratedSnapshot = hasTrackerSnapshotFilters(options.filters) || sort === "stars";
   if (needsHydratedSnapshot) {
+    const hydratedClauses = [...clauses];
+    // The key filter is derivable from beatmaps.cs, so push it into SQL (the
+    // exact range form of getBeatmapKeyCount's ceil) and spend the scan cap on
+    // rows that can actually match.
+    if (options.filters?.key === "4k") {
+      hydratedClauses.push("b.cs > 3 and b.cs <= 4");
+    } else if (options.filters?.key === "other") {
+      hydratedClauses.push("b.cs > 0 and (b.cs <= 3 or b.cs > 4)");
+    }
     const rows = (await exec(
       db,
       `${trackerScoreSelectSql()}
-       where ${whereSql}
-       order by se.ended_at desc`,
-      args,
+       where ${hydratedClauses.join(" and ")}
+       order by se.ended_at desc
+       limit ?`,
+      [...args, HYDRATED_SNAPSHOT_SCAN_LIMIT],
     )).rows;
     const allScores = rows
       .map((row) => hydrateScoreMetadata(row, parseJson<OscScore | null>(row.score_json, null)))

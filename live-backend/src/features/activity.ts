@@ -5,13 +5,13 @@ import { extractDanFeatures } from "../dan/dan-estimator/features.js";
 import type { DanFeatureMetrics } from "../dan/dan-estimator/types.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { OsuApiClient } from "../osu/client.js";
+import { addDayKeyDays, getCountryTimezone, getZonedDayKey } from "../shared/country-timezones.js";
 import { getDisplayedAccuracy, getDisplayedRank, getScoreTimestamp, nowIso } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 
 export const ACTIVITY_SKILL_ANALYSIS_VERSION = 3;
 
 const ACTIVITY_SESSION_GAP_MS = 45 * 60_000;
-const ACTIVITY_DAY_MAP_LIMIT = 6;
 const ACTIVITY_DAY_DETAIL_MAP_LIMIT = 500;
 const ACTIVITY_ANALYSIS_RUNNING_REQUEUE_MS = 10 * 60_000;
 const ACTIVITY_ANALYSIS_FAILED_RETRY_MS = 5 * 60_000;
@@ -101,6 +101,7 @@ export interface PlayerActivitySnapshot {
   isTracked: boolean;
   userId: number;
   country: string | null;
+  timezone: string;
   year: number;
   availableYears: number[];
   totalScores: number;
@@ -234,46 +235,35 @@ export async function getPlayerActivitySnapshot(
   }
 
   await backfillPlayerActivityFromRetainedScores(db, queue, userId, resolved.country);
+  const timezone = getCountryTimezone(resolved.country);
   const years = await getActivityYears(db, userId, resolved.country);
   const availableYears = years.length > 0 ? years : [year];
-  const dayRows = (await exec(
-    db,
-    `select day, score_count, passed_count, session_count
-     from player_activity_days
-     where country = ? and user_id = ? and day >= ? and day <= ?
-     order by day asc`,
-    [resolved.country, userId, `${year}-01-01`, `${year}-12-31`],
-  )).rows;
-  const mapCountsByDay = await getActivityMapCountsByDay(db, userId, resolved.country, year);
-  const days: PlayerActivityDay[] = dayRows.map((row) => {
-    const date = String(row.day);
-    return {
-      date,
-      scoreCount: Number(row.score_count) || 0,
-      passedCount: Number(row.passed_count) || 0,
-      sessionCount: Number(row.session_count) || 0,
-      mapCount: mapCountsByDay.get(date) ?? 0,
-      maps: [],
-      skills: null,
-      timeline: [],
-    };
+  // Days are bucketed in the player country's local timezone. Local days near
+  // New Year can land on adjacent UTC days, so pad the stored UTC range and
+  // keep the scores whose local year matches.
+  const refs = await getActivityScoreRefs(db, userId, resolved.country, timezone, {
+    from: `${year - 1}-12-30`,
+    to: `${year + 1}-01-02`,
   });
+  const days = buildActivityDaysFromRefs(refs.filter((ref) => ref.dayKey.startsWith(`${year}-`)));
   const totalScores = days.reduce((sum, day) => sum + day.scoreCount, 0);
   const totalSessions = days.reduce((sum, day) => sum + day.sessionCount, 0);
   const activeDays = days.filter((day) => day.scoreCount > 0).length;
+  const todayKey = getZonedDayKey(timezone, Date.now()) ?? nowIso().slice(0, 10);
 
   return {
     available: resolved.isTracked || days.length > 0,
     isTracked: resolved.isTracked,
     userId,
     country: resolved.country,
+    timezone,
     year,
     availableYears,
     totalScores,
     activeDays,
     totalSessions,
     typicalSession: getTypicalSession(totalScores, totalSessions, activeDays),
-    currentStreak: getCurrentActivityStreak(days, year),
+    currentStreak: getCurrentActivityStreak(days, year, todayKey),
     generatedAt,
     days,
   };
@@ -288,40 +278,37 @@ export async function getPlayerActivityDayDetail(
 ): Promise<PlayerActivityDay | null> {
   const day = normalizeActivityDayKey(requestedDay);
   if (!day) return null;
-  const year = Number(day.slice(0, 4));
   const resolved = await resolveActivityCountry(db, userId, requestedCountry);
   if (!resolved.country) return null;
 
   await backfillPlayerActivityFromRetainedScores(db, queue, userId, resolved.country);
-  const row = (await exec(
-    db,
-    `select day, score_count, passed_count, session_count
-     from player_activity_days
-     where country = ? and user_id = ? and day = ?
-     limit 1`,
-    [resolved.country, userId, day],
-  )).rows[0];
-  if (!row) return null;
+  const timezone = getCountryTimezone(resolved.country);
+  const rows = await getActivityDayScoreRows(db, userId, resolved.country, timezone, day);
+  if (rows.length === 0) return null;
 
-  const mapsByDay = await getActivityMapsByDay(db, userId, resolved.country, year, {
-    day,
-    limit: ACTIVITY_DAY_DETAIL_MAP_LIMIT,
-  });
-  const maps = mapsByDay.get(day) ?? [];
-  await enqueueMissingActivitySkillAnalyses(db, queue, mapsByDay);
-  const mapCountsByDay = await getActivityMapCountsByDay(db, userId, resolved.country, year, day);
-  const skillsByDay = await getActivitySkillsByDay(db, userId, resolved.country, year, day);
-  const timelineByDay = await getActivityTimelineByDay(db, userId, resolved.country, year, day);
+  const maps = await getActivityMapsForLocalDay(db, userId, resolved.country, day, rows);
+  await enqueueMissingActivitySkillAnalyses(db, queue, new Map([[day, maps]]));
+
+  let sessionCount = 0;
+  let passedCount = 0;
+  let previousMs = 0;
+  const beatmapIds = new Set<number>();
+  for (const row of rows) {
+    if (sessionCount === 0 || row.endedAtMs - previousMs > ACTIVITY_SESSION_GAP_MS) sessionCount++;
+    previousMs = row.endedAtMs;
+    if (row.passed) passedCount++;
+    beatmapIds.add(row.beatmapId);
+  }
 
   return {
     date: day,
-    scoreCount: Number(row.score_count) || 0,
-    passedCount: Number(row.passed_count) || 0,
-    sessionCount: Number(row.session_count) || 0,
-    mapCount: mapCountsByDay.get(day) ?? maps.length,
+    scoreCount: rows.length,
+    passedCount,
+    sessionCount,
+    mapCount: beatmapIds.size,
     maps,
-    skills: skillsByDay.get(day) ?? null,
-    timeline: timelineByDay.get(day) ?? [],
+    skills: buildActivitySkillReadout(rows),
+    timeline: buildActivityTimeline(day, rows),
   };
 }
 
@@ -715,227 +702,104 @@ async function getActivityYears(db: Db, userId: number, country: string): Promis
     .filter((year) => Number.isInteger(year) && year >= 2007 && year <= 2100);
 }
 
-async function getActivityMapsByDay(
+interface ActivityScoreRef {
+  dayKey: string;
+  endedAt: string;
+  endedAtMs: number;
+  passed: boolean;
+  beatmapId: number;
+}
+
+interface ActivityDayScoreRow extends ActivityScoreRef {
+  keyCount: number | null;
+  skills: ActivitySkillVector | null;
+}
+
+async function getActivityScoreRefs(
   db: Db,
   userId: number,
   country: string,
-  year: number,
-  options: { day?: string; limit?: number } = {},
-): Promise<Map<string, PlayerActivityMap[]>> {
-  const day = options.day ? normalizeActivityDayKey(options.day) : null;
-  const limit = Math.max(1, Math.min(options.limit ?? ACTIVITY_DAY_MAP_LIMIT, ACTIVITY_DAY_DETAIL_MAP_LIMIT));
-  const rangeSql = day ? "m.day = ?" : "m.day >= ? and m.day <= ?";
-  const rangeArgs = day ? [day] : [`${year}-01-01`, `${year}-12-31`];
+  timezone: string,
+  range: { from: string; to: string },
+): Promise<ActivityScoreRef[]> {
   const rows = (await exec(
     db,
-    `with ranked_maps as (
-       select
-         m.*,
-         b.beatmapset_id,
-         b.cs,
-         b.version,
-         s.title,
-         s.artist,
-         s.covers_json,
-         v.status as skill_status,
-         v.stream_score,
-         v.jack_score,
-         v.bracket_score,
-         v.ln_score,
-         v.ln_general_score,
-         v.ln_release_score,
-         v.ln_inverse_score,
-         v.ln_tech_score,
-         row_number() over (
-           partition by m.day
-           order by m.play_count desc, coalesce(m.best_pp, 0) desc, m.last_played_at desc, m.beatmap_id asc
-         ) as rn
-       from player_activity_maps m
-       left join beatmaps b on b.beatmap_id = m.beatmap_id
-       left join beatmapsets s on s.beatmapset_id = b.beatmapset_id
-       left join beatmap_skill_vectors v
-         on v.beatmap_id = m.beatmap_id and v.analysis_version = ?
-       where m.country = ? and m.user_id = ? and ${rangeSql}
-     )
-     select *
-     from ranked_maps
-     where rn <= ?
-     order by day asc, rn asc`,
-    [ACTIVITY_SKILL_ANALYSIS_VERSION, country, userId, ...rangeArgs, limit],
+    `select day, ended_at, passed, beatmap_id
+     from player_activity_score_refs
+     where country = ? and user_id = ? and day >= ? and day <= ?
+     order by ended_at asc, score_identity asc`,
+    [country, userId, range.from, range.to],
   )).rows;
-  const byDay = new Map<string, PlayerActivityMap[]>();
+  const refs: ActivityScoreRef[] = [];
   for (const row of rows) {
-    const day = String(row.day);
-    const beatmapId = Number(row.beatmap_id);
-    const beatmapsetId = row.beatmapset_id == null ? null : Number(row.beatmapset_id);
-    const safeBeatmapsetId = beatmapsetId != null && Number.isFinite(beatmapsetId) && beatmapsetId > 0 ? beatmapsetId : null;
-    const map: PlayerActivityMap = {
-      key: `${day}:${beatmapId}`,
-      beatmapId,
-      beatmapsetId: safeBeatmapsetId,
-      title: String(row.title ?? "Unknown"),
-      artist: String(row.artist ?? "Unknown artist"),
-      version: String(row.version ?? "Unknown"),
-      coverUrl: getActivityCoverUrl(row.covers_json, safeBeatmapsetId),
-      plays: Number(row.play_count) || 0,
-      accuracy: row.best_accuracy == null ? null : Number(row.best_accuracy),
-      pp: row.best_pp == null ? null : Number(row.best_pp),
-      rank: row.best_rank == null ? null : String(row.best_rank),
-      keyCount: row.cs == null ? null : Number(row.cs),
-      skills: readActivitySkillVector(row),
-    };
-    byDay.set(day, [...(byDay.get(day) ?? []), map]);
-  }
-  return byDay;
-}
-
-async function getActivityMapCountsByDay(db: Db, userId: number, country: string, year: number, requestedDay?: string): Promise<Map<string, number>> {
-  const day = requestedDay ? normalizeActivityDayKey(requestedDay) : null;
-  const rangeSql = day ? "day = ?" : "day >= ? and day <= ?";
-  const rangeArgs = day ? [day] : [`${year}-01-01`, `${year}-12-31`];
-  const rows = (await exec(
-    db,
-    `select day, count(*) as map_count
-     from player_activity_maps
-     where country = ? and user_id = ? and ${rangeSql}
-     group by day`,
-    [country, userId, ...rangeArgs],
-  )).rows;
-  const counts = new Map<string, number>();
-  for (const row of rows) {
-    counts.set(String(row.day), Number(row.map_count) || 0);
-  }
-  return counts;
-}
-
-async function getActivitySkillsByDay(db: Db, userId: number, country: string, year: number, requestedDay?: string): Promise<Map<string, PlayerActivitySkillReadout>> {
-  const day = requestedDay ? normalizeActivityDayKey(requestedDay) : null;
-  const rangeSql = day ? "m.day = ?" : "m.day >= ? and m.day <= ?";
-  const rangeArgs = day ? [day] : [`${year}-01-01`, `${year}-12-31`];
-  const rows = (await exec(
-    db,
-    `select
-       m.day,
-       b.cs as key_count,
-       sum(m.play_count) as total_plays,
-       sum(case when v.status = 'ready' then m.play_count else 0 end) as analyzed_plays,
-       sum(case when v.status = 'ready' then m.play_count * v.stream_score else 0 end) as stream_sum,
-       sum(case when v.status = 'ready' then m.play_count * v.jack_score else 0 end) as jack_sum,
-       sum(case when v.status = 'ready' then m.play_count * v.bracket_score else 0 end) as bracket_sum,
-       sum(case when v.status = 'ready' then m.play_count * v.ln_score else 0 end) as ln_sum,
-       sum(case when v.status = 'ready' then m.play_count * v.ln_general_score else 0 end) as ln_general_sum,
-       sum(case when v.status = 'ready' then m.play_count * v.ln_release_score else 0 end) as ln_release_sum,
-       sum(case when v.status = 'ready' then m.play_count * v.ln_inverse_score else 0 end) as ln_inverse_sum,
-       sum(case when v.status = 'ready' then m.play_count * v.ln_tech_score else 0 end) as ln_tech_sum
-     from player_activity_maps m
-     left join beatmaps b on b.beatmap_id = m.beatmap_id
-     left join beatmap_skill_vectors v
-       on v.beatmap_id = m.beatmap_id and v.analysis_version = ?
-     where m.country = ? and m.user_id = ? and ${rangeSql}
-     group by m.day, b.cs`,
-    [ACTIVITY_SKILL_ANALYSIS_VERSION, country, userId, ...rangeArgs],
-  )).rows;
-  const byDay = new Map<string, ActivitySkillAccumulator>();
-  for (const row of rows) {
-    const analyzedPlays = Number(row.analyzed_plays) || 0;
-    const totalPlays = Number(row.total_plays) || 0;
-    if (totalPlays <= 0) continue;
-    const day = String(row.day);
-    const streamSum = Number(row.stream_sum ?? 0);
-    const jackSum = Number(row.jack_sum ?? 0);
-    const bracketSum = Number(row.bracket_sum ?? 0);
-    const lnSum = Number(row.ln_sum ?? 0);
-    const lnGeneralSum = Number(row.ln_general_sum ?? 0);
-    const lnReleaseSum = Number(row.ln_release_sum ?? 0);
-    const lnInverseSum = Number(row.ln_inverse_sum ?? 0);
-    const lnTechSum = Number(row.ln_tech_sum ?? 0);
-    const keyCount = Number(row.key_count);
-    const safeKeyCount = Number.isFinite(keyCount) && keyCount > 0 ? Math.round(keyCount) : null;
-    const keyMode: PlayerActivityKeyModeSkillReadout = {
-      keyCount: safeKeyCount,
-      stream: analyzedPlays > 0 ? streamSum / analyzedPlays : 0,
-      jack: analyzedPlays > 0 ? jackSum / analyzedPlays : 0,
-      bracket: analyzedPlays > 0 ? bracketSum / analyzedPlays : 0,
-      ln: analyzedPlays > 0 ? lnSum / analyzedPlays : 0,
-      lnGeneral: analyzedPlays > 0 ? lnGeneralSum / analyzedPlays : 0,
-      lnRelease: analyzedPlays > 0 ? lnReleaseSum / analyzedPlays : 0,
-      lnInverse: analyzedPlays > 0 ? lnInverseSum / analyzedPlays : 0,
-      lnTech: analyzedPlays > 0 ? lnTechSum / analyzedPlays : 0,
-      analyzedPlays,
-      totalPlays,
-    };
-    const accumulator = byDay.get(day) ?? {
-      streamSum: 0,
-      jackSum: 0,
-      bracketSum: 0,
-      lnSum: 0,
-      lnGeneralSum: 0,
-      lnReleaseSum: 0,
-      lnInverseSum: 0,
-      lnTechSum: 0,
-      analyzedPlays: 0,
-      totalPlays: 0,
-      keyModes: [],
-    };
-    accumulator.streamSum += streamSum;
-    accumulator.jackSum += jackSum;
-    accumulator.bracketSum += bracketSum;
-    accumulator.lnSum += lnSum;
-    accumulator.lnGeneralSum += lnGeneralSum;
-    accumulator.lnReleaseSum += lnReleaseSum;
-    accumulator.lnInverseSum += lnInverseSum;
-    accumulator.lnTechSum += lnTechSum;
-    accumulator.analyzedPlays += analyzedPlays;
-    accumulator.totalPlays += totalPlays;
-    accumulator.keyModes.push(keyMode);
-    byDay.set(day, accumulator);
-  }
-  const output = new Map<string, PlayerActivitySkillReadout>();
-  for (const [day, accumulator] of byDay) {
-    const analyzedPlays = accumulator.analyzedPlays;
-    output.set(day, {
-      stream: analyzedPlays > 0 ? accumulator.streamSum / analyzedPlays : 0,
-      jack: analyzedPlays > 0 ? accumulator.jackSum / analyzedPlays : 0,
-      bracket: analyzedPlays > 0 ? accumulator.bracketSum / analyzedPlays : 0,
-      ln: analyzedPlays > 0 ? accumulator.lnSum / analyzedPlays : 0,
-      lnGeneral: analyzedPlays > 0 ? accumulator.lnGeneralSum / analyzedPlays : 0,
-      lnRelease: analyzedPlays > 0 ? accumulator.lnReleaseSum / analyzedPlays : 0,
-      lnInverse: analyzedPlays > 0 ? accumulator.lnInverseSum / analyzedPlays : 0,
-      lnTech: analyzedPlays > 0 ? accumulator.lnTechSum / analyzedPlays : 0,
-      analyzedPlays,
-      totalPlays: accumulator.totalPlays,
-      keyModes: accumulator.keyModes.sort((left, right) =>
-        (left.keyCount ?? Number.MAX_SAFE_INTEGER) - (right.keyCount ?? Number.MAX_SAFE_INTEGER),
-      ),
+    const endedAt = String(row.ended_at);
+    const endedAtMs = Date.parse(endedAt);
+    if (!Number.isFinite(endedAtMs)) continue;
+    const dayKey = getZonedDayKey(timezone, endedAtMs);
+    if (!dayKey) continue;
+    refs.push({
+      dayKey,
+      endedAt,
+      endedAtMs,
+      passed: !!Number(row.passed),
+      beatmapId: Number(row.beatmap_id),
     });
   }
-  return output;
+  return refs;
 }
 
-interface ActivitySkillAccumulator {
-  streamSum: number;
-  jackSum: number;
-  bracketSum: number;
-  lnSum: number;
-  lnGeneralSum: number;
-  lnReleaseSum: number;
-  lnInverseSum: number;
-  lnTechSum: number;
-  analyzedPlays: number;
-  totalPlays: number;
-  keyModes: PlayerActivityKeyModeSkillReadout[];
+interface ActivityDayAccumulator {
+  scoreCount: number;
+  passedCount: number;
+  sessionCount: number;
+  previousMs: number;
+  beatmapIds: Set<number>;
 }
 
-async function getActivityTimelineByDay(db: Db, userId: number, country: string, year: number, requestedDay?: string): Promise<Map<string, PlayerActivityTimelineSegment[]>> {
-  const day = requestedDay ? normalizeActivityDayKey(requestedDay) : null;
-  const rangeSql = day ? "r.day = ?" : "r.day >= ? and r.day <= ?";
-  const rangeArgs = day ? [day] : [`${year}-01-01`, `${year}-12-31`];
+// Refs arrive ordered by ended_at, so each local day's scores are contiguous
+// and the session gap scan can run per day in a single pass.
+function buildActivityDaysFromRefs(refs: ActivityScoreRef[]): PlayerActivityDay[] {
+  const byDay = new Map<string, ActivityDayAccumulator>();
+  for (const ref of refs) {
+    let day = byDay.get(ref.dayKey);
+    if (!day) {
+      day = { scoreCount: 0, passedCount: 0, sessionCount: 0, previousMs: 0, beatmapIds: new Set() };
+      byDay.set(ref.dayKey, day);
+    }
+    if (day.sessionCount === 0 || ref.endedAtMs - day.previousMs > ACTIVITY_SESSION_GAP_MS) day.sessionCount++;
+    day.previousMs = ref.endedAtMs;
+    day.scoreCount++;
+    if (ref.passed) day.passedCount++;
+    day.beatmapIds.add(ref.beatmapId);
+  }
+  return [...byDay.entries()]
+    .sort(([left], [right]) => (left < right ? -1 : 1))
+    .map(([date, day]) => ({
+      date,
+      scoreCount: day.scoreCount,
+      passedCount: day.passedCount,
+      sessionCount: day.sessionCount,
+      mapCount: day.beatmapIds.size,
+      maps: [],
+      skills: null,
+      timeline: [],
+    }));
+}
+
+// A local day overlaps at most two UTC days, so query the padded stored range
+// and keep the scores whose local date matches.
+async function getActivityDayScoreRows(
+  db: Db,
+  userId: number,
+  country: string,
+  timezone: string,
+  day: string,
+): Promise<ActivityDayScoreRow[]> {
   const rows = (await exec(
     db,
     `select
-       r.day,
-       r.score_identity,
        r.ended_at,
+       r.passed,
        r.beatmap_id,
        b.cs,
        v.status as skill_status,
@@ -951,54 +815,257 @@ async function getActivityTimelineByDay(db: Db, userId: number, country: string,
      left join beatmaps b on b.beatmap_id = r.beatmap_id
      left join beatmap_skill_vectors v
        on v.beatmap_id = r.beatmap_id and v.analysis_version = ?
-     where r.country = ? and r.user_id = ? and ${rangeSql}
-     order by r.day asc, r.ended_at asc, r.score_identity asc`,
-    [ACTIVITY_SKILL_ANALYSIS_VERSION, country, userId, ...rangeArgs],
+     where r.country = ? and r.user_id = ? and r.day >= ? and r.day <= ?
+     order by r.ended_at asc, r.score_identity asc`,
+    [ACTIVITY_SKILL_ANALYSIS_VERSION, country, userId, addDayKeyDays(day, -1), addDayKeyDays(day, 1)],
   )).rows;
-  const byDay = new Map<string, PlayerActivityTimelineSegment[]>();
-  let currentDay: string | null = null;
+  const output: ActivityDayScoreRow[] = [];
+  for (const row of rows) {
+    const endedAt = String(row.ended_at);
+    const endedAtMs = Date.parse(endedAt);
+    if (!Number.isFinite(endedAtMs)) continue;
+    if (getZonedDayKey(timezone, endedAtMs) !== day) continue;
+    const keyCount = Number(row.cs);
+    output.push({
+      dayKey: day,
+      endedAt,
+      endedAtMs,
+      passed: !!Number(row.passed),
+      beatmapId: Number(row.beatmap_id),
+      keyCount: Number.isFinite(keyCount) && keyCount > 0 ? Math.round(keyCount) : null,
+      skills: readActivitySkillVector(row),
+    });
+  }
+  return output;
+}
+
+async function getActivityMapsForLocalDay(
+  db: Db,
+  userId: number,
+  country: string,
+  day: string,
+  rows: ActivityDayScoreRow[],
+): Promise<PlayerActivityMap[]> {
+  const playStats = new Map<number, { plays: number; lastPlayedAt: string }>();
+  for (const row of rows) {
+    if (!Number.isInteger(row.beatmapId) || row.beatmapId <= 0) continue;
+    const stats = playStats.get(row.beatmapId);
+    if (stats) {
+      stats.plays++;
+      if (row.endedAt > stats.lastPlayedAt) stats.lastPlayedAt = row.endedAt;
+    } else {
+      playStats.set(row.beatmapId, { plays: 1, lastPlayedAt: row.endedAt });
+    }
+  }
+  const beatmapIds = [...playStats.entries()]
+    .sort(([leftId, left], [rightId, right]) =>
+      right.plays - left.plays
+      || (left.lastPlayedAt < right.lastPlayedAt ? 1 : left.lastPlayedAt > right.lastPlayedAt ? -1 : 0)
+      || leftId - rightId)
+    .slice(0, ACTIVITY_DAY_DETAIL_MAP_LIMIT)
+    .map(([beatmapId]) => beatmapId);
+  if (beatmapIds.length === 0) return [];
+
+  // Best pp/accuracy projections are keyed by UTC day; take the best across
+  // the UTC days this local day overlaps. A play from the neighbouring local
+  // day sharing a UTC bucket can leak into the best stats, but the play
+  // counts come from the score refs and stay exact.
+  const placeholders = beatmapIds.map(() => "?").join(", ");
+  const mapRows = (await exec(
+    db,
+    `select
+       m.beatmap_id,
+       m.best_pp,
+       m.best_accuracy,
+       m.best_rank,
+       b.beatmapset_id,
+       b.cs,
+       b.version,
+       s.title,
+       s.artist,
+       s.covers_json,
+       v.status as skill_status,
+       v.stream_score,
+       v.jack_score,
+       v.bracket_score,
+       v.ln_score,
+       v.ln_general_score,
+       v.ln_release_score,
+       v.ln_inverse_score,
+       v.ln_tech_score
+     from player_activity_maps m
+     left join beatmaps b on b.beatmap_id = m.beatmap_id
+     left join beatmapsets s on s.beatmapset_id = b.beatmapset_id
+     left join beatmap_skill_vectors v
+       on v.beatmap_id = m.beatmap_id and v.analysis_version = ?
+     where m.country = ? and m.user_id = ? and m.day >= ? and m.day <= ? and m.beatmap_id in (${placeholders})`,
+    [ACTIVITY_SKILL_ANALYSIS_VERSION, country, userId, addDayKeyDays(day, -1), addDayKeyDays(day, 1), ...beatmapIds],
+  )).rows;
+  const bestByBeatmap = new Map<number, Record<string, unknown>>();
+  for (const row of mapRows) {
+    const beatmapId = Number(row.beatmap_id);
+    const current = bestByBeatmap.get(beatmapId);
+    if (!current || isBetterActivityMapRow(row, current)) bestByBeatmap.set(beatmapId, row);
+  }
+
+  const maps: PlayerActivityMap[] = [];
+  for (const beatmapId of beatmapIds) {
+    const row = bestByBeatmap.get(beatmapId);
+    if (!row) continue;
+    const beatmapsetId = row.beatmapset_id == null ? null : Number(row.beatmapset_id);
+    const safeBeatmapsetId = beatmapsetId != null && Number.isFinite(beatmapsetId) && beatmapsetId > 0 ? beatmapsetId : null;
+    maps.push({
+      key: `${day}:${beatmapId}`,
+      beatmapId,
+      beatmapsetId: safeBeatmapsetId,
+      title: String(row.title ?? "Unknown"),
+      artist: String(row.artist ?? "Unknown artist"),
+      version: String(row.version ?? "Unknown"),
+      coverUrl: getActivityCoverUrl(row.covers_json, safeBeatmapsetId),
+      plays: playStats.get(beatmapId)?.plays ?? 0,
+      accuracy: row.best_accuracy == null ? null : Number(row.best_accuracy),
+      pp: row.best_pp == null ? null : Number(row.best_pp),
+      rank: row.best_rank == null ? null : String(row.best_rank),
+      keyCount: row.cs == null ? null : Number(row.cs),
+      skills: readActivitySkillVector(row),
+    });
+  }
+  return maps;
+}
+
+function isBetterActivityMapRow(candidate: Record<string, unknown>, current: Record<string, unknown>): boolean {
+  const candidatePp = candidate.best_pp == null ? -1 : Number(candidate.best_pp);
+  const currentPp = current.best_pp == null ? -1 : Number(current.best_pp);
+  if (candidatePp !== currentPp) return candidatePp > currentPp;
+  const candidateAccuracy = candidate.best_accuracy == null ? -1 : Number(candidate.best_accuracy);
+  const currentAccuracy = current.best_accuracy == null ? -1 : Number(current.best_accuracy);
+  return candidateAccuracy > currentAccuracy;
+}
+
+interface ActivitySkillSums {
+  keyCount: number | null;
+  streamSum: number;
+  jackSum: number;
+  bracketSum: number;
+  lnSum: number;
+  lnGeneralSum: number;
+  lnReleaseSum: number;
+  lnInverseSum: number;
+  lnTechSum: number;
+  analyzedPlays: number;
+  totalPlays: number;
+}
+
+function emptyActivitySkillSums(keyCount: number | null): ActivitySkillSums {
+  return {
+    keyCount,
+    streamSum: 0,
+    jackSum: 0,
+    bracketSum: 0,
+    lnSum: 0,
+    lnGeneralSum: 0,
+    lnReleaseSum: 0,
+    lnInverseSum: 0,
+    lnTechSum: 0,
+    analyzedPlays: 0,
+    totalPlays: 0,
+  };
+}
+
+function addActivitySkillRow(sums: ActivitySkillSums, row: ActivityDayScoreRow): void {
+  sums.totalPlays++;
+  if (!row.skills) return;
+  sums.analyzedPlays++;
+  sums.streamSum += row.skills.stream;
+  sums.jackSum += row.skills.jack;
+  sums.bracketSum += row.skills.bracket;
+  sums.lnSum += row.skills.ln;
+  sums.lnGeneralSum += row.skills.lnGeneral;
+  sums.lnReleaseSum += row.skills.lnRelease;
+  sums.lnInverseSum += row.skills.lnInverse;
+  sums.lnTechSum += row.skills.lnTech;
+}
+
+function toActivityKeyModeReadout(sums: ActivitySkillSums): PlayerActivityKeyModeSkillReadout {
+  const scale = sums.analyzedPlays > 0 ? 1 / sums.analyzedPlays : 0;
+  return {
+    keyCount: sums.keyCount,
+    stream: sums.streamSum * scale,
+    jack: sums.jackSum * scale,
+    bracket: sums.bracketSum * scale,
+    ln: sums.lnSum * scale,
+    lnGeneral: sums.lnGeneralSum * scale,
+    lnRelease: sums.lnReleaseSum * scale,
+    lnInverse: sums.lnInverseSum * scale,
+    lnTech: sums.lnTechSum * scale,
+    analyzedPlays: sums.analyzedPlays,
+    totalPlays: sums.totalPlays,
+  };
+}
+
+function buildActivitySkillReadout(rows: ActivityDayScoreRow[]): PlayerActivitySkillReadout | null {
+  if (rows.length === 0) return null;
+  const total = emptyActivitySkillSums(null);
+  const byKeyMode = new Map<string, ActivitySkillSums>();
+  for (const row of rows) {
+    addActivitySkillRow(total, row);
+    const key = String(row.keyCount);
+    let sums = byKeyMode.get(key);
+    if (!sums) {
+      sums = emptyActivitySkillSums(row.keyCount);
+      byKeyMode.set(key, sums);
+    }
+    addActivitySkillRow(sums, row);
+  }
+  const overall = toActivityKeyModeReadout(total);
+  return {
+    stream: overall.stream,
+    jack: overall.jack,
+    bracket: overall.bracket,
+    ln: overall.ln,
+    lnGeneral: overall.lnGeneral,
+    lnRelease: overall.lnRelease,
+    lnInverse: overall.lnInverse,
+    lnTech: overall.lnTech,
+    analyzedPlays: overall.analyzedPlays,
+    totalPlays: overall.totalPlays,
+    keyModes: [...byKeyMode.values()]
+      .map(toActivityKeyModeReadout)
+      .sort((left, right) =>
+        (left.keyCount ?? Number.MAX_SAFE_INTEGER) - (right.keyCount ?? Number.MAX_SAFE_INTEGER),
+      ),
+  };
+}
+
+function buildActivityTimeline(day: string, rows: ActivityDayScoreRow[]): PlayerActivityTimelineSegment[] {
+  const segments: PlayerActivityTimelineSegment[] = [];
   let sessionIndex = 1;
   let previousMs = 0;
   let draft: TimelineSegmentDraft | null = null;
 
   const flush = () => {
-    if (!currentDay || !draft) return;
-    byDay.set(currentDay, [...(byDay.get(currentDay) ?? []), finalizeTimelineDraft(currentDay, draft)]);
+    if (!draft) return;
+    segments.push(finalizeTimelineDraft(day, draft));
     draft = null;
   };
 
   for (const row of rows) {
-    const day = String(row.day);
-    const endedAt = String(row.ended_at);
-    const endedAtMs = Date.parse(endedAt);
-    if (!Number.isFinite(endedAtMs)) continue;
-
-    if (currentDay !== day) {
-      flush();
-      currentDay = day;
-      sessionIndex = 1;
-      previousMs = 0;
-    }
-
-    const keyCount = Number(row.cs);
-    const safeKeyCount = Number.isFinite(keyCount) && keyCount > 0 ? Math.round(keyCount) : null;
-    const skills = readActivitySkillVector(row);
-    const primarySkill = getPrimaryActivitySkill(skills);
-    const startsNewSession = previousMs > 0 && endedAtMs - previousMs > ACTIVITY_SESSION_GAP_MS;
+    const primarySkill = getPrimaryActivitySkill(row.skills);
+    const startsNewSession = previousMs > 0 && row.endedAtMs - previousMs > ACTIVITY_SESSION_GAP_MS;
     if (
       startsNewSession ||
       !draft ||
-      draft.keyCount !== safeKeyCount ||
+      draft.keyCount !== row.keyCount ||
       draft.primarySkill !== primarySkill
     ) {
       flush();
       if (startsNewSession) sessionIndex++;
       draft = {
         sessionIndex,
-        startAt: endedAt,
-        endAt: endedAt,
+        startAt: row.endedAt,
+        endAt: row.endedAt,
         playCount: 0,
-        keyCount: safeKeyCount,
+        keyCount: row.keyCount,
         primarySkill,
         streamSum: 0,
         jackSum: 0,
@@ -1012,23 +1079,23 @@ async function getActivityTimelineByDay(db: Db, userId: number, country: string,
       };
     }
 
-    draft.endAt = endedAt;
+    draft.endAt = row.endedAt;
     draft.playCount++;
-    if (skills) {
-      draft.streamSum += skills.stream;
-      draft.jackSum += skills.jack;
-      draft.bracketSum += skills.bracket;
-      draft.lnSum += skills.ln;
-      draft.lnGeneralSum += skills.lnGeneral;
-      draft.lnReleaseSum += skills.lnRelease;
-      draft.lnInverseSum += skills.lnInverse;
-      draft.lnTechSum += skills.lnTech;
+    if (row.skills) {
+      draft.streamSum += row.skills.stream;
+      draft.jackSum += row.skills.jack;
+      draft.bracketSum += row.skills.bracket;
+      draft.lnSum += row.skills.ln;
+      draft.lnGeneralSum += row.skills.lnGeneral;
+      draft.lnReleaseSum += row.skills.lnRelease;
+      draft.lnInverseSum += row.skills.lnInverse;
+      draft.lnTechSum += row.skills.lnTech;
       draft.analyzedCount++;
     }
-    previousMs = endedAtMs;
+    previousMs = row.endedAtMs;
   }
   flush();
-  return byDay;
+  return segments;
 }
 
 interface TimelineSegmentDraft {
@@ -1130,17 +1197,14 @@ function getPrimaryLnActivitySubtype(vector: ActivitySkillVector): PlayerActivit
   return sorted[0][1] >= 0.2 ? sorted[0][0] : null;
 }
 
-function getCurrentActivityStreak(days: PlayerActivityDay[], year: number): number {
-  const today = new Date();
+function getCurrentActivityStreak(days: PlayerActivityDay[], year: number, todayKey: string): number {
   const selectedYear = clampYear(year);
-  const cursor = selectedYear === today.getUTCFullYear()
-    ? new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()))
-    : new Date(Date.UTC(selectedYear, 11, 31));
-  const start = new Date(Date.UTC(selectedYear, 0, 1));
+  const cursorKey = todayKey.startsWith(`${selectedYear}-`) ? todayKey : `${selectedYear}-12-31`;
+  const startKey = `${selectedYear}-01-01`;
   const active = new Set(days.filter((day) => day.scoreCount > 0).map((day) => day.date));
   let streak = 0;
-  for (let day = cursor; day >= start; day = addUtcDays(day, -1)) {
-    if (!active.has(toUtcDateKey(day))) break;
+  for (let key = cursorKey; key >= startKey; key = addDayKeyDays(key, -1)) {
+    if (!active.has(key)) break;
     streak++;
   }
   return streak;
@@ -1397,6 +1461,7 @@ function emptyActivitySnapshot(
     isTracked,
     userId,
     country,
+    timezone: getCountryTimezone(country),
     year,
     availableYears: [year],
     totalScores: 0,
@@ -1465,12 +1530,3 @@ function normalizeActivityDayKey(value: string): string | null {
   return normalized === value ? value : null;
 }
 
-function toUtcDateKey(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
-
-function addUtcDays(date: Date, days: number): Date {
-  const next = new Date(date);
-  next.setUTCDate(next.getUTCDate() + days);
-  return next;
-}

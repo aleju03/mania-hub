@@ -169,12 +169,14 @@ describe("live backend", () => {
     const snapshot = await getPlayerActivitySnapshot(db, queue, 101, "CR", 2026);
     expect(snapshot.available).toBe(true);
     expect(snapshot.country).toBe("CR");
+    expect(snapshot.timezone).toBe("America/Costa_Rica");
     expect(snapshot.totalScores).toBe(1);
     expect(snapshot.activeDays).toBe(1);
     expect(snapshot.typicalSession).toBe(1);
     expect(snapshot.days).toHaveLength(1);
+    // ended_at 2026-05-12T00:02Z is 18:02 on May 11 in CR local time.
     expect(snapshot.days[0]).toMatchObject({
-      date: "2026-05-12",
+      date: "2026-05-11",
       scoreCount: 1,
       passedCount: 1,
       sessionCount: 1,
@@ -182,9 +184,10 @@ describe("live backend", () => {
     });
     expect(snapshot.days[0].maps).toEqual([]);
 
-    const dayDetail = await getPlayerActivityDayDetail(db, queue, 101, "CR", "2026-05-12");
+    expect(await getPlayerActivityDayDetail(db, queue, 101, "CR", "2026-05-12")).toBeNull();
+    const dayDetail = await getPlayerActivityDayDetail(db, queue, 101, "CR", "2026-05-11");
     expect(dayDetail).toMatchObject({
-      date: "2026-05-12",
+      date: "2026-05-11",
       scoreCount: 1,
       sessionCount: 1,
       mapCount: 1,
@@ -211,15 +214,37 @@ describe("live backend", () => {
 
     const snapshot = await getPlayerActivitySnapshot(db, queue, 101, "CR", 2026);
     expect(snapshot.totalScores).toBe(1);
-    expect(snapshot.days[0]).toMatchObject({ date: "2026-05-12", scoreCount: 1, sessionCount: 1 });
+    expect(snapshot.days[0]).toMatchObject({ date: "2026-05-11", scoreCount: 1, sessionCount: 1 });
 
     const cursor = (await exec(db, "select last_event_id from player_activity_backfill_cursors where country = 'CR' and user_id = 101")).rows[0];
     expect(Number(cursor?.last_event_id)).toBeGreaterThan(0);
 
     // With the cursor in place, wiped projections are not rebuilt from old events again.
-    await exec(db, "delete from player_activity_days");
+    await exec(db, "delete from player_activity_score_refs");
     const rescan = await getPlayerActivitySnapshot(db, queue, 101, "CR", 2026);
     expect(rescan.totalScores).toBe(0);
+  });
+
+  it("buckets activity days and sessions in the player country's local timezone", async () => {
+    const { db, queue, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    const base = scores[0];
+    // CR is UTC-6: 05:50Z is 23:50 on May 11 local, 06:10Z is 00:10 on May 12.
+    const lateEvening = { ...base, id: 9101, created_at: "2026-05-12T05:48:00.000Z", ended_at: "2026-05-12T05:50:00.000Z" };
+    const afterMidnight = { ...base, id: 9102, created_at: "2026-05-12T06:08:00.000Z", ended_at: "2026-05-12T06:10:00.000Z" };
+    await ingestor.ingestBatch([lateEvening, afterMidnight]);
+
+    const snapshot = await getPlayerActivitySnapshot(db, queue, 101, "CR", 2026);
+    expect(snapshot.timezone).toBe("America/Costa_Rica");
+    expect(snapshot.days.map((day) => day.date)).toEqual(["2026-05-11", "2026-05-12"]);
+    expect(snapshot.days.map((day) => day.scoreCount)).toEqual([1, 1]);
+    expect(snapshot.days.map((day) => day.sessionCount)).toEqual([1, 1]);
+
+    const detail = await getPlayerActivityDayDetail(db, queue, 101, "CR", "2026-05-11");
+    expect(detail?.scoreCount).toBe(1);
+    expect(detail?.timeline).toHaveLength(1);
+    expect(detail?.timeline[0]?.startAt).toBe("2026-05-12T05:50:00.000Z");
+    expect(detail?.maps[0]?.plays).toBe(1);
   });
 
   it("keeps paused countries out of ingestion even when they are pinned", async () => {
@@ -654,6 +679,46 @@ describe("live backend", () => {
 
     expect(await queue.depth()).toBe(5);
     expect(Number((await exec(db, "select count(*) as count from jobs where status = 'deferred_pressure'")).rows[0].count)).toBe(0);
+  });
+
+  it("ignores future-scheduled jobs when measuring queue pressure", async () => {
+    const { db, queue } = await setup();
+    const future = new Date(Date.now() + 10 * 60_000).toISOString();
+    const now = new Date().toISOString();
+    for (let index = 0; index < 100; index += 1) {
+      await exec(
+        db,
+        `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
+         values ('reconcile_user_recent_scores', ?, 'queued', 25, ?, 0, '{}', ?, ?)`,
+        [`recent:user:${index}:next:1`, future, now, now],
+      );
+    }
+
+    await queue.enqueue("analyze_activity_beatmap", "activity-beatmap:1:123", { beatmapId: 123 }, { priority: 5 });
+
+    const activityJob = (await exec(db, "select status from jobs where type = 'analyze_activity_beatmap'")).rows[0];
+    expect(activityJob.status).toBe("queued");
+    expect(await queue.depth()).toBe(1);
+  });
+
+  it("reactivates parked jobs as immediately runnable", async () => {
+    const { db, queue } = await setup();
+    const future = new Date(Date.now() + 30 * 60_000).toISOString();
+    const now = new Date().toISOString();
+    for (let index = 0; index < 5; index += 1) {
+      await exec(
+        db,
+        `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
+         values ('analyze_activity_beatmap', ?, 'deferred_pressure', 5, ?, 0, '{}', ?, ?)`,
+        [`activity-beatmap:1:${index}`, future, now, now],
+      );
+    }
+
+    await queue.shedPressure();
+
+    expect(await queue.depth()).toBe(5);
+    const claimed = await queue.claim("test-worker", 5, { types: ["analyze_activity_beatmap"] });
+    expect(claimed).toHaveLength(5);
   });
 
   it("creates enrichment jobs for unknown metadata on known tracked roster users", async () => {
@@ -4065,6 +4130,53 @@ describe("live backend", () => {
     expect(JSON.parse(first.writes.join(""))).toMatchObject({ country: "CO" });
     expect(second.res.statusCode).toBe(429);
     expect(JSON.parse(second.writes.join(""))).toMatchObject({ error: "rate_limited", bucket: "countryActivate" });
+  });
+
+  it("serves global tracker snapshots from the short single-flight cache", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const abuse = new AbuseGuard();
+    const config = baseConfig();
+    const ctx = {
+      db,
+      queue,
+      events,
+      config,
+      abuse,
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0 }) } },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never;
+    const scores = await fixture<OscScore[]>("scores.json");
+    await ingestor.ingestBatch([scores[0]]);
+    // Pull the fixture score into the global handler's 1h window.
+    await exec(db, "update score_events set ended_at = ?", [new Date().toISOString()]);
+
+    const first = mockRes();
+    await routeHttp(mockReq("GET", "/api/snapshots/tracker?country=GLOBAL&limit=77", { "x-real-ip": "203.0.113.30" }), first.res, ctx);
+    expect(first.res.statusCode).toBe(200);
+    const firstBody = JSON.parse(first.writes.join(""));
+    expect(firstBody.country).toBe("GLOBAL");
+    expect(firstBody.scores).toHaveLength(1);
+
+    // A score landing right after the first request stays invisible to an
+    // identical request inside the cache TTL, but a different parameter set
+    // recomputes and sees it.
+    await exec(
+      db,
+      `insert into score_events (score_id, score_identity, user_id, country, beatmap_id, ruleset_id, score_json, passed, processed, is_lazer, has_replay, ended_at, received_at, source)
+       select 9400, 'global-cache', user_id, 'US', beatmap_id, ruleset_id, score_json, passed, processed, is_lazer, has_replay, ended_at, received_at, source
+       from score_events where country = 'CR' limit 1`,
+    );
+
+    const second = mockRes();
+    await routeHttp(mockReq("GET", "/api/snapshots/tracker?country=GLOBAL&limit=77", { "x-real-ip": "203.0.113.30" }), second.res, ctx);
+    const secondBody = JSON.parse(second.writes.join(""));
+    expect(secondBody.scores).toHaveLength(1);
+    expect(secondBody.fetchedAt).toBe(firstBody.fetchedAt);
+
+    const third = mockRes();
+    await routeHttp(mockReq("GET", "/api/snapshots/tracker?country=GLOBAL&limit=78", { "x-real-ip": "203.0.113.30" }), third.res, ctx);
+    const thirdBody = JSON.parse(third.writes.join(""));
+    expect(thirdBody.scores).toHaveLength(2);
   });
 
   it("keeps replay video uploads admin-only unless public exports are enabled", async () => {

@@ -314,6 +314,8 @@ export interface LivePlayerActivitySnapshot {
   isTracked: boolean;
   userId: number;
   country: string | null;
+  /** IANA timezone the backend used to bucket days (the player country's local time). */
+  timezone?: string;
   year: number;
   availableYears: number[];
   totalScores: number;
@@ -470,57 +472,72 @@ export interface LiveBackendBootstrap {
 
 const LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS = 30_000;
 const LIVE_BACKEND_BOOTSTRAP_TIMEOUT_MS = 1_000;
+const SERVER_BOOTSTRAP_CACHE_TTL_MS = 30_000;
+
+async function loadLiveBackendBootstrap(): Promise<LiveBackendBootstrap> {
+  const base = getServerLiveBackendUrl();
+  if (!base) return { status: "offline", countryFeatures: null };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), LIVE_BACKEND_BOOTSTRAP_TIMEOUT_MS);
+  try {
+    const response = await fetch(`${base}/api/countries/features`, { signal: controller.signal });
+    const body = await response.json() as Partial<LiveCountryFeaturesSnapshot>;
+    if (!response.ok || !Array.isArray(body.countries)) {
+      return { status: "offline", countryFeatures: null };
+    }
+    return {
+      status: "ok",
+      countryFeatures: {
+        generatedAt: typeof body.generatedAt === "string" ? body.generatedAt : new Date().toISOString(),
+        countries: body.countries
+          .filter((entry): entry is LiveCountryFeature =>
+            !!entry &&
+            typeof entry === "object" &&
+            typeof entry.country === "string" &&
+            isCountryFeatureTier((entry as Partial<LiveCountryFeature>).featureTier),
+          )
+          .map((entry) => ({ country: entry.country.toUpperCase().slice(0, 2), featureTier: entry.featureTier })),
+      },
+    };
+  } catch (error) {
+    if (isAbortError(error)) return { status: "ok", countryFeatures: null };
+    return { status: "offline", countryFeatures: null };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// Country features are identical for every visitor, but the root context used to
+// round-trip to the live backend for them on every SSR request (twice: once
+// directly and once via getInitialCountry). Memoize per server instance:
+// successful results are reused for a short window, concurrent callers share one
+// in-flight request, and failures are never cached so recovery stays immediate.
+let serverBootstrapCache: { value: LiveBackendBootstrap; expiresAt: number } | null = null;
+let serverBootstrapInflight: Promise<LiveBackendBootstrap> | null = null;
 
 export const fetchLiveBackendBootstrap = createServerFn({ method: "GET" })
   .handler(async (): Promise<LiveBackendBootstrap> => {
-    const base = getServerLiveBackendUrl();
-    if (!base) return { status: "offline", countryFeatures: null };
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), LIVE_BACKEND_BOOTSTRAP_TIMEOUT_MS);
-    try {
-      const response = await fetch(`${base}/api/countries/features`, { signal: controller.signal });
-      const body = await response.json() as Partial<LiveCountryFeaturesSnapshot>;
-      if (!response.ok || !Array.isArray(body.countries)) {
-        return { status: "offline", countryFeatures: null };
-      }
-      return {
-        status: "ok",
-        countryFeatures: {
-          generatedAt: typeof body.generatedAt === "string" ? body.generatedAt : new Date().toISOString(),
-          countries: body.countries
-            .filter((entry): entry is LiveCountryFeature =>
-              !!entry &&
-              typeof entry === "object" &&
-              typeof entry.country === "string" &&
-              isCountryFeatureTier((entry as Partial<LiveCountryFeature>).featureTier),
-            )
-            .map((entry) => ({ country: entry.country.toUpperCase().slice(0, 2), featureTier: entry.featureTier })),
-        },
-      };
-    } catch (error) {
-      if (isAbortError(error)) return { status: "ok", countryFeatures: null };
-      return { status: "offline", countryFeatures: null };
-    } finally {
-      clearTimeout(timeout);
+    if (serverBootstrapCache && serverBootstrapCache.expiresAt > Date.now()) {
+      return serverBootstrapCache.value;
     }
+    if (!serverBootstrapInflight) {
+      serverBootstrapInflight = loadLiveBackendBootstrap()
+        .then((value) => {
+          if (value.status === "ok" && value.countryFeatures) {
+            serverBootstrapCache = { value, expiresAt: Date.now() + SERVER_BOOTSTRAP_CACHE_TTL_MS };
+          }
+          return value;
+        })
+        .finally(() => {
+          serverBootstrapInflight = null;
+        });
+    }
+    return serverBootstrapInflight;
   });
 
 function isAbortError(error: unknown): boolean {
   return !!error && typeof error === "object" && "name" in error && error.name === "AbortError";
 }
-
-export const fetchLivePlayerProfileSnapshot = createServerFn({ method: "GET" })
-  .inputValidator((data: { key?: unknown }) => {
-    if (typeof data?.key !== "string" || !data.key.trim()) throw new Error("Invalid profile key.");
-    return { key: data.key.trim().slice(0, 120) };
-  })
-  .handler(async ({ data }): Promise<LivePlayerProfileSnapshot | null> => {
-    const base = getServerLiveBackendUrl();
-    if (!base) return null;
-    const response = await fetch(`${base}/api/profiles/${encodeURIComponent(data.key)}/snapshot`);
-    if (!response.ok) throw new Error(`Live backend ${response.status} for profile snapshot`);
-    return response.json() as Promise<LivePlayerProfileSnapshot>;
-  });
 
 export const fetchLivePlayerCachedProfileSnapshot = createServerFn({ method: "GET" })
   .inputValidator((data: { key?: unknown }) => {
@@ -563,6 +580,14 @@ export const fetchLivePlayerAbout = createServerFn({ method: "GET" })
     if (!response.ok) throw new Error(`Live backend ${response.status} for profile about`);
     return response.json() as Promise<LivePlayerProfileSection<{ html: string | null }>>;
   });
+
+// Direct browser fetch: the backend allows CORS from the site origins, so the
+// post-hydration snapshot refresh skips the SSR server hop entirely.
+export async function fetchLivePlayerProfileSnapshotDirect(key: string): Promise<LivePlayerProfileSnapshot | null> {
+  const trimmed = key.trim().slice(0, 120);
+  if (!trimmed) throw new Error("Invalid profile key.");
+  return fetchLiveJson(`/api/profiles/${encodeURIComponent(trimmed)}/snapshot`);
+}
 
 export async function fetchLivePlayerRecentScoresDirect(userId: number): Promise<LivePlayerProfileSection<OsuScore[]>> {
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");

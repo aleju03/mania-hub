@@ -10,7 +10,7 @@ import {
   fetchLivePlayerActivityDirect,
   fetchLivePlayerActivityDayDirect,
   fetchLivePlayerAboutDirect,
-  fetchLivePlayerProfileSnapshot,
+  fetchLivePlayerProfileSnapshotDirect,
   fetchLivePlayerRecentScoresDirect,
   isLiveBackendConfigured,
   type LivePlayerActivityPrimarySkill,
@@ -47,7 +47,7 @@ import { DanBadge } from "../../components/ui/DanBadge";
 import { ScoreRowSkeleton, Skeleton } from "../../components/ui/LoadingSkeleton";
 import { UsernameText } from "../../components/ui/UsernameText";
 import { ManiaCard3DPanel as ManiaCardPanel } from "../../components/player/maniacard3d/ManiaCard3DPanel";
-import type { InsightScoreSnapshot, OsuManiaVariant, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
+import type { InsightScoreSnapshot, OsuCovers, OsuManiaVariant, OsuScore, OsuUser, UserProfileInsights } from "../../lib/types";
 import { calculateUserProfileInsights } from "../../lib/profile-insights";
 import { readPlayerShell } from "../../lib/player-shell-cache";
 import { pageSeo, playerOgImagePath } from "../../lib/seo";
@@ -129,6 +129,7 @@ type ActivitySummary = {
   currentStreak: number;
   typicalSession: number;
   availableYears: number[];
+  timezone: string;
 };
 
 const PLAYER_TABS: PlayerTab[] = ["best", "recent", "about", "card", "activity"];
@@ -172,6 +173,103 @@ export type PlayerLoaderData = {
   cachedSnapshot: LivePlayerProfileSnapshot | null;
 };
 
+// The cached snapshot is dehydrated into the SSR HTML, so every byte here is
+// document weight and hydration work (~580KB raw for a 200-score snapshot,
+// dominated by fields nothing on this page reads). Rebuild user/scores from
+// the typed fields only; the deferred post-mount refresh fetches the full
+// payload straight from the live backend, and the about tab fetches page
+// HTML on demand.
+function slimLoaderScore(score: OsuScore): OsuScore {
+  const { weight: _weight, ...rest } = score;
+  return {
+    ...rest,
+    beatmap: score.beatmap ? {
+      id: score.beatmap.id,
+      beatmapset_id: score.beatmap.beatmapset_id,
+      difficulty_rating: score.beatmap.difficulty_rating,
+      mode: score.beatmap.mode,
+      status: score.beatmap.status,
+      total_length: score.beatmap.total_length,
+      cs: score.beatmap.cs,
+      drain: score.beatmap.drain,
+      accuracy: score.beatmap.accuracy,
+      ar: score.beatmap.ar,
+      bpm: score.beatmap.bpm,
+      convert: score.beatmap.convert,
+      count_circles: score.beatmap.count_circles,
+      count_sliders: score.beatmap.count_sliders,
+      count_spinners: score.beatmap.count_spinners,
+      max_combo: score.beatmap.max_combo,
+      version: score.beatmap.version,
+      url: score.beatmap.url,
+    } : score.beatmap,
+    beatmapset: score.beatmapset ? {
+      id: score.beatmapset.id,
+      title: score.beatmapset.title,
+      artist: score.beatmapset.artist,
+      creator: score.beatmapset.creator,
+      user_id: score.beatmapset.user_id,
+      status: score.beatmapset.status,
+      play_count: score.beatmapset.play_count,
+      favourite_count: score.beatmapset.favourite_count,
+      submitted_date: score.beatmapset.submitted_date,
+      ranked_date: score.beatmapset.ranked_date,
+      last_updated: score.beatmapset.last_updated,
+      bpm: score.beatmapset.bpm,
+      preview_url: score.beatmapset.preview_url,
+      covers: {
+        list: score.beatmapset.covers?.list,
+        cover: score.beatmapset.covers?.cover,
+        "cover@2x": score.beatmapset.covers?.["cover@2x"],
+      } as OsuCovers,
+    } : score.beatmapset,
+    user: score.user ? {
+      id: score.user.id,
+      username: score.user.username,
+      avatar_url: score.user.avatar_url,
+      country_code: score.user.country_code,
+    } : score.user,
+  };
+}
+
+function slimLoaderUser(user: OsuUser): OsuUser {
+  return {
+    id: user.id,
+    username: user.username,
+    avatar_url: user.avatar_url,
+    cover_url: user.cover_url,
+    cover: user.cover,
+    country_code: user.country_code,
+    country: user.country,
+    join_date: user.join_date,
+    last_visit: user.last_visit,
+    is_active: user.is_active,
+    is_online: user.is_online,
+    is_supporter: user.is_supporter,
+    statistics: user.statistics,
+    rank_history: user.rank_history,
+    rank_highest: user.rank_highest,
+    page: null,
+    badges: user.badges ?? [],
+    user_achievements: [],
+    follower_count: user.follower_count,
+    mapping_follower_count: user.mapping_follower_count,
+    previous_usernames: user.previous_usernames,
+    playmode: user.playmode,
+    playstyle: user.playstyle,
+    post_count: user.post_count,
+    comments_count: user.comments_count,
+  };
+}
+
+function slimLoaderSnapshot(snapshot: LivePlayerProfileSnapshot): LivePlayerProfileSnapshot {
+  return {
+    ...snapshot,
+    user: slimLoaderUser(snapshot.user),
+    bestScores: snapshot.bestScores.map(slimLoaderScore),
+  };
+}
+
 function withProfileLoaderBudget<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
   const timeoutPromise = new Promise<null>((resolve) => {
@@ -196,7 +294,7 @@ export async function loadPlayerRouteData(username: string): Promise<PlayerLoade
     cachedSnapshot = null;
   }
 
-  return { cachedSnapshot };
+  return { cachedSnapshot: cachedSnapshot ? slimLoaderSnapshot(cachedSnapshot) : null };
 }
 
 export function buildPlayerRouteHead({
@@ -505,7 +603,7 @@ function loadPlayerSnapshotCached(username: string): Promise<{ user: OsuUser; be
   const cached = playerSnapshotRequestCache.get(cacheKey);
   if (cached) return cached;
 
-  const request = fetchLivePlayerProfileSnapshot({ data: { key: username } })
+  const request = fetchLivePlayerProfileSnapshotDirect(username)
     .then((snapshot) => {
       if (!snapshot) return null;
       const data = {
@@ -2186,7 +2284,10 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
 
           <div className="mt-6 sm:mt-7">
             <div className="flex gap-2">
-              <div className="grid w-8 shrink-0 grid-rows-7 gap-1 pt-5 text-[10px] text-osu-f1">
+              {/* Row pitch must match the cells: fixed 12px rows on mobile (cells are
+                  12px), 1fr rows on sm+ where pt-5 equals the month-label row (h-3 +
+                  mt-2) so the stretched height equals the heatmap grid exactly. */}
+              <div className="grid w-8 shrink-0 grid-rows-[repeat(7,12px)] gap-1 pt-5 text-[10px] leading-none text-osu-f1 sm:grid-rows-7">
                 {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
                   <span key={day} className="flex items-center">{day}</span>
                 ))}
@@ -2298,7 +2399,7 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
                   <ActivityDetailMetric label="Sessions" value={formatNumber(modalDay.sessionCount)} />
                 </div>
 
-                <ActivitySessionFlow day={modalDay} />
+                <ActivitySessionFlow day={modalDay} timezone={activity.timezone} />
 
                 <div className="mt-4 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-3 sm:mt-5 sm:p-4">
                   <div className="flex items-center justify-between gap-3">
@@ -2428,14 +2529,18 @@ function ActivityPatternBars({ skills, keyCount }: { skills: LivePlayerActivityS
   );
 }
 
-function ActivitySessionFlow({ day }: { day: ActivityDay }) {
+function ActivitySessionFlow({ day, timezone }: { day: ActivityDay; timezone: string }) {
   if (day.timeline.length === 0) return null;
   const sessions = groupActivityTimelineBySession(day.timeline);
   const flowLabel = formatActivityKeyFlow(day.timeline);
+  const timezoneHint = getActivityTimezoneHint(timezone, day.timeline[0]?.startAt);
   return (
     <div className="mt-4 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-3 sm:mt-5 sm:p-4">
       <div className="flex items-center justify-between gap-3">
-        <div className="text-[11px] font-bold uppercase text-osu-f1 sm:text-xs">Session flow</div>
+        <div className="text-[11px] font-bold uppercase text-osu-f1 sm:text-xs">
+          Session flow
+          {timezoneHint ? <span className="ml-1.5 font-semibold normal-case text-osu-f1/70">{timezoneHint}</span> : null}
+        </div>
         <div className="text-[10px] font-semibold text-osu-l2 sm:text-[11px]">{flowLabel}</div>
       </div>
       <div className="mt-3 space-y-2">
@@ -2443,17 +2548,21 @@ function ActivitySessionFlow({ day }: { day: ActivityDay }) {
           const sessionPlays = session.reduce((sum, segment) => sum + segment.playCount, 0);
           const first = session[0];
           const last = session[session.length - 1];
+          const startDateLabel = formatActivitySessionDate(first.startAt, day.date, timezone);
           return (
             <div key={first.key}>
               <div className="mb-1 flex items-center justify-between gap-3 text-[10px] text-osu-f1">
-                <span>{formatActivityTime(first.startAt)} - {formatActivityTime(last.endAt)}</span>
+                <span>
+                  {startDateLabel ? <span className="font-semibold text-osu-l2">{startDateLabel} · </span> : null}
+                  {formatActivityTime(first.startAt, timezone)} - {formatActivityTime(last.endAt, timezone)}
+                </span>
                 <span>{formatNumber(sessionPlays)} {sessionPlays === 1 ? "play" : "plays"}</span>
               </div>
               <div className="flex h-7 overflow-hidden rounded-md bg-osu-b4/70">
                 {session.map((segment) => (
                   <div
                     key={segment.key}
-                    title={formatActivitySegmentTitle(segment)}
+                    title={formatActivitySegmentTitle(segment, timezone)}
                     className="flex min-w-0 items-center justify-center border-r border-black/20 px-1 last:border-r-0"
                     style={{
                       flexBasis: 0,
@@ -2556,7 +2665,7 @@ function ActivityMonthLabels({ weeks, gridStyle }: { weeks: ActivityWeek[]; grid
   let lastMonth = "";
   return (
     <div
-      className="activity-heatmap-grid grid gap-1 text-[10px] text-osu-f1"
+      className="activity-heatmap-grid grid h-3 gap-1 text-[10px] leading-none text-osu-f1"
       style={gridStyle}
     >
       {weeks.map((week) => {
@@ -2609,6 +2718,7 @@ function buildActivityFromSnapshot(snapshot: LivePlayerActivitySnapshot | null, 
     currentStreak: snapshot?.currentStreak ?? 0,
     typicalSession,
     availableYears: snapshot?.availableYears ?? [today.getFullYear()],
+    timezone: snapshot?.timezone ?? "UTC",
   };
 }
 
@@ -2687,9 +2797,8 @@ function groupActivityTimelineBySession(segments: ActivityTimelineSegment[]): Ac
   for (const segment of segments) {
     groups.set(segment.sessionIndex, [...(groups.get(segment.sessionIndex) ?? []), segment]);
   }
-  return [...groups.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([, session]) => session);
+  return [...groups.values()]
+    .sort((a, b) => Date.parse(a[0].startAt) - Date.parse(b[0].startAt));
 }
 
 function getActivityPrimarySkill(skills: LivePlayerActivitySkillVector | null): LivePlayerActivityPrimarySkill {
@@ -2807,7 +2916,7 @@ function formatActivityTimelineSegmentLabel(segment: ActivityTimelineSegment): s
   return segment.primarySkill === "unknown" ? key ?? "" : [key, skill].filter(Boolean).join(" ");
 }
 
-function formatActivitySegmentTitle(segment: ActivityTimelineSegment): string {
+function formatActivitySegmentTitle(segment: ActivityTimelineSegment, timeZone: string): string {
   const scores = [
     `S ${Math.round(clamp01(segment.stream) * 100)}%`,
     `J ${Math.round(clamp01(segment.jack) * 100)}%`,
@@ -2815,7 +2924,7 @@ function formatActivitySegmentTitle(segment: ActivityTimelineSegment): string {
     `LN ${Math.round(clamp01(segment.ln) * 100)}%`,
   ].join(" / ");
   return [
-    `${formatActivityTime(segment.startAt)} - ${formatActivityTime(segment.endAt)}`,
+    `${formatActivityTime(segment.startAt, timeZone)} - ${formatActivityTime(segment.endAt, timeZone)}`,
     `${formatNumber(segment.playCount)} ${segment.playCount === 1 ? "play" : "plays"}`,
     formatActivityKeyCount(segment.keyCount),
     getActivitySkillLabel(segment.primarySkill, segment.keyCount),
@@ -2828,13 +2937,56 @@ function formatActivityKeyCount(keyCount: number | null): string | null {
   return `${Math.round(keyCount)}K`;
 }
 
-function formatActivityTime(value: string): string {
+// Safety net: with player-timezone bucketing a session always falls on its
+// heatmap date, but stale data from an older backend can still cross over;
+// label those sessions with their date so the order stays legible.
+function formatActivitySessionDate(startAt: string, dayKey: string, timeZone: string): string | null {
+  const date = new Date(startAt);
+  if (!Number.isFinite(date.getTime())) return null;
+  if (getZonedDateKey(date, timeZone) === dayKey) return null;
+  try {
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone });
+  } catch {
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
+}
+
+// en-CA formats as YYYY-MM-DD, matching the backend's day keys.
+function getZonedDateKey(date: Date, timeZone: string): string {
+  try {
+    return date.toLocaleDateString("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
+  } catch {
+    return toDateKey(date);
+  }
+}
+
+function formatActivityTime(value: string, timeZone: string): string {
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return "";
-  return date.toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  try {
+    return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone });
+  } catch {
+    return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  }
+}
+
+// Shown only when the viewer's clock differs from the player's timezone, so
+// the session times don't read as broken to foreign visitors.
+function getActivityTimezoneHint(timeZone: string, referenceIso: string | undefined): string | null {
+  const reference = referenceIso ? new Date(referenceIso) : new Date();
+  if (!Number.isFinite(reference.getTime())) return null;
+  try {
+    const zoned = new Intl.DateTimeFormat("en-US", { timeZone, timeZoneName: "shortOffset" })
+      .formatToParts(reference)
+      .find((part) => part.type === "timeZoneName")?.value ?? null;
+    const local = new Intl.DateTimeFormat("en-US", { timeZoneName: "shortOffset" })
+      .formatToParts(reference)
+      .find((part) => part.type === "timeZoneName")?.value ?? null;
+    if (!zoned || zoned === local) return null;
+    return zoned;
+  } catch {
+    return null;
+  }
 }
 
 function clamp01(value: number): number {

@@ -52,7 +52,7 @@ Feature modules (`src/features/`), one per surface:
 - `snipes.ts`: per-beatmap/lane boards in `country_beatmap_scores`; an overtake writes `snipe_events` and emits SSE `snipe`; missing boards are seeded by `seed_snipe_board`.
 - `maps.ts`: aggregates roster users' farmed scores into `country_maps_snapshots` (plus a global rollup); progress tracked in `live_meta`.
 - `farm-helper.ts` + `farm-helper-key-stats.ts`: PP-gain recommendations by comparing a player's top 200 against a global peer pool at similar PP; per-keymode weighted PP in `farm_helper_user_key_stats`.
-- `activity.ts`: per-day player skill vectors (stream/jack/LN/etc.) in `player_activity_*` tables, computed by `analyze_activity_beatmap` jobs.
+- `activity.ts`: per-day player skill vectors (stream/jack/LN/etc.) in `player_activity_*` tables, computed by `analyze_activity_beatmap` jobs. Days/sessions are bucketed in the player country's local timezone (`shared/country-timezones.ts`) at read time from `player_activity_score_refs`; stored rows stay keyed by UTC day.
 - `dan-estimates.ts`: cached dan ratings (`dan_estimates`), small batches computed inline, larger ones queued. Versioned by `cache-version.ts` under `src/dan/`.
 - `global-rankings.ts`, `rank-snapshots.ts`, `player-profiles.ts`: global ranking snapshot, 7-day rank deltas from `country_rank_snapshots`, and cached profile snapshots (best-100 cached 24h, profile sections ~2min).
 
