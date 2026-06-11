@@ -90,7 +90,7 @@ export function PackSummary({ cards, onOpenAnother, reducedMotion }: PackSummary
         onClick={onOpenAnother}
         className="mt-8 rounded-full bg-osu-pink px-7 py-2.5 text-sm font-bold text-white hover:brightness-110 transition cursor-pointer"
       >
-        Open another pack
+        Back to packs
       </button>
       <div className="mt-3 text-[11px] text-osu-f1">
         {newCount > 0
