@@ -14,6 +14,7 @@ export interface QualityInput {
 
 export interface QualityProfile {
   pixelRatio: number;
+  textureScale: number;
   antialias: boolean;
   adaptiveIdle: boolean;
   shaderQuality: ShaderQuality;
@@ -52,6 +53,7 @@ export function resolveQualityProfile(input: QualityInput): QualityProfile {
   if (input.reducedMotion) {
     return {
       pixelRatio: 1,
+      textureScale: 0.75,
       antialias: true,
       adaptiveIdle: true,
       shaderQuality: "medium",
@@ -61,16 +63,18 @@ export function resolveQualityProfile(input: QualityInput): QualityProfile {
 
   if (input.mobile) {
     return {
-      pixelRatio: clamp(input.devicePixelRatio, 1, 1.5),
-      antialias: true,
+      pixelRatio: clamp(input.devicePixelRatio, 1, 1.25),
+      textureScale: 0.75,
+      antialias: false,
       adaptiveIdle: true,
-      shaderQuality: "high",
+      shaderQuality: "medium",
       idleMotion: "wake-on-input",
     };
   }
 
   return {
     pixelRatio: clamp(input.devicePixelRatio, 1, 2),
+    textureScale: 1,
     antialias: true,
     adaptiveIdle: false,
     shaderQuality: "high",

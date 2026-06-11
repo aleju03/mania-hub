@@ -111,6 +111,10 @@ void main() {
   float drift1 = sin(uTime * 0.35) * 0.18;
   float drift2 = cos(uTime * 0.27 + 1.3) * 0.18;
 
+#if MC_MEDIUM
+  float triangles = triangleWave(vUv, vec2(6.0, 8.0), uTime * 0.07) * (1.0 - uStarfield);
+  float stars = starLayer(vUv, vec2(6.0, 8.0), uTime * 0.065, uTime) * uStarfield;
+#else
   // Twinkling sparkle layer (drifts slowly upward).
   float triangles = (triangleWave(vUv, vec2(7.0, 9.0), uTime * 0.09) * 0.58
                   + triangleWave(vUv + vec2(0.19, 0.11), vec2(5.0, 7.0), uTime * 0.052) * 0.42)
@@ -121,24 +125,30 @@ void main() {
   float stars = (starLayer(vUv, vec2(6.0, 8.0), uTime * 0.085, uTime)
               + starLayer(vUv + vec2(0.37, 0.21), vec2(10.0, 14.0), uTime * 0.04, uTime) * 0.65)
               * uStarfield;
+#endif
 
   // Primary beam: nearly vertical, like a Pokemon card tilted under a lamp.
   // Axis points roughly down-right, so the band sweeps top-left to bottom-right.
   // Anchor center on the card's middle (0.5, 0.5) so the band passes through
   // the center at rest instead of drifting toward the bottom.
   vec2 axisA = normalize(vec2(0.30, 1.0));
+  vec2 axisB = normalize(vec2(1.0, -0.55));
   float restA = 0.5 * (axisA.x + axisA.y);
   float centerA = restA + lightOffset.y * 0.55 + lightOffset.x * 0.20 + drift1;
   vec2 beamA = beam(vUv, axisA, centerA, 24.0, 5.0);
 
+#if MC_MEDIUM
+  float bandSharp = beamA.x * uFoil;
+  float bandWide = beamA.y * uFoil;
+#else
   // Secondary beam at a contrasting angle so the two cross when the card moves.
-  vec2 axisB = normalize(vec2(1.0, -0.55));
   float restB = 0.5 * (axisB.x + axisB.y);
   float centerB = restB + lightOffset.x * 0.55 - lightOffset.y * 0.25 + drift2;
   vec2 beamB = beam(vUv, axisB, centerB, 22.0, 4.5);
 
   float bandSharp = max(beamA.x, beamB.x * 0.7) * uFoil;
   float bandWide = max(beamA.y, beamB.y * 0.85) * uFoil;
+#endif
   glare *= uFoil;
 
   // Hue scrolls along each beam direction so the rainbow visibly shifts as

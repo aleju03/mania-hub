@@ -61,6 +61,37 @@ interface IntroFlipAnimation {
   resolve: () => void;
 }
 
+interface RendererDisposeOptions {
+  deferGpuRelease?: boolean;
+}
+
+type IdleDeadlineLike = {
+  didTimeout: boolean;
+  timeRemaining: () => number;
+};
+
+type WindowWithIdleCallback = Window & {
+  requestIdleCallback?: (
+    callback: (deadline: IdleDeadlineLike) => void,
+    options?: { timeout?: number },
+  ) => number;
+};
+
+function releaseRendererResources(callback: () => void, defer: boolean) {
+  if (!defer || typeof window === "undefined") {
+    callback();
+    return;
+  }
+
+  const idleWindow = window as WindowWithIdleCallback;
+  if (idleWindow.requestIdleCallback) {
+    idleWindow.requestIdleCallback(callback, { timeout: 900 });
+    return;
+  }
+
+  window.setTimeout(callback, 360);
+}
+
 // easeOutBack with a softened overshoot so the card snaps a few degrees past
 // front-facing and settles, instead of wobbling.
 function easeOutBackSoft(t: number) {
@@ -85,6 +116,7 @@ export class ManiaCardRenderer {
   private frameId: number | null = null;
   private disposed = false;
   private dataRequestId = 0;
+  private readyTextureRequestId = 0;
   private dragStart: { x: number; y: number; rotation: Rotation2D } | null = null;
   private manualRotation: Rotation2D = { x: 0, y: 0 };
   private orientationRotation: Rotation2D = { x: 0, y: 0 };
@@ -110,7 +142,11 @@ export class ManiaCardRenderer {
       reducedMotion: options.reducedMotion,
       devicePixelRatio: options.devicePixelRatio,
     });
-    this.renderer = new WebGLRenderer({ antialias: this.quality.antialias, alpha: true });
+    this.renderer = new WebGLRenderer({
+      antialias: this.quality.antialias,
+      alpha: true,
+      powerPreference: "high-performance",
+    });
     this.renderer.setPixelRatio(this.quality.pixelRatio);
     this.renderer.setSize(
       Math.max(1, Math.round(this.host.clientWidth * CANVAS_OVERSCAN)),
@@ -145,9 +181,10 @@ export class ManiaCardRenderer {
   async setData(data: ManiaCardReadyData) {
     const requestId = ++this.dataRequestId;
     this.readyEmitted = false;
+    this.readyTextureRequestId = 0;
     let textures: CardTextureSet;
     try {
-      textures = await createCardTextures(data);
+      textures = await createCardTextures(data, { textureScale: this.quality.textureScale });
     } catch (error) {
       if (!this.disposed && requestId === this.dataRequestId) this.onError?.(error);
       return;
@@ -159,6 +196,7 @@ export class ManiaCardRenderer {
 
     this.textures?.dispose();
     this.textures = textures;
+    this.readyTextureRequestId = requestId;
     this.clearGroup();
 
     const body = new Mesh(createCardBodyGeometry(), createEdgeMaterial(data));
@@ -170,7 +208,7 @@ export class ManiaCardRenderer {
     back.rotation.y = Math.PI;
     this.backMesh = back;
 
-    this.overlay = new Mesh(createCardFaceGeometry(), createOverlayMaterial(data, textures.layout));
+    this.overlay = new Mesh(createCardFaceGeometry(), createOverlayMaterial(data, textures.layout, this.quality.shaderQuality));
     this.overlay.position.z = OVERLAY_Z_OFFSET;
 
     this.group.add(body, front, back, this.overlay);
@@ -266,7 +304,7 @@ export class ManiaCardRenderer {
     this.start();
   }
 
-  dispose() {
+  dispose(options: RendererDisposeOptions = {}) {
     if (this.disposed) return;
     this.disposed = true;
     this.finishIntroAnim();
@@ -277,17 +315,26 @@ export class ManiaCardRenderer {
       window.removeEventListener("deviceorientation", this.onDeviceOrientation);
       this.orientationAttached = false;
     }
-    this.textures?.dispose();
-    this.backOverrideTexture?.dispose();
+    const textures = this.textures;
+    const backOverrideTexture = this.backOverrideTexture;
+    const group = this.group;
+    const renderer = this.renderer;
+    const canvas = this.renderer.domElement;
+    this.textures = null;
     this.backOverrideTexture = null;
-    this.group.traverse((object: Object3D) => {
-      const mesh = object as Mesh;
-      if (mesh.geometry) mesh.geometry.dispose();
-      const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
-      for (const material of materials) material.dispose();
-    });
-    this.renderer.dispose();
-    this.renderer.domElement.remove();
+    canvas.remove();
+
+    releaseRendererResources(() => {
+      textures?.dispose();
+      backOverrideTexture?.dispose();
+      group.traverse((object: Object3D) => {
+        const mesh = object as Mesh;
+        if (mesh.geometry) mesh.geometry.dispose();
+        const materials = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+        for (const material of materials) material.dispose();
+      });
+      renderer.dispose();
+    }, options.deferGpuRelease === true);
   }
 
   private clearGroup() {
@@ -352,7 +399,7 @@ export class ManiaCardRenderer {
     }
 
     this.renderer.render(this.scene, this.camera);
-    if (this.textures && !this.readyEmitted) {
+    if (this.textures && !this.readyEmitted && this.readyTextureRequestId === this.dataRequestId) {
       this.readyEmitted = true;
       this.onReady?.();
     }

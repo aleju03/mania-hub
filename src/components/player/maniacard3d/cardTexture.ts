@@ -17,11 +17,19 @@ export interface CardTextureSet {
   dispose: () => void;
 }
 
-export async function createCardTextures(data: ManiaCardReadyData): Promise<CardTextureSet> {
-  const frontCanvas = createCanvas();
-  const backCanvas = createCanvas();
+export async function createCardTextures(
+  data: ManiaCardReadyData,
+  options: { textureScale?: number } = {},
+): Promise<CardTextureSet> {
+  const textureScale = Math.max(0.5, Math.min(1, options.textureScale ?? 1));
+  const frontCanvas = createCanvas(textureScale);
+  const backCanvas = createCanvas(textureScale);
   const front = getContext(frontCanvas);
   const back = getContext(backCanvas);
+  if (textureScale !== 1) {
+    front.scale(textureScale, textureScale);
+    back.scale(textureScale, textureScale);
+  }
   const measure = (text: string, size: number, family: string, weight: number) => {
     front.font = `${weight} ${size}px ${family}`;
     return front.measureText(text).width;
@@ -49,10 +57,10 @@ export async function createCardTextures(data: ManiaCardReadyData): Promise<Card
   };
 }
 
-function createCanvas() {
+function createCanvas(textureScale: number) {
   const canvas = document.createElement("canvas");
-  canvas.width = CARD_TEXTURE_WIDTH;
-  canvas.height = CARD_TEXTURE_HEIGHT;
+  canvas.width = Math.round(CARD_TEXTURE_WIDTH * textureScale);
+  canvas.height = Math.round(CARD_TEXTURE_HEIGHT * textureScale);
   return canvas;
 }
 

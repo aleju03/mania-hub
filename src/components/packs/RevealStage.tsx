@@ -1,6 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import type { ManiaCardTier, ManiaSkills } from "#/lib/maniacard";
 import { tierRank, type PulledCard } from "#/lib/pack-collection";
 import type { PackPlayer } from "#/lib/packs";
@@ -69,6 +76,156 @@ function isMobileViewport() {
   );
 }
 
+function stackBackTransform(position: number, dragX = 0) {
+  const x = position * 5 + dragX;
+  const y = position * 6;
+  const rotate = position * 1.4 + dragX * 0.035;
+  return `translate3d(${x}px, ${y}px, 0) rotate(${rotate}deg) scale(${STACK_CARD_SCALE})`;
+}
+
+function DraggableStackBackCard({
+  cardBack,
+  position,
+  zIndex,
+  onDraw,
+}: {
+  cardBack: string;
+  position: number;
+  zIndex: number;
+  onDraw: () => void;
+}) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const suppressClickRef = useRef(false);
+  const gestureRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    latestX: number;
+    dragging: boolean;
+  } | null>(null);
+
+  const snapBack = () => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.transition = "transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1)";
+    el.style.transform = stackBackTransform(position);
+  };
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.transition = "transform 180ms ease-out";
+    el.style.transform = stackBackTransform(position);
+  }, [position]);
+
+  const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    const el = event.currentTarget;
+    suppressClickRef.current = false;
+    gestureRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      latestX: 0,
+      dragging: false,
+    };
+    el.style.transition = "none";
+  };
+
+  const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+
+    const dx = event.clientX - gesture.startX;
+    const dy = event.clientY - gesture.startY;
+    if (!gesture.dragging) {
+      if (Math.abs(dx) < 6 || Math.abs(dx) < Math.abs(dy) * 1.15) return;
+      gesture.dragging = true;
+      suppressClickRef.current = true;
+      if (typeof event.currentTarget.setPointerCapture === "function") {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }
+    }
+
+    event.preventDefault();
+    gesture.latestX = dx;
+    event.currentTarget.style.transform = stackBackTransform(position, dx);
+  };
+
+  const finishPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+
+    gestureRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    if (!gesture.dragging) {
+      snapBack();
+      return;
+    }
+
+    event.preventDefault();
+    if (Math.abs(gesture.latestX) > 90) {
+      onDraw();
+      return;
+    }
+    snapBack();
+  };
+
+  const onPointerCancel = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    gestureRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    snapBack();
+  };
+
+  const onClick = () => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    onDraw();
+  };
+
+  const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    onDraw();
+  };
+
+  return (
+    <div
+      ref={ref}
+      className="absolute inset-0 rounded-[18px] bg-cover bg-center cursor-grab active:cursor-grabbing select-none"
+      style={{
+        backgroundImage: `url(${cardBack})`,
+        boxShadow: "0 14px 36px rgba(0,0,0,0.5)",
+        zIndex,
+        transform: stackBackTransform(position),
+        transformOrigin: "center",
+        touchAction: "pan-y",
+        willChange: "transform",
+        backfaceVisibility: "hidden",
+        WebkitTapHighlightColor: "transparent",
+      }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={finishPointer}
+      onPointerCancel={onPointerCancel}
+      onClick={onClick}
+      onKeyDown={onKeyDown}
+      role="button"
+      tabIndex={0}
+      aria-label="Draw the next card"
+    />
+  );
+}
+
 export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }: RevealStageProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const backCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -89,9 +246,6 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
   const [skipping, setSkipping] = useState(false);
   const [flight, setFlight] = useState<CardFlight | null>(null);
   const trayRef = useRef<HTMLDivElement | null>(null);
-  // True once a drag gesture starts on the top card, so the click fired on
-  // release doesn't also draw.
-  const dragHappenedRef = useRef(false);
 
   const setPhase = (next: RevealPhase) => {
     phaseRef.current = next;
@@ -107,7 +261,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     setCardBack(backCanvas.toDataURL("image/png"));
     return () => {
       cancelledRef.current = true;
-      rendererRef.current?.dispose();
+      rendererRef.current?.dispose({ deferGpuRelease: true });
       rendererRef.current = null;
     };
   }, []);
@@ -391,16 +545,29 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
             .map((position) => {
               const isTop = position === 0;
               const draggable = isTop && phase === "stack" && !skipping;
+              if (draggable) {
+                return (
+                  <DraggableStackBackCard
+                    key={`${firstBackCardIndex + position}`}
+                    cardBack={cardBack}
+                    position={position}
+                    zIndex={10 - position}
+                    onDraw={() => {
+                      if (phaseRef.current === "stack") void reveal(index);
+                    }}
+                  />
+                );
+              }
               return (
                 <motion.div
                   key={`${firstBackCardIndex + position}`}
-                  className={`absolute inset-0 rounded-[18px] bg-cover bg-center ${
-                    draggable ? "cursor-grab active:cursor-grabbing" : ""
-                  }`}
+                  className="absolute inset-0 rounded-[18px] bg-cover bg-center"
                   style={{
                     backgroundImage: `url(${cardBack})`,
                     boxShadow: "0 14px 36px rgba(0,0,0,0.5)",
                     zIndex: 10 - position,
+                    willChange: "transform",
+                    backfaceVisibility: "hidden",
                   }}
                   animate={{
                     x: position * 5,
@@ -416,34 +583,6 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
                       ? { scale: { duration: 0.9, repeat: Infinity, ease: "easeInOut" }, default: { duration: 0.25 } }
                       : { duration: 0.25 }
                   }
-                  // The top card can also be dragged off the deck: past the
-                  // threshold (either side) the release draws it, short tugs
-                  // spring back. Vertical stays free for page scroll on touch.
-                  drag={draggable ? "x" : false}
-                  dragSnapToOrigin
-                  dragElastic={0.7}
-                  onPointerDown={isTop ? () => { dragHappenedRef.current = false; } : undefined}
-                  onDragStart={draggable ? () => { dragHappenedRef.current = true; } : undefined}
-                  onDragEnd={
-                    draggable
-                      ? (_event, info) => {
-                          if (Math.abs(info.offset.x) > 90 && phaseRef.current === "stack") void reveal(index);
-                        }
-                      : undefined
-                  }
-                  onClick={
-                    isTop
-                      ? () => {
-                          if (dragHappenedRef.current) {
-                            dragHappenedRef.current = false;
-                            return;
-                          }
-                          if (phaseRef.current === "stack") void reveal(index);
-                        }
-                      : undefined
-                  }
-                  role={isTop && phase === "stack" ? "button" : undefined}
-                  aria-label={isTop && phase === "stack" ? "Draw the next card" : undefined}
                 />
               );
             })}

@@ -54,6 +54,52 @@ function useReducedMotion() {
   return reduced;
 }
 
+type IdleDeadlineLike = {
+  didTimeout: boolean;
+  timeRemaining: () => number;
+};
+
+type WindowWithIdleCallback = Window & {
+  requestIdleCallback?: (
+    callback: (deadline: IdleDeadlineLike) => void,
+    options?: { timeout?: number },
+  ) => number;
+  cancelIdleCallback?: (handle: number) => void;
+};
+
+function scheduleCollectionPanelMount(callback: () => void, reducedMotion: boolean) {
+  if (typeof window === "undefined") {
+    callback();
+    return () => {};
+  }
+
+  const idleWindow = window as WindowWithIdleCallback;
+  let active = true;
+  let timeoutId: number | null = null;
+  let idleId: number | null = null;
+
+  timeoutId = window.setTimeout(() => {
+    timeoutId = null;
+    if (!active) return;
+
+    if (idleWindow.requestIdleCallback) {
+      idleId = idleWindow.requestIdleCallback(() => {
+        idleId = null;
+        if (active) callback();
+      }, { timeout: 900 });
+      return;
+    }
+
+    callback();
+  }, reducedMotion ? 80 : 380);
+
+  return () => {
+    active = false;
+    if (timeoutId !== null) window.clearTimeout(timeoutId);
+    if (idleId !== null) idleWindow.cancelIdleCallback?.(idleId);
+  };
+}
+
 function canAffordPack(wallet: PackWallet | null, type: PackTypeDef): boolean {
   if (!wallet) return false;
   if (type.cost.kind === "charge") return wallet.charges > 0;
@@ -171,6 +217,7 @@ function PacksPage() {
   const [cards, setCards] = useState<PackCardState[] | null>(null);
   const [revealed, setRevealed] = useState<RevealedCard[]>([]);
   const [dealError, setDealError] = useState(false);
+  const [collectionPanelReady, setCollectionPanelReady] = useState(true);
 
   const wallet = walletApi.wallet;
   const selectedType = packTypeById(packTypeId);
@@ -224,6 +271,18 @@ function PacksPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [packId, packTypeId]);
 
+  useEffect(() => {
+    if (phase === "pack") {
+      setCollectionPanelReady(true);
+      return;
+    }
+
+    setCollectionPanelReady(false);
+    if (phase !== "summary") return;
+
+    return scheduleCollectionPanelMount(() => setCollectionPanelReady(true), reducedMotion);
+  }, [phase, reducedMotion]);
+
   const openAnother = () => {
     setRevealed([]);
     // Keep the chosen pack type across packs while it stays affordable.
@@ -243,6 +302,7 @@ function PacksPage() {
   };
 
   const canOpen = canAffordPack(wallet, selectedType);
+  const showCollectionPanel = !dealError && (phase === "pack" || (phase === "summary" && collectionPanelReady));
 
   return (
     <div className="relative flex min-h-screen flex-col">
@@ -375,7 +435,7 @@ function PacksPage() {
               </AnimatePresence>
             )}
 
-            {!dealError && (phase === "pack" || phase === "summary") && (
+            {showCollectionPanel && (
               <div className="mt-14">
                 <CollectionPanel
                   wallet={wallet}

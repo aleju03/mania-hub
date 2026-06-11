@@ -46,10 +46,11 @@ describe("buildStarSegments", () => {
 describe("resolveQualityProfile", () => {
   test("caps mobile pixel ratio and reduces idle", () => {
     expect(resolveQualityProfile({ mobile: true, reducedMotion: false, devicePixelRatio: 3 })).toEqual({
-      pixelRatio: 1.5,
-      antialias: true,
+      pixelRatio: 1.25,
+      textureScale: 0.75,
+      antialias: false,
       adaptiveIdle: true,
-      shaderQuality: "high",
+      shaderQuality: "medium",
       idleMotion: "wake-on-input",
     });
   });
@@ -57,6 +58,7 @@ describe("resolveQualityProfile", () => {
   test("disables idle motion when reduced motion is requested", () => {
     expect(resolveQualityProfile({ mobile: false, reducedMotion: true, devicePixelRatio: 2 })).toMatchObject({
       pixelRatio: 1,
+      textureScale: 0.75,
       shaderQuality: "medium",
       idleMotion: "off",
     });
