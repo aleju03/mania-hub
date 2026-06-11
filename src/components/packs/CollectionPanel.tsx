@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { LogIn, Recycle, Search } from "lucide-react";
+import { Check, LogIn, Recycle, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "#/lib/maniacard";
 import {
@@ -97,6 +97,13 @@ async function backfillCardMint(card: CollectedCard, onApplyMint: (userId: numbe
     // The sketch tile remains; another session can retry.
     attemptedBackfills.delete(card.userId);
   }
+}
+
+/* The vivid rgb triplet of a tier's palette (from its badge halo), used to
+   tint the filter chips so they read as the tier instead of white pills. */
+function tierChipRgb(tier: ManiaCardTier): string {
+  const match = MANIA_TIER_STYLES[tier].badgeHalo.match(/([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/);
+  return match ? `${match[1]}, ${match[2]}, ${match[3]}` : "148, 163, 184";
 }
 
 /* Placeholder (and fallback for cards without a skills snapshot): a DOM
@@ -238,16 +245,115 @@ export function CollectionPanel({
   // Recycling the last copy removes the card from the collection, so it
   // takes a second tap to confirm.
   const [confirmUserId, setConfirmUserId] = useState<number | null>(null);
+  // Right-click menu on a card tile; whole-recycle inside it confirms on a
+  // second click too.
+  const [menu, setMenu] = useState<{ card: CollectedCard; x: number; y: number } | null>(null);
+  const [menuConfirm, setMenuConfirm] = useState(false);
+  // Select mode: tiles toggle instead of navigating, and the floating bar
+  // recycles every selected card at once (all copies, second click confirms).
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [confirmBulk, setConfirmBulk] = useState(false);
   useEffect(() => {
     if (confirmUserId === null) return;
     const timer = setTimeout(() => setConfirmUserId(null), 3000);
     return () => clearTimeout(timer);
   }, [confirmUserId]);
+  useEffect(() => {
+    if (!confirmBulk) return;
+    const timer = setTimeout(() => setConfirmBulk(false), 3000);
+    return () => clearTimeout(timer);
+  }, [confirmBulk]);
+  useEffect(() => {
+    if (!menu && !selecting) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (menu) {
+        setMenu(null);
+        return;
+      }
+      setSelecting(false);
+      setSelected(new Set());
+      setConfirmBulk(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menu, selecting]);
+
+  const toggleSelected = (userId: number) => {
+    setSelected((previous) => {
+      const next = new Set(previous);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+    setConfirmBulk(false);
+  };
+
+  const applySelect = (userId: number, on: boolean) => {
+    setSelected((previous) => {
+      if (on === previous.has(userId)) return previous;
+      const next = new Set(previous);
+      if (on) next.add(userId);
+      else next.delete(userId);
+      return next;
+    });
+    setConfirmBulk(false);
+  };
+
+  const exitSelecting = () => {
+    setSelecting(false);
+    setSelected(new Set());
+    setConfirmBulk(false);
+  };
+
+  // Mouse drag-select: pressing on a tile picks add-or-remove from that
+  // card's state, sweeping extends it. The click that follows the press is
+  // suppressed so the first card isn't toggled twice.
+  const dragRef = useRef<{ mode: boolean } | null>(null);
+  const suppressClickRef = useRef(false);
+
+  useEffect(() => {
+    if (!selecting) return;
+    const onMove = (event: PointerEvent) => {
+      if (!dragRef.current || !(event.target instanceof Element)) return;
+      const tile = event.target.closest("[data-card-id]");
+      const userId = tile ? Number(tile.getAttribute("data-card-id")) : Number.NaN;
+      if (Number.isFinite(userId)) applySelect(userId, dragRef.current.mode);
+    };
+    const onUp = () => {
+      dragRef.current = null;
+    };
+    // Clicking empty space (anything not marked as part of the selection UI)
+    // leaves select mode.
+    const onDown = (event: PointerEvent) => {
+      if (!(event.target instanceof Element)) return;
+      if (event.target.closest("[data-select-keep]")) return;
+      exitSelecting();
+    };
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+    document.addEventListener("pointercancel", onUp);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      document.removeEventListener("pointercancel", onUp);
+      document.removeEventListener("pointerdown", onDown);
+      dragRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selecting]);
 
   if (!wallet) return null;
 
   const cards = ownedCards(wallet).sort((a, b) => tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp);
   const ownedTiers = [...new Set(cards.map((card) => card.tier))].sort((a, b) => tierRank(b) - tierRank(a));
+  const tierCounts = new Map<ManiaCardTier | "unrated", number>();
+  for (const card of cards) {
+    const key = card.tier ?? "unrated";
+    tierCounts.set(key, (tierCounts.get(key) ?? 0) + 1);
+  }
   const trimmedQuery = query.trim().toLowerCase();
   const visibleCards = cards.filter((card) => {
     if (trimmedQuery && !card.username.toLowerCase().includes(trimmedQuery)) return false;
@@ -256,6 +362,9 @@ export function CollectionPanel({
     return card.tier === tierFilter;
   });
   const recyclable = duplicateShardTotal(wallet);
+  const selectedShardTotal = cards
+    .filter((card) => selected.has(card.userId))
+    .reduce((sum, card) => sum + duplicateShardValue(card) + shardValueForTier(card.tier), 0);
 
   return (
     <section className="mx-auto w-full max-w-[820px]">
@@ -267,19 +376,33 @@ export function CollectionPanel({
             {wallet.poolTotal ? ` / ${wallet.poolTotal.toLocaleString()}` : ""} players
           </span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3" data-select-keep="">
           <span className="flex items-center gap-1.5 text-[12px] text-osu-f1">
             <Recycle className="h-3.5 w-3.5" />
             <span className="font-semibold text-white tabular-nums">{wallet.shards.toLocaleString()}</span>
             shards
           </span>
-          {recyclable > 0 && (
+          {recyclable > 0 && !selecting && (
             <button
               type="button"
               onClick={onRecycleAll}
               className="rounded-lg border border-osu-pink/30 bg-osu-pink/10 px-2.5 py-1 text-[11px] font-semibold text-osu-pink-light transition-colors hover:border-osu-pink/50 hover:bg-osu-pink/20 hover:text-white cursor-pointer"
             >
               Recycle duplicates +{recyclable}
+            </button>
+          )}
+          {cards.length > 0 && (
+            <button
+              type="button"
+              onClick={() => (selecting ? exitSelecting() : setSelecting(true))}
+              className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                selecting
+                  ? "border-osu-pink/50 bg-osu-pink/15 text-white"
+                  : "border-osu-b3/40 bg-osu-b4/40 text-osu-f1 hover:bg-osu-b4/70 hover:text-white"
+              }`}
+              aria-pressed={selecting}
+            >
+              {selecting ? "Done" : "Select"}
             </button>
           )}
         </div>
@@ -304,7 +427,7 @@ export function CollectionPanel({
       ) : null}
 
       {cards.length > 0 && (
-        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2" data-select-keep="">
           <div className="relative w-[220px]">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1" />
             <input
@@ -321,25 +444,35 @@ export function CollectionPanel({
                 const value = tier === null ? "unrated" : tier;
                 const selected = tierFilter === value;
                 const label = tier === "all" ? "All" : tier === null ? "Unrated" : MANIA_TIER_STYLES[tier].label;
-                const colorClass =
-                  tier === "all" || tier === null
-                    ? selected
-                      ? "text-white"
-                      : "text-osu-f1"
-                    : MANIA_TIER_STYLES[tier].badgeColor;
+                const count = tier === "all" ? cards.length : tierCounts.get(tier ?? "unrated") ?? 0;
+                const rgb = tier === "all" || tier === null ? null : tierChipRgb(tier);
                 return (
                   <button
                     key={value}
                     type="button"
                     onClick={() => setTierFilter(selected ? "all" : (value as ManiaCardTier | "all" | "unrated"))}
-                    className={`rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors cursor-pointer ${
-                      selected
-                        ? "border-osu-pink/50 bg-osu-b4"
-                        : "border-osu-b3/30 bg-osu-b4/30 hover:bg-osu-b4/70"
-                    } ${colorClass}`}
+                    className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-[filter] cursor-pointer ${
+                      rgb
+                        ? selected
+                          ? ""
+                          : "hover:brightness-125"
+                        : selected
+                          ? "border-osu-pink/50 bg-osu-b4 text-white"
+                          : "border-osu-b3/30 bg-osu-b4/30 text-osu-f1 hover:bg-osu-b4/70"
+                    }`}
+                    style={
+                      rgb
+                        ? {
+                            color: `rgb(${rgb})`,
+                            borderColor: `rgba(${rgb}, ${selected ? 0.65 : 0.22})`,
+                            backgroundColor: `rgba(${rgb}, ${selected ? 0.14 : 0.05})`,
+                          }
+                        : undefined
+                    }
                     aria-pressed={selected}
                   >
                     {label}
+                    <span className="font-semibold tabular-nums opacity-65">{count}</span>
                   </button>
                 );
               })}
@@ -357,22 +490,77 @@ export function CollectionPanel({
           No cards match{trimmedQuery ? ` "${query.trim()}"` : " the selected rarity"}.
         </div>
       ) : (
-        <div className="mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5">
+        <div className={`mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5 ${selecting ? "select-none" : ""}`}>
           {visibleCards.map((card) => {
             const dupValue = duplicateShardValue(card);
             const lastCopyValue = shardValueForTier(card.tier);
             const confirming = confirmUserId === card.userId;
             return (
-              <div key={card.userId}>
-                <Link
-                  to="/player/$username"
-                  params={{ username: card.username }}
-                  className="block transition-transform duration-150 hover:-translate-y-1"
-                  aria-label={`Open ${card.username}'s profile`}
-                >
-                  <CollectionCardTile card={card} onApplyMint={onApplyMint} />
-                </Link>
-                {card.copies > 1 ? (
+              <div
+                key={card.userId}
+                data-card-id={card.userId}
+                data-select-keep=""
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  setMenuConfirm(false);
+                  setMenu({
+                    card,
+                    x: Math.min(event.clientX, window.innerWidth - 208),
+                    y: Math.min(event.clientY, window.innerHeight - 176),
+                  });
+                }}
+              >
+                {selecting ? (
+                  <button
+                    type="button"
+                    onPointerDown={(event) => {
+                      if (event.pointerType !== "mouse") {
+                        suppressClickRef.current = false;
+                        return;
+                      }
+                      if (event.button !== 0) return;
+                      // Native drag/text selection would hijack the sweep.
+                      event.preventDefault();
+                      suppressClickRef.current = true;
+                      dragRef.current = { mode: !selected.has(card.userId) };
+                      applySelect(card.userId, dragRef.current.mode);
+                    }}
+                    onClick={() => {
+                      // Touch taps and keyboard activation; mouse was already
+                      // handled on pointer down.
+                      if (suppressClickRef.current) {
+                        suppressClickRef.current = false;
+                        return;
+                      }
+                      toggleSelected(card.userId);
+                    }}
+                    className="relative block w-full cursor-pointer"
+                    aria-pressed={selected.has(card.userId)}
+                    aria-label={`${selected.has(card.userId) ? "Deselect" : "Select"} ${card.username}`}
+                  >
+                    <CollectionCardTile card={card} onApplyMint={onApplyMint} />
+                    <span
+                      className={`pointer-events-none absolute inset-0 rounded-[10px] ${
+                        selected.has(card.userId) ? "ring-2 ring-osu-pink" : "bg-black/45"
+                      }`}
+                    />
+                    {selected.has(card.userId) && (
+                      <span className="absolute left-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-osu-pink text-white">
+                        <Check className="h-3.5 w-3.5" />
+                      </span>
+                    )}
+                  </button>
+                ) : (
+                  <Link
+                    to="/player/$username"
+                    params={{ username: card.username }}
+                    className="block transition-transform duration-150 hover:-translate-y-1"
+                    aria-label={`Open ${card.username}'s profile`}
+                  >
+                    <CollectionCardTile card={card} onApplyMint={onApplyMint} />
+                  </Link>
+                )}
+                {selecting ? null : card.copies > 1 ? (
                   <button
                     type="button"
                     onClick={() => onRecycleCard(card.userId)}
@@ -406,6 +594,146 @@ export function CollectionPanel({
             );
           })}
         </div>
+      )}
+
+      {selecting && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-5 z-40 flex justify-center px-4">
+          <div
+            className="pointer-events-auto flex flex-wrap items-center justify-center gap-x-4 gap-y-2 rounded-full border border-osu-b3/50 bg-osu-b5 px-5 py-2.5 shadow-[0_12px_32px_rgba(0,0,0,0.55)]"
+            data-select-keep=""
+          >
+            <span className="text-[12px] text-osu-f1 tabular-nums">
+              <span className="font-bold text-white">{selected.size}</span> selected
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setSelected(new Set(visibleCards.map((card) => card.userId)));
+                setConfirmBulk(false);
+              }}
+              className="text-[12px] text-osu-f1 transition-colors hover:text-white cursor-pointer"
+            >
+              select all
+            </button>
+            {selected.size > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelected(new Set());
+                  setConfirmBulk(false);
+                }}
+                className="text-[12px] text-osu-f1 transition-colors hover:text-white cursor-pointer"
+              >
+                clear
+              </button>
+            )}
+            <button
+              type="button"
+              disabled={selected.size === 0}
+              onClick={() => {
+                if (!confirmBulk) {
+                  setConfirmBulk(true);
+                  return;
+                }
+                for (const userId of selected) onRecycleWhole(userId);
+                exitSelecting();
+              }}
+              className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[12px] font-bold text-white transition cursor-pointer disabled:cursor-default disabled:opacity-40 ${
+                confirmBulk ? "bg-osu-pink brightness-110" : "bg-osu-pink hover:brightness-110"
+              }`}
+            >
+              <Recycle className="h-3.5 w-3.5" />
+              {confirmBulk
+                ? `Sure? ${selected.size} ${selected.size === 1 ? "card leaves" : "cards leave"} the collection`
+                : `Recycle +${selectedShardTotal}`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {menu && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            data-select-keep=""
+            onPointerDown={() => setMenu(null)}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              setMenu(null);
+            }}
+          />
+          <div
+            className="fixed z-50 w-[200px] rounded-lg border border-osu-b3/50 bg-osu-b5 py-1 shadow-[0_12px_32px_rgba(0,0,0,0.55)]"
+            style={{ left: menu.x, top: menu.y }}
+            role="menu"
+            data-select-keep=""
+          >
+            <div className="flex items-center gap-2 px-3 py-1.5">
+              <img src={menu.card.avatarUrl} alt="" className="h-5 w-5 rounded-full object-cover" draggable={false} />
+              <span className="truncate text-[12px] font-bold text-white">{menu.card.username}</span>
+            </div>
+            <div className="mx-2 my-1 h-px bg-osu-b3/40" />
+            <Link
+              to="/player/$username"
+              params={{ username: menu.card.username }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white"
+              role="menuitem"
+              onClick={() => setMenu(null)}
+            >
+              Open profile
+            </Link>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setSelecting(true);
+                setSelected(new Set([menu.card.userId]));
+                setConfirmBulk(false);
+                setMenu(null);
+              }}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer"
+            >
+              <Check className="h-3 w-3" />
+              Select cards...
+            </button>
+            {menu.card.copies > 1 && (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  onRecycleCard(menu.card.userId);
+                  setMenu(null);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer"
+              >
+                <Recycle className="h-3 w-3" />
+                Recycle duplicates +{duplicateShardValue(menu.card)}
+              </button>
+            )}
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                if (!menuConfirm) {
+                  setMenuConfirm(true);
+                  return;
+                }
+                onRecycleWhole(menu.card.userId);
+                setMenu(null);
+              }}
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] transition-colors hover:bg-osu-b4/60 cursor-pointer ${
+                menuConfirm ? "font-bold text-osu-pink-light" : "text-osu-f1 hover:text-white"
+              }`}
+            >
+              <Recycle className="h-3 w-3" />
+              {menuConfirm
+                ? "Sure? The card leaves the collection"
+                : `${menu.card.copies > 1 ? "Recycle all copies" : "Recycle card"} +${
+                    duplicateShardValue(menu.card) + shardValueForTier(menu.card.tier)
+                  }`}
+            </button>
+          </div>
+        </>
       )}
     </section>
   );

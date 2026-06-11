@@ -69,6 +69,9 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
   const [burst, setBurst] = useState<{ key: number; tier: ManiaCardTier; glowColor: RgbaColor } | null>(null);
   const [cardBack, setCardBack] = useState<string | null>(null);
   const [skipping, setSkipping] = useState(false);
+  // True once a drag gesture starts on the top card, so the click fired on
+  // release doesn't also draw.
+  const dragHappenedRef = useRef(false);
 
   const setPhase = (next: RevealPhase) => {
     phaseRef.current = next;
@@ -299,11 +302,12 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
             .reverse()
             .map((position) => {
               const isTop = position === 0;
+              const draggable = isTop && phase === "stack" && !skipping;
               return (
                 <motion.div
                   key={`${firstBackCardIndex + position}`}
                   className={`absolute inset-0 rounded-[18px] bg-cover bg-center ${
-                    isTop && phase === "stack" && !skipping ? "cursor-pointer" : ""
+                    draggable ? "cursor-grab active:cursor-grabbing" : ""
                   }`}
                   style={{
                     backgroundImage: `url(${cardBack})`,
@@ -324,7 +328,32 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
                       ? { scale: { duration: 0.9, repeat: Infinity, ease: "easeInOut" }, default: { duration: 0.25 } }
                       : { duration: 0.25 }
                   }
-                  onClick={isTop ? () => { if (phaseRef.current === "stack") void reveal(index); } : undefined}
+                  // The top card can also be dragged off the deck: past the
+                  // threshold (either side) the release draws it, short tugs
+                  // spring back. Vertical stays free for page scroll on touch.
+                  drag={draggable ? "x" : false}
+                  dragSnapToOrigin
+                  dragElastic={0.7}
+                  onPointerDown={isTop ? () => { dragHappenedRef.current = false; } : undefined}
+                  onDragStart={draggable ? () => { dragHappenedRef.current = true; } : undefined}
+                  onDragEnd={
+                    draggable
+                      ? (_event, info) => {
+                          if (Math.abs(info.offset.x) > 90 && phaseRef.current === "stack") void reveal(index);
+                        }
+                      : undefined
+                  }
+                  onClick={
+                    isTop
+                      ? () => {
+                          if (dragHappenedRef.current) {
+                            dragHappenedRef.current = false;
+                            return;
+                          }
+                          if (phaseRef.current === "stack") void reveal(index);
+                        }
+                      : undefined
+                  }
                   role={isTop && phase === "stack" ? "button" : undefined}
                   aria-label={isTop && phase === "stack" ? "Draw the next card" : undefined}
                 />
@@ -443,7 +472,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
-              {phase === "preparing" ? "Drawing player..." : skipping ? "Revealing the rest..." : "Tap the stack to draw"}
+              {phase === "preparing" ? "Drawing player..." : skipping ? "Revealing the rest..." : "Tap the stack or drag the top card to draw"}
             </motion.div>
           )}
         </AnimatePresence>

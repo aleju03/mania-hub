@@ -13,6 +13,7 @@ precision highp float;
 uniform float uTime;
 uniform float uIntensity;
 uniform float uFoil;
+uniform float uStarfield;
 uniform vec2 uLight;
 uniform vec3 uTierColor;
 uniform vec4 uAvatarMask;
@@ -58,6 +59,29 @@ float triangleWave(vec2 uv, vec2 grid, float offset) {
   return shape * sparse * mix(0.45, 1.0, variant);
 }
 
+// Drifting, twinkling starfield (replaces the triangle flecks on World
+// Class). One star at most per grid cell; the y distance is scaled by the
+// card texture's 1000x1400 aspect so points stay round.
+float starLayer(vec2 uv, vec2 grid, float drift, float time) {
+  vec2 p = uv * grid;
+  p.y -= drift;
+  vec2 id = floor(p);
+  float variant = random(id);
+  float sparse = step(0.5, variant);
+  vec2 center = vec2(
+    0.18 + random(id + vec2(5.2, 1.7)) * 0.64,
+    0.18 + random(id + vec2(8.4, 3.3)) * 0.64
+  );
+  vec2 offset = (fract(p) - center) / grid;
+  offset.y *= 1.4;
+  float dist = length(offset) * grid.x;
+  float size = 0.030 + random(id + vec2(2.8, 6.1)) * 0.045;
+  float core = 1.0 - smoothstep(size * 0.35, size, dist);
+  float halo = exp(-dist * dist * 90.0) * 0.30;
+  float twinkle = 0.30 + 0.70 * (0.5 + 0.5 * sin(time * (0.7 + variant * 1.8) + variant * 41.0));
+  return (core + halo) * sparse * twinkle * mix(0.55, 1.0, random(id + vec2(9.9, 7.7)));
+}
+
 float roundedCardMask(vec2 uv) {
   vec2 halfSize = vec2(0.5, 0.5);
   float radius = 0.055;
@@ -88,8 +112,15 @@ void main() {
   float drift2 = cos(uTime * 0.27 + 1.3) * 0.18;
 
   // Twinkling sparkle layer (drifts slowly upward).
-  float triangles = triangleWave(vUv, vec2(7.0, 9.0), uTime * 0.09) * 0.58
-                  + triangleWave(vUv + vec2(0.19, 0.11), vec2(5.0, 7.0), uTime * 0.052) * 0.42;
+  float triangles = (triangleWave(vUv, vec2(7.0, 9.0), uTime * 0.09) * 0.58
+                  + triangleWave(vUv + vec2(0.19, 0.11), vec2(5.0, 7.0), uTime * 0.052) * 0.42)
+                  * (1.0 - uStarfield);
+
+  // Two star depths: the larger near layer drifts faster than the finer far
+  // layer for a slow parallax.
+  float stars = (starLayer(vUv, vec2(6.0, 8.0), uTime * 0.085, uTime)
+              + starLayer(vUv + vec2(0.37, 0.21), vec2(10.0, 14.0), uTime * 0.04, uTime) * 0.65)
+              * uStarfield;
 
   // Primary beam: nearly vertical, like a Pokemon card tilted under a lamp.
   // Axis points roughly down-right, so the band sweeps top-left to bottom-right.
@@ -119,18 +150,22 @@ void main() {
 
   // Holo: tier-tinted rainbow, lit only where the bands pass.
   vec3 holo = screen(uTierColor * 0.42, rainbow * 0.85)
-              * (triangles * 0.32 + bandWide * 0.75 + 0.10);
+              * (triangles * 0.32 + stars * 0.30 + bandWide * 0.75 + 0.10);
 
   // Specular streak (white core along the beam).
   vec3 sweep = vec3(bandSharp * 0.62 + glare * 0.22);
+
+  // Mint-white star cores so the starfield reads as light points rather than
+  // rainbow blobs.
+  vec3 starGlow = vec3(0.78, 1.0, 0.90) * stars * 0.55;
 
   float inAvatar = roundedRectMaskPx(vUv, uAvatarMask, uAvatarRadius, uTextureSize);
   float foilGain = mix(1.0, 0.30, inAvatar);
   float mask = roundedCardMask(vUv);
 
-  vec3 color = (holo + sweep) * foilGain;
+  vec3 color = (holo + sweep + starGlow) * foilGain;
   float alpha = clamp(
-    (triangles * 0.12 + bandWide * 0.30 + bandSharp * 0.26 + glare * 0.12) * foilGain * uIntensity,
+    (triangles * 0.12 + stars * 0.40 + bandWide * 0.30 + bandSharp * 0.26 + glare * 0.12) * foilGain * uIntensity,
     0.0,
     0.55
   ) * mask;

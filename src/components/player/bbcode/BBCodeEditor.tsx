@@ -208,6 +208,8 @@ export function BBCodeEditor({
   const [copied, setCopied] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [inlineStates, setInlineStates] = useState({ bold: false, italic: false, underline: false, strike: false });
+  // Caret offset in the raw-source textarea; the preview highlights its node.
+  const [caretOffset, setCaretOffset] = useState<number | null>(null);
   // Bumped whenever the visual surface must be rebuilt from `source`.
   const [visualEpoch, setVisualEpoch] = useState(0);
 
@@ -218,6 +220,7 @@ export function BBCodeEditor({
   const visualRangeRef = useRef<Range | null>(null);
   const visualSyncHandle = useRef<number | null>(null);
   const deferredSource = useDeferredValue(source);
+  const deferredCaretOffset = useDeferredValue(caretOffset);
 
   // Dialog form state. One dialog is open at a time, so shared fields are fine.
   const [urlField, setUrlField] = useState("");
@@ -1083,7 +1086,11 @@ export function BBCodeEditor({
               <textarea
                 ref={textareaRef}
                 value={source}
-                onChange={(event) => updateSource(event.target.value)}
+                onChange={(event) => {
+                  updateSource(event.target.value);
+                  setCaretOffset(event.target.selectionStart);
+                }}
+                onSelect={(event) => setCaretOffset(event.currentTarget.selectionStart)}
                 spellCheck={false}
                 placeholder="Write BBCode here, or paste your current me! page source..."
                 className={`${paneHeightClass} w-full resize-none bg-transparent px-4 py-3 text-[13px] leading-relaxed font-mono text-osu-l2 placeholder:text-osu-f1 focus:outline-none`}
@@ -1091,7 +1098,7 @@ export function BBCodeEditor({
             </div>
             <div className={`${mobilePane === "preview" ? "block" : "hidden"} lg:block bg-osu-b5/40`}>
               <div className={`${paneHeightClass} bbcode-content overflow-y-auto px-4 py-3 text-sm text-osu-l2`}>
-                <BBCodePreview source={deferredSource} />
+                <BBCodePreview source={deferredSource} highlightOffset={deferredCaretOffset} />
               </div>
             </div>
           </div>

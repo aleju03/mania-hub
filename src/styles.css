@@ -356,6 +356,12 @@ body { background: var(--color-osu-b6); color: var(--color-osu-c1); font-family:
 .bbcode-content .bbcode__align-centre,
 .bbcode-content .bbcode__align-center { text-align: center; }
 .bbcode-content .well { background: rgba(0, 0, 0, 0.25); border: 1px solid var(--color-osu-b3); border-radius: 0.5rem; padding: 0.6rem 0.85rem; margin: 0.75em 0; }
+/* Marks the preview region matching the caret in the raw BBCode pane. */
+.bbcode-content .bbcode-live-highlight {
+  border-radius: 0.3rem;
+  background: color-mix(in srgb, var(--color-osu-h1) 9%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-osu-h1) 35%, transparent);
+}
 .bbcode-content .bbcode--profile-page { padding: 0; }
 .bbcode-content .bbcode--profile-page:first-child > *:first-child { margin-top: 0; }
 .bbcode-content .bbcode--profile-page:last-child > *:last-child { margin-bottom: 0; }

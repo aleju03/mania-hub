@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildGradientBBCode,
   collectPlainText,
+  findBBNodePathAtOffset,
   gradientCharColors,
   normalizeHexColor,
   parseBBCode,
@@ -224,6 +225,52 @@ describe("parseBBCode", () => {
 
     const box = nodes.find((n) => n.type === "box");
     expect(box).toMatchObject({ title: "og ranking" });
+  });
+
+  it("omits source spans unless requested", () => {
+    const nodes = parseBBCode("a[b]x[/b]");
+    expect(nodes.every((n) => n.span === undefined)).toBe(true);
+    const node = nodes[1];
+    expect(node.type === "style" && node.children[0].span).toBeUndefined();
+  });
+
+  it("records source spans covering each node's tags", () => {
+    const source = "pre[b]bold[/b][notice]inside[/notice]";
+    const nodes = parseBBCode(source, { spans: true });
+    expect(nodes.map((n) => n.span)).toEqual([
+      { start: 0, end: 3 },
+      { start: 3, end: 14 },
+      { start: 14, end: 37 },
+    ]);
+    const bold = nodes[1];
+    expect(bold.type === "style" && bold.children[0].span).toEqual({ start: 6, end: 10 });
+  });
+
+  it("spans verbatim tags and replayed dangling opens", () => {
+    const source = "[img]https://a.io/x.png[/img][b]never closed";
+    const nodes = parseBBCode(source, { spans: true });
+    expect(nodes[0]).toMatchObject({ type: "img", span: { start: 0, end: 29 } });
+    // The dangling [b] replays as literal text spanning the rest.
+    expect(nodes[1]).toMatchObject({ type: "text", span: { start: 29, end: source.length } });
+  });
+});
+
+describe("findBBNodePathAtOffset", () => {
+  it("returns the containing chain, outermost first", () => {
+    const source = "[centre][color=#FF0000]hi[/color][/centre]after";
+    const nodes = parseBBCode(source, { spans: true });
+    const path = findBBNodePathAtOffset(nodes, source.indexOf("hi") + 1);
+    expect(path.map((n) => n.type)).toEqual(["centre", "color", "text"]);
+    expect(findBBNodePathAtOffset(nodes, source.indexOf("after") + 1).map((n) => n.type)).toEqual(["text"]);
+  });
+
+  it("descends into list items and returns [] past the end", () => {
+    const source = "[list][*]one[*]two[/list]";
+    const nodes = parseBBCode(source, { spans: true });
+    const path = findBBNodePathAtOffset(nodes, source.indexOf("two"));
+    expect(path.map((n) => n.type)).toEqual(["list", "text"]);
+    expect(path[1]).toMatchObject({ text: "two" });
+    expect(findBBNodePathAtOffset(nodes, source.length + 5)).toEqual([]);
   });
 });
 

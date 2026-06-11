@@ -21,7 +21,7 @@ export interface PackArtStyle {
   subtitle: string;
 }
 
-const DEFAULT_PACK_ART_STYLE: PackArtStyle = {
+export const DEFAULT_PACK_ART_STYLE: PackArtStyle = {
   accent: { r: 167, g: 139, b: 250 },
   subtitle: "BOOSTER PACK",
 };
@@ -46,7 +46,10 @@ const BLACK: Rgb = { r: 8, g: 6, b: 16 };
 /* Foil booster pack front, tinted per pack type. Drawn once per mount;
    PackStage shows it through background-image slices so the top strip can
    tear away as its own element. */
-export function createPackFrontCanvas(style: PackArtStyle = DEFAULT_PACK_ART_STYLE): HTMLCanvasElement {
+export function createPackFrontCanvas(
+  style: PackArtStyle = DEFAULT_PACK_ART_STYLE,
+  options: { subtitle?: boolean } = {},
+): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = PACK_ART_WIDTH;
   canvas.height = PACK_ART_HEIGHT;
@@ -69,6 +72,7 @@ export function createPackFrontCanvas(style: PackArtStyle = DEFAULT_PACK_ART_STY
   drawSheen(context, width, height);
   drawEmblem(context, width, height, style.accent);
   drawWordmark(context, width, height, style);
+  if (options.subtitle !== false) drawPackSubtitle(context, width, height, style.subtitle);
   drawCrimp(context, width, height, 0);
   drawCrimp(context, width, height, height - PACK_CRIMP_FRACTION * height);
   drawTearPerforation(context, width, height);
@@ -182,14 +186,6 @@ function drawWordmark(context: CanvasRenderingContext2D, width: number, height: 
   context.fillText("MANIACARDS", cx, height * 0.64);
 
   context.shadowBlur = 0;
-  context.font = `700 26px ${FONT}`;
-  context.fillStyle = "rgba(255,255,255,0.55)";
-  const spaced = style.subtitle
-    .toUpperCase()
-    .split(" ")
-    .map((word) => word.split("").join(" "))
-    .join("   ");
-  context.fillText(spaced, cx, height * 0.695);
 
   // "5 cards" pill
   const pillWidth = 190;
@@ -205,6 +201,30 @@ function drawWordmark(context: CanvasRenderingContext2D, width: number, height: 
   context.font = `800 26px ${FONT}`;
   context.fillStyle = "rgba(255,255,255,0.85)";
   context.fillText("5 CARDS", cx, pillY + 32);
+  context.restore();
+}
+
+/* The pack-type wording under the wordmark, drawn separately from the rest
+   of the foil so a pack-type switch can fade the old text out and the new
+   text in instead of double-exposing both. */
+export function drawPackSubtitle(
+  context: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  subtitle: string,
+  alpha = 1,
+) {
+  if (alpha <= 0) return;
+  context.save();
+  context.textAlign = "center";
+  context.font = `700 26px ${FONT}`;
+  context.fillStyle = `rgba(255,255,255,${(0.55 * alpha).toFixed(3)})`;
+  const spaced = subtitle
+    .toUpperCase()
+    .split(" ")
+    .map((word) => word.split("").join(" "))
+    .join("   ");
+  context.fillText(spaced, width / 2, height * 0.695);
   context.restore();
 }
 

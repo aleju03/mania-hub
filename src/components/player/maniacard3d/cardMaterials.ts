@@ -41,6 +41,8 @@ export function createOverlayMaterial(data: ManiaCardReadyData, layout: FaceLayo
       uIntensity: { value: 0.88 },
       // Common cards keep the triangle sparkle but drop the holo/foil sheen.
       uFoil: { value: data.tier === "common" ? 0 : 1 },
+      // World Class trades the triangle sparkle for a drifting starfield.
+      uStarfield: { value: data.tier === "worldClass" ? 1 : 0 },
       uLight: { value: new Vector2(0.5, 0.38) },
       uTierColor: { value: new Vector3(data.glowColor.r / 255, data.glowColor.g / 255, data.glowColor.b / 255) },
       uAvatarMask: {

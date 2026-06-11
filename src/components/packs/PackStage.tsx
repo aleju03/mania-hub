@@ -3,10 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import type { PackTypeDef } from "#/lib/packs";
 import {
   createPackFrontCanvas,
+  DEFAULT_PACK_ART_STYLE,
+  drawPackSubtitle,
   PACK_ART_HEIGHT,
   PACK_ART_WIDTH,
   PACK_ASPECT,
   PACK_TEAR_FRACTION,
+  type PackArtStyle,
 } from "./packArt";
 
 // The cut is tracked in vertical columns; each cut column remembers the y
@@ -87,6 +90,8 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
   const trailHeldRef = useRef(false);
   const trailCursorRef = useRef<{ x: number; y: number } | null>(null);
   const trailRafRef = useRef<number | null>(null);
+  const artFadeRafRef = useRef<number | null>(null);
+  const artStyleRef = useRef<PackArtStyle | null>(null);
   const reducedMotionRef = useRef(reducedMotion);
   reducedMotionRef.current = reducedMotion;
 
@@ -286,14 +291,68 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
   };
 
   useEffect(() => {
-    const canvas = createPackFrontCanvas(
-      packType ? { accent: packType.accent, subtitle: packType.artSubtitle } : undefined,
-    );
-    artCanvasRef.current = canvas;
-    setPackArt(canvas.toDataURL("image/png"));
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const nextStyle: PackArtStyle = packType
+      ? { accent: packType.accent, subtitle: packType.artSubtitle }
+      : DEFAULT_PACK_ART_STYLE;
+    const previousStyle = artStyleRef.current;
+    artStyleRef.current = nextStyle;
+    const next = createPackFrontCanvas(nextStyle);
+    setPackArt(next.toDataURL("image/png"));
+    if (artFadeRafRef.current !== null) {
+      cancelAnimationFrame(artFadeRafRef.current);
+      artFadeRafRef.current = null;
+    }
+    if (!previousStyle || reducedMotionRef.current || rippingRef.current) {
+      artCanvasRef.current = next;
+      drawFrame();
+      return;
+    }
+    // Switching pack types recolors the same pack in place: the foil accent
+    // crossfades while the subtitle fades out as the old wording and back in
+    // as the new one (blending two different texts at the same spot reads as
+    // a garbled double exposure).
+    const prevBase = createPackFrontCanvas(previousStyle, { subtitle: false });
+    const nextBase = createPackFrontCanvas(nextStyle, { subtitle: false });
+    const blend = document.createElement("canvas");
+    blend.width = PACK_ART_WIDTH;
+    blend.height = PACK_ART_HEIGHT;
+    const blendContext = blend.getContext("2d");
+    if (!blendContext) {
+      artCanvasRef.current = next;
+      drawFrame();
+      return;
+    }
+    artCanvasRef.current = blend;
+    const fadeMs = 360;
+    const startedAt = performance.now();
+    const step = (now: number) => {
+      artFadeRafRef.current = null;
+      const t = Math.min(1, (now - startedAt) / fadeMs);
+      blendContext.clearRect(0, 0, blend.width, blend.height);
+      blendContext.globalAlpha = 1;
+      blendContext.drawImage(prevBase, 0, 0);
+      blendContext.globalAlpha = t;
+      blendContext.drawImage(nextBase, 0, 0);
+      blendContext.globalAlpha = 1;
+      drawPackSubtitle(blendContext, blend.width, blend.height, previousStyle.subtitle, 1 - Math.min(1, t / 0.45));
+      drawPackSubtitle(blendContext, blend.width, blend.height, nextStyle.subtitle, Math.max(0, (t - 0.55) / 0.45));
+      if (t >= 1) artCanvasRef.current = next;
+      drawFrame();
+      if (t < 1) artFadeRafRef.current = requestAnimationFrame(step);
+    };
+    artFadeRafRef.current = requestAnimationFrame(step);
+    return () => {
+      if (artFadeRafRef.current !== null) {
+        cancelAnimationFrame(artFadeRafRef.current);
+        artFadeRafRef.current = null;
+      }
     };
   }, [packType]);
 

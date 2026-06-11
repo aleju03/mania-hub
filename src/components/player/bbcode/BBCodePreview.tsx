@@ -1,11 +1,31 @@
-import { Fragment, useMemo, useState, type ReactNode } from "react";
-import { parseBBCode, type BBNode } from "../../../lib/bbcode";
+import {
+  cloneElement,
+  Fragment,
+  isValidElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+  type ReactNode,
+  type Ref,
+} from "react";
+import { findBBNodePathAtOffset, parseBBCode, type BBNode } from "../../../lib/bbcode";
 
 // Renders the parsed BBCode tree with the same markup/classes osu! emits for
 // profile pages, so the existing .bbcode-content styles apply 1:1 and the
 // preview matches what the about card (and osu! itself) will show.
 
 const BARE_URL_PATTERN = /https?:\/\/[^\s<>[\]]+/g;
+
+const HIGHLIGHT_CLASS = "bbcode-live-highlight";
+
+/** Maps the source caret to the rendered preview while editing raw BBCode. */
+interface HighlightCtx {
+  target: BBNode | null;
+  targetRef: (el: HTMLElement | null) => void;
+}
 
 function shortenUrlText(href: string): string {
   try {
@@ -48,10 +68,23 @@ function renderTextWithLinks(text: string, keyPrefix: string): ReactNode[] {
   return out;
 }
 
-function SpoilerBox({ title, children }: { title: string | null; children: ReactNode }) {
+function SpoilerBox({
+  title,
+  children,
+  highlighted,
+  highlightRef,
+}: {
+  title: string | null;
+  children: ReactNode;
+  highlighted?: boolean;
+  highlightRef?: Ref<HTMLDivElement>;
+}) {
   const [open, setOpen] = useState(false);
   return (
-    <div className={`js-spoilerbox bbcode-spoilerbox${open ? " is-open" : ""}`}>
+    <div
+      ref={highlighted ? highlightRef : undefined}
+      className={`js-spoilerbox bbcode-spoilerbox${open ? " is-open" : ""}${highlighted ? ` ${HIGHLIGHT_CLASS}` : ""}`}
+    >
       <button
         type="button"
         className="js-spoilerbox__link bbcode-spoilerbox__link"
@@ -65,12 +98,28 @@ function SpoilerBox({ title, children }: { title: string | null; children: React
   );
 }
 
-function renderNode(node: BBNode, key: string): ReactNode {
+function renderNode(node: BBNode, key: string, ctx: HighlightCtx): ReactNode {
+  const rendered = renderNodeContent(node, key, ctx);
+  // [box] handles its own highlight (SpoilerBox isn't a host element).
+  if (node !== ctx.target || node.type === "box" || !isValidElement(rendered)) return rendered;
+  if (node.type === "text") {
+    return (
+      <span key={key} className={HIGHLIGHT_CLASS} ref={ctx.targetRef}>
+        {rendered}
+      </span>
+    );
+  }
+  const element = rendered as ReactElement<{ className?: string; ref?: Ref<HTMLElement> }>;
+  const className = [element.props.className, HIGHLIGHT_CLASS].filter(Boolean).join(" ");
+  return cloneElement(element, { className, ref: ctx.targetRef });
+}
+
+function renderNodeContent(node: BBNode, key: string, ctx: HighlightCtx): ReactNode {
   switch (node.type) {
     case "text":
       return <Fragment key={key}>{renderTextWithLinks(node.text, key)}</Fragment>;
     case "style": {
-      const children = renderNodes(node.children, key);
+      const children = renderNodes(node.children, key, ctx);
       switch (node.tag) {
         case "b": return <strong key={key}>{children}</strong>;
         case "i": return <em key={key}>{children}</em>;
@@ -81,24 +130,24 @@ function renderNode(node: BBNode, key: string): ReactNode {
       return null;
     }
     case "color":
-      return <span key={key} style={{ color: node.color }}>{renderNodes(node.children, key)}</span>;
+      return <span key={key} style={{ color: node.color }}>{renderNodes(node.children, key, ctx)}</span>;
     case "size":
-      return <span key={key} style={{ fontSize: `${node.size}%` }}>{renderNodes(node.children, key)}</span>;
+      return <span key={key} style={{ fontSize: `${node.size}%` }}>{renderNodes(node.children, key, ctx)}</span>;
     case "url":
       return (
         <a key={key} href={node.href} target="_blank" rel="noopener noreferrer nofollow" title={node.href}>
-          {renderNodes(node.children, key)}
+          {renderNodes(node.children, key, ctx)}
         </a>
       );
     case "email":
-      return <a key={key} href={`mailto:${node.address}`}>{renderNodes(node.children, key)}</a>;
+      return <a key={key} href={`mailto:${node.address}`}>{renderNodes(node.children, key, ctx)}</a>;
     case "profile": {
       const href = node.userId
         ? `https://osu.ppy.sh/users/${encodeURIComponent(node.userId)}`
         : `https://osu.ppy.sh/users/${encodeURIComponent(nodeText(node.children))}`;
       return (
         <a key={key} href={href} target="_blank" rel="noopener noreferrer nofollow">
-          {renderNodes(node.children, key)}
+          {renderNodes(node.children, key, ctx)}
         </a>
       );
     }
@@ -118,27 +167,31 @@ function renderNode(node: BBNode, key: string): ReactNode {
     case "audio":
       return <audio key={key} controls preload="none" src={node.src} />;
     case "heading":
-      return <h2 key={key}>{renderNodes(node.children, key)}</h2>;
+      return <h2 key={key}>{renderNodes(node.children, key, ctx)}</h2>;
     case "notice":
-      return <div key={key} className="well">{renderNodes(node.children, key)}</div>;
+      return <div key={key} className="well">{renderNodes(node.children, key, ctx)}</div>;
     case "centre":
-      return <center key={key}>{renderNodes(node.children, key)}</center>;
+      return <center key={key}>{renderNodes(node.children, key, ctx)}</center>;
     case "quote":
       return (
         <blockquote key={key}>
           {node.author ? <h4>{node.author} wrote:</h4> : null}
-          {renderNodes(node.children, key)}
+          {renderNodes(node.children, key, ctx)}
         </blockquote>
       );
     case "box":
-      return <SpoilerBox key={key} title={node.title}>{renderNodes(node.children, key)}</SpoilerBox>;
+      return (
+        <SpoilerBox key={key} title={node.title} highlighted={node === ctx.target} highlightRef={ctx.targetRef}>
+          {renderNodes(node.children, key, ctx)}
+        </SpoilerBox>
+      );
     case "code":
       return node.inline
         ? <code key={key}>{node.code}</code>
         : <pre key={key}>{node.code}</pre>;
     case "list": {
       const items = node.items.map((item, index) => (
-        <li key={`${key}-li-${index}`}>{renderNodes(item, `${key}-li-${index}`)}</li>
+        <li key={`${key}-li-${index}`}>{renderNodes(item, `${key}-li-${index}`, ctx)}</li>
       ));
       return node.ordered ? <ol key={key}>{items}</ol> : <ul key={key}>{items}</ul>;
     }
@@ -178,14 +231,55 @@ function nodeText(nodes: BBNode[]): string {
   return nodes.map((node) => (node.type === "text" ? node.text : "")).join("").trim();
 }
 
-function renderNodes(nodes: BBNode[], keyPrefix: string): ReactNode[] {
-  return nodes.map((node, index) => renderNode(node, `${keyPrefix}-${index}`));
+function renderNodes(nodes: BBNode[], keyPrefix: string, ctx: HighlightCtx): ReactNode[] {
+  return nodes.map((node, index) => renderNode(node, `${keyPrefix}-${index}`, ctx));
 }
 
-export function BBCodePreview({ source }: { source: string }) {
-  const nodes = useMemo(() => parseBBCode(source), [source]);
+const HIGHLIGHT_BLOCK_TYPES = new Set<BBNode["type"]>([
+  "heading", "notice", "centre", "quote", "box", "list", "imagemap", "youtube",
+]);
+
+/**
+ * Picks what to highlight for a caret path: the innermost block keeps the
+ * region readable (a single [color] span in a gradient run would be one
+ * character), falling back to the top-level node for plain inline runs.
+ */
+function pickHighlightNode(path: BBNode[]): BBNode | null {
+  for (let i = path.length - 1; i >= 0; i--) {
+    const node = path[i];
+    if (HIGHLIGHT_BLOCK_TYPES.has(node.type) || (node.type === "code" && !node.inline)) return node;
+  }
+  const top = path[0] ?? null;
+  // A caret on the blank line between blocks lands in whitespace-only text;
+  // highlighting it would just draw an empty sliver.
+  if (top && top.type === "text" && top.text.trim() === "") return null;
+  return top;
+}
+
+export function BBCodePreview({
+  source,
+  highlightOffset,
+}: {
+  source: string;
+  /** Caret offset into `source`; highlights the matching preview region. */
+  highlightOffset?: number | null;
+}) {
+  const nodes = useMemo(() => parseBBCode(source, { spans: true }), [source]);
+  const target = useMemo(() => {
+    if (highlightOffset == null) return null;
+    return pickHighlightNode(findBBNodePathAtOffset(nodes, highlightOffset));
+  }, [highlightOffset, nodes]);
+
+  const targetEl = useRef<HTMLElement | null>(null);
+  const targetRef = useCallback((el: HTMLElement | null) => {
+    targetEl.current = el;
+  }, []);
+  useEffect(() => {
+    if (target) targetEl.current?.scrollIntoView({ block: "nearest" });
+  }, [target]);
+
   if (nodes.length === 0) {
     return <div className="text-osu-f1 text-sm py-6 text-center">Nothing to preview yet.</div>;
   }
-  return <>{renderNodes(nodes, "bb")}</>;
+  return <>{renderNodes(nodes, "bb", { target, targetRef })}</>;
 }

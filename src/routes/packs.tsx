@@ -315,8 +315,10 @@ function PacksPage() {
                         </div>
                       </div>
                     ) : (
+                      // No packTypeId key: the stage stays mounted across
+                      // type switches and crossfades the foil to the new
+                      // accent instead of remounting a fresh pack.
                       <PackStage
-                        key={packTypeId}
                         reducedMotion={reducedMotion}
                         onOpened={handleOpened}
                         packType={selectedType}

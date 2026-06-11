@@ -19,7 +19,13 @@ export interface BBBlockSpacing {
   afterClose: boolean;
 }
 
-export type BBNode =
+/** Range in the normalized (\n-only) source a node was parsed from. */
+export interface BBSourceSpan {
+  start: number;
+  end: number;
+}
+
+export type BBNode = (
   | { type: "text"; text: string }
   | { type: "style"; tag: BBInlineStyleTag; children: BBNode[] }
   | { type: "color"; color: string; children: BBNode[] }
@@ -38,7 +44,8 @@ export type BBNode =
   | { type: "box"; title: string | null; children: BBNode[]; spacing?: BBBlockSpacing }
   | { type: "code"; inline: boolean; code: string; spacing?: BBBlockSpacing }
   | { type: "list"; ordered: boolean; items: BBNode[][]; spacing?: BBBlockSpacing }
-  | { type: "imagemap"; src: string; links: BBImagemapLink[]; raw: string; spacing?: BBBlockSpacing };
+  | { type: "imagemap"; src: string; links: BBImagemapLink[]; raw: string; spacing?: BBBlockSpacing }
+) & { span?: BBSourceSpan };
 
 export interface BBImagemapLink {
   /** Percentages of the image's dimensions, as osu! defines them. */
@@ -58,6 +65,8 @@ interface ContainerFrame {
   items?: BBNode[][];
   /** Raw source of the opening tag, replayed as text if never closed. */
   openSource: string;
+  /** Offset of the opening tag in the normalized source. */
+  openStart: number;
   /** Block tags: whether a newline right after the open tag was trimmed. */
   afterOpenTrimmed?: boolean;
 }
@@ -156,20 +165,23 @@ function attachSpacing(node: BBNode, spacing: BBBlockSpacing) {
   }
 }
 
-function pushText(children: BBNode[], text: string) {
+function pushText(children: BBNode[], text: string, start?: number) {
   if (!text) return;
   const last = children[children.length - 1];
   if (last && last.type === "text") {
     last.text += text;
+    if (last.span && start != null) last.span.end = start + text.length;
   } else {
-    children.push({ type: "text", text });
+    const node: BBNode = { type: "text", text };
+    if (start != null) node.span = { start, end: start + text.length };
+    children.push(node);
   }
 }
 
 /** Appends nodes, merging adjacent text nodes so replayed literals stay one run. */
 function pushNodes(target: BBNode[], nodes: BBNode[]) {
   for (const node of nodes) {
-    if (node.type === "text") pushText(target, node.text);
+    if (node.type === "text") pushText(target, node.text, node.span?.start);
     else target.push(node);
   }
 }
@@ -200,28 +212,28 @@ function buildVerbatimNode(tag: string, content: string, param: string | null): 
   }
 }
 
-function openContainer(tag: string, param: string | null, openSource: string): ContainerFrame | null {
+function openContainer(tag: string, param: string | null, openSource: string, openStart: number): ContainerFrame | null {
   switch (tag) {
     case "b": case "i": case "u": case "s": case "strike": case "spoiler":
     case "heading": case "notice": case "centre": case "center":
     case "spoilerbox":
-      return { tag, param: null, children: [], openSource };
+      return { tag, param: null, children: [], openSource, openStart };
     case "color":
       if (!param || !isValidBBColor(param.trim())) return null;
-      return { tag, param: param.trim(), children: [], openSource };
+      return { tag, param: param.trim(), children: [], openSource, openStart };
     case "size":
       if (normalizeSize(param) == null) return null;
-      return { tag, param, children: [], openSource };
+      return { tag, param, children: [], openSource, openStart };
     case "url":
       if (param != null && !isSafeHref(param)) return null;
-      return { tag, param, children: [], openSource };
+      return { tag, param, children: [], openSource, openStart };
     case "email":
     case "profile":
     case "quote":
     case "box":
-      return { tag, param, children: [], openSource };
+      return { tag, param, children: [], openSource, openStart };
     case "list":
-      return { tag, param, children: [], items: [], openSource };
+      return { tag, param, children: [], items: [], openSource, openStart };
     default:
       return null;
   }
@@ -294,9 +306,9 @@ function trimLeadingNewline(source: string, index: number): number {
   return source[index] === "\n" ? index + 1 : index;
 }
 
-export function parseBBCode(source: string): BBNode[] {
+export function parseBBCode(source: string, options?: { spans?: boolean }): BBNode[] {
   const normalized = source.replace(/\r\n?/g, "\n");
-  const root: ContainerFrame = { tag: "", param: null, children: [], openSource: "" };
+  const root: ContainerFrame = { tag: "", param: null, children: [], openSource: "", openStart: 0 };
   const stack: ContainerFrame[] = [root];
   const top = () => stack[stack.length - 1];
 
@@ -310,7 +322,7 @@ export function parseBBCode(source: string): BBNode[] {
     const isClose = slash === "/";
 
     const emitLiteral = () => {
-      pushText(top().children, normalized.slice(cursor, match!.index + tagSource.length));
+      pushText(top().children, normalized.slice(cursor, match!.index + tagSource.length), cursor);
       cursor = TAG_PATTERN.lastIndex;
     };
 
@@ -318,7 +330,7 @@ export function parseBBCode(source: string): BBNode[] {
     if (name === "*") {
       const frame = top();
       if (!isClose && frame.tag === "list" && frame.items) {
-        pushText(frame.children, normalized.slice(cursor, match.index));
+        pushText(frame.children, normalized.slice(cursor, match.index), cursor);
         if (frame.children.length > 0) frame.items.push(frame.children);
         frame.children = [];
         cursor = trimLeadingNewline(normalized, TAG_PATTERN.lastIndex);
@@ -337,7 +349,8 @@ export function parseBBCode(source: string): BBNode[] {
       const content = normalized.slice(TAG_PATTERN.lastIndex, closeAt);
       const node = buildVerbatimNode(name, content, rawParam ?? null);
       if (!node) { emitLiteral(); continue; }
-      pushText(top().children, normalized.slice(cursor, match.index));
+      pushText(top().children, normalized.slice(cursor, match.index), cursor);
+      node.span = { start: match.index, end: closeAt + closeToken.length };
       top().children.push(node);
       cursor = closeAt + closeToken.length;
       if (BLOCK_TAGS.has(name)) {
@@ -357,9 +370,9 @@ export function parseBBCode(source: string): BBNode[] {
     if (!CONTAINER_TAGS.has(name)) { emitLiteral(); continue; }
 
     if (!isClose) {
-      const frame = openContainer(name, rawParam ?? null, tagSource);
+      const frame = openContainer(name, rawParam ?? null, tagSource, match.index);
       if (!frame) { emitLiteral(); continue; }
-      pushText(top().children, normalized.slice(cursor, match.index));
+      pushText(top().children, normalized.slice(cursor, match.index), cursor);
       stack.push(frame);
       cursor = TAG_PATTERN.lastIndex;
       if (BLOCK_TAGS.has(name)) {
@@ -382,7 +395,8 @@ export function parseBBCode(source: string): BBNode[] {
     }
     if (openIndex === -1) { emitLiteral(); continue; }
 
-    pushText(top().children, normalized.slice(cursor, match.index));
+    const closeEnd = match.index + tagSource.length;
+    pushText(top().children, normalized.slice(cursor, match.index), cursor);
     cursor = TAG_PATTERN.lastIndex;
     let afterCloseTrimmed = false;
     if (BLOCK_TAGS.has(name)) {
@@ -397,7 +411,7 @@ export function parseBBCode(source: string): BBNode[] {
     while (stack.length - 1 > openIndex) {
       const dangling = stack.pop()!;
       const parent = top();
-      pushText(parent.children, dangling.openSource);
+      pushText(parent.children, dangling.openSource, dangling.openStart);
       pushNodes(parent.children, dangling.children);
     }
     const frame = stack.pop()!;
@@ -420,25 +434,55 @@ export function parseBBCode(source: string): BBNode[] {
         beforeClose: beforeCloseTrimmed,
         afterClose: afterCloseTrimmed,
       });
+      node.span = { start: frame.openStart, end: closeEnd };
       parent.children.push(node);
     } else {
-      pushText(parent.children, frame.openSource);
+      pushText(parent.children, frame.openSource, frame.openStart);
       pushNodes(parent.children, frame.children);
-      pushText(parent.children, tagSource);
+      pushText(parent.children, tagSource, match.index);
     }
   }
 
-  pushText(top().children, normalized.slice(cursor));
+  pushText(top().children, normalized.slice(cursor), cursor);
 
   // Unwind unclosed frames at EOF the same way.
   while (stack.length > 1) {
     const dangling = stack.pop()!;
     const parent = top();
-    pushText(parent.children, dangling.openSource);
+    pushText(parent.children, dangling.openSource, dangling.openStart);
     pushNodes(parent.children, dangling.children);
   }
 
+  if (!options?.spans) stripSpans(root.children);
   return root.children;
+}
+
+function stripSpans(nodes: BBNode[]) {
+  for (const node of nodes) {
+    delete node.span;
+    if (node.type === "list") node.items.forEach(stripSpans);
+    else if ("children" in node) stripSpans(node.children);
+  }
+}
+
+/**
+ * Innermost-first is the caller's job: returns the chain of nodes whose source
+ * spans contain `offset` (outermost first), so the editor can map a caret
+ * position in the raw source to the rendered preview. Requires a tree parsed
+ * with `{ spans: true }`.
+ */
+export function findBBNodePathAtOffset(nodes: BBNode[], offset: number): BBNode[] {
+  for (const node of nodes) {
+    const span = node.span;
+    if (!span || offset < span.start || offset > span.end) continue;
+    const childLists = node.type === "list" ? node.items : "children" in node ? [node.children] : [];
+    for (const children of childLists) {
+      const childPath = findBBNodePathAtOffset(children, offset);
+      if (childPath.length > 0) return [node, ...childPath];
+    }
+    return [node];
+  }
+  return [];
 }
 
 const GRADIENT_HEX_PATTERN = /^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/;

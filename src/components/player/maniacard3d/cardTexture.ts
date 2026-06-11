@@ -91,8 +91,13 @@ function drawFront(
   context.save();
   clipCard(context);
   drawTierBackground(context, data);
-  drawTrianglePattern(context, data.tier === "worldClass" ? 0.07 : 0.18);
-  if (data.tier === "worldClass") drawWorldClassFoilAccents(context);
+  // World Class skips the triangle flecks entirely - its front is a clean
+  // starfield (static here, drifting/twinkling in the overlay shader).
+  if (data.tier === "worldClass") {
+    drawWorldClassFoilAccents(context);
+  } else {
+    drawTrianglePattern(context, 0.18);
+  }
   drawModeBadge(context, data);
   drawUsername(context, layout);
   drawTierLabel(context, data, layout);
@@ -699,15 +704,28 @@ function drawWorldClassBackground(context: CanvasRenderingContext2D) {
 
 function drawWorldClassStarfield(context: CanvasRenderingContext2D) {
   context.save();
-  for (let index = 0; index < 90; index += 1) {
+  const palette = ["255, 255, 255", "187, 247, 208", "153, 246, 228", "209, 250, 229"];
+  for (let index = 0; index < 130; index += 1) {
     const x = random01(index * 19.43 + 2.1) * CARD_TEXTURE_WIDTH;
     const y = random01(index * 31.77 + 8.4) * CARD_TEXTURE_HEIGHT;
     if (!isInsideRoundedCard(x, y, 18)) continue;
-    const radius = 0.9 + random01(index * 7.91 + 4.6) * 2.2;
-    const alpha = 0.16 + random01(index * 11.23 + 1.9) * 0.42;
+    const radius = 0.8 + random01(index * 7.91 + 4.6) * 2.4;
+    const alpha = 0.14 + random01(index * 11.23 + 1.9) * 0.46;
+    const color = palette[Math.floor(random01(index * 5.37 + 3.3) * palette.length) % palette.length];
+    // An occasional brighter star gets a soft halo so the field reads as
+    // having depth instead of uniform noise.
+    if (index % 16 === 5) {
+      const halo = context.createRadialGradient(x, y, 0, x, y, radius * 7);
+      halo.addColorStop(0, `rgba(${color}, ${(alpha * 0.5).toFixed(3)})`);
+      halo.addColorStop(1, `rgba(${color}, 0)`);
+      context.fillStyle = halo;
+      context.beginPath();
+      context.arc(x, y, radius * 7, 0, Math.PI * 2);
+      context.fill();
+    }
     context.beginPath();
     context.arc(x, y, radius, 0, Math.PI * 2);
-    context.fillStyle = `rgba(187, 247, 208, ${alpha.toFixed(3)})`;
+    context.fillStyle = `rgba(${color}, ${alpha.toFixed(3)})`;
     context.fill();
   }
   context.restore();
