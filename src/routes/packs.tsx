@@ -1,4 +1,4 @@
-import { createFileRoute, notFound } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { Recycle } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -11,7 +11,6 @@ import { PackSummary } from "../components/packs/PackSummary";
 import { RevealStage, type PackCardState, type RevealedCard } from "../components/packs/RevealStage";
 import { usePackWallet } from "../components/packs/usePackWallet";
 import { useAuth } from "../lib/auth-context";
-import { isPacksFeatureEnabled } from "../lib/feature-flags";
 import {
   MAX_PACK_CHARGES,
   msUntilNextCharge,
@@ -36,12 +35,6 @@ export const Route = createFileRoute("/packs")({
     path: "/packs",
     origin: match.context.origin,
   }),
-  beforeLoad: () => {
-    if (!isPacksFeatureEnabled()) {
-      throw notFound();
-    }
-    return undefined as never;
-  },
   component: PacksPage,
 });
 

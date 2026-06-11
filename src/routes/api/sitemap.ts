@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { isPacksFeatureEnabled } from "#/lib/feature-flags";
 import { getCanonicalOrigin } from "#/lib/origin";
 
 // Paths that should be crawled and indexed. Keep in sync with robots.txt
@@ -10,14 +9,12 @@ const STATIC_PATHS = [
   { path: "/top-plays", changefreq: "hourly", priority: "0.9" },
   { path: "/maps", changefreq: "daily", priority: "0.8" },
   { path: "/farm-helper", changefreq: "daily", priority: "0.7" },
+  { path: "/packs", changefreq: "weekly", priority: "0.6" },
 ] as const;
 
 function buildSitemap(origin: string): string {
   const lastmod = new Date().toISOString().split("T")[0];
-  const paths = isPacksFeatureEnabled()
-    ? [...STATIC_PATHS, { path: "/packs", changefreq: "weekly", priority: "0.6" } as const]
-    : STATIC_PATHS;
-  const urls = paths.map(({ path, changefreq, priority }) => {
+  const urls = STATIC_PATHS.map(({ path, changefreq, priority }) => {
     return `  <url>
     <loc>${origin}${path}</loc>
     <lastmod>${lastmod}</lastmod>

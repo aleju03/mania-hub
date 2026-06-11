@@ -15,7 +15,6 @@ import { getCountryFlagGradient, getCountryFlagUrl, isGlobalScope } from "../../
 import { isLiveBackendConfigured } from "../../lib/live-backend";
 import { useCountryWarming } from "../../lib/use-country-warming";
 import { useDynamicFavicon } from "../../lib/favicon";
-import { isPacksFeatureEnabled } from "../../lib/feature-flags";
 
 const links = [
   { id: "home", to: "/", label: "home" },
@@ -74,7 +73,6 @@ export function Nav() {
   const showSnipesLink = !liveBackendConfigured || selectedCountryFeatureTier === "snipes";
   const visibleLinks = links.filter((link) => {
     if (link.id === "snipes" && !showSnipesLink) return false;
-    if (link.id === "packs" && !isPacksFeatureEnabled()) return false;
     return true;
   });
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
