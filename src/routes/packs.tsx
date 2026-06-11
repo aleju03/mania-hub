@@ -15,6 +15,7 @@ import { isPacksFeatureEnabled } from "../lib/feature-flags";
 import {
   MAX_PACK_CHARGES,
   msUntilNextCharge,
+  ownedCards,
   PACK_OPEN_SHARD_REWARD,
   type PackWallet,
 } from "../lib/pack-collection";
@@ -191,7 +192,15 @@ function PacksPage() {
     let cancelled = false;
     setCards(null);
     setDealError(false);
-    drawPackPlayers(Math.random, { topFraction: packTypeById(packTypeId).topFraction })
+    const type = packTypeById(packTypeId);
+    const currentWallet = walletApi.wallet;
+    drawPackPlayers(Math.random, {
+      topFraction: type.topFraction,
+      ownedUserIds:
+        type.guaranteesNew && currentWallet
+          ? new Set(ownedCards(currentWallet).map((card) => card.userId))
+          : undefined,
+    })
       .then((draw) => {
         if (cancelled) return;
         walletApi.notePoolTotal(draw.poolTotal);

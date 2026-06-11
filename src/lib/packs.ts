@@ -150,6 +150,8 @@ export interface PackTypeDef {
   cost: PackCost;
   /* Slice of the pool this pack draws from (1 = the whole pool). */
   topFraction: number;
+  /* Re-rolls the draw so at least one card is outside the collection. */
+  guaranteesNew?: boolean;
   blurb: string;
   accent: { r: number; g: number; b: number };
 }
@@ -170,7 +172,8 @@ export const PACK_TYPES: PackTypeDef[] = [
     artSubtitle: "WILD PACK",
     cost: { kind: "shards", amount: 8 },
     topFraction: 1,
-    blurb: "Same odds as standard",
+    guaranteesNew: true,
+    blurb: "Whole pool, at least one card you don't own",
     accent: { r: 52, g: 211, b: 153 },
   },
   {
@@ -366,6 +369,35 @@ const defaultPoolPageFetcher: PoolPageFetcher = async (page) => {
 export interface PackDrawOptions {
   /* Draw from the pool's top slice instead of the whole pool (1 = all). */
   topFraction?: number;
+  /* Collected card ids. When set, a draw made up entirely of owned players
+     swaps its weakest slot for an unowned one (the wild pack's guarantee).
+     Best-effort: a near-complete collection can exhaust the re-roll budget. */
+  ownedUserIds?: ReadonlySet<number>;
+}
+
+/* Extra page rolls allowed while hunting an unowned player for the wild
+   guarantee, after the already-fetched pages come up empty. */
+export const UNOWNED_DRAW_ATTEMPTS = 6;
+
+/* Picks a random player from the given pool pages who is inside the draw
+   slice and outside both the owned set and the current pack. */
+export function pickUnownedPoolEntry(
+  pages: Iterable<LiveGlobalRankingEntry[]>,
+  drawTotal: number,
+  ownedUserIds: ReadonlySet<number>,
+  usedUserIds: ReadonlySet<number>,
+  rng: () => number,
+): LiveGlobalRankingEntry | null {
+  const candidates: LiveGlobalRankingEntry[] = [];
+  for (const page of pages) {
+    for (const entry of page) {
+      if (entry.rank <= drawTotal && !ownedUserIds.has(entry.user.id) && !usedUserIds.has(entry.user.id)) {
+        candidates.push(entry);
+      }
+    }
+  }
+  if (candidates.length === 0) return null;
+  return candidates[Math.floor(rng() * candidates.length)];
 }
 
 export interface PackDraw {
@@ -394,6 +426,29 @@ export async function drawPackPlayersFromPool(
   const pagesByNumber = new Map(pages.map((page, index) => [page, responses[index]?.ranking ?? []]));
   const entries = pickPackEntries(positions, pagesByNumber, rng);
   if (entries.length === 0) throw new Error("No players available for this pack.");
+
+  const owned = options.ownedUserIds;
+  if (owned && owned.size > 0 && entries.every((entry) => owned.has(entry.user.id))) {
+    const used = new Set(entries.map((entry) => entry.user.id));
+    let replacement = pickUnownedPoolEntry(pagesByNumber.values(), drawTotal, owned, used, rng);
+    for (let attempt = 0; !replacement && attempt < UNOWNED_DRAW_ATTEMPTS; attempt += 1) {
+      const page = rankToPage(rollUniformPositions(drawTotal, 1, rng)[0]);
+      if (pagesByNumber.has(page)) continue;
+      const response = page === 1 ? head : await fetchPage(page);
+      pagesByNumber.set(page, response.ranking);
+      replacement = pickUnownedPoolEntry([response.ranking], drawTotal, owned, used, rng);
+    }
+    if (replacement) {
+      // Swap out the weakest pull so the guarantee never costs the pack's hit.
+      const rankOf = (entry: LiveGlobalRankingEntry) => entry.global_rank ?? entry.rank;
+      let weakest = 0;
+      for (let index = 1; index < entries.length; index += 1) {
+        if (rankOf(entries[index]) > rankOf(entries[weakest])) weakest = index;
+      }
+      entries[weakest] = replacement;
+    }
+  }
+
   return { players: sortIntoRevealOrder(entries.map(liveEntryToPackPlayer)), poolTotal: total };
 }
 
