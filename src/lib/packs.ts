@@ -72,11 +72,11 @@ export interface PackRankBand {
   weight: number;
 }
 
-// One entry per card slot, in reveal order. Early slots draw from deep ranks
-// (bands past MAX_PACK_RANK resolve through the country pool), the last slot
-// is the pack's "hit" with a small chance at the very top. Card tiers are
-// still computed from the player's real scores - these bands only shape
-// which players land in a pack, never what their card says.
+// Fallback-only (no live backend): one entry per card slot, in reveal order.
+// Early slots draw from deep ranks (bands past MAX_PACK_RANK resolve through
+// the country pool), the last slot is the pack's "hit" with a small chance
+// at the very top. Card tiers are still computed from the player's real
+// scores - these bands only shape which players land in a pack.
 export const PACK_SLOT_BANDS: PackRankBand[][] = [
   [{ minRank: DEEP_MIN_RANK, maxRank: DEEP_MAX_RANK, weight: 1 }],
   [
@@ -133,34 +133,81 @@ export function rollPackRanks(rng: () => number = Math.random): number[] {
   return rollRanksFromBands(PACK_SLOT_BANDS, rng);
 }
 
-/* Slot bands over the tracked-player pool, as positions 1..total (1 = the
-   pool's best player). Mirrors the escalation of PACK_SLOT_BANDS but in
-   percentiles, so the distribution holds whatever size the pool grows to:
-   commons from the deep pool, then climbing, with the last slot the hit
-   (4% chance at the pool's top 3). */
-export function poolBandsForSize(total: number): PackRankBand[][] {
-  const pos = (fraction: number) => Math.max(1, Math.min(total, Math.round(fraction * total)));
-  return [
-    [{ minRank: pos(0.35), maxRank: total, weight: 1 }],
-    [
-      { minRank: pos(0.35), maxRank: total, weight: 3 },
-      { minRank: pos(0.15), maxRank: pos(0.35), weight: 2 },
-    ],
-    [
-      { minRank: pos(0.15), maxRank: pos(0.5), weight: 4 },
-      { minRank: pos(0.08), maxRank: pos(0.15), weight: 1 },
-    ],
-    [
-      { minRank: pos(0.04), maxRank: pos(0.2), weight: 7 },
-      { minRank: pos(0.015), maxRank: pos(0.04), weight: 3 },
-    ],
-    [
-      { minRank: pos(0.01), maxRank: pos(0.04), weight: 50 },
-      { minRank: pos(0.003), maxRank: pos(0.01), weight: 30 },
-      { minRank: Math.min(4, total), maxRank: Math.max(4, pos(0.003)), weight: 16 },
-      { minRank: 1, maxRank: Math.min(3, total), weight: 4 },
-    ],
-  ];
+// The booster lineup. Standard burns a regenerating pack charge; the rest
+// are bought with shards recycled from duplicate cards and draw from
+// progressively tighter top slices of the tracked pool. Within a pack's
+// slice every player has identical odds - rarity always comes from the
+// player's real scores, never from the draw.
+export type PackTypeId = "standard" | "wild" | "elite" | "legend";
+
+export type PackCost = { kind: "charge" } | { kind: "shards"; amount: number };
+
+export interface PackTypeDef {
+  id: PackTypeId;
+  name: string;
+  /* Subtitle line on the foil art, e.g. "ELITE PACK". */
+  artSubtitle: string;
+  cost: PackCost;
+  /* Slice of the pool this pack draws from (1 = the whole pool). */
+  topFraction: number;
+  blurb: string;
+  accent: { r: number; g: number; b: number };
+}
+
+export const PACK_TYPES: PackTypeDef[] = [
+  {
+    id: "standard",
+    name: "Standard",
+    artSubtitle: "BOOSTER PACK",
+    cost: { kind: "charge" },
+    topFraction: 1,
+    blurb: "Every tracked player, same odds",
+    accent: { r: 167, g: 139, b: 250 },
+  },
+  {
+    id: "wild",
+    name: "Wild",
+    artSubtitle: "WILD PACK",
+    cost: { kind: "shards", amount: 8 },
+    topFraction: 1,
+    blurb: "Same odds as standard",
+    accent: { r: 52, g: 211, b: 153 },
+  },
+  {
+    id: "elite",
+    name: "Elite",
+    artSubtitle: "ELITE PACK",
+    cost: { kind: "shards", amount: 25 },
+    topFraction: 0.1,
+    blurb: "Top 10% of the pool",
+    accent: { r: 251, g: 191, b: 36 },
+  },
+  {
+    id: "legend",
+    name: "Legend",
+    artSubtitle: "LEGEND PACK",
+    cost: { kind: "shards", amount: 60 },
+    topFraction: 0.02,
+    blurb: "Top 2% of the pool",
+    accent: { r: 244, g: 114, b: 182 },
+  },
+];
+
+export function packTypeById(id: PackTypeId): PackTypeDef {
+  return PACK_TYPES.find((type) => type.id === id) ?? PACK_TYPES[0];
+}
+
+// Tiny pools widen a sliced draw to a sane floor instead of repeating the
+// same handful of players every pack.
+export const POOL_SLICE_MIN_PLAYERS = 50;
+
+export function poolSliceSize(total: number, topFraction: number): number {
+  if (topFraction >= 1) return total;
+  return Math.max(Math.min(total, POOL_SLICE_MIN_PLAYERS), Math.round(total * topFraction));
+}
+
+export function rollUniformPositions(total: number, count: number, rng: () => number): number[] {
+  return Array.from({ length: count }, () => 1 + Math.min(total - 1, Math.floor(rng() * total)));
 }
 
 export function isDeepRank(rank: number): boolean {
@@ -316,16 +363,30 @@ const defaultPoolPageFetcher: PoolPageFetcher = async (page) => {
   return { ranking: snapshot.ranking, total: snapshot.total };
 };
 
+export interface PackDrawOptions {
+  /* Draw from the pool's top slice instead of the whole pool (1 = all). */
+  topFraction?: number;
+}
+
+export interface PackDraw {
+  players: PackPlayer[];
+  poolTotal: number | null;
+}
+
 /* Primary draw: the live backend's tracked-player pool. Free of osu! API
-   calls - the global rankings snapshot is a local DB read on the backend. */
+   calls - the global rankings snapshot is a local DB read on the backend.
+   Draws uniformly over the whole pool, or over its top slice for the
+   shard-bought pack types. */
 export async function drawPackPlayersFromPool(
   rng: () => number = Math.random,
   fetchPage: PoolPageFetcher = defaultPoolPageFetcher,
-): Promise<PackPlayer[]> {
+  options: PackDrawOptions = {},
+): Promise<PackDraw> {
   const head = await fetchPage(1);
   const total = Math.max(head.total, head.ranking.length);
   if (total < 100) throw new Error("Tracked player pool is too small for packs.");
-  const positions = rollRanksFromBands(poolBandsForSize(total), rng);
+  const drawTotal = poolSliceSize(total, options.topFraction ?? 1);
+  const positions = rollUniformPositions(drawTotal, PACK_SIZE, rng);
   const pages = [...new Set(positions.map(rankToPage))];
   const responses = await Promise.all(
     pages.map(async (page) => (page === 1 ? head : await fetchPage(page))),
@@ -333,18 +394,21 @@ export async function drawPackPlayersFromPool(
   const pagesByNumber = new Map(pages.map((page, index) => [page, responses[index]?.ranking ?? []]));
   const entries = pickPackEntries(positions, pagesByNumber, rng);
   if (entries.length === 0) throw new Error("No players available for this pack.");
-  return sortIntoRevealOrder(entries.map(liveEntryToPackPlayer));
+  return { players: sortIntoRevealOrder(entries.map(liveEntryToPackPlayer)), poolTotal: total };
 }
 
-export async function drawPackPlayers(rng: () => number = Math.random): Promise<PackPlayer[]> {
+export async function drawPackPlayers(
+  rng: () => number = Math.random,
+  options: PackDrawOptions = {},
+): Promise<PackDraw> {
   if (isLiveBackendConfigured()) {
     try {
-      return await drawPackPlayersFromPool(rng);
+      return await drawPackPlayersFromPool(rng, defaultPoolPageFetcher, options);
     } catch {
       // Backend hiccup: degrade to the direct osu! rankings draw below.
     }
   }
-  return drawPackPlayersFromOsuApi(rng);
+  return { players: await drawPackPlayersFromOsuApi(rng), poolTotal: null };
 }
 
 export async function drawPackPlayersFromOsuApi(rng: () => number = Math.random): Promise<PackPlayer[]> {
@@ -377,9 +441,14 @@ export async function fetchPackPlayerScores(userId: number): Promise<OsuScore[]>
   if (isLiveBackendConfigured()) {
     try {
       // Best scores from the backend's profile snapshot (24h cache); the
-      // same data the profile maniacard tab renders from.
+      // same data the profile maniacard tab renders from. An EMPTY cached
+      // list falls through to the live window - it usually means the
+      // snapshot was computed before the player's plays were fetched, and
+      // returning it would mint a blank card.
       const snapshot = await fetchLivePlayerProfileSnapshotDirect(String(userId));
-      if (snapshot && Array.isArray(snapshot.bestScores)) return snapshot.bestScores;
+      if (snapshot && Array.isArray(snapshot.bestScores) && snapshot.bestScores.length > 0) {
+        return snapshot.bestScores;
+      }
     } catch {
       // Backend hiccup: degrade to the direct osu! API window below.
     }

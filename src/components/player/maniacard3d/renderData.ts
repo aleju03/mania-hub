@@ -3,6 +3,7 @@ import {
   getManiaCardTier,
   getNextManiaCardTier,
   MANIA_TIER_STYLES,
+  type ManiaSkills,
 } from "#/lib/maniacard";
 import type {
   GradientStop,
@@ -26,6 +27,22 @@ export function buildManiaCardRenderData({ user, scores }: ManiaCardRenderInput)
     return { status: "empty", message: EMPTY_CARD_MESSAGE };
   }
 
+  return buildManiaCardRenderDataFromSkills({ user, skills, scores });
+}
+
+/* Rebuilds renderable card data from an already computed skills snapshot.
+   The texture pipeline never reads scores, so surfaces that persist skills
+   (the pack collection) can redraw the exact card front without refetching
+   the player's plays. */
+export function buildManiaCardRenderDataFromSkills({
+  user,
+  skills,
+  scores = [],
+}: {
+  user: ManiaCardRenderInput["user"];
+  skills: ManiaSkills;
+  scores?: ManiaCardRenderInput["scores"];
+}): ManiaCardReadyData {
   const tier = getManiaCardTier(skills.cardPower);
   const tierStyle = MANIA_TIER_STYLES[tier];
   const nextTier = getNextManiaCardTier(skills.cardPower);

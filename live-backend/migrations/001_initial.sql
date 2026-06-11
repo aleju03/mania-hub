@@ -444,3 +444,10 @@ create index if not exists idx_player_activity_maps_day on player_activity_maps(
 create index if not exists idx_jobs_ready on jobs(status, run_after, priority desc);
 create index if not exists idx_live_event_country_sequence on live_event_log(country, sequence);
 create index if not exists idx_api_call_log_provider_time on api_call_log(provider, started_at desc);
+
+create table if not exists pack_wallets (
+  user_id integer primary key,
+  payload text not null,
+  rev integer not null,
+  updated_at integer not null
+);

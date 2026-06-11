@@ -47,6 +47,9 @@ export interface ManiaCardRendererOptions {
   // Start with the card back facing the camera; playRevealFlip() spins it
   // front-side-out. Used by the pack opening reveal.
   startFaceDown?: boolean;
+  // Disables the device-orientation tilt on mobile (pack reveals want a
+  // steady card; touch drag still works).
+  gyro?: boolean;
   onReady?: () => void;
   onError?: (error: unknown) => void;
 }
@@ -70,7 +73,7 @@ function easeOutBackSoft(t: number) {
 export class ManiaCardRenderer {
   private readonly host: HTMLElement;
   private readonly renderer: WebGLRenderer;
-  private readonly mobile: boolean;
+  private readonly gyroEnabled: boolean;
   private readonly onReady?: () => void;
   private readonly onError?: (error: unknown) => void;
   private readonly scene = new Scene();
@@ -99,7 +102,7 @@ export class ManiaCardRenderer {
   constructor(options: ManiaCardRendererOptions) {
     if (options.startFaceDown) this.introRotationDeg = 180;
     this.host = options.host;
-    this.mobile = options.mobile;
+    this.gyroEnabled = options.mobile && options.gyro !== false;
     this.onReady = options.onReady;
     this.onError = options.onError;
     this.quality = resolveQualityProfile({
@@ -135,7 +138,7 @@ export class ManiaCardRenderer {
     this.scene.add(new AmbientLight(0xffffff, 1.4));
     this.scene.add(this.group);
     this.attachPointerEvents();
-    if (options.mobile && !this.getOrientationPermissionRequester()) this.attachOrientationListener();
+    if (this.gyroEnabled && !this.getOrientationPermissionRequester()) this.attachOrientationListener();
     void this.setData(options.data);
   }
 
@@ -299,10 +302,16 @@ export class ManiaCardRenderer {
       const eased = easeOutBackSoft(progress);
       this.introRotationDeg = anim.fromDeg * (1 - eased);
       // Sweep the foil light across the face while the card turns so the
-      // reveal lands with a glint instead of a flat frame.
+      // reveal lands with a glint instead of a flat frame. The tail of the
+      // sweep blends into the resting light so the foil pattern never snaps
+      // on the final frame.
+      const rest = pointerToLight(this.interaction.rotation);
+      const sweepX = clamp(0.85 - eased * 0.7, 0.08, 0.92);
+      const blendIn = clamp((progress - 0.72) / 0.28, 0, 1);
+      const blend = blendIn * blendIn * (3 - 2 * blendIn);
       this.interaction.light = {
-        x: clamp(0.85 - eased * 0.7, 0.08, 0.92),
-        y: 0.35,
+        x: sweepX + (rest.x - sweepX) * blend,
+        y: 0.35 + (rest.y - 0.35) * blend,
       };
       if (progress >= 1) {
         this.introRotationDeg = 0;
@@ -403,7 +412,7 @@ export class ManiaCardRenderer {
   }
 
   private getOrientationPermissionRequester() {
-    if (!this.mobile || typeof window === "undefined" || !("DeviceOrientationEvent" in window)) return null;
+    if (!this.gyroEnabled || typeof window === "undefined" || !("DeviceOrientationEvent" in window)) return null;
 
     const OrientationEvent = window.DeviceOrientationEvent as DeviceOrientationEventWithPermission;
     return typeof OrientationEvent.requestPermission === "function" ? OrientationEvent.requestPermission.bind(OrientationEvent) : null;
@@ -440,7 +449,7 @@ export class ManiaCardRenderer {
     if (
       this.disposed ||
       this.orientationAttached ||
-      !this.mobile ||
+      !this.gyroEnabled ||
       typeof window === "undefined" ||
       !("DeviceOrientationEvent" in window)
     ) {

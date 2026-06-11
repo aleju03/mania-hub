@@ -1,5 +1,6 @@
 import { motion, useMotionValue, useSpring } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
+import type { PackTypeDef } from "#/lib/packs";
 import {
   createPackFrontCanvas,
   PACK_ART_HEIGHT,
@@ -45,6 +46,8 @@ interface SlashSpark {
 interface PackStageProps {
   onOpened: () => void;
   reducedMotion: boolean;
+  /* Tints the foil art and subtitle; omitted = the standard pack look. */
+  packType?: PackTypeDef;
 }
 
 function random01(value: number) {
@@ -56,7 +59,7 @@ function clampNumber(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-export function PackStage({ onOpened, reducedMotion }: PackStageProps) {
+export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const packRef = useRef<HTMLDivElement | null>(null);
   const liveCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -65,7 +68,8 @@ export function PackStage({ onOpened, reducedMotion }: PackStageProps) {
   const [ripClips, setRipClips] = useState<{ strip: string; body: string } | null>(null);
   const [sparks, setSparks] = useState<SlashSpark[]>([]);
 
-  const slashRef = useRef<{ pointerId: number; lastX: number; lastYFrac: number; lastSparkX: number } | null>(null);
+  const slashRef = useRef<{ lastX: number; lastYFrac: number; lastSparkX: number } | null>(null);
+  const bladeHeldRef = useRef<{ pointerId: number } | null>(null);
   const rippingRef = useRef(false);
   const sparkIdRef = useRef(0);
   // Cut y per column as a height fraction; NaN = column not cut yet.
@@ -282,14 +286,16 @@ export function PackStage({ onOpened, reducedMotion }: PackStageProps) {
   };
 
   useEffect(() => {
-    const canvas = createPackFrontCanvas();
+    const canvas = createPackFrontCanvas(
+      packType ? { accent: packType.accent, subtitle: packType.artSubtitle } : undefined,
+    );
     artCanvasRef.current = canvas;
     setPackArt(canvas.toDataURL("image/png"));
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, []);
+  }, [packType]);
 
   // Blade trail: while the pointer is held down anywhere on the stage, a
   // fading streak chases the cursor (on and off the pack), so the slash
@@ -527,46 +533,27 @@ export function PackStage({ onOpened, reducedMotion }: PackStageProps) {
     rotateX.set(0);
   };
 
-  const beginSlash = (event: React.PointerEvent<HTMLDivElement>, rect: DOMRect, ny: number) => {
-    event.currentTarget.setPointerCapture(event.pointerId);
-    const x = clampNumber(event.clientX - rect.left, 0, rect.width);
-    const yFrac = clampNumber(ny, CUT_MIN_Y, CUT_MAX_Y);
-    slashRef.current = { pointerId: event.pointerId, lastX: x, lastYFrac: yFrac, lastSparkX: x };
-    setCutSpan(x, yFrac, x, yFrac);
-    ensureLoop();
-  };
-
-  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+  /* Advances the blade gesture at a viewport point: starts a slash when the
+     blade enters the tear band, extends the cut while slashing. */
+  const cutAtPoint = (clientX: number, clientY: number) => {
     if (rippingRef.current) return;
     const rect = packRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const ny = (event.clientY - rect.top) / rect.height;
-    if (ny < TEAR_BAND_TOP || ny > TEAR_BAND_BOTTOM) return;
-    beginSlash(event, rect, ny);
-  };
-
-  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!rect || rect.width === 0) return;
+    const ny = (clientY - rect.top) / rect.height;
     const slash = slashRef.current;
-    if (!slash || slash.pointerId !== event.pointerId) {
-      // A held blade entering the band starts cutting even when the hold
-      // began off the pack: a fruit-ninja swipe straight through.
-      if (!rippingRef.current && !slashRef.current && (event.buttons & 1) === 1) {
-        const rect = packRef.current?.getBoundingClientRect();
-        if (rect) {
-          const ny = (event.clientY - rect.top) / rect.height;
-          if (ny >= TEAR_BAND_TOP && ny <= TEAR_BAND_BOTTOM) {
-            beginSlash(event, rect, ny);
-            return;
-          }
-        }
-      }
-      onPointerMoveTilt(event);
+    if (!slash) {
+      if (ny < TEAR_BAND_TOP || ny > TEAR_BAND_BOTTOM) return;
+      // Horizontal slack so a swipe that starts off the pack still bites.
+      if (clientX < rect.left - 60 || clientX > rect.right + 60) return;
+      const x = clampNumber(clientX - rect.left, 0, rect.width);
+      const yFrac = clampNumber(ny, CUT_MIN_Y, CUT_MAX_Y);
+      slashRef.current = { lastX: x, lastYFrac: yFrac, lastSparkX: x };
+      setCutSpan(x, yFrac, x, yFrac);
+      ensureLoop();
       return;
     }
-    const rect = packRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const x = clampNumber(event.clientX - rect.left, 0, rect.width);
-    const yFrac = clampNumber((event.clientY - rect.top) / rect.height, CUT_MIN_Y, CUT_MAX_Y);
+    const x = clampNumber(clientX - rect.left, 0, rect.width);
+    const yFrac = clampNumber(ny, CUT_MIN_Y, CUT_MAX_Y);
     setCutSpan(slash.lastX, slash.lastYFrac, x, yFrac);
     slash.lastX = x;
     slash.lastYFrac = yFrac;
@@ -577,11 +564,44 @@ export function PackStage({ onOpened, reducedMotion }: PackStageProps) {
     if (cutCountRef.current / BIN_COUNT >= TEAR_COMPLETE_COVERAGE) triggerRip();
   };
 
-  const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (slashRef.current?.pointerId !== event.pointerId) return;
-    slashRef.current = null;
-    ensureLoop();
-  };
+  /* The blade is driven from document-level pointer events: touch pointers
+     are implicitly captured by whatever element the finger lands on, so
+     element-bound handlers never see a swipe that starts off the pack (the
+     reason cutting was impossible on mobile). Tracking the held pointer
+     ourselves also sidesteps iOS Safari's unreliable PointerEvent.buttons. */
+  useEffect(() => {
+    const onDown = (event: PointerEvent) => {
+      if (rippingRef.current || bladeHeldRef.current) return;
+      if (event.pointerType === "mouse" && event.button !== 0) return;
+      const stage = stageRef.current;
+      if (!stage || !(event.target instanceof Node) || !stage.contains(event.target)) return;
+      bladeHeldRef.current = { pointerId: event.pointerId };
+      cutAtPoint(event.clientX, event.clientY);
+    };
+    const onMove = (event: PointerEvent) => {
+      const held = bladeHeldRef.current;
+      if (!held || held.pointerId !== event.pointerId) return;
+      cutAtPoint(event.clientX, event.clientY);
+    };
+    const onUp = (event: PointerEvent) => {
+      if (bladeHeldRef.current?.pointerId !== event.pointerId) return;
+      bladeHeldRef.current = null;
+      slashRef.current = null;
+      ensureLoop();
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp);
+    document.addEventListener("pointercancel", onUp);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", onUp);
+      document.removeEventListener("pointercancel", onUp);
+      bladeHeldRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const ripping = ripClips !== null;
 
@@ -593,7 +613,9 @@ export function PackStage({ onOpened, reducedMotion }: PackStageProps) {
     : { y: 46, scale: 0.9, opacity: 0 };
 
   return (
-    <div ref={stageRef} className="flex flex-col items-center">
+    // pan-y: vertical swipes still scroll the page on touch, horizontal
+    // swipes are the blade and never turn into a scroll.
+    <div ref={stageRef} className="flex flex-col items-center" style={{ touchAction: "pan-y" }}>
       {/* Blade trail overlay, viewport-sized so the streak runs off the pack */}
       {!reducedMotion && (
         <canvas
@@ -616,10 +638,7 @@ export function PackStage({ onOpened, reducedMotion }: PackStageProps) {
           }}
           animate={reducedMotion || ripping ? undefined : { y: [0, -7, 0] }}
           transition={reducedMotion || ripping ? undefined : { duration: 3.6, repeat: Infinity, ease: "easeInOut" }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={onPointerUp}
+          onPointerMove={onPointerMoveTilt}
           onPointerLeave={onPointerLeaveTilt}
         >
           {packArt ? (

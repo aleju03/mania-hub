@@ -11,6 +11,7 @@ import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapsho
 import type { ScoreSpeedBucket } from "../shared/score.js";
 import { enqueueGlobalRankingStatRepairs, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
 import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery } from "../features/maps.js";
+import { getPackWallet, savePackWallet } from "../features/pack-wallets.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
@@ -414,6 +415,47 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     } catch (error) {
       sendOsuError(req, res, ctx, error);
     }
+    return true;
+  }
+  const packWalletMatch = url.pathname.match(/^\/api\/pack-wallet\/(\d+)$/);
+  if (packWalletMatch) {
+    // Server-to-server only: the frontend's server functions authenticate
+    // the osu! login cookie and forward the viewer's own wallet with the
+    // admin bearer token. Browsers never call this directly.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    const walletUserId = Number(packWalletMatch[1]);
+    if (!Number.isFinite(walletUserId) || walletUserId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    if (req.method === "GET") {
+      const wallet = await getPackWallet(ctx.db, walletUserId);
+      sendJson(req, res, ctx, 200, wallet ? { payload: wallet.payload, rev: wallet.rev } : { payload: null, rev: 0 });
+      return true;
+    }
+    if (req.method === "POST") {
+      const body = parseJson<Record<string, unknown>>(
+        (await readBodyBuffer(req, PACK_WALLET_BODY_LIMIT_BYTES)).toString("utf8") || "{}",
+        {},
+      );
+      const payload = typeof body.payload === "string" ? body.payload : "";
+      const baseRev = Number(body.baseRev);
+      if (!payload || payload.length > PACK_WALLET_PAYLOAD_MAX_CHARS || !Number.isFinite(baseRev) || baseRev < 0) {
+        sendJson(req, res, ctx, 400, { error: "invalid_wallet_payload" });
+        return true;
+      }
+      const result = await savePackWallet(ctx.db, walletUserId, payload, Math.floor(baseRev));
+      if (!result.ok) {
+        sendJson(req, res, ctx, 409, { error: "wallet_conflict", payload: result.current.payload, rev: result.current.rev });
+        return true;
+      }
+      sendJson(req, res, ctx, 200, { rev: result.rev });
+      return true;
+    }
+    sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
     return true;
   }
   if (url.pathname === "/api/osu/beatmap-file") {
@@ -1742,6 +1784,11 @@ async function readBody(req: IncomingMessage): Promise<string> {
 }
 
 const DEFAULT_BODY_LIMIT_BYTES = 1024 * 1024;
+
+// A wallet holding the full ~6k tracked-player pool serializes to ~1.5MB,
+// so pack wallet pushes get more headroom than the default body limit.
+const PACK_WALLET_BODY_LIMIT_BYTES = 4 * 1024 * 1024;
+const PACK_WALLET_PAYLOAD_MAX_CHARS = 3_500_000;
 
 class HttpRequestError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) {

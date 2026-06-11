@@ -11,6 +11,7 @@ interface PackSummaryProps {
 
 export function PackSummary({ cards, onOpenAnother, reducedMotion }: PackSummaryProps) {
   const bestRank = Math.min(...cards.map((card) => card.player.globalRank));
+  const newCount = cards.filter((card) => card.isNew).length;
 
   return (
     <div className="flex flex-col items-center">
@@ -40,12 +41,17 @@ export function PackSummary({ cards, onOpenAnother, reducedMotion }: PackSummary
                 aria-label={`Open ${card.player.user.username}'s profile`}
               >
                 <div
-                  className="overflow-hidden rounded-[10px] transition-transform duration-150 hover:-translate-y-1"
+                  className="relative overflow-hidden rounded-[10px] transition-transform duration-150 hover:-translate-y-1"
                   style={{
                     aspectRatio: "5 / 7",
                     boxShadow: isBest ? `0 0 0 2px ${tierColor}, 0 10px 34px ${glow}` : `0 10px 26px rgba(0,0,0,0.45)`,
                   }}
                 >
+                  {card.isNew && (
+                    <span className="absolute left-1.5 top-1.5 z-10 rounded bg-osu-pink px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-white">
+                      new
+                    </span>
+                  )}
                   {card.thumbnail ? (
                     <img
                       src={card.thumbnail}
@@ -86,7 +92,11 @@ export function PackSummary({ cards, onOpenAnother, reducedMotion }: PackSummary
       >
         Open another pack
       </button>
-      <div className="mt-3 text-[11px] text-osu-f1">Cards are not saved yet. Screenshot the good ones.</div>
+      <div className="mt-3 text-[11px] text-osu-f1">
+        {newCount > 0
+          ? `${newCount} new card${newCount === 1 ? "" : "s"} added to your collection.`
+          : "All duplicates. Recycle them in your collection for shards."}
+      </div>
     </div>
   );
 }

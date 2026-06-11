@@ -12,14 +12,17 @@ import {
   MAX_PACK_RANK,
   PACK_SIZE,
   PACK_SLOT_BANDS,
+  PACK_TYPES,
+  packTypeById,
   pickDeepCountry,
   pickPackEntries,
-  poolBandsForSize,
+  POOL_SLICE_MIN_PLAYERS,
+  poolSliceSize,
   rankIndexInPage,
   rankToPage,
   RANKINGS_PAGE_SIZE,
   rollPackRanks,
-  rollRanksFromBands,
+  rollUniformPositions,
   sortIntoRevealOrder,
   toPackPlayer,
 } from "./packs";
@@ -222,36 +225,30 @@ function makePoolFetcher(total: number) {
 }
 
 describe("tracked pool draws", () => {
-  it("builds bands inside the pool for any size", () => {
+  it("rolls uniform positions inside the pool for any size", () => {
     for (const total of [120, 850, 5853, 60_000]) {
-      const slotBands = poolBandsForSize(total);
-      expect(slotBands).toHaveLength(PACK_SIZE);
-      for (const bands of slotBands) {
-        for (const band of bands) {
-          expect(band.minRank).toBeGreaterThanOrEqual(1);
-          expect(band.maxRank).toBeLessThanOrEqual(total);
-          expect(band.maxRank).toBeGreaterThanOrEqual(band.minRank);
+      for (let seed = 1; seed <= 50; seed += 1) {
+        for (const position of rollUniformPositions(total, PACK_SIZE, mulberry32(seed))) {
+          expect(position).toBeGreaterThanOrEqual(1);
+          expect(position).toBeLessThanOrEqual(total);
         }
       }
-      const hitBands = slotBands[PACK_SIZE - 1];
-      expect(hitBands[hitBands.length - 1].minRank).toBe(1);
     }
   });
 
-  it("rolls positions inside the pool", () => {
+  it("can roll both ends of the pool", () => {
     const total = 5853;
-    const slotBands = poolBandsForSize(total);
-    for (let seed = 1; seed <= 100; seed += 1) {
-      for (const position of rollRanksFromBands(slotBands, mulberry32(seed))) {
-        expect(position).toBeGreaterThanOrEqual(1);
-        expect(position).toBeLessThanOrEqual(total);
-      }
-    }
+    const positions = Array.from({ length: 400 }, (_, seed) =>
+      rollUniformPositions(total, PACK_SIZE, mulberry32(seed + 1)),
+    ).flat();
+    expect(positions.some((position) => position <= total * 0.1)).toBe(true);
+    expect(positions.some((position) => position >= total * 0.9)).toBe(true);
   });
 
   it("draws a full pack of distinct tracked players, weakest first", async () => {
     const { fetchPage, calls } = makePoolFetcher(5853);
-    const players = await drawPackPlayersFromPool(mulberry32(21), fetchPage);
+    const { players, poolTotal } = await drawPackPlayersFromPool(mulberry32(21), fetchPage);
+    expect(poolTotal).toBe(5853);
     expect(players).toHaveLength(PACK_SIZE);
     expect(new Set(players.map((player) => player.user.id)).size).toBe(PACK_SIZE);
     for (let index = 1; index < players.length; index += 1) {
@@ -259,6 +256,26 @@ describe("tracked pool draws", () => {
     }
     // Page 1 is fetched once for the pool size and reused, never refetched.
     expect(calls.filter((page) => page === 1)).toHaveLength(1);
+  });
+
+  it("draws sliced packs from the pool's top slice only", async () => {
+    const total = 5853;
+    const topSlice = poolSliceSize(total, 0.1);
+    expect(topSlice).toBe(Math.round(total * 0.1));
+    // Tiny pools widen the slice to a sane floor instead of repeating 5 players.
+    expect(poolSliceSize(120, 0.1)).toBe(POOL_SLICE_MIN_PLAYERS);
+    expect(poolSliceSize(120, 1)).toBe(120);
+    for (let seed = 1; seed <= 30; seed += 1) {
+      const { fetchPage } = makePoolFetcher(total);
+      const { players } = await drawPackPlayersFromPool(mulberry32(seed), fetchPage, { topFraction: 0.1 });
+      expect(players).toHaveLength(PACK_SIZE);
+      for (const player of players) {
+        // makePoolEntry ids encode the pool position. Collision fallbacks
+        // stay within the slice's fetched pages, so the bound is the last
+        // page's edge, not the exact slice size.
+        expect(player.user.id - 100_000).toBeLessThanOrEqual(rankToPage(topSlice) * RANKINGS_PAGE_SIZE);
+      }
+    }
   });
 
   it("refuses tiny pools so a misconfigured backend cannot produce junk packs", async () => {
@@ -271,6 +288,27 @@ describe("tracked pool draws", () => {
     expect(liveEntryToPackPlayer(entry).globalRank).toBe(21);
     const unranked = { ...entry, global_rank: null };
     expect(liveEntryToPackPlayer(unranked).globalRank).toBe(7);
+  });
+});
+
+describe("pack type lineup", () => {
+  it("defines a sane lineup: one charge pack, shard packs with valid slices", () => {
+    const chargePacks = PACK_TYPES.filter((type) => type.cost.kind === "charge");
+    expect(chargePacks.map((type) => type.id)).toEqual(["standard"]);
+    for (const type of PACK_TYPES) {
+      expect(type.topFraction).toBeGreaterThan(0);
+      expect(type.topFraction).toBeLessThanOrEqual(1);
+      if (type.cost.kind === "shards") expect(type.cost.amount).toBeGreaterThan(0);
+      expect(packTypeById(type.id)).toBe(type);
+    }
+    // Tighter slices cost more shards.
+    const shardPacks = PACK_TYPES.filter(
+      (type): type is typeof type & { cost: { kind: "shards"; amount: number } } => type.cost.kind === "shards",
+    );
+    const sorted = [...shardPacks].sort((a, b) => a.cost.amount - b.cost.amount);
+    for (let index = 1; index < sorted.length; index += 1) {
+      expect(sorted[index].topFraction).toBeLessThanOrEqual(sorted[index - 1].topFraction);
+    }
   });
 });
 

@@ -16,9 +16,37 @@ function random01(value: number) {
   return x - Math.floor(x);
 }
 
-/* Foil booster pack front. Drawn once per mount; PackStage shows it through
-   background-image slices so the top strip can tear away as its own element. */
-export function createPackFrontCanvas(): HTMLCanvasElement {
+export interface PackArtStyle {
+  accent: { r: number; g: number; b: number };
+  subtitle: string;
+}
+
+const DEFAULT_PACK_ART_STYLE: PackArtStyle = {
+  accent: { r: 167, g: 139, b: 250 },
+  subtitle: "BOOSTER PACK",
+};
+
+type Rgb = PackArtStyle["accent"];
+
+function rgba(color: Rgb, alpha: number): string {
+  return `rgba(${color.r}, ${color.g}, ${color.b}, ${alpha})`;
+}
+
+function mixRgb(color: Rgb, target: Rgb, amount: number): Rgb {
+  return {
+    r: Math.round(color.r + (target.r - color.r) * amount),
+    g: Math.round(color.g + (target.g - color.g) * amount),
+    b: Math.round(color.b + (target.b - color.b) * amount),
+  };
+}
+
+const WHITE: Rgb = { r: 255, g: 255, b: 255 };
+const BLACK: Rgb = { r: 8, g: 6, b: 16 };
+
+/* Foil booster pack front, tinted per pack type. Drawn once per mount;
+   PackStage shows it through background-image slices so the top strip can
+   tear away as its own element. */
+export function createPackFrontCanvas(style: PackArtStyle = DEFAULT_PACK_ART_STYLE): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   canvas.width = PACK_ART_WIDTH;
   canvas.height = PACK_ART_HEIGHT;
@@ -37,10 +65,10 @@ export function createPackFrontCanvas(): HTMLCanvasElement {
   context.fillStyle = base;
   context.fillRect(0, 0, width, height);
 
-  drawLargeTriangles(context, width, height);
+  drawLargeTriangles(context, width, height, style.accent);
   drawSheen(context, width, height);
-  drawEmblem(context, width, height);
-  drawWordmark(context, width, height);
+  drawEmblem(context, width, height, style.accent);
+  drawWordmark(context, width, height, style);
   drawCrimp(context, width, height, 0);
   drawCrimp(context, width, height, height - PACK_CRIMP_FRACTION * height);
   drawTearPerforation(context, width, height);
@@ -51,12 +79,15 @@ export function createPackFrontCanvas(): HTMLCanvasElement {
 
 // A few large interlocking triangles anchored to a loose grid, in quiet foil
 // tones - the osu! motif at pack scale.
-function drawLargeTriangles(context: CanvasRenderingContext2D, width: number, height: number) {
+function drawLargeTriangles(context: CanvasRenderingContext2D, width: number, height: number, accent: Rgb) {
+  // The two tinted triangles take the pack's accent (one pure, one nudged
+  // toward white) so each pack type reads differently at a glance.
+  const accentSoft = mixRgb(accent, WHITE, 0.35);
   const triangles: Array<{ points: Array<[number, number]>; fill: string }> = [
-    { points: [[-40, height], [220, height * 0.46], [430, height]], fill: "rgba(167, 139, 250, 0.10)" },
-    { points: [[150, height], [400, height * 0.56], [650, height]], fill: "rgba(244, 114, 182, 0.08)" },
+    { points: [[-40, height], [220, height * 0.46], [430, height]], fill: rgba(accent, 0.10) },
+    { points: [[150, height], [400, height * 0.56], [650, height]], fill: rgba(accentSoft, 0.08) },
     { points: [[290, height * 0.86], [430, height * 0.6], [570, height * 0.86]], fill: "rgba(255, 255, 255, 0.05)" },
-    { points: [[width + 40, height * 0.2], [width * 0.62, height * 0.46], [width + 40, height * 0.62]], fill: "rgba(125, 211, 252, 0.07)" },
+    { points: [[width + 40, height * 0.2], [width * 0.62, height * 0.46], [width + 40, height * 0.62]], fill: rgba(accent, 0.07) },
     { points: [[-30, height * 0.22], [150, height * 0.42], [-30, height * 0.56]], fill: "rgba(255, 255, 255, 0.04)" },
   ];
   for (const triangle of triangles) {
@@ -82,15 +113,15 @@ function drawSheen(context: CanvasRenderingContext2D, width: number, height: num
   context.fillRect(0, 0, width, height);
 }
 
-function drawEmblem(context: CanvasRenderingContext2D, width: number, height: number) {
+function drawEmblem(context: CanvasRenderingContext2D, width: number, height: number, accent: Rgb) {
   const cx = width / 2;
   const cy = height * 0.4;
 
   context.save();
   const halo = context.createRadialGradient(cx, cy, 0, cx, cy, 240);
-  halo.addColorStop(0, "rgba(167, 139, 250, 0.34)");
-  halo.addColorStop(0.55, "rgba(167, 139, 250, 0.10)");
-  halo.addColorStop(1, "rgba(167, 139, 250, 0)");
+  halo.addColorStop(0, rgba(accent, 0.34));
+  halo.addColorStop(0.55, rgba(accent, 0.10));
+  halo.addColorStop(1, rgba(accent, 0));
   context.fillStyle = halo;
   context.fillRect(cx - 250, cy - 250, 500, 500);
 
@@ -124,9 +155,9 @@ function drawEmblem(context: CanvasRenderingContext2D, width: number, height: nu
   context.beginPath();
   context.arc(cx, cy, 96, 0, Math.PI * 2);
   const disc = context.createLinearGradient(cx - 96, cy - 96, cx + 96, cy + 96);
-  disc.addColorStop(0, "rgba(196, 181, 253, 0.85)");
-  disc.addColorStop(0.5, "rgba(124, 58, 237, 0.85)");
-  disc.addColorStop(1, "rgba(30, 17, 70, 0.9)");
+  disc.addColorStop(0, rgba(mixRgb(accent, WHITE, 0.3), 0.85));
+  disc.addColorStop(0.5, rgba(mixRgb(accent, BLACK, 0.3), 0.85));
+  disc.addColorStop(1, rgba(mixRgb(accent, BLACK, 0.8), 0.9));
   context.fillStyle = disc;
   context.fill();
   context.strokeStyle = "rgba(255,255,255,0.55)";
@@ -139,21 +170,26 @@ function drawEmblem(context: CanvasRenderingContext2D, width: number, height: nu
   context.restore();
 }
 
-function drawWordmark(context: CanvasRenderingContext2D, width: number, height: number) {
+function drawWordmark(context: CanvasRenderingContext2D, width: number, height: number, style: PackArtStyle) {
   const cx = width / 2;
   context.save();
   context.textAlign = "center";
 
   context.font = `italic 900 64px ${FONT}`;
   context.fillStyle = "rgba(255,255,255,0.95)";
-  context.shadowColor = "rgba(167, 139, 250, 0.55)";
+  context.shadowColor = rgba(style.accent, 0.55);
   context.shadowBlur = 22;
   context.fillText("MANIACARDS", cx, height * 0.64);
 
   context.shadowBlur = 0;
   context.font = `700 26px ${FONT}`;
   context.fillStyle = "rgba(255,255,255,0.55)";
-  context.fillText("B O O S T E R   P A C K", cx, height * 0.695);
+  const spaced = style.subtitle
+    .toUpperCase()
+    .split(" ")
+    .map((word) => word.split("").join(" "))
+    .join("   ");
+  context.fillText(spaced, cx, height * 0.695);
 
   // "5 cards" pill
   const pillWidth = 190;

@@ -1,7 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import type { ManiaCardTier } from "#/lib/maniacard";
+import type { ManiaCardTier, ManiaSkills } from "#/lib/maniacard";
+import type { PulledCard } from "#/lib/pack-collection";
 import type { PackPlayer } from "#/lib/packs";
 import type { OsuScore } from "#/lib/types";
 import { CountryFlag } from "../ui/CountryFlag";
@@ -23,11 +24,15 @@ export interface RevealedCard {
   tierLabel: string | null;
   glowColor: RgbaColor | null;
   thumbnail: string | null;
+  isNew: boolean;
 }
 
 interface RevealStageProps {
   cards: PackCardState[];
   reducedMotion: boolean;
+  /* Called once per card the moment it is revealed; returns whether this is
+     the player's first copy in the viewer's collection. */
+  onCardRevealed?: (pull: PulledCard) => boolean;
   onComplete: (revealed: RevealedCard[]) => void;
 }
 
@@ -46,7 +51,7 @@ function isMobileViewport() {
   );
 }
 
-export function RevealStage({ cards, reducedMotion, onComplete }: RevealStageProps) {
+export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }: RevealStageProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const backCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<ManiaCardRenderer | null>(null);
@@ -109,6 +114,9 @@ export function RevealStage({ cards, reducedMotion, onComplete }: RevealStagePro
           reducedMotion,
           devicePixelRatio: typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1,
           startFaceDown: true,
+          // Pack reveals want a steady card; tilting the phone should not
+          // swing it around (touch drag still works).
+          gyro: false,
           onReady: () => onReadyRef.current?.(),
           onError: (error) => onErrorRef.current?.(error),
         });
@@ -122,8 +130,21 @@ export function RevealStage({ cards, reducedMotion, onComplete }: RevealStagePro
       }
     });
 
-  const recordRevealed = (entry: RevealedCard) => {
-    revealedRef.current = [...revealedRef.current, entry];
+  const recordRevealed = (entry: Omit<RevealedCard, "isNew">, skills: ManiaSkills | null) => {
+    const isNew = onCardRevealed
+      ? onCardRevealed({
+          userId: entry.player.user.id,
+          username: entry.player.user.username,
+          avatarUrl: entry.player.user.avatar_url,
+          countryCode: entry.player.user.country_code,
+          tier: entry.tier,
+          tierLabel: entry.tierLabel,
+          skills,
+          pp: entry.player.pp,
+          globalRank: entry.player.globalRank,
+        })
+      : false;
+    revealedRef.current = [...revealedRef.current, { ...entry, isNew }];
     setRevealed(revealedRef.current);
   };
 
@@ -134,9 +155,10 @@ export function RevealStage({ cards, reducedMotion, onComplete }: RevealStagePro
     setRevealed(revealedRef.current);
   };
 
-  const reveal = async () => {
-    if (phaseRef.current !== "stack" || skipping) return;
-    const card = cards[index];
+  const reveal = async (position: number) => {
+    if (skipping) return;
+    if (phaseRef.current === "preparing" || phaseRef.current === "flipping") return;
+    const card = cards[position];
     if (!card) return;
     setPhase("preparing");
 
@@ -145,20 +167,23 @@ export function RevealStage({ cards, reducedMotion, onComplete }: RevealStagePro
     const data = buildManiaCardRenderData({ user: card.player.user, scores });
 
     if (data.status !== "ready") {
-      recordRevealed({ player: card.player, tier: null, tierLabel: null, glowColor: null, thumbnail: null });
+      recordRevealed({ player: card.player, tier: null, tierLabel: null, glowColor: null, thumbnail: null }, null);
       setActiveData(null);
       setActiveFallback(null);
       setPhase("shown");
       return;
     }
 
-    recordRevealed({
-      player: card.player,
-      tier: data.tier,
-      tierLabel: data.tierStyle.label,
-      glowColor: data.glowColor,
-      thumbnail: null,
-    });
+    recordRevealed(
+      {
+        player: card.player,
+        tier: data.tier,
+        tierLabel: data.tierStyle.label,
+        glowColor: data.glowColor,
+        thumbnail: null,
+      },
+      data.skills,
+    );
     const cardIndex = revealedRef.current.length - 1;
     void renderCardThumbnail(data)
       .then((thumbnail) => {
@@ -179,7 +204,7 @@ export function RevealStage({ cards, reducedMotion, onComplete }: RevealStagePro
       await rendererRef.current?.playRevealFlip(reducedMotion ? 240 : 980);
       if (cancelledRef.current) return;
       setPhase("shown");
-      if (!reducedMotion) setBurst({ key: index, tier: data.tier, glowColor: data.glowColor });
+      if (!reducedMotion) setBurst({ key: position, tier: data.tier, glowColor: data.glowColor });
     } catch {
       // WebGL unavailable: fall back to the 2D front image.
       if (cancelledRef.current) return;
@@ -197,17 +222,20 @@ export function RevealStage({ cards, reducedMotion, onComplete }: RevealStagePro
     }
   };
 
+  // One click: leave the shown card and immediately start drawing the next,
+  // instead of dropping back to the stack and waiting for a second click.
   const advance = () => {
-    if (phaseRef.current !== "shown") return;
+    if (phaseRef.current !== "shown" || skipping) return;
     setBurst(null);
     if (index + 1 >= cards.length) {
       onComplete(revealedRef.current);
       return;
     }
+    const next = index + 1;
     setActiveData(null);
     setActiveFallback(null);
-    setIndex(index + 1);
-    setPhase("stack");
+    setIndex(next);
+    void reveal(next);
   };
 
   // Resolves every remaining card without the one-by-one ceremony.
@@ -221,7 +249,7 @@ export function RevealStage({ cards, reducedMotion, onComplete }: RevealStagePro
       if (cancelledRef.current) return;
       const data = buildManiaCardRenderData({ user: card.player.user, scores });
       if (data.status !== "ready") {
-        recordRevealed({ player: card.player, tier: null, tierLabel: null, glowColor: null, thumbnail: null });
+        recordRevealed({ player: card.player, tier: null, tierLabel: null, glowColor: null, thumbnail: null }, null);
         continue;
       }
       let thumbnail: string | null = null;
@@ -231,13 +259,16 @@ export function RevealStage({ cards, reducedMotion, onComplete }: RevealStagePro
         thumbnail = null;
       }
       if (cancelledRef.current) return;
-      recordRevealed({
-        player: card.player,
-        tier: data.tier,
-        tierLabel: data.tierStyle.label,
-        glowColor: data.glowColor,
-        thumbnail,
-      });
+      recordRevealed(
+        {
+          player: card.player,
+          tier: data.tier,
+          tierLabel: data.tierStyle.label,
+          glowColor: data.glowColor,
+          thumbnail,
+        },
+        data.skills,
+      );
     }
     if (!cancelledRef.current) onComplete(revealedRef.current);
   };
@@ -293,7 +324,7 @@ export function RevealStage({ cards, reducedMotion, onComplete }: RevealStagePro
                       ? { scale: { duration: 0.9, repeat: Infinity, ease: "easeInOut" }, default: { duration: 0.25 } }
                       : { duration: 0.25 }
                   }
-                  onClick={isTop ? () => void reveal() : undefined}
+                  onClick={isTop ? () => { if (phaseRef.current === "stack") void reveal(index); } : undefined}
                   role={isTop && phase === "stack" ? "button" : undefined}
                   aria-label={isTop && phase === "stack" ? "Draw the next card" : undefined}
                 />
@@ -389,6 +420,11 @@ export function RevealStage({ cards, reducedMotion, onComplete }: RevealStagePro
                 <CountryFlag code={current.player.user.country_code} size="sm" decorative />
               </Link>
               <div className="mt-1 flex items-center justify-center gap-2 text-[12px]">
+                {current.isNew && (
+                  <span className="rounded bg-osu-pink/15 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-osu-pink-light">
+                    new
+                  </span>
+                )}
                 {current.tierLabel && (
                   <span className="font-bold uppercase tracking-wide" style={{ color: tierColor }}>
                     {current.tierLabel}
@@ -418,7 +454,7 @@ export function RevealStage({ cards, reducedMotion, onComplete }: RevealStagePro
         {phase === "stack" && !skipping && (
           <button
             type="button"
-            onClick={() => void reveal()}
+            onClick={() => void reveal(index)}
             className="rounded-full bg-osu-pink px-6 py-2 text-sm font-bold text-white hover:brightness-110 transition cursor-pointer"
           >
             Draw card
