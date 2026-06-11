@@ -1268,7 +1268,7 @@ function FarmersModal({
         >
           <div className="absolute inset-0 bg-black/80" onClick={onClose} />
           <motion.div
-            className="relative z-10 flex h-[min(34rem,calc(100vh-1.5rem))] w-full max-w-[360px] flex-col overflow-hidden rounded-xl bg-osu-b5 shadow-2xl ring-1 ring-white/10 sm:h-[min(34rem,calc(100vh-3rem))]"
+            className="relative z-10 flex h-[min(34rem,calc(100dvh-1.5rem))] w-full max-w-[360px] flex-col overflow-hidden rounded-xl bg-osu-b5 shadow-2xl ring-1 ring-white/10 sm:h-[min(34rem,calc(100dvh-3rem))]"
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.12, ease: "easeOut" }}

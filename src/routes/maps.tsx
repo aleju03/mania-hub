@@ -3476,7 +3476,7 @@ function MapDetailsModal({
             onClick={onClose}
           />
           <motion.div
-            className="modal-card-mobile-safe relative isolate z-10 w-full max-w-[640px] max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-3rem)] overflow-hidden rounded-2xl bg-osu-b5 ring-1 ring-white/10 shadow-2xl flex flex-col"
+            className="modal-card-mobile-safe relative isolate z-10 w-full max-w-[640px] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden rounded-2xl bg-osu-b5 ring-1 ring-white/10 shadow-2xl flex flex-col"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
