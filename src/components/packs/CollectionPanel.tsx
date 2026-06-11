@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { Check, LogIn, Recycle, Search } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, LogIn, Recycle, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "#/lib/maniacard";
 import {
@@ -12,6 +12,7 @@ import {
   type CollectedCard,
   type PackWallet,
 } from "#/lib/pack-collection";
+import { fetchServerPackCollectionPage, type ServerPackCollectionPage } from "#/lib/pack-wallet-sync";
 import { fetchPackPlayerScores } from "#/lib/packs";
 import {
   buildManiaCardRenderData,
@@ -33,22 +34,21 @@ interface CollectionPanelProps {
   syncStatus: "local" | "syncing" | "synced";
   /* Recycle callbacks return the shards gained so the panel can play the
      clink and spawn the "+N" burst at the click point. */
-  onRecycleCard: (userId: number) => number;
-  onRecycleWhole: (userId: number) => number;
-  onRecycleAll: () => number;
+  onRecycleCard: (userId: number) => number | Promise<number>;
+  onRecycleWhole: (userId: number) => number | Promise<number>;
+  onRecycleAll: () => number | Promise<number>;
   onApplyMint: (userId: number, mint: CardMint) => boolean;
 }
 
-/* Real card fronts are redrawn through the maniacard texture pipeline from
-   the stored skills snapshot. Rendering is lazy (when the tile scrolls into
-   view), throttled, and cached for the session so a big collection doesn't
-   redraw on every visit to the page. */
+const COLLECTION_PAGE_SIZE = 15;
+const COLLECTION_THUMB_WIDTH = 240;
+
 const thumbnailCache = new Map<string, string>();
 
 let activeRenders = 0;
 const renderQueue: Array<() => void> = [];
 async function throttleRender<T>(task: () => Promise<T>): Promise<T> {
-  if (activeRenders >= 3) await new Promise<void>((resolve) => renderQueue.push(resolve));
+  if (activeRenders >= 2) await new Promise<void>((resolve) => renderQueue.push(resolve));
   activeRenders += 1;
   try {
     return await task();
@@ -59,7 +59,30 @@ async function throttleRender<T>(task: () => Promise<T>): Promise<T> {
 }
 
 function thumbnailKey(card: CollectedCard): string {
-  return `${card.userId}:${card.skills ? Math.round(card.skills.cardPower) : "plain"}`;
+  return `${card.userId}:${card.tier ?? "unrated"}:${card.skills ? Math.round(card.skills.cardPower) : "plain"}`;
+}
+
+function cardUserForRender(card: CollectedCard) {
+  return {
+    id: card.userId,
+    username: card.username,
+    avatar_url: card.avatarUrl,
+    country_code: card.countryCode,
+    statistics: { global_rank: card.globalRank, pp: card.pp },
+  };
+}
+
+async function renderCollectionThumbnail(card: CollectedCard): Promise<string | null> {
+  if (!card.skills) return null;
+  const data = buildManiaCardRenderDataFromSkills({
+    user: cardUserForRender(card),
+    skills: card.skills,
+  });
+  return throttleRender(() => renderCardThumbnail(data, COLLECTION_THUMB_WIDTH));
+}
+
+function pageSignature(cards: CollectedCard[]) {
+  return cards.map(thumbnailKey).join("|");
 }
 
 /* Legacy cards (collected before skills snapshots existed) and failed mints
@@ -150,49 +173,24 @@ function CardSketch({ card }: { card: CollectedCard }) {
 
 function CollectionCardTile({
   card,
+  thumbnail,
   onApplyMint,
 }: {
   card: CollectedCard;
+  thumbnail: string | null;
   onApplyMint: (userId: number, mint: CardMint) => boolean;
 }) {
-  const key = thumbnailKey(card);
-  const [thumbnail, setThumbnail] = useState<string | null>(() => thumbnailCache.get(key) ?? null);
   const hostRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (thumbnailCache.has(key)) {
-      setThumbnail(thumbnailCache.get(key) ?? null);
-      return;
-    }
-    setThumbnail(null);
+    if (card.skills) return;
     let cancelled = false;
-    const skills = card.skills;
-    // With a skills snapshot the real front renders locally; without one the
-    // card re-mints itself first (the wallet update re-runs this effect).
-    const work = skills
-      ? async () => {
-          try {
-            const data = buildManiaCardRenderDataFromSkills({
-              user: {
-                id: card.userId,
-                username: card.username,
-                avatar_url: card.avatarUrl,
-                country_code: card.countryCode,
-                statistics: { global_rank: card.globalRank, pp: card.pp },
-              },
-              skills,
-            });
-            const url = await throttleRender(() => renderCardThumbnail(data, 240));
-            thumbnailCache.set(key, url);
-            if (!cancelled) setThumbnail(url);
-          } catch {
-            // Sketch stays as the fallback.
-          }
-        }
-      : () => backfillCardMint(card, onApplyMint);
+    const work = () => {
+      if (!cancelled) void backfillCardMint(card, onApplyMint);
+    };
     const host = hostRef.current;
     if (!host || typeof IntersectionObserver !== "function") {
-      void work();
+      work();
       return () => {
         cancelled = true;
       };
@@ -212,7 +210,7 @@ function CollectionCardTile({
       observer.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [card.userId, card.skills]);
 
   return (
     <div ref={hostRef} className="relative" style={{ aspectRatio: "5 / 7" }}>
@@ -231,6 +229,24 @@ function CollectionCardTile({
           x{card.copies}
         </span>
       )}
+    </div>
+  );
+}
+
+function CollectionCardPlaceholder() {
+  return (
+    <div>
+      <div
+        className="relative overflow-hidden rounded-[10px] border border-osu-b3/40 bg-osu-b4/40"
+        style={{ aspectRatio: "5 / 7" }}
+      >
+        <div className="absolute inset-[7px] rounded-[7px] border border-white/10" />
+        <div className="absolute left-1/2 top-[9%] aspect-square w-[66%] -translate-x-1/2 rounded-[6px] bg-white/8" />
+        <div className="absolute inset-x-[18%] top-[62%] h-3 rounded bg-white/8" />
+        <div className="absolute inset-x-[26%] top-[76%] h-2 rounded bg-white/6" />
+        <div className="absolute inset-x-[20%] bottom-[7%] h-2 rounded bg-white/6" />
+      </div>
+      <div className="mx-auto mt-1.5 h-4 w-10 rounded bg-osu-b4/40" />
     </div>
   );
 }
@@ -258,6 +274,11 @@ export function CollectionPanel({
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [confirmBulk, setConfirmBulk] = useState(false);
+  const [collectionPage, setCollectionPage] = useState(0);
+  const [readyPageSignature, setReadyPageSignature] = useState("");
+  const [serverPage, setServerPage] = useState<ServerPackCollectionPage | null>(null);
+  const [serverLoading, setServerLoading] = useState(false);
+  const [serverRefreshKey, setServerRefreshKey] = useState(0);
   // One-shot "+N" shard floats spawned at the click point of a recycle.
   const [shardBursts, setShardBursts] = useState<Array<{ id: number; x: number; y: number; amount: number }>>([]);
   const burstIdRef = useRef(0);
@@ -279,6 +300,12 @@ export function CollectionPanel({
     window.setTimeout(() => {
       setShardBursts((current) => current.filter((burst) => burst.id !== id));
     }, 800);
+  };
+  const runRecycle = (action: () => number | Promise<number>, anchor: Element | null) => {
+    void Promise.resolve(action()).then((gained) => {
+      celebrateRecycle(gained, anchor);
+      if (gained > 0 && useServerCollection) setServerRefreshKey((key) => key + 1);
+    });
   };
   useEffect(() => {
     if (confirmUserId === null) return;
@@ -371,26 +398,140 @@ export function CollectionPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selecting]);
 
-  if (!wallet) return null;
-
-  const cards = ownedCards(wallet).sort((a, b) => tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp);
-  const ownedTiers = [...new Set(cards.map((card) => card.tier))].sort((a, b) => tierRank(b) - tierRank(a));
+  const walletReady = wallet !== null;
+  const useServerCollection = walletReady && syncStatus !== "local";
+  const localCards = wallet
+    ? ownedCards(wallet).sort((a, b) => tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp)
+    : [];
+  const cards = useServerCollection ? (serverPage?.cards as CollectedCard[] | undefined) ?? [] : localCards;
+  const serverTierCounts = serverPage?.tierCounts ?? {};
+  const serverCollectionTotal = Object.values(serverTierCounts).reduce((sum, count) => sum + count, 0);
+  const ownedTiers: Array<ManiaCardTier | null> = useServerCollection
+    ? Object.keys(serverTierCounts)
+        .map((tier) => (tier === "unrated" ? null : tier as ManiaCardTier))
+        .sort((a, b) => tierRank(b) - tierRank(a))
+    : [...new Set(localCards.map((card) => card.tier))].sort((a, b) => tierRank(b) - tierRank(a));
   const tierCounts = new Map<ManiaCardTier | "unrated", number>();
-  for (const card of cards) {
-    const key = card.tier ?? "unrated";
-    tierCounts.set(key, (tierCounts.get(key) ?? 0) + 1);
+  if (useServerCollection) {
+    for (const [tier, count] of Object.entries(serverTierCounts)) {
+      tierCounts.set(tier === "unrated" ? "unrated" : tier as ManiaCardTier, count);
+    }
+  } else {
+    for (const card of localCards) {
+      const key = card.tier ?? "unrated";
+      tierCounts.set(key, (tierCounts.get(key) ?? 0) + 1);
+    }
   }
   const trimmedQuery = query.trim().toLowerCase();
-  const visibleCards = cards.filter((card) => {
+  const visibleCards = useServerCollection ? cards : cards.filter((card) => {
     if (trimmedQuery && !card.username.toLowerCase().includes(trimmedQuery)) return false;
     if (tierFilter === "all") return true;
     if (tierFilter === "unrated") return card.tier === null;
     return card.tier === tierFilter;
   });
-  const recyclable = duplicateShardTotal(wallet);
+  const filteredTotal = useServerCollection ? serverPage?.total ?? 0 : visibleCards.length;
+  const collectionTotal = useServerCollection ? serverCollectionTotal : localCards.length;
+  const totalPages = Math.max(1, Math.ceil(filteredTotal / COLLECTION_PAGE_SIZE));
+  const currentPage = Math.min(collectionPage, totalPages - 1);
+  const pageStart = currentPage * COLLECTION_PAGE_SIZE;
+  const pageEnd = Math.min(filteredTotal, pageStart + COLLECTION_PAGE_SIZE);
+  const pageCards = useServerCollection ? cards : visibleCards.slice(pageStart, pageEnd);
+  const currentPageSignature = pageSignature(pageCards);
+  const pageReady =
+    !currentPageSignature ||
+    readyPageSignature === currentPageSignature ||
+    pageCards.every((card) => !card.skills || thumbnailCache.has(thumbnailKey(card)));
+  const showPagePlaceholders = serverLoading || !pageReady;
+  const placeholderCount = Math.min(COLLECTION_PAGE_SIZE, Math.max(1, pageCards.length || filteredTotal || COLLECTION_PAGE_SIZE));
+  const recyclable = useServerCollection ? serverPage?.duplicateShardTotal ?? 0 : wallet ? duplicateShardTotal(wallet) : 0;
   const selectedShardTotal = cards
     .filter((card) => selected.has(card.userId))
     .reduce((sum, card) => sum + duplicateShardValue(card) + shardValueForTier(card.tier), 0);
+
+  useEffect(() => {
+    setCollectionPage(0);
+    setSelected(new Set());
+    setConfirmBulk(false);
+  }, [trimmedQuery, tierFilter]);
+
+  useEffect(() => {
+    setSelected(new Set());
+    setConfirmBulk(false);
+  }, [currentPage]);
+
+  useEffect(() => {
+    if (collectionPage <= totalPages - 1) return;
+    setCollectionPage(Math.max(0, totalPages - 1));
+  }, [collectionPage, totalPages]);
+
+  useEffect(() => {
+    if (!walletReady || !useServerCollection) {
+      setServerPage(null);
+      setServerLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setServerLoading(true);
+    void fetchServerPackCollectionPage({
+      data: {
+        page: collectionPage,
+        pageSize: COLLECTION_PAGE_SIZE,
+        tier: tierFilter,
+        query: trimmedQuery,
+      },
+    })
+      .then((page) => {
+        if (cancelled) return;
+        setServerPage(page);
+      })
+      .catch(() => {
+        if (!cancelled) setServerPage(null);
+      })
+      .finally(() => {
+        if (!cancelled) setServerLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [walletReady, useServerCollection, collectionPage, tierFilter, trimmedQuery, serverRefreshKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const cardsForPage = pageCards;
+    const signature = currentPageSignature;
+
+    if (!signature) {
+      setReadyPageSignature(signature);
+      return;
+    }
+
+    const missing = cardsForPage.filter((card) => card.skills && !thumbnailCache.has(thumbnailKey(card)));
+    if (missing.length === 0) {
+      setReadyPageSignature(signature);
+      return;
+    }
+
+    setReadyPageSignature("");
+    const run = async () => {
+      await Promise.all(missing.map(async (card) => {
+        try {
+          const thumbnail = await renderCollectionThumbnail(card);
+          if (thumbnail) thumbnailCache.set(thumbnailKey(card), thumbnail);
+        } catch {
+          // The DOM fallback remains for this card.
+        }
+      }));
+      if (!cancelled) setReadyPageSignature(signature);
+    };
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPageSignature]);
+
+  if (!wallet) return null;
 
   return (
     <section className="mx-auto w-full max-w-[820px]">
@@ -398,7 +539,7 @@ export function CollectionPanel({
         <div className="flex items-baseline gap-2">
           <h2 className="text-sm font-bold text-white">Collection</h2>
           <span className="text-[12px] text-osu-f1 tabular-nums">
-            {cards.length}
+            {collectionTotal}
             {wallet.poolTotal ? ` / ${wallet.poolTotal.toLocaleString()}` : ""} players
           </span>
         </div>
@@ -420,13 +561,13 @@ export function CollectionPanel({
           {recyclable > 0 && !selecting && (
             <button
               type="button"
-              onClick={(event) => celebrateRecycle(onRecycleAll(), event.currentTarget)}
+              onClick={(event) => runRecycle(() => onRecycleAll(), event.currentTarget)}
               className="rounded-lg border border-osu-pink/30 bg-osu-pink/10 px-2.5 py-1 text-[11px] font-semibold text-osu-pink-light transition-colors hover:border-osu-pink/50 hover:bg-osu-pink/20 hover:text-white cursor-pointer"
             >
               Recycle duplicates +{recyclable}
             </button>
           )}
-          {cards.length > 0 && (
+          {collectionTotal > 0 && (
             <button
               type="button"
               onClick={() => (selecting ? exitSelecting() : setSelecting(true))}
@@ -461,7 +602,7 @@ export function CollectionPanel({
         </div>
       ) : null}
 
-      {cards.length > 0 && (
+      {collectionTotal > 0 && (
         <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2" data-select-keep="">
           <div className="relative w-[220px]">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1" />
@@ -479,7 +620,7 @@ export function CollectionPanel({
                 const value = tier === null ? "unrated" : tier;
                 const selected = tierFilter === value;
                 const label = tier === "all" ? "All" : tier === null ? "Unrated" : MANIA_TIER_STYLES[tier].label;
-                const count = tier === "all" ? cards.length : tierCounts.get(tier ?? "unrated") ?? 0;
+                const count = tier === "all" ? collectionTotal : tierCounts.get(tier ?? "unrated") ?? 0;
                 const rgb = tier === "all" || tier === null ? null : tierChipRgb(tier);
                 return (
                   <button
@@ -513,23 +654,51 @@ export function CollectionPanel({
               })}
             </div>
           )}
+          {totalPages > 1 && (
+            <div className="ml-auto flex items-center gap-2 text-[11px] text-osu-f1">
+              <button
+                type="button"
+                onClick={() => setCollectionPage((page) => Math.max(0, page - 1))}
+                disabled={currentPage <= 0}
+                className="grid h-7 w-7 place-items-center rounded-lg border border-osu-b3/40 bg-osu-b4/40 text-osu-f1 transition-colors hover:bg-osu-b4/70 hover:text-white disabled:cursor-default disabled:opacity-40"
+                aria-label="Previous collection page"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="min-w-[118px] text-center tabular-nums">
+                {filteredTotal === 0 ? "0" : `${pageStart + 1}-${pageEnd}`} / {filteredTotal}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCollectionPage((page) => Math.min(totalPages - 1, page + 1))}
+                disabled={currentPage >= totalPages - 1}
+                className="grid h-7 w-7 place-items-center rounded-lg border border-osu-b3/40 bg-osu-b4/40 text-osu-f1 transition-colors hover:bg-osu-b4/70 hover:text-white disabled:cursor-default disabled:opacity-40"
+                aria-label="Next collection page"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
         </div>
       )}
 
-      {cards.length === 0 ? (
+      {collectionTotal === 0 && !serverLoading ? (
         <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
           No cards yet. Open a pack to start your collection.
         </div>
-      ) : visibleCards.length === 0 ? (
+      ) : filteredTotal === 0 && !serverLoading ? (
         <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
           No cards match{trimmedQuery ? ` "${query.trim()}"` : " the selected rarity"}.
         </div>
       ) : (
         <div className={`mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5 ${selecting ? "select-none" : ""}`}>
-          {visibleCards.map((card) => {
+          {showPagePlaceholders
+            ? Array.from({ length: placeholderCount }, (_, index) => <CollectionCardPlaceholder key={`placeholder-${index}`} />)
+            : pageCards.map((card) => {
             const dupValue = duplicateShardValue(card);
             const lastCopyValue = shardValueForTier(card.tier);
             const confirming = confirmUserId === card.userId;
+            const thumbnail = thumbnailCache.get(thumbnailKey(card)) ?? null;
             return (
               <div
                 key={card.userId}
@@ -573,7 +742,7 @@ export function CollectionPanel({
                     aria-pressed={selected.has(card.userId)}
                     aria-label={`${selected.has(card.userId) ? "Deselect" : "Select"} ${card.username}`}
                   >
-                    <CollectionCardTile card={card} onApplyMint={onApplyMint} />
+                    <CollectionCardTile card={card} thumbnail={thumbnail} onApplyMint={onApplyMint} />
                     <span
                       className={`pointer-events-none absolute inset-0 rounded-[10px] ${
                         selected.has(card.userId) ? "ring-2 ring-osu-pink" : "bg-black/45"
@@ -592,13 +761,13 @@ export function CollectionPanel({
                     className="block transition-transform duration-150 hover:-translate-y-1"
                     aria-label={`Open ${card.username}'s profile`}
                   >
-                    <CollectionCardTile card={card} onApplyMint={onApplyMint} />
+                    <CollectionCardTile card={card} thumbnail={thumbnail} onApplyMint={onApplyMint} />
                   </Link>
                 )}
                 {selecting ? null : card.copies > 1 ? (
                   <button
                     type="button"
-                    onClick={(event) => celebrateRecycle(onRecycleCard(card.userId), event.currentTarget)}
+                    onClick={(event) => runRecycle(() => onRecycleCard(card.userId), event.currentTarget)}
                     className="mx-auto mt-1.5 flex items-center gap-1 text-[10px] text-osu-f1 transition-colors hover:text-white cursor-pointer"
                     title={`Recycle ${card.copies - 1} duplicate ${card.copies - 1 === 1 ? "copy" : "copies"}`}
                   >
@@ -614,7 +783,7 @@ export function CollectionPanel({
                         return;
                       }
                       setConfirmUserId(null);
-                      celebrateRecycle(onRecycleWhole(card.userId), event.currentTarget);
+                      runRecycle(() => onRecycleWhole(card.userId), event.currentTarget);
                     }}
                     className={`mx-auto mt-1.5 flex items-center gap-1 text-[10px] transition-colors cursor-pointer ${
                       confirming ? "font-bold text-osu-pink-light" : "text-osu-f1/70 hover:text-white"
@@ -643,12 +812,12 @@ export function CollectionPanel({
             <button
               type="button"
               onClick={() => {
-                setSelected(new Set(visibleCards.map((card) => card.userId)));
+                setSelected(new Set(pageCards.map((card) => card.userId)));
                 setConfirmBulk(false);
               }}
               className="text-[12px] text-osu-f1 transition-colors hover:text-white cursor-pointer"
             >
-              select all
+              select page
             </button>
             {selected.size > 0 && (
               <button
@@ -670,10 +839,14 @@ export function CollectionPanel({
                   setConfirmBulk(true);
                   return;
                 }
-                let gained = 0;
-                for (const userId of selected) gained += onRecycleWhole(userId);
-                celebrateRecycle(gained, event.currentTarget);
-                exitSelecting();
+                const anchor = event.currentTarget;
+                void (async () => {
+                  let gained = 0;
+                  for (const userId of selected) gained += await onRecycleWhole(userId);
+                  celebrateRecycle(gained, anchor);
+                  if (gained > 0 && useServerCollection) setServerRefreshKey((key) => key + 1);
+                  exitSelecting();
+                })();
               }}
               className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[12px] font-bold text-white transition cursor-pointer disabled:cursor-default disabled:opacity-40 ${
                 confirmBulk ? "bg-osu-pink brightness-110" : "bg-osu-pink hover:brightness-110"
@@ -767,7 +940,7 @@ export function CollectionPanel({
                 type="button"
                 role="menuitem"
                 onClick={(event) => {
-                  celebrateRecycle(onRecycleCard(menu.card.userId), event.currentTarget);
+                  runRecycle(() => onRecycleCard(menu.card.userId), event.currentTarget);
                   setMenu(null);
                 }}
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer"
@@ -784,7 +957,7 @@ export function CollectionPanel({
                   setMenuConfirm(true);
                   return;
                 }
-                celebrateRecycle(onRecycleWhole(menu.card.userId), event.currentTarget);
+                runRecycle(() => onRecycleWhole(menu.card.userId), event.currentTarget);
                 setMenu(null);
               }}
               className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] transition-colors hover:bg-osu-b4/60 cursor-pointer ${

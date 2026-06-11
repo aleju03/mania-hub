@@ -5,7 +5,9 @@ import type { ManiaCardReadyData } from "../player/maniacard3d/types";
    summary. Reuses the exact texture pipeline the 3D card draws with, scaled
    down so five thumbnails don't hold five full-size canvases alive. */
 export async function renderCardThumbnail(data: ManiaCardReadyData, width = 280): Promise<string> {
-  const textures = await createCardTextures(data);
+  const textures = await createCardTextures(data, {
+    textureScale: Math.max(0.5, Math.min(1, width / 560)),
+  });
   try {
     const source = textures.frontTexture.image;
     const canvas = document.createElement("canvas");

@@ -451,3 +451,28 @@ create table if not exists pack_wallets (
   rev integer not null,
   updated_at integer not null
 );
+
+create table if not exists pack_collection_cards (
+  owner_user_id integer not null,
+  card_user_id integer not null,
+  username text not null,
+  avatar_url text not null,
+  country_code text not null,
+  tier text,
+  tier_label text,
+  skills_json text,
+  pp real not null,
+  global_rank integer not null,
+  copies integer not null,
+  recycled_copies integer not null,
+  first_pulled_at integer not null,
+  last_pulled_at integer not null,
+  updated_at integer not null,
+  primary key(owner_user_id, card_user_id)
+);
+create index if not exists idx_pack_collection_owner_rank
+  on pack_collection_cards(owner_user_id, copies, global_rank);
+create index if not exists idx_pack_collection_owner_tier
+  on pack_collection_cards(owner_user_id, tier, copies, pp desc);
+create index if not exists idx_pack_collection_owner_username
+  on pack_collection_cards(owner_user_id, username);

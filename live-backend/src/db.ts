@@ -28,6 +28,7 @@ export async function migrate(db: Db): Promise<void> {
   await migrateMapsFarmedOverlay(db);
   await migrateApiCallTargets(db);
   await migratePlayerActivity(db);
+  await migratePackCollectionCards(db);
 }
 
 export async function dbHealth(db: Db): Promise<boolean> {
@@ -429,5 +430,40 @@ async function migratePlayerActivity(db: Db): Promise<void> {
   await db.execute(`
     create index if not exists idx_player_activity_maps_day
       on player_activity_maps(day)
+  `);
+}
+
+async function migratePackCollectionCards(db: Db): Promise<void> {
+  await db.execute(`
+    create table if not exists pack_collection_cards (
+      owner_user_id integer not null,
+      card_user_id integer not null,
+      username text not null,
+      avatar_url text not null,
+      country_code text not null,
+      tier text,
+      tier_label text,
+      skills_json text,
+      pp real not null,
+      global_rank integer not null,
+      copies integer not null,
+      recycled_copies integer not null,
+      first_pulled_at integer not null,
+      last_pulled_at integer not null,
+      updated_at integer not null,
+      primary key(owner_user_id, card_user_id)
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_pack_collection_owner_rank
+      on pack_collection_cards(owner_user_id, copies, global_rank)
+  `);
+  await db.execute(`
+    create index if not exists idx_pack_collection_owner_tier
+      on pack_collection_cards(owner_user_id, tier, copies, pp desc)
+  `);
+  await db.execute(`
+    create index if not exists idx_pack_collection_owner_username
+      on pack_collection_cards(owner_user_id, username)
   `);
 }

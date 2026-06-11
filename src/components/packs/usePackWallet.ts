@@ -18,7 +18,12 @@ import {
   type PackWallet,
   type PulledCard,
 } from "#/lib/pack-collection";
-import { fetchServerPackWallet, pushServerPackWallet } from "#/lib/pack-wallet-sync";
+import {
+  fetchServerPackWallet,
+  pushServerPackWallet,
+  recycleServerPackCollection,
+  type PackWalletCardsMode,
+} from "#/lib/pack-wallet-sync";
 import type { PackCost } from "#/lib/packs";
 
 export type PackSyncStatus = "local" | "syncing" | "synced";
@@ -34,10 +39,10 @@ export interface PackWalletApi {
   openPack: (cost: PackCost) => boolean;
   recordPull: (pull: PulledCard) => boolean;
   /* Recycles a card's duplicate copies, keeping one. */
-  recycleCard: (userId: number) => number;
+  recycleCard: (userId: number) => number | Promise<number>;
   /* Recycles every copy; the card leaves the collection. */
-  recycleWhole: (userId: number) => number;
-  recycleAll: () => number;
+  recycleWhole: (userId: number) => number | Promise<number>;
+  recycleAll: () => number | Promise<number>;
   /* Backfills a recomputed mint (skills snapshot + tier) onto an owned
      card; used to upgrade legacy cards collected before snapshots existed. */
   applyMint: (userId: number, mint: Parameters<typeof applyCardMint>[2]) => boolean;
@@ -51,7 +56,9 @@ interface SyncState {
   enabled: boolean;
   rev: number;
   lastSyncedPayload: string | null;
+  cardsMode: PackWalletCardsMode;
   pushTimer: ReturnType<typeof setTimeout> | null;
+  pushPromise: Promise<void> | null;
   pushing: boolean;
   /* Bumped on viewer change so stale async work drops its results. */
   generation: number;
@@ -66,6 +73,10 @@ function parseWalletPayload(payload: string | null): PackWallet | null {
   }
 }
 
+function stripWalletCards(wallet: PackWallet): PackWallet {
+  return Object.keys(wallet.cards).length === 0 ? wallet : { ...wallet, cards: {} };
+}
+
 export function usePackWallet(): PackWalletApi {
   const auth = useAuth();
   const viewerId = auth.viewer?.id ?? null;
@@ -78,7 +89,9 @@ export function usePackWallet(): PackWalletApi {
     enabled: false,
     rev: 0,
     lastSyncedPayload: null,
+    cardsMode: "delta",
     pushTimer: null,
+    pushPromise: null,
     pushing: false,
     generation: 0,
   });
@@ -89,7 +102,7 @@ export function usePackWallet(): PackWalletApi {
     if (sync.pushTimer) clearTimeout(sync.pushTimer);
     sync.pushTimer = setTimeout(() => {
       sync.pushTimer = null;
-      void pushNow();
+      void runPushNow();
     }, delayMs);
   };
 
@@ -106,7 +119,7 @@ export function usePackWallet(): PackWalletApi {
     setSyncStatus("syncing");
     const generation = sync.generation;
     try {
-      const result = await pushServerPackWallet({ data: { payload, baseRev: sync.rev } });
+      const result = await pushServerPackWallet({ data: { payload, baseRev: sync.rev, cardsMode: sync.cardsMode } });
       if (generation !== sync.generation) return;
       if (!result) {
         // Logged out server-side or no backend configured: stay local.
@@ -116,10 +129,20 @@ export function usePackWallet(): PackWalletApi {
       }
       if (result.ok) {
         sync.rev = result.rev;
-        sync.lastSyncedPayload = payload;
+        const latestPayload = JSON.stringify(walletRef.current);
         // Mutations that landed mid-flight get their own push.
-        if (JSON.stringify(walletRef.current) !== payload) schedulePush();
-        else setSyncStatus("synced");
+        if (latestPayload !== payload) {
+          schedulePush();
+        } else {
+          const stripped = stripWalletCards(current);
+          const strippedPayload = JSON.stringify(stripped);
+          sync.lastSyncedPayload = strippedPayload;
+          sync.cardsMode = "delta";
+          walletRef.current = stripped;
+          writePackWallet(keyRef.current, stripped);
+          setWallet(stripped);
+          setSyncStatus("synced");
+        }
         return;
       }
       // Another device moved the wallet forward: reconcile and push again.
@@ -138,6 +161,17 @@ export function usePackWallet(): PackWalletApi {
     }
   };
 
+  const runPushNow = () => {
+    const sync = syncRef.current;
+    if (sync.pushing && sync.pushPromise) return sync.pushPromise;
+    const promise = pushNow();
+    sync.pushPromise = promise;
+    void promise.finally(() => {
+      if (syncRef.current.pushPromise === promise) syncRef.current.pushPromise = null;
+    });
+    return promise;
+  };
+
   const commit = (next: PackWallet, syncEligible = true) => {
     walletRef.current = next;
     writePackWallet(keyRef.current, next);
@@ -148,20 +182,60 @@ export function usePackWallet(): PackWalletApi {
     if (syncEligible) schedulePush();
   };
 
+  const commitServerWallet = (payload: string, rev: number) => {
+    const parsed = parseWalletPayload(payload);
+    if (!parsed) return;
+    const stripped = stripWalletCards(parsed);
+    const serialized = JSON.stringify(stripped);
+    const sync = syncRef.current;
+    sync.rev = rev;
+    sync.lastSyncedPayload = serialized;
+    sync.cardsMode = "delta";
+    walletRef.current = stripped;
+    writePackWallet(keyRef.current, stripped);
+    setWallet(stripped);
+    setNowMs(Date.now());
+    setSyncStatus("synced");
+  };
+
+  const recycleOnServer = async (mode: "duplicates" | "whole" | "all_duplicates", userId?: number) => {
+    const sync = syncRef.current;
+    if (!sync.enabled) return null;
+    try {
+      if (sync.pushTimer) {
+        clearTimeout(sync.pushTimer);
+        sync.pushTimer = null;
+        await runPushNow();
+      } else if (sync.pushPromise) {
+        await sync.pushPromise;
+      }
+      if (Object.keys(walletRef.current?.cards ?? {}).length > 0) return null;
+      const result = await recycleServerPackCollection({ data: { mode, cardUserId: userId } });
+      if (!result) return null;
+      commitServerWallet(result.payload, result.rev);
+      return result.gained;
+    } catch {
+      return null;
+    }
+  };
+
   useEffect(() => {
     const sync = syncRef.current;
     sync.generation += 1;
     sync.enabled = false;
     sync.rev = 0;
     sync.lastSyncedPayload = null;
+    sync.cardsMode = "delta";
     if (sync.pushTimer) {
       clearTimeout(sync.pushTimer);
       sync.pushTimer = null;
     }
+    sync.pushPromise = null;
     setSyncStatus("local");
 
     keyRef.current = packWalletStorageKey(viewerId);
     const loaded = loadWalletForViewer(viewerId, Date.now());
+    sync.cardsMode = Object.keys(loaded.cards).length > 0 ? "snapshot" : "delta";
     walletRef.current = loaded;
     writePackWallet(keyRef.current, loaded);
     setWallet(loaded);
@@ -202,7 +276,7 @@ export function usePackWallet(): PackWalletApi {
       if (sync.enabled && sync.pushTimer) {
         clearTimeout(sync.pushTimer);
         sync.pushTimer = null;
-        void pushNow();
+        void runPushNow();
       }
     };
     document.addEventListener("visibilitychange", flush);
@@ -249,6 +323,17 @@ export function usePackWallet(): PackWalletApi {
       return result.isNew;
     },
     recycleCard: (userId) => {
+      if (syncRef.current.enabled) {
+        return (async () => {
+          const gained = await recycleOnServer("duplicates", userId);
+          if (gained !== null) return gained;
+          const current = walletRef.current;
+          if (!current) return 0;
+          const result = recycleDuplicates(current, userId);
+          if (result.gained > 0) commit(result.wallet);
+          return result.gained;
+        })();
+      }
       const current = walletRef.current;
       if (!current) return 0;
       const result = recycleDuplicates(current, userId);
@@ -256,6 +341,17 @@ export function usePackWallet(): PackWalletApi {
       return result.gained;
     },
     recycleWhole: (userId) => {
+      if (syncRef.current.enabled) {
+        return (async () => {
+          const gained = await recycleOnServer("whole", userId);
+          if (gained !== null) return gained;
+          const current = walletRef.current;
+          if (!current) return 0;
+          const result = recycleAllCopies(current, userId);
+          if (result.gained > 0) commit(result.wallet);
+          return result.gained;
+        })();
+      }
       const current = walletRef.current;
       if (!current) return 0;
       const result = recycleAllCopies(current, userId);
@@ -263,6 +359,17 @@ export function usePackWallet(): PackWalletApi {
       return result.gained;
     },
     recycleAll: () => {
+      if (syncRef.current.enabled) {
+        return (async () => {
+          const gained = await recycleOnServer("all_duplicates");
+          if (gained !== null) return gained;
+          const current = walletRef.current;
+          if (!current) return 0;
+          const result = recycleAllDuplicates(current);
+          if (result.gained > 0) commit(result.wallet);
+          return result.gained;
+        })();
+      }
       const current = walletRef.current;
       if (!current) return 0;
       const result = recycleAllDuplicates(current);

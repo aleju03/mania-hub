@@ -11,7 +11,7 @@ import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapsho
 import type { ScoreSpeedBucket } from "../shared/score.js";
 import { enqueueGlobalRankingStatRepairs, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
 import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery } from "../features/maps.js";
-import { getPackWallet, savePackWallet } from "../features/pack-wallets.js";
+import { getPackWallet, listPackCollectionCards, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
@@ -465,11 +465,12 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       );
       const payload = typeof body.payload === "string" ? body.payload : "";
       const baseRev = Number(body.baseRev);
+      const cardImportMode = body.cardsMode === "delta" ? "delta" : "snapshot";
       if (!payload || payload.length > PACK_WALLET_PAYLOAD_MAX_CHARS || !Number.isFinite(baseRev) || baseRev < 0) {
         sendJson(req, res, ctx, 400, { error: "invalid_wallet_payload" });
         return true;
       }
-      const result = await savePackWallet(ctx.db, walletUserId, payload, Math.floor(baseRev));
+      const result = await savePackWallet(ctx.db, walletUserId, payload, Math.floor(baseRev), Date.now(), cardImportMode);
       if (!result.ok) {
         sendJson(req, res, ctx, 409, { error: "wallet_conflict", payload: result.current.payload, rev: result.current.rev });
         return true;
@@ -478,6 +479,48 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+    return true;
+  }
+  const packCollectionMatch = url.pathname.match(/^\/api\/pack-collection\/(\d+)$/);
+  if (packCollectionMatch) {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    const walletUserId = Number(packCollectionMatch[1]);
+    if (!Number.isFinite(walletUserId) || walletUserId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    if (req.method === "POST") {
+      const body = parseJson<Record<string, unknown>>(
+        (await readBodyBuffer(req, DEFAULT_BODY_LIMIT_BYTES)).toString("utf8") || "{}",
+        {},
+      );
+      const mode = body.mode === "duplicates" || body.mode === "whole" || body.mode === "all_duplicates"
+        ? body.mode
+        : null;
+      const cardUserId = Number(body.cardUserId);
+      if (!mode || (mode !== "all_duplicates" && (!Number.isFinite(cardUserId) || cardUserId <= 0))) {
+        sendJson(req, res, ctx, 400, { error: "invalid_recycle_request" });
+        return true;
+      }
+      const result = await recyclePackCollectionCards(ctx.db, walletUserId, {
+        mode,
+        cardUserId: Number.isFinite(cardUserId) ? Math.floor(cardUserId) : undefined,
+      });
+      sendJson(req, res, ctx, 200, { gained: result.gained, payload: result.wallet.payload, rev: result.wallet.rev });
+      return true;
+    }
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const page = Math.max(0, Math.floor(Number(url.searchParams.get("page")) || 0));
+    const pageSize = Math.min(60, Math.max(1, Math.floor(Number(url.searchParams.get("pageSize")) || 15)));
+    const tier = url.searchParams.get("tier");
+    const query = url.searchParams.get("q");
+    sendJson(req, res, ctx, 200, await listPackCollectionCards(ctx.db, walletUserId, { page, pageSize, tier, query }));
     return true;
   }
   if (url.pathname === "/api/osu/beatmap-file") {
