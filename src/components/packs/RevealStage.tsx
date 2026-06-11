@@ -1,8 +1,8 @@
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ManiaCardTier, ManiaSkills } from "#/lib/maniacard";
-import type { PulledCard } from "#/lib/pack-collection";
+import { tierRank, type PulledCard } from "#/lib/pack-collection";
 import type { PackPlayer } from "#/lib/packs";
 import type { OsuScore } from "#/lib/types";
 import { CountryFlag } from "../ui/CountryFlag";
@@ -11,6 +11,7 @@ import { buildManiaCardRenderData } from "../player/maniacard3d/renderData";
 import type { ManiaCardReadyData, RgbaColor } from "../player/maniacard3d/types";
 import { renderCardThumbnail } from "./cardSnapshot";
 import { createCardBackCanvas } from "./packArt";
+import { playCardDraw, playFlipWhoosh, playRevealChime } from "./packSfx";
 import { TierBurst } from "./TierBurst";
 
 export interface PackCardState {
@@ -37,6 +38,23 @@ interface RevealStageProps {
 }
 
 type RevealPhase = "stack" | "preparing" | "flipping" | "shown";
+
+interface FlightRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/* The advance transition: the shown card's thumbnail flies from the big
+   card's spot down into its tray slot, shrinking on the way. `to` is null
+   until the tray tile exists to be measured. */
+interface CardFlight {
+  cardIndex: number;
+  thumbnail: string;
+  from: FlightRect;
+  to: FlightRect | null;
+}
 
 // The WebGL card fills the host's height divided by the renderer's 1.05
 // breathing-room factor. The DOM stack cards scale to the same apparent size
@@ -69,6 +87,8 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
   const [burst, setBurst] = useState<{ key: number; tier: ManiaCardTier; glowColor: RgbaColor } | null>(null);
   const [cardBack, setCardBack] = useState<string | null>(null);
   const [skipping, setSkipping] = useState(false);
+  const [flight, setFlight] = useState<CardFlight | null>(null);
+  const trayRef = useRef<HTMLDivElement | null>(null);
   // True once a drag gesture starts on the top card, so the click fired on
   // release doesn't also draw.
   const dragHappenedRef = useRef(false);
@@ -164,6 +184,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     const card = cards[position];
     if (!card) return;
     setPhase("preparing");
+    playCardDraw();
 
     const scores = await card.scoresPromise;
     if (cancelledRef.current) return;
@@ -188,11 +209,6 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
       data.skills,
     );
     const cardIndex = revealedRef.current.length - 1;
-    void renderCardThumbnail(data)
-      .then((thumbnail) => {
-        if (!cancelledRef.current) updateThumbnail(cardIndex, thumbnail);
-      })
-      .catch(() => {});
 
     try {
       await ensureRendererReady(data);
@@ -204,10 +220,18 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
       // takes over the top of the stack, then it turns.
       await new Promise((resolve) => setTimeout(resolve, reducedMotion ? 60 : 220));
       if (cancelledRef.current) return;
-      await rendererRef.current?.playRevealFlip(reducedMotion ? 240 : 980);
+      const flipMs = reducedMotion ? 240 : 980;
+      playFlipWhoosh(flipMs);
+      await rendererRef.current?.playRevealFlip(flipMs);
       if (cancelledRef.current) return;
+      // Tray thumbnail comes from the front texture the renderer already
+      // drew; rebuilding it through the full texture pipeline used to run
+      // concurrently with the flip and stutter the animation.
+      const thumbnail = rendererRef.current?.snapshotFrontCanvas();
+      if (thumbnail) updateThumbnail(cardIndex, thumbnail);
       setPhase("shown");
       if (!reducedMotion) setBurst({ key: position, tier: data.tier, glowColor: data.glowColor });
+      playRevealChime(tierRank(data.tier) / 8, revealedRef.current[cardIndex]?.isNew ?? false);
     } catch {
       // WebGL unavailable: fall back to the 2D front image.
       if (cancelledRef.current) return;
@@ -217,11 +241,13 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
         const thumbnail = await renderCardThumbnail(data, 600);
         if (cancelledRef.current) return;
         setActiveFallback(thumbnail);
+        updateThumbnail(cardIndex, thumbnail);
       } catch {
         setActiveFallback(null);
       }
       setActiveData(data);
       setPhase("shown");
+      playRevealChime(tierRank(data.tier) / 8, revealedRef.current[cardIndex]?.isNew ?? false);
     }
   };
 
@@ -234,6 +260,17 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
       onComplete(revealedRef.current);
       return;
     }
+    // The leaving card flies into its tray slot while the next one prepares.
+    const entry = revealedRef.current[index];
+    const hostRect = hostRef.current?.getBoundingClientRect();
+    if (!reducedMotion && entry?.thumbnail && hostRect) {
+      setFlight({
+        cardIndex: index,
+        thumbnail: entry.thumbnail,
+        from: { left: hostRect.left, top: hostRect.top, width: hostRect.width, height: hostRect.height },
+        to: null,
+      });
+    }
     const next = index + 1;
     setActiveData(null);
     setActiveFallback(null);
@@ -241,10 +278,61 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     void reveal(next);
   };
 
+  // Once the tray re-renders with the leaving card's slot, measure it so the
+  // flight knows where to land. Layout effect: the measurement and the
+  // overlay mount must happen before the browser paints the hidden tile.
+  useLayoutEffect(() => {
+    if (!flight || flight.to) return;
+    const tile = trayRef.current?.querySelector(`[data-tray-index="${flight.cardIndex}"]`);
+    if (!(tile instanceof HTMLElement)) {
+      setFlight(null);
+      return;
+    }
+    const rect = tile.getBoundingClientRect();
+    setFlight({ ...flight, to: { left: rect.left, top: rect.top, width: rect.width, height: rect.height } });
+  }, [flight]);
+
+  // The flight runs on the compositor via the Web Animations API: the next
+  // card's texture build blocks the main thread mid-flight, and a rAF-driven
+  // animation (framer-motion) visibly stutters there.
+  const flightImgRef = useRef<HTMLImageElement | null>(null);
+  useLayoutEffect(() => {
+    if (!flight?.to) return;
+    const el = flightImgRef.current;
+    if (!el || typeof el.animate !== "function") {
+      setFlight(null);
+      return;
+    }
+    const dx = flight.to.left - flight.from.left;
+    const dy = flight.to.top - flight.from.top;
+    const sx = flight.to.width / flight.from.width;
+    const sy = flight.to.height / flight.from.height;
+    const animation = el.animate(
+      [
+        { transform: "translate(0px, 0px) scale(1, 1)" },
+        { transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` },
+      ],
+      { duration: 450, easing: "cubic-bezier(0.3, 0.7, 0.2, 1)", fill: "forwards" },
+    );
+    let cancelled = false;
+    animation.finished
+      .then(() => {
+        if (!cancelled) setFlight(null);
+      })
+      .catch(() => {
+        if (!cancelled) setFlight(null);
+      });
+    return () => {
+      cancelled = true;
+      animation.cancel();
+    };
+  }, [flight]);
+
   // Resolves every remaining card without the one-by-one ceremony.
   const revealRest = async () => {
     if (skipping || phaseRef.current === "preparing" || phaseRef.current === "flipping") return;
     setSkipping(true);
+    playCardDraw();
     const startAt = phaseRef.current === "shown" ? index + 1 : index;
     for (let position = startAt; position < cards.length; position += 1) {
       const card = cards[position];
@@ -511,9 +599,16 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
 
       {/* Tray of already revealed cards */}
       {revealed.length > (phase === "shown" ? 1 : 0) && (
-        <div className="mt-6 flex items-center justify-center gap-2">
+        <div ref={trayRef} className="mt-6 flex items-center justify-center gap-2">
           {revealed.slice(0, phase === "shown" ? revealed.length - 1 : revealed.length).map((entry, position) => (
-            <div key={`${entry.player.user.id}-${position}`} className="w-11 overflow-hidden rounded-[6px]" style={{ aspectRatio: "5 / 7" }}>
+            <div
+              key={`${entry.player.user.id}-${position}`}
+              data-tray-index={position}
+              className="w-11 overflow-hidden rounded-[6px]"
+              // The slot stays invisible while its card is mid-flight; the
+              // landing overlay is what the eye follows into place.
+              style={{ aspectRatio: "5 / 7", opacity: flight?.cardIndex === position ? 0 : 1 }}
+            >
               {entry.thumbnail ? (
                 <img src={entry.thumbnail} alt={entry.player.user.username} className="h-full w-full object-cover" draggable={false} />
               ) : (
@@ -522,6 +617,26 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
             </div>
           ))}
         </div>
+      )}
+
+      {/* Flying card: the advanced card shrinking into its tray slot */}
+      {flight?.to && (
+        <img
+          ref={flightImgRef}
+          src={flight.thumbnail}
+          alt=""
+          className="pointer-events-none fixed z-40 rounded-[10px] object-cover"
+          style={{
+            left: flight.from.left,
+            top: flight.from.top,
+            width: flight.from.width,
+            height: flight.from.height,
+            transformOrigin: "top left",
+            willChange: "transform",
+          }}
+          draggable={false}
+          aria-hidden="true"
+        />
       )}
     </div>
   );

@@ -18,6 +18,7 @@ import {
   PACK_OPEN_SHARD_REWARD,
   type PackWallet,
 } from "../lib/pack-collection";
+import { isLiveBackendConfigured, warmLivePackPlayers } from "../lib/live-backend";
 import {
   drawPackPlayers,
   fetchPackPlayerScores,
@@ -178,9 +179,12 @@ function PacksPage() {
   const nextChargeMs = wallet ? msUntilNextCharge(wallet, walletApi.nowMs || Date.now()) : null;
 
   /* Deal a fresh pack from the tracked pool (uniform odds within the pack
-     type's slice), then start prefetching each player's best scores so the
-     cards are usually ready by the time the pack is slashed open. Staggered
-     to keep the backend's snapshot endpoint calm. */
+     type's slice), then ask the backend to warm the profile snapshots and
+     start prefetching each player's best scores, so the cards are usually
+     ready by the time the pack is slashed open. Both the warm and the
+     prefetches run sequentially in card order (and coalesce server-side, so
+     nothing fetches twice): when the osu! API budget is tight, card 1's
+     fetch must not queue behind the other four players'. */
   useEffect(() => {
     let cancelled = false;
     setCards(null);
@@ -197,13 +201,18 @@ function PacksPage() {
       .then((draw) => {
         if (cancelled) return;
         walletApi.notePoolTotal(draw.poolTotal);
+        if (isLiveBackendConfigured()) {
+          void warmLivePackPlayers(draw.players.map((player) => player.user.id)).catch(() => {});
+        }
+        let previous: Promise<unknown> = Promise.resolve();
         setCards(
-          draw.players.map((player, position) => ({
-            player,
-            scoresPromise: new Promise<void>((resolve) => setTimeout(resolve, position * 350))
+          draw.players.map((player) => {
+            const scoresPromise = previous
               .then(() => fetchPackPlayerScores(player.user.id))
-              .catch(() => []),
-          })),
+              .catch(() => []);
+            previous = scoresPromise;
+            return { player, scoresPromise };
+          }),
         );
       })
       .catch(() => {

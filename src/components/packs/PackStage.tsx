@@ -11,6 +11,7 @@ import {
   PACK_TEAR_FRACTION,
   type PackArtStyle,
 } from "./packArt";
+import { playPackRip, playSlashTick } from "./packSfx";
 
 // The cut is tracked in vertical columns; each cut column remembers the y
 // (as a fraction of pack height) where the blade crossed it, so the tear
@@ -525,6 +526,7 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
   const triggerRip = () => {
     if (rippingRef.current) return;
     rippingRef.current = true;
+    playPackRip();
     slashRef.current = null;
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
@@ -554,7 +556,10 @@ export function PackStage({ onOpened, reducedMotion, packType }: PackStageProps)
       cutCountRef.current += 1;
       changed = true;
     }
-    if (changed) recomputeCutFields();
+    if (changed) {
+      recomputeCutFields();
+      playSlashTick(cutCountRef.current / BIN_COUNT);
+    }
   };
 
   const spawnSparks = (x: number, y: number) => {

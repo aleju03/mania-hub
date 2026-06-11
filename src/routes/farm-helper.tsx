@@ -307,32 +307,29 @@ function PlayerPicker({ viewer, onPick }: { viewer: ReturnType<typeof useAuth>["
     <div className="mx-auto grid min-h-[70vh] w-full max-w-5xl content-center gap-10 py-10 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] lg:items-center lg:gap-14">
       <div className="text-center lg:text-left">
         {viewer ? (
-          <div className="flex flex-col items-center lg:items-start">
-            <button
-              type="button"
-              onClick={() => onPick(String(viewer.id))}
-              aria-label={`Plan ${viewer.username}'s farm`}
-              className="inline-flex rounded-full ring-2 ring-osu-pink/30 transition-shadow hover:ring-osu-pink/60"
-            >
-              <Avatar url={viewer.avatarUrl} userId={viewer.id} size={72} />
-            </button>
-            <div className="mt-3 flex items-center gap-2">
-              <h2 className="text-2xl font-bold text-osu-c1">Hey, {viewer.username}</h2>
-              {viewer.countryCode ? <CountryFlag code={viewer.countryCode} size="sm" decorative /> : null}
+          <div>
+            <div className="text-3xl font-black leading-tight text-osu-c1">
+              <div>maps worth farming</div>
+              <div className="mt-3 flex items-center justify-center gap-3 lg:justify-start">
+                <span>for</span>
+                <button
+                  type="button"
+                  onClick={() => onPick(String(viewer.id))}
+                  aria-label={`Find farm maps for ${viewer.username}`}
+                  className="group inline-flex items-center gap-2.5 rounded-xl border border-osu-b3/30 bg-osu-b4 py-1.5 pl-2 pr-3 text-lg font-bold text-osu-c1 transition-colors duration-150 hover:border-osu-pink/60 hover:bg-osu-b3"
+                >
+                  <Avatar url={viewer.avatarUrl} userId={viewer.id} size={30} />
+                  <span className="max-w-44 truncate">{viewer.username}</span>
+                  {viewer.countryCode ? <CountryFlag code={viewer.countryCode} size="sm" decorative /> : null}
+                  <ArrowRight className="h-4 w-4 shrink-0 text-osu-pink transition-transform group-hover:translate-x-0.5" />
+                </button>
+              </div>
             </div>
-            <button
-              type="button"
-              onClick={() => onPick(String(viewer.id))}
-              className="group mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-osu-pink px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-osu-pink-light"
-            >
-              Plan my farm
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-            </button>
 
             <div className="mt-7 flex w-full items-center gap-3">
               <span className="h-px flex-1 bg-osu-b3/30" />
               <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-osu-f1">
-                or look up someone else
+                or someone else
               </span>
               <span className="h-px flex-1 bg-osu-b3/30" />
             </div>
@@ -354,7 +351,7 @@ function PlayerPicker({ viewer, onPick }: { viewer: ReturnType<typeof useAuth>["
 
         {viewer ? (
           <div className="mx-auto mt-4 w-full max-w-md lg:mx-0">
-            <SearchInput onSearch={searchPlayers} onSelect={(user) => onPick(user.username)} placeholder="enter a username..." />
+            <SearchInput onSearch={searchPlayers} onSelect={(user) => onPick(user.username)} placeholder="username..." />
           </div>
         ) : null}
 

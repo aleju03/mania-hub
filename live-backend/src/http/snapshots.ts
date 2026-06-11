@@ -12,7 +12,7 @@ import type { ScoreSpeedBucket } from "../shared/score.js";
 import { enqueueGlobalRankingStatRepairs, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
 import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery } from "../features/maps.js";
 import { getPackWallet, savePackWallet } from "../features/pack-wallets.js";
-import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../features/player-profiles.js";
+import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, warmProfileSnapshots } from "../features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../features/rank-snapshots.js";
 import { getSnipesSnapshot } from "../features/snipes.js";
 import { getTopPlaysSnapshot, type TopPlaysSnapshotOptions } from "../features/top-plays.js";
@@ -415,6 +415,28 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     } catch (error) {
       sendOsuError(req, res, ctx, error);
     }
+    return true;
+  }
+  if (url.pathname === "/api/packs/warm") {
+    // Pack deals send the drawn user ids here so cold players' profile
+    // snapshots start fetching before their card is ever flipped. Responds
+    // immediately; the osu! API work runs in the background.
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!checkRate(req, res, ctx, "publicCostly")) return true;
+    const body = parseJson<Record<string, unknown>>((await readBody(req)) || "{}", {});
+    const userIds = [...new Set(
+      (Array.isArray(body.userIds) ? body.userIds : [])
+        .map(Number)
+        .filter((id) => Number.isInteger(id) && id > 0),
+    )].slice(0, 10);
+    if (userIds.length === 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_ids" });
+      return true;
+    }
+    sendJson(req, res, ctx, 202, await warmProfileSnapshots(ctx.db, ctx.osu, userIds));
     return true;
   }
   const packWalletMatch = url.pathname.match(/^\/api\/pack-wallet\/(\d+)$/);

@@ -1044,6 +1044,21 @@ export async function fetchLiveDanEstimates(items: LiveDanEstimateRequest[], est
   });
 }
 
+/* Tells the backend which players a freshly dealt pack drew, so cold
+   players' profile snapshots start fetching before their card is flipped.
+   Fire-and-forget: the response only reports how many fetches started. */
+export async function warmLivePackPlayers(userIds: number[]): Promise<void> {
+  const uniqueUserIds = [...new Set(userIds)]
+    .filter((id) => Number.isInteger(id) && id > 0)
+    .slice(0, 10);
+  if (uniqueUserIds.length === 0) return;
+  await fetchLiveJson("/api/packs/warm", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ userIds: uniqueUserIds }),
+  });
+}
+
 export function openLiveEventSource(country: string, options?: { observe?: boolean }): EventSource | null {
   const base = getLiveBackendUrl();
   if (!base || typeof EventSource === "undefined") return null;

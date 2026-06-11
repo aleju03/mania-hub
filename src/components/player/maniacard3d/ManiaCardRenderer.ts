@@ -235,6 +235,25 @@ export class ManiaCardRenderer {
     pending?.resolve();
   }
 
+  /* Downscales the front texture the renderer already drew to a data URL.
+     Far cheaper than rebuilding the textures from scratch; the pack reveal
+     uses it for tray thumbnails after the flip lands. */
+  snapshotFrontCanvas(width = 280): string | null {
+    const image = this.textures?.frontTexture.image;
+    if (!(image instanceof HTMLCanvasElement)) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = Math.round(width * 1.4);
+    const context = canvas.getContext("2d");
+    if (!context) return null;
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    try {
+      return canvas.toDataURL("image/png");
+    } catch {
+      return null;
+    }
+  }
+
   resize() {
     const hostWidth = Math.max(1, this.host.clientWidth);
     const hostHeight = Math.max(1, this.host.clientHeight);

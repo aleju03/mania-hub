@@ -114,7 +114,7 @@ export async function getPlayerProfileSnapshot(
     return snapshot;
   }
 
-  return buildServedSnapshot(db, await fetchAndStoreProfileSnapshot(db, osu, key), false);
+  return buildServedSnapshot(db, await fetchAndStoreProfileSnapshotShared(db, osu, key), false);
 }
 
 // First-ever profile views used to wait for the browser to hydrate and call
@@ -142,7 +142,7 @@ function warmProfileSnapshotInBackground(
   }
   fallbackWarmLastAttempt.delete(key);
   fallbackWarmLastAttempt.set(key, now);
-  void fetchAndStoreProfileSnapshot(db, osu, key).catch(() => {});
+  void fetchAndStoreProfileSnapshotShared(db, osu, key).catch(() => {});
 }
 
 export async function getCachedPlayerProfileSnapshot(
@@ -283,6 +283,57 @@ async function getStoredUserTopScores(db: Db, userId: number): Promise<OscScore[
     .filter((score): score is OscScore => !!score);
 }
 
+/* In-flight snapshot fetches keyed by profile key. A pack warm and the
+   reveal's snapshot request for the same cold player share one osu! API
+   fetch instead of doubling it; two visitors landing on the same cold
+   profile coalesce the same way. */
+const inflightSnapshotFetches = new Map<string, Promise<ProfileSnapshotRow>>();
+
+function fetchAndStoreProfileSnapshotShared(
+  db: Db,
+  osu: Pick<OsuApiClient, "getUserByKey" | "getUserBestScoresWindow">,
+  key: string,
+): Promise<ProfileSnapshotRow> {
+  const existing = inflightSnapshotFetches.get(key);
+  if (existing) return existing;
+  const promise = fetchAndStoreProfileSnapshot(db, osu, key).finally(() => {
+    inflightSnapshotFetches.delete(key);
+  });
+  inflightSnapshotFetches.set(key, promise);
+  return promise;
+}
+
+/* Pack deals call this with the drawn user ids so cold players' snapshots
+   are usually stored by the time their card is flipped. Fresh snapshots are
+   skipped; cold ones fetch in the background, one player at a time IN PACK
+   ORDER: the osu! limiter queue is FIFO, so fetching all five concurrently
+   would put card 1's best-score pages behind every other player's user
+   lookup and make the first reveal the slowest when the API budget is
+   tight. Returns how many fetches were started. */
+export async function warmProfileSnapshots(
+  db: Db,
+  osu: Pick<OsuApiClient, "getUserByKey" | "getUserBestScoresWindow">,
+  userIds: number[],
+): Promise<{ warming: number }> {
+  const coldKeys: string[] = [];
+  for (const userId of userIds) {
+    const key = normalizeProfileKey(String(userId));
+    const row = await getStoredProfileSnapshot(db, key);
+    if (row && !isExpired(row.fetched_at, PROFILE_SNAPSHOT_TTL_MS)) continue;
+    coldKeys.push(key);
+  }
+  void (async () => {
+    for (const key of coldKeys) {
+      try {
+        await fetchAndStoreProfileSnapshotShared(db, osu, key);
+      } catch {
+        // Skip to the next player; the reveal's own request retries this one.
+      }
+    }
+  })();
+  return { warming: coldKeys.length };
+}
+
 async function fetchAndStoreProfileSnapshot(
   db: Db,
   osu: Pick<OsuApiClient, "getUserByKey" | "getUserBestScoresWindow">,
@@ -324,7 +375,7 @@ function refreshProfileSnapshotInBackground(
   key: string,
   row: ProfileSnapshotRow,
 ): void {
-  void fetchAndStoreProfileSnapshot(db, osu, key).catch(async (error) => {
+  void fetchAndStoreProfileSnapshotShared(db, osu, key).catch(async (error) => {
     await exec(db, "update profile_snapshots set refresh_error = ?, updated_at = ? where user_id = ?", [
       error instanceof Error ? error.message : String(error),
       nowIso(),

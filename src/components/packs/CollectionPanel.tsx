@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { motion } from "framer-motion";
 import { Check, LogIn, Recycle, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "#/lib/maniacard";
@@ -18,6 +19,7 @@ import {
 } from "../player/maniacard3d/renderData";
 import { CountryFlag } from "../ui/CountryFlag";
 import { renderCardThumbnail } from "./cardSnapshot";
+import { playRecycleClink } from "./packSfx";
 
 export interface CardMint {
   skills: ManiaSkills;
@@ -29,9 +31,11 @@ interface CollectionPanelProps {
   wallet: PackWallet | null;
   showLoginNudge: boolean;
   syncStatus: "local" | "syncing" | "synced";
-  onRecycleCard: (userId: number) => void;
-  onRecycleWhole: (userId: number) => void;
-  onRecycleAll: () => void;
+  /* Recycle callbacks return the shards gained so the panel can play the
+     clink and spawn the "+N" burst at the click point. */
+  onRecycleCard: (userId: number) => number;
+  onRecycleWhole: (userId: number) => number;
+  onRecycleAll: () => number;
   onApplyMint: (userId: number, mint: CardMint) => boolean;
 }
 
@@ -254,6 +258,28 @@ export function CollectionPanel({
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [confirmBulk, setConfirmBulk] = useState(false);
+  // One-shot "+N" shard floats spawned at the click point of a recycle.
+  const [shardBursts, setShardBursts] = useState<Array<{ id: number; x: number; y: number; amount: number }>>([]);
+  const burstIdRef = useRef(0);
+
+  /* Quick feedback when a recycle lands: shard clink plus a short "+N"
+     float with a few flying slivers, anchored to the clicked control. */
+  const celebrateRecycle = (gained: number, anchor: Element | null) => {
+    if (gained <= 0) return;
+    playRecycleClink(gained);
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const rect = anchor?.getBoundingClientRect();
+    if (!rect) return;
+    burstIdRef.current += 1;
+    const id = burstIdRef.current;
+    setShardBursts((current) => [
+      ...current.slice(-5),
+      { id, x: rect.left + rect.width / 2, y: rect.top, amount: gained },
+    ]);
+    window.setTimeout(() => {
+      setShardBursts((current) => current.filter((burst) => burst.id !== id));
+    }, 800);
+  };
   useEffect(() => {
     if (confirmUserId === null) return;
     const timer = setTimeout(() => setConfirmUserId(null), 3000);
@@ -379,13 +405,22 @@ export function CollectionPanel({
         <div className="flex items-center gap-3" data-select-keep="">
           <span className="flex items-center gap-1.5 text-[12px] text-osu-f1">
             <Recycle className="h-3.5 w-3.5" />
-            <span className="font-semibold text-white tabular-nums">{wallet.shards.toLocaleString()}</span>
+            {/* Keyed on the value so each shard change replays a small pop */}
+            <motion.span
+              key={wallet.shards}
+              className="inline-block font-semibold text-white tabular-nums"
+              initial={{ scale: 1.25 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+            >
+              {wallet.shards.toLocaleString()}
+            </motion.span>
             shards
           </span>
           {recyclable > 0 && !selecting && (
             <button
               type="button"
-              onClick={onRecycleAll}
+              onClick={(event) => celebrateRecycle(onRecycleAll(), event.currentTarget)}
               className="rounded-lg border border-osu-pink/30 bg-osu-pink/10 px-2.5 py-1 text-[11px] font-semibold text-osu-pink-light transition-colors hover:border-osu-pink/50 hover:bg-osu-pink/20 hover:text-white cursor-pointer"
             >
               Recycle duplicates +{recyclable}
@@ -563,7 +598,7 @@ export function CollectionPanel({
                 {selecting ? null : card.copies > 1 ? (
                   <button
                     type="button"
-                    onClick={() => onRecycleCard(card.userId)}
+                    onClick={(event) => celebrateRecycle(onRecycleCard(card.userId), event.currentTarget)}
                     className="mx-auto mt-1.5 flex items-center gap-1 text-[10px] text-osu-f1 transition-colors hover:text-white cursor-pointer"
                     title={`Recycle ${card.copies - 1} duplicate ${card.copies - 1 === 1 ? "copy" : "copies"}`}
                   >
@@ -573,13 +608,13 @@ export function CollectionPanel({
                 ) : (
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={(event) => {
                       if (!confirming) {
                         setConfirmUserId(card.userId);
                         return;
                       }
                       setConfirmUserId(null);
-                      onRecycleWhole(card.userId);
+                      celebrateRecycle(onRecycleWhole(card.userId), event.currentTarget);
                     }}
                     className={`mx-auto mt-1.5 flex items-center gap-1 text-[10px] transition-colors cursor-pointer ${
                       confirming ? "font-bold text-osu-pink-light" : "text-osu-f1/70 hover:text-white"
@@ -630,12 +665,14 @@ export function CollectionPanel({
             <button
               type="button"
               disabled={selected.size === 0}
-              onClick={() => {
+              onClick={(event) => {
                 if (!confirmBulk) {
                   setConfirmBulk(true);
                   return;
                 }
-                for (const userId of selected) onRecycleWhole(userId);
+                let gained = 0;
+                for (const userId of selected) gained += onRecycleWhole(userId);
+                celebrateRecycle(gained, event.currentTarget);
                 exitSelecting();
               }}
               className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[12px] font-bold text-white transition cursor-pointer disabled:cursor-default disabled:opacity-40 ${
@@ -650,6 +687,35 @@ export function CollectionPanel({
           </div>
         </div>
       )}
+
+      {shardBursts.map((burst) => (
+        <div
+          key={burst.id}
+          className="pointer-events-none fixed z-50"
+          style={{ left: burst.x, top: burst.y }}
+          aria-hidden="true"
+        >
+          <motion.div
+            className="flex -translate-x-1/2 items-center gap-1 text-[12px] font-bold text-osu-pink-light"
+            style={{ textShadow: "0 1px 6px rgba(0,0,0,0.7)" }}
+            initial={{ y: 2, opacity: 0, scale: 0.7 }}
+            animate={{ y: -26, opacity: [0, 1, 1, 0], scale: 1 }}
+            transition={{ duration: 0.65, ease: "easeOut" }}
+          >
+            <Recycle className="h-3.5 w-3.5" />
+            +{burst.amount}
+          </motion.div>
+          {[-1, 0, 1].map((spread) => (
+            <motion.span
+              key={spread}
+              className="absolute left-0 top-0 h-1.5 w-1.5 rounded-full bg-osu-pink"
+              initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+              animate={{ x: spread * 22, y: -34 - Math.abs(spread) * 8, opacity: 0, scale: 0.4 }}
+              transition={{ duration: 0.55, ease: "easeOut" }}
+            />
+          ))}
+        </div>
+      ))}
 
       {menu && (
         <>
@@ -700,8 +766,8 @@ export function CollectionPanel({
               <button
                 type="button"
                 role="menuitem"
-                onClick={() => {
-                  onRecycleCard(menu.card.userId);
+                onClick={(event) => {
+                  celebrateRecycle(onRecycleCard(menu.card.userId), event.currentTarget);
                   setMenu(null);
                 }}
                 className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] text-osu-f1 transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer"
@@ -713,12 +779,12 @@ export function CollectionPanel({
             <button
               type="button"
               role="menuitem"
-              onClick={() => {
+              onClick={(event) => {
                 if (!menuConfirm) {
                   setMenuConfirm(true);
                   return;
                 }
-                onRecycleWhole(menu.card.userId);
+                celebrateRecycle(onRecycleWhole(menu.card.userId), event.currentTarget);
                 setMenu(null);
               }}
               className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[12px] transition-colors hover:bg-osu-b4/60 cursor-pointer ${

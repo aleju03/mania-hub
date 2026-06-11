@@ -2203,6 +2203,9 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [selectedDay, setSelectedDay] = useState<ActivityDay | null>(null);
+  // Dev-only simulated day; kept out of selectedDay so the day-sync and
+  // detail-fetch effects below never race it against real backend data.
+  const [devDay, setDevDay] = useState<ActivityDay | null>(null);
   const [selectedDayDetail, setSelectedDayDetail] = useState<ActivityDay | null>(null);
   const [dayDetailLoading, setDayDetailLoading] = useState(false);
   const [dayDetailError, setDayDetailError] = useState<string | null>(null);
@@ -2216,7 +2219,11 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
   }, [activity.availableYears, currentYear, selectedYear]);
   const averageActiveDay = activity.activeDays > 0 ? Math.round(activity.totalScores / activity.activeDays) : 0;
   const selectedDayDate = selectedDay?.date;
-  const modalDay = selectedDayDetail?.date === selectedDayDate ? selectedDayDetail : selectedDay;
+  const modalDay = devDay ?? (selectedDayDetail?.date === selectedDayDate ? selectedDayDetail : selectedDay);
+  const closeDayModal = useCallback(() => {
+    setSelectedDay(null);
+    setDevDay(null);
+  }, []);
   const activityGridStyle = useMemo(
     () => ({ "--activity-weeks": String(activity.weeks.length) }) as CSSProperties,
     [activity.weeks.length],
@@ -2397,6 +2404,16 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
             <span className="text-[11px] text-osu-f1">
               Typical session <span className="font-semibold text-osu-l2">{activity.typicalSession} plays</span>
             </span>
+            {import.meta.env.DEV && (
+              <button
+                type="button"
+                onClick={() => setDevDay(createDevActivityDay(activity.timezone))}
+                className="rounded-lg border border-osu-pink/25 bg-osu-pink/10 px-2 py-1 text-[10px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/20"
+                title="Open the day modal with simulated busy-day data"
+              >
+                Sim busy day
+              </button>
+            )}
           </div>
         </section>
 
@@ -2424,7 +2441,7 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
         {modalDay && (
           <motion.div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-2 backdrop-blur-sm sm:p-4"
-            onClick={() => setSelectedDay(null)}
+            onClick={closeDayModal}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -2445,7 +2462,7 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setSelectedDay(null)}
+                  onClick={closeDayModal}
                   aria-label="Close activity details"
                   className="flex h-8 w-8 items-center justify-center rounded-full text-osu-f1 hover:bg-osu-b3/50 hover:text-white"
                 >
@@ -2585,10 +2602,13 @@ function ActivityPatternBars({ patterns, keyCount }: { patterns: LivePlayerActiv
 }
 
 function ActivitySessionFlow({ day, timezone }: { day: ActivityDay; timezone: string }) {
+  const [selectedSegmentKey, setSelectedSegmentKey] = useState<string | null>(null);
   if (day.timeline.length === 0) return null;
-  const sessions = groupActivityTimelineBySession(day.timeline);
+  const sessions = groupActivityTimelineBySession(day.timeline).map(mergeActivitySessionSegments);
   const flowLabel = formatActivityKeyFlow(day.timeline);
   const timezoneHint = getActivityTimezoneHint(timezone, day.timeline[0]?.startAt);
+  const showKeymodeStrip = new Set(day.timeline.map((segment) => segment.keyCount ?? 0)).size > 1;
+  const legend = getActivityFlowLegend(day.timeline);
   return (
     <div className="mt-4 rounded-lg border border-osu-b3/20 bg-osu-b5/35 p-3 sm:mt-5 sm:p-4">
       <div className="flex items-center justify-between gap-3">
@@ -2598,12 +2618,13 @@ function ActivitySessionFlow({ day, timezone }: { day: ActivityDay; timezone: st
         </div>
         <div className="text-[10px] font-semibold text-osu-l2 sm:text-[11px]">{flowLabel}</div>
       </div>
-      <div className="mt-3 space-y-2">
+      <div className="mt-3 space-y-2.5">
         {sessions.map((session) => {
           const sessionPlays = session.reduce((sum, segment) => sum + segment.playCount, 0);
           const first = session[0];
           const last = session[session.length - 1];
           const startDateLabel = formatActivitySessionDate(first.startAt, day.date, timezone);
+          const selected = session.find((segment) => segment.key === selectedSegmentKey) ?? null;
           return (
             <div key={first.key}>
               <div className="mb-1 flex items-center justify-between gap-3 text-[10px] text-osu-f1">
@@ -2614,27 +2635,73 @@ function ActivitySessionFlow({ day, timezone }: { day: ActivityDay; timezone: st
                 <span>{formatNumber(sessionPlays)} {sessionPlays === 1 ? "play" : "plays"}</span>
               </div>
               <div className="flex h-7 overflow-hidden rounded-md bg-osu-b4/70">
-                {session.map((segment) => (
-                  <div
-                    key={segment.key}
-                    title={formatActivitySegmentTitle(segment, timezone)}
-                    className="flex min-w-0 items-center justify-center border-r border-black/20 px-1 last:border-r-0"
-                    style={{
-                      flexBasis: 0,
-                      flexGrow: Math.max(1, segment.playCount),
-                      backgroundColor: getActivityTimelineSegmentColor(segment),
-                    }}
-                  >
-                    <span className="truncate text-[9px] font-black leading-none text-white/95">
-                      {formatActivityTimelineSegmentLabel(segment)}
-                    </span>
-                  </div>
-                ))}
+                {session.map((segment) => {
+                  const isSelected = segment.key === selectedSegmentKey;
+                  return (
+                    <button
+                      key={segment.key}
+                      type="button"
+                      title={formatActivitySegmentTitle(segment, timezone)}
+                      onClick={() => setSelectedSegmentKey(isSelected ? null : segment.key)}
+                      className={`flex min-w-0 items-center justify-center border-r border-black/20 px-1 last:border-r-0 ${isSelected ? "ring-1 ring-inset ring-white/80" : ""}`}
+                      style={{
+                        flexBasis: 0,
+                        flexGrow: Math.max(1, segment.playCount),
+                        backgroundColor: getActivityTimelineSegmentColor(segment),
+                      }}
+                    >
+                      {segment.playCount / sessionPlays >= 0.08 ? (
+                        <span className="truncate text-[9px] font-black leading-none text-white/95">
+                          {formatActivityFlowSegmentLabel(segment)}
+                        </span>
+                      ) : null}
+                    </button>
+                  );
+                })}
               </div>
+              {showKeymodeStrip ? (
+                <div className="mt-1 flex">
+                  {groupActivityKeymodeRuns(session).map((run) => {
+                    const label = formatActivityKeyCount(run.keyCount);
+                    return (
+                      <div
+                        key={run.key}
+                        className="flex min-w-0 items-center gap-1 overflow-hidden px-1"
+                        style={{ flexBasis: 0, flexGrow: run.weight }}
+                      >
+                        <span className="h-px min-w-1 flex-1 bg-osu-b3/60" />
+                        {label ? <span className="text-[8px] font-bold leading-none text-osu-f1">{label}</span> : null}
+                        <span className="h-px min-w-1 flex-1 bg-osu-b3/60" />
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
+              {selected ? (
+                <div className="mt-1.5 flex items-center gap-1.5 text-[10px] text-osu-f1">
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-[2px]"
+                    style={{ backgroundColor: getActivityTimelineSegmentColor(selected) }}
+                  />
+                  <span>{formatActivitySegmentTitle(selected, timezone)}</span>
+                </div>
+              ) : null}
             </div>
           );
         })}
       </div>
+      {legend.length > 0 ? (
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-osu-f1">
+          {legend.slice(0, 5).map((entry) => (
+            <span key={entry.label} className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-[2px]" style={{ backgroundColor: entry.color }} />
+              <span className="font-semibold text-osu-l2">{entry.label}</span>
+              <span>{formatNumber(entry.plays)}</span>
+            </span>
+          ))}
+          {legend.length > 5 ? <span>+ {legend.length - 5} more</span> : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -2908,17 +2975,24 @@ function getActivitySkillColor(skill: LivePlayerActivityPrimarySkill): string {
   return getActivityPatternMeta(skill, null).color;
 }
 
-function getActivityKeyModeColor(keyCount: number | null): string {
-  if (keyCount === 4) return "#57aeba";
-  if (keyCount === 5) return "#c59a5c";
-  if (keyCount === 6) return "#83a86f";
-  if (keyCount === 7) return "#8f6bd8";
-  return "#675f76";
+// Weights mirror the bar cells' flexGrow so run boundaries line up exactly
+// with the segment boundaries above them.
+function groupActivityKeymodeRuns(session: ActivityTimelineSegment[]): { key: string; keyCount: number | null; weight: number }[] {
+  const runs: { key: string; keyCount: number | null; weight: number }[] = [];
+  for (const segment of session) {
+    const prev = runs[runs.length - 1];
+    const weight = Math.max(1, segment.playCount);
+    if (prev && prev.keyCount === segment.keyCount) {
+      prev.weight += weight;
+    } else {
+      runs.push({ key: segment.key, keyCount: segment.keyCount, weight });
+    }
+  }
+  return runs;
 }
 
 function getActivityTimelineSegmentColor(segment: ActivityTimelineSegment): string {
-  if (segment.primarySkill !== "unknown") return getActivitySkillColor(segment.primarySkill);
-  return getActivityKeyModeColor(segment.keyCount);
+  return getActivitySkillColor(segment.primarySkill);
 }
 
 function getActivitySkillLabel(skill: LivePlayerActivityPrimarySkill, keyCount: number | null): string {
@@ -2939,10 +3013,194 @@ function formatActivityKeyFlow(segments: ActivityTimelineSegment[]): string {
   return labels.join(" / ");
 }
 
-function formatActivityTimelineSegmentLabel(segment: ActivityTimelineSegment): string {
-  const key = formatActivityKeyCount(segment.keyCount);
-  const skill = getActivitySkillShortLabel(segment.primarySkill, segment.keyCount);
-  return segment.primarySkill === "unknown" ? key ?? "" : [key, skill].filter(Boolean).join(" ");
+function formatActivityFlowSegmentLabel(segment: ActivityTimelineSegment): string {
+  const skill = segment.primarySkill === "unknown"
+    ? null
+    : getActivitySkillShortLabel(segment.primarySkill, segment.keyCount);
+  return [skill, formatNumber(segment.playCount)].filter(Boolean).join(" ");
+}
+
+// Adjacent same-keymode same-skill segments read as one block; merging them
+// frees enough width for the survivors' labels.
+function mergeActivitySessionSegments(session: ActivityTimelineSegment[]): ActivityTimelineSegment[] {
+  const merged: ActivityTimelineSegment[] = [];
+  for (const segment of session) {
+    const prev = merged[merged.length - 1];
+    if (prev && prev.keyCount === segment.keyCount && prev.primarySkill === segment.primarySkill) {
+      merged[merged.length - 1] = {
+        ...prev,
+        endAt: segment.endAt,
+        playCount: prev.playCount + segment.playCount,
+        patterns: mergeActivityPatterns(prev.patterns, prev.playCount, segment.patterns, segment.playCount),
+      };
+    } else {
+      merged.push(segment);
+    }
+  }
+  return merged;
+}
+
+function mergeActivityPatterns(
+  left: LivePlayerActivityPatterns,
+  leftPlays: number,
+  right: LivePlayerActivityPatterns,
+  rightPlays: number,
+): LivePlayerActivityPatterns {
+  const total = Math.max(1, leftPlays + rightPlays);
+  const out: LivePlayerActivityPatterns = {};
+  for (const key of new Set([...Object.keys(left ?? {}), ...Object.keys(right ?? {})])) {
+    out[key] = ((Number(left?.[key]) || 0) * leftPlays + (Number(right?.[key]) || 0) * rightPlays) / total;
+  }
+  return out;
+}
+
+function getActivityFlowLegend(segments: ActivityTimelineSegment[]): { label: string; color: string; plays: number }[] {
+  const entries = new Map<string, { label: string; color: string; plays: number; known: boolean }>();
+  for (const segment of segments) {
+    const known = segment.primarySkill !== "unknown";
+    const label = known ? getActivitySkillLabel(segment.primarySkill, segment.keyCount) : "Unanalyzed";
+    const entry = entries.get(label) ?? { label, color: getActivityTimelineSegmentColor(segment), plays: 0, known };
+    entry.plays += segment.playCount;
+    entries.set(label, entry);
+  }
+  const list = [...entries.values()]
+    .sort((a, b) => Number(b.known) - Number(a.known) || b.plays - a.plays);
+  // A legend that only says "Unanalyzed" decodes nothing.
+  return list.some((entry) => entry.known) ? list : [];
+}
+
+function createDevActivityPatterns(skill: LivePlayerActivityPrimarySkill, keyCount: number | null): LivePlayerActivityPatterns {
+  if (skill === "unknown") return {};
+  const base: LivePlayerActivityPatterns = keyCount != null && keyCount >= 7
+    ? { ln: 0.46, lnRelease: 0.34, handstream: 0.3, stream: 0.36, tech: 0.32 }
+    : { stream: 0.42, jumpstream: 0.31, tech: 0.38, jack: 0.26, chordjack: 0.24, stamina: 0.45 };
+  if (skill === "mixed") return { ...base, stream: 0.64, chordjack: 0.6, tech: 0.58 };
+  return { ...base, [skill]: 0.88 };
+}
+
+function createDevActivityMap(
+  index: number,
+  title: string,
+  artist: string,
+  version: string,
+  keyCount: number,
+  plays: number,
+  accuracy: number,
+  pp: number,
+  primary: LivePlayerActivityPrimarySkill | null,
+): ActivityPlayedMap {
+  return {
+    key: `dev-map-${index}`,
+    beatmapId: 4000000 + index,
+    beatmapsetId: 1900000 + index,
+    title,
+    artist,
+    version,
+    coverUrl: null,
+    plays,
+    accuracy,
+    pp,
+    rank: "S",
+    keyCount,
+    skills: primary ? { primary, patterns: createDevActivityPatterns(primary, keyCount) } : null,
+  };
+}
+
+// Dev-only fixture for previewing the day modal with a busy multi-keymode day;
+// local setups usually run without osu! API jobs, so real days stay sparse.
+// Covers: adjacent merge candidates, sub-threshold segments, unanalyzed
+// segments, 7K bracket relabeling, hybrid, partial analysis, map overflow.
+function createDevActivityDay(timezone: string): ActivityDay {
+  const sessionSpecs: { keyCount: number | null; skill: LivePlayerActivityPrimarySkill; plays: number; minutes: number }[][] = [
+    [
+      { keyCount: 4, skill: "chordjack", plays: 5, minutes: 14 },
+      { keyCount: 4, skill: "stream", plays: 1, minutes: 3 },
+      { keyCount: 4, skill: "stream", plays: 3, minutes: 9 },
+      { keyCount: 4, skill: "tech", plays: 2, minutes: 6 },
+      { keyCount: 4, skill: "unknown", plays: 1, minutes: 3 },
+      { keyCount: 4, skill: "jack", plays: 1, minutes: 2 },
+      { keyCount: 4, skill: "chordjack", plays: 6, minutes: 16 },
+      { keyCount: 4, skill: "mixed", plays: 4, minutes: 11 },
+      { keyCount: 7, skill: "jumpstream", plays: 3, minutes: 8 },
+    ],
+    [
+      { keyCount: 7, skill: "ln", plays: 6, minutes: 18 },
+      { keyCount: 7, skill: "handstream", plays: 2, minutes: 7 },
+      { keyCount: 7, skill: "unknown", plays: 1, minutes: 3 },
+      { keyCount: 7, skill: "lnRelease", plays: 4, minutes: 12 },
+      { keyCount: 7, skill: "mixed", plays: 5, minutes: 13 },
+    ],
+    [
+      { keyCount: 4, skill: "stamina", plays: 7, minutes: 19 },
+      { keyCount: 4, skill: "stream", plays: 2, minutes: 5 },
+    ],
+  ];
+  const start = new Date();
+  start.setHours(13, 40, 0, 0);
+  let cursor = start.getTime();
+  const timeline: ActivityTimelineSegment[] = [];
+  sessionSpecs.forEach((session, sessionIndex) => {
+    session.forEach((spec, segmentIndex) => {
+      const startAt = new Date(cursor).toISOString();
+      cursor += spec.minutes * 60_000;
+      timeline.push({
+        key: `dev:${sessionIndex}:${segmentIndex}`,
+        sessionIndex,
+        startAt,
+        endAt: new Date(cursor).toISOString(),
+        playCount: spec.plays,
+        keyCount: spec.keyCount,
+        primarySkill: spec.skill,
+        patterns: createDevActivityPatterns(spec.skill, spec.keyCount),
+      });
+    });
+    cursor += 75 * 60_000;
+  });
+  const scoreCount = timeline.reduce((sum, segment) => sum + segment.playCount, 0);
+  const playsForKeyCount = (keyCount: number) => timeline
+    .filter((segment) => segment.keyCount === keyCount)
+    .reduce((sum, segment) => sum + segment.playCount, 0);
+  const maps = [
+    createDevActivityMap(1, "Quantum Surgery", "Camellia", "[4K] Lasersweep", 4, 6, 0.9641, 412, "chordjack"),
+    createDevActivityMap(2, "Snow Crystals", "yuki.", "[4K] Hyper", 4, 5, 0.9893, 121, "stream"),
+    createDevActivityMap(3, "Lights of Muse", "xi", "[7K] LN Master", 7, 4, 0.9712, 287, "ln"),
+    createDevActivityMap(4, "Backbeat Maniac", "Eternal", "[4K] SHD", 4, 4, 0.9534, 198, "stamina"),
+    createDevActivityMap(5, "Brain Power", "NOMA", "[4K] Another", 4, 3, 0.9477, 233, "mixed"),
+    createDevActivityMap(6, "Future Dominators", "technoplanet", "[7K] 4 Dimensions", 7, 3, 0.9588, 305, "handstream"),
+    createDevActivityMap(7, "Grand Thaw", "Aoi", "[7K] Release", 7, 3, 0.9821, 176, "lnRelease"),
+    createDevActivityMap(8, "Pure Ruby", "DJ Sharpnel", "[4K] Lunatic", 4, 2, 0.9312, 264, "jack"),
+    createDevActivityMap(9, "Cicadidae", "t+pazolite", "[4K] Extra", 4, 2, 0.9665, 209, "tech"),
+    createDevActivityMap(10, "Unknown Signal", "Various Artists", "[4K] ???", 4, 1, 0.9402, 88, null),
+  ];
+  return {
+    date: getZonedDateKey(start, timezone),
+    scoreCount,
+    passedCount: Math.round(scoreCount * 0.7),
+    sessionCount: sessionSpecs.length,
+    mapCount: maps.length + 4,
+    level: 4,
+    maps,
+    skills: {
+      patterns: { stream: 0.74, chordjack: 0.72, tech: 0.66, stamina: 0.62, jack: 0.48 },
+      analyzedPlays: scoreCount - 2,
+      totalPlays: scoreCount,
+      keyModes: [
+        {
+          keyCount: 4,
+          patterns: { stream: 0.86, chordjack: 0.72, tech: 0.71, stamina: 0.7, jack: 0.61 },
+          analyzedPlays: playsForKeyCount(4) - 1,
+          totalPlays: playsForKeyCount(4),
+        },
+        {
+          keyCount: 7,
+          patterns: { ln: 0.82, lnRelease: 0.66, handstream: 0.58, stream: 0.4 },
+          analyzedPlays: playsForKeyCount(7) - 1,
+          totalPlays: playsForKeyCount(7),
+        },
+      ],
+    },
+    timeline,
+  };
 }
 
 function formatActivitySegmentTitle(segment: ActivityTimelineSegment, timeZone: string): string {
