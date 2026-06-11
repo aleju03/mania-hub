@@ -3761,9 +3761,9 @@ describe("live backend", () => {
     expect(poolSet?.patterns).toEqual(["stream"]);
     expect(poolSet?.starMin).toBeCloseTo(3.2);
     expect(poolSet?.starMax).toBeCloseTo(5.6);
-    expect(poolSet?.covers).toEqual({});
-    expect(poolSet?.maniaBeatmaps).toEqual([]);
-    expect(poolSet?.previewUrl).toBe("");
+    expect(poolSet?.covers).toBeUndefined();
+    expect(poolSet?.maniaBeatmaps).toBeUndefined();
+    expect(poolSet?.previewUrl).toBeUndefined();
 
     // The on-demand per-set record carries the full difficulty list, but only
     // the three cover variants the card actually renders.
@@ -3771,9 +3771,9 @@ describe("live backend", () => {
     expect(full.id).toBe(7000);
     expect(full.maniaBeatmaps).toHaveLength(2);
     expect(full.previewUrl).toBe("https://img/preview.mp3");
-    expect(Object.keys(full.covers).sort()).toEqual(["card", "cover", "list"]);
-    expect(full.covers["cover@2x"]).toBeUndefined();
-    expect(full.covers.slimcover).toBeUndefined();
+    expect(Object.keys(full.covers ?? {}).sort()).toEqual(["card", "cover", "list"]);
+    expect(full.covers?.["cover@2x"]).toBeUndefined();
+    expect(full.covers?.slimcover).toBeUndefined();
   });
 
   it("serves maps browse tabs as paginated lightweight pages", async () => {

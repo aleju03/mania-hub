@@ -833,7 +833,18 @@ export async function fetchLiveMapsSnapshot(
 ): Promise<LiveMapsSnapshot> {
   const query = new URLSearchParams({ country });
   if (section === "random") query.set("section", "random");
-  return fetchLiveJson(`/api/snapshots/maps?${query.toString()}`);
+  const snapshot = await fetchLiveJson<LiveMapsSnapshot>(`/api/snapshots/maps?${query.toString()}`);
+  // The random section omits covers/previewUrl/maniaBeatmaps from its pool
+  // entries on the wire (they're always empty there, and GLOBAL ships ~45k
+  // entries); restore the defaults so consumers keep the full beatmapset shape.
+  if (section === "random" && snapshot.value?.beatmapsetsPool) {
+    for (const set of Object.values(snapshot.value.beatmapsetsPool)) {
+      set.covers ??= {} as MapsFavouriteBeatmapset["covers"];
+      set.previewUrl ??= "";
+      set.maniaBeatmaps ??= [];
+    }
+  }
+  return snapshot;
 }
 
 export async function fetchLiveMapsPageSnapshot(

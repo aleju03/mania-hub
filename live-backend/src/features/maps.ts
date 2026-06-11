@@ -105,13 +105,16 @@ interface MapsFavouriteBeatmapset {
   title: string;
   artist: string;
   creator: string;
-  covers: Record<string, string | undefined>;
+  // covers / previewUrl / maniaBeatmaps are omitted from the random-section
+  // pool on the wire (GLOBAL ships ~45k entries); the frontend fills defaults.
+  // Full-set reads (getMapsRandomBeatmapsets, core favourites) always set them.
+  covers?: Record<string, string | undefined>;
   status: string;
   globalPlayCount: number;
   globalFavouriteCount: number;
-  previewUrl: string;
+  previewUrl?: string;
   maniaKeys: number[];
-  maniaBeatmaps: Array<{
+  maniaBeatmaps?: Array<{
     id: number;
     version: string;
     difficultyRating: number;
@@ -608,10 +611,12 @@ function sliceMapsSnapshotSection(value: CountryMapsData | null, section: MapsSn
   if (section === "random") {
     // The Random tab only needs each set's filter/label fields here; the heavy
     // covers, per-difficulty list and preview audio are fetched per pick via
-    // getMapsRandomBeatmapsets, so strip them to keep this payload small.
+    // getMapsRandomBeatmapsets, so drop them from the wire entirely (the
+    // frontend restores empty defaults after fetch).
     const beatmapsetsPool: Record<number, MapsFavouriteBeatmapset> = {};
     for (const [id, set] of Object.entries(value.beatmapsetsPool)) {
-      beatmapsetsPool[Number(id)] = { ...set, covers: {}, maniaBeatmaps: [], previewUrl: "" };
+      const { covers: _covers, maniaBeatmaps: _maniaBeatmaps, previewUrl: _previewUrl, ...lean } = set;
+      beatmapsetsPool[Number(id)] = lean;
     }
     return { ...value, farmed: [], mostPlayed: [], favourites: [], beatmapsetsPool };
   }
@@ -2469,7 +2474,7 @@ async function persistMapsSnapshotDisplayMetadata(db: Db, value: CountryMapsData
       artist: beatmapset.artist,
       creator: beatmapset.creator,
       status: beatmapset.status,
-      covers: beatmapset.covers,
+      covers: beatmapset.covers ?? {},
       globalPlayCount: beatmapset.globalPlayCount,
       globalFavouriteCount: beatmapset.globalFavouriteCount,
       previewUrl: beatmapset.previewUrl,
@@ -2477,7 +2482,7 @@ async function persistMapsSnapshotDisplayMetadata(db: Db, value: CountryMapsData
       maniaKeys: beatmapset.maniaKeys,
       patterns: beatmapset.patterns,
     }, updatedAt);
-    for (const beatmap of beatmapset.maniaBeatmaps) {
+    for (const beatmap of beatmapset.maniaBeatmaps ?? []) {
       await upsertMapsBeatmap(db, {
         beatmapId: beatmap.id,
         beatmapsetId: beatmapset.id,
@@ -2687,13 +2692,10 @@ async function readMapsRandomPoolByBeatmapsetIds(db: Db, ids: number[]): Promise
       title: String(row.title ?? ""),
       artist: String(row.artist ?? ""),
       creator: String(row.creator ?? ""),
-      covers: {},
       status: String(row.status ?? ""),
       globalPlayCount: Number(row.global_play_count ?? 0),
       globalFavouriteCount: Number(row.global_favourite_count ?? 0),
-      previewUrl: "",
       maniaKeys: storedKeys.length > 0 ? storedKeys : [...new Set(aggregateKeys)],
-      maniaBeatmaps: [],
       starMin: Number(row.star_min ?? 0),
       starMax: Number(row.star_max ?? 0),
       bpm: Number(row.bpm ?? 0),

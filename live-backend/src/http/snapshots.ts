@@ -1264,16 +1264,23 @@ function writePreparedJson(
 }
 
 // /api/snapshots/maps serves a multi-MB payload (a whole country roster's
-// farmed + favourite maps). The stored snapshot only changes when the weekly
-// maps refresh job rewrites the row, yet every visit otherwise re-parses,
+// farmed + favourite maps). The stored snapshot only changes when the maps
+// refresh job rewrites the row, yet every visit otherwise re-parses,
 // re-slices and re-compresses it from scratch. We cache the finished
 // (already-compressed) response body keyed on the row's refreshed_at: that key
 // IS the real cache lifetime — it stays valid until the next rebuild, then
-// changes on its own, so a populated snapshot is effectively cached for the
-// whole week between refreshes regardless of traffic. The TTL is just a
-// periodic re-check so the volatile isStale / refreshQueued flags in the body
-// can't stay wrong indefinitely if a rebuild stalls; the weekly refresh is
-// enqueued on the activatePublicCountry path, independent of this cache.
+// changes on its own. The TTL is just a periodic re-check so the volatile
+// isStale / refreshQueued flags in the body can't stay wrong indefinitely if
+// a rebuild stalls; the refresh itself is enqueued on cache misses (inside
+// getMapsSnapshot) and on the activatePublicCountry path.
+//
+// The two sections cache differently. "core" only caches settled responses
+// (no refresh in flight) because its body flips when the rebuild lands.
+// "random" caches even mid-refresh: its pool is identical for a given
+// refreshed_at regardless of staleness flags, and GLOBAL is permanently
+// "behind sources" (any country refresh or ingested score re-stales it), so
+// requiring a settled state would keep GLOBAL — a ~10s hydrate of ~45k sets —
+// uncached forever, which is exactly what made the Random tab crawl.
 const MAPS_RESPONSE_CACHE_TTL_MS = 60 * 60_000;
 const MAPS_RESPONSE_CACHE_MAX_ENTRIES = 32;
 const MAPS_PAGE_RESPONSE_CACHE_TTL_MS = 10 * 60_000;
@@ -1514,10 +1521,14 @@ async function handleMapsSnapshot(
   // Cheap timestamp-only read first: a cache hit must avoid getMapsSnapshot(),
   // which is itself the expensive payload_json parse/hydrate/slice path.
   const meta = await getMapsSnapshotMeta(ctx.db, country);
-  const farmedOverlayKey = section === "core" ? meta.farmedOverlayUpdatedAt ?? "" : "";
-  const sourceRefreshKey = meta.sourceRefreshedAt ?? "";
+  // The random slice depends only on this row's pool ids plus beatmapset
+  // metadata, so its key is just refreshed_at. The cross-country source and
+  // farmed-overlay timestamps that key "core" churn with every ingested score
+  // on GLOBAL and would keep the random entry permanently cold.
   const cacheKey = meta.refreshedAt
-    ? `${country.toUpperCase()}|${section}|${encoding ?? "identity"}|${meta.refreshedAt}|${sourceRefreshKey}|${farmedOverlayKey}`
+    ? section === "random"
+      ? `${country.toUpperCase()}|random|${encoding ?? "identity"}|${meta.refreshedAt}`
+      : `${country.toUpperCase()}|core|${encoding ?? "identity"}|${meta.refreshedAt}|${meta.sourceRefreshedAt ?? ""}|${meta.farmedOverlayUpdatedAt ?? ""}`
     : null;
 
   if (cacheKey) {
@@ -1526,18 +1537,50 @@ async function handleMapsSnapshot(
       writePreparedJson(req, res, ctx, cached);
       return;
     }
+    // Coalesce concurrent misses: a burst of visitors right after a rebuild
+    // (or restart) must run the multi-second hydrate once, not once each.
+    const inflight = mapsSnapshotInflight.get(cacheKey);
+    if (inflight) {
+      writePreparedJson(req, res, ctx, await inflight);
+      return;
+    }
+    const build = buildMapsSnapshotResponse(ctx, country, section, encoding, cacheKey, now);
+    mapsSnapshotInflight.set(cacheKey, build);
+    try {
+      writePreparedJson(req, res, ctx, await build);
+    } finally {
+      mapsSnapshotInflight.delete(cacheKey);
+    }
+    return;
   }
 
+  writePreparedJson(req, res, ctx, await buildMapsSnapshotResponse(ctx, country, section, encoding, null, now));
+}
+
+const mapsSnapshotInflight = new Map<string, Promise<PreparedJsonResponse>>();
+
+async function buildMapsSnapshotResponse(
+  ctx: HttpContext,
+  country: string,
+  section: "core" | "random",
+  encoding: "br" | "gzip" | null,
+  cacheKey: string | null,
+  now: number,
+): Promise<PreparedJsonResponse> {
   const snapshot = await getMapsSnapshot(ctx.db, ctx.queue, country, ctx.config.mapsRefreshIntervalMs, section);
   const status = snapshot.value ? 200 : 202;
   const prepared = await prepareJsonResponse(status, snapshot, encoding);
-  writePreparedJson(req, res, ctx, prepared);
 
   // Only cache populated 200s — never the cold "still building" 202/null state,
-  // whose body changes the moment the first real snapshot lands.
-  if (cacheKey && status === 200 && snapshot.value && !snapshot.refreshQueued) {
+  // whose body changes the moment the first real snapshot lands. "core" also
+  // waits for a settled refresh; "random" must not (see the cache comment).
+  const cacheable = section === "random"
+    ? status === 200 && snapshot.value != null
+    : status === 200 && snapshot.value != null && !snapshot.refreshQueued;
+  if (cacheKey && cacheable) {
     mapsResponseCache.set(cacheKey, { ...prepared, storedAt: now });
   }
+  return prepared;
 }
 
 function negotiateEncoding(req: IncomingMessage): "br" | "gzip" | null {
