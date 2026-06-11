@@ -31,12 +31,19 @@ const SHEDDABLE_TYPES = [
   "refresh_country_roster",
   "osc_backfill",
   "osc_country_catchup",
-  "analyze_activity_beatmap",
 ];
 
 const ACTIVE_TYPE_CAPS: Record<string, number> = {
   refresh_user_top_scores: 80,
   reconcile_user_recent_scores: 10,
+};
+
+// Types with a reserved lane: invisible to the shared depth/shedding pool so
+// they drain steadily even when the queue hovers above the soft-pressure line,
+// but capped to this many active jobs so they cannot crowd anything out. The
+// osu! API token bucket still governs their actual request rate.
+const RESERVED_LANE_TYPES: Record<string, number> = {
+  analyze_activity_beatmap: 10,
 };
 
 export class JobQueue {
@@ -146,7 +153,7 @@ export class JobQueue {
     return activeDepth(this.db);
   }
 
-  async pressure(): Promise<{ depth: number; deferred: number; targetDepth: number; softDepth: number; recoveryDepth: number; shedding: boolean; sheddableTypes: string[]; typeCaps: Record<string, number> }> {
+  async pressure(): Promise<{ depth: number; deferred: number; targetDepth: number; softDepth: number; recoveryDepth: number; shedding: boolean; sheddableTypes: string[]; typeCaps: Record<string, number>; reservedLanes: Record<string, number> }> {
     const depth = await this.depth();
     const deferred = await deferredDepth(this.db);
     return {
@@ -158,11 +165,23 @@ export class JobQueue {
       shedding: depth >= QUEUE_SOFT_PRESSURE_DEPTH,
       sheddableTypes: SHEDDABLE_TYPES,
       typeCaps: ACTIVE_TYPE_CAPS,
+      reservedLanes: RESERVED_LANE_TYPES,
     };
   }
 
   async shedPressure(targetDepth = QUEUE_TARGET_DEPTH): Promise<number> {
     let deferred = 0;
+    // Reserved lanes are refilled to their reserve (and trimmed back to it)
+    // independently of the shared pool below.
+    for (const [type, reserve] of Object.entries(RESERVED_LANE_TYPES)) {
+      const activeOfType = await activeDepth(this.db, type);
+      if (activeOfType < reserve) {
+        await this.reactivateDeferred(reserve - activeOfType, type);
+      } else if (activeOfType > reserve) {
+        deferred += await this.deferQueuedOrFailedType(type, reserve);
+      }
+    }
+
     let depth = await this.depth();
     // Drain parked jobs whenever there is headroom below the soft-pressure
     // line. Waiting for the recovery floor starves the deferred pool when
@@ -225,6 +244,15 @@ export class JobQueue {
   }
 
   private async pressureStatusFor(type: string): Promise<{ defer: boolean; reason: string | null }> {
+    const reserve = RESERVED_LANE_TYPES[type];
+    if (reserve != null) {
+      const activeOfType = await activeDepth(this.db, type);
+      if (activeOfType >= reserve) {
+        return { defer: true, reason: `deferred by ${type} reserve (${activeOfType}/${reserve})` };
+      }
+      return { defer: false, reason: null };
+    }
+
     const depth = await this.depth();
     if (depth >= QUEUE_SOFT_PRESSURE_DEPTH && SHEDDABLE_TYPES.includes(type)) {
       return { defer: true, reason: `deferred by queue pressure (${depth}/${QUEUE_TARGET_DEPTH})` };
@@ -310,11 +338,19 @@ export class JobQueue {
     return Number(result.rowsAffected ?? 0);
   }
 
-  private async reactivateDeferred(limit: number): Promise<number> {
+  private async reactivateDeferred(limit: number, type?: string): Promise<number> {
     if (limit <= 0) return 0;
     // run_after is reset so reactivated jobs are runnable immediately and count
     // toward depth; the parked run_after was only the +30min pressure stamp.
+    // Without a type this serves the shared pool, so reserved-lane types are
+    // excluded; they only re-enter through their own lane's refill.
     const now = nowIso();
+    const reserved = Object.keys(RESERVED_LANE_TYPES);
+    const typeFilter = type != null
+      ? { sql: "and type = ?", args: [type] }
+      : reserved.length > 0
+        ? { sql: `and type not in (${reserved.map(() => "?").join(", ")})`, args: reserved }
+        : { sql: "", args: [] as string[] };
     const result = await exec(
       this.db,
       `update jobs
@@ -326,10 +362,11 @@ export class JobQueue {
          select id
          from jobs
          where status = 'deferred_pressure'
+         ${typeFilter.sql}
          order by priority desc, run_after asc, updated_at asc, id asc
          limit ?
        )`,
-      [now, now, Math.max(0, Math.floor(limit))],
+      [now, now, ...typeFilter.args, Math.max(0, Math.floor(limit))],
     );
     return Number(result.rowsAffected ?? 0);
   }
@@ -341,9 +378,15 @@ async function activeDepth(db: Db, type?: string): Promise<number> {
   // above the shedding threshold.
   const now = nowIso();
   const runnable = "(status = 'running' or (status in ('queued', 'failed') and run_after <= ?))";
-  const row = type == null
-    ? (await exec(db, `select count(*) as count from jobs where ${runnable}`, [now])).rows[0]
-    : (await exec(db, `select count(*) as count from jobs where ${runnable} and type = ?`, [now, type])).rows[0];
+  if (type != null) {
+    const row = (await exec(db, `select count(*) as count from jobs where ${runnable} and type = ?`, [now, type])).rows[0];
+    return Number(row?.count ?? 0);
+  }
+  // Reserved-lane jobs are capped on their own; counting them here would push
+  // the shared pool into shedding just for keeping their reserve full.
+  const reserved = Object.keys(RESERVED_LANE_TYPES);
+  const filter = reserved.length > 0 ? ` and type not in (${reserved.map(() => "?").join(", ")})` : "";
+  const row = (await exec(db, `select count(*) as count from jobs where ${runnable}${filter}`, [now, ...reserved])).rows[0];
   return Number(row?.count ?? 0);
 }
 

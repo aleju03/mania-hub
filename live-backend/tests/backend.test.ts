@@ -694,14 +694,14 @@ describe("live backend", () => {
       );
     }
 
-    await queue.enqueue("analyze_activity_beatmap", "activity-beatmap:1:123", { beatmapId: 123 }, { priority: 5 });
+    await queue.enqueue("refresh_user_maps_farmed_scores", "maps-farmed:CR:123", { country: "CR", userId: 123 }, { priority: 5 });
 
-    const activityJob = (await exec(db, "select status from jobs where type = 'analyze_activity_beatmap'")).rows[0];
-    expect(activityJob.status).toBe("queued");
+    const farmedJob = (await exec(db, "select status from jobs where type = 'refresh_user_maps_farmed_scores'")).rows[0];
+    expect(farmedJob.status).toBe("queued");
     expect(await queue.depth()).toBe(1);
   });
 
-  it("reactivates parked jobs as immediately runnable", async () => {
+  it("reactivates parked reserved-lane jobs as immediately runnable", async () => {
     const { db, queue } = await setup();
     const future = new Date(Date.now() + 30 * 60_000).toISOString();
     const now = new Date().toISOString();
@@ -716,9 +716,41 @@ describe("live backend", () => {
 
     await queue.shedPressure();
 
-    expect(await queue.depth()).toBe(5);
+    // Reserved-lane jobs stay out of the shared depth pool entirely.
+    expect(await queue.depth()).toBe(0);
     const claimed = await queue.claim("test-worker", 5, { types: ["analyze_activity_beatmap"] });
     expect(claimed).toHaveLength(5);
+  });
+
+  it("keeps the activity-analysis reserved lane fed under global pressure", async () => {
+    const { db, queue } = await setup();
+    const now = new Date().toISOString();
+    for (let index = 0; index < 120; index += 1) {
+      await exec(
+        db,
+        `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
+         values ('refresh_user_top_scores', ?, 'queued', 50, ?, 0, '{}', ?, ?)`,
+        [`top:pressure:${index}`, now, now, now],
+      );
+    }
+    for (let index = 0; index < 30; index += 1) {
+      await exec(
+        db,
+        `insert into jobs (type, dedupe_key, status, priority, run_after, attempts, payload_json, created_at, updated_at)
+         values ('analyze_activity_beatmap', ?, 'deferred_pressure', 5, ?, 0, '{}', ?, ?)`,
+        [`activity-beatmap:1:${index}`, now, now, now],
+      );
+    }
+
+    await queue.shedPressure();
+
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'analyze_activity_beatmap' and status = 'queued'")).rows[0].count)).toBe(10);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type = 'analyze_activity_beatmap' and status = 'deferred_pressure'")).rows[0].count)).toBe(20);
+
+    await queue.enqueue("analyze_activity_beatmap", "activity-beatmap:1:999", { beatmapId: 999 }, { priority: 5 });
+    const overflow = (await exec(db, "select status, last_error from jobs where dedupe_key = 'activity-beatmap:1:999'")).rows[0];
+    expect(overflow.status).toBe("deferred_pressure");
+    expect(String(overflow.last_error)).toContain("reserve");
   });
 
   it("creates enrichment jobs for unknown metadata on known tracked roster users", async () => {
