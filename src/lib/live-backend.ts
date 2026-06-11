@@ -221,6 +221,12 @@ export interface LivePlayerProfileSection<T> {
   isStale: boolean;
 }
 
+export interface LivePlayerAboutPayload {
+  html: string | null;
+  /** Raw BBCode source of the page; absent on payloads cached before it was added. */
+  raw?: string | null;
+}
+
 /** Pattern id -> 0..1 intensity. Ids come from the backend's dan estimator
  * families (stream, jumpstream, handstream, jack, chordjack, stamina, tech)
  * plus ln and its 7K subtypes; the record stays open so new backend families
@@ -585,12 +591,12 @@ export const fetchLivePlayerAbout = createServerFn({ method: "GET" })
     if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
     return { userId };
   })
-  .handler(async ({ data }): Promise<LivePlayerProfileSection<{ html: string | null }> | null> => {
+  .handler(async ({ data }): Promise<LivePlayerProfileSection<LivePlayerAboutPayload> | null> => {
     const base = getServerLiveBackendUrl();
     if (!base) return null;
     const response = await fetch(`${base}/api/profiles/${data.userId}/about`);
     if (!response.ok) throw new Error(`Live backend ${response.status} for profile about`);
-    return response.json() as Promise<LivePlayerProfileSection<{ html: string | null }>>;
+    return response.json() as Promise<LivePlayerProfileSection<LivePlayerAboutPayload>>;
   });
 
 // Direct browser fetch: the backend allows CORS from the site origins, so the
@@ -606,7 +612,7 @@ export async function fetchLivePlayerRecentScoresDirect(userId: number): Promise
   return fetchLiveJson(`/api/profiles/${userId}/recent`);
 }
 
-export async function fetchLivePlayerAboutDirect(userId: number): Promise<LivePlayerProfileSection<{ html: string | null }>> {
+export async function fetchLivePlayerAboutDirect(userId: number): Promise<LivePlayerProfileSection<LivePlayerAboutPayload>> {
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
   return fetchLiveJson(`/api/profiles/${userId}/about`);
 }

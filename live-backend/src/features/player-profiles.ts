@@ -190,7 +190,8 @@ export async function getPlayerAbout(
     const user = await osu.getUser(userId, "api:profile_about");
     const page = readRecord(user.page);
     const html = typeof page?.html === "string" ? sanitizeProfilePageHtml(page.html) : null;
-    return { html };
+    const raw = typeof page?.raw === "string" ? page.raw : null;
+    return { html, raw };
   });
 }
 

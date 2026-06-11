@@ -1,6 +1,7 @@
 import { Link, createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Pencil } from "lucide-react";
 import {
   getUser,
   getUserScoresBestWindow,
@@ -54,6 +55,10 @@ import { readPlayerShell } from "../../lib/player-shell-cache";
 import { pageSeo, playerOgImagePath } from "../../lib/seo";
 import { getRankTierClass } from "../../lib/rankings";
 
+// The BBCode editor (toolbar + parser + preview) only loads when someone
+// actually opens it; the about tab itself stays light.
+const BBCodeEditorLazy = lazy(() => import("../../components/player/bbcode/BBCodeEditor"));
+
 const userRequestCache = new Map<string, Promise<OsuUser>>();
 const userRecentRequestCache = new Map<number, Promise<OsuScore[]>>();
 const userBestWindowRequestCache = new Map<number, Promise<OsuScore[]>>();
@@ -62,8 +67,12 @@ const userRecentDataCache = new Map<number, { data: OsuScore[]; expiresAt: numbe
 const userBestWindowDataCache = new Map<number, { data: OsuScore[]; expiresAt: number }>();
 const playerSnapshotDataCache = new Map<string, { data: { user: OsuUser; bestScores: OsuScore[] }; expiresAt: number }>();
 const playerSnapshotRequestCache = new Map<string, Promise<{ user: OsuUser; bestScores: OsuScore[] } | null>>();
-const playerAboutDataCache = new Map<number, { data: string | null; expiresAt: number }>();
-const playerAboutRequestCache = new Map<string, Promise<string | null>>();
+interface PlayerAboutData {
+  html: string | null;
+  raw: string | null;
+}
+const playerAboutDataCache = new Map<number, { data: PlayerAboutData; expiresAt: number }>();
+const playerAboutRequestCache = new Map<string, Promise<PlayerAboutData>>();
 const USER_CLIENT_CACHE_TTL = 5 * 60 * 1000;
 const USER_RECENT_CLIENT_CACHE_TTL = 2 * 60 * 1000;
 const USER_BEST_WINDOW_CLIENT_CACHE_TTL = 5 * 60 * 1000;
@@ -699,7 +708,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   });
 }
 
-function loadPlayerAboutCached(userId: number, username: string): Promise<string | null> {
+function loadPlayerAboutCached(userId: number, username: string): Promise<PlayerAboutData> {
   const now = Date.now();
   const cachedData = playerAboutDataCache.get(userId);
   if (cachedData && cachedData.expiresAt > now) {
@@ -714,22 +723,25 @@ function loadPlayerAboutCached(userId: number, username: string): Promise<string
   if (cached) return cached;
 
   const request = withTimeout(fetchLivePlayerAboutDirect(userId), PLAYER_ABOUT_LIVE_TIMEOUT_MS)
-    .then((section) => section?.payload.html ?? null)
+    .then((section): PlayerAboutData => ({
+      html: section?.payload.html ?? null,
+      raw: section?.payload.raw ?? null,
+    }))
     .finally(() => {
       playerAboutRequestCache.delete(requestKey);
     });
 
   playerAboutRequestCache.set(requestKey, request);
-  return request.then((html) => {
+  return request.then((about) => {
     playerAboutDataCache.set(userId, {
-      data: html,
+      data: about,
       expiresAt: Date.now() + PLAYER_ABOUT_CLIENT_CACHE_TTL,
     });
-    return html;
+    return about;
   });
 }
 
-function readCachedPlayerAbout(userId: number): string | null | undefined {
+function readCachedPlayerAbout(userId: number): PlayerAboutData | undefined {
   const cachedData = playerAboutDataCache.get(userId);
   if (!cachedData) return undefined;
   if (cachedData.expiresAt <= Date.now()) {
@@ -794,6 +806,8 @@ export function PlayerProfilePage({
   const [best, setBest] = useState<OsuScore[]>(() => loaderBestScores);
   const [recent, setRecent] = useState<OsuScore[]>([]);
   const [aboutHtml, setAboutHtml] = useState<string | null>(null);
+  const [aboutRaw, setAboutRaw] = useState<string | null>(null);
+  const [aboutEditing, setAboutEditing] = useState(false);
   const [profileInsights, setProfileInsights] = useState<UserProfileInsights | null>(() =>
     loaderBestScores.length > 0 ? calculateUserProfileInsights(loaderBestScores) : null,
   );
@@ -1034,11 +1048,13 @@ export function PlayerProfilePage({
     if (!user || tab !== "about" || aboutHtml != null) return;
     if (user.page?.html) {
       setAboutHtml(user.page.html);
+      setAboutRaw(user.page.raw ?? null);
       return;
     }
     const cachedAbout = readCachedPlayerAbout(user.id);
     if (cachedAbout !== undefined) {
-      setAboutHtml(cachedAbout);
+      setAboutHtml(cachedAbout.html);
+      setAboutRaw(cachedAbout.raw);
       return;
     }
 
@@ -1047,9 +1063,10 @@ export function PlayerProfilePage({
     setAboutError(null);
 
     loadPlayerAboutCached(user.id, user.username)
-      .then((html) => {
+      .then((about) => {
         if (cancelled) return;
-        setAboutHtml(html);
+        setAboutHtml(about.html);
+        setAboutRaw(about.raw);
       })
       .catch(() => {
         if (cancelled) return;
@@ -1097,7 +1114,9 @@ export function PlayerProfilePage({
     [best, recent],
   );
   const displayedProfileInsights = profileInsights;
-  const displayedAboutHtml = aboutHtml ?? (user ? readCachedPlayerAbout(user.id) : undefined);
+  const cachedAboutFallback = user ? readCachedPlayerAbout(user.id) : undefined;
+  const displayedAboutHtml = aboutHtml ?? cachedAboutFallback?.html;
+  const displayedAboutRaw = aboutRaw ?? cachedAboutFallback?.raw ?? null;
   const profileStatsProjectedOnly = user ? hasProjectedOnlyProfileStats(user) : false;
 
   const cycleBestMod = useCallback((mod: string) => {
@@ -1802,7 +1821,24 @@ export function PlayerProfilePage({
                 exit={{ opacity: 0, y: -4 }}
                 transition={{ duration: 0.14 }}
               >
-                {loadingAbout ? (
+                {aboutEditing && user ? (
+                  <Suspense
+                    fallback={(
+                      <div className="space-y-2 rounded-xl bg-osu-b4 border border-osu-b3/20 p-5">
+                        <Skeleton className="h-4 w-40" />
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-4 w-2/3" />
+                      </div>
+                    )}
+                  >
+                    <BBCodeEditorLazy
+                      userId={user.id}
+                      username={user.username}
+                      initialSource={displayedAboutRaw}
+                      onClose={() => setAboutEditing(false)}
+                    />
+                  </Suspense>
+                ) : loadingAbout ? (
                   <div className="space-y-2 rounded-xl bg-osu-b4 border border-osu-b3/20 p-5">
                     <Skeleton className="h-4 w-40" />
                     <Skeleton className="h-4 w-full" />
@@ -1811,9 +1847,19 @@ export function PlayerProfilePage({
                 ) : aboutError ? (
                   <div className="text-center py-8 text-osu-f1 text-sm">{aboutError}</div>
                 ) : displayedAboutHtml ? (
-                  <PlayerAboutCard html={displayedAboutHtml} />
+                  <PlayerAboutCard html={displayedAboutHtml} onEdit={() => setAboutEditing(true)} />
                 ) : (
-                  <div className="text-center py-8 text-osu-f1 text-sm">No About content found.</div>
+                  <div className="text-center py-8 text-osu-f1 text-sm space-y-3">
+                    <div>No About content found.</div>
+                    <button
+                      type="button"
+                      onClick={() => setAboutEditing(true)}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-osu-b4 text-[12px] font-semibold text-osu-l2 border border-osu-b3/30 hover:bg-osu-b3 transition-colors cursor-pointer"
+                    >
+                      <Pencil size={13} />
+                      Write one in the BBCode editor
+                    </button>
+                  </div>
                 )}
               </motion.div>
             ) : tab === "card" ? (
@@ -3011,7 +3057,7 @@ function formatActivityMonth(date: string): string {
   });
 }
 
-function PlayerAboutCard({ html }: { html: string }) {
+function PlayerAboutCard({ html, onEdit }: { html: string; onEdit: () => void }) {
   const contentRef = useRef<HTMLDivElement | null>(null);
 
   // Wire up osu's spoilerbox toggles + shorten raw URL link text. osu's own
@@ -3077,7 +3123,16 @@ function PlayerAboutCard({ html }: { html: string }) {
   }, [html]);
 
   return (
-    <div className="bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
+    <div className="relative bg-osu-b4 rounded-xl border border-osu-b3/20 overflow-hidden">
+      <button
+        type="button"
+        onClick={onEdit}
+        title="Open in the BBCode editor"
+        aria-label="Open in the BBCode editor"
+        className="absolute top-2.5 right-2.5 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-osu-b3/80 text-osu-l2 border border-osu-b3/40 hover:bg-osu-b2 hover:text-osu-c1 transition-colors cursor-pointer"
+      >
+        <Pencil size={14} />
+      </button>
       <div
         ref={contentRef}
         className="bbcode-content px-4 py-3 text-sm text-osu-l2 max-h-[520px] overflow-y-auto"
