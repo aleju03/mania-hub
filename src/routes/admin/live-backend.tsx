@@ -12,7 +12,7 @@ import {
   type LiveEventName,
 } from "../../lib/live-backend";
 import { formatNumber, formatTimeAgo } from "../../lib/format";
-import { getCountryName } from "../../lib/country";
+import { COUNTRY_OPTIONS, getCountryName } from "../../lib/country";
 import { CountryFlag } from "../../components/ui/CountryFlag";
 
 type ConnectionState = "idle" | "connecting" | "open" | "error";
@@ -2618,6 +2618,172 @@ function writeCountryFilterPreferences(preferences: CountryFilterPreferences): v
   }
 }
 
+function normalizeCountrySearchText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\u2019/g, "'");
+}
+
+function AddCountryPicker({
+  trackedCodes,
+  busy,
+  onAddCountry,
+}: {
+  trackedCodes: Set<string>;
+  busy: boolean;
+  onAddCountry: (country: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<{ code: string; name: string } | null>(null);
+  const [open, setOpen] = useState(false);
+  const [highlight, setHighlight] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: MouseEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    return () => document.removeEventListener("mousedown", onPointer);
+  }, [open]);
+
+  const matches = useMemo(() => {
+    const trimmed = query.trim();
+    if (!trimmed) return [];
+    const text = normalizeCountrySearchText(trimmed);
+    const code = trimmed.toUpperCase();
+    const ranked: Array<{ option: { code: string; name: string }; rank: number }> = [];
+    for (const option of COUNTRY_OPTIONS) {
+      const name = normalizeCountrySearchText(option.name);
+      const rank = option.code === code
+        ? 0
+        : name.startsWith(text)
+          ? 1
+          : option.code.startsWith(code)
+            ? 2
+            : name.includes(text)
+              ? 3
+              : -1;
+      if (rank >= 0) ranked.push({ option, rank });
+    }
+    ranked.sort((a, b) => a.rank - b.rank || a.option.name.localeCompare(b.option.name));
+    return ranked.slice(0, 8).map((entry) => entry.option);
+  }, [query]);
+
+  const pick = (option: { code: string; name: string }) => {
+    if (trackedCodes.has(option.code)) return;
+    setSelected(option);
+    setQuery(option.name);
+    setOpen(false);
+  };
+
+  return (
+    <form
+      className="flex flex-wrap items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!selected || trackedCodes.has(selected.code)) return;
+        onAddCountry(selected.code);
+        setSelected(null);
+        setQuery("");
+      }}
+    >
+      Add
+      <div ref={ref} className="relative">
+        <div className="flex items-center gap-1 rounded-md border border-osu-b3/25 bg-osu-b5/50 p-1">
+          {selected ? <CountryFlag code={selected.code} size="xs" decorative className="ml-1.5" /> : null}
+          <input
+            value={query}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setSelected(null);
+              setHighlight(0);
+              setOpen(true);
+            }}
+            onFocus={() => {
+              if (query.trim() && !selected) setOpen(true);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                event.preventDefault();
+                if (!open) {
+                  setOpen(true);
+                  return;
+                }
+                if (matches.length === 0) return;
+                const delta = event.key === "ArrowDown" ? 1 : -1;
+                setHighlight((value) => (value + delta + matches.length) % matches.length);
+              } else if (event.key === "Enter" && open && matches.length > 0) {
+                event.preventDefault();
+                pick(matches[Math.min(highlight, matches.length - 1)]);
+              } else if (event.key === "Escape") {
+                setOpen(false);
+              }
+            }}
+            placeholder="Search country"
+            role="combobox"
+            aria-expanded={open}
+            aria-label="Search for a country to start tracking"
+            className="w-36 rounded bg-transparent px-2 py-1 text-[10px] font-medium normal-case tracking-normal text-white placeholder:text-osu-f1/40 focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={!selected || busy}
+            title="Register this country as active + live and queue its roster"
+            className="rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-osu-f1 transition-colors duration-[120ms] hover:text-osu-l2 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
+          >
+            Track
+          </button>
+        </div>
+        {open && query.trim() ? (
+          <div
+            role="listbox"
+            className="absolute left-0 top-full z-50 mt-1 max-h-[240px] w-56 overflow-y-auto overscroll-contain rounded-lg border border-osu-b3/50 bg-osu-b5 py-1 normal-case tracking-normal shadow-[0_10px_25px_rgba(0,0,0,0.5)] lg:left-auto lg:right-0"
+          >
+            {matches.length === 0 ? (
+              <div className="px-2.5 py-1.5 text-[10px] font-medium text-osu-f1">No country matches "{query.trim()}"</div>
+            ) : (
+              matches.map((option, index) => {
+                const tracked = trackedCodes.has(option.code);
+                return (
+                  <button
+                    key={option.code}
+                    type="button"
+                    role="option"
+                    aria-selected={selected?.code === option.code}
+                    disabled={tracked}
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      pick(option);
+                    }}
+                    onMouseEnter={() => setHighlight(index)}
+                    className={`flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-[10px] font-medium transition-colors duration-[80ms] ${
+                      tracked
+                        ? "cursor-default text-osu-f1/50"
+                        : index === highlight
+                          ? "cursor-pointer bg-osu-b3/45 text-white"
+                          : "cursor-pointer text-osu-c2"
+                    }`}
+                  >
+                    <CountryFlag code={option.code} size="xs" decorative muted={tracked} />
+                    <span className="truncate">{option.name}</span>
+                    <span className={`ml-auto flex-shrink-0 font-mono ${tracked ? "text-osu-f1/40" : "text-osu-f1/70"}`}>
+                      {tracked ? "tracked" : option.code}
+                    </span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        ) : null}
+      </div>
+    </form>
+  );
+}
+
 function CountriesCard({
   status,
   busy,
@@ -2638,7 +2804,6 @@ function CountriesCard({
   onAddCountry: (country: string) => void;
 }) {
   const [sortMode, setSortMode] = useState<CountrySortMode>("status");
-  const [addCountryCode, setAddCountryCode] = useState("");
   const [statusFilters, setStatusFilters] = useState<Record<CountryDisplayStatus, boolean>>(DEFAULT_COUNTRY_STATUS_FILTERS);
   const [tierFilters, setTierFilters] = useState<Record<CountryFeatureTier, boolean>>(DEFAULT_COUNTRY_TIER_FILTERS);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
@@ -2665,6 +2830,10 @@ function CountriesCard({
     for (const entry of status?.roster ?? []) map.set(entry.country, entry.users);
     return map;
   }, [status?.roster]);
+  const trackedCountryCodes = useMemo(
+    () => new Set(countries.map((entry) => entry.country.trim().toUpperCase())),
+    [countries],
+  );
   const statusCounts = useMemo(() => {
     const counts: Record<CountryDisplayStatus, number> = { active: 0, warm: 0, idle: 0, paused: 0 };
     for (const entry of countries) counts[getCountryDisplayStatus(entry)] += 1;
@@ -2800,35 +2969,11 @@ function CountriesCard({
               ))}
             </div>
           </div>
-          <form
-            className="flex flex-wrap items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-osu-f1"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!/^[A-Z]{2}$/.test(addCountryCode)) return;
-              onAddCountry(addCountryCode);
-              setAddCountryCode("");
-            }}
-          >
-            Add
-            <div className="flex items-center gap-1 rounded-md border border-osu-b3/25 bg-osu-b5/50 p-1">
-              <input
-                value={addCountryCode}
-                onChange={(event) => setAddCountryCode(event.target.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 2))}
-                placeholder="EG"
-                maxLength={2}
-                aria-label="Country code to start tracking"
-                className="w-10 rounded bg-transparent px-2 py-1 text-center font-mono text-[10px] text-white placeholder:text-osu-f1/40 focus:outline-none"
-              />
-              <button
-                type="submit"
-                disabled={!/^[A-Z]{2}$/.test(addCountryCode) || busy?.startsWith("add-country") === true}
-                title="Register this country as active + live and queue its roster"
-                className="rounded px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-osu-f1 transition-colors duration-[120ms] hover:text-osu-l2 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer"
-              >
-                Track
-              </button>
-            </div>
-          </form>
+          <AddCountryPicker
+            trackedCodes={trackedCountryCodes}
+            busy={busy?.startsWith("add-country") === true}
+            onAddCountry={onAddCountry}
+          />
         </div>
       </div>
       <div className="mb-3 rounded-md border border-osu-b3/25 bg-osu-b5/40">
