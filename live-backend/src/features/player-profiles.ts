@@ -483,10 +483,9 @@ async function buildServedSnapshot(db: Db, row: ProfileSnapshotRow, forceStale: 
   const projection = await projectTopPlays(db, row.user_id, rawBestScores, row.fetched_at, projectionBaselineAt, recentScores);
   const basePp = readNumber(readRecord(user.statistics)?.pp);
   const projectedPp = calculateProjectedUserPp(basePp, projection.ppBaselineScores, projection.scores);
-  const projectedUser = applyProjectedPp(user, projectedPp);
 
   return {
-    user: projectedUser,
+    user,
     bestScores: projection.scores,
     fetchedAt: row.fetched_at,
     userFetchedAt,
@@ -635,19 +634,6 @@ function calculateProjectedUserPp(basePp: number | null, rawScores: OscScore[], 
   const projectedWeighted = calculateWeightedPpTotal(projectedScores);
   if (!Number.isFinite(rawWeighted) || !Number.isFinite(projectedWeighted)) return basePp;
   return Math.max(0, basePp + projectedWeighted - rawWeighted);
-}
-
-function applyProjectedPp(user: Record<string, unknown>, projectedPp: number | null): Record<string, unknown> {
-  if (projectedPp == null) return user;
-  const statistics = readRecord(user.statistics);
-  if (!statistics) return user;
-  return {
-    ...user,
-    statistics: {
-      ...statistics,
-      pp: projectedPp,
-    },
-  };
 }
 
 function sanitizeProfilePageHtml(html: string | null | undefined): string | null {

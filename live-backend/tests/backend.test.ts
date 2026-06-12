@@ -2181,7 +2181,8 @@ describe("live backend", () => {
     expect(scoreIds).not.toContain(7001);
     expect(snapshot.projection.appliedTopPlayEvents).toBe(1);
     expect(snapshot.projection.provenanceByScoreId[9001]).toBe("live_top_play_event");
-    expect(Number((snapshot.user.statistics as { pp?: number }).pp)).toBeGreaterThan(1000);
+    expect(snapshot.projection.projectedPp).toBeGreaterThan(1000);
+    expect((snapshot.user.statistics as { pp?: number }).pp).toBe(1000);
   });
 
   it("does not add live top-play projection again after official profile pp refreshes", async () => {

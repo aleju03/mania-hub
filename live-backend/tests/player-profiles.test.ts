@@ -87,6 +87,8 @@ describe("player profile snapshots", () => {
 
     expect(snapshot?.bestScores.map((entry) => entry.id)).toEqual([2, 1]);
     expect(snapshot?.projection.appliedRecentScores).toBe(1);
+    expect(snapshot?.projection.projectedPp).toBeGreaterThan(1000);
+    expect((snapshot?.user.statistics as { pp?: number } | undefined)?.pp).toBe(1000);
     expect(snapshot?.projection.provenanceByScoreId[2]).toBe("profile_recent_score");
     expect(snapshot?.projection.provenanceByScoreId[3]).toBeUndefined();
   });
