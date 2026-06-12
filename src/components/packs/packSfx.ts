@@ -110,7 +110,7 @@ export function playSlashTick(progress: number) {
   if (!ctx) return;
   playNoise(ctx, {
     duration: 0.032,
-    gain: 0.1,
+    gain: 0.14,
     startFreq: 2100 + progress * 2400 + Math.random() * 420,
     q: 8,
   });
@@ -129,16 +129,38 @@ export function playPackRip() {
 export function playCardDraw() {
   const ctx = ensureAudio();
   if (!ctx) return;
-  playNoise(ctx, { duration: 0.13, gain: 0.09, startFreq: 520, endFreq: 2100, q: 1.1 });
+  playNoise(ctx, { duration: 0.13, gain: 0.07, startFreq: 520, endFreq: 2100, q: 1.1 });
 }
 
-/* Riser that tracks the flip: a filtered sweep that crests as the card
-   turns front-side-out. */
+/* Riser that tracks the flip: an airy lowpassed swell that crests as the
+   card turns front-side-out, then falls away. playNoise can't express this
+   (it attacks instantly and decays for its whole duration, reading as a
+   zip), so the envelope is shaped here. */
 export function playFlipWhoosh(durationMs: number) {
   const ctx = ensureAudio();
-  if (!ctx) return;
-  const duration = Math.max(0.15, (durationMs / 1000) * 0.66);
-  playNoise(ctx, { duration, gain: 0.14, startFreq: 320, endFreq: 2900, q: 0.8 });
+  if (!ctx || !master) return;
+  const duration = Math.max(0.18, (durationMs / 1000) * 0.72);
+  // Audible from the first degrees of the turn, cresting mid-flip.
+  const crest = duration * 0.42;
+  const t = ctx.currentTime;
+  const source = ctx.createBufferSource();
+  source.buffer = getNoise(ctx);
+  source.loop = true;
+  source.playbackRate.value = 0.9 + Math.random() * 0.2;
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(480, t);
+  filter.frequency.exponentialRampToValueAtTime(2400, t + crest);
+  filter.frequency.exponentialRampToValueAtTime(900, t + duration);
+  filter.Q.value = 0.4;
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0001, t);
+  gain.gain.exponentialRampToValueAtTime(0.035, t + 0.03);
+  gain.gain.exponentialRampToValueAtTime(0.11, t + crest);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+  source.connect(filter).connect(gain).connect(master);
+  source.start(t, Math.random() * 0.5);
+  source.stop(t + duration + 0.05);
 }
 
 const CHIME_NOTES = [784, 988, 1175, 1568, 1976];
@@ -153,12 +175,14 @@ export function playRevealChime(intensity: number, isNew: boolean) {
   for (let i = 0; i < count; i += 1) {
     const freq = CHIME_NOTES[Math.min(i, CHIME_NOTES.length - 1)];
     const at = i * 0.075;
-    playTone(ctx, { at, freq, duration: 0.55 + level * 0.4, gain: 0.12 });
-    playTone(ctx, { at, freq: freq * 2, duration: 0.4 + level * 0.3, gain: 0.04, type: "sine" });
+    // Sine fundamental + octave partial reads as a small bell; triangle
+    // waves here sounded like a chiptune arpeggio.
+    playTone(ctx, { at, freq, duration: 0.55 + level * 0.4, gain: 0.11, type: "sine" });
+    playTone(ctx, { at, freq: freq * 2, duration: 0.4 + level * 0.3, gain: 0.032, type: "sine" });
   }
   if (level > 0.5) playNoise(ctx, { duration: 0.5, gain: 0.05, startFreq: 6800, q: 0.7 });
   if (isNew) {
-    playTone(ctx, { at: count * 0.075 + 0.04, freq: 2349, duration: 0.5, gain: 0.08, type: "sine" });
+    playTone(ctx, { at: count * 0.075 + 0.04, freq: 2349, duration: 0.5, gain: 0.065, type: "sine" });
   }
 }
 

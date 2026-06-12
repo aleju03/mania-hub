@@ -20,10 +20,17 @@ import {
 } from "../lib/pack-collection";
 import { isLiveBackendConfigured, warmLivePackPlayers } from "../lib/live-backend";
 import {
+  clearPendingPack,
+  consumePendingPackCard,
+  readPendingPack,
+  writePendingPack,
+} from "../lib/pack-pending";
+import {
   drawPackPlayers,
   fetchPackPlayerScores,
   PACK_TYPES,
   packTypeById,
+  type PackPlayer,
   type PackTypeDef,
   type PackTypeId,
 } from "../lib/packs";
@@ -98,6 +105,22 @@ function scheduleCollectionPanelMount(callback: () => void, reducedMotion: boole
     if (timeoutId !== null) window.clearTimeout(timeoutId);
     if (idleId !== null) idleWindow.cancelIdleCallback?.(idleId);
   };
+}
+
+/* Starts each player's best-scores prefetch, sequentially in card order (and
+   coalescing server-side, so nothing fetches twice): when the osu! API budget
+   is tight, card 1's fetch must not queue behind the other players'. */
+function buildCardStates(players: PackPlayer[]): PackCardState[] {
+  let previous: Promise<unknown> = Promise.resolve();
+  return players.map((player) => {
+    /* null = the fetch failed (network, rate limit), as opposed to a
+       player with genuinely no ranked plays; the reveal retries it. */
+    const scoresPromise = previous
+      .then(() => fetchPackPlayerScores(player.user.id))
+      .catch(() => null);
+    previous = scoresPromise;
+    return { player, scoresPromise };
+  });
 }
 
 function canAffordPack(wallet: PackWallet | null, type: PackTypeDef): boolean {
@@ -228,14 +251,24 @@ function PacksPage() {
   /* Deal a fresh pack from the tracked pool (uniform odds within the pack
      type's slice), then ask the backend to warm the profile snapshots and
      start prefetching each player's best scores, so the cards are usually
-     ready by the time the pack is slashed open. Both the warm and the
-     prefetches run sequentially in card order (and coalesce server-side, so
-     nothing fetches twice): when the osu! API budget is tight, card 1's
-     fetch must not queue behind the other four players'. */
+     ready by the time the pack is slashed open. A pack paid for earlier but
+     abandoned mid-reveal (navigation, refresh) resumes its unrevealed
+     remainder instead: the charge is already spent. */
   useEffect(() => {
     let cancelled = false;
     setCards(null);
     setDealError(false);
+    if (packId === 0) {
+      const pendingPlayers = readPendingPack();
+      if (pendingPlayers) {
+        if (isLiveBackendConfigured()) {
+          void warmLivePackPlayers(pendingPlayers.map((player) => player.user.id)).catch(() => {});
+        }
+        setCards(buildCardStates(pendingPlayers));
+        setPhase("reveal");
+        return;
+      }
+    }
     const type = packTypeById(packTypeId);
     const currentWallet = walletApi.wallet;
     drawPackPlayers(Math.random, {
@@ -251,16 +284,7 @@ function PacksPage() {
         if (isLiveBackendConfigured()) {
           void warmLivePackPlayers(draw.players.map((player) => player.user.id)).catch(() => {});
         }
-        let previous: Promise<unknown> = Promise.resolve();
-        setCards(
-          draw.players.map((player) => {
-            const scoresPromise = previous
-              .then(() => fetchPackPlayerScores(player.user.id))
-              .catch(() => []);
-            previous = scoresPromise;
-            return { player, scoresPromise };
-          }),
-        );
+        setCards(buildCardStates(draw.players));
       })
       .catch(() => {
         if (!cancelled) setDealError(true);
@@ -270,6 +294,15 @@ function PacksPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [packId, packTypeId]);
+
+  /* The slash charged the wallet, so from that moment the unrevealed cards
+     are owed to the viewer: keep the remainder in localStorage so leaving the
+     page resumes the pack instead of eating it. Entries are consumed one by
+     one as cards flip into the wallet. */
+  useEffect(() => {
+    if (phase !== "reveal" || !cards) return;
+    writePendingPack(cards.map((card) => card.player));
+  }, [phase, cards]);
 
   useEffect(() => {
     if (phase === "pack") {
@@ -410,8 +443,13 @@ function PacksPage() {
                       <RevealStage
                         cards={cards}
                         reducedMotion={reducedMotion}
-                        onCardRevealed={walletApi.recordPull}
+                        onCardRevealed={(pull) => {
+                          // In the wallet now, so no longer owed by the pending pack.
+                          consumePendingPackCard(pull.userId);
+                          return walletApi.recordPull(pull);
+                        }}
                         onComplete={(pulls) => {
+                          clearPendingPack();
                           setRevealed(pulls);
                           setPhase("summary");
                         }}

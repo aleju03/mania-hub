@@ -10,7 +10,7 @@ import {
 } from "react";
 import type { ManiaCardTier, ManiaSkills } from "#/lib/maniacard";
 import { tierRank, type PulledCard } from "#/lib/pack-collection";
-import type { PackPlayer } from "#/lib/packs";
+import { fetchPackPlayerScores, type PackPlayer } from "#/lib/packs";
 import type { OsuScore } from "#/lib/types";
 import { CountryFlag } from "../ui/CountryFlag";
 import { ManiaCardRenderer } from "../player/maniacard3d/ManiaCardRenderer";
@@ -23,7 +23,9 @@ import { TierBurst } from "./TierBurst";
 
 export interface PackCardState {
   player: PackPlayer;
-  scoresPromise: Promise<OsuScore[]>;
+  /* null = the score fetch failed; distinct from an empty list, which means
+     the player has no usable ranked plays. */
+  scoresPromise: Promise<OsuScore[] | null>;
 }
 
 export interface RevealedCard {
@@ -241,6 +243,11 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
   const [revealed, setRevealed] = useState<RevealedCard[]>([]);
   const [activeData, setActiveData] = useState<ManiaCardReadyData | null>(null);
   const [activeFallback, setActiveFallback] = useState<string | null>(null);
+  const [mintFailure, setMintFailure] = useState<"no-data" | "fetch" | null>(null);
+  /* A cold player's scores can take a while to fetch (osu! API queue on the
+     backend); after a few seconds the draw label says so instead of looking
+     stuck. */
+  const [slowDraw, setSlowDraw] = useState(false);
   const [burst, setBurst] = useState<{ key: number; tier: ManiaCardTier; glowColor: RgbaColor } | null>(null);
   const [cardBack, setCardBack] = useState<string | null>(null);
   const [skipping, setSkipping] = useState(false);
@@ -251,6 +258,13 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     phaseRef.current = next;
     setPhaseState(next);
   };
+
+  useEffect(() => {
+    setSlowDraw(false);
+    if (phase !== "preparing") return;
+    const timer = window.setTimeout(() => setSlowDraw(true), 4000);
+    return () => window.clearTimeout(timer);
+  }, [phase, index]);
 
   useEffect(() => {
     // Reset on every mount: StrictMode runs mount -> cleanup -> mount, and a
@@ -340,14 +354,31 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     setPhase("preparing");
     playCardDraw();
 
-    const scores = await card.scoresPromise;
+    let scores = await card.scoresPromise;
     if (cancelledRef.current) return;
+    if (scores === null) {
+      // The pre-deal fetch failed (flaky network, rate limit); one more try
+      // now that the card is actually being revealed.
+      scores = await fetchPackPlayerScores(card.player.user.id).catch(() => null);
+      if (cancelledRef.current) return;
+    }
+
+    if (scores === null) {
+      recordRevealed({ player: card.player, tier: null, tierLabel: null, glowColor: null, thumbnail: null }, null);
+      setActiveData(null);
+      setActiveFallback(null);
+      setMintFailure("fetch");
+      setPhase("shown");
+      return;
+    }
+
     const data = buildManiaCardRenderData({ user: card.player.user, scores });
 
     if (data.status !== "ready") {
       recordRevealed({ player: card.player, tier: null, tierLabel: null, glowColor: null, thumbnail: null }, null);
       setActiveData(null);
       setActiveFallback(null);
+      setMintFailure("no-data");
       setPhase("shown");
       return;
     }
@@ -428,6 +459,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     const next = index + 1;
     setActiveData(null);
     setActiveFallback(null);
+    setMintFailure(null);
     setIndex(next);
     void reveal(next);
   };
@@ -490,8 +522,16 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
     const startAt = phaseRef.current === "shown" ? index + 1 : index;
     for (let position = startAt; position < cards.length; position += 1) {
       const card = cards[position];
-      const scores = await card.scoresPromise;
+      let scores = await card.scoresPromise;
       if (cancelledRef.current) return;
+      if (scores === null) {
+        scores = await fetchPackPlayerScores(card.player.user.id).catch(() => null);
+        if (cancelledRef.current) return;
+      }
+      if (scores === null) {
+        recordRevealed({ player: card.player, tier: null, tierLabel: null, glowColor: null, thumbnail: null }, null);
+        continue;
+      }
       const data = buildManiaCardRenderData({ user: card.player.user, scores });
       if (data.status !== "ready") {
         recordRevealed({ player: card.player, tier: null, tierLabel: null, glowColor: null, thumbnail: null }, null);
@@ -522,7 +562,9 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
   const firstBackCardIndex = phase === "flipping" || phase === "shown" ? index + 1 : index;
   const remainingBacks = Math.max(0, cards.length - firstBackCardIndex);
 
-  const showCanvas = (phase === "flipping" || phase === "shown") && !activeFallback;
+  /* Without activeData there is nothing valid on the canvas; keeping it
+     visible would show the previous card's face behind a failure overlay. */
+  const showCanvas = (phase === "flipping" || phase === "shown") && !activeFallback && activeData !== null;
   const current = revealed[index] ?? null;
   const tierColor = current?.glowColor
     ? `rgb(${current.glowColor.r}, ${current.glowColor.g}, ${current.glowColor.b})`
@@ -634,13 +676,15 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
           />
         )}
 
-        {/* Mint failure (player without usable card data) */}
+        {/* Mint failure (no usable card data, or the score fetch failed) */}
         {phase === "shown" && !activeData && (
-          <div className="absolute inset-0 z-[15] grid place-items-center rounded-[18px] border-2 border-osu-b3/40 bg-osu-b4/70 px-6 text-center">
+          <div className="absolute inset-0 z-[15] grid place-items-center rounded-[18px] border-2 border-osu-b3/40 bg-osu-b4/90 px-6 text-center">
             <div>
               <div className="text-sm font-bold text-white">{cards[index]?.player.user.username}</div>
               <div className="mt-2 text-[12px] text-osu-f1">
-                This player's card refused to mint. Not enough ranked play data.
+                {mintFailure === "fetch"
+                  ? "Couldn't load this player's plays right now. The card is in your collection and will mint itself there."
+                  : "This player's card refused to mint. Not enough ranked play data."}
               </div>
             </div>
           </div>
@@ -660,11 +704,15 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
               exit={{ opacity: 0 }}
               transition={{ duration: 0.22 }}
             >
+              {/* New tab: an in-app navigation would unmount the reveal and
+                  forfeit the still-unrevealed cards of an already-paid pack. */}
               <Link
                 to="/player/$username"
                 params={{ username: current.player.user.username }}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="inline-flex items-center justify-center gap-2 hover:underline underline-offset-4 decoration-osu-f1/60"
-                aria-label={`Open ${current.player.user.username}'s profile`}
+                aria-label={`Open ${current.player.user.username}'s profile in a new tab`}
               >
                 <img
                   src={current.player.user.avatar_url}
@@ -692,14 +740,20 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
             </motion.div>
           ) : (
             <motion.div
-              key={`hint-${index}-${phase}`}
+              key={`hint-${index}-${phase}-${slowDraw}`}
               className="text-[12px] text-osu-f1"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
             >
-              {phase === "preparing" ? "Drawing player..." : skipping ? "Revealing the rest..." : "Tap the stack or drag the top card to draw"}
+              {phase === "preparing"
+                ? slowDraw
+                  ? "Warming this player up... first draws can take a moment"
+                  : "Drawing player..."
+                : skipping
+                  ? "Revealing the rest..."
+                  : "Tap the stack or drag the top card to draw"}
             </motion.div>
           )}
         </AnimatePresence>

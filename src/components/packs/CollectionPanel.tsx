@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { Check, ChevronLeft, ChevronRight, LogIn, Recycle, Search } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, LogIn, Recycle, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "#/lib/maniacard";
 import {
@@ -83,6 +83,115 @@ async function renderCollectionThumbnail(card: CollectedCard): Promise<string | 
 
 function pageSignature(cards: CollectedCard[]) {
   return cards.map(thumbnailKey).join("|");
+}
+
+function CollectionPager({
+  page,
+  totalPages,
+  pageStart,
+  pageEnd,
+  total,
+  onPageChange,
+}: {
+  page: number;
+  totalPages: number;
+  pageStart: number;
+  pageEnd: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}) {
+  const [jumpOpen, setJumpOpen] = useState(false);
+  const [jumpValue, setJumpValue] = useState("");
+
+  const submitJump = () => {
+    const parsed = Number.parseInt(jumpValue, 10);
+    if (Number.isFinite(parsed) && parsed >= 1 && parsed <= totalPages) onPageChange(parsed - 1);
+    setJumpOpen(false);
+    setJumpValue("");
+  };
+
+  const navButton =
+    "grid h-7 w-7 place-items-center rounded-lg border border-osu-b3/40 bg-osu-b4/40 text-osu-f1 transition-colors hover:bg-osu-b4/70 hover:text-white disabled:cursor-default disabled:opacity-40 cursor-pointer";
+
+  return (
+    <div className="flex items-center gap-1.5 text-[11px] text-osu-f1">
+      <button
+        type="button"
+        onClick={() => onPageChange(0)}
+        disabled={page <= 0}
+        className={navButton}
+        aria-label="First collection page"
+      >
+        <ChevronsLeft className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={() => onPageChange(Math.max(0, page - 1))}
+        disabled={page <= 0}
+        className={navButton}
+        aria-label="Previous collection page"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      {jumpOpen ? (
+        <form
+          className="flex min-w-[118px] items-center justify-center gap-1"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitJump();
+          }}
+        >
+          <input
+            type="number"
+            min={1}
+            max={totalPages}
+            value={jumpValue}
+            onChange={(event) => setJumpValue(event.target.value)}
+            onBlur={submitJump}
+            onKeyDown={(event) => {
+              if (event.key !== "Escape") return;
+              setJumpValue("");
+              setJumpOpen(false);
+            }}
+            autoFocus
+            placeholder={String(page + 1)}
+            className="w-12 rounded-md border border-osu-b3/60 bg-osu-b5/70 px-1.5 py-0.5 text-center tabular-nums text-white outline-none focus:border-osu-pink/50 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+          <span>/ {totalPages}</span>
+        </form>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setJumpValue("");
+            setJumpOpen(true);
+          }}
+          className="min-w-[118px] rounded-md px-2 py-0.5 text-center tabular-nums transition-colors hover:bg-osu-b4/60 hover:text-white cursor-pointer"
+          title="Jump to a page"
+        >
+          {total === 0 ? "0" : `${pageStart + 1}-${pageEnd}`} / {total}
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => onPageChange(Math.min(totalPages - 1, page + 1))}
+        disabled={page >= totalPages - 1}
+        className={navButton}
+        aria-label="Next collection page"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
+      <button
+        type="button"
+        onClick={() => onPageChange(totalPages - 1)}
+        disabled={page >= totalPages - 1}
+        className={navButton}
+        aria-label="Last collection page"
+      >
+        <ChevronsRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
 }
 
 /* Legacy cards (collected before skills snapshots existed) and failed mints
@@ -275,6 +384,7 @@ export function CollectionPanel({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [collectionPage, setCollectionPage] = useState(0);
+  const collectionControlsRef = useRef<HTMLDivElement | null>(null);
   const [readyPageSignature, setReadyPageSignature] = useState("");
   const [serverPage, setServerPage] = useState<ServerPackCollectionPage | null>(null);
   const [serverLoading, setServerLoading] = useState(false);
@@ -603,7 +713,11 @@ export function CollectionPanel({
       ) : null}
 
       {collectionTotal > 0 && (
-        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2" data-select-keep="">
+        <div
+          ref={collectionControlsRef}
+          className="mt-4 flex scroll-mt-[76px] flex-wrap items-center gap-x-3 gap-y-2"
+          data-select-keep=""
+        >
           <div className="relative w-[220px]">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1" />
             <input
@@ -655,28 +769,15 @@ export function CollectionPanel({
             </div>
           )}
           {totalPages > 1 && (
-            <div className="ml-auto flex items-center gap-2 text-[11px] text-osu-f1">
-              <button
-                type="button"
-                onClick={() => setCollectionPage((page) => Math.max(0, page - 1))}
-                disabled={currentPage <= 0}
-                className="grid h-7 w-7 place-items-center rounded-lg border border-osu-b3/40 bg-osu-b4/40 text-osu-f1 transition-colors hover:bg-osu-b4/70 hover:text-white disabled:cursor-default disabled:opacity-40"
-                aria-label="Previous collection page"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-              <span className="min-w-[118px] text-center tabular-nums">
-                {filteredTotal === 0 ? "0" : `${pageStart + 1}-${pageEnd}`} / {filteredTotal}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCollectionPage((page) => Math.min(totalPages - 1, page + 1))}
-                disabled={currentPage >= totalPages - 1}
-                className="grid h-7 w-7 place-items-center rounded-lg border border-osu-b3/40 bg-osu-b4/40 text-osu-f1 transition-colors hover:bg-osu-b4/70 hover:text-white disabled:cursor-default disabled:opacity-40"
-                aria-label="Next collection page"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </button>
+            <div className="ml-auto">
+              <CollectionPager
+                page={currentPage}
+                totalPages={totalPages}
+                pageStart={pageStart}
+                pageEnd={pageEnd}
+                total={filteredTotal}
+                onPageChange={setCollectionPage}
+              />
             </div>
           )}
         </div>
@@ -797,6 +898,22 @@ export function CollectionPanel({
               </div>
             );
           })}
+        </div>
+      )}
+
+      {totalPages > 1 && filteredTotal > 0 && (
+        <div className="mt-5 flex justify-center" data-select-keep="">
+          <CollectionPager
+            page={currentPage}
+            totalPages={totalPages}
+            pageStart={pageStart}
+            pageEnd={pageEnd}
+            total={filteredTotal}
+            onPageChange={(page) => {
+              setCollectionPage(page);
+              collectionControlsRef.current?.scrollIntoView({ block: "start" });
+            }}
+          />
         </div>
       )}
 
