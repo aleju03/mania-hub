@@ -1,5 +1,5 @@
 import { Link, createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Pencil } from "lucide-react";
 import {
@@ -836,6 +836,16 @@ export function PlayerProfilePage({
   const [bestVisibleCount, setBestVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const [recentVisibleCount, setRecentVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const tabsRailRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    const resetScroll = () => window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    resetScroll();
+
+    // TanStack's scroll restoration and mobile Safari's viewport settling both
+    // happen around this same frame, so repeat once after layout has committed.
+    const frame = window.requestAnimationFrame(resetScroll);
+    return () => window.cancelAnimationFrame(frame);
+  }, [username]);
 
   useEffect(() => {
     if (!avatarOpen && !modModalOpen && !bpmModalOpen) return;
