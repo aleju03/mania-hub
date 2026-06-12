@@ -1,4 +1,6 @@
 import { HeadContent, Link, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { Coffee, X } from "lucide-react";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest, setCookie } from "@tanstack/react-start/server";
 import { Nav } from "../components/layout/Nav";
@@ -318,6 +320,73 @@ function NotFoundPage() {
   );
 }
 
+const KOFI_PAGE_URL = "https://ko-fi.com/aleju03";
+
+function KofiSupportButton() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+  return (
+    <>
+      <a
+        href={KOFI_PAGE_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          setOpen(true);
+        }}
+        className="inline-flex items-center gap-1 rounded-full border border-osu-pink/25 bg-osu-pink/10 px-2 py-0.5 text-[10px] font-semibold text-osu-pink-light/80 hover:bg-osu-pink/20 hover:text-osu-pink-light transition-colors"
+      >
+        <Coffee className="h-3 w-3" />
+        support the server
+      </a>
+      {open ? (
+        <>
+          <div
+            className="fixed inset-0 z-[140] bg-black/55 backdrop-blur-[2px]"
+            onClick={() => setOpen(false)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="fixed left-1/2 top-1/2 z-[141] w-[min(400px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-osu-b3/50 px-4 py-3">
+              <div className="text-left">
+                <div className="text-sm font-bold text-white">Support mania-tracker</div>
+                <div className="text-[11px] text-osu-f1">
+                  Everything here runs on one paid server. Donations cover its cost.
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                aria-label="Close"
+                className="cursor-pointer rounded-md p-1 text-osu-f1 transition-colors hover:bg-osu-b3/60 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <iframe
+              src={`${KOFI_PAGE_URL}/?hidefeed=true&widget=true&embed=true&preview=true`}
+              title="Support aleju03 on Ko-fi"
+              className="block h-[min(620px,70vh)] w-full border-0 bg-[#f9f9f9]"
+            />
+          </div>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 function RootLayout() {
   const { auth, initialCountry, backendStatus, countryFeatures } = Route.useRouteContext();
   seedClientRootSlowContext({ auth, backendStatus, countryFeatures });
@@ -339,19 +408,24 @@ function RootLayout() {
               </main>
             </>
           )}
-          <footer className="px-4 py-2 text-center text-[10px] text-osu-pink-light/30">
+          <footer className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 px-4 py-2 text-center text-[10px] text-osu-pink-light/30">
+            <KofiSupportButton />
+            <span>·</span>
             <span title="Not affiliated with or endorsed by osu! or ppy Pty Ltd. All game data is fetched via the public osu! API.">
               not affiliated with ppy
             </span>
-            {" · made by "}
-            <a
-              href="https://osu.ppy.sh/users/7095193"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:text-osu-pink-light/60 transition-colors"
-            >
-              aleju03
-            </a>
+            <span>·</span>
+            <span>
+              made by{" "}
+              <a
+                href="https://osu.ppy.sh/users/7095193"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-osu-pink-light/60 transition-colors"
+              >
+                aleju03
+              </a>
+            </span>
           </footer>
         </PostHogProvider>
       </AuthContext.Provider>
