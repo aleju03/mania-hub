@@ -566,6 +566,7 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
      visible would show the previous card's face behind a failure overlay. */
   const showCanvas = (phase === "flipping" || phase === "shown") && !activeFallback && activeData !== null;
   const current = revealed[index] ?? null;
+  const trayEntries = revealed.slice(0, skipping ? revealed.length : index);
   const tierColor = current?.glowColor
     ? `rgb(${current.glowColor.r}, ${current.glowColor.g}, ${current.glowColor.b})`
     : "rgb(226, 232, 240)";
@@ -790,10 +791,14 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
         )}
       </div>
 
-      {/* Tray of already revealed cards */}
-      {revealed.length > (phase === "shown" ? 1 : 0) && (
+      {/* Tray of already revealed cards. Cut by index rather than by
+          dropping the last entry: the in-progress card is recorded before
+          its flip finishes, and letting that entry join the centered row
+          mid-flight shifts every tile sideways, so the flying card would
+          land beside its slot. While skipping, entries show as they land. */}
+      {trayEntries.length > 0 && (
         <div ref={trayRef} className="mt-6 flex items-center justify-center gap-2">
-          {revealed.slice(0, phase === "shown" ? revealed.length - 1 : revealed.length).map((entry, position) => (
+          {trayEntries.map((entry, position) => (
             <div
               key={`${entry.player.user.id}-${position}`}
               data-tray-index={position}
