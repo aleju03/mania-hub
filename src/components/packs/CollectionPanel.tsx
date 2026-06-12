@@ -36,6 +36,7 @@ interface CollectionPanelProps {
      clink and spawn the "+N" burst at the click point. */
   onRecycleCard: (userId: number) => number | Promise<number>;
   onRecycleWhole: (userId: number) => number | Promise<number>;
+  onRecycleWholeMany: (userIds: number[]) => number | Promise<number>;
   onRecycleAll: () => number | Promise<number>;
   onApplyMint: (userId: number, mint: CardMint) => boolean;
 }
@@ -366,6 +367,7 @@ export function CollectionPanel({
   syncStatus,
   onRecycleCard,
   onRecycleWhole,
+  onRecycleWholeMany,
   onRecycleAll,
   onApplyMint,
 }: CollectionPanelProps) {
@@ -383,6 +385,7 @@ export function CollectionPanel({
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [confirmBulk, setConfirmBulk] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [collectionPage, setCollectionPage] = useState(0);
   const collectionControlsRef = useRef<HTMLDivElement | null>(null);
   const [readyPageSignature, setReadyPageSignature] = useState("");
@@ -950,29 +953,35 @@ export function CollectionPanel({
             )}
             <button
               type="button"
-              disabled={selected.size === 0}
+              disabled={selected.size === 0 || bulkBusy}
               onClick={(event) => {
                 if (!confirmBulk) {
                   setConfirmBulk(true);
                   return;
                 }
                 const anchor = event.currentTarget;
+                setBulkBusy(true);
                 void (async () => {
-                  let gained = 0;
-                  for (const userId of selected) gained += await onRecycleWhole(userId);
-                  celebrateRecycle(gained, anchor);
-                  if (gained > 0 && useServerCollection) setServerRefreshKey((key) => key + 1);
-                  exitSelecting();
+                  try {
+                    const gained = await onRecycleWholeMany(Array.from(selected));
+                    celebrateRecycle(gained, anchor);
+                    if (gained > 0 && useServerCollection) setServerRefreshKey((key) => key + 1);
+                    exitSelecting();
+                  } finally {
+                    setBulkBusy(false);
+                  }
                 })();
               }}
               className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-[12px] font-bold text-white transition cursor-pointer disabled:cursor-default disabled:opacity-40 ${
                 confirmBulk ? "bg-osu-pink brightness-110" : "bg-osu-pink hover:brightness-110"
               }`}
             >
-              <Recycle className="h-3.5 w-3.5" />
-              {confirmBulk
-                ? `Sure? ${selected.size} ${selected.size === 1 ? "card leaves" : "cards leave"} the collection`
-                : `Recycle +${selectedShardTotal}`}
+              <Recycle className={`h-3.5 w-3.5 ${bulkBusy ? "animate-spin" : ""}`} />
+              {bulkBusy
+                ? "Recycling..."
+                : confirmBulk
+                  ? `Sure? ${selected.size} ${selected.size === 1 ? "card leaves" : "cards leave"} the collection`
+                  : `Recycle +${selectedShardTotal}`}
             </button>
           </div>
         </div>

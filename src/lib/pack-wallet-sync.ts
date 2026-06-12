@@ -152,15 +152,26 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
 export type ServerPackRecycleMode = "duplicates" | "whole" | "all_duplicates";
 
 export const recycleServerPackCollection = createServerFn({ method: "POST" })
-  .inputValidator((input: { mode?: unknown; cardUserId?: unknown }) => {
+  .inputValidator((input: { mode?: unknown; cardUserId?: unknown; cardUserIds?: unknown }) => {
     const mode = input?.mode === "duplicates" || input?.mode === "whole" || input?.mode === "all_duplicates"
       ? input.mode
       : null;
     const cardUserId = Number(input?.cardUserId);
-    if (!mode || (mode !== "all_duplicates" && (!Number.isFinite(cardUserId) || cardUserId <= 0))) {
+    const cardUserIds = mode === "whole" && Array.isArray(input?.cardUserIds)
+      ? input.cardUserIds
+          .slice(0, 500)
+          .map((id) => Math.floor(Number(id) || 0))
+          .filter((id) => id > 0)
+      : null;
+    const hasBulkIds = cardUserIds !== null && cardUserIds.length > 0;
+    if (!mode || (mode !== "all_duplicates" && !hasBulkIds && (!Number.isFinite(cardUserId) || cardUserId <= 0))) {
       throw new Error("Invalid recycle request.");
     }
-    return { mode, cardUserId: Number.isFinite(cardUserId) ? Math.floor(cardUserId) : undefined };
+    return {
+      mode,
+      cardUserId: Number.isFinite(cardUserId) ? Math.floor(cardUserId) : undefined,
+      cardUserIds: hasBulkIds ? cardUserIds : undefined,
+    };
   })
   .handler(async ({ data }): Promise<{ gained: number; payload: string; rev: number } | null> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");

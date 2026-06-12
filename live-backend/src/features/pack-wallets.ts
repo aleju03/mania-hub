@@ -405,10 +405,36 @@ export function shardValueForStoredTier(tier: string | null): number {
 export async function recyclePackCollectionCards(
   db: Db,
   userId: number,
-  options: { mode: PackRecycleMode; cardUserId?: number },
+  options: { mode: PackRecycleMode; cardUserId?: number; cardUserIds?: number[] },
   now = Date.now(),
 ): Promise<PackRecycleResult> {
   let gained = 0;
+
+  if (options.mode === "whole" && options.cardUserIds && options.cardUserIds.length > 0) {
+    const ids = [...new Set(options.cardUserIds.map((id) => Math.floor(Number(id) || 0)).filter((id) => id > 0))];
+    if (ids.length === 0) return { gained: 0, wallet: await getOrCreatePackWallet(db, userId, now) };
+    const placeholders = ids.map(() => "?").join(", ");
+    const row = (await exec(
+      db,
+      `select coalesce(sum(copies * ${shardValueSql("tier")}), 0) as gained
+       from pack_collection_cards
+       where owner_user_id = ? and card_user_id in (${placeholders}) and copies > 0`,
+      [userId, ...ids],
+    )).rows[0];
+    gained = Number(row?.gained) || 0;
+    if (gained > 0) {
+      await exec(
+        db,
+        `update pack_collection_cards
+         set recycled_copies = recycled_copies + copies,
+             copies = 0,
+             updated_at = ?
+         where owner_user_id = ? and card_user_id in (${placeholders}) and copies > 0`,
+        [now, userId, ...ids],
+      );
+    }
+    return { gained, wallet: await addWalletShards(db, userId, gained, now) };
+  }
 
   if (options.mode === "all_duplicates") {
     const row = (await exec(

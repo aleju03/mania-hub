@@ -42,6 +42,8 @@ export interface PackWalletApi {
   recycleCard: (userId: number) => number | Promise<number>;
   /* Recycles every copy; the card leaves the collection. */
   recycleWhole: (userId: number) => number | Promise<number>;
+  /* Whole-recycles a batch of cards in one server round-trip. */
+  recycleWholeMany: (userIds: number[]) => number | Promise<number>;
   recycleAll: () => number | Promise<number>;
   /* Backfills a recomputed mint (skills snapshot + tier) onto an owned
      card; used to upgrade legacy cards collected before snapshots existed. */
@@ -198,7 +200,11 @@ export function usePackWallet(): PackWalletApi {
     setSyncStatus("synced");
   };
 
-  const recycleOnServer = async (mode: "duplicates" | "whole" | "all_duplicates", userId?: number) => {
+  const recycleOnServer = async (
+    mode: "duplicates" | "whole" | "all_duplicates",
+    userId?: number,
+    userIds?: number[],
+  ) => {
     const sync = syncRef.current;
     if (!sync.enabled) return null;
     try {
@@ -210,7 +216,7 @@ export function usePackWallet(): PackWalletApi {
         await sync.pushPromise;
       }
       if (Object.keys(walletRef.current?.cards ?? {}).length > 0) return null;
-      const result = await recycleServerPackCollection({ data: { mode, cardUserId: userId } });
+      const result = await recycleServerPackCollection({ data: { mode, cardUserId: userId, cardUserIds: userIds } });
       if (!result) return null;
       commitServerWallet(result.payload, result.rev);
       return result.gained;
@@ -357,6 +363,27 @@ export function usePackWallet(): PackWalletApi {
       const result = recycleAllCopies(current, userId);
       if (result.gained > 0) commit(result.wallet);
       return result.gained;
+    },
+    recycleWholeMany: (userIds) => {
+      const recycleManyLocally = () => {
+        let working = walletRef.current;
+        if (!working) return 0;
+        let gained = 0;
+        for (const userId of userIds) {
+          const result = recycleAllCopies(working, userId);
+          gained += result.gained;
+          working = result.wallet;
+        }
+        if (gained > 0) commit(working);
+        return gained;
+      };
+      if (syncRef.current.enabled) {
+        return (async () => {
+          const gained = await recycleOnServer("whole", undefined, userIds);
+          return gained !== null ? gained : recycleManyLocally();
+        })();
+      }
+      return recycleManyLocally();
     },
     recycleAll: () => {
       if (syncRef.current.enabled) {

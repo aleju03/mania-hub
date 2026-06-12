@@ -501,13 +501,21 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         ? body.mode
         : null;
       const cardUserId = Number(body.cardUserId);
-      if (!mode || (mode !== "all_duplicates" && (!Number.isFinite(cardUserId) || cardUserId <= 0))) {
+      const cardUserIds = mode === "whole" && Array.isArray(body.cardUserIds)
+        ? body.cardUserIds
+            .slice(0, 500)
+            .map((id) => Math.floor(Number(id) || 0))
+            .filter((id) => id > 0)
+        : null;
+      const hasBulkIds = cardUserIds !== null && cardUserIds.length > 0;
+      if (!mode || (mode !== "all_duplicates" && !hasBulkIds && (!Number.isFinite(cardUserId) || cardUserId <= 0))) {
         sendJson(req, res, ctx, 400, { error: "invalid_recycle_request" });
         return true;
       }
       const result = await recyclePackCollectionCards(ctx.db, walletUserId, {
         mode,
         cardUserId: Number.isFinite(cardUserId) ? Math.floor(cardUserId) : undefined,
+        cardUserIds: hasBulkIds ? cardUserIds : undefined,
       });
       sendJson(req, res, ctx, 200, { gained: result.gained, payload: result.wallet.payload, rev: result.wallet.rev });
       return true;
