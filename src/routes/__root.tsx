@@ -363,7 +363,7 @@ function KofiSupportButton() {
               <div className="text-left">
                 <div className="text-sm font-bold text-white">Support mania-tracker</div>
                 <div className="text-[11px] text-osu-f1">
-                  Everything here runs on one paid server. Donations cover its cost.
+                  This site is a hobby project running on a single server. If it&apos;s been useful to you, you can help keep it up here.
                 </div>
               </div>
               <button
