@@ -26,6 +26,7 @@ import {
   formatNumber,
   formatAccuracy,
   formatTimeAgo,
+  formatDetailedTimeAgo,
   formatDate,
   formatPP,
 } from "../../lib/format";
@@ -1603,7 +1604,7 @@ export function PlayerProfilePage({
                     className="text-[11px] text-osu-l2"
                     title={new Date(user.last_visit).toLocaleString()}
                   >
-                    Last seen {formatTimeAgo(user.last_visit)}
+                    Last seen {formatDetailedTimeAgo(user.last_visit)}
                   </span>
                 ) : null}
               </div>
