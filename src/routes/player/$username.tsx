@@ -837,6 +837,7 @@ export function PlayerProfilePage({
   const [bestVisibleCount, setBestVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const [recentVisibleCount, setRecentVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const tabsRailRef = useRef<HTMLDivElement | null>(null);
+  const loadedProfileKeyRef = useRef<string | null>(null);
 
   useLayoutEffect(() => {
     const resetScroll = () => window.scrollTo({ top: 0, left: 0, behavior: "auto" });
@@ -872,27 +873,37 @@ export function PlayerProfilePage({
     const hasLoaderBestScores = loaderBestScores.length > 0;
     const seededUser = loaderSnapshot?.user ?? readCachedUser(username) ?? readPlayerShell(username);
 
-    setUser(seededUser);
-    setBest(loaderBestScores);
+    // Tab navigation re-runs this effect with the SSR cached snapshot, which
+    // can lag the freshly fetched one already on screen (the newest-top-play
+    // card would flip back to a stale play). Only re-seed user/best/insights
+    // state when the profile itself changed.
+    const profileKey = username.trim().toLowerCase();
+    const isNewProfile = loadedProfileKeyRef.current !== profileKey;
+    loadedProfileKeyRef.current = profileKey;
+
+    if (isNewProfile) {
+      setUser(seededUser);
+      setBest(loaderBestScores);
+      setProfileInsights(hasLoaderBestScores ? calculateUserProfileInsights(loaderBestScores) : null);
+      setBestWindowLoaded(hasLoaderBestScores);
+      setWaitingForSnapshotBest(!hasLoaderBestScores);
+      setLoadingUser(!seededUser);
+      setLoadingInsights(!hasLoaderBestScores);
+    }
     setRecent([]);
     setAboutHtml(null);
-    setProfileInsights(hasLoaderBestScores ? calculateUserProfileInsights(loaderBestScores) : null);
     setTab(normalizePlayerTab(initialTab));
     setKeyFilter("all");
     setBestModFilter({});
     setBestSort("pp");
     setBestAgeSort("newest");
-    setBestWindowLoaded(hasLoaderBestScores);
-    setWaitingForSnapshotBest(!hasLoaderBestScores);
     setUserError(null);
     setBestError(null);
     setRecentError(null);
     setAboutError(null);
     setInsightsError(null);
-    setLoadingUser(!seededUser);
     setLoadingRecent(false);
     setLoadingAbout(false);
-    setLoadingInsights(!hasLoaderBestScores);
     setRecentHasMore(false);
     setBestVisibleCount(INITIAL_SCORE_BATCH_SIZE);
     setRecentVisibleCount(INITIAL_SCORE_BATCH_SIZE);
