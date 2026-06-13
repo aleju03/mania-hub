@@ -126,7 +126,47 @@ describe("calculateUserProfileInsights", () => {
       { min: 700, max: null, count: 1, total: 4 },
       { min: 500, max: 599, count: 1, total: 4 },
       { min: 400, max: 499, count: 1, total: 4 },
-      { min: null, max: 399, count: 1, total: 4 },
+      { min: 300, max: 399, count: 1, total: 4 },
+    ]);
+  });
+
+  it("uses smaller pp bands for lower-pp profiles", () => {
+    const insights = calculateUserProfileInsights([
+      createScore({
+        id: 1,
+        cs: 4,
+        bpm: 120,
+        created_at: "2025-01-01T00:00:00Z",
+        pp: 138,
+      }),
+      createScore({
+        id: 2,
+        cs: 4,
+        bpm: 130,
+        created_at: "2025-01-02T00:00:00Z",
+        pp: 103,
+      }),
+      createScore({
+        id: 3,
+        cs: 4,
+        bpm: 140,
+        created_at: "2025-01-03T00:00:00Z",
+        pp: 77,
+      }),
+      createScore({
+        id: 4,
+        cs: 4,
+        bpm: 150,
+        created_at: "2025-01-04T00:00:00Z",
+        pp: 28,
+      }),
+    ]);
+
+    expect(insights.ppRange).toEqual({ top: 138, bottom: 28 });
+    expect(insights.ppDistribution).toEqual([
+      { min: 100, max: null, count: 2, total: 4 },
+      { min: 50, max: 99, count: 1, total: 4 },
+      { min: null, max: 49, count: 1, total: 4 },
     ]);
   });
 });

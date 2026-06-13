@@ -1,8 +1,12 @@
 import { getModAcronyms, getScoreDisplayValues, getScoreRate, getScoreTimestamp } from "./score";
 import type { InsightScoreSnapshot, OsuScore, UserProfileInsights } from "./types";
 
-const PP_DISTRIBUTION_MIN_THRESHOLD = 400;
-const PP_DISTRIBUTION_STEP = 100;
+function getPpDistributionStep(top: number): number {
+  if (top < 250) return 50;
+  if (top < 1000) return 100;
+  if (top < 2000) return 250;
+  return 500;
+}
 
 function getTopCountEntry(counts: Map<string, number>, total: number): { label: string; count: number; total: number } | null {
   const entries = [...counts.entries()];
@@ -35,14 +39,14 @@ function buildPpDistribution(ppValues: number[]): UserProfileInsights["ppDistrib
   if (!ppValues.length) return [];
 
   const top = Math.max(...ppValues);
-  const maxThreshold = Math.max(
-    PP_DISTRIBUTION_MIN_THRESHOLD,
-    Math.floor(top / PP_DISTRIBUTION_STEP) * PP_DISTRIBUTION_STEP,
-  );
+  const bottom = Math.min(...ppValues);
+  const step = getPpDistributionStep(top);
+  const maxThreshold = Math.max(step, Math.floor(top / step) * step);
+  const minThreshold = Math.max(step, Math.floor(bottom / step) * step);
   const total = ppValues.length;
   const buckets: UserProfileInsights["ppDistribution"] = [];
-  for (let threshold = maxThreshold; threshold >= PP_DISTRIBUTION_MIN_THRESHOLD; threshold -= PP_DISTRIBUTION_STEP) {
-    const upper = threshold === maxThreshold ? null : threshold + PP_DISTRIBUTION_STEP;
+  for (let threshold = maxThreshold; threshold >= minThreshold; threshold -= step) {
+    const upper = threshold === maxThreshold ? null : threshold + step;
     const count = ppValues.filter((pp) => pp >= threshold && (upper == null || pp < upper)).length;
     if (count > 0) {
       buckets.push({
@@ -54,11 +58,11 @@ function buildPpDistribution(ppValues: number[]): UserProfileInsights["ppDistrib
     }
   }
 
-  const belowCount = ppValues.filter((pp) => pp < PP_DISTRIBUTION_MIN_THRESHOLD).length;
+  const belowCount = ppValues.filter((pp) => pp < minThreshold).length;
   if (belowCount > 0) {
     buckets.push({
       min: null,
-      max: PP_DISTRIBUTION_MIN_THRESHOLD - 1,
+      max: minThreshold - 1,
       count: belowCount,
       total,
     });

@@ -1620,10 +1620,10 @@ export function PlayerProfilePage({
                       </div>
 
                       <div className="mt-4 space-y-2">
-                        {ppDistribution.map((entry) => {
+                        {ppDistribution.map((entry, index) => {
                           const pct = ppTotal > 0 ? (entry.count / ppTotal) * 100 : 0;
                           const fillWidth = entry.count > 0 ? Math.max(4, pct) : 0;
-                          const color = getPpDistributionColor(entry.min);
+                          const color = getPpDistributionColor(index, entry.min == null);
 
                           return (
                             <div key={`${entry.min ?? "below"}:${entry.max ?? "up"}`} className="rounded-lg px-2.5 py-2 transition-colors hover:bg-osu-b3/25">
@@ -3960,20 +3960,18 @@ function ExpandHint() {
   );
 }
 
-const PP_THRESHOLD_COLORS = [
-  "var(--color-osu-green-light)",
-  "var(--color-osu-blue)",
-  "var(--color-osu-yellow)",
-  "var(--color-osu-orange)",
-  "var(--color-osu-pink-light)",
+const PP_DISTRIBUTION_COLORS = [
   "var(--color-osu-purple-light)",
+  "var(--color-osu-pink-light)",
+  "var(--color-osu-orange)",
+  "var(--color-osu-yellow)",
+  "var(--color-osu-blue)",
+  "var(--color-osu-green-light)",
 ];
 
-function getPpDistributionColor(min: number | null): string {
-  if (min == null) return "var(--color-osu-f1)";
-
-  const index = Math.max(0, Math.floor((min - 400) / 100));
-  return PP_THRESHOLD_COLORS[Math.min(index, PP_THRESHOLD_COLORS.length - 1)];
+function getPpDistributionColor(index: number, isBelowBucket: boolean): string {
+  if (isBelowBucket) return "var(--color-osu-f1)";
+  return PP_DISTRIBUTION_COLORS[Math.min(index, PP_DISTRIBUTION_COLORS.length - 1)];
 }
 
 function formatPpDistributionLabel(entry: UserProfileInsights["ppDistribution"][number]): string {
