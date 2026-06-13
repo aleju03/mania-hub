@@ -2351,7 +2351,7 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
       <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-6 text-center">
         <div className="text-sm font-semibold text-osu-l2">No activity data for this player</div>
         <div className="mt-1.5 text-[13px] text-osu-f1">
-          Plays are only recorded for the top players of each tracked country, and this player isn't currently among them.
+          Plays are only recorded for the top 100 players of each tracked country, and this player isn't currently among them.
         </div>
       </div>
     );
