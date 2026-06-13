@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { Globe, LogIn, LogOut, Settings } from "lucide-react";
+import { Globe, LogIn, LogOut, Settings, UserRound } from "lucide-react";
 import { SearchInput } from "../ui/SearchInput";
 import { Avatar } from "../ui/Avatar";
 import { CountrySelector } from "./CountrySelector";
@@ -485,9 +485,19 @@ export function Nav() {
                     <div className="text-[10px] font-medium text-osu-l3 leading-tight">Signed in as</div>
                     <div className="text-[12px] font-semibold text-white truncate">{auth.viewer.username}</div>
                   </div>
+                  <Link
+                    to="/player/$username"
+                    params={{ username: auth.viewer.username }}
+                    onClick={() => setUserMenuOpen(false)}
+                    className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
+                    role="menuitem"
+                  >
+                    <UserRound className="h-3.5 w-3.5" />
+                    Profile
+                  </Link>
                   <a
                     href={logoutHref}
-                    className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
+                    className="flex items-center gap-2 border-t border-osu-b3/30 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
                     role="menuitem"
                   >
                     <LogOut className="h-3.5 w-3.5" />
@@ -625,19 +635,30 @@ export function Nav() {
                 <CountrySelector className="w-full" selectedCountry={selectedCountry} onSelect={handleCountrySelect} showGlobal={liveBackendConfigured} />
                 <ThemePicker variant="mobile" />
                 {auth.viewer ? (
-                  <a
-                    href={logoutHref}
-                    className="flex w-full items-center gap-3 rounded-lg border border-osu-b3/40 bg-osu-b4/60 py-1.5 pl-1.5 pr-3 text-[12px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b4 hover:text-white"
-                  >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60">
-                      <Avatar url={auth.viewer.avatarUrl} userId={auth.viewer.id} size={36} />
-                    </span>
-                    <span className="flex flex-col items-start leading-tight">
-                      <span className="truncate text-white">{auth.viewer.username}</span>
-                      <span className="text-[10px] font-normal text-osu-l3">Sign out</span>
-                    </span>
-                    <LogOut className="ml-auto h-4 w-4 opacity-70" />
-                  </a>
+                  <div className="space-y-2">
+                    <Link
+                      to="/player/$username"
+                      params={{ username: auth.viewer.username }}
+                      onClick={() => setMenuOpen(false)}
+                      className="flex w-full items-center gap-3 rounded-lg border border-osu-b3/40 bg-osu-b4/60 py-1.5 pl-1.5 pr-3 text-[12px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b4 hover:text-white"
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60">
+                        <Avatar url={auth.viewer.avatarUrl} userId={auth.viewer.id} size={36} />
+                      </span>
+                      <span className="flex min-w-0 flex-col items-start leading-tight">
+                        <span className="max-w-full truncate text-white">{auth.viewer.username}</span>
+                        <span className="text-[10px] font-normal text-osu-l3">Profile</span>
+                      </span>
+                      <UserRound className="ml-auto h-4 w-4 opacity-70" />
+                    </Link>
+                    <a
+                      href={logoutHref}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-osu-b3/40 bg-osu-b4/60 px-3 py-2 text-[12px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b4 hover:text-white"
+                    >
+                      <LogOut className="h-4 w-4 opacity-70" />
+                      Logout
+                    </a>
+                  </div>
                 ) : auth.loginSuggested ? (
                   <a
                     href={loginHref}

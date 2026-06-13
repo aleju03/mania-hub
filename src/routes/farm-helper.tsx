@@ -34,10 +34,56 @@ type SortDirection = "asc" | "desc";
 interface FarmHelperSearch {
   user?: string;
   key?: LiveFarmHelperKeyMode;
+  reason?: ReasonFilter;
+  sort?: SortMode;
+  dir?: SortDirection;
+  page?: number;
 }
 
 function parseKeyMode(value: unknown): LiveFarmHelperKeyMode | undefined {
   return value === "4k" || value === "7k" || value === "any" ? value : undefined;
+}
+
+function parseReasonFilter(value: unknown): ReasonFilter {
+  return value === "missing" || value === "improve" || value === "stale" ? value : "all";
+}
+
+function parseSortMode(value: unknown): SortMode {
+  return value === "popularity" || value === "players" || value === "difficulty" ? value : "gain";
+}
+
+function parseSortDirection(value: unknown): SortDirection {
+  return value === "asc" ? "asc" : "desc";
+}
+
+function parsePage(value: unknown): number {
+  const page = Math.floor(Number(value));
+  return Number.isFinite(page) && page > 0 ? page : 0;
+}
+
+function buildFarmHelperSearch({
+  user,
+  key,
+  reason,
+  sort,
+  dir,
+  page,
+}: {
+  user?: string | null;
+  key?: LiveFarmHelperKeyMode;
+  reason?: ReasonFilter;
+  sort?: SortMode;
+  dir?: SortDirection;
+  page?: number;
+}): FarmHelperSearch {
+  return {
+    user: user ?? undefined,
+    key: key && key !== "any" ? key : undefined,
+    reason: reason && reason !== "all" ? reason : undefined,
+    sort: sort && sort !== "gain" ? sort : undefined,
+    dir: dir && dir !== "desc" ? dir : undefined,
+    page: page && page > 0 ? Math.floor(page) : undefined,
+  };
 }
 
 function isAbortError(error: unknown): boolean {
@@ -57,9 +103,13 @@ const searchPlayers = async (q: string) => {
 };
 
 export const Route = createFileRoute("/farm-helper")({
-  validateSearch: (search: Record<string, unknown>): FarmHelperSearch => ({
+  validateSearch: (search: Record<string, unknown>): FarmHelperSearch => buildFarmHelperSearch({
     user: typeof search.user === "string" && search.user.trim() ? search.user.trim().slice(0, 60) : undefined,
     key: parseKeyMode(search.key),
+    reason: parseReasonFilter(search.reason),
+    sort: parseSortMode(search.sort),
+    dir: parseSortDirection(search.dir),
+    page: parsePage(search.page),
   }),
   head: ({ match }) => pageSeo({
     title: "Farm Helper",
@@ -95,19 +145,45 @@ function FarmHelperPage() {
   const [snapshot, setSnapshot] = useState<LiveFarmHelperSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [reasonFilter, setReasonFilter] = useState<ReasonFilter>("all");
-  const [sortMode, setSortMode] = useState<SortMode>("gain");
-  const [sortDir, setSortDir] = useState<SortDirection>("desc");
 
   const subjectKey = search.user ?? null;
   const keyMode: LiveFarmHelperKeyMode = search.key ?? "any";
+  const reasonFilter: ReasonFilter = search.reason ?? "all";
+  const sortMode: SortMode = search.sort ?? "gain";
+  const sortDir: SortDirection = search.dir ?? "desc";
+  const page = search.page ?? 0;
+
+  const navigateFarmHelper = ({
+    user = subjectKey,
+    key = keyMode,
+    reason = reasonFilter,
+    sort = sortMode,
+    dir = sortDir,
+    page: nextPage = page,
+    replace = true,
+  }: {
+    user?: string | null;
+    key?: LiveFarmHelperKeyMode;
+    reason?: ReasonFilter;
+    sort?: SortMode;
+    dir?: SortDirection;
+    page?: number;
+    replace?: boolean;
+  }) => {
+    navigate({
+      to: "/farm-helper",
+      search: buildFarmHelperSearch({ user, key, reason, sort, dir, page: nextPage }),
+      replace,
+      resetScroll: false,
+    });
+  };
 
   const setSubject = (key: string | null) => {
-    navigate({ to: "/farm-helper", search: { user: key ?? undefined, key: keyMode === "any" ? undefined : keyMode }, replace: false });
+    navigateFarmHelper({ user: key, page: 0, replace: false });
   };
 
   const setKeyMode = (next: LiveFarmHelperKeyMode) => {
-    navigate({ to: "/farm-helper", search: { user: subjectKey ?? undefined, key: next === "any" ? undefined : next }, replace: true });
+    navigateFarmHelper({ key: next, page: 0 });
   };
 
   useEffect(() => {
@@ -141,7 +217,6 @@ function FarmHelperPage() {
     };
   }, [liveEnabled, subjectKey, keyMode]);
 
-  const [page, setPage] = useState(0);
   const [farmersFor, setFarmersFor] = useState<LiveFarmHelperRec | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -165,17 +240,12 @@ function FarmHelperPage() {
     return sorted;
   }, [snapshot, reasonFilter, sortMode, sortDir]);
 
-  // Reset to the first page whenever the result set changes underneath us.
-  useEffect(() => {
-    setPage(0);
-  }, [subjectKey, keyMode, reasonFilter, sortMode, sortDir]);
-
   const pageCount = Math.ceil(recs.length / PAGE_SIZE);
   const safePage = Math.min(page, Math.max(0, pageCount - 1));
   const pageRecs = recs.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
 
   const goToPage = (next: number) => {
-    setPage(next);
+    navigateFarmHelper({ page: next });
     listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -233,12 +303,15 @@ function FarmHelperPage() {
                     </div>
                     <Filters
                       reasonFilter={reasonFilter}
-                      onReason={setReasonFilter}
+                      onReason={(next) => navigateFarmHelper({ reason: next, page: 0 })}
                       sortMode={sortMode}
                       sortDir={sortDir}
                       onSort={(next) => {
-                        setSortDir(sortMode === next ? (sortDir === "desc" ? "asc" : "desc") : "desc");
-                        setSortMode(next);
+                        navigateFarmHelper({
+                          sort: next,
+                          dir: sortMode === next ? (sortDir === "desc" ? "asc" : "desc") : "desc",
+                          page: 0,
+                        });
                       }}
                       counts={countReasons(snapshot.recs)}
                     />
