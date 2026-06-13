@@ -1,7 +1,7 @@
 import { Link, createFileRoute, useLocation, useNavigate } from "@tanstack/react-router";
 import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Pencil } from "lucide-react";
+import { Pencil, X } from "lucide-react";
 import {
   getUser,
   getUserScoresBestWindow,
@@ -833,6 +833,7 @@ export function PlayerProfilePage({
   const [includeNoModUsage, setIncludeNoModUsage] = useState(true);
   const [hoveredMod, setHoveredMod] = useState<string | null>(null);
   const [bpmModalOpen, setBpmModalOpen] = useState(false);
+  const [ppModalOpen, setPpModalOpen] = useState(false);
   const [recentHasMore, setRecentHasMore] = useState(false);
   const [bestVisibleCount, setBestVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const [recentVisibleCount, setRecentVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
@@ -850,17 +851,18 @@ export function PlayerProfilePage({
   }, [username]);
 
   useEffect(() => {
-    if (!avatarOpen && !modModalOpen && !bpmModalOpen) return;
+    if (!avatarOpen && !modModalOpen && !bpmModalOpen && !ppModalOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setAvatarOpen(false);
         setModModalOpen(false);
         setBpmModalOpen(false);
+        setPpModalOpen(false);
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [avatarOpen, modModalOpen, bpmModalOpen]);
+  }, [avatarOpen, modModalOpen, bpmModalOpen, ppModalOpen]);
 
   useEffect(() => {
     const activeTab = tabsRailRef.current?.querySelector<HTMLButtonElement>(`[data-player-tab="${tab}"]`);
@@ -1566,6 +1568,95 @@ export function PlayerProfilePage({
         )}
       </AnimatePresence>
 
+      {/* PP distribution modal */}
+      <AnimatePresence>
+        {ppModalOpen && profileInsights?.ppRange && profileInsights.ppDistribution.length > 0 && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 sm:backdrop-blur-sm cursor-pointer p-4"
+            onClick={() => setPpModalOpen(false)}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="PP distribution"
+              className="modal-card-mobile-safe relative isolate bg-osu-b4 border border-osu-b3/20 rounded-2xl w-[420px] max-w-full max-h-[85vh] overflow-hidden shadow-[0_12px_60px_rgba(0,0,0,0.7)] cursor-default"
+              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.16, ease: "easeOut" }}
+            >
+              <div className="pointer-events-none absolute inset-0 bg-osu-b4" aria-hidden="true" />
+              <button
+                type="button"
+                onClick={() => setPpModalOpen(false)}
+                aria-label="Close"
+                className="absolute top-3 right-3 z-20 w-7 h-7 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
+              >
+                <X size={14} />
+              </button>
+              <div className="relative z-10 max-h-[85vh] overflow-y-auto p-5 [scrollbar-gutter:stable]">
+                {(() => {
+                  const ppDistribution = profileInsights.ppDistribution;
+                  const ppTotal = ppDistribution[0]?.total ?? profileInsights.sampleSize;
+
+                  return (
+                    <>
+                      <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">PP Distribution</div>
+                      <div className="mt-0.5 text-[11px] text-osu-f1/60">
+                        across {ppTotal} profile top plays with PP
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                        <span className="text-2xl font-bold text-osu-pink-light tabular-nums">{Math.round(profileInsights.ppRange.top)}</span>
+                        <span className="text-[11px] text-osu-f1">top pp</span>
+                        <span className="text-osu-f1/40">/</span>
+                        <span className="text-xl font-bold text-white tabular-nums">{Math.round(profileInsights.ppRange.bottom)}</span>
+                        <span className="text-[11px] text-osu-f1">bottom pp</span>
+                      </div>
+
+                      <div className="mt-4 space-y-2">
+                        {ppDistribution.map((entry) => {
+                          const pct = ppTotal > 0 ? (entry.count / ppTotal) * 100 : 0;
+                          const fillWidth = entry.count > 0 ? Math.max(4, pct) : 0;
+                          const color = getPpDistributionColor(entry.min);
+
+                          return (
+                            <div key={`${entry.min ?? "below"}:${entry.max ?? "up"}`} className="rounded-lg px-2.5 py-2 transition-colors hover:bg-osu-b3/25">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-baseline gap-1.5">
+                                  <span className="text-sm font-bold text-white tabular-nums">{formatPpDistributionLabel(entry)}</span>
+                                  <span className="text-[10px] text-osu-f1">pp</span>
+                                </div>
+                                <div className="flex items-baseline gap-1.5 tabular-nums">
+                                  <span className="text-sm font-bold text-white">{entry.count}</span>
+                                  <span className="text-[10px] text-osu-f1">plays</span>
+                                  <span className="text-[10px] text-osu-f1/60">({formatPpDistributionPercent(entry.count, ppTotal)})</span>
+                                </div>
+                              </div>
+                              <div className="mt-1.5 h-1.5 rounded-full bg-osu-b3/40 overflow-hidden">
+                                <div
+                                  className="h-full rounded-full"
+                                  style={{ width: `${fillWidth}%`, backgroundColor: color }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Cover + Avatar */}
       <div className="relative h-[220px] sm:h-[280px] overflow-hidden bg-osu-b4">
         <img
@@ -1656,6 +1747,7 @@ export function PlayerProfilePage({
               </div>
             ) : displayedProfileInsights && displayedProfileInsights.sampleSize > 0 ? (() => {
               const profileInsights = displayedProfileInsights;
+              const hasPpDistribution = profileInsights.ppRange != null && profileInsights.ppDistribution.length > 0;
               return (
               <div className="space-y-3">
                 {/* Row 1: Key Split + Most Used Mod + BPM + PP Range */}
@@ -1717,8 +1809,16 @@ export function PlayerProfilePage({
                       <div className="mt-1.5 text-sm text-osu-f1">-</div>
                     )}
                   </div>
-                  <div className="bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 min-h-[90px]">
-                    <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">PP Range</div>
+                  <button
+                    type="button"
+                    className={`bg-osu-b4 rounded-xl p-3.5 border border-osu-b3/20 min-h-[90px] w-full text-left group focus:outline-none focus-visible:border-osu-pink/60 focus-visible:ring-2 focus-visible:ring-osu-pink/25 ${hasPpDistribution ? "cursor-pointer hover:border-osu-b3/50 transition-colors" : "cursor-default"}`}
+                    onClick={hasPpDistribution ? () => setPpModalOpen(true) : undefined}
+                    disabled={!hasPpDistribution}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">PP Range</div>
+                      {hasPpDistribution && <ExpandHint />}
+                    </div>
                     {profileInsights.ppRange ? (
                       <>
                         <div className="mt-1 flex items-baseline gap-1.5">
@@ -1732,7 +1832,7 @@ export function PlayerProfilePage({
                     ) : (
                       <div className="mt-1.5 text-sm text-osu-f1">-</div>
                     )}
-                  </div>
+                  </button>
                 </div>
 
                 {/* Row 2: Newest + Oldest top play with map backgrounds */}
@@ -3858,6 +3958,36 @@ function ExpandHint() {
       <path d="M3.5 2 6.5 5 3.5 8" />
     </svg>
   );
+}
+
+const PP_THRESHOLD_COLORS = [
+  "var(--color-osu-green-light)",
+  "var(--color-osu-blue)",
+  "var(--color-osu-yellow)",
+  "var(--color-osu-orange)",
+  "var(--color-osu-pink-light)",
+  "var(--color-osu-purple-light)",
+];
+
+function getPpDistributionColor(min: number | null): string {
+  if (min == null) return "var(--color-osu-f1)";
+
+  const index = Math.max(0, Math.floor((min - 400) / 100));
+  return PP_THRESHOLD_COLORS[Math.min(index, PP_THRESHOLD_COLORS.length - 1)];
+}
+
+function formatPpDistributionLabel(entry: UserProfileInsights["ppDistribution"][number]): string {
+  if (entry.min == null) return `below ${(entry.max ?? 399) + 1}`;
+  if (entry.max == null) return `${entry.min}+`;
+  return `${entry.min}-${entry.max}`;
+}
+
+function formatPpDistributionPercent(count: number, total: number): string {
+  if (total <= 0) return "0%";
+  return `${((count / total) * 100).toLocaleString("en-US", {
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 0,
+  })}%`;
 }
 
 function BpmExtremeRow({ label, bpm, snapshot }: { label: string; bpm: number; snapshot: InsightScoreSnapshot }) {

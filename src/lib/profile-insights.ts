@@ -1,6 +1,9 @@
 import { getModAcronyms, getScoreDisplayValues, getScoreRate, getScoreTimestamp } from "./score";
 import type { InsightScoreSnapshot, OsuScore, UserProfileInsights } from "./types";
 
+const PP_DISTRIBUTION_MIN_THRESHOLD = 400;
+const PP_DISTRIBUTION_STEP = 100;
+
 function getTopCountEntry(counts: Map<string, number>, total: number): { label: string; count: number; total: number } | null {
   const entries = [...counts.entries()];
   if (!entries.length) return null;
@@ -26,6 +29,42 @@ function getMedian(values: number[]): number | null {
 function getTimestampMs(score: OsuScore): number {
   const timestamp = getScoreTimestamp(score);
   return timestamp ? new Date(timestamp).getTime() : 0;
+}
+
+function buildPpDistribution(ppValues: number[]): UserProfileInsights["ppDistribution"] {
+  if (!ppValues.length) return [];
+
+  const top = Math.max(...ppValues);
+  const maxThreshold = Math.max(
+    PP_DISTRIBUTION_MIN_THRESHOLD,
+    Math.floor(top / PP_DISTRIBUTION_STEP) * PP_DISTRIBUTION_STEP,
+  );
+  const total = ppValues.length;
+  const buckets: UserProfileInsights["ppDistribution"] = [];
+  for (let threshold = maxThreshold; threshold >= PP_DISTRIBUTION_MIN_THRESHOLD; threshold -= PP_DISTRIBUTION_STEP) {
+    const upper = threshold === maxThreshold ? null : threshold + PP_DISTRIBUTION_STEP;
+    const count = ppValues.filter((pp) => pp >= threshold && (upper == null || pp < upper)).length;
+    if (count > 0) {
+      buckets.push({
+        min: threshold,
+        max: upper == null ? null : upper - 1,
+        count,
+        total,
+      });
+    }
+  }
+
+  const belowCount = ppValues.filter((pp) => pp < PP_DISTRIBUTION_MIN_THRESHOLD).length;
+  if (belowCount > 0) {
+    buckets.push({
+      min: null,
+      max: PP_DISTRIBUTION_MIN_THRESHOLD - 1,
+      count: belowCount,
+      total,
+    });
+  }
+
+  return buckets;
 }
 
 function scoreToSnapshot(score: OsuScore): InsightScoreSnapshot {
@@ -87,7 +126,7 @@ export function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfil
     .map(([keyCount, count]) => ({ keyCount, count }))
     .sort((a, b) => b.count - a.count || a.keyCount - b.keyCount);
   datedScores.sort((a, b) => a.ms - b.ms);
-  const sortedPpValues = ppValues.sort((a, b) => b - a);
+  const sortedPpValues = [...ppValues].sort((a, b) => b - a);
   const bpms = bpmEntries.map((e) => e.bpm);
 
   let bpmRange: UserProfileInsights["bpmRange"] = null;
@@ -135,5 +174,6 @@ export function calculateUserProfileInsights(bestScores: OsuScore[]): UserProfil
           bottom: sortedPpValues[sortedPpValues.length - 1],
         }
       : null,
+    ppDistribution: buildPpDistribution(sortedPpValues),
   };
 }

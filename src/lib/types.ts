@@ -497,6 +497,13 @@ export interface UserProfileBpmKeyBucket {
   count: number;
 }
 
+export interface UserProfilePpDistributionBucket {
+  min: number | null;
+  max: number | null;
+  count: number;
+  total: number;
+}
+
 export interface UserProfileInsights {
   sampleSize: number;
   keySplit: UserProfileKeyBucket[];
@@ -516,6 +523,7 @@ export interface UserProfileInsights {
     top: number;
     bottom: number;
   } | null;
+  ppDistribution: UserProfilePpDistributionBucket[];
 }
 
 export interface HomePageData {

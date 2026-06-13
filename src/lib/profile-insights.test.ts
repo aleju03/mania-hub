@@ -82,6 +82,14 @@ describe("calculateUserProfileInsights", () => {
         title: "Newest NM",
       }),
       createScore({
+        id: 5,
+        cs: 7,
+        bpm: 170,
+        created_at: "2025-02-15T00:00:00Z",
+        pp: 350,
+        title: "Lower PP",
+      }),
+      createScore({
         id: 4,
         cs: 4,
         bpm: 90,
@@ -92,20 +100,20 @@ describe("calculateUserProfileInsights", () => {
       }),
     ]);
 
-    expect(insights.sampleSize).toBe(3);
+    expect(insights.sampleSize).toBe(4);
     expect(insights.keySplit).toEqual([
       { keyCount: 4, count: 2 },
-      { keyCount: 7, count: 1 },
+      { keyCount: 7, count: 2 },
     ]);
     expect(insights.mostUsedMod).toEqual({ label: "DT", count: 1, total: 2 });
     expect(insights.modBreakdown).toEqual([
-      { label: "DT", count: 1, total: 3 },
-      { label: "HD", count: 1, total: 3 },
+      { label: "DT", count: 1, total: 4 },
+      { label: "HD", count: 1, total: 4 },
     ]);
-    expect(insights.medianBpm).toBe(200);
+    expect(insights.medianBpm).toBe(185);
     expect(insights.bpmByKeyMode).toEqual([
       { keyCount: 4, median: 235, count: 2 },
-      { keyCount: 7, median: 120, count: 1 },
+      { keyCount: 7, median: 145, count: 2 },
     ]);
     expect(insights.bpmRange?.min).toBe(120);
     expect(insights.bpmRange?.minScore.title).toBe("Middle HD");
@@ -113,6 +121,12 @@ describe("calculateUserProfileInsights", () => {
     expect(insights.bpmRange?.maxScore.title).toBe("Old DT");
     expect(insights.oldestTopPlay?.title).toBe("Old DT");
     expect(insights.newestTopPlay?.title).toBe("Newest NM");
-    expect(insights.ppRange).toEqual({ top: 700, bottom: 450 });
+    expect(insights.ppRange).toEqual({ top: 700, bottom: 350 });
+    expect(insights.ppDistribution).toEqual([
+      { min: 700, max: null, count: 1, total: 4 },
+      { min: 500, max: 599, count: 1, total: 4 },
+      { min: 400, max: 499, count: 1, total: 4 },
+      { min: null, max: 399, count: 1, total: 4 },
+    ]);
   });
 });
