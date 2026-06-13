@@ -1020,6 +1020,51 @@ describe("live backend", () => {
     expect(Number((await exec(db, "select count(*) as count from score_events where source = 'osu_scores_fallback'")).rows[0].count)).toBe(2);
   });
 
+  it("resets a rejected osu scores fallback cursor and retries from the current page", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-30T12:00:00.000Z"));
+    const { db, ingestor } = await setup(["CR"]);
+    const now = Date.now();
+    const config = {
+      oscSocketStaleMs: 10 * 60_000,
+      enableOsuScoresFallback: true,
+      osuScoresFallbackIntervalMs: 5_000,
+      trackedCountries: ["CR"],
+      prewarmCountries: [],
+      mapsWarmCountries: [],
+      countryWarmTtlMs: 24 * 60 * 60 * 1000,
+    };
+    await exec(
+      db,
+      "insert into live_meta (key, value_json, updated_at) values ('osu_scores_fallback_cursor_string', ?, ?)",
+      [JSON.stringify("cursor:stale"), new Date(now - 60_000).toISOString()],
+    );
+    const osu = {
+      getScores: vi.fn(async (_ruleset: string, cursorString: string | null) => {
+        if (cursorString === "cursor:stale") {
+          throw new OsuApiError(422, "/scores?ruleset=mania&cursor_string=cursor%3Astale");
+        }
+        expect(cursorString).toBeNull();
+        return { scores: [], cursor_string: "cursor:fresh" };
+      }),
+    };
+
+    const result = await runScoresFallbackPage(db, config, osu, ingestor, {
+      now,
+      oscStatus: {
+        connected: true,
+        lastBatchAt: "2026-05-30T11:00:00.000Z",
+        lastError: null,
+        stale: true,
+      },
+    });
+
+    expect(osu.getScores).toHaveBeenNthCalledWith(1, "mania", "cursor:stale", "osu_scores_fallback");
+    expect(osu.getScores).toHaveBeenNthCalledWith(2, "mania", null, "osu_scores_fallback");
+    expect(result).toMatchObject({ ran: true, fetched: 0, cursorString: null, nextCursorString: "cursor:fresh" });
+    expect(JSON.parse(String((await exec(db, "select value_json from live_meta where key = 'osu_scores_fallback_cursor_string'")).rows[0].value_json))).toBe("cursor:fresh");
+  });
+
   it("fans osu scores fallback rows into per-user recent polling", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-30T12:00:00.000Z"));

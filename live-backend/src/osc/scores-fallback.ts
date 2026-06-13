@@ -3,7 +3,8 @@ import { getActiveCountryCodes } from "../countries.js";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import type { ScoreIngestor } from "../ingest/score-ingestor.js";
-import type { OsuApiClient } from "../osu/client.js";
+import { logWarn } from "../logger.js";
+import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import type { OscScore } from "../shared/types.js";
 import type { OscStatus } from "./client.js";
 
@@ -77,9 +78,11 @@ export async function runScoresFallbackPage(
     return recordResult(db, emptyResult("osc_fresh", cursorString), now);
   }
 
-  const response = await osu.getScores("mania", cursorString, FALLBACK_CALLER);
+  const fetchResult = await getScoresWithCursorRecovery(db, osu, cursorString);
+  const response = fetchResult.response;
+  const effectiveCursorString = fetchResult.cursorString;
   const scores = normalizeScores(response.scores ?? []);
-  const nextCursorString = response.cursor_string ?? cursorString;
+  const nextCursorString = response.cursor_string ?? effectiveCursorString;
   if (nextCursorString) await setStoredCursorString(db, nextCursorString, now);
   const candidateScores = await filterCandidateScores(db, config, scores);
   const latestCandidateEndedAt = getLatestEndedAt(candidateScores);
@@ -96,7 +99,7 @@ export async function runScoresFallbackPage(
     candidates: candidateScores.length,
     inserted: ingestResult.inserted,
     skipped: ingestResult.skipped,
-    cursorString,
+    cursorString: effectiveCursorString,
     nextCursorString,
     latestEndedAt: getLatestEndedAt(scores),
     latestCandidateEndedAt,
@@ -148,12 +151,37 @@ async function getStoredCursorString(db: Db): Promise<string | null> {
   return parseJson<string | null>(row?.value_json, null);
 }
 
+async function getScoresWithCursorRecovery(
+  db: Db,
+  osu: Pick<OsuApiClient, "getScores">,
+  cursorString: string | null,
+): Promise<{ response: Awaited<ReturnType<OsuApiClient["getScores"]>>; cursorString: string | null }> {
+  try {
+    return {
+      response: await osu.getScores("mania", cursorString, FALLBACK_CALLER),
+      cursorString,
+    };
+  } catch (error) {
+    if (!(error instanceof OsuApiError) || error.status !== 422 || !cursorString) throw error;
+    await clearStoredCursorString(db);
+    logWarn("osu_scores_fallback_cursor_reset", { status: error.status, path: error.path });
+    return {
+      response: await osu.getScores("mania", null, FALLBACK_CALLER),
+      cursorString: null,
+    };
+  }
+}
+
 async function setStoredCursorString(db: Db, cursorString: string, now: number): Promise<void> {
   await exec(db, "insert or replace into live_meta (key, value_json, updated_at) values (?, ?, ?)", [
     FALLBACK_CURSOR_KEY,
     json(cursorString),
     new Date(now).toISOString(),
   ]);
+}
+
+async function clearStoredCursorString(db: Db): Promise<void> {
+  await exec(db, "delete from live_meta where key = ?", [FALLBACK_CURSOR_KEY]);
 }
 
 async function advanceCandidateSeenUntil(db: Db, latestCandidateEndedAt: string | null, now: number): Promise<void> {
