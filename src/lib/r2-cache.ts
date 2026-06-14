@@ -185,6 +185,54 @@ export function getUploadedReplayStorageKey(id: string): string {
   return `${REPLAY_CACHE_PREFIX}uploaded-replays/${safeId}.osr`;
 }
 
+const MANIACARD_THUMBNAIL_CACHE_PREFIX = `${REPLAY_CACHE_PREFIX}maniacards/`;
+const MANIACARD_THUMBNAIL_CONTENT_TYPE = "image/webp";
+
+function getPublicReplayCacheUrl(storageKey: string): string | null {
+  const publicBaseUrl = getPublicReplayCacheBaseUrl();
+  return publicBaseUrl
+    ? `${publicBaseUrl}/${storageKey.split("/").map(encodeURIComponent).join("/")}`
+    : null;
+}
+
+export function getManiaCardThumbnailStorageKey(cacheKey: string): string {
+  const hash = crypto.createHash("sha256").update(cacheKey).digest("hex").slice(0, 40);
+  return `${MANIACARD_THUMBNAIL_CACHE_PREFIX}${hash}.webp`;
+}
+
+export async function getManiaCardThumbnailUrl(cacheKey: string): Promise<string | null> {
+  const r2 = getClient();
+  if (!r2) return null;
+
+  const storageKey = getManiaCardThumbnailStorageKey(cacheKey);
+  assertReplayCacheKey(storageKey);
+  try {
+    await r2.send(new HeadObjectCommand({
+      Bucket: REPLAY_CACHE_BUCKET,
+      Key: storageKey,
+    }));
+    return getPublicReplayCacheUrl(storageKey) ?? await signGetUrl(storageKey, MANIACARD_THUMBNAIL_CONTENT_TYPE);
+  } catch {
+    return null;
+  }
+}
+
+export async function putManiaCardThumbnailAndGetUrl(cacheKey: string, buffer: Buffer): Promise<string | null> {
+  const r2 = getClient();
+  if (!r2 || buffer.length === 0) return null;
+
+  const storageKey = getManiaCardThumbnailStorageKey(cacheKey);
+  assertReplayCacheKey(storageKey);
+  await r2.send(new PutObjectCommand({
+    Bucket: REPLAY_CACHE_BUCKET,
+    Key: storageKey,
+    Body: buffer,
+    ContentType: MANIACARD_THUMBNAIL_CONTENT_TYPE,
+    CacheControl: "public, max-age=31536000, immutable",
+  }));
+  return getPublicReplayCacheUrl(storageKey) ?? await signGetUrl(storageKey, MANIACARD_THUMBNAIL_CONTENT_TYPE);
+}
+
 export async function getReplayVideoSignedUrl(id: string, filename: string): Promise<string | null> {
   const r2 = getClient();
   if (!r2) return null;

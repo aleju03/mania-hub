@@ -25,6 +25,7 @@ import {
   COLLECTION_CARD_THUMB_WIDTH,
   getMemoryCardThumbnail,
   loadPersistedCardThumbnail,
+  loadR2CardThumbnail,
   rememberCardThumbnailBlob,
 } from "./cardThumbnailCache";
 import { playRecycleClink } from "./packSfx";
@@ -650,7 +651,12 @@ export function CollectionPanel({
         const cached = await loadPersistedCardThumbnail(key);
         if (cancelled) return;
         if (cached) setThumbnailRevision((revision) => revision + 1);
-        else toRender.push(card);
+        else {
+          const remote = await loadR2CardThumbnail(key);
+          if (cancelled) return;
+          if (remote) setThumbnailRevision((revision) => revision + 1);
+          else toRender.push(card);
+        }
       }));
       if (cancelled || toRender.length === 0) return;
 

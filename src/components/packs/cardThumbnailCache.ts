@@ -1,5 +1,9 @@
 import type { CollectedCard } from "#/lib/pack-collection";
 import {
+  fetchR2PackCardThumbnail,
+  uploadR2PackCardThumbnail,
+} from "#/lib/pack-card-thumbnails";
+import {
   buildManiaCardRenderDataFromSkills,
   getManiaCardRenderDataSignature,
 } from "../player/maniacard3d/renderData";
@@ -13,9 +17,14 @@ const CACHE_ROUTE = "/__mania-card-thumbnails/";
 const MAX_MEMORY_THUMBNAILS = 180;
 const MAX_PERSISTED_THUMBNAILS = 900;
 const PERSISTED_PRUNE_INTERVAL = 30;
+const MAX_R2_UPLOADS = 2;
 
 const memoryCache = new Map<string, string>();
 const pendingLoads = new Map<string, Promise<string | null>>();
+const pendingRemoteLoads = new Map<string, Promise<string | null>>();
+const pendingRemoteUploads = new Set<string>();
+const remoteUploadQueue: Array<() => void> = [];
+let activeRemoteUploads = 0;
 let persistedWritesSincePrune = 0;
 
 function hashString(input: string): string {
@@ -76,6 +85,36 @@ async function prunePersistedThumbnails(cache: Cache): Promise<void> {
 async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   const response = await fetch(dataUrl);
   return response.blob();
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") resolve(reader.result);
+      else reject(new Error("Card thumbnail encoding failed."));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Card thumbnail encoding failed."));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function uploadThumbnailToR2(key: string, blob: Blob): Promise<void> {
+  if (pendingRemoteUploads.has(key)) return;
+  pendingRemoteUploads.add(key);
+  try {
+    if (activeRemoteUploads >= MAX_R2_UPLOADS) {
+      await new Promise<void>((resolve) => remoteUploadQueue.push(resolve));
+    }
+    activeRemoteUploads += 1;
+    await uploadR2PackCardThumbnail({ data: { key, dataUrl: await blobToDataUrl(blob) } });
+  } catch {
+    // Best-effort: local caches still cover this browser.
+  } finally {
+    activeRemoteUploads = Math.max(0, activeRemoteUploads - 1);
+    pendingRemoteUploads.delete(key);
+    remoteUploadQueue.shift()?.();
+  }
 }
 
 export function cardThumbnailKeyForData(data: ManiaCardReadyData, width = COLLECTION_CARD_THUMB_WIDTH): string {
@@ -140,6 +179,30 @@ export async function loadPersistedCardThumbnail(key: string): Promise<string | 
   return load;
 }
 
+export async function loadR2CardThumbnail(key: string): Promise<string | null> {
+  const memory = getMemoryCardThumbnail(key);
+  if (memory) return memory;
+
+  const pending = pendingRemoteLoads.get(key);
+  if (pending) return pending;
+
+  const load = (async () => {
+    try {
+      const result = await fetchR2PackCardThumbnail({ data: { key } });
+      if (!result.url) return null;
+      rememberMemoryThumbnail(key, result.url);
+      return result.url;
+    } catch {
+      return null;
+    } finally {
+      pendingRemoteLoads.delete(key);
+    }
+  })();
+
+  pendingRemoteLoads.set(key, load);
+  return load;
+}
+
 export async function rememberCardThumbnailBlob(key: string, blob: Blob): Promise<string> {
   const url = URL.createObjectURL(blob);
   rememberMemoryThumbnail(key, url);
@@ -161,6 +224,8 @@ export async function rememberCardThumbnailBlob(key: string, blob: Blob): Promis
       // The in-memory URL is still enough for this session.
     }
   }
+
+  void uploadThumbnailToR2(key, blob);
 
   return url;
 }
