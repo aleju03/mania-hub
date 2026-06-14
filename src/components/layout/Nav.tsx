@@ -385,10 +385,7 @@ export function Nav() {
                     : "text-osu-pink-light hover:text-white"
                 }`}
               >
-                <span className="inline-flex items-center gap-1">
-                  {l.label}
-                  {l.id === "snipes" && <img src="/images/icons/sniper.webp" alt="" draggable={false} className="w-3.5 h-3.5 -mt-0.5" />}
-                </span>
+                <span className="inline-flex items-center gap-1">{l.label}</span>
               </Link>
             ))}
             {barRect && (
@@ -614,7 +611,6 @@ export function Nav() {
                     }`}
                   >
                     {l.label}
-                    {l.id === "snipes" && <img src="/images/icons/sniper.webp" alt="" draggable={false} className="inline w-4 h-4" />}
                   </Link>
                 ))}
               </div>
