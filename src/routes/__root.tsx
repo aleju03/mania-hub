@@ -185,6 +185,57 @@ function isPromiseLike<T>(value: T | Promise<T>): value is Promise<T> {
   return typeof (value as Promise<T>).then === "function";
 }
 
+declare global {
+  interface Window {
+    __maniaHubRecoverChunkLoad?: (error: unknown) => boolean;
+  }
+}
+
+const CHUNK_LOAD_ERROR_PATTERNS = [
+  "failed to fetch dynamically imported module",
+  "error loading dynamically imported module",
+  "importing a module script failed",
+  "failed to load module script",
+  "loading chunk",
+  "chunkloaderror",
+  "vite:preloaderror",
+];
+
+const CHUNK_LOAD_RECOVERY_SCRIPT = `(()=>{var key="mania-hub-chunk-reload-v1";var ttl=300000;function text(value){try{if(!value)return"";if(typeof value==="string")return value;if(value instanceof Error)return value.name+" "+value.message;var parts=[];if(typeof value.name==="string")parts.push(value.name);if(typeof value.message==="string")parts.push(value.message);if(typeof value.type==="string")parts.push(value.type);if(value.reason)parts.push(text(value.reason));if(value.payload)parts.push(text(value.payload));return parts.join(" ");}catch(e){return"";}}function isChunkError(value){var message=text(value).toLowerCase();return message.indexOf("failed to fetch dynamically imported module")!==-1||message.indexOf("error loading dynamically imported module")!==-1||message.indexOf("importing a module script failed")!==-1||message.indexOf("failed to load module script")!==-1||message.indexOf("loading chunk")!==-1||message.indexOf("chunkloaderror")!==-1||message.indexOf("vite:preloaderror")!==-1;}function freshen(){var tasks=[];try{if(navigator.serviceWorker&&navigator.serviceWorker.getRegistrations){tasks.push(navigator.serviceWorker.getRegistrations().then(function(registrations){return Promise.all(registrations.map(function(registration){return registration.unregister().catch(function(){});}));}));}}catch(e){}try{if(window.caches&&caches.keys){tasks.push(caches.keys().then(function(keys){return Promise.all(keys.filter(function(name){return /^static-v/.test(name)||/^mania-hub/.test(name);}).map(function(name){return caches.delete(name);}));}));}}catch(e){}Promise.allSettled(tasks).finally(function(){location.reload();});}function recover(value){if(!isChunkError(value))return false;try{var now=Date.now();var href=location.href;var previous=JSON.parse(sessionStorage.getItem(key)||"null");if(previous&&previous.href===href&&now-previous.at<ttl)return false;sessionStorage.setItem(key,JSON.stringify({href:href,at:now}));}catch(e){}freshen();return true;}window.__maniaHubRecoverChunkLoad=recover;window.addEventListener("vite:preloadError",function(event){if(recover(event&&event.payload)){event.preventDefault();}},true);window.addEventListener("unhandledrejection",function(event){recover(event&&event.reason);},true);window.addEventListener("error",function(event){recover(event&&(event.error||event.message));},true);})();`;
+
+function errorText(error: unknown): string {
+  if (!error) return "";
+  if (typeof error === "string") return error;
+  if (error instanceof Error) return `${error.name} ${error.message}`;
+  if (typeof error === "object") {
+    const value = error as {
+      message?: unknown;
+      name?: unknown;
+      payload?: unknown;
+      reason?: unknown;
+      type?: unknown;
+    };
+    return [
+      typeof value.name === "string" ? value.name : "",
+      typeof value.message === "string" ? value.message : "",
+      typeof value.type === "string" ? value.type : "",
+      errorText(value.reason),
+      errorText(value.payload),
+    ].filter(Boolean).join(" ");
+  }
+  return "";
+}
+
+function isChunkLoadError(error: unknown): boolean {
+  const message = errorText(error).toLowerCase();
+  return CHUNK_LOAD_ERROR_PATTERNS.some((pattern) => message.includes(pattern));
+}
+
+function recoverFromChunkLoadError(error: unknown): boolean {
+  if (typeof window === "undefined") return false;
+  return window.__maniaHubRecoverChunkLoad?.(error) ?? false;
+}
+
 function availableCountrySetFromContext(context: RootSlowContext): ReadonlySet<string> | null {
   if (!context.countryFeatures) return null;
   return new Set(context.countryFeatures.countries.map((entry) => entry.country.toUpperCase()));
@@ -272,17 +323,30 @@ export const Route = createRootRoute({
 });
 
 function RootErrorComponent({ error }: { error: Error }) {
+  const chunkLoadError = isChunkLoadError(error);
+
+  useEffect(() => {
+    if (import.meta.env.PROD && chunkLoadError) {
+      recoverFromChunkLoadError(error);
+    }
+  }, [chunkLoadError, error]);
+
   return (
     <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 py-24 text-center">
       <div className="text-5xl font-bold text-white">Something broke</div>
       <div className="max-w-md text-sm text-osu-f1">
-        The page hit an unexpected error and couldn't finish rendering. Reloading usually
-        clears it. If it keeps happening, try disabling browser extensions.
+        {chunkLoadError
+          ? "A freshly deployed asset could not be loaded. The app will try one clean refresh; if it comes back here, the preview deploy is missing a built asset."
+          : "The page hit an unexpected error and couldn't finish rendering. Reloading usually clears it. If it keeps happening, try disabling browser extensions."}
       </div>
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => window.location.reload()}
+          onClick={() => {
+            if (!chunkLoadError || !recoverFromChunkLoadError(error)) {
+              window.location.reload();
+            }
+          }}
           className="rounded-md bg-osu-pink/20 px-4 py-2 text-xs font-semibold text-white hover:bg-osu-pink/30 transition-colors"
         >
           Reload page
@@ -451,6 +515,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             __html: `(function(){try{var h=null;var t=localStorage.getItem("mania-hub-theme-v1");if(t!=null){var tn=Number(t);if(isFinite(tn))h=tn;}if(h==null){var s=localStorage.getItem("mania-hub-cache-v5");if(s){var p=JSON.parse(s);var bh=p&&p.state&&p.state.themeHue;if(typeof bh==="number"&&isFinite(bh))h=bh;}}if(h!=null){var n=((Math.round(h)%360)+360)%360;document.documentElement.style.setProperty("--theme-hue",String(n));if(n!==333)document.documentElement.style.setProperty("--theme-hue-mix","1");}var sv=localStorage.getItem("mania-hub-theme-sat-v1");if(sv!=null){var sn=Number(sv);if(isFinite(sn))document.documentElement.style.setProperty("--theme-sat",String(Math.max(0,Math.min(100,Math.round(sn)))/100));}}catch(e){}})();`,
           }}
         />
+        <script dangerouslySetInnerHTML={{ __html: CHUNK_LOAD_RECOVERY_SCRIPT }} />
       </head>
       <body className="min-h-screen flex flex-col font-sans antialiased">
         {children}

@@ -7,7 +7,7 @@
   },
   "scripts": {
     "dev": "vite dev --port 3000",
-    "build": "vite build",
+    "build": "vite build && node scripts/verify-build-assets.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "dan:analyze": "vite-node scripts/dan-analyze.ts",

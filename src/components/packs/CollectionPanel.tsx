@@ -49,6 +49,12 @@ interface CollectionPanelProps {
   onApplyMint: (userId: number, mint: CardMint) => boolean;
 }
 
+interface LoadedServerCollectionPage {
+  cacheKey: string;
+  filterKey: string;
+  page: ServerPackCollectionPage;
+}
+
 const COLLECTION_PAGE_SIZE = 15;
 const skeletonThumbnailCache = new Map<ManiaCardTier, string>();
 const serverCollectionPageCache = new Map<string, ServerPackCollectionPage>();
@@ -107,6 +113,18 @@ function serverCollectionCacheKey({
   query: string;
 }) {
   return `${page}:${pageSize}:${tier}:${query}`;
+}
+
+function serverCollectionFilterKey({
+  pageSize,
+  tier,
+  query,
+}: {
+  pageSize: number;
+  tier: ManiaCardTier | "all" | "unrated";
+  query: string;
+}) {
+  return `${pageSize}:${tier}:${query}`;
 }
 
 function CollectionPager({
@@ -276,6 +294,8 @@ function CollectionCardTile({
   onApplyMint: (userId: number, mint: CardMint) => boolean;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const previousThumbnailRef = useRef<string | null>(thumbnail);
+  const animateThumbnail = Boolean(thumbnail && !previousThumbnailRef.current);
 
   useEffect(() => {
     if (card.skills) return;
@@ -307,6 +327,10 @@ function CollectionCardTile({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [card.userId, card.skills]);
 
+  useEffect(() => {
+    previousThumbnailRef.current = thumbnail;
+  }, [thumbnail]);
+
   return (
     <div ref={hostRef} className="relative" style={{ aspectRatio: "5 / 7" }}>
       <CollectionCardFacePlaceholder card={card} />
@@ -316,9 +340,9 @@ function CollectionCardTile({
           src={thumbnail}
           alt={`${card.username} maniacard`}
           className="absolute inset-0 h-full w-full rounded-[10px] object-cover"
-          initial={{ opacity: 0 }}
+          initial={animateThumbnail ? { opacity: 0 } : false}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.14, ease: "easeOut" }}
+          transition={animateThumbnail ? { duration: 0.14, ease: "easeOut" } : { duration: 0 }}
           draggable={false}
         />
       )}
@@ -398,15 +422,25 @@ export function CollectionPanel({
   const [simulateSkeletons, setSimulateSkeletons] = useState(false);
   const collectionControlsRef = useRef<HTMLDivElement | null>(null);
   const [, setThumbnailRevision] = useState(0);
-  const [serverPage, setServerPage] = useState<ServerPackCollectionPage | null>(() =>
-    serverCollectionPageCache.get(serverCollectionCacheKey({
+  const [serverPage, setServerPage] = useState<LoadedServerCollectionPage | null>(() => {
+    const initialRequest = {
       page: 0,
       pageSize: COLLECTION_PAGE_SIZE,
-      tier: "all",
+      tier: "all" as const,
       query: "",
-    })) ?? null,
-  );
+    };
+    const cacheKey = serverCollectionCacheKey(initialRequest);
+    const page = serverCollectionPageCache.get(cacheKey) ?? null;
+    return page
+      ? {
+          cacheKey,
+          filterKey: serverCollectionFilterKey(initialRequest),
+          page,
+        }
+      : null;
+  });
   const [serverLoading, setServerLoading] = useState(false);
+  const [serverMissingKey, setServerMissingKey] = useState<string | null>(null);
   const [serverRefreshKey, setServerRefreshKey] = useState(0);
   // One-shot "+N" shard floats spawned at the click point of a recycle.
   const [shardBursts, setShardBursts] = useState<Array<{ id: number; x: number; y: number; amount: number }>>([]);
@@ -529,11 +563,26 @@ export function CollectionPanel({
 
   const walletReady = wallet !== null;
   const useServerCollection = walletReady && syncStatus !== "local";
+  const serverRequest = {
+    page: collectionPage,
+    pageSize: COLLECTION_PAGE_SIZE,
+    tier: tierFilter,
+    query: query.trim().toLowerCase(),
+  };
+  const serverCacheKey = serverCollectionCacheKey(serverRequest);
+  const serverFilterKey = serverCollectionFilterKey(serverRequest);
+  const cachedServerPage = useServerCollection ? serverCollectionPageCache.get(serverCacheKey) ?? null : null;
+  const activeServerPage = useServerCollection
+    ? cachedServerPage ?? (serverPage?.cacheKey === serverCacheKey ? serverPage.page : null)
+    : null;
+  const serverMetaPage = useServerCollection
+    ? activeServerPage ?? (serverPage?.filterKey === serverFilterKey ? serverPage.page : null)
+    : null;
   const localCards = wallet
     ? ownedCards(wallet).sort((a, b) => tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp)
     : [];
-  const cards = useServerCollection ? (serverPage?.cards as CollectedCard[] | undefined) ?? [] : localCards;
-  const serverTierCounts = serverPage?.tierCounts ?? {};
+  const cards = useServerCollection ? (activeServerPage?.cards as CollectedCard[] | undefined) ?? [] : localCards;
+  const serverTierCounts = serverMetaPage?.tierCounts ?? {};
   const serverCollectionTotal = Object.values(serverTierCounts).reduce((sum, count) => sum + count, 0);
   const ownedTiers: Array<ManiaCardTier | null> = useServerCollection
     ? Object.keys(serverTierCounts)
@@ -551,14 +600,14 @@ export function CollectionPanel({
       tierCounts.set(key, (tierCounts.get(key) ?? 0) + 1);
     }
   }
-  const trimmedQuery = query.trim().toLowerCase();
+  const trimmedQuery = serverRequest.query;
   const visibleCards = useServerCollection ? cards : cards.filter((card) => {
     if (trimmedQuery && !card.username.toLowerCase().includes(trimmedQuery)) return false;
     if (tierFilter === "all") return true;
     if (tierFilter === "unrated") return card.tier === null;
     return card.tier === tierFilter;
   });
-  const filteredTotal = useServerCollection ? serverPage?.total ?? 0 : visibleCards.length;
+  const filteredTotal = useServerCollection ? serverMetaPage?.total ?? 0 : visibleCards.length;
   const collectionTotal = useServerCollection ? serverCollectionTotal : localCards.length;
   const totalPages = Math.max(1, Math.ceil(filteredTotal / COLLECTION_PAGE_SIZE));
   const currentPage = Math.min(collectionPage, totalPages - 1);
@@ -566,9 +615,13 @@ export function CollectionPanel({
   const pageEnd = Math.min(filteredTotal, pageStart + COLLECTION_PAGE_SIZE);
   const pageCards = useServerCollection ? cards : visibleCards.slice(pageStart, pageEnd);
   const currentPageSignature = pageSignature(pageCards);
-  const showPagePlaceholders = serverLoading && pageCards.length === 0;
-  const placeholderCount = Math.min(COLLECTION_PAGE_SIZE, Math.max(1, pageCards.length || filteredTotal || COLLECTION_PAGE_SIZE));
-  const recyclable = useServerCollection ? serverPage?.duplicateShardTotal ?? 0 : wallet ? duplicateShardTotal(wallet) : 0;
+  const serverPagePending = useServerCollection && !activeServerPage && serverMissingKey !== serverCacheKey;
+  const showPagePlaceholders = serverPagePending || (serverLoading && pageCards.length === 0);
+  const placeholderCount = Math.min(
+    COLLECTION_PAGE_SIZE,
+    Math.max(1, Math.min(COLLECTION_PAGE_SIZE, filteredTotal - pageStart) || pageCards.length || COLLECTION_PAGE_SIZE),
+  );
+  const recyclable = useServerCollection ? serverMetaPage?.duplicateShardTotal ?? 0 : wallet ? duplicateShardTotal(wallet) : 0;
   const selectedShardTotal = cards
     .filter((card) => selected.has(card.userId))
     .reduce((sum, card) => sum + duplicateShardValue(card) + shardValueForTier(card.tier), 0);
@@ -593,18 +646,16 @@ export function CollectionPanel({
     if (!walletReady || !useServerCollection) {
       setServerPage(null);
       setServerLoading(false);
+      setServerMissingKey(null);
       return;
     }
     let cancelled = false;
-    const cacheKey = serverCollectionCacheKey({
-      page: collectionPage,
-      pageSize: COLLECTION_PAGE_SIZE,
-      tier: tierFilter,
-      query: trimmedQuery,
-    });
-    const cachedPage = serverCollectionPageCache.get(cacheKey) ?? null;
-    if (cachedPage) setServerPage(cachedPage);
-    setServerLoading(true);
+    const cachedPage = serverCollectionPageCache.get(serverCacheKey) ?? null;
+    setServerMissingKey((key) => (key === serverCacheKey ? null : key));
+    if (cachedPage) {
+      setServerPage({ cacheKey: serverCacheKey, filterKey: serverFilterKey, page: cachedPage });
+    }
+    setServerLoading(!cachedPage);
     void fetchServerPackCollectionPage({
       data: {
         page: collectionPage,
@@ -615,11 +666,16 @@ export function CollectionPanel({
     })
       .then((page) => {
         if (cancelled) return;
-        if (page) serverCollectionPageCache.set(cacheKey, page);
-        setServerPage(page ?? cachedPage);
+        if (page) serverCollectionPageCache.set(serverCacheKey, page);
+        const nextPage = page ?? cachedPage;
+        if (nextPage) setServerPage({ cacheKey: serverCacheKey, filterKey: serverFilterKey, page: nextPage });
+        else setServerMissingKey(serverCacheKey);
       })
       .catch(() => {
-        if (!cancelled && !cachedPage) setServerPage(null);
+        if (!cancelled && !cachedPage) {
+          setServerMissingKey(serverCacheKey);
+          setServerPage((current) => (current?.cacheKey === serverCacheKey ? null : current));
+        }
       })
       .finally(() => {
         if (!cancelled) setServerLoading(false);
@@ -627,7 +683,7 @@ export function CollectionPanel({
     return () => {
       cancelled = true;
     };
-  }, [walletReady, useServerCollection, collectionPage, tierFilter, trimmedQuery, serverRefreshKey]);
+  }, [walletReady, useServerCollection, collectionPage, tierFilter, trimmedQuery, serverCacheKey, serverFilterKey, serverRefreshKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -836,11 +892,11 @@ export function CollectionPanel({
         </div>
       )}
 
-      {collectionTotal === 0 && !serverLoading ? (
+      {collectionTotal === 0 && !serverLoading && !serverPagePending ? (
         <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
           No cards yet. Open a pack to start your collection.
         </div>
-      ) : filteredTotal === 0 && !serverLoading ? (
+      ) : filteredTotal === 0 && !serverLoading && !serverPagePending ? (
         <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
           No cards match{trimmedQuery ? ` "${query.trim()}"` : " the selected rarity"}.
         </div>
