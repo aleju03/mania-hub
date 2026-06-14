@@ -2547,6 +2547,79 @@ describe("live backend", () => {
     expect(Number((await exec(db, "select count(*) as count from snipe_events")).rows[0].count)).toBe(1);
   });
 
+  it("hydrates metadata-light fallback scores before snipe projection", async () => {
+    const { db, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    const now = new Date().toISOString();
+    const { user: _user, beatmap: _beatmap, beatmapset: _beatmapset, ...storedScore } = scores[0];
+    const current: OscScore = {
+      ...storedScore,
+      id: 9100,
+      legacy_score_id: 8100,
+      legacy_total_score: 1000,
+      total_score: 0,
+      score: 0,
+      pp: 260,
+      accuracy: 0,
+      type: "solo_score",
+      ended_at: "2026-05-12T00:05:00.000Z",
+      created_at: "2026-05-12T00:05:00.000Z",
+    };
+
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values ('CR', 101, 1, 'osu_rankings', 1, ?)`,
+      [now],
+    );
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, updated_at)
+       values
+         (101, 'Sniper', 'https://assets.example/sniper.png', 'CR', ?),
+         (303, 'Victim', 'https://assets.example/victim.png', 'CR', ?)`,
+      [now, now],
+    );
+    await exec(
+      db,
+      `insert into beatmapsets (beatmapset_id, title, artist, creator, status, covers_json, metadata_json, updated_at)
+       values (50, 'Fixture Song', 'Fixture Artist', 'mapper', 'ranked', ?, '{}', ?)`,
+      [JSON.stringify({ cover: "https://assets.example/cover.jpg" }), now],
+    );
+    await exec(
+      db,
+      `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, max_combo, version, url, metadata_json, updated_at)
+       values (501, 50, 'mania', 'ranked', 4, 5.6, 180, 1234, 'Another', 'https://osu.ppy.sh/beatmaps/501', '{}', ?)`,
+      [now],
+    );
+    await exec(
+      db,
+      `insert into country_beatmap_scores (country, beatmap_id, lane_key, user_id, score_id, total_score, pp, accuracy, rank, mods_json, is_lazer, has_replay, ended_at, updated_at)
+       values ('CR', 501, 'normal:stable', 303, 7000, 900, 200, 0.97, 'S', '[]', 0, 1, '2026-05-11T00:00:00.000Z', ?)`,
+      [now],
+    );
+
+    await ingestor.ingestBatch([current], "osu_scores_fallback", {
+      enqueueRecentReconcile: false,
+      processTopPlayFeatures: false,
+      processMapsFarmedFeatures: false,
+      processSnipeFeatures: true,
+    });
+
+    const snipes = await getSnipesSnapshot(db, "CR", 10);
+    expect(snipes.events).toHaveLength(1);
+    expect(snipes.events[0].score_id).toBe(9100);
+    expect(snipes.events[0].sniper.id).toBe(101);
+    expect(snipes.events[0].victim.id).toBe(303);
+    expect(snipes.events[0].totalScore).toBe(1000);
+    expect(snipes.events[0].victimTotalScore).toBe(900);
+    const boardRow = (await exec(
+      db,
+      "select total_score from country_beatmap_scores where country = 'CR' and beatmap_id = 501 and lane_key = 'normal:stable' and user_id = 101",
+    )).rows[0];
+    expect(Number(boardRow.total_score)).toBe(1000);
+  });
+
   it("detects the triggering snipe after first-time board seeding", async () => {
     const { db, queue, events, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");

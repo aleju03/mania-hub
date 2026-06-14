@@ -6,11 +6,11 @@ import { recordPlayerActivity, removePlayerActivityScore } from "../features/act
 import { maybeEnqueueMapsFarmedRefresh } from "../features/maps.js";
 import { updateSnipeProjection } from "../features/snipes.js";
 import { maybeEnqueueTopPlayRefresh } from "../features/top-plays.js";
-import { getTrackerScoreByIdentity } from "../features/tracker.js";
+import { getHydratedScoreByIdentity } from "../features/tracker.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { hasPendingRecentReconcileJob, RECENT_RECONCILE_JOB_TYPE, requeueDeferredRecentReconcileJobs } from "../jobs/recent-reconcile.js";
 import type { LiveEventLog } from "../live/event-log.js";
-import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, getScoreIdentity, isLazerScore, nowIso, scoreHasPublicLeaderboard, scoreHasReplay } from "../shared/score.js";
+import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, getScoreIdentity, isLazerScore, nowIso, scoreHasPublicLeaderboard, scoreHasReplay, toLeanTrackerScore } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 import { logInfo } from "../logger.js";
 import { isUserKnownInactive } from "../users.js";
@@ -68,6 +68,7 @@ export class ScoreIngestor {
     const totalScore = getDisplayedTotalScore(score);
     const scoreIdentity = getScoreIdentity(score);
     let inserted = 0;
+    const hydratedScoresByCountry = new Map<string, OscScore>();
     for (const country of countries) {
       const result = await exec(
         this.db,
@@ -131,9 +132,10 @@ export class ScoreIngestor {
         await this.deleteMatchingIdZeroRecentScore(country, score, beatmapId, totalScore, receivedAt);
       }
       await markCountryScoreSeen(this.db, country);
-      const liveScore = await getTrackerScoreByIdentity(this.db, country, scoreIdentity);
-      if (liveScore) {
-        await this.events.append("tracker_score", liveScore.country, liveScore.score, `tracker_score:${liveScore.country}:${scoreIdentity}`);
+      const hydratedScore = await getHydratedScoreByIdentity(this.db, country, scoreIdentity);
+      if (hydratedScore) {
+        hydratedScoresByCountry.set(country, hydratedScore.score);
+        await this.events.append("tracker_score", hydratedScore.country, toLeanTrackerScore(hydratedScore.score), `tracker_score:${hydratedScore.country}:${scoreIdentity}`);
       }
     }
     if (inserted === 0) return false;
@@ -159,12 +161,15 @@ export class ScoreIngestor {
         }
       }
     }
-    if (!score.beatmap || !score.beatmapset || !score.user) return true;
     if (processSnipeFeatures) {
       for (const country of countries) {
+        const snipeScore = score.beatmap && score.beatmapset && score.user
+          ? score
+          : hydratedScoresByCountry.get(country);
+        if (!snipeScore) continue;
         if (!await canSeedSnipesForCountry(this.db, this.config, country)) continue;
-        if (canUseOsuApi && await this.enqueueSnipeSeedIfNeeded(country, score)) continue;
-        await updateSnipeProjection(this.db, this.events, country, score);
+        if (canUseOsuApi && await this.enqueueSnipeSeedIfNeeded(country, snipeScore)) continue;
+        await updateSnipeProjection(this.db, this.events, country, snipeScore);
       }
     }
     return true;
