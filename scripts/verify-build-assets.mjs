@@ -1,10 +1,23 @@
-import { access, readdir, readFile } from "node:fs/promises";
+import { access, readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
-const publicDir = path.join(repoRoot, ".output", "public");
+let publicDir = "";
+
+const outputCandidates = [
+  {
+    label: "Vercel Build Output API",
+    publicDir: path.join(repoRoot, ".vercel", "output", "static"),
+    marker: path.join(repoRoot, ".vercel", "output", "nitro.json"),
+  },
+  {
+    label: "Nitro public output",
+    publicDir: path.join(repoRoot, ".output", "public"),
+    marker: path.join(repoRoot, ".output", "nitro.json"),
+  },
+];
 
 const textExtensions = new Set([".css", ".html", ".js", ".json", ".mjs"]);
 const existenceCache = new Map();
@@ -22,6 +35,36 @@ async function exists(filePath) {
     );
   }
   return existenceCache.get(filePath);
+}
+
+async function getOutputMtime(candidate) {
+  try {
+    return (await stat(candidate.marker)).mtimeMs;
+  } catch {
+    return (await stat(candidate.publicDir)).mtimeMs;
+  }
+}
+
+async function findPublicDir() {
+  const available = [];
+
+  for (const candidate of outputCandidates) {
+    if (!await exists(candidate.publicDir)) continue;
+    available.push({
+      ...candidate,
+      mtimeMs: await getOutputMtime(candidate),
+    });
+  }
+
+  if (available.length === 0) {
+    const checked = outputCandidates
+      .map((candidate) => path.relative(repoRoot, candidate.publicDir))
+      .join(", ");
+    throw new Error(`Build output not found. Checked ${checked}`);
+  }
+
+  available.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return available[0];
 }
 
 async function walk(dir) {
@@ -67,7 +110,7 @@ function resolveLocalRef(sourceFile, ref) {
 
 async function checkRef(sourceFile, ref) {
   const target = resolveLocalRef(sourceFile, ref);
-  if (!target || !target.startsWith(publicDir)) return;
+  if (!target || !isInsidePublicDir(target)) return;
 
   const key = `${sourceFile}:${ref}`;
   if (checkedRefs.has(key)) return;
@@ -80,6 +123,11 @@ async function checkRef(sourceFile, ref) {
       target: path.relative(repoRoot, target),
     });
   }
+}
+
+function isInsidePublicDir(filePath) {
+  const relative = path.relative(publicDir, filePath);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 async function scanJs(sourceFile, text) {
@@ -111,9 +159,8 @@ async function scanHtmlLike(sourceFile, text) {
 }
 
 async function main() {
-  if (!await exists(publicDir)) {
-    throw new Error(`Build output not found at ${path.relative(repoRoot, publicDir)}`);
-  }
+  const output = await findPublicDir();
+  publicDir = output.publicDir;
 
   const files = await walk(publicDir);
 
@@ -143,7 +190,9 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`Verified ${checkedRefs.size} emitted asset references across ${files.length} files.`);
+  console.log(
+    `Verified ${checkedRefs.size} emitted asset references across ${files.length} files in ${path.relative(repoRoot, publicDir)}.`,
+  );
 }
 
 main().catch((error) => {
