@@ -17,6 +17,10 @@ import { ManiaCardRenderer } from "../player/maniacard3d/ManiaCardRenderer";
 import { buildManiaCardRenderData } from "../player/maniacard3d/renderData";
 import type { ManiaCardReadyData, RgbaColor } from "../player/maniacard3d/types";
 import { renderCardThumbnail } from "./cardSnapshot";
+import {
+  COLLECTION_CARD_THUMB_WIDTH,
+  rememberCardThumbnailDataUrl,
+} from "./cardThumbnailCache";
 import { createCardBackCanvas } from "./packArt";
 import { playCardDraw, playFlipWhoosh, playRevealChime } from "./packSfx";
 import { TierBurst } from "./TierBurst";
@@ -412,8 +416,11 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
       // Tray thumbnail comes from the front texture the renderer already
       // drew; rebuilding it through the full texture pipeline used to run
       // concurrently with the flip and stutter the animation.
-      const thumbnail = rendererRef.current?.snapshotFrontCanvas();
-      if (thumbnail) updateThumbnail(cardIndex, thumbnail);
+      const thumbnail = rendererRef.current?.snapshotFrontCanvas(COLLECTION_CARD_THUMB_WIDTH);
+      if (thumbnail) {
+        updateThumbnail(cardIndex, thumbnail);
+        void rememberCardThumbnailDataUrl(data, thumbnail, COLLECTION_CARD_THUMB_WIDTH);
+      }
       setPhase("shown");
       if (!reducedMotion) setBurst({ key: position, tier: data.tier, glowColor: data.glowColor });
       playRevealChime(tierRank(data.tier) / 8, revealedRef.current[cardIndex]?.isNew ?? false);
@@ -539,7 +546,8 @@ export function RevealStage({ cards, reducedMotion, onCardRevealed, onComplete }
       }
       let thumbnail: string | null = null;
       try {
-        thumbnail = await renderCardThumbnail(data);
+        thumbnail = await renderCardThumbnail(data, COLLECTION_CARD_THUMB_WIDTH);
+        void rememberCardThumbnailDataUrl(data, thumbnail, COLLECTION_CARD_THUMB_WIDTH);
       } catch {
         thumbnail = null;
       }

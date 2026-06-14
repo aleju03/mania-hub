@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, LogIn, Recycle, Search } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, LogIn, Recycle, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "#/lib/maniacard";
 import {
@@ -18,8 +18,15 @@ import {
   buildManiaCardRenderData,
   buildManiaCardRenderDataFromSkills,
 } from "../player/maniacard3d/renderData";
-import { CountryFlag } from "../ui/CountryFlag";
-import { renderCardThumbnail } from "./cardSnapshot";
+import { renderCardSkeletonThumbnail, renderCardThumbnailBlob } from "./cardSnapshot";
+import {
+  cardThumbnailKeyForCollectionCard,
+  cardThumbnailKeyForData,
+  COLLECTION_CARD_THUMB_WIDTH,
+  getMemoryCardThumbnail,
+  loadPersistedCardThumbnail,
+  rememberCardThumbnailBlob,
+} from "./cardThumbnailCache";
 import { playRecycleClink } from "./packSfx";
 
 export interface CardMint {
@@ -42,9 +49,8 @@ interface CollectionPanelProps {
 }
 
 const COLLECTION_PAGE_SIZE = 15;
-const COLLECTION_THUMB_WIDTH = 240;
-
-const thumbnailCache = new Map<string, string>();
+const skeletonThumbnailCache = new Map<ManiaCardTier, string>();
+const serverCollectionPageCache = new Map<string, ServerPackCollectionPage>();
 
 let activeRenders = 0;
 const renderQueue: Array<() => void> = [];
@@ -60,7 +66,7 @@ async function throttleRender<T>(task: () => Promise<T>): Promise<T> {
 }
 
 function thumbnailKey(card: CollectedCard): string {
-  return `${card.userId}:${card.tier ?? "unrated"}:${card.skills ? Math.round(card.skills.cardPower) : "plain"}`;
+  return cardThumbnailKeyForCollectionCard(card) ?? `${card.userId}:${card.tier ?? "unrated"}:plain`;
 }
 
 function cardUserForRender(card: CollectedCard) {
@@ -73,17 +79,33 @@ function cardUserForRender(card: CollectedCard) {
   };
 }
 
-async function renderCollectionThumbnail(card: CollectedCard): Promise<string | null> {
+async function renderCollectionThumbnail(card: CollectedCard): Promise<{ key: string; url: string } | null> {
   if (!card.skills) return null;
   const data = buildManiaCardRenderDataFromSkills({
     user: cardUserForRender(card),
     skills: card.skills,
   });
-  return throttleRender(() => renderCardThumbnail(data, COLLECTION_THUMB_WIDTH));
+  const key = cardThumbnailKeyForData(data, COLLECTION_CARD_THUMB_WIDTH);
+  const blob = await throttleRender(() => renderCardThumbnailBlob(data, COLLECTION_CARD_THUMB_WIDTH));
+  return { key, url: await rememberCardThumbnailBlob(key, blob) };
 }
 
 function pageSignature(cards: CollectedCard[]) {
   return cards.map(thumbnailKey).join("|");
+}
+
+function serverCollectionCacheKey({
+  page,
+  pageSize,
+  tier,
+  query,
+}: {
+  page: number;
+  pageSize: number;
+  tier: ManiaCardTier | "all" | "unrated";
+  query: string;
+}) {
+  return `${page}:${pageSize}:${tier}:${query}`;
 }
 
 function CollectionPager({
@@ -243,44 +265,6 @@ function tierChipRgb(tier: ManiaCardTier): string {
   return match ? `${match[1]}, ${match[2]}, ${match[3]}` : "148, 163, 184";
 }
 
-/* Placeholder (and fallback for cards without a skills snapshot): a DOM
-   sketch of the card in its tier dress. */
-function CardSketch({ card }: { card: CollectedCard }) {
-  const style = MANIA_TIER_STYLES[card.tier ?? "common"];
-  return (
-    <div
-      className={`relative h-full w-full overflow-hidden rounded-[10px] border bg-gradient-to-br ${style.background} ${style.border}`}
-    >
-      <div className="pointer-events-none absolute inset-[5px] rounded-[7px] border border-white/25" />
-      <img
-        src={card.avatarUrl}
-        alt=""
-        loading="lazy"
-        className="absolute left-1/2 top-[8.5%] aspect-square w-[66%] -translate-x-1/2 rounded-[6px] border border-white/30 object-cover"
-        draggable={false}
-      />
-      <div className="absolute inset-x-[7%] top-[60%] flex items-center justify-center gap-1">
-        <CountryFlag code={card.countryCode} size="xs" decorative />
-        <span className="truncate text-[10px] font-bold text-white" style={{ textShadow: "0 1px 3px rgba(0,0,0,0.6)" }}>
-          {card.username}
-        </span>
-      </div>
-      <div
-        className="absolute inset-x-0 top-[74%] text-center text-[8px] font-bold uppercase tracking-widest text-white/90"
-        style={{ textShadow: "0 1px 3px rgba(0,0,0,0.6)" }}
-      >
-        {card.tierLabel ?? "unrated"}
-      </div>
-      <div
-        className="absolute inset-x-0 bottom-[5%] text-center text-[8px] font-semibold text-white/70 tabular-nums"
-        style={{ textShadow: "0 1px 3px rgba(0,0,0,0.6)" }}
-      >
-        {Math.round(card.pp).toLocaleString()}pp · #{card.globalRank.toLocaleString()}
-      </div>
-    </div>
-  );
-}
-
 function CollectionCardTile({
   card,
   thumbnail,
@@ -324,15 +308,18 @@ function CollectionCardTile({
 
   return (
     <div ref={hostRef} className="relative" style={{ aspectRatio: "5 / 7" }}>
-      {thumbnail ? (
-        <img
+      <CollectionCardFacePlaceholder card={card} />
+      {thumbnail && (
+        <motion.img
+          key={thumbnail}
           src={thumbnail}
           alt={`${card.username} maniacard`}
-          className="h-full w-full rounded-[10px] object-cover"
+          className="absolute inset-0 h-full w-full rounded-[10px] object-cover"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.14, ease: "easeOut" }}
           draggable={false}
         />
-      ) : (
-        <CardSketch card={card} />
       )}
       {card.copies > 1 && (
         <span className="absolute right-1.5 top-1.5 rounded bg-black/70 px-1 py-px text-[10px] font-bold text-white tabular-nums">
@@ -343,19 +330,39 @@ function CollectionCardTile({
   );
 }
 
+function CollectionCardFacePlaceholder({ card }: { card?: CollectedCard }) {
+  const tier = card?.tier ?? "common";
+  let thumbnail = skeletonThumbnailCache.get(tier) ?? null;
+  if (!thumbnail) {
+    thumbnail = renderCardSkeletonThumbnail(tier, COLLECTION_CARD_THUMB_WIDTH);
+    if (thumbnail) skeletonThumbnailCache.set(tier, thumbnail);
+  }
+  if (thumbnail) {
+    return (
+      <img
+        src={thumbnail}
+        alt=""
+        className="h-full w-full rounded-[10px] object-cover"
+        draggable={false}
+      />
+    );
+  }
+
+  const style = MANIA_TIER_STYLES[tier];
+  return (
+    <div
+      className={`relative overflow-hidden rounded-[10px] border bg-gradient-to-br ${style.background} ${style.border}`}
+      style={{ aspectRatio: "5 / 7" }}
+    >
+      <div className="absolute inset-0 bg-black/12" />
+    </div>
+  );
+}
+
 function CollectionCardPlaceholder() {
   return (
     <div>
-      <div
-        className="relative overflow-hidden rounded-[10px] border border-osu-b3/40 bg-osu-b4/40"
-        style={{ aspectRatio: "5 / 7" }}
-      >
-        <div className="absolute inset-[7px] rounded-[7px] border border-white/10" />
-        <div className="absolute left-1/2 top-[9%] aspect-square w-[66%] -translate-x-1/2 rounded-[6px] bg-white/8" />
-        <div className="absolute inset-x-[18%] top-[62%] h-3 rounded bg-white/8" />
-        <div className="absolute inset-x-[26%] top-[76%] h-2 rounded bg-white/6" />
-        <div className="absolute inset-x-[20%] bottom-[7%] h-2 rounded bg-white/6" />
-      </div>
+      <CollectionCardFacePlaceholder />
       <div className="mx-auto mt-1.5 h-4 w-10 rounded bg-osu-b4/40" />
     </div>
   );
@@ -387,9 +394,17 @@ export function CollectionPanel({
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [collectionPage, setCollectionPage] = useState(0);
+  const [simulateSkeletons, setSimulateSkeletons] = useState(false);
   const collectionControlsRef = useRef<HTMLDivElement | null>(null);
-  const [readyPageSignature, setReadyPageSignature] = useState("");
-  const [serverPage, setServerPage] = useState<ServerPackCollectionPage | null>(null);
+  const [, setThumbnailRevision] = useState(0);
+  const [serverPage, setServerPage] = useState<ServerPackCollectionPage | null>(() =>
+    serverCollectionPageCache.get(serverCollectionCacheKey({
+      page: 0,
+      pageSize: COLLECTION_PAGE_SIZE,
+      tier: "all",
+      query: "",
+    })) ?? null,
+  );
   const [serverLoading, setServerLoading] = useState(false);
   const [serverRefreshKey, setServerRefreshKey] = useState(0);
   // One-shot "+N" shard floats spawned at the click point of a recycle.
@@ -550,11 +565,7 @@ export function CollectionPanel({
   const pageEnd = Math.min(filteredTotal, pageStart + COLLECTION_PAGE_SIZE);
   const pageCards = useServerCollection ? cards : visibleCards.slice(pageStart, pageEnd);
   const currentPageSignature = pageSignature(pageCards);
-  const pageReady =
-    !currentPageSignature ||
-    readyPageSignature === currentPageSignature ||
-    pageCards.every((card) => !card.skills || thumbnailCache.has(thumbnailKey(card)));
-  const showPagePlaceholders = serverLoading || !pageReady;
+  const showPagePlaceholders = serverLoading && pageCards.length === 0;
   const placeholderCount = Math.min(COLLECTION_PAGE_SIZE, Math.max(1, pageCards.length || filteredTotal || COLLECTION_PAGE_SIZE));
   const recyclable = useServerCollection ? serverPage?.duplicateShardTotal ?? 0 : wallet ? duplicateShardTotal(wallet) : 0;
   const selectedShardTotal = cards
@@ -584,6 +595,14 @@ export function CollectionPanel({
       return;
     }
     let cancelled = false;
+    const cacheKey = serverCollectionCacheKey({
+      page: collectionPage,
+      pageSize: COLLECTION_PAGE_SIZE,
+      tier: tierFilter,
+      query: trimmedQuery,
+    });
+    const cachedPage = serverCollectionPageCache.get(cacheKey) ?? null;
+    if (cachedPage) setServerPage(cachedPage);
     setServerLoading(true);
     void fetchServerPackCollectionPage({
       data: {
@@ -595,10 +614,11 @@ export function CollectionPanel({
     })
       .then((page) => {
         if (cancelled) return;
-        setServerPage(page);
+        if (page) serverCollectionPageCache.set(cacheKey, page);
+        setServerPage(page ?? cachedPage);
       })
       .catch(() => {
-        if (!cancelled) setServerPage(null);
+        if (!cancelled && !cachedPage) setServerPage(null);
       })
       .finally(() => {
         if (!cancelled) setServerLoading(false);
@@ -614,27 +634,35 @@ export function CollectionPanel({
     const signature = currentPageSignature;
 
     if (!signature) {
-      setReadyPageSignature(signature);
       return;
     }
 
-    const missing = cardsForPage.filter((card) => card.skills && !thumbnailCache.has(thumbnailKey(card)));
-    if (missing.length === 0) {
-      setReadyPageSignature(signature);
-      return;
-    }
+    const missing = cardsForPage
+      .map((card) => ({ card, key: cardThumbnailKeyForCollectionCard(card) }))
+      .filter((entry): entry is { card: CollectedCard; key: string } =>
+        Boolean(entry.key && entry.card.skills && !getMemoryCardThumbnail(entry.key)),
+      );
+    if (missing.length === 0) return;
 
-    setReadyPageSignature("");
     const run = async () => {
-      await Promise.all(missing.map(async (card) => {
+      const toRender: CollectedCard[] = [];
+      await Promise.all(missing.map(async ({ card, key }) => {
+        const cached = await loadPersistedCardThumbnail(key);
+        if (cancelled) return;
+        if (cached) setThumbnailRevision((revision) => revision + 1);
+        else toRender.push(card);
+      }));
+      if (cancelled || toRender.length === 0) return;
+
+      await Promise.all(toRender.map(async (card) => {
         try {
           const thumbnail = await renderCollectionThumbnail(card);
-          if (thumbnail) thumbnailCache.set(thumbnailKey(card), thumbnail);
+          if (cancelled || !thumbnail) return;
+          setThumbnailRevision((revision) => revision + 1);
         } catch {
           // The DOM fallback remains for this card.
         }
       }));
-      if (!cancelled) setReadyPageSignature(signature);
     };
     void run();
 
@@ -783,6 +811,22 @@ export function CollectionPanel({
               />
             </div>
           )}
+          {import.meta.env.DEV && (
+            <button
+              type="button"
+              onClick={() => setSimulateSkeletons((active) => !active)}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                simulateSkeletons
+                  ? "border-osu-pink/50 bg-osu-pink/15 text-white"
+                  : "border-osu-b3/40 bg-osu-b4/40 text-osu-f1 hover:bg-osu-b4/70 hover:text-white"
+              }`}
+              aria-pressed={simulateSkeletons}
+              title="Dev only: show collection card skeletons"
+            >
+              <ImageOff className="h-3.5 w-3.5" />
+              Skeletons
+            </button>
+          )}
         </div>
       )}
 
@@ -802,7 +846,7 @@ export function CollectionPanel({
             const dupValue = duplicateShardValue(card);
             const lastCopyValue = shardValueForTier(card.tier);
             const confirming = confirmUserId === card.userId;
-            const thumbnail = thumbnailCache.get(thumbnailKey(card)) ?? null;
+            const thumbnail = simulateSkeletons ? null : getMemoryCardThumbnail(cardThumbnailKeyForCollectionCard(card));
             return (
               <div
                 key={card.userId}
