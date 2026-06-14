@@ -40,7 +40,15 @@ import {
 import { parseCachedManiaBeatmap } from "../lib/parsed-beatmap-cache";
 import { extractReplayScoreIdFromFilename, parseUploadedReplayBuffer } from "../lib/replay-upload";
 import { startProgressPoll } from "../lib/progress-poll";
-import { fetchLiveGlobalRankings, getLiveBackendUrl, isLiveBackendConfigured, type LiveGlobalRankingEntry } from "../lib/live-backend";
+import {
+  fetchLiveGlobalRankings,
+  fetchLivePlayerCachedProfileSnapshotDirect,
+  fetchLivePlayerRecentScoresDirect,
+  getLiveBackendUrl,
+  isLiveBackendConfigured,
+  type LiveGlobalRankingEntry,
+  type LivePlayerProfileSnapshot,
+} from "../lib/live-backend";
 import { isGlobalScope } from "../lib/country";
 import { useAuth } from "../lib/auth-context";
 import { readGlobalTopPlayersCache, readGlobalTopPlayersMemoryCache, writeGlobalTopPlayersCache } from "../lib/global-top-players-cache";
@@ -79,6 +87,8 @@ interface ReplaySearch {
   player?: string; // selected player username (for URL state)
 }
 
+type PlayerScoreGroups = { best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScore[]; recent: OsuScore[] };
+
 type FullscreenDocument = Document & {
   webkitFullscreenElement?: Element | null;
   webkitExitFullscreen?: () => Promise<void> | void;
@@ -93,6 +103,13 @@ const FULLSCREEN_POINTER_CHROME_HIDE_MS = 1800;
 const FULLSCREEN_TAP_CHROME_HIDE_MS = 3000;
 const REPLAY_VIDEO_EXPORT_CLIP_SECONDS = 20;
 const MAX_UPLOAD_REPLAY_BYTES = 25 * 1024 * 1024;
+const REPLAY_PLAYER_LIVE_CACHE_TIMEOUT_MS = 900;
+const REPLAY_PLAYER_INITIAL_SCORE_TARGET_MS = 2000;
+const REPLAY_PLAYER_BEST_DISPLAY_LIMIT = 100;
+const REPLAY_PLAYER_BEST_FALLBACK_LIMIT = 50;
+const REPLAY_PLAYER_RECENT_LIMIT = 25;
+const REPLAY_PLAYER_PINNED_LIMIT = 25;
+const REPLAY_PLAYER_FIRSTS_LIMIT = 50;
 const REPLAY_VIDEO_EXPORT_RESOLUTIONS: Record<ReplayVideoExportOptions["resolution"], { width: number; height: number }> = {
   "720p": { width: 1280, height: 720 },
   "1080p": { width: 1920, height: 1080 },
@@ -445,6 +462,51 @@ function mergeScoresById(...groups: OsuScore[][]): OsuScore[] {
   return Array.from(byId.values());
 }
 
+function createEmptyPlayerScoreGroups(): PlayerScoreGroups {
+  return { best: [], firsts: [], pinned: [], recent: [] };
+}
+
+function hasAnyPlayerScore(groups: PlayerScoreGroups): boolean {
+  return groups.best.length > 0 || groups.firsts.length > 0 || groups.pinned.length > 0 || groups.recent.length > 0;
+}
+
+function buildPlayerScoreGroups(raw: PlayerScoreGroups): PlayerScoreGroups {
+  const filterReplayable = (scores: OsuScore[]) => scores.filter((s) => scoreHasReplay(s));
+  const pinned = filterReplayable(raw.pinned);
+  const pinnedIds = new Set(pinned.map((score) => score.id));
+  const best = filterReplayable(raw.best).filter((score) => !pinnedIds.has(score.id));
+  const bestIds = new Set(best.map((score) => score.id));
+  const firsts = filterReplayable(raw.firsts).filter((score) => !pinnedIds.has(score.id) && !bestIds.has(score.id));
+  // Recent is intentionally not deduped against the others: a recent play that
+  // is also a best score is exactly what you want to see as "new".
+  const recent = filterReplayable(raw.recent);
+  return { best, firsts, pinned, recent };
+}
+
+function getSnapshotUserId(snapshot: LivePlayerProfileSnapshot | null): number | null {
+  const userId = Number(snapshot?.user?.id);
+  return Number.isInteger(userId) && userId > 0 ? userId : null;
+}
+
+function getSnapshotBestScores(snapshot: LivePlayerProfileSnapshot | null): OsuScore[] {
+  return Array.isArray(snapshot?.bestScores)
+    ? snapshot.bestScores.slice(0, REPLAY_PLAYER_BEST_DISPLAY_LIMIT)
+    : [];
+}
+
+async function fetchReplayCachedProfileSnapshot(key: string): Promise<LivePlayerProfileSnapshot | null> {
+  if (!isLiveBackendConfigured()) return null;
+  try {
+    return await withTimeout(
+      fetchLivePlayerCachedProfileSnapshotDirect(key),
+      REPLAY_PLAYER_LIVE_CACHE_TIMEOUT_MS,
+      "Timed out loading cached profile snapshot",
+    );
+  } catch {
+    return null;
+  }
+}
+
 function ReplayPage() {
   const { scoreId, beatmapsetId, uploadId, t: initialTime, tab, player: playerParam } = Route.useSearch();
   const navigate = useNavigate();
@@ -474,11 +536,13 @@ function ReplayPage() {
   const [scorePreviewError, setScorePreviewError] = useState<string | null>(null);
 
   // Player browse state
-  const [playerScoreGroups, setPlayerScoreGroups] = useState<{ best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScore[]; recent: OsuScore[] } | null>(null);
+  const [playerScoreGroups, setPlayerScoreGroups] = useState<PlayerScoreGroups | null>(null);
   const [loadingScores, setLoadingScores] = useState(false);
   const [playerLookupUserId, setPlayerLookupUserId] = useState<number | null>(null);
   const [loadedPlayerParam, setLoadedPlayerParam] = useState<string | null>(null);
   const loadingPlayerParamRef = useRef<string | null>(null);
+  const playerScoreRequestRef = useRef(0);
+  const playerIdsByParamRef = useRef<Map<string, number>>(new Map());
 
   // Browse mode
   const [browseMode, setBrowseMode] = useState<ReplayBrowseMode>(tab === "beatmap" || tab === "upload" ? tab : "player");
@@ -576,6 +640,8 @@ function ReplayPage() {
 
   useEffect(() => {
     if (scoreId) {
+      playerScoreRequestRef.current += 1;
+      setLoadingScores(false);
       loadReplay(scoreId);
       return;
     }
@@ -639,33 +705,114 @@ function ReplayPage() {
     }));
   };
 
-  const loadPlayerScores = useCallback(async (userId: number) => {
-    setLoadingScores(true);
-    try {
-      const [best, firsts, pinned, recent] = await Promise.all([
-        getUserScoresBest({ data: { userId, limit: 100 } }).catch(() => [] as OsuScore[]),
-        getUserScoresFirsts({ data: { userId, limit: 100 } }).catch(() => [] as OsuScore[]),
-        getUserScoresPinned({ data: { userId, limit: 50 } }).catch(() => [] as OsuScore[]),
-        getUserScoresRecent({ data: { userId, limit: 50, include_fails: true } }).catch(() => [] as OsuScore[]),
+  const loadPlayerScores = useCallback(async (
+    userId: number,
+    options: { profileKey?: string; cachedSnapshot?: LivePlayerProfileSnapshot | null } = {},
+  ) => {
+    const requestId = playerScoreRequestRef.current + 1;
+    playerScoreRequestRef.current = requestId;
+    const isCurrentRequest = () => playerScoreRequestRef.current === requestId;
+    let rawGroups = createEmptyPlayerScoreGroups();
+    let visibleGroups = createEmptyPlayerScoreGroups();
+    let initialResolved = false;
+    let initialTimeout: number | null = null;
+    let resolveInitial: () => void = () => {};
+
+    const finishInitial = () => {
+      if (initialResolved) return;
+      initialResolved = true;
+      if (initialTimeout) window.clearTimeout(initialTimeout);
+      if (isCurrentRequest()) setLoadingScores(false);
+      resolveInitial();
+    };
+
+    const applyGroups = () => {
+      if (!isCurrentRequest()) return;
+      visibleGroups = buildPlayerScoreGroups(rawGroups);
+      setPlayerScoreGroups(visibleGroups);
+      if (hasAnyPlayerScore(visibleGroups)) finishInitial();
+    };
+
+    const runScoreTask = (
+      key: keyof PlayerScoreGroups,
+      promise: Promise<OsuScore[]>,
+      options: { initialTimeoutMs?: number } = {},
+    ): Promise<void> => {
+      const updatePromise = promise
+        .then((scores) => {
+          rawGroups = { ...rawGroups, [key]: scores };
+          applyGroups();
+        })
+        .catch(() => {});
+
+      if (!options.initialTimeoutMs) return updatePromise;
+      return Promise.race([
+        updatePromise,
+        new Promise<void>((resolve) => {
+          window.setTimeout(resolve, options.initialTimeoutMs);
+        }),
       ]);
-      const filterReplayable = (scores: OsuScore[]) => scores.filter((s) => scoreHasReplay(s));
-      const pinnedFiltered = filterReplayable(pinned);
-      const pinnedIds = new Set(pinnedFiltered.map((s) => s.id));
-      const bestFiltered = filterReplayable(best).filter((s) => !pinnedIds.has(s.id));
-      const bestIds = new Set(bestFiltered.map((s) => s.id));
-      const firstsFiltered = filterReplayable(firsts).filter((s) => !pinnedIds.has(s.id) && !bestIds.has(s.id));
-      // Recent is intentionally NOT deduped against the others — a recent play
-      // that is also a best score is exactly what you want to see as "new".
-      const recentFiltered = filterReplayable(recent);
-      const nextGroups = { best: bestFiltered, firsts: firstsFiltered, pinned: pinnedFiltered, recent: recentFiltered };
-      setPlayerScoreGroups(nextGroups);
-    } catch { setPlayerScoreGroups({ best: [], firsts: [], pinned: [], recent: [] }); }
-    finally { setLoadingScores(false); }
+    };
+
+    const fetchRecentScores = async (): Promise<OsuScore[]> => {
+      if (isLiveBackendConfigured()) {
+        try {
+          const section = await withTimeout(
+            fetchLivePlayerRecentScoresDirect(userId),
+            REPLAY_PLAYER_LIVE_CACHE_TIMEOUT_MS,
+            "Timed out loading cached recent scores",
+          );
+          return Array.isArray(section.payload) ? section.payload.slice(0, REPLAY_PLAYER_RECENT_LIMIT) : [];
+        } catch {
+          // Fall back to the existing osu! score-list cache below.
+        }
+      }
+      return getUserScoresRecent({ data: { userId, limit: REPLAY_PLAYER_RECENT_LIMIT, include_fails: true } }).catch(() => [] as OsuScore[]);
+    };
+
+    const profileKey = options.profileKey?.trim() || String(userId);
+    const snapshotPromise = options.cachedSnapshot !== undefined
+      ? Promise.resolve(options.cachedSnapshot)
+      : fetchReplayCachedProfileSnapshot(profileKey);
+    const bestPromise = snapshotPromise.then(async (snapshot) => {
+      const snapshotBest = getSnapshotBestScores(snapshot);
+      if (snapshotBest.length > 0) return snapshotBest;
+      return getUserScoresBest({ data: { userId, limit: REPLAY_PLAYER_BEST_FALLBACK_LIMIT } }).catch(() => [] as OsuScore[]);
+    });
+
+    setLoadingScores(true);
+    setPlayerScoreGroups(createEmptyPlayerScoreGroups());
+
+    const initialReady = new Promise<void>((resolve) => {
+      resolveInitial = resolve;
+      initialTimeout = window.setTimeout(() => {
+        if (hasAnyPlayerScore(visibleGroups)) finishInitial();
+      }, REPLAY_PLAYER_INITIAL_SCORE_TARGET_MS);
+    });
+
+    const primaryTasks = [
+      runScoreTask("best", bestPromise, { initialTimeoutMs: REPLAY_PLAYER_INITIAL_SCORE_TARGET_MS }),
+      runScoreTask("recent", fetchRecentScores(), { initialTimeoutMs: REPLAY_PLAYER_INITIAL_SCORE_TARGET_MS }),
+      runScoreTask("pinned", getUserScoresPinned({ data: { userId, limit: REPLAY_PLAYER_PINNED_LIMIT } }).catch(() => [] as OsuScore[]), {
+        initialTimeoutMs: REPLAY_PLAYER_INITIAL_SCORE_TARGET_MS,
+      }),
+    ];
+
+    void Promise.allSettled(primaryTasks).then(() => {
+      if (!isCurrentRequest()) return;
+      finishInitial();
+      void runScoreTask("firsts", getUserScoresFirsts({ data: { userId, limit: REPLAY_PLAYER_FIRSTS_LIMIT } }).catch(() => [] as OsuScore[]));
+    });
+
+    await initialReady;
   }, []);
 
   const handleSelectPlayer = async (user: { id: number; username: string }) => {
+    const normalizedUsername = normalizeReplayPlayerParam(user.username);
+    if (normalizedUsername) playerIdsByParamRef.current.set(normalizedUsername, user.id);
     navigate({ to: "/replay", search: { player: user.username } });
     setPlayerScoreGroups(null);
+    setLoadingScores(true);
     setPlayerLookupUserId(user.id);
     setLoadedPlayerParam(null);
   };
@@ -900,8 +1047,10 @@ function ReplayPage() {
   useEffect(() => {
     if (scoreId) return;
     if (!normalizedPlayerParam) {
+      playerScoreRequestRef.current += 1;
       setPlayerScoreGroups(null);
       setPlayerLookupUserId(null);
+      setLoadingScores(false);
       setLoadedPlayerParam(null);
       loadingPlayerParamRef.current = null;
       return;
@@ -919,6 +1068,31 @@ function ReplayPage() {
     let cancelled = false;
     (async () => {
       try {
+        const loadResolvedUser = async (userId: number, cachedSnapshot?: LivePlayerProfileSnapshot | null) => {
+          if (cancelled) return;
+          setPlayerLookupUserId(userId);
+          await loadPlayerScores(userId, {
+            profileKey: cachedSnapshot ? playerParam! : String(userId),
+            cachedSnapshot,
+          });
+          if (!cancelled) setLoadedPlayerParam(normalizedPlayerParam);
+        };
+
+        const knownUserId = playerIdsByParamRef.current.get(normalizedPlayerParam);
+        if (knownUserId) {
+          await loadResolvedUser(knownUserId);
+          return;
+        }
+
+        const cachedSnapshot = await fetchReplayCachedProfileSnapshot(playerParam!);
+        const snapshotUserId = getSnapshotUserId(cachedSnapshot);
+        if (cancelled) return;
+        if (snapshotUserId) {
+          playerIdsByParamRef.current.set(normalizedPlayerParam, snapshotUserId);
+          await loadResolvedUser(snapshotUserId, cachedSnapshot);
+          return;
+        }
+
         const res = await searchUsers({ data: { query: playerParam! } });
         const match = (res.user?.data ?? []).find(
           (u: { username: string }) => u.username.toLowerCase() === normalizedPlayerParam,
@@ -926,16 +1100,23 @@ function ReplayPage() {
         if (cancelled) return;
 
         if (match) {
-          setPlayerLookupUserId(match.id);
-          await loadPlayerScores(match.id);
-          if (!cancelled) setLoadedPlayerParam(normalizedPlayerParam);
+          playerIdsByParamRef.current.set(normalizedPlayerParam, match.id);
+          await loadResolvedUser(match.id);
           return;
         }
 
         setPlayerLookupUserId(null);
-        setPlayerScoreGroups({ best: [], firsts: [], pinned: [], recent: [] });
+        setPlayerScoreGroups(createEmptyPlayerScoreGroups());
+        setLoadingScores(false);
         setLoadedPlayerParam(normalizedPlayerParam);
-      } catch { /* ignore */ }
+      } catch {
+        if (!cancelled) {
+          setPlayerLookupUserId(null);
+          setPlayerScoreGroups(createEmptyPlayerScoreGroups());
+          setLoadingScores(false);
+          setLoadedPlayerParam(normalizedPlayerParam);
+        }
+      }
       finally {
         if (loadingPlayerParamRef.current === normalizedPlayerParam) {
           loadingPlayerParamRef.current = null;
@@ -1060,7 +1241,9 @@ function ReplayPage() {
                 selectedCountry={selectedCountry}
                 onModeChange={(mode) => {
                   setBrowseMode(mode);
+                  playerScoreRequestRef.current += 1;
                   setPlayerScoreGroups(null);
+                  setLoadingScores(false);
                   setBeatmapResults([]);
                   setRawBeatmapScores([]);
                   setPartialBeatmapScores([]);

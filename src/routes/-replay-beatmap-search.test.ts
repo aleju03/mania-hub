@@ -17,7 +17,8 @@ describe("replay beatmap search", () => {
 
     expect(routeSource).toContain("const [playerLookupUserId, setPlayerLookupUserId] = useState<number | null>(null)");
     expect(routeSource).toContain("setPlayerLookupUserId(user.id)");
-    expect(routeSource).toContain("setPlayerLookupUserId(match.id)");
+    expect(routeSource).toContain("playerIdsByParamRef.current.set(normalizedPlayerParam, match.id)");
+    expect(routeSource).toContain("await loadResolvedUser(match.id)");
     expect(routeSource).toContain("playerLookupUserId={playerLookupUserId}");
     expect(browseSource).toContain("if (playerLookupUserId) return playerLookupUserId");
   });

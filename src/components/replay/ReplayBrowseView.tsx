@@ -382,7 +382,7 @@ function PlayerReplayBrowser({
         )}
       </div>
 
-      {loadingScores && (
+      {loadingScores && !hasAnyScores && (
         <div className="flex justify-center py-8">
           <div className="w-6 h-6 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
         </div>

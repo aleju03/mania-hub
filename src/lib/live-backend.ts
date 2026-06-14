@@ -607,6 +607,17 @@ export async function fetchLivePlayerProfileSnapshotDirect(key: string): Promise
   return fetchLiveJson(`/api/profiles/${encodeURIComponent(trimmed)}/snapshot`);
 }
 
+export async function fetchLivePlayerCachedProfileSnapshotDirect(key: string): Promise<LivePlayerProfileSnapshot | null> {
+  const trimmed = key.trim().slice(0, 120);
+  if (!trimmed) throw new Error("Invalid profile key.");
+  const base = getLiveBackendUrl();
+  if (!base) throw new Error("Live backend is not configured.");
+  const response = await fetch(`${base}/api/profiles/${encodeURIComponent(trimmed)}/cached-snapshot`, { credentials: "omit" });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`Live backend ${response.status}`);
+  return response.json() as Promise<LivePlayerProfileSnapshot>;
+}
+
 export async function fetchLivePlayerRecentScoresDirect(userId: number): Promise<LivePlayerProfileSection<OsuScore[]>> {
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("Invalid user ID.");
   return fetchLiveJson(`/api/profiles/${userId}/recent`);

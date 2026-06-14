@@ -23,7 +23,8 @@ describe("replay upload mode", () => {
     expect(routeSource).toContain('"X-Replay-Filename": encodeURIComponent(filename)');
     expect(routeSource).toContain("uploaded.scoreId");
     expect(routeSource).toContain('getScore({ data: { scoreId, mode: "mania" } })');
-    expect(routeSource).toContain("setUploadedReplayMods(uploadedScore?.mods ?? uploaded.mods)");
+    expect(routeSource).toContain("const uploadedMods = uploadedScore?.mods ?? uploaded.mods");
+    expect(routeSource).toContain("setUploadedReplayMods(uploadedMods)");
     expect(routeSource).toContain("lookupBeatmapByChecksum({ data: { checksum } })");
     expect(routeSource).toContain("replayMods={uploadedReplayMods}");
     expect(routeSource).toContain("shareUrl={uploadedReplayShareUrl");
