@@ -1,4 +1,4 @@
-import { getModAcronyms, getScoreDisplayValues, getScoreRate, getScoreTimestamp } from "./score";
+import { getModAcronyms, getScoreDisplayValues, getScoreRate, getScoreTimestamp, getScoreUrl } from "./score";
 import type { InsightScoreSnapshot, OsuScore, UserProfileInsights } from "./types";
 
 function getPpDistributionStep(top: number): number {
@@ -82,6 +82,7 @@ function scoreToSnapshot(score: OsuScore): InsightScoreSnapshot {
     rank: display.rank,
     coverUrl: score.beatmapset?.covers?.cover ?? "",
     beatmapUrl: score.beatmap?.url ?? `https://osu.ppy.sh/b/${score.beatmap?.id ?? 0}`,
+    scoreUrl: getScoreUrl(score),
     date: getScoreTimestamp(score) ?? "",
     mods: getModAcronyms(score.mods),
   };

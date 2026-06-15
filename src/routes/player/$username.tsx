@@ -357,6 +357,12 @@ export type ModFilterMode = "include" | "exclude";
 type ModFilterState = Record<string, ModFilterMode>;
 type BestSort = "pp" | "newest" | "oldest";
 type BestAgeSort = Exclude<BestSort, "pp">;
+type PpDistributionMode = "bands" | "cumulative";
+type PpCumulativeDistributionRow = {
+  threshold: number;
+  count: number;
+  total: number;
+};
 
 // Synthetic chip used to filter for scores submitted without any mods.
 const NO_MOD_KEY = "NM";
@@ -558,6 +564,36 @@ function getScoreListSignature(scores: OsuScore[]): string {
 
 function scoreListsAreEquivalent(a: OsuScore[], b: OsuScore[]): boolean {
   return a.length === b.length && getScoreListSignature(a) === getScoreListSignature(b);
+}
+
+function getPpCumulativeDistributionStep(top: number): number {
+  return top < 250 ? 50 : 100;
+}
+
+function buildPpCumulativeDistribution(scores: OsuScore[]): PpCumulativeDistributionRow[] {
+  const ppValues = scores
+    .map((score) => score.pp)
+    .filter((pp): pp is number => typeof pp === "number" && Number.isFinite(pp))
+    .sort((a, b) => b - a);
+
+  if (!ppValues.length) return [];
+
+  const top = ppValues[0];
+  const bottom = ppValues[ppValues.length - 1];
+  const step = getPpCumulativeDistributionStep(top);
+  const maxThreshold = Math.max(0, Math.floor(top / step) * step);
+  const minThreshold = Math.max(0, Math.floor(bottom / step) * step);
+  const rows: PpCumulativeDistributionRow[] = [];
+  let count = 0;
+
+  for (let threshold = maxThreshold; threshold >= minThreshold; threshold -= step) {
+    while (count < ppValues.length && ppValues[count] >= threshold) {
+      count += 1;
+    }
+    rows.push({ threshold, count, total: ppValues.length });
+  }
+
+  return rows;
 }
 
 function profileUsersAreEquivalent(a: OsuUser | null, b: OsuUser): boolean {
@@ -834,11 +870,13 @@ export function PlayerProfilePage({
   const [hoveredMod, setHoveredMod] = useState<string | null>(null);
   const [bpmModalOpen, setBpmModalOpen] = useState(false);
   const [ppModalOpen, setPpModalOpen] = useState(false);
+  const [ppDistributionMode, setPpDistributionMode] = useState<PpDistributionMode>("bands");
   const [recentHasMore, setRecentHasMore] = useState(false);
   const [bestVisibleCount, setBestVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const [recentVisibleCount, setRecentVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const tabsRailRef = useRef<HTMLDivElement | null>(null);
   const loadedProfileKeyRef = useRef<string | null>(null);
+  const ppCumulativeDistribution = useMemo(() => buildPpCumulativeDistribution(best), [best]);
 
   useLayoutEffect(() => {
     const resetScroll = () => window.scrollTo({ top: 0, left: 0, behavior: "auto" });
@@ -1603,12 +1641,51 @@ export function PlayerProfilePage({
                 {(() => {
                   const ppDistribution = profileInsights.ppDistribution;
                   const ppTotal = ppDistribution[0]?.total ?? profileInsights.sampleSize;
+                  const showCumulative = ppDistributionMode === "cumulative" && ppCumulativeDistribution.length > 0;
+                  const ppRows = showCumulative
+                    ? ppCumulativeDistribution.map((entry, index) => ({
+                        key: `cumulative:${entry.threshold}`,
+                        label: formatPpCumulativeDistributionLabel(entry.threshold),
+                        count: entry.count,
+                        total: entry.total,
+                        color: getPpDistributionColor(index, false),
+                      }))
+                    : ppDistribution.map((entry, index) => ({
+                        key: `${entry.min ?? "below"}:${entry.max ?? "up"}`,
+                        label: formatPpDistributionLabel(entry),
+                        count: entry.count,
+                        total: ppTotal,
+                        color: getPpDistributionColor(index, entry.min == null),
+                      }));
 
                   return (
                     <>
-                      <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">PP Distribution</div>
-                      <div className="mt-0.5 text-[11px] text-osu-f1/60">
-                        across {ppTotal} profile top plays with PP
+                      <div className="pr-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="text-[10px] uppercase tracking-wider text-osu-f1 font-semibold">PP Distribution</div>
+                          <div className="mt-0.5 text-[11px] text-osu-f1/60">
+                            across {ppTotal} profile top plays with PP
+                          </div>
+                        </div>
+                        <div className="inline-flex w-fit items-center gap-0.5 rounded-lg border border-osu-b3/20 bg-osu-b4/60 p-0.5">
+                          {(["bands", "cumulative"] as const).map((mode) => {
+                            const active = ppDistributionMode === mode;
+                            return (
+                              <button
+                                key={mode}
+                                type="button"
+                                onClick={() => setPpDistributionMode(mode)}
+                                aria-pressed={active}
+                                className={`rounded-md px-2 py-1 text-[10px] font-semibold transition-colors cursor-pointer ${active
+                                  ? "bg-osu-pink/15 text-osu-pink-light"
+                                  : "text-osu-f1 hover:bg-osu-b3/40 hover:text-osu-l2"
+                                }`}
+                              >
+                                {mode === "bands" ? "Bands" : "Cumulative"}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
 
                       <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -1620,28 +1697,27 @@ export function PlayerProfilePage({
                       </div>
 
                       <div className="mt-4 space-y-2">
-                        {ppDistribution.map((entry, index) => {
-                          const pct = ppTotal > 0 ? (entry.count / ppTotal) * 100 : 0;
+                        {ppRows.map((entry) => {
+                          const pct = entry.total > 0 ? (entry.count / entry.total) * 100 : 0;
                           const fillWidth = entry.count > 0 ? Math.max(4, pct) : 0;
-                          const color = getPpDistributionColor(index, entry.min == null);
 
                           return (
-                            <div key={`${entry.min ?? "below"}:${entry.max ?? "up"}`} className="rounded-lg px-2.5 py-2 transition-colors hover:bg-osu-b3/25">
+                            <div key={entry.key} className="rounded-lg px-2.5 py-2 transition-colors hover:bg-osu-b3/25">
                               <div className="flex items-center justify-between gap-3">
                                 <div className="flex items-baseline gap-1.5">
-                                  <span className="text-sm font-bold text-white tabular-nums">{formatPpDistributionLabel(entry)}</span>
+                                  <span className="text-sm font-bold text-white tabular-nums">{entry.label}</span>
                                   <span className="text-[10px] text-osu-f1">pp</span>
                                 </div>
                                 <div className="flex items-baseline gap-1.5 tabular-nums">
                                   <span className="text-sm font-bold text-white">{entry.count}</span>
-                                  <span className="text-[10px] text-osu-f1">plays</span>
-                                  <span className="text-[10px] text-osu-f1/60">({formatPpDistributionPercent(entry.count, ppTotal)})</span>
+                                  <span className="text-[10px] text-osu-f1">{entry.count === 1 ? "play" : "plays"}</span>
+                                  <span className="text-[10px] text-osu-f1/60">({formatPpDistributionPercent(entry.count, entry.total)})</span>
                                 </div>
                               </div>
                               <div className="mt-1.5 h-1.5 rounded-full bg-osu-b3/40 overflow-hidden">
                                 <div
                                   className="h-full rounded-full"
-                                  style={{ width: `${fillWidth}%`, backgroundColor: color }}
+                                  style={{ width: `${fillWidth}%`, backgroundColor: entry.color }}
                                 />
                               </div>
                             </div>
@@ -3980,6 +4056,10 @@ function formatPpDistributionLabel(entry: UserProfileInsights["ppDistribution"][
   return `${entry.min}-${entry.max}`;
 }
 
+function formatPpCumulativeDistributionLabel(threshold: number): string {
+  return `${threshold}+`;
+}
+
 function formatPpDistributionPercent(count: number, total: number): string {
   if (total <= 0) return "0%";
   return `${((count / total) * 100).toLocaleString("en-US", {
@@ -4033,9 +4113,11 @@ function TopPlayCard({ label, snapshot }: { label: string; snapshot: InsightScor
     );
   }
 
+  const href = snapshot.scoreUrl ?? snapshot.beatmapUrl;
+
   return (
     <a
-      href={snapshot.beatmapUrl}
+      href={href}
       target="_blank"
       rel="noreferrer"
       className="block relative rounded-xl overflow-hidden border border-osu-b3/20 bg-osu-b4 h-[112px] hover:border-osu-pink/30 transition-colors group/topplay"

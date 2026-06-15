@@ -120,7 +120,9 @@ describe("calculateUserProfileInsights", () => {
     expect(insights.bpmRange?.max).toBe(270);
     expect(insights.bpmRange?.maxScore.title).toBe("Old DT");
     expect(insights.oldestTopPlay?.title).toBe("Old DT");
+    expect(insights.oldestTopPlay?.scoreUrl).toBe("https://osu.ppy.sh/scores/mania/1");
     expect(insights.newestTopPlay?.title).toBe("Newest NM");
+    expect(insights.newestTopPlay?.scoreUrl).toBe("https://osu.ppy.sh/scores/mania/3");
     expect(insights.ppRange).toEqual({ top: 700, bottom: 350 });
     expect(insights.ppDistribution).toEqual([
       { min: 700, max: null, count: 1, total: 4 },

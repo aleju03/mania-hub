@@ -487,6 +487,7 @@ export interface InsightScoreSnapshot {
   rank: string;
   coverUrl: string;
   beatmapUrl: string;
+  scoreUrl: string | null;
   date: string;
   mods: string[];
 }
