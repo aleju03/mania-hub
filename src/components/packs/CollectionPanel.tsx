@@ -2,7 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, LogIn, Recycle, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "#/lib/maniacard";
+import { getManiaCardTier, MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "#/lib/maniacard";
 import {
   duplicateShardTotal,
   duplicateShardValue,
@@ -58,6 +58,17 @@ interface LoadedServerCollectionPage {
 const COLLECTION_PAGE_SIZE = 15;
 const skeletonThumbnailCache = new Map<ManiaCardTier, string>();
 const serverCollectionPageCache = new Map<string, ServerPackCollectionPage>();
+const COLLECTION_TIER_ORDER: ManiaCardTier[] = [
+  "worldClass",
+  "ascendant",
+  "mythic",
+  "legendary",
+  "ultraRare",
+  "superRare",
+  "elite",
+  "rare",
+  "common",
+];
 
 let activeRenders = 0;
 const renderQueue: Array<() => void> = [];
@@ -99,6 +110,49 @@ async function renderCollectionThumbnail(card: CollectedCard): Promise<{ key: st
 
 function pageSignature(cards: CollectedCard[]) {
   return cards.map(thumbnailKey).join("|");
+}
+
+function resolveCollectionCardTier(card?: CollectedCard): ManiaCardTier {
+  if (card?.tier) return card.tier;
+  if (card?.skills && Number.isFinite(card.skills.cardPower)) {
+    return getManiaCardTier(card.skills.cardPower);
+  }
+  return "common";
+}
+
+function placeholderTiersForPage({
+  count,
+  pageStart,
+  tierFilter,
+  tierCounts,
+}: {
+  count: number;
+  pageStart: number;
+  tierFilter: ManiaCardTier | "all" | "unrated";
+  tierCounts: Record<string, number>;
+}): ManiaCardTier[] {
+  if (tierFilter !== "all") {
+    const tier = tierFilter === "unrated" ? "common" : tierFilter;
+    return Array.from({ length: count }, () => tier);
+  }
+
+  const tiers: ManiaCardTier[] = [];
+  let remainingBeforePage = pageStart;
+  for (const tier of COLLECTION_TIER_ORDER) {
+    const tierCount = Math.max(0, Math.floor(Number(tierCounts[tier]) || 0));
+    if (tierCount <= 0) continue;
+    if (remainingBeforePage >= tierCount) {
+      remainingBeforePage -= tierCount;
+      continue;
+    }
+    const visibleFromTier = Math.min(tierCount - remainingBeforePage, count - tiers.length);
+    tiers.push(...Array.from({ length: visibleFromTier }, () => tier));
+    remainingBeforePage = 0;
+    if (tiers.length >= count) break;
+  }
+
+  while (tiers.length < count) tiers.push("common");
+  return tiers;
 }
 
 function serverCollectionCacheKey({
@@ -355,8 +409,8 @@ function CollectionCardTile({
   );
 }
 
-function CollectionCardFacePlaceholder({ card }: { card?: CollectedCard }) {
-  const tier = card?.tier ?? "common";
+function CollectionCardFacePlaceholder({ card, tier: forcedTier }: { card?: CollectedCard; tier?: ManiaCardTier }) {
+  const tier = forcedTier ?? resolveCollectionCardTier(card);
   let thumbnail = skeletonThumbnailCache.get(tier) ?? null;
   if (!thumbnail) {
     thumbnail = renderCardSkeletonThumbnail(tier, COLLECTION_CARD_THUMB_WIDTH);
@@ -384,10 +438,10 @@ function CollectionCardFacePlaceholder({ card }: { card?: CollectedCard }) {
   );
 }
 
-function CollectionCardPlaceholder() {
+function CollectionCardPlaceholder({ tier }: { tier: ManiaCardTier }) {
   return (
     <div>
-      <CollectionCardFacePlaceholder />
+      <CollectionCardFacePlaceholder tier={tier} />
       <div className="mx-auto mt-1.5 h-4 w-10 rounded bg-osu-b4/40" />
     </div>
   );
@@ -621,6 +675,12 @@ export function CollectionPanel({
     COLLECTION_PAGE_SIZE,
     Math.max(1, Math.min(COLLECTION_PAGE_SIZE, filteredTotal - pageStart) || pageCards.length || COLLECTION_PAGE_SIZE),
   );
+  const placeholderTiers = placeholderTiersForPage({
+    count: placeholderCount,
+    pageStart,
+    tierFilter,
+    tierCounts: serverTierCounts,
+  });
   const recyclable = useServerCollection ? serverMetaPage?.duplicateShardTotal ?? 0 : wallet ? duplicateShardTotal(wallet) : 0;
   const selectedShardTotal = cards
     .filter((card) => selected.has(card.userId))
@@ -903,7 +963,7 @@ export function CollectionPanel({
       ) : (
         <div className={`mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5 ${selecting ? "select-none" : ""}`}>
           {showPagePlaceholders
-            ? Array.from({ length: placeholderCount }, (_, index) => <CollectionCardPlaceholder key={`placeholder-${index}`} />)
+            ? placeholderTiers.map((tier, index) => <CollectionCardPlaceholder key={`placeholder-${index}`} tier={tier} />)
             : pageCards.map((card) => {
             const dupValue = duplicateShardValue(card);
             const lastCopyValue = shardValueForTier(card.tier);
