@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "#/lib/auth-context";
+import type { ManiaCardTier } from "#/lib/maniacard";
 import {
   applyCardMint,
   loadWalletForViewer,
   MAX_PACK_CHARGES,
+  ownedCards,
   packWalletStorageKey,
   reconcileWallets,
   recordPull,
@@ -44,6 +46,7 @@ export interface PackWalletApi {
   recycleWhole: (userId: number) => number | Promise<number>;
   /* Whole-recycles a batch of cards in one server round-trip. */
   recycleWholeMany: (userIds: number[]) => number | Promise<number>;
+  recycleWholeMatching: (filter: { tier: ManiaCardTier | "all" | "unrated"; query: string }) => number | Promise<number>;
   recycleAll: () => number | Promise<number>;
   /* Backfills a recomputed mint (skills snapshot + tier) onto an owned
      card; used to upgrade legacy cards collected before snapshots existed. */
@@ -77,6 +80,17 @@ function parseWalletPayload(payload: string | null): PackWallet | null {
 
 function stripWalletCards(wallet: PackWallet): PackWallet {
   return Object.keys(wallet.cards).length === 0 ? wallet : { ...wallet, cards: {} };
+}
+
+function collectionCardMatchesFilter(
+  card: PackWallet["cards"][string],
+  filter: { tier: ManiaCardTier | "all" | "unrated"; query: string },
+): boolean {
+  const query = filter.query.trim().toLowerCase();
+  if (query && !card.username.toLowerCase().includes(query)) return false;
+  if (filter.tier === "all") return true;
+  if (filter.tier === "unrated") return card.tier === null;
+  return card.tier === filter.tier;
 }
 
 export function usePackWallet(): PackWalletApi {
@@ -201,9 +215,10 @@ export function usePackWallet(): PackWalletApi {
   };
 
   const recycleOnServer = async (
-    mode: "duplicates" | "whole" | "all_duplicates",
+    mode: "duplicates" | "whole" | "all_duplicates" | "whole_matching",
     userId?: number,
     userIds?: number[],
+    filter?: { tier: ManiaCardTier | "all" | "unrated"; query: string },
   ) => {
     const sync = syncRef.current;
     if (!sync.enabled) return null;
@@ -216,7 +231,15 @@ export function usePackWallet(): PackWalletApi {
         await sync.pushPromise;
       }
       if (Object.keys(walletRef.current?.cards ?? {}).length > 0) return null;
-      const result = await recycleServerPackCollection({ data: { mode, cardUserId: userId, cardUserIds: userIds } });
+      const result = await recycleServerPackCollection({
+        data: {
+          mode,
+          cardUserId: userId,
+          cardUserIds: userIds,
+          tier: filter?.tier,
+          query: filter?.query,
+        },
+      });
       if (!result) return null;
       commitServerWallet(result.payload, result.rev);
       return result.gained;
@@ -384,6 +407,30 @@ export function usePackWallet(): PackWalletApi {
         })();
       }
       return recycleManyLocally();
+    },
+    recycleWholeMatching: (filter) => {
+      const recycleMatchingLocally = () => {
+        let working = walletRef.current;
+        if (!working) return 0;
+        let gained = 0;
+        const userIds = ownedCards(working)
+          .filter((card) => collectionCardMatchesFilter(card, filter))
+          .map((card) => card.userId);
+        for (const userId of userIds) {
+          const result = recycleAllCopies(working, userId);
+          gained += result.gained;
+          working = result.wallet;
+        }
+        if (gained > 0) commit(working);
+        return gained;
+      };
+      if (syncRef.current.enabled) {
+        return (async () => {
+          const gained = await recycleOnServer("whole_matching", undefined, undefined, filter);
+          return gained !== null ? gained : recycleMatchingLocally();
+        })();
+      }
+      return recycleMatchingLocally();
     },
     recycleAll: () => {
       if (syncRef.current.enabled) {

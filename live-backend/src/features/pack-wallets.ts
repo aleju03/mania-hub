@@ -37,9 +37,10 @@ export interface PackCollectionPage {
   total: number;
   tierCounts: Record<string, number>;
   duplicateShardTotal: number;
+  filteredShardTotal: number;
 }
 
-export type PackRecycleMode = "duplicates" | "whole" | "all_duplicates";
+export type PackRecycleMode = "duplicates" | "whole" | "all_duplicates" | "whole_matching";
 export type PackWalletCardImportMode = "snapshot" | "delta";
 
 export interface PackRecycleResult {
@@ -390,11 +391,19 @@ export async function listPackCollectionCards(
      where owner_user_id = ? and copies > 0`,
     [userId],
   )).rows[0];
+  const filteredShardRow = (await exec(
+    db,
+    `select coalesce(sum(copies * ${shardValueSql("tier")}), 0) as total
+     from pack_collection_cards
+     where ${whereSql}`,
+    args,
+  )).rows[0];
   return {
     cards: rows.map((row) => cardFromRow(row as Record<string, unknown>)),
     total: Number(totalRow?.total) || 0,
     tierCounts: Object.fromEntries(tierRows.map((row) => [String(row.tier), Number(row.count) || 0])),
     duplicateShardTotal: Number(duplicateRow?.total) || 0,
+    filteredShardTotal: Number(filteredShardRow?.total) || 0,
   };
 }
 
@@ -405,10 +414,49 @@ export function shardValueForStoredTier(tier: string | null): number {
 export async function recyclePackCollectionCards(
   db: Db,
   userId: number,
-  options: { mode: PackRecycleMode; cardUserId?: number; cardUserIds?: number[] },
+  options: { mode: PackRecycleMode; cardUserId?: number; cardUserIds?: number[]; tier?: string | null; query?: string | null },
   now = Date.now(),
 ): Promise<PackRecycleResult> {
   let gained = 0;
+
+  if (options.mode === "whole_matching") {
+    const where = ["owner_user_id = ?", "copies > 0"];
+    const args: InValue[] = [userId];
+    const tier = options.tier ?? "all";
+    const query = options.query?.trim().toLowerCase() ?? "";
+    if (query) {
+      where.push("lower(username) like ?");
+      args.push(`%${query}%`);
+    }
+    if (tier && tier !== "all") {
+      if (tier === "unrated") where.push("tier is null");
+      else {
+        where.push("tier = ?");
+        args.push(tier);
+      }
+    }
+    const whereSql = where.join(" and ");
+    const row = (await exec(
+      db,
+      `select coalesce(sum(copies * ${shardValueSql("tier")}), 0) as gained
+       from pack_collection_cards
+       where ${whereSql}`,
+      args,
+    )).rows[0];
+    gained = Number(row?.gained) || 0;
+    if (gained > 0) {
+      await exec(
+        db,
+        `update pack_collection_cards
+         set recycled_copies = recycled_copies + copies,
+             copies = 0,
+             updated_at = ?
+         where ${whereSql}`,
+        [now, ...args],
+      );
+    }
+    return { gained, wallet: await addWalletShards(db, userId, gained, now) };
+  }
 
   if (options.mode === "whole" && options.cardUserIds && options.cardUserIds.length > 0) {
     const ids = [...new Set(options.cardUserIds.map((id) => Math.floor(Number(id) || 0)).filter((id) => id > 0))];

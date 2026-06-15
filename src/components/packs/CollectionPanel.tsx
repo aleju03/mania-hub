@@ -45,6 +45,7 @@ interface CollectionPanelProps {
   onRecycleCard: (userId: number) => number | Promise<number>;
   onRecycleWhole: (userId: number) => number | Promise<number>;
   onRecycleWholeMany: (userIds: number[]) => number | Promise<number>;
+  onRecycleWholeMatching: (filter: { tier: ManiaCardTier | "all" | "unrated"; query: string }) => number | Promise<number>;
   onRecycleAll: () => number | Promise<number>;
   onApplyMint: (userId: number, mint: CardMint) => boolean;
 }
@@ -482,6 +483,7 @@ export function CollectionPanel({
   onRecycleCard,
   onRecycleWhole,
   onRecycleWholeMany,
+  onRecycleWholeMatching,
   onRecycleAll,
   onApplyMint,
 }: CollectionPanelProps) {
@@ -498,6 +500,7 @@ export function CollectionPanel({
   // recycles every selected card at once (all copies, second click confirms).
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [selectionScope, setSelectionScope] = useState<"manual" | "all">("manual");
   const [confirmBulk, setConfirmBulk] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [collectionPage, setCollectionPage] = useState(0);
@@ -572,6 +575,7 @@ export function CollectionPanel({
       }
       setSelecting(false);
       setSelected(new Set());
+      setSelectionScope("manual");
       setConfirmBulk(false);
     };
     window.addEventListener("keydown", onKey);
@@ -579,6 +583,12 @@ export function CollectionPanel({
   }, [menu, selecting]);
 
   const toggleSelected = (userId: number) => {
+    if (selectionScope === "all") {
+      setSelectionScope("manual");
+      setSelected(new Set(pageCards.filter((card) => card.userId !== userId).map((card) => card.userId)));
+      setConfirmBulk(false);
+      return;
+    }
     setSelected((previous) => {
       const next = new Set(previous);
       if (next.has(userId)) next.delete(userId);
@@ -589,6 +599,15 @@ export function CollectionPanel({
   };
 
   const applySelect = (userId: number, on: boolean) => {
+    if (selectionScope === "all") {
+      const next = new Set(pageCards.map((card) => card.userId));
+      if (on) next.add(userId);
+      else next.delete(userId);
+      setSelectionScope("manual");
+      setSelected(next);
+      setConfirmBulk(false);
+      return;
+    }
     setSelected((previous) => {
       if (on === previous.has(userId)) return previous;
       const next = new Set(previous);
@@ -602,6 +621,7 @@ export function CollectionPanel({
   const exitSelecting = () => {
     setSelecting(false);
     setSelected(new Set());
+    setSelectionScope("manual");
     setConfirmBulk(false);
   };
 
@@ -713,17 +733,23 @@ export function CollectionPanel({
   const selectedShardTotal = cards
     .filter((card) => selected.has(card.userId))
     .reduce((sum, card) => sum + duplicateShardValue(card) + shardValueForTier(card.tier), 0);
+  const filteredShardTotal = useServerCollection
+    ? serverMetaPage?.filteredShardTotal ?? 0
+    : visibleCards.reduce((sum, card) => sum + card.copies * shardValueForTier(card.tier), 0);
+  const selectedCount = selectionScope === "all" ? filteredTotal : selected.size;
+  const bulkShardTotal = selectionScope === "all" ? filteredShardTotal : selectedShardTotal;
 
   useEffect(() => {
     setCollectionPage(0);
     setSelected(new Set());
+    setSelectionScope("manual");
     setConfirmBulk(false);
   }, [trimmedQuery, tierFilter]);
 
   useEffect(() => {
-    setSelected(new Set());
+    if (selectionScope !== "all") setSelected(new Set());
     setConfirmBulk(false);
-  }, [currentPage]);
+  }, [currentPage, selectionScope]);
 
   useEffect(() => {
     if (collectionPage <= totalPages - 1) return;
@@ -1003,6 +1029,7 @@ export function CollectionPanel({
             const lastCopyValue = shardValueForTier(card.tier);
             const confirming = confirmUserId === card.userId;
             const thumbnail = simulateSkeletons ? null : getMemoryCardThumbnail(cardThumbnailKeyForCollectionCard(card));
+            const cardSelected = selectionScope === "all" || selected.has(card.userId);
             return (
               <div
                 key={card.userId}
@@ -1030,7 +1057,7 @@ export function CollectionPanel({
                       // Native drag/text selection would hijack the sweep.
                       event.preventDefault();
                       suppressClickRef.current = true;
-                      dragRef.current = { mode: !selected.has(card.userId) };
+                      dragRef.current = { mode: !cardSelected };
                       applySelect(card.userId, dragRef.current.mode);
                     }}
                     onClick={() => {
@@ -1043,16 +1070,16 @@ export function CollectionPanel({
                       toggleSelected(card.userId);
                     }}
                     className="relative block w-full cursor-pointer"
-                    aria-pressed={selected.has(card.userId)}
-                    aria-label={`${selected.has(card.userId) ? "Deselect" : "Select"} ${card.username}`}
+                    aria-pressed={cardSelected}
+                    aria-label={`${cardSelected ? "Deselect" : "Select"} ${card.username}`}
                   >
                     <CollectionCardTile card={card} thumbnail={thumbnail} onApplyMint={onApplyMint} />
                     <span
                       className={`pointer-events-none absolute inset-0 rounded-[10px] ${
-                        selected.has(card.userId) ? "ring-2 ring-osu-pink" : "bg-black/45"
+                        cardSelected ? "ring-2 ring-osu-pink" : "bg-black/45"
                       }`}
                     />
-                    {selected.has(card.userId) && (
+                    {cardSelected && (
                       <span className="absolute left-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-osu-pink text-white">
                         <Check className="h-3.5 w-3.5" />
                       </span>
@@ -1127,11 +1154,12 @@ export function CollectionPanel({
             data-select-keep=""
           >
             <span className="text-[12px] text-osu-f1 tabular-nums">
-              <span className="font-bold text-white">{selected.size}</span> selected
+              <span className="font-bold text-white">{selectedCount}</span> selected
             </span>
             <button
               type="button"
               onClick={() => {
+                setSelectionScope("manual");
                 setSelected(new Set(pageCards.map((card) => card.userId)));
                 setConfirmBulk(false);
               }}
@@ -1139,11 +1167,27 @@ export function CollectionPanel({
             >
               select page
             </button>
-            {selected.size > 0 && (
+            {filteredTotal > pageCards.length && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectionScope("all");
+                  setSelected(new Set());
+                  setConfirmBulk(false);
+                }}
+                className={`text-[12px] transition-colors cursor-pointer ${
+                  selectionScope === "all" ? "font-bold text-white" : "text-osu-f1 hover:text-white"
+                }`}
+              >
+                select all
+              </button>
+            )}
+            {selectedCount > 0 && (
               <button
                 type="button"
                 onClick={() => {
                   setSelected(new Set());
+                  setSelectionScope("manual");
                   setConfirmBulk(false);
                 }}
                 className="text-[12px] text-osu-f1 transition-colors hover:text-white cursor-pointer"
@@ -1153,7 +1197,7 @@ export function CollectionPanel({
             )}
             <button
               type="button"
-              disabled={selected.size === 0 || bulkBusy}
+              disabled={selectedCount === 0 || bulkBusy}
               onClick={(event) => {
                 if (!confirmBulk) {
                   setConfirmBulk(true);
@@ -1163,7 +1207,9 @@ export function CollectionPanel({
                 setBulkBusy(true);
                 void (async () => {
                   try {
-                    const gained = await onRecycleWholeMany(Array.from(selected));
+                    const gained = selectionScope === "all"
+                      ? await onRecycleWholeMatching({ tier: tierFilter, query: trimmedQuery })
+                      : await onRecycleWholeMany(Array.from(selected));
                     celebrateRecycle(gained, anchor);
                     if (gained > 0 && useServerCollection) setServerRefreshKey((key) => key + 1);
                     exitSelecting();
@@ -1180,8 +1226,8 @@ export function CollectionPanel({
               {bulkBusy
                 ? "Recycling..."
                 : confirmBulk
-                  ? `Sure? ${selected.size} ${selected.size === 1 ? "card leaves" : "cards leave"} the collection`
-                  : `Recycle +${selectedShardTotal}`}
+                  ? `Sure? ${selectedCount} ${selectedCount === 1 ? "card leaves" : "cards leave"} the collection`
+                  : `Recycle +${bulkShardTotal}`}
             </button>
           </div>
         </div>

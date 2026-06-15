@@ -482,6 +482,7 @@ function PacksPage() {
                   onRecycleCard={walletApi.recycleCard}
                   onRecycleWhole={walletApi.recycleWhole}
                   onRecycleWholeMany={walletApi.recycleWholeMany}
+                  onRecycleWholeMatching={walletApi.recycleWholeMatching}
                   onRecycleAll={walletApi.recycleAll}
                   onApplyMint={walletApi.applyMint}
                 />

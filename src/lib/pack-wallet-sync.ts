@@ -33,6 +33,7 @@ export interface ServerPackCollectionPage {
   total: number;
   tierCounts: Record<string, number>;
   duplicateShardTotal: number;
+  filteredShardTotal: number;
 }
 
 export type PushPackWalletResult =
@@ -146,14 +147,19 @@ export const fetchServerPackCollectionPage = createServerFn({ method: "GET" })
       total: Number(body.total) || 0,
       tierCounts: body.tierCounts && typeof body.tierCounts === "object" ? body.tierCounts : {},
       duplicateShardTotal: Number(body.duplicateShardTotal) || 0,
+      filteredShardTotal: Number(body.filteredShardTotal) || 0,
     };
   });
 
-export type ServerPackRecycleMode = "duplicates" | "whole" | "all_duplicates";
+export type ServerPackRecycleMode = "duplicates" | "whole" | "all_duplicates" | "whole_matching";
 
 export const recycleServerPackCollection = createServerFn({ method: "POST" })
-  .inputValidator((input: { mode?: unknown; cardUserId?: unknown; cardUserIds?: unknown }) => {
-    const mode = input?.mode === "duplicates" || input?.mode === "whole" || input?.mode === "all_duplicates"
+  .inputValidator((input: { mode?: unknown; cardUserId?: unknown; cardUserIds?: unknown; tier?: unknown; query?: unknown }) => {
+    const mode =
+      input?.mode === "duplicates" ||
+      input?.mode === "whole" ||
+      input?.mode === "all_duplicates" ||
+      input?.mode === "whole_matching"
       ? input.mode
       : null;
     const cardUserId = Number(input?.cardUserId);
@@ -164,13 +170,23 @@ export const recycleServerPackCollection = createServerFn({ method: "POST" })
           .filter((id) => id > 0)
       : null;
     const hasBulkIds = cardUserIds !== null && cardUserIds.length > 0;
-    if (!mode || (mode !== "all_duplicates" && !hasBulkIds && (!Number.isFinite(cardUserId) || cardUserId <= 0))) {
+    if (
+      !mode ||
+      (mode !== "all_duplicates" &&
+        mode !== "whole_matching" &&
+        !hasBulkIds &&
+        (!Number.isFinite(cardUserId) || cardUserId <= 0))
+    ) {
       throw new Error("Invalid recycle request.");
     }
+    const tier = typeof input?.tier === "string" ? input.tier : "all";
+    const query = typeof input?.query === "string" ? input.query.slice(0, 120) : "";
     return {
       mode,
       cardUserId: Number.isFinite(cardUserId) ? Math.floor(cardUserId) : undefined,
       cardUserIds: hasBulkIds ? cardUserIds : undefined,
+      tier,
+      query,
     };
   })
   .handler(async ({ data }): Promise<{ gained: number; payload: string; rev: number } | null> => {

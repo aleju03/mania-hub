@@ -497,7 +497,11 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         (await readBodyBuffer(req, DEFAULT_BODY_LIMIT_BYTES)).toString("utf8") || "{}",
         {},
       );
-      const mode = body.mode === "duplicates" || body.mode === "whole" || body.mode === "all_duplicates"
+      const mode =
+        body.mode === "duplicates" ||
+        body.mode === "whole" ||
+        body.mode === "all_duplicates" ||
+        body.mode === "whole_matching"
         ? body.mode
         : null;
       const cardUserId = Number(body.cardUserId);
@@ -508,7 +512,13 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
             .filter((id) => id > 0)
         : null;
       const hasBulkIds = cardUserIds !== null && cardUserIds.length > 0;
-      if (!mode || (mode !== "all_duplicates" && !hasBulkIds && (!Number.isFinite(cardUserId) || cardUserId <= 0))) {
+      if (
+        !mode ||
+        (mode !== "all_duplicates" &&
+          mode !== "whole_matching" &&
+          !hasBulkIds &&
+          (!Number.isFinite(cardUserId) || cardUserId <= 0))
+      ) {
         sendJson(req, res, ctx, 400, { error: "invalid_recycle_request" });
         return true;
       }
@@ -516,6 +526,8 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
         mode,
         cardUserId: Number.isFinite(cardUserId) ? Math.floor(cardUserId) : undefined,
         cardUserIds: hasBulkIds ? cardUserIds : undefined,
+        tier: typeof body.tier === "string" ? body.tier : "all",
+        query: typeof body.query === "string" ? body.query.slice(0, 120) : "",
       });
       sendJson(req, res, ctx, 200, { gained: result.gained, payload: result.wallet.payload, rev: result.wallet.rev });
       return true;
