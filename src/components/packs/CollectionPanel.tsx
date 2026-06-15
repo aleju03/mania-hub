@@ -69,6 +69,23 @@ const COLLECTION_TIER_ORDER: ManiaCardTier[] = [
   "rare",
   "common",
 ];
+const UNKNOWN_COLLECTION_LOADING_TIERS: ManiaCardTier[] = [
+  "worldClass",
+  "mythic",
+  "legendary",
+  "legendary",
+  "ultraRare",
+  "superRare",
+  "elite",
+  "rare",
+  "legendary",
+  "ultraRare",
+  "superRare",
+  "elite",
+  "rare",
+  "elite",
+  "common",
+];
 
 let activeRenders = 0;
 const renderQueue: Array<() => void> = [];
@@ -134,6 +151,15 @@ function placeholderTiersForPage({
   if (tierFilter !== "all") {
     const tier = tierFilter === "unrated" ? "common" : tierFilter;
     return Array.from({ length: count }, () => tier);
+  }
+
+  const knownTierTotal = COLLECTION_TIER_ORDER.reduce((sum, tier) => {
+    return sum + Math.max(0, Math.floor(Number(tierCounts[tier]) || 0));
+  }, 0);
+  if (knownTierTotal === 0) {
+    return Array.from({ length: count }, (_, index) => {
+      return UNKNOWN_COLLECTION_LOADING_TIERS[(pageStart + index) % UNKNOWN_COLLECTION_LOADING_TIERS.length]!;
+    });
   }
 
   const tiers: ManiaCardTier[] = [];
@@ -441,7 +467,9 @@ function CollectionCardFacePlaceholder({ card, tier: forcedTier }: { card?: Coll
 function CollectionCardPlaceholder({ tier }: { tier: ManiaCardTier }) {
   return (
     <div>
-      <CollectionCardFacePlaceholder tier={tier} />
+      <div className="relative" style={{ aspectRatio: "5 / 7" }}>
+        <CollectionCardFacePlaceholder tier={tier} />
+      </div>
       <div className="mx-auto mt-1.5 h-4 w-10 rounded bg-osu-b4/40" />
     </div>
   );
