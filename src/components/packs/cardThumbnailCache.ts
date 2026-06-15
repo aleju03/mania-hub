@@ -1,5 +1,6 @@
 import type { CollectedCard } from "#/lib/pack-collection";
 import {
+  fetchR2PackCardThumbnails,
   fetchR2PackCardThumbnail,
   uploadR2PackCardThumbnail,
 } from "#/lib/pack-card-thumbnails";
@@ -201,6 +202,29 @@ export async function loadR2CardThumbnail(key: string): Promise<string | null> {
 
   pendingRemoteLoads.set(key, load);
   return load;
+}
+
+export async function loadR2CardThumbnails(keys: string[]): Promise<Record<string, string>> {
+  const urls: Record<string, string> = {};
+  const missingKeys: string[] = [];
+  for (const key of [...new Set(keys)]) {
+    const memory = getMemoryCardThumbnail(key);
+    if (memory) urls[key] = memory;
+    else missingKeys.push(key);
+  }
+  if (missingKeys.length === 0) return urls;
+
+  try {
+    const result = await fetchR2PackCardThumbnails({ data: { keys: missingKeys } });
+    for (const [key, url] of Object.entries(result.urls)) {
+      rememberMemoryThumbnail(key, url);
+      urls[key] = url;
+    }
+  } catch {
+    // Missing/slow remote thumbnails fall through to local rendering.
+  }
+
+  return urls;
 }
 
 export async function rememberCardThumbnailBlob(key: string, blob: Blob): Promise<string> {

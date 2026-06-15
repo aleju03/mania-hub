@@ -25,7 +25,7 @@ import {
   COLLECTION_CARD_THUMB_WIDTH,
   getMemoryCardThumbnail,
   loadPersistedCardThumbnail,
-  loadR2CardThumbnail,
+  loadR2CardThumbnails,
   rememberCardThumbnailBlob,
 } from "./cardThumbnailCache";
 import { playRecycleClink } from "./packSfx";
@@ -790,19 +790,25 @@ export function CollectionPanel({
     if (missing.length === 0) return;
 
     const run = async () => {
-      const toRender: CollectedCard[] = [];
+      const remoteCandidates: Array<{ card: CollectedCard; key: string }> = [];
       await Promise.all(missing.map(async ({ card, key }) => {
         const cached = await loadPersistedCardThumbnail(key);
         if (cancelled) return;
         if (cached) setThumbnailRevision((revision) => revision + 1);
-        else {
-          const remote = await loadR2CardThumbnail(key);
-          if (cancelled) return;
-          if (remote) setThumbnailRevision((revision) => revision + 1);
-          else toRender.push(card);
-        }
+        else remoteCandidates.push({ card, key });
       }));
-      if (cancelled || toRender.length === 0) return;
+      if (cancelled || remoteCandidates.length === 0) return;
+
+      const remoteUrls = await loadR2CardThumbnails(remoteCandidates.map((entry) => entry.key));
+      if (cancelled) return;
+      const toRender = remoteCandidates
+        .filter(({ key }) => {
+          if (!remoteUrls[key]) return true;
+          setThumbnailRevision((revision) => revision + 1);
+          return false;
+        })
+        .map(({ card }) => card);
+      if (toRender.length === 0) return;
 
       await Promise.all(toRender.map(async (card) => {
         try {
