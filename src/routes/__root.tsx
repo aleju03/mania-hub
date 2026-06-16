@@ -443,7 +443,7 @@ function KofiSupportButton() {
               </button>
             </div>
             <iframe
-              src={`${KOFI_PAGE_URL}/?hidefeed=true&widget=true&embed=true&preview=true`}
+              src={`${KOFI_PAGE_URL}/?hidefeed=true&widget=true&embed=true`}
               title="Support aleju03 on Ko-fi"
               loading="eager"
               scrolling="yes"
