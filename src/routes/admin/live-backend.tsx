@@ -757,7 +757,7 @@ function LiveBackendPage() {
       setError(null);
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
-      setError(err instanceof Error ? err.message : "Could not reach live backend.");
+      setError(err instanceof Error ? err.message : "Could not reach server.");
     } finally {
       if (requestId === requestIdRef.current) {
         loadInFlightCountryRef.current = null;
@@ -780,7 +780,7 @@ function LiveBackendPage() {
       return null;
     } catch (err) {
       if (requestId !== requestIdRef.current) return null;
-      return err instanceof Error ? err.message : "Could not reach live backend.";
+      return err instanceof Error ? err.message : "Could not reach server.";
     }
   }, [countryCode]);
 
@@ -900,7 +900,7 @@ function LiveBackendPage() {
             <>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Live backend</div>
+              <div className="text-[9px] uppercase tracking-wider text-osu-f1 font-semibold">Server</div>
               <div className="text-[13px] text-osu-c2 mt-1">
                 Always-on ingestion is server-side. Pages still fetch a snapshot on entry, then subscribe to SSE for changes.
               </div>
@@ -918,7 +918,7 @@ function LiveBackendPage() {
 
           {error ? <ErrorBanner message={error} /> : null}
 
-          <Section title="Health" subtitle="Is the backend up and ingesting?">
+          <Section title="Health" subtitle="Is the server up and ingesting?">
             <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
               <KpiCard
                 label="Backend"
@@ -969,7 +969,7 @@ function LiveBackendPage() {
             <StatusCard status={status} connectionState={connectionState} country={countryCode} snapshots={snapshots} />
           </Section>
 
-          <Section title="Countries" subtitle="Which countries the backend is currently tracking">
+          <Section title="Countries" subtitle="Which countries the server is currently tracking">
             <CountriesCard
               status={status}
               busy={actionBusy}
@@ -1030,7 +1030,7 @@ function LiveBackendPage() {
             <RateBreakdownCard status={status} />
           </Section>
 
-          <Section title="Controls" subtitle="Admin actions for routine backend maintenance.">
+          <Section title="Controls" subtitle="Admin actions for routine server maintenance.">
             <ControlsCard
               status={status}
               busy={actionBusy}
@@ -1119,7 +1119,7 @@ function LiveBackendHeader({
 
 function MonitoringTabs({ activeTab, onChange }: { activeTab: MonitoringTab; onChange: (tab: MonitoringTab) => void }) {
   const tabs: Array<{ value: MonitoringTab; label: string; hint: string }> = [
-    { value: "backend", label: "Backend", hint: "oSC, SSE, jobs, countries" },
+    { value: "backend", label: "Server", hint: "oSC, SSE, jobs, countries" },
     { value: "analytics", label: "Analytics", hint: "replays, visitors, referrers, errors" },
   ];
   return (
@@ -3535,7 +3535,7 @@ function RateRows({ rows, max, empty }: { rows: Array<{ label: string; count: nu
 function AbuseGuardCard({ status }: { status: LiveBackendStatus | null }) {
   const abuse = status?.abuse ?? null;
   return (
-    <SectionCard title="Abuse guard" subtitle="Live backend public request limiter state">
+    <SectionCard title="Abuse guard" subtitle="Server public request limiter state">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <GuardMetric
           label="SSE connections"
@@ -3558,7 +3558,7 @@ function AbuseGuardCard({ status }: { status: LiveBackendStatus | null }) {
       </div>
       {!abuse ? (
         <div className="mt-3 rounded-md bg-osu-b5/60 border border-osu-b3/20 px-3 py-2 text-[11px] text-osu-f1">
-          This backend has not reported abuse guard state yet.
+          The server has not reported abuse guard state yet.
         </div>
       ) : null}
     </SectionCard>
@@ -3656,7 +3656,7 @@ function ControlsCard({
         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
           <AdminButton
             label={status?.worker?.paused ? "Resume jobs" : "Pause jobs"}
-            description={status?.worker?.paused ? "Let queued backend jobs start running again." : "Temporarily stop queued jobs. Live score intake can still write new scores."}
+            description={status?.worker?.paused ? "Let queued server jobs start running again." : "Temporarily stop queued jobs. Live score intake can still write new scores."}
             icon={status?.worker?.paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
             busy={busy === "pause-workers" || busy === "resume-workers"}
             onClick={onToggleWorkers}
@@ -3691,7 +3691,7 @@ function ControlsCard({
           />
           <AdminButton
             label="Catch up missed scores"
-            description="Queue a paced oSC history scan to recover scores missed while the backend was offline."
+            description="Queue a paced oSC history scan to recover scores missed while the server was offline."
             icon={<History className="h-3.5 w-3.5" />}
             busy={busy === "osc-backfill"}
             onClick={onRunOscBackfill}
@@ -3769,7 +3769,7 @@ function QueueSummaryRow({ row }: { row: NonNullable<LiveBackendStatus["queueSum
 function ErrorBanner({ message }: { message: string }) {
   return (
     <div className="rounded-lg border border-osu-red/30 bg-osu-red/10 px-4 py-3">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-red-light">Live backend error</div>
+      <div className="text-[11px] font-semibold uppercase tracking-wider text-osu-red-light">Server error</div>
       <div className="text-[12px] text-osu-l2 mt-1 break-words">{message}</div>
     </div>
   );

@@ -327,7 +327,7 @@ export function getServerLiveBackendUrl(): string | null {
 }
 
 function normalizeAdminPath(input: unknown): string {
-  if (typeof input !== "string") throw new Error("Invalid live backend admin path.");
+  if (typeof input !== "string") throw new Error("Invalid server admin path.");
   const url = new URL(input, "http://live-backend.local");
   const path = `${url.pathname}${url.search}`;
   const exact = new Set([
@@ -380,7 +380,7 @@ function normalizeAdminPath(input: unknown): string {
       return `/api/admin/set-country-tier?country=${country.toUpperCase()}&tier=${tier}`;
     }
   }
-  throw new Error("Unsupported live backend admin action.");
+  throw new Error("Unsupported server admin action.");
 }
 
 export const runLiveBackendAdminAction = createServerFn({ method: "POST" })
@@ -388,7 +388,7 @@ export const runLiveBackendAdminAction = createServerFn({ method: "POST" })
     path: normalizeAdminPath(data?.path),
   }))
   .handler(async ({ data }): Promise<{ ok: boolean; body: string | null }> => {
-    await requireAdminAccess("Live backend admin action");
+    await requireAdminAccess("Server admin action");
     const base = getServerLiveBackendUrl();
     if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
     const headers: HeadersInit = {};
@@ -404,7 +404,7 @@ export const runLiveBackendAdminAction = createServerFn({ method: "POST" })
     if (!response.ok) {
       const message = body && typeof body === "object" && "error" in body
         ? String((body as { error?: unknown }).error)
-        : `Live backend ${response.status} for ${data.path}`;
+        : `Server ${response.status} for ${data.path}`;
       throw new Error(message);
     }
     return { ok: true, body: text || null };
@@ -416,7 +416,7 @@ export const fetchLiveBackendAdminStatus = createServerFn({ method: "GET" })
     return { country: /^([A-Z]{2}|GLOBAL)$/.test(rawCountry) ? rawCountry : null };
   })
   .handler(async ({ data }): Promise<any> => {
-    await requireAdminAccess("Live backend admin status");
+    await requireAdminAccess("Server admin status");
     const base = getServerLiveBackendUrl();
     if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
     const headers: HeadersInit = {};
@@ -434,7 +434,7 @@ export const fetchLiveBackendAdminStatus = createServerFn({ method: "GET" })
       }
     } catch (err) {
       if (isAbortError(err)) {
-        throw new Error(`Live backend admin status timed out after ${Math.round(LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS / 1000)}s.`);
+        throw new Error(`Server admin status timed out after ${Math.round(LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS / 1000)}s.`);
       }
       throw err;
     } finally {
@@ -444,7 +444,7 @@ export const fetchLiveBackendAdminStatus = createServerFn({ method: "GET" })
     if (!response.ok) {
       const message = body && typeof body === "object" && "error" in body
         ? String((body as { error?: unknown }).error)
-        : `Live backend ${response.status} for /api/admin/status`;
+        : `Server ${response.status} for /api/admin/status`;
       throw new Error(message);
     }
     return body;
@@ -495,7 +495,7 @@ async function loadLiveBackendBootstrap(): Promise<LiveBackendBootstrap> {
 }
 
 // Country features are identical for every visitor, but the root context used to
-// round-trip to the live backend for them on every SSR request (twice: once
+// round-trip to the server for them on every SSR request (twice: once
 // directly and once via getInitialCountry). Memoize per server instance:
 // successful results are reused for a short window, concurrent callers share one
 // in-flight request, and failures are never cached so recovery stays immediate.
@@ -528,7 +528,7 @@ function isAbortError(error: unknown): boolean {
 
 const LIVE_BACKEND_ACTIVATE_TIMEOUT_MS = 2_500;
 
-// Registers a geo-detected but never-tracked country on the live backend so a
+// Registers a geo-detected but never-tracked country on the server so a
 // visit from it starts tracking right away (active status, live tier). The
 // visitor's forwarded IP is passed through so the backend's activation rate
 // limits key on the visitor instead of this server. Server-side only.
@@ -567,7 +567,7 @@ export const fetchLivePlayerCachedProfileSnapshot = createServerFn({ method: "GE
     if (!base) return null;
     const response = await fetch(`${base}/api/profiles/${encodeURIComponent(data.key)}/cached-snapshot`);
     if (response.status === 404) return null;
-    if (!response.ok) throw new Error(`Live backend ${response.status} for cached profile snapshot`);
+    if (!response.ok) throw new Error(`Server ${response.status} for cached profile snapshot`);
     return response.json() as Promise<LivePlayerProfileSnapshot>;
   });
 
@@ -581,7 +581,7 @@ export const fetchLivePlayerRecentScores = createServerFn({ method: "GET" })
     const base = getServerLiveBackendUrl();
     if (!base) return null;
     const response = await fetch(`${base}/api/profiles/${data.userId}/recent`);
-    if (!response.ok) throw new Error(`Live backend ${response.status} for profile recent scores`);
+    if (!response.ok) throw new Error(`Server ${response.status} for profile recent scores`);
     return response.json() as Promise<LivePlayerProfileSection<OsuScore[]>>;
   });
 
@@ -595,7 +595,7 @@ export const fetchLivePlayerAbout = createServerFn({ method: "GET" })
     const base = getServerLiveBackendUrl();
     if (!base) return null;
     const response = await fetch(`${base}/api/profiles/${data.userId}/about`);
-    if (!response.ok) throw new Error(`Live backend ${response.status} for profile about`);
+    if (!response.ok) throw new Error(`Server ${response.status} for profile about`);
     return response.json() as Promise<LivePlayerProfileSection<LivePlayerAboutPayload>>;
   });
 
@@ -611,10 +611,10 @@ export async function fetchLivePlayerCachedProfileSnapshotDirect(key: string): P
   const trimmed = key.trim().slice(0, 120);
   if (!trimmed) throw new Error("Invalid profile key.");
   const base = getLiveBackendUrl();
-  if (!base) throw new Error("Live backend is not configured.");
+  if (!base) throw new Error("Server is not configured.");
   const response = await fetch(`${base}/api/profiles/${encodeURIComponent(trimmed)}/cached-snapshot`, { credentials: "omit" });
   if (response.status === 404) return null;
-  if (!response.ok) throw new Error(`Live backend ${response.status}`);
+  if (!response.ok) throw new Error(`Server ${response.status}`);
   return response.json() as Promise<LivePlayerProfileSnapshot>;
 }
 
@@ -1080,8 +1080,8 @@ export function openLiveEventSource(country: string, options?: { observe?: boole
 
 async function fetchLiveJson<T>(path: string, init?: RequestInit): Promise<T> {
   const base = getLiveBackendUrl();
-  if (!base) throw new Error("Live backend is not configured.");
+  if (!base) throw new Error("Server is not configured.");
   const response = await fetch(`${base}${path}`, { credentials: "omit", ...init });
-  if (!response.ok) throw new Error(`Live backend ${response.status}`);
+  if (!response.ok) throw new Error(`Server ${response.status}`);
   return response.json() as Promise<T>;
 }

@@ -1,9 +1,9 @@
-export const SITE_NAME = "o!mania tracker";
+export const SITE_NAME = "Mania Tracker";
 
 export const DEFAULT_DESCRIPTION =
-  "Live osu!mania score tracker: country rankings, top plays, snipes, beatmap stats, and a browser replay viewer.";
+  "See what's happening in osu!mania with live scores, country rankings, top plays, map stats, player profiles, and replays.";
 
-export const OG_IMAGE_VERSION = "20";
+export const OG_IMAGE_VERSION = "21";
 
 /* Builds the og:image URL. The image itself only needs title + country —
    the description stays in the HTML `<meta>` for social-card body text

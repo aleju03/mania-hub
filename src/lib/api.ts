@@ -852,7 +852,7 @@ export async function fetchBeatmapFile(beatmapId: number, beatmapsetId?: number 
     } satisfies BeatmapFileCacheValue, BEATMAP_FILE_CACHE_TTL);
     return osuFile;
   } catch (error) {
-    errors.push(`live-backend (${error instanceof Error ? error.message : String(error)})`);
+    errors.push(`server (${error instanceof Error ? error.message : String(error)})`);
   }
 
   if (beatmapsetId) {
@@ -939,7 +939,7 @@ async function fetchLiveBackendBeatmapFile(beatmapId: number, caller: string): P
     await throwLiveBackendOsuError(response, caller, `/osu/${beatmapId}`, "beatmap-file");
   }
   const text = await response.text();
-  if (!isLikelyBeatmapFile(text)) throw new Error("live backend returned an invalid .osu file");
+  if (!isLikelyBeatmapFile(text)) throw new Error("Server returned an invalid .osu file");
   return text;
 }
 

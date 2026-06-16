@@ -52,7 +52,7 @@ function getRequestCountry(): string | null {
   return null;
 }
 
-// The set of country codes the live backend actually tracks. We only auto-route
+// The set of country codes the server actually tracks. We only auto-route
 // a visitor to a single-country view when its country is in this set; everything
 // else (untracked countries, no geo signal, backend offline) lands on Global.
 // Returns null when the backend is unreachable so availability stays "unknown".
@@ -500,9 +500,13 @@ function RootLayout() {
           <footer className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 px-4 py-2 text-center text-[10px] text-osu-pink-light/30">
             <KofiSupportButton />
             <span>·</span>
-            <span title="Not affiliated with or endorsed by osu! or ppy Pty Ltd. All game data is fetched via the public osu! API.">
-              not affiliated with ppy
-            </span>
+            <Link to="/privacy" className="hover:text-osu-pink-light/60 transition-colors">
+              privacy
+            </Link>
+            <span>·</span>
+            <Link to="/terms" className="hover:text-osu-pink-light/60 transition-colors">
+              terms
+            </Link>
             <span>·</span>
             <span>
               made by{" "}

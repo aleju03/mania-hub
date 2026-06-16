@@ -263,8 +263,8 @@ function FarmHelperPage() {
           {!liveEnabled ? (
             <EmptyNotice
               eyebrow="unavailable"
-              title="Farm Helper needs the live backend"
-              body="This tool reads cross-country farm data from the live backend, which isn't configured in this environment."
+              title="Farm Helper needs the server"
+              body="This tool reads cross-country farm data from the server, which isn't configured in this environment."
             />
           ) : !subjectKey ? (
             <PlayerPicker viewer={auth.viewer} onPick={setSubject} />

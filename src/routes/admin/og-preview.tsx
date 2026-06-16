@@ -36,7 +36,7 @@ const PRESETS: Preset[] = [
     key: "default",
     label: "Default (no country)",
     kind: "default",
-    title: "o!mania tracker",
+    title: "Mania Tracker",
     subtitle: "osu!mania rankings, live scores, maps, snipes, and replays",
     path: "/",
     /* This is the fallback the endpoint renders when no `kind` and no
@@ -48,7 +48,7 @@ const PRESETS: Preset[] = [
     key: "home",
     label: "Home",
     kind: "home",
-    title: "o!mania tracker",
+    title: "Mania Tracker",
     subtitle: "osu!mania rankings, live scores, maps, snipes, and replays",
     path: "/",
     countryAware: true,
@@ -104,7 +104,7 @@ const PRESETS: Preset[] = [
 // Mirror the endpoint's limits so the counter warns before truncation kicks in.
 const MAX_TITLE = 38;
 const MAX_SUBTITLE = 150;
-const SITE_NAME = "o!mania tracker";
+const SITE_NAME = "Mania Tracker";
 
 export const Route = createFileRoute("/admin/og-preview")({
   head: () => ({

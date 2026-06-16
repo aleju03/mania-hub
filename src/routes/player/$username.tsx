@@ -192,7 +192,7 @@ export type PlayerLoaderData = {
 // document weight and hydration work (~580KB raw for a 200-score snapshot,
 // dominated by fields nothing on this page reads). Rebuild user/scores from
 // the typed fields only; the deferred post-mount refresh fetches the full
-// payload straight from the live backend, and the about tab fetches page
+// payload straight from the server, and the about tab fetches page
 // HTML on demand.
 function slimLoaderScore(score: OsuScore): OsuScore {
   const { weight: _weight, ...rest } = score;
@@ -298,7 +298,7 @@ function withProfileLoaderBudget<T>(promise: Promise<T>, timeoutMs: number): Pro
   ]);
 }
 
-// SSR fetches to the live backend occasionally fail instantly when a kept-alive
+// SSR fetches to the server occasionally fail instantly when a kept-alive
 // socket was closed by the proxy between requests; a fresh connection almost
 // always succeeds, so one immediate retry turns those misses into hits.
 async function fetchCachedSnapshotWithRetry(username: string): Promise<LivePlayerProfileSnapshot | null> {
@@ -2431,7 +2431,7 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
     if (!isLiveBackendConfigured()) {
       setLoading(false);
       setSnapshot(null);
-      setError("Activity is only available when the live backend is configured.");
+      setError("Activity is only available when the server is configured.");
       return;
     }
 

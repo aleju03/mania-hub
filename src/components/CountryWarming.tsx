@@ -2,7 +2,7 @@ import { getCountryName } from "../lib/country";
 import { CountryFlag } from "./ui/CountryFlag";
 
 /**
- * Shown on every country-scoped surface when the live backend has never seen
+ * Shown on every country-scoped surface when the server has never seen
  * the selected country before. The backend has queued roster/maps warmup jobs;
  * the page that renders this is polling and will swap to real data once ready.
  */

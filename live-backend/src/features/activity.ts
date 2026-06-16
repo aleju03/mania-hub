@@ -1,12 +1,14 @@
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
+import { extractBeatmapOsuFileFromArchive } from "../audio/beatmap-archive.js";
 import { parseManiaBeatmap, type ManiaNote } from "../dan/beatmap-parser.js";
 import { extractDanFeatures } from "../dan/dan-estimator/features.js";
 import { chooseSkillFamily } from "../dan/dan-estimator/family-choice.js";
 import { estimateFamilyScores } from "../dan/dan-estimator/scoring.js";
 import { DAN_PRIMARY_FAMILIES, type DanFeatureMetrics } from "../dan/dan-estimator/types.js";
 import type { JobQueue } from "../jobs/queue.js";
-import type { OsuApiClient } from "../osu/client.js";
+import { errorContext, logWarn } from "../logger.js";
+import { OsuApiClient } from "../osu/client.js";
 import { addDayKeyDays, getCountryTimezone, getZonedDayKey } from "../shared/country-timezones.js";
 import { getDisplayedAccuracy, getDisplayedRank, getScoreTimestamp, nowIso } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
@@ -429,7 +431,7 @@ export async function computeBeatmapActivitySkillVector(
   );
 
   try {
-    const osuFile = await osu.getBeatmapFile(beatmapId, "job:analyze_activity_beatmap");
+    const osuFile = await getActivityBeatmapFile(db, osu, beatmapId);
     const map = parseManiaBeatmap(osuFile);
     const starRating = Number((await exec(
       db,
@@ -472,6 +474,56 @@ export async function computeBeatmapActivitySkillVector(
     );
     throw error;
   }
+}
+
+async function getActivityBeatmapFile(
+  db: Db,
+  osu: Pick<OsuApiClient, "getBeatmapFile">,
+  beatmapId: number,
+): Promise<string> {
+  if (osu instanceof OsuApiClient) {
+    const archiveMeta = await readActivityBeatmapArchiveMeta(db, beatmapId);
+    if (archiveMeta) {
+      try {
+        const file = await extractBeatmapOsuFileFromArchive(String(archiveMeta.beatmapsetId), beatmapId, {
+          version: archiveMeta.version,
+        });
+        return file.text;
+      } catch (error) {
+        logWarn("activity_beatmap_archive_fetch_failed", {
+          beatmap_id: beatmapId,
+          beatmapset_id: archiveMeta.beatmapsetId,
+          ...errorContext(error),
+        });
+      }
+    }
+  }
+
+  return osu.getBeatmapFile(beatmapId, "job:analyze_activity_beatmap");
+}
+
+async function readActivityBeatmapArchiveMeta(
+  db: Db,
+  beatmapId: number,
+): Promise<{ beatmapsetId: number; version: string | null } | null> {
+  const row = (await exec(
+    db,
+    `select beatmapset_id, version
+     from beatmaps
+     where beatmap_id = ?
+     union all
+     select beatmapset_id, version
+     from maps_beatmaps
+     where beatmap_id = ?
+     limit 1`,
+    [beatmapId, beatmapId],
+  )).rows[0];
+  if (!row) return null;
+
+  const beatmapsetId = Number(row.beatmapset_id);
+  if (!Number.isSafeInteger(beatmapsetId) || beatmapsetId <= 0) return null;
+  const version = typeof row.version === "string" && row.version.trim() ? row.version : null;
+  return { beatmapsetId, version };
 }
 
 async function upsertActivityDay(
@@ -1440,4 +1492,3 @@ function normalizeActivityDayKey(value: string): string | null {
   const normalized = parsed.toISOString().slice(0, 10);
   return normalized === value ? value : null;
 }
-

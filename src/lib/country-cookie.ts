@@ -63,7 +63,7 @@ export function resolveDetectedCountry(country: string | null | undefined): stri
   return normalized && isSupportedCountryCode(normalized) ? normalized : null;
 }
 
-// A country is only worth routing to automatically when the live backend
+// A country is only worth routing to automatically when the server
 // actually tracks it. `available` is the set of tracked country codes; when it
 // is null we couldn't reach the backend and treat availability as unknown.
 function isAvailableCountry(code: string | null | undefined, available: ReadonlySet<string> | null): boolean {

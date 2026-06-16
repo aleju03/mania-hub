@@ -967,7 +967,7 @@ function MapsPage() {
   const [liveMapsPage, setLiveMapsPage] = useState<LiveMapsPageState | null>(null);
   const liveMapsPageCacheRef = useRef<Map<string, LiveMapsPageState>>(liveMapsPageSessionCache);
   const liveMapsPageTotalCacheRef = useRef<Map<string, number>>(liveMapsPageTotalSessionCache);
-  // True while the live backend is building this country's maps for the very
+  // True while the server is building this country's maps for the very
   // first time (no snapshot has ever existed). Distinguishes a cold first build
   // from a quick refresh of already-cached maps.
   const [mapsFirstBuild, setMapsFirstBuild] = useState(false);
@@ -3830,7 +3830,7 @@ interface MapsPlayerListControl {
   loadMore: () => void;
 }
 
-// Loads a map's player list one page (50) at a time from the live backend,
+// Loads a map's player list one page (50) at a time from the server,
 // with server-side search, so a 1k+ player map never ships or renders in one
 // shot. Only engaged when the map has more players than the preview already
 // holds; otherwise the modal searches the preview client-side.

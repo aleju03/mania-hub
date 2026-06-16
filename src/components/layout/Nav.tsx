@@ -67,7 +67,7 @@ export function Nav() {
   const returnTo = `${location.pathname}${location.searchStr}`;
   const loginHref = `/api/auth/osu?next=${encodeURIComponent(returnTo)}`;
   const logoutHref = `/api/auth/logout?next=${encodeURIComponent(returnTo)}`;
-  // When the live backend is off, Snipes is always shown. Otherwise show it
+  // When the server is off, Snipes is always shown. Otherwise show it
   // only once the tier is known to be "snipes" — while the tier is still
   // unknown (first-ever visit) the tab stays hidden rather than flashing in.
   const showSnipesLink = !liveBackendConfigured || selectedCountryFeatureTier === "snipes";

@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { ManiaCardTier, ManiaSkills } from "./maniacard";
 
-// Server functions bridging the browser's pack wallet to the live backend's
+// Server functions bridging the browser's pack wallet to the server's
 // pack_wallets store. The viewer always comes from the osu! login cookie,
 // never from client input, so a logged-in user can only ever read and write
 // their own wallet. The backend route is admin-token gated; that token only
@@ -57,7 +57,7 @@ async function getSyncTarget(): Promise<{ url: string; headers: HeadersInit } | 
   return { url: `${base}/api/pack-wallet/${auth.viewer.id}`, headers };
 }
 
-/* Null when sync is unavailable (logged out or no live backend configured);
+/* Null when sync is unavailable (logged out or no server configured);
    the wallet then stays browser-local. */
 export const fetchServerPackWallet = createServerFn({ method: "GET" }).handler(
   async (): Promise<ServerPackWallet | null> => {

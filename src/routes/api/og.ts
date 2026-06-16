@@ -246,7 +246,7 @@ type MapsOgPool = { covers: string[]; poolSize: number };
 
 const MAPS_OG_LIVE_FETCH_TIMEOUT_MS = 8_000;
 
-// Primary source: the live backend's stored maps snapshot. One paged read of
+// Primary source: the server's stored maps snapshot. One paged read of
 // a maps tab gives covers + total; the backend keeps these fresh on its own
 // refresh schedule for every tracked country. The maps OG reads favourites;
 // the farm helper OG reads farmed.
@@ -286,7 +286,7 @@ async function fetchMapsOgPoolFromLiveBackend(
   }
 }
 
-// Turso fallback (live backend unconfigured/down or country untracked there):
+// Turso fallback (server unconfigured/down or country untracked there):
 // recover the last roster we cached for this country, then look up the
 // favourites blob stored under that exact roster key. Both reads allow stale
 // entries and never rebuild.
@@ -488,7 +488,7 @@ async function renderMapsOg(request: Request, country: string): Promise<Response
                 h(
                   "div",
                   { key: "brand", style: { color: "#7a6b74", letterSpacing: "0.06em" } },
-                  "o!mania tracker",
+                  "Mania Tracker",
                 ),
               ],
             ),
@@ -1653,7 +1653,7 @@ async function renderHomeOg(request: Request, country: string): Promise<Response
         // Brand sticker — small, taped at the bottom-centre, tilted.
         sticker({
           key: "brand",
-          text: "o!mania tracker",
+          text: "Mania Tracker",
           fontSize: 22,
           background: "#f3ece4",
           color: "#1a1317",
@@ -1791,7 +1791,7 @@ async function renderRankingsOg(
         // Tiny brand mark, taped corner.
         sticker({
           key: "brand",
-          text: "o!mania tracker",
+          text: "Mania Tracker",
           fontSize: 16,
           background: "#1a1317",
           color: "#7a6b74",
@@ -1840,7 +1840,7 @@ async function renderCountryOg(
   const title = clamp(rawTitle, MAX_TITLE_LEN);
   // Skip showing the title when it's just the site name (home page), so
   // we don't duplicate the brand mark that sits at the bottom already.
-  const showTitle = title && title !== "o!mania tracker";
+  const showTitle = title && title !== "Mania Tracker";
 
   const response = new ImageResponse(
     h(
@@ -1944,7 +1944,7 @@ async function renderCountryOg(
                   letterSpacing: "0.06em",
                 },
               },
-              "o!mania tracker",
+              "Mania Tracker",
             ),
           ],
         ),
@@ -2176,7 +2176,7 @@ function gradeSticker(props: {
    stickers. The backdrop pulls the global mania top 50 avatars (one
    getRankings call with no country filter), so the page still feels
    populated by real players. The focal centre is a pink
-   "o!mania tracker" sticker. */
+   "Mania Tracker" sticker. */
 async function renderDefaultPolaroidOg(request: Request): Promise<Response> {
   // Curated list of countries with active mania scenes / visually
   // distinctive flags. Costa Rica leads (project's home scene). The
@@ -2192,7 +2192,7 @@ async function renderDefaultPolaroidOg(request: Request): Promise<Response> {
   // Hand-tuned scatter for the foreground flag stickers. 14 slots,
   // sizes in the 100-130px range (flags are 3:2 so they're wider
   // than they are tall). The centre band stays open for the
-  // "o!mania tracker" focal sticker.
+  // "Mania Tracker" focal sticker.
   const FLAG_SLOTS: Array<{
     top: number;
     left: number;
@@ -2292,12 +2292,12 @@ async function renderDefaultPolaroidOg(request: Request): Promise<Response> {
         ...flagCards,
         ...gradeBadges,
 
-        // Centre focal sticker: large pink "o!mania tracker" with a
+        // Centre focal sticker: large pink "Mania Tracker" with a
         // small product line. Plays the role the flag polaroid does on
         // the country pages.
         sticker({
           key: "title",
-          text: "o!mania tracker",
+          text: "Mania Tracker",
           subText: "RANKS / SCORES / MAPS / REPLAYS",
           fontSize: 80,
           background: "#ff66aa",
@@ -2556,7 +2556,7 @@ async function renderFarmHelperOg(request: Request): Promise<Response> {
         // Small brand mark, bottom-left corner.
         sticker({
           key: "brand",
-          text: "o!mania tracker",
+          text: "Mania Tracker",
           fontSize: 16,
           background: "#f3ece4",
           color: "#1a1317",
@@ -2585,8 +2585,8 @@ async function renderFarmHelperOg(request: Request): Promise<Response> {
    so the social card body text carries it — baking it into the image
    too would just duplicate. */
 async function renderDefaultOg(request: Request, url: URL): Promise<Response> {
-  const title = clamp(url.searchParams.get("title"), MAX_TITLE_LEN) || "o!mania tracker";
-  const showBrand = title !== "o!mania tracker";
+  const title = clamp(url.searchParams.get("title"), MAX_TITLE_LEN) || "Mania Tracker";
+  const showBrand = title !== "Mania Tracker";
 
   const [regularFont, heavyFont] = await loadOgFonts(request);
 
@@ -2641,7 +2641,7 @@ async function renderDefaultOg(request: Request, url: URL): Promise<Response> {
                       letterSpacing: "0.04em",
                     },
                   },
-                  "o!mania tracker",
+                  "Mania Tracker",
                 )
               : null,
             h(

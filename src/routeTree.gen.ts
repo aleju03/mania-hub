@@ -11,10 +11,12 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TrackerRouteImport } from './routes/tracker'
 import { Route as TopPlaysRouteImport } from './routes/top-plays'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as SnipesRouteImport } from './routes/snipes'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ReplayRouteImport } from './routes/replay'
 import { Route as RankingsRouteImport } from './routes/rankings'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PacksRouteImport } from './routes/packs'
 import { Route as MapsRouteImport } from './routes/maps'
 import { Route as LegalRouteImport } from './routes/legal'
@@ -54,6 +56,11 @@ const TopPlaysRoute = TopPlaysRouteImport.update({
   path: '/top-plays',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SnipesRoute = SnipesRouteImport.update({
   id: '/snipes',
   path: '/snipes',
@@ -72,6 +79,11 @@ const ReplayRoute = ReplayRouteImport.update({
 const RankingsRoute = RankingsRouteImport.update({
   id: '/rankings',
   path: '/rankings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PacksRoute = PacksRouteImport.update({
@@ -221,10 +233,12 @@ export interface FileRoutesByFullPath {
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
   '/packs': typeof PacksRoute
+  '/privacy': typeof PrivacyRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
   '/settings': typeof SettingsRoute
   '/snipes': typeof SnipesRoute
+  '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
@@ -257,10 +271,12 @@ export interface FileRoutesByTo {
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
   '/packs': typeof PacksRoute
+  '/privacy': typeof PrivacyRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
   '/settings': typeof SettingsRoute
   '/snipes': typeof SnipesRoute
+  '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
@@ -294,10 +310,12 @@ export interface FileRoutesById {
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
   '/packs': typeof PacksRoute
+  '/privacy': typeof PrivacyRoute
   '/rankings': typeof RankingsRoute
   '/replay': typeof ReplayRoute
   '/settings': typeof SettingsRoute
   '/snipes': typeof SnipesRoute
+  '/terms': typeof TermsRoute
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
@@ -332,10 +350,12 @@ export interface FileRouteTypes {
     | '/legal'
     | '/maps'
     | '/packs'
+    | '/privacy'
     | '/rankings'
     | '/replay'
     | '/settings'
     | '/snipes'
+    | '/terms'
     | '/top-plays'
     | '/tracker'
     | '/admin/dan-classifier'
@@ -368,10 +388,12 @@ export interface FileRouteTypes {
     | '/legal'
     | '/maps'
     | '/packs'
+    | '/privacy'
     | '/rankings'
     | '/replay'
     | '/settings'
     | '/snipes'
+    | '/terms'
     | '/top-plays'
     | '/tracker'
     | '/admin/dan-classifier'
@@ -404,10 +426,12 @@ export interface FileRouteTypes {
     | '/legal'
     | '/maps'
     | '/packs'
+    | '/privacy'
     | '/rankings'
     | '/replay'
     | '/settings'
     | '/snipes'
+    | '/terms'
     | '/top-plays'
     | '/tracker'
     | '/admin/dan-classifier'
@@ -441,10 +465,12 @@ export interface RootRouteChildren {
   LegalRoute: typeof LegalRoute
   MapsRoute: typeof MapsRoute
   PacksRoute: typeof PacksRoute
+  PrivacyRoute: typeof PrivacyRoute
   RankingsRoute: typeof RankingsRoute
   ReplayRoute: typeof ReplayRoute
   SettingsRoute: typeof SettingsRoute
   SnipesRoute: typeof SnipesRoute
+  TermsRoute: typeof TermsRoute
   TopPlaysRoute: typeof TopPlaysRoute
   TrackerRoute: typeof TrackerRoute
   AdminDanClassifierRoute: typeof AdminDanClassifierRoute
@@ -482,6 +508,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TopPlaysRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/snipes': {
       id: '/snipes'
       path: '/snipes'
@@ -508,6 +541,13 @@ declare module '@tanstack/react-router' {
       path: '/rankings'
       fullPath: '/rankings'
       preLoaderRoute: typeof RankingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/packs': {
@@ -757,10 +797,12 @@ const rootRouteChildren: RootRouteChildren = {
   LegalRoute: LegalRoute,
   MapsRoute: MapsRoute,
   PacksRoute: PacksRoute,
+  PrivacyRoute: PrivacyRoute,
   RankingsRoute: RankingsRoute,
   ReplayRoute: ReplayRoute,
   SettingsRoute: SettingsRoute,
   SnipesRoute: SnipesRoute,
+  TermsRoute: TermsRoute,
   TopPlaysRoute: TopPlaysRoute,
   TrackerRoute: TrackerRoute,
   AdminDanClassifierRoute: AdminDanClassifierRoute,

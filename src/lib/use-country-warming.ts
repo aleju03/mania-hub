@@ -27,7 +27,7 @@ export function seedCountryTierCache(countries: LiveCountryFeature[] | null | un
 }
 
 export interface CountryWarmingState {
-  /** True while the live backend is still building this country's first roster. */
+  /** True while the server is still building this country's first roster. */
   warming: boolean;
   /** True until the first activation response for the current country lands. */
   checking: boolean;
@@ -36,14 +36,14 @@ export interface CountryWarmingState {
 }
 
 /**
- * Activates `country` on the live backend and tracks whether it is still cold
+ * Activates `country` on the server and tracks whether it is still cold
  * (no roster projection yet). While warming, it polls until the backend reports
  * the country ready, then flips `warming` to false so the page can load data.
  *
  * Also surfaces the country's feature tier (cached per country, so repeat
  * visits resolve synchronously without a flicker).
  *
- * Returns inert values when the live backend is not configured, so callers can
+ * Returns inert values when the server is not configured, so callers can
  * treat it as a no-op fallback.
  */
 export function useCountryWarming(country: string): CountryWarmingState {

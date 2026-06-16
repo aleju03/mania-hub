@@ -9,10 +9,10 @@ import type { LeanRankingEntry, OsuScore } from "./types";
 
 export const PACK_SIZE = 5;
 
-// Packs draw from the live backend's tracked-player pool (the global
+// Packs draw from the server's tracked-player pool (the global
 // rankings snapshot, ~6k players whose data the backend already stores), so
 // opening a pack costs local DB reads instead of osu! API calls. The direct
-// osu! rankings path further down is the fallback when no live backend is
+// osu! rankings path further down is the fallback when no server is
 // configured or the pool draw fails.
 
 // Global mania performance rankings expose pages 1..200 of 50 rows (deeper
@@ -72,7 +72,7 @@ export interface PackRankBand {
   weight: number;
 }
 
-// Fallback-only (no live backend): one entry per card slot, in reveal order.
+// Fallback-only (no server): one entry per card slot, in reveal order.
 // Early slots draw from deep ranks (bands past MAX_PACK_RANK resolve through
 // the country pool), the last slot is the pack's "hit" with a small chance
 // at the very top. Card tiers are still computed from the player's real
@@ -405,7 +405,7 @@ export interface PackDraw {
   poolTotal: number | null;
 }
 
-/* Primary draw: the live backend's tracked-player pool. Free of osu! API
+/* Primary draw: the server's tracked-player pool. Free of osu! API
    calls - the global rankings snapshot is a local DB read on the backend.
    Draws uniformly over the whole pool, or over its top slice for the
    shard-bought pack types. */

@@ -15,7 +15,7 @@ interface CountrySelectorProps {
   selectedCountry: string;
   onSelect: (country: string) => void;
   className?: string;
-  // The Global aggregate is only meaningful when the live backend is wired up,
+  // The Global aggregate is only meaningful when the server is wired up,
   // so the nav opts in based on that.
   showGlobal?: boolean;
 }

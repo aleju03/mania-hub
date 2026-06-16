@@ -7,8 +7,21 @@ const ZIP_TAIL_BYTES = 128 * 1024;
 const MAX_ZIP_CENTRAL_DIRECTORY_BYTES = 8 * 1024 * 1024;
 const MAX_ARCHIVE_BYTES = 120 * 1024 * 1024;
 const MAX_EXTRACTED_FILE_BYTES = 60 * 1024 * 1024;
+const MAX_OSU_FILE_BYTES = 16 * 1024 * 1024;
+const MAX_ARCHIVE_OSU_CANDIDATES = 128;
+
+type ArchiveSource = {
+  name: string;
+  url: (beatmapsetId: string) => string;
+  resolveRedirectBeforeRange?: boolean;
+};
 
 const ARCHIVE_SOURCES = [
+  {
+    name: "osudl",
+    url: (beatmapsetId: string) => `https://osudl.org/s/${encodeURIComponent(beatmapsetId)}?video=false`,
+    resolveRedirectBeforeRange: true,
+  },
   {
     name: "osu.direct",
     url: (beatmapsetId: string) => `https://osu.direct/api/d/${encodeURIComponent(beatmapsetId)}`,
@@ -29,7 +42,7 @@ const ARCHIVE_SOURCES = [
     name: "sayobot",
     url: (beatmapsetId: string) => `https://txy1.sayobot.cn/beatmaps/download/full/${encodeURIComponent(beatmapsetId)}`,
   },
-] as const;
+] as const satisfies readonly ArchiveSource[];
 
 type ArchiveSourceName = (typeof ARCHIVE_SOURCES)[number]["name"];
 
@@ -46,6 +59,11 @@ type ZipDirectoryEntry = {
   flags: number;
   localHeaderOffset: number;
 };
+
+export interface BeatmapArchiveOsuFile {
+  path: string;
+  text: string;
+}
 
 const archiveSourceState = new Map<ArchiveSourceName, { nextAvailableAt: number; cooldownUntil: number; tail: Promise<void> }>();
 
@@ -245,7 +263,7 @@ function pickZipDirectoryEntry(entries: ZipDirectoryEntry[], filename: string): 
   return files.find((entry) => entry.path.split("/").pop()?.toLowerCase() === baseName) ?? null;
 }
 
-function extractEntryFromZipBuffer(buffer: ArrayBuffer, filename: string): Buffer {
+function readZipDirectoryEntriesFromBuffer(buffer: ArrayBuffer): ZipDirectoryEntry[] {
   const bytes = new Uint8Array(buffer);
   const view = new DataView(buffer);
   const eocdOffset = findEndOfCentralDirectory(bytes);
@@ -264,34 +282,53 @@ function extractEntryFromZipBuffer(buffer: ArrayBuffer, filename: string): Buffe
   }
 
   const directory = buffer.slice(centralDirectoryOffset, centralDirectoryOffset + centralDirectorySize);
-  const entry = pickZipDirectoryEntry(parseZipDirectoryEntries(directory), filename);
-  if (!entry) throw new Error(`File "${filename}" not found in archive`);
-  if (entry.flags & 0x1) throw new Error(`File "${filename}" is encrypted`);
-  if (entry.uncompressedSize > MAX_EXTRACTED_FILE_BYTES || entry.compressedSize > MAX_EXTRACTED_FILE_BYTES) {
-    throw new Error(`File "${filename}" is too large`);
+  return parseZipDirectoryEntries(directory);
+}
+
+function validateZipEntry(entry: ZipDirectoryEntry, label: string, maxBytes = MAX_EXTRACTED_FILE_BYTES): void {
+  if (entry.flags & 0x1) throw new Error(`File "${label}" is encrypted`);
+  if (entry.uncompressedSize > maxBytes || entry.compressedSize > maxBytes) {
+    throw new Error(`File "${label}" is too large`);
   }
   if (entry.compressionMethod !== 0 && entry.compressionMethod !== 8) {
-    throw new Error(`File "${filename}" uses unsupported zip compression method ${entry.compressionMethod}`);
+    throw new Error(`File "${label}" uses unsupported zip compression method ${entry.compressionMethod}`);
   }
+}
 
+function extractZipEntryFromBuffer(
+  buffer: ArrayBuffer,
+  entry: ZipDirectoryEntry,
+  label = entry.path,
+  maxBytes = MAX_EXTRACTED_FILE_BYTES,
+): Buffer {
+  validateZipEntry(entry, label, maxBytes);
+
+  const bytes = new Uint8Array(buffer);
+  const view = new DataView(buffer);
   if (entry.localHeaderOffset + 30 > bytes.length || view.getUint32(entry.localHeaderOffset, true) !== 0x04034b50) {
-    throw new Error(`File "${filename}" local header is invalid`);
+    throw new Error(`File "${label}" local header is invalid`);
   }
   const filenameLength = view.getUint16(entry.localHeaderOffset + 26, true);
   const extraLength = view.getUint16(entry.localHeaderOffset + 28, true);
   const dataOffset = entry.localHeaderOffset + 30 + filenameLength + extraLength;
   const dataEnd = dataOffset + entry.compressedSize;
-  if (dataEnd > bytes.length) throw new Error(`File "${filename}" data points outside the archive`);
+  if (dataEnd > bytes.length) throw new Error(`File "${label}" data points outside the archive`);
 
   const compressed = Buffer.from(buffer.slice(dataOffset, dataEnd));
   const output = entry.compressionMethod === 0 ? compressed : inflateRawSync(compressed);
-  if (output.length > MAX_EXTRACTED_FILE_BYTES) {
-    throw new Error(`File "${filename}" is too large`);
+  if (output.length > maxBytes) {
+    throw new Error(`File "${label}" is too large`);
   }
   return output;
 }
 
-async function extractArchiveFileByRangeFromUrl(url: string, filename: string, signal: AbortSignal): Promise<Buffer> {
+function extractEntryFromZipBuffer(buffer: ArrayBuffer, filename: string): Buffer {
+  const entry = pickZipDirectoryEntry(readZipDirectoryEntriesFromBuffer(buffer), filename);
+  if (!entry) throw new Error(`File "${filename}" not found in archive`);
+  return extractZipEntryFromBuffer(buffer, entry, filename);
+}
+
+async function readZipDirectoryEntriesByRangeFromUrl(url: string, signal: AbortSignal): Promise<ZipDirectoryEntry[]> {
   const tail = await fetchRangeBuffer(url, `bytes=-${ZIP_TAIL_BYTES}`, ZIP_TAIL_BYTES, signal);
   const tailBytes = new Uint8Array(tail.buffer);
   const eocdOffset = findEndOfCentralDirectory(tailBytes);
@@ -316,15 +353,17 @@ async function extractArchiveFileByRangeFromUrl(url: string, filename: string, s
     MAX_ZIP_CENTRAL_DIRECTORY_BYTES,
     signal,
   );
-  const entry = pickZipDirectoryEntry(parseZipDirectoryEntries(directory.buffer), filename);
-  if (!entry) throw new Error(`File "${filename}" not found in archive`);
-  if (entry.flags & 0x1) throw new Error(`File "${filename}" is encrypted`);
-  if (entry.uncompressedSize > MAX_EXTRACTED_FILE_BYTES || entry.compressedSize > MAX_EXTRACTED_FILE_BYTES) {
-    throw new Error(`File "${filename}" is too large`);
-  }
-  if (entry.compressionMethod !== 0 && entry.compressionMethod !== 8) {
-    throw new Error(`File "${filename}" uses unsupported zip compression method ${entry.compressionMethod}`);
-  }
+  return parseZipDirectoryEntries(directory.buffer);
+}
+
+async function extractZipEntryByRangeFromUrl(
+  url: string,
+  entry: ZipDirectoryEntry,
+  signal: AbortSignal,
+  label = entry.path,
+  maxBytes = MAX_EXTRACTED_FILE_BYTES,
+): Promise<Buffer> {
+  validateZipEntry(entry, label, maxBytes);
 
   const header = await fetchRangeBuffer(
     url,
@@ -334,7 +373,7 @@ async function extractArchiveFileByRangeFromUrl(url: string, filename: string, s
   );
   const headerView = new DataView(header.buffer);
   if (headerView.getUint32(0, true) !== 0x04034b50) {
-    throw new Error(`File "${filename}" local header is invalid`);
+    throw new Error(`File "${label}" local header is invalid`);
   }
 
   const filenameLength = headerView.getUint16(26, true);
@@ -343,15 +382,140 @@ async function extractArchiveFileByRangeFromUrl(url: string, filename: string, s
   const data = await fetchRangeBuffer(
     url,
     `bytes=${dataOffset}-${dataOffset + entry.compressedSize - 1}`,
-    MAX_EXTRACTED_FILE_BYTES,
+    maxBytes,
     signal,
   );
   const compressed = Buffer.from(data.buffer);
   const output = entry.compressionMethod === 0 ? compressed : inflateRawSync(compressed);
-  if (output.length > MAX_EXTRACTED_FILE_BYTES) {
-    throw new Error(`File "${filename}" is too large`);
+  if (output.length > maxBytes) {
+    throw new Error(`File "${label}" is too large`);
   }
   return output;
+}
+
+async function extractArchiveFileByRangeFromUrl(url: string, filename: string, signal: AbortSignal): Promise<Buffer> {
+  const entry = pickZipDirectoryEntry(await readZipDirectoryEntriesByRangeFromUrl(url, signal), filename);
+  if (!entry) throw new Error(`File "${filename}" not found in archive`);
+  return extractZipEntryByRangeFromUrl(url, entry, signal, filename);
+}
+
+function isRedirectStatus(status: number): boolean {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308;
+}
+
+async function resolveArchiveRangeUrl(source: (typeof ARCHIVE_SOURCES)[number], beatmapsetId: string, signal: AbortSignal): Promise<string> {
+  const url = source.url(beatmapsetId);
+  if (!("resolveRedirectBeforeRange" in source) || !source.resolveRedirectBeforeRange) return url;
+
+  const response = await fetch(url, {
+    signal,
+    redirect: "manual",
+    headers: { Range: "bytes=0-0" },
+  });
+  await response.body?.cancel().catch(() => {});
+
+  if (isRedirectStatus(response.status)) {
+    const location = response.headers.get("location");
+    if (!location) throw new Error("redirect omitted Location");
+    return new URL(location, url).toString();
+  }
+  if (response.status === 206) return url;
+  if (!response.ok) throw new Error(`redirect probe returned ${response.status}`);
+  throw new Error(`redirect probe returned ${response.status}`);
+}
+
+function isArchiveOsuEntry(entry: ZipDirectoryEntry): boolean {
+  return !entry.path.endsWith("/")
+    && entry.path.toLowerCase().endsWith(".osu")
+    && entry.uncompressedSize > 0
+    && entry.uncompressedSize <= MAX_OSU_FILE_BYTES
+    && entry.compressedSize <= MAX_OSU_FILE_BYTES;
+}
+
+function normalizeArchiveLookupText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function getOsuCandidateScore(entry: ZipDirectoryEntry, hints?: { version?: string | null }): number {
+  const version = normalizeArchiveLookupText(hints?.version ?? "");
+  if (!version) return 0;
+
+  const path = normalizeArchiveLookupText(entry.path);
+  return path.includes(version) ? 1 : 0;
+}
+
+function getArchiveOsuCandidates(entries: ZipDirectoryEntry[], hints?: { version?: string | null }): ZipDirectoryEntry[] {
+  return entries
+    .filter(isArchiveOsuEntry)
+    .sort((left, right) =>
+      getOsuCandidateScore(right, hints) - getOsuCandidateScore(left, hints)
+      || left.uncompressedSize - right.uncompressedSize
+      || left.path.localeCompare(right.path));
+}
+
+function decodeOsuFile(buffer: Buffer): string {
+  return new TextDecoder("utf-8").decode(buffer);
+}
+
+function readBeatmapIdFromOsuFile(text: string): number | null {
+  const match = /^BeatmapID\s*:\s*(\d+)\s*$/im.exec(text);
+  if (!match) return null;
+  const beatmapId = Number(match[1]);
+  return Number.isSafeInteger(beatmapId) && beatmapId > 0 ? beatmapId : null;
+}
+
+function summarizeArchiveCandidateErrors(errors: string[]): string {
+  if (errors.length <= 5) return errors.join("; ");
+  return `${errors.slice(0, 5).join("; ")}; ${errors.length - 5} more`;
+}
+
+function findBeatmapOsuFileInArchiveBuffer(
+  buffer: ArrayBuffer,
+  beatmapId: number,
+  hints?: { version?: string | null },
+): BeatmapArchiveOsuFile {
+  const candidates = getArchiveOsuCandidates(readZipDirectoryEntriesFromBuffer(buffer), hints);
+  if (candidates.length === 0) throw new Error("archive does not contain .osu files");
+
+  const errors: string[] = [];
+  for (const entry of candidates.slice(0, MAX_ARCHIVE_OSU_CANDIDATES)) {
+    try {
+      const text = decodeOsuFile(extractZipEntryFromBuffer(buffer, entry, entry.path, MAX_OSU_FILE_BYTES));
+      if (readBeatmapIdFromOsuFile(text) === beatmapId) return { path: entry.path, text };
+    } catch (error) {
+      errors.push(`${entry.path}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  const suffix = errors.length > 0 ? ` (${summarizeArchiveCandidateErrors(errors)})` : "";
+  throw new Error(`BeatmapID ${beatmapId} not found in archive .osu files${suffix}`);
+}
+
+async function findBeatmapOsuFileByRangeFromUrl(
+  url: string,
+  beatmapId: number,
+  hints: { version?: string | null } | undefined,
+  signal: AbortSignal,
+): Promise<BeatmapArchiveOsuFile> {
+  const candidates = getArchiveOsuCandidates(await readZipDirectoryEntriesByRangeFromUrl(url, signal), hints);
+  if (candidates.length === 0) throw new Error("archive does not contain .osu files");
+
+  const errors: string[] = [];
+  for (const entry of candidates.slice(0, MAX_ARCHIVE_OSU_CANDIDATES)) {
+    try {
+      const text = decodeOsuFile(await extractZipEntryByRangeFromUrl(url, entry, signal, entry.path, MAX_OSU_FILE_BYTES));
+      if (readBeatmapIdFromOsuFile(text) === beatmapId) return { path: entry.path, text };
+    } catch (error) {
+      errors.push(`${entry.path}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  const suffix = errors.length > 0 ? ` (${summarizeArchiveCandidateErrors(errors)})` : "";
+  throw new Error(`BeatmapID ${beatmapId} not found in archive .osu files${suffix}`);
 }
 
 async function extractArchiveFileByRange(beatmapsetId: string, filename: string): Promise<Buffer> {
@@ -365,9 +529,10 @@ async function extractArchiveFileByRange(beatmapsetId: string, filename: string)
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
     try {
-      return await withArchiveSourceSlot(source.name, () => (
-        extractArchiveFileByRangeFromUrl(source.url(beatmapsetId), filename, controller.signal)
-      ));
+      return await withArchiveSourceSlot(source.name, async () => {
+        const rangeUrl = await resolveArchiveRangeUrl(source, beatmapsetId, controller.signal);
+        return extractArchiveFileByRangeFromUrl(rangeUrl, filename, controller.signal);
+      });
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
         cooldownArchiveSource(source.name);
@@ -379,6 +544,38 @@ async function extractArchiveFileByRange(beatmapsetId: string, filename: string)
     }
   }
   throw new Error(`Archive range extraction failed for beatmapset ${beatmapsetId} (${errors.join("; ")})`);
+}
+
+async function extractBeatmapOsuFileByRange(
+  beatmapsetId: string,
+  beatmapId: number,
+  hints?: { version?: string | null },
+): Promise<BeatmapArchiveOsuFile> {
+  const errors: string[] = [];
+  for (const source of ARCHIVE_SOURCES) {
+    if (isArchiveSourceCoolingDown(source.name)) {
+      errors.push(`${source.name}: cooling down`);
+      continue;
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
+    try {
+      return await withArchiveSourceSlot(source.name, async () => {
+        const rangeUrl = await resolveArchiveRangeUrl(source, beatmapsetId, controller.signal);
+        return findBeatmapOsuFileByRangeFromUrl(rangeUrl, beatmapId, hints, controller.signal);
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        cooldownArchiveSource(source.name);
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`${source.name}: ${message}`);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  throw new Error(`Archive .osu range extraction failed for beatmapset ${beatmapsetId} (${errors.join("; ")})`);
 }
 
 function isLikelyZip(buffer: ArrayBuffer): boolean {
@@ -422,6 +619,45 @@ async function extractArchiveFileByFullArchive(beatmapsetId: string, filename: s
   throw new Error(`Archive fetch failed for beatmapset ${beatmapsetId} (${errors.join("; ")})`);
 }
 
+async function extractBeatmapOsuFileByFullArchive(
+  beatmapsetId: string,
+  beatmapId: number,
+  hints?: { version?: string | null },
+): Promise<BeatmapArchiveOsuFile> {
+  const errors: string[] = [];
+  for (const source of ARCHIVE_SOURCES) {
+    if (isArchiveSourceCoolingDown(source.name)) {
+      errors.push(`${source.name}: cooling down`);
+      continue;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), ARCHIVE_FETCH_TIMEOUT_MS);
+    let shouldCooldown = false;
+    try {
+      const archiveResponse = await withArchiveSourceSlot(source.name, () => fetch(source.url(beatmapsetId), { signal: controller.signal }));
+      if (!archiveResponse.ok) {
+        shouldCooldown = shouldCooldownArchiveSource(archiveResponse.status);
+        throw new Error(`${source.name} returned ${archiveResponse.status}`);
+      }
+
+      const archiveBuffer = await readResponseBufferWithLimit(archiveResponse, MAX_ARCHIVE_BYTES);
+      if (!isLikelyZip(archiveBuffer)) {
+        throw new Error(`${source.name} returned a non-zip response`);
+      }
+      return findBeatmapOsuFileInArchiveBuffer(archiveBuffer, beatmapId, hints);
+    } catch (error) {
+      if (shouldCooldown || (error instanceof Error && error.name === "AbortError")) {
+        cooldownArchiveSource(source.name);
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`${source.name}: ${message}`);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  throw new Error(`Archive .osu fetch failed for beatmapset ${beatmapsetId} (${errors.join("; ")})`);
+}
+
 export async function extractBeatmapArchiveFile(beatmapsetId: string, filename: string): Promise<Buffer> {
   try {
     return await extractArchiveFileByRange(beatmapsetId, filename);
@@ -431,4 +667,19 @@ export async function extractBeatmapArchiveFile(beatmapsetId: string, filename: 
   }
 
   return extractArchiveFileByFullArchive(beatmapsetId, filename);
+}
+
+export async function extractBeatmapOsuFileFromArchive(
+  beatmapsetId: string,
+  beatmapId: number,
+  hints?: { version?: string | null },
+): Promise<BeatmapArchiveOsuFile> {
+  try {
+    return await extractBeatmapOsuFileByRange(beatmapsetId, beatmapId, hints);
+  } catch {
+    // Some mirrors do not support range reads, and some redirect routes need a
+    // plain archive request. Fall back to a guarded full-archive fetch.
+  }
+
+  return extractBeatmapOsuFileByFullArchive(beatmapsetId, beatmapId, hints);
 }
