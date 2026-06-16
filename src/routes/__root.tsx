@@ -387,14 +387,6 @@ function NotFoundPage() {
 
 const KOFI_PAGE_URL = "https://ko-fi.com/aleju03";
 
-function shouldOpenKofiEmbed() {
-  if (typeof window === "undefined") return false;
-  const hasTouch = navigator.maxTouchPoints > 0;
-  const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
-  const hoverless = window.matchMedia("(hover: none)").matches;
-  return !hasTouch && !coarsePointer && !hoverless;
-}
-
 function KofiSupportButton() {
   const [open, setOpen] = useState(false);
   useEffect(() => {
@@ -418,15 +410,21 @@ function KofiSupportButton() {
   }, [open]);
   const modal = open && typeof document !== "undefined"
     ? createPortal(
-        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 pointer-events-none">
+        <div
+          className="fixed inset-0 z-[140] flex items-center justify-center p-4 pointer-events-none"
+          onTouchMoveCapture={(event) => {
+            if (event.target instanceof HTMLIFrameElement) return;
+            event.preventDefault();
+          }}
+        >
           <div
-            className="absolute inset-0 bg-black/65 pointer-events-auto"
+            className="absolute inset-0 bg-black/65 pointer-events-auto touch-none"
             onClick={() => setOpen(false)}
           />
           <div
             role="dialog"
             aria-modal="true"
-            className="relative z-10 w-[min(400px,calc(100vw-2rem))] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl pointer-events-auto"
+            className="relative z-10 w-[min(400px,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl pointer-events-auto"
           >
             <div className="flex items-center justify-between gap-3 border-b border-osu-b3/50 px-4 py-3">
               <div className="text-left">
@@ -448,7 +446,9 @@ function KofiSupportButton() {
               src={`${KOFI_PAGE_URL}/?hidefeed=true&widget=true&embed=true&preview=true`}
               title="Support aleju03 on Ko-fi"
               loading="eager"
-              className="block h-[min(620px,70dvh)] w-full overscroll-contain border-0 bg-[#f9f9f9] [touch-action:auto]"
+              scrolling="yes"
+              allow="payment *"
+              className="block h-[540px] max-h-[calc(100vh-9rem)] w-full overscroll-contain border-0 bg-[#f9f9f9] [touch-action:auto]"
             />
           </div>
         </div>,
@@ -463,7 +463,6 @@ function KofiSupportButton() {
         rel="noopener noreferrer"
         onClick={(event) => {
           if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-          if (!shouldOpenKofiEmbed()) return;
           event.preventDefault();
           setOpen(true);
         }}
