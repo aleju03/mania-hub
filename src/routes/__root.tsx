@@ -1,5 +1,6 @@
 import { HeadContent, Link, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Coffee, X } from "lucide-react";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest, setCookie } from "@tanstack/react-start/server";
@@ -396,32 +397,28 @@ function KofiSupportButton() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
-  return (
-    <>
-      <a
-        href={KOFI_PAGE_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={(event) => {
-          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-          event.preventDefault();
-          setOpen(true);
-        }}
-        className="inline-flex items-center gap-1 rounded-full border border-osu-pink/25 bg-osu-pink/10 px-2 py-0.5 text-[10px] font-semibold text-osu-pink-light/80 hover:bg-osu-pink/20 hover:text-osu-pink-light transition-colors"
-      >
-        <Coffee className="h-3 w-3" />
-        support the server
-      </a>
-      {open ? (
-        <>
+  useEffect(() => {
+    if (!open) return;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverscroll = document.documentElement.style.overscrollBehavior;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overscrollBehavior = "none";
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overscrollBehavior = previousHtmlOverscroll;
+    };
+  }, [open]);
+  const modal = open && typeof document !== "undefined"
+    ? createPortal(
+        <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 pointer-events-none">
           <div
-            className="fixed inset-0 z-[140] bg-black/55 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-black/65 pointer-events-auto"
             onClick={() => setOpen(false)}
           />
           <div
             role="dialog"
             aria-modal="true"
-            className="fixed left-1/2 top-1/2 z-[141] w-[min(400px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl"
+            className="relative z-10 w-[min(400px,calc(100vw-2rem))] max-h-[calc(100dvh-2rem)] overflow-hidden rounded-xl border border-osu-b2/70 bg-osu-b4 shadow-2xl pointer-events-auto"
           >
             <div className="flex items-center justify-between gap-3 border-b border-osu-b3/50 px-4 py-3">
               <div className="text-left">
@@ -442,11 +439,31 @@ function KofiSupportButton() {
             <iframe
               src={`${KOFI_PAGE_URL}/?hidefeed=true&widget=true&embed=true&preview=true`}
               title="Support aleju03 on Ko-fi"
-              className="block h-[min(620px,70vh)] w-full border-0 bg-[#f9f9f9]"
+              loading="eager"
+              className="block h-[min(620px,70dvh)] w-full overscroll-contain border-0 bg-[#f9f9f9] [touch-action:auto]"
             />
           </div>
-        </>
-      ) : null}
+        </div>,
+        document.body,
+      )
+    : null;
+  return (
+    <>
+      <a
+        href={KOFI_PAGE_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(event) => {
+          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          setOpen(true);
+        }}
+        className="inline-flex items-center gap-1 rounded-full border border-osu-pink/25 bg-osu-pink/10 px-2 py-0.5 text-[10px] font-semibold text-osu-pink-light/80 hover:bg-osu-pink/20 hover:text-osu-pink-light transition-colors"
+      >
+        <Coffee className="h-3 w-3" />
+        support the server
+      </a>
+      {modal}
     </>
   );
 }
