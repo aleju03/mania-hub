@@ -387,6 +387,14 @@ function NotFoundPage() {
 
 const KOFI_PAGE_URL = "https://ko-fi.com/aleju03";
 
+function shouldOpenKofiEmbed() {
+  if (typeof window === "undefined") return false;
+  const hasTouch = navigator.maxTouchPoints > 0;
+  const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+  const hoverless = window.matchMedia("(hover: none)").matches;
+  return !hasTouch && !coarsePointer && !hoverless;
+}
+
 function KofiSupportButton() {
   const [open, setOpen] = useState(false);
   useEffect(() => {
@@ -455,6 +463,7 @@ function KofiSupportButton() {
         rel="noopener noreferrer"
         onClick={(event) => {
           if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          if (!shouldOpenKofiEmbed()) return;
           event.preventDefault();
           setOpen(true);
         }}
