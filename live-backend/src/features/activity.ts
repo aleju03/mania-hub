@@ -398,7 +398,7 @@ async function enqueueMissingActivitySkillAnalyses(
   const placeholders = beatmapIds.map(() => "?").join(", ");
   const rows = (await exec(
     db,
-    `select beatmap_id, status, updated_at
+    `select beatmap_id, status, error, updated_at
      from beatmap_skill_vectors
      where analysis_version = ? and beatmap_id in (${placeholders})`,
     [ACTIVITY_SKILL_ANALYSIS_VERSION, ...beatmapIds],
@@ -460,18 +460,21 @@ export async function computeBeatmapActivitySkillVector(
       ],
     );
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     const failedAt = nowIso();
+    const status = isTerminalActivitySkillAnalysisError(message) ? "unavailable" : "failed";
     await exec(
       db,
       `insert into beatmap_skill_vectors
          (beatmap_id, analysis_version, status, error, updated_at)
-       values (?, ?, 'failed', ?, ?)
+       values (?, ?, ?, ?, ?)
        on conflict(beatmap_id, analysis_version) do update set
          status = excluded.status,
          error = excluded.error,
          updated_at = excluded.updated_at`,
-      [beatmapId, ACTIVITY_SKILL_ANALYSIS_VERSION, error instanceof Error ? error.message : String(error), failedAt],
+      [beatmapId, ACTIVITY_SKILL_ANALYSIS_VERSION, status, message, failedAt],
     );
+    if (status === "unavailable") return;
     throw error;
   }
 }
@@ -646,7 +649,7 @@ async function recomputeActivitySessions(db: Db, country: string, userId: number
 async function enqueueBeatmapSkillAnalysisIfNeeded(db: Db, queue: JobQueue, beatmapId: number): Promise<void> {
   const row = (await exec(
     db,
-    `select status, updated_at
+    `select status, error, updated_at
      from beatmap_skill_vectors
      where beatmap_id = ? and analysis_version = ?
      limit 1`,
@@ -658,11 +661,26 @@ async function enqueueBeatmapSkillAnalysisIfNeeded(db: Db, queue: JobQueue, beat
 
 function shouldSkipActivitySkillAnalysis(row: Record<string, unknown>): boolean {
   const status = String(row.status);
+  const error = typeof row.error === "string" ? row.error : "";
   const updatedAt = typeof row.updated_at === "string" ? row.updated_at : "";
   if (status === "ready") return true;
+  if (status === "unavailable") return true;
+  if (status === "failed" && isTerminalActivitySkillAnalysisError(error)) return true;
   if (status === "running" && isRecentActivityAnalysisStatus(updatedAt, ACTIVITY_ANALYSIS_RUNNING_REQUEUE_MS)) return true;
   if (status === "failed" && isRecentActivityAnalysisStatus(updatedAt, ACTIVITY_ANALYSIS_FAILED_RETRY_MS)) return true;
   return false;
+}
+
+function isTerminalActivitySkillAnalysisError(message: string): boolean {
+  if (!message.startsWith("Failed to fetch .osu file for beatmap ")) return false;
+  const separatorIndex = message.indexOf(": ");
+  if (separatorIndex < 0) return false;
+  const sourceErrors = message
+    .slice(separatorIndex + 2)
+    .split(";")
+    .map((part) => part.trim().toLowerCase())
+    .filter(Boolean);
+  return sourceErrors.length > 0 && sourceErrors.every((part) => part.includes("(404)") || part.includes("invalid .osu file"));
 }
 
 async function enqueueActivitySkillAnalysis(queue: JobQueue, beatmapId: number): Promise<void> {
