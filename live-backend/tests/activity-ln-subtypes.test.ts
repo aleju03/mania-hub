@@ -16,8 +16,12 @@ function repeatRows<T>(pattern: T[][], times: number): T[][] {
   return Array.from({ length: times }).flatMap(() => pattern);
 }
 
-function makeOsu(rows: Array<Array<number | { column: number; holdMs?: number }>>, intervalMs: number): string {
-  const keyCount = 7;
+function makeOsu(
+  rows: Array<Array<number | { column: number; holdMs?: number }>>,
+  intervalMs: number,
+  options: { circleSize?: number; keyCount?: number } = {},
+): string {
+  const keyCount = options.keyCount ?? 7;
   const hitObjects = rows.flatMap((row, index) => {
     const time = index * intervalMs;
     return row.map((entry) => {
@@ -42,7 +46,7 @@ function makeOsu(rows: Array<Array<number | { column: number; holdMs?: number }>
     "Version:7K",
     "",
     "[Difficulty]",
-    "CircleSize:7",
+    `CircleSize:${options.circleSize ?? keyCount}`,
     "OverallDifficulty:8",
     "",
     "[TimingPoints]",
@@ -68,6 +72,14 @@ async function analyzeFixture(beatmapId: number, osuFile: string) {
 }
 
 describe("activity LN subtype vectors", () => {
+  it("handles fractional mania key counts without fractional note columns", async () => {
+    const rightEdgeHolds = Array.from({ length: 32 }, () => [{ column: 6, holdMs: 120 }]);
+    const row = await analyzeFixture(100, makeOsu(rightEdgeHolds, 80, { circleSize: 6.8, keyCount: 7 }));
+
+    expect(row.status).toBe("ready");
+    expect(JSON.parse(String(row.skills_json))).toMatchObject({ primary: expect.any(String) });
+  });
+
   it("stores the strongest 7K LN subtype score", async () => {
     const releaseRows = Array.from({ length: 7 * 36 }, (_, index) => [
       { column: index % 7, holdMs: 45 },
