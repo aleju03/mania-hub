@@ -2121,7 +2121,7 @@ describe("live backend", () => {
     expect(cached?.isStale).toBe(true);
   });
 
-  it("serves stale profile user stats immediately and refreshes them in the background", async () => {
+  it("refreshes stale profile user stats before serving browser snapshots", async () => {
     const { db } = await setup();
     const best = await fixture<OscScore[]>("top-best.json");
     const getUserByKey = vi.fn(async () => ({
@@ -2129,6 +2129,8 @@ describe("live backend", () => {
       username: "Sniper",
       avatar_url: "https://assets.example/sniper.png",
       country_code: "CR",
+      last_visit: "2026-05-01T00:00:00+00:00",
+      is_online: true,
       statistics: { pp: 1000, global_rank: 100, country_rank: 1, play_count: 10 },
       page: null,
     }));
@@ -2137,6 +2139,8 @@ describe("live backend", () => {
       username: "Sniper",
       avatar_url: "https://assets.example/sniper-new.png",
       country_code: "CR",
+      last_visit: "2026-05-12T00:00:00+00:00",
+      is_online: false,
       statistics: { pp: 1100, global_rank: 90, country_rank: 1, play_count: 20 },
       page: { html: "<b>fresh but stripped</b>" },
     }));
@@ -2150,21 +2154,16 @@ describe("live backend", () => {
     const snapshot = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
 
     expect(snapshot.user).toMatchObject({
-      avatar_url: "https://assets.example/sniper.png",
-      page: null,
-      statistics: expect.objectContaining({ global_rank: 100, play_count: 10 }),
-    });
-    expect(getUserByKey).toHaveBeenCalledTimes(1);
-    expect(getUserBestScoresWindow).toHaveBeenCalledTimes(1);
-
-    await vi.waitFor(() => expect(getUser).toHaveBeenCalledTimes(1));
-    const refreshed = await getCachedPlayerProfileSnapshot(db, "Sniper");
-    expect(refreshed?.user).toMatchObject({
       avatar_url: "https://assets.example/sniper-new.png",
+      last_visit: "2026-05-12T00:00:00+00:00",
+      is_online: false,
       page: null,
       statistics: expect.objectContaining({ global_rank: 90, play_count: 20 }),
     });
-    expect(refreshed?.fetchedAt).not.toBe(refreshed?.userFetchedAt);
+    expect(getUserByKey).toHaveBeenCalledTimes(1);
+    expect(getUser).toHaveBeenCalledTimes(1);
+    expect(getUserBestScoresWindow).toHaveBeenCalledTimes(1);
+    expect(snapshot.fetchedAt).not.toBe(snapshot.userFetchedAt);
   });
 
   it("projects confirmed live top plays into cached player snapshots without same-map duplicates", async () => {

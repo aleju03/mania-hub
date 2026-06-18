@@ -104,13 +104,13 @@ export async function getPlayerProfileSnapshot(
   const row = await getStoredProfileSnapshot(db, key);
   if (row) {
     const snapshotExpired = isExpired(row.fetched_at, PROFILE_SNAPSHOT_TTL_MS);
+    const servedRow = await refreshProfileUserIfDue(db, osu, row);
     if (snapshotExpired) {
-      refreshProfileSnapshotInBackground(db, osu, key, row);
-      return buildServedSnapshot(db, row, true, await getProfileRecentScoresForOverlay(db, osu, row.user_id));
+      refreshProfileSnapshotInBackground(db, osu, key, servedRow);
+      return buildServedSnapshot(db, servedRow, true, await getProfileRecentScoresForOverlay(db, osu, servedRow.user_id));
     }
-    refreshProfileUserInBackground(db, osu, row);
-    const snapshot = await buildServedSnapshot(db, row, false, await getProfileRecentScoresForOverlay(db, osu, row.user_id));
-    if (snapshot.projection.appliedRecentScores > 0) refreshProfileSnapshotInBackground(db, osu, key, row);
+    const snapshot = await buildServedSnapshot(db, servedRow, false, await getProfileRecentScoresForOverlay(db, osu, servedRow.user_id));
+    if (snapshot.projection.appliedRecentScores > 0) refreshProfileSnapshotInBackground(db, osu, key, servedRow);
     return snapshot;
   }
 
@@ -382,14 +382,6 @@ function refreshProfileSnapshotInBackground(
       row.user_id,
     ]);
   });
-}
-
-function refreshProfileUserInBackground(
-  db: Db,
-  osu: Pick<OsuApiClient, "getUser">,
-  row: ProfileSnapshotRow,
-): void {
-  void refreshProfileUserIfDue(db, osu, row);
 }
 
 async function refreshProfileUserIfDue(
