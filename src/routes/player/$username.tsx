@@ -603,6 +603,9 @@ function profileUsersAreEquivalent(a: OsuUser | null, b: OsuUser): boolean {
     a.username === b.username &&
     a.avatar_url === b.avatar_url &&
     a.country_code === b.country_code &&
+    a.is_online === b.is_online &&
+    a.last_visit === b.last_visit &&
+    a.is_supporter === b.is_supporter &&
     a.statistics?.pp === b.statistics?.pp &&
     a.statistics?.play_count === b.statistics?.play_count &&
     a.statistics?.global_rank === b.statistics?.global_rank &&
