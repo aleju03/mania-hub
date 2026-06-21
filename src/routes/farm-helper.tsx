@@ -330,6 +330,7 @@ function FarmHelperPage() {
                           key={`${rec.beatmapId}:${rec.speedBucket}`}
                           rec={rec}
                           userKey={String(snapshot.userId)}
+                          userName={snapshot.username}
                           keyMode={keyMode}
                           onShowFarmers={() => setFarmersFor(rec)}
                         />
@@ -920,11 +921,13 @@ function SegmentButton({
 function RecRow({
   rec,
   userKey,
+  userName,
   keyMode,
   onShowFarmers,
 }: {
   rec: LiveFarmHelperRec;
   userKey: string;
+  userName: string;
   keyMode: LiveFarmHelperKeyMode;
   onShowFarmers: () => void;
 }) {
@@ -947,6 +950,7 @@ function RecRow({
     lengthSec: rec.lengthSec,
     mapUrl: rec.mapUrl,
     userKey,
+    userName,
     keyMode,
     speed: rec.speedBucket,
     reason: rec.reason,

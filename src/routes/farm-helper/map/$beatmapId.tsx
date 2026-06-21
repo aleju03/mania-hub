@@ -26,6 +26,7 @@ type FarmMapContext = {
   lengthSec?: number;
   mapUrl?: string;
   userKey?: string;
+  userName?: string;
   keyMode?: LiveFarmHelperKeyMode;
   speed?: LiveFarmHelperSpeedBucket;
   reason?: LiveFarmHelperReason;
@@ -857,6 +858,7 @@ function readStoredFarmContext(beatmapId: number): FarmMapContext | null {
       lengthSec: finiteNumber(data.lengthSec),
       mapUrl: finiteString(data.mapUrl),
       userKey: typeof data.userKey === "string" ? data.userKey : undefined,
+      userName: finiteString(data.userName),
       keyMode: data.keyMode === "4k" || data.keyMode === "7k" || data.keyMode === "any" ? data.keyMode : undefined,
       speed: data.speed === "ht" || data.speed === "normal" || data.speed === "dt" ? data.speed : undefined,
       reason: data.reason === "missing" || data.reason === "improve" || data.reason === "stale" ? data.reason : undefined,

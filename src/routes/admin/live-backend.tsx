@@ -186,6 +186,12 @@ interface AnalyticsRecentEventRow {
   profileUsername: string | null;
   replayPlayer: string | null;
   replayScoreId: string | null;
+  viewUrl: string | null;
+  farmHelperUser: string | null;
+  farmMapTitle: string | null;
+  farmMapUser: string | null;
+  packType: string | null;
+  packUsername: string | null;
 }
 
 interface AnalyticsCountryRow {
@@ -525,7 +531,7 @@ async function fetchAnalyticsMonitorDataFromPostHog({
     ),
     runQuery(
       "recent activity",
-      `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id, properties.$screen_width, properties.$viewport_width FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT 30`,
+      `SELECT formatDateTime(toTimeZone(timestamp, 'America/Costa_Rica'), '%h:%i:%S %p'), event, properties.$pathname, properties.$geoip_country_code, properties.selected_country, distinct_id, properties.maps_tab, properties.rankings_page, properties.profile_username, properties.replay_player, properties.replay_score_id, properties.$screen_width, properties.$viewport_width, properties.$current_url, properties.farm_helper_user, properties.pack_type, properties.pack_username, properties.farm_map_title, properties.farm_map_user FROM events WHERE timestamp > ${since} AND distinct_id != 'server'${recentCountryClause} AND (properties.$pathname IS NULL OR properties.$pathname NOT LIKE '/admin/%') AND NOT (event = '$pageview' AND properties.$pathname = '/') ORDER BY timestamp DESC LIMIT 30`,
     ),
     runQuery(
       "physical countries",
@@ -585,6 +591,12 @@ async function fetchAnalyticsMonitorDataFromPostHog({
       profileUsername: row[8] ? String(row[8]) : null,
       replayPlayer: row[9] ? String(row[9]) : null,
       replayScoreId: row[10] ? String(row[10]) : null,
+      viewUrl: row[13] ? String(row[13]) : null,
+      farmHelperUser: row[14] ? String(row[14]) : null,
+      packType: row[15] ? String(row[15]) : null,
+      packUsername: row[16] ? String(row[16]) : null,
+      farmMapTitle: row[17] ? String(row[17]) : null,
+      farmMapUser: row[18] ? String(row[18]) : null,
     })),
     topPhysicalCountries: topPhysCountries.map((row) => ({
       country: String(row[0] ?? ""),
@@ -1522,7 +1534,79 @@ function formatAnalyticsMapsTab(tab: string | null): string {
   return ANALYTICS_MAPS_TAB_LABELS[tab] ?? tab;
 }
 
+const ANALYTICS_PACK_TYPE_LABELS: Record<string, string> = {
+  standard: "Standard",
+  wild: "Wild",
+  elite: "Elite",
+  legend: "Legend",
+};
+
+function formatAnalyticsPackType(type: string | null): string {
+  if (!type) return "pack";
+  return ANALYTICS_PACK_TYPE_LABELS[type] ?? type;
+}
+
+const ADMIN_ANALYTICS_INSPECT_PARAM = "mh_admin_inspect";
+const ANALYTICS_PRIMARY_HOSTS = new Set(["mania-tracker.com", "www.mania-tracker.com"]);
+
+function isAnalyticsViewHostAllowed(url: URL): boolean {
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+  const host = url.host.toLowerCase();
+  const hostname = url.hostname.toLowerCase();
+  if (typeof window !== "undefined" && host === window.location.host.toLowerCase()) return true;
+  if (ANALYTICS_PRIMARY_HOSTS.has(hostname)) return true;
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
+}
+
+// Turn the captured absolute $current_url into a same-origin link so the admin
+// can open exactly what the visitor saw (e.g. /farm-helper?user=X). Admin and
+// off-site URLs are dropped so we never link out of the dashboard or to nothing.
+function analyticsViewHref(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (!isAnalyticsViewHostAllowed(parsed)) return null;
+    const href = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    if (!href.startsWith("/") || href.startsWith("/admin")) return null;
+    return href;
+  } catch {
+    return null;
+  }
+}
+
+function analyticsInspectionHref(href: string): string {
+  try {
+    const parsed = new URL(href, "https://mania-tracker.local");
+    const marker = `${ADMIN_ANALYTICS_INSPECT_PARAM}=1`;
+    const hash = parsed.hash.startsWith("#") ? parsed.hash.slice(1) : parsed.hash;
+    const hashParts = hash ? hash.split("&").filter(Boolean) : [];
+    if (!hashParts.some((part) => part === ADMIN_ANALYTICS_INSPECT_PARAM || part.startsWith(`${ADMIN_ANALYTICS_INSPECT_PARAM}=`))) {
+      hashParts.push(marker);
+    }
+    parsed.hash = hashParts.length > 0 ? `#${hashParts.join("&")}` : "";
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return href;
+  }
+}
+
+// Pull a query param off the captured $current_url. Used as a fallback so the
+// inline label (e.g. who farm help was viewed for) still resolves for events
+// captured before the dedicated property existed.
+function analyticsUrlParam(url: string | null, key: string): string | null {
+  if (!url) return null;
+  try {
+    const value = new URL(url).searchParams.get(key);
+    return value && value.trim() ? value : null;
+  } catch {
+    return null;
+  }
+}
+
 function formatAnalyticsRecentEventLabel(row: AnalyticsRecentEventRow): string {
+  if (row.event === "pack_open") {
+    return `Pack · ${formatAnalyticsPackType(row.packType)} · ${row.packUsername || "guest"}`;
+  }
   const path = row.path || "";
   if (!path || path === "/") return "Home";
   if (path === "/maps") return `Maps / ${formatAnalyticsMapsTab(row.mapsTab)}`;
@@ -1530,6 +1614,17 @@ function formatAnalyticsRecentEventLabel(row: AnalyticsRecentEventRow): string {
   if (path.startsWith("/player/")) return row.profileUsername ? `Player · ${row.profileUsername}` : "Player";
   if (path === "/top-plays") return "Top plays";
   if (path === "/tracker") return "Tracker";
+  if (path === "/farm-helper") {
+    const user = row.farmHelperUser || analyticsUrlParam(row.viewUrl, "user");
+    return user ? `Farm helper · ${user}` : "Farm helper";
+  }
+  if (path.startsWith("/farm-helper/map/")) {
+    const subject = row.farmMapUser ? ` · for ${row.farmMapUser}` : "";
+    if (row.farmMapTitle) return `Farm map · ${row.farmMapTitle}${subject}`;
+    const beatmapId = path.slice("/farm-helper/map/".length);
+    return beatmapId ? `Farm map · #${beatmapId}${subject}` : `Farm map${subject}`;
+  }
+  if (path === "/packs") return "Packs";
   if (path === "/replay") {
     if (row.replayPlayer) return `Replay / ${row.replayPlayer}`;
     if (row.replayScoreId) return `Replay / #${row.replayScoreId.slice(-6)}`;
@@ -1634,12 +1729,16 @@ function AnalyticsRecentEventsCard({
             const entry = row.distinctId ? visitorPalette.get(row.distinctId) : undefined;
             const color = entry ? VISITOR_COLORS[entry.slot % VISITOR_COLORS.length] : null;
             const visitorLabel = entry?.label ?? "—";
-            return (
-              <div
-                key={`${row.timestamp}-${index}`}
-                className="flex items-center gap-2 text-[10px] py-1.5 px-2 rounded-md hover:bg-osu-b3/30 transition-colors duration-[100ms]"
-                title={row.distinctId ? `visitor id: ${row.distinctId}${row.path ? ` · ${row.path}` : ""}` : row.path || ""}
-              >
+            const href = analyticsViewHref(row.viewUrl);
+            const inspectionHref = href ? analyticsInspectionHref(href) : null;
+            const rowClass = "flex items-center gap-2 text-[10px] py-1.5 px-2 rounded-md hover:bg-osu-b3/30 transition-colors duration-[100ms]";
+            const rowTitle = href
+              ? `open ${href}${row.distinctId ? ` · visitor id: ${row.distinctId}` : ""}`
+              : row.distinctId
+                ? `visitor id: ${row.distinctId}${row.path ? ` · ${row.path}` : ""}`
+                : row.path || "";
+            const content = (
+              <>
                 <span className={`w-1 self-stretch rounded-full flex-shrink-0 ${color?.dot ?? "bg-osu-b3/40"}`} />
                 <span className="text-osu-f1 font-mono w-20 flex-shrink-0">{row.timestamp || "—"}</span>
                 {row.country ? (
@@ -1648,10 +1747,26 @@ function AnalyticsRecentEventsCard({
                   <span className="h-[10px] w-[15px] rounded-[1px] bg-osu-b3/40 flex-shrink-0" />
                 )}
                 <AnalyticsVisitorDeviceIcon deviceKind={row.deviceKind} />
-                <span className="text-osu-c2 truncate flex-1">{formatAnalyticsRecentEventLabel(row)}</span>
+                <span className="text-osu-c2 truncate flex-1 group-hover:underline">{formatAnalyticsRecentEventLabel(row)}</span>
                 <span className={`font-mono font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${color ? `${color.bg} ${color.text}` : "text-osu-f1"}`}>
                   {visitorLabel}
                 </span>
+              </>
+            );
+            return href ? (
+              <a
+                key={`${row.timestamp}-${index}`}
+                href={inspectionHref ?? href}
+                target="_blank"
+                rel="noreferrer"
+                className={`group cursor-pointer ${rowClass}`}
+                title={rowTitle}
+              >
+                {content}
+              </a>
+            ) : (
+              <div key={`${row.timestamp}-${index}`} className={rowClass} title={rowTitle}>
+                {content}
               </div>
             );
           })}
@@ -1831,11 +1946,17 @@ function AnalyticsTopProfilesCard({ rows, range }: { rows: AnalyticsTopProfileRo
           {rows.map((row) => {
             const pct = Math.max(3, Math.round((row.views / max) * 100));
             return (
-              <div key={row.username} className="relative rounded-md bg-osu-b5/60 border border-osu-b3/20 overflow-hidden">
+              <a
+                key={row.username}
+                href={analyticsInspectionHref(`/player/${encodeURIComponent(row.username)}`)}
+                target="_blank"
+                rel="noreferrer"
+                className="group relative block cursor-pointer rounded-md bg-osu-b5/60 border border-osu-b3/20 overflow-hidden hover:border-osu-purple/40 transition-colors duration-[100ms]"
+              >
                 <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-osu-purple/20 to-osu-purple/5" style={{ width: `${pct}%` }} />
                 <div className="relative px-3 py-2 flex items-center justify-between gap-3">
                   <span className="min-w-0 flex-1 truncate text-[11px] text-osu-c2">
-                    {row.username}
+                    <span className="group-hover:underline">{row.username}</span>
                     {row.lastViewedLabel ? (
                       <span className="text-osu-f1">
                         {" "}· last visited {row.lastViewedLabel} <AnalyticsInlineCountryFlag country={row.lastVisitorCountry} />
@@ -1844,7 +1965,7 @@ function AnalyticsTopProfilesCard({ rows, range }: { rows: AnalyticsTopProfileRo
                   </span>
                   <span className="text-[11px] font-bold text-white flex-shrink-0">{formatNumber(row.views)}</span>
                 </div>
-              </div>
+              </a>
             );
           })}
         </div>
@@ -1867,7 +1988,13 @@ function AnalyticsTopReplaysCard({ rows, range }: { rows: AnalyticsTopReplayRow[
               ? `${row.artist} - ${row.title}`
               : row.title ?? `#${row.scoreId.slice(-6)}`;
             return (
-              <div key={row.scoreId} className="relative rounded-md bg-osu-b5/60 border border-osu-b3/20 overflow-hidden">
+              <a
+                key={row.scoreId}
+                href={analyticsInspectionHref(`/replay?scoreId=${encodeURIComponent(row.scoreId)}`)}
+                target="_blank"
+                rel="noreferrer"
+                className="group relative block cursor-pointer rounded-md bg-osu-b5/60 border border-osu-b3/20 overflow-hidden hover:border-osu-yellow/40 transition-colors duration-[100ms]"
+              >
                 <div className="absolute inset-y-0 left-0 bg-gradient-to-r from-osu-yellow/20 to-osu-yellow/5" style={{ width: `${pct}%` }} />
                 <div className="relative px-2 py-1.5 flex items-center gap-2.5 min-w-0">
                   {row.coverUrl ? (
@@ -1876,7 +2003,7 @@ function AnalyticsTopReplaysCard({ rows, range }: { rows: AnalyticsTopReplayRow[
                     <div className="w-[56px] h-[34px] rounded-[2px] bg-osu-b3/30 flex-shrink-0" />
                   )}
                   <div className="flex-1 min-w-0 leading-tight">
-                    <div className="text-[11px] text-white truncate font-medium">{primary}</div>
+                    <div className="text-[11px] text-white truncate font-medium group-hover:underline">{primary}</div>
                     <div className="mt-0.5 flex min-w-0 items-center gap-1 truncate text-[9px] text-osu-f1">
                       {row.difficulty ? <span className="text-osu-c2">[{row.difficulty}]</span> : null}
                       {row.difficulty && (row.player || row.lastViewedLabel) ? <span>·</span> : null}
@@ -1892,7 +2019,7 @@ function AnalyticsTopReplaysCard({ rows, range }: { rows: AnalyticsTopReplayRow[
                   </div>
                   <span className="text-[12px] font-bold text-white flex-shrink-0">{formatNumber(row.views)}</span>
                 </div>
-              </div>
+              </a>
             );
           })}
         </div>

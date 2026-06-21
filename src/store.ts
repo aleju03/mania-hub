@@ -152,6 +152,29 @@ function removeThemeHueFromStorage(): void {
   }
 }
 
+// The pre-hydration bootstrap in `__root.tsx` paints the resolved hue/sat onto
+// the document before this module runs (reading the dedicated key, then the
+// legacy blob). Reading those inline values back lets the startup reconciliation
+// recover the theme even when a localStorage read here transiently returns null
+// — the symptom being the theme occasionally reverting to default on load until
+// a reload or re-pick. Inline style holds hue as a 0-359 number and sat as a
+// 0-1 fraction.
+function readDomThemeHue(): number | null {
+  if (typeof document === "undefined") return null;
+  const raw = document.documentElement.style.getPropertyValue("--theme-hue").trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? clampThemeHue(n) : null;
+}
+
+function readDomThemeSat(): number | null {
+  if (typeof document === "undefined") return null;
+  const raw = document.documentElement.style.getPropertyValue("--theme-sat").trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? clampThemeSat(n * 100) : null;
+}
+
 function filterFreshAvatarAccents(raw: unknown): Record<string, CachedAvatarAccent> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const result: Record<string, CachedAvatarAccent> = {};
@@ -1118,16 +1141,34 @@ if (typeof window !== "undefined") {
       writeCountryCookieClient(current);
     }
   };
-  const syncThemeHueToDom = () => {
-    applyThemeHueToDom(useAppStore.getState().themeHue);
+  // Reconcile the persisted theme onto the DOM and store once persist has
+  // hydrated. Re-reading storage here (instead of trusting the possibly-default
+  // store value) self-heals a transient localStorage miss at store-create time,
+  // and the DOM fallback means we never overwrite the hue/sat the bootstrap
+  // already painted with the default. A recovered value is written back to the
+  // dedicated key so the fast bootstrap path works next load (e.g. legacy
+  // blob-only themes). We never persist the default here, so a total read
+  // failure can't destroy a stored theme — a reload recovers it.
+  const syncThemeToDom = () => {
+    const storedHue = readThemeHueFromStorage();
+    const hue = storedHue ?? readDomThemeHue() ?? DEFAULT_THEME_HUE;
+    if (storedHue == null && hue !== DEFAULT_THEME_HUE) writeThemeHueToStorage(hue);
+    applyThemeHueToDom(hue);
+    if (useAppStore.getState().themeHue !== hue) useAppStore.setState({ themeHue: hue });
+
+    const storedSat = readThemeSatFromStorage();
+    const sat = storedSat ?? readDomThemeSat() ?? DEFAULT_THEME_SAT;
+    if (storedSat == null && sat !== DEFAULT_THEME_SAT) writeThemeSatToStorage(sat);
+    applyThemeSatToDom(sat);
+    if (useAppStore.getState().themeSaturation !== sat) useAppStore.setState({ themeSaturation: sat });
   };
   if (useAppStore.persist.hasHydrated()) {
     syncCookieToStore();
-    syncThemeHueToDom();
+    syncThemeToDom();
   } else {
     useAppStore.persist.onFinishHydration(() => {
       syncCookieToStore();
-      syncThemeHueToDom();
+      syncThemeToDom();
     });
   }
 }

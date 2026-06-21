@@ -1,9 +1,21 @@
 const API_KEY = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
 const ENDPOINT = "/api/sync";
 const VISITOR_ID_KEY = "mh_vid";
+const ADMIN_ANALYTICS_INSPECT_PARAM = "mh_admin_inspect";
 
 let cachedVisitorId: string | null = null;
 let superProperties: Record<string, unknown> = {};
+
+function isAdminAnalyticsInspection(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has(ADMIN_ANALYTICS_INSPECT_PARAM)) return true;
+    return window.location.hash.includes(ADMIN_ANALYTICS_INSPECT_PARAM);
+  } catch {
+    return false;
+  }
+}
 
 function getVisitorId(): string {
   if (cachedVisitorId) return cachedVisitorId;
@@ -51,6 +63,7 @@ function getBaseProperties(): Record<string, unknown> {
 
 export function track(event: string, properties?: Record<string, unknown>) {
   if (!API_KEY || typeof window === "undefined") return;
+  if (isAdminAnalyticsInspection()) return;
   const distinctId = getVisitorId();
   const payload = {
     api_key: API_KEY,
@@ -85,6 +98,31 @@ export function registerSuperProperties(props: Record<string, unknown>) {
   superProperties = { ...superProperties, ...props };
 }
 
+// Mirrors the key the farm-helper list writes before navigating into a map
+// detail, so the pageview can label the entry by map name and subject instead
+// of only its id.
+const FARM_MAP_CONTEXT_KEY_PREFIX = "mania-hub-farm-helper-map-context-v1:";
+
+function readFarmMapContext(beatmapId: string): { title: string | null; user: string | null } {
+  if (!beatmapId || typeof window === "undefined") return { title: null, user: null };
+  try {
+    const raw = window.sessionStorage.getItem(`${FARM_MAP_CONTEXT_KEY_PREFIX}${beatmapId}`);
+    if (!raw) return { title: null, user: null };
+    const parsed = JSON.parse(raw) as { title?: unknown; userName?: unknown; username?: unknown; userKey?: unknown };
+    const title = typeof parsed?.title === "string" && parsed.title.trim() ? parsed.title : null;
+    const userName = typeof parsed?.userName === "string" && parsed.userName.trim()
+      ? parsed.userName
+      : typeof parsed?.username === "string" && parsed.username.trim()
+        ? parsed.username
+        : typeof parsed?.userKey === "string" && parsed.userKey.trim()
+          ? parsed.userKey
+          : null;
+    return { title, user: userName };
+  } catch {
+    return { title: null, user: null };
+  }
+}
+
 function getPageviewProperties(pathname: string): Record<string, unknown> {
   if (typeof window === "undefined") return {};
   const props: Record<string, unknown> = {};
@@ -103,6 +141,14 @@ function getPageviewProperties(pathname: string): Record<string, unknown> {
   } else if (pathname === "/rankings") {
     const page = params.get("page");
     if (page) props.rankings_page = page;
+  } else if (pathname === "/farm-helper") {
+    const user = params.get("user");
+    if (user) props.farm_helper_user = user;
+  } else if (pathname.startsWith("/farm-helper/map/")) {
+    const beatmapId = pathname.slice("/farm-helper/map/".length).split("/")[0];
+    const context = readFarmMapContext(beatmapId);
+    if (context.title) props.farm_map_title = context.title;
+    if (context.user) props.farm_map_user = context.user;
   } else if (pathname.startsWith("/player/")) {
     const username = decodeURIComponent(pathname.slice("/player/".length));
     if (username) props.profile_username = username;

@@ -35,6 +35,7 @@ import {
   type PackTypeId,
 } from "../lib/packs";
 import { pageSeo } from "../lib/seo";
+import { track } from "../lib/posthog";
 
 export const Route = createFileRoute("/packs")({
   head: ({ match }) => pageSeo({
@@ -331,6 +332,10 @@ function PacksPage() {
       setPackId((id) => id + 1);
       return;
     }
+    track("pack_open", {
+      pack_type: selectedType.id,
+      pack_username: auth.viewer?.username,
+    });
     setPhase("reveal");
   };
 

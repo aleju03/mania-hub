@@ -314,7 +314,14 @@ function HomePage() {
     () => readGlobalTopPlayersMemoryCache()?.data ?? null,
   );
   const [loadingScores, setLoadingScores] = useState(recentScores.length === 0);
-  const [loadingPopoffs, setLoadingPopoffs] = useState(popoffs.length === 0);
+  // On Global the card renders the 24h-filtered set, not the raw array, so base
+  // "is there anything to show" on the filtered count. Otherwise a refresh with
+  // cached-but-aged entries reads loading=false against a non-empty array while
+  // the visible (filtered) list is empty, flashing "No recent top plays" until
+  // the fetch lands. Driving the skeleton off the displayable count keeps it
+  // stale-while-revalidate instead.
+  const displayablePopoffsCount = (selectedIsGlobal ? filterHomeGlobalPopoffs(popoffs) : popoffs).length;
+  const [loadingPopoffs, setLoadingPopoffs] = useState(() => displayablePopoffsCount === 0);
   const countryName = getCountryName(selectedCountry);
   const homeTopPlaysRange = selectedIsGlobal ? "24h" : hydrated ? topPlaysRange : "7d";
   const homeActivePlayers = rankings?.ranking
@@ -518,7 +525,7 @@ function HomePage() {
     }
 
     if (liveBackendEnabled) {
-      setLoadingPopoffs(popoffs.length === 0);
+      setLoadingPopoffs(displayablePopoffsCount === 0);
       fetchLiveTopPlaysSnapshot(selectedCountry, selectedIsGlobal ? "24h" : "7d")
         .then((snapshot) => {
           if (cancelled) return;
