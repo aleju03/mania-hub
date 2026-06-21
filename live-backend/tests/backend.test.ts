@@ -2071,6 +2071,62 @@ describe("live backend", () => {
     expect(getUserBestScoresWindow).toHaveBeenCalledTimes(1);
   });
 
+  it("treats numeric player profile keys as usernames before falling back to ids", async () => {
+    const { db } = await setup();
+    const best = await fixture<OscScore[]>("top-best.json");
+    const getUserByKey = vi.fn(async (_key: string, _caller?: string, lookup?: "id" | "username") => {
+      if (lookup !== "username") throw new Error("numeric profile route should try username lookup first");
+      return {
+        id: 9090,
+        username: "4044",
+        avatar_url: "https://assets.example/4044.png",
+        country_code: "CR",
+        statistics: { pp: 1234, global_rank: 100, country_rank: 1 },
+        page: null,
+      };
+    });
+    const getUser = vi.fn(async () => {
+      throw new Error("fresh profile users should not refresh within the short user TTL");
+    });
+    const getUserBestScoresWindow = vi.fn(async () => best);
+
+    const first = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "4044");
+    const second = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "4044");
+
+    expect(first.user).toMatchObject({ id: 9090, username: "4044" });
+    expect(second.user).toMatchObject({ id: 9090, username: "4044" });
+    expect(getUserByKey).toHaveBeenCalledTimes(1);
+    expect(getUserByKey).toHaveBeenCalledWith("4044", "api:profile_snapshot", "username");
+    expect(getUserBestScoresWindow).toHaveBeenCalledWith(9090, expect.any(Number), "api:profile_snapshot:best");
+  });
+
+  it("falls back to numeric player profile ids when no numeric username exists", async () => {
+    const { db } = await setup();
+    const best = await fixture<OscScore[]>("top-best.json");
+    const getUserByKey = vi.fn(async (_key: string, _caller?: string, lookup?: "id" | "username") => {
+      if (lookup === "username") throw new OsuApiError(404, "/users/%404044/mania");
+      return {
+        id: 4044,
+        username: "IdPlayer",
+        avatar_url: "https://assets.example/id-player.png",
+        country_code: "CR",
+        statistics: { pp: 1234, global_rank: 100, country_rank: 1 },
+        page: null,
+      };
+    });
+    const getUser = vi.fn(async () => {
+      throw new Error("fresh profile users should not refresh within the short user TTL");
+    });
+    const getUserBestScoresWindow = vi.fn(async () => best);
+
+    const snapshot = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "4044");
+
+    expect(snapshot.user).toMatchObject({ id: 4044, username: "IdPlayer" });
+    expect(getUserByKey).toHaveBeenNthCalledWith(1, "4044", "api:profile_snapshot", "username");
+    expect(getUserByKey).toHaveBeenNthCalledWith(2, "4044", "api:profile_snapshot", "id");
+    expect(getUserBestScoresWindow).toHaveBeenCalledWith(4044, expect.any(Number), "api:profile_snapshot:best");
+  });
+
   it("serves cached player profile snapshots from local storage without an osu client", async () => {
     const { db } = await setup();
     const best = await fixture<OscScore[]>("top-best.json");
@@ -2970,6 +3026,26 @@ describe("live backend", () => {
 
     expect(first).toEqual(second);
     expect(fetchImpl.mock.calls.filter(([input]) => String(input).includes("/api/v2/users/123/mania"))).toHaveLength(1);
+  });
+
+  it("can force osu! user lookup by numeric username", async () => {
+    const fetchImpl = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (url.endsWith("/oauth/token")) {
+        return Response.json({ access_token: "token", expires_in: 3600 });
+      }
+      return Response.json({ id: 9090, username: "4044" });
+    });
+    const osu = new OsuApiClient({
+      osuClientId: "test-client",
+      osuClientSecret: "test-secret",
+      osuApiHardPerMinute: 60,
+      osuApiTargetPerMinute: 60,
+    }, fetchImpl as typeof fetch);
+
+    await osu.getUserByKey("4044", "getUser", "username");
+
+    expect(fetchImpl.mock.calls.some(([input]) => String(input).includes("/api/v2/users/%404044/mania"))).toBe(true);
   });
 
   it("queues stale maps snapshots without duplicating active refresh jobs", async () => {

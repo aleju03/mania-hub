@@ -267,8 +267,9 @@ export class OsuApiClient {
     return this.getJson(`/users/${userId}/mania`, caller);
   }
 
-  async getUserByKey(key: string, caller = "unknown"): Promise<Record<string, unknown>> {
-    return this.getJson(`/users/${encodeURIComponent(key)}/mania`, caller);
+  async getUserByKey(key: string, caller = "unknown", lookup?: "id" | "username"): Promise<Record<string, unknown>> {
+    const userParam = lookup === "username" ? `@${key}` : key;
+    return this.getJson(`/users/${encodeURIComponent(userParam)}/mania`, caller);
   }
 
   async getBeatmap(beatmapId: number, caller = "unknown"): Promise<Record<string, unknown>> {

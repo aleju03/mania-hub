@@ -87,9 +87,7 @@ export function getUserScoreListCacheKey(
 }
 
 async function fetchUserFromOsu(key: string): Promise<OsuUser> {
-  const user = await osuFetch<OsuUser>(`/users/${encodeURIComponent(key)}/mania`, undefined, {
-    caller: "getUser",
-  });
+  const user = await fetchUserByKeyFromOsu(key);
   if (user.page) {
     user.page.html = await sanitizeServerProfilePageHtml(user.page.html);
   }
@@ -98,6 +96,34 @@ async function fetchUserFromOsu(key: string): Promise<OsuUser> {
     setPersistentCache(`user-id:v${USER_CACHE_VERSION}:${user.id}`, user, USER_CACHE_TTL),
   ]);
   return user;
+}
+
+async function fetchUserByKeyFromOsu(key: string): Promise<OsuUser> {
+  const trimmed = key.trim();
+  const lookupKeys = isNumericUserKey(trimmed) ? [`@${trimmed}`, trimmed] : [`@${trimmed}`];
+  let fallbackError: unknown = null;
+
+  for (const lookupKey of lookupKeys) {
+    try {
+      return await osuFetch<OsuUser>(`/users/${encodeURIComponent(lookupKey)}/mania`, undefined, {
+        caller: "getUser",
+      });
+    } catch (error) {
+      fallbackError = error;
+      if (!isNumericUserKey(trimmed) || !isOsuNotFoundError(error)) throw error;
+    }
+  }
+
+  throw fallbackError instanceof Error ? fallbackError : new Error(String(fallbackError ?? "Failed to fetch user"));
+}
+
+function isNumericUserKey(key: string): boolean {
+  const numericKey = Number(key);
+  return Number.isInteger(numericKey) && numericKey > 0;
+}
+
+function isOsuNotFoundError(error: unknown): boolean {
+  return /\]\s+404\s/.test(getErrorMessage(error));
 }
 
 export async function getCachedUser(key: string): Promise<OsuUser> {

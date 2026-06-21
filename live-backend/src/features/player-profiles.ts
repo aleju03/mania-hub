@@ -1,7 +1,7 @@
 import sanitizeHtml from "sanitize-html";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
-import type { OsuApiClient } from "../osu/client.js";
+import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { calculateWeightedPpTotal, getScoreIdentity, getScoreTimestamp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 
@@ -15,6 +15,7 @@ const PROFILE_USER_INLINE_REFRESH_BUDGET_MS = 150;
 const PROFILE_RECENT_OVERLAY_INLINE_REFRESH_BUDGET_MS = 150;
 
 type ProfileScoreProvenance = "osu_snapshot" | "live_top_play_event" | "profile_recent_score";
+type ProfileLookupMode = "auto" | "userId";
 
 export interface PlayerProfileSnapshot {
   user: Record<string, unknown>;
@@ -254,19 +255,31 @@ function readProfileRecentScores(payload: unknown): OscScore[] {
     : [];
 }
 
-async function getStoredProfileSnapshot(db: Db, key: string): Promise<ProfileSnapshotRow | null> {
+async function getStoredProfileSnapshot(db: Db, key: string, lookupMode: ProfileLookupMode = "auto"): Promise<ProfileSnapshotRow | null> {
   const numericKey = Number(key);
-  const row = Number.isInteger(numericKey) && numericKey > 0
-    ? (await exec(db, "select * from profile_snapshots where user_id = ?", [numericKey])).rows[0]
-    : (await exec(db, "select * from profile_snapshots where username_key = ?", [key])).rows[0];
+  let row: Record<string, unknown> | undefined;
+  if (Number.isInteger(numericKey) && numericKey > 0 && lookupMode === "userId") {
+    row = (await exec(db, "select * from profile_snapshots where user_id = ?", [numericKey])).rows[0];
+  } else {
+    row = (await exec(db, "select * from profile_snapshots where username_key = ?", [key])).rows[0];
+    if (!row && Number.isInteger(numericKey) && numericKey > 0) {
+      row = (await exec(db, "select * from profile_snapshots where user_id = ?", [numericKey])).rows[0];
+    }
+  }
   return row ? row as unknown as ProfileSnapshotRow : null;
 }
 
-async function getStoredProfileUser(db: Db, key: string): Promise<Record<string, unknown> | null> {
+async function getStoredProfileUser(db: Db, key: string, lookupMode: ProfileLookupMode = "auto"): Promise<Record<string, unknown> | null> {
   const numericKey = Number(key);
-  const row = Number.isInteger(numericKey) && numericKey > 0
-    ? (await exec(db, "select * from users where user_id = ?", [numericKey])).rows[0]
-    : (await exec(db, "select * from users where lower(username) = ?", [key])).rows[0];
+  let row: Record<string, unknown> | undefined;
+  if (Number.isInteger(numericKey) && numericKey > 0 && lookupMode === "userId") {
+    row = (await exec(db, "select * from users where user_id = ?", [numericKey])).rows[0];
+  } else {
+    row = (await exec(db, "select * from users where lower(username) = ?", [key])).rows[0];
+    if (!row && Number.isInteger(numericKey) && numericKey > 0) {
+      row = (await exec(db, "select * from users where user_id = ?", [numericKey])).rows[0];
+    }
+  }
   return row ? row as Record<string, unknown> : null;
 }
 
@@ -294,13 +307,15 @@ function fetchAndStoreProfileSnapshotShared(
   db: Db,
   osu: Pick<OsuApiClient, "getUserByKey" | "getUserBestScoresWindow">,
   key: string,
+  lookupMode: ProfileLookupMode = "auto",
 ): Promise<ProfileSnapshotRow> {
-  const existing = inflightSnapshotFetches.get(key);
+  const inflightKey = `${lookupMode}:${key}`;
+  const existing = inflightSnapshotFetches.get(inflightKey);
   if (existing) return existing;
-  const promise = fetchAndStoreProfileSnapshot(db, osu, key).finally(() => {
-    inflightSnapshotFetches.delete(key);
+  const promise = fetchAndStoreProfileSnapshot(db, osu, key, lookupMode).finally(() => {
+    inflightSnapshotFetches.delete(inflightKey);
   });
-  inflightSnapshotFetches.set(key, promise);
+  inflightSnapshotFetches.set(inflightKey, promise);
   return promise;
 }
 
@@ -319,14 +334,14 @@ export async function warmProfileSnapshots(
   const coldKeys: string[] = [];
   for (const userId of userIds) {
     const key = normalizeProfileKey(String(userId));
-    const row = await getStoredProfileSnapshot(db, key);
+    const row = await getStoredProfileSnapshot(db, key, "userId");
     if (row && !isExpired(row.fetched_at, PROFILE_SNAPSHOT_TTL_MS)) continue;
     coldKeys.push(key);
   }
   void (async () => {
     for (const key of coldKeys) {
       try {
-        await fetchAndStoreProfileSnapshotShared(db, osu, key);
+        await fetchAndStoreProfileSnapshotShared(db, osu, key, "userId");
       } catch {
         // Skip to the next player; the reveal's own request retries this one.
       }
@@ -339,8 +354,9 @@ async function fetchAndStoreProfileSnapshot(
   db: Db,
   osu: Pick<OsuApiClient, "getUserByKey" | "getUserBestScoresWindow">,
   key: string,
+  lookupMode: ProfileLookupMode,
 ): Promise<ProfileSnapshotRow> {
-  const user = await osu.getUserByKey(key, "api:profile_snapshot");
+  const user = await fetchProfileUserByKey(osu, key, lookupMode);
   const userId = Number(user.id);
   const username = typeof user.username === "string" ? user.username : key;
   if (!Number.isInteger(userId) || userId <= 0) throw new Error("osu! profile response was missing a user id");
@@ -368,6 +384,24 @@ async function fetchAndStoreProfileSnapshot(
   const row = await getStoredProfileSnapshot(db, usernameKey);
   if (!row) throw new Error("Failed to store profile snapshot");
   return row;
+}
+
+async function fetchProfileUserByKey(
+  osu: Pick<OsuApiClient, "getUserByKey">,
+  key: string,
+  lookupMode: ProfileLookupMode,
+): Promise<Record<string, unknown>> {
+  if (lookupMode === "userId") return osu.getUserByKey(key, "api:profile_snapshot", "id");
+  if (!isNumericProfileKey(key)) return osu.getUserByKey(key, "api:profile_snapshot", "username");
+
+  try {
+    return await osu.getUserByKey(key, "api:profile_snapshot", "username");
+  } catch (error) {
+    if (error instanceof OsuApiError && error.status === 404) {
+      return osu.getUserByKey(key, "api:profile_snapshot", "id");
+    }
+    throw error;
+  }
 }
 
 function refreshProfileSnapshotInBackground(
@@ -674,6 +708,11 @@ function normalizeProfileKey(key: string): string {
   const normalized = key.trim().toLowerCase();
   if (!normalized || normalized.length > 120) throw new Error("Invalid profile key");
   return normalized;
+}
+
+function isNumericProfileKey(key: string): boolean {
+  const numericKey = Number(key);
+  return Number.isInteger(numericKey) && numericKey > 0;
 }
 
 function isExpired(fetchedAt: string, ttlMs: number): boolean {

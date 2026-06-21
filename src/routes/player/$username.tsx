@@ -66,8 +66,15 @@ const userBestWindowRequestCache = new Map<number, Promise<OsuScore[]>>();
 const userDataCache = new Map<string, { data: OsuUser; expiresAt: number }>();
 const userRecentDataCache = new Map<number, { data: OsuScore[]; expiresAt: number }>();
 const userBestWindowDataCache = new Map<number, { data: OsuScore[]; expiresAt: number }>();
-const playerSnapshotDataCache = new Map<string, { data: { user: OsuUser; bestScores: OsuScore[] }; expiresAt: number }>();
-const playerSnapshotRequestCache = new Map<string, Promise<{ user: OsuUser; bestScores: OsuScore[] } | null>>();
+type PlayerSnapshotData = {
+  user: OsuUser;
+  bestScores: OsuScore[];
+  fetchedAt: string;
+  userFetchedAt: string;
+  isStale: boolean;
+};
+const playerSnapshotDataCache = new Map<string, { data: PlayerSnapshotData; expiresAt: number }>();
+const playerSnapshotRequestCache = new Map<string, Promise<PlayerSnapshotData | null>>();
 interface PlayerAboutData {
   html: string | null;
   raw: string | null;
@@ -83,6 +90,9 @@ const PLAYER_ABOUT_LIVE_TIMEOUT_MS = 8_000;
 const PLAYER_RECENT_LIVE_TIMEOUT_MS = 8_000;
 const PROFILE_SNAPSHOT_BEST_GRACE_MS = 450;
 const PROFILE_SNAPSHOT_REFRESH_DEFER_MS = 2500;
+const PROFILE_USER_METADATA_STALE_MS = 10 * 60_000;
+const PROFILE_USER_METADATA_STALE_CACHE_TTL = 1_000;
+const PROFILE_USER_METADATA_RETRY_DELAYS_MS = [1200, 3500, 8000, 15000] as const;
 // With SSR pinned next to the backend (fra1 <-> Nuremberg, ~5ms RTT) the happy
 // path is ~50ms; this budget exists to absorb backend event-loop stalls, which
 // run ~0.5-1.5s. Waiting one out beats serving a skeleton: a miss costs the
@@ -613,6 +623,11 @@ function profileUsersAreEquivalent(a: OsuUser | null, b: OsuUser): boolean {
   );
 }
 
+function profileSnapshotUserMetadataIsStale(snapshot: Pick<PlayerSnapshotData, "userFetchedAt">): boolean {
+  const fetchedAt = Date.parse(snapshot.userFetchedAt);
+  return !Number.isFinite(fetchedAt) || Date.now() - fetchedAt >= PROFILE_USER_METADATA_STALE_MS;
+}
+
 function loadUserCached(username: string): Promise<OsuUser> {
   const cacheKey = username.trim().toLowerCase();
   const now = Date.now();
@@ -654,11 +669,11 @@ function readCachedUser(username: string): OsuUser | undefined {
   return cachedData.data;
 }
 
-function loadPlayerSnapshotCached(username: string): Promise<{ user: OsuUser; bestScores: OsuScore[] } | null> {
+function loadPlayerSnapshotCached(username: string, options: { bypassDataCache?: boolean } = {}): Promise<PlayerSnapshotData | null> {
   const cacheKey = username.trim().toLowerCase();
   const now = Date.now();
   const cachedData = playerSnapshotDataCache.get(cacheKey);
-  if (cachedData && cachedData.expiresAt > now) {
+  if (!options.bypassDataCache && cachedData && cachedData.expiresAt > now) {
     return Promise.resolve(cachedData.data);
   }
   if (cachedData) {
@@ -674,14 +689,20 @@ function loadPlayerSnapshotCached(username: string): Promise<{ user: OsuUser; be
       const data = {
         user: snapshot.user,
         bestScores: dedupeScores(snapshot.bestScores),
+        fetchedAt: snapshot.fetchedAt,
+        userFetchedAt: snapshot.userFetchedAt,
+        isStale: snapshot.isStale,
       };
+      const userMetadataStale = profileSnapshotUserMetadataIsStale(data);
+      const cacheTtl = userMetadataStale ? PROFILE_USER_METADATA_STALE_CACHE_TTL : PLAYER_SNAPSHOT_CLIENT_CACHE_TTL;
+      const userCacheTtl = userMetadataStale ? PROFILE_USER_METADATA_STALE_CACHE_TTL : USER_CLIENT_CACHE_TTL;
       playerSnapshotDataCache.set(cacheKey, {
         data,
-        expiresAt: Date.now() + PLAYER_SNAPSHOT_CLIENT_CACHE_TTL,
+        expiresAt: Date.now() + cacheTtl,
       });
       userDataCache.set(cacheKey, {
         data: data.user,
-        expiresAt: Date.now() + USER_CLIENT_CACHE_TTL,
+        expiresAt: Date.now() + userCacheTtl,
       });
       userBestWindowDataCache.set(data.user.id, {
         data: data.bestScores,
@@ -913,6 +934,8 @@ export function PlayerProfilePage({
   useEffect(() => {
     let cancelled = false;
     let snapshotTimer: number | null = null;
+    let metadataRetryTimer: number | null = null;
+    let metadataRetryAttempt = 0;
     const hasLoaderBestScores = loaderBestScores.length > 0;
     const seededUser = loaderSnapshot?.user ?? readCachedUser(username) ?? readPlayerShell(username);
 
@@ -966,7 +989,7 @@ export function PlayerProfilePage({
       }
     }
 
-    const applySnapshot = (result: { user: OsuUser; bestScores: OsuScore[] } | null) => {
+    const applySnapshot = (result: PlayerSnapshotData | null) => {
       if (cancelled || !result) return;
       snapshotApplied = true;
       setUser((current) => profileUsersAreEquivalent(current, result.user) ? current : result.user);
@@ -982,6 +1005,33 @@ export function PlayerProfilePage({
         setInsightsError(null);
         setLoadingInsights(false);
       }
+    };
+
+    const clearMetadataRetry = () => {
+      if (metadataRetryTimer) {
+        window.clearTimeout(metadataRetryTimer);
+        metadataRetryTimer = null;
+      }
+    };
+
+    const scheduleMetadataRetry = (snapshot: PlayerSnapshotData | null) => {
+      if (!snapshot || !profileSnapshotUserMetadataIsStale(snapshot)) return;
+      if (metadataRetryAttempt >= PROFILE_USER_METADATA_RETRY_DELAYS_MS.length) return;
+
+      const delay = PROFILE_USER_METADATA_RETRY_DELAYS_MS[metadataRetryAttempt++];
+      clearMetadataRetry();
+      metadataRetryTimer = window.setTimeout(() => {
+        metadataRetryTimer = null;
+        loadPlayerSnapshotCached(username, { bypassDataCache: true })
+          .then((result) => {
+            if (cancelled) return;
+            applySnapshot(result);
+            scheduleMetadataRetry(result);
+          })
+          .catch(() => {
+            if (!cancelled) scheduleMetadataRetry(snapshot);
+          });
+      }, delay);
     };
 
     const loadFallbackUser = () => loadUserCached(username)
@@ -1008,6 +1058,7 @@ export function PlayerProfilePage({
           if (cancelled) return;
           if (snapshot) {
             applySnapshot(snapshot);
+            scheduleMetadataRetry(snapshot);
             return;
           }
           setWaitingForSnapshotBest(false);
@@ -1032,6 +1083,7 @@ export function PlayerProfilePage({
     return () => {
       cancelled = true;
       if (snapshotTimer) window.clearTimeout(snapshotTimer);
+      clearMetadataRetry();
     };
   }, [initialTab, loaderBestScores, loaderSnapshot, username]);
 
