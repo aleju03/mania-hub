@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, LogIn, Recycle, Search } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ImageOff, Loader2, LogIn, Recycle, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { getManiaCardTier, MANIA_TIER_STYLES, type ManiaCardTier, type ManiaSkills } from "#/lib/maniacard";
 import {
@@ -70,23 +70,6 @@ const COLLECTION_TIER_ORDER: ManiaCardTier[] = [
   "rare",
   "common",
 ];
-const UNKNOWN_COLLECTION_LOADING_TIERS: ManiaCardTier[] = [
-  "worldClass",
-  "mythic",
-  "legendary",
-  "legendary",
-  "ultraRare",
-  "superRare",
-  "elite",
-  "rare",
-  "legendary",
-  "ultraRare",
-  "superRare",
-  "elite",
-  "rare",
-  "elite",
-  "common",
-];
 
 let activeRenders = 0;
 const renderQueue: Array<() => void> = [];
@@ -154,15 +137,8 @@ function placeholderTiersForPage({
     return Array.from({ length: count }, () => tier);
   }
 
-  const knownTierTotal = COLLECTION_TIER_ORDER.reduce((sum, tier) => {
-    return sum + Math.max(0, Math.floor(Number(tierCounts[tier]) || 0));
-  }, 0);
-  if (knownTierTotal === 0) {
-    return Array.from({ length: count }, (_, index) => {
-      return UNKNOWN_COLLECTION_LOADING_TIERS[(pageStart + index) % UNKNOWN_COLLECTION_LOADING_TIERS.length]!;
-    });
-  }
-
+  // Counts are filter-independent, so on "all" we lay the skeletons out in the
+  // real rarity order the loaded cards will follow.
   const tiers: ManiaCardTier[] = [];
   let remainingBeforePage = pageStart;
   for (const tier of COLLECTION_TIER_ORDER) {
@@ -684,7 +660,11 @@ export function CollectionPanel({
     ? ownedCards(wallet).sort((a, b) => tierRank(b.tier) - tierRank(a.tier) || b.pp - a.pp)
     : [];
   const cards = useServerCollection ? (activeServerPage?.cards as CollectedCard[] | undefined) ?? [] : localCards;
-  const serverTierCounts = serverMetaPage?.tierCounts ?? {};
+  // tierCounts describe the whole collection (the server computes them without
+  // the tier/query filter), so the last page loaded under any filter still
+  // carries them. Keeping them across filter switches stops the rarity chips
+  // from flashing and lets the loading skeletons match the real per-rarity counts.
+  const serverTierCounts = serverMetaPage?.tierCounts ?? serverPage?.page.tierCounts ?? {};
   const serverCollectionTotal = Object.values(serverTierCounts).reduce((sum, count) => sum + count, 0);
   const ownedTiers: Array<ManiaCardTier | null> = useServerCollection
     ? Object.keys(serverTierCounts)
@@ -719,16 +699,30 @@ export function CollectionPanel({
   const currentPageSignature = pageSignature(pageCards);
   const serverPagePending = useServerCollection && !activeServerPage && serverMissingKey !== serverCacheKey;
   const showPagePlaceholders = serverPagePending || (serverLoading && pageCards.length === 0);
-  const placeholderCount = Math.min(
-    COLLECTION_PAGE_SIZE,
-    Math.max(1, Math.min(COLLECTION_PAGE_SIZE, filteredTotal - pageStart) || pageCards.length || COLLECTION_PAGE_SIZE),
-  );
-  const placeholderTiers = placeholderTiersForPage({
-    count: placeholderCount,
-    pageStart,
-    tierFilter,
-    tierCounts: serverTierCounts,
-  });
+  // On the very first sync nothing has loaded yet, so we don't know the
+  // rarities or the size; a search is just as unpredictable. In those cases show
+  // a "Loading collection..." line instead of guessing a grid of cards.
+  const knownCollectionShape = Object.keys(serverTierCounts).length > 0;
+  const showLoadingMessage = showPagePlaceholders && (!knownCollectionShape || Boolean(trimmedQuery));
+  const showSkeletonGrid = showPagePlaceholders && !showLoadingMessage;
+  // Skeletons mirror what the current filter will return. tierCounts are
+  // filter-independent, so a rarity filter (without a search) resolves to
+  // exactly that rarity's count rather than a full page of placeholders.
+  const expectedFilterTotal =
+    filteredTotal > 0
+      ? filteredTotal
+      : tierFilter === "all"
+        ? collectionTotal
+        : Math.max(0, Math.floor(Number(serverTierCounts[tierFilter === "unrated" ? "unrated" : tierFilter]) || 0));
+  const placeholderCount = Math.max(1, Math.min(COLLECTION_PAGE_SIZE, expectedFilterTotal - pageStart));
+  const placeholderTiers = showSkeletonGrid
+    ? placeholderTiersForPage({
+        count: placeholderCount,
+        pageStart,
+        tierFilter,
+        tierCounts: serverTierCounts,
+      })
+    : [];
   const recyclable = useServerCollection ? serverMetaPage?.duplicateShardTotal ?? 0 : wallet ? duplicateShardTotal(wallet) : 0;
   const selectedShardTotal = cards
     .filter((card) => selected.has(card.userId))
@@ -1016,13 +1010,18 @@ export function CollectionPanel({
         <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
           No cards yet. Open a pack to start your collection.
         </div>
+      ) : showLoadingMessage ? (
+        <div className="mt-4 flex min-h-[240px] items-center justify-center gap-2 rounded-xl border border-osu-b3/40 bg-osu-b4/40 text-[12px] text-osu-f1">
+          <Loader2 className="h-4 w-4 animate-spin text-osu-pink" />
+          Loading collection...
+        </div>
       ) : filteredTotal === 0 && !serverLoading && !serverPagePending ? (
         <div className="mt-6 rounded-xl border border-osu-b3/40 bg-osu-b4/40 px-6 py-8 text-center text-[12px] text-osu-f1">
           No cards match{trimmedQuery ? ` "${query.trim()}"` : " the selected rarity"}.
         </div>
       ) : (
         <div className={`mt-4 grid grid-cols-3 gap-x-3 gap-y-4 sm:grid-cols-4 md:grid-cols-5 ${selecting ? "select-none" : ""}`}>
-          {showPagePlaceholders
+          {showSkeletonGrid
             ? placeholderTiers.map((tier, index) => <CollectionCardPlaceholder key={`placeholder-${index}`} tier={tier} />)
             : pageCards.map((card) => {
             const dupValue = duplicateShardValue(card);
