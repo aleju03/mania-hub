@@ -2121,7 +2121,7 @@ describe("live backend", () => {
     expect(cached?.isStale).toBe(true);
   });
 
-  it("refreshes stale profile user stats before serving browser snapshots", async () => {
+  it("uses a fast stale profile user refresh before serving browser snapshots", async () => {
     const { db } = await setup();
     const best = await fixture<OscScore[]>("top-best.json");
     const getUserByKey = vi.fn(async () => ({
@@ -2164,6 +2164,116 @@ describe("live backend", () => {
     expect(getUser).toHaveBeenCalledTimes(1);
     expect(getUserBestScoresWindow).toHaveBeenCalledTimes(1);
     expect(snapshot.fetchedAt).not.toBe(snapshot.userFetchedAt);
+  });
+
+  it("serves cached profile user stats when the refresh is slow", async () => {
+    const { db } = await setup();
+    const best = await fixture<OscScore[]>("top-best.json");
+    const getUserByKey = vi.fn(async () => ({
+      id: 101,
+      username: "Sniper",
+      avatar_url: "https://assets.example/sniper.png",
+      country_code: "CR",
+      last_visit: "2026-05-01T00:00:00+00:00",
+      is_online: true,
+      statistics: { pp: 1000, global_rank: 100, country_rank: 1, play_count: 10 },
+      page: null,
+    }));
+    let resolveUserRefresh: (value: Record<string, unknown>) => void = () => {};
+    const getUser = vi.fn(() => new Promise<Record<string, unknown>>((resolve) => {
+      resolveUserRefresh = resolve;
+    }));
+    const getUserBestScoresWindow = vi.fn(async () => best);
+
+    await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    await exec(db, "update profile_snapshots set user_fetched_at = ? where user_id = 101", [
+      new Date(Date.now() - 11 * 60_000).toISOString(),
+    ]);
+
+    const startedAt = Date.now();
+    const snapshot = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+    expect(snapshot.user).toMatchObject({
+      avatar_url: "https://assets.example/sniper.png",
+      last_visit: "2026-05-01T00:00:00+00:00",
+      is_online: true,
+      page: null,
+      statistics: expect.objectContaining({ global_rank: 100, play_count: 10 }),
+    });
+    expect(getUserByKey).toHaveBeenCalledTimes(1);
+    expect(getUser).toHaveBeenCalledTimes(1);
+    expect(getUserBestScoresWindow).toHaveBeenCalledTimes(1);
+
+    resolveUserRefresh({
+      id: 101,
+      username: "Sniper",
+      avatar_url: "https://assets.example/sniper-new.png",
+      country_code: "CR",
+      last_visit: "2026-05-12T00:00:00+00:00",
+      is_online: false,
+      statistics: { pp: 1100, global_rank: 90, country_rank: 1, play_count: 20 },
+      page: { html: "<b>fresh but stripped</b>" },
+    });
+
+    await vi.waitFor(async () => {
+      const refreshed = await getCachedPlayerProfileSnapshot(db, "Sniper");
+      expect(refreshed?.user).toMatchObject({
+        avatar_url: "https://assets.example/sniper-new.png",
+        last_visit: "2026-05-12T00:00:00+00:00",
+        is_online: false,
+        page: null,
+        statistics: expect.objectContaining({ global_rank: 90, play_count: 20 }),
+      });
+    });
+  });
+
+  it("serves cached profile recent overlay when the refresh is slow", async () => {
+    const { db } = await setup();
+    const best = await fixture<OscScore[]>("top-best.json");
+    const getUserByKey = vi.fn(async () => ({
+      id: 101,
+      username: "Sniper",
+      avatar_url: "https://assets.example/sniper.png",
+      country_code: "CR",
+      statistics: { pp: 1000, global_rank: 100, country_rank: 1, play_count: 10 },
+      page: null,
+    }));
+    const getUser = vi.fn(async () => ({
+      id: 101,
+      username: "Sniper",
+      avatar_url: "https://assets.example/sniper.png",
+      country_code: "CR",
+      statistics: { pp: 1000, global_rank: 100, country_rank: 1, play_count: 10 },
+      page: null,
+    }));
+    const getUserBestScoresWindow = vi.fn(async () => best);
+    const cachedRecent = { ...best[0], id: 9901 };
+    const refreshedRecent = { ...best[0], id: 9902 };
+
+    await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
+    await getPlayerRecentScores(db, { getUserRecentScores: vi.fn(async () => [cachedRecent]) }, 101);
+    await exec(db, "update profile_section_cache set fetched_at = ? where cache_key = 'recent:101'", [
+      new Date(Date.now() - 3 * 60_000).toISOString(),
+    ]);
+
+    let resolveRecentRefresh: (value: OscScore[]) => void = () => {};
+    const getUserRecentScores = vi.fn(() => new Promise<OscScore[]>((resolve) => {
+      resolveRecentRefresh = resolve;
+    }));
+
+    const startedAt = Date.now();
+    await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow, getUserRecentScores }, "Sniper");
+
+    expect(Date.now() - startedAt).toBeLessThan(1000);
+    expect(getUserRecentScores).toHaveBeenCalledTimes(1);
+    resolveRecentRefresh([refreshedRecent]);
+
+    await vi.waitFor(async () => {
+      const row = (await exec(db, "select payload_json from profile_section_cache where cache_key = 'recent:101'")).rows[0];
+      const payload = JSON.parse(String(row?.payload_json)) as OscScore[];
+      expect(payload.map((score) => score.id)).toEqual([9902]);
+    });
   });
 
   it("projects confirmed live top plays into cached player snapshots without same-map duplicates", async () => {

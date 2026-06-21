@@ -11,6 +11,8 @@ const PROFILE_USER_RECENT_TOP_PLAY_TTL_MS = 2 * 60_000;
 const PROFILE_RECENT_TOP_PLAY_WINDOW_MS = 24 * 60 * 60_000;
 const PROFILE_SECTION_TTL_MS = 2 * 60_000;
 const PROFILE_BEST_SCORES_LIMIT = 200;
+const PROFILE_USER_INLINE_REFRESH_BUDGET_MS = 150;
+const PROFILE_RECENT_OVERLAY_INLINE_REFRESH_BUDGET_MS = 150;
 
 type ProfileScoreProvenance = "osu_snapshot" | "live_top_play_event" | "profile_recent_score";
 
@@ -104,7 +106,7 @@ export async function getPlayerProfileSnapshot(
   const row = await getStoredProfileSnapshot(db, key);
   if (row) {
     const snapshotExpired = isExpired(row.fetched_at, PROFILE_SNAPSHOT_TTL_MS);
-    const servedRow = await refreshProfileUserIfDue(db, osu, row);
+    const servedRow = await refreshProfileUserForServe(db, osu, row);
     if (snapshotExpired) {
       refreshProfileSnapshotInBackground(db, osu, key, servedRow);
       return buildServedSnapshot(db, servedRow, true, await getProfileRecentScoresForOverlay(db, osu, servedRow.user_id));
@@ -234,12 +236,11 @@ async function getProfileRecentScoresForOverlay(
   userId: number,
 ): Promise<OscScore[]> {
   if (!osu.getUserRecentScores) return getCachedProfileRecentScores(db, userId);
-  try {
-    const section = await getProfileSection(db, "recent", userId, async () => osu.getUserRecentScores!(userId, "api:profile_snapshot:recent_overlay"));
-    return readProfileRecentScores(section.payload);
-  } catch {
-    return getCachedProfileRecentScores(db, userId);
-  }
+  const cached = await getCachedProfileRecentScores(db, userId);
+  const refresh = getProfileSection(db, "recent", userId, async () => osu.getUserRecentScores!(userId, "api:profile_snapshot:recent_overlay"))
+    .then((section) => readProfileRecentScores(section.payload))
+    .catch(() => cached);
+  return withInlineRefreshBudget(refresh, cached, PROFILE_RECENT_OVERLAY_INLINE_REFRESH_BUDGET_MS);
 }
 
 async function getCachedProfileRecentScores(db: Db, userId: number): Promise<OscScore[]> {
@@ -382,6 +383,33 @@ function refreshProfileSnapshotInBackground(
       row.user_id,
     ]);
   });
+}
+
+async function refreshProfileUserForServe(
+  db: Db,
+  osu: Pick<OsuApiClient, "getUser">,
+  row: ProfileSnapshotRow,
+): Promise<ProfileSnapshotRow> {
+  return withInlineRefreshBudget(refreshProfileUserIfDue(db, osu, row), row, PROFILE_USER_INLINE_REFRESH_BUDGET_MS);
+}
+
+async function withInlineRefreshBudget<T>(
+  refresh: Promise<T>,
+  fallbackValue: T,
+  timeoutMs: number,
+): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  const fallback = new Promise<T>((resolve) => {
+    timeout = setTimeout(() => resolve(fallbackValue), timeoutMs);
+    timeout.unref?.();
+  });
+
+  try {
+    return await Promise.race([refresh, fallback]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+    void refresh.catch(() => {});
+  }
 }
 
 async function refreshProfileUserIfDue(
