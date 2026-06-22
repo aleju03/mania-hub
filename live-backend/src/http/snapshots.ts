@@ -359,7 +359,14 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     if (!checkRate(req, res, ctx, "publicCostly")) return true;
     try {
-      const result = await getFarmHelperFarmers(ctx.db, ctx.osu, userKey, beatmapId, parseFarmHelperSpeedBucket(url.searchParams.get("speed")));
+      const result = await getFarmHelperFarmers(
+        ctx.db,
+        ctx.osu,
+        userKey,
+        beatmapId,
+        parseFarmHelperSpeedBucket(url.searchParams.get("speed")),
+        parseFarmHelperKeyMode(url.searchParams.get("key")),
+      );
       res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
       sendJson(req, res, ctx, 200, result);
     } catch (error) {

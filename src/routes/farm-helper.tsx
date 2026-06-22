@@ -217,7 +217,7 @@ function FarmHelperPage() {
     };
   }, [liveEnabled, subjectKey, keyMode]);
 
-  const [farmersFor, setFarmersFor] = useState<LiveFarmHelperRec | null>(null);
+  const [farmersFor, setFarmersFor] = useState<{ rec: LiveFarmHelperRec; keyMode: LiveFarmHelperKeyMode } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const recs = useMemo(() => {
@@ -331,8 +331,8 @@ function FarmHelperPage() {
                           rec={rec}
                           userKey={String(snapshot.userId)}
                           userName={snapshot.username}
-                          keyMode={keyMode}
-                          onShowFarmers={() => setFarmersFor(rec)}
+                          keyMode={snapshot.keyMode}
+                          onShowFarmers={() => setFarmersFor({ rec, keyMode: snapshot.keyMode })}
                         />
                       ))}
                     </div>
@@ -355,8 +355,9 @@ function FarmHelperPage() {
       </div>
 
       <FarmersModal
-        rec={farmersFor}
+        rec={farmersFor?.rec ?? null}
         userKey={snapshot ? String(snapshot.userId) : null}
+        keyMode={farmersFor?.keyMode ?? keyMode}
         onClose={() => setFarmersFor(null)}
       />
     </div>
@@ -1247,10 +1248,12 @@ function EmptyNotice({
 function FarmersModal({
   rec,
   userKey,
+  keyMode,
   onClose,
 }: {
   rec: LiveFarmHelperRec | null;
   userKey: string | null;
+  keyMode: LiveFarmHelperKeyMode;
   onClose: () => void;
 }) {
   const open = rec != null && userKey != null;
@@ -1272,7 +1275,7 @@ function FarmersModal({
     setFarmers([]);
     setTotal(0);
     setQuery("");
-    fetchLiveFarmHelperFarmers(userKey, beatmapId, speedBucket, { signal: controller.signal })
+    fetchLiveFarmHelperFarmers(userKey, beatmapId, speedBucket, { keyMode, signal: controller.signal })
       .then((data) => {
         if (cancelled) return;
         setFarmers(data.farmers);
@@ -1288,7 +1291,7 @@ function FarmersModal({
       cancelled = true;
       controller.abort();
     };
-  }, [open, beatmapId, speedBucket, userKey]);
+  }, [open, beatmapId, speedBucket, userKey, keyMode]);
 
   useLayoutEffect(() => {
     if (!open) return;

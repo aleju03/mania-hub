@@ -765,10 +765,11 @@ export async function fetchLiveFarmHelperFarmers(
   userKey: string,
   beatmapId: number,
   speedBucket?: LiveFarmHelperSpeedBucket,
-  options?: { signal?: AbortSignal },
+  options?: { keyMode?: LiveFarmHelperKeyMode; signal?: AbortSignal },
 ): Promise<LiveFarmHelperFarmers> {
   const query = new URLSearchParams({ user: userKey, beatmap: String(beatmapId) });
   if (speedBucket) query.set("speed", speedBucket);
+  if (options?.keyMode) query.set("key", options.keyMode);
   return fetchLiveJson(`/api/snapshots/farm-helper-farmers?${query.toString()}`, options?.signal ? { signal: options.signal } : undefined);
 }
 

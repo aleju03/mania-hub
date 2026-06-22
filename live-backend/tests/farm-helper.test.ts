@@ -509,6 +509,59 @@ describe("farm helper", () => {
     expect(farmers.farmers.every((peer) => peer.username.startsWith("KeyPeer"))).toBe(true);
   });
 
+  it("scopes the who-farms list to the snapshot keyMode (Any keeps the total-pp pool)", async () => {
+    const recent = nowIso();
+    const targetBeatmap = 70;
+    const supportBeatmaps = Array.from({ length: 8 }, (_, i) => 7000 + i);
+    const bestScores: OscScore[] = [
+      subjectScore(6999, 700, recent, 4, 8),
+      subjectScore(targetBeatmap, 400, recent, 4, 8.5),
+      ...supportBeatmaps.map((beatmapId, index) => subjectScore(beatmapId, 500 - index * 5, recent, 4, 7.8)),
+    ];
+
+    await insertBeatmapMeta(targetBeatmap, 4, 8.5);
+    await insertBeatmapMeta(6999, 4, 8);
+    for (const beatmapId of supportBeatmaps) await insertBeatmapMeta(beatmapId, 4, 7.8);
+
+    // 4K-strength peers: total pp BELOW the subject's total-pp band, but their 4K
+    // farm strength matches the subject, so only the key-mode band should see them.
+    for (let i = 0; i < 12; i += 1) {
+      const id = 700 + i;
+      await insertUser(id, 13_000, "CR", `KeyPeer${i}`);
+      await insertFarmed("CR", id, targetBeatmap, 520, recent);
+      for (const beatmapId of supportBeatmaps) await insertFarmed("CR", id, beatmapId, 500 - i, recent);
+    }
+
+    // High total-pp, 4K-light farmers (the bojii/logann case): inside the subject's
+    // total-pp band, so the Any/total-pp pool is the cohort that should see them.
+    for (let i = 0; i < 12; i += 1) {
+      const id = 800 + i;
+      await insertUser(id, 15_000, "US", `TotalPpPeer${i}`);
+      await insertFarmed("US", id, targetBeatmap, 900, recent);
+      for (const beatmapId of supportBeatmaps) await insertFarmed("US", id, beatmapId, 900 - i, recent);
+    }
+
+    const osu = makeOsuStub(bestScores, 15_000);
+
+    // The Any card samples the total-pp band -> the high-total-pp cohort.
+    const snapshot = await getFarmHelperSnapshot(db, osu, "Subject", { keyMode: "any" });
+    expect(snapshot.peerBand.mode).toBe("pp_band");
+    expect(snapshot.peerBand.count).toBe(12);
+    expect(snapshot.peerBand.farmDataCount).toBe(12);
+
+    // The who-farms list must mirror that Any cohort, not silently switch to a 4K
+    // band (which is what produced the card-vs-modal count mismatch).
+    const anyFarmers = await getFarmHelperFarmers(db, osu, "Subject", targetBeatmap, undefined, "any");
+    expect(anyFarmers.total).toBe(12);
+    expect(anyFarmers.farmers.every((peer) => peer.username.startsWith("TotalPpPeer"))).toBe(true);
+
+    // Without a keyMode it still falls back to the map's key count (4K), selecting
+    // the key-strength cohort instead -> a disjoint set of players.
+    const keyFarmers = await getFarmHelperFarmers(db, osu, "Subject", targetBeatmap);
+    expect(keyFarmers.total).toBe(12);
+    expect(keyFarmers.farmers.every((peer) => peer.username.startsWith("KeyPeer"))).toBe(true);
+  });
+
   it("does not compare halftime subject scores against nomod farm scores", async () => {
     const recent = nowIso();
     const targetBeatmap = 40;

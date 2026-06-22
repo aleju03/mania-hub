@@ -621,6 +621,7 @@ export async function getFarmHelperFarmers(
   rawKey: string,
   beatmapId: number,
   speedBucket?: ScoreSpeedBucket,
+  requestedKeyMode?: FarmHelperKeyMode,
 ): Promise<FarmHelperFarmersResult> {
   const profile = await resolveProfile(db, osu, rawKey);
   const user = profile.user;
@@ -631,14 +632,22 @@ export async function getFarmHelperFarmers(
   const statistics = asRecord(user.statistics);
   const subjectPp = numberOr(statistics.pp, 0);
   const beatmap = (await readBeatmapMeta(db, [beatmapId])).get(beatmapId);
-  const keyMode: FarmHelperKeyMode = beatmap?.keys === 7 ? "7k" : beatmap?.keys === 4 ? "4k" : "any";
+  // Mirror the snapshot's peer pool: use the keyMode the card was generated with,
+  // not the map's own key count. Otherwise the card (e.g. "any" -> total-pp band)
+  // and this list (map-derived "4k"/"7k" band) sample different cohorts and the
+  // farmer counts disagree. Fall back to the map's key count for direct callers
+  // that don't pass a keyMode.
+  const keyMode: FarmHelperKeyMode = requestedKeyMode
+    ?? (beatmap?.keys === 7 ? "7k" : beatmap?.keys === 4 ? "4k" : "any");
   const lane = speedBucket ?? inferSubjectSpeedBucket(profile.bestScores, beatmapId);
   const rankedScores = [...profile.bestScores]
     .filter((score) => typeof score.pp === "number" && score.pp > 0)
     .sort((a, b) => (b.pp ?? 0) - (a.pp ?? 0));
   const subjectModeStats = calculateSubjectKeyModeStats(rankedScores, keyMode);
   const subjectPeerPp = getVariantPp(getVariantPps(statistics), keyMode) ?? subjectModeStats.weightedPp;
-  const { peers } = await selectPeerBand(db, userId, subjectPp, keyMode, subjectPeerPp);
+  const { peers } = await selectPeerBand(db, userId, subjectPp, keyMode, subjectPeerPp, {
+    strictKeyMode: requestedKeyMode != null && keyMode !== "any",
+  });
   if (peers.length === 0) return { beatmapId, total: 0, farmers: [] };
 
   const peerIds = peers.map((p) => p.userId);
