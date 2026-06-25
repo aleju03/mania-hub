@@ -20,6 +20,7 @@ const GLOBAL_MAPS_FARMED_REFRESH_DEBOUNCE_MS = 10 * 60_000;
 const MAPS_FARMED_OVERLAY_META_PREFIX = "maps_farmed_overlay_updated_at:";
 const MAPS_REFRESH_PROGRESS_META_PREFIX = "maps_refresh_progress:";
 const MAPS_REFRESH_PROGRESS_WRITE_INTERVAL_MS = 1_000;
+const MAPS_METADATA_BATCH_FLUSH_STATEMENTS = 500;
 
 export class MapsRosterNotReadyError extends Error {
   constructor(readonly country: string) {
@@ -2396,8 +2397,14 @@ async function persistMapsSnapshotDisplayMetadata(db: Db, value: CountryMapsData
   value.favouritesByPlayer.forEach(addUser);
 
   const statements: DbStatement[] = [];
+  const pushStatement = async (statement: DbStatement): Promise<void> => {
+    statements.push(statement);
+    if (statements.length >= MAPS_METADATA_BATCH_FLUSH_STATEMENTS) {
+      await execBatch(db, statements.splice(0));
+    }
+  };
   for (const [userId, user] of users) {
-    statements.push({
+    await pushStatement({
       sql: `insert into users (user_id, username, avatar_url, country_code, updated_at)
             values (?, ?, ?, null, ?)
             on conflict(user_id) do update set
@@ -2409,7 +2416,7 @@ async function persistMapsSnapshotDisplayMetadata(db: Db, value: CountryMapsData
   }
 
   for (const entry of value.farmed) {
-    statements.push(mapsBeatmapsetStatement({
+    await pushStatement(mapsBeatmapsetStatement({
       beatmapsetId: entry.beatmapsetId,
       title: entry.title,
       artist: entry.artist,
@@ -2417,7 +2424,7 @@ async function persistMapsSnapshotDisplayMetadata(db: Db, value: CountryMapsData
       status: entry.status,
       covers: entry.covers,
     }, updatedAt));
-    statements.push(mapsBeatmapStatement({
+    await pushStatement(mapsBeatmapStatement({
       beatmapId: entry.beatmapId,
       beatmapsetId: entry.beatmapsetId,
       mode: "mania",
@@ -2432,7 +2439,7 @@ async function persistMapsSnapshotDisplayMetadata(db: Db, value: CountryMapsData
   }
 
   for (const entry of value.mostPlayed) {
-    statements.push(mapsBeatmapsetStatement({
+    await pushStatement(mapsBeatmapsetStatement({
       beatmapsetId: entry.beatmapsetId,
       title: entry.title,
       artist: entry.artist,
@@ -2441,7 +2448,7 @@ async function persistMapsSnapshotDisplayMetadata(db: Db, value: CountryMapsData
       covers: entry.covers,
       globalPlayCount: entry.globalPlayCount,
     }, updatedAt));
-    statements.push(mapsBeatmapStatement({
+    await pushStatement(mapsBeatmapStatement({
       beatmapId: entry.beatmapId,
       beatmapsetId: entry.beatmapsetId,
       mode: "mania",
@@ -2454,7 +2461,7 @@ async function persistMapsSnapshotDisplayMetadata(db: Db, value: CountryMapsData
   }
 
   for (const entry of value.favourites) {
-    statements.push(mapsBeatmapsetStatement({
+    await pushStatement(mapsBeatmapsetStatement({
       beatmapsetId: entry.beatmapsetId,
       title: entry.title,
       artist: entry.artist,
@@ -2467,7 +2474,7 @@ async function persistMapsSnapshotDisplayMetadata(db: Db, value: CountryMapsData
   }
 
   for (const beatmapset of Object.values(value.beatmapsetsPool)) {
-    statements.push(mapsBeatmapsetStatement({
+    await pushStatement(mapsBeatmapsetStatement({
       beatmapsetId: beatmapset.id,
       title: beatmapset.title,
       artist: beatmapset.artist,
@@ -2482,7 +2489,7 @@ async function persistMapsSnapshotDisplayMetadata(db: Db, value: CountryMapsData
       patterns: beatmapset.patterns,
     }, updatedAt));
     for (const beatmap of beatmapset.maniaBeatmaps ?? []) {
-      statements.push(mapsBeatmapStatement({
+      await pushStatement(mapsBeatmapStatement({
         beatmapId: beatmap.id,
         beatmapsetId: beatmapset.id,
         mode: "mania",
