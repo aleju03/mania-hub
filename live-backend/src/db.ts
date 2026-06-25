@@ -1,4 +1,4 @@
-import { createClient, type Client, type InValue } from "@libsql/client";
+import { createClient, type Client, type InValue, type ResultSet, type TransactionMode } from "@libsql/client";
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { Config } from "./config.js";
@@ -82,8 +82,25 @@ export function splitSql(sql: string): string[] {
     .filter((statement) => statement && !statement.startsWith("--"));
 }
 
+export interface DbStatement {
+  sql: string;
+  args?: InValue[];
+}
+
+const EXEC_BATCH_MAX_STATEMENTS = 500;
+
 export async function exec(db: Db, sql: string, args: InValue[] = []) {
   return db.execute({ sql, args });
+}
+
+export async function execBatch(db: Db, statements: DbStatement[], mode: TransactionMode = "write") {
+  if (statements.length === 0) return [];
+  const results: ResultSet[] = [];
+  for (let index = 0; index < statements.length; index += EXEC_BATCH_MAX_STATEMENTS) {
+    const chunk = statements.slice(index, index + EXEC_BATCH_MAX_STATEMENTS);
+    results.push(...await db.batch(chunk.map(({ sql, args = [] }) => ({ sql, args })), mode));
+  }
+  return results;
 }
 
 export async function logApiCall(db: Db, entry: { provider: string; caller: string; path: string; startedAt: string }): Promise<void> {

@@ -1,5 +1,5 @@
 import type { Db } from "../db.js";
-import { exec, json } from "../db.js";
+import { execBatch, json, type DbStatement } from "../db.js";
 import { readConfig } from "../config.js";
 import { markCountryRosterRefreshed } from "../countries.js";
 import type { JobQueue } from "../jobs/queue.js";
@@ -39,7 +39,9 @@ export async function refreshCountryRoster(db: Db, osu: Pick<OsuApiClient, "getR
   }
   const now = nowIso();
   let count = 0;
-  await exec(db, "update country_rosters set is_tracked = 0, refreshed_at = ? where country = ?", [now, country]);
+  const statements: DbStatement[] = [
+    { sql: "update country_rosters set is_tracked = 0, refreshed_at = ? where country = ?", args: [now, country] },
+  ];
   for (let index = 0; index < Math.min(rows.length, config.rosterSize); index++) {
     const row = rows[index];
     const user = row.user;
@@ -47,28 +49,28 @@ export async function refreshCountryRoster(db: Db, osu: Pick<OsuApiClient, "getR
     const globalRank = nullablePositiveInt(row.global_rank ?? user.statistics?.global_rank);
     const countryRank = nullablePositiveInt(row.country_rank ?? user.statistics?.country_rank) ?? index + 1;
     const storedUser = buildStoredRankingUser(row, { pp, globalRank, countryRank });
-    await exec(
-      db,
-      `insert into users (user_id, username, avatar_url, country_code, is_active, pp, global_rank, country_rank, profile_json, updated_at)
-       values (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
-       on conflict(user_id) do update set username = excluded.username, avatar_url = excluded.avatar_url, country_code = excluded.country_code, pp = excluded.pp, global_rank = excluded.global_rank, country_rank = excluded.country_rank, profile_json = excluded.profile_json, updated_at = excluded.updated_at`,
-      [user.id, user.username, user.avatar_url, user.country_code, pp, globalRank, countryRank, json(storedUser), now],
-    );
-    await exec(
-      db,
-      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
-       values (?, ?, ?, 'osu_rankings', 1, ?)
-       on conflict(country, user_id) do update set rank = excluded.rank, is_tracked = 1, refreshed_at = excluded.refreshed_at`,
-      [country, user.id, countryRank, now],
-    );
-    await exec(
-      db,
-      `insert into country_rank_snapshots (country, user_id, country_rank, global_rank, pp, captured_at)
-       values (?, ?, ?, ?, ?, ?)`,
-      [country, user.id, countryRank, globalRank, pp, now],
+    statements.push(
+      {
+        sql: `insert into users (user_id, username, avatar_url, country_code, is_active, pp, global_rank, country_rank, profile_json, updated_at)
+              values (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
+              on conflict(user_id) do update set username = excluded.username, avatar_url = excluded.avatar_url, country_code = excluded.country_code, pp = excluded.pp, global_rank = excluded.global_rank, country_rank = excluded.country_rank, profile_json = excluded.profile_json, updated_at = excluded.updated_at`,
+        args: [user.id, user.username, user.avatar_url, user.country_code, pp, globalRank, countryRank, json(storedUser), now],
+      },
+      {
+        sql: `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+              values (?, ?, ?, 'osu_rankings', 1, ?)
+              on conflict(country, user_id) do update set rank = excluded.rank, is_tracked = 1, refreshed_at = excluded.refreshed_at`,
+        args: [country, user.id, countryRank, now],
+      },
+      {
+        sql: `insert into country_rank_snapshots (country, user_id, country_rank, global_rank, pp, captured_at)
+              values (?, ?, ?, ?, ?, ?)`,
+        args: [country, user.id, countryRank, globalRank, pp, now],
+      },
     );
     count++;
   }
+  await execBatch(db, statements);
   await markCountryRosterRefreshed(db, country);
   return count;
 }

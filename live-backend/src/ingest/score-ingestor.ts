@@ -1,6 +1,6 @@
 import type { Config } from "../config.js";
-import type { Db } from "../db.js";
-import { exec, json } from "../db.js";
+import type { Db, DbStatement } from "../db.js";
+import { exec, execBatch, json } from "../db.js";
 import { canSeedSnipesForCountry, getActiveCountryCodes, markCountryScoreSeen } from "../countries.js";
 import { recordPlayerActivity, removePlayerActivityScore } from "../features/activity.js";
 import { maybeEnqueueMapsFarmedRefresh } from "../features/maps.js";
@@ -283,42 +283,40 @@ export class ScoreIngestor {
 
   private async persistMetadata(score: OscScore): Promise<void> {
     const now = nowIso();
+    const statements: DbStatement[] = [];
     if (score.user) {
-      await exec(
-        this.db,
-        `insert into users (user_id, username, avatar_url, country_code, profile_json, updated_at)
-         values (?, ?, ?, ?, ?, ?)
-         on conflict(user_id) do update set username = excluded.username, avatar_url = excluded.avatar_url, country_code = excluded.country_code, updated_at = excluded.updated_at`,
-        [score.user.id, score.user.username, score.user.avatar_url, score.user.country_code, json(score.user), now],
-      );
+      statements.push({
+        sql: `insert into users (user_id, username, avatar_url, country_code, profile_json, updated_at)
+              values (?, ?, ?, ?, ?, ?)
+              on conflict(user_id) do update set username = excluded.username, avatar_url = excluded.avatar_url, country_code = excluded.country_code, updated_at = excluded.updated_at`,
+        args: [score.user.id, score.user.username, score.user.avatar_url, score.user.country_code, json(score.user), now],
+      });
       const activeCountries = await getActiveCountryCodes(this.db, this.config);
       if (score.user.country_code && activeCountries.includes(score.user.country_code.toUpperCase())) {
-        await exec(
-          this.db,
-          `insert or ignore into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
-           values (?, ?, null, 'score', 1, ?)`,
-          [score.user.country_code, score.user.id, now],
-        );
+        statements.push({
+          sql: `insert or ignore into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+                values (?, ?, null, 'score', 1, ?)`,
+          args: [score.user.country_code, score.user.id, now],
+        });
       }
     }
     if (score.beatmapset) {
-      await exec(
-        this.db,
-        `insert into beatmapsets (beatmapset_id, title, artist, creator, status, covers_json, metadata_json, updated_at)
-         values (?, ?, ?, ?, ?, ?, ?, ?)
-         on conflict(beatmapset_id) do update set title = excluded.title, artist = excluded.artist, covers_json = excluded.covers_json, updated_at = excluded.updated_at`,
-        [score.beatmapset.id, score.beatmapset.title, score.beatmapset.artist, score.beatmapset.creator ?? null, score.beatmapset.status ?? null, json(score.beatmapset.covers), json(score.beatmapset), now],
-      );
+      statements.push({
+        sql: `insert into beatmapsets (beatmapset_id, title, artist, creator, status, covers_json, metadata_json, updated_at)
+              values (?, ?, ?, ?, ?, ?, ?, ?)
+              on conflict(beatmapset_id) do update set title = excluded.title, artist = excluded.artist, covers_json = excluded.covers_json, updated_at = excluded.updated_at`,
+        args: [score.beatmapset.id, score.beatmapset.title, score.beatmapset.artist, score.beatmapset.creator ?? null, score.beatmapset.status ?? null, json(score.beatmapset.covers), json(score.beatmapset), now],
+      });
     }
     if (score.beatmap) {
-      await exec(
-        this.db,
-        `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, max_combo, version, url, metadata_json, updated_at)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         on conflict(beatmap_id) do update set version = excluded.version, metadata_json = excluded.metadata_json, updated_at = excluded.updated_at`,
-        [score.beatmap.id, score.beatmap.beatmapset_id, score.beatmap.mode, score.beatmap.status ?? null, score.beatmap.cs, score.beatmap.difficulty_rating, score.beatmap.bpm, score.beatmap.max_combo ?? null, score.beatmap.version, score.beatmap.url, json(score.beatmap), now],
-      );
+      statements.push({
+        sql: `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, max_combo, version, url, metadata_json, updated_at)
+              values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              on conflict(beatmap_id) do update set version = excluded.version, metadata_json = excluded.metadata_json, updated_at = excluded.updated_at`,
+        args: [score.beatmap.id, score.beatmap.beatmapset_id, score.beatmap.mode, score.beatmap.status ?? null, score.beatmap.cs, score.beatmap.difficulty_rating, score.beatmap.bpm, score.beatmap.max_combo ?? null, score.beatmap.version, score.beatmap.url, json(score.beatmap), now],
+      });
     }
+    await execBatch(this.db, statements);
   }
 }
 

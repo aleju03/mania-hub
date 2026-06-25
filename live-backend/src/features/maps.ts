@@ -1,9 +1,8 @@
-import type { InValue } from "@libsql/client";
 import { setImmediate as yieldToEventLoop } from "node:timers/promises";
 import { readConfig } from "../config.js";
 import { GLOBAL_COUNTRY_CODE, isGlobalCountry } from "../countries.js";
-import type { Db } from "../db.js";
-import { exec, json, parseJson } from "../db.js";
+import type { Db, DbStatement } from "../db.js";
+import { exec, execBatch, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { getModAcronyms, getScoreIdentity, getScoreTimestamp, nowIso } from "../shared/score.js";
@@ -2396,29 +2395,29 @@ async function persistMapsSnapshotDisplayMetadata(db: Db, value: CountryMapsData
   for (const entry of value.favourites) entry.players.forEach(addUser);
   value.favouritesByPlayer.forEach(addUser);
 
+  const statements: DbStatement[] = [];
   for (const [userId, user] of users) {
-    await exec(
-      db,
-      `insert into users (user_id, username, avatar_url, country_code, updated_at)
-       values (?, ?, ?, null, ?)
-       on conflict(user_id) do update set
-         username = excluded.username,
-         avatar_url = excluded.avatar_url,
-         updated_at = excluded.updated_at`,
-      [userId, user.username || `User ${userId}`, user.avatarUrl, updatedAt],
-    );
+    statements.push({
+      sql: `insert into users (user_id, username, avatar_url, country_code, updated_at)
+            values (?, ?, ?, null, ?)
+            on conflict(user_id) do update set
+              username = excluded.username,
+              avatar_url = excluded.avatar_url,
+              updated_at = excluded.updated_at`,
+      args: [userId, user.username || `User ${userId}`, user.avatarUrl, updatedAt],
+    });
   }
 
   for (const entry of value.farmed) {
-    await upsertMapsBeatmapset(db, {
+    statements.push(mapsBeatmapsetStatement({
       beatmapsetId: entry.beatmapsetId,
       title: entry.title,
       artist: entry.artist,
       creator: entry.creator,
       status: entry.status,
       covers: entry.covers,
-    }, updatedAt);
-    await upsertMapsBeatmap(db, {
+    }, updatedAt));
+    statements.push(mapsBeatmapStatement({
       beatmapId: entry.beatmapId,
       beatmapsetId: entry.beatmapsetId,
       mode: "mania",
@@ -2429,11 +2428,11 @@ async function persistMapsSnapshotDisplayMetadata(db: Db, value: CountryMapsData
       totalLength: entry.totalLength,
       version: entry.version,
       url: `https://osu.ppy.sh/beatmaps/${entry.beatmapId}`,
-    }, updatedAt);
+    }, updatedAt));
   }
 
   for (const entry of value.mostPlayed) {
-    await upsertMapsBeatmapset(db, {
+    statements.push(mapsBeatmapsetStatement({
       beatmapsetId: entry.beatmapsetId,
       title: entry.title,
       artist: entry.artist,
@@ -2441,8 +2440,8 @@ async function persistMapsSnapshotDisplayMetadata(db: Db, value: CountryMapsData
       status: entry.status,
       covers: entry.covers,
       globalPlayCount: entry.globalPlayCount,
-    }, updatedAt);
-    await upsertMapsBeatmap(db, {
+    }, updatedAt));
+    statements.push(mapsBeatmapStatement({
       beatmapId: entry.beatmapId,
       beatmapsetId: entry.beatmapsetId,
       mode: "mania",
@@ -2451,11 +2450,11 @@ async function persistMapsSnapshotDisplayMetadata(db: Db, value: CountryMapsData
       totalLength: entry.totalLength,
       version: entry.version,
       url: `https://osu.ppy.sh/beatmaps/${entry.beatmapId}`,
-    }, updatedAt);
+    }, updatedAt));
   }
 
   for (const entry of value.favourites) {
-    await upsertMapsBeatmapset(db, {
+    statements.push(mapsBeatmapsetStatement({
       beatmapsetId: entry.beatmapsetId,
       title: entry.title,
       artist: entry.artist,
@@ -2464,11 +2463,11 @@ async function persistMapsSnapshotDisplayMetadata(db: Db, value: CountryMapsData
       covers: entry.covers,
       globalPlayCount: entry.globalPlayCount,
       globalFavouriteCount: entry.globalFavouriteCount,
-    }, updatedAt);
+    }, updatedAt));
   }
 
   for (const beatmapset of Object.values(value.beatmapsetsPool)) {
-    await upsertMapsBeatmapset(db, {
+    statements.push(mapsBeatmapsetStatement({
       beatmapsetId: beatmapset.id,
       title: beatmapset.title,
       artist: beatmapset.artist,
@@ -2481,9 +2480,9 @@ async function persistMapsSnapshotDisplayMetadata(db: Db, value: CountryMapsData
       bpm: beatmapset.bpm,
       maniaKeys: beatmapset.maniaKeys,
       patterns: beatmapset.patterns,
-    }, updatedAt);
+    }, updatedAt));
     for (const beatmap of beatmapset.maniaBeatmaps ?? []) {
-      await upsertMapsBeatmap(db, {
+      statements.push(mapsBeatmapStatement({
         beatmapId: beatmap.id,
         beatmapsetId: beatmapset.id,
         mode: "mania",
@@ -2494,19 +2493,18 @@ async function persistMapsSnapshotDisplayMetadata(db: Db, value: CountryMapsData
         totalLength: beatmap.totalLength,
         version: beatmap.version,
         url: `https://osu.ppy.sh/beatmaps/${beatmap.id}`,
-      }, updatedAt);
+      }, updatedAt));
     }
   }
+  await execBatch(db, statements);
 }
 
-async function upsertMapsBeatmapset(
-  db: Db,
+function mapsBeatmapsetStatement(
   value: Pick<MapsBeatmapsetMetadata, "beatmapsetId" | "title" | "artist" | "creator" | "status" | "covers"> & Partial<Pick<MapsBeatmapsetMetadata, "globalPlayCount" | "globalFavouriteCount" | "previewUrl" | "bpm" | "maniaKeys" | "patterns">>,
   updatedAt: string,
-): Promise<void> {
-  await exec(
-    db,
-    `insert into maps_beatmapsets
+): DbStatement {
+  return {
+    sql: `insert into maps_beatmapsets
        (beatmapset_id, title, artist, creator, status, covers_json, global_play_count, global_favourite_count, preview_url, bpm, mania_keys_json, patterns_json, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      on conflict(beatmapset_id) do update set
@@ -2522,7 +2520,7 @@ async function upsertMapsBeatmapset(
        mania_keys_json = coalesce(excluded.mania_keys_json, maps_beatmapsets.mania_keys_json),
        patterns_json = coalesce(excluded.patterns_json, maps_beatmapsets.patterns_json),
        updated_at = excluded.updated_at`,
-    [
+    args: [
       value.beatmapsetId,
       value.title,
       value.artist,
@@ -2537,17 +2535,15 @@ async function upsertMapsBeatmapset(
       value.patterns ? json(value.patterns) : null,
       updatedAt,
     ],
-  );
+  };
 }
 
-async function upsertMapsBeatmap(
-  db: Db,
+function mapsBeatmapStatement(
   value: Omit<MapsBeatmapMetadata, "cs" | "bpm"> & Partial<Pick<MapsBeatmapMetadata, "cs" | "bpm">>,
   updatedAt: string,
-): Promise<void> {
-  await exec(
-    db,
-    `insert into maps_beatmaps
+): DbStatement {
+  return {
+    sql: `insert into maps_beatmaps
        (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, total_length, version, url, updated_at)
      values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      on conflict(beatmap_id) do update set
@@ -2561,7 +2557,7 @@ async function upsertMapsBeatmap(
        version = excluded.version,
        url = coalesce(excluded.url, maps_beatmaps.url),
        updated_at = excluded.updated_at`,
-    [
+    args: [
       value.beatmapId,
       value.beatmapsetId,
       value.mode,
@@ -2574,7 +2570,7 @@ async function upsertMapsBeatmap(
       value.url,
       updatedAt,
     ],
-  );
+  };
 }
 
 async function readMapsBeatmapsByIds(db: Db, ids: number[]): Promise<Map<number, MapsBeatmapMetadata>> {
@@ -3153,11 +3149,12 @@ async function replaceUserMapsFarmedOverlay(
   rows: MapsFarmedOverlayWriteRow[],
   updatedAt: string,
 ): Promise<void> {
-  const deleted = await exec(db, "delete from country_maps_farmed_scores where country = ? and user_id = ?", [country, userId]);
+  const statements: DbStatement[] = [
+    { sql: "delete from country_maps_farmed_scores where country = ? and user_id = ?", args: [country, userId] },
+  ];
   for (const row of rows) {
-    await exec(
-      db,
-      `insert into country_maps_farmed_scores
+    statements.push({
+      sql: `insert into country_maps_farmed_scores
          (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at)
        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict(country, user_id, beatmap_id) do update set
@@ -3169,7 +3166,7 @@ async function replaceUserMapsFarmedOverlay(
          played_at = excluded.played_at,
          detected_at = excluded.detected_at,
          updated_at = excluded.updated_at`,
-      [
+      args: [
         row.country,
         row.userId,
         row.beatmapId,
@@ -3182,17 +3179,19 @@ async function replaceUserMapsFarmedOverlay(
         row.detectedAt,
         row.updatedAt,
       ],
-    );
+    });
   }
-  if (rows.length > 0 || Number(deleted.rowsAffected ?? 0) > 0) {
+  const results = await execBatch(db, statements);
+  const deleted = results[0];
+  if (rows.length > 0 || Number(deleted?.rowsAffected ?? 0) > 0) {
     await refreshFarmHelperKeyStatsForUser(db, userId, updatedAt);
     await touchMapsFarmedOverlay(db, country, updatedAt);
   }
 }
 
 async function persistMapsFarmedScoreDisplayMetadata(db: Db, scores: OscScore[], updatedAt: string): Promise<void> {
+  const statements: DbStatement[] = [];
   for (const score of scores) {
-    const statements: Array<{ sql: string; args: InValue[] }> = [];
     if (score.user) {
       statements.push({
         sql: `insert into users (user_id, username, avatar_url, country_code, profile_json, updated_at)
@@ -3268,11 +3267,8 @@ async function persistMapsFarmedScoreDisplayMetadata(db: Db, scores: OscScore[],
         ],
       });
     }
-
-    for (const statement of statements) {
-      await exec(db, statement.sql, statement.args);
-    }
   }
+  await execBatch(db, statements);
 }
 
 async function updateUserMapsFarmedThreshold(db: Db, userId: number, bestScores: OscScore[], refreshedAt: string): Promise<void> {

@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { performance } from "node:perf_hooks";
 import { brotliCompress, constants as zlibConstants, gzip } from "node:zlib";
 import type { Config } from "../config.js";
 import { handleBeatmapAudioRequest } from "../audio/http.js";
@@ -80,7 +81,11 @@ export interface HttpContext {
   resumeWorkers?: () => void;
 }
 
+const REQUEST_STARTED_AT = Symbol("maniaHubRequestStartedAt");
+type TimedRequest = IncomingMessage & { [REQUEST_STARTED_AT]?: number };
+
 export async function routeHttp(req: IncomingMessage, res: ServerResponse, ctx: HttpContext): Promise<boolean> {
+  (req as TimedRequest)[REQUEST_STARTED_AT] = performance.now();
   try {
     return await routeHttpUnsafe(req, res, ctx);
   } catch (error) {
@@ -1322,6 +1327,7 @@ export function sendJson(req: IncomingMessage, res: ServerResponse, ctx: Pick<Ht
   sendCors(req, res, ctx);
   res.statusCode = status;
   res.setHeader("content-type", "application/json; charset=utf-8");
+  setServerTiming(req, res);
   const json = Buffer.from(JSON.stringify(body), "utf8");
   if (json.length < COMPRESSIBLE_MIN_BYTES) {
     res.end(json);
@@ -1404,9 +1410,18 @@ function writePreparedJson(
   sendCors(req, res, ctx);
   res.statusCode = prepared.status;
   res.setHeader("content-type", "application/json; charset=utf-8");
+  setServerTiming(req, res);
   if (prepared.vary) appendVary(res, "accept-encoding");
   if (prepared.encoding) res.setHeader("content-encoding", prepared.encoding);
   res.end(prepared.body);
+}
+
+function setServerTiming(req: IncomingMessage, res: ServerResponse): void {
+  if (res.headersSent) return;
+  const startedAt = (req as TimedRequest)[REQUEST_STARTED_AT];
+  if (startedAt == null) return;
+  const durationMs = Math.max(0, performance.now() - startedAt);
+  res.setHeader("server-timing", `app;dur=${durationMs.toFixed(1)}`);
 }
 
 // /api/snapshots/maps serves a multi-MB payload (a whole country roster's

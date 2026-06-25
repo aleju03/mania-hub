@@ -5,6 +5,7 @@ import {
   AUTH_STATE_COOKIE_MAX_AGE_SECONDS,
   AUTH_STATE_COOKIE_NAME,
   ANONYMOUS_AUTH_STATE,
+  hasAuthCookieHeader,
 } from "./auth-shared";
 import type { AuthState, AuthViewer } from "./auth-shared";
 
@@ -200,7 +201,9 @@ export async function readCurrentAuth(): Promise<AuthState> {
 }
 
 export async function getCurrentAuthHandler(): Promise<AuthState> {
-  setResponseHeader("Cache-Control", "private, no-store");
+  if (hasAuthCookieHeader(getRequest().headers.get("cookie"))) {
+    setResponseHeader("Cache-Control", "private, no-store");
+  }
   return readCurrentAuth();
 }
 

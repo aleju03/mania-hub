@@ -827,6 +827,58 @@ function LiveBackendPage() {
     });
   }, []);
 
+  const patchCountryTier = useCallback((country: string, featureTier: CountryFeatureTier) => {
+    setStatus((current) => {
+      if (!current?.countries) return current;
+      return {
+        ...current,
+        countries: current.countries.map((entry) =>
+          entry.country === country
+            ? { ...entry, featureTier }
+            : entry,
+        ),
+      };
+    });
+  }, []);
+
+  const patchDeleteCountry = useCallback((country: string) => {
+    setStatus((current) => {
+      if (!current?.countries) return current;
+      return {
+        ...current,
+        countries: current.countries.filter((entry) => entry.country !== country),
+      };
+    });
+  }, []);
+
+  const patchAddCountry = useCallback((country: string) => {
+    const normalized = country.trim().toUpperCase().slice(0, 2);
+    if (!/^[A-Z]{2}$/.test(normalized)) return;
+    setStatus((current) => {
+      if (!current?.countries || current.countries.some((entry) => entry.country === normalized)) return current;
+      const now = new Date().toISOString();
+      return {
+        ...current,
+        countries: [
+          {
+            country: normalized,
+            status: "active",
+            featureTier: "live",
+            pinned: false,
+            firstRequestedAt: now,
+            lastRequestedAt: now,
+            lastRosterRefreshAt: null,
+            lastScoreAt: null,
+            activeUsers: 0,
+            lastActiveAt: null,
+            isWarm: true,
+          },
+          ...current.countries,
+        ],
+      };
+    });
+  }, []);
+
   useEffect(() => {
     if (activeTab !== "backend") return;
     const quiet = refreshNonce > 0;
@@ -993,10 +1045,18 @@ function LiveBackendPage() {
                 );
               }}
               onDeleteCountry={(entry) => {
-                void runAdminAction(`delete-country-${entry.country}`, `/api/admin/delete-country?country=${encodeURIComponent(entry.country)}`);
+                void runAdminAction(
+                  `delete-country-${entry.country}`,
+                  `/api/admin/delete-country?country=${encodeURIComponent(entry.country)}`,
+                  () => patchDeleteCountry(entry.country),
+                );
               }}
               onSetCountryTier={(entry, tier) => {
-                void runAdminAction(`set-tier-${entry.country}`, `/api/admin/set-country-tier?country=${encodeURIComponent(entry.country)}&tier=${encodeURIComponent(tier)}`);
+                void runAdminAction(
+                  `set-tier-${entry.country}`,
+                  `/api/admin/set-country-tier?country=${encodeURIComponent(entry.country)}&tier=${encodeURIComponent(tier)}`,
+                  () => patchCountryTier(entry.country, tier),
+                );
               }}
               onCatchUpCountry={(entry) => {
                 void runAdminAction(
@@ -1012,7 +1072,11 @@ function LiveBackendPage() {
                 );
               }}
               onAddCountry={(country) => {
-                void runAdminAction(`add-country-${country}`, `/api/admin/add-country?country=${encodeURIComponent(country)}`);
+                void runAdminAction(
+                  `add-country-${country}`,
+                  `/api/admin/add-country?country=${encodeURIComponent(country)}`,
+                  () => patchAddCountry(country),
+                );
               }}
             />
           </Section>
