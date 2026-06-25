@@ -145,7 +145,7 @@ function isLeanTrackerScorePayload(value: unknown): value is LeanTrackerScore {
     && typeof candidate.user_id === "number"
     && typeof candidate.accuracy === "number"
     && Array.isArray(candidate.mods)
-    && typeof candidate.score === "number"
+    && hasScoreTotal(candidate)
     && typeof candidate.rank === "string"
     && typeof candidate.beatmap === "object"
     && candidate.beatmap != null
@@ -153,6 +153,13 @@ function isLeanTrackerScorePayload(value: unknown): value is LeanTrackerScore {
     && candidate.beatmapset != null
     && typeof candidate.user === "object"
     && candidate.user != null;
+}
+
+function hasScoreTotal(candidate: Partial<LeanTrackerScore>): boolean {
+  return typeof candidate.score === "number"
+    || typeof candidate.total_score === "number"
+    || typeof candidate.classic_total_score === "number"
+    || typeof candidate.legacy_total_score === "number";
 }
 
 function isStoredTrackerScoreEvent(value: unknown): value is StoredTrackerScoreEvent {

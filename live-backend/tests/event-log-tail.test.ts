@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createDb, migrate } from "../src/db.js";
-import { LiveEventLog } from "../src/live/event-log.js";
+import { compactLiveEventLogPayloadForStorage, LiveEventLog } from "../src/live/event-log.js";
 import type { LiveEvent } from "../src/shared/types.js";
 
 const dirs: string[] = [];
@@ -28,6 +28,45 @@ async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<voi
 }
 
 describe("live event log tail (server/worker split)", () => {
+  it("compacts lean tracker payloads that carry total_score instead of score", () => {
+    const payload = {
+      id: 12345,
+      user_id: 678,
+      accuracy: 0.9876,
+      mods: [{ acronym: "DT" }],
+      total_score: 987654,
+      rank: "S",
+      beatmap: {
+        id: 111,
+        beatmapset_id: 222,
+        difficulty_rating: 6.5,
+        mode: "mania",
+        cs: 4,
+        bpm: 180,
+        max_combo: 1200,
+        version: "MX",
+        url: "https://osu.ppy.sh/beatmaps/111",
+      },
+      beatmapset: {
+        id: 222,
+        title: "Title",
+        artist: "Artist",
+        covers: {},
+      },
+      user: {
+        id: 678,
+        username: "player",
+        avatar_url: "https://a.ppy.sh/678",
+      },
+    };
+
+    expect(compactLiveEventLogPayloadForStorage("tracker_score", "CR", payload)).toEqual({
+      schemaVersion: 1,
+      ref: "tracker_score",
+      scoreIdentity: "official:12345",
+    });
+  });
+
   it("delivers events appended on a separate worker connection to a tailing server connection", async () => {
     const url = await tempDbUrl();
     const writerDb = await createDb({ databaseUrl: url });
