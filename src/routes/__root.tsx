@@ -3,18 +3,19 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Coffee, X } from "lucide-react";
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest, setCookie } from "@tanstack/react-start/server";
+import { getRequest, setCookie, setResponseHeader } from "@tanstack/react-start/server";
 import { Nav } from "../components/layout/Nav";
 import { RouteLoadingBar } from "../components/layout/RouteLoadingBar";
 import { AuthContext } from "../lib/auth-context";
 import { getCurrentAuth } from "../lib/auth";
 import { InitialCountryContext } from "../lib/country-context";
-import type { AuthState } from "../lib/auth-shared";
+import { hasAuthCookieHeader, type AuthState } from "../lib/auth-shared";
 import {
   COUNTRY_AUTO_COOKIE_NAME,
   COUNTRY_COOKIE_MAX_AGE_SECONDS,
   COUNTRY_COOKIE_NAME,
   hasAutoCountryCookieHeader,
+  hasCountryCookieHeader,
   parseCountryCookieHeader,
   readAutoCountryCookieClient,
   readCountryCookieClient,
@@ -122,6 +123,45 @@ type RootRouteContext = RootSlowContext & {
   initialCountry: string;
   origin: string;
 };
+
+interface DocumentCacheConfig {
+  sMaxage: number;
+  swr: number;
+}
+
+const DEFAULT_DOCUMENT_CACHE: DocumentCacheConfig = {
+  sMaxage: 60,
+  swr: 300,
+};
+
+const DOCUMENT_CACHE_BY_PATH: Record<string, DocumentCacheConfig> = {
+  "/": DEFAULT_DOCUMENT_CACHE,
+  "/rankings": DEFAULT_DOCUMENT_CACHE,
+  "/top-plays": DEFAULT_DOCUMENT_CACHE,
+  "/maps": DEFAULT_DOCUMENT_CACHE,
+  "/replay": { sMaxage: 300, swr: 1800 },
+};
+
+function getDocumentCacheForPathname(pathname: string): DocumentCacheConfig | null {
+  const exact = DOCUMENT_CACHE_BY_PATH[pathname];
+  if (exact) return exact;
+  if (pathname.startsWith("/player/")) return DEFAULT_DOCUMENT_CACHE;
+  return null;
+}
+
+function setServerDocumentCacheHeaders(): void {
+  const request = getRequest();
+  const cacheConfig = getDocumentCacheForPathname(new URL(request.url).pathname);
+  if (!cacheConfig) return;
+  const cookieHeader = request.headers.get("cookie");
+  if (hasAuthCookieHeader(cookieHeader) || !hasCountryCookieHeader(cookieHeader)) {
+    setResponseHeader("Cache-Control", "private, no-store");
+    setResponseHeader("Vary", "Cookie");
+    return;
+  }
+  setResponseHeader("Cache-Control", `public, s-maxage=${cacheConfig.sMaxage}, stale-while-revalidate=${cacheConfig.swr}`);
+  setResponseHeader("Vary", "Cookie");
+}
 
 const CLIENT_ROOT_CONTEXT_TTL_MS = 60_000;
 
@@ -265,6 +305,7 @@ function getClientRootContext(): RootRouteContext | Promise<RootRouteContext> {
 }
 
 async function getServerRootContext(): Promise<RootRouteContext> {
+  setServerDocumentCacheHeaders();
   const [initialCountry, origin, auth, bootstrap] = await Promise.all([
     getInitialCountry(),
     getRequestOrigin(),
