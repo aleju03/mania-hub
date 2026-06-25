@@ -92,6 +92,97 @@ describe("player profile snapshots", () => {
     expect(snapshot?.projection.provenanceByScoreId[2]).toBe("profile_recent_score");
     expect(snapshot?.projection.provenanceByScoreId[3]).toBeUndefined();
   });
+
+  it("hydrates compact cached best-score snapshots from normalized metadata", async () => {
+    const snapshotFetchedAt = "2026-06-01T03:28:53Z";
+    const best = score({
+      id: 11,
+      beatmapId: 201,
+      title: "Compact best",
+      pp: 88.12,
+      endedAt: snapshotFetchedAt,
+    });
+    const { user: _user, beatmap, beatmapset, ...compactBest } = best;
+
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, profile_json, updated_at)
+       values (?, ?, ?, ?, ?, ?)`,
+      [
+        USER_ID,
+        "MnShiny",
+        "https://example.test/avatar.png",
+        "CR",
+        JSON.stringify({ id: USER_ID, username: "MnShiny", country_code: "CR", avatar_url: "https://example.test/avatar.png", statistics: { pp: 1000 } }),
+        snapshotFetchedAt,
+      ],
+    );
+    await exec(
+      db,
+      `insert into beatmapsets (beatmapset_id, title, artist, creator, status, covers_json, metadata_json, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        beatmapset?.id,
+        beatmapset?.title,
+        beatmapset?.artist,
+        beatmapset?.creator ?? null,
+        beatmapset?.status ?? null,
+        JSON.stringify(beatmapset?.covers ?? {}),
+        JSON.stringify({ ...beatmapset, play_count: 1234, preview_url: "https://b.ppy.sh/preview.mp3" }),
+        snapshotFetchedAt,
+      ],
+    );
+    await exec(
+      db,
+      `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, max_combo, version, url, metadata_json, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        beatmap?.id,
+        beatmap?.beatmapset_id,
+        beatmap?.mode,
+        beatmap?.status ?? null,
+        beatmap?.cs,
+        beatmap?.difficulty_rating,
+        beatmap?.bpm,
+        beatmap?.max_combo ?? null,
+        beatmap?.version,
+        beatmap?.url,
+        JSON.stringify({ ...beatmap, total_length: 95, drain: 4 }),
+        snapshotFetchedAt,
+      ],
+    );
+    await exec(
+      db,
+      `insert into profile_snapshots
+       (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at)
+       values (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        USER_ID,
+        "mnshiny",
+        JSON.stringify({
+          id: USER_ID,
+          username: "MnShiny",
+          country_code: "CR",
+          avatar_url: "https://example.test/avatar.png",
+          statistics: { pp: 1000 },
+        }),
+        JSON.stringify([compactBest]),
+        200,
+        snapshotFetchedAt,
+        snapshotFetchedAt,
+        snapshotFetchedAt,
+      ],
+    );
+
+    const snapshot = await getCachedPlayerProfileSnapshot(db, "MnShiny");
+
+    expect(snapshot?.bestScores[0]).toMatchObject({
+      id: 11,
+      user: { id: USER_ID, username: "MnShiny" },
+      beatmap: { id: 201, version: "[4K] Normal", total_length: 95 },
+      beatmapset: { title: "Compact best", play_count: 1234 },
+    });
+  });
 });
 
 function score(options: {

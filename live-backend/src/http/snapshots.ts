@@ -5,7 +5,7 @@ import type { Config } from "../config.js";
 import { handleBeatmapAudioRequest } from "../audio/http.js";
 import { activateCountry, deleteCountryData, getCountryRegistry, GLOBAL_COUNTRY_CODE, isCountryFeatureAtLeast, isGlobalCountry, setCountryFeatureTier, setCountryPaused, setCountryStatus, type CountryFeatureTier, type CountryRegistryStatus } from "../countries.js";
 import type { Db } from "../db.js";
-import { dbHealth, exec, parseJson } from "../db.js";
+import { dbHealth, exec, getSqliteBusyRetryStats, parseJson } from "../db.js";
 import { getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../features/activity.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
 import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, type FarmHelperKeyMode } from "../features/farm-helper.js";
@@ -916,6 +916,10 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
   const worker = (mirror?.worker as WorkerStatus | null | undefined) ?? ctx.workerStatus?.() ?? null;
   const osc = (mirror?.osc as OscStatus | undefined) ?? ctx.oscStatus();
   const rate = mirror?.osuRate ?? ctx.osu.limiter.state();
+  const sqliteBusy = {
+    server: getSqliteBusyRetryStats(),
+    worker: mirror?.sqliteBusy ?? (ctx.config.role === "server" ? null : getSqliteBusyRetryStats()),
+  };
   const snapshotStats = options.snapshotCountry
     ? await adminSnapshotStats(ctx.db, options.snapshotCountry)
     : undefined;
@@ -930,6 +934,7 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
     queueSummary: await ctx.queue.summary(),
     roster: await rosterSummary(ctx.db),
     rate,
+    sqliteBusy,
     scoresFallback: await scoresFallbackStatus(ctx, mirror),
     abuse: ctx.abuse?.state() ?? null,
     apiCallHistory: await apiCallHistory(ctx.db),

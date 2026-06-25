@@ -16,10 +16,11 @@ export interface RuntimeStatusSnapshot {
   osc: unknown;
   osuRate: unknown;
   scoresFallbackRate: unknown;
+  sqliteBusy: unknown;
   updatedAt: string;
 }
 
-export async function writeRuntimeStatus(db: Db, status: Pick<RuntimeStatusSnapshot, "worker" | "osc" | "osuRate" | "scoresFallbackRate">): Promise<void> {
+export async function writeRuntimeStatus(db: Db, status: Pick<RuntimeStatusSnapshot, "worker" | "osc" | "osuRate" | "scoresFallbackRate" | "sqliteBusy">): Promise<void> {
   const payload: RuntimeStatusSnapshot = { ...status, updatedAt: nowIso() };
   await exec(
     db,
@@ -39,7 +40,7 @@ export async function readRuntimeStatus(db: Db): Promise<RuntimeStatusSnapshot |
 // Mirror the worker's status to the DB on an interval. Returns a stop function.
 export function startRuntimeStatusMirror(
   db: Db,
-  snapshot: () => Pick<RuntimeStatusSnapshot, "worker" | "osc" | "osuRate" | "scoresFallbackRate">,
+  snapshot: () => Pick<RuntimeStatusSnapshot, "worker" | "osc" | "osuRate" | "scoresFallbackRate" | "sqliteBusy">,
   intervalMs: number,
 ): () => void {
   let stopped = false;

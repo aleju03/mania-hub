@@ -3,6 +3,7 @@ import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { calculateWeightedPpTotal, getScoreIdentity, getScoreTimestamp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
+import { compactScoresForStorage, hydrateScoresDisplayMetadata, persistScoresDisplayMetadata } from "../shared/score-storage.js";
 import type { OscScore } from "../shared/types.js";
 
 const PROFILE_SNAPSHOT_TTL_MS = 24 * 60 * 60_000;
@@ -292,9 +293,9 @@ async function getStoredUserTopScores(db: Db, userId: number): Promise<OscScore[
      limit ?`,
     [userId, PROFILE_BEST_SCORES_LIMIT],
   )).rows;
-  return rows
+  return hydrateScoresDisplayMetadata(db, rows
     .map((row) => parseJson<OscScore | null>(row.score_json, null))
-    .filter((score): score is OscScore => !!score);
+    .filter((score): score is OscScore => !!score));
 }
 
 /* In-flight snapshot fetches keyed by profile key. A pack warm and the
@@ -365,6 +366,7 @@ async function fetchAndStoreProfileSnapshot(
   const bestScores = await osu.getUserBestScoresWindow(userId, PROFILE_BEST_SCORES_LIMIT, "api:profile_snapshot:best");
   const fetchedAt = nowIso();
   const usernameKey = normalizeProfileKey(username);
+  await persistScoresDisplayMetadata(db, bestScores, fetchedAt);
   await exec(
     db,
     `insert into profile_snapshots (user_id, username_key, user_json, best_scores_json, best_scores_limit, fetched_at, user_fetched_at, updated_at, refresh_error)
@@ -378,7 +380,7 @@ async function fetchAndStoreProfileSnapshot(
        user_fetched_at = excluded.user_fetched_at,
        updated_at = excluded.updated_at,
        refresh_error = null`,
-    [userId, usernameKey, json(storedUser), json(bestScores), PROFILE_BEST_SCORES_LIMIT, fetchedAt, fetchedAt, fetchedAt],
+    [userId, usernameKey, json(storedUser), json(compactScoresForStorage(bestScores)), PROFILE_BEST_SCORES_LIMIT, fetchedAt, fetchedAt, fetchedAt],
   );
   await upsertDisplayUser(db, userId, username, storedUser, fetchedAt);
   const row = await getStoredProfileSnapshot(db, usernameKey);
@@ -531,7 +533,7 @@ async function upsertDisplayUser(
 
 async function buildServedSnapshot(db: Db, row: ProfileSnapshotRow, forceStale: boolean, recentScores: OscScore[] = []): Promise<PlayerProfileSnapshot> {
   const user = parseJson<Record<string, unknown>>(row.user_json, {});
-  const rawBestScores = parseJson<OscScore[]>(row.best_scores_json, []);
+  const rawBestScores = await hydrateScoresDisplayMetadata(db, parseJson<OscScore[]>(row.best_scores_json, []));
   const userFetchedAt = row.user_fetched_at ?? row.fetched_at;
   const projectionBaselineAt = latestValidTimestamp(row.fetched_at, userFetchedAt);
   const projection = await projectTopPlays(db, row.user_id, rawBestScores, row.fetched_at, projectionBaselineAt, recentScores);
@@ -573,10 +575,13 @@ async function projectTopPlays(
   for (const score of scores) provenanceByScoreId[score.id] = "osu_snapshot";
   let appliedTopPlayEvents = 0;
   let appliedRecentScores = 0;
+  const rawTopPlayScores = rows.map((row) => parseJson<{ score?: OscScore }>(row.payload_json, {}).score ?? null);
+  const topPlayScores = await hydrateScoresDisplayMetadata(db, rawTopPlayScores.filter((score): score is OscScore => !!score));
+  let topPlayScoreIndex = 0;
 
-  for (const row of rows) {
-    const payload = parseJson<{ score?: OscScore }>(row.payload_json, {});
-    const eventScore = payload.score;
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+    const row = rows[rowIndex];
+    const eventScore = rawTopPlayScores[rowIndex] ? topPlayScores[topPlayScoreIndex++] : null;
     if (!eventScore || eventScore.user_id !== userId || eventScore.pp == null || eventScore.pp <= 0) continue;
     scores = applyTopPlayEvent(scores, eventScore);
     if (isAtOrBefore(row.detected_at, ppProjectionBaselineAt)) ppBaselineScores = scores;

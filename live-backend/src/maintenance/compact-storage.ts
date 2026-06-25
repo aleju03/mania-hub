@@ -1,11 +1,11 @@
-import type { InValue } from "@libsql/client";
 import { readConfig } from "../config.js";
 import { createDb, exec, json, migrate } from "../db.js";
 import { compactCountryMapsSnapshots } from "../features/maps.js";
 import { toStoredScoreEvent } from "../ingest/score-ingestor.js";
 import { compactLiveEventLogPayloadForStorage } from "../live/event-log.js";
 import { getModAcronyms, getScoreTimestamp, nowIso } from "../shared/score.js";
-import type { OscScore } from "../shared/types.js";
+import { compactScoreForStorage, compactScoresForStorage, persistScoresDisplayMetadata } from "../shared/score-storage.js";
+import type { CountryTopPlay, OscScore } from "../shared/types.js";
 
 interface CompactOptions {
   batchSize: number;
@@ -25,6 +25,14 @@ const snapshots = await compactCountryMapsSnapshots(db);
 console.log(`country_maps_snapshots: compacted ${snapshots.compacted}, skipped ${snapshots.skipped}, scanned ${snapshots.scanned}`);
 await releaseMemory();
 
+const profileSnapshots = await compactProfileSnapshots(options.batchSize);
+console.log(`profile_snapshots: compacted ${profileSnapshots.compacted}, failed ${profileSnapshots.failed}, scanned ${profileSnapshots.scanned}`);
+await releaseMemory();
+
+const topPlays = await compactTopPlayEvents(options.batchSize);
+console.log(`top_play_events: compacted ${topPlays.compacted}, failed ${topPlays.failed}, scanned ${topPlays.scanned}`);
+await releaseMemory();
+
 const scoreEvents = await compactScoreEvents(options.batchSize);
 console.log(`score_events: compacted ${scoreEvents.compacted}, failed ${scoreEvents.failed}, scanned ${scoreEvents.scanned}`);
 await releaseMemory();
@@ -37,6 +45,10 @@ const apiCalls = await compactApiCallLog();
 console.log(`api_call_log: compacted ${apiCalls.compactedRows} rows across ${apiCalls.compactedTargets} targets`);
 await releaseMemory();
 
+const apiTargets = await pruneOrphanApiCallTargets();
+console.log(`api_call_targets: pruned ${apiTargets.pruned} orphan targets`);
+await releaseMemory();
+
 if (options.vacuum) {
   console.log("Running VACUUM. Keep the backend stopped until this finishes.");
   await db.execute("vacuum");
@@ -44,6 +56,114 @@ if (options.vacuum) {
 }
 
 db.close();
+
+async function compactProfileSnapshots(batchSize: number): Promise<{ scanned: number; compacted: number; failed: number }> {
+  const result = { scanned: 0, compacted: 0, failed: 0 };
+  let afterUserId = 0;
+
+  while (true) {
+    const rows = (await exec(
+      db,
+      `select user_id, updated_at
+       from profile_snapshots
+       where user_id > ?
+         and json_valid(best_scores_json)
+         and (
+           best_scores_json like '%"user"%'
+           or best_scores_json like '%"beatmap"%'
+           or best_scores_json like '%"beatmapset"%'
+         )
+       order by user_id asc
+       limit ?`,
+      [afterUserId, batchSize],
+    )).rows;
+
+    if (rows.length === 0) break;
+    result.scanned += rows.length;
+
+    for (const row of rows) {
+      afterUserId = Math.max(afterUserId, Number(row.user_id));
+      const snapshotRow = (await exec(
+        db,
+        "select best_scores_json from profile_snapshots where user_id = ?",
+        [Number(row.user_id)],
+      )).rows[0];
+      const scores = parseScores(snapshotRow?.best_scores_json);
+      if (!scores) {
+        result.failed++;
+        continue;
+      }
+      const updatedAt = String(row.updated_at ?? nowIso());
+      await persistScoresDisplayMetadata(db, scores, updatedAt);
+      await exec(
+        db,
+        "update profile_snapshots set best_scores_json = ? where user_id = ?",
+        [json(compactScoresForStorage(scores)), Number(row.user_id)],
+      );
+      result.compacted++;
+      await releaseMemory();
+    }
+
+    await releaseMemory();
+    if (rows.length < batchSize) break;
+  }
+
+  return result;
+}
+
+async function compactTopPlayEvents(batchSize: number): Promise<{ scanned: number; compacted: number; failed: number }> {
+  const result = { scanned: 0, compacted: 0, failed: 0 };
+  let afterRowid = 0;
+
+  while (true) {
+    const rows = (await exec(
+      db,
+      `select rowid, detected_at
+       from top_play_events
+       where rowid > ?
+         and json_valid(payload_json)
+         and (
+           payload_json like '%"user"%'
+           or payload_json like '%"beatmap"%'
+           or payload_json like '%"beatmapset"%'
+         )
+       order by rowid asc
+       limit ?`,
+      [afterRowid, batchSize],
+    )).rows;
+
+    if (rows.length === 0) break;
+    result.scanned += rows.length;
+
+    for (const row of rows) {
+      afterRowid = Math.max(afterRowid, Number(row.rowid));
+      const eventRow = (await exec(
+        db,
+        "select payload_json from top_play_events where rowid = ?",
+        [Number(row.rowid)],
+      )).rows[0];
+      const event = parseUnknownJson(eventRow?.payload_json) as Partial<CountryTopPlay> | null;
+      if (!event?.score) {
+        result.failed++;
+        continue;
+      }
+      const updatedAt = String(row.detected_at ?? nowIso());
+      await persistScoresDisplayMetadata(db, [event.score], updatedAt);
+      await exec(
+        db,
+        "update top_play_events set payload_json = ? where rowid = ?",
+        [json(compactTopPlayPayload(event)), Number(row.rowid)],
+      );
+      result.compacted++;
+      await releaseMemory();
+    }
+
+    await releaseMemory();
+    if (rows.length < batchSize) break;
+  }
+
+  return result;
+}
 
 async function compactMapsFarmedOverlay(batchSize: number): Promise<{ scanned: number; compacted: number; failed: number }> {
   const result = { scanned: 0, compacted: 0, failed: 0 };
@@ -71,7 +191,7 @@ async function compactMapsFarmedOverlay(batchSize: number): Promise<{ scanned: n
         continue;
       }
 
-      await persistScoreDisplayMetadata(score, String(row.updated_at ?? nowIso()));
+      await persistScoresDisplayMetadata(db, [score], String(row.updated_at ?? nowIso()));
       await exec(
         db,
         `update country_maps_farmed_scores
@@ -177,7 +297,7 @@ async function compactScoreEvents(batchSize: number): Promise<{ scanned: number;
         continue;
       }
 
-      await persistScoreDisplayMetadata(score, String(row.received_at ?? nowIso()));
+      await persistScoresDisplayMetadata(db, [score], String(row.received_at ?? nowIso()));
       await exec(
         db,
         "update score_events set score_json = ? where id = ?",
@@ -245,93 +365,51 @@ async function compactApiCallLog(): Promise<{ compactedTargets: number; compacte
   return { compactedTargets, compactedRows: Number(result.rowsAffected ?? 0) };
 }
 
-async function persistScoreDisplayMetadata(score: OscScore, updatedAt: string): Promise<void> {
-  const statements: Array<{ sql: string; args: InValue[] }> = [];
-  if (score.user) {
-    statements.push({
-      sql: `insert into users (user_id, username, avatar_url, country_code, profile_json, updated_at)
-            values (?, ?, ?, ?, ?, ?)
-            on conflict(user_id) do update set
-              username = excluded.username,
-              avatar_url = excluded.avatar_url,
-              country_code = coalesce(excluded.country_code, users.country_code),
-              updated_at = excluded.updated_at`,
-      args: [
-        score.user.id,
-        score.user.username,
-        score.user.avatar_url,
-        score.user.country_code,
-        json(score.user),
-        updatedAt,
-      ],
-    });
+async function pruneOrphanApiCallTargets(): Promise<{ pruned: number }> {
+  let pruned = 0;
+  while (true) {
+    const result = await exec(
+      db,
+      `delete from api_call_targets
+       where id in (
+         select t.id
+         from api_call_targets t
+         where not exists (
+           select 1 from api_call_log l where l.target_id = t.id limit 1
+         )
+         limit 5000
+       )`,
+    );
+    const rows = Number(result.rowsAffected ?? 0);
+    if (rows === 0) break;
+    pruned += rows;
+    await releaseMemory();
   }
-
-  if (score.beatmapset) {
-    statements.push({
-      sql: `insert into beatmapsets (beatmapset_id, title, artist, creator, status, covers_json, metadata_json, updated_at)
-            values (?, ?, ?, ?, ?, ?, ?, ?)
-            on conflict(beatmapset_id) do update set
-              title = excluded.title,
-              artist = excluded.artist,
-              creator = excluded.creator,
-              status = excluded.status,
-              covers_json = excluded.covers_json,
-              updated_at = excluded.updated_at`,
-      args: [
-        score.beatmapset.id,
-        score.beatmapset.title,
-        score.beatmapset.artist,
-        score.beatmapset.creator ?? null,
-        score.beatmapset.status ?? null,
-        json(score.beatmapset.covers ?? {}),
-        json(score.beatmapset),
-        updatedAt,
-      ],
-    });
-  }
-
-  if (score.beatmap) {
-    statements.push({
-      sql: `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, max_combo, version, url, metadata_json, updated_at)
-            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            on conflict(beatmap_id) do update set
-              beatmapset_id = excluded.beatmapset_id,
-              mode = excluded.mode,
-              status = excluded.status,
-              cs = excluded.cs,
-              difficulty_rating = excluded.difficulty_rating,
-              bpm = excluded.bpm,
-              max_combo = excluded.max_combo,
-              version = excluded.version,
-              url = excluded.url,
-              updated_at = excluded.updated_at`,
-      args: [
-        score.beatmap.id,
-        score.beatmap.beatmapset_id,
-        score.beatmap.mode,
-        score.beatmap.status ?? null,
-        score.beatmap.cs,
-        score.beatmap.difficulty_rating,
-        score.beatmap.bpm,
-        score.beatmap.max_combo ?? null,
-        score.beatmap.version,
-        score.beatmap.url,
-        json(score.beatmap),
-        updatedAt,
-      ],
-    });
-  }
-
-  for (const statement of statements) {
-    await exec(db, statement.sql, statement.args);
-  }
+  return { pruned };
 }
 
 function parseScore(value: unknown): OscScore | null {
   const parsed = parseUnknownJson(value) as Partial<OscScore> | null;
   if (!parsed || !Number.isFinite(parsed.id) || !Number.isFinite(parsed.user_id)) return null;
   return parsed as OscScore;
+}
+
+function parseScores(value: unknown): OscScore[] | null {
+  const parsed = parseUnknownJson(value);
+  if (!Array.isArray(parsed)) return null;
+  const scores = parsed.filter((score): score is OscScore => {
+    const candidate = score as Partial<OscScore> | null;
+    return !!candidate && Number.isFinite(candidate.id) && Number.isFinite(candidate.user_id);
+  });
+  return scores.length === parsed.length ? scores : null;
+}
+
+function compactTopPlayPayload(event: Partial<CountryTopPlay>): Partial<CountryTopPlay> {
+  const { user: _user, score, ...rest } = event;
+  return {
+    ...rest,
+    score: score ? compactScoreForStorage(score) : score,
+  };
 }
 
 function parseUnknownJson(value: unknown): unknown | null {

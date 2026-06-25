@@ -11,6 +11,26 @@ const SQLITE_BUSY_RETRY_MS = readBoundedEnvInt("SQLITE_BUSY_RETRY_MS", 30_000, 0
 const SQLITE_BUSY_RETRY_INITIAL_DELAY_MS = 25;
 const SQLITE_BUSY_RETRY_MAX_DELAY_MS = 500;
 
+export interface SqliteBusyRetryStats {
+  retryBudgetMs: number;
+  operations: number;
+  attempts: number;
+  exhausted: number;
+  totalWaitMs: number;
+  lastAt: string | null;
+  lastMessage: string | null;
+}
+
+const sqliteBusyRetryStats: SqliteBusyRetryStats = {
+  retryBudgetMs: SQLITE_BUSY_RETRY_MS,
+  operations: 0,
+  attempts: 0,
+  exhausted: 0,
+  totalWaitMs: 0,
+  lastAt: null,
+  lastMessage: null,
+};
+
 export async function createDb(config: Pick<Config, "databaseUrl" | "databaseAuthToken"> & PragmaConfig): Promise<Db> {
   const isFile = config.databaseUrl.startsWith("file:");
   if (isFile) {
@@ -113,21 +133,48 @@ export function isSqliteBusyError(error: unknown): boolean {
   return /SQLITE_(BUSY|LOCKED)|database is locked|database table is locked/i.test(message);
 }
 
+export function getSqliteBusyRetryStats(): SqliteBusyRetryStats {
+  return { ...sqliteBusyRetryStats };
+}
+
 async function withSqliteBusyRetry<T>(operation: () => Promise<T>): Promise<T> {
-  if (SQLITE_BUSY_RETRY_MS <= 0) return operation();
+  if (SQLITE_BUSY_RETRY_MS <= 0) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (isSqliteBusyError(error)) recordSqliteBusyRetry(error, 0, true);
+      throw error;
+    }
+  }
   const startedAt = Date.now();
   let delayMs = SQLITE_BUSY_RETRY_INITIAL_DELAY_MS;
+  let operationAttempts = 0;
   for (;;) {
     try {
       return await operation();
     } catch (error) {
       if (!isSqliteBusyError(error)) throw error;
       const elapsedMs = Date.now() - startedAt;
-      if (elapsedMs >= SQLITE_BUSY_RETRY_MS) throw error;
-      await sleep(Math.min(delayMs, SQLITE_BUSY_RETRY_MS - elapsedMs));
+      operationAttempts += 1;
+      if (elapsedMs >= SQLITE_BUSY_RETRY_MS) {
+        recordSqliteBusyRetry(error, 0, true, operationAttempts);
+        throw error;
+      }
+      const waitMs = Math.min(delayMs, SQLITE_BUSY_RETRY_MS - elapsedMs);
+      recordSqliteBusyRetry(error, waitMs, false, operationAttempts);
+      await sleep(waitMs);
       delayMs = Math.min(SQLITE_BUSY_RETRY_MAX_DELAY_MS, Math.ceil(delayMs * 1.6));
     }
   }
+}
+
+function recordSqliteBusyRetry(error: unknown, waitMs: number, exhausted: boolean, operationAttempts = 1): void {
+  if (operationAttempts === 1) sqliteBusyRetryStats.operations += 1;
+  sqliteBusyRetryStats.attempts += 1;
+  if (exhausted) sqliteBusyRetryStats.exhausted += 1;
+  sqliteBusyRetryStats.totalWaitMs += Math.max(0, Math.ceil(waitMs));
+  sqliteBusyRetryStats.lastAt = new Date().toISOString();
+  sqliteBusyRetryStats.lastMessage = error instanceof Error ? error.message : String(error);
 }
 
 function sleep(ms: number): Promise<void> {

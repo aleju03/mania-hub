@@ -1979,6 +1979,12 @@ describe("live backend", () => {
     const emitted = await confirmTopPlay(db, events, osu, { userId: 101, scoreId: 9001, country: "CR" });
     expect(emitted).toBe(true);
     expect(Number((await exec(db, "select count(*) as count from top_play_events")).rows[0].count)).toBe(1);
+    const storedTopPlay = JSON.parse(String((await exec(db, "select payload_json from top_play_events where score_id = 9001")).rows[0].payload_json)) as { user?: unknown; score?: Partial<OscScore> };
+    expect(storedTopPlay.user).toBeUndefined();
+    expect(storedTopPlay.score?.user).toBeUndefined();
+    expect(storedTopPlay.score?.beatmap).toBeUndefined();
+    expect(storedTopPlay.score?.beatmapset).toBeUndefined();
+    expect(storedTopPlay.score?.beatmap_id).toBe(501);
     expect(Number((await exec(db, "select count(*) as count from country_maps_farmed_scores where country = 'CR' and user_id = 101")).rows[0].count)).toBe(1);
     await exec(db, "update users set avatar_url = 'https://assets.example/fresh-top.png' where user_id = 101");
     const snapshot = await getTopPlaysSnapshot(db, "CR", "7d");

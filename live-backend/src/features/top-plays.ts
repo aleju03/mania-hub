@@ -3,6 +3,7 @@ import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { calculateApproxPpGainMap, calculateReplacementPpGain, calculateWeightedPp, getScoreTimestamp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
+import { compactScoreForStorage, hydrateScoresDisplayMetadata, persistScoresDisplayMetadata } from "../shared/score-storage.js";
 import type { CountryTopPlay, OscScore, ScoreUser } from "../shared/types.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import type { OsuApiClient } from "../osu/client.js";
@@ -13,7 +14,9 @@ const TOP_PLAYS_DEFAULT_PAGE_SIZE = 200;
 const TOP_PLAYS_MAX_PAGE_SIZE = 200;
 const TOP_PLAYS_PP_GAIN_LIMIT = 500;
 const TOP_PLAY_TIME_EXPR = "coalesce(case when json_valid(e.payload_json) then json_extract(e.payload_json, '$.time') end, e.detected_at)";
-const TOP_PLAY_KEY_COUNT_EXPR = "cast(case when json_valid(e.payload_json) then json_extract(e.payload_json, '$.score.beatmap.cs') end as real)";
+const TOP_PLAY_BEATMAP_ID_EXPR = "cast(case when json_valid(e.payload_json) then coalesce(json_extract(e.payload_json, '$.score.beatmap_id'), json_extract(e.payload_json, '$.score.beatmap.id')) end as integer)";
+const TOP_PLAY_BEATMAP_JOIN = `left join beatmaps b on b.beatmap_id = ${TOP_PLAY_BEATMAP_ID_EXPR}`;
+const TOP_PLAY_KEY_COUNT_EXPR = "cast(coalesce(case when json_valid(e.payload_json) then json_extract(e.payload_json, '$.score.beatmap.cs') end, b.cs) as real)";
 
 export type TopPlaysSnapshotSort = "recent" | "pp" | "gain";
 export type TopPlaysSnapshotDirection = "asc" | "desc";
@@ -91,11 +94,12 @@ export async function confirmTopPlay(
     ppGain,
     time: score.ended_at ?? score.created_at ?? refreshedAt,
   };
+  await persistScoresDisplayMetadata(db, [score], refreshedAt);
   const inserted = await exec(
     db,
     `insert or ignore into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
      values (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [payload.country, confirmedScoreId, payload.userId, event.pp, event.weightedPP, event.ppGain, json(event), refreshedAt],
+    [payload.country, confirmedScoreId, payload.userId, event.pp, event.weightedPP, event.ppGain, json(toStoredTopPlayEvent(event)), refreshedAt],
   );
   if (inserted.rowsAffected === 0) return false;
   const farmedUpdate = await recordMapsFarmedScore(db, payload.country, score, refreshedAt);
@@ -291,6 +295,7 @@ export async function getTopPlaysSnapshot(db: Db, country: string, window: strin
     db,
     `select count(*) as count
      from top_play_events e
+     ${TOP_PLAY_BEATMAP_JOIN}
      where ${whereSql}`,
     args,
   )).rows;
@@ -299,13 +304,14 @@ export async function getTopPlaysSnapshot(db: Db, country: string, window: strin
     `select e.payload_json, u.username, u.avatar_url, u.country_code
      from top_play_events e
      left join users u on u.user_id = e.user_id
+     ${TOP_PLAY_BEATMAP_JOIN}
      where ${whereSql}
      order by ${topPlaysSnapshotOrderBy(options)}
      limit ? offset ?`,
     [...args, pageSize, offset],
   )).rows;
   return {
-    popoffs: rows.map(hydrateTopPlayEvent),
+    popoffs: await hydrateTopPlayEvents(db, rows),
     scannedAt: Date.now(),
     window,
     total: Number(totalRows[0]?.count ?? 0),
@@ -330,6 +336,7 @@ async function getTopPlaysPpGains(db: Db, country: string, cutoff: string, optio
             u.username, u.avatar_url, u.country_code
      from top_play_events e
      left join users u on u.user_id = e.user_id
+     ${TOP_PLAY_BEATMAP_JOIN}
      where ${where.join(" and ")}
      group by e.user_id
      having total_gain >= 0.05
@@ -355,31 +362,52 @@ function topPlaysSnapshotOrderBy(options: TopPlaysSnapshotOptions): string {
   }
 }
 
-function hydrateTopPlayEvent(row: Record<string, unknown>): CountryTopPlay {
-  const event = parseJson<CountryTopPlay>(row.payload_json, {} as CountryTopPlay);
+function toStoredTopPlayEvent(event: CountryTopPlay): CountryTopPlay {
+  const { user: _user, score, ...stored } = event;
+  return {
+    ...stored,
+    user: undefined as unknown as CountryTopPlay["user"],
+    score: compactScoreForStorage(score),
+  };
+}
+
+async function hydrateTopPlayEvents(db: Db, rows: Record<string, unknown>[]): Promise<CountryTopPlay[]> {
+  const parsed = rows.map((row) => parseJson<CountryTopPlay>(row.payload_json, {} as CountryTopPlay));
+  const rawScores = parsed.map((event) => event.score ?? null);
+  const hydratedScores = await hydrateScoresDisplayMetadata(db, rawScores.filter((score): score is OscScore => !!score));
+  let scoreIndex = 0;
+  return rows.map((row, index) => {
+    const score = rawScores[index] ? hydratedScores[scoreIndex++] : undefined;
+    return hydrateTopPlayEvent(row, parsed[index], score);
+  });
+}
+
+function hydrateTopPlayEvent(row: Record<string, unknown>, event: CountryTopPlay, hydratedScore?: OscScore): CountryTopPlay {
   const username = row.username == null ? "" : String(row.username);
   const avatarUrl = row.avatar_url == null ? "" : String(row.avatar_url);
   const countryCode = row.country_code == null ? "" : String(row.country_code);
-  if (!event.user || (!username && !avatarUrl)) return event;
+  const eventScore = hydratedScore ?? event.score;
+  const eventUser = event.user ?? eventScore?.user;
+  if (!eventUser && (!username && !avatarUrl)) return { ...event, score: eventScore };
 
   const user = {
-    ...event.user,
-    username: username || event.user.username,
-    avatar_url: avatarUrl || event.user.avatar_url,
-    country_code: countryCode || event.user.country_code,
+    id: Number(row.user_id ?? eventUser?.id ?? eventScore?.user_id ?? 0),
+    username: username || eventUser?.username || "",
+    avatar_url: avatarUrl || eventUser?.avatar_url || "",
+    country_code: countryCode || eventUser?.country_code || "",
   };
-  const scoreUser = event.score?.user
+  const scoreUser = eventScore?.user
     ? {
-        ...event.score.user,
+        ...eventScore.user,
         username: user.username,
         avatar_url: user.avatar_url,
-        country_code: user.country_code || event.score.user.country_code,
+        country_code: user.country_code || eventScore.user.country_code,
       }
-    : event.score?.user;
+    : user.id > 0 ? user : eventScore?.user;
   return {
     ...event,
     user,
-    score: scoreUser ? { ...event.score, user: scoreUser } : event.score,
+    score: scoreUser && eventScore ? { ...eventScore, user: scoreUser } : eventScore,
   };
 }
 

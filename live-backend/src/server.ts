@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { readConfig } from "./config.js";
 import { ensurePinnedCountries, getIndexedCountryCodes, getMapsWarmCountryCodes } from "./countries.js";
-import { createDb, logApiCall, migrate } from "./db.js";
+import { createDb, getSqliteBusyRetryStats, logApiCall, migrate } from "./db.js";
 import { routeHttp, sendNotFound } from "./http/snapshots.js";
 import { ScoreIngestor } from "./ingest/score-ingestor.js";
 import { JobQueue } from "./jobs/queue.js";
@@ -162,6 +162,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
         osc: app.osc.status(),
         osuRate: app.osu.limiter.state(),
         scoresFallbackRate: app.scoresFallbackOsu.limiter.state(),
+        sqliteBusy: getSqliteBusyRetryStats(),
       }),
       5_000,
     );

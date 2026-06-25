@@ -10,8 +10,8 @@
     "verify": "vitest run && tsc -p tsconfig.json",
     "compact:maps-farmed": "node --env-file-if-exists=.env --import tsx src/maintenance/compact-maps-farmed-overlay.ts",
     "compact:maps-farmed:dist": "node --env-file-if-exists=.env dist/maintenance/compact-maps-farmed-overlay.js",
-    "compact:storage": "node --expose-gc --env-file-if-exists=.env --import tsx src/maintenance/compact-storage.ts",
-    "compact:storage:dist": "node --expose-gc --env-file-if-exists=.env dist/maintenance/compact-storage.js",
+    "compact:storage": "node --max-old-space-size=768 --expose-gc --env-file-if-exists=.env --import tsx src/maintenance/compact-storage.ts",
+    "compact:storage:dist": "node --max-old-space-size=768 --expose-gc --env-file-if-exists=.env dist/maintenance/compact-storage.js",
     "smoke:osc": "node --env-file-if-exists=.env --import tsx src/smoke-osc.ts"
   },
   "dependencies": {
