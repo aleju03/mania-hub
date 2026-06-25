@@ -177,7 +177,7 @@ export async function enqueueOscCountryCatchup(queue: JobQueue, db: Db, config: 
   const normalized = normalizeCountryPayload(country);
   if (!normalized) throw new Error("Invalid country.");
   const after = await getCountryCatchupAfter(db, config, normalized);
-  const epoch = Date.now();
+  const epoch = await nextCatchupEpoch(db, normalized);
   await setCatchupEpoch(db, normalized, epoch);
   await queue.enqueue(
     "osc_country_catchup",
@@ -192,7 +192,7 @@ export async function cancelOscCountryCatchup(db: Db, country: string): Promise<
   const normalized = normalizeCountryPayload(country);
   if (!normalized) throw new Error("Invalid country.");
   // Bump the epoch first so any page already running stops re-enqueuing its chain.
-  await setCatchupEpoch(db, normalized, Date.now());
+  await setCatchupEpoch(db, normalized, await nextCatchupEpoch(db, normalized));
   const result = await exec(
     db,
     "delete from jobs where type = 'osc_country_catchup' and dedupe_key like ? and status in ('queued', 'failed', 'running')",
@@ -209,10 +209,23 @@ async function setCatchupEpoch(db: Db, country: string, epoch: number): Promise<
   ]);
 }
 
-async function isCatchupCancelled(db: Db, country: string, epoch: number): Promise<boolean> {
+async function readCatchupEpoch(db: Db, country: string): Promise<number | null> {
   const row = (await exec(db, "select value_json from live_meta where key = ?", [`osc_country_catchup_epoch:${country}`])).rows[0];
   const stored = parseJson<number>(row?.value_json, Number.NaN);
-  return Number.isFinite(stored) && stored !== epoch;
+  return Number.isFinite(stored) ? stored : null;
+}
+
+// Epochs must strictly increase so a cancel (or a fresh chain) can never collide
+// with the epoch of the chain it supersedes. Date.now() alone is not enough: two
+// calls in the same millisecond would tie, which silently breaks cancellation.
+async function nextCatchupEpoch(db: Db, country: string): Promise<number> {
+  const current = await readCatchupEpoch(db, country);
+  return Math.max(Date.now(), (current ?? 0) + 1);
+}
+
+async function isCatchupCancelled(db: Db, country: string, epoch: number): Promise<boolean> {
+  const stored = await readCatchupEpoch(db, country);
+  return stored != null && stored !== epoch;
 }
 
 function normalizeScores(body: OscScoresResponse): OscScore[] {

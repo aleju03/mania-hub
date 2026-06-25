@@ -3,7 +3,12 @@ import type { OscScore } from "../shared/types.js";
 
 const BEATMAP_FILE_FETCH_TIMEOUT_MS = 15_000;
 
-type LimiterLane = "interactive" | "job" | "bulk" | "default";
+export type LimiterLane = "interactive" | "job" | "bulk" | "default";
+
+export interface SharedLimiter {
+  reserve(caller: string, path: string, lane: LimiterLane): Promise<number>;
+  pause?(ms: number): void | Promise<void>;
+}
 
 type PendingLimiterCall<T = unknown> = {
   caller: string;
@@ -19,6 +24,7 @@ type PendingLimiterCall<T = unknown> = {
 type LimiterOptions = {
   interactiveBurstCapacity?: number;
   maxPendingCalls?: number;
+  sharedLimiter?: SharedLimiter;
 };
 
 export interface OsuScoresResponse {
@@ -38,6 +44,7 @@ export class TokenBucketLimiter {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private readonly interactiveBurstCapacity: number;
   private readonly maxPendingCalls: number;
+  private readonly sharedLimiter?: SharedLimiter;
   private interactiveBurstTokens: number;
   private interactiveBurstUpdatedAt = Date.now();
 
@@ -49,6 +56,7 @@ export class TokenBucketLimiter {
   ) {
     this.interactiveBurstCapacity = Math.max(0, Math.floor(options.interactiveBurstCapacity ?? 0));
     this.maxPendingCalls = Math.max(1, Math.floor(options.maxPendingCalls ?? DEFAULT_MAX_PENDING_CALLS));
+    this.sharedLimiter = options.sharedLimiter;
     this.interactiveBurstTokens = this.interactiveBurstCapacity;
   }
 
@@ -100,12 +108,18 @@ export class TokenBucketLimiter {
     if (usedInteractiveBurst) this.consumeInteractiveBurstToken(startedAt);
     this.starts.push(startedAt);
     this.nextStartAt = startedAt + Math.ceil(60_000 / Math.max(1, this.targetPerMinute));
+    this.run(next).then(next.resolve, next.reject).finally(() => this.pump());
+    this.pump();
+  }
+
+  private async run<T>(next: PendingLimiterCall<T>): Promise<T> {
+    const startedAt = this.sharedLimiter
+      ? await this.sharedLimiter.reserve(next.caller, next.path, next.lane)
+      : Date.now();
     this.recent.push({ startedAt, caller: next.caller, path: next.path });
     this.onCall?.({ caller: next.caller, path: next.path, startedAt });
     this.recent = this.recent.filter((entry) => startedAt - entry.startedAt < 60_000);
-
-    next.fn().then(next.resolve, next.reject).finally(() => this.pump());
-    this.pump();
+    return next.fn() as Promise<T>;
   }
 
   private nextWaitMs(next: PendingLimiterCall): number {
@@ -163,6 +177,7 @@ export class TokenBucketLimiter {
   pause(ms: number): void {
     if (!Number.isFinite(ms) || ms <= 0) return;
     this.pausedUntil = Math.max(this.pausedUntil, Date.now() + ms);
+    void this.sharedLimiter?.pause?.(ms);
   }
 
   state() {
@@ -253,9 +268,11 @@ export class OsuApiClient {
     private readonly config: Pick<Config, "osuClientId" | "osuClientSecret" | "osuApiTargetPerMinute" | "osuApiHardPerMinute">,
     private readonly fetchImpl: typeof fetch = fetch,
     onCall?: (entry: { caller: string; path: string; startedAt: number }) => void,
+    options: { sharedLimiter?: SharedLimiter } = {},
   ) {
     this.limiter = new TokenBucketLimiter(config.osuApiHardPerMinute, config.osuApiTargetPerMinute, onCall, {
       interactiveBurstCapacity: 4,
+      sharedLimiter: options.sharedLimiter,
     });
   }
 

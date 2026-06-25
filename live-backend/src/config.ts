@@ -1,6 +1,26 @@
+export type BackendRole = "all" | "server" | "worker";
+
 export interface Config {
   port: number;
   nodeEnv: string;
+  // Process role. "all" (default) runs HTTP serving + ingest + workers in one
+  // process (legacy single-process mode). "server" serves HTTP/SSE only and
+  // tails live_event_log for live updates; "worker" runs ingest/jobs/schedulers
+  // and writes to the shared DB but serves no public traffic. Splitting the two
+  // keeps a heavy background query from blocking the request-serving event loop.
+  role: BackendRole;
+  // When the serving process does not run ingest itself, it learns about new
+  // live events by polling live_event_log. Defaults on for role "server".
+  enableEventLogTail: boolean;
+  eventLogTailIntervalMs: number;
+  // Optional internal HTTP port for the worker process (health/status only).
+  // Null means the worker process does not listen at all.
+  workerHttpPort: number | null;
+  // SQLite/libsql pragmas applied per connection at boot.
+  sqliteBusyTimeoutMs: number;
+  sqliteSynchronous: string;
+  sqliteCacheMb: number;
+  sqliteMmapMb: number;
   databaseUrl: string;
   databaseAuthToken?: string;
   osuClientId?: string;
@@ -89,6 +109,16 @@ function readBoundedInt(name: string, fallback: number, min: number, max: number
   return Math.max(min, Math.min(max, readInt(name, fallback)));
 }
 
+function readOptionalInt(name: string): number | null {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
+}
+
+function readRole(): BackendRole {
+  const raw = (process.env.LIVE_BACKEND_ROLE ?? process.env.BACKEND_ROLE ?? "all").trim().toLowerCase();
+  return raw === "server" || raw === "worker" ? raw : "all";
+}
+
 function csv(value: string | undefined, fallback: string): string[] {
   return (value ?? fallback)
     .split(",")
@@ -126,9 +156,18 @@ export function readConfig(): Config {
     ...trackedCountries,
   ]);
 
+  const role = readRole();
   return {
     port: readInt("PORT", 7227),
     nodeEnv: process.env.NODE_ENV ?? "development",
+    role,
+    enableEventLogTail: readBool("ENABLE_EVENT_LOG_TAIL", role === "server"),
+    eventLogTailIntervalMs: readBoundedInt("EVENT_LOG_TAIL_INTERVAL_MS", 250, 50, 5_000),
+    workerHttpPort: readOptionalInt("WORKER_HTTP_PORT"),
+    sqliteBusyTimeoutMs: readBoundedInt("SQLITE_BUSY_TIMEOUT_MS", 5_000, 0, 60_000),
+    sqliteSynchronous: (process.env.SQLITE_SYNCHRONOUS || "NORMAL").toUpperCase(),
+    sqliteCacheMb: readBoundedInt("SQLITE_CACHE_MB", 64, 0, 2_048),
+    sqliteMmapMb: readBoundedInt("SQLITE_MMAP_MB", 256, 0, 8_192),
     databaseUrl: process.env.DATABASE_URL ?? "file:./data/mania-hub-live.db",
     databaseAuthToken: process.env.DATABASE_AUTH_TOKEN || undefined,
     osuClientId: process.env.OSU_CLIENT_ID || undefined,

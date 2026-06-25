@@ -1,20 +1,81 @@
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import { getTrackerScoreByIdentity } from "../features/tracker.js";
+import { logWarn } from "../logger.js";
 import { getScoreIdentity } from "../shared/score.js";
 import { nowIso } from "../shared/score.js";
 import type { LeanTrackerScore, LiveEvent } from "../shared/types.js";
 
 export type EventSink = (event: LiveEvent) => void;
 
+const TAIL_BATCH_LIMIT = 200;
+
 export class LiveEventLog {
   private sinks = new Set<EventSink>();
+  private tailing = false;
 
   constructor(private readonly db: Db) {}
 
   subscribe(sink: EventSink): () => void {
     this.sinks.add(sink);
     return () => this.sinks.delete(sink);
+  }
+
+  private dispatch(event: LiveEvent): void {
+    for (const sink of this.sinks) sink(event);
+  }
+
+  // Used by a serving process that does not run ingest itself: poll the log for
+  // newly appended rows (written by the worker process) and fan them out to the
+  // local SSE sinks. While tailing, append() stops dispatching directly so the
+  // poller is the single delivery path (no double-send if this process appends).
+  startTail(intervalMs: number): () => void {
+    this.tailing = true;
+    let stopped = false;
+    let cursor = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const schedule = (delay: number) => {
+      if (stopped) return;
+      timer = setTimeout(tick, delay);
+      timer.unref();
+    };
+    const tick = async () => {
+      if (stopped) return;
+      try {
+        const batch = await this.replay(null, cursor, TAIL_BATCH_LIMIT);
+        for (const event of batch) {
+          if (event.sequence > cursor) cursor = event.sequence;
+          this.dispatch(event);
+        }
+        // A full batch likely means more is waiting; drain without idling.
+        schedule(batch.length >= TAIL_BATCH_LIMIT ? 0 : intervalMs);
+      } catch (error) {
+        logWarn("event_log_tail_failed", { error: error instanceof Error ? error.message : String(error) });
+        schedule(Math.max(intervalMs, 1_000));
+      }
+    };
+    // Start from the current head so we only forward events created from now on;
+    // SSE clients receive their own backlog via replay-on-connect. Retry head
+    // detection on failure rather than tailing from sequence 0, which would
+    // replay the entire live_event_log history into live sinks.
+    const initCursor = async () => {
+      if (stopped) return;
+      try {
+        cursor = await this.latestSequence();
+        schedule(intervalMs);
+      } catch (error) {
+        logWarn("event_log_tail_head_failed", { error: error instanceof Error ? error.message : String(error) });
+        if (stopped) return;
+        timer = setTimeout(initCursor, 1_000);
+        timer.unref();
+      }
+    };
+    void initCursor();
+    return () => {
+      stopped = true;
+      this.tailing = false;
+      if (timer) clearTimeout(timer);
+    };
   }
 
   async append(type: string, country: string | null, payload: unknown, eventId?: string): Promise<LiveEvent> {
@@ -31,8 +92,8 @@ export class LiveEventLog {
     const event = Number(result.rowsAffected ?? 0) > 0
       ? rowToLiveEventWithPayload(row, payload)
       : await this.rowToLiveEvent(row);
-    if (Number(result.rowsAffected ?? 0) > 0) {
-      for (const sink of this.sinks) sink(event);
+    if (Number(result.rowsAffected ?? 0) > 0 && !this.tailing) {
+      this.dispatch(event);
     }
     return event;
   }

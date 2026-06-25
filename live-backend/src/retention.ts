@@ -115,7 +115,7 @@ async function pruneForLocalDbLimit(db: Db, config: Pick<Config, "targetLocalDbB
       const rows = Number(result.rowsAffected ?? 0);
       if (rows === 0) break;
       deleted[`emergency_${table}`] = (deleted[`emergency_${table}`] ?? 0) + rows;
-      await checkpointLocalDb(db);
+      await checkpointLocalDb(db, "TRUNCATE");
       const updated = await getApproxLocalDbBytes(storage.filePath);
       if (updated == null) break;
       currentBytes = updated;
@@ -131,8 +131,12 @@ async function getApproxLocalDbBytes(filePath: string | null): Promise<number | 
   return (bytes ?? 0) + (walBytes ?? 0);
 }
 
-async function checkpointLocalDb(db: Db): Promise<void> {
-  await exec(db, "pragma wal_checkpoint(TRUNCATE)").catch(() => undefined);
+// PASSIVE checkpoints whatever it can without waiting on active readers, so it
+// never stalls the event loop; TRUNCATE blocks until it can reclaim the whole
+// WAL file and is reserved for the emergency over-limit prune where freeing
+// disk space is the point.
+async function checkpointLocalDb(db: Db, mode: "PASSIVE" | "TRUNCATE" = "PASSIVE"): Promise<void> {
+  await exec(db, `pragma wal_checkpoint(${mode})`).catch(() => undefined);
 }
 
 function localDbFilePath(databaseUrl: string): string | null {

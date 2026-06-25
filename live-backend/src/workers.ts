@@ -11,6 +11,7 @@ import { getHydratedScoresForMetadata } from "./features/tracker.js";
 import type { ClaimOptions, Job, JobQueue } from "./jobs/queue.js";
 import { hasPendingRecentReconcileJob, RECENT_RECONCILE_JOB_TYPE, requeueDeferredRecentReconcileJobs } from "./jobs/recent-reconcile.js";
 import type { LiveEventLog } from "./live/event-log.js";
+import { readWorkersPaused } from "./live/runtime-status.js";
 import { OsuApiError, type OsuApiClient } from "./osu/client.js";
 import { OscBackfill } from "./osc/backfill.js";
 import type { ScoreIngestor } from "./ingest/score-ingestor.js";
@@ -115,6 +116,11 @@ const OSU_API_JOB_TYPES = new Set([
 export class WorkerRunner {
   private stopped = false;
   private paused = false;
+  // Mirror of the cross-process pause flag (control:workers_paused), refreshed
+  // on a short interval so an admin "pause" on the serving process takes effect
+  // here even when workers run in a separate process.
+  private dbPaused = false;
+  private dbPausedCheckedAt = 0;
   private readonly backfill = new OscBackfill(readConfig());
   private readonly activeJobs = new Map<string, WorkerActiveJob[]>();
 
@@ -147,12 +153,22 @@ export class WorkerRunner {
   }
 
   async runOnce(): Promise<void> {
-    if (this.paused) return;
+    if (await this.isPaused()) return;
     await this.runJobs(this.workerId, await this.claimJobs(this.workerId, 5));
   }
 
+  private async isPaused(): Promise<boolean> {
+    if (this.paused) return true;
+    const now = Date.now();
+    if (now - this.dbPausedCheckedAt > 2_000) {
+      this.dbPausedCheckedAt = now;
+      this.dbPaused = await readWorkersPaused(this.db).catch(() => this.dbPaused);
+    }
+    return this.dbPaused;
+  }
+
   private async runLaneOnce(lane: WorkerLane): Promise<void> {
-    if (this.paused) return;
+    if (await this.isPaused()) return;
     const laneWorkerId = `${this.workerId}:${lane.name}`;
     const jobs = await this.claimJobs(laneWorkerId, lane.claimLimit, { types: lane.jobTypes });
     await this.runJobs(laneWorkerId, jobs, lane.name);
@@ -217,7 +233,7 @@ export class WorkerRunner {
 
   status(): { paused: boolean; stopped: boolean; workerId: string; lanes: Array<Omit<WorkerLane, "jobTypes"> & { jobTypes: string[] | null; activeJobs: WorkerActiveJob[] }> } {
     return {
-      paused: this.paused,
+      paused: this.paused || this.dbPaused,
       stopped: this.stopped,
       workerId: this.workerId,
       lanes: this.lanes.map((lane) => ({

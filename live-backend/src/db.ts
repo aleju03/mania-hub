@@ -5,15 +5,49 @@ import type { Config } from "./config.js";
 
 export type Db = Client;
 
-export async function createDb(config: Pick<Config, "databaseUrl" | "databaseAuthToken">): Promise<Db> {
-  if (config.databaseUrl.startsWith("file:")) {
+type PragmaConfig = Partial<Pick<Config, "sqliteBusyTimeoutMs" | "sqliteSynchronous" | "sqliteCacheMb" | "sqliteMmapMb">>;
+
+export async function createDb(config: Pick<Config, "databaseUrl" | "databaseAuthToken"> & PragmaConfig): Promise<Db> {
+  const isFile = config.databaseUrl.startsWith("file:");
+  if (isFile) {
     const filePath = config.databaseUrl.slice("file:".length);
     await mkdir(dirname(resolve(filePath)), { recursive: true });
   }
-  return createClient({
+  const client = createClient({
     url: config.databaseUrl,
     authToken: config.databaseAuthToken,
   });
+  // Local libsql runs every query synchronously on the calling thread, and each
+  // process opens its own connection, so connection-level pragmas must be set
+  // here. Skipped for remote (Turso) URLs, which manage these server-side.
+  if (isFile) await applyConnectionPragmas(client, config);
+  return client;
+}
+
+async function applyConnectionPragmas(db: Db, config: PragmaConfig): Promise<void> {
+  // busy_timeout makes a connection wait for a lock instead of failing with
+  // SQLITE_BUSY immediately. This is mandatory once a second process/connection
+  // (a split worker) writes to the same WAL file concurrently.
+  const busyTimeoutMs = config.sqliteBusyTimeoutMs ?? 5_000;
+  // NORMAL fsyncs only at checkpoints (not every commit) and is durable/safe
+  // under WAL: a crash can lose the last few committed transactions but never
+  // corrupts the database. A big win for the write-heavy ingest/job path.
+  const synchronous = (config.sqliteSynchronous ?? "NORMAL").toUpperCase();
+  const cacheMb = config.sqliteCacheMb ?? 64;
+  const mmapBytes = (config.sqliteMmapMb ?? 256) * 1024 * 1024;
+  const pragmas = [
+    `pragma busy_timeout = ${busyTimeoutMs}`,
+    `pragma synchronous = ${/^(OFF|NORMAL|FULL|EXTRA)$/.test(synchronous) ? synchronous : "NORMAL"}`,
+    `pragma wal_autocheckpoint = 1000`,
+  ];
+  // Negative cache_size is in KiB of memory (positive is in pages).
+  if (cacheMb > 0) pragmas.push(`pragma cache_size = ${-cacheMb * 1024}`);
+  if (mmapBytes > 0) pragmas.push(`pragma mmap_size = ${mmapBytes}`);
+  for (const pragma of pragmas) {
+    await db.execute(pragma).catch((error) => {
+      console.warn(`[db] failed to apply ${pragma}:`, error instanceof Error ? error.message : error);
+    });
+  }
 }
 
 export async function migrate(db: Db): Promise<void> {
@@ -27,6 +61,7 @@ export async function migrate(db: Db): Promise<void> {
   await migrateProfileSnapshots(db);
   await migrateMapsFarmedOverlay(db);
   await migrateApiCallTargets(db);
+  await migrateApiRateLimitReservations(db);
   await migratePlayerActivity(db);
   await migratePackCollectionCards(db);
 }
@@ -295,6 +330,24 @@ async function migrateApiCallTargets(db: Db): Promise<void> {
   await db.execute(`
     create index if not exists idx_api_call_log_target_time
       on api_call_log(target_id, started_at desc)
+  `);
+}
+
+async function migrateApiRateLimitReservations(db: Db): Promise<void> {
+  await db.execute(`
+    create table if not exists api_rate_limit_reservations (
+      id integer primary key autoincrement,
+      provider text not null,
+      started_at_ms integer not null,
+      caller text not null,
+      path text not null,
+      lane text not null,
+      created_at_ms integer not null
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_api_rate_limit_reservations_provider_time
+      on api_rate_limit_reservations(provider, started_at_ms)
   `);
 }
 

@@ -412,6 +412,16 @@ create table if not exists api_call_targets (
   unique(provider, caller, path)
 );
 
+create table if not exists api_rate_limit_reservations (
+  id integer primary key autoincrement,
+  provider text not null,
+  started_at_ms integer not null,
+  caller text not null,
+  path text not null,
+  lane text not null,
+  created_at_ms integer not null
+);
+
 create index if not exists idx_score_events_country_time on score_events(country, ended_at desc);
 create index if not exists idx_country_registry_status_request on country_registry(status, last_requested_at desc);
 create index if not exists idx_score_events_user_time on score_events(user_id, ended_at desc);
@@ -444,6 +454,7 @@ create index if not exists idx_player_activity_maps_day on player_activity_maps(
 create index if not exists idx_jobs_ready on jobs(status, run_after, priority desc);
 create index if not exists idx_live_event_country_sequence on live_event_log(country, sequence);
 create index if not exists idx_api_call_log_provider_time on api_call_log(provider, started_at desc);
+create index if not exists idx_api_rate_limit_reservations_provider_time on api_rate_limit_reservations(provider, started_at_ms);
 
 create table if not exists pack_wallets (
   user_id integer primary key,

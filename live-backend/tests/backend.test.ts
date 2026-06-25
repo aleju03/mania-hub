@@ -2203,8 +2203,12 @@ describe("live backend", () => {
     const getUserBestScoresWindow = vi.fn(async () => best);
 
     await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
-    await exec(db, "update profile_snapshots set user_fetched_at = ? where user_id = 101", [
+    // user_fetched_at stale (>10min) triggers a user refresh; fetched_at stays an
+    // earlier-but-fresh time (24h TTL) so the section timestamp and the refreshed
+    // user timestamp stay distinct even when the test runs within one millisecond.
+    await exec(db, "update profile_snapshots set user_fetched_at = ?, fetched_at = ? where user_id = 101", [
       new Date(Date.now() - 11 * 60_000).toISOString(),
+      new Date(Date.now() - 5 * 60_000).toISOString(),
     ]);
 
     const snapshot = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");
@@ -2380,7 +2384,10 @@ describe("live backend", () => {
       db,
       `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
        values ('CR', ?, 101, ?, ?, 50, ?, ?)`,
-      [liveTop.id, liveTop.pp, liveTop.pp, JSON.stringify({ user: { id: 101, username: "Sniper", avatar_url: "https://assets.example/sniper.png" }, score: liveTop, pp: liveTop.pp, weightedPP: liveTop.pp, ppGain: 50, time: liveTop.ended_at }), new Date().toISOString()],
+      // Detected strictly after the snapshot was cached, so the projection picks
+      // it up. Derived from fetchedAt (not wall-clock "now") to stay deterministic
+      // even when the whole test runs inside a single millisecond.
+      [liveTop.id, liveTop.pp, liveTop.pp, JSON.stringify({ user: { id: 101, username: "Sniper", avatar_url: "https://assets.example/sniper.png" }, score: liveTop, pp: liveTop.pp, weightedPP: liveTop.pp, ppGain: 50, time: liveTop.ended_at }), new Date(Date.parse(baseSnapshot.fetchedAt) + 1000).toISOString()],
     );
 
     const snapshot = await getPlayerProfileSnapshot(db, { getUser, getUserByKey, getUserBestScoresWindow }, "Sniper");

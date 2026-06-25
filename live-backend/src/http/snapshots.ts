@@ -21,6 +21,7 @@ import { type AbuseBucket, type AbuseGuard, normalizeCountryParam, type RateLimi
 import type { JobQueue } from "../jobs/queue.js";
 import type { CountryClientTracker } from "../live/country-clients.js";
 import type { LiveEventLog } from "../live/event-log.js";
+import { readRuntimeStatus, setWorkersPaused, type RuntimeStatusSnapshot } from "../live/runtime-status.js";
 import type { OscStatus } from "../osc/client.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
 import { cancelOscCountryCatchup, enqueueOscBackfill, enqueueOscCountryCatchup } from "../osc/backfill.js";
@@ -806,6 +807,8 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     ctx.pauseWorkers?.();
+    // Cross-process flag the worker polls, so pause works when workers run elsewhere.
+    await setWorkersPaused(ctx.db, true);
     sendJson(req, res, ctx, 200, { ok: true, worker: ctx.workerStatus?.() ?? null });
     return true;
   }
@@ -815,6 +818,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       return true;
     }
     ctx.resumeWorkers?.();
+    await setWorkersPaused(ctx.db, false);
     sendJson(req, res, ctx, 200, { ok: true, worker: ctx.workerStatus?.() ?? null });
     return true;
   }
@@ -900,7 +904,13 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
 async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: boolean; snapshotCountry?: string } = {}) {
   const db = await dbHealth(ctx.db);
   const last = (await exec(ctx.db, "select max(created_at) as created_at from live_event_log")).rows[0]?.created_at ?? null;
-  const worker = ctx.workerStatus?.() ?? null;
+  // In a split deployment the worker runs in another process, so its live
+  // status (lanes, OSC feed, osu! limiter) is mirrored to the DB. Prefer that
+  // mirror in server-only mode; fall back to in-process state for "all" mode.
+  const mirror = ctx.config.role === "server" ? await readRuntimeStatus(ctx.db) : null;
+  const worker = (mirror?.worker as WorkerStatus | null | undefined) ?? ctx.workerStatus?.() ?? null;
+  const osc = (mirror?.osc as OscStatus | undefined) ?? ctx.oscStatus();
+  const rate = mirror?.osuRate ?? ctx.osu.limiter.state();
   const snapshotStats = options.snapshotCountry
     ? await adminSnapshotStats(ctx.db, options.snapshotCountry)
     : undefined;
@@ -908,14 +918,14 @@ async function statusBody(ctx: HttpContext, options: { includeWorkerActivity?: b
     ok: db,
     db,
     storage: await getLocalDbStorage(ctx.config),
-    osc: ctx.oscStatus(),
+    osc,
     lastEventAt: last,
     queueDepth: await ctx.queue.depth(),
     queuePressure: await ctx.queue.pressure(),
     queueSummary: await ctx.queue.summary(),
     roster: await rosterSummary(ctx.db),
-    rate: ctx.osu.limiter.state(),
-    scoresFallback: await scoresFallbackStatus(ctx),
+    rate,
+    scoresFallback: await scoresFallbackStatus(ctx, mirror),
     abuse: ctx.abuse?.state() ?? null,
     apiCallHistory: await apiCallHistory(ctx.db),
     countries: await countryRegistryStatus(ctx),
@@ -979,13 +989,15 @@ async function adminSnapshotStats(db: Db, country: string) {
   };
 }
 
-async function scoresFallbackStatus(ctx: HttpContext) {
+async function scoresFallbackStatus(ctx: HttpContext, mirror?: RuntimeStatusSnapshot | null) {
   const resultRow = (await exec(ctx.db, "select value_json, updated_at from live_meta where key = 'osu_scores_fallback_last_result'")).rows[0];
   const cursorRow = (await exec(ctx.db, "select value_json, updated_at from live_meta where key = 'osu_scores_fallback_cursor_string'")).rows[0];
   // The fallback poller runs on its own osu! client, so its limiter is a bucket
   // separate from the main one shown in `rate`. Surface used/target/pending here
-  // so the admin panel can show the fallback's real polling rate.
-  const limiterState = ctx.scoresFallbackOsu?.limiter.state();
+  // so the admin panel can show the fallback's real polling rate. In split mode
+  // the poller lives in the worker process, so prefer its mirrored limiter state.
+  const limiterState = (mirror?.scoresFallbackRate as ReturnType<NonNullable<HttpContext["scoresFallbackOsu"]>["limiter"]["state"]> | undefined)
+    ?? ctx.scoresFallbackOsu?.limiter.state();
   return {
     enabled: ctx.config.enableOsuScoresFallback,
     intervalMs: ctx.config.osuScoresFallbackIntervalMs,
