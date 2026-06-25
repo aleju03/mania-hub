@@ -45,6 +45,7 @@ const ARCHIVE_SOURCES = [
 ] as const satisfies readonly ArchiveSource[];
 
 type ArchiveSourceName = (typeof ARCHIVE_SOURCES)[number]["name"];
+type ArchiveSourceEntry = (typeof ARCHIVE_SOURCES)[number];
 
 type RangeBuffer = {
   buffer: ArrayBuffer;
@@ -66,6 +67,7 @@ export interface BeatmapArchiveOsuFile {
 }
 
 const archiveSourceState = new Map<ArchiveSourceName, { nextAvailableAt: number; cooldownUntil: number; tail: Promise<void> }>();
+let archiveSourceCursor = 0;
 
 function getArchiveSourceState(source: ArchiveSourceName) {
   let state = archiveSourceState.get(source);
@@ -108,6 +110,44 @@ function cooldownArchiveSource(source: ArchiveSourceName): void {
 
 function shouldCooldownArchiveSource(status: number): boolean {
   return status === 403 || status === 429 || status >= 500;
+}
+
+function getArchiveSourceOrder(now = Date.now()): ArchiveSourceEntry[] {
+  const startIndex = archiveSourceCursor % ARCHIVE_SOURCES.length;
+  archiveSourceCursor = (archiveSourceCursor + 1) % ARCHIVE_SOURCES.length;
+  return [...ARCHIVE_SOURCES]
+    .map((source, index) => {
+      const state = getArchiveSourceState(source.name);
+      return {
+        source,
+        rotationRank: (index - startIndex + ARCHIVE_SOURCES.length) % ARCHIVE_SOURCES.length,
+        cooldownWaitMs: Math.max(0, state.cooldownUntil - now),
+        slotWaitMs: Math.max(0, state.nextAvailableAt - now),
+      };
+    })
+    .sort((left, right) =>
+      Number(left.cooldownWaitMs > 0) - Number(right.cooldownWaitMs > 0)
+      || left.slotWaitMs - right.slotWaitMs
+      || left.rotationRank - right.rotationRank)
+    .map((entry) => entry.source);
+}
+
+export function __resetArchiveSourceOrderForTest(): void {
+  archiveSourceCursor = 0;
+  archiveSourceState.clear();
+}
+
+export function __setArchiveSourceStateForTest(
+  source: ArchiveSourceName,
+  state: Partial<{ nextAvailableAt: number; cooldownUntil: number }>,
+): void {
+  const existing = getArchiveSourceState(source);
+  existing.nextAvailableAt = state.nextAvailableAt ?? existing.nextAvailableAt;
+  existing.cooldownUntil = state.cooldownUntil ?? existing.cooldownUntil;
+}
+
+export function __getArchiveSourceOrderForTest(now: number): ArchiveSourceName[] {
+  return getArchiveSourceOrder(now).map((source) => source.name);
 }
 
 async function readResponseBufferWithLimit(response: Response, limitBytes: number): Promise<ArrayBuffer> {
@@ -520,7 +560,7 @@ async function findBeatmapOsuFileByRangeFromUrl(
 
 async function extractArchiveFileByRange(beatmapsetId: string, filename: string): Promise<Buffer> {
   const errors: string[] = [];
-  for (const source of ARCHIVE_SOURCES) {
+  for (const source of getArchiveSourceOrder()) {
     if (isArchiveSourceCoolingDown(source.name)) {
       errors.push(`${source.name}: cooling down`);
       continue;
@@ -552,7 +592,7 @@ async function extractBeatmapOsuFileByRange(
   hints?: { version?: string | null },
 ): Promise<BeatmapArchiveOsuFile> {
   const errors: string[] = [];
-  for (const source of ARCHIVE_SOURCES) {
+  for (const source of getArchiveSourceOrder()) {
     if (isArchiveSourceCoolingDown(source.name)) {
       errors.push(`${source.name}: cooling down`);
       continue;
@@ -586,7 +626,7 @@ function isLikelyZip(buffer: ArrayBuffer): boolean {
 
 async function extractArchiveFileByFullArchive(beatmapsetId: string, filename: string): Promise<Buffer> {
   const errors: string[] = [];
-  for (const source of ARCHIVE_SOURCES) {
+  for (const source of getArchiveSourceOrder()) {
     if (isArchiveSourceCoolingDown(source.name)) {
       errors.push(`${source.name}: cooling down`);
       continue;
@@ -625,7 +665,7 @@ async function extractBeatmapOsuFileByFullArchive(
   hints?: { version?: string | null },
 ): Promise<BeatmapArchiveOsuFile> {
   const errors: string[] = [];
-  for (const source of ARCHIVE_SOURCES) {
+  for (const source of getArchiveSourceOrder()) {
     if (isArchiveSourceCoolingDown(source.name)) {
       errors.push(`${source.name}: cooling down`);
       continue;
