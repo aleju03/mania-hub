@@ -61,7 +61,7 @@ export class JobQueue {
        on conflict(dedupe_key) do update set
          status = excluded.status,
          priority = max(priority, excluded.priority),
-         run_after = min(run_after, excluded.run_after),
+         run_after = case when jobs.status = 'done' then excluded.run_after else min(run_after, excluded.run_after) end,
          attempts = case when jobs.status = 'done' then 0 else jobs.attempts end,
          payload_json = excluded.payload_json,
          last_error = case when jobs.status = 'done' then excluded.last_error else coalesce(jobs.last_error, excluded.last_error) end,
