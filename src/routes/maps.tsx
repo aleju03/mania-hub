@@ -2774,6 +2774,7 @@ function MapsPage() {
                     <div key={`random-${randomPlayer.id}-${pickedSetId}`} className="cards-enter">
                       <RandomCard
                         bm={randomBeatmapset}
+                        resolving={randomPickResolving}
                       />
                     </div>
                   ) : (
@@ -4848,7 +4849,7 @@ function DifficultyPicker({
   );
 }
 
-function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
+function RandomCard({ bm, resolving = false }: { bm: MapsFavouriteBeatmapset; resolving?: boolean }) {
   const url = `https://osu.ppy.sh/beatmapsets/${bm.id}`;
   const coverUrl = bm.covers.cover ?? bm.covers.card ?? bm.covers["list@2x"] ?? bm.covers.list ?? "";
   const keys = bm.maniaKeys ?? [];
@@ -5612,6 +5613,9 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
       <div className="rounded-2xl bg-osu-b4 border border-osu-b3/20 hover:border-osu-pink/40 transition-colors">
         <a href={url} target="_blank" rel="noreferrer" className="block relative rounded-t-2xl overflow-hidden">
         <div className="relative w-full h-[220px] bg-osu-b6 overflow-hidden">
+          {!coverReady && (resolving || coverUrl !== "") && (
+            <Skeleton className="absolute inset-0 rounded-none" />
+          )}
           {coverUrl && (
             <div
               className={`absolute inset-0 bg-cover bg-center transition-opacity duration-500 ${coverReady ? "opacity-100" : "opacity-0"}`}
@@ -5684,7 +5688,7 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
           </div>
         )}
 
-        {maniaBeatmaps.length > 1 && (
+        {maniaBeatmaps.length > 1 ? (
           <div className="flex items-center gap-2">
             <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide text-osu-f1/80">
               Diff
@@ -5701,7 +5705,13 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
               {maniaBeatmaps.length} diffs
             </span>
           </div>
-        )}
+        ) : resolving ? (
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-2.5 w-6 shrink-0" />
+            <Skeleton className="h-8 min-w-0 flex-1 rounded-md" />
+            <Skeleton className="h-7 w-14 shrink-0 rounded-md" />
+          </div>
+        ) : null}
 
         {previewUrl ? (
           <div className="flex flex-wrap items-center gap-2">
@@ -5853,6 +5863,14 @@ function RandomCard({ bm }: { bm: MapsFavouriteBeatmapset }) {
                 }}
               />
             ) : null}
+          </div>
+        ) : resolving ? (
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-8 w-8 shrink-0 rounded-full" />
+            <Skeleton className="h-1 min-w-0 flex-1 rounded-full" />
+            <Skeleton className="h-3 w-10 shrink-0" />
+            <Skeleton className="h-5 w-5 shrink-0 rounded-full" />
+            <Skeleton className="h-1 w-12 shrink-0 rounded-full" />
           </div>
         ) : null}
         {previewError ? (
