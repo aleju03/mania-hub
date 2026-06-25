@@ -137,8 +137,11 @@ const DEFAULT_DOCUMENT_CACHE: DocumentCacheConfig = {
 const DOCUMENT_CACHE_BY_PATH: Record<string, DocumentCacheConfig> = {
   "/": DEFAULT_DOCUMENT_CACHE,
   "/rankings": DEFAULT_DOCUMENT_CACHE,
+  "/tracker": DEFAULT_DOCUMENT_CACHE,
   "/top-plays": DEFAULT_DOCUMENT_CACHE,
+  "/snipes": DEFAULT_DOCUMENT_CACHE,
   "/maps": DEFAULT_DOCUMENT_CACHE,
+  "/farm-helper": DEFAULT_DOCUMENT_CACHE,
   "/replay": { sMaxage: 300, swr: 1800 },
 };
 

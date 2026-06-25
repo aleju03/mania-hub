@@ -113,8 +113,11 @@ const requestRateLimitMiddleware = createMiddleware().server(
 const DOCUMENT_CACHE_BY_PATH: Record<string, DocumentCacheConfig> = {
   "/": DEFAULT_DOCUMENT_CACHE,
   "/rankings": DEFAULT_DOCUMENT_CACHE,
+  "/tracker": DEFAULT_DOCUMENT_CACHE,
   "/top-plays": DEFAULT_DOCUMENT_CACHE,
+  "/snipes": DEFAULT_DOCUMENT_CACHE,
   "/maps": DEFAULT_DOCUMENT_CACHE,
+  "/farm-helper": DEFAULT_DOCUMENT_CACHE,
   // Replay pages are an app shell; the real replay/beatmap data is loaded
   // via server functions. Long TTL since the shell rarely changes.
   "/replay": { sMaxage: 300, swr: 1800 },
