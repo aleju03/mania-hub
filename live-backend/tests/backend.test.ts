@@ -373,17 +373,23 @@ describe("live backend", () => {
     await exec(db, "insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at) values ('CR', 9001, 101, 100, 95, 20, '{}', '2026-01-01T00:00:00.000Z')");
     await exec(db, "insert into snipe_events (country, beatmap_id, lane_key, score_id, sniper_id, victim_id, board_rank, payload_json, detected_at) values ('CR', 501, '4K:NM', 9001, 101, 202, 1, '{}', '2026-01-01T00:00:00.000Z')");
     await exec(db, "insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at) values ('CR', '{}', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')");
+    await exec(db, "insert into live_meta (key, value_json, updated_at) values ('maps_farmed_user_overlay_refreshed_at:CR:101', '\"2026-01-01T00:00:00.000Z\"', '2026-01-01T00:00:00.000Z')");
+    await exec(db, "insert into country_maps_most_played (country, user_id, beatmap_id, play_count, updated_at) values ('CR', 101, 501, 3, '2026-01-01T00:00:00.000Z')");
+    await exec(db, "insert into country_maps_favourite_sets (country, user_id, beatmapset_id, updated_at) values ('CR', 101, 50, '2026-01-01T00:00:00.000Z')");
+    await exec(db, "insert into live_meta (key, value_json, updated_at) values ('maps_user_library_refreshed_at:CR:101', '\"2026-01-01T00:00:00.000Z\"', '2026-01-01T00:00:00.000Z')");
     await events.append("status", "CR", { ok: true }, "delete-test:CR");
     await queue.enqueue("refresh_country_roster", "roster:CR", { country: "CR" });
 
     const deleted = await deleteCountryData(db, "CR");
 
     expect(deleted.country_registry).toBe(1);
-    for (const table of ["country_registry", "country_rosters", "country_rank_snapshots", "score_events", "country_beatmap_scores", "top_play_events", "snipe_events", "country_maps_snapshots", "country_maps_farmed_scores", "live_event_log"]) {
+    for (const table of ["country_registry", "country_rosters", "country_rank_snapshots", "score_events", "country_beatmap_scores", "top_play_events", "snipe_events", "country_maps_snapshots", "country_maps_farmed_scores", "country_maps_most_played", "country_maps_favourite_sets", "live_event_log"]) {
       expect(Number((await exec(db, `select count(*) as count from ${table} where country = 'CR'`)).rows[0].count)).toBe(0);
     }
     expect(Number((await exec(db, "select count(*) as count from country_rosters where country = 'US'")).rows[0].count)).toBe(1);
     expect(Number((await exec(db, "select count(*) as count from jobs where dedupe_key = 'roster:CR'")).rows[0].count)).toBe(0);
+    expect(Number((await exec(db, "select count(*) as count from live_meta where key like 'maps_farmed_user_overlay_refreshed_at:CR:%'")).rows[0].count)).toBe(0);
+    expect(Number((await exec(db, "select count(*) as count from live_meta where key like 'maps_user_library_refreshed_at:CR:%'")).rows[0].count)).toBe(0);
   });
 
   it("retains activity for the current and previous calendar year", async () => {
@@ -3353,7 +3359,8 @@ describe("live backend", () => {
                 ...baseScore.beatmap!,
                 id: 60_000,
                 beatmapset_id: 70_000,
-              },
+                total_length: 123,
+              } as NonNullable<OscScore["beatmap"]> & { total_length: number },
               beatmapset: {
                 ...baseScore.beatmapset!,
                 id: 70_000,
@@ -3370,10 +3377,101 @@ describe("live backend", () => {
       expect(osu.getUserBestScoresWindow).toHaveBeenCalledTimes(100);
       expect(osu.getUserBestScoresWindow).toHaveBeenCalledWith(10_100, 200, "job:refresh_country_maps:farmed");
       expect(snapshot.farmed.some((entry) => entry.players.some((player) => player.id === 10_100))).toBe(true);
+
+      await exec(db, "delete from live_meta where key = 'maps_farmed_user_overlay_refreshed_at:CR:10100'");
+      osu.getUserBestScoresWindow.mockClear();
+      await refreshCountryMaps(db, osu, { country: "CR" });
+
+      expect(osu.getUserBestScoresWindow).toHaveBeenCalledTimes(1);
+      expect(osu.getUserBestScoresWindow).toHaveBeenCalledWith(10_100, 200, "job:refresh_country_maps:farmed");
+
+      osu.getUserBestScoresWindow.mockClear();
+      const rebuilt = await refreshCountryMaps(db, osu, { country: "CR" });
+
+      expect(osu.getUserBestScoresWindow).not.toHaveBeenCalled();
+      const rebuiltFarmed = rebuilt.farmed.find((entry) => entry.players.some((player) => player.id === 10_100));
+      expect(rebuiltFarmed).toBeTruthy();
+      expect(rebuiltFarmed?.totalLength).toBe(123);
     } finally {
       if (previousRosterSize == null) delete process.env.ROSTER_SIZE;
       else process.env.ROSTER_SIZE = previousRosterSize;
     }
+  });
+
+  it("rebuilds country popular and favourites from stored per-user rows", async () => {
+    const { db } = await setup();
+    const now = "2026-05-12T11:45:00.000Z";
+    for (const [rank, userId, username] of [
+      [1, 101, "Maps Alpha"],
+      [2, 102, "Maps Bravo"],
+    ] as const) {
+      await exec(
+        db,
+        `insert into users (user_id, username, avatar_url, country_code, updated_at)
+         values (?, ?, ?, 'CR', ?)`,
+        [userId, username, `https://assets.example/${userId}.png`, now],
+      );
+      await exec(
+        db,
+        `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+         values ('CR', ?, ?, 'test', 1, ?)`,
+        [userId, rank, now],
+      );
+    }
+    const mostPlayed = [{
+      beatmap_id: 90_001,
+      count: 7,
+      beatmap: { id: 90_001, beatmapset_id: 90_000, mode: "mania", status: "ranked", cs: 4, difficulty_rating: 5.5, bpm: 180, total_length: 120, version: "4K Popular", url: "https://osu.ppy.sh/beatmaps/90001" },
+      beatmapset: { id: 90_000, title: "Popular Set", artist: "Artist", creator: "Mapper", status: "ranked", covers: {}, play_count: 200, favourite_count: 20 },
+    }];
+    const favourite = {
+      id: 91_000,
+      title: "Favourite Set",
+      artist: "Fav Artist",
+      creator: "Fav Mapper",
+      covers: {},
+      status: "ranked",
+      play_count: 300,
+      favourite_count: 50,
+      preview_url: "",
+      bpm: 190,
+      tags: "stream jump",
+      beatmaps: [{ id: 91_001, mode: "mania", status: "ranked", cs: 7, difficulty_rating: 6.2, bpm: 190, total_length: 150, version: "7K Fav", url: "https://osu.ppy.sh/beatmaps/91001" }],
+    };
+    const osu = {
+      getUserBestScoresWindow: vi.fn(async () => []),
+      getUserMostPlayed: vi.fn(async () => mostPlayed),
+      getUserFavourites: vi.fn(async () => [favourite]),
+    };
+
+    const snapshot = await refreshCountryMaps(db, osu, { country: "CR" });
+
+    expect(osu.getUserMostPlayed).toHaveBeenCalledTimes(2);
+    expect(osu.getUserFavourites).toHaveBeenCalledTimes(2);
+    expect(snapshot.mostPlayed[0]).toMatchObject({ beatmapId: 90_001, playerCount: 2, totalPlays: 14 });
+    expect(snapshot.favourites[0]).toMatchObject({ beatmapsetId: 91_000, playerCount: 2 });
+
+    osu.getUserBestScoresWindow.mockClear();
+    osu.getUserMostPlayed.mockClear();
+    osu.getUserFavourites.mockClear();
+    const rebuilt = await refreshCountryMaps(db, osu, { country: "CR" });
+
+    expect(osu.getUserBestScoresWindow).not.toHaveBeenCalled();
+    expect(osu.getUserMostPlayed).not.toHaveBeenCalled();
+    expect(osu.getUserFavourites).not.toHaveBeenCalled();
+    expect(rebuilt.mostPlayed[0]).toMatchObject({ beatmapId: 90_001, playerCount: 2, totalPlays: 14 });
+    expect(rebuilt.favourites[0]).toMatchObject({ beatmapsetId: 91_000, playerCount: 2 });
+    expect(rebuilt.beatmapsetsPool[91_000]?.maniaBeatmaps?.[0]).toMatchObject({ id: 91_001, cs: 7, totalLength: 150 });
+
+    await exec(db, "delete from live_meta where key = 'maps_user_library_refreshed_at:CR:101'");
+    osu.getUserMostPlayed.mockClear();
+    osu.getUserFavourites.mockClear();
+    await refreshCountryMaps(db, osu, { country: "CR" });
+
+    expect(osu.getUserMostPlayed).toHaveBeenCalledTimes(1);
+    expect(osu.getUserFavourites).toHaveBeenCalledTimes(1);
+    expect(osu.getUserMostPlayed).toHaveBeenCalledWith(101, "job:refresh_country_maps:most_played");
+    expect(osu.getUserFavourites).toHaveBeenCalledWith(101, 10, "job:refresh_country_maps:favourites");
   });
 
   it("reports queued progress for cold maps snapshots", async () => {

@@ -148,12 +148,26 @@ export async function deleteCountryData(db: Db, country: string): Promise<Record
   await deleteFrom("snipe_events");
   await deleteFrom("country_maps_snapshots");
   await deleteFrom("country_maps_farmed_scores");
+  await deleteFrom("country_maps_most_played");
+  await deleteFrom("country_maps_favourite_sets");
   await deleteFrom("player_activity_score_refs");
   await deleteFrom("player_activity_days");
   await deleteFrom("player_activity_maps");
   await deleteFrom("live_event_log");
   deleted.farm_helper_user_key_stats = Number((await exec(db, "delete from farm_helper_user_key_stats")).rowsAffected ?? 0);
-  const mapsMetaDeleted = Number((await exec(db, "delete from live_meta where key in (?, ?)", [`maps_farmed_overlay_updated_at:${normalized}`, `maps_refresh_progress:${normalized}`])).rowsAffected ?? 0);
+  const mapsMetaDeleted = Number((await exec(
+    db,
+    `delete from live_meta
+     where key in (?, ?)
+        or key like ?
+        or key like ?`,
+    [
+      `maps_farmed_overlay_updated_at:${normalized}`,
+      `maps_refresh_progress:${normalized}`,
+      `maps_farmed_user_overlay_refreshed_at:${normalized}:%`,
+      `maps_user_library_refreshed_at:${normalized}:%`,
+    ],
+  )).rowsAffected ?? 0);
   const keyStatsMetaDeleted = Number((await exec(db, "delete from live_meta where key like 'farm_helper_key_stats_seeded:%'")).rowsAffected ?? 0);
   deleted.live_meta = mapsMetaDeleted + keyStatsMetaDeleted;
 

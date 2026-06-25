@@ -18,6 +18,10 @@ const FARMED_SINGLE_PLAYER_PP_MIN = 500;
 const USER_FAVOURITES_MAX_PAGES = 10;
 const GLOBAL_MAPS_FARMED_REFRESH_DEBOUNCE_MS = 10 * 60_000;
 const MAPS_FARMED_OVERLAY_META_PREFIX = "maps_farmed_overlay_updated_at:";
+const MAPS_FARMED_USER_OVERLAY_META_PREFIX = "maps_farmed_user_overlay_refreshed_at:";
+const MAPS_USER_LIBRARY_META_PREFIX = "maps_user_library_refreshed_at:";
+const MAPS_USER_LIBRARY_REFRESH_INTERVAL_MS = 30 * 24 * 60 * 60_000;
+const MAPS_USER_LIBRARY_STALE_REFRESH_LIMIT = 25;
 const MAPS_REFRESH_PROGRESS_META_PREFIX = "maps_refresh_progress:";
 const MAPS_REFRESH_PROGRESS_WRITE_INTERVAL_MS = 1_000;
 const MAPS_METADATA_BATCH_FLUSH_STATEMENTS = 500;
@@ -2074,13 +2078,13 @@ export async function refreshCountryMaps(
   };
 
   try {
-    const farmedPromise = buildCountryFarmed(db, osu, users, progress).then(async (section) => {
+    const farmedPromise = buildCountryFarmed(db, osu, country, users, progress).then(async (section) => {
       latestFarmed = section;
       await progress.markSectionDone("farmed");
       await persistLatest();
       return section;
     });
-    const favouritesPromise = buildCountryFavourites(osu, users, progress).then(async (section) => {
+    const favouritesPromise = buildCountryFavourites(db, osu, country, users, progress).then(async (section) => {
       latestFavourites = section;
       await progress.markSectionDone("favourites");
       await persistLatest();
@@ -2846,88 +2850,202 @@ async function getMapsUsers(db: Db, country: string): Promise<MapsUser[]> {
 async function buildCountryFarmed(
   db: Db,
   osu: Pick<OsuApiClient, "getUserBestScoresWindow">,
+  country: string,
   users: MapsUser[],
   progress?: MapsRefreshProgressReporter,
 ): Promise<CountryMapsFarmedSection> {
-  const userResults = await mapWithConcurrency(users, MAPS_FETCH_CONCURRENCY, async (user) => {
+  const missingUsers = await getUsersMissingMapsFarmedOverlay(db, country, users);
+  if (missingUsers.length > 0) {
+    await seedCountryFarmedOverlayUsers(db, osu, country, missingUsers, progress);
+  }
+  return readCountryFarmedOverlaySection(db, country, users);
+}
+
+async function seedCountryFarmedOverlayUsers(
+  db: Db,
+  osu: Pick<OsuApiClient, "getUserBestScoresWindow">,
+  country: string,
+  users: MapsUser[],
+  progress?: MapsRefreshProgressReporter,
+): Promise<void> {
+  await mapWithConcurrency(users, MAPS_FETCH_CONCURRENCY, async (user) => {
     try {
       const bestScores = await osu.getUserBestScoresWindow(user.id, 200, "job:refresh_country_maps:farmed")
         .catch((error) => {
           throwIfMapsRefreshShouldAbort(error);
           return [] as OscScore[];
         });
-      return { user, bestScores };
+      const updatedAt = nowIso();
+      const rows = buildMapsFarmedOverlayRows(country, bestScores, updatedAt, user.id);
+      await persistMapsFarmedScoreDisplayMetadata(db, bestScores, updatedAt);
+      await replaceUserMapsFarmedOverlay(db, country, user.id, rows, updatedAt);
+      await updateUserMapsFarmedThreshold(db, user.id, bestScores, updatedAt);
     } finally {
       await progress?.markUserDone("farmed");
     }
   });
-  const generatedAt = nowIso();
-  await Promise.all(userResults.map(({ user, bestScores }) => updateUserMapsFarmedThreshold(db, user.id, bestScores, generatedAt)));
+}
+
+async function getUsersMissingMapsFarmedOverlay(db: Db, country: string, users: MapsUser[]): Promise<MapsUser[]> {
+  const seeded = new Set<number>();
+  for (let index = 0; index < users.length; index += 900) {
+    const chunk = users.slice(index, index + 900);
+    if (chunk.length === 0) continue;
+    const placeholders = chunk.map(() => "?").join(",");
+    const metaKeys = chunk.map((user) => mapsFarmedUserOverlayMetaKey(country, user.id));
+    const metaRows = (await exec(
+      db,
+      `select key
+       from live_meta
+       where key in (${placeholders})`,
+      metaKeys,
+    )).rows;
+    for (const row of metaRows) {
+      const userId = userIdFromMapsFarmedUserOverlayMetaKey(String(row.key ?? ""));
+      if (userId != null) seeded.add(userId);
+    }
+  }
+  return users.filter((user) => !seeded.has(user.id));
+}
+
+async function readCountryFarmedOverlaySection(
+  db: Db,
+  country: string,
+  users: MapsUser[],
+): Promise<CountryMapsFarmedSection> {
+  const rows: Record<string, unknown>[] = [];
+  for (let index = 0; index < users.length; index += 900) {
+    const chunk = users.slice(index, index + 900);
+    if (chunk.length === 0) continue;
+    const placeholders = chunk.map(() => "?").join(",");
+    rows.push(...(await exec(
+      db,
+      `select
+         s.country,
+         s.user_id,
+         s.beatmap_id,
+         s.score_id,
+         s.pp,
+         s.score_json,
+         s.mods_json,
+         s.score_url,
+         s.played_at,
+         s.detected_at,
+         s.updated_at,
+         u.username,
+         u.avatar_url,
+         u.country_code,
+         coalesce(b.beatmapset_id, mb.beatmapset_id) as beatmapset_id,
+         coalesce(b.mode, mb.mode) as mode,
+         coalesce(b.status, mb.status) as beatmap_status,
+         coalesce(b.cs, mb.cs) as cs,
+         coalesce(b.difficulty_rating, mb.difficulty_rating) as difficulty_rating,
+         coalesce(b.bpm, mb.bpm) as bpm,
+         b.max_combo,
+         coalesce(b.version, mb.version) as version,
+         coalesce(b.url, mb.url) as url,
+         coalesce(mb.total_length, 0) as total_length,
+         coalesce(bs.title, mbs.title) as title,
+         coalesce(bs.artist, mbs.artist) as artist,
+         coalesce(bs.creator, mbs.creator) as creator,
+         coalesce(bs.status, mbs.status) as beatmapset_status,
+         coalesce(bs.covers_json, mbs.covers_json) as covers_json
+       from country_maps_farmed_scores s
+       left join users u on u.user_id = s.user_id
+       left join beatmaps b on b.beatmap_id = s.beatmap_id
+       left join maps_beatmaps mb on mb.beatmap_id = s.beatmap_id
+       left join beatmapsets bs on bs.beatmapset_id = coalesce(b.beatmapset_id, mb.beatmapset_id)
+       left join maps_beatmapsets mbs on mbs.beatmapset_id = coalesce(b.beatmapset_id, mb.beatmapset_id)
+       where s.country = ? and s.user_id in (${placeholders})
+       order by s.updated_at asc`,
+      [country, ...chunk.map((user) => user.id)],
+    )).rows);
+  }
 
   const farmedMap = new Map<number, MapsFarmedEntry>();
-  for (const { user, bestScores } of userResults) {
-    for (const score of bestScores) {
-      if (!score.beatmap || score.beatmap.mode !== "mania") continue;
-      if (!score.pp || score.pp <= 0) continue;
-      if (score.beatmapset?.status !== "ranked") continue;
-
-      const bid = score.beatmap.id;
-      const existing = farmedMap.get(bid);
-      const player = {
-        id: user.id,
-        username: user.username,
-        avatarUrl: user.avatar_url,
-        mods: getModAcronyms(score.mods),
-        pp: score.pp,
-        scoreUrl: getScoreUrl(score),
-        playedAt: getScoreTimestamp(score) || null,
-      };
-      if (existing) {
-        if (!existing.players.some((p) => p.id === user.id)) {
-          existing.playerCount++;
-          existing.players.push(player);
-          existing.maxPp = Math.max(existing.maxPp, score.pp);
-        }
-      } else {
-        farmedMap.set(bid, {
-          beatmapId: bid,
-          version: score.beatmap.version,
-          difficultyRating: score.beatmap.difficulty_rating,
-          totalLength: getTotalLength(score.beatmap),
-          cs: score.beatmap.cs,
-          bpm: score.beatmap.bpm,
-          beatmapsetId: score.beatmapset.id,
-          title: score.beatmapset.title,
-          artist: score.beatmapset.artist,
-          creator: score.beatmapset.creator ?? "",
-          covers: score.beatmapset.covers,
-          status: score.beatmapset.status ?? "",
-          playerCount: 1,
-          players: [player],
-          avgPp: 0,
-          maxPp: score.pp,
-        });
-      }
-    }
+  let rowsProcessed = 0;
+  for (const row of rows) {
+    if (++rowsProcessed % 2000 === 0) await yieldToEventLoop();
+    const merged = farmedOverlayRowToEntry(row);
+    if (!merged) continue;
+    mergeFarmedEntry(farmedMap, merged.entry, merged.player);
   }
 
   const farmed: MapsFarmedEntry[] = [];
   for (const entry of farmedMap.values()) {
+    finalizeFarmedEntry(entry);
     if (entry.playerCount < 2 && entry.maxPp < FARMED_SINGLE_PLAYER_PP_MIN) continue;
-    entry.players.sort((a, b) => b.pp - a.pp);
-    entry.avgPp = entry.players.reduce((sum, player) => sum + player.pp, 0) / entry.players.length;
     farmed.push(entry);
   }
   farmed.sort((a, b) => b.playerCount - a.playerCount || b.avgPp - a.avgPp);
-  return { farmed, generatedAt };
+  return { farmed, generatedAt: nowIso() };
 }
 
 async function buildCountryFavourites(
+  db: Db,
   osu: Pick<OsuApiClient, "getUserMostPlayed" | "getUserFavourites">,
+  country: string,
   users: MapsUser[],
   progress?: MapsRefreshProgressReporter,
 ): Promise<CountryMapsFavouritesSection> {
-  const userResults = await mapWithConcurrency(users, MAPS_FETCH_CONCURRENCY, async (user) => {
+  const dueUsers = await getUsersDueForMapsUserLibrary(db, country, users);
+  if (dueUsers.length > 0) {
+    await seedCountryMapsUserLibraryUsers(db, osu, country, dueUsers, progress);
+  }
+  return readCountryMapsUserLibrarySection(db, country, users);
+}
+
+async function getUsersDueForMapsUserLibrary(db: Db, country: string, users: MapsUser[]): Promise<MapsUser[]> {
+  const refreshedByUser = new Map<number, string>();
+  for (let index = 0; index < users.length; index += 900) {
+    const chunk = users.slice(index, index + 900);
+    if (chunk.length === 0) continue;
+    const placeholders = chunk.map(() => "?").join(",");
+    const keys = chunk.map((user) => mapsUserLibraryMetaKey(country, user.id));
+    const rows = (await exec(
+      db,
+      `select key, value_json
+       from live_meta
+       where key in (${placeholders})`,
+      keys,
+    )).rows;
+    for (const row of rows) {
+      const userId = userIdFromMapsUserLibraryMetaKey(String(row.key ?? ""));
+      const refreshedAt = parseJson<string | null>(row.value_json, null);
+      if (userId != null && typeof refreshedAt === "string" && refreshedAt) {
+        refreshedByUser.set(userId, refreshedAt);
+      }
+    }
+  }
+
+  const missing: MapsUser[] = [];
+  const stale: Array<{ user: MapsUser; refreshedMs: number }> = [];
+  const staleCutoffMs = Date.now() - MAPS_USER_LIBRARY_REFRESH_INTERVAL_MS;
+  for (const user of users) {
+    const refreshedAt = refreshedByUser.get(user.id);
+    const refreshedMs = refreshedAt ? new Date(refreshedAt).getTime() : Number.NaN;
+    if (!Number.isFinite(refreshedMs)) {
+      missing.push(user);
+    } else if (refreshedMs < staleCutoffMs) {
+      stale.push({ user, refreshedMs });
+    }
+  }
+
+  if (missing.length > 0) return missing;
+  return stale
+    .sort((a, b) => a.refreshedMs - b.refreshedMs)
+    .slice(0, MAPS_USER_LIBRARY_STALE_REFRESH_LIMIT)
+    .map((entry) => entry.user);
+}
+
+async function seedCountryMapsUserLibraryUsers(
+  db: Db,
+  osu: Pick<OsuApiClient, "getUserMostPlayed" | "getUserFavourites">,
+  country: string,
+  users: MapsUser[],
+  progress?: MapsRefreshProgressReporter,
+): Promise<void> {
+  await mapWithConcurrency(users, MAPS_FETCH_CONCURRENCY, async (user) => {
     try {
       const [mostPlayed, favourites] = await Promise.all([
         osu.getUserMostPlayed(user.id, "job:refresh_country_maps:most_played")
@@ -2943,42 +3061,262 @@ async function buildCountryFavourites(
             return [] as RawBeatmapset[];
           }),
       ]);
-      return { user, mostPlayed, favourites };
+      await replaceUserMapsUserLibrary(db, country, user.id, mostPlayed, favourites, nowIso());
     } finally {
       await progress?.markUserDone("favourites");
     }
   });
+}
+
+async function replaceUserMapsUserLibrary(
+  db: Db,
+  country: string,
+  userId: number,
+  mostPlayed: RawBeatmapPlaycount[],
+  favourites: RawBeatmapset[],
+  updatedAt: string,
+): Promise<void> {
+  const statements: DbStatement[] = [
+    { sql: "delete from country_maps_most_played where country = ? and user_id = ?", args: [country, userId] },
+    { sql: "delete from country_maps_favourite_sets where country = ? and user_id = ?", args: [country, userId] },
+  ];
+
+  for (const mp of mostPlayed) {
+    if (mp.beatmap?.mode !== "mania" || !mp.beatmapset) continue;
+    const beatmapId = Number(mp.beatmap_id ?? mp.beatmap.id);
+    const beatmapsetId = Number(mp.beatmapset.id ?? mp.beatmap.beatmapset_id ?? 0);
+    const count = Math.floor(Number(mp.count ?? 0));
+    if (
+      !Number.isSafeInteger(beatmapId) || beatmapId <= 0
+      || !Number.isSafeInteger(beatmapsetId) || beatmapsetId <= 0
+      || !Number.isFinite(count) || count <= 0
+    ) {
+      continue;
+    }
+    statements.push(mapsBeatmapsetStatement({
+      beatmapsetId,
+      title: String(mp.beatmapset.title ?? ""),
+      artist: String(mp.beatmapset.artist ?? ""),
+      creator: String(mp.beatmapset.creator ?? ""),
+      status: String(mp.beatmapset.status ?? ""),
+      covers: mp.beatmapset.covers ?? {},
+      globalPlayCount: Number(mp.beatmapset.play_count ?? 0),
+      globalFavouriteCount: Number(mp.beatmapset.favourite_count ?? 0),
+    }, updatedAt));
+    statements.push(mapsBeatmapStatement({
+      beatmapId,
+      beatmapsetId,
+      mode: "mania",
+      status: String(mp.beatmap.status ?? mp.beatmapset.status ?? ""),
+      cs: Number(mp.beatmap.cs ?? 0),
+      difficultyRating: Number(mp.beatmap.difficulty_rating ?? 0),
+      bpm: Number(mp.beatmap.bpm ?? 0),
+      totalLength: getTotalLength(mp.beatmap),
+      version: String(mp.beatmap.version ?? ""),
+      url: String(mp.beatmap.url ?? `https://osu.ppy.sh/beatmaps/${beatmapId}`),
+    }, updatedAt));
+    statements.push({
+      sql: `insert into country_maps_most_played
+           (country, user_id, beatmap_id, play_count, updated_at)
+         values (?, ?, ?, ?, ?)
+         on conflict(country, user_id, beatmap_id) do update set
+           play_count = excluded.play_count,
+           updated_at = excluded.updated_at`,
+      args: [country, userId, beatmapId, count, updatedAt],
+    });
+  }
+
+  for (const fav of favourites) {
+    const beatmapset = rawFavouriteBeatmapsetToPoolEntry(fav);
+    if (!beatmapset) continue;
+    statements.push(mapsBeatmapsetStatement({
+      beatmapsetId: beatmapset.id,
+      title: beatmapset.title,
+      artist: beatmapset.artist,
+      creator: beatmapset.creator,
+      status: beatmapset.status,
+      covers: beatmapset.covers ?? {},
+      globalPlayCount: beatmapset.globalPlayCount,
+      globalFavouriteCount: beatmapset.globalFavouriteCount,
+      previewUrl: beatmapset.previewUrl,
+      bpm: beatmapset.bpm,
+      maniaKeys: beatmapset.maniaKeys,
+      patterns: beatmapset.patterns,
+    }, updatedAt));
+    for (const beatmap of beatmapset.maniaBeatmaps ?? []) {
+      statements.push(mapsBeatmapStatement({
+        beatmapId: beatmap.id,
+        beatmapsetId: beatmapset.id,
+        mode: "mania",
+        status: beatmapset.status,
+        cs: beatmap.cs,
+        difficultyRating: beatmap.difficultyRating,
+        bpm: beatmapset.bpm,
+        totalLength: beatmap.totalLength,
+        version: beatmap.version,
+        url: `https://osu.ppy.sh/beatmaps/${beatmap.id}`,
+      }, updatedAt));
+    }
+    statements.push({
+      sql: `insert into country_maps_favourite_sets
+           (country, user_id, beatmapset_id, updated_at)
+         values (?, ?, ?, ?)
+         on conflict(country, user_id, beatmapset_id) do update set
+           updated_at = excluded.updated_at`,
+      args: [country, userId, beatmapset.id, updatedAt],
+    });
+  }
+
+  statements.push({
+    sql: `insert into live_meta (key, value_json, updated_at)
+       values (?, ?, ?)
+       on conflict(key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at`,
+    args: [mapsUserLibraryMetaKey(country, userId), json(updatedAt), updatedAt],
+  });
+  await execBatch(db, statements);
+}
+
+function rawFavouriteBeatmapsetToPoolEntry(fav: RawBeatmapset): MapsFavouriteBeatmapset | null {
+  const id = Number(fav.id ?? 0);
+  const maniaBeatmaps = (fav.beatmaps ?? [])
+    .filter((beatmap) => beatmap.mode === "mania" && Number.isSafeInteger(Number(beatmap.id)) && Number(beatmap.id) > 0);
+  if (!Number.isSafeInteger(id) || id <= 0 || maniaBeatmaps.length === 0) return null;
+
+  const keys = new Set<number>();
+  const stars: number[] = [];
+  for (const beatmap of maniaBeatmaps) {
+    const keyCount = Number(beatmap.cs ?? 0);
+    const star = Number(beatmap.difficulty_rating ?? 0);
+    if (Number.isFinite(keyCount)) keys.add(keyCount);
+    if (Number.isFinite(star)) stars.push(star);
+  }
+
+  return {
+    id,
+    title: String(fav.title ?? ""),
+    artist: String(fav.artist ?? ""),
+    creator: String(fav.creator ?? ""),
+    covers: fav.covers ?? {},
+    status: String(fav.status ?? ""),
+    globalPlayCount: Number(fav.play_count ?? 0),
+    globalFavouriteCount: Number(fav.favourite_count ?? 0),
+    previewUrl: String(fav.preview_url ?? ""),
+    maniaKeys: [...keys].sort((a, b) => a - b),
+    maniaBeatmaps: maniaBeatmaps
+      .map((beatmap) => ({
+        id: Number(beatmap.id),
+        version: String(beatmap.version ?? ""),
+        difficultyRating: Number(beatmap.difficulty_rating ?? 0),
+        totalLength: getTotalLength(beatmap),
+        cs: Number(beatmap.cs ?? 0),
+      }))
+      .sort((a, b) => b.difficultyRating - a.difficultyRating),
+    starMin: stars.length ? Math.min(...stars) : 0,
+    starMax: stars.length ? Math.max(...stars) : 0,
+    bpm: Number(fav.bpm ?? 0),
+    patterns: detectManiaPatterns(String(fav.tags ?? ""), maniaBeatmaps.map((beatmap) => String(beatmap.version ?? "")), String(fav.title ?? "")),
+  };
+}
+
+async function readCountryMapsUserLibrarySection(
+  db: Db,
+  country: string,
+  users: MapsUser[],
+): Promise<CountryMapsFavouritesSection> {
+  const [mostPlayed, favouriteSection] = await Promise.all([
+    readCountryMostPlayedSection(db, country, users),
+    readCountryFavouriteSection(db, country, users),
+  ]);
+  return { mostPlayed, ...favouriteSection, generatedAt: nowIso() };
+}
+
+async function readCountryMostPlayedSection(db: Db, country: string, users: MapsUser[]): Promise<MapsAggregatedBeatmap[]> {
+  const rows: Record<string, unknown>[] = [];
+  for (let index = 0; index < users.length; index += 900) {
+    const chunk = users.slice(index, index + 900);
+    if (chunk.length === 0) continue;
+    const placeholders = chunk.map(() => "?").join(",");
+    rows.push(...(await exec(
+      db,
+      `select
+         mp.user_id,
+         mp.beatmap_id,
+         mp.play_count,
+         u.username,
+         u.avatar_url,
+         b.beatmapset_id,
+         b.mode,
+         b.status as beatmap_status,
+         b.cs,
+         b.difficulty_rating,
+         b.bpm,
+         b.total_length,
+         b.version,
+         b.url,
+         bs.title,
+         bs.artist,
+         bs.creator,
+         bs.status as beatmapset_status,
+         bs.covers_json,
+         bs.global_play_count
+       from country_maps_most_played mp
+       left join users u on u.user_id = mp.user_id
+       left join maps_beatmaps b on b.beatmap_id = mp.beatmap_id
+       left join maps_beatmapsets bs on bs.beatmapset_id = b.beatmapset_id
+       where mp.country = ? and mp.user_id in (${placeholders})`,
+      [country, ...chunk.map((user) => user.id)],
+    )).rows);
+  }
 
   const mpMap = new Map<number, MapsAggregatedBeatmap>();
-  for (const { user, mostPlayed } of userResults) {
-    for (const mp of mostPlayed) {
-      if (mp.beatmap?.mode !== "mania" || !mp.beatmapset) continue;
-      const beatmapId = Number(mp.beatmap_id ?? mp.beatmap.id);
-      const count = Number(mp.count ?? 0);
-      const existing = mpMap.get(beatmapId);
-      const player = { id: user.id, username: user.username, avatarUrl: user.avatar_url, count };
-      if (existing) {
-        existing.totalPlays += count;
-        existing.playerCount++;
-        existing.players.push(player);
-      } else {
-        mpMap.set(beatmapId, {
-          beatmapId,
-          version: String(mp.beatmap.version ?? ""),
-          difficultyRating: Number(mp.beatmap.difficulty_rating ?? 0),
-          totalLength: getTotalLength(mp.beatmap),
-          beatmapsetId: Number(mp.beatmapset.id ?? 0),
-          title: String(mp.beatmapset.title ?? ""),
-          artist: String(mp.beatmapset.artist ?? ""),
-          creator: String(mp.beatmapset.creator ?? ""),
-          covers: mp.beatmapset.covers ?? {},
-          status: String(mp.beatmapset.status ?? ""),
-          globalPlayCount: Number(mp.beatmapset.play_count ?? 0),
-          totalPlays: count,
-          playerCount: 1,
-          players: [player],
-        });
-      }
+  let rowsProcessed = 0;
+  for (const row of rows) {
+    if (++rowsProcessed % 2000 === 0) await yieldToEventLoop();
+    const beatmapId = Number(row.beatmap_id);
+    const userId = Number(row.user_id);
+    const count = Number(row.play_count ?? 0);
+    const beatmapsetId = Number(row.beatmapset_id);
+    if (
+      !Number.isSafeInteger(beatmapId) || beatmapId <= 0
+      || !Number.isSafeInteger(userId) || userId <= 0
+      || !Number.isFinite(count) || count <= 0
+      || !Number.isSafeInteger(beatmapsetId) || beatmapsetId <= 0
+      || String(row.mode ?? "mania") !== "mania"
+      || row.version == null
+      || row.title == null
+      || row.artist == null
+    ) {
+      continue;
+    }
+
+    const player = {
+      id: userId,
+      username: String(row.username ?? `User ${userId}`),
+      avatarUrl: String(row.avatar_url ?? ""),
+      count,
+    };
+    const existing = mpMap.get(beatmapId);
+    if (existing) {
+      existing.totalPlays += count;
+      existing.playerCount++;
+      existing.players.push(player);
+    } else {
+      mpMap.set(beatmapId, {
+        beatmapId,
+        version: String(row.version),
+        difficultyRating: Number(row.difficulty_rating ?? 0),
+        totalLength: Number(row.total_length ?? 0),
+        beatmapsetId,
+        title: String(row.title),
+        artist: String(row.artist),
+        creator: String(row.creator ?? ""),
+        covers: parseJson<Record<string, string | undefined>>(row.covers_json, {}),
+        status: String(row.beatmapset_status ?? row.beatmap_status ?? ""),
+        globalPlayCount: Number(row.global_play_count ?? 0),
+        totalPlays: count,
+        playerCount: 1,
+        players: [player],
+      });
     }
   }
 
@@ -2987,74 +3325,93 @@ async function buildCountryFavourites(
     .filter((entry) => entry.playerCount >= 2)
     .sort((a, b) => b.playerCount - a.playerCount || b.totalPlays - a.totalPlays);
 
+  return mostPlayed;
+}
+
+async function readCountryFavouriteSection(
+  db: Db,
+  country: string,
+  users: MapsUser[],
+): Promise<Omit<CountryMapsFavouritesSection, "mostPlayed" | "generatedAt">> {
+  const rosterUsers = new Map(users.map((user, index) => [user.id, { user, index }]));
+  const rows: Record<string, unknown>[] = [];
+  for (let index = 0; index < users.length; index += 900) {
+    const chunk = users.slice(index, index + 900);
+    if (chunk.length === 0) continue;
+    const placeholders = chunk.map(() => "?").join(",");
+    rows.push(...(await exec(
+      db,
+      `select
+         f.user_id,
+         f.beatmapset_id,
+         u.username,
+         u.avatar_url
+       from country_maps_favourite_sets f
+       left join users u on u.user_id = f.user_id
+       where f.country = ? and f.user_id in (${placeholders})`,
+      [country, ...chunk.map((user) => user.id)],
+    )).rows);
+  }
+
+  const beatmapsetIds = [...new Set(rows.map((row) => Number(row.beatmapset_id)).filter((id) => Number.isSafeInteger(id) && id > 0))];
+  const beatmapsets = await readMapsBeatmapsetsByIds(db, beatmapsetIds);
+  const poolBeatmaps = await readMapsBeatmapsByBeatmapsetIds(db, beatmapsetIds);
+  const poolBeatmapsBySet = new Map<number, MapsBeatmapMetadata[]>();
+  for (const beatmap of poolBeatmaps) {
+    const list = poolBeatmapsBySet.get(beatmap.beatmapsetId) ?? [];
+    list.push(beatmap);
+    poolBeatmapsBySet.set(beatmap.beatmapsetId, list);
+  }
+
   const favMap = new Map<number, MapsAggregatedFavourite>();
+  const favouritesByPlayerSets = new Map<number, { username: string; avatarUrl: string; beatmapsetIds: Set<number> }>();
   const beatmapsetsPool: Record<number, MapsFavouriteBeatmapset> = {};
-  const favouritesByPlayer: MapsPlayerFavourites[] = [];
-  for (const { user, favourites } of userResults) {
-    const playerIds: number[] = [];
-    for (const fav of favourites) {
-      const maniaBeatmaps = (fav.beatmaps ?? []).filter((beatmap) => beatmap.mode === "mania" && Number.isFinite(Number(beatmap.id)));
-      if (maniaBeatmaps.length === 0 || !fav.id) continue;
-      playerIds.push(fav.id);
 
-      if (!beatmapsetsPool[fav.id]) {
-        const keys = new Set<number>();
-        const stars: number[] = [];
-        for (const beatmap of maniaBeatmaps) {
-          const keyCount = Number(beatmap.cs ?? 0);
-          const star = Number(beatmap.difficulty_rating ?? 0);
-          if (Number.isFinite(keyCount)) keys.add(keyCount);
-          if (Number.isFinite(star)) stars.push(star);
-        }
-        beatmapsetsPool[fav.id] = {
-          id: fav.id,
-          title: String(fav.title ?? ""),
-          artist: String(fav.artist ?? ""),
-          creator: String(fav.creator ?? ""),
-          covers: fav.covers ?? {},
-          status: String(fav.status ?? ""),
-          globalPlayCount: Number(fav.play_count ?? 0),
-          globalFavouriteCount: Number(fav.favourite_count ?? 0),
-          previewUrl: String(fav.preview_url ?? ""),
-          maniaKeys: [...keys].sort((a, b) => a - b),
-          maniaBeatmaps: maniaBeatmaps
-            .map((beatmap) => ({
-              id: Number(beatmap.id),
-              version: String(beatmap.version ?? ""),
-              difficultyRating: Number(beatmap.difficulty_rating ?? 0),
-              totalLength: getTotalLength(beatmap),
-              cs: Number(beatmap.cs ?? 0),
-            }))
-            .sort((a, b) => b.difficultyRating - a.difficultyRating),
-          starMin: stars.length ? Math.min(...stars) : 0,
-          starMax: stars.length ? Math.max(...stars) : 0,
-          bpm: Number(fav.bpm ?? 0),
-          patterns: detectManiaPatterns(String(fav.tags ?? ""), maniaBeatmaps.map((beatmap) => String(beatmap.version ?? "")), String(fav.title ?? "")),
-        };
-      }
+  let rowsProcessed = 0;
+  for (const row of rows) {
+    if (++rowsProcessed % 2000 === 0) await yieldToEventLoop();
+    const userId = Number(row.user_id);
+    const beatmapsetId = Number(row.beatmapset_id);
+    const beatmapset = beatmapsets.get(beatmapsetId);
+    if (!Number.isSafeInteger(userId) || userId <= 0 || !beatmapset) continue;
 
-      const existing = favMap.get(fav.id);
-      const player = { id: user.id, username: user.username, avatarUrl: user.avatar_url };
-      if (existing) {
+    const rosterUser = rosterUsers.get(userId)?.user;
+    const player = {
+      id: userId,
+      username: String(row.username ?? rosterUser?.username ?? `User ${userId}`),
+      avatarUrl: String(row.avatar_url ?? rosterUser?.avatar_url ?? ""),
+    };
+    const playerFavourites = favouritesByPlayerSets.get(userId) ?? {
+      username: player.username,
+      avatarUrl: player.avatarUrl,
+      beatmapsetIds: new Set<number>(),
+    };
+    playerFavourites.beatmapsetIds.add(beatmapsetId);
+    favouritesByPlayerSets.set(userId, playerFavourites);
+
+    if (!beatmapsetsPool[beatmapsetId]) {
+      beatmapsetsPool[beatmapsetId] = buildPoolBeatmapset(beatmapsetId, beatmapset, poolBeatmapsBySet.get(beatmapsetId) ?? []);
+    }
+
+    const existing = favMap.get(beatmapsetId);
+    if (existing) {
+      if (!existing.players.some((candidate) => candidate.id === userId)) {
         existing.playerCount++;
         existing.players.push(player);
-      } else {
-        favMap.set(fav.id, {
-          beatmapsetId: fav.id,
-          title: String(fav.title ?? ""),
-          artist: String(fav.artist ?? ""),
-          creator: String(fav.creator ?? ""),
-          covers: fav.covers ?? {},
-          status: String(fav.status ?? ""),
-          globalPlayCount: Number(fav.play_count ?? 0),
-          globalFavouriteCount: Number(fav.favourite_count ?? 0),
-          playerCount: 1,
-          players: [player],
-        });
       }
-    }
-    if (playerIds.length > 0) {
-      favouritesByPlayer.push({ id: user.id, username: user.username, avatarUrl: user.avatar_url, beatmapsetIds: playerIds });
+    } else {
+      favMap.set(beatmapsetId, {
+        beatmapsetId,
+        title: beatmapset.title,
+        artist: beatmapset.artist,
+        creator: beatmapset.creator,
+        covers: beatmapset.covers,
+        status: beatmapset.status,
+        globalPlayCount: beatmapset.globalPlayCount,
+        globalFavouriteCount: beatmapset.globalFavouriteCount,
+        playerCount: 1,
+        players: [player],
+      });
     }
   }
 
@@ -3062,7 +3419,17 @@ async function buildCountryFavourites(
     .filter((entry) => entry.playerCount >= 2)
     .sort((a, b) => b.playerCount - a.playerCount || b.globalFavouriteCount - a.globalFavouriteCount);
 
-  return { mostPlayed, favourites, favouritesByPlayer, beatmapsetsPool, generatedAt: nowIso() };
+  const favouritesByPlayer = [...favouritesByPlayerSets.entries()]
+    .map(([id, value]) => ({
+      id,
+      username: value.username,
+      avatarUrl: value.avatarUrl,
+      beatmapsetIds: [...value.beatmapsetIds],
+    }))
+    .filter((player) => player.beatmapsetIds.length > 0)
+    .sort((a, b) => (rosterUsers.get(a.id)?.index ?? Number.MAX_SAFE_INTEGER) - (rosterUsers.get(b.id)?.index ?? Number.MAX_SAFE_INTEGER));
+
+  return { favourites, favouritesByPlayer, beatmapsetsPool };
 }
 
 function composeCountryMapsData(farmedSection: CountryMapsFarmedSection, favSection: CountryMapsFavouritesSection): CountryMapsData {
@@ -3190,6 +3557,7 @@ async function replaceUserMapsFarmedOverlay(
   }
   const results = await execBatch(db, statements);
   const deleted = results[0];
+  await markUserMapsFarmedOverlaySeeded(db, country, userId, updatedAt);
   if (rows.length > 0 || Number(deleted?.rowsAffected ?? 0) > 0) {
     await refreshFarmHelperKeyStatsForUser(db, userId, updatedAt);
     await touchMapsFarmedOverlay(db, country, updatedAt);
@@ -3241,6 +3609,14 @@ async function persistMapsFarmedScoreDisplayMetadata(db: Db, scores: OscScore[],
           updatedAt,
         ],
       });
+      statements.push(mapsBeatmapsetStatement({
+        beatmapsetId: score.beatmapset.id,
+        title: score.beatmapset.title,
+        artist: score.beatmapset.artist,
+        creator: score.beatmapset.creator ?? "",
+        status: score.beatmapset.status ?? "",
+        covers: score.beatmapset.covers ?? {},
+      }, updatedAt));
     }
 
     if (score.beatmap) {
@@ -3273,6 +3649,18 @@ async function persistMapsFarmedScoreDisplayMetadata(db: Db, scores: OscScore[],
           updatedAt,
         ],
       });
+      statements.push(mapsBeatmapStatement({
+        beatmapId: score.beatmap.id,
+        beatmapsetId: score.beatmap.beatmapset_id,
+        mode: score.beatmap.mode,
+        status: score.beatmap.status ?? "",
+        cs: score.beatmap.cs,
+        difficultyRating: score.beatmap.difficulty_rating,
+        bpm: score.beatmap.bpm,
+        totalLength: getTotalLength(score.beatmap),
+        version: score.beatmap.version,
+        url: score.beatmap.url,
+      }, updatedAt));
     }
   }
   await execBatch(db, statements);
@@ -3317,24 +3705,27 @@ async function applyMapsFarmedOverlay(
        u.username,
        u.avatar_url,
        u.country_code,
-       b.beatmapset_id,
-       b.mode,
-       b.status as beatmap_status,
-       b.cs,
-       b.difficulty_rating,
-       b.bpm,
+       coalesce(b.beatmapset_id, mb.beatmapset_id) as beatmapset_id,
+       coalesce(b.mode, mb.mode) as mode,
+       coalesce(b.status, mb.status) as beatmap_status,
+       coalesce(b.cs, mb.cs) as cs,
+       coalesce(b.difficulty_rating, mb.difficulty_rating) as difficulty_rating,
+       coalesce(b.bpm, mb.bpm) as bpm,
        b.max_combo,
-       b.version,
-       b.url,
-       bs.title,
-       bs.artist,
-       bs.creator,
-       bs.status as beatmapset_status,
-       bs.covers_json
+       coalesce(b.version, mb.version) as version,
+       coalesce(b.url, mb.url) as url,
+       coalesce(mb.total_length, 0) as total_length,
+       coalesce(bs.title, mbs.title) as title,
+       coalesce(bs.artist, mbs.artist) as artist,
+       coalesce(bs.creator, mbs.creator) as creator,
+       coalesce(bs.status, mbs.status) as beatmapset_status,
+       coalesce(bs.covers_json, mbs.covers_json) as covers_json
      from country_maps_farmed_scores s
      left join users u on u.user_id = s.user_id
      left join beatmaps b on b.beatmap_id = s.beatmap_id
-     left join beatmapsets bs on bs.beatmapset_id = b.beatmapset_id
+     left join maps_beatmaps mb on mb.beatmap_id = s.beatmap_id
+     left join beatmapsets bs on bs.beatmapset_id = coalesce(b.beatmapset_id, mb.beatmapset_id)
+     left join maps_beatmapsets mbs on mbs.beatmapset_id = coalesce(b.beatmapset_id, mb.beatmapset_id)
      where ${global ? "s.country != ?" : "s.country = ?"} and s.updated_at > ?
      order by s.updated_at asc`,
     [global ? GLOBAL_COUNTRY_CODE : country, refreshedAt],
@@ -3465,7 +3856,7 @@ function farmedOverlayColumnRowToEntry(row: Record<string, unknown>): { entry: M
       beatmapId,
       version: String(row.version),
       difficultyRating: Number(row.difficulty_rating ?? 0),
-      totalLength: 0,
+      totalLength: Number(row.total_length ?? 0),
       cs: Number(row.cs ?? 0),
       bpm: Number(row.bpm ?? 0),
       beatmapsetId,
@@ -3663,6 +4054,36 @@ async function touchMapsFarmedOverlay(db: Db, country: string, updatedAt: string
 
 function mapsFarmedOverlayMetaKey(country: string): string {
   return `${MAPS_FARMED_OVERLAY_META_PREFIX}${country.toUpperCase()}`;
+}
+
+async function markUserMapsFarmedOverlaySeeded(db: Db, country: string, userId: number, updatedAt: string): Promise<void> {
+  await exec(
+    db,
+    `insert into live_meta (key, value_json, updated_at)
+     values (?, ?, ?)
+     on conflict(key) do update set value_json = excluded.value_json, updated_at = excluded.updated_at`,
+    [mapsFarmedUserOverlayMetaKey(country, userId), json(updatedAt), updatedAt],
+  );
+}
+
+function mapsFarmedUserOverlayMetaKey(country: string, userId: number): string {
+  return `${MAPS_FARMED_USER_OVERLAY_META_PREFIX}${country.toUpperCase()}:${userId}`;
+}
+
+function userIdFromMapsFarmedUserOverlayMetaKey(key: string): number | null {
+  if (!key.startsWith(MAPS_FARMED_USER_OVERLAY_META_PREFIX)) return null;
+  const id = Number(key.slice(key.lastIndexOf(":") + 1));
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+function mapsUserLibraryMetaKey(country: string, userId: number): string {
+  return `${MAPS_USER_LIBRARY_META_PREFIX}${country.toUpperCase()}:${userId}`;
+}
+
+function userIdFromMapsUserLibraryMetaKey(key: string): number | null {
+  if (!key.startsWith(MAPS_USER_LIBRARY_META_PREFIX)) return null;
+  const id = Number(key.slice(key.lastIndexOf(":") + 1));
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
 function getTotalLength(beatmap: RawBeatmap | NonNullable<OscScore["beatmap"]>): number {

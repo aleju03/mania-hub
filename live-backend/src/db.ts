@@ -412,6 +412,34 @@ async function migrateMapsFarmedOverlay(db: Db): Promise<void> {
     create index if not exists idx_country_maps_farmed_scores_country_beatmap
       on country_maps_farmed_scores(country, beatmap_id)
   `);
+
+  await db.execute(`
+    create table if not exists country_maps_most_played (
+      country text not null,
+      user_id integer not null,
+      beatmap_id integer not null,
+      play_count integer not null,
+      updated_at text not null,
+      primary key (country, user_id, beatmap_id)
+    )
+  `);
+  await db.execute(`
+    create table if not exists country_maps_favourite_sets (
+      country text not null,
+      user_id integer not null,
+      beatmapset_id integer not null,
+      updated_at text not null,
+      primary key (country, user_id, beatmapset_id)
+    )
+  `);
+  await db.execute(`
+    create index if not exists idx_country_maps_most_played_country_beatmap
+      on country_maps_most_played(country, beatmap_id)
+  `);
+  await db.execute(`
+    create index if not exists idx_country_maps_favourite_sets_country_set
+      on country_maps_favourite_sets(country, beatmapset_id)
+  `);
 }
 
 async function migrateApiCallTargets(db: Db): Promise<void> {
