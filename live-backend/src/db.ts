@@ -68,6 +68,7 @@ export async function migrate(db: Db): Promise<void> {
   await migrateApiRateLimitReservations(db);
   await migratePlayerActivity(db);
   await migratePackCollectionCards(db);
+  await migrateTrackerIndexes(db);
 }
 
 export async function dbHealth(db: Db): Promise<boolean> {
@@ -571,5 +572,12 @@ async function migratePackCollectionCards(db: Db): Promise<void> {
   await db.execute(`
     create index if not exists idx_pack_collection_owner_username
       on pack_collection_cards(owner_user_id, username)
+  `);
+}
+
+async function migrateTrackerIndexes(db: Db): Promise<void> {
+  await db.execute(`
+    create index if not exists idx_top_play_events_score
+      on top_play_events(score_id)
   `);
 }

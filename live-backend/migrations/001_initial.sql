@@ -431,6 +431,7 @@ create index if not exists idx_country_beatmap_scores_rank on country_beatmap_sc
 create index if not exists idx_top_play_events_country_time on top_play_events(country, detected_at desc);
 create index if not exists idx_top_play_events_country_pp on top_play_events(country, pp desc, detected_at desc);
 create index if not exists idx_top_play_events_user_time on top_play_events(user_id, detected_at);
+create index if not exists idx_top_play_events_score on top_play_events(score_id);
 create index if not exists idx_snipe_events_country_time on snipe_events(country, detected_at desc);
 create index if not exists idx_country_maps_snapshots_refreshed on country_maps_snapshots(refreshed_at desc);
 create index if not exists idx_maps_beatmaps_beatmapset on maps_beatmaps(beatmapset_id);
