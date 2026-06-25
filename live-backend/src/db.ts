@@ -7,6 +7,10 @@ export type Db = Client;
 
 type PragmaConfig = Partial<Pick<Config, "sqliteBusyTimeoutMs" | "sqliteSynchronous" | "sqliteCacheMb" | "sqliteMmapMb">>;
 
+const SQLITE_BUSY_RETRY_MS = readBoundedEnvInt("SQLITE_BUSY_RETRY_MS", 30_000, 0, 120_000);
+const SQLITE_BUSY_RETRY_INITIAL_DELAY_MS = 25;
+const SQLITE_BUSY_RETRY_MAX_DELAY_MS = 500;
+
 export async function createDb(config: Pick<Config, "databaseUrl" | "databaseAuthToken"> & PragmaConfig): Promise<Db> {
   const isFile = config.databaseUrl.startsWith("file:");
   if (isFile) {
@@ -44,7 +48,7 @@ async function applyConnectionPragmas(db: Db, config: PragmaConfig): Promise<voi
   if (cacheMb > 0) pragmas.push(`pragma cache_size = ${-cacheMb * 1024}`);
   if (mmapBytes > 0) pragmas.push(`pragma mmap_size = ${mmapBytes}`);
   for (const pragma of pragmas) {
-    await db.execute(pragma).catch((error) => {
+    await withSqliteBusyRetry(() => db.execute(pragma)).catch((error) => {
       console.warn(`[db] failed to apply ${pragma}:`, error instanceof Error ? error.message : error);
     });
   }
@@ -90,7 +94,7 @@ export interface DbStatement {
 const EXEC_BATCH_MAX_STATEMENTS = 500;
 
 export async function exec(db: Db, sql: string, args: InValue[] = []) {
-  return db.execute({ sql, args });
+  return withSqliteBusyRetry(() => db.execute({ sql, args }));
 }
 
 export async function execBatch(db: Db, statements: DbStatement[], mode: TransactionMode = "write") {
@@ -98,9 +102,41 @@ export async function execBatch(db: Db, statements: DbStatement[], mode: Transac
   const results: ResultSet[] = [];
   for (let index = 0; index < statements.length; index += EXEC_BATCH_MAX_STATEMENTS) {
     const chunk = statements.slice(index, index + EXEC_BATCH_MAX_STATEMENTS);
-    results.push(...await db.batch(chunk.map(({ sql, args = [] }) => ({ sql, args })), mode));
+    results.push(...await withSqliteBusyRetry(() => db.batch(chunk.map(({ sql, args = [] }) => ({ sql, args })), mode)));
   }
   return results;
+}
+
+export function isSqliteBusyError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /SQLITE_(BUSY|LOCKED)|database is locked|database table is locked/i.test(message);
+}
+
+async function withSqliteBusyRetry<T>(operation: () => Promise<T>): Promise<T> {
+  if (SQLITE_BUSY_RETRY_MS <= 0) return operation();
+  const startedAt = Date.now();
+  let delayMs = SQLITE_BUSY_RETRY_INITIAL_DELAY_MS;
+  for (;;) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isSqliteBusyError(error)) throw error;
+      const elapsedMs = Date.now() - startedAt;
+      if (elapsedMs >= SQLITE_BUSY_RETRY_MS) throw error;
+      await sleep(Math.min(delayMs, SQLITE_BUSY_RETRY_MS - elapsedMs));
+      delayMs = Math.min(SQLITE_BUSY_RETRY_MAX_DELAY_MS, Math.ceil(delayMs * 1.6));
+    }
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, Math.max(1, Math.ceil(ms))));
+}
+
+function readBoundedEnvInt(name: string, fallback: number, min: number, max: number): number {
+  const value = Number(process.env[name]);
+  if (!Number.isFinite(value)) return fallback;
+  return Math.max(min, Math.min(max, Math.floor(value)));
 }
 
 export async function logApiCall(db: Db, entry: { provider: string; caller: string; path: string; startedAt: string }): Promise<void> {
