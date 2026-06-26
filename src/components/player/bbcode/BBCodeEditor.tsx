@@ -43,6 +43,8 @@ import {
   serializeBBCodeDom,
   type EditableWrapKind,
 } from "../../../lib/bbcode-dom";
+import { getUser, searchUsers } from "../../../lib/osu";
+import { SearchInput } from "../../ui/SearchInput";
 import { BBCodePreview } from "./BBCodePreview";
 
 const DRAFT_KEY_PREFIX = "mania-hub-bbcode-draft-v1:";
@@ -185,13 +187,17 @@ export function BBCodeEditor({
   username,
   initialSource,
   onClose,
+  enableLoadFromUser = false,
+  enableLoadOwnPage = false,
 }: {
-  userId: number;
-  username: string;
+  userId: number | null;
+  username?: string;
   initialSource: string | null;
-  onClose: () => void;
+  onClose?: () => void;
+  enableLoadFromUser?: boolean;
+  enableLoadOwnPage?: boolean;
 }) {
-  const draftKey = `${DRAFT_KEY_PREFIX}${userId}`;
+  const draftKey = `${DRAFT_KEY_PREFIX}${userId ?? "guest"}`;
   const baseSource = initialSource ?? "";
   const [restoredDraft, setRestoredDraft] = useState(false);
   const [source, setSource] = useState<string>(() => {
@@ -207,6 +213,8 @@ export function BBCodeEditor({
   const [mobilePane, setMobilePane] = useState<"write" | "preview">("write");
   const [copied, setCopied] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [loadingUserPage, setLoadingUserPage] = useState(false);
+  const [loadStatus, setLoadStatus] = useState<{ kind: "loaded" | "empty" | "error"; name?: string } | null>(null);
   const [inlineStates, setInlineStates] = useState({ bold: false, italic: false, underline: false, strike: false });
   // Caret offset in the raw-source textarea; the preview highlights its node.
   const [caretOffset, setCaretOffset] = useState<number | null>(null);
@@ -554,6 +562,40 @@ export function BBCodeEditor({
     clearDraft(draftKey);
     setVisualEpoch((epoch) => epoch + 1);
   }, [baseSource, confirmReset, draftKey, updateSource]);
+
+  const searchPlayers = useCallback(async (query: string) => {
+    const res = await searchUsers({ data: { query } });
+    return (res.user?.data ?? [])
+      .slice(0, 6)
+      .map((entry: { id: number; username: string; avatar_url: string; country_code: string }) => ({
+        id: entry.id,
+        username: entry.username,
+        avatar_url: entry.avatar_url,
+        country_code: entry.country_code,
+      }));
+  }, []);
+
+  // Pulls a player's existing me! page into the editor as a starting point.
+  // Replaces the current source (like a reset) so the draft restore can't fight it.
+  const loadUserPage = useCallback(async (picked: { id: number; username: string }) => {
+    setLoadStatus(null);
+    setLoadingUserPage(true);
+    try {
+      const fetched = await getUser({ data: { key: String(picked.id) } });
+      const raw = fetched.page?.raw ?? "";
+      setRestoredDraft(false);
+      setConfirmReset(false);
+      updateSource(raw);
+      clearDraft(draftKey);
+      setVisualEpoch((epoch) => epoch + 1);
+      const name = fetched.username || picked.username;
+      setLoadStatus(raw.trim() ? { kind: "loaded", name } : { kind: "empty", name });
+    } catch {
+      setLoadStatus({ kind: "error" });
+    } finally {
+      setLoadingUserPage(false);
+    }
+  }, [draftKey, updateSource]);
 
   const gradientPreview = useMemo(() => {
     const text = textField || "preview";
@@ -946,14 +988,18 @@ export function BBCodeEditor({
           <div className="text-[13px] font-bold text-osu-c1">BBCode editor</div>
           <div className="text-[12px] text-osu-f1 truncate">
             Edits stay in this browser. Copy the result and paste it into the me! editor on{" "}
-            <a
-              href={`https://osu.ppy.sh/users/${userId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-osu-pink-light hover:text-osu-pink underline"
-            >
-              {username}'s osu! page
-            </a>.
+            {userId != null && username ? (
+              <a
+                href={`https://osu.ppy.sh/users/${userId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-osu-pink-light hover:text-osu-pink underline"
+              >
+                {username}'s osu! page
+              </a>
+            ) : (
+              "your osu! profile page"
+            )}.
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2 shrink-0">
@@ -969,17 +1015,61 @@ export function BBCodeEditor({
             {copied ? <Check size={14} /> : <Copy size={14} />}
             {copied ? "Copied" : "Copy BBCode"}
           </button>
-          <button
-            type="button"
-            onClick={onClose}
-            title="Close editor"
-            aria-label="Close editor"
-            className="w-7 h-7 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
-          >
-            <X size={15} />
-          </button>
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              title="Close editor"
+              aria-label="Close editor"
+              className="w-7 h-7 flex items-center justify-center rounded-full text-osu-f1 hover:text-white hover:bg-osu-b3/50 transition-colors cursor-pointer"
+            >
+              <X size={15} />
+            </button>
+          ) : null}
         </div>
       </div>
+
+      {/* Load an existing me! page as a starting point or to recover after a clear.
+          Only while the editor is empty, so it can never clobber in-progress work. */}
+      {(enableLoadFromUser || (enableLoadOwnPage && userId != null)) && source.trim().length === 0 ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 border-b border-osu-b3/30 bg-osu-b5/40">
+          {enableLoadFromUser ? (
+            <>
+              <span className="text-[12px] font-semibold text-osu-f1 shrink-0">Load a player's me! page</span>
+              <SearchInput
+                className="w-full sm:w-64"
+                placeholder="find player..."
+                onSearch={searchPlayers}
+                onSelect={loadUserPage}
+              />
+            </>
+          ) : (
+            <>
+              <span className="text-[12px] font-semibold text-osu-f1 shrink-0">Start from your live me! page</span>
+              <button
+                type="button"
+                onClick={() => loadUserPage({ id: userId!, username: username ?? "" })}
+                disabled={loadingUserPage}
+                className={dialogApplyClass}
+              >
+                Load my me! page
+              </button>
+            </>
+          )}
+          {loadingUserPage ? (
+            <span className="flex items-center gap-1.5 text-[12px] text-osu-f1">
+              <span className="h-3.5 w-3.5 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
+              Loading me! page...
+            </span>
+          ) : loadStatus?.kind === "error" ? (
+            <span className="text-[12px] text-osu-red">Couldn't load that me! page.</span>
+          ) : loadStatus?.kind === "empty" ? (
+            <span className="text-[12px] text-osu-yellow">{loadStatus.name}'s me! page is empty.</span>
+          ) : loadStatus?.kind === "loaded" ? (
+            <span className="text-[12px] text-osu-l2">Loaded {loadStatus.name}'s me! page into the editor.</span>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Toolbar */}
       <div className="flex items-center gap-0.5 px-3 py-2 border-b border-osu-b3/30 overflow-x-auto">
@@ -1116,7 +1206,9 @@ export function BBCodeEditor({
             confirmReset ? "text-osu-red font-semibold" : "text-osu-f1 hover:text-osu-l2 underline"
           }`}
         >
-          {confirmReset ? "Click again to discard edits" : "Reset to current page"}
+          {confirmReset
+            ? (baseSource ? "Click again to discard edits" : "Click again to clear")
+            : (baseSource ? "Reset to current page" : "Clear editor")}
         </button>
       </div>
     </div>

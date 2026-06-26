@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { ChevronDown, Globe, LogIn, LogOut, Settings, UserRound } from "lucide-react";
 import { SearchInput } from "../ui/SearchInput";
 import { Avatar } from "../ui/Avatar";
+import { CountryFlag } from "../ui/CountryFlag";
 import { CountrySelector } from "./CountrySelector";
 import { SettingsDrawer } from "./SettingsDrawer";
 import { ThemePicker } from "./ThemePicker";
@@ -11,9 +12,9 @@ import { useAuth } from "../../lib/auth-context";
 import { searchUsers } from "../../lib/osu";
 import { DEFAULT_SNIPES_FILTERS, useAppStore, useHasHydrated, useSelectedCountry } from "../../store";
 import { readCountryFromSearchStr } from "../../lib/country-search";
-import { getCountryFlagGradient, getCountryFlagUrl, isGlobalScope } from "../../lib/country";
+import { getCountryFlagGradient, getCountryFlagUrl, getCountryName, isGlobalScope, isSupportedCountryCode } from "../../lib/country";
 import { isLiveBackendConfigured } from "../../lib/live-backend";
-import { useCountryWarming } from "../../lib/use-country-warming";
+import { getCachedCountryTier, useCountryWarming } from "../../lib/use-country-warming";
 import { useDynamicFavicon } from "../../lib/favicon";
 
 // Leaf destinations. Kept `as const` (not typed) so each `to` stays a literal
@@ -28,6 +29,7 @@ const NAV_LEAVES = {
   snipes: { id: "snipes", to: "/snipes", label: "snipes" },
   "farm-helper": { id: "farm-helper", to: "/farm-helper", label: "farm helper" },
   replay: { id: "replay", to: "/replay", label: "replay" },
+  bbcode: { id: "bbcode", to: "/bbcode", label: "BBCode editor" },
 } as const;
 
 type NavLeafId = keyof typeof NAV_LEAVES;
@@ -44,7 +46,7 @@ const NAV_TOP: NavTop[] = [
   { kind: "link", id: "maps" },
   { kind: "link", id: "packs" },
   { kind: "link", id: "snipes" },
-  { kind: "group", id: "tools", label: "tools", items: ["farm-helper", "replay"] },
+  { kind: "group", id: "tools", label: "tools", items: ["farm-helper", "replay", "bbcode"] },
 ];
 
 // Each leaf maps to its top-level item id so the active-link bar can sit under
@@ -85,6 +87,16 @@ export function Nav() {
   const routeCountry = readCountryFromSearchStr(location.searchStr);
   const selectedCountry = routeCountry ?? fallbackCountry;
   const liveBackendConfigured = isLiveBackendConfigured();
+  const viewerCountryCode = auth.viewer?.countryCode?.trim().toUpperCase() || null;
+  // Only offer the one-click country switch when the viewer's country is one the
+  // backend actually tracks, so the destination view has data. When the live
+  // backend isn't configured there's no track list, so any supported country goes.
+  const viewerCountryTracked = Boolean(
+    viewerCountryCode
+      && !isGlobalScope(viewerCountryCode)
+      && isSupportedCountryCode(viewerCountryCode)
+      && (!liveBackendConfigured || getCachedCountryTier(viewerCountryCode) != null),
+  );
   // Resolves the country's feature tier (cached per country, so a switch
   // between two already-seen countries never flickers the Snipes tab).
   const { featureTier: selectedCountryFeatureTier } = useCountryWarming(selectedCountry);
@@ -652,57 +664,86 @@ export function Nav() {
               </div>
             </>
           )}
-          {auth.viewer ? (
+          {auth.viewer || auth.loginAvailable ? (
             <div ref={userMenuRef} className="relative">
               <button
                 type="button"
                 onClick={() => setUserMenuOpen((open) => !open)}
-                className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60 transition hover:ring-osu-pink/60 cursor-pointer"
-                title={`Signed in as ${auth.viewer.username}`}
+                className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60 text-osu-pink-light transition hover:ring-osu-pink/60 cursor-pointer"
+                title={auth.viewer ? `Signed in as ${auth.viewer.username}` : "Account"}
                 aria-haspopup="menu"
                 aria-expanded={userMenuOpen}
               >
-                <Avatar url={auth.viewer.avatarUrl} userId={auth.viewer.id} size={32} />
+                {auth.viewer ? (
+                  <Avatar url={auth.viewer.avatarUrl} userId={auth.viewer.id} size={32} />
+                ) : (
+                  <UserRound className="h-4 w-4" strokeWidth={2.1} />
+                )}
               </button>
               {userMenuOpen && (
                 <div
                   className="absolute right-0 top-full mt-2 w-44 rounded-lg bg-osu-b5 border border-osu-b3/50 shadow-xl overflow-hidden z-[80]"
                   role="menu"
                 >
-                  <div className="px-3 py-2 border-b border-osu-b3/30">
-                    <div className="text-[10px] font-medium text-osu-l3 leading-tight">Signed in as</div>
-                    <div className="text-[12px] font-semibold text-white truncate">{auth.viewer.username}</div>
-                  </div>
-                  <Link
-                    to="/player/$username"
-                    params={{ username: auth.viewer.username }}
-                    onClick={() => setUserMenuOpen(false)}
-                    className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
-                    role="menuitem"
-                  >
-                    <UserRound className="h-3.5 w-3.5" />
-                    Profile
-                  </Link>
-                  <a
-                    href={logoutHref}
-                    className="flex items-center gap-2 border-t border-osu-b3/30 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
-                    role="menuitem"
-                  >
-                    <LogOut className="h-3.5 w-3.5" />
-                    Logout
-                  </a>
+                  {auth.viewer ? (
+                    <>
+                      <div className="px-3 py-2 border-b border-osu-b3/30">
+                        <div className="text-[10px] font-medium text-osu-l3 leading-tight">Signed in as</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-white">{auth.viewer.username}</span>
+                          {viewerCountryTracked && viewerCountryCode ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleCountrySelect(viewerCountryCode);
+                                setUserMenuOpen(false);
+                              }}
+                              title={`Switch to ${getCountryName(viewerCountryCode)}`}
+                              aria-label={`Switch country to ${getCountryName(viewerCountryCode)}`}
+                              className="-my-1 flex shrink-0 items-center justify-center rounded-md p-1 transition-colors hover:bg-osu-b3/70 cursor-pointer"
+                            >
+                              <CountryFlag code={viewerCountryCode} size="md" decorative />
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                      <Link
+                        to="/player/$username"
+                        params={{ username: auth.viewer.username }}
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
+                        role="menuitem"
+                      >
+                        <UserRound className="h-3.5 w-3.5" />
+                        Profile
+                      </Link>
+                      <a
+                        href={logoutHref}
+                        className="flex items-center gap-2 border-t border-osu-b3/30 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
+                        role="menuitem"
+                      >
+                        <LogOut className="h-3.5 w-3.5" />
+                        Logout
+                      </a>
+                    </>
+                  ) : (
+                    <>
+                      <div className="px-3 py-2 border-b border-osu-b3/30 text-[12px] font-semibold text-white">
+                        Not signed in
+                      </div>
+                      <a
+                        href={loginHref}
+                        className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
+                        role="menuitem"
+                      >
+                        <LogIn className="h-3.5 w-3.5" />
+                        Log in with osu!
+                      </a>
+                    </>
+                  )}
                 </div>
               )}
             </div>
-          ) : auth.loginSuggested ? (
-            <a
-              href={loginHref}
-              className="flex h-8 items-center gap-1.5 rounded-lg border border-osu-pink/30 bg-osu-pink/10 px-2 text-[10px] font-semibold text-osu-pink-light transition-colors hover:border-osu-pink/50 hover:bg-osu-pink/20 hover:text-white"
-              title="Sign in with osu!"
-            >
-              <LogIn className="h-3.5 w-3.5" />
-              <span>Login</span>
-            </a>
           ) : null}
           <CountrySelector className="w-52" selectedCountry={selectedCountry} onSelect={handleCountrySelect} showGlobal={liveBackendConfigured} />
           <SearchInput
@@ -828,7 +869,7 @@ export function Nav() {
                       Logout
                     </a>
                   </div>
-                ) : auth.loginSuggested ? (
+                ) : auth.loginAvailable ? (
                   <a
                     href={loginHref}
                     className="flex w-full items-center justify-center gap-2 rounded-lg border border-osu-pink/30 bg-osu-pink/10 px-3 py-2 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/20 hover:text-white"
