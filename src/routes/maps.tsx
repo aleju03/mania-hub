@@ -23,6 +23,7 @@ import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
+import { ModGlyph } from "../components/maps/ModGlyph";
 import { ModBadge } from "../components/ui/ModBadge";
 import { Pagination } from "../components/ui/Pagination";
 import type {
@@ -3329,20 +3330,14 @@ function MiniModIcon({ mod, size = 10 }: { mod: string; size?: number }) {
   const offset = Math.round(size * -0.3);
   return (
     <span
-      className="absolute rounded-full border border-osu-b5 z-10 overflow-hidden"
+      className="absolute flex items-center justify-center rounded-full border border-osu-b5 z-10 overflow-hidden"
       style={{ width: size, height: size, top: offset, right: offset, backgroundColor: bg }}
       title={mod}
     >
-      <span
-        className="absolute inset-0"
-        style={{
-          backgroundColor: `color-mix(in srgb-linear, black, ${bg} 10%)`,
-          maskImage: `url(/images/badges/mods/mod-${file}.svg)`,
-          WebkitMaskImage: `url(/images/badges/mods/mod-${file}.svg)`,
-          maskSize: "110%", WebkitMaskSize: "110%",
-          maskPosition: "center", WebkitMaskPosition: "center",
-          maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
-        }}
+      <ModGlyph
+        file={file}
+        color={`color-mix(in srgb-linear, black, ${bg} 10%)`}
+        style={{ width: "110%", height: "110%" }}
       />
     </span>
   );
@@ -3654,19 +3649,11 @@ function MapDetailsContent({
           )}
           {dominantModFile && (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-osu-b4 ring-1 ring-osu-b3/50 text-[10px] font-semibold text-osu-l2">
-              <span
+              <ModGlyph
+                file={dominantModFile}
+                color={dominantModColor}
                 className="h-3 w-3"
-                style={{
-                  backgroundColor: dominantModColor,
-                  maskImage: `url(/images/badges/mods/mod-${dominantModFile}.svg)`,
-                  WebkitMaskImage: `url(/images/badges/mods/mod-${dominantModFile}.svg)`,
-                  maskSize: "120%",
-                  WebkitMaskSize: "120%",
-                  maskPosition: "center",
-                  WebkitMaskPosition: "center",
-                  maskRepeat: "no-repeat",
-                  WebkitMaskRepeat: "no-repeat",
-                }}
+                style={{ transform: "scale(1.2)" }}
               />
               dominant {dominantMod}
             </span>
@@ -4236,29 +4223,14 @@ function FarmedCard({
         {dominantModFile && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none -translate-y-2.5">
             <div className="relative w-[56px] h-[38px] opacity-70">
-              {/* Base badge shape */}
-              <img src="/images/badges/mods/mod-icon.svg" alt="" className="absolute inset-0 w-full h-full" style={{ filter: `brightness(0) saturate(100%)` }} />
-              <div
-                className="absolute inset-0"
-                style={{
-                  backgroundColor: dominantModColor,
-                  maskImage: "url(/images/badges/mods/mod-icon.svg)",
-                  WebkitMaskImage: "url(/images/badges/mods/mod-icon.svg)",
-                  maskSize: "100%", WebkitMaskSize: "100%",
-                  maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
-                }}
-              />
-              {/* Mod icon overlay */}
-              <div
-                className="absolute inset-0"
-                style={{
-                  backgroundColor: `color-mix(in srgb-linear, black, ${dominantModColor} 10%)`,
-                  maskImage: `url(/images/badges/mods/mod-${dominantModFile}.svg)`,
-                  WebkitMaskImage: `url(/images/badges/mods/mod-${dominantModFile}.svg)`,
-                  maskSize: "110%", WebkitMaskSize: "110%",
-                  maskPosition: "center", WebkitMaskPosition: "center",
-                  maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat",
-                }}
+              {/* Colored badge hexagon */}
+              <ModGlyph file="icon" color={dominantModColor} className="absolute inset-0 h-full w-full" />
+              {/* Mod glyph */}
+              <ModGlyph
+                file={dominantModFile}
+                color={`color-mix(in srgb-linear, black, ${dominantModColor} 10%)`}
+                className="absolute inset-0 h-full w-full"
+                style={{ transform: "scale(1.1)" }}
               />
             </div>
           </div>
