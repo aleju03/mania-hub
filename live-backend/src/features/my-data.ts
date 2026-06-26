@@ -3,12 +3,16 @@ import { exec, parseJson } from "../db.js";
 import { getCountryTimezone } from "../shared/country-timezones.js";
 import { getModAcronyms, toLeanTrackerScore } from "../shared/score.js";
 import { hydrateScoresDisplayMetadata } from "../shared/score-storage.js";
-import { getHydratedScoresForMetadata } from "./tracker.js";
-import type { CountryTopPlay, LeanTrackerScore, OscScore } from "../shared/types.js";
+import type { CountryTopPlay, LeanTrackerScore, OscScore, OsuBeatmap, OsuBeatmapset, ScoreUser } from "../shared/types.js";
 
 export interface MyDataTopPlay {
   score: LeanTrackerScore;
   ppGain: number;
+}
+
+export interface MyDataTrackedPlay extends LeanTrackerScore {
+  archived?: boolean;
+  archivedExact?: boolean;
 }
 
 export interface MyDataPage<T> {
@@ -370,17 +374,160 @@ export async function getMyDataSummary(db: Db, userId: number): Promise<MyDataSu
   return summary;
 }
 
-/** A user-scoped tracker feed: every retained tracked play, lean-shaped for the row UI. */
-export async function getUserTrackedFeed(db: Db, userId: number, limit = 30, offset = 0): Promise<MyDataPage<LeanTrackerScore>> {
+/** A user-scoped tracker feed: every stored tracked play, lean-shaped for the row UI. */
+export async function getUserTrackedFeed(db: Db, userId: number, limit = 30, offset = 0): Promise<MyDataPage<MyDataTrackedPlay>> {
   const safeLimit = Math.max(1, Math.floor(limit));
   const safeOffset = Math.max(0, Math.floor(offset));
   const total = Number((await exec(
     db,
-    "select count(*) as count from score_events where user_id = ?",
+    "select count(*) as count from player_activity_score_refs where user_id = ?",
     [userId],
   )).rows[0]?.count ?? 0);
-  const rows = await getHydratedScoresForMetadata(db, { userId }, safeLimit, safeOffset, { passedOnly: false });
-  return { items: rows.map((r) => toLeanTrackerScore(r.score)), total, limit: safeLimit, offset: safeOffset };
+  const rows = (await exec(
+    db,
+    `select
+       r.country,
+       r.score_identity,
+       r.user_id,
+       r.day,
+       r.beatmap_id,
+       r.passed,
+       r.ended_at,
+       se.score_json,
+       u.username,
+       u.avatar_url,
+       u.country_code,
+       b.beatmapset_id,
+       b.mode,
+       b.status as beatmap_status,
+       b.cs,
+       b.difficulty_rating,
+       b.bpm,
+       b.max_combo,
+       b.version,
+       b.url,
+       bs.title,
+       bs.artist,
+       bs.status as beatmapset_status,
+       bs.covers_json,
+       m.best_score_id,
+       m.best_pp,
+       m.best_accuracy,
+       m.best_rank,
+       m.play_count
+     from player_activity_score_refs r
+     left join score_events se
+       on se.country = r.country and se.score_identity = r.score_identity
+     left join users u on u.user_id = r.user_id
+     left join beatmaps b on b.beatmap_id = r.beatmap_id
+     left join beatmapsets bs on bs.beatmapset_id = b.beatmapset_id
+     left join player_activity_maps m
+       on m.country = r.country and m.user_id = r.user_id and m.day = r.day and m.beatmap_id = r.beatmap_id
+     where r.user_id = ?
+     order by r.ended_at desc, r.score_identity desc
+     limit ? offset ?`,
+    [userId, safeLimit, safeOffset],
+  )).rows;
+  return { items: rows.flatMap(activityRefRowToTrackedPlay), total, limit: safeLimit, offset: safeOffset };
+}
+
+function activityRefRowToTrackedPlay(row: Record<string, unknown>): MyDataTrackedPlay[] {
+  const storedScore = parseJson<OscScore | null>(String(row.score_json ?? ""), null);
+  if (storedScore) {
+    const score = {
+      ...storedScore,
+      user: storedScore.user ?? activityRowUser(row),
+      beatmap: storedScore.beatmap ?? activityRowBeatmap(row),
+      beatmapset: storedScore.beatmapset ?? activityRowBeatmapset(row),
+    };
+    if (score.beatmap && score.beatmapset && score.user) return [toLeanTrackerScore(score)];
+  }
+  const archived = archivedActivityRowToTrackedPlay(row);
+  return archived ? [archived] : [];
+}
+
+function archivedActivityRowToTrackedPlay(row: Record<string, unknown>): MyDataTrackedPlay | null {
+  const user = activityRowUser(row);
+  if (!user) return null;
+  const beatmap = activityRowBeatmap(row);
+  if (!beatmap) return null;
+  const beatmapset = activityRowBeatmapset(row) ?? {
+    id: beatmap.beatmapset_id,
+    title: "Unknown map",
+    artist: "Unknown artist",
+    covers: {},
+  };
+  const exactMapPlay = Number(row.play_count ?? 0) === 1;
+  const scoreId = Number(row.best_score_id);
+  const identityId = parseOfficialScoreIdentity(row.score_identity);
+  const accuracy = exactMapPlay ? Number(row.best_accuracy ?? 0) : 0;
+  return {
+    id: Number.isFinite(scoreId) && scoreId > 0 ? scoreId : (identityId ?? 0),
+    user_id: Number(row.user_id),
+    accuracy: Number.isFinite(accuracy) ? accuracy : 0,
+    beatmap_id: Number(row.beatmap_id),
+    mods: [],
+    score: 0,
+    max_combo: 0,
+    passed: !!Number(row.passed),
+    rank: exactMapPlay && row.best_rank != null ? String(row.best_rank) : (Number(row.passed) ? "A" : "F"),
+    statistics: {},
+    pp: exactMapPlay && row.best_pp != null ? Number(row.best_pp) : null,
+    beatmap,
+    beatmapset,
+    user,
+    ended_at: String(row.ended_at),
+    archived: true,
+    archivedExact: exactMapPlay,
+  };
+}
+
+function parseOfficialScoreIdentity(value: unknown): number | null {
+  const match = String(value ?? "").match(/^official:(\d+)$/);
+  if (!match) return null;
+  const id = Number(match[1]);
+  return Number.isSafeInteger(id) && id > 0 ? id : null;
+}
+
+function activityRowUser(row: Record<string, unknown>): ScoreUser | undefined {
+  const id = Number(row.user_id);
+  if (!Number.isFinite(id) || id <= 0) return undefined;
+  return {
+    id,
+    username: String(row.username ?? "Unknown player"),
+    avatar_url: String(row.avatar_url ?? ""),
+    country_code: String(row.country_code ?? ""),
+  };
+}
+
+function activityRowBeatmap(row: Record<string, unknown>): OsuBeatmap | undefined {
+  const id = Number(row.beatmap_id);
+  if (!Number.isFinite(id) || id <= 0) return undefined;
+  const beatmapsetId = Number(row.beatmapset_id);
+  return {
+    id,
+    beatmapset_id: Number.isFinite(beatmapsetId) && beatmapsetId > 0 ? beatmapsetId : 0,
+    difficulty_rating: Number(row.difficulty_rating ?? 0),
+    mode: String(row.mode ?? "mania"),
+    status: row.beatmap_status == null ? undefined : String(row.beatmap_status),
+    cs: Number(row.cs ?? 0),
+    bpm: Number(row.bpm ?? 0),
+    max_combo: row.max_combo == null ? undefined : Number(row.max_combo),
+    version: String(row.version ?? "Unknown"),
+    url: String(row.url ?? `https://osu.ppy.sh/beatmaps/${id}`),
+  };
+}
+
+function activityRowBeatmapset(row: Record<string, unknown>): OsuBeatmapset | undefined {
+  const id = Number(row.beatmapset_id);
+  if (!Number.isFinite(id) || id <= 0) return undefined;
+  return {
+    id,
+    title: String(row.title ?? "Unknown map"),
+    artist: String(row.artist ?? "Unknown artist"),
+    status: row.beatmapset_status == null ? undefined : String(row.beatmapset_status),
+    covers: parseJson<OsuBeatmapset["covers"]>(row.covers_json, {}),
+  };
 }
 
 /**

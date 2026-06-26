@@ -7,10 +7,9 @@ import { Avatar } from "../ui/Avatar";
 import { CountryFlag } from "../ui/CountryFlag";
 import { OsuLogo } from "../ui/OsuLogo";
 import { useAuth } from "../../lib/auth-context";
-import { fetchMyDataDashboard, fetchMyDataFeed, fetchMyDataTopPlays, MY_DATA_PAGE_SIZE, type MyDataSummary, type MyDataPage, type MyDataTopPlay } from "../../lib/my-data";
+import { fetchMyDataDashboard, fetchMyDataFeed, fetchMyDataTopPlays, MY_DATA_PAGE_SIZE, type MyDataSummary, type MyDataPage, type MyDataTopPlay, type MyDataTrackedPlay } from "../../lib/my-data";
 import { openLiveEventSource, type LivePlayerActivitySnapshot } from "../../lib/live-backend";
 import { getScoreTimestamp } from "../../lib/score";
-import type { LeanTrackerScore } from "../../lib/types";
 import { MeScoreRow } from "./MeScoreRow";
 import { RosterOptInCard } from "./RosterOptInCard";
 import { skillPatternEntries, type SkillPatternEntry } from "./skill-patterns";
@@ -97,7 +96,7 @@ export function MyDataPanel() {
   const viewer = auth.viewer;
 
   const [summary, setSummary] = useState<MyDataSummary | null>(null);
-  const [feed, setFeed] = useState<LeanTrackerScore[]>([]);
+  const [feed, setFeed] = useState<MyDataTrackedPlay[]>([]);
   const [topPlays, setTopPlays] = useState<MyDataTopPlay[]>([]);
   const [feedTab, setFeedTab] = useState<"tracked" | "top">("tracked");
   const [trackedPageIndex, setTrackedPageIndex] = useState(0);
@@ -111,7 +110,7 @@ export function MyDataPanel() {
   const [loading, setLoading] = useState(true);
   const newKeysRef = useRef<Set<string>>(new Set());
 
-  const applyTrackedPage = useCallback((page: MyDataPage<LeanTrackerScore>) => {
+  const applyTrackedPage = useCallback((page: MyDataPage<MyDataTrackedPlay>) => {
     setFeed(page.items);
     setTrackedTotal(page.total);
     setTrackedLimit(page.limit);
@@ -183,7 +182,7 @@ export function MyDataPanel() {
     if (!source) return;
     const onScore = (event: Event) => {
       try {
-        const score = JSON.parse((event as MessageEvent).data) as LeanTrackerScore;
+        const score = JSON.parse((event as MessageEvent).data) as MyDataTrackedPlay;
         if (score.user_id !== viewer.id || !score.passed) return;
         const key = `${score.beatmap?.id}-${getScoreTimestamp(score)}-${score.pp}`;
         setFeed((prev) => {

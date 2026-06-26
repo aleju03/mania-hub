@@ -296,6 +296,29 @@ describe("live backend", () => {
     expect(topSecond.items.map((play) => Math.round(play.score.pp ?? 0))).toEqual([298]);
   });
 
+  it("keeps archived activity refs in the my data tracked feed after raw score retention", async () => {
+    const { db, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    await ingestor.ingestBatch([{
+      ...scores[0],
+      id: 9600,
+      created_at: "2026-05-12T00:00:00.000Z",
+      ended_at: "2026-05-12T00:00:30.000Z",
+    }]);
+    await exec(db, "delete from score_events where user_id = 101");
+
+    const page = await getUserTrackedFeed(db, 101, 12, 0);
+    expect(page.total).toBe(1);
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0]).toMatchObject({
+      archived: true,
+      archivedExact: true,
+      user_id: 101,
+      beatmap: { id: 501 },
+      ended_at: "2026-05-12T00:00:30.000Z",
+    });
+  });
+
   it("serves the my data dashboard initial payload in one request", async () => {
     const { db, queue, events, ingestor } = await setup();
     const scores = await fixture<OscScore[]>("scores.json");

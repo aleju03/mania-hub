@@ -16,9 +16,14 @@ export interface MyDataPage<T> {
   offset: number;
 }
 
+export interface MyDataTrackedPlay extends LeanTrackerScore {
+  archived?: boolean;
+  archivedExact?: boolean;
+}
+
 export interface MyDataDashboard {
   summary: MyDataSummary | null;
-  trackedPage: MyDataPage<LeanTrackerScore>;
+  trackedPage: MyDataPage<MyDataTrackedPlay>;
   topPlayPage: MyDataPage<MyDataTopPlay>;
   activity: LivePlayerActivitySnapshot | null;
 }
@@ -140,18 +145,18 @@ function readPageBody<T>(body: { items?: T[]; total?: number; limit?: number; of
 function emptyDashboard(): MyDataDashboard {
   return {
     summary: null,
-    trackedPage: emptyPage<LeanTrackerScore>(0),
+    trackedPage: emptyPage<MyDataTrackedPlay>(0),
     topPlayPage: emptyPage<MyDataTopPlay>(0),
     activity: null,
   };
 }
 
-async function fetchMyDataFeedRaw(cfg: MyDataBackendConfig, pageIndex: number): Promise<MyDataPage<LeanTrackerScore>> {
+async function fetchMyDataFeedRaw(cfg: MyDataBackendConfig, pageIndex: number): Promise<MyDataPage<MyDataTrackedPlay>> {
   try {
     const offset = pageIndex * MY_DATA_PAGE_SIZE;
     const response = await fetch(`${cfg.base}/api/my-data/feed?userId=${cfg.userId}&limit=${MY_DATA_PAGE_SIZE}&offset=${offset}`, { headers: cfg.headers });
     if (!response.ok) return emptyPage(pageIndex);
-    const body = (await response.json()) as { scores?: LeanTrackerScore[]; total?: number; limit?: number; offset?: number };
+    const body = (await response.json()) as { scores?: MyDataTrackedPlay[]; total?: number; limit?: number; offset?: number };
     return {
       items: Array.isArray(body.scores) ? body.scores : [],
       total: Number.isFinite(Number(body.total)) ? Math.max(0, Number(body.total)) : 0,
@@ -198,7 +203,7 @@ async function fetchMyDataDashboardFallback(cfg: MyDataBackendConfig, year: numb
   if (!summary?.tracked) {
     return {
       summary,
-      trackedPage: emptyPage<LeanTrackerScore>(0),
+      trackedPage: emptyPage<MyDataTrackedPlay>(0),
       topPlayPage: emptyPage<MyDataTopPlay>(0),
       activity: null,
     };
@@ -219,7 +224,7 @@ function readPageIndex(value: unknown): number {
 
 export const fetchMyDataFeed = createServerFn({ method: "GET" })
   .inputValidator((data: { pageIndex?: unknown } | undefined) => ({ pageIndex: readPageIndex(data?.pageIndex) }))
-  .handler(async ({ data }): Promise<MyDataPage<LeanTrackerScore>> => {
+  .handler(async ({ data }): Promise<MyDataPage<MyDataTrackedPlay>> => {
     const { setResponseHeader } = await import("@tanstack/react-start/server");
     setResponseHeader("Cache-Control", "private, no-store");
     const cfg = await myDataBackend();
@@ -246,7 +251,7 @@ export const fetchMyDataDashboard = createServerFn({ method: "GET" })
       if (!response.ok) return fetchMyDataDashboardFallback(cfg, year);
       const body = (await response.json()) as {
         summary?: MyDataSummary | null;
-        trackedPage?: { items?: LeanTrackerScore[]; total?: number; limit?: number; offset?: number };
+        trackedPage?: { items?: MyDataTrackedPlay[]; total?: number; limit?: number; offset?: number };
         topPlayPage?: { items?: MyDataTopPlay[]; total?: number; limit?: number; offset?: number };
         activity?: LivePlayerActivitySnapshot | null;
       };
