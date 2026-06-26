@@ -71,8 +71,10 @@ function parseReasonFilter(value: unknown): ReasonFilter {
   return value === "missing" || value === "improve" || value === "stale" ? value : "all";
 }
 
-function parseSortMode(value: unknown): SortMode {
-  return value === "popularity" || value === "players" || value === "difficulty" || value === "recent" ? value : "gain";
+function parseSortMode(value: unknown): SortMode | undefined {
+  return value === "gain" || value === "popularity" || value === "players" || value === "difficulty" || value === "recent"
+    ? value
+    : undefined;
 }
 
 function parseSortDirection(value: unknown): SortDirection {
