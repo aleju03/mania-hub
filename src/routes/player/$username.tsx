@@ -43,7 +43,10 @@ import {
   getScoreUrl,
   scoreHasReplay,
 } from "../../lib/score";
+import { useAuth } from "../../lib/auth-context";
+import { addSelfToRoster } from "../../lib/roster-self-track";
 import { GradeImg } from "../../components/ui/GradeImg";
+import { OsuLogo } from "../../components/ui/OsuLogo";
 import { ModBadge } from "../../components/ui/ModBadge";
 import { LazerBadge } from "../../components/ui/LazerBadge";
 import { DanBadge } from "../../components/ui/DanBadge";
@@ -2452,9 +2455,114 @@ function PlayerPageSkeleton({
   );
 }
 
+// Empty state for the Activity tab when a player isn't tracked yet. For the signed-in owner it
+// becomes an opt-in: they can add themselves to their country's roster instead of being locked
+// out for not being in the top 100. Anonymous visitors get a login nudge; other people's
+// untracked profiles keep the plain explanation (you can only ever add yourself).
+function ActivityOptInEmptyState({
+  mode,
+  loginAvailable,
+  onTracked,
+}: {
+  mode: "self" | "other" | "anon";
+  loginAvailable: boolean;
+  onTracked?: () => void;
+}) {
+  const location = useLocation();
+  const [status, setStatus] = useState<"idle" | "pending" | "done" | "error">("idle");
+  const [message, setMessage] = useState<string | null>(null);
+  const loginHref = `/api/auth/osu?next=${encodeURIComponent(`${location.pathname}${location.searchStr}`)}`;
+
+  const handleTrack = useCallback(async () => {
+    setStatus("pending");
+    setMessage(null);
+    try {
+      const result = await addSelfToRoster();
+      if (result.ok) {
+        setStatus("done");
+        onTracked?.();
+        return;
+      }
+      setStatus("error");
+      setMessage(
+        result.status === "country_not_tracked"
+          ? "Your country isn't tracked yet, so there's nothing to record your plays against."
+          : result.status === "country_full"
+            ? "This country's opt-in list is full right now. Check back later."
+            : "Couldn't turn on tracking right now. Try again in a moment.",
+      );
+    } catch {
+      setStatus("error");
+      setMessage("Couldn't turn on tracking right now. Try again in a moment.");
+    }
+  }, [onTracked]);
+
+  if (mode === "self" && status === "done") {
+    return (
+      <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-6 text-center">
+        <div className="text-sm font-semibold text-osu-l2">You're being tracked now</div>
+        <div className="mt-1.5 text-[13px] text-osu-f1">
+          Your recent plays are being pulled in. Activity will start filling in here within a minute or two, and keeps updating as you play.
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === "self") {
+    return (
+      <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-6 text-center">
+        <div className="text-sm font-semibold text-osu-l2">Start tracking your plays</div>
+        <div className="mt-1.5 text-[13px] text-osu-f1">
+          Activity is recorded automatically for the top 100 of each country. You're not in it yet, but you can add yourself to the tracker.
+        </div>
+        <button
+          type="button"
+          onClick={handleTrack}
+          disabled={status === "pending"}
+          className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-osu-pink/40 bg-osu-pink/15 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white cursor-pointer disabled:opacity-60 disabled:cursor-default"
+        >
+          {status === "pending" ? "Adding you…" : "Track my plays"}
+        </button>
+        {message ? <div className="mt-3 text-[12px] text-osu-f1">{message}</div> : null}
+      </div>
+    );
+  }
+
+  if (mode === "anon") {
+    return (
+      <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-6 text-center">
+        <div className="text-sm font-semibold text-osu-l2">No activity data for this player</div>
+        <div className="mt-1.5 text-[13px] text-osu-f1">
+          Activity is recorded for the top 100 of each tracked country. If this is your profile, log in with osu! to add yourself to the tracker.
+        </div>
+        {loginAvailable ? (
+          <a
+            href={loginHref}
+            className="mt-4 inline-flex items-center gap-2 rounded-lg border border-osu-pink/40 bg-osu-pink/15 px-4 py-2 text-[12px] font-semibold text-osu-pink-light transition-colors hover:bg-osu-pink/25 hover:text-white"
+          >
+            <OsuLogo className="h-4 w-4" />
+            Log in with osu!
+          </a>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-6 text-center">
+      <div className="text-sm font-semibold text-osu-l2">No activity data for this player</div>
+      <div className="mt-1.5 text-[13px] text-osu-f1">
+        Plays are only recorded for the top 100 players of each tracked country, and this player isn't currently among them.
+      </div>
+    </div>
+  );
+}
+
 function PlayerActivityPanel({ user }: { user: OsuUser }) {
+  const auth = useAuth();
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [activityRefreshKey, setActivityRefreshKey] = useState(0);
   const [selectedDay, setSelectedDay] = useState<ActivityDay | null>(null);
   // Dev-only simulated day; kept out of selectedDay so the day-sync and
   // detail-fetch effects below never race it against real backend data.
@@ -2512,7 +2620,7 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
     return () => {
       cancelled = true;
     };
-  }, [selectedYear, user.id]);
+  }, [activityRefreshKey, selectedYear, user.id]);
 
   useEffect(() => {
     if (!selectedDayDate) return;
@@ -2578,13 +2686,14 @@ function PlayerActivityPanel({ user }: { user: OsuUser }) {
   }
 
   if (snapshot && !snapshot.available) {
+    const optInMode: "self" | "other" | "anon" =
+      auth.viewer == null ? "anon" : auth.viewer.id === user.id ? "self" : "other";
     return (
-      <div className="rounded-xl border border-osu-b3/20 bg-osu-b4 p-6 text-center">
-        <div className="text-sm font-semibold text-osu-l2">No activity data for this player</div>
-        <div className="mt-1.5 text-[13px] text-osu-f1">
-          Plays are only recorded for the top 100 players of each tracked country, and this player isn't currently among them.
-        </div>
-      </div>
+      <ActivityOptInEmptyState
+        mode={optInMode}
+        loginAvailable={auth.loginAvailable}
+        onTracked={() => setActivityRefreshKey((key) => key + 1)}
+      />
     );
   }
 

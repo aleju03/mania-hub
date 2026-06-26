@@ -25,7 +25,7 @@ export async function markUserMissing(db: Db, userId: number, reason: string): P
   );
   const rosterResult = await exec(
     db,
-    "update country_rosters set is_tracked = 0, refreshed_at = ? where user_id = ? and is_tracked = 1",
+    "update country_rosters set rank = null, is_tracked = 0, refreshed_at = ? where user_id = ? and is_tracked = 1",
     [now, safeUserId],
   );
   const jobResult = await exec(

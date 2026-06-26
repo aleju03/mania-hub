@@ -9,6 +9,7 @@ import { formatDuration, formatNumber } from "../../../lib/format";
 import { PageHeader } from "../../../components/layout/PageHeader";
 import { Skeleton } from "../../../components/ui/LoadingSkeleton";
 import { ChartPreviewPanel } from "../../../components/maps/ChartPreviewPanel";
+import { FarmersList } from "../../../components/farm-helper/FarmersList";
 import type { LiveFarmHelperKeyMode, LiveFarmHelperReason, LiveFarmHelperSpeedBucket } from "../../../lib/live-backend";
 import { pageSeo } from "../../../lib/seo";
 
@@ -41,6 +42,12 @@ type FarmMapContext = {
   playedAt?: string;
 };
 
+type FarmMapSearch = {
+  user?: string;
+  key?: LiveFarmHelperKeyMode;
+  speed?: LiveFarmHelperSpeedBucket;
+};
+
 type DetailBeatmap = MapsFavouriteBeatmapset["maniaBeatmaps"][number] & {
   accuracy?: number;
   drain?: number;
@@ -70,6 +77,7 @@ const REASON_LABELS: Record<LiveFarmHelperReason, string> = {
   missing: "missing",
   improve: "improve",
   stale: "old pb",
+  owned: "cleared",
 };
 
 const SPEED_LABELS: Record<LiveFarmHelperSpeedBucket, string> = {
@@ -87,6 +95,11 @@ const SPEED_RATES: Record<LiveFarmHelperSpeedBucket, number> = {
 const FARM_MAP_CONTEXT_KEY_PREFIX = "mania-hub-farm-helper-map-context-v1:";
 
 export const Route = createFileRoute("/farm-helper/map/$beatmapId")({
+  validateSearch: (search: Record<string, unknown>): FarmMapSearch => ({
+    user: typeof search.user === "string" && search.user.trim() ? search.user.trim().slice(0, 80) : undefined,
+    key: parseFarmKeyMode(search.key),
+    speed: parseFarmSpeed(search.speed),
+  }),
   head: ({ match }) => pageSeo({
     title: "Farm Map Detail",
     description: "osu!mania farm map detail with difficulty metrics, radar chart, density timeline, and chart preview.",
@@ -99,6 +112,7 @@ export const Route = createFileRoute("/farm-helper/map/$beatmapId")({
 
 function FarmMapDetailPage() {
   const { beatmapId: beatmapIdRaw } = Route.useParams();
+  const search = Route.useSearch();
   const navigate = useNavigate();
   const beatmapId = Number.parseInt(beatmapIdRaw, 10);
   const [beatmapset, setBeatmapset] = useState<DetailBeatmapset | null>(null);
@@ -106,16 +120,11 @@ function FarmMapDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedBeatmapId, setSelectedBeatmapId] = useState<number | null>(Number.isFinite(beatmapId) ? beatmapId : null);
   const [analysisState, setAnalysisState] = useState<AnalysisState>({ status: "idle", analysis: null, error: null });
-  const [farmContext, setFarmContext] = useState<FarmMapContext | null>(() => readStoredFarmContext(beatmapId));
+  const [farmContext, setFarmContext] = useState<FarmMapContext | null>(() => readFarmMapContext(beatmapId, search));
 
   useEffect(() => {
-    if (typeof window === "undefined" || !window.location.search) return;
-    window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.hash}`);
-  }, []);
-
-  useEffect(() => {
-    setFarmContext(readStoredFarmContext(beatmapId));
-  }, [beatmapId]);
+    setFarmContext(readFarmMapContext(beatmapId, search));
+  }, [beatmapId, search.user, search.key, search.speed]);
 
   useEffect(() => {
     if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) {
@@ -308,53 +317,35 @@ function FarmMapDetailPage() {
               </div>
             </section>
 
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,860px)_340px] xl:justify-center">
-              <div className="min-w-0 xl:pt-24 2xl:pt-28">
+            <div className={`grid gap-4 ${hasFarmContext || farmContext?.userKey ? "xl:grid-cols-[minmax(0,1fr)_360px]" : ""}`}>
+              <div className="min-w-0 space-y-4">
                 <ChartPreviewPanel
                   beatmapset={beatmapset}
                   selectedBeatmapId={selectedBeatmap.id}
                   playbackRate={farmRate}
-                  className="h-[360px] rounded-lg sm:h-[400px] xl:h-[430px]"
+                  className="h-[360px] rounded-lg sm:h-[400px] xl:h-[460px]"
                   flatBackdrop
                 />
-              </div>
 
-              <aside className="xl:sticky xl:top-4">
-                <section className="flex h-full min-h-[420px] flex-col rounded-lg border border-osu-b3/25 bg-osu-b4">
-                  {hasFarmContext ? (
-                    <div className="border-b border-osu-b3/20 p-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">farm verdict</div>
-                          <div className="mt-1 text-2xl font-black tabular-nums text-osu-pink">
-                            {farmContext?.gain != null ? `+${formatPp(farmContext.gain)}pp` : "unknown"}
-                          </div>
-                        </div>
-                        <div className="grid min-w-[150px] gap-1.5">
-                          <CompactRow label="your score" value={farmContext?.subjectPp != null ? `${formatPp(farmContext.subjectPp)}pp` : "not played"} />
-                          <CompactRow label="target" value={farmContext?.benchmark != null ? `${formatPp(farmContext.benchmark)}pp` : "unknown"} />
-                          <CompactRow label="fit" value={farmContext?.peerFraction != null ? `${Math.round(farmContext.peerFraction * 100)}%` : "unknown"} />
-                        </div>
-                      </div>
+                <section className="rounded-lg border border-osu-b3/25 bg-osu-b4 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">analysis</div>
+                      <h2 className="mt-0.5 text-base font-bold text-osu-c1">Map shape</h2>
                     </div>
-                  ) : null}
-
-                  <div className="flex flex-1 flex-col p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">analysis</div>
-                        <h2 className="mt-0.5 text-base font-bold text-osu-c1">Map shape</h2>
-                      </div>
-                      <BarChart3 className="h-4 w-4 text-osu-pink" />
+                    <BarChart3 className="h-4 w-4 text-osu-pink" />
+                  </div>
+                  <div className="mt-2 grid gap-4 sm:grid-cols-[minmax(0,300px)_minmax(0,1fr)] sm:items-center">
+                    <div className="mx-auto w-full max-w-[340px]">
+                      {analysisState.status === "ready" ? (
+                        <RadarChart axes={metrics.radar} />
+                      ) : analysisState.status === "failed" ? (
+                        <AnalysisUnavailableState />
+                      ) : (
+                        <AnalysisLoadingState />
+                      )}
                     </div>
-                    {analysisState.status === "ready" ? (
-                      <RadarChart axes={metrics.radar} />
-                    ) : analysisState.status === "failed" ? (
-                      <AnalysisUnavailableState />
-                    ) : (
-                      <AnalysisLoadingState />
-                    )}
-                    <div className="mt-1 grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       <MetricTile icon={<Keyboard className="h-3.5 w-3.5" />} label="objects" value={formatNumber(metrics.objects)} />
                       <MetricTile icon={<Gauge className="h-3.5 w-3.5" />} label="peak nps" value={metrics.peakNps.toFixed(1)} />
                       <MetricTile icon={<Activity className="h-3.5 w-3.5" />} label="avg nps" value={metrics.avgNps.toFixed(1)} />
@@ -369,7 +360,44 @@ function FarmMapDetailPage() {
                     </div>
                   </div>
                 </section>
-              </aside>
+              </div>
+
+              {hasFarmContext || farmContext?.userKey ? (
+                <aside className="flex flex-col gap-4 xl:sticky xl:top-4">
+                  {hasFarmContext ? (
+                    <section className="shrink-0 rounded-lg border border-osu-b3/25 bg-osu-b4 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">farm verdict</div>
+                          <div className="mt-1 text-2xl font-black tabular-nums text-osu-pink">
+                            {farmContext?.gain != null ? `+${formatPp(farmContext.gain)}pp` : "unknown"}
+                          </div>
+                        </div>
+                        <div className="grid min-w-[150px] gap-1.5">
+                          <CompactRow label="your score" value={farmContext?.subjectPp != null ? `${formatPp(farmContext.subjectPp)}pp` : "not played"} />
+                          <CompactRow label="target" value={farmContext?.benchmark != null ? `${formatPp(farmContext.benchmark)}pp` : "unknown"} />
+                          <CompactRow label="fit" value={farmContext?.peerFraction != null ? `${Math.round(farmContext.peerFraction * 100)}%` : "unknown"} />
+                        </div>
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {farmContext?.userKey ? (
+                    <section className="flex max-h-[640px] min-h-[360px] flex-col overflow-hidden rounded-lg border border-osu-b3/25 bg-osu-b4">
+                      <div className="shrink-0 border-b border-osu-b3/20 p-3">
+                        <h2 className="text-base font-bold text-osu-c1">Who farms this</h2>
+                      </div>
+                      <FarmersList
+                        userKey={farmContext.userKey}
+                        beatmapId={selectedBeatmap.id}
+                        speedBucket={selectedBeatmap.id === beatmapId ? farmContext.speed : undefined}
+                        keyMode={farmContext.keyMode ?? "any"}
+                        className="min-h-0 flex-1"
+                      />
+                    </section>
+                  ) : null}
+                </aside>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -808,9 +836,58 @@ function DetailSkeleton({ farmContext, farmRate }: { farmContext: FarmMapContext
       ) : (
         <Skeleton className="h-56 w-full rounded-lg" />
       )}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,860px)_340px] xl:justify-center">
-        <Skeleton className="h-[360px] w-full rounded-lg sm:h-[400px] xl:h-[430px]" />
-        <Skeleton className="h-[420px] w-full rounded-lg" />
+      <div className={`grid gap-4 ${farmContext ? "xl:grid-cols-[minmax(0,1fr)_360px]" : ""}`}>
+        <div className="min-w-0 space-y-4">
+          <Skeleton className="h-[360px] w-full rounded-lg sm:h-[400px] xl:h-[460px]" />
+          <div className="rounded-lg border border-osu-b3/25 bg-osu-b4 p-4">
+            <div className="space-y-1.5">
+              <Skeleton className="h-2.5 w-16" />
+              <Skeleton className="h-4 w-28" />
+            </div>
+            <div className="mt-3 grid gap-4 sm:grid-cols-[minmax(0,300px)_minmax(0,1fr)] sm:items-center">
+              <div className="mx-auto flex w-full max-w-[340px] justify-center">
+                <Skeleton className="h-[240px] w-[240px] rounded-full" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-[60px] rounded-md" />
+                ))}
+                <Skeleton className="col-span-2 h-[60px] rounded-md" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {farmContext ? (
+          <div className="flex flex-col gap-4">
+            <div className="rounded-lg border border-osu-b3/25 bg-osu-b4 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="space-y-1.5">
+                  <Skeleton className="h-2.5 w-20" />
+                  <Skeleton className="h-7 w-24" />
+                </div>
+                <div className="grid min-w-[150px] gap-1.5">
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-full" />
+                </div>
+              </div>
+            </div>
+            <div className="flex h-[480px] flex-col overflow-hidden rounded-lg border border-osu-b3/25 bg-osu-b4">
+              <div className="border-b border-osu-b3/20 p-3">
+                <Skeleton className="h-5 w-32" />
+              </div>
+              <div className="px-3 pt-2.5">
+                <Skeleton className="h-7 w-full rounded-lg" />
+              </div>
+              <div className="flex-1 space-y-1.5 p-2.5">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <Skeleton key={i} className="h-9 rounded-lg" />
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );
@@ -834,6 +911,17 @@ function formatPp(value: number): string {
 
 function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value));
+}
+
+function readFarmMapContext(beatmapId: number, search: FarmMapSearch): FarmMapContext | null {
+  const stored = readStoredFarmContext(beatmapId);
+  if (!stored && !search.user && !search.key && !search.speed) return null;
+  return {
+    ...(stored ?? {}),
+    userKey: search.user ?? stored?.userKey,
+    keyMode: search.key ?? stored?.keyMode,
+    speed: search.speed ?? stored?.speed,
+  };
 }
 
 function readStoredFarmContext(beatmapId: number): FarmMapContext | null {
@@ -861,7 +949,10 @@ function readStoredFarmContext(beatmapId: number): FarmMapContext | null {
       userName: finiteString(data.userName),
       keyMode: data.keyMode === "4k" || data.keyMode === "7k" || data.keyMode === "any" ? data.keyMode : undefined,
       speed: data.speed === "ht" || data.speed === "normal" || data.speed === "dt" ? data.speed : undefined,
-      reason: data.reason === "missing" || data.reason === "improve" || data.reason === "stale" ? data.reason : undefined,
+      reason:
+        data.reason === "missing" || data.reason === "improve" || data.reason === "stale" || data.reason === "owned"
+          ? data.reason
+          : undefined,
       gain: finiteNumber(data.gain),
       benchmark: finiteNumber(data.benchmark),
       subjectPp: finiteNumber(data.subjectPp),
@@ -875,6 +966,14 @@ function readStoredFarmContext(beatmapId: number): FarmMapContext | null {
   } catch {
     return null;
   }
+}
+
+function parseFarmKeyMode(value: unknown): LiveFarmHelperKeyMode | undefined {
+  return value === "4k" || value === "7k" || value === "any" ? value : undefined;
+}
+
+function parseFarmSpeed(value: unknown): LiveFarmHelperSpeedBucket | undefined {
+  return value === "ht" || value === "normal" || value === "dt" ? value : undefined;
 }
 
 function finiteString(value: unknown): string | undefined {

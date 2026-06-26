@@ -22,6 +22,7 @@ import { MANIA_PATTERN_LABELS } from "../lib/mania-patterns";
 import { PageHeader } from "../components/layout/PageHeader";
 import { PageTabs } from "../components/layout/PageTabs";
 import { Avatar } from "../components/ui/Avatar";
+import { OsuLogo } from "../components/ui/OsuLogo";
 import { Skeleton } from "../components/ui/LoadingSkeleton";
 import { ModGlyph } from "../components/maps/ModGlyph";
 import { ModBadge } from "../components/ui/ModBadge";
@@ -50,6 +51,7 @@ import {
   getPreviewInitialCombo,
   getPreviewNotes,
   getPreviewScrollVelocities,
+  resolveInitialChartPreviewAudioMode,
 } from "../lib/chart-preview";
 import { REPLAY_SCROLL_SPEED_CHANGE_EVENT, readReplayScrollSpeed } from "../lib/replay-scroll-speed";
 import { REPLAY_SKIN_SETTINGS_CHANGE_EVENT, readReplaySkinSettings } from "../lib/replay-skin";
@@ -3494,13 +3496,6 @@ function MapDetailsModal({
   );
 }
 
-const OSU_DIRECT_SVG_PATHS = (
-  <>
-    <path d="m75.1 181.4c-4.7 0-8.8-0.8-12.3-2.3s-6.4-3.7-8.6-6.4c-2.3-2.7-4-5.9-5.2-9.6s-1.7-7.6-1.7-11.9 0.6-8.3 1.7-12c1.2-3.7 2.9-7 5.2-9.7s5.2-4.9 8.6-6.5 7.6-2.4 12.3-2.4 8.8 0.8 12.3 2.4 6.4 3.7 8.8 6.5c2.3 2.7 4 6 5.2 9.7 1.1 3.7 1.7 7.7 1.7 12s-0.6 8.2-1.7 11.9-2.8 6.9-5.2 9.6c-2.3 2.7-5.2 4.9-8.8 6.4-3.4 1.6-7.6 2.3-12.3 2.3zm0-12.1c4.2 0 7.2-1.6 9-4.7s2.7-7.6 2.7-13.4-0.9-10.3-2.7-13.4-4.8-4.7-9-4.7c-4.1 0-7.1 1.6-8.9 4.7s-2.7 7.6-2.7 13.4 0.9 10.3 2.7 13.4c1.8 3.2 4.8 4.7 8.9 4.7zm51.8-14.5c-4.2-1.2-7.5-3-9.8-5.3-2.4-2.4-3.5-5.9-3.5-10.6 0-5.7 2-10.1 6.1-13.4 4.1-3.2 9.6-4.8 16.7-4.8 2.9 0 5.8 0.3 8.6 0.8s5.7 1.3 8.6 2.4c-0.2 1.9-0.5 4-1.1 6.1s-1.3 3.9-2.1 5.5c-1.8-0.7-3.8-1.4-5.9-2-2.2-0.6-4.5-0.8-6.8-0.8-2.5 0-4.5 0.4-5.9 1.2s-2.1 2-2.1 3.8c0 1.6 0.5 2.8 1.5 3.5s2.4 1.3 4.3 1.9l6.4 1.9c2.1 0.6 4 1.3 5.7 2.2s3.1 1.9 4.3 3.2 2.1 2.8 2.8 4.7 1 4.2 1 6.8c0 2.8-0.6 5.3-1.7 7.7-1.2 2.4-2.8 4.5-5 6.2-2.2 1.8-4.9 3.1-8 4.2-3.1 1-6.7 1.5-10.7 1.5-1.8 0-3.4-0.1-4.9-0.2s-2.9-0.3-4.3-0.6-2.7-0.6-4.1-1c-1.3-0.4-2.8-0.9-4.4-1.5 0.1-2 0.5-4.1 1.1-6.1 0.6-2.1 1.3-4.1 2.2-6 2.5 1 4.8 1.7 7 2.2s4.5 0.7 6.9 0.7c1 0 2.2-0.1 3.4-0.3s2.4-0.5 3.4-1 1.9-1.1 2.6-1.9 1.1-1.8 1.1-3.1c0-1.8-0.5-3.1-1.6-3.9s-2.6-1.5-4.5-2.1zm39.3-32.7c2.7-0.4 5.3-0.7 8-0.7 2.6 0 5.3 0.2 8 0.7v30.7c0 3.1 0.2 5.6 0.7 7.6s1.2 3.6 2.2 4.7c1 1.2 2.3 2 3.8 2.5s3.3 0.7 5.3 0.7c2.8 0 5.1-0.3 7-0.8v-45.4c2.7-0.4 5.3-0.7 7.9-0.7s5.3 0.2 8 0.7v55.8c-2.4 0.8-5.6 1.6-9.5 2.4s-8 1.2-12.3 1.2c-3.8 0-7.5-0.3-11-0.9s-6.6-1.9-9.3-3.8-4.8-4.8-6.3-8.5c-1.6-3.7-2.4-8.7-2.4-14.9v-31.3zm65.9 58c-0.4-2.8-0.7-5.5-0.7-8.2s0.2-5.5 0.7-8.3c2.8-0.4 5.5-0.7 8.2-0.7s5.5 0.2 8.3 0.7c0.4 2.8 0.7 5.6 0.7 8.2 0 2.8-0.2 5.5-0.7 8.3-2.8 0.4-5.6 0.7-8.2 0.7-2.8-0.1-5.5-0.3-8.3-0.7zm-0.4-80.7c2.9-0.4 5.8-0.7 8.6-0.7 2.9 0 5.8 0.2 8.8 0.7l-1.1 54.9c-2.6 0.4-5.1 0.7-7.5 0.7-2.5 0-5.1-0.2-7.6-0.7z" />
-    <path d="m150 0c-82.8 0-150 67.2-150 150s67.2 150 150 150 150-67.2 150-150-67.2-150-150-150zm0 285c-74.6 0-135-60.4-135-135s60.4-135 135-135 135 60.4 135 135-60.4 135-135 135z" />
-  </>
-);
-
 function MapDetailsContent({
   details,
   country,
@@ -3702,9 +3697,7 @@ function MapDetailsContent({
           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-osu-b3/70 hover:bg-osu-b3 text-white/85 hover:text-white text-[12px] font-semibold transition-colors cursor-pointer"
           title="Open in osu! client"
         >
-          <svg viewBox="0 0 300 300" className="h-[14px] w-[14px]" fill="currentColor" aria-hidden>
-            {OSU_DIRECT_SVG_PATHS}
-          </svg>
+          <OsuLogo className="h-[14px] w-[14px]" />
           <span>Open in osu!</span>
         </a>
       </div>
@@ -5071,11 +5064,13 @@ function RandomCard({ bm, resolving = false }: { bm: MapsFavouriteBeatmapset; re
           setReplayChartStartMs(previewPlan.startTimeMs);
           setReplayChartPlaybackMs(previewPlan.startTimeMs);
           setReplayChartTimeScale(previewPlan.timeScale);
-          setReplayAudioMode(
-            previewPlan.audioMode === "set-preview" && !timedRateVariant && previewPlan.beatmap.audioFilename
-              ? "selected-file"
-              : previewPlan.audioMode,
-          );
+          setReplayAudioMode(resolveInitialChartPreviewAudioMode({
+            plannedAudioMode: previewPlan.audioMode,
+            hasSelectedAudioFile: Boolean(previewPlan.beatmap.audioFilename),
+            hasSetPreviewAudio: Boolean(previewUrl),
+            hasDifficultyPicker: maniaBeatmaps.length > 1,
+            timedRateVariant,
+          }));
         }
       })
       .catch(() => {
@@ -5091,7 +5086,7 @@ function RandomCard({ bm, resolving = false }: { bm: MapsFavouriteBeatmapset; re
     return () => {
       cancelled = true;
     };
-  }, [maniaBeatmaps, metadataBeatmapsetId, replayChartScrub, replayPreviewRequested, selectedBeatmap, selectedDifficultyRate, usesSetPreviewForReplayAudio]);
+  }, [maniaBeatmaps, metadataBeatmapsetId, previewUrl, replayChartScrub, replayPreviewRequested, selectedBeatmap, selectedDifficultyRate, usesSetPreviewForReplayAudio]);
 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
@@ -5650,10 +5645,7 @@ function RandomCard({ bm, resolving = false }: { bm: MapsFavouriteBeatmapset; re
               title="Open in osu!"
             >
               <span className="text-[11px] font-semibold">Open in</span>
-              <svg viewBox="0 0 300 300" className="h-[26px] w-[26px]" fill="currentColor">
-                <path d="m75.1 181.4c-4.7 0-8.8-0.8-12.3-2.3s-6.4-3.7-8.6-6.4c-2.3-2.7-4-5.9-5.2-9.6s-1.7-7.6-1.7-11.9 0.6-8.3 1.7-12c1.2-3.7 2.9-7 5.2-9.7s5.2-4.9 8.6-6.5 7.6-2.4 12.3-2.4 8.8 0.8 12.3 2.4 6.4 3.7 8.8 6.5c2.3 2.7 4 6 5.2 9.7 1.1 3.7 1.7 7.7 1.7 12s-0.6 8.2-1.7 11.9-2.8 6.9-5.2 9.6c-2.3 2.7-5.2 4.9-8.8 6.4-3.4 1.6-7.6 2.3-12.3 2.3zm0-12.1c4.2 0 7.2-1.6 9-4.7s2.7-7.6 2.7-13.4-0.9-10.3-2.7-13.4-4.8-4.7-9-4.7c-4.1 0-7.1 1.6-8.9 4.7s-2.7 7.6-2.7 13.4 0.9 10.3 2.7 13.4c1.8 3.2 4.8 4.7 8.9 4.7zm51.8-14.5c-4.2-1.2-7.5-3-9.8-5.3-2.4-2.4-3.5-5.9-3.5-10.6 0-5.7 2-10.1 6.1-13.4 4.1-3.2 9.6-4.8 16.7-4.8 2.9 0 5.8 0.3 8.6 0.8s5.7 1.3 8.6 2.4c-0.2 1.9-0.5 4-1.1 6.1s-1.3 3.9-2.1 5.5c-1.8-0.7-3.8-1.4-5.9-2-2.2-0.6-4.5-0.8-6.8-0.8-2.5 0-4.5 0.4-5.9 1.2s-2.1 2-2.1 3.8c0 1.6 0.5 2.8 1.5 3.5s2.4 1.3 4.3 1.9l6.4 1.9c2.1 0.6 4 1.3 5.7 2.2s3.1 1.9 4.3 3.2 2.1 2.8 2.8 4.7 1 4.2 1 6.8c0 2.8-0.6 5.3-1.7 7.7-1.2 2.4-2.8 4.5-5 6.2-2.2 1.8-4.9 3.1-8 4.2-3.1 1-6.7 1.5-10.7 1.5-1.8 0-3.4-0.1-4.9-0.2s-2.9-0.3-4.3-0.6-2.7-0.6-4.1-1c-1.3-0.4-2.8-0.9-4.4-1.5 0.1-2 0.5-4.1 1.1-6.1 0.6-2.1 1.3-4.1 2.2-6 2.5 1 4.8 1.7 7 2.2s4.5 0.7 6.9 0.7c1 0 2.2-0.1 3.4-0.3s2.4-0.5 3.4-1 1.9-1.1 2.6-1.9 1.1-1.8 1.1-3.1c0-1.8-0.5-3.1-1.6-3.9s-2.6-1.5-4.5-2.1zm39.3-32.7c2.7-0.4 5.3-0.7 8-0.7 2.6 0 5.3 0.2 8 0.7v30.7c0 3.1 0.2 5.6 0.7 7.6s1.2 3.6 2.2 4.7c1 1.2 2.3 2 3.8 2.5s3.3 0.7 5.3 0.7c2.8 0 5.1-0.3 7-0.8v-45.4c2.7-0.4 5.3-0.7 7.9-0.7s5.3 0.2 8 0.7v55.8c-2.4 0.8-5.6 1.6-9.5 2.4s-8 1.2-12.3 1.2c-3.8 0-7.5-0.3-11-0.9s-6.6-1.9-9.3-3.8-4.8-4.8-6.3-8.5c-1.6-3.7-2.4-8.7-2.4-14.9v-31.3zm65.9 58c-0.4-2.8-0.7-5.5-0.7-8.2s0.2-5.5 0.7-8.3c2.8-0.4 5.5-0.7 8.2-0.7s5.5 0.2 8.3 0.7c0.4 2.8 0.7 5.6 0.7 8.2 0 2.8-0.2 5.5-0.7 8.3-2.8 0.4-5.6 0.7-8.2 0.7-2.8-0.1-5.5-0.3-8.3-0.7zm-0.4-80.7c2.9-0.4 5.8-0.7 8.6-0.7 2.9 0 5.8 0.2 8.8 0.7l-1.1 54.9c-2.6 0.4-5.1 0.7-7.5 0.7-2.5 0-5.1-0.2-7.6-0.7z" />
-                <path d="m150 0c-82.8 0-150 67.2-150 150s67.2 150 150 150 150-67.2 150-150-67.2-150-150-150zm0 285c-74.6 0-135-60.4-135-135s60.4-135 135-135 135 60.4 135 135-60.4 135-135 135z" />
-              </svg>
+              <OsuLogo className="h-[26px] w-[26px]" />
             </a>
           </div>
         </div>

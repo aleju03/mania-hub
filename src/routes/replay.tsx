@@ -2,7 +2,7 @@ import { createFileRoute, useCanGoBack, useNavigate, useRouter } from "@tanstack
 import { useState, useRef, useEffect, useCallback, useMemo, type PointerEvent as ReactPointerEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { LoaderCircle, Maximize2, Minimize2, Pause, Play } from "lucide-react";
-import { getReplayParsed, getBeatmapFile, getScore, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum } from "../lib/osu";
+import { getReplayParsed, getBeatmapFile, getScore, getUser, getUserScoresBest, getUserScoresFirsts, getUserScoresPinned, getUserScoresRecent, searchUsers, searchBeatmaps, getBeatmapScores, getRankings, getBeatmapScoreLookupStatus, getPartialBeatmapScores, lookupBeatmapByChecksum } from "../lib/osu";
 import { filterBeatmapSearchResults } from "../lib/beatmap-search";
 import { getEffectiveManiaKeyCount, getScoreDisplayValues, getScoreRate, modShiftsPitchWithRate, scoreHasReplay } from "../lib/score";
 import { useAppStore, useHiddenUserIds, useSelectedCountry } from "../store";
@@ -13,6 +13,7 @@ import type { ReplayBrowseMode } from "../components/replay/ReplayBrowseView";
 import { ReplayControls, ReplayProgressBar } from "../components/replay/ReplayControls";
 import type { ReplayVideoExportOptions } from "../components/replay/ReplayControls";
 import { ReplayInfo } from "../components/replay/ReplayInfo";
+import type { ReplayPlayerProfile } from "../components/replay/ReplayInfo";
 import { ReplaySkinSettingsModal } from "../components/replay/ReplaySkinSettingsModal";
 import { track } from "../lib/posthog";
 import { withTimeout } from "../lib/promise-timeout";
@@ -88,6 +89,7 @@ interface ReplaySearch {
 }
 
 type PlayerScoreGroups = { best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScore[]; recent: OsuScore[] };
+type PlayerScoreGroupLoading = Record<keyof PlayerScoreGroups, boolean>;
 
 type FullscreenDocument = Document & {
   webkitFullscreenElement?: Element | null;
@@ -148,6 +150,8 @@ type UploadedReplayDownload = {
   buffer: ArrayBuffer;
   filename: string | null;
 };
+
+type ReplayLoadingStep = "score" | "assets" | "viewer" | "upload" | "shared-upload";
 
 declare global {
   interface Window {
@@ -383,6 +387,51 @@ function shouldUseServerReplayVideoRender(): boolean {
   return import.meta.env.VITE_REPLAY_VIDEO_SERVER_RENDER === "1";
 }
 
+function getReplayLoadingCopy(step: ReplayLoadingStep, elapsedMs: number): { title: string; detail: string } {
+  const elapsedSeconds = Math.floor(elapsedMs / 1000);
+  const elapsedLabel = elapsedSeconds >= 4 ? ` (${elapsedSeconds}s)` : "";
+  const slowDetail = elapsedMs >= 12_000
+    ? "Still waiting on osu! replay data. First-time downloads are slower, but cached replays open faster next time."
+    : elapsedMs >= 6_000
+      ? "Still working. This usually means the replay download or beatmap file is taking a moment."
+      : null;
+
+  if (slowDetail) {
+    return {
+      title: `Loading replay${elapsedLabel}`,
+      detail: slowDetail,
+    };
+  }
+
+  switch (step) {
+    case "score":
+      return {
+        title: `Checking score details${elapsedLabel}`,
+        detail: "Confirming replay availability and key count.",
+      };
+    case "assets":
+      return {
+        title: `Downloading replay and beatmap${elapsedLabel}`,
+        detail: "Fetching the .osr, parsing frames, and loading the chart file.",
+      };
+    case "viewer":
+      return {
+        title: `Preparing replay viewer${elapsedLabel}`,
+        detail: "Unpacking frames and getting the renderer ready.",
+      };
+    case "upload":
+      return {
+        title: `Reading replay file${elapsedLabel}`,
+        detail: "Parsing the upload and matching it to a beatmap.",
+      };
+    case "shared-upload":
+      return {
+        title: `Loading shared replay${elapsedLabel}`,
+        detail: "Downloading the shared .osr and matching it to a beatmap.",
+      };
+  }
+}
+
 // Browsers default `preservesPitch` to true (the DT/HT behavior). NC/DC need
 // it off so pitch tracks playbackRate. Vendor prefixes cover Safari/Firefox.
 function setAudioPreservesPitch(audio: HTMLAudioElement, preservesPitch: boolean): void {
@@ -398,12 +447,13 @@ function setAudioPreservesPitch(audio: HTMLAudioElement, preservesPitch: boolean
 
 export const Route = createFileRoute("/replay")({
   loaderDeps: ({ search }) => ({ scoreId: search.scoreId }),
-  loader: async ({ deps }): Promise<{ seoScore: ReplaySeoScore | null }> => {
-    if (typeof deps.scoreId !== "number") return { seoScore: null };
+  loader: async ({ deps }): Promise<{ seoScore: ReplaySeoScore | null; score: OsuScore | null }> => {
+    if (typeof deps.scoreId !== "number") return { seoScore: null, score: null };
 
     try {
       const score = await getScore({ data: { scoreId: deps.scoreId } });
       return {
+        score,
         seoScore: {
           username: score.user?.username ?? "",
           title: score.beatmapset?.title ?? "",
@@ -411,7 +461,7 @@ export const Route = createFileRoute("/replay")({
         },
       };
     } catch {
-      return { seoScore: null };
+      return { seoScore: null, score: null };
     }
   },
   head: ({ match, loaderData }) => {
@@ -466,6 +516,10 @@ function createEmptyPlayerScoreGroups(): PlayerScoreGroups {
   return { best: [], firsts: [], pinned: [], recent: [] };
 }
 
+function createPlayerScoreGroupLoading(isLoading: boolean): PlayerScoreGroupLoading {
+  return { best: isLoading, firsts: isLoading, pinned: isLoading, recent: isLoading };
+}
+
 function hasAnyPlayerScore(groups: PlayerScoreGroups): boolean {
   return groups.best.length > 0 || groups.firsts.length > 0 || groups.pinned.length > 0 || groups.recent.length > 0;
 }
@@ -509,6 +563,7 @@ async function fetchReplayCachedProfileSnapshot(key: string): Promise<LivePlayer
 
 function ReplayPage() {
   const { scoreId, beatmapsetId, uploadId, t: initialTime, tab, player: playerParam } = Route.useSearch();
+  const loaderData = Route.useLoaderData();
   const navigate = useNavigate();
   const router = useRouter();
   const canGoBack = useCanGoBack();
@@ -524,11 +579,15 @@ function ReplayPage() {
   const [replay, setReplay] = useState<ServerReplay | null>(null);
   const [beatmap, setBeatmap] = useState<ManiaBeatmap | null>(null);
   const [scoreInfo, setScoreInfo] = useState<OsuScore | null>(null);
+  const [playerProfile, setPlayerProfile] = useState<ReplayPlayerProfile | null>(null);
   const [uploadedReplayMods, setUploadedReplayMods] = useState<OsuMod[]>([]);
   const [uploadedBeatmapsetId, setUploadedBeatmapsetId] = useState<number | undefined>(undefined);
   const [uploadedReplayShareUrl, setUploadedReplayShareUrl] = useState<string | null>(null);
   const [loadedUploadId, setLoadedUploadId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [replayLoadingStep, setReplayLoadingStep] = useState<ReplayLoadingStep>("score");
+  const [replayLoadingStartedAt, setReplayLoadingStartedAt] = useState(0);
+  const [replayLoadingElapsedMs, setReplayLoadingElapsedMs] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [playerSearchQuery, setPlayerSearchQuery] = useState("");
   const [scorePreview, setScorePreview] = useState<OsuScore | null>(null);
@@ -538,6 +597,7 @@ function ReplayPage() {
   // Player browse state
   const [playerScoreGroups, setPlayerScoreGroups] = useState<PlayerScoreGroups | null>(null);
   const [loadingScores, setLoadingScores] = useState(false);
+  const [playerScoreLoadingByGroup, setPlayerScoreLoadingByGroup] = useState<PlayerScoreGroupLoading>(() => createPlayerScoreGroupLoading(false));
   const [playerLookupUserId, setPlayerLookupUserId] = useState<number | null>(null);
   const [loadedPlayerParam, setLoadedPlayerParam] = useState<string | null>(null);
   const loadingPlayerParamRef = useRef<string | null>(null);
@@ -576,9 +636,66 @@ function ReplayPage() {
   );
   const normalizedPlayerParam = normalizeReplayPlayerParam(playerParam);
   const playerSearchScoreId = parseReplayScoreInput(playerSearchQuery);
+  const replayLoadingCopy = getReplayLoadingCopy(replayLoadingStep, replayLoadingElapsedMs);
 
-  const loadReplay = useCallback(async (sid: number) => {
+  useEffect(() => {
+    if (!loading || replayLoadingStartedAt <= 0) {
+      setReplayLoadingElapsedMs(0);
+      return;
+    }
+
+    const updateElapsed = () => setReplayLoadingElapsedMs(Date.now() - replayLoadingStartedAt);
+    updateElapsed();
+    const interval = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(interval);
+  }, [loading, replayLoadingStartedAt]);
+
+  // Resolve the replay player's avatar + profile banner for the info bar. Seed
+  // from the score's embedded user (instant avatar), then fetch the full profile
+  // to pull the cover image. Falls back to a name-only header if lookup fails.
+  const scoreUserId = scoreInfo?.user?.id;
+  const scoreUserName = scoreInfo?.user?.username;
+  const scoreUserAvatar = scoreInfo?.user?.avatar_url;
+  useEffect(() => {
+    if (!replay) {
+      setPlayerProfile(null);
+      return;
+    }
+    const lookupKey = scoreUserId
+      ? String(scoreUserId)
+      : (scoreUserName || replay.header.playerName || "").trim();
+    if (!lookupKey) {
+      setPlayerProfile(null);
+      return;
+    }
+
+    setPlayerProfile({
+      id: scoreUserId ?? null,
+      username: scoreUserName || replay.header.playerName,
+      avatarUrl: scoreUserAvatar,
+      coverUrl: undefined,
+    });
+
+    let cancelled = false;
+    getUser({ data: { key: lookupKey } })
+      .then((user) => {
+        if (cancelled || !user) return;
+        setPlayerProfile({
+          id: user.id ?? scoreUserId ?? null,
+          username: user.username || scoreUserName || replay.header.playerName,
+          avatarUrl: user.avatar_url || scoreUserAvatar,
+          coverUrl: user.cover_url || user.cover?.custom_url || undefined,
+        });
+      })
+      .catch(() => { /* keep the score-seeded avatar/name */ });
+    return () => { cancelled = true; };
+  }, [replay, scoreUserId, scoreUserName, scoreUserAvatar]);
+
+  const loadReplay = useCallback(async (sid: number, initialScore?: OsuScore | null) => {
     setError(null);
+    setReplayLoadingStep("score");
+    setReplayLoadingStartedAt(Date.now());
+    setReplayLoadingElapsedMs(0);
     setLoading(true);
     setReplay(null);
     setBeatmap(null);
@@ -590,7 +707,9 @@ function ReplayPage() {
 
     try {
       // Fetch score first to get key count (beatmap.cs) for correct replay parsing
-      const score = await getScore({ data: { scoreId: sid, mode: "mania" } }).catch(() => null);
+      const score = initialScore?.id === sid
+        ? initialScore
+        : await getScore({ data: { scoreId: sid, mode: "mania" } }).catch(() => null);
       if (score) {
         const availability = getReplayScoreAvailability(score);
         if (!availability.available) {
@@ -611,6 +730,7 @@ function ReplayPage() {
         });
       }
 
+      setReplayLoadingStep("assets");
       // Fetch replay with the effective key count from score API, and beatmap file in parallel.
       // xK mods only apply to converted beatmaps, matching osu!lazer's ManiaKeyMod converter hook.
       const keyCount = score?.beatmap ? getEffectiveManiaKeyCount(score.beatmap, score.mods) ?? undefined : undefined;
@@ -621,6 +741,7 @@ function ReplayPage() {
           : Promise.resolve(null),
       ]);
 
+      setReplayLoadingStep("viewer");
       setReplay({
         header: parsed.header,
         frames: unpackReplayFrames(parsed.framesPacked),
@@ -642,7 +763,8 @@ function ReplayPage() {
     if (scoreId) {
       playerScoreRequestRef.current += 1;
       setLoadingScores(false);
-      loadReplay(scoreId);
+      setPlayerScoreLoadingByGroup(createPlayerScoreGroupLoading(false));
+      loadReplay(scoreId, loaderData.score);
       return;
     }
     if (uploadId) return;
@@ -660,7 +782,8 @@ function ReplayPage() {
     setScorePreview(null);
     setScorePreviewLoading(false);
     setScorePreviewError(null);
-  }, [scoreId, uploadId, loadReplay]);
+    setPlayerScoreLoadingByGroup(createPlayerScoreGroupLoading(false));
+  }, [scoreId, uploadId, loadReplay, loaderData.score]);
 
   useEffect(() => {
     if (scoreId) return;
@@ -726,6 +849,11 @@ function ReplayPage() {
       resolveInitial();
     };
 
+    const setScoreGroupLoading = (key: keyof PlayerScoreGroups, isLoading: boolean) => {
+      if (!isCurrentRequest()) return;
+      setPlayerScoreLoadingByGroup((current) => ({ ...current, [key]: isLoading }));
+    };
+
     const applyGroups = () => {
       if (!isCurrentRequest()) return;
       visibleGroups = buildPlayerScoreGroups(rawGroups);
@@ -743,7 +871,8 @@ function ReplayPage() {
           rawGroups = { ...rawGroups, [key]: scores };
           applyGroups();
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => setScoreGroupLoading(key, false));
 
       if (!options.initialTimeoutMs) return updatePromise;
       return Promise.race([
@@ -781,6 +910,7 @@ function ReplayPage() {
     });
 
     setLoadingScores(true);
+    setPlayerScoreLoadingByGroup(createPlayerScoreGroupLoading(true));
     setPlayerScoreGroups(createEmptyPlayerScoreGroups());
 
     const initialReady = new Promise<void>((resolve) => {
@@ -810,8 +940,10 @@ function ReplayPage() {
   const handleSelectPlayer = async (user: { id: number; username: string }) => {
     const normalizedUsername = normalizeReplayPlayerParam(user.username);
     if (normalizedUsername) playerIdsByParamRef.current.set(normalizedUsername, user.id);
+    playerScoreRequestRef.current += 1;
     navigate({ to: "/replay", search: { player: user.username } });
-    setPlayerScoreGroups(null);
+    setPlayerScoreGroups(createEmptyPlayerScoreGroups());
+    setPlayerScoreLoadingByGroup(createPlayerScoreGroupLoading(true));
     setLoadingScores(true);
     setPlayerLookupUserId(user.id);
     setLoadedPlayerParam(null);
@@ -872,6 +1004,9 @@ function ReplayPage() {
 
   const loadSharedUploadedReplay = useCallback(async (id: string) => {
     setError(null);
+    setReplayLoadingStep("shared-upload");
+    setReplayLoadingStartedAt(Date.now());
+    setReplayLoadingElapsedMs(0);
     setLoading(true);
     setReplay(null);
     setBeatmap(null);
@@ -909,6 +1044,9 @@ function ReplayPage() {
       return;
     }
 
+    setReplayLoadingStep("upload");
+    setReplayLoadingStartedAt(Date.now());
+    setReplayLoadingElapsedMs(0);
     setLoading(true);
     setReplay(null);
     setBeatmap(null);
@@ -1051,6 +1189,7 @@ function ReplayPage() {
       setPlayerScoreGroups(null);
       setPlayerLookupUserId(null);
       setLoadingScores(false);
+      setPlayerScoreLoadingByGroup(createPlayerScoreGroupLoading(false));
       setLoadedPlayerParam(null);
       loadingPlayerParamRef.current = null;
       return;
@@ -1062,7 +1201,9 @@ function ReplayPage() {
       hasScoreId: Boolean(scoreId),
     })) return;
 
-    setPlayerScoreGroups(null);
+    playerScoreRequestRef.current += 1;
+    setPlayerScoreGroups(createEmptyPlayerScoreGroups());
+    setPlayerScoreLoadingByGroup(createPlayerScoreGroupLoading(true));
     setLoadedPlayerParam(null);
     loadingPlayerParamRef.current = normalizedPlayerParam;
     let cancelled = false;
@@ -1107,12 +1248,14 @@ function ReplayPage() {
 
         setPlayerLookupUserId(null);
         setPlayerScoreGroups(createEmptyPlayerScoreGroups());
+        setPlayerScoreLoadingByGroup(createPlayerScoreGroupLoading(false));
         setLoadingScores(false);
         setLoadedPlayerParam(normalizedPlayerParam);
       } catch {
         if (!cancelled) {
           setPlayerLookupUserId(null);
           setPlayerScoreGroups(createEmptyPlayerScoreGroups());
+          setPlayerScoreLoadingByGroup(createPlayerScoreGroupLoading(false));
           setLoadingScores(false);
           setLoadedPlayerParam(normalizedPlayerParam);
         }
@@ -1225,13 +1368,14 @@ function ReplayPage() {
         <div className="max-w-[1200px] mx-auto px-3 py-3 sm:px-5 sm:py-6">
           <AnimatePresence mode="wait">
             {loading ? (
-              <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center py-20">
-                <div className="w-10 h-10 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin mb-4" />
-                <p className="text-sm text-osu-f1">Loading replay & beatmap...</p>
+              <motion.div key="loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center px-4 py-20 text-center">
+                <div className="mb-4 h-10 w-10 rounded-full border-2 border-osu-pink/40 border-t-osu-pink animate-spin" />
+                <p className="text-sm font-semibold text-osu-l2">{replayLoadingCopy.title}</p>
+                <p className="mt-1 max-w-md text-xs leading-relaxed text-osu-f1">{replayLoadingCopy.detail}</p>
               </motion.div>
             ) : replay ? (
               <motion.div key="viewer" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <ReplayInfo replay={replay} score={scoreInfo} beatmap={beatmap} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} shareUrl={uploadedReplayShareUrl ?? undefined} onClear={handleClearReplay} />
+                <ReplayInfo replay={replay} score={scoreInfo} beatmap={beatmap} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} shareUrl={uploadedReplayShareUrl ?? undefined} playerProfile={playerProfile} onClear={handleClearReplay} />
                 <ReplayViewer replay={replay} beatmap={beatmap} scoreInfo={scoreInfo} replayMods={uploadedReplayMods} fallbackBeatmapsetId={uploadedBeatmapsetId ?? beatmapsetId} initialTime={initialTime} />
               </motion.div>
             ) : (
@@ -1244,6 +1388,7 @@ function ReplayPage() {
                   playerScoreRequestRef.current += 1;
                   setPlayerScoreGroups(null);
                   setLoadingScores(false);
+                  setPlayerScoreLoadingByGroup(createPlayerScoreGroupLoading(false));
                   setBeatmapResults([]);
                   setRawBeatmapScores([]);
                   setPartialBeatmapScores([]);
@@ -1272,6 +1417,7 @@ function ReplayPage() {
                 onOpenScorePreview={handleOpenScorePreview}
                 loadingScores={loadingScores}
                 playerScoreGroups={playerScoreGroups}
+                playerScoreLoadingByGroup={playerScoreLoadingByGroup}
                 playerLookupUserId={playerLookupUserId}
                 playerParam={playerParam}
                 suggestionPlayers={suggestionPlayers}
@@ -1334,8 +1480,11 @@ function ReplayViewer({
   const [speed, setSpeed] = useState(1);
   const effectiveReplayMods = useMemo(() => scoreInfo?.mods ?? replayMods ?? [], [replayMods, scoreInfo?.mods]);
   const replayStableScrollSpeed = useMemo(
-    () => resolveStableManiaReplayScrollSpeed(replay.stableScrollSpeedScale, beatmap?.bpm ?? scoreInfo?.beatmap?.bpm),
-    [beatmap?.bpm, replay.stableScrollSpeedScale, scoreInfo?.beatmap?.bpm],
+    () => resolveStableManiaReplayScrollSpeed(
+      replay.stableScrollSpeedScale,
+      beatmap?.stableScrollBpm ?? beatmap?.bpm ?? scoreInfo?.beatmap?.bpm,
+    ),
+    [beatmap?.bpm, beatmap?.stableScrollBpm, replay.stableScrollSpeedScale, scoreInfo?.beatmap?.bpm],
   );
   const displayScoreValues = useMemo(
     () => (scoreInfo ? getScoreDisplayValues(scoreInfo) : null),

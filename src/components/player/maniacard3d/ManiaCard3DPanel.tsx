@@ -455,7 +455,7 @@ function RatingExplainerModal({
                   <span>Control (9%) + Stamina (7%) + Speed (7%) + Precision (5%)</span>
                 </div>
               </div>
-              <p className="mt-2 text-[11px] text-osu-f1/70">This number determines your tier.</p>
+              <p className="mt-2 text-[11px] text-osu-f1/70">PP standing is read on a per-keymode scale, so a 7K main isn't ranked on 4K PP. This number determines your tier.</p>
             </Step>
           </div>
         </div>

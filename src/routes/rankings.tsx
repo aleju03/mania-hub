@@ -1,5 +1,5 @@
 import { createFileRoute, Link, stripSearchParams, useNavigate } from "@tanstack/react-router";
-import { useEffect, useRef, useState, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import type { MouseEvent } from "react";
 import { getRankings, getUsersRankHistory } from "../lib/osu";
 import { CLIENT_CACHE_TTL, isCacheStale } from "../lib/cache";
@@ -72,25 +72,6 @@ function handlePlayerAuxClick(event: MouseEvent<HTMLElement>, username: string):
   window.open(getPlayerPath(username), "_blank", "noopener,noreferrer");
 }
 
-// Track the sm breakpoint with useSyncExternalStore so the initial render
-// reads the real viewport width synchronously (no second-render flicker) and
-// server rendering falls back to the desktop variant.
-const DESKTOP_MQ = "(min-width: 640px)";
-function subscribeDesktop(cb: () => void): () => void {
-  const mq = window.matchMedia(DESKTOP_MQ);
-  mq.addEventListener("change", cb);
-  return () => mq.removeEventListener("change", cb);
-}
-function getDesktopSnapshot(): boolean {
-  return window.matchMedia(DESKTOP_MQ).matches;
-}
-function getDesktopServerSnapshot(): boolean {
-  return true;
-}
-function useIsDesktop(): boolean {
-  return useSyncExternalStore(subscribeDesktop, getDesktopSnapshot, getDesktopServerSnapshot);
-}
-
 export const Route = createFileRoute("/rankings")({
   validateSearch: (search: Record<string, unknown>): RankingsSearch => ({
     page: parseRankingsPage(search.page),
@@ -121,7 +102,6 @@ function RankingsPage() {
   const navigate = useNavigate();
   const fallbackCountry = useSelectedCountry();
   const selectedCountry = country ?? fallbackCountry;
-  const isDesktop = useIsDesktop();
   const cachedPageOneData = useAppStore((state) => state.rankingsByCountry[selectedCountry] ?? null);
   const rankingsFetchedAt = useAppStore((state) => state.rankingsFetchedAtByCountry[selectedCountry] ?? null);
   const rankHistories = useAppStore((state) => state.rankHistories);
@@ -465,8 +445,7 @@ function RankingsPage() {
         />
         <div className="bg-osu-b5">
           <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5">
-            {!isDesktop && (
-            <>
+            <div className="sm:hidden">
             <div className="flex items-center gap-1.5 pb-3 overflow-x-auto scrollbar-hide">
               {([
                 { field: "rank" as SortField, label: "#" },
@@ -594,11 +573,9 @@ function RankingsPage() {
                 <div className="px-4 py-10 text-center text-xs text-osu-f1">No ranked players yet.</div>
               )}
             </div>
-            </>
-            )}
+            </div>
 
-            {isDesktop && (
-            <div className="rounded-xl overflow-hidden border border-osu-b3/30">
+            <div className="hidden sm:block rounded-xl overflow-hidden border border-osu-b3/30">
               <table className="w-full table-fixed">
                 <colgroup>
                   <col className="w-[5%]" />
@@ -691,7 +668,6 @@ function RankingsPage() {
                 </tbody>
               </table>
             </div>
-            )}
             {globalTotalPages > 1 && (
               <Pagination
                 page={Math.min(Math.max(page, 1), globalTotalPages) - 1}
@@ -730,8 +706,7 @@ function RankingsPage() {
       {!warming && (
       <div className="bg-osu-b5">
         <div className="max-w-[1200px] mx-auto px-4 sm:px-5 py-5">
-          {!isDesktop && (
-          <>
+          <div className="sm:hidden">
           {/* Mobile sort bar */}
           <div className="flex items-center gap-1.5 pb-3 overflow-x-auto scrollbar-hide">
             {([
@@ -910,11 +885,9 @@ function RankingsPage() {
               ))
             )}
           </div>
-          </>
-          )}
+          </div>
 
-          {isDesktop && (
-          <div className="rounded-xl overflow-hidden border border-osu-b3/30">
+          <div className="hidden sm:block rounded-xl overflow-hidden border border-osu-b3/30">
             <table className="w-full table-fixed">
               <colgroup>
                 <col className="w-[5%]" />
@@ -1015,20 +988,7 @@ function RankingsPage() {
                   Array.from({ length: 10 }).map((_, i) => (
                     <tr key={i} className="border-t border-osu-b3/20">
                       <td colSpan={10} className="px-3 py-1.5">
-                        <div className="hidden sm:block">
-                          <RankingRowSkeleton />
-                        </div>
-                        <div className="sm:hidden space-y-2 rounded-lg bg-osu-b4/50 p-3">
-                          <div className="flex items-center gap-3">
-                            <Skeleton className="w-8 h-4" />
-                            <Skeleton className="w-8 h-8 rounded-full" />
-                            <Skeleton className="h-4 flex-1" />
-                          </div>
-                          <div className="flex gap-2">
-                            <Skeleton className="h-3 flex-1" />
-                            <Skeleton className="h-3 w-14" />
-                          </div>
-                        </div>
+                        <RankingRowSkeleton />
                       </td>
                     </tr>
                   ))
@@ -1036,7 +996,6 @@ function RankingsPage() {
               </tbody>
             </table>
           </div>
-          )}
           {hasNextPage && (
             <div className="flex items-center justify-center gap-3 pt-4">
               <button

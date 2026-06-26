@@ -2,19 +2,19 @@ import { createFileRoute, Link, Outlet, useMatches, useNavigate } from "@tanstac
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ExternalLink, Users, Target, TrendingUp, History, ArrowRight, X } from "lucide-react";
+import { ExternalLink, Users, Target, TrendingUp, History, ArrowRight, X, Search, LayoutGrid, List } from "lucide-react";
 import {
-  fetchLiveFarmHelperFarmers,
   fetchLiveFarmHelperSnapshot,
   isLiveBackendConfigured,
-  type LiveFarmHelperFarmer,
   type LiveFarmHelperKeyMode,
   type LiveFarmHelperRec,
   type LiveFarmHelperSnapshot,
+  type LiveFarmHelperView,
 } from "../lib/live-backend";
 import { searchUsers } from "../lib/osu";
 import { PageHeader } from "../components/layout/PageHeader";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
+import { FarmersList } from "../components/farm-helper/FarmersList";
 import { SearchInput } from "../components/ui/SearchInput";
 import { Avatar } from "../components/ui/Avatar";
 import { CountryFlag } from "../components/ui/CountryFlag";
@@ -26,14 +26,19 @@ import { useAuth } from "../lib/auth-context";
 import { pageSeo } from "../lib/seo";
 
 const PAGE_SIZE = 10;
+const GRID_PAGE_SIZE = 12;
+const POPULAR_LIMIT = 100;
 
 type ReasonFilter = "all" | "missing" | "improve" | "stale";
-type SortMode = "gain" | "popularity" | "players" | "difficulty";
+type SortMode = "gain" | "popularity" | "players" | "difficulty" | "recent";
 type SortDirection = "asc" | "desc";
+type LayoutMode = "list" | "grid";
 
 interface FarmHelperSearch {
   user?: string;
   key?: LiveFarmHelperKeyMode;
+  view?: LiveFarmHelperView;
+  layout?: LayoutMode;
   reason?: ReasonFilter;
   sort?: SortMode;
   dir?: SortDirection;
@@ -44,12 +49,30 @@ function parseKeyMode(value: unknown): LiveFarmHelperKeyMode | undefined {
   return value === "4k" || value === "7k" || value === "any" ? value : undefined;
 }
 
+function parseView(value: unknown): LiveFarmHelperView | undefined {
+  return value === "popular" ? "popular" : value === "gain" ? "gain" : undefined;
+}
+
+function parseLayout(value: unknown): LayoutMode | undefined {
+  return value === "grid" ? "grid" : value === "list" ? "list" : undefined;
+}
+
+// Popular browse suits the card grid (and matches the maps page); the personalized
+// gain view defaults to the dense list. An explicit ?layout= overrides either.
+function defaultLayoutForView(view: LiveFarmHelperView): LayoutMode {
+  return view === "popular" ? "grid" : "list";
+}
+
+function defaultSortForView(view: LiveFarmHelperView): SortMode {
+  return view === "popular" ? "popularity" : "gain";
+}
+
 function parseReasonFilter(value: unknown): ReasonFilter {
   return value === "missing" || value === "improve" || value === "stale" ? value : "all";
 }
 
 function parseSortMode(value: unknown): SortMode {
-  return value === "popularity" || value === "players" || value === "difficulty" ? value : "gain";
+  return value === "popularity" || value === "players" || value === "difficulty" || value === "recent" ? value : "gain";
 }
 
 function parseSortDirection(value: unknown): SortDirection {
@@ -64,6 +87,8 @@ function parsePage(value: unknown): number {
 function buildFarmHelperSearch({
   user,
   key,
+  view,
+  layout,
   reason,
   sort,
   dir,
@@ -71,16 +96,22 @@ function buildFarmHelperSearch({
 }: {
   user?: string | null;
   key?: LiveFarmHelperKeyMode;
+  view?: LiveFarmHelperView;
+  layout?: LayoutMode | null;
   reason?: ReasonFilter;
   sort?: SortMode;
   dir?: SortDirection;
   page?: number;
 }): FarmHelperSearch {
+  const effectiveView = view ?? "gain";
+  const defaultSort = defaultSortForView(effectiveView);
   return {
     user: user ?? undefined,
     key: key && key !== "any" ? key : undefined,
+    view: effectiveView !== "gain" ? effectiveView : undefined,
+    layout: layout ?? undefined,
     reason: reason && reason !== "all" ? reason : undefined,
-    sort: sort && sort !== "gain" ? sort : undefined,
+    sort: sort && sort !== defaultSort ? sort : undefined,
     dir: dir && dir !== "desc" ? dir : undefined,
     page: page && page > 0 ? Math.floor(page) : undefined,
   };
@@ -106,6 +137,8 @@ export const Route = createFileRoute("/farm-helper")({
   validateSearch: (search: Record<string, unknown>): FarmHelperSearch => buildFarmHelperSearch({
     user: typeof search.user === "string" && search.user.trim() ? search.user.trim().slice(0, 60) : undefined,
     key: parseKeyMode(search.key),
+    view: parseView(search.view),
+    layout: parseLayout(search.layout),
     reason: parseReasonFilter(search.reason),
     sort: parseSortMode(search.sort),
     dir: parseSortDirection(search.dir),
@@ -125,6 +158,7 @@ const REASON_META: Record<LiveFarmHelperRec["reason"], { label: string; accent: 
   missing: { label: "missing", accent: "bg-osu-blue", text: "text-osu-blue" },
   improve: { label: "improve", accent: "bg-osu-green-light", text: "text-osu-green-light" },
   stale: { label: "old pb", accent: "bg-osu-yellow", text: "text-osu-yellow" },
+  owned: { label: "cleared", accent: "bg-osu-pink", text: "text-osu-pink" },
 };
 
 const FARM_MAP_CONTEXT_KEY_PREFIX = "mania-hub-farm-helper-map-context-v1:";
@@ -148,31 +182,44 @@ function FarmHelperPage() {
 
   const subjectKey = search.user ?? null;
   const keyMode: LiveFarmHelperKeyMode = search.key ?? "any";
-  const reasonFilter: ReasonFilter = search.reason ?? "all";
-  const sortMode: SortMode = search.sort ?? "gain";
+  const view: LiveFarmHelperView = search.view ?? "gain";
+  const layout: LayoutMode = search.layout ?? defaultLayoutForView(view);
+  const reasonFilter: ReasonFilter = view === "gain" ? (search.reason ?? "all") : "all";
+  const sortMode: SortMode = search.sort ?? defaultSortForView(view);
   const sortDir: SortDirection = search.dir ?? "desc";
   const page = search.page ?? 0;
+  const [query, setQuery] = useState("");
 
-  const navigateFarmHelper = ({
-    user = subjectKey,
-    key = keyMode,
-    reason = reasonFilter,
-    sort = sortMode,
-    dir = sortDir,
-    page: nextPage = page,
-    replace = true,
-  }: {
-    user?: string | null;
-    key?: LiveFarmHelperKeyMode;
-    reason?: ReasonFilter;
-    sort?: SortMode;
-    dir?: SortDirection;
-    page?: number;
-    replace?: boolean;
-  }) => {
+  const navigateFarmHelper = (
+    patch: {
+      user?: string | null;
+      key?: LiveFarmHelperKeyMode;
+      view?: LiveFarmHelperView;
+      layout?: LayoutMode | null;
+      reason?: ReasonFilter;
+      sort?: SortMode;
+      dir?: SortDirection;
+      page?: number;
+      replace?: boolean;
+    } = {},
+  ) => {
+    const { replace = true, ...changes } = patch;
+    // Spread merges onto the raw search params, so an explicit `undefined`
+    // (e.g. sort) clears that param rather than falling back to its current value.
+    const next = {
+      user: subjectKey,
+      key: keyMode,
+      view: search.view,
+      layout: search.layout ?? undefined,
+      reason: reasonFilter,
+      sort: search.sort,
+      dir: sortDir,
+      page,
+      ...changes,
+    };
     navigate({
       to: "/farm-helper",
-      search: buildFarmHelperSearch({ user, key, reason, sort, dir, page: nextPage }),
+      search: buildFarmHelperSearch(next),
       replace,
       resetScroll: false,
     });
@@ -186,6 +233,15 @@ function FarmHelperPage() {
     navigateFarmHelper({ key: next, page: 0 });
   };
 
+  const setView = (next: LiveFarmHelperView) => {
+    // Reset the sort so each mode lands on its natural default ordering.
+    navigateFarmHelper({ view: next, reason: undefined, sort: undefined, page: 0 });
+  };
+
+  const setLayout = (next: LayoutMode) => {
+    navigateFarmHelper({ layout: next });
+  };
+
   useEffect(() => {
     if (!liveEnabled || !subjectKey) {
       setSnapshot(null);
@@ -195,7 +251,12 @@ function FarmHelperPage() {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
-    fetchLiveFarmHelperSnapshot(subjectKey, { keyMode, signal: controller.signal })
+    fetchLiveFarmHelperSnapshot(subjectKey, {
+      keyMode,
+      view,
+      limit: view === "popular" ? POPULAR_LIMIT : undefined,
+      signal: controller.signal,
+    })
       .then((data) => {
         if (cancelled) return;
         setSnapshot(data);
@@ -215,14 +276,23 @@ function FarmHelperPage() {
       cancelled = true;
       controller.abort();
     };
-  }, [liveEnabled, subjectKey, keyMode]);
+  }, [liveEnabled, subjectKey, keyMode, view]);
 
   const [farmersFor, setFarmersFor] = useState<{ rec: LiveFarmHelperRec; keyMode: LiveFarmHelperKeyMode } | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   const recs = useMemo(() => {
     if (!snapshot) return [];
-    const filtered = reasonFilter === "all" ? snapshot.recs : snapshot.recs.filter((rec) => rec.reason === reasonFilter);
+    const q = query.trim().toLowerCase();
+    const matchesQuery = (rec: LiveFarmHelperRec) =>
+      !q
+      || rec.title.toLowerCase().includes(q)
+      || rec.artist.toLowerCase().includes(q)
+      || rec.creator.toLowerCase().includes(q)
+      || rec.version.toLowerCase().includes(q);
+    const filtered = snapshot.recs.filter(
+      (rec) => (reasonFilter === "all" || rec.reason === reasonFilter) && matchesQuery(rec),
+    );
     const sorted = [...filtered];
     const direction = sortDir === "desc" ? 1 : -1;
     sorted.sort((a, b) => {
@@ -230,19 +300,22 @@ function FarmHelperPage() {
       const byFit = b.peerFraction - a.peerFraction;
       const byPlayers = b.peerCount - a.peerCount;
       const byStars = b.stars - a.stars;
+      const byRecent = timestampMs(b.peerRecencyPlayedAt) - timestampMs(a.peerRecencyPlayedAt);
       const bySelected =
         sortMode === "gain" ? byGain
           : sortMode === "popularity" ? byFit
             : sortMode === "players" ? byPlayers
-              : byStars;
+              : sortMode === "recent" ? byRecent
+                : byStars;
       return (bySelected || byGain || byFit || byPlayers || byStars) * direction;
     });
     return sorted;
-  }, [snapshot, reasonFilter, sortMode, sortDir]);
+  }, [snapshot, query, reasonFilter, sortMode, sortDir]);
 
-  const pageCount = Math.ceil(recs.length / PAGE_SIZE);
+  const pageSize = layout === "grid" ? GRID_PAGE_SIZE : PAGE_SIZE;
+  const pageCount = Math.ceil(recs.length / pageSize);
   const safePage = Math.min(page, Math.max(0, pageCount - 1));
-  const pageRecs = recs.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
+  const pageRecs = recs.slice(safePage * pageSize, safePage * pageSize + pageSize);
 
   const goToPage = (next: number) => {
     navigateFarmHelper({ page: next });
@@ -293,36 +366,75 @@ function FarmHelperPage() {
                   <div className="border-b border-osu-b3/20 px-4 py-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">recommendations</div>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-osu-f1">
+                          {view === "popular" ? "popular at your level" : "recommendations"}
+                        </div>
                         <div className="mt-0.5 text-sm font-semibold text-osu-c1">
                           {formatPp(recs.length)} map{recs.length === 1 ? "" : "s"}
-                          <span className="font-normal text-osu-f1"> · +{formatPp(totalGain(recs))}pp on the table</span>
+                          {view === "popular" ? (
+                            <span className="font-normal text-osu-f1"> · what nearby players farm</span>
+                          ) : (
+                            <span className="font-normal text-osu-f1"> · +{formatPp(totalGain(recs))}pp on the table</span>
+                          )}
                         </div>
                       </div>
-                      <KeyModeControl requestedKeyMode={keyMode} onKeyMode={setKeyMode} />
+                      <ViewModeToggle view={view} onView={setView} />
                     </div>
-                    <Filters
-                      reasonFilter={reasonFilter}
-                      onReason={(next) => navigateFarmHelper({ reason: next, page: 0 })}
-                      sortMode={sortMode}
-                      sortDir={sortDir}
-                      onSort={(next) => {
-                        navigateFarmHelper({
-                          sort: next,
-                          dir: sortMode === next ? (sortDir === "desc" ? "asc" : "desc") : "desc",
-                          page: 0,
-                        });
-                      }}
-                      counts={countReasons(snapshot.recs)}
-                    />
+                    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+                      <ResultsSearch value={query} onChange={setQuery} />
+                      <div className="flex items-center gap-2">
+                        <KeyModeControl requestedKeyMode={keyMode} onKeyMode={setKeyMode} />
+                        <LayoutToggle layout={layout} onLayout={setLayout} />
+                      </div>
+                      <Filters
+                        showReason={view === "gain"}
+                        reasonFilter={reasonFilter}
+                        onReason={(next) => navigateFarmHelper({ reason: next, page: 0 })}
+                        sortMode={sortMode}
+                        sortDir={sortDir}
+                        onSort={(next) => {
+                          navigateFarmHelper({
+                            sort: next,
+                            dir: sortMode === next ? (sortDir === "desc" ? "asc" : "desc") : "desc",
+                            page: 0,
+                          });
+                        }}
+                        counts={countReasons(snapshot.recs)}
+                      />
+                    </div>
                   </div>
 
                   {recs.length === 0 ? (
                     <EmptyNotice
-                      eyebrow="all caught up"
-                      title="Nothing left to farm at your level"
-                      body="No farm maps match this filter. Try widening the key mode or clearing the reason filter."
+                      eyebrow={query ? "no matches" : "all caught up"}
+                      title={
+                        query
+                          ? "No maps match your search"
+                          : view === "popular"
+                            ? "No popular maps at your level yet"
+                            : "Nothing left to farm at your level"
+                      }
+                      body={
+                        query
+                          ? "Try a different title, artist, or difficulty name."
+                          : view === "popular"
+                            ? "No nearby players have farm data here yet. Try a different key mode."
+                            : "Try the popular view to browse every farm map around your fit, or widen the key mode."
+                      }
                     />
+                  ) : layout === "grid" ? (
+                    <div className="grid grid-cols-2 gap-2.5 bg-osu-b5 p-2.5 sm:grid-cols-3 xl:grid-cols-4">
+                      {pageRecs.map((rec) => (
+                        <RecCard
+                          key={`${rec.beatmapId}:${rec.speedBucket}`}
+                          rec={rec}
+                          userKey={String(snapshot.userId)}
+                          userName={snapshot.username}
+                          keyMode={snapshot.keyMode}
+                          onShowFarmers={() => setFarmersFor({ rec, keyMode: snapshot.keyMode })}
+                        />
+                      ))}
+                    </div>
                   ) : (
                     <div className="divide-y divide-osu-b3/20">
                       {pageRecs.map((rec) => (
@@ -749,6 +861,12 @@ function totalGain(recs: LiveFarmHelperRec[]): number {
   return recs.reduce((sum, rec) => sum + Math.max(0, rec.estimatedPpGain), 0);
 }
 
+function timestampMs(value: string | null | undefined): number {
+  if (!value) return 0;
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms : 0;
+}
+
 function peerBandRangeLabel(snapshot: LiveFarmHelperSnapshot): string {
   const { count, minPp, maxPp } = snapshot.peerBand;
   if (count <= 0 || minPp <= 0 || maxPp <= 0) return "no pp range";
@@ -788,6 +906,7 @@ function ChangeSubjectButton({ onPick }: { onPick: (key: string) => void }) {
 }
 
 function Filters({
+  showReason,
   reasonFilter,
   onReason,
   sortMode,
@@ -795,6 +914,7 @@ function Filters({
   onSort,
   counts,
 }: {
+  showReason: boolean;
   reasonFilter: ReasonFilter;
   onReason: (next: ReasonFilter) => void;
   sortMode: SortMode;
@@ -803,25 +923,28 @@ function Filters({
   counts: Record<ReasonFilter, number>;
 }) {
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2">
-      <ChipGroup label="show">
-        <SegmentedControl>
-          {(["all", "missing", "improve", "stale"] as const).map((reason) => (
-            <SegmentButton key={reason} active={reasonFilter === reason} onClick={() => onReason(reason)}>
-              {reason === "stale" ? "old" : reason}
-              <span className={`tabular-nums ${reasonFilter === reason ? "text-osu-pink-light/70" : "text-osu-f1/70"}`}>
-                {counts[reason]}
-              </span>
-            </SegmentButton>
-          ))}
-        </SegmentedControl>
-      </ChipGroup>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+      {showReason ? (
+        <ChipGroup label="show">
+          <SegmentedControl>
+            {(["all", "missing", "improve", "stale"] as const).map((reason) => (
+              <SegmentButton key={reason} active={reasonFilter === reason} onClick={() => onReason(reason)}>
+                {reason === "stale" ? "old" : reason}
+                <span className={`tabular-nums ${reasonFilter === reason ? "text-osu-pink-light/70" : "text-osu-f1/70"}`}>
+                  {counts[reason]}
+                </span>
+              </SegmentButton>
+            ))}
+          </SegmentedControl>
+        </ChipGroup>
+      ) : null}
       <ChipGroup label="sort">
         <SegmentedControl>
           {(
             [
               ["gain", "gain"],
               ["popularity", "fit"],
+              ["recent", "recent"],
               ["players", "players"],
               ["difficulty", "stars"],
             ] as const
@@ -870,6 +993,77 @@ function KeyModeControl({
           {mode}
         </button>
       ))}
+    </div>
+  );
+}
+
+function ViewModeToggle({ view, onView }: { view: LiveFarmHelperView; onView: (next: LiveFarmHelperView) => void }) {
+  return (
+    <div className="flex shrink-0 overflow-hidden rounded-lg border border-osu-b3/30" role="group" aria-label="View mode">
+      {([["gain", "for you"], ["popular", "popular"]] as const).map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          onClick={() => onView(value)}
+          aria-pressed={view === value}
+          className={`px-2.5 py-1.5 text-[11px] font-semibold transition-colors duration-[120ms] ${
+            view === value ? "bg-osu-pink/15 text-osu-pink-light" : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function LayoutToggle({ layout, onLayout }: { layout: LayoutMode; onLayout: (next: LayoutMode) => void }) {
+  const options = [
+    { value: "list", Icon: List },
+    { value: "grid", Icon: LayoutGrid },
+  ] as const;
+  return (
+    <div className="flex shrink-0 overflow-hidden rounded-lg border border-osu-b3/30" role="group" aria-label="Layout">
+      {options.map(({ value, Icon }) => (
+        <button
+          key={value}
+          type="button"
+          onClick={() => onLayout(value)}
+          aria-pressed={layout === value}
+          aria-label={`${value} layout`}
+          title={`${value} layout`}
+          className={`px-2 py-1.5 transition-colors duration-[120ms] ${
+            layout === value ? "bg-osu-b3 text-osu-l2" : "bg-osu-b4/50 text-osu-f1 hover:text-osu-l2"
+          }`}
+        >
+          <Icon className="h-3.5 w-3.5" />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ResultsSearch({ value, onChange }: { value: string; onChange: (next: string) => void }) {
+  return (
+    <div className="relative min-w-[150px] flex-1 sm:max-w-[260px]">
+      <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-osu-f1" />
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="filter by title or artist..."
+        aria-label="Filter maps"
+        className="w-full rounded-lg border border-osu-b3/30 bg-osu-b4/50 py-1.5 pl-8 pr-7 text-[11px] text-osu-c1 placeholder:text-osu-f1 transition-colors focus:border-osu-h1/40 focus:outline-none"
+      />
+      {value ? (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          aria-label="Clear search"
+          className="absolute right-2 top-1/2 -translate-y-1/2 text-osu-f1 transition-colors hover:text-osu-l2"
+        >
+          <X className="h-3 w-3" />
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -935,46 +1129,8 @@ function RecRow({
   const meta = REASON_META[rec.reason];
   const bar = comparisonBar(rec);
   const fit = confidence(rec);
-  const navigate = useNavigate();
   const desktopCover = rec.listCover || rec.cover;
-  const detailContext = {
-    beatmapsetId: rec.beatmapsetId,
-    title: rec.title,
-    artist: rec.artist,
-    creator: rec.creator,
-    version: rec.version,
-    cover: rec.cover,
-    status: rec.status,
-    stars: rec.stars,
-    keys: rec.keys,
-    bpm: rec.bpm,
-    lengthSec: rec.lengthSec,
-    mapUrl: rec.mapUrl,
-    userKey,
-    userName,
-    keyMode,
-    speed: rec.speedBucket,
-    reason: rec.reason,
-    gain: Math.round(rec.estimatedPpGain * 10) / 10,
-    benchmark: Math.round(rec.benchmarkPp * 10) / 10,
-    subjectPp: rec.subjectPp == null ? undefined : Math.round(rec.subjectPp * 10) / 10,
-    peerCount: rec.peerCount,
-    peerSampleSize: rec.peerSampleSize,
-    peerFraction: Math.round(rec.peerFraction * 1000) / 1000,
-    median: Math.round(rec.peerPpMedian * 10) / 10,
-    p75: Math.round(rec.peerPpP75 * 10) / 10,
-    playedAt: rec.subjectPlayedAt ?? undefined,
-  };
-  const rememberContext = () => {
-    writeFarmMapContext(rec.beatmapId, detailContext);
-  };
-  const openDetails = () => {
-    rememberContext();
-    void navigate({
-      to: "/farm-helper/map/$beatmapId",
-      params: { beatmapId: String(rec.beatmapId) },
-    });
-  };
+  const openDetails = useOpenFarmMapDetail(rec, userKey, userName, keyMode);
   return (
     <div
       role="link"
@@ -1058,6 +1214,105 @@ function RecRow({
   );
 }
 
+// Grid-layout card mirroring the maps page's farmed-map card, driven by farm-helper
+// rec data: cover with key/star/gain badges, peer-popularity stats, farmer avatars.
+function RecCard({
+  rec,
+  userKey,
+  userName,
+  keyMode,
+  onShowFarmers,
+}: {
+  rec: LiveFarmHelperRec;
+  userKey: string;
+  userName: string;
+  keyMode: LiveFarmHelperKeyMode;
+  onShowFarmers: () => void;
+}) {
+  const openDetails = useOpenFarmMapDetail(rec, userKey, userName, keyMode);
+  const cover = rec.listCover || rec.cover;
+  const gain = Math.max(0, rec.estimatedPpGain);
+  return (
+    <div className="overflow-hidden rounded-xl border border-osu-b3/20 bg-osu-b4 transition-colors hover:border-osu-pink/30">
+      <button
+        type="button"
+        onClick={openDetails}
+        className="relative block w-full cursor-pointer overflow-hidden text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-osu-pink/60"
+        aria-label={`Open details for ${rec.title} [${rec.version}]`}
+      >
+        {cover ? (
+          <img src={cover} alt="" loading="lazy" className="h-[90px] w-full object-cover" />
+        ) : (
+          <div className="h-[90px] w-full bg-osu-b6" />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" aria-hidden="true" />
+        <span className="absolute left-1.5 top-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-bold text-white">{rec.keys}K</span>
+        <span className="absolute right-1.5 top-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[9px] font-bold tabular-nums text-osu-yellow">
+          {"★"}{rec.stars.toFixed(2)}
+        </span>
+        {gain >= 1 ? (
+          <span className="absolute bottom-1.5 right-1.5 rounded bg-osu-pink/90 px-1.5 py-0.5 text-[9px] font-bold tabular-nums text-white">
+            +{formatPp(gain)}pp
+          </span>
+        ) : null}
+        <div className="absolute inset-x-0 bottom-0 px-2.5 pb-1.5">
+          <div className="truncate text-[12px] font-semibold leading-tight text-white drop-shadow-lg">{rec.title}</div>
+          <div className="truncate text-[10px] leading-tight text-white/70 drop-shadow-lg">{rec.artist}</div>
+        </div>
+      </button>
+
+      <div className="px-2.5 py-2">
+        <div className="flex items-center gap-1.5">
+          <span className="flex-1 truncate text-[10px] text-osu-l2">[{rec.version}]</span>
+          <ModList mods={rec.recommendedMods ?? []} size={0.5} className="max-w-[72px]" />
+          <span className="shrink-0 text-[9px] text-osu-f1">{formatLength(rec.lengthSec)}</span>
+        </div>
+
+        <div className="mt-1.5 flex items-center gap-3">
+          <CardStat value={formatPp(rec.peerCount)} label={rec.peerCount === 1 ? "player" : "players"} color="text-osu-blue" />
+          <CardStat value={`~${formatPp(rec.peerPpMedian)}`} label="avg pp" color="text-osu-pink" />
+          {rec.subjectPp != null ? <CardStat value={formatPp(rec.subjectPp)} label="you" color="text-osu-green-light" /> : null}
+        </div>
+
+        <CardFarmerAvatars rec={rec} onShowFarmers={onShowFarmers} />
+      </div>
+    </div>
+  );
+}
+
+function CardStat({ value, label, color }: { value: string; label: string; color: string }) {
+  return (
+    <div className="flex items-center gap-1">
+      <span className={`text-[11px] font-bold tabular-nums ${color}`}>{value}</span>
+      <span className="text-[8px] uppercase text-osu-f1">{label}</span>
+    </div>
+  );
+}
+
+function CardFarmerAvatars({ rec, onShowFarmers }: { rec: LiveFarmHelperRec; onShowFarmers: () => void }) {
+  const shown = rec.topPeers.slice(0, 4);
+  if (shown.length === 0) return null;
+  const overflow = Math.max(0, rec.peerCount - shown.length);
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onShowFarmers();
+      }}
+      className="mt-1.5 flex w-full items-center gap-0.5 rounded-lg py-0.5 text-left transition-opacity hover:opacity-80"
+      title="See everyone who farmed this"
+    >
+      {shown.map((peer) => (
+        <span key={peer.userId} className="inline-flex rounded-full ring-2 ring-osu-b4">
+          <Avatar url={peer.avatarUrl} userId={peer.userId} size={18} />
+        </span>
+      ))}
+      {overflow > 0 ? <span className="ml-1 text-[8px] uppercase text-osu-f1">+{formatPp(overflow)}</span> : null}
+    </button>
+  );
+}
+
 function writeFarmMapContext(beatmapId: number, context: Record<string, unknown>): void {
   if (typeof window === "undefined") return;
   try {
@@ -1065,6 +1320,65 @@ function writeFarmMapContext(beatmapId: number, context: Record<string, unknown>
   } catch {
     /* ignore storage errors */
   }
+}
+
+function buildFarmMapDetailContext(
+  rec: LiveFarmHelperRec,
+  userKey: string,
+  userName: string,
+  keyMode: LiveFarmHelperKeyMode,
+): Record<string, unknown> {
+  return {
+    beatmapsetId: rec.beatmapsetId,
+    title: rec.title,
+    artist: rec.artist,
+    creator: rec.creator,
+    version: rec.version,
+    cover: rec.cover,
+    status: rec.status,
+    stars: rec.stars,
+    keys: rec.keys,
+    bpm: rec.bpm,
+    lengthSec: rec.lengthSec,
+    mapUrl: rec.mapUrl,
+    userKey,
+    userName,
+    keyMode,
+    speed: rec.speedBucket,
+    reason: rec.reason,
+    gain: Math.round(rec.estimatedPpGain * 10) / 10,
+    benchmark: Math.round(rec.benchmarkPp * 10) / 10,
+    subjectPp: rec.subjectPp == null ? undefined : Math.round(rec.subjectPp * 10) / 10,
+    peerCount: rec.peerCount,
+    peerSampleSize: rec.peerSampleSize,
+    peerFraction: Math.round(rec.peerFraction * 1000) / 1000,
+    median: Math.round(rec.peerPpMedian * 10) / 10,
+    p75: Math.round(rec.peerPpP75 * 10) / 10,
+    playedAt: rec.subjectPlayedAt ?? undefined,
+  };
+}
+
+// Shared by the list row and the grid card: stash the rec context, then open the
+// dedicated map detail page (which rehydrates the context for its farm verdict).
+function useOpenFarmMapDetail(
+  rec: LiveFarmHelperRec,
+  userKey: string,
+  userName: string,
+  keyMode: LiveFarmHelperKeyMode,
+): () => void {
+  const navigate = useNavigate();
+  return () => {
+    writeFarmMapContext(rec.beatmapId, buildFarmMapDetailContext(rec, userKey, userName, keyMode));
+    void navigate({
+      to: "/farm-helper/map/$beatmapId",
+      params: { beatmapId: String(rec.beatmapId) },
+      search: {
+        user: userKey,
+        key: keyMode,
+        speed: rec.speedBucket,
+      },
+    });
+  };
 }
 
 function PeerList({ rec, onShowFarmers }: { rec: LiveFarmHelperRec; onShowFarmers: () => void }) {
@@ -1098,6 +1412,7 @@ function PeerList({ rec, onShowFarmers }: { rec: LiveFarmHelperRec; onShowFarmer
 }
 
 function farmStatusLabel(rec: LiveFarmHelperRec): string {
+  if (rec.reason === "owned") return "cleared";
   if (rec.reason === "missing") return rec.peerFraction >= 0.45 ? "common pick" : "missing";
   if (rec.reason === "stale") return "old pb";
   if (rec.estimatedPpGain >= 70) return "large gap";
@@ -1257,41 +1572,7 @@ function FarmersModal({
   onClose: () => void;
 }) {
   const open = rec != null && userKey != null;
-  const [farmers, setFarmers] = useState<LiveFarmHelperFarmer[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const [query, setQuery] = useState("");
   const [scrollLocked, setScrollLocked] = useState(false);
-  const beatmapId = rec?.beatmapId ?? null;
-  const speedBucket = rec?.speedBucket;
-
-  useEffect(() => {
-    if (!open || beatmapId == null || !userKey) return;
-    let cancelled = false;
-    const controller = new AbortController();
-    setLoading(true);
-    setFailed(false);
-    setFarmers([]);
-    setTotal(0);
-    setQuery("");
-    fetchLiveFarmHelperFarmers(userKey, beatmapId, speedBucket, { keyMode, signal: controller.signal })
-      .then((data) => {
-        if (cancelled) return;
-        setFarmers(data.farmers);
-        setTotal(data.total);
-      })
-      .catch(() => {
-        if (!cancelled && !controller.signal.aborted) setFailed(true);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [open, beatmapId, speedBucket, userKey, keyMode]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -1329,9 +1610,6 @@ function FarmersModal({
   }, [scrollLocked]);
 
   if (typeof document === "undefined") return null;
-
-  const q = query.trim().toLowerCase();
-  const visible = q ? farmers.filter((f) => f.username.toLowerCase().includes(q)) : farmers;
 
   return createPortal(
     <AnimatePresence onExitComplete={() => setScrollLocked(false)}>
@@ -1378,65 +1656,15 @@ function FarmersModal({
               </div>
             </div>
 
-            <div className="h-[42px] shrink-0 px-3 pt-2.5">
-              {loading || total > 8 ? (
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="search player..."
-                  disabled={loading}
-                  className="w-full rounded-lg border border-osu-b3/40 bg-osu-b4 px-3 py-1.5 text-[11px] text-osu-c1 placeholder:text-osu-f1 transition-colors focus:border-osu-h1/40 focus:outline-none"
-                />
-              ) : null}
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-y-auto p-2.5">
-              {loading ? (
-                <div className="space-y-1.5">
-                  {Array.from({ length: 7 }).map((_, i) => (
-                    <Skeleton key={i} className="h-9 rounded-lg" />
-                  ))}
-                </div>
-              ) : failed ? (
-                <div className="py-10 text-center text-sm text-osu-f1">Couldn't load the farmer list. Try again.</div>
-              ) : visible.length === 0 ? (
-                <div className="py-10 text-center text-sm text-osu-f1">
-                  {q ? "No players match." : "No nearby players have farmed this yet."}
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {visible.map((farmer) => {
-                    const rank = farmers.findIndex((candidate) => candidate.userId === farmer.userId) + 1;
-                    return (
-                      <Link
-                        key={farmer.userId}
-                        to="/player/$username"
-                        params={{ username: farmer.username || String(farmer.userId) }}
-                        className="flex items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-osu-b3/50"
-                      >
-                        <span className="w-6 shrink-0 text-right text-[11px] font-semibold tabular-nums text-osu-f1">
-                          #{rank}
-                        </span>
-                        <Avatar url={farmer.avatarUrl} userId={farmer.userId} size={24} />
-                        <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-osu-c1">
-                          {farmer.username || `#${farmer.userId}`}
-                        </span>
-                        <ModList mods={farmer.mods ?? []} className="max-w-[112px]" />
-                        <span className="shrink-0 text-[11px] font-semibold tabular-nums text-osu-l2">{formatPp(farmer.pp)}pp</span>
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className="shrink-0 border-t border-osu-b3/30 px-3 py-2 text-[10px] text-osu-f1">
-              {loading
-                ? "loading..."
-                : `${formatPp(total)} player${total === 1 ? "" : "s"} farmed this${
-                    farmers.length < total ? ` · showing top ${farmers.length}` : ""
-                  }`}
-            </div>
+            {userKey ? (
+              <FarmersList
+                userKey={userKey}
+                beatmapId={rec.beatmapId}
+                speedBucket={rec.speedBucket}
+                keyMode={keyMode}
+                className="min-h-0 flex-1"
+              />
+            ) : null}
           </motion.div>
         </motion.div>
       ) : null}
@@ -1489,7 +1717,10 @@ function clampPct(value: number): number {
 
 function countReasons(recs: LiveFarmHelperRec[]): Record<ReasonFilter, number> {
   const counts: Record<ReasonFilter, number> = { all: recs.length, missing: 0, improve: 0, stale: 0 };
-  for (const rec of recs) counts[rec.reason] += 1;
+  // "owned" only appears in the popular view, where the reason filter is hidden.
+  for (const rec of recs) {
+    if (rec.reason !== "owned") counts[rec.reason] += 1;
+  }
   return counts;
 }
 

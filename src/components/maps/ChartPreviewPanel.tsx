@@ -14,6 +14,7 @@ import {
   getPreviewInitialCombo,
   getPreviewNotes,
   getPreviewScrollVelocities,
+  resolveInitialChartPreviewAudioMode,
 } from "../../lib/chart-preview";
 import { formatDuration } from "../../lib/format";
 
@@ -272,11 +273,13 @@ export function ChartPreviewPanel({
           setChartStartMs(plan.startTimeMs);
           setChartPlaybackMs(plan.startTimeMs);
           setChartTimeScale(plan.timeScale * previewPlaybackRate);
-          setAudioMode(
-            plan.audioMode === "set-preview" && !timedRateVariant && plan.beatmap.audioFilename
-              ? "selected-file"
-              : plan.audioMode,
-          );
+          setAudioMode(resolveInitialChartPreviewAudioMode({
+            plannedAudioMode: plan.audioMode,
+            hasSelectedAudioFile: Boolean(plan.beatmap.audioFilename),
+            hasSetPreviewAudio: Boolean(previewUrl),
+            hasDifficultyPicker: maniaBeatmaps.length > 1,
+            timedRateVariant,
+          }));
         }
       })
       .catch(() => {
@@ -296,6 +299,7 @@ export function ChartPreviewPanel({
     chartScrub,
     maniaBeatmaps,
     metadataBeatmapsetId,
+    previewUrl,
     previewPlaybackRate,
     requested,
     selectedBeatmap,

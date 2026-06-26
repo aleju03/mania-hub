@@ -3,10 +3,15 @@ import { exec, json, parseJson } from "../db.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedRank, getDisplayedTotalScore, getModAcronyms, isLazerScore, nowIso, scoreHasPublicLeaderboard, scoreHasReplay } from "../shared/score.js";
 import type { OscScore, SnipeEvent } from "../shared/types.js";
+import { isRankedRosterMember } from "../rosters/country-rosters.js";
 
 export async function updateSnipeProjection(db: Db, events: LiveEventLog, country: string, score: OscScore): Promise<SnipeEvent | null> {
   if (!score.beatmap || !score.beatmapset || !score.user) return null;
   if (!scoreHasPublicLeaderboard(score)) return null;
+  // Country snipe boards are a ranking surface: only ranked roster members (top N) write to them.
+  // Manual/opt-in members are tracked for activity but carry a null rank, so they never seed,
+  // appear on, or snipe these boards. This mirrors the `rank is not null` seeding filter.
+  if (!await isRankedRosterMember(db, country, score.user_id)) return null;
   const totalScore = getDisplayedTotalScore(score);
   if (totalScore == null) return null;
   const isLazer = isLazerScore(score);

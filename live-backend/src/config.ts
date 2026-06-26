@@ -55,6 +55,7 @@ export interface Config {
   rosterRefreshIntervalMs: number;
   rosterRankingPages: number;
   rosterSize: number;
+  manualRosterMaxPerCountry: number;
   mapsRefreshIntervalMs: number;
   oscBackfillMaxAgeMs: number;
   oscBackfillPageLimit: number;
@@ -202,6 +203,7 @@ export function readConfig(): Config {
     rosterRefreshIntervalMs: readInt("ROSTER_REFRESH_INTERVAL_MS", 6 * 60 * 60 * 1000),
     rosterRankingPages: readInt("ROSTER_RANKING_PAGES", 2),
     rosterSize: readInt("ROSTER_SIZE", 100),
+    manualRosterMaxPerCountry: readInt("MANUAL_ROSTER_MAX_PER_COUNTRY", 50),
     mapsRefreshIntervalMs: readInt("MAPS_REFRESH_INTERVAL_MS", 7 * 24 * 60 * 60 * 1000),
     oscBackfillMaxAgeMs: readInt("OSC_BACKFILL_MAX_AGE_MS", 24 * 60 * 60 * 1000),
     oscBackfillPageLimit: Math.min(readInt("OSC_BACKFILL_PAGE_LIMIT", 1000), 1000),

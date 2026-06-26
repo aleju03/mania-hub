@@ -8,7 +8,7 @@ import type { Db } from "../db.js";
 import { dbHealth, exec, getSqliteBusyRetryStats, parseJson } from "../db.js";
 import { getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../features/activity.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
-import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, type FarmHelperKeyMode } from "../features/farm-helper.js";
+import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, type FarmHelperKeyMode, type FarmHelperView } from "../features/farm-helper.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
 import { enqueueGlobalRankingStatRepairs, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
 import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery } from "../features/maps.js";
@@ -37,7 +37,7 @@ import {
   writeReplayVideoUpload,
 } from "../replay-video/exports.js";
 import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
-import { enqueueRosterRefreshes } from "../rosters/country-rosters.js";
+import { addManualRosterMember, enqueueRosterRefreshes, removeManualRosterMember } from "../rosters/country-rosters.js";
 import { getLocalDbStorage, runRetention } from "../retention.js";
 
 const HIDDEN_ADMIN_WORKER_LANE_NAMES = new Set([
@@ -220,6 +220,34 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     sendJson(req, res, ctx, 200, await statusBody(ctx, { includeWorkerActivity: true, snapshotCountry: country }));
     return true;
   }
+  if (url.pathname === "/api/roster/self-add" || url.pathname === "/api/roster/self-remove") {
+    // Admin-token gated: the frontend server fn forwards the osu!-verified viewer id with the
+    // shared admin token (the pack-wallet pattern), so a user can only ever opt themselves in.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ userId?: unknown; country?: unknown }>((await readBody(req)) || "{}", {});
+    const memberUserId = Number(body.userId);
+    const memberCountry = typeof body.country === "string" ? body.country.trim().toUpperCase() : "";
+    if (!Number.isInteger(memberUserId) || memberUserId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    if (!/^[A-Z]{2}$/.test(memberCountry) || isGlobalCountry(memberCountry)) {
+      sendJson(req, res, ctx, 400, { error: "invalid_country" });
+      return true;
+    }
+    const result = url.pathname === "/api/roster/self-remove"
+      ? await removeManualRosterMember(ctx.db, memberCountry, memberUserId)
+      : await addManualRosterMember(ctx.db, ctx.queue, ctx.config, memberCountry, memberUserId);
+    sendJson(req, res, ctx, result.ok ? 200 : 409, result);
+    return true;
+  }
   if (url.pathname === "/api/countries/activate") {
     if (req.method !== "POST") {
       sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
@@ -339,6 +367,7 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     try {
       const snapshot = await getFarmHelperSnapshot(ctx.db, ctx.osu, userKey, {
         keyMode: parseFarmHelperKeyMode(url.searchParams.get("key")),
+        view: parseFarmHelperView(url.searchParams.get("view")),
         limit: clampInteger(url.searchParams.get("limit"), 1, 100, 60),
       });
       res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
@@ -1573,6 +1602,10 @@ function parseMapsPlayersKind(raw: string | null): MapsPlayersKind | null {
 
 function parseFarmHelperKeyMode(raw: string | null): FarmHelperKeyMode | undefined {
   return raw === "4k" || raw === "7k" || raw === "any" ? raw : undefined;
+}
+
+function parseFarmHelperView(raw: string | null): FarmHelperView | undefined {
+  return raw === "gain" || raw === "popular" ? raw : undefined;
 }
 
 function parseFarmHelperSpeedBucket(raw: string | null): ScoreSpeedBucket | undefined {

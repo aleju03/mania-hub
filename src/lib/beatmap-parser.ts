@@ -25,6 +25,7 @@ export interface ManiaBeatmap {
   keyCount: number;
   od: number;
   bpm: number;
+  stableScrollBpm?: number;
   notes: ManiaNote[];
   totalLength: number;
   beatmapsetId?: number | null;
@@ -245,6 +246,12 @@ export function parseManiaBeatmap(content: string, options: ParseManiaBeatmapOpt
     ? Math.max(...notes.map((n) => n.endTime))
     : 0;
   const sortedNotes = notes.sort((a, b) => a.time - b.time);
+  const stableScrollBeatLength = timingPoints.length > 0
+    ? getMostCommonBeatLength(timingPoints, totalLength)
+    : 0;
+  const stableScrollBpm = stableScrollBeatLength > 0
+    ? Math.round(60000 / stableScrollBeatLength)
+    : bpm;
 
   return {
     title,
@@ -254,6 +261,7 @@ export function parseManiaBeatmap(content: string, options: ParseManiaBeatmapOpt
     keyCount: normalizeKeyCount(options.keyCount ?? circleSize),
     od: overallDifficulty,
     bpm,
+    stableScrollBpm,
     notes: sortedNotes,
     totalLength,
     beatmapsetId,

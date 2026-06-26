@@ -1090,6 +1090,12 @@ export class ManiaReplayRenderer {
     this.render(true);
   }
 
+  getMissTimes(): number[] {
+    return this.judgmentEvents
+      .filter((event) => event.judgment === 6 && Number.isFinite(event.time))
+      .map((event) => event.time);
+  }
+
   setSpeed(speed: number) { this.playbackSpeed = speed; }
 
   setScrollSpeed(speed: number) {

@@ -104,13 +104,21 @@ async function insertUser(id: number, pp: number, country: string, username = `P
   );
 }
 
-async function insertFarmed(country: string, userId: number, beatmapId: number, pp: number, updatedAt: string, mods: string[] = []): Promise<void> {
+async function insertFarmed(
+  country: string,
+  userId: number,
+  beatmapId: number,
+  pp: number,
+  updatedAt: string,
+  mods: string[] = [],
+  playedAt = updatedAt,
+): Promise<void> {
   await exec(
     db,
     `insert into country_maps_farmed_scores
        (country, user_id, beatmap_id, score_id, pp, score_json, mods_json, score_url, played_at, detected_at, updated_at)
      values (?, ?, ?, ?, ?, '{}', ?, null, ?, ?, ?)`,
-    [country, userId, beatmapId, nextScoreId++, pp, JSON.stringify(mods), updatedAt, updatedAt, updatedAt],
+    [country, userId, beatmapId, nextScoreId++, pp, JSON.stringify(mods), playedAt, updatedAt, updatedAt],
   );
 }
 
@@ -218,6 +226,26 @@ describe("farm helper", () => {
     }
     expect(result.farmers[0].username).toMatch(/^Peer/);
     expect(result.farmers[0].avatarUrl).toContain("a.ppy.sh");
+  });
+
+  it("dedupes the same peer's farm score across countries by map speed lane", async () => {
+    const bestScores = buildSubjectBestScores();
+    const recent = nowIso();
+    await seedPeers();
+    await insertFarmed("US", 100, BM_MISSING, 700, recent);
+
+    const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const rec = snapshot.recs.find((candidate) => candidate.beatmapId === BM_MISSING);
+    expect(rec?.peerSampleSize).toBe(15);
+    expect(rec?.peerCount).toBe(15);
+    expect(rec?.peerFraction).toBe(1);
+    expect(rec?.topPeers.filter((peer) => peer.userId === 100)).toHaveLength(1);
+    expect(rec?.topPeers.find((peer) => peer.userId === 100)?.pp).toBe(700);
+
+    const farmers = await getFarmHelperFarmers(db, makeOsuStub(bestScores), "Subject", BM_MISSING);
+    expect(farmers.total).toBe(15);
+    expect(farmers.farmers.filter((farmer) => farmer.userId === 100)).toHaveLength(1);
+    expect(farmers.farmers[0]).toMatchObject({ userId: 100, pp: 700 });
   });
 
   it("does not hide missing maps behind bottom-quartile peer scores", async () => {
@@ -348,6 +376,83 @@ describe("farm helper", () => {
 
     const snapshot = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { keyMode: "7k" });
     expect(snapshot.recs.length).toBe(0);
+  });
+
+  it("popular view keeps already-cleared maps that the gain view drops, ranked by popularity", async () => {
+    const recent = nowIso();
+    const BM_OWNED = 13;
+    // Subject already owns BM_OWNED at the peer median, so the gain view's
+    // already-cleared gate drops it even though peers actively farm it.
+    const bestScores = [...buildSubjectBestScores(), subjectScore(BM_OWNED, 600, recent)];
+    await seedPeers();
+    for (let i = 0; i < 12; i += 1) {
+      await insertFarmed(i < 8 ? "CR" : "US", 100 + i, BM_OWNED, 600, recent);
+    }
+    await insertBeatmapMeta(BM_OWNED);
+
+    const gain = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject");
+    const popular = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { view: "popular" });
+
+    expect(gain.view).toBe("gain");
+    expect(popular.view).toBe("popular");
+
+    // Gain view omits the already-cleared map; popular includes it, labelled "owned".
+    expect(gain.recs.some((rec) => rec.beatmapId === BM_OWNED)).toBe(false);
+    const owned = popular.recs.find((rec) => rec.beatmapId === BM_OWNED);
+    expect(owned?.reason).toBe("owned");
+    expect(owned?.subjectPp).toBe(600);
+    expect(owned?.peerCount).toBe(12);
+
+    // Popular surfaces a superset of the gain view, ranked by peer popularity.
+    expect(popular.recs.length).toBeGreaterThan(gain.recs.length);
+    for (let i = 1; i < popular.recs.length; i += 1) {
+      expect(popular.recs[i - 1].peerFraction).toBeGreaterThanOrEqual(popular.recs[i].peerFraction);
+    }
+    // The fully-farmed maps (fraction 1) outrank the 0.8-fraction owned map.
+    expect(popular.recs[popular.recs.length - 1]?.beatmapId).toBe(BM_OWNED);
+  });
+
+  it("uses third-latest peer played-at recency for popular sorting, with a small-sample fallback", async () => {
+    const bestScores = buildSubjectBestScores();
+    const BM_RECENT = 14;
+    const BM_SMALL_SAMPLE = 15;
+    await seedPeers();
+    await insertBeatmapMeta(BM_RECENT);
+    await insertBeatmapMeta(BM_SMALL_SAMPLE);
+    const newestPlayedAt = "2025-04-01T12:34:56.000Z";
+    const olderPlayedAt = "2025-01-01T00:00:00.000Z";
+    const refreshedAt = "2026-06-01T00:00:00.000Z";
+    for (let i = 0; i < 12; i += 1) {
+      await insertFarmed(
+        i < 8 ? "CR" : "US",
+        100 + i,
+        BM_RECENT,
+        610,
+        refreshedAt,
+        [],
+        i === 0 ? newestPlayedAt : olderPlayedAt,
+      );
+    }
+    for (let i = 0; i < 3; i += 1) {
+      await insertFarmed(
+        "CR",
+        100 + i,
+        BM_SMALL_SAMPLE,
+        610,
+        refreshedAt,
+        [],
+        i === 0 ? newestPlayedAt : olderPlayedAt,
+      );
+    }
+
+    const popular = await getFarmHelperSnapshot(db, makeOsuStub(bestScores), "Subject", { view: "popular" });
+    const rec = popular.recs.find((candidate) => candidate.beatmapId === BM_RECENT);
+    const smallSample = popular.recs.find((candidate) => candidate.beatmapId === BM_SMALL_SAMPLE);
+
+    expect(rec?.latestPeerPlayedAt).toBe(newestPlayedAt);
+    expect(rec?.peerRecencyPlayedAt).toBe(olderPlayedAt);
+    expect(rec?.latestPeerPlayedAt).not.toBe(refreshedAt);
+    expect(smallSample?.peerRecencyPlayedAt).toBe(newestPlayedAt);
   });
 
   it("does not fall back to total pp peers for an explicit key-mode request", async () => {

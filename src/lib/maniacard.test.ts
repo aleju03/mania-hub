@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { computeManiaSkills, getNextManiaCardTier } from "./maniacard";
+import { computeKeymodePpPrestige, computeManiaSkills, getNextManiaCardTier } from "./maniacard";
 import type { OsuScore } from "./types";
 
 function score(overrides: Partial<OsuScore> = {}): OsuScore {
@@ -215,6 +215,39 @@ describe("computeManiaSkills", () => {
 
     if (!elitePp7k || !lowerPp4kSpecialist) throw new Error("expected both cards to be computable");
     expect(elitePp7k.cardPower).toBeGreaterThan(lowerPp4kSpecialist.cardPower);
+  });
+
+  test("scores PP standing on a per-keymode scale", () => {
+    const pure7k = [{ keyMode: 7, weight: 1 }];
+    const pure4k = [{ keyMode: 4, weight: 1 }];
+    // A 7K main reaches a given competitive standing at a lower raw global PP
+    // than a 4K main, so the same total PP is worth more prestige at 7K.
+    expect(computeKeymodePpPrestige(16_000, pure7k)).toBeGreaterThan(computeKeymodePpPrestige(16_000, pure4k));
+    // Bounds and empty/unknown-keymode fallback behave.
+    expect(computeKeymodePpPrestige(40_000, pure7k)).toBe(1);
+    expect(computeKeymodePpPrestige(0, pure4k)).toBe(0);
+    expect(computeKeymodePpPrestige(15_000, [])).toBeGreaterThan(0);
+  });
+
+  test("blends a hybrid's prestige band smoothly instead of snapping on the main keymode", () => {
+    const pp = 16_000;
+    const pure7k = computeKeymodePpPrestige(pp, [{ keyMode: 7, weight: 1 }]);
+    const pure4k = computeKeymodePpPrestige(pp, [{ keyMode: 4, weight: 1 }]);
+    // An even hybrid lands between the two pure bands, not on either cliff.
+    const evenHybrid = computeKeymodePpPrestige(pp, [
+      { keyMode: 7, weight: 1 },
+      { keyMode: 4, weight: 1 },
+    ]);
+    expect(evenHybrid).toBeGreaterThan(pure4k);
+    expect(evenHybrid).toBeLessThan(pure7k);
+    // One extra play of either keymode nudges the result, it doesn't flip a tier:
+    // a hybrid whose biggest plays are 7K is weighted toward the 7K band.
+    const sevenKLeaning = computeKeymodePpPrestige(pp, [
+      { keyMode: 7, weight: 7 },
+      { keyMode: 4, weight: 3 },
+    ]);
+    expect(sevenKLeaning).toBeGreaterThan(evenHybrid);
+    expect(sevenKLeaning).toBeLessThan(pure7k);
   });
 
   test("does not let half-time density farm read as full-rate speed", () => {

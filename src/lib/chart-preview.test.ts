@@ -10,6 +10,7 @@ import {
   getPreviewNotes,
   getPreviewScrollVelocities,
   pickPreviewStartTime,
+  resolveInitialChartPreviewAudioMode,
 } from "./chart-preview";
 
 const baseBeatmap: ManiaBeatmap = {
@@ -189,5 +190,33 @@ describe("chart preview helpers", () => {
     expect(plan.startTimeMs).toBe(0);
     expect(plan.timeScale).toBe(1.4);
     expect(plan.audioMode).toBe("set-preview");
+  });
+
+  it("keeps single-diff chart previews on the set preview audio until seek", () => {
+    expect(resolveInitialChartPreviewAudioMode({
+      plannedAudioMode: "set-preview",
+      hasSelectedAudioFile: true,
+      hasSetPreviewAudio: true,
+      hasDifficultyPicker: false,
+      timedRateVariant: false,
+    })).toBe("set-preview");
+  });
+
+  it("uses selected audio for multi-diff set-preview plans and missing preview audio", () => {
+    expect(resolveInitialChartPreviewAudioMode({
+      plannedAudioMode: "set-preview",
+      hasSelectedAudioFile: true,
+      hasSetPreviewAudio: true,
+      hasDifficultyPicker: true,
+      timedRateVariant: false,
+    })).toBe("selected-file");
+
+    expect(resolveInitialChartPreviewAudioMode({
+      plannedAudioMode: "set-preview",
+      hasSelectedAudioFile: true,
+      hasSetPreviewAudio: false,
+      hasDifficultyPicker: false,
+      timedRateVariant: false,
+    })).toBe("selected-file");
   });
 });

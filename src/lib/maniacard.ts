@@ -398,9 +398,49 @@ function calibrateDisplaySkillValues(cardPower: number, values: number[]): numbe
   return values.map((value) => Math.round(clamp(value * scale, 0, DISPLAY_SKILL_SCALE)));
 }
 
-export function computeGlobalPpStrength(pp: number | null | undefined): number {
-  const value = Math.max(0, pp ?? 0);
-  return curve(normalize(value, 12_000, 24_000), 0.7);
+// Global PP standing, read on a per-keymode scale. Competitive standing-per-PP
+// differs by keymode: a 7K main reaches a given standing at a lower raw global
+// PP than a 4K main (smaller ranked pool, lower PP per map historically), so a
+// single fixed band measured every keymode on 4K PP economics and capped 7K
+// specialists a tier below where their standing sits. Floors/tops are read off
+// the tracked global mania ladder per keymode; 4K keeps the original band.
+const PP_PRESTIGE_BANDS: Record<number, [number, number]> = {
+  4: [12_000, 24_000],
+  7: [10_500, 24_000],
+};
+const DEFAULT_PP_PRESTIGE_BAND: [number, number] = [11_500, 24_000];
+
+export interface KeymodePpWeight {
+  keyMode: number;
+  weight: number;
+}
+
+// Blend the per-keymode bands by how much each keymode drives the player's PP
+// (score weight, so their biggest plays count most, not raw play count). A pure
+// main resolves to its own band; a hybrid lands smoothly between bands instead
+// of snapping a whole tier on whichever keymode happens to hold one more play in
+// the top 200. PP-weighting also reflects that a hybrid whose top plays are 7K
+// earned their standing on 7K economics even with a near-even play split.
+export function computeKeymodePpPrestige(
+  pp: number | null | undefined,
+  keymodeWeights: KeymodePpWeight[],
+): number {
+  const total = keymodeWeights.reduce((sum, k) => sum + Math.max(0, k.weight), 0);
+  let min: number;
+  let max: number;
+  if (total <= 0) {
+    [min, max] = DEFAULT_PP_PRESTIGE_BAND;
+  } else {
+    min = 0;
+    max = 0;
+    for (const { keyMode, weight } of keymodeWeights) {
+      const [lo, hi] = PP_PRESTIGE_BANDS[keyMode] ?? DEFAULT_PP_PRESTIGE_BAND;
+      const share = Math.max(0, weight) / total;
+      min += lo * share;
+      max += hi * share;
+    }
+  }
+  return curve(normalize(Math.max(0, pp ?? 0), min, max), 0.7);
 }
 
 function computeElitePpPrestige(pp: number | null | undefined): number {
@@ -446,11 +486,19 @@ export function computeManiaSkills(scores: OsuScore[], options: { globalPp?: num
   if (profiles.length === 0) return null;
 
   const blended = blendProfiles(profiles);
-  const globalPpStrength = computeGlobalPpStrength(options.globalPp);
+  // Same weights and terms as before; the only change is that the main PP term
+  // now reads standing on a per-keymode scale (computeKeymodePpPrestige) instead
+  // of a single fixed band, so a 7K main isn't measured on 4K PP economics. This
+  // can only raise a 7K player's standing and leaves 4K and the sub-floor casual
+  // base untouched, so no card is nerfed by the change.
+  const ppPrestige = computeKeymodePpPrestige(
+    options.globalPp,
+    profiles.map((profile) => ({ keyMode: profile.keyMode, weight: profile.weight })),
+  );
   const elitePpPrestige = computeElitePpPrestige(options.globalPp);
   const cardPower =
     blended.peak * 0.33 +
-    globalPpStrength * 0.39 +
+    ppPrestige * 0.39 +
     blended.control * 0.09 +
     blended.speed * 0.07 +
     blended.precision * 0.05 +

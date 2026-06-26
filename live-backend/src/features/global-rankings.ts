@@ -75,7 +75,7 @@ export async function getGlobalRankingsSnapshot(db: Db, query: GlobalRankingsQue
        u.profile_json
      from country_rosters ro
      join users u on u.user_id = ro.user_id
-     where ro.is_tracked = 1 and u.pp is not null
+     where ro.is_tracked = 1 and ro.rank is not null and u.pp is not null
      group by u.user_id
      order by u.pp desc, u.global_rank asc`,
   )).rows;
@@ -270,6 +270,7 @@ async function readGlobalRankingDeltas(
        on current_roster.country = old.country
       and current_roster.user_id = old.user_id
       and current_roster.is_tracked = 1
+      and current_roster.rank is not null
      where old.user_id in (${placeholders})`,
     [...uniqueUserIds, targetAt, oldestAllowedAt, ...uniqueUserIds],
   )).rows;

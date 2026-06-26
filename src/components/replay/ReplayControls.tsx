@@ -898,6 +898,8 @@ export function ReplayProgressBar({
   }, [rendererRef]);
 
   const displayDuration = rendererRef.current?.displayDuration ?? 0;
+  const duration = rendererRef.current?.duration ?? 0;
+  const missTimes = rendererRef.current?.getMissTimes?.() ?? [];
   const leftLabel = formatReplayMs(progress * displayDuration);
   const rightLabel = formatReplayMs(displayDuration);
 
@@ -930,9 +932,10 @@ export function ReplayProgressBar({
           }}
           className={`block w-full h-1.5 appearance-none bg-osu-b3 rounded-full cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-osu-pink ${sliderClass}`}
         />
+        <ReplayMissMarkers missTimes={missTimes} duration={duration} heatmap={heatmap} />
         <ClipPreviewRange
           progress={progress}
-          duration={rendererRef.current?.duration ?? 0}
+          duration={duration}
           seconds={clipPreviewSeconds}
           rate={clipPreviewRate}
           customRange={customPreviewRange}
@@ -942,6 +945,42 @@ export function ReplayProgressBar({
       {children}
     </div>
   );
+}
+
+function ReplayMissMarkers({ missTimes, duration, heatmap }: { missTimes: number[]; duration: number; heatmap: number[] }) {
+  if (duration <= 0 || missTimes.length === 0) return null;
+
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-full z-20 h-5 opacity-0 transition-opacity duration-150 group-hover:opacity-90" aria-hidden="true">
+      {missTimes.map((time, index) => {
+        const left = Math.max(0, Math.min(1, time / duration));
+        const top = getHeatmapLineTopPercent(heatmap, left);
+        return (
+          <span
+            key={`${Math.round(time)}-${index}`}
+            className="absolute h-2 w-2 -translate-x-1/2 -translate-y-1/2"
+            style={{ left: `${left * 100}%`, top: `${top}%` }}
+          >
+            <span className="absolute left-1/2 top-1/2 h-2.5 w-px -translate-x-1/2 -translate-y-1/2 rotate-45 rounded-full bg-osu-red-light" />
+            <span className="absolute left-1/2 top-1/2 h-2.5 w-px -translate-x-1/2 -translate-y-1/2 -rotate-45 rounded-full bg-osu-red-light" />
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function getHeatmapLineTopPercent(heatmap: number[], progress: number): number {
+  if (heatmap.length === 0) return 50;
+  if (heatmap.length === 1) return 100 - heatmap[0] * 100;
+
+  const clamped = Math.max(0, Math.min(1, progress));
+  const rawIndex = clamped * (heatmap.length - 1);
+  const leftIndex = Math.floor(rawIndex);
+  const rightIndex = Math.min(heatmap.length - 1, leftIndex + 1);
+  const mix = rawIndex - leftIndex;
+  const value = heatmap[leftIndex] * (1 - mix) + heatmap[rightIndex] * mix;
+  return 100 - Math.max(0, Math.min(1, value)) * 100;
 }
 
 function KeypressHeatmap({ heatmap }: { heatmap: number[] }) {

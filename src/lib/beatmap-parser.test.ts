@@ -65,6 +65,34 @@ OverallDifficulty:8
     ]);
   });
 
+  it("keeps stable replay scroll-speed BPM on the gameplay base timing", () => {
+    const beatmap = parseManiaBeatmap(`
+osu file format v14
+
+[Metadata]
+Title:Test
+Artist:Tester
+Creator:Mapper
+Version:Stable scroll base BPM
+
+[Difficulty]
+CircleSize:4
+OverallDifficulty:8
+
+[TimingPoints]
+0,729.92700729927,4,1,0,100,1,0
+1000,279.06976744186,4,1,0,100,1,0
+
+[HitObjects]
+64,192,500,1,0,0:0:0:0:
+64,192,2000,1,0,0:0:0:0:
+64,192,6000,1,0,0:0:0:0:
+`);
+
+    expect(beatmap.bpm).toBe(82);
+    expect(beatmap.stableScrollBpm).toBe(215);
+  });
+
   it("combines inherited SV with BPM scaling like osu!mania", () => {
     const beatmap = parseManiaBeatmap(`
 osu file format v14

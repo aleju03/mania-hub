@@ -1,10 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
+import { avatarImageSrc } from "#/components/ui/Avatar";
 import { formatDate } from "#/lib/format";
 import { getDisplayedAccuracy, getScoreTimestamp, isLazerScore } from "#/lib/score";
 import type { ManiaBeatmap } from "#/lib/beatmap-parser";
 import type { ServerReplay } from "#/lib/replay-types";
 import type { OsuScore } from "#/lib/types";
+
+// Avatar + banner resolved from the replay's player so the info bar carries the
+// player's identity instead of a bare name. Seeded from the score's embedded
+// user, then enriched with the profile cover once it loads.
+export interface ReplayPlayerProfile {
+  id: number | null;
+  username: string;
+  avatarUrl?: string;
+  coverUrl?: string;
+}
 
 interface ReplayInfoProps {
   replay: ServerReplay;
@@ -12,10 +23,11 @@ interface ReplayInfoProps {
   beatmap: ManiaBeatmap | null;
   fallbackBeatmapsetId?: number;
   shareUrl?: string;
+  playerProfile?: ReplayPlayerProfile | null;
   onClear: () => void;
 }
 
-export function ReplayInfo({ replay, score, beatmap, fallbackBeatmapsetId, shareUrl, onClear }: ReplayInfoProps) {
+export function ReplayInfo({ replay, score, beatmap, fallbackBeatmapsetId, shareUrl, playerProfile, onClear }: ReplayInfoProps) {
   const h = replay.header;
   const totalHits = h.countGeki + h.count300 + h.countKatu + h.count100 + h.count50;
   const accuracy = score
@@ -31,16 +43,32 @@ export function ReplayInfo({ replay, score, beatmap, fallbackBeatmapsetId, share
     : getReplayHeaderClientLabel(h.gameVersion);
   const playedAt = score ? getScoreTimestamp(score) : "";
   const playedDate = playedAt ? formatDate(playedAt) : null;
+  const displayName = playerProfile?.username?.trim() || h.playerName;
+  const avatarSrc = avatarImageSrc(playerProfile?.avatarUrl, playerProfile?.id ?? undefined);
+  const playerCoverUrl = playerProfile?.coverUrl;
+  // Over a banner the muted label washes out, so brighten it and outline both
+  // label + name with a shadow. Without a banner keep the plain muted look that
+  // matches the other stat labels.
+  const playerLabelClass = playerCoverUrl
+    ? "text-white/80 [text-shadow:0_1px_3px_rgba(0,0,0,0.95)]"
+    : "text-osu-f1";
+  const playerNameShadow = playerCoverUrl ? " [text-shadow:0_1px_3px_rgba(0,0,0,0.85)]" : "";
 
   return (
     <>
-      <div className="sm:hidden bg-osu-b4 rounded-xl p-3 mb-3 border border-osu-b3/20">
+      <div className="sm:hidden relative overflow-hidden bg-osu-b4 rounded-xl p-3 mb-3 border border-osu-b3/20">
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <div className="min-w-0">
-                <div className="text-[8px] uppercase tracking-wider text-osu-f1">Player</div>
-                <div className="truncate text-sm font-bold text-white">{h.playerName}</div>
+              <div className="relative -mt-3 -ml-3 pt-3 pl-3 pb-1.5 pr-12 min-w-0">
+                <PlayerBanner coverUrl={playerCoverUrl} />
+                <div className="relative flex items-center gap-2 min-w-0">
+                  <PlayerAvatar src={avatarSrc} name={displayName} size={32} />
+                  <div className="min-w-0">
+                    <div className={`text-[8px] uppercase tracking-wider ${playerLabelClass}`}>Player</div>
+                    <div className={`truncate text-sm font-bold text-white${playerNameShadow}`}>{displayName}</div>
+                  </div>
+                </div>
               </div>
               <div className="h-7 w-px bg-osu-b3/40" />
               <div className="min-w-0 flex-1">
@@ -98,9 +126,15 @@ export function ReplayInfo({ replay, score, beatmap, fallbackBeatmapsetId, share
         </div>
       </div>
 
-      <div className="hidden sm:block bg-osu-b4 rounded-xl p-4 mb-4 border border-osu-b3/20">
+      <div className="hidden sm:block relative overflow-hidden bg-osu-b4 rounded-xl p-4 mb-4 border border-osu-b3/20">
         <div className="grid grid-cols-[minmax(56px,max-content)_minmax(0,1fr)_auto] lg:grid-cols-[minmax(64px,max-content)_minmax(160px,1fr)_auto_auto] items-center gap-x-4 sm:gap-x-6 gap-y-2">
-          <div className="min-w-0"><div className="text-[9px] uppercase tracking-wider text-osu-f1">Player</div><div className="text-sm font-bold text-white truncate">{h.playerName}</div></div>
+          <div className="relative -my-4 -ml-4 py-4 pl-4 pr-14 min-w-0">
+            <PlayerBanner coverUrl={playerCoverUrl} />
+            <div className="relative flex items-center gap-2.5 min-w-0">
+              <PlayerAvatar src={avatarSrc} name={displayName} size={36} />
+              <div className="min-w-0"><div className={`text-[9px] uppercase tracking-wider ${playerLabelClass}`}>Player</div><div className={`text-sm font-bold text-white truncate${playerNameShadow}`}>{displayName}</div></div>
+            </div>
+          </div>
           {beatmap && (
             <div className="min-w-0">
               <div className="text-[9px] uppercase tracking-wider text-osu-f1">Map</div>
@@ -135,6 +169,61 @@ export function ReplayInfo({ replay, score, beatmap, fallbackBeatmapsetId, share
         </div>
       </div>
     </>
+  );
+}
+
+// Sits behind the player avatar + name only: bleeds to the card's left/top/bottom
+// edges (the parent uses negative margins) and dissolves to the right via a mask
+// so it blends back into the bar instead of ending on a hard edge.
+const PLAYER_BANNER_FADE = "linear-gradient(to right, #000 0%, #000 40%, transparent 90%)";
+
+function PlayerBanner({ coverUrl }: { coverUrl?: string }) {
+  if (!coverUrl) return null;
+  return (
+    <div
+      className="pointer-events-none absolute inset-0"
+      style={{ maskImage: PLAYER_BANNER_FADE, WebkitMaskImage: PLAYER_BANNER_FADE }}
+      aria-hidden="true"
+    >
+      <div
+        className="absolute inset-0 bg-cover bg-center opacity-60"
+        style={{ backgroundImage: `url(${coverUrl})` }}
+      />
+      <div className="absolute inset-0 bg-osu-b4/30" />
+    </div>
+  );
+}
+
+function PlayerAvatar({ src, name, size }: { src?: string; name: string; size: number }) {
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [src]);
+
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt=""
+        width={size}
+        height={size}
+        className="flex-shrink-0 rounded-full object-cover ring-2 ring-white/10"
+        style={{ width: size, height: size }}
+        loading="lazy"
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="flex flex-shrink-0 items-center justify-center rounded-full bg-osu-b6 font-bold text-osu-f1 ring-2 ring-white/10"
+      style={{ width: size, height: size, fontSize: Math.round(size * 0.42) }}
+      aria-hidden="true"
+    >
+      {name.trim().charAt(0).toUpperCase() || "?"}
+    </div>
   );
 }
 

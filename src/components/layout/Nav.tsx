@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { Globe, LogIn, LogOut, Settings, UserRound } from "lucide-react";
+import { ChevronDown, Globe, LogIn, LogOut, Settings, UserRound } from "lucide-react";
 import { SearchInput } from "../ui/SearchInput";
 import { Avatar } from "../ui/Avatar";
 import { CountrySelector } from "./CountrySelector";
@@ -16,17 +16,46 @@ import { isLiveBackendConfigured } from "../../lib/live-backend";
 import { useCountryWarming } from "../../lib/use-country-warming";
 import { useDynamicFavicon } from "../../lib/favicon";
 
-const links = [
-  { id: "home", to: "/", label: "home" },
-  { id: "rankings", to: "/rankings", label: "rankings" },
-  { id: "tracker", to: "/tracker", label: "tracker" },
-  { id: "top-plays", to: "/top-plays", label: "top plays" },
-  { id: "maps", to: "/maps", label: "maps" },
-  { id: "farm-helper", to: "/farm-helper", label: "farm helper" },
-  { id: "replay", to: "/replay", label: "replay" },
-  { id: "snipes", to: "/snipes", label: "snipes" },
-  { id: "packs", to: "/packs", label: "packs" },
-] as const;
+// Leaf destinations. Kept `as const` (not typed) so each `to` stays a literal
+// route path; TanStack Router's Link types reject a widened `string`.
+const NAV_LEAVES = {
+  home: { id: "home", to: "/", label: "home" },
+  rankings: { id: "rankings", to: "/rankings", label: "rankings" },
+  "top-plays": { id: "top-plays", to: "/top-plays", label: "top plays" },
+  tracker: { id: "tracker", to: "/tracker", label: "tracker" },
+  maps: { id: "maps", to: "/maps", label: "maps" },
+  packs: { id: "packs", to: "/packs", label: "packs" },
+  snipes: { id: "snipes", to: "/snipes", label: "snipes" },
+  "farm-helper": { id: "farm-helper", to: "/farm-helper", label: "farm helper" },
+  replay: { id: "replay", to: "/replay", label: "replay" },
+} as const;
+
+type NavLeafId = keyof typeof NAV_LEAVES;
+type NavLeaf = (typeof NAV_LEAVES)[NavLeafId];
+
+// Top-level nav: a few standalone links plus grouped dropdowns, osu!-style.
+type NavTop =
+  | { kind: "link"; id: NavLeafId }
+  | { kind: "group"; id: string; label: string; items: NavLeafId[] };
+
+const NAV_TOP: NavTop[] = [
+  { kind: "link", id: "home" },
+  { kind: "group", id: "players", label: "players", items: ["tracker", "rankings", "top-plays"] },
+  { kind: "link", id: "maps" },
+  { kind: "link", id: "packs" },
+  { kind: "link", id: "snipes" },
+  { kind: "group", id: "tools", label: "tools", items: ["farm-helper", "replay"] },
+];
+
+// Each leaf maps to its top-level item id so the active-link bar can sit under
+// the group that owns the current page.
+const LEAF_TO_TOP: Record<string, string> = {};
+for (const top of NAV_TOP) {
+  if (top.kind === "link") LEAF_TO_TOP[top.id] = top.id;
+  else for (const id of top.items) LEAF_TO_TOP[id] = top.id;
+}
+
+const ALL_LEAVES = Object.values(NAV_LEAVES);
 
 /* Nav links to /maps and /snipes target routes whose validateSearch has
    many required fields. Passing only `{ country }` would be a partial and
@@ -49,6 +78,7 @@ export function Nav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const fallbackCountry = useSelectedCountry();
   const setSelectedCountry = useAppStore((state) => state.setSelectedCountry);
@@ -71,18 +101,18 @@ export function Nav() {
   // only once the tier is known to be "snipes" — while the tier is still
   // unknown (first-ever visit) the tab stays hidden rather than flashing in.
   const showSnipesLink = !liveBackendConfigured || selectedCountryFeatureTier === "snipes";
-  const visibleLinks = links.filter((link) => {
-    if (link.id === "snipes" && !showSnipesLink) return false;
-    return true;
-  });
+  const isLeafVisible = (leaf: NavLeaf) => leaf.id !== "snipes" || showSnipesLink;
+  const visibleLeaves = ALL_LEAVES.filter(isLeafVisible);
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
   const snipesFilters = useAppStore((state) => state.snipesFiltersByCountry[selectedCountry] ?? DEFAULT_SNIPES_FILTERS);
   const hydrated = useHasHydrated();
   const topPlaysRangeForLink = hydrated && topPlaysRange !== "7d" ? topPlaysRange : "7d";
   const snipesFiltersForLink = hydrated ? snipesFilters : DEFAULT_SNIPES_FILTERS;
   const settingsActive = location.pathname.startsWith("/settings");
-  const current = visibleLinks.find((l) => location.pathname.startsWith(l.to === "/" ? "/__home" : l.to)) ||
-    (location.pathname === "/" ? links[0] : location.pathname.startsWith("/player") || settingsActive || (location.pathname === "/snipes" && !showSnipesLink) ? null : visibleLinks[0]);
+  const current = visibleLeaves.find((l) => location.pathname.startsWith(l.to === "/" ? "/__home" : l.to)) ||
+    (location.pathname === "/" ? NAV_LEAVES.home : location.pathname.startsWith("/player") || settingsActive || (location.pathname === "/snipes" && !showSnipesLink) ? null : visibleLeaves[0]);
+  // The active page's top-level item; the indicator bar sits under this.
+  const activeTopId = current ? (LEAF_TO_TOP[current.id] ?? null) : null;
 
   // Active-link indicator: single always-mounted bar, measured from the
   // active link's rect. Replaces an earlier Framer Motion `layoutId` shared
@@ -92,12 +122,17 @@ export function Nav() {
   const adminMenuRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const restoreMenuAfterSettingsCloseRef = useRef(false);
-  const linkRefs = useRef<Map<string, HTMLAnchorElement>>(new Map());
+  // Keyed by top-level item id (home link + group triggers); used to measure
+  // the active-link indicator bar.
+  const linkRefs = useRef<Map<string, HTMLElement>>(new Map());
+  const closeGroupTimer = useRef<number | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [dimHeight, setDimHeight] = useState(0);
   const [barRect, setBarRect] = useState<{ left: number; width: number } | null>(null);
 
   useLayoutEffect(() => {
     const measure = () => {
-      const id = current?.id;
+      const id = activeTopId;
       const container = linksContainerRef.current;
       if (!id || !container) {
         setBarRect(null);
@@ -128,7 +163,18 @@ export function Nav() {
       cancelled = true;
       ro.disconnect();
     };
-  }, [current?.id]);
+  }, [activeTopId]);
+
+  // Size the dim band to the open dropdown so only the menu area darkens, not
+  // the whole page. Stored as the band height BELOW the 60px navbar, with a bit
+  // of extra room so the gradient fades out past the last item before its
+  // accent line. Left at its last value while closing so it fades out cleanly.
+  useLayoutEffect(() => {
+    if (!openGroup) return;
+    const el = dropdownRef.current;
+    if (!el) return;
+    setDimHeight(Math.max(0, Math.ceil(el.getBoundingClientRect().bottom) - 60 + 22));
+  }, [openGroup]);
 
   const selectedIsGlobal = isGlobalScope(selectedCountry);
   const flagBackground = getCountryFlagGradient(selectedCountry)
@@ -148,6 +194,7 @@ export function Nav() {
     setMenuOpen(false);
     setAdminMenuOpen(false);
     setUserMenuOpen(false);
+    setOpenGroup(null);
     setSettingsOpen(false);
   }, [location.pathname]);
 
@@ -177,6 +224,31 @@ export function Nav() {
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [userMenuOpen]);
 
+  // Nav group dropdowns: close on outside click or Escape.
+  useEffect(() => {
+    if (!openGroup) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && linksContainerRef.current?.contains(target)) return;
+      setOpenGroup(null);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpenGroup(null);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [openGroup]);
+
+  useEffect(() => () => {
+    if (closeGroupTimer.current) clearTimeout(closeGroupTimer.current);
+  }, []);
+
   // Prevent body scroll when drawer is open. Defer the layout-invalidating
   // style write by two rAFs so the drawer's transform transition gets a clean
   // first frame on the compositor before we trigger a full-document restyle
@@ -200,6 +272,57 @@ export function Nav() {
       document.body.style.overflow = "";
     };
   }, [menuOpen]);
+
+  // Per-leaf search params. Routes like /maps and /snipes have many required
+  // search fields; validateSearch fills the rest from defaults at runtime.
+  const linkSearch = (id: NavLeafId) => {
+    switch (id) {
+      case "home":
+      case "tracker":
+        return { country: selectedCountry };
+      case "rankings":
+        return { country: selectedCountry, page: 1 };
+      case "top-plays":
+        return { country: selectedCountry, range: topPlaysRangeForLink };
+      case "maps":
+        return preserveSearchWithCountryOnFirstPage(selectedCountry);
+      case "snipes":
+        return { country: selectedCountry, ...snipesFiltersForLink, page: 0 };
+      default:
+        return undefined;
+    }
+  };
+
+  const openGroupNow = (id: string) => {
+    if (closeGroupTimer.current) {
+      clearTimeout(closeGroupTimer.current);
+      closeGroupTimer.current = null;
+    }
+    setOpenGroup(id);
+  };
+
+  const scheduleCloseGroup = () => {
+    if (closeGroupTimer.current) clearTimeout(closeGroupTimer.current);
+    closeGroupTimer.current = window.setTimeout(() => setOpenGroup(null), 120);
+  };
+
+  const renderMobileLink = (leaf: NavLeaf) => (
+    <Link
+      key={leaf.id}
+      to={leaf.to}
+      search={linkSearch(leaf.id)}
+      preload={leaf.id === "tracker" ? false : "intent"}
+      onClick={() => setMenuOpen(false)}
+      draggable={false}
+      className={`flex items-center gap-3 px-5 py-3 text-sm font-medium capitalize transition-colors duration-[120ms] ${
+        current?.id === leaf.id
+          ? "text-white bg-osu-pink/10 border-l-3 border-osu-yellow"
+          : "text-osu-pink-light hover:text-white hover:bg-osu-b4/50 border-l-3 border-transparent"
+      }`}
+    >
+      {leaf.label}
+    </Link>
+  );
 
   const handleSearch = async (q: string) => {
     const res = await searchUsers({ data: { query: q } });
@@ -273,7 +396,22 @@ export function Nav() {
   };
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50">
+    <>
+      {/* osu!-style dim behind an open nav dropdown: a band only as tall as the
+          menu, dark under the navbar and fading to transparent, capped by a
+          themed accent line marking its end. Sits below the header (z-50) so the
+          bar and dropdown stay bright. */}
+      <div
+        className={`fixed inset-x-0 top-[60px] z-40 bg-gradient-to-b from-black/25 via-black/40 to-black/55 backdrop-blur-md transition-opacity duration-150 ${
+          openGroup ? "opacity-100" : "pointer-events-none opacity-0"
+        }`}
+        style={{ height: dimHeight }}
+        onClick={() => setOpenGroup(null)}
+        aria-hidden
+      >
+        <div className="absolute inset-x-0 bottom-0 h-px bg-osu-pink/40" />
+      </div>
+      <header className="fixed top-0 left-0 right-0 z-50">
       <div className="absolute inset-0 bg-osu-b6">
         <img
           src="/images/layout/nav2-background-hue0.webp"
@@ -356,38 +494,91 @@ export function Nav() {
 
           {/* Desktop nav links */}
           <div ref={linksContainerRef} className="relative hidden md:flex items-center gap-1">
-            {visibleLinks.map((l) => (
-              <Link
-                key={l.id}
-                ref={(el: HTMLAnchorElement | null) => {
-                  if (el) linkRefs.current.set(l.id, el);
-                  else linkRefs.current.delete(l.id);
-                }}
-                to={l.to}
-                search={
-                  l.id === "home" || l.id === "tracker"
-                    ? { country: selectedCountry }
-                    : l.id === "rankings"
-                      ? { country: selectedCountry, page: 1 }
-                      : l.id === "top-plays"
-                        ? { country: selectedCountry, range: topPlaysRangeForLink }
-                        : l.id === "maps"
-                          ? preserveSearchWithCountryOnFirstPage(selectedCountry)
-                          : l.id === "snipes"
-                            ? { country: selectedCountry, ...snipesFiltersForLink, page: 0 }
-                            : undefined
-                }
-                preload={l.id === "tracker" ? false : "intent"}
-                draggable={false}
-                className={`relative px-2.5 py-[19px] text-[12px] font-semibold capitalize whitespace-nowrap transition-colors duration-[120ms] ${
-                  current?.id === l.id
-                    ? "text-white"
-                    : "text-osu-pink-light hover:text-white"
-                }`}
-              >
-                <span className="inline-flex items-center gap-1">{l.label}</span>
-              </Link>
-            ))}
+            {NAV_TOP.map((top) => {
+              if (top.kind === "link") {
+                if (top.id === "snipes" && !showSnipesLink) return null;
+                const leaf = NAV_LEAVES[top.id];
+                return (
+                  <Link
+                    key={top.id}
+                    ref={(el: HTMLAnchorElement | null) => {
+                      if (el) linkRefs.current.set(top.id, el);
+                      else linkRefs.current.delete(top.id);
+                    }}
+                    to={leaf.to}
+                    search={linkSearch(leaf.id)}
+                    preload={leaf.id === "tracker" ? false : "intent"}
+                    draggable={false}
+                    className={`relative px-2.5 py-[19px] text-[12px] font-semibold capitalize whitespace-nowrap transition-colors duration-[120ms] ${
+                      activeTopId === top.id ? "text-white" : "text-osu-pink-light hover:text-white"
+                    }`}
+                  >
+                    {leaf.label}
+                  </Link>
+                );
+              }
+
+              const groupItems = top.items.map((id) => NAV_LEAVES[id]).filter(isLeafVisible);
+              if (groupItems.length === 0) return null;
+              const open = openGroup === top.id;
+              return (
+                <div
+                  key={top.id}
+                  className="relative"
+                  onMouseEnter={() => openGroupNow(top.id)}
+                  onMouseLeave={scheduleCloseGroup}
+                >
+                  <button
+                    type="button"
+                    ref={(el: HTMLButtonElement | null) => {
+                      if (el) linkRefs.current.set(top.id, el);
+                      else linkRefs.current.delete(top.id);
+                    }}
+                    onClick={() => setOpenGroup((prev) => (prev === top.id ? null : top.id))}
+                    className={`relative flex cursor-pointer items-center gap-1 px-2.5 py-[19px] text-[12px] font-semibold capitalize whitespace-nowrap transition-colors duration-[120ms] ${
+                      activeTopId === top.id || open ? "text-white" : "text-osu-pink-light hover:text-white"
+                    }`}
+                    aria-haspopup="menu"
+                    aria-expanded={open}
+                  >
+                    {top.label}
+                    <ChevronDown
+                      className={`h-3 w-3 opacity-70 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+                      strokeWidth={2.5}
+                    />
+                  </button>
+                  {open && (
+                    <div
+                      ref={dropdownRef}
+                      className="absolute left-0 top-full z-[70] flex min-w-[150px] flex-col whitespace-nowrap pt-1 pb-2"
+                      role="menu"
+                    >
+                      {groupItems.map((leaf) => {
+                        const itemActive = current?.id === leaf.id;
+                        return (
+                          <Link
+                            key={leaf.id}
+                            to={leaf.to}
+                            search={linkSearch(leaf.id)}
+                            preload={leaf.id === "tracker" ? false : "intent"}
+                            onClick={() => setOpenGroup(null)}
+                            draggable={false}
+                            role="menuitem"
+                            className={`relative py-2 pl-4 pr-3 text-[13px] font-semibold capitalize [text-shadow:0_1px_5px_rgba(0,0,0,0.95)] transition-colors before:absolute before:left-1 before:top-1/2 before:h-[15px] before:w-[3px] before:-translate-y-1/2 before:rounded-full before:bg-osu-yellow before:transition-opacity ${
+                              itemActive
+                                ? "text-white before:opacity-100"
+                                : "text-osu-pink-light before:opacity-0 hover:text-white hover:before:opacity-100"
+                            }`}
+                          >
+                            {leaf.label}
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
             {barRect && (
               <motion.div
                 className="absolute bottom-0 h-[3px] rounded-full bg-osu-yellow pointer-events-none"
@@ -584,35 +775,17 @@ export function Nav() {
         aria-hidden={!menuOpen}
       >
               <div className="py-2">
-                {visibleLinks.map((l) => (
-                  <Link
-                    key={l.id}
-                    to={l.to}
-                    search={
-                      l.id === "home" || l.id === "tracker"
-                        ? { country: selectedCountry }
-                        : l.id === "rankings"
-                          ? { country: selectedCountry, page: 1 }
-                          : l.id === "top-plays"
-                            ? { country: selectedCountry, range: topPlaysRangeForLink }
-                            : l.id === "maps"
-                              ? preserveSearchWithCountryOnFirstPage(selectedCountry)
-                              : l.id === "snipes"
-                                ? { country: selectedCountry, ...snipesFiltersForLink, page: 0 }
-                                : undefined
-                    }
-                    preload={l.id === "tracker" ? false : "intent"}
-                    onClick={() => setMenuOpen(false)}
-                    draggable={false}
-                    className={`flex items-center gap-3 px-5 py-3 text-sm font-medium capitalize transition-colors duration-[120ms] ${
-                      current?.id === l.id
-                        ? "text-white bg-osu-pink/10 border-l-3 border-osu-yellow"
-                        : "text-osu-pink-light hover:text-white hover:bg-osu-b4/50 border-l-3 border-transparent"
-                    }`}
-                  >
-                    {l.label}
-                  </Link>
-                ))}
+                {NAV_TOP.map((top) => {
+                  if (top.kind === "link") {
+                    if (top.id === "snipes" && !showSnipesLink) return null;
+                    return renderMobileLink(NAV_LEAVES[top.id]);
+                  }
+                  // Flat list on mobile: no category labels in the drawer.
+                  return top.items
+                    .map((id) => NAV_LEAVES[id])
+                    .filter(isLeafVisible)
+                    .map((leaf) => renderMobileLink(leaf));
+                })}
               </div>
 
               <div className="border-t border-osu-b3/30 px-4 py-4">
@@ -730,5 +903,6 @@ export function Nav() {
         onBackdropClose={handleSettingsBackdropClose}
       />
     </header>
+    </>
   );
 }

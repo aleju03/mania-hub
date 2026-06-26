@@ -1,7 +1,7 @@
 import type { Db } from "../db.js";
-import { execBatch, json, type DbStatement } from "../db.js";
-import { readConfig } from "../config.js";
-import { markCountryRosterRefreshed } from "../countries.js";
+import { exec, execBatch, json, type DbStatement } from "../db.js";
+import { readConfig, type Config } from "../config.js";
+import { getActiveCountryCodes, markCountryRosterRefreshed } from "../countries.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { nowIso } from "../shared/score.js";
@@ -40,7 +40,11 @@ export async function refreshCountryRoster(db: Db, osu: Pick<OsuApiClient, "getR
   const now = nowIso();
   let count = 0;
   const statements: DbStatement[] = [
-    { sql: "update country_rosters set is_tracked = 0, refreshed_at = ? where country = ?", args: [now, country] },
+    // Ranked members are reset to untracked here and re-marked below if still in the top N.
+    { sql: "update country_rosters set rank = null, is_tracked = 0, refreshed_at = ? where country = ? and source != 'manual'", args: [now, country] },
+    // Manual opt-in members stay tracked across refreshes, but drop any stale rank so they only
+    // re-enter ranking scope if the upsert below places them back in the top N this run.
+    { sql: "update country_rosters set rank = null, refreshed_at = ? where country = ? and source = 'manual'", args: [now, country] },
   ];
   for (let index = 0; index < Math.min(rows.length, config.rosterSize); index++) {
     const row = rows[index];
@@ -79,6 +83,127 @@ export async function enqueueRosterRefreshes(queue: JobQueue, countries: string[
   for (const country of countries) {
     await queue.enqueue("refresh_country_roster", `roster:${country}`, { country }, { priority: 10, replaceDone: true });
   }
+}
+
+/**
+ * Ranked roster members carry a non-null country rank (the top-N pulled from osu! rankings).
+ * Manual opt-in members and transient `score`-sourced members are tracked for activity but
+ * rank null, so they are deliberately excluded from ranking surfaces (global rankings, the
+ * country maps board, snipe boards, rank deltas). This is the shared discriminator for that.
+ */
+export async function isRankedRosterMember(db: Db, country: string, userId: number): Promise<boolean> {
+  const row = (await exec(
+    db,
+    "select 1 from country_rosters where country = ? and user_id = ? and is_tracked = 1 and rank is not null limit 1",
+    [country.toUpperCase(), userId],
+  )).rows[0];
+  return row != null;
+}
+
+export type ManualRosterMemberStatus =
+  | "added"
+  | "already_member"
+  | "already_ranked"
+  | "removed"
+  | "not_member"
+  | "country_not_tracked"
+  | "country_full";
+
+export interface ManualRosterMemberResult {
+  ok: boolean;
+  country: string;
+  userId: number;
+  status: ManualRosterMemberStatus;
+}
+
+/**
+ * Opt a user into their country's roster as a durable `manual` member (rank null). They become
+ * tracking-scope (scores ingested, activity analysed) but stay out of ranking surfaces until the
+ * roster refresh ever places them in the real top N. The caller proves identity upstream: the
+ * frontend server fn only ever forwards the osu!-verified viewer id.
+ */
+export async function addManualRosterMember(
+  db: Db,
+  queue: JobQueue,
+  config: Config,
+  country: string,
+  userId: number,
+): Promise<ManualRosterMemberResult> {
+  const normalized = country.toUpperCase();
+  const base = { country: normalized, userId };
+  // The country must already be actively tracked, otherwise scores never ingest and nothing
+  // would be recorded. Activating a cold country is a separate, rate-limited flow.
+  const activeCountries = await getActiveCountryCodes(db, config);
+  if (!activeCountries.includes(normalized)) {
+    return { ...base, ok: false, status: "country_not_tracked" };
+  }
+  const existing = (await exec(
+    db,
+    "select rank, source, is_tracked from country_rosters where country = ? and user_id = ?",
+    [normalized, userId],
+  )).rows[0];
+  // Already a ranked member (in the top N): they are tracked already, nothing to opt into.
+  if (existing && existing.rank != null && Number(existing.is_tracked) === 1) {
+    return { ...base, ok: true, status: "already_ranked" };
+  }
+  const alreadyManual = existing != null && String(existing.source) === "manual" && Number(existing.is_tracked) === 1;
+  if (!alreadyManual) {
+    // Bound the per-country opt-in count: every manual member joins the fallback-poll rotation
+    // and accrues activity jobs, so this caps the recurring cost.
+    const cap = Math.max(0, Math.floor(config.manualRosterMaxPerCountry));
+    if (cap > 0) {
+      const countRow = (await exec(
+        db,
+        "select count(*) as n from country_rosters where country = ? and source = 'manual' and is_tracked = 1 and rank is null",
+        [normalized],
+      )).rows[0];
+      if (Number(countRow?.n ?? 0) >= cap) {
+        return { ...base, ok: false, status: "country_full" };
+      }
+    }
+  }
+  const now = nowIso();
+  await exec(
+    db,
+    `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+     values (?, ?, null, 'manual', 1, ?)
+     on conflict(country, user_id) do update set rank = null, source = 'manual', is_tracked = 1, refreshed_at = excluded.refreshed_at`,
+    [normalized, userId, now],
+  );
+  // Backfill so the activity tab fills in promptly instead of only tracking from the next play.
+  // Both jobs dedupe on their keys, so repeated opt-in clicks collapse into one unit of work.
+  await queue.enqueue("enrich_user", `user:${userId}`, { userId }, { priority: 100 });
+  await queue.enqueue("reconcile_user_recent_scores", `recent:user:${userId}`, { userId }, { priority: 70, replaceDone: true });
+  return { ...base, ok: true, status: alreadyManual ? "already_member" : "added" };
+}
+
+/** Opt a user back out: soft-untrack their manual row so refreshes keep ignoring it. */
+export async function removeManualRosterMember(db: Db, country: string, userId: number): Promise<ManualRosterMemberResult> {
+  const normalized = country.toUpperCase();
+  const existing = (await exec(
+    db,
+    "select rank, is_tracked from country_rosters where country = ? and user_id = ? and source = 'manual'",
+    [normalized, userId],
+  )).rows[0];
+  if (existing && existing.rank != null && Number(existing.is_tracked) === 1) {
+    return {
+      country: normalized,
+      userId,
+      ok: true,
+      status: "already_ranked",
+    };
+  }
+  const result = await exec(
+    db,
+    "update country_rosters set is_tracked = 0, refreshed_at = ? where country = ? and user_id = ? and source = 'manual' and rank is null",
+    [nowIso(), normalized, userId],
+  );
+  return {
+    country: normalized,
+    userId,
+    ok: true,
+    status: Number(result.rowsAffected ?? 0) > 0 ? "removed" : "not_member",
+  };
 }
 
 function nullableNumber(value: unknown): number | null {

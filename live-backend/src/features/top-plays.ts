@@ -8,6 +8,7 @@ import type { CountryTopPlay, OscScore, ScoreUser } from "../shared/types.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import type { OsuApiClient } from "../osu/client.js";
 import { recordMapsFarmedScore } from "./maps.js";
+import { isRankedRosterMember } from "../rosters/country-rosters.js";
 
 const TOP_PLAY_CONFIRMATION_PENDING_MS = 30 * 60_000;
 const TOP_PLAYS_DEFAULT_PAGE_SIZE = 200;
@@ -56,6 +57,8 @@ export async function maybeEnqueueTopPlayRefresh(
 ): Promise<void> {
   if (score.pp == null || score.pp <= 0) return;
   if (!scoreHasPublicLeaderboard(score)) return;
+  // Top-play events are a ranking/feed surface: only ranked roster members generate them.
+  if (!await isRankedRosterMember(db, country, score.user_id)) return;
   const row = (await exec(db, "select top_play_min_pp from users where user_id = ?", [score.user_id])).rows[0];
   const threshold = Math.max(0, Number(row?.top_play_min_pp ?? 0) - marginPp);
   if (score.pp >= threshold) {

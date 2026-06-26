@@ -32,6 +32,7 @@ export interface ReplayRendererLike {
   readonly time: number;
   readonly isPlaying: boolean;
   destroy: () => void;
+  getMissTimes?: () => number[];
   pause: () => void;
   play: () => void;
   resize: () => void;

@@ -67,6 +67,7 @@ describe("resolveStableManiaReplayScrollSpeed", () => {
   it("resolves stable mania scroll speed scale with beatmap bpm", () => {
     expect(resolveStableManiaReplayScrollSpeed(9.009009, 222)).toBe(20);
     expect(resolveStableManiaReplayScrollSpeed(12.98077, 208)).toBe(27);
+    expect(resolveStableManiaReplayScrollSpeed(15.81395, 215)).toBe(34);
   });
 
   it("ignores resolved values outside stable's scroll speed range", () => {

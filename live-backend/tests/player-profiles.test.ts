@@ -103,6 +103,7 @@ describe("player profile snapshots", () => {
       endedAt: snapshotFetchedAt,
     });
     const { user: _user, beatmap, beatmapset, ...compactBest } = best;
+    if (!beatmap || !beatmapset) throw new Error("profile fixture is missing beatmap metadata");
 
     await exec(
       db,
@@ -122,12 +123,12 @@ describe("player profile snapshots", () => {
       `insert into beatmapsets (beatmapset_id, title, artist, creator, status, covers_json, metadata_json, updated_at)
        values (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        beatmapset?.id,
-        beatmapset?.title,
-        beatmapset?.artist,
-        beatmapset?.creator ?? null,
-        beatmapset?.status ?? null,
-        JSON.stringify(beatmapset?.covers ?? {}),
+        beatmapset.id,
+        beatmapset.title,
+        beatmapset.artist,
+        beatmapset.creator ?? null,
+        beatmapset.status ?? null,
+        JSON.stringify(beatmapset.covers ?? {}),
         JSON.stringify({ ...beatmapset, play_count: 1234, preview_url: "https://b.ppy.sh/preview.mp3" }),
         snapshotFetchedAt,
       ],
@@ -137,16 +138,16 @@ describe("player profile snapshots", () => {
       `insert into beatmaps (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, max_combo, version, url, metadata_json, updated_at)
        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        beatmap?.id,
-        beatmap?.beatmapset_id,
-        beatmap?.mode,
-        beatmap?.status ?? null,
-        beatmap?.cs,
-        beatmap?.difficulty_rating,
-        beatmap?.bpm,
-        beatmap?.max_combo ?? null,
-        beatmap?.version,
-        beatmap?.url,
+        beatmap.id,
+        beatmap.beatmapset_id,
+        beatmap.mode,
+        beatmap.status ?? null,
+        beatmap.cs,
+        beatmap.difficulty_rating,
+        beatmap.bpm,
+        beatmap.max_combo ?? null,
+        beatmap.version,
+        beatmap.url,
         JSON.stringify({ ...beatmap, total_length: 95, drain: 4 }),
         snapshotFetchedAt,
       ],

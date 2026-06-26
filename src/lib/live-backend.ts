@@ -680,8 +680,9 @@ export async function fetchLiveTrackerSnapshot(
   return fetchLiveJson(`/api/snapshots/tracker?${query.toString()}`);
 }
 
-export type LiveFarmHelperReason = "missing" | "improve" | "stale";
+export type LiveFarmHelperReason = "missing" | "improve" | "stale" | "owned";
 export type LiveFarmHelperKeyMode = "4k" | "7k" | "any";
+export type LiveFarmHelperView = "gain" | "popular";
 export type LiveFarmHelperSpeedBucket = "ht" | "normal" | "dt";
 
 export interface LiveFarmHelperPeer {
@@ -717,6 +718,8 @@ export interface LiveFarmHelperRec {
   peerFraction: number;
   peerPpMedian: number;
   peerPpP75: number;
+  latestPeerPlayedAt: string | null;
+  peerRecencyPlayedAt: string | null;
   topPeers: LiveFarmHelperPeer[];
   scoreUrl: string | null;
   mapUrl: string;
@@ -731,6 +734,7 @@ export interface LiveFarmHelperSnapshot {
   coverUrl: string;
   pp: number;
   keyMode: LiveFarmHelperKeyMode;
+  view: LiveFarmHelperView;
   peerBand: { mode: string; count: number; farmDataCount: number; minPp: number; maxPp: number };
   totalPotentialPp: number;
   recs: LiveFarmHelperRec[];
@@ -739,10 +743,11 @@ export interface LiveFarmHelperSnapshot {
 
 export async function fetchLiveFarmHelperSnapshot(
   userKey: string,
-  params?: { keyMode?: LiveFarmHelperKeyMode; limit?: number; signal?: AbortSignal },
+  params?: { keyMode?: LiveFarmHelperKeyMode; view?: LiveFarmHelperView; limit?: number; signal?: AbortSignal },
 ): Promise<LiveFarmHelperSnapshot> {
   const query = new URLSearchParams({ user: userKey });
   if (params?.keyMode) query.set("key", params.keyMode);
+  if (params?.view) query.set("view", params.view);
   if (params?.limit != null) query.set("limit", String(params.limit));
   return fetchLiveJson(`/api/snapshots/farm-helper?${query.toString()}`, params?.signal ? { signal: params.signal } : undefined);
 }

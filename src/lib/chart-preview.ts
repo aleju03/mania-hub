@@ -8,7 +8,7 @@ const RANDOM_REPLAY_TAP_HOLD_MS = 48;
 const DENSE_PREVIEW_LEAD_IN_MS = 1_000;
 const MAX_PREVIEW_CACHE_ENTRIES_PER_MAP = 20;
 
-type ChartPreviewAudioMode = "set-preview" | "selected-file";
+export type ChartPreviewAudioMode = "set-preview" | "selected-file";
 
 export type ChartPreviewPlaybackPlan = {
   beatmap: ManiaBeatmap;
@@ -16,6 +16,27 @@ export type ChartPreviewPlaybackPlan = {
   timeScale: number;
   audioMode: ChartPreviewAudioMode;
 };
+
+export function resolveInitialChartPreviewAudioMode({
+  plannedAudioMode,
+  hasSelectedAudioFile,
+  hasSetPreviewAudio,
+  hasDifficultyPicker,
+  timedRateVariant,
+}: {
+  plannedAudioMode: ChartPreviewAudioMode;
+  hasSelectedAudioFile: boolean;
+  hasSetPreviewAudio: boolean;
+  hasDifficultyPicker: boolean;
+  timedRateVariant: boolean;
+}): ChartPreviewAudioMode {
+  if (plannedAudioMode !== "set-preview" || !hasSelectedAudioFile) {
+    return plannedAudioMode;
+  }
+  if (!hasSetPreviewAudio) return "selected-file";
+  if (timedRateVariant) return "set-preview";
+  return hasDifficultyPicker ? "selected-file" : "set-preview";
+}
 
 const previewNotesCache = new WeakMap<ManiaBeatmap, Map<string, ManiaNote[]>>();
 const previewComboCache = new WeakMap<ManiaBeatmap, Map<number, number>>();

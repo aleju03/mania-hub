@@ -16,14 +16,15 @@ import { filterBeatmapSearchResults } from "#/lib/beatmap-search";
 import type { BeatmapScoreLookupStatus, OsuBeatmap, OsuBeatmapset, OsuScore } from "#/lib/types";
 
 export type ReplayBrowseMode = "player" | "beatmap" | "upload";
-type PlayerReplaySectionKey = "pinned" | "recent" | "best" | "firsts";
+type PlayerReplaySectionKey = "pinned" | "best" | "firsts" | "recent";
 type PlayerScoreGroups = { best: OsuScore[]; firsts: OsuScore[]; pinned: OsuScore[]; recent: OsuScore[] };
+type PlayerScoreLoadingByGroup = Record<PlayerReplaySectionKey, boolean>;
 
 const PLAYER_REPLAY_SECTIONS: { key: PlayerReplaySectionKey; label: string }[] = [
   { key: "pinned", label: "Pinned" },
-  { key: "recent", label: "Recent Plays" },
   { key: "best", label: "Best Scores" },
   { key: "firsts", label: "First Places" },
+  { key: "recent", label: "Recent Plays" },
 ];
 const PLAYER_BEATMAP_SEARCH_MIN_LENGTH = 3;
 const PLAYER_BEATMAP_SEARCH_DEBOUNCE_MS = 650;
@@ -45,6 +46,7 @@ interface ReplayBrowseViewProps {
   onOpenScorePreview: () => void;
   loadingScores: boolean;
   playerScoreGroups: PlayerScoreGroups | null;
+  playerScoreLoadingByGroup: PlayerScoreLoadingByGroup;
   playerLookupUserId: number | null;
   playerParam?: string;
   suggestionPlayers: {
@@ -91,6 +93,7 @@ export function ReplayBrowseView({
   onOpenScorePreview,
   loadingScores,
   playerScoreGroups,
+  playerScoreLoadingByGroup,
   playerLookupUserId,
   playerParam,
   suggestionPlayers,
@@ -148,6 +151,7 @@ export function ReplayBrowseView({
           onOpenScorePreview={onOpenScorePreview}
           loadingScores={loadingScores}
           playerScoreGroups={playerScoreGroups}
+          playerScoreLoadingByGroup={playerScoreLoadingByGroup}
           playerLookupUserId={playerLookupUserId}
           playerParam={playerParam}
           suggestionPlayers={suggestionPlayers}
@@ -317,6 +321,7 @@ function PlayerReplayBrowser({
   onOpenScorePreview,
   loadingScores,
   playerScoreGroups,
+  playerScoreLoadingByGroup,
   playerLookupUserId,
   playerParam,
   suggestionPlayers,
@@ -325,7 +330,8 @@ function PlayerReplayBrowser({
 }: Pick<ReplayBrowseViewProps,
   "selectedCountry" | "onPlayerSearch" | "onSelectPlayer" | "onPlayerSearchSubmit" | "onPlayerQueryChange" |
   "playerSearchScoreId" | "scorePreview" | "scorePreviewLoading" | "scorePreviewError" | "onOpenScorePreview" |
-  "loadingScores" | "playerScoreGroups" | "playerLookupUserId" | "playerParam" | "suggestionPlayers" | "onOpenPlayerScore"
+  "loadingScores" | "playerScoreGroups" | "playerScoreLoadingByGroup" | "playerLookupUserId" | "playerParam" |
+  "suggestionPlayers" | "onOpenPlayerScore"
 > & { hasError: boolean }) {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [activePlayerSection, setActivePlayerSection] = useState<PlayerReplaySectionKey>("pinned");
@@ -334,19 +340,19 @@ function PlayerReplayBrowser({
     () => playerScoreGroups
       ? PLAYER_REPLAY_SECTIONS
         .map((section) => ({ ...section, scores: playerScoreGroups[section.key] }))
-        .filter((section) => section.scores.length > 0)
       : [],
     [playerScoreGroups],
   );
 
   useEffect(() => {
     setExpandedSections({});
-    setActivePlayerSection(sections[0]?.key ?? "pinned");
-  }, [sections]);
+    setActivePlayerSection("pinned");
+  }, [playerLookupUserId, playerParam]);
 
   const hasAnyScores = playerScoreGroups
     ? playerScoreGroups.best.length > 0 || playerScoreGroups.firsts.length > 0 || playerScoreGroups.pinned.length > 0 || playerScoreGroups.recent.length > 0
     : false;
+  const hasLoadingScoreSection = Object.values(playerScoreLoadingByGroup).some(Boolean);
 
   // Keep URL/player-search identity even when the replayable score sections are empty.
   const playerUserId = useMemo(() => {
@@ -357,6 +363,7 @@ function PlayerReplayBrowser({
     }
     return null;
   }, [playerLookupUserId, playerScoreGroups]);
+  const shouldShowPlayerSections = Boolean(playerScoreGroups && (hasAnyScores || hasLoadingScoreSection || playerUserId || playerParam));
 
   return (
     <>
@@ -382,16 +389,17 @@ function PlayerReplayBrowser({
         )}
       </div>
 
-      {loadingScores && !hasAnyScores && (
+      {loadingScores && !playerScoreGroups && (
         <div className="flex justify-center py-8">
           <div className="w-6 h-6 border-2 border-osu-pink/40 border-t-osu-pink rounded-full animate-spin" />
         </div>
       )}
 
-      {playerScoreGroups && hasAnyScores && (
+      {shouldShowPlayerSections && (
         <>
           <PlayerScoreSections
             sections={sections}
+            playerScoreLoadingByGroup={playerScoreLoadingByGroup}
             expandedSections={expandedSections}
             activePlayerSection={activePlayerSection}
             onSetActivePlayerSection={setActivePlayerSection}
@@ -399,30 +407,25 @@ function PlayerReplayBrowser({
             onOpenScore={onOpenPlayerScore}
             playerParam={playerParam}
           />
-          {playerUserId && (
-            <PlayerBeatmapLookup
-              userId={playerUserId}
-              onOpenScore={onOpenPlayerScore}
-            />
-          )}
         </>
       )}
 
-      {!loadingScores && playerScoreGroups && !hasAnyScores && (
+      {!hasLoadingScoreSection && playerScoreGroups && !hasAnyScores && (
         <>
           <div className="text-center py-8 text-osu-f1 text-sm">
             No replays available for this player
           </div>
-          {playerUserId && (
-            <PlayerBeatmapLookup
-              userId={playerUserId}
-              onOpenScore={onOpenPlayerScore}
-            />
-          )}
         </>
       )}
 
-      {!loadingScores && !playerScoreGroups && !hasError && (
+      {playerUserId && playerScoreGroups && (hasAnyScores || !hasLoadingScoreSection) && (
+        <PlayerBeatmapLookup
+          userId={playerUserId}
+          onOpenScore={onOpenPlayerScore}
+        />
+      )}
+
+      {!loadingScores && !hasLoadingScoreSection && !playerScoreGroups && !hasError && (
         suggestionPlayers.length > 0 ? (
           <PlayerSuggestions
             selectedCountry={selectedCountry}
@@ -441,6 +444,7 @@ function PlayerReplayBrowser({
 
 function PlayerScoreSections({
   sections,
+  playerScoreLoadingByGroup,
   expandedSections,
   activePlayerSection,
   onSetActivePlayerSection,
@@ -448,6 +452,7 @@ function PlayerScoreSections({
   onOpenScore,
 }: {
   sections: ({ key: PlayerReplaySectionKey; label: string; scores: OsuScore[] })[];
+  playerScoreLoadingByGroup: PlayerScoreLoadingByGroup;
   expandedSections: Record<string, boolean>;
   activePlayerSection: PlayerReplaySectionKey;
   onSetActivePlayerSection: (section: PlayerReplaySectionKey) => void;
@@ -455,6 +460,8 @@ function PlayerScoreSections({
   onOpenScore: (score: OsuScore) => void;
   playerParam?: string;
 }) {
+  if (sections.length === 0) return null;
+
   const mobileSection = sections.find((section) => section.key === activePlayerSection) ?? sections[0];
   const renderScorePanel = (
     section: typeof sections[number],
@@ -464,6 +471,7 @@ function PlayerScoreSections({
   ) => {
     const isExpanded = expandedSections[section.key];
     const hasMore = section.scores.length > 5;
+    const isSectionLoading = playerScoreLoadingByGroup[section.key] && section.scores.length === 0;
     return (
       <motion.section
         key={section.key}
@@ -477,37 +485,52 @@ function PlayerScoreSections({
             {section.label}
           </h4>
           <span className="rounded bg-osu-pink/15 px-2 py-0.5 text-[10px] font-bold tabular-nums text-osu-pink-light">
-            {section.scores.length}
+            {isSectionLoading ? (
+              <span className="block h-2.5 w-2.5 animate-spin rounded-full border border-osu-pink/35 border-t-osu-pink-light" />
+            ) : section.scores.length}
           </span>
         </div>
 
         <div className={`replay-score-scroll overflow-x-hidden transition-[max-height] duration-150 ease-out ${isExpanded ? `${listClassName} overflow-y-auto overscroll-contain` : hasMore ? "max-h-[276px] [overflow-y:clip]" : "max-h-none overflow-y-visible"}`}>
-          {section.scores.map((score) => (
-            <button
-              key={score.id}
-              type="button"
-              className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors cursor-pointer hover:bg-osu-b3/65 focus:outline-none focus-visible:bg-osu-b3/65"
-              onClick={() => onOpenScore(score)}
-            >
-              <GradeImg grade={getDisplayedRank(score)} size={24} />
-              {score.beatmapset?.covers?.list && (
-                <img src={score.beatmapset.covers.list} alt="" className="h-8 w-12 flex-shrink-0 rounded object-cover" loading="lazy" />
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium text-white">{score.beatmapset?.title}</div>
-                <div className="flex min-w-0 items-center gap-2">
-                  <div className="truncate text-[10px] text-osu-f1">[{score.beatmap?.version}] {score.beatmap?.cs && `${score.beatmap.cs}K`}</div>
-                  <ScoreModBadges score={score} className="hidden shrink-0 gap-0.5 sm:flex" hideWhenEmpty />
+          {section.scores.length > 0 ? (
+            section.scores.map((score) => (
+              <button
+                key={score.id}
+                type="button"
+                className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors cursor-pointer hover:bg-osu-b3/65 focus:outline-none focus-visible:bg-osu-b3/65"
+                onClick={() => onOpenScore(score)}
+              >
+                <GradeImg grade={getDisplayedRank(score)} size={24} />
+                {score.beatmapset?.covers?.list && (
+                  <img src={score.beatmapset.covers.list} alt="" className="h-8 w-12 flex-shrink-0 rounded object-cover" loading="lazy" />
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium text-white">{score.beatmapset?.title}</div>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="truncate text-[10px] text-osu-f1">[{score.beatmap?.version}] {score.beatmap?.cs && `${score.beatmap.cs}K`}</div>
+                    <ScoreModBadges score={score} className="hidden shrink-0 gap-0.5 sm:flex" hideWhenEmpty />
+                  </div>
+                  <ScoreModBadges score={score} className="mt-1 flex gap-0.5 sm:hidden" hideWhenEmpty />
                 </div>
-                <ScoreModBadges score={score} className="mt-1 flex gap-0.5 sm:hidden" hideWhenEmpty />
-              </div>
-              <div className="hidden shrink-0 text-right sm:block">
-                <div className="text-xs font-semibold text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</div>
-                <div className="text-sm font-bold text-white">{formatPP(score.pp)}</div>
-              </div>
-              <div className="shrink-0 text-sm font-bold text-white sm:hidden">{formatPP(score.pp)}</div>
-            </button>
-          ))}
+                <div className="hidden shrink-0 text-right sm:block">
+                  <div className="text-xs font-semibold text-osu-l2">{formatAccuracy(getDisplayedAccuracy(score))}</div>
+                  <div className="text-sm font-bold text-white">{formatPP(score.pp)}</div>
+                </div>
+                <div className="shrink-0 text-sm font-bold text-white sm:hidden">{formatPP(score.pp)}</div>
+              </button>
+            ))
+          ) : (
+            <div className="flex min-h-[156px] flex-col items-center justify-center gap-2 px-4 py-8 text-center text-xs text-osu-f1">
+              {isSectionLoading ? (
+                <>
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-osu-pink/40 border-t-osu-pink" />
+                  <span>Loading scores...</span>
+                </>
+              ) : (
+                <span>No replayable scores here</span>
+              )}
+            </div>
+          )}
         </div>
 
         {hasMore && (

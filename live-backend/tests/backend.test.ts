@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot } from "../src/features/snipes.js";
 import { getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../src/features/activity.js";
-import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, globalMapsFarmedRefreshRunAfter, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores } from "../src/features/maps.js";
+import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, globalMapsFarmedRefreshRunAfter, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, type MapsPageQuery } from "../src/features/maps.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../src/features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
 import { confirmTopPlay, getTopPlaysSnapshot, TopPlayConfirmationPendingError } from "../src/features/top-plays.js";
@@ -18,7 +18,7 @@ import { handleSse } from "../src/live/sse.js";
 import { cancelOscCountryCatchup, enqueueOscCountryCatchup, OscBackfill } from "../src/osc/backfill.js";
 import { OscSocketClient } from "../src/osc/client.js";
 import { runScoresFallbackPage, shouldRunScoresFallback } from "../src/osc/scores-fallback.js";
-import { refreshCountryRoster } from "../src/rosters/country-rosters.js";
+import { addManualRosterMember, refreshCountryRoster, removeManualRosterMember } from "../src/rosters/country-rosters.js";
 import { activateCountry, canSeedSnipesForCountry, deleteCountryData, getActiveCountryCodes, getIndexedCountryCodes, getMapsWarmCountryCodes, setCountryFeatureTier, setCountryPaused, setCountryStatus, touchCountryRequest } from "../src/countries.js";
 import { CountryClientTracker } from "../src/live/country-clients.js";
 import { ScoreIngestor } from "../src/ingest/score-ingestor.js";
@@ -856,7 +856,7 @@ describe("live backend", () => {
       "select user_id, rank, is_tracked from country_rosters where country = 'CR' order by user_id",
     )).rows;
     expect(rows.map((row) => `${row.user_id}:${row.rank ?? "null"}:${row.is_tracked}`)).toEqual([
-      "111:1:0",
+      "111:null:0",
       "222:1:1",
       "333:2:1",
       "444:null:0",
@@ -1183,6 +1183,8 @@ describe("live backend", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-05-30T12:00:00.000Z"));
     const { db, ingestor } = await setup(["CR"]);
+    // user 101 is a ranked roster member so rank-gated leaderboard features run for them.
+    await exec(db, "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('CR', 101, 1, 'osu_rankings', 1, ?)", [new Date().toISOString()]);
     const [score] = await fixture<OscScore[]>("scores.json");
     const config = {
       oscSocketStaleMs: 10 * 60_000,
@@ -1216,6 +1218,8 @@ describe("live backend", () => {
 
   it("dedupes maps-farmed refresh jobs per country user", async () => {
     const { db, ingestor } = await setup(["CR"]);
+    // user 101 is a ranked roster member so rank-gated maps-farmed refresh runs for them.
+    await exec(db, "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('CR', 101, 1, 'osu_rankings', 1, ?)", [new Date().toISOString()]);
     const [baseScore] = await fixture<OscScore[]>("scores.json");
     const secondScore: OscScore = {
       ...baseScore,
@@ -2619,6 +2623,8 @@ describe("live backend", () => {
 
   it("confirms oSC top plays by legacy score id when osu! best scores use the stable id", async () => {
     const { db, events, ingestor } = await setup();
+    // user 101 is a ranked roster member so rank-gated top-play refresh runs for them.
+    await exec(db, "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('CR', 101, 1, 'osu_rankings', 1, ?)", [new Date().toISOString()]);
     const scores = await fixture<OscScore[]>("scores.json");
     const oscScore = { ...scores[0], id: 99001, legacy_score_id: 9001 };
 
@@ -2775,6 +2781,8 @@ describe("live backend", () => {
 
   it("stores one snipe event from a durable country board", async () => {
     const { db, ingestor } = await setup();
+    // user 101 (the sniper) is a ranked roster member so the rank-gated snipe write runs.
+    await exec(db, "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('CR', 101, 1, 'osu_rankings', 1, ?)", [new Date().toISOString()]);
     const scores = await fixture<OscScore[]>("scores.json");
     const current = { ...scores[0], rank: "A", type: "score_mania" };
     await exec(
@@ -2937,6 +2945,8 @@ describe("live backend", () => {
 
   it("does not count improving an already leading score as a snipe", async () => {
     const { db, ingestor } = await setup();
+    // user 101 (the leader) is a ranked roster member so the rank-gated snipe write runs.
+    await exec(db, "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('CR', 101, 1, 'osu_rankings', 1, ?)", [new Date().toISOString()]);
     const scores = await fixture<OscScore[]>("scores.json");
     await exec(
       db,
@@ -2963,6 +2973,118 @@ describe("live backend", () => {
       "select total_score from country_beatmap_scores where country = 'CR' and beatmap_id = 501 and lane_key = 'normal:lazer' and user_id = 101",
     )).rows[0];
     expect(Number(updatedLeader.total_score)).toBe(987654);
+  });
+
+  it("keeps manual opt-in members tracked across a roster refresh and clears any stale rank", async () => {
+    const { db } = await setup(["CR"]);
+    const now = new Date().toISOString();
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values
+         ('CR', 111, 1, 'osu_rankings', 1, ?),
+         ('CR', 555, null, 'manual', 1, ?),
+         ('CR', 666, 3, 'manual', 1, ?),
+         ('CR', 777, 5, 'manual', 1, ?)`,
+      [now, now, now, now],
+    );
+    // New top roster: 111 stays ranked, and manual member 666 has genuinely climbed into it.
+    // Manual member 555 was never ranked; manual member 777 was briefly ranked but has dropped out.
+    const ranking = [
+      { pp: 1234, global_rank: 1000, country_rank: 1, user: { id: 111, username: "Top", avatar_url: "", country_code: "CR" } },
+      { pp: 1200, global_rank: 1100, country_rank: 2, user: { id: 666, username: "Climber", avatar_url: "", country_code: "CR" } },
+    ];
+    const osu = {
+      getRanking: vi.fn(async (_country: string, page: number) => ({ ranking: page === 1 ? ranking : [] })),
+    };
+
+    await refreshCountryRoster(db, osu as never, "CR", "test");
+
+    const rows = (await exec(
+      db,
+      "select user_id, rank, source, is_tracked from country_rosters where country = 'CR' order by user_id",
+    )).rows;
+    expect(rows.map((row) => `${row.user_id}:${row.rank ?? "null"}:${row.source}:${row.is_tracked}`)).toEqual([
+      "111:1:osu_rankings:1", // ranked member, still in the top: refreshed in place
+      "555:null:manual:1",    // manual, never ranked: stays tracked, rank stays null
+      "666:2:manual:1",       // manual, climbed into the top: gains a real rank, source unchanged
+      "777:null:manual:1",    // manual, dropped out: stays tracked, stale rank cleared to null
+    ]);
+  });
+
+  it("lets stale dropped ranked rows opt into manual tracking", async () => {
+    const { db, queue } = await setup(["CR"]);
+    const now = new Date().toISOString();
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values ('CR', 888, 42, 'osu_rankings', 0, ?)`,
+      [now],
+    );
+
+    const result = await addManualRosterMember(
+      db,
+      queue,
+      { trackedCountries: ["CR"], countryWarmTtlMs: 24 * 60 * 60 * 1000, manualRosterMaxPerCountry: 50 } as never,
+      "CR",
+      888,
+    );
+
+    expect(result.status).toBe("added");
+    const row = (await exec(
+      db,
+      "select rank, source, is_tracked from country_rosters where country = 'CR' and user_id = 888",
+    )).rows[0];
+    expect(`${row.rank ?? "null"}:${row.source}:${row.is_tracked}`).toBe("null:manual:1");
+  });
+
+  it("does not let ranked manual members self-remove or consume manual cap slots", async () => {
+    const { db, queue } = await setup(["CR"]);
+    const now = new Date().toISOString();
+    const config = { trackedCountries: ["CR"], countryWarmTtlMs: 24 * 60 * 60 * 1000, manualRosterMaxPerCountry: 1 } as never;
+    await exec(
+      db,
+      `insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at)
+       values ('CR', 666, 2, 'manual', 1, ?)`,
+      [now],
+    );
+
+    const removeResult = await removeManualRosterMember(db, "CR", 666);
+    expect(removeResult.status).toBe("already_ranked");
+    const rankedManual = (await exec(db, "select rank, is_tracked from country_rosters where country = 'CR' and user_id = 666")).rows[0];
+    expect(`${rankedManual.rank}:${rankedManual.is_tracked}`).toBe("2:1");
+
+    expect((await addManualRosterMember(db, queue, config, "CR", 777)).status).toBe("added");
+    expect((await addManualRosterMember(db, queue, config, "CR", 888)).status).toBe("country_full");
+  });
+
+  it("tracks a manual opt-in member's scores but keeps them off the country snipe/top-play/maps boards", async () => {
+    const { db, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    // user 101 opted in as a manual member (rank null): tracking scope, not ranking scope.
+    await exec(db, "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('CR', 101, null, 'manual', 1, ?)", [new Date().toISOString()]);
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, updated_at)
+       values (303, 'Victim', 'https://assets.example/victim.png', 'CR', ?)`,
+      [new Date().toISOString()],
+    );
+    await exec(
+      db,
+      `insert into country_beatmap_scores (country, beatmap_id, lane_key, user_id, score_id, total_score, pp, accuracy, rank, mods_json, is_lazer, has_replay, ended_at, updated_at)
+       values ('CR', 501, 'normal:stable', 303, 7000, 900000, 200, 0.97, 'S', '[]', 0, 1, '2026-05-11T00:00:00.000Z', ?)`,
+      [new Date().toISOString()],
+    );
+
+    await ingestor.ingestBatch([{ ...scores[0], rank: "A", type: "score_mania" }]);
+
+    // The score is ingested for activity tracking...
+    expect(Number((await exec(db, "select count(*) as count from score_events where user_id = 101 and country = 'CR'")).rows[0].count)).toBe(1);
+    // ...but the rank gate keeps the manual member off every ranking surface.
+    expect((await getSnipesSnapshot(db, "CR", 10)).events).toHaveLength(0);
+    expect(Number((await exec(db, "select count(*) as count from snipe_events")).rows[0].count)).toBe(0);
+    expect(Number((await exec(db, "select count(*) as count from country_beatmap_scores where user_id = 101")).rows[0].count)).toBe(0);
+    expect(Number((await exec(db, "select count(*) as count from jobs where type in ('refresh_user_top_scores', 'refresh_user_maps_farmed_scores')")).rows[0].count)).toBe(0);
   });
 
   it("seeds snipe boards from ranked current roster rows only", async () => {
@@ -3949,7 +4071,7 @@ describe("live backend", () => {
 
     await refreshGlobalMaps(db);
 
-    const query = (mod: "all" | "dt" | "ht" | "none") => ({
+    const query = (mod: MapsPageQuery["mod"]): MapsPageQuery => ({
       tab: "farmed" as const, page: 0, pageSize: 24, key: "all", beatmapSort: "players" as const,
       farmedSort: "players" as const, dir: "desc" as const, status: "all", pp: 0, mod, q: "",
     });
@@ -3975,7 +4097,7 @@ describe("live backend", () => {
     expect(dtIds).toContain(61);
     expect(dtIds).not.toContain(41);
 
-    const noneFiltered = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query("none"));
+    const noneFiltered = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query("nm"));
     const noneIds = (noneFiltered.value?.items ?? []).map((it) => (it as { beatmapId: number }).beatmapId);
     expect(noneIds).toContain(41);
     expect(noneIds).not.toContain(51);

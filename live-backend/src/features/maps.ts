@@ -5,6 +5,7 @@ import type { Db, DbStatement } from "../db.js";
 import { exec, execBatch, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { OsuApiError, type OsuApiClient } from "../osu/client.js";
+import { isRankedRosterMember } from "../rosters/country-rosters.js";
 import { getModAcronyms, getScoreIdentity, getScoreTimestamp, nowIso } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
 import { markUserMissing } from "../users.js";
@@ -315,6 +316,8 @@ export async function maybeEnqueueMapsFarmedRefresh(
   marginPp: number,
 ): Promise<void> {
   if (!isPotentialFarmedScore(score)) return;
+  // The maps-farmed board is a ranking surface: only ranked roster members contribute to it.
+  if (!await isRankedRosterMember(db, country, score.user_id)) return;
   const row = (await exec(
     db,
     "select maps_farmed_min_pp, top_play_min_pp from users where user_id = ?",
@@ -2867,7 +2870,7 @@ async function getMapsUsers(db: Db, country: string): Promise<MapsUser[]> {
     `select r.user_id, u.username, u.avatar_url
      from country_rosters r
      left join users u on u.user_id = r.user_id
-     where r.country = ? and r.is_tracked = 1
+     where r.country = ? and r.is_tracked = 1 and r.rank is not null
      order by r.rank asc
      limit ?`,
     [country, rosterSize],

@@ -56,6 +56,7 @@ export async function getRankDeltaSnapshot(db: Db, country: string, userIds: num
        on current_roster.country = old.country
       and current_roster.user_id = old.user_id
       and current_roster.is_tracked = 1
+      and current_roster.rank is not null
      where old.country = ?`,
     [country, ...uniqueUserIds, targetAt, oldestAllowedAt, country],
   )).rows;

@@ -16,7 +16,12 @@ import { queryFarmHelperKeyPeersByDistance, queryFarmHelperKeyPeersWithinBand, t
 
 export type FarmHelperKeyMode = "4k" | "7k" | "any";
 type ConcreteFarmHelperKeyMode = Exclude<FarmHelperKeyMode, "any">;
-export type FarmHelperReason = "missing" | "improve" | "stale";
+export type FarmHelperReason = "missing" | "improve" | "stale" | "owned";
+// "gain" is the personalized, pp-gain-ranked recommendation view (the default).
+// "popular" reuses the same peer cohort but skips the value/already-cleared gates
+// and ranks by how many same-pp peers farm a map, so a player can browse every
+// popular farm map around their fit (including ones they have already cleared).
+export type FarmHelperView = "gain" | "popular";
 
 export interface FarmHelperPeer {
   userId: number;
@@ -51,6 +56,8 @@ export interface FarmHelperRec {
   peerFraction: number;
   peerPpMedian: number;
   peerPpP75: number;
+  latestPeerPlayedAt: string | null;
+  peerRecencyPlayedAt: string | null;
   topPeers: FarmHelperPeer[];
   scoreUrl: string | null;
   mapUrl: string;
@@ -65,6 +72,7 @@ export interface FarmHelperSnapshot {
   coverUrl: string;
   pp: number;
   keyMode: FarmHelperKeyMode;
+  view: FarmHelperView;
   peerBand: { mode: string; count: number; farmDataCount: number; minPp: number; maxPp: number };
   totalPotentialPp: number;
   recs: FarmHelperRec[];
@@ -73,6 +81,7 @@ export interface FarmHelperSnapshot {
 
 export interface FarmHelperParams {
   keyMode?: FarmHelperKeyMode;
+  view?: FarmHelperView;
   limit?: number;
 }
 
@@ -89,6 +98,9 @@ const MIN_PEERS = 12;
 const MIN_KEYMODE_PROXY_SCORES = 8;
 const PEER_MIN_COUNT = 3;
 const PEER_MIN_FRACTION = 0.12;
+// Popular mode is a browse view, so the popularity floor is lower than the
+// personalized view's and the difficulty/value gates are skipped entirely.
+const POPULAR_PEER_MIN_FRACTION = 0.05;
 const IMPROVE_MARGIN_PP = 8;
 const STALE_AGE_MS = 120 * 86_400_000;
 const STALE_ACTIVE_MS = 180 * 86_400_000;
@@ -140,11 +152,22 @@ interface CandidateAgg {
   peers: Array<{ userId: number; pp: number }>;
   modCombos: Map<string, { mods: string[]; count: number; ppTotal: number }>;
   latestUpdatedMs: number;
+  playedAtMs: number[];
 }
 
 interface PeerFarmedAggregation {
   byBeatmap: Map<string, CandidateAgg>;
   farmDataPeerCount: number;
+}
+
+interface CanonicalFarmedScore {
+  userId: number;
+  beatmapId: number;
+  pp: number;
+  mods: string[];
+  speedBucket: ScoreSpeedBucket;
+  playedAtMs: number;
+  updatedAtMs: number;
 }
 
 interface BeatmapMeta {
@@ -176,6 +199,7 @@ export async function getFarmHelperSnapshot(
   params: FarmHelperParams = {},
 ): Promise<FarmHelperSnapshot> {
   const requestedKeyMode = params.keyMode ?? "any";
+  const view = params.view ?? "gain";
   const limit = clampLimit(params.limit);
 
   const profile = await resolveProfile(db, osu, rawKey);
@@ -192,7 +216,7 @@ export async function getFarmHelperSnapshot(
   const coverUrl = String(user.cover_url ?? asRecord(user.cover).url ?? "");
 
   const cache = getCache(db);
-  const cacheKey = `${userId}:${requestedKeyMode}:${limit}`;
+  const cacheKey = `${userId}:${requestedKeyMode}:${view}:${limit}`;
   const now = Date.now();
   const cached = cache.get(cacheKey);
   if (cached && cached.expiresAt > now) {
@@ -210,6 +234,7 @@ export async function getFarmHelperSnapshot(
     subjectVariantPp,
     subjectVariantPps,
     requestedKeyMode,
+    view,
     limit,
   });
 
@@ -243,9 +268,11 @@ async function buildSnapshot(
     subjectVariantPp: number | null;
     subjectVariantPps: Partial<Record<"4k" | "7k", number>>;
     requestedKeyMode: FarmHelperKeyMode;
+    view: FarmHelperView;
     limit: number;
   },
 ): Promise<FarmHelperSnapshot> {
+  const isPopular = ctx.view === "popular";
   const generatedAt = nowIso();
   // Per-beatmap best pp the subject already has in their top plays, and the flat
   // pp list used as the baseline for net-weighted-pp gain estimation.
@@ -320,6 +347,7 @@ async function buildSnapshot(
     coverUrl: ctx.coverUrl,
     pp: ctx.subjectPp,
     keyMode,
+    view: ctx.view,
     peerBand: emptyBand,
     totalPotentialPp: 0,
     recs: [],
@@ -337,10 +365,11 @@ async function buildSnapshot(
   };
   if (peerSampleSize === 0) return coveredSnapshot;
 
+  const minPeerFraction = isPopular ? POPULAR_PEER_MIN_FRACTION : PEER_MIN_FRACTION;
   const candidates: CandidateAgg[] = [];
   for (const agg of peerFarmed.byBeatmap.values()) {
     if (agg.peers.length < PEER_MIN_COUNT) continue;
-    if (agg.peers.length / peerSampleSize < PEER_MIN_FRACTION) continue;
+    if (agg.peers.length / peerSampleSize < minPeerFraction) continue;
     candidates.push(agg);
   }
   if (candidates.length === 0) return coveredSnapshot;
@@ -356,7 +385,7 @@ async function buildSnapshot(
     const meta = beatmapMeta.get(agg.beatmapId);
     if (!meta) continue;
     if (keyMode !== "any" && meta.keys !== (keyMode === "7k" ? 7 : 4)) continue;
-    if (hasFit && (meta.stars < starLo - STAR_BUFFER || meta.stars > starHi + STAR_BUFFER)) continue;
+    if (!isPopular && hasFit && (meta.stars < starLo - STAR_BUFFER || meta.stars > starHi + STAR_BUFFER)) continue;
 
     const median = quantile(agg.pps, 0.5);
     const p75 = quantile(agg.pps, 0.75);
@@ -370,13 +399,16 @@ async function buildSnapshot(
     ) {
       continue;
     }
-    const cap = keyMode === "any" && candidateKeyMode
+    const rawCap = keyMode === "any" && candidateKeyMode
       ? getModeBenchmarkCapFromEvidence(
           subjectModeStatsByKey[candidateKeyMode],
           ctx.subjectVariantPps[candidateKeyMode] ?? null,
         )
       : subjectBenchmarkCap;
-    if (cap == null) continue;
+    if (rawCap == null && !isPopular) continue;
+    // Popular mode is a browse, not a pp ceiling check, so an unknown cap means
+    // "don't cap" rather than "drop".
+    const cap = rawCap ?? Number.POSITIVE_INFINITY;
     const subject = subjectByBeatmap.get(farmHelperLaneKey(agg.beatmapId, agg.speedBucket)) ?? null;
 
     let reason: FarmHelperReason;
@@ -384,8 +416,8 @@ async function buildSnapshot(
     if (!subject) {
       reason = "missing";
       const rawBenchmark = quantile(agg.pps, MISSING_MAP_BENCHMARK_QUANTILE);
-      if (rawBenchmark > cap) continue;
-      benchmark = rawBenchmark;
+      if (rawBenchmark > cap && !isPopular) continue;
+      benchmark = Math.min(rawBenchmark, cap);
     } else if (median - subject.pp > IMPROVE_MARGIN_PP) {
       reason = "improve";
       benchmark = Math.min(median, cap, nextPlayedMapBenchmark(subject.pp));
@@ -396,14 +428,19 @@ async function buildSnapshot(
     ) {
       reason = "stale";
       benchmark = Math.min(p75, cap, nextPlayedMapBenchmark(subject.pp));
+    } else if (isPopular) {
+      // Already cleared at a competitive score: keep it in the popular browse,
+      // labelled "owned", with a near-zero gain.
+      reason = "owned";
+      benchmark = Math.max(subject.pp, Math.min(median, cap));
     } else {
       continue;
     }
 
     if (!Number.isFinite(benchmark) || benchmark <= 0) continue;
-    if (subject && benchmark - subject.pp <= IMPROVE_MARGIN_PP) continue;
+    if (!isPopular && subject && benchmark - subject.pp <= IMPROVE_MARGIN_PP) continue;
     const estimatedPpGain = estimateGain(baselineEntries, baselineTotal, agg.beatmapId, benchmark);
-    if (estimatedPpGain < MIN_VISIBLE_GAIN_PP) continue;
+    if (!isPopular && estimatedPpGain < MIN_VISIBLE_GAIN_PP) continue;
 
     const setMeta = beatmapsetMeta.get(meta.beatmapsetId);
     const difficultyFit = hasFit ? clamp01(1 - Math.abs(meta.stars - starMid) / starSpread) : 0.5;
@@ -435,6 +472,8 @@ async function buildSnapshot(
       peerFraction: round2(agg.peers.length / peerSampleSize),
       peerPpMedian: round2(median),
       peerPpP75: round2(p75),
+      latestPeerPlayedAt: dateMsToIso(Math.max(0, ...agg.playedAtMs)),
+      peerRecencyPlayedAt: dateMsToIso(peerRecencyPlayedAtMs(agg.playedAtMs)),
       topPeers: agg.peers
         .slice()
         .sort((a, b) => b.pp - a.pp)
@@ -450,18 +489,33 @@ async function buildSnapshot(
 
   if (scored.length === 0) return coveredSnapshot;
 
-  const maxGain = Math.max(...scored.map((r) => r.estimatedPpGain), 1);
-  for (const rec of scored) {
-    rec.rankScore = round2(
-      0.5 * (rec.estimatedPpGain / maxGain)
-      + 0.25 * rec.peerFraction
-      + 0.15 * rec.difficultyFit
-      + 0.1 * rec.recencyFit,
+  // Popular mode can surface the same chart under two speed lanes (e.g. NoMod and
+  // DT); collapse to the most-farmed lane per beatmap so the browse grid shows one
+  // card per map, matching the maps page.
+  const ranked = isPopular ? collapsePopularLanes(scored) : scored;
+
+  if (isPopular) {
+    for (const rec of ranked) rec.rankScore = round2(rec.peerFraction);
+    ranked.sort((a, b) =>
+      b.peerFraction - a.peerFraction
+      || b.peerCount - a.peerCount
+      || b.estimatedPpGain - a.estimatedPpGain
+      || b.stars - a.stars,
     );
+  } else {
+    const maxGain = Math.max(...ranked.map((r) => r.estimatedPpGain), 1);
+    for (const rec of ranked) {
+      rec.rankScore = round2(
+        0.5 * (rec.estimatedPpGain / maxGain)
+        + 0.25 * rec.peerFraction
+        + 0.15 * rec.difficultyFit
+        + 0.1 * rec.recencyFit,
+      );
+    }
+    ranked.sort((a, b) => b.rankScore - a.rankScore || b.estimatedPpGain - a.estimatedPpGain);
   }
 
-  scored.sort((a, b) => b.rankScore - a.rankScore || b.estimatedPpGain - a.estimatedPpGain);
-  const top: FarmHelperRec[] = scored.slice(0, ctx.limit).map(({ difficultyFit, recencyFit, ...rec }) => {
+  const top: FarmHelperRec[] = ranked.slice(0, ctx.limit).map(({ difficultyFit, recencyFit, ...rec }) => {
     void difficultyFit;
     void recencyFit;
     return rec;
@@ -651,26 +705,26 @@ export async function getFarmHelperFarmers(
   if (peers.length === 0) return { beatmapId, total: 0, farmers: [] };
 
   const peerIds = peers.map((p) => p.userId);
-  const farmersRaw: Array<{ userId: number; pp: number; mods: string[] }> = [];
+  const farmersByLane = new Map<string, CanonicalFarmedScore>();
   for (let i = 0; i < peerIds.length; i += 900) {
     const chunk = peerIds.slice(i, i + 900);
     if (chunk.length === 0) continue;
     const placeholders = chunk.map(() => "?").join(",");
     const rows = (await exec(
       db,
-      `select user_id, pp, mods_json from country_maps_farmed_scores
+      `select beatmap_id, user_id, pp, mods_json, played_at, updated_at from country_maps_farmed_scores
        where beatmap_id = ? and user_id in (${placeholders})`,
       [beatmapId, ...chunk],
     )).rows;
     for (const row of rows) {
-      const mods = parseJson<string[]>(row.mods_json, []);
-      if (lane && getScoreSpeedBucket(mods) !== lane) continue;
-      const pp = Number(row.pp);
-      if (!Number.isFinite(pp) || pp <= 0) continue;
-      farmersRaw.push({ userId: Number(row.user_id), pp, mods });
+      const farmed = parseFarmedScoreRow(row);
+      if (!farmed) continue;
+      if (lane && farmed.speedBucket !== lane) continue;
+      keepBestFarmedScore(farmersByLane, farmed);
     }
   }
 
+  const farmersRaw = [...farmersByLane.values()];
   farmersRaw.sort((a, b) => b.pp - a.pp);
   const total = farmersRaw.length;
   const top = farmersRaw.slice(0, FARMERS_MAX);
@@ -690,46 +744,93 @@ export async function getFarmHelperFarmers(
 }
 
 async function aggregatePeerFarmedMaps(db: Db, peerIds: number[]): Promise<PeerFarmedAggregation> {
-  const byBeatmap = new Map<string, CandidateAgg>();
-  const farmDataPeerIds = new Set<number>();
+  const byPeerLane = new Map<string, CanonicalFarmedScore>();
   for (let i = 0; i < peerIds.length; i += 900) {
     const chunk = peerIds.slice(i, i + 900);
     if (chunk.length === 0) continue;
     const placeholders = chunk.map(() => "?").join(",");
     const rows = (await exec(
       db,
-      `select beatmap_id, user_id, pp, mods_json, updated_at
+      `select beatmap_id, user_id, pp, mods_json, played_at, updated_at
        from country_maps_farmed_scores
        where user_id in (${placeholders})`,
       chunk,
     )).rows;
     for (const row of rows) {
-      const userId = Number(row.user_id);
-      const beatmapId = Number(row.beatmap_id);
-      const pp = Number(row.pp);
-      if (!Number.isSafeInteger(userId) || userId <= 0) continue;
-      if (!Number.isFinite(pp) || pp <= 0) continue;
-      farmDataPeerIds.add(userId);
-      const mods = normalizeStoredMods(parseJson<string[]>(row.mods_json, []));
-      const speedBucket = getScoreSpeedBucket(mods);
-      const key = farmHelperLaneKey(beatmapId, speedBucket);
-      let agg = byBeatmap.get(key);
-      if (!agg) {
-        agg = { beatmapId, speedBucket, pps: [], peers: [], modCombos: new Map(), latestUpdatedMs: 0 };
-        byBeatmap.set(key, agg);
-      }
-      agg.pps.push(pp);
-      agg.peers.push({ userId, pp });
-      const modKey = mods.join(",");
-      const modCombo = agg.modCombos.get(modKey) ?? { mods, count: 0, ppTotal: 0 };
-      modCombo.count += 1;
-      modCombo.ppTotal += pp;
-      agg.modCombos.set(modKey, modCombo);
-      const updatedMs = row.updated_at == null ? 0 : Date.parse(String(row.updated_at));
-      if (Number.isFinite(updatedMs) && updatedMs > agg.latestUpdatedMs) agg.latestUpdatedMs = updatedMs;
+      const farmed = parseFarmedScoreRow(row);
+      if (!farmed) continue;
+      keepBestFarmedScore(byPeerLane, farmed);
     }
   }
+
+  const byBeatmap = new Map<string, CandidateAgg>();
+  const farmDataPeerIds = new Set<number>();
+  for (const farmed of byPeerLane.values()) {
+    farmDataPeerIds.add(farmed.userId);
+    const key = farmHelperLaneKey(farmed.beatmapId, farmed.speedBucket);
+    let agg = byBeatmap.get(key);
+    if (!agg) {
+      agg = {
+        beatmapId: farmed.beatmapId,
+        speedBucket: farmed.speedBucket,
+        pps: [],
+        peers: [],
+        modCombos: new Map(),
+        latestUpdatedMs: 0,
+        playedAtMs: [],
+      };
+      byBeatmap.set(key, agg);
+    }
+    agg.pps.push(farmed.pp);
+    agg.peers.push({ userId: farmed.userId, pp: farmed.pp });
+    const modKey = farmed.mods.join(",");
+    const modCombo = agg.modCombos.get(modKey) ?? { mods: farmed.mods, count: 0, ppTotal: 0 };
+    modCombo.count += 1;
+    modCombo.ppTotal += farmed.pp;
+    agg.modCombos.set(modKey, modCombo);
+    if (farmed.updatedAtMs > agg.latestUpdatedMs) agg.latestUpdatedMs = farmed.updatedAtMs;
+    if (farmed.playedAtMs > 0) agg.playedAtMs.push(farmed.playedAtMs);
+  }
   return { byBeatmap, farmDataPeerCount: farmDataPeerIds.size };
+}
+
+function dateMsToIso(ms: number): string | null {
+  return ms > 0 && Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+}
+
+function peerRecencyPlayedAtMs(values: number[]): number {
+  const sorted = values.filter((value) => value > 0 && Number.isFinite(value)).sort((a, b) => b - a);
+  if (sorted.length === 0) return 0;
+  return sorted.length >= 5 ? sorted[2] : sorted[0];
+}
+
+function parseFarmedScoreRow(row: Record<string, unknown>): CanonicalFarmedScore | null {
+  const userId = Number(row.user_id);
+  const beatmapId = Number(row.beatmap_id);
+  const pp = Number(row.pp);
+  if (!Number.isSafeInteger(userId) || userId <= 0) return null;
+  if (!Number.isSafeInteger(beatmapId) || beatmapId <= 0) return null;
+  if (!Number.isFinite(pp) || pp <= 0) return null;
+  const mods = normalizeStoredMods(parseJson<string[]>(row.mods_json, []));
+  const playedAtMs = row.played_at == null ? 0 : Date.parse(String(row.played_at));
+  const updatedAtMs = row.updated_at == null ? 0 : Date.parse(String(row.updated_at));
+  return {
+    userId,
+    beatmapId,
+    pp,
+    mods,
+    speedBucket: getScoreSpeedBucket(mods),
+    playedAtMs: Number.isFinite(playedAtMs) ? playedAtMs : 0,
+    updatedAtMs: Number.isFinite(updatedAtMs) ? updatedAtMs : 0,
+  };
+}
+
+function keepBestFarmedScore(target: Map<string, CanonicalFarmedScore>, farmed: CanonicalFarmedScore): void {
+  const key = `${farmed.userId}:${farmed.beatmapId}:${farmed.speedBucket}`;
+  const existing = target.get(key);
+  if (!existing || farmed.pp > existing.pp || (farmed.pp === existing.pp && farmed.updatedAtMs > existing.updatedAtMs)) {
+    target.set(key, farmed);
+  }
 }
 
 async function collectAnyOffKeyCandidateSupport(
@@ -891,6 +992,16 @@ function estimateGain(
   const hypothetical: Array<{ pp: number }> = baselineEntries.filter((entry) => entry.beatmapId !== beatmapId);
   hypothetical.push({ pp: benchmark });
   return Math.max(0, calculateWeightedPpTotal(hypothetical) - baselineTotal);
+}
+
+// Keep one entry per beatmap (the most-farmed speed lane) for the popular browse.
+function collapsePopularLanes<T extends { beatmapId: number; peerCount: number }>(recs: T[]): T[] {
+  const byBeatmap = new Map<number, T>();
+  for (const rec of recs) {
+    const existing = byBeatmap.get(rec.beatmapId);
+    if (!existing || rec.peerCount > existing.peerCount) byBeatmap.set(rec.beatmapId, rec);
+  }
+  return [...byBeatmap.values()];
 }
 
 function getRecommendedMods(agg: CandidateAgg): string[] {
