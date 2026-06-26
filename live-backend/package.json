@@ -8,6 +8,8 @@
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",
     "verify": "vitest run && tsc -p tsconfig.json",
+    "db:sync-from-vps": "node --env-file-if-exists=.env --import tsx src/maintenance/sync-db-from-vps.ts",
+    "db:sync-from-vps:dist": "node --env-file-if-exists=.env dist/maintenance/sync-db-from-vps.js",
     "compact:maps-farmed": "node --env-file-if-exists=.env --import tsx src/maintenance/compact-maps-farmed-overlay.ts",
     "compact:maps-farmed:dist": "node --env-file-if-exists=.env dist/maintenance/compact-maps-farmed-overlay.js",
     "compact:storage": "node --max-old-space-size=768 --expose-gc --env-file-if-exists=.env --import tsx src/maintenance/compact-storage.ts",
