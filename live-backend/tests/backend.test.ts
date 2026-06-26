@@ -3828,7 +3828,7 @@ describe("live backend", () => {
     const { db, queue } = await setup();
     const now = "2026-05-12T12:00:00.000Z";
 
-    for (const setId of [40, 50]) {
+    for (const setId of [40, 50, 60]) {
       await exec(
         db,
         `insert into maps_beatmapsets
@@ -3846,16 +3846,22 @@ describe("live backend", () => {
     }
 
     const player = (id: number, mods: string[], pp: number) => ({ id, mods, pp, scoreUrl: null, playedAt: now });
-    // bm41: DT is a minority of the roster (85/285) but holds every top-pp score,
-    // so the top GLOBAL_MAPS_PLAYERS_PER_ENTRY (80) by pp are all DT.
+    // bm41: DT is 85/285 (30%) of the roster, below the 40% threshold, but holds
+    // every top-pp score, so the top GLOBAL_MAPS_PLAYERS_PER_ENTRY (80) are all DT.
     const bm41 = [
       ...Array.from({ length: 85 }, (_, i) => player(1000 + i, ["DT"], 700 - i)),
       ...Array.from({ length: 200 }, (_, i) => player(2000 + i, [], 300)),
     ];
-    // bm51: DT is a genuine majority (150/200), so it should still flag DT.
+    // bm51: DT is a clear majority (150/200, 75%), so it flags DT.
     const bm51 = [
       ...Array.from({ length: 150 }, (_, i) => player(3000 + i, ["DT"], 800 - i)),
       ...Array.from({ length: 50 }, (_, i) => player(4000 + i, [], 300)),
+    ];
+    // bm61: DT is 90/200 (45%) - over the 40% threshold but under a strict
+    // majority, so it flags DT under the share rule (would be null at >50%).
+    const bm61 = [
+      ...Array.from({ length: 90 }, (_, i) => player(6000 + i, ["DT"], 750 - i)),
+      ...Array.from({ length: 110 }, (_, i) => player(7000 + i, [], 300)),
     ];
 
     await exec(
@@ -3866,6 +3872,7 @@ describe("live backend", () => {
         farmed: [
           { beatmapId: 41, playerCount: bm41.length, avgPp: 0, maxPp: 700, players: bm41 },
           { beatmapId: 51, playerCount: bm51.length, avgPp: 0, maxPp: 800, players: bm51 },
+          { beatmapId: 61, playerCount: bm61.length, avgPp: 0, maxPp: 750, players: bm61 },
         ],
         mostPlayed: [], favourites: [], favouritesByPlayer: [], beatmapsetsPool: [],
       }), now, now],
@@ -3881,24 +3888,29 @@ describe("live backend", () => {
     const items = (page.value?.items ?? []) as Array<{ beatmapId: number; playerCount: number; dominantMod?: string | null }>;
     const map41 = items.find((it) => it.beatmapId === 41);
     const map51 = items.find((it) => it.beatmapId === 51);
+    const map61 = items.find((it) => it.beatmapId === 61);
 
     // Full count is preserved even though stored players are truncated to 80.
     expect(map41?.playerCount).toBe(285);
-    // 85/285 DT is not a majority: the badge must not read DT despite the top-80 being all DT.
+    // 30% DT is below the 40% threshold: the badge must not read DT despite the top-80 being all DT.
     expect(map41?.dominantMod ?? null).toBeNull();
-    // 150/200 DT is a real majority, so the genuine DT farm still flags DT.
+    // 75% DT flags DT.
     expect(map51?.dominantMod).toBe("DT");
+    // 45% DT is over the 40% threshold (but under a strict majority), so it flags DT.
+    expect(map61?.dominantMod).toBe("DT");
 
     // The mod filter (full-population path) agrees with the badge.
     const dtFiltered = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query("dt"));
     const dtIds = (dtFiltered.value?.items ?? []).map((it) => (it as { beatmapId: number }).beatmapId);
     expect(dtIds).toContain(51);
+    expect(dtIds).toContain(61);
     expect(dtIds).not.toContain(41);
 
     const noneFiltered = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query("none"));
     const noneIds = (noneFiltered.value?.items ?? []).map((it) => (it as { beatmapId: number }).beatmapId);
     expect(noneIds).toContain(41);
     expect(noneIds).not.toContain(51);
+    expect(noneIds).not.toContain(61);
   });
 
   it("preserves truncated country farmed counts when applying live overlay rows", async () => {

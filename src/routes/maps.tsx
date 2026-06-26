@@ -114,6 +114,9 @@ type MapsSearch = {
 const PAGE_SIZE = 24;
 const VISIBLE_AVATARS = 4;
 const FARMED_SINGLE_PLAYER_PP_MIN = 500;
+// Keep in sync with the live backend (FARMED_DOMINANT_MOD_SHARE): a speed mod is
+// dominant when more than this share of the farming roster used it.
+const FARMED_DOMINANT_MOD_SHARE = 0.4;
 // When "avoid repeats" is on, recently-picked players/maps get 10× less weight
 // rather than being excluded, so the advertised distribution still holds for
 // fresh candidates but the feed doesn't stall on the same person/map.
@@ -3291,13 +3294,13 @@ function getDominantSpeedMod(players: MapsFarmedPlayer[]): "DT" | "HT" | null {
   if (dtCount === 0 && htCount === 0) return null;
 
   if (dtCount >= htCount) {
-    // Majority is DT/NC — need at least half the players
-    if (dtCount > players.length / 2) return "DT";
+    // DT/NC is dominant once more than FARMED_DOMINANT_MOD_SHARE of farmers use it.
+    if (dtCount > players.length * FARMED_DOMINANT_MOD_SHARE) return "DT";
     return null;
   }
 
-  // Majority is HT — check that the top PP play is also HT
-  if (htCount > players.length / 2) {
+  // HT leads — also require the top PP play to be HT before flagging it.
+  if (htCount > players.length * FARMED_DOMINANT_MOD_SHARE) {
     const topPlayer = players.reduce((best, p) => (p.pp > best.pp ? p : best), players[0]);
     if ((topPlayer.mods ?? []).includes("HT")) return "HT";
   }

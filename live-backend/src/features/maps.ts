@@ -15,6 +15,10 @@ const MAPS_FARMED_REFRESH_PRIORITY = -100;
 const MAPS_FETCH_CONCURRENCY = 2;
 const MAPS_FARMED_SCORE_WINDOW = 200;
 const FARMED_SINGLE_PLAYER_PP_MIN = 500;
+// A speed mod counts as a map's dominant farm mod when more than this share of
+// the farming roster used it. Below a strict majority because, on farm maps,
+// 40%+ DT among all farmers (DT vs nomod) already reads as "this is DT farm".
+const FARMED_DOMINANT_MOD_SHARE = 0.4;
 const USER_FAVOURITES_MAX_PAGES = 10;
 const GLOBAL_MAPS_FARMED_REFRESH_DEBOUNCE_MS = 10 * 60_000;
 const MAPS_FARMED_OVERLAY_META_PREFIX = "maps_farmed_overlay_updated_at:";
@@ -1829,8 +1833,8 @@ function getDominantMapsSpeedMod(players: MapsFarmedEntry["players"]): "DT" | "H
   }
 
   if (dtCount === 0 && htCount === 0) return null;
-  if (dtCount >= htCount) return dtCount > players.length / 2 ? "DT" : null;
-  if (htCount > players.length / 2) {
+  if (dtCount >= htCount) return dtCount > players.length * FARMED_DOMINANT_MOD_SHARE ? "DT" : null;
+  if (htCount > players.length * FARMED_DOMINANT_MOD_SHARE) {
     const topPlayer = players.reduce((best, player) => (player.pp > best.pp ? player : best), players[0]);
     if ((topPlayer.mods ?? []).includes("HT")) return "HT";
   }
@@ -1848,8 +1852,8 @@ function getDominantStoredMapsSpeedMod(players: StoredMapsFarmedPlayer[]): "DT" 
   }
 
   if (dtCount === 0 && htCount === 0) return null;
-  if (dtCount >= htCount) return dtCount > players.length / 2 ? "DT" : null;
-  if (htCount > players.length / 2) {
+  if (dtCount >= htCount) return dtCount > players.length * FARMED_DOMINANT_MOD_SHARE ? "DT" : null;
+  if (htCount > players.length * FARMED_DOMINANT_MOD_SHARE) {
     const topPlayer = players.reduce((best, player) => (Number(player.pp ?? 0) > Number(best.pp ?? 0) ? player : best), players[0]);
     if ((topPlayer.mods ?? []).includes("HT")) return "HT";
   }
