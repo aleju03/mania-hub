@@ -16,6 +16,7 @@ import { routeHttp, sendJson } from "../src/http/snapshots.js";
 import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { handleSse } from "../src/live/sse.js";
 import { cancelOscCountryCatchup, enqueueOscCountryCatchup, OscBackfill } from "../src/osc/backfill.js";
+import { OscSocketClient } from "../src/osc/client.js";
 import { runScoresFallbackPage, shouldRunScoresFallback } from "../src/osc/scores-fallback.js";
 import { refreshCountryRoster } from "../src/rosters/country-rosters.js";
 import { activateCountry, canSeedSnipesForCountry, deleteCountryData, getActiveCountryCodes, getIndexedCountryCodes, getMapsWarmCountryCodes, setCountryFeatureTier, setCountryPaused, setCountryStatus, touchCountryRequest } from "../src/countries.js";
@@ -979,6 +980,74 @@ describe("live backend", () => {
       lastError: null,
       stale: true,
     }, staleMs, now)).toBe(true);
+  });
+
+  it("backs off stale oSC socket reconnects while fallback polling stays active", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-05-30T12:00:00.000Z"));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    class FakeSocket extends EventEmitter {
+      disconnect(): void {
+        this.emit("disconnect");
+      }
+    }
+
+    const sockets: FakeSocket[] = [];
+    const socketModule = {
+      io: vi.fn(() => {
+        const socket = new FakeSocket();
+        sockets.push(socket);
+        return socket as any;
+      }),
+    };
+    const ingestor = { ingestBatch: vi.fn().mockResolvedValue({ inserted: 0, skipped: 0 }) };
+    const onStale = vi.fn().mockResolvedValue(undefined);
+    const client = new OscSocketClient(
+      {
+        oscBaseUrl: "https://osc.example",
+        oscSocketPath: "/ws",
+        oscSocketStaleMs: 30_000,
+        oscSocketWatchdogIntervalMs: 10_000,
+      },
+      ingestor as any,
+      onStale,
+      socketModule,
+    );
+
+    try {
+      await client.start();
+      sockets[0].emit("connect");
+      expect(socketModule.io).toHaveBeenCalledTimes(1);
+      expect(client.status().stale).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(40_000);
+      expect(client.status().stale).toBe(true);
+      expect(client.status().restarts).toBe(0);
+      expect(client.status().nextReconnectAt).toBe("2026-05-30T12:05:40.000Z");
+      expect(socketModule.io).toHaveBeenCalledTimes(1);
+      expect(onStale).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(4 * 60_000 + 50_000);
+      expect(socketModule.io).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(socketModule.io).toHaveBeenCalledTimes(2);
+      expect(client.status().restarts).toBe(1);
+      expect(onStale).toHaveBeenCalledTimes(1);
+      sockets[1].emit("connect");
+      expect(client.status().stale).toBe(true);
+      expect(client.status().nextReconnectAt).toBe("2026-05-30T12:15:40.000Z");
+
+      sockets[1].emit("scores", []);
+      await Promise.resolve();
+      expect(client.status().stale).toBe(false);
+      expect(client.status().nextReconnectAt).toBeNull();
+      expect(ingestor.ingestBatch).toHaveBeenCalledTimes(1);
+    } finally {
+      client.stop();
+      warn.mockRestore();
+    }
   });
 
   it("ingests the global mania osu scores fallback and stores its cursor", async () => {

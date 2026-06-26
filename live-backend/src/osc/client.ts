@@ -9,6 +9,8 @@ export interface OscStatus {
   lastRestartAt?: string | null;
   lastError: string | null;
   stale?: boolean;
+  staleSinceAt?: string | null;
+  nextReconnectAt?: string | null;
   restarts?: number;
 }
 
@@ -21,10 +23,16 @@ interface OscState {
   restarts: number;
 }
 
+const STALE_RECONNECT_INITIAL_MS = 5 * 60_000;
+const STALE_RECONNECT_MAX_MS = 30 * 60_000;
+
 export class OscSocketClient {
   private socket: { disconnect: () => void } | null = null;
   private socketModule: { io: (url: string, options: Record<string, unknown>) => SocketLike } | null = null;
   private watchdog: ReturnType<typeof setTimeout> | null = null;
+  private staleSinceMs: number | null = null;
+  private nextStaleReconnectAtMs: number | null = null;
+  private staleReconnectDelayMs = STALE_RECONNECT_INITIAL_MS;
   private state: OscState = {
     connected: false,
     lastBatchAt: null,
@@ -38,14 +46,22 @@ export class OscSocketClient {
     private readonly config: Pick<Config, "oscBaseUrl" | "oscSocketPath" | "oscSocketStaleMs" | "oscSocketWatchdogIntervalMs">,
     private readonly ingestor: ScoreIngestor,
     private readonly onStale?: () => void | Promise<void>,
+    private readonly socketModuleOverride?: { io: (url: string, options: Record<string, unknown>) => SocketLike },
   ) {}
 
   status(): OscStatus {
-    return { ...this.state, stale: this.isStale(Date.now()) };
+    const now = Date.now();
+    return {
+      ...this.state,
+      stale: this.isStale(now),
+      staleSinceAt: this.staleSinceMs == null ? null : new Date(this.staleSinceMs).toISOString(),
+      nextReconnectAt: this.nextStaleReconnectAtMs == null ? null : new Date(this.nextStaleReconnectAtMs).toISOString(),
+    };
   }
 
   async start(): Promise<void> {
-    this.socketModule = await dynamicImport("socket.io-client") as { io: (url: string, options: Record<string, unknown>) => SocketLike };
+    this.socketModule = this.socketModuleOverride
+      ?? (await dynamicImport("socket.io-client") as { io: (url: string, options: Record<string, unknown>) => SocketLike });
     this.connect("startup");
     this.startWatchdog();
   }
@@ -62,7 +78,12 @@ export class OscSocketClient {
     });
     this.socket = socket;
     socket.on("connect", () => {
-      this.state = { ...this.state, connected: true, lastConnectedAt: new Date().toISOString(), lastError: null };
+      this.state = {
+        ...this.state,
+        connected: true,
+        lastConnectedAt: new Date().toISOString(),
+        lastError: this.staleSinceMs == null ? null : this.state.lastError,
+      };
       socket.emit("subscribe", "scores");
     });
     socket.on("disconnect", () => {
@@ -75,6 +96,7 @@ export class OscSocketClient {
     });
     socket.on("scores", async (scores: OscScore[]) => {
       if (this.socket !== socket) return;
+      this.clearStaleState();
       this.state = { ...this.state, lastBatchAt: new Date().toISOString() };
       try {
         await this.ingestor.ingestBatch(Array.isArray(scores) ? scores : [], "osc_socket");
@@ -89,12 +111,7 @@ export class OscSocketClient {
     const tick = () => {
       const now = Date.now();
       if (this.isStale(now)) {
-        const lastActivityAt = this.state.lastBatchAt ?? this.state.lastConnectedAt ?? "never";
-        const message = `oSC socket stale; reconnecting after ${this.config.oscSocketStaleMs}ms without scores`;
-        console.warn("[osc]", message, { lastActivityAt });
-        this.state = { ...this.state, lastError: message };
-        if (this.onStale) void Promise.resolve(this.onStale()).catch((error) => console.warn("[osc] stale recovery failed", error));
-        this.connect("stale");
+        this.handleStale(now);
       }
       this.watchdog = setTimeout(tick, this.config.oscSocketWatchdogIntervalMs).unref();
     };
@@ -102,6 +119,11 @@ export class OscSocketClient {
   }
 
   private isStale(now: number): boolean {
+    if (this.staleSinceMs != null) return true;
+    return this.isActivityStale(now);
+  }
+
+  private isActivityStale(now: number): boolean {
     if (!this.state.connected) return false;
     const lastActivity = this.state.lastBatchAt ?? this.state.lastConnectedAt;
     if (!lastActivity) return false;
@@ -109,11 +131,47 @@ export class OscSocketClient {
     return Number.isFinite(lastActivityMs) && now - lastActivityMs > this.config.oscSocketStaleMs;
   }
 
+  private handleStale(now: number): void {
+    const lastActivityAt = this.state.lastBatchAt ?? this.state.lastConnectedAt ?? "never";
+    if (this.staleSinceMs == null) {
+      this.staleSinceMs = now;
+      this.staleReconnectDelayMs = STALE_RECONNECT_INITIAL_MS;
+      this.nextStaleReconnectAtMs = now + this.staleReconnectDelayMs;
+      const message = `oSC socket stale; fallback polling active after ${this.config.oscSocketStaleMs}ms without scores`;
+      console.warn("[osc]", message, {
+        lastActivityAt,
+        nextReconnectAt: new Date(this.nextStaleReconnectAtMs).toISOString(),
+      });
+      this.state = { ...this.state, lastError: message };
+      if (this.onStale) void Promise.resolve(this.onStale()).catch((error) => console.warn("[osc] stale recovery failed", error));
+      return;
+    }
+
+    if (this.nextStaleReconnectAtMs == null || now < this.nextStaleReconnectAtMs) return;
+    const attemptedAfterMs = this.staleReconnectDelayMs;
+    this.staleReconnectDelayMs = Math.min(this.staleReconnectDelayMs * 2, STALE_RECONNECT_MAX_MS);
+    this.nextStaleReconnectAtMs = now + this.staleReconnectDelayMs;
+    const message = `oSC socket still stale; reconnecting after ${attemptedAfterMs}ms without scores`;
+    console.warn("[osc]", message, {
+      lastActivityAt,
+      nextReconnectAt: new Date(this.nextStaleReconnectAtMs).toISOString(),
+    });
+    this.state = { ...this.state, lastError: message };
+    this.connect("stale");
+  }
+
+  private clearStaleState(): void {
+    this.staleSinceMs = null;
+    this.nextStaleReconnectAtMs = null;
+    this.staleReconnectDelayMs = STALE_RECONNECT_INITIAL_MS;
+  }
+
   stop(): void {
     if (this.watchdog) clearTimeout(this.watchdog);
     this.watchdog = null;
     this.socket?.disconnect();
     this.socket = null;
+    this.clearStaleState();
     this.state = { ...this.state, connected: false };
   }
 }
