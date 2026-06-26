@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { ChevronDown, Globe, LogIn, LogOut, Settings, UserRound } from "lucide-react";
+import { ChevronDown, Database, Globe, LogIn, LogOut, Settings, Target, UserRound } from "lucide-react";
 import { SearchInput } from "../ui/SearchInput";
 import { Avatar } from "../ui/Avatar";
 import { CountryFlag } from "../ui/CountryFlag";
@@ -30,6 +30,7 @@ const NAV_LEAVES = {
   "farm-helper": { id: "farm-helper", to: "/farm-helper", label: "farm helper" },
   replay: { id: "replay", to: "/replay", label: "watch replays" },
   bbcode: { id: "bbcode", to: "/bbcode", label: "BBCode editor" },
+  discord: { id: "discord", to: "/discord", label: "Discord bot" },
 } as const;
 
 type NavLeafId = keyof typeof NAV_LEAVES;
@@ -46,7 +47,7 @@ const NAV_TOP: NavTop[] = [
   { kind: "link", id: "maps" },
   { kind: "link", id: "packs" },
   { kind: "link", id: "snipes" },
-  { kind: "group", id: "tools", label: "tools", items: ["farm-helper", "replay", "bbcode"] },
+  { kind: "group", id: "tools", label: "tools", items: ["farm-helper", "replay", "bbcode", "discord"] },
 ];
 
 // Each leaf maps to its top-level item id so the active-link bar can sit under
@@ -80,6 +81,7 @@ export function Nav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [mobileAccountOpen, setMobileAccountOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const fallbackCountry = useSelectedCountry();
@@ -113,7 +115,13 @@ export function Nav() {
   // only once the tier is known to be "snipes" — while the tier is still
   // unknown (first-ever visit) the tab stays hidden rather than flashing in.
   const showSnipesLink = !liveBackendConfigured || selectedCountryFeatureTier === "snipes";
-  const isLeafVisible = (leaf: NavLeaf) => leaf.id !== "snipes" || showSnipesLink;
+  const isLeafVisible = (leaf: NavLeaf) => {
+    // Discord bot is dev-gated for now: visible in local dev and on the dev
+    // preview host, hidden in production.
+    if (leaf.id === "discord") return devMode;
+    if (leaf.id === "snipes") return showSnipesLink;
+    return true;
+  };
   const visibleLeaves = ALL_LEAVES.filter(isLeafVisible);
   const topPlaysRange = useAppStore((state) => state.topPlaysRangeByCountry[selectedCountry] ?? "7d");
   const snipesFilters = useAppStore((state) => state.snipesFiltersByCountry[selectedCountry] ?? DEFAULT_SNIPES_FILTERS);
@@ -206,9 +214,14 @@ export function Nav() {
     setMenuOpen(false);
     setAdminMenuOpen(false);
     setUserMenuOpen(false);
+    setMobileAccountOpen(false);
     setOpenGroup(null);
     setSettingsOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) setMobileAccountOpen(false);
+  }, [menuOpen]);
 
   useEffect(() => {
     if (!adminMenuOpen) return;
@@ -316,6 +329,16 @@ export function Nav() {
   const scheduleCloseGroup = () => {
     if (closeGroupTimer.current) clearTimeout(closeGroupTimer.current);
     closeGroupTimer.current = window.setTimeout(() => setOpenGroup(null), 120);
+  };
+
+  const handleGroupTriggerClick = (top: Extract<NavTop, { kind: "group" }>) => {
+    if (top.id === "players") {
+      setOpenGroup(null);
+      navigate({ to: "/rankings", search: { country: selectedCountry, page: 1 } });
+      return;
+    }
+
+    openGroupNow(top.id);
   };
 
   const renderMobileLink = (leaf: NavLeaf) => (
@@ -546,7 +569,7 @@ export function Nav() {
                       if (el) linkRefs.current.set(top.id, el);
                       else linkRefs.current.delete(top.id);
                     }}
-                    onClick={() => setOpenGroup((prev) => (prev === top.id ? null : top.id))}
+                    onClick={() => handleGroupTriggerClick(top)}
                     className={`relative flex cursor-pointer items-center gap-1 px-2.5 py-[19px] text-[12px] font-semibold capitalize whitespace-nowrap transition-colors duration-[120ms] ${
                       activeTopId === top.id || open ? "text-white" : "text-osu-pink-light hover:text-white"
                     }`}
@@ -643,6 +666,16 @@ export function Nav() {
                         R2
                       </Link>
                     )}
+                    {adminMode && (
+                      <Link
+                        to="/admin/discord"
+                        onClick={() => setAdminMenuOpen(false)}
+                        className="block px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors border-t border-osu-b3/30"
+                        role="menuitem"
+                      >
+                        Discord
+                      </Link>
+                    )}
                     <Link
                       to="/admin/dan-classifier"
                       onClick={() => setAdminMenuOpen(false)}
@@ -716,6 +749,24 @@ export function Nav() {
                       >
                         <UserRound className="h-3.5 w-3.5" />
                         Profile
+                      </Link>
+                      <Link
+                        to="/my-data"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
+                        role="menuitem"
+                      >
+                        <Database className="h-3.5 w-3.5" />
+                        My Data
+                      </Link>
+                      <Link
+                        to="/goals"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-osu-l2 hover:bg-osu-b4 hover:text-white transition-colors"
+                        role="menuitem"
+                      >
+                        <Target className="h-3.5 w-3.5" />
+                        Goals
                       </Link>
                       <a
                         href={logoutHref}
@@ -845,29 +896,68 @@ export function Nav() {
                 <CountrySelector className="w-full" selectedCountry={selectedCountry} onSelect={handleCountrySelect} showGlobal={liveBackendConfigured} />
                 <ThemePicker variant="mobile" />
                 {auth.viewer ? (
-                  <div className="space-y-2">
-                    <Link
-                      to="/player/$username"
-                      params={{ username: auth.viewer.username }}
-                      onClick={() => setMenuOpen(false)}
-                      className="flex w-full items-center gap-3 rounded-lg border border-osu-b3/40 bg-osu-b4/60 py-1.5 pl-1.5 pr-3 text-[12px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b4 hover:text-white"
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setMobileAccountOpen((open) => !open)}
+                      className="flex w-full items-center gap-2.5 rounded-lg border border-osu-b3/30 bg-osu-b4/60 px-2.5 py-1.5 text-osu-l2 transition-colors duration-[120ms] hover:border-osu-b3/60 hover:bg-osu-b4/80"
+                      aria-label="Account menu"
+                      aria-expanded={mobileAccountOpen}
                     >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60">
-                        <Avatar url={auth.viewer.avatarUrl} userId={auth.viewer.id} size={36} />
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full ring-1 ring-osu-b3/60">
+                        <Avatar url={auth.viewer.avatarUrl} userId={auth.viewer.id} size={24} />
                       </span>
-                      <span className="flex min-w-0 flex-col items-start leading-tight">
-                        <span className="max-w-full truncate text-white">{auth.viewer.username}</span>
-                        <span className="text-[10px] font-normal text-osu-l3">Profile</span>
+                      <span className="min-w-0 flex-1 truncate text-left text-[11px] font-semibold">
+                        {auth.viewer.username}
                       </span>
-                      <UserRound className="ml-auto h-4 w-4 opacity-70" />
-                    </Link>
-                    <a
-                      href={logoutHref}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-osu-b3/40 bg-osu-b4/60 px-3 py-2 text-[12px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b4 hover:text-white"
-                    >
-                      <LogOut className="h-4 w-4 opacity-70" />
-                      Logout
-                    </a>
+                      <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-osu-f1 transition-transform duration-150 ${mobileAccountOpen ? "rotate-180" : ""}`} strokeWidth={2.2} />
+                    </button>
+
+                    {mobileAccountOpen ? (
+                      <div className="absolute left-0 right-0 top-full z-[65] mt-1 overflow-hidden rounded-lg border border-osu-b3/50 bg-osu-b5 shadow-[0_10px_25px_rgba(0,0,0,0.5)]">
+                        <Link
+                          to="/player/$username"
+                          params={{ username: auth.viewer.username }}
+                          onClick={() => {
+                            setMobileAccountOpen(false);
+                            setMenuOpen(false);
+                          }}
+                          className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
+                        >
+                          <UserRound className="h-3.5 w-3.5 shrink-0 opacity-75" />
+                          Profile
+                        </Link>
+                        <Link
+                          to="/my-data"
+                          onClick={() => {
+                            setMobileAccountOpen(false);
+                            setMenuOpen(false);
+                          }}
+                          className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
+                        >
+                          <Database className="h-3.5 w-3.5 shrink-0 opacity-75" />
+                          My Data
+                        </Link>
+                        <Link
+                          to="/goals"
+                          onClick={() => {
+                            setMobileAccountOpen(false);
+                            setMenuOpen(false);
+                          }}
+                          className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
+                        >
+                          <Target className="h-3.5 w-3.5 shrink-0 opacity-75" />
+                          Goals
+                        </Link>
+                        <a
+                          href={logoutHref}
+                          className="flex w-full items-center gap-2.5 border-t border-osu-b3/30 px-3 py-2 text-left text-[11px] font-medium text-osu-l2 transition-colors duration-[80ms] hover:bg-osu-b3/50 hover:text-white"
+                        >
+                          <LogOut className="h-3.5 w-3.5 shrink-0 opacity-75" />
+                          Logout
+                        </a>
+                      </div>
+                    ) : null}
                   </div>
                 ) : auth.loginAvailable ? (
                   <a
@@ -918,6 +1008,15 @@ export function Nav() {
                       className="block w-full text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
                     >
                       R2
+                    </Link>
+                  )}
+                  {adminMode && (
+                    <Link
+                      to="/admin/discord"
+                      onClick={() => setMenuOpen(false)}
+                      className="block w-full text-center px-3 py-2 rounded-lg bg-osu-yellow/15 text-[10px] text-osu-yellow font-semibold hover:bg-osu-yellow/25 transition-colors cursor-pointer border border-osu-yellow/30"
+                    >
+                      Discord
                     </Link>
                   )}
                   <Link

@@ -23,6 +23,7 @@ export type LiveEventName =
   | "top_play"
   | "maps_farmed_update"
   | "snipe"
+  | "goal_completed"
   | "job_status";
 
 export type LiveCountryFeatureTier = "indexed" | "maps_warm" | "live" | "snipes";
@@ -337,8 +338,13 @@ function normalizeAdminPath(input: unknown): string {
     "/api/admin/run-retention",
     "/api/admin/osc-smoke",
     "/api/admin/run-osc-backfill",
+    "/api/admin/discord/register-commands",
   ]);
   if (exact.has(path)) return path;
+  if (url.pathname === "/api/admin/discord/remove-subscription") {
+    const id = url.searchParams.get("id");
+    if (id && /^\d+$/.test(id)) return `/api/admin/discord/remove-subscription?id=${id}`;
+  }
   if (url.pathname === "/api/admin/refresh-roster") {
     const country = url.searchParams.get("country");
     if (country && /^[A-Za-z]{2}$/.test(country)) return `/api/admin/refresh-roster?country=${country.toUpperCase()}`;
@@ -448,6 +454,65 @@ export const fetchLiveBackendAdminStatus = createServerFn({ method: "GET" })
       throw new Error(message);
     }
     return body;
+  });
+
+export interface DiscordPublicInfo {
+  configured: boolean;
+  applicationId: string | null;
+  inviteUrl: string | null;
+  feedsEnabled: boolean;
+  commands: Array<{ name: string; description: string }>;
+}
+
+// Public Discord info (no secrets) for the /discord tool page. Proxies the
+// backend's public /api/discord/info; returns a "not configured" shape when the
+// live backend is unset or unreachable so the page can still render setup help.
+export const fetchDiscordPublicInfo = createServerFn({ method: "GET" })
+  .handler(async (): Promise<DiscordPublicInfo> => {
+    const offline: DiscordPublicInfo = { configured: false, applicationId: null, inviteUrl: null, feedsEnabled: false, commands: [] };
+    const base = getServerLiveBackendUrl();
+    if (!base) return offline;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5_000);
+    try {
+      const response = await fetch(`${base}/api/discord/info`, { signal: controller.signal });
+      if (!response.ok) return offline;
+      return await response.json() as DiscordPublicInfo;
+    } catch {
+      return offline;
+    } finally {
+      clearTimeout(timeout);
+    }
+  });
+
+// Admin-only Discord status (recent interactions, subscriptions). Requires admin.
+export const fetchDiscordAdminStatus = createServerFn({ method: "GET" })
+  .handler(async (): Promise<any> => {
+    await requireAdminAccess("Discord admin status");
+    const base = getServerLiveBackendUrl();
+    if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+    const headers: HeadersInit = {};
+    if (process.env.LIVE_ADMIN_TOKEN) {
+      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${base}/api/admin/discord/status`, { headers, signal: controller.signal });
+      const body = await response.json() as any;
+      if (!response.ok) {
+        const message = body && typeof body === "object" && "error" in body
+          ? String((body as { error?: unknown }).error)
+          : `Server ${response.status} for /api/admin/discord/status`;
+        throw new Error(message);
+      }
+      return body;
+    } catch (err) {
+      if (isAbortError(err)) throw new Error("Discord admin status timed out.");
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
   });
 
 export type LiveBackendStatus = "ok" | "offline";

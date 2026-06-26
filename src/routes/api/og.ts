@@ -16,6 +16,7 @@ import { getAssetOrigin } from "../../lib/origin";
 import { getDisplayedRank, getManiaJudgementCounts, getModAcronyms } from "../../lib/score";
 import { getCachedOgImage, putOgImage } from "../../lib/r2-cache";
 import { OG_IMAGE_VERSION } from "../../lib/seo";
+import { computeManiaSkills, getManiaCardTier, MANIA_TIER_STYLES } from "../../lib/maniacard";
 import type { OsuCovers, OsuScore } from "../../lib/types";
 
 const WIDTH = 1200;
@@ -1181,6 +1182,392 @@ async function renderPlayerOg(request: Request, rawUsername: string): Promise<Re
       height: HEIGHT,
       fonts: ogFontList(regularFont, heavyFont),
     },
+  );
+
+  response.headers.set("Cache-Control", OG_CACHE_HEADER);
+  return response;
+}
+
+// ---------------------------------------------------------------------------
+// Maniacard: a player's skill-tier card, rendered flat for social sharing and
+// for the Discord /maniacard command. Reuses the same skill engine and tier
+// palette as the in-app 3D card so the numbers and colours match exactly.
+// ---------------------------------------------------------------------------
+
+interface ManiacardSnapshot {
+  user: {
+    id?: number;
+    username?: string;
+    avatar_url?: string;
+    country_code?: string;
+    statistics?: { global_rank?: number | null; pp?: number | null } | null;
+  };
+  bestScores?: OsuScore[];
+}
+
+async function fetchManiacardSnapshot(base: string, key: string): Promise<ManiacardSnapshot | null> {
+  const response = await fetch(`${base}/api/profiles/${encodeURIComponent(key)}/snapshot`);
+  if (response.status === 404) return null;
+  if (!response.ok) throw new OgFallbackError(`maniacard snapshot ${response.status}`);
+  return (await response.json()) as ManiacardSnapshot;
+}
+
+const MANIA_GLYPH_D =
+  "M500 48q-21 0-35 15t-15 35v504q0 21 15 36t35 14 36-14 14-36v-504q0-21-14-35t-36-15z m-110 192v220q0 21-14 36t-36 14-35-14-15-36v-220q0-21 15-35t35-15 36 15 14 35z m320 0v220q0 21-14 36t-36 14-35-14-15-36v-220q0-21 15-35t35-15 36 15 14 35z m-210 500q-106 0-197-53-88-52-140-140-53-91-53-197t53-197q52-88 140-140 91-53 197-53t197 53q88 52 140 140 53 91 53 197t-53 197q-52 88-140 140-91 53-197 53z m0 80q97 0 182-36t150-102q64-62 101-148t37-184-36-182-102-150q-62-64-148-101t-184-37-182 36-150 102q-64 62-101 149t-37 183 37 182 101 150q62 64 149 101t183 37v0z";
+
+// The mania glyph is authored y-up (the in-app canvas flips it), so flip it for
+// svg's y-down space. Inlined as a data url since Satori rasterizes svg images.
+function maniaGlyphDataUrl(): string {
+  // Baseline sits at 0.86 of the glyph height (matches the in-app card); pad the
+  // viewBox so the flipped glyph is centred and never clips.
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-40 -40 1080 1080"><g transform="matrix(1,0,0,-1,0,860)"><path d="${MANIA_GLYPH_D}" fill="#ffffff"/></g></svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
+
+function starDataUrl(fill: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M50 4 L62 38 L98 38 L69 60 L80 96 L50 74 L20 96 L31 60 L2 38 L38 38 Z" fill="${fill}"/></svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
+
+// Floating osu-style triangles: a jittered grid so positions never line up,
+// varied sizes, up or down but never tilted, overlapping into soft facets.
+// Baked as explicit paths so resvg rasterizes it reliably as an img.
+function triangleOverlayDataUrl(w: number, height: number): string {
+  const sx = w / 1000;
+  const sy = height / 1400;
+  const rand = (n: number) => {
+    const v = Math.sin(n) * 43758.5453123;
+    return v - Math.floor(v);
+  };
+  const poly = (pts: Array<[number, number]>, fill: string) =>
+    `<path d="${pts.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`).join(" ")} Z" fill="${fill}"/>`;
+  let paths = "";
+  for (let row = 0; row < 6; row += 1) {
+    for (let col = 0; col < 5; col += 1) {
+      const i = row * 11 + col;
+      if (rand(i * 19.17 + 4.2) < 0.4) continue;
+      const cx = (col * 200 + 100 + (rand(i * 43.91 + 8.5) - 0.5) * 130) * sx;
+      const cy = (row * 233 + 117 + (rand(i * 29.37 + 12.4) - 0.5) * 130) * sy;
+      const side = (230 + rand(i * 13.81 + 2.7) * 300) * sx;
+      const hgt = side * 0.866;
+      const up = rand(i * 7.3 + 3.1) > 0.5;
+      const pts: Array<[number, number]> = up
+        ? [[cx, cy - (hgt * 2) / 3], [cx + side / 2, cy + hgt / 3], [cx - side / 2, cy + hgt / 3]]
+        : [[cx, cy + (hgt * 2) / 3], [cx + side / 2, cy - hgt / 3], [cx - side / 2, cy - hgt / 3]];
+      // Fewer, larger, low-contrast facets (subtle like the reference). Dark
+      // ones stay extra faint since dark-on-light reads strongly; ~50/50
+      // light/dark so the pale top and dark bottom each show some.
+      const dark = rand(i * 3.11 + 6.9) > 0.5;
+      const a = dark ? 0.035 + rand(i * 5.21 + 1.3) * 0.04 : 0.05 + rand(i * 5.21 + 1.3) * 0.06;
+      paths += poly(pts, dark ? `rgba(0,0,0,${a.toFixed(3)})` : `rgba(255,255,255,${a.toFixed(3)})`);
+    }
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${height}">${paths}</svg>`;
+  return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
+}
+
+// Portrait trading card matching the in-app maniacard front: the tier gradient
+// is the body (that colour IS the tier's identity, not decoration), with the
+// mania glyph badge, username plate, tier label, big avatar, the three skill
+// values as plain stats and the star-rating row.
+async function renderManiacardOg(request: Request, rawUsername: string): Promise<Response> {
+  const username = rawUsername.trim().slice(0, 64);
+  const base = getServerLiveBackendUrl();
+  if (!base) throw new OgFallbackError("live backend not configured");
+
+  const [[regularFont, heavyFont], snapshot] = await Promise.all([
+    loadOgFonts(request),
+    fetchManiacardSnapshot(base, username),
+  ]);
+  if (!snapshot?.user) throw new OgFallbackError(`no profile for ${username}`);
+
+  const user = snapshot.user;
+  const scores = snapshot.bestScores ?? [];
+  const skills = computeManiaSkills(
+    scores.map((score) => ({ ...score, statistics: score.statistics ?? {} })),
+    { globalPp: user.statistics?.pp },
+  );
+  if (!skills) throw new OgFallbackError(`no card for ${username}`);
+
+  const tier = getManiaCardTier(skills.cardPower);
+  const style = MANIA_TIER_STYLES[tier];
+  const avatarUrl = user.avatar_url || (user.id ? `https://a.ppy.sh/${user.id}` : "");
+
+  const statRows: Array<[string, number]> = [
+    ["Control", skills.fingerControl],
+    ["Speed", skills.speed],
+    ["Precision", skills.accuracy],
+  ];
+  // Same star logic as the in-app card: ceil(starAvg) segments, full/half/empty.
+  const segCount = Math.min(10, Math.max(1, Math.ceil(skills.starAvg)));
+  const starUrls = Array.from({ length: segCount }, (_, i) => {
+    const remaining = skills.starAvg - i;
+    const fill = remaining >= 1 ? "#fcd34d" : remaining >= 0.5 ? "rgba(252,211,77,0.55)" : "rgba(252,211,77,0.22)";
+    return starDataUrl(fill);
+  });
+
+  const CARD_W = 720;
+  const CARD_H = 1008;
+  const textShadow = "0 2px 5px rgba(0,0,0,0.55)";
+
+  const response = new ImageResponse(
+    h(
+      "div",
+      {
+        style: {
+          width: "100%",
+          height: "100%",
+          position: "relative",
+          display: "flex",
+          overflow: "hidden",
+          background: style.badgeGradient,
+          fontFamily: '"Torus OG"',
+          color: "#ffffff",
+        },
+      },
+      [
+        // osu triangle texture over the tier gradient.
+        h("img", {
+          key: "tris",
+          src: triangleOverlayDataUrl(CARD_W, CARD_H),
+          style: { position: "absolute", top: "0", left: "0", width: "100%", height: "100%" },
+        }),
+        // Mode badge (top-left).
+        h(
+          "div",
+          {
+            key: "badge",
+            style: {
+              position: "absolute",
+              left: "28px",
+              top: "28px",
+              width: "96px",
+              height: "96px",
+              borderRadius: "22px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(0,0,0,0.20)",
+              border: "2px solid rgba(255,255,255,0.34)",
+              boxShadow: `0 0 28px ${style.glowColor}`,
+            },
+          },
+          h("img", { src: maniaGlyphDataUrl(), style: { width: "66px", height: "66px" } }),
+        ),
+        // Username plate (top-center).
+        h(
+          "div",
+          {
+            key: "plate",
+            style: {
+              position: "absolute",
+              left: "176px",
+              top: "54px",
+              width: "458px",
+              height: "76px",
+              borderRadius: "18px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(0,0,0,0.34)",
+              overflow: "hidden",
+            },
+          },
+          h(
+            "div",
+            { style: { fontSize: "40px", fontWeight: 900, color: "#ffffff", textShadow, whiteSpace: "nowrap" } },
+            user.username || "Unknown",
+          ),
+        ),
+        // Tier label (right).
+        h(
+          "div",
+          {
+            key: "tier",
+            style: {
+              position: "absolute",
+              right: "34px",
+              top: "152px",
+              display: "flex",
+              fontSize: "42px",
+              fontWeight: 900,
+              color: "#ffffff",
+              textShadow: `0 0 22px ${style.glowColor}, 0 2px 5px rgba(0,0,0,0.6)`,
+            },
+          },
+          style.label,
+        ),
+        // Avatar.
+        h(
+          "div",
+          {
+            key: "avatar",
+            style: {
+              position: "absolute",
+              left: "133px",
+              top: "202px",
+              width: "454px",
+              height: "454px",
+              borderRadius: "26px",
+              display: "flex",
+              border: "6px solid rgba(255,255,255,0.18)",
+              boxSizing: "border-box",
+              overflow: "hidden",
+            },
+          },
+          h("img", { src: avatarUrl, style: { width: "100%", height: "100%", objectFit: "cover" } }),
+        ),
+        // Stats box.
+        h(
+          "div",
+          {
+            key: "stats",
+            style: {
+              position: "absolute",
+              left: "148px",
+              top: "678px",
+              width: "424px",
+              height: "180px",
+              borderRadius: "24px",
+              background: "rgba(0,0,0,0.32)",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "center",
+              padding: "0 38px",
+            },
+          },
+          statRows.map(([label, value], i) =>
+            h(
+              "div",
+              {
+                key: `stat-${i}`,
+                style: {
+                  display: "flex",
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "baseline",
+                  marginBottom: i < statRows.length - 1 ? "10px" : "0",
+                },
+              },
+              [
+                h("div", { key: "l", style: { fontSize: "30px", fontWeight: 700, color: "rgba(255,255,255,0.85)", textShadow } }, label),
+                h("div", { key: "v", style: { fontSize: "40px", fontWeight: 900, color: "#ffffff", textShadow } }, formatOgInt(value)),
+              ],
+            ),
+          ),
+        ),
+        // Star rating row.
+        h(
+          "div",
+          {
+            key: "starwrap",
+            style: {
+              position: "absolute",
+              left: "0",
+              bottom: "46px",
+              width: `${CARD_W}px`,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+            },
+          },
+          [
+            h(
+              "div",
+              { key: "stars", style: { display: "flex", flexDirection: "row" } },
+              starUrls.map((src, i) =>
+                h("img", { key: `s-${i}`, src, style: { width: "46px", height: "46px", marginLeft: i ? "6px" : "0" } }),
+              ),
+            ),
+            h(
+              "div",
+              { key: "avg", style: { display: "flex", flexDirection: "row", alignItems: "center", marginTop: "10px" } },
+              [
+                h("img", { key: "as", src: starDataUrl("#fcd34d"), style: { width: "24px", height: "24px", marginRight: "8px" } }),
+                h("div", { key: "an", style: { fontSize: "28px", fontWeight: 900, color: "rgba(255,255,255,0.82)", textShadow } }, skills.starAvg.toFixed(2)),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+    {
+      width: CARD_W,
+      height: CARD_H,
+      fonts: ogFontList(regularFont, heavyFont),
+    },
+  );
+
+  response.headers.set("Cache-Control", OG_CACHE_HEADER);
+  return response;
+}
+
+// ---------------------------------------------------------------------------
+// Dan emblem: a single rasterized dan logo, used as the /dan command thumbnail.
+// Discord cannot render the SVG emblems, so this route fetches the asset and
+// re-emits it as a PNG over a soft family-tinted tile. (webp emblems are linked
+// directly by the bot and never reach here.)
+// ---------------------------------------------------------------------------
+
+const DAN_FAMILY_ACCENT: Record<string, string> = {
+  stream: "#7dd3fc",
+  jack: "#fca5a5",
+  handstream: "#c4b5fd",
+  stamina: "#6ee7b7",
+  chordjack: "#fcd34d",
+  tech: "#f0abfc",
+  ln: "#5eead4",
+  dan: "#fdba74",
+};
+
+function danEmblemAssetPath(label: string, family: string): string | null {
+  if (family === "ln" && /^(1[0-6]|[1-9])$/.test(label)) return `/images/dans/ln/${label}.svg`;
+  if (/^([1-9]|10)$/.test(label)) return `/images/dans/reform/${label}.svg`;
+  return null;
+}
+
+async function renderDanEmblemOg(request: Request, label: string, family: string): Promise<Response> {
+  const assetPath = danEmblemAssetPath(label, family);
+  if (!assetPath) throw new OgFallbackError(`no svg dan emblem for ${family}/${label}`);
+
+  const assetUrl = new URL(assetPath, getAssetOrigin(request)).toString();
+  const assetResponse = await fetch(assetUrl);
+  if (!assetResponse.ok) throw new OgFallbackError(`dan emblem ${assetResponse.status}`);
+  const data = Buffer.from(await assetResponse.arrayBuffer()).toString("base64");
+  const dataUrl = `data:image/svg+xml;base64,${data}`;
+  const accent = DAN_FAMILY_ACCENT[family] ?? "#ff66aa";
+
+  const response = new ImageResponse(
+    h(
+      "div",
+      {
+        style: {
+          width: "100%",
+          height: "100%",
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "linear-gradient(135deg, #140f12 0%, #241019 100%)",
+        },
+      },
+      [
+        h("div", {
+          key: "glow",
+          style: {
+            position: "absolute",
+            inset: "0",
+            background: `radial-gradient(circle at 50% 46%, ${accent}40 0%, rgba(0,0,0,0) 62%)`,
+          },
+        }),
+        h("img", {
+          key: "emblem",
+          src: dataUrl,
+          style: { width: "384px", height: "384px", objectFit: "contain" },
+        }),
+      ],
+    ),
+    { width: 512, height: 512 },
   );
 
   response.headers.set("Cache-Control", OG_CACHE_HEADER);
@@ -2696,6 +3083,37 @@ export const Route = createFileRoute("/api/og")({
             );
           } catch (err) {
             console.warn("[og] player render failed, falling back", err);
+          }
+        }
+
+        // Maniacard route. Username in URL; skills computed from the player's
+        // top plays via the live backend, rendered as a tier card.
+        if (kind === "maniacard") {
+          const username = url.searchParams.get("username");
+          if (!username) return new Response("Missing username", { status: 400 });
+          try {
+            return await serveOg(
+              `maniacard:${username.trim().toLowerCase()}:v${version}`,
+              () => renderManiacardOg(request, username),
+            );
+          } catch (err) {
+            if (!isOgFallbackError(err)) console.warn("[og] maniacard render failed, falling back", err);
+          }
+        }
+
+        // Dan emblem thumbnail for the /dan command (rasterizes an svg emblem).
+        if (kind === "dan-emblem") {
+          const label = (url.searchParams.get("label") ?? "").trim().toLowerCase().slice(0, 8);
+          const family = (url.searchParams.get("family") ?? "").trim().toLowerCase().slice(0, 16);
+          if (label) {
+            try {
+              return await serveOg(
+                `dan-emblem:${family}:${label}:v${version}`,
+                () => renderDanEmblemOg(request, label, family),
+              );
+            } catch (err) {
+              if (!isOgFallbackError(err)) console.warn("[og] dan-emblem render failed, falling back", err);
+            }
           }
         }
 

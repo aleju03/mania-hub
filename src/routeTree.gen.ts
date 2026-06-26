@@ -18,9 +18,12 @@ import { Route as ReplayRouteImport } from './routes/replay'
 import { Route as RankingsRouteImport } from './routes/rankings'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PacksRouteImport } from './routes/packs'
+import { Route as MyDataRouteImport } from './routes/my-data'
 import { Route as MapsRouteImport } from './routes/maps'
 import { Route as LegalRouteImport } from './routes/legal'
+import { Route as GoalsRouteImport } from './routes/goals'
 import { Route as FarmHelperRouteImport } from './routes/farm-helper'
+import { Route as DiscordRouteImport } from './routes/discord'
 import { Route as BbcodeRouteImport } from './routes/bbcode'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PlayerUsernameRouteImport } from './routes/player/$username'
@@ -36,6 +39,7 @@ import { Route as AdminR2RouteImport } from './routes/admin/r2'
 import { Route as AdminOgPreviewRouteImport } from './routes/admin/og-preview'
 import { Route as AdminMonitorRouteImport } from './routes/admin/monitor'
 import { Route as AdminLiveBackendRouteImport } from './routes/admin/live-backend'
+import { Route as AdminDiscordRouteImport } from './routes/admin/discord'
 import { Route as AdminDanClassifierRouteImport } from './routes/admin/dan-classifier'
 import { Route as VideosIdFilenameRouteImport } from './routes/videos/$id/$filename'
 import { Route as PlayerUsernameRecentRouteImport } from './routes/player/$username/recent'
@@ -92,6 +96,11 @@ const PacksRoute = PacksRouteImport.update({
   path: '/packs',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MyDataRoute = MyDataRouteImport.update({
+  id: '/my-data',
+  path: '/my-data',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MapsRoute = MapsRouteImport.update({
   id: '/maps',
   path: '/maps',
@@ -102,9 +111,19 @@ const LegalRoute = LegalRouteImport.update({
   path: '/legal',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GoalsRoute = GoalsRouteImport.update({
+  id: '/goals',
+  path: '/goals',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const FarmHelperRoute = FarmHelperRouteImport.update({
   id: '/farm-helper',
   path: '/farm-helper',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiscordRoute = DiscordRouteImport.update({
+  id: '/discord',
+  path: '/discord',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BbcodeRoute = BbcodeRouteImport.update({
@@ -182,6 +201,11 @@ const AdminLiveBackendRoute = AdminLiveBackendRouteImport.update({
   path: '/admin/live-backend',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminDiscordRoute = AdminDiscordRouteImport.update({
+  id: '/admin/discord',
+  path: '/admin/discord',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminDanClassifierRoute = AdminDanClassifierRouteImport.update({
   id: '/admin/dan-classifier',
   path: '/admin/dan-classifier',
@@ -236,9 +260,12 @@ const ApiAuthOsuCallbackRoute = ApiAuthOsuCallbackRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/bbcode': typeof BbcodeRoute
+  '/discord': typeof DiscordRoute
   '/farm-helper': typeof FarmHelperRouteWithChildren
+  '/goals': typeof GoalsRoute
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
+  '/my-data': typeof MyDataRoute
   '/packs': typeof PacksRoute
   '/privacy': typeof PrivacyRoute
   '/rankings': typeof RankingsRoute
@@ -249,6 +276,7 @@ export interface FileRoutesByFullPath {
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
+  '/admin/discord': typeof AdminDiscordRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
@@ -275,9 +303,12 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/bbcode': typeof BbcodeRoute
+  '/discord': typeof DiscordRoute
   '/farm-helper': typeof FarmHelperRouteWithChildren
+  '/goals': typeof GoalsRoute
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
+  '/my-data': typeof MyDataRoute
   '/packs': typeof PacksRoute
   '/privacy': typeof PrivacyRoute
   '/rankings': typeof RankingsRoute
@@ -288,6 +319,7 @@ export interface FileRoutesByTo {
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
+  '/admin/discord': typeof AdminDiscordRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
@@ -315,9 +347,12 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/bbcode': typeof BbcodeRoute
+  '/discord': typeof DiscordRoute
   '/farm-helper': typeof FarmHelperRouteWithChildren
+  '/goals': typeof GoalsRoute
   '/legal': typeof LegalRoute
   '/maps': typeof MapsRoute
+  '/my-data': typeof MyDataRoute
   '/packs': typeof PacksRoute
   '/privacy': typeof PrivacyRoute
   '/rankings': typeof RankingsRoute
@@ -328,6 +363,7 @@ export interface FileRoutesById {
   '/top-plays': typeof TopPlaysRoute
   '/tracker': typeof TrackerRoute
   '/admin/dan-classifier': typeof AdminDanClassifierRoute
+  '/admin/discord': typeof AdminDiscordRoute
   '/admin/live-backend': typeof AdminLiveBackendRoute
   '/admin/monitor': typeof AdminMonitorRoute
   '/admin/og-preview': typeof AdminOgPreviewRoute
@@ -356,9 +392,12 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/bbcode'
+    | '/discord'
     | '/farm-helper'
+    | '/goals'
     | '/legal'
     | '/maps'
+    | '/my-data'
     | '/packs'
     | '/privacy'
     | '/rankings'
@@ -369,6 +408,7 @@ export interface FileRouteTypes {
     | '/top-plays'
     | '/tracker'
     | '/admin/dan-classifier'
+    | '/admin/discord'
     | '/admin/live-backend'
     | '/admin/monitor'
     | '/admin/og-preview'
@@ -395,9 +435,12 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/bbcode'
+    | '/discord'
     | '/farm-helper'
+    | '/goals'
     | '/legal'
     | '/maps'
+    | '/my-data'
     | '/packs'
     | '/privacy'
     | '/rankings'
@@ -408,6 +451,7 @@ export interface FileRouteTypes {
     | '/top-plays'
     | '/tracker'
     | '/admin/dan-classifier'
+    | '/admin/discord'
     | '/admin/live-backend'
     | '/admin/monitor'
     | '/admin/og-preview'
@@ -434,9 +478,12 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/bbcode'
+    | '/discord'
     | '/farm-helper'
+    | '/goals'
     | '/legal'
     | '/maps'
+    | '/my-data'
     | '/packs'
     | '/privacy'
     | '/rankings'
@@ -447,6 +494,7 @@ export interface FileRouteTypes {
     | '/top-plays'
     | '/tracker'
     | '/admin/dan-classifier'
+    | '/admin/discord'
     | '/admin/live-backend'
     | '/admin/monitor'
     | '/admin/og-preview'
@@ -474,9 +522,12 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BbcodeRoute: typeof BbcodeRoute
+  DiscordRoute: typeof DiscordRoute
   FarmHelperRoute: typeof FarmHelperRouteWithChildren
+  GoalsRoute: typeof GoalsRoute
   LegalRoute: typeof LegalRoute
   MapsRoute: typeof MapsRoute
+  MyDataRoute: typeof MyDataRoute
   PacksRoute: typeof PacksRoute
   PrivacyRoute: typeof PrivacyRoute
   RankingsRoute: typeof RankingsRoute
@@ -487,6 +538,7 @@ export interface RootRouteChildren {
   TopPlaysRoute: typeof TopPlaysRoute
   TrackerRoute: typeof TrackerRoute
   AdminDanClassifierRoute: typeof AdminDanClassifierRoute
+  AdminDiscordRoute: typeof AdminDiscordRoute
   AdminLiveBackendRoute: typeof AdminLiveBackendRoute
   AdminMonitorRoute: typeof AdminMonitorRoute
   AdminOgPreviewRoute: typeof AdminOgPreviewRoute
@@ -570,6 +622,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PacksRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/my-data': {
+      id: '/my-data'
+      path: '/my-data'
+      fullPath: '/my-data'
+      preLoaderRoute: typeof MyDataRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/maps': {
       id: '/maps'
       path: '/maps'
@@ -584,11 +643,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LegalRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/goals': {
+      id: '/goals'
+      path: '/goals'
+      fullPath: '/goals'
+      preLoaderRoute: typeof GoalsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/farm-helper': {
       id: '/farm-helper'
       path: '/farm-helper'
       fullPath: '/farm-helper'
       preLoaderRoute: typeof FarmHelperRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/discord': {
+      id: '/discord'
+      path: '/discord'
+      fullPath: '/discord'
+      preLoaderRoute: typeof DiscordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/bbcode': {
@@ -694,6 +767,13 @@ declare module '@tanstack/react-router' {
       path: '/admin/live-backend'
       fullPath: '/admin/live-backend'
       preLoaderRoute: typeof AdminLiveBackendRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/discord': {
+      id: '/admin/discord'
+      path: '/admin/discord'
+      fullPath: '/admin/discord'
+      preLoaderRoute: typeof AdminDiscordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/dan-classifier': {
@@ -814,9 +894,12 @@ const ApiAuthOsuRouteWithChildren = ApiAuthOsuRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BbcodeRoute: BbcodeRoute,
+  DiscordRoute: DiscordRoute,
   FarmHelperRoute: FarmHelperRouteWithChildren,
+  GoalsRoute: GoalsRoute,
   LegalRoute: LegalRoute,
   MapsRoute: MapsRoute,
+  MyDataRoute: MyDataRoute,
   PacksRoute: PacksRoute,
   PrivacyRoute: PrivacyRoute,
   RankingsRoute: RankingsRoute,
@@ -827,6 +910,7 @@ const rootRouteChildren: RootRouteChildren = {
   TopPlaysRoute: TopPlaysRoute,
   TrackerRoute: TrackerRoute,
   AdminDanClassifierRoute: AdminDanClassifierRoute,
+  AdminDiscordRoute: AdminDiscordRoute,
   AdminLiveBackendRoute: AdminLiveBackendRoute,
   AdminMonitorRoute: AdminMonitorRoute,
   AdminOgPreviewRoute: AdminOgPreviewRoute,
