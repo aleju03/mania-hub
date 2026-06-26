@@ -229,12 +229,18 @@ export async function getHydratedScoreByIdentity(db: Db, country: string, scoreI
   return { country: String(row.country), score };
 }
 
-export async function getHydratedTrackerScoresForMetadata(db: Db, filter: { userId?: number; beatmapId?: number }, limit = 10): Promise<Array<{ country: string; score: LeanTrackerScore }>> {
-  return (await getHydratedScoresForMetadata(db, filter, limit))
+export async function getHydratedTrackerScoresForMetadata(db: Db, filter: { userId?: number; beatmapId?: number }, limit = 10, offset = 0): Promise<Array<{ country: string; score: LeanTrackerScore }>> {
+  return (await getHydratedScoresForMetadata(db, filter, limit, offset))
     .map((row) => ({ country: row.country, score: toLeanTrackerScore(row.score) }));
 }
 
-export async function getHydratedScoresForMetadata(db: Db, filter: { userId?: number; beatmapId?: number }, limit = 10): Promise<Array<{ country: string; score: OscScore }>> {
+export async function getHydratedScoresForMetadata(
+  db: Db,
+  filter: { userId?: number; beatmapId?: number },
+  limit = 10,
+  offset = 0,
+  options: { passedOnly?: boolean } = {},
+): Promise<Array<{ country: string; score: OscScore }>> {
   const clauses: string[] = [];
   const args: Array<string | number> = [];
   if (filter.userId != null) {
@@ -249,10 +255,10 @@ export async function getHydratedScoresForMetadata(db: Db, filter: { userId?: nu
   const rows = (await exec(
     db,
     `${trackerScoreSelectSql()}
-     where (${clauses.join(" or ")}) and se.passed = 1
+     where (${clauses.join(" or ")})${options.passedOnly === false ? "" : " and se.passed = 1"}
      order by se.ended_at desc
-     limit ?`,
-    [...args, limit],
+     limit ? offset ?`,
+    [...args, limit, Math.max(0, Math.floor(offset))],
   )).rows;
   return rows.flatMap((row) => {
     const score = hydrateScoreMetadata(row, parseJson<OscScore | null>(row.score_json, null));

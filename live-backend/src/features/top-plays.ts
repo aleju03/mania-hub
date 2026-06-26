@@ -2,7 +2,8 @@ import { isGlobalCountry } from "../countries.js";
 import type { Db } from "../db.js";
 import { exec, json, parseJson } from "../db.js";
 import type { JobQueue } from "../jobs/queue.js";
-import { calculateApproxPpGainMap, calculateReplacementPpGain, calculateWeightedPp, getScoreTimestamp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
+import { calculateApproxPpGainMap, calculateReplacementPpGain, calculateWeightedPp, calculateWeightedPpTotal, getScoreTimestamp, nowIso, scoreHasPublicLeaderboard } from "../shared/score.js";
+import { evaluatePpGoals } from "./goals.js";
 import { compactScoreForStorage, hydrateScoresDisplayMetadata, persistScoresDisplayMetadata } from "../shared/score-storage.js";
 import type { CountryTopPlay, OscScore, ScoreUser } from "../shared/types.js";
 import type { LiveEventLog } from "../live/event-log.js";
@@ -105,6 +106,18 @@ export async function confirmTopPlay(
     [payload.country, confirmedScoreId, payload.userId, event.pp, event.weightedPP, event.ppGain, json(toStoredTopPlayEvent(event)), refreshedAt],
   );
   if (inserted.rowsAffected === 0) return false;
+  // A fresh top play is what moves overall pp, so this is the natural moment to settle "reach N pp"
+  // goals. The weighted top-200 total reflects the new score immediately (and slightly under-counts
+  // by omitting bonus pp, so it never completes a goal early); fall back to the stored pp if higher.
+  try {
+    const observedPp = Math.max(
+      Number((await exec(db, "select pp from users where user_id = ?", [payload.userId])).rows[0]?.pp ?? 0),
+      calculateWeightedPpTotal(bestScores),
+    );
+    await evaluatePpGoals(db, events, payload.userId, observedPp, payload.country);
+  } catch {
+    // never let goal settling block a confirmed top play
+  }
   const farmedUpdate = await recordMapsFarmedScore(db, payload.country, score, refreshedAt);
   await events.append("top_play", payload.country, event, `top_play:${payload.country}:${confirmedScoreId}`);
   if (farmedUpdate) {

@@ -448,6 +448,7 @@ create index if not exists idx_country_beatmap_scores_rank on country_beatmap_sc
 create index if not exists idx_top_play_events_country_time on top_play_events(country, detected_at desc);
 create index if not exists idx_top_play_events_country_pp on top_play_events(country, pp desc, detected_at desc);
 create index if not exists idx_top_play_events_user_time on top_play_events(user_id, detected_at);
+create index if not exists idx_top_play_events_user_pp on top_play_events(user_id, pp desc);
 create index if not exists idx_top_play_events_score on top_play_events(score_id);
 create index if not exists idx_snipe_events_country_time on snipe_events(country, detected_at desc);
 create index if not exists idx_country_maps_snapshots_refreshed on country_maps_snapshots(refreshed_at desc);
@@ -464,11 +465,14 @@ create index if not exists idx_replay_video_exports_status_time on replay_video_
 create index if not exists idx_dan_estimates_updated on dan_estimates(updated_at desc);
 create index if not exists idx_beatmap_skill_vectors_status_updated on beatmap_skill_vectors(status, updated_at desc);
 create index if not exists idx_player_activity_refs_user_day on player_activity_score_refs(country, user_id, day, ended_at);
+create index if not exists idx_player_activity_refs_user_time on player_activity_score_refs(user_id, ended_at desc);
 create index if not exists idx_player_activity_refs_day on player_activity_score_refs(day);
 create index if not exists idx_player_activity_days_user_day on player_activity_days(country, user_id, day);
+create index if not exists idx_player_activity_days_user_day_all on player_activity_days(user_id, day);
 create index if not exists idx_player_activity_days_user_year on player_activity_days(country, user_id, substr(day, 1, 4));
 create index if not exists idx_player_activity_days_day on player_activity_days(day);
 create index if not exists idx_player_activity_maps_user_day on player_activity_maps(country, user_id, day, play_count desc);
+create index if not exists idx_player_activity_maps_user_beatmap on player_activity_maps(user_id, beatmap_id);
 create index if not exists idx_player_activity_maps_beatmap on player_activity_maps(beatmap_id);
 create index if not exists idx_player_activity_maps_day on player_activity_maps(day);
 create index if not exists idx_jobs_ready on jobs(status, run_after, priority desc);
@@ -507,3 +511,20 @@ create index if not exists idx_pack_collection_owner_tier
   on pack_collection_cards(owner_user_id, tier, copies, pp desc);
 create index if not exists idx_pack_collection_owner_username
   on pack_collection_cards(owner_user_id, username);
+
+-- Discord bot: live-feed channel subscriptions. A row means "post events of
+-- feed_type for `country` into Discord channel_id". The unique key keeps a
+-- channel from being subscribed twice to the same feed/country pair.
+create table if not exists discord_subscriptions (
+  id integer primary key autoincrement,
+  guild_id text,
+  channel_id text not null,
+  country text not null,
+  feed_type text not null,
+  min_pp real not null default 0,
+  created_by text,
+  created_at text not null,
+  unique(channel_id, feed_type, country)
+);
+create index if not exists idx_discord_subscriptions_feed
+  on discord_subscriptions(feed_type, country);

@@ -89,6 +89,7 @@ export async function migrate(db: Db): Promise<void> {
   await migratePlayerActivity(db);
   await migratePackCollectionCards(db);
   await migrateTrackerIndexes(db);
+  await migrateUserGoals(db);
 }
 
 export async function dbHealth(db: Db): Promise<boolean> {
@@ -101,10 +102,19 @@ export async function dbHealth(db: Db): Promise<boolean> {
 }
 
 export function splitSql(sql: string): string[] {
+  // Strip whole-line `--` comments from inside each statement, not just chunks that begin with
+  // one: a comment block sitting directly above a `create table` (no `;` between) would otherwise
+  // make the chunk start with `--` and drop the table entirely, leaving its index to fail.
   return sql
     .split(";")
-    .map((statement) => statement.trim())
-    .filter((statement) => statement && !statement.startsWith("--"));
+    .map((statement) =>
+      statement
+        .split("\n")
+        .filter((line) => !line.trim().startsWith("--"))
+        .join("\n")
+        .trim(),
+    )
+    .filter((statement) => statement.length > 0);
 }
 
 export interface DbStatement {
@@ -586,12 +596,20 @@ async function migratePlayerActivity(db: Db): Promise<void> {
       on player_activity_score_refs(country, user_id, day, ended_at)
   `);
   await db.execute(`
+    create index if not exists idx_player_activity_refs_user_time
+      on player_activity_score_refs(user_id, ended_at desc)
+  `);
+  await db.execute(`
     create index if not exists idx_player_activity_refs_day
       on player_activity_score_refs(day)
   `);
   await db.execute(`
     create index if not exists idx_player_activity_days_user_day
       on player_activity_days(country, user_id, day)
+  `);
+  await db.execute(`
+    create index if not exists idx_player_activity_days_user_day_all
+      on player_activity_days(user_id, day)
   `);
   await db.execute(`
     create index if not exists idx_player_activity_days_user_year
@@ -604,6 +622,10 @@ async function migratePlayerActivity(db: Db): Promise<void> {
   await db.execute(`
     create index if not exists idx_player_activity_maps_user_day
       on player_activity_maps(country, user_id, day, play_count desc)
+  `);
+  await db.execute(`
+    create index if not exists idx_player_activity_maps_user_beatmap
+      on player_activity_maps(user_id, beatmap_id)
   `);
   await db.execute(`
     create index if not exists idx_player_activity_maps_beatmap
@@ -652,7 +674,54 @@ async function migratePackCollectionCards(db: Db): Promise<void> {
 
 async function migrateTrackerIndexes(db: Db): Promise<void> {
   await db.execute(`
+    create index if not exists idx_score_events_user_time
+      on score_events(user_id, ended_at desc)
+  `);
+  await db.execute(`
     create index if not exists idx_top_play_events_score
       on top_play_events(score_id)
+  `);
+  await db.execute(`
+    create index if not exists idx_top_play_events_user_pp
+      on top_play_events(user_id, pp desc)
+  `);
+}
+
+async function migrateUserGoals(db: Db): Promise<void> {
+  // Per-player goals that auto-complete from the ingest pipeline. Timestamps are epoch ms
+  // (matching the pack tables); status is 'open' | 'completed'. beatmap_id scopes map goals,
+  // target_value carries pp / accuracy fraction, target_grade carries S/SS-style targets.
+  await db.execute(`
+    create table if not exists user_goals (
+      id text primary key,
+      user_id integer not null,
+      country text,
+      kind text not null,
+      beatmap_id integer,
+      beatmapset_id integer,
+      beatmap_label text,
+      target_value real,
+      target_grade text,
+      note text,
+      status text not null default 'open',
+      created_at integer not null,
+      completed_at integer,
+      completed_value real,
+      completed_score_id text,
+      completed_beatmap_id integer,
+      updated_at integer not null
+    )
+  `);
+  const goalColumns = (await db.execute("pragma table_info(user_goals)")).rows.map((row) => String(row.name));
+  if (!goalColumns.includes("beatmapset_id")) {
+    await db.execute("alter table user_goals add column beatmapset_id integer");
+  }
+  await db.execute(`
+    create index if not exists idx_user_goals_user_status
+      on user_goals(user_id, status)
+  `);
+  await db.execute(`
+    create index if not exists idx_user_goals_user_beatmap
+      on user_goals(user_id, status, beatmap_id)
   `);
 }

@@ -93,6 +93,16 @@ export interface Config {
   enableOscSocket: boolean;
   enableOsuScoresFallback: boolean;
   osuScoresFallbackIntervalMs: number;
+  // Discord bot (HTTP interactions). Application id + public key are required to
+  // accept interactions; the bot token is only needed to register commands and
+  // post live-feed messages to channels.
+  enableDiscordBot: boolean;
+  enableDiscordFeeds: boolean;
+  discordApplicationId?: string;
+  discordPublicKey?: string;
+  discordBotToken?: string;
+  discordDevGuildId?: string;
+  discordSiteOrigin: string;
 }
 
 function readInt(name: string, fallback: number): number {
@@ -241,5 +251,12 @@ export function readConfig(): Config {
     enableOscSocket: readBool("ENABLE_OSC_SOCKET", true),
     enableOsuScoresFallback: readBool("ENABLE_OSU_SCORES_FALLBACK", readBool("ENABLE_OSU_RECENT_FALLBACK", true)),
     osuScoresFallbackIntervalMs: readInt("OSU_SCORES_FALLBACK_INTERVAL_MS", readInt("OSU_RECENT_FALLBACK_INTERVAL_MS", 10_000)),
+    enableDiscordBot: readBool("ENABLE_DISCORD_BOT", false),
+    enableDiscordFeeds: readBool("ENABLE_DISCORD_FEEDS", true),
+    discordApplicationId: process.env.DISCORD_APPLICATION_ID || undefined,
+    discordPublicKey: process.env.DISCORD_PUBLIC_KEY || undefined,
+    discordBotToken: process.env.DISCORD_BOT_TOKEN || undefined,
+    discordDevGuildId: process.env.DISCORD_DEV_GUILD_ID || undefined,
+    discordSiteOrigin: (process.env.DISCORD_SITE_ORIGIN || "https://mania-tracker.com").replace(/\/+$/, ""),
   };
 }

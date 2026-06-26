@@ -5,13 +5,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDb, exec, migrate } from "../src/db.js";
 import { getSnipesSnapshot } from "../src/features/snipes.js";
-import { getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../src/features/activity.js";
+import { ACTIVITY_SKILL_ANALYSIS_VERSION, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../src/features/activity.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsSnapshot, globalMapsFarmedRefreshRunAfter, recordMapsFarmedScore, refreshCountryMaps, refreshGlobalMaps, refreshUserMapsFarmedScores, type MapsPageQuery } from "../src/features/maps.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores } from "../src/features/player-profiles.js";
 import { getRankDeltaSnapshot } from "../src/features/rank-snapshots.js";
 import { confirmTopPlay, getTopPlaysSnapshot, TopPlayConfirmationPendingError } from "../src/features/top-plays.js";
 import { getTrackerSnapshot } from "../src/features/tracker.js";
 import { getGlobalRankingsSnapshot } from "../src/features/global-rankings.js";
+import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed } from "../src/features/my-data.js";
 import { routeHttp, sendJson } from "../src/http/snapshots.js";
 import { AbuseGuard } from "../src/http/abuse-guard.js";
 import { handleSse } from "../src/live/sse.js";
@@ -166,6 +167,19 @@ describe("live backend", () => {
 
     await ingestor.ingestBatch([scores[0]]);
     await ingestor.ingestBatch([scores[0]]);
+    await exec(
+      db,
+      `insert into beatmap_skill_vectors
+         (beatmap_id, analysis_version, status, skills_json, computed_at, updated_at)
+       values (?, ?, 'ready', ?, ?, ?)`,
+      [
+        501,
+        ACTIVITY_SKILL_ANALYSIS_VERSION,
+        JSON.stringify({ primary: "stream", patterns: { stream: 1, jack: 0.25 } }),
+        "2026-05-12T00:03:00.000Z",
+        "2026-05-12T00:03:00.000Z",
+      ],
+    );
 
     const snapshot = await getPlayerActivitySnapshot(db, queue, 101, "CR", 2026);
     expect(snapshot.available).toBe(true);
@@ -184,6 +198,11 @@ describe("live backend", () => {
       mapCount: 1,
     });
     expect(snapshot.days[0].maps).toEqual([]);
+    expect(snapshot.days[0].skills).toMatchObject({
+      analyzedPlays: 1,
+      totalPlays: 1,
+      patterns: { stream: 1, jack: 0.25 },
+    });
 
     expect(await getPlayerActivityDayDetail(db, queue, 101, "CR", "2026-05-12")).toBeNull();
     const dayDetail = await getPlayerActivityDayDetail(db, queue, 101, "CR", "2026-05-11");
@@ -224,6 +243,136 @@ describe("live backend", () => {
     await exec(db, "delete from player_activity_score_refs");
     const rescan = await getPlayerActivitySnapshot(db, queue, 101, "CR", 2026);
     expect(rescan.totalScores).toBe(0);
+  });
+
+  it("pages my data tracked plays and top plays with total counts", async () => {
+    const { db, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    const base = scores[0];
+    const plays = [0, 1, 2].map((i) => ({
+      ...base,
+      id: 9200 + i,
+      created_at: `2026-05-12T00:0${i}:00.000Z`,
+      ended_at: `2026-05-12T00:0${i}:30.000Z`,
+    }));
+    await ingestor.ingestBatch(plays);
+
+    for (let i = 0; i < 3; i++) {
+      await exec(
+        db,
+        `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
+         values ('CR', ?, 101, ?, ?, 10, ?, ?)`,
+        [
+          9300 + i,
+          300 - i,
+          (300 - i) * 0.95,
+          topPlayPayload({
+            scoreId: 9300 + i,
+            userId: 101,
+            username: "Tester",
+            country: "CR",
+            pp: 300 - i,
+            ppGain: 10,
+            time: `2026-05-12T00:1${i}:00.000Z`,
+            keys: 4,
+          }),
+          `2026-05-12T00:1${i}:00.000Z`,
+        ],
+      );
+    }
+
+    const trackedFirst = await getUserTrackedFeed(db, 101, 2, 0);
+    const trackedSecond = await getUserTrackedFeed(db, 101, 2, 2);
+    expect(trackedFirst.total).toBe(3);
+    expect(trackedFirst.items).toHaveLength(2);
+    expect(trackedSecond.total).toBe(3);
+    expect(trackedSecond.items).toHaveLength(1);
+
+    const topFirst = await getUserTopPlaysFeed(db, 101, 2, 0);
+    const topSecond = await getUserTopPlaysFeed(db, 101, 2, 2);
+    expect(topFirst.total).toBe(3);
+    expect(topFirst.items.map((play) => Math.round(play.score.pp ?? 0))).toEqual([300, 299]);
+    expect(topSecond.total).toBe(3);
+    expect(topSecond.items.map((play) => Math.round(play.score.pp ?? 0))).toEqual([298]);
+  });
+
+  it("serves the my data dashboard initial payload in one request", async () => {
+    const { db, queue, events, ingestor } = await setup();
+    const scores = await fixture<OscScore[]>("scores.json");
+    const base = scores[0];
+    await exec(db, "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('CR', 101, 1, 'test', 1, ?)", [new Date().toISOString()]);
+    await ingestor.ingestBatch([0, 1].map((i) => ({
+      ...base,
+      id: 9400 + i,
+      created_at: `2026-05-12T00:0${i}:00.000Z`,
+      ended_at: `2026-05-12T00:0${i}:30.000Z`,
+    })));
+    await exec(
+      db,
+      `insert into top_play_events (country, score_id, user_id, pp, weighted_pp, pp_gain, payload_json, detected_at)
+       values ('CR', 9500, 101, 321, 304.95, 12, ?, '2026-05-12T00:10:00.000Z')`,
+      [topPlayPayload({ scoreId: 9500, userId: 101, username: "Tester", country: "CR", pp: 321, ppGain: 12, time: "2026-05-12T00:10:00.000Z", keys: 4 })],
+    );
+
+    const response = mockRes();
+    await routeHttp(mockReq("GET", "/api/my-data/dashboard?userId=101&limit=2&year=2026", { authorization: "Bearer secret" }), response.res, {
+      db,
+      queue,
+      events,
+      config: baseConfig({ liveAdminToken: "secret" }),
+      osu: { limiter: { state: () => ({ hardPerMinute: 60, usedLastMinute: 0, byCaller: [], byPath: [] }) } },
+      oscStatus: () => ({ connected: false, lastBatchAt: null, lastError: null }),
+    } as never);
+
+    const body = JSON.parse(response.writes.join(""));
+    expect(response.res.statusCode).toBe(200);
+    expect(body.summary).toMatchObject({ userId: 101, tracked: true, topPlayCount: 1 });
+    expect(body.trackedPage).toMatchObject({ total: 2, limit: 2, offset: 0 });
+    expect(body.trackedPage.items).toHaveLength(2);
+    expect(body.topPlayPage).toMatchObject({ total: 1, limit: 2, offset: 0 });
+    expect(body.topPlayPage.items).toHaveLength(1);
+    expect(body.activity).toMatchObject({ available: true, totalScores: 2 });
+  });
+
+  it("prefers official osu! variant pp for my data keymode stats", async () => {
+    const { db } = await setup();
+    const userId = 424242;
+    await exec(
+      db,
+      `insert into users (user_id, username, avatar_url, country_code, profile_json, updated_at, pp, global_rank, country_rank)
+       values (?, 'Tester', '', 'CR', ?, '2026-05-12T00:00:00.000Z', 15090, 828, 3)`,
+      [
+        userId,
+        JSON.stringify({
+          id: userId,
+          username: "Tester",
+          avatar_url: "",
+          country_code: "CR",
+          statistics: {
+            pp: 15090,
+            variants: [
+              { mode: "mania", variant: "4k", pp: 13526 },
+              { mode: "mania", variant: "7k", pp: 14330 },
+            ],
+          },
+        }),
+      ],
+    );
+    await exec(db, "insert into country_rosters (country, user_id, rank, source, is_tracked, refreshed_at) values ('CR', ?, 3, 'test', 1, '2026-05-12T00:00:00.000Z')", [userId]);
+    await exec(
+      db,
+      `insert into farm_helper_user_key_stats (key_count, user_id, weighted_pp, score_count, source_updated_at, updated_at)
+       values
+         (4, ?, 12959, 100, '2026-05-12T00:00:00.000Z', '2026-05-12T00:00:00.000Z'),
+         (7, ?, 13708, 100, '2026-05-12T00:00:00.000Z', '2026-05-12T00:00:00.000Z')`,
+      [userId, userId],
+    );
+
+    const summary = await getMyDataSummary(db, userId);
+    expect(summary.keyStats.map((stat) => [stat.keyCount, Math.round(stat.weightedPp)])).toEqual([
+      [7, 14330],
+      [4, 13526],
+    ]);
   });
 
   it("buckets activity days and sessions in the player country's local timezone", async () => {

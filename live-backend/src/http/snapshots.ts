@@ -8,6 +8,8 @@ import type { Db } from "../db.js";
 import { dbHealth, exec, getSqliteBusyRetryStats, parseJson } from "../db.js";
 import { getPlayerActivityAvailability, getPlayerActivityDayDetail, getPlayerActivitySnapshot } from "../features/activity.js";
 import { getDanEstimateBatch } from "../features/dan-estimates.js";
+import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_TARGET_GRADES, createUserGoal, deleteUserGoal, getUserGoal, listUserGoalsWithProgress, reconcileGoalsForUser, type GoalKind, type UserGoalInput } from "../features/goals.js";
+import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed } from "../features/my-data.js";
 import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, type FarmHelperKeyMode, type FarmHelperView } from "../features/farm-helper.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
 import { enqueueGlobalRankingStatRepairs, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
@@ -39,6 +41,8 @@ import {
 import { isReplayVideoStorageConfigured } from "../replay-video/r2.js";
 import { addManualRosterMember, enqueueRosterRefreshes, removeManualRosterMember } from "../rosters/country-rosters.js";
 import { getLocalDbStorage, runRetention } from "../retention.js";
+import { getDiscordPublicInfo, type DiscordRuntime } from "../discord/index.js";
+import { listAllSubscriptions, removeSubscriptionById } from "../discord/subscriptions.js";
 
 const HIDDEN_ADMIN_WORKER_LANE_NAMES = new Set([
   "dan-estimates",
@@ -79,6 +83,7 @@ export interface HttpContext {
   };
   pauseWorkers?: () => void;
   resumeWorkers?: () => void;
+  discord?: DiscordRuntime;
 }
 
 const REQUEST_STARTED_AT = Symbol("maniaHubRequestStartedAt");
@@ -118,6 +123,21 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     await handleBeatmapAudioRequest(req, res, ctx.config, url);
     return true;
   }
+  // Discord posts interactions server-to-server (no Origin header, bursty). It
+  // sits before the public rate gate because Ed25519 signature verification —
+  // not IP rate limiting — is what protects this endpoint; an unsigned request
+  // is rejected fast inside handleInteraction.
+  if (url.pathname === "/api/discord/interactions") {
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    if (!ctx.discord) {
+      sendJson(req, res, ctx, 404, { error: "discord_not_configured" });
+      return true;
+    }
+    return ctx.discord.handleInteraction(req, res);
+  }
   if (url.pathname.startsWith("/api/") && !isAdmin(req, ctx) && !checkRate(req, res, ctx, "publicApi")) {
     return true;
   }
@@ -137,6 +157,11 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
   if (url.pathname === "/api/countries/features") {
     res.setHeader("cache-control", "public, max-age=30");
     sendJson(req, res, ctx, 200, await countryFeaturesBody(ctx));
+    return true;
+  }
+  if (url.pathname === "/api/discord/info") {
+    res.setHeader("cache-control", "public, max-age=60");
+    sendJson(req, res, ctx, 200, getDiscordPublicInfo(ctx.config));
     return true;
   }
   const profileRoute = parseProfileRoute(url.pathname);
@@ -246,6 +271,191 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       ? await removeManualRosterMember(ctx.db, memberCountry, memberUserId)
       : await addManualRosterMember(ctx.db, ctx.queue, ctx.config, memberCountry, memberUserId);
     sendJson(req, res, ctx, result.ok ? 200 : 409, result);
+    return true;
+  }
+  if (url.pathname === "/api/goals" || url.pathname === "/api/goals/create" || url.pathname === "/api/goals/delete") {
+    // All goal endpoints are admin-token gated: the frontend server fn injects the osu!-verified
+    // viewer id (the roster/pack-wallet bridge), so a user only ever reads or mutates their own
+    // goals. The browser can never name a different user id here.
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (url.pathname === "/api/goals") {
+      if (req.method !== "GET") {
+        sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+        return true;
+      }
+      const userId = Number(url.searchParams.get("userId"));
+      if (!Number.isInteger(userId) || userId <= 0) {
+        sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+        return true;
+      }
+      // Settle goals against stored projections before listing, so goals that were already satisfied
+      // before creation (or while a split worker's in-memory goal index was stale) do not linger open.
+      await reconcileGoalsForUser(ctx.db, ctx.events, userId).catch(() => {});
+      sendJson(req, res, ctx, 200, { goals: await listUserGoalsWithProgress(ctx.db, userId) });
+      return true;
+    }
+    if (req.method !== "POST") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const body = parseJson<{ userId?: unknown; id?: unknown; kind?: unknown; country?: unknown; beatmapId?: unknown; beatmapsetId?: unknown; beatmapLabel?: unknown; targetValue?: unknown; targetGrade?: unknown; note?: unknown }>((await readBody(req)) || "{}", {});
+    const userId = Number(body.userId);
+    if (!Number.isInteger(userId) || userId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    if (url.pathname === "/api/goals/delete") {
+      const id = typeof body.id === "string" ? body.id : "";
+      if (!id) {
+        sendJson(req, res, ctx, 400, { error: "invalid_goal" });
+        return true;
+      }
+      const ok = await deleteUserGoal(ctx.db, userId, id);
+      sendJson(req, res, ctx, ok ? 200 : 404, { ok });
+      return true;
+    }
+    // create
+    const kind = String(body.kind ?? "") as GoalKind;
+    if (!GOAL_KINDS.includes(kind)) {
+      sendJson(req, res, ctx, 400, { error: "invalid_kind" });
+      return true;
+    }
+    const rawCountry = typeof body.country === "string" ? body.country.trim().toUpperCase() : "";
+    const input: UserGoalInput = { userId, country: /^[A-Z]{2}$/.test(rawCountry) ? rawCountry : null, kind };
+    if (GOAL_MAP_KINDS.includes(kind)) {
+      const beatmapId = Number(body.beatmapId);
+      if (!Number.isInteger(beatmapId) || beatmapId <= 0) {
+        sendJson(req, res, ctx, 400, { error: "invalid_beatmap" });
+        return true;
+      }
+      input.beatmapId = beatmapId;
+      const beatmapsetId = Number(body.beatmapsetId);
+      input.beatmapsetId = Number.isInteger(beatmapsetId) && beatmapsetId > 0 ? beatmapsetId : null;
+      input.beatmapLabel = typeof body.beatmapLabel === "string" ? body.beatmapLabel : null;
+    }
+    if (kind === "accuracy") {
+      let target = Number(body.targetValue);
+      // Accept either a fraction (0.96) or a percent (96); normalise to a 0-1 fraction.
+      if (target > 1 && target <= 100) target = target / 100;
+      if (!(target > 0 && target <= 1)) {
+        sendJson(req, res, ctx, 400, { error: "invalid_target" });
+        return true;
+      }
+      input.targetValue = target;
+    } else if (kind === "grade") {
+      const grade = String(body.targetGrade ?? "").toUpperCase();
+      if (!GOAL_TARGET_GRADES.includes(grade)) {
+        sendJson(req, res, ctx, 400, { error: "invalid_grade" });
+        return true;
+      }
+      input.targetGrade = grade;
+    } else if (kind === "play_pp" || kind === "reach_pp") {
+      const target = Number(body.targetValue);
+      if (!(target > 0)) {
+        sendJson(req, res, ctx, 400, { error: "invalid_target" });
+        return true;
+      }
+      input.targetValue = target;
+    }
+    if (typeof body.note === "string") input.note = body.note;
+    const created = await createUserGoal(ctx.db, ctx.queue, input);
+    // A just-created goal may already be satisfied by the player's stored tracker/top-play data.
+    await reconcileGoalsForUser(ctx.db, ctx.events, userId, [kind]).catch(() => {});
+    sendJson(req, res, ctx, 200, { ok: true, goal: (await getUserGoal(ctx.db, created.id)) ?? created });
+    return true;
+  }
+  if (url.pathname === "/api/my-data/summary") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const userId = Number(url.searchParams.get("userId"));
+    if (!Number.isInteger(userId) || userId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, await getMyDataSummary(ctx.db, userId));
+    return true;
+  }
+  if (url.pathname === "/api/my-data/dashboard") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const userId = Number(url.searchParams.get("userId"));
+    if (!Number.isInteger(userId) || userId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    const limit = clampLimit(url.searchParams.get("limit"), 12, 60);
+    const trackedOffset = clampInteger(url.searchParams.get("trackedOffset"), 0, 1_000_000, 0);
+    const topOffset = clampInteger(url.searchParams.get("topOffset"), 0, 1_000_000, 0);
+    const year = clampInteger(url.searchParams.get("year"), 2007, 2100, new Date().getFullYear());
+    const summary = await getMyDataSummary(ctx.db, userId);
+    const emptyTrackedPage = { items: [], total: 0, limit, offset: trackedOffset };
+    const emptyTopPlayPage = { items: [], total: 0, limit, offset: topOffset };
+    if (!summary.tracked) {
+      sendJson(req, res, ctx, 200, { summary, trackedPage: emptyTrackedPage, topPlayPage: emptyTopPlayPage, activity: null });
+      return true;
+    }
+    const activityCountry = summary.countryCode ?? summary.trackedCountries[0] ?? GLOBAL_COUNTRY_CODE;
+    const [trackedPage, topPlayPage, activity] = await Promise.all([
+      getUserTrackedFeed(ctx.db, userId, limit, trackedOffset),
+      getUserTopPlaysFeed(ctx.db, userId, limit, topOffset),
+      getPlayerActivitySnapshot(ctx.db, ctx.queue, userId, activityCountry, year).catch(() => null),
+    ]);
+    sendJson(req, res, ctx, 200, { summary, trackedPage, topPlayPage, activity });
+    return true;
+  }
+  if (url.pathname === "/api/my-data/feed") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const userId = Number(url.searchParams.get("userId"));
+    if (!Number.isInteger(userId) || userId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    const limit = clampLimit(url.searchParams.get("limit"), 12, 60);
+    const offset = clampInteger(url.searchParams.get("offset"), 0, 1_000_000, 0);
+    const page = await getUserTrackedFeed(ctx.db, userId, limit, offset);
+    sendJson(req, res, ctx, 200, { scores: page.items, total: page.total, limit: page.limit, offset: page.offset });
+    return true;
+  }
+  if (url.pathname === "/api/my-data/top-plays") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (req.method !== "GET") {
+      sendJson(req, res, ctx, 405, { error: "method_not_allowed" });
+      return true;
+    }
+    const userId = Number(url.searchParams.get("userId"));
+    if (!Number.isInteger(userId) || userId <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_user_id" });
+      return true;
+    }
+    const limit = clampLimit(url.searchParams.get("limit"), 12, 60);
+    const offset = clampInteger(url.searchParams.get("offset"), 0, 1_000_000, 0);
+    const page = await getUserTopPlaysFeed(ctx.db, userId, limit, offset);
+    sendJson(req, res, ctx, 200, { plays: page.items, total: page.total, limit: page.limit, offset: page.offset });
     return true;
   }
   if (url.pathname === "/api/countries/activate") {
@@ -890,6 +1100,50 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     }
     await enqueueOscBackfill(ctx.queue, ctx.db, ctx.config);
     sendJson(req, res, ctx, 200, { ok: true });
+    return true;
+  }
+  if (url.pathname === "/api/admin/discord/status") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    sendJson(req, res, ctx, 200, {
+      ok: true,
+      discord: ctx.discord?.status() ?? { enabled: false },
+      subscriptions: await listAllSubscriptions(ctx.db),
+    });
+    return true;
+  }
+  if (url.pathname === "/api/admin/discord/register-commands") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (!ctx.discord) {
+      sendJson(req, res, ctx, 400, { error: "discord_not_configured" });
+      return true;
+    }
+    try {
+      const result = await ctx.discord.registerCommands();
+      sendJson(req, res, ctx, 200, { ok: true, ...result });
+    } catch (error) {
+      sendJson(req, res, ctx, 200, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+  if (url.pathname === "/api/admin/discord/remove-subscription") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    const id = Number(url.searchParams.get("id"));
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      sendJson(req, res, ctx, 400, { error: "invalid_id" });
+      return true;
+    }
+    const removed = await removeSubscriptionById(ctx.db, id);
+    if (removed) ctx.discord?.notifySubscriptionsChanged();
+    sendJson(req, res, ctx, 200, { ok: true, removed });
     return true;
   }
   if (url.pathname === "/api/admin/reset-local-db") {

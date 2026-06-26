@@ -8,6 +8,7 @@ import { JobQueue } from "./jobs/queue.js";
 import { LiveEventLog } from "./live/event-log.js";
 import { startRuntimeStatusMirror } from "./live/runtime-status.js";
 import { deferMapsRefreshesWaitingForRoster, enqueueGlobalMapsRefreshIfDue, enqueueMapsRefreshIfDue } from "./features/maps.js";
+import { startGoalUserIndexRefresh } from "./features/goals.js";
 import { AbuseGuard } from "./http/abuse-guard.js";
 import { CountryClientTracker } from "./live/country-clients.js";
 import { handleSse } from "./live/sse.js";
@@ -19,6 +20,7 @@ import { SqliteSharedRateLimiter } from "./osu/shared-rate-limiter.js";
 import { enqueueRosterRefreshes } from "./rosters/country-rosters.js";
 import { startRetentionScheduler } from "./retention.js";
 import { WorkerRunner } from "./workers.js";
+import { createDiscordRuntime } from "./discord/index.js";
 
 // Serving routes touch these tables; a server-role process must not start until
 // the worker/all process has migrated all of them, or it would 500 on a
@@ -42,6 +44,7 @@ const REQUIRED_SCHEMA_TABLES = [
   "player_activity_days",
   "pack_collection_cards",
   "api_rate_limit_reservations",
+  "user_goals",
 ];
 
 export async function createApp() {
@@ -64,6 +67,10 @@ export async function createApp() {
     await queue.shedPressure();
     await deferMapsRefreshesWaitingForRoster(db);
     await ensurePinnedCountries(db, config);
+    // Keep the in-memory "who has open goals" filter warm in the process that ingests scores, so
+    // the ingest hot path skips a DB lookup for players with no goals (and learns of goals created
+    // by a separate server-role process within a refresh interval).
+    startGoalUserIndexRefresh(db);
   }
   const logOsuCall = (entry: { caller: string; path: string; startedAt: number }) => {
     void logApiCall(db, {
@@ -92,6 +99,7 @@ export async function createApp() {
     await enqueueRosterRefreshes(queue, await getIndexedCountryCodes(db, config));
   }
   const worker = new WorkerRunner(db, queue, events, osu, ingestor);
+  const discord = createDiscordRuntime({ db, osu, queue, config });
   const ctx = {
     db,
     queue,
@@ -105,6 +113,7 @@ export async function createApp() {
     workerStatus: () => worker.status(),
     pauseWorkers: () => worker.pause(),
     resumeWorkers: () => worker.resume(),
+    discord: discord ?? undefined,
   };
   const server = createServer(async (req, res) => {
     try {
@@ -123,7 +132,7 @@ export async function createApp() {
   // sporadic SSR loader failures). Keep ours above the proxy's idle window.
   server.keepAliveTimeout = 75_000;
   server.headersTimeout = 80_000;
-  return { server, db, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients };
+  return { server, db, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients, discord };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -172,6 +181,16 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   // tailing live_event_log (written by the worker process).
   if (app.config.enableEventLogTail) {
     app.events.startTail(app.config.eventLogTailIntervalMs);
+  }
+
+  // Post Discord live feeds from the serving process only, so a given event is
+  // never posted twice, whether it arrives via append-dispatch (all role) or the
+  // event-log tail (server role); the headless worker never posts. Delivery is
+  // at-most-once: the tail starts at the current head, so events appended while
+  // the serving process is down are not back-filled to Discord (by design, so a
+  // restart never floods channels with stale plays).
+  if (runServing && app.discord) {
+    app.events.subscribe(app.discord.feedSink);
   }
 
   if (runServing) {

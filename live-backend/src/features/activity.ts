@@ -776,28 +776,41 @@ async function getActivityScoreRefs(
   country: string,
   timezone: string,
   range: { from: string; to: string },
-): Promise<ActivityScoreRef[]> {
+): Promise<ActivityDayScoreRow[]> {
   const rows = (await exec(
     db,
-    `select day, ended_at, passed, beatmap_id
-     from player_activity_score_refs
-     where country = ? and user_id = ? and day >= ? and day <= ?
-     order by ended_at asc, score_identity asc`,
-    [country, userId, range.from, range.to],
+    `select
+       r.day,
+       r.ended_at,
+       r.passed,
+       r.beatmap_id,
+       b.cs,
+       v.status as skill_status,
+       v.skills_json
+     from player_activity_score_refs r
+     left join beatmaps b on b.beatmap_id = r.beatmap_id
+     left join beatmap_skill_vectors v
+       on v.beatmap_id = r.beatmap_id and v.analysis_version = ?
+     where r.country = ? and r.user_id = ? and r.day >= ? and r.day <= ?
+     order by r.ended_at asc, r.score_identity asc`,
+    [ACTIVITY_SKILL_ANALYSIS_VERSION, country, userId, range.from, range.to],
   )).rows;
-  const refs: ActivityScoreRef[] = [];
+  const refs: ActivityDayScoreRow[] = [];
   for (const row of rows) {
     const endedAt = String(row.ended_at);
     const endedAtMs = Date.parse(endedAt);
     if (!Number.isFinite(endedAtMs)) continue;
     const dayKey = getZonedDayKey(timezone, endedAtMs);
     if (!dayKey) continue;
+    const keyCount = Number(row.cs);
     refs.push({
       dayKey,
       endedAt,
       endedAtMs,
       passed: !!Number(row.passed),
       beatmapId: Number(row.beatmap_id),
+      keyCount: Number.isFinite(keyCount) && keyCount > 0 ? Math.round(keyCount) : null,
+      skills: readActivitySkillVector(row),
     });
   }
   return refs;
@@ -809,16 +822,17 @@ interface ActivityDayAccumulator {
   sessionCount: number;
   previousMs: number;
   beatmapIds: Set<number>;
+  rows: ActivityDayScoreRow[];
 }
 
 // Refs arrive ordered by ended_at, so each local day's scores are contiguous
 // and the session gap scan can run per day in a single pass.
-function buildActivityDaysFromRefs(refs: ActivityScoreRef[]): PlayerActivityDay[] {
+function buildActivityDaysFromRefs(refs: ActivityDayScoreRow[]): PlayerActivityDay[] {
   const byDay = new Map<string, ActivityDayAccumulator>();
   for (const ref of refs) {
     let day = byDay.get(ref.dayKey);
     if (!day) {
-      day = { scoreCount: 0, passedCount: 0, sessionCount: 0, previousMs: 0, beatmapIds: new Set() };
+      day = { scoreCount: 0, passedCount: 0, sessionCount: 0, previousMs: 0, beatmapIds: new Set(), rows: [] };
       byDay.set(ref.dayKey, day);
     }
     if (day.sessionCount === 0 || ref.endedAtMs - day.previousMs > ACTIVITY_SESSION_GAP_MS) day.sessionCount++;
@@ -826,6 +840,7 @@ function buildActivityDaysFromRefs(refs: ActivityScoreRef[]): PlayerActivityDay[
     day.scoreCount++;
     if (ref.passed) day.passedCount++;
     day.beatmapIds.add(ref.beatmapId);
+    day.rows.push(ref);
   }
   return [...byDay.entries()]
     .sort(([left], [right]) => (left < right ? -1 : 1))
@@ -836,7 +851,7 @@ function buildActivityDaysFromRefs(refs: ActivityScoreRef[]): PlayerActivityDay[
       sessionCount: day.sessionCount,
       mapCount: day.beatmapIds.size,
       maps: [],
-      skills: null,
+      skills: buildActivitySkillReadout(day.rows),
       timeline: [],
     }));
 }

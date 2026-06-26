@@ -7,12 +7,13 @@ import { maybeEnqueueMapsFarmedRefresh } from "../features/maps.js";
 import { updateSnipeProjection } from "../features/snipes.js";
 import { maybeEnqueueTopPlayRefresh } from "../features/top-plays.js";
 import { getHydratedScoreByIdentity } from "../features/tracker.js";
+import { evaluateScoreGoals } from "../features/goals.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { hasPendingRecentReconcileJob, RECENT_RECONCILE_JOB_TYPE, requeueDeferredRecentReconcileJobs } from "../jobs/recent-reconcile.js";
 import type { LiveEventLog } from "../live/event-log.js";
 import { getBoardLaneKey, getDisplayedAccuracy, getDisplayedTotalScore, getModAcronyms, getScoreIdentity, isLazerScore, nowIso, scoreHasPublicLeaderboard, scoreHasReplay, toLeanTrackerScore } from "../shared/score.js";
 import type { OscScore } from "../shared/types.js";
-import { logInfo } from "../logger.js";
+import { logInfo, logWarn } from "../logger.js";
 import { isUserKnownInactive } from "../users.js";
 
 export interface ScoreIngestOptions {
@@ -139,6 +140,13 @@ export class ScoreIngestor {
       }
     }
     if (inserted === 0) return false;
+    // Auto-complete play-shaped goals (pass / accuracy / grade / "land an X pp play"). Guarded so
+    // a goals bug can never drop a score: ingest is the hot path and must keep flowing.
+    try {
+      await evaluateScoreGoals(this.db, this.events, score, countries);
+    } catch (error) {
+      logWarn("goal_eval_failed", { user_id: score.user_id, error: error instanceof Error ? error.message : String(error) });
+    }
     if (source.startsWith("osc_")) await this.updateOscCursor(score, receivedAt);
     const canUseOsuApi = this.canUseOsuApi();
     const userKnownInactive = await isUserKnownInactive(this.db, score.user_id);
