@@ -247,7 +247,7 @@ function writeRandomPickSettings(patch: Partial<RandomPickSettings>): void {
 
 function formatLiveMapsProgress(progress: LiveMapsRefreshProgress): string {
   const percent = Math.max(0, Math.min(100, Math.round(progress.percent)));
-  if (progress.status === "queued") return `${progress.message || "Queued maps build..."} (${percent}%)`;
+  if (progress.status === "queued") return "Loading maps...";
   if (progress.status === "failed") return "Maps build failed.";
   if (progress.stage === "done" || progress.status === "done") return "Maps ready.";
   const message = progress.message || (progress.stage === "persisting" ? "Saving maps..." : "Building maps...");

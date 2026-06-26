@@ -9,7 +9,7 @@ import {
 } from "./auth-shared";
 import type { AuthState, AuthViewer } from "./auth-shared";
 
-const DEFAULT_DEV_OSU_USER_IDS = [19230890];
+const DEFAULT_DEV_OSU_USER_IDS: number[] = [];
 const DEFAULT_ADMIN_OSU_USER_IDS = [7095193];
 const OSU_API_VERSION = "20220705";
 const OSU_OAUTH_TIMEOUT_MS = 10_000;
