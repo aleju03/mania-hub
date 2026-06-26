@@ -3824,6 +3824,83 @@ describe("live backend", () => {
     expect(favTop.playerCount).toBe(2);
   });
 
+  it("derives Global dominant mod from the full roster, not the top-pp sample", async () => {
+    const { db, queue } = await setup();
+    const now = "2026-05-12T12:00:00.000Z";
+
+    for (const setId of [40, 50]) {
+      await exec(
+        db,
+        `insert into maps_beatmapsets
+           (beatmapset_id, title, artist, creator, status, covers_json, global_play_count, global_favourite_count, preview_url, bpm, mania_keys_json, patterns_json, updated_at)
+         values (?, ?, 'Artist', 'Mapper', 'ranked', '{}', 1, 1, '', 180, '[4]', '[]', ?)`,
+        [setId, `Set ${setId}`, now],
+      );
+      await exec(
+        db,
+        `insert into maps_beatmaps
+           (beatmap_id, beatmapset_id, mode, status, cs, difficulty_rating, bpm, total_length, version, url, updated_at)
+         values (?, ?, 'mania', 'ranked', 4, 5, 180, 120, ?, ?, ?)`,
+        [setId + 1, setId, `[4K] ${setId}`, `https://osu.ppy.sh/beatmaps/${setId + 1}`, now],
+      );
+    }
+
+    const player = (id: number, mods: string[], pp: number) => ({ id, mods, pp, scoreUrl: null, playedAt: now });
+    // bm41: DT is a minority of the roster (85/285) but holds every top-pp score,
+    // so the top GLOBAL_MAPS_PLAYERS_PER_ENTRY (80) by pp are all DT.
+    const bm41 = [
+      ...Array.from({ length: 85 }, (_, i) => player(1000 + i, ["DT"], 700 - i)),
+      ...Array.from({ length: 200 }, (_, i) => player(2000 + i, [], 300)),
+    ];
+    // bm51: DT is a genuine majority (150/200), so it should still flag DT.
+    const bm51 = [
+      ...Array.from({ length: 150 }, (_, i) => player(3000 + i, ["DT"], 800 - i)),
+      ...Array.from({ length: 50 }, (_, i) => player(4000 + i, [], 300)),
+    ];
+
+    await exec(
+      db,
+      `insert into country_maps_snapshots (country, payload_json, generated_at, refreshed_at) values (?, ?, ?, ?)`,
+      ["CR", JSON.stringify({
+        schemaVersion: 2, generatedAt: now, farmedGeneratedAt: now, favouritesGeneratedAt: now,
+        farmed: [
+          { beatmapId: 41, playerCount: bm41.length, avgPp: 0, maxPp: 700, players: bm41 },
+          { beatmapId: 51, playerCount: bm51.length, avgPp: 0, maxPp: 800, players: bm51 },
+        ],
+        mostPlayed: [], favourites: [], favouritesByPlayer: [], beatmapsetsPool: [],
+      }), now, now],
+    );
+
+    await refreshGlobalMaps(db);
+
+    const query = (mod: "all" | "dt" | "ht" | "none") => ({
+      tab: "farmed" as const, page: 0, pageSize: 24, key: "all", beatmapSort: "players" as const,
+      farmedSort: "players" as const, dir: "desc" as const, status: "all", pp: 0, mod, q: "",
+    });
+    const page = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query("all"));
+    const items = (page.value?.items ?? []) as Array<{ beatmapId: number; playerCount: number; dominantMod?: string | null }>;
+    const map41 = items.find((it) => it.beatmapId === 41);
+    const map51 = items.find((it) => it.beatmapId === 51);
+
+    // Full count is preserved even though stored players are truncated to 80.
+    expect(map41?.playerCount).toBe(285);
+    // 85/285 DT is not a majority: the badge must not read DT despite the top-80 being all DT.
+    expect(map41?.dominantMod ?? null).toBeNull();
+    // 150/200 DT is a real majority, so the genuine DT farm still flags DT.
+    expect(map51?.dominantMod).toBe("DT");
+
+    // The mod filter (full-population path) agrees with the badge.
+    const dtFiltered = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query("dt"));
+    const dtIds = (dtFiltered.value?.items ?? []).map((it) => (it as { beatmapId: number }).beatmapId);
+    expect(dtIds).toContain(51);
+    expect(dtIds).not.toContain(41);
+
+    const noneFiltered = await getMapsPageSnapshot(db, queue, "GLOBAL", 7 * 24 * 60 * 60 * 1000, query("none"));
+    const noneIds = (noneFiltered.value?.items ?? []).map((it) => (it as { beatmapId: number }).beatmapId);
+    expect(noneIds).toContain(41);
+    expect(noneIds).not.toContain(51);
+  });
+
   it("preserves truncated country farmed counts when applying live overlay rows", async () => {
     const { db, queue } = await setup();
     const refreshedAt = "2026-05-12T12:00:00.000Z";

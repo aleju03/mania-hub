@@ -166,7 +166,7 @@ interface StoredMapsFarmedPlayer extends StoredMapsPlayer {
 
 interface StoredCountryMapsData {
   schemaVersion: 2;
-  farmed: Array<Pick<MapsFarmedEntry, "beatmapId" | "playerCount" | "avgPp" | "maxPp"> & { players: StoredMapsFarmedPlayer[] }>;
+  farmed: Array<Pick<MapsFarmedEntry, "beatmapId" | "playerCount" | "avgPp" | "maxPp" | "dominantMod"> & { players: StoredMapsFarmedPlayer[] }>;
   mostPlayed: Array<Pick<MapsAggregatedBeatmap, "beatmapId" | "totalPlays" | "playerCount"> & { players: StoredMapsCountPlayer[] }>;
   favourites: Array<Pick<MapsAggregatedFavourite, "beatmapsetId" | "playerCount"> & { players: StoredMapsPlayer[] }>;
   favouritesByPlayer: Array<Pick<MapsPlayerFavourites, "id" | "beatmapsetIds">>;
@@ -814,6 +814,9 @@ function compactMapsSnapshotForStorage(value: CountryMapsData): StoredCountryMap
       playerCount: entry.playerCount,
       avgPp: entry.avgPp,
       maxPp: entry.maxPp,
+      // Computed over the full roster (per-country snapshots are not truncated)
+      // so the dominant mod reflects everyone who farmed the map, not a sample.
+      dominantMod: getDominantMapsSpeedMod(entry.players),
       players: entry.players.map((player) => ({
         id: player.id,
         mods: player.mods,
@@ -887,6 +890,7 @@ async function hydrateCompactMapsSnapshot(db: Db, value: StoredCountryMapsData):
       })),
       avgPp: entry.avgPp,
       maxPp: entry.maxPp,
+      dominantMod: entry.dominantMod,
     }];
   });
 
@@ -1263,6 +1267,7 @@ async function readGlobalFarmedEntriesForFilteredPage(
         playerCount: players.length,
         avgPp: players.reduce((sum, player) => sum + player.pp, 0) / players.length,
         maxPp,
+        dominantMod: getDominantStoredMapsSpeedMod(players),
         players,
       }];
     });
@@ -1331,6 +1336,7 @@ async function hydrateCompactFarmedEntries(
       })),
       avgPp: Number(entry.avgPp ?? 0),
       maxPp: Number(entry.maxPp ?? 0),
+      dominantMod: entry.dominantMod,
     }];
   });
 }
@@ -1404,7 +1410,7 @@ function limitMapsPagePreviewPlayers<T extends MapsPageItem>(items: T[]): T[] {
       return {
         ...item,
         covers,
-        dominantMod: item.dominantMod ?? getDominantMapsSpeedMod(item.players),
+        dominantMod: resolveStoredDominantMod(item.dominantMod, () => getDominantMapsSpeedMod(item.players)),
         players,
       };
     }
@@ -1598,19 +1604,20 @@ function filterSortFarmedMaps(items: MapsFarmedEntry[], query: MapsPageQuery): M
         playerCount: players.length,
         avgPp: players.reduce((sum, player) => sum + player.pp, 0) / players.length,
         maxPp,
+        // pp filter narrows the roster, so recompute the dominant over the kept players.
+        dominantMod: getDominantMapsSpeedMod(players),
       };
     })
-    .filter(
-      (entry): entry is MapsFarmedEntry =>
-        entry !== null &&
-        matchesMapsKeyFilter(entry.cs, query.key) &&
-        matchesMapsSearch(query.q, [entry.title, entry.artist, entry.creator, entry.version]) &&
-        (query.mod === "all" || (
-          query.mod === "dt" ? getDominantMapsSpeedMod(entry.players) === "DT" :
-          query.mod === "ht" ? getDominantMapsSpeedMod(entry.players) === "HT" :
-          getDominantMapsSpeedMod(entry.players) === null
-        )),
-    )
+    .filter((entry): entry is MapsFarmedEntry => {
+      if (entry === null) return false;
+      if (!matchesMapsKeyFilter(entry.cs, query.key)) return false;
+      if (!matchesMapsSearch(query.q, [entry.title, entry.artist, entry.creator, entry.version])) return false;
+      if (query.mod === "all") return true;
+      const dominant = resolveStoredDominantMod(entry.dominantMod, () => getDominantMapsSpeedMod(entry.players));
+      if (query.mod === "dt") return dominant === "DT";
+      if (query.mod === "ht") return dominant === "HT";
+      return dominant === null;
+    })
     .sort((a, b) => {
       const flip = query.dir === "asc" ? -1 : 1;
       if (query.farmedSort === "players") return (b.playerCount - a.playerCount) * flip || b.avgPp - a.avgPp;
@@ -1638,12 +1645,14 @@ function filterSortStoredFarmedMaps(items: StoredMapsFarmedEntry[], query: MapsP
           ? players.reduce((sum, player) => sum + Number(player.pp ?? 0), 0) / players.length
           : 0,
         maxPp,
+        // pp filter narrows the roster, so recompute the dominant over the kept players.
+        dominantMod: getDominantStoredMapsSpeedMod(players),
       };
     })
     .filter((entry): entry is StoredMapsFarmedEntry => {
       if (!entry) return false;
       if (query.mod === "all") return true;
-      const dominant = getDominantStoredMapsSpeedMod(entry.players);
+      const dominant = resolveStoredDominantMod(entry.dominantMod, () => getDominantStoredMapsSpeedMod(entry.players));
       if (query.mod === "dt") return dominant === "DT";
       if (query.mod === "ht") return dominant === "HT";
       return dominant === null;
@@ -1696,6 +1705,8 @@ async function filterSortStoredFarmedMapsForPage(
           ? players.reduce((sum, player) => sum + Number(player.pp ?? 0), 0) / players.length
           : 0,
         maxPp,
+        // pp filter narrows the roster, so recompute the dominant over the kept players.
+        dominantMod: getDominantStoredMapsSpeedMod(players),
       };
     })
     .filter((entry): entry is StoredMapsFarmedEntry => {
@@ -1705,7 +1716,7 @@ async function filterSortStoredFarmedMapsForPage(
       if (!matchesMapsKeyFilter(meta.cs, query.key)) return false;
       if (!matchesMapsSearch(query.q, [meta.title, meta.artist, meta.creator, meta.version])) return false;
       if (query.mod === "all") return true;
-      const dominant = getDominantStoredMapsSpeedMod(entry.players);
+      const dominant = resolveStoredDominantMod(entry.dominantMod, () => getDominantStoredMapsSpeedMod(entry.players));
       if (query.mod === "dt") return dominant === "DT";
       if (query.mod === "ht") return dominant === "HT";
       return dominant === null;
@@ -1793,6 +1804,18 @@ function getLatestStoredFarmedPlayTime(entry: StoredMapsFarmedEntry): number {
     const time = new Date(player.playedAt ?? 0).getTime();
     return Number.isFinite(time) ? Math.max(latest, time) : latest;
   }, 0);
+}
+
+// A stored dominant mod is computed over the full roster (before Global truncates
+// each entry's players to the top GLOBAL_MAPS_PLAYERS_PER_ENTRY by pp), so it is
+// authoritative. null is a real value ("no dominant mod") and must be preserved;
+// only undefined ("not computed", e.g. a pre-fix snapshot) falls back to deriving
+// the mod from whatever players are on hand, which on Global is a pp-skewed sample.
+function resolveStoredDominantMod(
+  stored: "DT" | "HT" | null | undefined,
+  recompute: () => "DT" | "HT" | null,
+): "DT" | "HT" | null {
+  return stored === undefined ? recompute() : stored;
 }
 
 function getDominantMapsSpeedMod(players: MapsFarmedEntry["players"]): "DT" | "HT" | null {
@@ -2210,6 +2233,11 @@ export async function refreshGlobalMaps(db: Db): Promise<CountryMapsData> {
         playerCount: players.length,
         avgPp,
         maxPp,
+        // Computed over the full player union, before the players list is
+        // truncated to the top GLOBAL_MAPS_PLAYERS_PER_ENTRY by pp. Otherwise
+        // the flag is derived from the highest-pp scores (which skew DT) rather
+        // than the majority of farmers.
+        dominantMod: getDominantStoredMapsSpeedMod(players),
         players: players.slice(0, GLOBAL_MAPS_PLAYERS_PER_ENTRY),
       }];
     })

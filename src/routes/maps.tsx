@@ -3520,8 +3520,14 @@ function MapDetailsContent({
       ? `https://osu.ppy.sh/beatmapsets/${setId}`
       : `https://osu.ppy.sh/beatmapsets/${setId}#mania/${details.map.beatmapId}`;
   const osuDirectUrl = `osu://dl/${setId}`;
+  // The backend computes dominantMod over the full roster; null is a real value
+  // ("no dominant mod"), so only recompute from preview players when it's absent.
   const dominantMod =
-    details.kind === "farmed" ? details.map.dominantMod ?? getDominantSpeedMod(details.map.players) : null;
+    details.kind === "farmed"
+      ? details.map.dominantMod !== undefined
+        ? details.map.dominantMod
+        : getDominantSpeedMod(details.map.players)
+      : null;
   const dominantModFile =
     dominantMod === "DT" ? "double-time" : dominantMod === "HT" ? "half-time" : null;
   const dominantModColor = dominantMod === "DT" ? "#ff6666" : "#b3d944";
@@ -4207,7 +4213,9 @@ function FarmedCard({
   onPlayerClick: (u: string) => void;
   onOpenDetails: () => void;
 }) {
-  const dominantMod = map.dominantMod ?? getDominantSpeedMod(map.players);
+  // dominantMod from the live backend is computed over the full roster; null is a
+  // real "no dominant mod" verdict, so only recompute (fallback path) when absent.
+  const dominantMod = map.dominantMod !== undefined ? map.dominantMod : getDominantSpeedMod(map.players);
   const dominantModFile = dominantMod === "DT" ? "double-time" : dominantMod === "HT" ? "half-time" : null;
   const dominantModColor = dominantMod === "DT" ? "#ff6666" : "#b3d944";
 
