@@ -376,6 +376,32 @@ type PpCumulativeDistributionRow = {
   count: number;
   total: number;
 };
+const PP_DISTRIBUTION_MODE_STORAGE_KEY = "mania-hub-pp-distribution-mode-v1";
+
+function isPpDistributionMode(value: unknown): value is PpDistributionMode {
+  return value === "bands" || value === "cumulative";
+}
+
+function readPpDistributionModePreference(): PpDistributionMode {
+  if (typeof window === "undefined") return "bands";
+
+  try {
+    const stored = window.localStorage.getItem(PP_DISTRIBUTION_MODE_STORAGE_KEY);
+    return isPpDistributionMode(stored) ? stored : "bands";
+  } catch {
+    return "bands";
+  }
+}
+
+function writePpDistributionModePreference(mode: PpDistributionMode): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(PP_DISTRIBUTION_MODE_STORAGE_KEY, mode);
+  } catch {
+    // Preference storage is best-effort; the modal still works normally.
+  }
+}
 
 // Synthetic chip used to filter for scores submitted without any mods.
 const NO_MOD_KEY = "NM";
@@ -897,13 +923,19 @@ export function PlayerProfilePage({
   const [hoveredMod, setHoveredMod] = useState<string | null>(null);
   const [bpmModalOpen, setBpmModalOpen] = useState(false);
   const [ppModalOpen, setPpModalOpen] = useState(false);
-  const [ppDistributionMode, setPpDistributionMode] = useState<PpDistributionMode>("bands");
+  const [ppDistributionMode, setPpDistributionModeState] = useState<PpDistributionMode>(() =>
+    readPpDistributionModePreference(),
+  );
   const [recentHasMore, setRecentHasMore] = useState(false);
   const [bestVisibleCount, setBestVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const [recentVisibleCount, setRecentVisibleCount] = useState(INITIAL_SCORE_BATCH_SIZE);
   const tabsRailRef = useRef<HTMLDivElement | null>(null);
   const loadedProfileKeyRef = useRef<string | null>(null);
   const ppCumulativeDistribution = useMemo(() => buildPpCumulativeDistribution(best), [best]);
+  const setPpDistributionMode = useCallback((mode: PpDistributionMode) => {
+    setPpDistributionModeState(mode);
+    writePpDistributionModePreference(mode);
+  }, []);
 
   useLayoutEffect(() => {
     const resetScroll = () => window.scrollTo({ top: 0, left: 0, behavior: "auto" });
