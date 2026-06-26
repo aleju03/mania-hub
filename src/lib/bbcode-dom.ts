@@ -7,7 +7,7 @@
 //
 // Client-only: the serializer walks live DOM nodes.
 
-import { parseBBCode, type BBBlockSpacing, type BBNode } from "./bbcode";
+import { clampBBSizePercent, parseBBCode, type BBBlockSpacing, type BBNode } from "./bbcode";
 
 export function escapeBBHtml(value: string): string {
   return value
@@ -31,11 +31,16 @@ export type EditableWrapKind =
   | "spoiler" | "color" | "size" | "url"
   | "heading" | "centre" | "notice" | "quote" | "codeblock" | "c" | "box";
 
+function editableSizeValue(param: string | undefined): number {
+  const value = Number(param);
+  return Number.isFinite(value) ? value : 100;
+}
+
 /**
  * Open/close HTML fragments for wrapping a contentEditable selection so the
  * result serializes back to the intended BBCode tag. `param` is the color,
  * size, href, or box title depending on the kind. Callers must validate
- * params (color via isValidBBColor, size 30-200, href http(s)).
+ * params (color via isValidBBColor, numeric size, href http(s)).
  */
 export function editableWrapMarkup(kind: EditableWrapKind, param?: string): { open: string; close: string } {
   switch (kind) {
@@ -43,8 +48,10 @@ export function editableWrapMarkup(kind: EditableWrapKind, param?: string): { op
       return { open: '<span class="spoiler">', close: "</span>" };
     case "color":
       return { open: `<span style="color:${escapeBBAttr(param ?? "#ffffff")}" data-bb-color="${escapeBBAttr(param ?? "#ffffff")}">`, close: "</span>" };
-    case "size":
-      return { open: `<span style="font-size:${Number(param) || 100}%" data-bb-size="${Number(param) || 100}">`, close: "</span>" };
+    case "size": {
+      const size = editableSizeValue(param);
+      return { open: `<span style="font-size:${clampBBSizePercent(size)}%" data-bb-size="${size}">`, close: "</span>" };
+    }
     case "url":
       return { open: `<a href="${escapeBBAttr(param ?? "")}" data-bb="url">`, close: "</a>" };
     case "heading":
@@ -101,7 +108,7 @@ function renderNode(node: BBNode): string {
     case "color":
       return `<span style="color:${escapeBBAttr(node.color)}" data-bb-color="${escapeBBAttr(node.color)}">${renderChildren(node.children)}</span>`;
     case "size":
-      return `<span style="font-size:${node.size}%" data-bb-size="${node.size}">${renderChildren(node.children)}</span>`;
+      return `<span style="font-size:${clampBBSizePercent(node.size)}%" data-bb-size="${node.size}">${renderChildren(node.children)}</span>`;
     case "url":
       return `<a href="${escapeBBAttr(node.href)}" data-bb="url"${node.bare ? ' data-bare="1"' : ""}>${renderChildren(node.children)}</a>`;
     case "email":
@@ -145,10 +152,10 @@ function renderNode(node: BBNode): string {
       return `<${tag} data-nl="${nlString(node.spacing)}">${items}</${tag}>`;
     }
     case "imagemap": {
-      const areas = node.links.map((link) =>
-        `<span class="imagemap__link" style="left:${link.x}%;top:${link.y}%;width:${link.width}%;height:${link.height}%"${link.title ? ` title="${escapeBBAttr(link.title)}"` : ""}></span>`,
+      const areas = node.links.map((link, index) =>
+        `<span class="imagemap__link" data-bb-imagemap-area="1" data-index="${index}" data-x="${link.x}" data-y="${link.y}" data-width="${link.width}" data-height="${link.height}" data-href="${escapeBBAttr(link.href)}" data-title="${escapeBBAttr(link.title)}" style="left:${link.x}%;top:${link.y}%;width:${link.width}%;height:${link.height}%"${link.title ? ` title="${escapeBBAttr(link.title)}"` : ""}></span>`,
       ).join("");
-      return `<span class="imagemap" data-bb="imagemap" data-raw="${escapeBBAttr(node.raw)}" contenteditable="false">`
+      return `<span class="imagemap" data-bb="imagemap" data-src="${escapeBBAttr(node.src)}" data-raw="${escapeBBAttr(node.raw)}" contenteditable="false">`
         + `<img class="imagemap__image" src="${escapeBBAttr(node.src)}" alt="" loading="lazy">${areas}</span>`;
     }
     default:

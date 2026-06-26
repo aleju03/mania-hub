@@ -7,11 +7,12 @@ import {
   useMemo,
   useRef,
   useState,
+  type MouseEvent,
   type ReactElement,
   type ReactNode,
   type Ref,
 } from "react";
-import { findBBNodePathAtOffset, parseBBCode, type BBNode } from "../../../lib/bbcode";
+import { clampBBSizePercent, findBBNodePathAtOffset, parseBBCode, type BBNode, type BBSourceSpan } from "../../../lib/bbcode";
 
 // Renders the parsed BBCode tree with the same markup/classes osu! emits for
 // profile pages, so the existing .bbcode-content styles apply 1:1 and the
@@ -25,6 +26,7 @@ const HIGHLIGHT_CLASS = "bbcode-live-highlight";
 interface HighlightCtx {
   target: BBNode | null;
   targetRef: (el: HTMLElement | null) => void;
+  onSelectSourceSpan?: (span: BBSourceSpan) => void;
 }
 
 function shortenUrlText(href: string): string {
@@ -100,18 +102,35 @@ function SpoilerBox({
 
 function renderNode(node: BBNode, key: string, ctx: HighlightCtx): ReactNode {
   const rendered = renderNodeContent(node, key, ctx);
+  const selectProps = node.span && ctx.onSelectSourceSpan
+    ? {
+        onClick: (event: MouseEvent<HTMLElement>) => {
+          event.preventDefault();
+          event.stopPropagation();
+          ctx.onSelectSourceSpan?.(node.span!);
+        },
+      }
+    : null;
   // [box] handles its own highlight (SpoilerBox isn't a host element).
-  if (node !== ctx.target || node.type === "box" || !isValidElement(rendered)) return rendered;
   if (node.type === "text") {
+    const className = node === ctx.target ? HIGHLIGHT_CLASS : undefined;
     return (
-      <span key={key} className={HIGHLIGHT_CLASS} ref={ctx.targetRef}>
+      <span key={key} className={className} ref={node === ctx.target ? ctx.targetRef : undefined} {...selectProps}>
         {rendered}
       </span>
     );
   }
-  const element = rendered as ReactElement<{ className?: string; ref?: Ref<HTMLElement> }>;
+  if (!isValidElement(rendered)) return rendered;
+  // [box] handles its own highlight (SpoilerBox isn't a host element).
+  if (node.type === "box") return rendered;
+  if (node !== ctx.target && !selectProps) return rendered;
+  const element = rendered as ReactElement<{ className?: string; ref?: Ref<HTMLElement>; onClick?: (event: MouseEvent<HTMLElement>) => void }>;
   const className = [element.props.className, HIGHLIGHT_CLASS].filter(Boolean).join(" ");
-  return cloneElement(element, { className, ref: ctx.targetRef });
+  return cloneElement(element, {
+    ...(selectProps ?? {}),
+    className: node === ctx.target ? className : element.props.className,
+    ref: node === ctx.target ? ctx.targetRef : element.props.ref,
+  });
 }
 
 function renderNodeContent(node: BBNode, key: string, ctx: HighlightCtx): ReactNode {
@@ -132,7 +151,7 @@ function renderNodeContent(node: BBNode, key: string, ctx: HighlightCtx): ReactN
     case "color":
       return <span key={key} style={{ color: node.color }}>{renderNodes(node.children, key, ctx)}</span>;
     case "size":
-      return <span key={key} style={{ fontSize: `${node.size}%` }}>{renderNodes(node.children, key, ctx)}</span>;
+      return <span key={key} style={{ fontSize: `${clampBBSizePercent(node.size)}%` }}>{renderNodes(node.children, key, ctx)}</span>;
     case "url":
       return (
         <a key={key} href={node.href} target="_blank" rel="noopener noreferrer nofollow" title={node.href}>
@@ -259,10 +278,12 @@ function pickHighlightNode(path: BBNode[]): BBNode | null {
 export function BBCodePreview({
   source,
   highlightOffset,
+  onSelectSourceSpan,
 }: {
   source: string;
   /** Caret offset into `source`; highlights the matching preview region. */
   highlightOffset?: number | null;
+  onSelectSourceSpan?: (span: BBSourceSpan) => void;
 }) {
   const nodes = useMemo(() => parseBBCode(source, { spans: true }), [source]);
   const target = useMemo(() => {
@@ -281,5 +302,5 @@ export function BBCodePreview({
   if (nodes.length === 0) {
     return <div className="text-osu-f1 text-sm py-6 text-center">Nothing to preview yet.</div>;
   }
-  return <>{renderNodes(nodes, "bb", { target, targetRef })}</>;
+  return <>{renderNodes(nodes, "bb", { target, targetRef, onSelectSourceSpan })}</>;
 }

@@ -28,7 +28,7 @@ const NAV_LEAVES = {
   packs: { id: "packs", to: "/packs", label: "packs" },
   snipes: { id: "snipes", to: "/snipes", label: "snipes" },
   "farm-helper": { id: "farm-helper", to: "/farm-helper", label: "farm helper" },
-  replay: { id: "replay", to: "/replay", label: "replay" },
+  replay: { id: "replay", to: "/replay", label: "watch replays" },
   bbcode: { id: "bbcode", to: "/bbcode", label: "BBCode editor" },
 } as const;
 

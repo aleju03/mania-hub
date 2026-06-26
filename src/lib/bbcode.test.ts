@@ -49,10 +49,11 @@ describe("parseBBCode", () => {
     });
   });
 
-  it("parses size within osu's 30-200 range and rejects out-of-range", () => {
+  it("parses numeric size params and rejects non-numeric values", () => {
     expect(single("[size=85]small[/size]")).toMatchObject({ type: "size", size: 85 });
-    expect(parseBBCode("[size=900]big[/size]")[0]).toEqual({
-      type: "text", text: "[size=900]big[/size]",
+    expect(single("[size=500]big[/size]")).toMatchObject({ type: "size", size: 500 });
+    expect(parseBBCode("[size=huge]big[/size]")[0]).toEqual({
+      type: "text", text: "[size=huge]big[/size]",
     });
   });
 
@@ -186,6 +187,18 @@ describe("parseBBCode", () => {
         children: [{ type: "text", text: "[i]x" }],
       },
     ]);
+  });
+
+  it("repairs crossed tags when the delayed inner close exists", () => {
+    expect(single("[notice][centre]x[/notice][/centre]")).toMatchObject({
+      type: "notice",
+      children: [{ type: "centre", children: [{ type: "text", text: "x" }] }],
+    });
+    expect(single("[size=150][color=#FFFFFF]x[/size][/color]")).toMatchObject({
+      type: "size",
+      size: 150,
+      children: [{ type: "color", color: "#FFFFFF", children: [{ type: "text", text: "x" }] }],
+    });
   });
 
   it("is case-insensitive on tag names", () => {

@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
   ALargeSmall,
@@ -13,6 +14,8 @@ import {
   Bold,
   Braces,
   Check,
+  ChevronLeft,
+  ChevronRight,
   ChevronsDownUp,
   Code,
   Copy,
@@ -27,15 +30,18 @@ import {
   Megaphone,
   Music,
   Palette,
+  Plus,
   Rainbow,
   Strikethrough,
   TextQuote,
+  Trash2,
   Underline,
+  Unlink,
   UserRound,
   X,
   Youtube,
 } from "lucide-react";
-import { buildGradientBBCode, gradientCharColors, normalizeHexColor, parseYoutubeInput } from "../../../lib/bbcode";
+import { buildGradientBBCode, gradientCharColors, normalizeHexColor, parseYoutubeInput, type BBSourceSpan } from "../../../lib/bbcode";
 import {
   bbcodeToEditableHtml,
   editableWrapMarkup,
@@ -73,12 +79,49 @@ const GRADIENT_PRESETS: Array<{ label: string; stops: string[]; mirror: boolean 
 const GRADIENT_MAX_STOPS = 6;
 
 const IMAGEMAP_TEMPLATE = "[imagemap]\nhttps://example.com/image.png\n0 0 50 100 https://example.com left half tooltip\n50 0 50 100 https://osu.ppy.sh right half tooltip\n[/imagemap]";
+const IMAGEMAP_AREA_SELECTOR = '[data-bb-imagemap-area="1"]';
 
 type EditMode = "visual" | "code";
 
 type ToolDialog =
   | "color" | "gradient" | "size" | "link" | "image"
   | "youtube" | "audio" | "profile" | "box";
+
+type ImagemapField = "x" | "y" | "width" | "height" | "href" | "title";
+type ImagemapDragKind = "move" | "n" | "s" | "e" | "w" | "nw" | "ne" | "sw" | "se";
+
+interface ImagemapAreaFields {
+  x: string;
+  y: string;
+  width: string;
+  height: string;
+  href: string;
+  title: string;
+}
+
+interface ImagemapSelection extends ImagemapAreaFields {
+  areaIndex: number;
+  areaCount: number;
+}
+
+interface ImagemapDragState {
+  areaEl: HTMLElement;
+  mapEl: HTMLElement;
+  kind: ImagemapDragKind;
+  pointerId: number;
+  startClientX: number;
+  startClientY: number;
+  startX: number;
+  startY: number;
+  startWidth: number;
+  startHeight: number;
+}
+
+interface LinkSelection {
+  href: string;
+  text: string;
+  bare: boolean;
+}
 
 interface SelectionSnapshot {
   start: number;
@@ -109,6 +152,133 @@ function clearDraft(key: string) {
   } catch {
     // Ignore.
   }
+}
+
+function formatImagemapNumber(value: number): string {
+  if (!Number.isFinite(value)) return "0";
+  return Number(value.toFixed(3)).toString();
+}
+
+function clampImagemapNumber(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min;
+  return Math.min(max, Math.max(min, value));
+}
+
+function clampImagemapPercent(value: string, fallback: string, min = 0): string {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return formatImagemapNumber(Math.min(100, Math.max(min, parsed)));
+}
+
+function getImagemapAreas(mapEl: HTMLElement): HTMLElement[] {
+  return Array.from(mapEl.querySelectorAll<HTMLElement>(IMAGEMAP_AREA_SELECTOR));
+}
+
+function readImagemapAreaFields(areaEl: HTMLElement): ImagemapAreaFields {
+  return {
+    x: areaEl.getAttribute("data-x") ?? "0",
+    y: areaEl.getAttribute("data-y") ?? "0",
+    width: areaEl.getAttribute("data-width") ?? "10",
+    height: areaEl.getAttribute("data-height") ?? "10",
+    href: areaEl.getAttribute("data-href") ?? "",
+    title: areaEl.getAttribute("data-title") ?? "",
+  };
+}
+
+function applyImagemapAreaFields(areaEl: HTMLElement, fields: ImagemapAreaFields) {
+  const current = readImagemapAreaFields(areaEl);
+  const x = clampImagemapPercent(fields.x, current.x);
+  const y = clampImagemapPercent(fields.y, current.y);
+  const width = clampImagemapPercent(fields.width, current.width, 0.1);
+  const height = clampImagemapPercent(fields.height, current.height, 0.1);
+  const href = fields.href.trim();
+  const title = fields.title.trim();
+
+  areaEl.setAttribute("data-x", x);
+  areaEl.setAttribute("data-y", y);
+  areaEl.setAttribute("data-width", width);
+  areaEl.setAttribute("data-height", height);
+  areaEl.setAttribute("data-href", href);
+  areaEl.setAttribute("data-title", title);
+  areaEl.style.left = `${x}%`;
+  areaEl.style.top = `${y}%`;
+  areaEl.style.width = `${width}%`;
+  areaEl.style.height = `${height}%`;
+  if (title) areaEl.setAttribute("title", title);
+  else areaEl.removeAttribute("title");
+}
+
+function reindexImagemapAreas(mapEl: HTMLElement) {
+  getImagemapAreas(mapEl).forEach((area, index) => area.setAttribute("data-index", String(index)));
+}
+
+function clearImagemapHandles(root: HTMLElement | null) {
+  root?.querySelectorAll(".bbcode-imagemap-handle").forEach((handle) => handle.remove());
+}
+
+function addImagemapHandles(areaEl: HTMLElement) {
+  clearImagemapHandles(areaEl.closest(".bbcode-editor-surface"));
+  const handles: ImagemapDragKind[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+  for (const kind of handles) {
+    const handle = document.createElement("span");
+    handle.className = `bbcode-imagemap-handle bbcode-imagemap-handle--${kind}`;
+    handle.setAttribute("data-bb-imagemap-handle", kind);
+    handle.setAttribute("aria-hidden", "true");
+    areaEl.appendChild(handle);
+  }
+}
+
+function updateImagemapRaw(mapEl: HTMLElement) {
+  const src = mapEl.getAttribute("data-src")
+    ?? mapEl.querySelector<HTMLImageElement>(".imagemap__image")?.getAttribute("src")
+    ?? "";
+  const currentRaw = mapEl.getAttribute("data-raw") ?? "";
+  const prefix = currentRaw.startsWith("\n") ? "\n" : "";
+  const suffix = currentRaw.endsWith("\n") ? "\n" : "";
+  const lines = [src];
+  for (const area of getImagemapAreas(mapEl)) {
+    const fields = readImagemapAreaFields(area);
+    const href = fields.href.trim() || "#";
+    const title = fields.title.trim();
+    lines.push(`${fields.x} ${fields.y} ${fields.width} ${fields.height} ${href}${title ? ` ${title}` : ""}`);
+  }
+  mapEl.setAttribute("data-raw", `${prefix}${lines.join("\n")}${suffix}`);
+}
+
+function fieldsFromImagemapDrag(state: ImagemapDragState, clientX: number, clientY: number): ImagemapAreaFields {
+  const rect = state.mapEl.getBoundingClientRect();
+  const dx = rect.width > 0 ? ((clientX - state.startClientX) / rect.width) * 100 : 0;
+  const dy = rect.height > 0 ? ((clientY - state.startClientY) / rect.height) * 100 : 0;
+  const minSize = 0.1;
+  const current = readImagemapAreaFields(state.areaEl);
+
+  if (state.kind === "move") {
+    return {
+      ...current,
+      x: formatImagemapNumber(clampImagemapNumber(state.startX + dx, 0, 100 - state.startWidth)),
+      y: formatImagemapNumber(clampImagemapNumber(state.startY + dy, 0, 100 - state.startHeight)),
+      width: formatImagemapNumber(state.startWidth),
+      height: formatImagemapNumber(state.startHeight),
+    };
+  }
+
+  let left = state.startX;
+  let top = state.startY;
+  let right = state.startX + state.startWidth;
+  let bottom = state.startY + state.startHeight;
+
+  if (state.kind.includes("w")) left = clampImagemapNumber(state.startX + dx, 0, right - minSize);
+  if (state.kind.includes("e")) right = clampImagemapNumber(state.startX + state.startWidth + dx, left + minSize, 100);
+  if (state.kind.includes("n")) top = clampImagemapNumber(state.startY + dy, 0, bottom - minSize);
+  if (state.kind.includes("s")) bottom = clampImagemapNumber(state.startY + state.startHeight + dy, top + minSize, 100);
+
+  return {
+    ...current,
+    x: formatImagemapNumber(left),
+    y: formatImagemapNumber(top),
+    width: formatImagemapNumber(right - left),
+    height: formatImagemapNumber(bottom - top),
+  };
 }
 
 /** Inserts text at the textarea selection, keeping the native undo stack alive. */
@@ -216,6 +386,8 @@ export function BBCodeEditor({
   const [loadingUserPage, setLoadingUserPage] = useState(false);
   const [loadStatus, setLoadStatus] = useState<{ kind: "loaded" | "empty" | "error"; name?: string } | null>(null);
   const [inlineStates, setInlineStates] = useState({ bold: false, italic: false, underline: false, strike: false });
+  const [imagemapSelection, setImagemapSelection] = useState<ImagemapSelection | null>(null);
+  const [linkSelection, setLinkSelection] = useState<LinkSelection | null>(null);
   // Caret offset in the raw-source textarea; the preview highlights its node.
   const [caretOffset, setCaretOffset] = useState<number | null>(null);
   // Bumped whenever the visual surface must be rebuilt from `source`.
@@ -223,6 +395,9 @@ export function BBCodeEditor({
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const visualRef = useRef<HTMLDivElement | null>(null);
+  const imagemapElementRef = useRef<HTMLElement | null>(null);
+  const imagemapDragRef = useRef<ImagemapDragState | null>(null);
+  const linkElementRef = useRef<HTMLAnchorElement | null>(null);
   const sourceRef = useRef(source);
   const selectionRef = useRef<SelectionSnapshot>({ start: 0, end: 0, text: "" });
   const visualRangeRef = useRef<Range | null>(null);
@@ -249,6 +424,10 @@ export function BBCodeEditor({
     const el = visualRef.current;
     if (!el) return;
     el.innerHTML = bbcodeToEditableHtml(sourceRef.current);
+    imagemapElementRef.current = null;
+    linkElementRef.current = null;
+    setImagemapSelection(null);
+    setLinkSelection(null);
   }, [editMode, visualEpoch]);
 
   const flushVisual = useCallback((): string => {
@@ -270,6 +449,276 @@ export function BBCodeEditor({
   useEffect(() => () => {
     if (visualSyncHandle.current != null) window.clearTimeout(visualSyncHandle.current);
   }, []);
+
+  const clearLinkSelection = useCallback(() => {
+    visualRef.current
+      ?.querySelectorAll<HTMLAnchorElement>("a.is-selected")
+      .forEach((anchor) => anchor.classList.remove("is-selected"));
+    linkElementRef.current = null;
+    setLinkSelection(null);
+  }, []);
+
+  const selectLink = useCallback((anchor: HTMLAnchorElement) => {
+    const bbKind = anchor.getAttribute("data-bb");
+    if (bbKind && bbKind !== "url") {
+      clearLinkSelection();
+      return;
+    }
+    clearLinkSelection();
+    anchor.classList.add("is-selected");
+    linkElementRef.current = anchor;
+    setLinkSelection({
+      href: anchor.getAttribute("href") ?? "",
+      text: anchor.textContent ?? "",
+      bare: anchor.getAttribute("data-bare") === "1",
+    });
+  }, [clearLinkSelection]);
+
+  const updateSelectedLinkHref = useCallback((href: string) => {
+    const anchor = linkElementRef.current;
+    if (!anchor) return;
+    const oldHref = anchor.getAttribute("href") ?? "";
+    anchor.setAttribute("href", href);
+    anchor.setAttribute("title", href);
+    if (anchor.getAttribute("data-bare") === "1" || anchor.textContent === oldHref) {
+      anchor.textContent = href;
+    }
+    setLinkSelection({
+      href,
+      text: anchor.textContent ?? "",
+      bare: anchor.getAttribute("data-bare") === "1",
+    });
+    scheduleVisualSync();
+  }, [scheduleVisualSync]);
+
+  const updateSelectedLinkText = useCallback((text: string) => {
+    const anchor = linkElementRef.current;
+    if (!anchor) return;
+    anchor.textContent = text;
+    if (text !== (anchor.getAttribute("href") ?? "")) {
+      anchor.removeAttribute("data-bare");
+    }
+    setLinkSelection({
+      href: anchor.getAttribute("href") ?? "",
+      text,
+      bare: anchor.getAttribute("data-bare") === "1",
+    });
+    scheduleVisualSync();
+  }, [scheduleVisualSync]);
+
+
+  const removeSelectedLink = useCallback(() => {
+    const anchor = linkElementRef.current;
+    if (!anchor) return;
+    const fragment = document.createDocumentFragment();
+    while (anchor.firstChild) fragment.appendChild(anchor.firstChild);
+    anchor.replaceWith(fragment);
+    clearLinkSelection();
+    scheduleVisualSync();
+  }, [clearLinkSelection, scheduleVisualSync]);
+
+  const clearImagemapSelection = useCallback(() => {
+    const root = visualRef.current;
+    clearImagemapHandles(root);
+    root
+      ?.querySelectorAll<HTMLElement>(".imagemap__link.is-selected")
+      .forEach((area) => area.classList.remove("is-selected"));
+    imagemapDragRef.current = null;
+    imagemapElementRef.current = null;
+    setImagemapSelection(null);
+  }, []);
+
+  const selectImagemapArea = useCallback((areaEl: HTMLElement) => {
+    const mapEl = areaEl.closest<HTMLElement>('.imagemap[data-bb="imagemap"]');
+    if (!mapEl) return;
+    visualRef.current
+      ?.querySelectorAll<HTMLElement>(".imagemap__link.is-selected")
+      .forEach((area) => area.classList.remove("is-selected"));
+    areaEl.classList.add("is-selected");
+    addImagemapHandles(areaEl);
+    imagemapElementRef.current = mapEl;
+    const areas = getImagemapAreas(mapEl);
+    const index = Math.max(0, areas.indexOf(areaEl));
+    clearLinkSelection();
+    setImagemapSelection({
+      ...readImagemapAreaFields(areaEl),
+      areaIndex: index,
+      areaCount: areas.length,
+    });
+  }, [clearLinkSelection]);
+
+  const pickImagemapAreaAtPoint = useCallback((mapEl: HTMLElement, clientX: number, clientY: number): HTMLElement | null => {
+    const rect = mapEl.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    const x = ((clientX - rect.left) / rect.width) * 100;
+    const y = ((clientY - rect.top) / rect.height) * 100;
+    return getImagemapAreas(mapEl).reverse().find((area) => {
+      const fields = readImagemapAreaFields(area);
+      const left = Number(fields.x);
+      const top = Number(fields.y);
+      const width = Number(fields.width);
+      const height = Number(fields.height);
+      return x >= left && x <= left + width && y >= top && y <= top + height;
+    }) ?? null;
+  }, []);
+
+  const selectImagemapAreaByIndex = useCallback((index: number) => {
+    const mapEl = imagemapElementRef.current;
+    if (!mapEl) return;
+    const areas = getImagemapAreas(mapEl);
+    if (areas.length === 0) {
+      clearImagemapSelection();
+      return;
+    }
+    const wrapped = (index + areas.length) % areas.length;
+    selectImagemapArea(areas[wrapped]);
+  }, [clearImagemapSelection, selectImagemapArea]);
+
+  const commitImagemapAreaElement = useCallback((areaEl: HTMLElement, mapEl: HTMLElement, fields: ImagemapAreaFields) => {
+    applyImagemapAreaFields(areaEl, fields);
+    updateImagemapRaw(mapEl);
+    scheduleVisualSync();
+    const areas = getImagemapAreas(mapEl);
+    setImagemapSelection({
+      ...readImagemapAreaFields(areaEl),
+      areaIndex: Math.max(0, areas.indexOf(areaEl)),
+      areaCount: areas.length,
+    });
+  }, [scheduleVisualSync]);
+
+  const commitImagemapAreaFields = useCallback((fields: ImagemapAreaFields) => {
+    const mapEl = imagemapElementRef.current;
+    if (!mapEl || !imagemapSelection) return;
+    const areaEl = getImagemapAreas(mapEl)[imagemapSelection.areaIndex];
+    if (!areaEl) return;
+    commitImagemapAreaElement(areaEl, mapEl, fields);
+  }, [commitImagemapAreaElement, imagemapSelection]);
+
+  const handleImagemapPointerMove = useCallback((event: PointerEvent) => {
+    const drag = imagemapDragRef.current;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    event.preventDefault();
+    commitImagemapAreaElement(drag.areaEl, drag.mapEl, fieldsFromImagemapDrag(drag, event.clientX, event.clientY));
+  }, [commitImagemapAreaElement]);
+
+  const stopImagemapDrag = useCallback((event: PointerEvent) => {
+    const drag = imagemapDragRef.current;
+    if (drag && event.pointerId !== drag.pointerId) return;
+    imagemapDragRef.current = null;
+    document.removeEventListener("pointermove", handleImagemapPointerMove);
+    document.removeEventListener("pointerup", stopImagemapDrag);
+    document.removeEventListener("pointercancel", stopImagemapDrag);
+  }, [handleImagemapPointerMove]);
+
+  const handleVisualPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    const mapEl = target?.closest?.<HTMLElement>('.imagemap[data-bb="imagemap"]') ?? null;
+    const root = visualRef.current;
+    if (!root || !target) return;
+    if (!mapEl || !root.contains(mapEl)) {
+      if (imagemapSelection && root.contains(target)) clearImagemapSelection();
+      const anchor = target.closest<HTMLAnchorElement>("a");
+      const linkKind = anchor?.getAttribute("data-bb");
+      if (anchor && root.contains(anchor) && (!linkKind || linkKind === "url")) {
+        event.preventDefault();
+        selectLink(anchor);
+      } else if (linkSelection && root.contains(target)) {
+        clearLinkSelection();
+      }
+      return;
+    }
+
+    const directArea = target.closest<HTMLElement>(IMAGEMAP_AREA_SELECTOR);
+    const areaEl = directArea && mapEl.contains(directArea)
+      ? directArea
+      : pickImagemapAreaAtPoint(mapEl, event.clientX, event.clientY);
+    if (!areaEl) return;
+    event.preventDefault();
+    event.stopPropagation();
+    selectImagemapArea(areaEl);
+
+    const handle = target.closest<HTMLElement>("[data-bb-imagemap-handle]");
+    const handleKind = handle?.getAttribute("data-bb-imagemap-handle") as ImagemapDragKind | null;
+    const fields = readImagemapAreaFields(areaEl);
+    imagemapDragRef.current = {
+      areaEl,
+      mapEl,
+      kind: handleKind ?? "move",
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startX: Number(fields.x) || 0,
+      startY: Number(fields.y) || 0,
+      startWidth: Number(fields.width) || 0.1,
+      startHeight: Number(fields.height) || 0.1,
+    };
+    document.addEventListener("pointermove", handleImagemapPointerMove);
+    document.addEventListener("pointerup", stopImagemapDrag);
+    document.addEventListener("pointercancel", stopImagemapDrag);
+  }, [
+    clearImagemapSelection,
+    clearLinkSelection,
+    handleImagemapPointerMove,
+    imagemapSelection,
+    linkSelection,
+    pickImagemapAreaAtPoint,
+    selectImagemapArea,
+    selectLink,
+    stopImagemapDrag,
+  ]);
+
+  useEffect(() => () => {
+    document.removeEventListener("pointermove", handleImagemapPointerMove);
+    document.removeEventListener("pointerup", stopImagemapDrag);
+    document.removeEventListener("pointercancel", stopImagemapDrag);
+  }, [handleImagemapPointerMove, stopImagemapDrag]);
+
+  const updateImagemapSelectionField = useCallback((field: ImagemapField, value: string) => {
+    setImagemapSelection((current) => {
+      if (!current) return current;
+      const next = { ...current, [field]: value };
+      commitImagemapAreaFields(next);
+      return next;
+    });
+  }, [commitImagemapAreaFields]);
+
+  const addImagemapArea = useCallback(() => {
+    const mapEl = imagemapElementRef.current;
+    if (!mapEl) return;
+    const base = imagemapSelection ?? { x: "5", y: "5", width: "20", height: "20", href: "", title: "" };
+    const area = document.createElement("span");
+    area.className = "imagemap__link";
+    area.setAttribute("data-bb-imagemap-area", "1");
+    applyImagemapAreaFields(area, {
+      x: formatImagemapNumber(Math.min(90, Number(base.x) + 5 || 5)),
+      y: formatImagemapNumber(Math.min(90, Number(base.y) + 5 || 5)),
+      width: base.width || "20",
+      height: base.height || "20",
+      href: base.href || "",
+      title: base.title ? `${base.title} copy` : "",
+    });
+    mapEl.appendChild(area);
+    reindexImagemapAreas(mapEl);
+    updateImagemapRaw(mapEl);
+    scheduleVisualSync();
+    selectImagemapArea(area);
+  }, [imagemapSelection, scheduleVisualSync, selectImagemapArea]);
+
+  const deleteImagemapArea = useCallback(() => {
+    const mapEl = imagemapElementRef.current;
+    if (!mapEl || !imagemapSelection) return;
+    const areas = getImagemapAreas(mapEl);
+    const area = areas[imagemapSelection.areaIndex];
+    if (!area) return;
+    area.remove();
+    reindexImagemapAreas(mapEl);
+    updateImagemapRaw(mapEl);
+    scheduleVisualSync();
+    const nextAreas = getImagemapAreas(mapEl);
+    if (nextAreas.length === 0) clearImagemapSelection();
+    else selectImagemapArea(nextAreas[Math.min(imagemapSelection.areaIndex, nextAreas.length - 1)]);
+  }, [clearImagemapSelection, imagemapSelection, scheduleVisualSync, selectImagemapArea]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => writeDraft(draftKey, source), DRAFT_SAVE_DEBOUNCE_MS);
@@ -455,6 +904,31 @@ export function BBCodeEditor({
     insertAtSelection(el, snippet);
   }, []);
 
+  const sourceCaretOffsetForSpan = useCallback((span: BBSourceSpan): number => {
+    const sourceSlice = sourceRef.current.slice(span.start, span.end);
+    if (!sourceSlice.startsWith("[")) return span.start;
+    const tagEnd = sourceSlice.indexOf("]");
+    return tagEnd === -1 ? span.start : span.start + tagEnd + 1;
+  }, []);
+
+  const selectSourceSpan = useCallback((span: BBSourceSpan) => {
+    const caret = sourceCaretOffsetForSpan(span);
+    setMobilePane("write");
+    window.requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(caret, caret);
+      setCaretOffset(caret);
+
+      const before = el.value.slice(0, caret);
+      const lineIndex = before.split("\n").length - 1;
+      const computed = window.getComputedStyle(el);
+      const lineHeight = Number.parseFloat(computed.lineHeight) || 20;
+      el.scrollTop = Math.max(0, lineIndex * lineHeight - el.clientHeight * 0.35);
+    });
+  }, [sourceCaretOffsetForSpan]);
+
   // ---- mode-dispatching toolbar actions ------------------------------------
 
   const applyInline = useCallback((command: string, tag: string, placeholder: string) => {
@@ -605,6 +1079,109 @@ export function BBCodeEditor({
   }, [gradientMirror, gradientStops, textField]);
 
   const charCount = source.length;
+
+  const renderImagemapInspector = (): ReactNode => {
+    if (!imagemapSelection) return null;
+    return (
+      <div className="flex flex-wrap items-end gap-2.5 px-4 py-3 border-b border-osu-b3/30 bg-osu-b5/50">
+        <div className="flex items-center gap-1.5 self-center pr-1 text-[11px] font-semibold uppercase tracking-wide text-osu-f1">
+          <span>Imagemap area {imagemapSelection.areaIndex + 1}/{imagemapSelection.areaCount}</span>
+          <button
+            type="button"
+            title="Previous area"
+            aria-label="Previous area"
+            onClick={() => selectImagemapAreaByIndex(imagemapSelection.areaIndex - 1)}
+            className="grid h-7 w-7 place-items-center rounded-md border border-osu-b3/40 bg-osu-b4/70 text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-white cursor-pointer"
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <button
+            type="button"
+            title="Next area"
+            aria-label="Next area"
+            onClick={() => selectImagemapAreaByIndex(imagemapSelection.areaIndex + 1)}
+            className="grid h-7 w-7 place-items-center rounded-md border border-osu-b3/40 bg-osu-b4/70 text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-white cursor-pointer"
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+
+        <DialogField label="URL">
+          <input
+            type="text"
+            value={imagemapSelection.href}
+            onChange={(event) => updateImagemapSelectionField("href", event.target.value)}
+            placeholder="#"
+            className={`${dialogInputClass} w-64`}
+          />
+        </DialogField>
+        <DialogField label="Title">
+          <input
+            type="text"
+            value={imagemapSelection.title}
+            onChange={(event) => updateImagemapSelectionField("title", event.target.value)}
+            className={`${dialogInputClass} w-44`}
+          />
+        </DialogField>
+
+        <button
+          type="button"
+          title="Add area"
+          aria-label="Add area"
+          onClick={addImagemapArea}
+          className="grid h-8 w-8 place-items-center rounded-md border border-osu-b3/40 bg-osu-b4/70 text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-white cursor-pointer"
+        >
+          <Plus size={15} />
+        </button>
+        <button
+          type="button"
+          title="Delete area"
+          aria-label="Delete area"
+          onClick={deleteImagemapArea}
+          className="grid h-8 w-8 place-items-center rounded-md border border-osu-red/40 bg-osu-red/10 text-osu-red-light transition-colors hover:bg-osu-red/20 hover:text-white cursor-pointer"
+        >
+          <Trash2 size={15} />
+        </button>
+      </div>
+    );
+  };
+
+  const renderLinkInspector = (): ReactNode => {
+    if (!linkSelection) return null;
+    return (
+      <div className="flex flex-wrap items-end gap-2.5 px-4 py-3 border-b border-osu-b3/30 bg-osu-b5/50">
+        <div className="self-center pr-1 text-[11px] font-semibold uppercase tracking-wide text-osu-f1">
+          Link
+        </div>
+        <DialogField label="URL">
+          <input
+            type="text"
+            value={linkSelection.href}
+            onChange={(event) => updateSelectedLinkHref(event.target.value)}
+            placeholder="https://..."
+            className={`${dialogInputClass} w-80`}
+          />
+        </DialogField>
+        <DialogField label="Text">
+          <input
+            type="text"
+            value={linkSelection.text}
+            onChange={(event) => updateSelectedLinkText(event.target.value)}
+            className={`${dialogInputClass} w-48`}
+          />
+        </DialogField>
+        <button
+          type="button"
+          title="Remove link"
+          aria-label="Remove link"
+          onClick={removeSelectedLink}
+          className="grid h-8 w-8 place-items-center rounded-md border border-osu-b3/40 bg-osu-b4/70 text-osu-l2 transition-colors hover:bg-osu-b3 hover:text-white cursor-pointer"
+        >
+          <Unlink size={15} />
+        </button>
+      </div>
+    );
+  };
 
   const renderDialog = (): ReactNode => {
     switch (dialog) {
@@ -1119,6 +1696,9 @@ export function BBCodeEditor({
         </div>
       </div>
 
+      {renderImagemapInspector()}
+      {renderLinkInspector()}
+
       {/* Tool dialog */}
       {dialog ? (
         <div className="px-4 py-3 border-b border-osu-b3/30 bg-osu-b5/50">{renderDialog()}</div>
@@ -1148,6 +1728,7 @@ export function BBCodeEditor({
           contentEditable
           suppressContentEditableWarning
           spellCheck={false}
+          onPointerDown={handleVisualPointerDown}
           onInput={scheduleVisualSync}
           onBlur={() => flushVisual()}
           data-placeholder="Write your page here. Select text and use the toolbar to format it."
@@ -1187,8 +1768,12 @@ export function BBCodeEditor({
               />
             </div>
             <div className={`${mobilePane === "preview" ? "block" : "hidden"} lg:block bg-osu-b5/40`}>
-              <div className={`${paneHeightClass} bbcode-content overflow-y-auto px-4 py-3 text-sm text-osu-l2`}>
-                <BBCodePreview source={deferredSource} highlightOffset={deferredCaretOffset} />
+              <div className={`${paneHeightClass} bbcode-content bbcode-preview-surface overflow-y-auto px-4 py-3 text-sm text-osu-l2`}>
+                <BBCodePreview
+                  source={deferredSource}
+                  highlightOffset={deferredCaretOffset}
+                  onSelectSourceSpan={selectSourceSpan}
+                />
               </div>
             </div>
           </div>

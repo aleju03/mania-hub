@@ -25,6 +25,28 @@ describe("bbcode editable DOM round-trip", () => {
     expectIdentity("[color=#B14DE8][b]purple[/b][/color] and [size=85]small[/size]");
   });
 
+  it("keeps oversized osu! size params while clamping visual output", () => {
+    const source = "[centre][heading][size=500]Title[/size][/heading][/centre]";
+    const html = bbcodeToEditableHtml(source);
+    expect(html).toContain("<h2");
+    expect(html).toContain("font-size:200%");
+    expect(html).toContain('data-bb-size="500"');
+    expect(html).not.toContain("[size=500]");
+    expectIdentity(source);
+  });
+
+  it("renders osu!-tolerated crossed tags without visible BBCode", () => {
+    const html = bbcodeToEditableHtml("[notice][centre][size=150]About[/size]\n\ntext[/notice][/centre]");
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    expect(html).toContain('class="well"');
+    expect(html).toContain("<center");
+    expect(container.textContent).toContain("About");
+    expect(container.textContent).toContain("text");
+    expect(container.textContent).not.toContain("[centre]");
+    expect(container.textContent).not.toContain("[/notice]");
+  });
+
   it("keeps links in both forms, emails and profiles", () => {
     expectIdentity("[url=https://example.com]text[/url]");
     expectIdentity("[url]https://example.com[/url]");
@@ -67,6 +89,29 @@ describe("bbcode editable DOM round-trip", () => {
 
   it("keeps imagemaps byte-for-byte", () => {
     expectIdentity("[imagemap]\nhttps://example.com/map.png\n10 20 30 40 https://example.com tooltip here\n0 0 50 50 # none\n[/imagemap]");
+  });
+
+  it("stamps imagemap areas with editable metadata", () => {
+    const html = bbcodeToEditableHtml("[imagemap]\nhttps://example.com/map.png\n10 20 30 40 https://example.com tooltip here\n[/imagemap]");
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    const map = container.querySelector<HTMLElement>('[data-bb="imagemap"]')!;
+    const area = container.querySelector<HTMLElement>('[data-bb-imagemap-area="1"]')!;
+    expect(map.dataset.src).toBe("https://example.com/map.png");
+    expect(area.dataset.x).toBe("10");
+    expect(area.dataset.y).toBe("20");
+    expect(area.dataset.width).toBe("30");
+    expect(area.dataset.height).toBe("40");
+    expect(area.dataset.href).toBe("https://example.com");
+    expect(area.dataset.title).toBe("tooltip here");
+  });
+
+  it("serializes updated imagemap raw metadata", () => {
+    const container = document.createElement("div");
+    container.innerHTML = bbcodeToEditableHtml("[imagemap]\nhttps://example.com/map.png\n10 20 30 40 https://example.com old\n[/imagemap]");
+    const map = container.querySelector<HTMLElement>('[data-bb="imagemap"]')!;
+    map.dataset.raw = "https://example.com/map.png\n5 6 7 8 https://osu.ppy.sh edited";
+    expect(serializeBBCodeDom(container)).toBe("[imagemap]https://example.com/map.png\n5 6 7 8 https://osu.ppy.sh edited[/imagemap]");
   });
 
   it("keeps a realistic profile page byte-for-byte", () => {

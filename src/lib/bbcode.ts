@@ -94,6 +94,9 @@ const TAG_PATTERN = /\[(\/?)([a-zA-Z]+|\*)(?:=([^\]\n]*))?\]/g;
 
 const HEX_COLOR_PATTERN = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 const NAMED_COLOR_PATTERN = /^[a-zA-Z]{2,30}$/;
+const SIZE_PARAM_PATTERN = /^\d+$/;
+const SIZE_RENDER_MIN = 30;
+const SIZE_RENDER_MAX = 200;
 
 export function isValidBBColor(value: string): boolean {
   return HEX_COLOR_PATTERN.test(value) || NAMED_COLOR_PATTERN.test(value);
@@ -101,10 +104,16 @@ export function isValidBBColor(value: string): boolean {
 
 function normalizeSize(value: string | null): number | null {
   if (!value) return null;
-  const size = Number(value.trim());
-  if (!Number.isFinite(size) || !Number.isInteger(size)) return null;
-  if (size < 30 || size > 200) return null;
+  const trimmed = value.trim();
+  if (!SIZE_PARAM_PATTERN.test(trimmed)) return null;
+  const size = Number(trimmed);
+  if (!Number.isSafeInteger(size)) return null;
   return size;
+}
+
+export function clampBBSizePercent(size: number): number {
+  if (!Number.isFinite(size)) return 100;
+  return Math.min(SIZE_RENDER_MAX, Math.max(SIZE_RENDER_MIN, size));
 }
 
 function extractYoutubeId(value: string): string | null {
@@ -306,11 +315,40 @@ function trimLeadingNewline(source: string, index: number): number {
   return source[index] === "\n" ? index + 1 : index;
 }
 
+function closeAliases(name: string): string[] {
+  if (name === "centre" || name === "center") return ["centre", "center"];
+  if (name === "s" || name === "strike") return ["s", "strike"];
+  return [name];
+}
+
+function canonicalCloseKey(name: string): string {
+  if (name === "center") return "centre";
+  if (name === "strike") return "s";
+  return name;
+}
+
+function hasFutureClose(source: string, tag: string, fromIndex: number): boolean {
+  const lower = source.toLowerCase();
+  return closeAliases(tag).some((alias) => lower.indexOf(`[/${alias}]`, fromIndex) !== -1);
+}
+
+function trimTrailingBlockNewline(frame: ContainerFrame): boolean {
+  if (!BLOCK_TAGS.has(frame.tag)) return false;
+  const last = frame.children[frame.children.length - 1];
+  if (last && last.type === "text" && last.text.endsWith("\n")) {
+    last.text = last.text.slice(0, -1);
+    if (!last.text) frame.children.pop();
+    return true;
+  }
+  return false;
+}
+
 export function parseBBCode(source: string, options?: { spans?: boolean }): BBNode[] {
   const normalized = source.replace(/\r\n?/g, "\n");
   const root: ContainerFrame = { tag: "", param: null, children: [], openSource: "", openStart: 0 };
   const stack: ContainerFrame[] = [root];
   const top = () => stack[stack.length - 1];
+  const skippedCloseCounts = new Map<string, number>();
 
   let cursor = 0;
   TAG_PATTERN.lastIndex = 0;
@@ -385,15 +423,29 @@ export function parseBBCode(source: string, options?: { spans?: boolean }): BBNo
     }
 
     // Closing tag: find the matching open frame (centre/center and s/strike
-    // alias each other; everything between unwinds as literal-preserving).
-    const aliases = name === "centre" || name === "center"
-      ? ["centre", "center"]
-      : name === "s" || name === "strike" ? ["s", "strike"] : [name];
+    // alias each other).
+    const aliases = closeAliases(name);
     let openIndex = -1;
     for (let i = stack.length - 1; i >= 1; i--) {
       if (aliases.includes(stack[i].tag)) { openIndex = i; break; }
     }
-    if (openIndex === -1) { emitLiteral(); continue; }
+    if (openIndex === -1) {
+      const skipKey = canonicalCloseKey(name);
+      const skipCount = skippedCloseCounts.get(skipKey) ?? 0;
+      if (skipCount > 0) {
+        if (skipCount === 1) skippedCloseCounts.delete(skipKey);
+        else skippedCloseCounts.set(skipKey, skipCount - 1);
+        pushText(top().children, normalized.slice(cursor, match.index), cursor);
+        cursor = TAG_PATTERN.lastIndex;
+        if (BLOCK_TAGS.has(name)) {
+          cursor = trimLeadingNewline(normalized, cursor);
+        }
+        TAG_PATTERN.lastIndex = cursor;
+      } else {
+        emitLiteral();
+      }
+      continue;
+    }
 
     const closeEnd = match.index + tagSource.length;
     pushText(top().children, normalized.slice(cursor, match.index), cursor);
@@ -406,26 +458,33 @@ export function parseBBCode(source: string, options?: { spans?: boolean }): BBNo
     }
     TAG_PATTERN.lastIndex = cursor;
 
-    // Unwind any frames above the match: they were never closed, so replay
-    // them as literal open-tag text followed by their children.
+    // Unwind frames above the match. osu!'s renderer tolerates crossed tags
+    // when the delayed inner closer still appears later, so close those frames
+    // here and skip their future closer. If no delayed closer exists, keep the
+    // old literal-preserving recovery for truly dangling tags.
     while (stack.length - 1 > openIndex) {
       const dangling = stack.pop()!;
       const parent = top();
-      pushText(parent.children, dangling.openSource, dangling.openStart);
-      pushNodes(parent.children, dangling.children);
+      const node = hasFutureClose(normalized, dangling.tag, cursor) ? closeContainer(dangling) : null;
+      if (node) {
+        attachSpacing(node, {
+          afterOpen: dangling.afterOpenTrimmed ?? false,
+          beforeClose: trimTrailingBlockNewline(dangling),
+          afterClose: false,
+        });
+        node.span = { start: dangling.openStart, end: match.index };
+        parent.children.push(node);
+        const skipKey = canonicalCloseKey(dangling.tag);
+        skippedCloseCounts.set(skipKey, (skippedCloseCounts.get(skipKey) ?? 0) + 1);
+      } else {
+        pushText(parent.children, dangling.openSource, dangling.openStart);
+        pushNodes(parent.children, dangling.children);
+      }
     }
     const frame = stack.pop()!;
     // Trim one trailing newline inside a closing block for tighter output
     // (frame.children is the pending last item when the frame is a [list]).
-    let beforeCloseTrimmed = false;
-    if (BLOCK_TAGS.has(frame.tag)) {
-      const last = frame.children[frame.children.length - 1];
-      if (last && last.type === "text" && last.text.endsWith("\n")) {
-        beforeCloseTrimmed = true;
-        last.text = last.text.slice(0, -1);
-        if (!last.text) frame.children.pop();
-      }
-    }
+    const beforeCloseTrimmed = trimTrailingBlockNewline(frame);
     const node = closeContainer(frame);
     const parent = top();
     if (node) {
