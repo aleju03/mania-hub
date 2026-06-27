@@ -1,4 +1,5 @@
 import { logWarn } from "../logger.js";
+import { toComponentsV2Body } from "./components.js";
 
 // Pinned API version. v10 is current and stable for interactions.
 const DISCORD_API_BASE = "https://discord.com/api/v10";
@@ -31,12 +32,20 @@ export interface DiscordComponent {
   label?: string;
   url?: string;
   custom_id?: string;
+  disabled?: boolean;
   emoji?: { name: string };
+  content?: string;
+  accent_color?: number;
+  media?: { url: string };
+  description?: string;
+  items?: Array<{ media: { url: string }; description?: string; spoiler?: boolean }>;
+  accessory?: DiscordComponent;
+  spoiler?: boolean;
 }
 
 export interface DiscordMessageBody {
-  content?: string;
-  embeds?: DiscordEmbed[];
+  content?: string | null;
+  embeds?: DiscordEmbed[] | null;
   components?: DiscordComponent[];
   // Bitfield; 1<<6 = EPHEMERAL (only valid on interaction responses).
   flags?: number;
@@ -52,6 +61,8 @@ export interface DiscordCommandDefinition {
   integration_types?: number[];
   contexts?: number[];
   dm_permission?: boolean;
+  // Stringified permission bitfield; surfaces the gate in Server Settings.
+  default_member_permissions?: string;
 }
 
 export class DiscordRestError extends Error {
@@ -157,8 +168,8 @@ export class DiscordRest {
   editOriginalInteractionResponse(token: string, body: DiscordMessageBody): Promise<unknown> {
     return this.request({
       method: "PATCH",
-      path: `/webhooks/${this.applicationId}/${token}/messages/@original`,
-      body: withSafeMentions(body),
+      path: `/webhooks/${this.applicationId}/${token}/messages/@original?with_components=true`,
+      body: prepareMessageBody(body, true),
       auth: "none",
     });
   }
@@ -167,8 +178,8 @@ export class DiscordRest {
   createFollowupMessage(token: string, body: DiscordMessageBody): Promise<unknown> {
     return this.request({
       method: "POST",
-      path: `/webhooks/${this.applicationId}/${token}`,
-      body: withSafeMentions(body),
+      path: `/webhooks/${this.applicationId}/${token}?with_components=true`,
+      body: prepareMessageBody(body, false),
       auth: "none",
     });
   }
@@ -178,7 +189,7 @@ export class DiscordRest {
     return this.request({
       method: "POST",
       path: `/channels/${channelId}/messages`,
-      body: withSafeMentions(body),
+      body: prepareMessageBody(body, false),
       auth: "bot",
     });
   }
@@ -186,6 +197,30 @@ export class DiscordRest {
   /** Fetches the bot application (used to validate the token from the admin page). */
   getApplication(): Promise<{ id: string; name: string; bot?: { username?: string } }> {
     return this.request({ method: "GET", path: "/applications/@me", auth: "bot" });
+  }
+
+  /**
+   * Opens (or returns the existing) DM channel with a user. Discord is
+   * idempotent here and caches the channel, so the id can be reused for later
+   * sends. Needs the bot token. Fails (50007) if the user blocks DMs or shares
+   * no surface with the bot; the caller treats that as an unreachable recipient.
+   */
+  createDmChannel(userId: string): Promise<{ id: string }> {
+    return this.request({
+      method: "POST",
+      path: "/users/@me/channels",
+      body: { recipient_id: userId },
+      auth: "bot",
+    });
+  }
+
+  /**
+   * Lists the guilds the bot is a member of (i.e. which servers added it).
+   * `with_counts` adds approximate member counts; one page of 200 is plenty for
+   * a bot this size. Needs the bot token.
+   */
+  listGuilds(): Promise<Array<{ id: string; name?: string; icon?: string | null; approximate_member_count?: number }>> {
+    return this.request({ method: "GET", path: "/users/@me/guilds?with_counts=true&limit=200", auth: "bot" });
   }
 }
 
@@ -196,6 +231,10 @@ export class DiscordRest {
 function withSafeMentions(body: DiscordMessageBody): DiscordMessageBody {
   if (body.allowed_mentions) return body;
   return { ...body, allowed_mentions: { parse: [] } };
+}
+
+function prepareMessageBody(body: DiscordMessageBody, clearLegacy: boolean): DiscordMessageBody {
+  return withSafeMentions(toComponentsV2Body(body, { clearLegacy }));
 }
 
 async function readRetryAfterMs(response: Response): Promise<number> {

@@ -682,6 +682,10 @@ async function migrateTrackerIndexes(db: Db): Promise<void> {
       on top_play_events(score_id)
   `);
   await db.execute(`
+    create index if not exists idx_top_play_events_time
+      on top_play_events(detected_at desc)
+  `);
+  await db.execute(`
     create index if not exists idx_top_play_events_user_pp
       on top_play_events(user_id, pp desc)
   `);

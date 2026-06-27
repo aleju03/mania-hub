@@ -103,11 +103,22 @@ export interface Config {
   discordBotToken?: string;
   discordDevGuildId?: string;
   discordSiteOrigin: string;
+  // How recently a map must have been ranked to qualify for a farm-map alert,
+  // and how much confirmed PP-gain activity must appear before it fires.
+  discordNewMapWindowDays: number;
+  discordNewFarmMapSignalWindowHours: number;
+  discordNewFarmMapMinUsers: number;
+  discordNewFarmMapMinPpGain: number;
 }
 
 function readInt(name: string, fallback: number): number {
   const value = Number(process.env[name]);
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+}
+
+function readNonNegativeNumber(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
 function readBool(name: string, fallback: boolean): boolean {
@@ -258,5 +269,9 @@ export function readConfig(): Config {
     discordBotToken: process.env.DISCORD_BOT_TOKEN || undefined,
     discordDevGuildId: process.env.DISCORD_DEV_GUILD_ID || undefined,
     discordSiteOrigin: (process.env.DISCORD_SITE_ORIGIN || "https://mania-tracker.com").replace(/\/+$/, ""),
+    discordNewMapWindowDays: readInt("DISCORD_NEW_MAP_WINDOW_DAYS", 14),
+    discordNewFarmMapSignalWindowHours: readInt("DISCORD_NEW_FARM_MAP_SIGNAL_WINDOW_HOURS", 48),
+    discordNewFarmMapMinUsers: readInt("DISCORD_NEW_FARM_MAP_MIN_USERS", 3),
+    discordNewFarmMapMinPpGain: readNonNegativeNumber("DISCORD_NEW_FARM_MAP_MIN_PP_GAIN", 0.05),
   };
 }

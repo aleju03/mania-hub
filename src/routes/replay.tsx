@@ -112,6 +112,9 @@ const REPLAY_PLAYER_BEST_FALLBACK_LIMIT = 50;
 const REPLAY_PLAYER_RECENT_LIMIT = 25;
 const REPLAY_PLAYER_PINNED_LIMIT = 25;
 const REPLAY_PLAYER_FIRSTS_LIMIT = 50;
+const REPLAY_LANDING_SEO_TITLE = "osu!mania replay watcher";
+const REPLAY_LANDING_SEO_DESCRIPTION =
+  "Browser-based osu!mania replay watcher and viewer for .osr files, score replays, keypress overlays, skins, and MP4 export.";
 const REPLAY_VIDEO_EXPORT_RESOLUTIONS: Record<ReplayVideoExportOptions["resolution"], { width: number; height: number }> = {
   "720p": { width: 1280, height: 720 },
   "1080p": { width: 1920, height: 1080 },
@@ -469,17 +472,23 @@ export const Route = createFileRoute("/replay")({
     const hasSharedScore = typeof scoreId === "number";
     const hasSharedUpload = typeof uploadId === "string" && uploadId.length > 0;
     const playerName = typeof player === "string" ? player.trim() : "";
+    const isReplayLanding = !hasSharedScore
+      && !hasSharedUpload
+      && typeof beatmapsetId !== "number"
+      && !playerName
+      && !match.search.tab
+      && typeof match.search.t !== "number";
     const title = hasSharedScore
       ? buildReplaySeoTitle(scoreId, loaderData?.seoScore, playerName)
       : hasSharedUpload
         ? "Shared replay"
-        : "Replay viewer";
+        : REPLAY_LANDING_SEO_TITLE;
 
     return pageSeo({
       title,
       description: hasSharedScore
         ? ""
-        : "Watch osu!mania .osr replays in your browser.",
+        : REPLAY_LANDING_SEO_DESCRIPTION,
       path: withSearchParams("/replay", {
         scoreId,
         beatmapsetId,
@@ -488,8 +497,8 @@ export const Route = createFileRoute("/replay")({
       }),
       origin: match.context.origin,
       image: hasSharedScore ? replayOgImagePath(scoreId) : undefined,
-      social: hasSharedScore,
-      noindex: true,
+      social: true,
+      noindex: !isReplayLanding,
       appendSiteName: !hasSharedScore,
     });
   },
@@ -1360,7 +1369,7 @@ function ReplayPage() {
       <div className={replay ? "hidden sm:block" : ""}>
         <PageHeader
           iconSrc="/images/icons/home.svg"
-          title="mania replay viewer"
+          title={REPLAY_LANDING_SEO_TITLE}
         />
       </div>
 

@@ -3,17 +3,18 @@ import { exec } from "../db.js";
 import { GLOBAL_COUNTRY_CODE } from "../countries.js";
 import { nowIso } from "../shared/score.js";
 
-export type FeedType = "top_play" | "snipe";
+export type FeedType = "top_play" | "snipe" | "new_map";
 
-export const FEED_TYPES: FeedType[] = ["top_play", "snipe"];
+export const FEED_TYPES: FeedType[] = ["top_play", "snipe", "new_map"];
 
 export function isFeedType(value: string | undefined): value is FeedType {
-  return value === "top_play" || value === "snipe";
+  return value === "top_play" || value === "snipe" || value === "new_map";
 }
 
 export const FEED_LABELS: Record<FeedType, string> = {
   top_play: "Top plays",
   snipe: "Snipes",
+  new_map: "New farm maps",
 };
 
 export interface DiscordSubscription {
@@ -140,5 +141,10 @@ export async function listAllSubscriptions(db: Db): Promise<DiscordSubscription[
 
 export async function countSubscriptions(db: Db): Promise<number> {
   const result = await exec(db, "select count(*) as n from discord_subscriptions");
+  return Number(result.rows[0]?.n ?? 0);
+}
+
+export async function countSubscriptionsByFeed(db: Db, feedType: FeedType): Promise<number> {
+  const result = await exec(db, "select count(*) as n from discord_subscriptions where feed_type = ?", [feedType]);
   return Number(result.rows[0]?.n ?? 0);
 }

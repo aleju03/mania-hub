@@ -447,6 +447,7 @@ create index if not exists idx_score_events_passed_time on score_events(ended_at
 create index if not exists idx_country_beatmap_scores_rank on country_beatmap_scores(country, beatmap_id, lane_key, total_score desc);
 create index if not exists idx_top_play_events_country_time on top_play_events(country, detected_at desc);
 create index if not exists idx_top_play_events_country_pp on top_play_events(country, pp desc, detected_at desc);
+create index if not exists idx_top_play_events_time on top_play_events(detected_at desc);
 create index if not exists idx_top_play_events_user_time on top_play_events(user_id, detected_at);
 create index if not exists idx_top_play_events_user_pp on top_play_events(user_id, pp desc);
 create index if not exists idx_top_play_events_score on top_play_events(score_id);
@@ -528,3 +529,43 @@ create table if not exists discord_subscriptions (
 );
 create index if not exists idx_discord_subscriptions_feed
   on discord_subscriptions(feed_type, country);
+
+-- Discord bot: links a Discord user to an osu! account so commands like /recent
+-- resolve a default player without typing a username. Trust-based (no OAuth);
+-- one osu! identity per Discord user, overwritten on re-link.
+create table if not exists discord_user_links (
+  discord_user_id text primary key,
+  osu_user_id integer not null,
+  osu_username text not null,
+  country_code text,
+  created_at text not null,
+  updated_at text not null
+);
+create index if not exists idx_discord_user_links_osu
+  on discord_user_links(osu_user_id);
+
+-- Discord bot: personal alerts a user sets up for themselves, delivered to their
+-- DMs. kind 'user' watches one osu! player (new top plays plus ranked scores at
+-- or above min_pp). kind 'maps' alerts on new farm maps. For 'maps' rows the
+-- target_osu_user_id is 0 so the unique key collapses duplicates per subscriber.
+create table if not exists discord_user_trackers (
+  id integer primary key autoincrement,
+  subscriber_id text not null,
+  kind text not null,
+  target_osu_user_id integer not null default 0,
+  target_username text,
+  min_pp real not null default 0,
+  created_at text not null,
+  unique(subscriber_id, kind, target_osu_user_id)
+);
+create index if not exists idx_discord_user_trackers_target
+  on discord_user_trackers(kind, target_osu_user_id);
+
+-- Discord bot: dedupes new-farm-map alerts so each map fires at most once
+-- across all destinations. Intentionally durable (not pruned): one row per newly
+-- ranked mania difficulty is negligible, and deleting a row inside the alert
+-- window would re-fire the alert.
+create table if not exists discord_alerted_maps (
+  beatmap_id integer primary key,
+  alerted_at text not null
+);

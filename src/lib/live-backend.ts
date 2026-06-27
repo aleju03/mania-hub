@@ -515,6 +515,37 @@ export const fetchDiscordAdminStatus = createServerFn({ method: "GET" })
     }
   });
 
+// Admin-only: which Discord servers the bot is a member of (live from Discord).
+// Separate from the status fetch so it isn't hit on every status poll.
+export const fetchDiscordGuilds = createServerFn({ method: "GET" })
+  .handler(async (): Promise<any> => {
+    await requireAdminAccess("Discord guild list");
+    const base = getServerLiveBackendUrl();
+    if (!base) throw new Error("LIVE_BACKEND_URL is not configured.");
+    const headers: HeadersInit = {};
+    if (process.env.LIVE_ADMIN_TOKEN) {
+      headers.authorization = `Bearer ${process.env.LIVE_ADMIN_TOKEN}`;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), LIVE_BACKEND_ADMIN_STATUS_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${base}/api/admin/discord/guilds`, { headers, signal: controller.signal });
+      const body = await response.json() as any;
+      if (!response.ok) {
+        const message = body && typeof body === "object" && "error" in body
+          ? String((body as { error?: unknown }).error)
+          : `Server ${response.status} for /api/admin/discord/guilds`;
+        throw new Error(message);
+      }
+      return body;
+    } catch (err) {
+      if (isAbortError(err)) throw new Error("Discord guild list timed out.");
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
+  });
+
 export type LiveBackendStatus = "ok" | "offline";
 
 export interface LiveBackendBootstrap {
@@ -1036,6 +1067,33 @@ export async function fetchLiveGlobalRankings(options: number | LiveGlobalRankin
   });
   const snapshot = await fetchLiveJson<Record<string, unknown>>(
     `/api/snapshots/global-rankings?${query.toString()}`,
+  );
+  const ranking = Array.isArray(snapshot.ranking)
+    ? snapshot.ranking.map(normalizeLiveGlobalRankingEntry)
+    : [];
+  return {
+    ranking,
+    total: readFiniteNumber(snapshot.total) ?? ranking.length,
+    page: readPositiveInteger(snapshot.page) ?? params.page ?? 1,
+    pageSize: readPositiveInteger(snapshot.pageSize) ?? params.pageSize ?? ranking.length,
+    fetchedAt: readFiniteNumber(snapshot.fetchedAt) ?? Date.now(),
+  };
+}
+
+export async function fetchLiveRankingsSnapshot(
+  country: string,
+  options: number | LiveGlobalRankingsParams = 50,
+): Promise<LiveGlobalRankingsSnapshot> {
+  const params = typeof options === "number" ? { page: 1, pageSize: options } : options;
+  const query = new URLSearchParams({
+    country: country.trim().toUpperCase(),
+    page: String(Math.max(1, Math.floor(params.page ?? 1))),
+    pageSize: String(Math.max(1, Math.min(50, Math.floor(params.pageSize ?? 50)))),
+    sort: params.sort ?? "rank",
+    dir: params.dir === "asc" ? "asc" : "desc",
+  });
+  const snapshot = await fetchLiveJson<Record<string, unknown>>(
+    `/api/snapshots/rankings?${query.toString()}`,
   );
   const ranking = Array.isArray(snapshot.ranking)
     ? snapshot.ranking.map(normalizeLiveGlobalRankingEntry)

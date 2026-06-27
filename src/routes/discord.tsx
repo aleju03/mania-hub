@@ -1,10 +1,9 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 import { Radio } from "lucide-react";
 import { PageHeader } from "../components/layout/PageHeader";
 import { OsuTriangleBackdrop } from "../components/layout/OsuTriangleBackdrop";
 import { CommandShowcase } from "../components/discord/CommandShowcase";
-import { canUseAdminFeatures, canUseDevFeatures } from "../lib/auth-shared";
-import { useAuth } from "../lib/auth-context";
+import { canUseDevFeatures } from "../lib/auth-shared";
 import { fetchDiscordPublicInfo, type DiscordPublicInfo } from "../lib/live-backend";
 
 export const Route = createFileRoute("/discord")({
@@ -36,8 +35,6 @@ function DiscordLogo({ className }: { className?: string }) {
 
 function DiscordToolPage() {
   const info = Route.useLoaderData();
-  const auth = useAuth();
-  const isAdmin = canUseAdminFeatures(auth);
 
   return (
     <div className="relative flex min-h-screen flex-col">
@@ -58,13 +55,6 @@ function DiscordToolPage() {
             <Hero info={info} />
             {info.configured ? <CommandShowcase /> : null}
             {info.configured ? <FeedsCard feedsEnabled={info.feedsEnabled} /> : null}
-
-            {info.configured && isAdmin ? (
-              <p className="text-center text-[11px] text-osu-l3">
-                Registration and live-feed management happen in the{" "}
-                <Link to="/admin/discord" className="text-osu-pink-light hover:text-white">admin dashboard</Link>.
-              </p>
-            ) : null}
           </div>
         </div>
       </div>
@@ -85,8 +75,9 @@ function Hero({ info }: { info: DiscordPublicInfo }) {
         <div className="min-w-0 flex-1">
           <h1 className="text-[17px] font-bold text-white">maniabot</h1>
           <p className="mt-1 text-[13px] leading-relaxed text-osu-l2">
-            The Mania Hub bot for Discord. Look up osu!mania players, rankings, recent plays and snipes
-            from any channel, and auto-post new top plays as they happen.
+            Every osu!mania lookup as a slash command. Link your account once with <code className="text-osu-pink-light">/link</code> and
+            commands like <code className="text-osu-pink-light">/recent</code> work with no username. Feeds auto-post to channels, and{" "}
+            <code className="text-osu-pink-light">/watch</code> DMs you when a player pops off or a new map gets ranked.
           </p>
         </div>
         {info.configured && info.inviteUrl ? (
@@ -139,10 +130,14 @@ function FeedsCard({ feedsEnabled }: { feedsEnabled: boolean }) {
       </div>
       <p className="text-[12px] leading-relaxed text-osu-l2">
         In any channel, run{" "}
-        <code className="text-osu-pink-light">/subscribe feed:&lt;top plays|snipes&gt; country:&lt;CR&gt;</code>{" "}
-        to auto-post new events as they happen. Add{" "}
+        <code className="text-osu-pink-light">/subscribe feed:top plays country:&lt;CR&gt;</code>{" "}
+        to auto-post new top plays as they happen. Other feeds: snipes and new farm maps. Add{" "}
         <code className="text-osu-pink-light">min_pp</code> to only post big scores. Managing feeds needs
         the Manage Server permission.
+      </p>
+      <p className="mt-2 text-[12px] leading-relaxed text-osu-l2">
+        For yourself, <code className="text-osu-pink-light">/watch user &lt;player&gt;</code> DMs you on their pp gains and big ranked
+        plays, and <code className="text-osu-pink-light">/watch maps</code> DMs you when a new map starts producing pp gains. No Manage Server needed.
       </p>
       {!feedsEnabled ? (
         <p className="mt-2 text-[11px] text-osu-l3">Feeds are currently disabled on the backend.</p>

@@ -51,6 +51,65 @@ export interface GlobalRankingsQuery {
   dir?: GlobalRankingsSortDirection;
 }
 
+export async function getCountryRankingsSnapshot(
+  db: Db,
+  country: string,
+  query: GlobalRankingsQuery = {},
+): Promise<GlobalRankingsSnapshot> {
+  const normalizedCountry = country.trim().toUpperCase();
+  const page = Math.max(1, Math.floor(query.page ?? 1) || 1);
+  const pageSize = Math.max(1, Math.min(GLOBAL_RANKINGS_MAX_PAGE_SIZE, Math.floor(query.pageSize ?? 50) || 50));
+  const offset = (page - 1) * pageSize;
+  const total = Number((await exec(
+    db,
+    `select count(*) as total
+     from country_rosters ro
+     join users u on u.user_id = ro.user_id
+     where upper(ro.country) = ?
+       and ro.is_tracked = 1
+       and ro.rank is not null`,
+    [normalizedCountry],
+  )).rows[0]?.total ?? 0);
+  const rows = (await exec(
+    db,
+    `select
+       u.user_id,
+       u.username,
+       u.avatar_url,
+       u.country_code,
+       u.pp,
+       u.global_rank,
+       ro.rank as country_rank,
+       u.profile_json
+     from country_rosters ro
+     join users u on u.user_id = ro.user_id
+     where upper(ro.country) = ?
+       and ro.is_tracked = 1
+       and ro.rank is not null
+     order by ro.rank asc
+     limit ? offset ?`,
+    [normalizedCountry, pageSize, offset],
+  )).rows;
+
+  const deltas = await readGlobalRankingDeltas(db, rows.map((row) => Number(row.user_id)));
+  const ranking: GlobalRankingEntry[] = rows.map((row, index) => {
+    const countryRank = readPositiveInteger(row.country_rank) ?? offset + index + 1;
+    return {
+      ...buildGlobalRankingEntry(row, countryRank),
+      global_change: deltas.get(Number(row.user_id))?.globalChange ?? null,
+      country_change: deltas.get(Number(row.user_id))?.countryChange ?? null,
+    };
+  });
+
+  return {
+    ranking,
+    total,
+    page,
+    pageSize,
+    fetchedAt: Date.now(),
+  };
+}
+
 // The Global leaderboard is the union of every tracked country's roster, ranked
 // by mania pp. Because the warmed rosters span the top mania countries, this is
 // effectively the real global mania top-N (limited to players we track).

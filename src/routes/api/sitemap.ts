@@ -8,6 +8,7 @@ const STATIC_PATHS = [
   { path: "/rankings", changefreq: "hourly", priority: "0.9" },
   { path: "/top-plays", changefreq: "hourly", priority: "0.9" },
   { path: "/maps", changefreq: "daily", priority: "0.8" },
+  { path: "/replay", changefreq: "weekly", priority: "0.8" },
   { path: "/farm-helper", changefreq: "daily", priority: "0.7" },
   { path: "/packs", changefreq: "weekly", priority: "0.6" },
 ] as const;

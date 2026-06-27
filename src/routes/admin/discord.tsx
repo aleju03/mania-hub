@@ -1,7 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { canUseAdminFeatures } from "../../lib/auth-shared";
-import { fetchDiscordAdminStatus, runLiveBackendAdminAction } from "../../lib/live-backend";
+import { fetchDiscordAdminStatus, fetchDiscordGuilds, runLiveBackendAdminAction } from "../../lib/live-backend";
 
 export const Route = createFileRoute("/admin/discord")({
   head: () => ({
@@ -28,6 +28,11 @@ interface DiscordStatus {
   devGuildId?: string | null;
   commandCount?: number;
   recentInteractions?: Array<{ command: string; userId: string | null; guildId: string | null; at: number }>;
+  commandCounts?: Record<string, number>;
+  errorCount?: number;
+  alertsDelivered?: number;
+  dmFailures?: number;
+  trackedPlayers?: number;
 }
 
 interface DiscordSubscription {
@@ -41,12 +46,31 @@ interface DiscordSubscription {
   createdAt: string;
 }
 
+interface DiscordTracker {
+  id: number;
+  subscriberId: string;
+  kind: string;
+  targetOsuUserId: number;
+  targetUsername: string | null;
+  minPp: number;
+  createdAt: string;
+}
+
 interface DiscordAdminPayload {
   discord: DiscordStatus;
   subscriptions: DiscordSubscription[];
+  trackers?: DiscordTracker[];
+  linkCount?: number;
 }
 
-const FEED_LABELS: Record<string, string> = { top_play: "Top plays", snipe: "Snipes" };
+interface DiscordGuild {
+  id: string;
+  name: string;
+  iconUrl: string | null;
+  memberCount: number | null;
+}
+
+const FEED_LABELS: Record<string, string> = { top_play: "Top plays", snipe: "Snipes", new_map: "New farm maps" };
 
 function DiscordAdminPage() {
   const [data, setData] = useState<DiscordAdminPayload | null>(null);
@@ -109,6 +133,35 @@ function DiscordAdminPage() {
 
   const status = data?.discord;
   const subscriptions = data?.subscriptions ?? [];
+  const trackers = data?.trackers ?? [];
+
+  const [guilds, setGuilds] = useState<DiscordGuild[] | null>(null);
+  const [guildsLoading, setGuildsLoading] = useState(false);
+  const [guildsError, setGuildsError] = useState<string | null>(null);
+
+  const loadGuilds = useCallback(async () => {
+    setGuildsLoading(true);
+    setGuildsError(null);
+    try {
+      const res = (await fetchDiscordGuilds()) as { ok?: boolean; guilds?: DiscordGuild[]; error?: string };
+      if (res.ok === false) {
+        setGuildsError(res.error ?? "Could not load servers.");
+      } else {
+        setGuilds(res.guilds ?? []);
+      }
+    } catch (err) {
+      setGuildsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setGuildsLoading(false);
+    }
+  }, []);
+
+  // Load the live guild list once the bot is known to be enabled with a token.
+  // Kept out of the main status poll so each Refresh doesn't hit the Discord API.
+  const botReady = Boolean(status?.enabled && status?.hasBotToken);
+  useEffect(() => {
+    if (botReady) void loadGuilds();
+  }, [botReady, loadGuilds]);
 
   return (
     <div className="min-h-[calc(100vh-60px)] flex-1 bg-osu-b5">
@@ -133,7 +186,7 @@ function DiscordAdminPage() {
       <div className="mx-auto max-w-[1100px] space-y-4 px-4 py-5 sm:px-5">
         <p className="text-[12px] leading-relaxed text-osu-l3">
           Backend control panel for the Discord bot: confirm it's wired up, push its slash commands to
-          Discord, and see which channels are receiving live feeds. The public-facing page is at{" "}
+          Discord, see which servers added it, and which channels are receiving live feeds. The public-facing page is at{" "}
           <Link to="/discord" className="text-osu-pink-light hover:text-white">Tool page</Link>.
         </p>
         {error ? (
@@ -166,6 +219,11 @@ function DiscordAdminPage() {
                 <StatusRow label="Commands" hint="Number of slash commands the bot defines." value={<span className="text-osu-l2">{status.commandCount ?? 0}</span>} />
                 <StatusRow label="Application ID" hint="Your bot's public id (the one in the invite link)." value={<span className="font-mono text-[11px] text-osu-l2">{status.applicationId ?? "-"}</span>} />
                 <StatusRow label="Dev guild" hint="If set, commands register to just that one server, instantly. Empty = global (all servers, up to ~1h to appear)." value={<span className="font-mono text-[11px] text-osu-l2">{status.devGuildId ?? "-"}</span>} />
+                <StatusRow label="Linked accounts" hint="Players who ran /link to tie their osu! account to their Discord user." value={<span className="text-osu-l2">{data?.linkCount ?? 0}</span>} />
+                <StatusRow label="Tracked players" hint="Distinct osu! players currently watched by a personal /watch alert." value={<span className="text-osu-l2">{status.trackedPlayers ?? 0}</span>} />
+                <StatusRow label="Alerts delivered" hint="Personal DM and new-map alerts sent since the backend started." value={<span className="text-osu-l2">{status.alertsDelivered ?? 0}</span>} />
+                <StatusRow label="DM failures" hint="DM sends that failed for reasons other than closed DMs (those self-heal)." value={<span className="text-osu-l2">{status.dmFailures ?? 0}</span>} />
+                <StatusRow label="Handler errors" hint="Commands that threw while building a reply since startup." value={<span className="text-osu-l2">{status.errorCount ?? 0}</span>} />
               </div>
 
               <div className="mt-4 rounded-lg border border-osu-b3/30 bg-osu-b5/60 p-3">
@@ -187,6 +245,55 @@ function DiscordAdminPage() {
                       : "Registering globally, so new or changed commands can take up to ~1h to appear. Set DISCORD_DEV_GUILD_ID for instant updates while testing."}
                 </p>
               </div>
+            </section>
+
+            <section className="rounded-xl border border-osu-b3/30 bg-osu-b4 p-4">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-[12px] font-semibold text-white">
+                  Servers {guilds ? <span className="text-osu-l3">({guilds.length})</span> : null}
+                </h3>
+                {status.hasBotToken ? (
+                  <button
+                    type="button"
+                    onClick={() => void loadGuilds()}
+                    disabled={guildsLoading}
+                    className="rounded-lg border border-osu-b3/50 bg-osu-b4 px-2.5 py-1 text-[11px] font-semibold text-osu-l2 transition-colors hover:bg-osu-b3 disabled:opacity-50"
+                  >
+                    {guildsLoading ? "Loading…" : "Reload"}
+                  </button>
+                ) : null}
+              </div>
+              <p className="mb-3 mt-0.5 text-[11px] text-osu-l3">
+                Every Discord server the bot is currently in, biggest first. Live from Discord, not the
+                subscriptions below: a server counts here even if no channel ran <code className="text-osu-pink-light">/subscribe</code>.
+              </p>
+              {!status.hasBotToken ? (
+                <p className="text-[12px] text-osu-l3">Set <code className="text-osu-pink-light">DISCORD_BOT_TOKEN</code> on the backend to list servers.</p>
+              ) : guildsError ? (
+                <p className="text-[12px] text-rose-300">{guildsError}</p>
+              ) : guilds === null ? (
+                <p className="text-[12px] text-osu-l3">Loading…</p>
+              ) : guilds.length === 0 ? (
+                <p className="text-[12px] text-osu-l3">The bot isn't in any servers yet.</p>
+              ) : (
+                <ul className="grid gap-1.5 sm:grid-cols-2">
+                  {guilds.map((guild) => (
+                    <li key={guild.id} className="flex items-center gap-2 rounded-lg border border-osu-b3/20 bg-osu-b5/40 px-2.5 py-1.5">
+                      {guild.iconUrl ? (
+                        <img src={guild.iconUrl} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" loading="lazy" />
+                      ) : (
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-osu-b3 text-[10px] font-bold text-osu-l2">
+                          {guild.name.slice(0, 1).toUpperCase()}
+                        </span>
+                      )}
+                      <span className="min-w-0 flex-1 truncate text-[12px] text-osu-l2" title={guild.name}>{guild.name}</span>
+                      {guild.memberCount != null ? (
+                        <span className="shrink-0 text-[10px] text-osu-l3">{guild.memberCount.toLocaleString()}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
 
             <section className="rounded-xl border border-osu-b3/30 bg-osu-b4 p-4">
@@ -237,6 +344,58 @@ function DiscordAdminPage() {
                 </div>
               )}
             </section>
+
+            <section className="rounded-xl border border-osu-b3/30 bg-osu-b4 p-4">
+              <h3 className="text-[12px] font-semibold text-white">
+                Personal alerts <span className="text-osu-l3">({trackers.length})</span>
+              </h3>
+              <p className="mb-3 text-[11px] text-osu-l3">
+                DM alerts users set up for themselves with <code className="text-osu-pink-light">/watch</code>: a specific player's
+                plays, or new farm maps. Delivered to the user's DMs, not a channel.
+              </p>
+              {trackers.length === 0 ? (
+                <p className="text-[12px] text-osu-l3">No one has set up a personal alert yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-[12px]">
+                    <thead className="text-[10px] uppercase tracking-wide text-osu-l3">
+                      <tr>
+                        <th className="py-1 pr-3 font-semibold">Kind</th>
+                        <th className="py-1 pr-3 font-semibold">Target</th>
+                        <th className="py-1 pr-3 font-semibold">Min pp</th>
+                        <th className="py-1 pr-3 font-semibold">Subscriber</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-osu-l2">
+                      {trackers.map((t) => (
+                        <tr key={t.id} className="border-t border-osu-b3/20">
+                          <td className="py-1.5 pr-3">{t.kind === "maps" ? "New maps" : "Player"}</td>
+                          <td className="py-1.5 pr-3">{t.kind === "maps" ? "-" : t.targetUsername ?? String(t.targetOsuUserId)}</td>
+                          <td className="py-1.5 pr-3">{t.minPp > 0 ? t.minPp : "-"}</td>
+                          <td className="py-1.5 pr-3 font-mono text-[11px] text-osu-l3">{t.subscriberId}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
+            {status.commandCounts && Object.keys(status.commandCounts).length > 0 ? (
+              <section className="rounded-xl border border-osu-b3/30 bg-osu-b4 p-4">
+                <h3 className="text-[12px] font-semibold text-white">Command usage</h3>
+                <p className="mb-3 text-[11px] text-osu-l3">How many times each command ran since the backend started (in memory).</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(status.commandCounts)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([name, count]) => (
+                      <span key={name} className="rounded-md border border-osu-b3/30 bg-osu-b5/50 px-2 py-1 text-[11px] text-osu-l2">
+                        <code className="text-osu-pink-light">/{name}</code> <span className="tabular-nums">{count}</span>
+                      </span>
+                    ))}
+                </div>
+              </section>
+            ) : null}
 
             {status.recentInteractions && status.recentInteractions.length > 0 ? (
               <section className="rounded-xl border border-osu-b3/30 bg-osu-b4 p-4">

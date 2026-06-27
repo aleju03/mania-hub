@@ -12,7 +12,7 @@ import { GOAL_KINDS, GOAL_MAP_KINDS, GOAL_TARGET_GRADES, createUserGoal, deleteU
 import { getMyDataSummary, getUserTopPlaysFeed, getUserTrackedFeed } from "../features/my-data.js";
 import { FarmHelperUserNotFoundError, getFarmHelperFarmers, getFarmHelperSnapshot, type FarmHelperKeyMode, type FarmHelperView } from "../features/farm-helper.js";
 import type { ScoreSpeedBucket } from "../shared/score.js";
-import { enqueueGlobalRankingStatRepairs, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
+import { enqueueGlobalRankingStatRepairs, getCountryRankingsSnapshot, getGlobalRankingsSnapshot, type GlobalRankingsSort } from "../features/global-rankings.js";
 import { enqueueGlobalMapsRefreshIfDue, enqueueMapsRefresh, enqueueMapsRefreshIfDue, getMapsPageSnapshot, getMapsPlayersSnapshot, getMapsRandomBeatmapsets, getMapsRefreshProgress, getMapsSnapshot, getMapsSnapshotMeta, MAPS_PLAYERS_MAX_PAGE_SIZE, type MapsPageQuery, type MapsPlayersKind, type MapsPlayersPageQuery } from "../features/maps.js";
 import { getPackWallet, listPackCollectionCards, recyclePackCollectionCards, savePackWallet } from "../features/pack-wallets.js";
 import { getCachedPlayerProfileSnapshot, getPlayerAbout, getPlayerProfileSnapshot, getPlayerRecentScores, warmProfileSnapshots } from "../features/player-profiles.js";
@@ -43,6 +43,8 @@ import { addManualRosterMember, enqueueRosterRefreshes, removeManualRosterMember
 import { getLocalDbStorage, runRetention } from "../retention.js";
 import { getDiscordPublicInfo, type DiscordRuntime } from "../discord/index.js";
 import { listAllSubscriptions, removeSubscriptionById } from "../discord/subscriptions.js";
+import { listAllUserTrackers } from "../discord/trackers.js";
+import { countUserLinks } from "../discord/identity.js";
 
 const HIDDEN_ADMIN_WORKER_LANE_NAMES = new Set([
   "dan-estimates",
@@ -552,6 +554,29 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     // cache far longer than the live tabs.
     res.setHeader("cache-control", "public, max-age=600, stale-while-revalidate=1800");
     sendJson(req, res, ctx, 200, { beatmapsets: await getMapsRandomBeatmapsets(ctx.db, ids) });
+    return true;
+  }
+  if (url.pathname === "/api/snapshots/rankings") {
+    if (isGlobalCountry(country)) {
+      const snapshot = await getGlobalRankingsSnapshot(ctx.db, parseGlobalRankingsQuery(url.searchParams));
+      try {
+        await enqueueGlobalRankingStatRepairs(ctx.queue, snapshot.ranking);
+      } catch (error) {
+        console.warn("[global-rankings] failed to queue stat repair", error);
+      }
+      res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
+      sendJson(req, res, ctx, 200, snapshot);
+      return true;
+    }
+    if (!isObserveCountryRequest(url) && !await activatePublicCountry(req, res, ctx, country)) return true;
+    const snapshot = await getCountryRankingsSnapshot(ctx.db, country, parseGlobalRankingsQuery(url.searchParams));
+    try {
+      await enqueueGlobalRankingStatRepairs(ctx.queue, snapshot.ranking);
+    } catch (error) {
+      console.warn("[country-rankings] failed to queue stat repair", error);
+    }
+    res.setHeader("cache-control", "public, max-age=60, stale-while-revalidate=300");
+    sendJson(req, res, ctx, 200, snapshot);
     return true;
   }
   if (url.pathname === "/api/snapshots/global-rankings") {
@@ -1111,6 +1136,8 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
       ok: true,
       discord: ctx.discord?.status() ?? { enabled: false },
       subscriptions: await listAllSubscriptions(ctx.db),
+      trackers: await listAllUserTrackers(ctx.db),
+      linkCount: await countUserLinks(ctx.db),
     });
     return true;
   }
@@ -1126,6 +1153,23 @@ async function routeHttpUnsafe(req: IncomingMessage, res: ServerResponse, ctx: H
     try {
       const result = await ctx.discord.registerCommands();
       sendJson(req, res, ctx, 200, { ok: true, ...result });
+    } catch (error) {
+      sendJson(req, res, ctx, 200, { ok: false, error: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+  if (url.pathname === "/api/admin/discord/guilds") {
+    if (!isAdmin(req, ctx)) {
+      sendJson(req, res, ctx, 401, { error: "unauthorized" });
+      return true;
+    }
+    if (!ctx.discord) {
+      sendJson(req, res, ctx, 400, { error: "discord_not_configured" });
+      return true;
+    }
+    try {
+      const guilds = await ctx.discord.listGuilds();
+      sendJson(req, res, ctx, 200, { ok: true, count: guilds.length, guilds });
     } catch (error) {
       sendJson(req, res, ctx, 200, { ok: false, error: error instanceof Error ? error.message : String(error) });
     }

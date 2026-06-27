@@ -5,7 +5,6 @@ Allow: /api/sitemap
 Disallow: /api/
 Disallow: /admin/
 Disallow: /tracker
-Disallow: /replay
 Disallow: /snipes
 Allow: /
 
