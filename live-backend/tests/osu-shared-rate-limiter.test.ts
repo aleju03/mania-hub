@@ -2,7 +2,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createDb, migrate } from "../src/db.js";
+import { createDb, exec, migrate } from "../src/db.js";
 import { SqliteSharedRateLimiter } from "../src/osu/shared-rate-limiter.js";
 
 const dirs: string[] = [];
@@ -77,5 +77,22 @@ describe("sqlite shared osu! rate limiter", () => {
     const interactiveStart = await second.reserve("getUser", "/users/1/mania", "interactive");
 
     expect(interactiveStart).toBe(startedAt);
+  });
+
+  it("serializes concurrent reservations on one local connection", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "mania-osu-shared-limiter-"));
+    dirs.push(dir);
+    const db = await createDb({ databaseUrl: `file:${join(dir, "test.db")}` });
+    await migrate(db);
+    const limiter = new SqliteSharedRateLimiter(db, { targetPerMinute: 1000, hardPerMinute: 1000 });
+
+    await expect(Promise.all(
+      Array.from({ length: 20 }, (_, index) =>
+        limiter.reserve(`api:profile_snapshot:${index}`, `/users/${index}/mania`, "interactive"),
+      ),
+    )).resolves.toHaveLength(20);
+
+    const row = (await exec(db, "select count(*) as count from api_rate_limit_reservations")).rows[0];
+    expect(Number(row.count)).toBe(20);
   });
 });

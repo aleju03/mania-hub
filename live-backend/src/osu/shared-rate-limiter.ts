@@ -16,6 +16,7 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
   private readonly provider: string;
   private readonly targetPerMinute: number;
   private readonly hardPerMinute: number;
+  private reservationTail: Promise<void> = Promise.resolve();
 
   constructor(private readonly db: Db, options: SqliteSharedRateLimiterOptions) {
     this.provider = options.provider ?? "osu";
@@ -25,7 +26,7 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
 
   async reserve(caller: string, path: string, lane: LimiterLane): Promise<number> {
     for (;;) {
-      const waitMs = await this.tryReserve(caller, path, lane);
+      const waitMs = await this.withReservationLock(() => this.tryReserve(caller, path, lane));
       if (waitMs <= 0) return Date.now();
       await sleep(waitMs);
     }
@@ -118,6 +119,20 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
     } catch (error) {
       await exec(this.db, "rollback").catch(() => undefined);
       throw error;
+    }
+  }
+
+  private async withReservationLock<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = this.reservationTail;
+    let release!: () => void;
+    this.reservationTail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous.catch(() => undefined);
+    try {
+      return await operation();
+    } finally {
+      release();
     }
   }
 

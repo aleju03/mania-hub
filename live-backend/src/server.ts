@@ -59,6 +59,7 @@ export async function createApp() {
   } else {
     await migrate(db);
   }
+  const rateLimitDb = await createDb(config);
   const queue = new JobQueue(db);
   const events = new LiveEventLog(db);
   // Startup writes belong to the ingest/worker side; a serving process stays
@@ -80,7 +81,7 @@ export async function createApp() {
       startedAt: new Date(entry.startedAt).toISOString(),
     }).catch(() => {});
   };
-  const sharedOsuLimiter = new SqliteSharedRateLimiter(db, {
+  const sharedOsuLimiter = new SqliteSharedRateLimiter(rateLimitDb, {
     provider: "osu",
     targetPerMinute: config.osuApiTargetPerMinute,
     hardPerMinute: config.osuApiHardPerMinute,
@@ -132,7 +133,7 @@ export async function createApp() {
   // sporadic SSR loader failures). Keep ours above the proxy's idle window.
   server.keepAliveTimeout = 75_000;
   server.headersTimeout = 80_000;
-  return { server, db, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients, discord };
+  return { server, db, rateLimitDb, queue, events, osu, scoresFallbackOsu, osc, worker, ingestor, config, countryClients, discord };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
