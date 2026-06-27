@@ -66,60 +66,50 @@ export class SqliteSharedRateLimiter implements SharedLimiter {
 
   private async tryReserve(caller: string, path: string, lane: LimiterLane): Promise<number> {
     const now = Date.now();
-    await exec(this.db, "begin immediate");
-    try {
-      await exec(
-        this.db,
-        "delete from api_rate_limit_reservations where provider = ? and started_at_ms < ?",
-        [this.provider, now - PRUNE_AFTER_MS],
-      );
+    await exec(
+      this.db,
+      "delete from api_rate_limit_reservations where provider = ? and started_at_ms < ?",
+      [this.provider, now - PRUNE_AFTER_MS],
+    );
 
-      const pausedUntil = await this.readPausedUntil();
-      let waitMs = pausedUntil > now ? pausedUntil - now : 0;
+    const pausedUntil = await this.readPausedUntil();
+    let waitMs = pausedUntil > now ? pausedUntil - now : 0;
 
-      const windowRows = (await exec(
-        this.db,
-        `select count(*) as count, min(started_at_ms) as oldest
-         from api_rate_limit_reservations
-         where provider = ? and started_at_ms > ?`,
-        [this.provider, now - WINDOW_MS],
-      )).rows[0];
-      const used = Number(windowRows?.count ?? 0);
-      const oldest = Number(windowRows?.oldest ?? 0);
-      if (used >= this.hardPerMinute && Number.isFinite(oldest) && oldest > 0) {
-        waitMs = Math.max(waitMs, oldest + WINDOW_MS + 1 - now);
-      }
-
-      if (lane !== "interactive") {
-        const latestRow = (await exec(
-          this.db,
-          "select max(started_at_ms) as latest from api_rate_limit_reservations where provider = ?",
-          [this.provider],
-        )).rows[0];
-        const latest = Number(latestRow?.latest ?? 0);
-        if (Number.isFinite(latest) && latest > 0) {
-          waitMs = Math.max(waitMs, latest + Math.ceil(WINDOW_MS / this.targetPerMinute) - now);
-        }
-      }
-
-      if (waitMs > 0) {
-        await exec(this.db, "commit");
-        return Math.ceil(waitMs);
-      }
-
-      await exec(
-        this.db,
-        `insert into api_rate_limit_reservations
-           (provider, started_at_ms, caller, path, lane, created_at_ms)
-         values (?, ?, ?, ?, ?, ?)`,
-        [this.provider, now, caller, path, lane, now],
-      );
-      await exec(this.db, "commit");
-      return 0;
-    } catch (error) {
-      await exec(this.db, "rollback").catch(() => undefined);
-      throw error;
+    const windowRows = (await exec(
+      this.db,
+      `select count(*) as count, min(started_at_ms) as oldest
+       from api_rate_limit_reservations
+       where provider = ? and started_at_ms > ?`,
+      [this.provider, now - WINDOW_MS],
+    )).rows[0];
+    const used = Number(windowRows?.count ?? 0);
+    const oldest = Number(windowRows?.oldest ?? 0);
+    if (used >= this.hardPerMinute && Number.isFinite(oldest) && oldest > 0) {
+      waitMs = Math.max(waitMs, oldest + WINDOW_MS + 1 - now);
     }
+
+    if (lane !== "interactive") {
+      const latestRow = (await exec(
+        this.db,
+        "select max(started_at_ms) as latest from api_rate_limit_reservations where provider = ?",
+        [this.provider],
+      )).rows[0];
+      const latest = Number(latestRow?.latest ?? 0);
+      if (Number.isFinite(latest) && latest > 0) {
+        waitMs = Math.max(waitMs, latest + Math.ceil(WINDOW_MS / this.targetPerMinute) - now);
+      }
+    }
+
+    if (waitMs > 0) return Math.ceil(waitMs);
+
+    await exec(
+      this.db,
+      `insert into api_rate_limit_reservations
+         (provider, started_at_ms, caller, path, lane, created_at_ms)
+       values (?, ?, ?, ?, ?, ?)`,
+      [this.provider, now, caller, path, lane, now],
+    );
+    return 0;
   }
 
   private async withReservationLock<T>(operation: () => Promise<T>): Promise<T> {
